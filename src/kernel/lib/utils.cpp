@@ -34,13 +34,71 @@ Cache cache_model(MODEL_CACHE);
 
 namespace yask {
 
+    // Timer.
+    void YaskTimer::start(TimeSpec* ts) {
+
+        // Make sure timer was stopped.
+        assert(_begin.tv_sec == 0);
+        assert(_begin.tv_nsec == 0);
+        
+        if (ts)
+            _begin = *ts;
+        else {
+            auto cts = get_timespec();
+            _begin = cts;
+        }
+    }
+    double YaskTimer::stop(TimeSpec* ts) {
+        TimeSpec end, delta;
+        if (ts)
+            end = *ts;
+        else {
+            auto cts = get_timespec();
+            end = cts;
+        }
+
+        // Make sure timer was started.
+        assert(_begin.tv_sec != 0);
+
+        // Make sure time is going forward.
+        assert(end.tv_sec >= _begin.tv_sec);
+        
+        // Elapsed time is just end - begin times.
+        delta.tv_sec = end.tv_sec - _begin.tv_sec;
+        _elapsed.tv_sec += delta.tv_sec;
+        
+        // No need to check for sign or to normalize, because tv_nsec is
+        // signed and 64-bit.
+        delta.tv_nsec = end.tv_nsec - _begin.tv_nsec;
+        _elapsed.tv_nsec += delta.tv_nsec;
+
+        // Clear begin to catch misuse.
+        _begin.tv_sec = 0;
+        _begin.tv_nsec = 0;
+        
+        return double(delta.tv_sec) + double(delta.tv_nsec) * 1e-9;
+    }
+    double YaskTimer::get_secs_since_start() const {
+
+        // Make sure timer was started.
+        assert(_begin.tv_sec != 0);
+
+        TimeSpec now, delta;
+        now = get_timespec();
+
+        // Elapsed time is just now - begin times.
+        delta.tv_sec = now.tv_sec - _begin.tv_sec;
+        delta.tv_nsec = now.tv_nsec - _begin.tv_nsec;
+
+        return double(delta.tv_sec) + double(delta.tv_nsec) * 1e-9;
+    }
+    
     // Aligned allocation.
     char* alignedAlloc(std::size_t nbytes) {
 
         // Alignment to use based on size.
         const size_t _def_alignment = CACHELINE_BYTES;
         const size_t _def_big_alignment = YASK_HUGE_ALIGNMENT;
-
         size_t align = (nbytes >= _def_big_alignment) ?
             _def_big_alignment : _def_alignment;
         void *p = 0;
@@ -58,38 +116,70 @@ namespace yask {
         return static_cast<char*>(p);
     }
 
+#ifdef USE_PMEM
+    static int pmem_tmpfile(const char *dir, size_t size, int *fd, void **addr)
+    {
+        static char tmpl[] = "/appdirect_memXXXXXX";
+        int err = 0;
+
+        char fullname[strlen(dir) + sizeof (tmpl)];
+        (void) strcpy(fullname, dir);
+        (void) strcat(fullname, tmpl);
+
+        if ((*fd = mkstemp(fullname)) < 0) {
+            perror("mkstemp()");
+            err = MEMKIND_ERROR_RUNTIME;
+            THROW_YASK_EXCEPTION("Error: MEMKIND_ERROR_RUNTIME - mkstemp()\n");
+        }
+
+        (void) unlink(dir);
+
+        if (ftruncate(*fd, size) != 0) {
+            err = MEMKIND_ERROR_RUNTIME;
+            THROW_YASK_EXCEPTION("Error: MEMKIND_ERROR_RUNTIME - ftruncate()\n");
+        }
+
+        *addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *fd, 0);
+        if (*addr == MAP_FAILED) {
+            err = MEMKIND_ERROR_RUNTIME;
+            THROW_YASK_EXCEPTION("Error: MEMKIND_ERROR_RUNTIME - mmap()\n");
+        }
+
+        return err;
+    }
+#endif
+
     // NUMA allocation.
+    // 'numa_pref' == yask_numa_none: use default aligned alloc.
     // 'numa_pref' >= 0: preferred NUMA node.
-    // 'numa_pref' < 0: use defined policy.
+    // 'numa_pref' < 0: use NUMA policy corresponding to value.
+    // TODO: get rid of magic-number scheme.
     char* numaAlloc(std::size_t nbytes, int numa_pref) {
+
+        void *p = 0;
 
         if (numa_pref == yask_numa_none)
             return alignedAlloc(nbytes);
 
-#ifndef USE_NUMA
-        THROW_YASK_EXCEPTION("Error: explicit NUMA policy allocation is not enabled");
-#endif
-
-        void *p = 0;
-
 #ifdef USE_NUMA
+
+        // Should we use the numa policy library?
 #ifdef USE_NUMA_POLICY_LIB
 #pragma omp single
-        if (numa_available() != -1) {
+        else if (numa_available() != -1) {
             numa_set_bind_policy(0);
             if (numa_pref >= 0 && numa_pref <= numa_max_node())
                 numa_alloc_onnode(nbytes, numa_pref);
             else
                 numa_alloc_local(nbytes);
-            if ((size_t)p % CACHELINE_BYTES)
-                THROW_YASK_EXCEPTION("Error: numa_alloc_*(" + makeByteStr(nbytes) +
-                                     ") returned unaligned addr " + p);
+            // Interleaved not available.
         }
         else
             THROW_YASK_EXCEPTION("Error: explicit NUMA policy allocation is not available");
 
+        // Use mmap/mbind explicitly.
 #else
-        if (get_mempolicy(NULL, NULL, 0, 0, 0) == 0) {
+        else if (get_mempolicy(NULL, NULL, 0, 0, 0) == 0) {
 
             // Set mmap flags.
             int mmprot = PROT_READ | PROT_WRITE;
@@ -131,16 +221,131 @@ namespace yask {
         }
         else
             THROW_YASK_EXCEPTION("Error: explicit NUMA policy allocation is not available");
-#endif
-#endif
+
+#endif // not USE_NUMA_POLICY_LIB.
+
+#else
+        THROW_YASK_EXCEPTION("Error: NUMA allocation is not enabled; build with numa=1");
+#endif // USE_NUMA.
+        
         // Should not get here w/null p; throw exception.
         if (!p)
             THROW_YASK_EXCEPTION("Error: cannot allocate " + makeByteStr(nbytes));
+
+        // Check alignment.
+        if ((size_t(p) & (CACHELINE_BYTES - 1)) != 0)
+            FORMAT_AND_THROW_YASK_EXCEPTION("Error: NUMA-allocated " << p << " is not " <<
+                                            CACHELINE_BYTES << "-byte aligned");
 
         // Return as a char* as required for shared_ptr ctor.
         return static_cast<char*>(p);
     }
 
+    // Reverse numaAlloc().
+    void NumaDeleter::operator()(char* p) {
+
+        if (p && _numa_pref == yask_numa_none) {
+            free(p);
+            p = NULL;
+        }
+
+#ifdef USE_NUMA
+#ifdef USE_NUMA_POLICY_LIB
+        if (p && numa_available() != -1) {
+            numa_free(p, _nbytes);
+            p = NULL;
+        }
+#else
+        if (p && get_mempolicy(NULL, NULL, 0, 0, 0) == 0) {
+            munmap(p, _nbytes);
+            p = NULL;
+        }
+#endif
+#endif
+        if (p) {
+            free(p);
+            p = NULL;
+        }
+    }
+        
+    // PMEM allocation.
+    char* pmemAlloc(std::size_t nbytes, int dev_num) {
+
+        void *p = 0;
+
+        // Allocate into pmem.
+#ifdef USE_PMEM
+        int err = 0;
+        int fd;
+        // 'X' of pmemX should be matched with the NUMA node.
+        string pmem_name("/mnt/pmem") + to_string(dev_num);
+        err = pmem_tmpfile(pmem_name.c_str(), nbytes, &fd, &p);
+        if (err)
+            THROW_YASK_EXCEPTION("Error: Unable to create temporary file for PMEM");
+#else
+        THROW_YASK_EXCEPTION("Error: PMEM allocation is not enabled; build with pmem=1");
+#endif
+
+        // Check alignment.
+        if ((size_t(p) & (CACHELINE_BYTES - 1)) != 0)
+            FORMAT_AND_THROW_YASK_EXCEPTION("Error: PMEM-allocated " << p << " is not " <<
+                                            CACHELINE_BYTES << "-byte aligned");
+
+        // Return as a char* as required for shared_ptr ctor.
+        return static_cast<char*>(p);
+    }
+
+    // Reverse pmemAlloc().
+    void PmemDeleter::operator()(char* p) {
+        if (p) {
+            munmap(p, _nbytes);
+            p = NULL;
+        }
+    }
+        
+    // MPI shm allocation.
+    char* shmAlloc(std::size_t nbytes,
+                   const MPI_Comm* shm_comm, MPI_Win* shm_win) {
+
+        void *p = 0;
+
+        // Allocate using MPI shm.
+#ifdef USE_MPI
+        assert(shm_comm);
+        assert(shm_win);
+        MPI_Info win_info;
+        MPI_Info_create(&win_info);
+        MPI_Info_set(win_info, "alloc_shared_noncontig", "true");
+        MPI_Win_allocate_shared(nbytes, 1, win_info, *shm_comm, &p, shm_win);
+        MPI_Info_free(&win_info);
+        MPI_Win_lock_all(0, *shm_win);
+#else
+        THROW_YASK_EXCEPTION("Error: MPI shm allocation is not enabled; build with mpi=1");
+#endif
+
+        // Check alignment.
+        if ((size_t(p) & (CACHELINE_BYTES - 1)) != 0)
+            FORMAT_AND_THROW_YASK_EXCEPTION("Error: MPI shm-allocated " << p << " is not " <<
+                                            CACHELINE_BYTES << "-byte aligned");
+
+        // Return as a char* as required for shared_ptr ctor.
+        return static_cast<char*>(p);
+    }
+
+    // Reverse shmAlloc().
+    void ShmDeleter::operator()(char* p) {
+
+#ifdef USE_MPI
+        assert(_shm_comm);
+        assert(_shm_win);
+        MPI_Win_unlock_all(*_shm_win);
+        MPI_Win_free(_shm_win);
+        p = NULL;
+#else
+        THROW_YASK_EXCEPTION("Error: MPI shm deallocation is not enabled; build with mpi=1");
+#endif
+    }
+        
     // Return num with SI multiplier and "iB" suffix,
     // e.g., 412KiB.
     string makeByteStr(size_t nbytes)
@@ -185,8 +390,10 @@ namespace yask {
         const double onem = 1e-3;
         const double oneu = 1e-6;
         const double onen = 1e-9;
+#ifdef USE_PICO
         const double onep = 1e-12;
         const double onef = 1e-15;
+#endif
         if (num == 0.)
             os << num;
         else if (num > oneE)
@@ -201,10 +408,12 @@ namespace yask {
             os << (num / oneM) << "M";
         else if (num > oneK)
             os << (num / oneK) << "K"; // NB: official SI symbol is "k".
+#ifdef USE_PICO
         else if (num < onep)
             os << (num / onef) << "f";
         else if (num < onen)
             os << (num / onep) << "p";
+#endif
         else if (num < oneu)
             os << (num / onen) << "n";
         else if (num < onem)

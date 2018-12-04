@@ -1,4 +1,4 @@
-#!/bin/csh -f
+#!/usr/bin/env perl
 
 ##############################################################################
 ## YASK: Yet Another Stencil Kernel
@@ -23,22 +23,38 @@
 ## IN THE SOFTWARE.
 ##############################################################################
 
-# Purpose: find best result from each GA search csv file.
+# Purpose: Convert YASK log file(s) to csv format.
 
-if ( "-$1" == "-" ) then
-    if ( `echo logs/yask_*/*.csv | wc -l` > 0 ) then
-        $0 logs/yask_*/*.csv
-    else
-        echo "usage: $0 [csv-file(s) from yask_tuner.pl]"
-    endif
-    exit
-endif
+use strict;
+use File::Basename;
+use File::Path;
+use lib dirname($0)."/lib";
+use lib dirname($0)."/../lib";
+use FileHandle;
+use YaskUtils;
+use POSIX;
 
-echo "Summary of yask_tuner results:"
-head -n1 $1
-foreach f ($*)
-    echo '=========='
-    wc -l $f
-    grep ',TRUE' $f | tail -n1
-end
+if (!@ARGV) {
+  die "Usage: $0 <log file(s) from yask.sh>\n".
+    "CSV output is written to STDOUT.\n";
+}
 
+my $outFH = new FileHandle;
+$outFH = *STDOUT;
+
+# Header.
+print $outFH "log file,";
+YaskUtils::printCsvHeader($outFH);
+print $outFH "\n";
+
+# Values from files.
+for my $arg (@ARGV) {
+  for my $fn (glob $arg) {
+    my %results;
+    YaskUtils::getResultsFromFile(\%results, $fn);
+
+    print $outFH "\"$fn\",";
+    YaskUtils::printCsvValues(\%results, $outFH);
+    print $outFH "\n";
+  }
+}

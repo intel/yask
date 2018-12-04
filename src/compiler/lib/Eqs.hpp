@@ -439,7 +439,7 @@ namespace yask {
     };
 
     // A named equation bundle, which contains one or more grid-update
-    // equations.  All equations in a bundle must have the same condition.
+    // equations.  All equations in a bundle must have the same conditions.
     // Equations in a bundle must not have inter-dependencies because they
     // will be combined into a single expression.
     class EqBundle : public EqLot {
@@ -450,8 +450,9 @@ namespace yask {
 
         // TODO: move these into protected section and make accessors.
 
-        // Common condition.
+        // Common conditions.
         BoolExprPtr cond;
+        BoolExprPtr step_cond;
 
         // Common step expr.
         NumExprPtr step_expr;
@@ -493,6 +494,16 @@ namespace yask {
         virtual bool visitCond(ExprVisitor* ev) {
             if (cond.get()) {
                 cond->accept(ev);
+                return true;
+            }
+            return false;
+        }
+
+        // Visit the step condition.
+        // Return true if there was one to visit.
+        virtual bool visitStepCond(ExprVisitor* ev) {
+            if (step_cond.get()) {
+                step_cond->accept(ev);
                 return true;
             }
             return false;
@@ -590,7 +601,8 @@ namespace yask {
     typedef vector_set<EqBundlePtr> EqBundleList;
 
     // A named equation bundle pack, which contains one or more equation
-    // bundles.  All equations in a pack do not need to have the same condition.
+    // bundles.  All equations in a pack do not need to have the same
+    // domain condition, but they must have the same step condition.
     // Equations in a pack must not have inter-dependencies because they
     // may be run in parallel or in any order on any sub-domain.
     class EqBundlePack : public EqLot {
@@ -598,6 +610,9 @@ namespace yask {
         EqBundleList _bundles;  // bundles in this pack.
 
     public:
+
+        // Common condition.
+        BoolExprPtr step_cond;
 
         // Ctor.
         EqBundlePack(bool is_scratch) :
@@ -631,6 +646,16 @@ namespace yask {
         }
         virtual const EqBundleList& getItems() const {
             return _bundles;
+        }
+
+        // Visit the step condition.
+        // Return true if there was one to visit.
+        virtual bool visitStepCond(ExprVisitor* ev) {
+            if (step_cond.get()) {
+                step_cond->accept(ev);
+                return true;
+            }
+            return false;
         }
 
     };

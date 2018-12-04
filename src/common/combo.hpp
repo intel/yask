@@ -23,45 +23,20 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-//////// Some common code shared between YASK compiler and kernel. //////////
+#pragma once
 
 // Include this first to assure NDEBUG is set properly.
 #include "yask_assert.hpp"
 
-#include <sstream>
-#include "common_utils.hpp"
-
-using namespace std;
-
 namespace yask {
 
-    // A var that behaves like OMP_NUM_THREADS.
-    int yask_num_threads[yask_max_levels] = { 0 };
+    // Return the number of ways to choose 'k' things from a set of 'n'.
+    int choose(int n, int k);
 
-    // Update this version string anytime changes are
-    // committed to a repository, especially when
-    // affecting master or develop branches.
-    // Be sure to keep 2 digits in minor and patch
-    // fields to allow proper alphanumeric sorting
-    // for numbers above 9 (at least up to 99).
+    // Get the 'x'th lexicographically ordered set of 'p' elements in 'n'.
+    // Returns values in 'c'.
+    // 'x' and values in 'c' are 1-based.
+    void combination(int* c, int n, int p, int x);
 
-    // Format: "major.minor.patch".
-    const string version = "2.15.10";
-
-    string yask_get_version_string() {
-        return version;
-    }
-
-    // See yask_common_api.hpp for documentation.
-    const char* yask_exception::what() noexcept {
-        return "yask::yask_exception\n";
-    }
-
-    void yask_exception::add_message(const string& arg_msg) {
-        _msg.append(arg_msg);
-    }
-
-    const char* yask_exception::get_message() const {
-        return _msg.c_str();
-    }
+    void test_combo();
 }

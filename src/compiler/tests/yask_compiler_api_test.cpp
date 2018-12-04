@@ -45,6 +45,9 @@ int main() {
         auto stdos = ofac.new_stdout_output();
         soln->set_debug_output(stdos);
 
+        // Number of bytes in each FP value.
+        soln->set_element_bytes(4);
+
         // Define the problem dimensions.
         auto t = fac.new_step_index("t");
         auto x = fac.new_domain_index("x");
@@ -54,11 +57,8 @@ int main() {
         // Create a grid var.
         auto g1 = soln->new_grid("test_grid", {t, x, y, z});
 
-        // Create a scratch-grid var.
-        auto sg1 = soln->new_scratch_grid("scratch_grid", {x, y, z});
-
-        // Create an equation for the scratch-grid.
-        auto n1 = fac.new_const_number_node(3.14);
+        // Create an equation based on some values from 'g1'.
+        auto n1 = g1->new_grid_point({t, x, y, z});
         cout << n1->format_simple() << endl;
 
         auto n2 = g1->new_grid_point({t, x+1, y, z-2});
@@ -70,20 +70,21 @@ int main() {
         auto n4 = n2 * -n3 * 0.9;
         cout << n4->format_simple() << endl;
 
-        auto n5 = g1->new_grid_point({t, x+1, y-1, z});
+        auto n5 = g1->new_grid_point({t, x+2, y-1, z});
         cout << n5->format_simple() << endl;
 
         auto n6 = n4 / n5;
         cout << n6->format_simple() << endl;
 
-        // Define scratch grid value.
-        auto ns_lhs = sg1->new_grid_point({x, y, z});
-        cout << ns_lhs->format_simple() << endl;
+        // Create a scratch-grid var.
+        auto sg1 = soln->new_scratch_grid("scratch_grid", {x, y, z});
 
+        // Define scratch-grid value based on expression 'n6' above.
+        auto ns_lhs = sg1->new_grid_point({x, y, z});
         auto ns_eq = fac.new_equation_node(ns_lhs, n6);
         cout << ns_eq->format_simple() << endl;
 
-        // Use scratch grid value.
+        // Define another equation based on some values from 'sg1'.
         auto n7a = sg1->new_grid_point({x-1, y, z+2});
         auto n7b = sg1->new_grid_point({x+1, y-1, z-2});
         auto n8 = n7a + n7b;
@@ -97,7 +98,7 @@ int main() {
         auto sd0 = (x >= fac.new_first_domain_index(x) + 5);
 
         // Set equations to update the main grid using
-        // expression n8 in sub-domain sd0 and -n8 otherwise.
+        // expression 'n8' in sub-domain 'sd0' and -'n8' otherwise.
         auto n_eq0 = fac.new_equation_node(n_lhs, n8, sd0);
         cout << n_eq0->format_simple() << endl;
         auto n_eq1 = fac.new_equation_node(n_lhs, -n8, !sd0);
@@ -106,9 +107,6 @@ int main() {
         cout << "Solution '" << soln->get_name() << "' contains " <<
             soln->get_num_grids() << " grid(s), and " <<
             soln->get_num_equations() << " equation(s)." << endl;
-
-        // Number of bytes in each FP value.
-        soln->set_element_bytes(4);
 
         // Generate DOT output.
         auto dot_file = ofac.new_file_output("yc-api-test-cxx.dot");
