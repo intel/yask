@@ -25,18 +25,18 @@ IN THE SOFTWARE.
 
 #pragma once
 
+// Provide the needed definitions for NUMA support.
+// This is fairly convoluted because of the inconsistency of
+// support on various OS releases.
+// The USE_NUMA* vars are set in the Makefile.
 #ifdef USE_NUMA
 
 // Use numa policy library?
 #ifdef USE_NUMA_POLICY_LIB
 #include <numa.h>
 
-// Use mmap and mbind directly?
-#else
-#include <sys/mman.h>
-
 // Use <numaif.h> if available.
-#ifdef USE_NUMAIF_H
+#elif defined(USE_NUMAIF_H)
 #include <numaif.h>
 
 // This is a hack, but some systems are missing <numaif.h>.
@@ -54,7 +54,6 @@ extern "C" {
 #define MPOL_BIND        2
 #define MPOL_INTERLEAVE  3
 
-#endif
 #endif
 #endif
 
