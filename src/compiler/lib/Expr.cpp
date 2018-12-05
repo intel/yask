@@ -354,12 +354,14 @@ namespace yask {
     NumExprPtr operator-(const NumExprPtr rhs) {
         return make_shared<NegExpr>(rhs);
     }
-#define MATH_FUNC(fn_name)                                 \
-    NumExprPtr fn_name(const NumExprPtr rhs) {             \
-        return make_shared<FuncExpr>(#fn_name, rhs);       \
+#define MATH_FUNC(dsl_fn, yask_fn)                         \
+    NumExprPtr dsl_fn(const NumExprPtr rhs) {              \
+        return make_shared<FuncExpr>(#yask_fn, rhs);       \
     }
-    MATH_FUNC(yc_sqrt);
-    MATH_FUNC(yc_cbrt);
+    MATH_FUNC(sqrt, yask_sqrt);
+    MATH_FUNC(cbrt, yask_cbrt);
+    MATH_FUNC(sin, yask_sin);
+    MATH_FUNC(cos, yask_cos);
 #undef MATH_FUNC
 
     // A free function to create a constant expression.

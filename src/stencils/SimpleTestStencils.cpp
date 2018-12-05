@@ -613,7 +613,7 @@ public:
         StencilBase("test_func_1d", stencils) { }
 
     virtual void define() {
-        A(t+1, x) EQUALS yc_sqrt(A(t, x)) + yc_cbrt(A(t, x+1));
+        A(t+1, x) EQUALS sqrt(A(t, x)) + cos(A(t, x+1));
     }
 };
 

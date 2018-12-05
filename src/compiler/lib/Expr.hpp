@@ -491,8 +491,10 @@ namespace yask {
         }
     };
 #define MATH_FUNC(fn_name) NumExprPtr fn_name(const NumExprPtr rhs);
-    MATH_FUNC(yc_sqrt);
-    MATH_FUNC(yc_cbrt);
+    MATH_FUNC(sqrt);
+    MATH_FUNC(cbrt);
+    MATH_FUNC(sin);
+    MATH_FUNC(cos);
 #undef MATH_FUNC
 
     // Base class for any generic binary operator.

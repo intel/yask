@@ -481,35 +481,37 @@ namespace yask {
 
     // SVML library.
 #if REAL_BYTES == 4
-#define SVML_UNARY_SCALAR(func, libm_dpfn, libm_spfn)     \
-    ALWAYS_INLINE real_t func(const real_t& a) {          \
+#define SVML_UNARY_SCALAR(yask_fn, libm_dpfn, libm_spfn)     \
+    ALWAYS_INLINE real_t yask_fn(const real_t& a) {          \
         return libm_spfn(a);                              \
     }
 #else
-#define SVML_UNARY_SCALAR(func, libm_dpfn, libm_spfn)     \
-    ALWAYS_INLINE real_t func(const real_t& a) {          \
+#define SVML_UNARY_SCALAR(yask_fn, libm_dpfn, libm_spfn)     \
+    ALWAYS_INLINE real_t yask_fn(const real_t& a) {          \
         return libm_dpfn(a);                             \
     }
 #endif
 #if defined(NO_INTRINSICS)
-#define SVML_UNARY(func, svml_fn, libm_dpfn, libm_spfn)         \
-    SVML_UNARY_SCALAR(func, libm_dpfn, libm_spfn)                 \
-    ALWAYS_INLINE real_vec_t func(const real_vec_t& a) {          \
+#define SVML_UNARY(yask_fn, svml_fn, libm_dpfn, libm_spfn)         \
+    SVML_UNARY_SCALAR(yask_fn, libm_dpfn, libm_spfn)                 \
+    ALWAYS_INLINE real_vec_t yask_fn(const real_vec_t& a) {          \
         real_vec_t res;                                                 \
-        REAL_VEC_LOOP(i) res[i] = func(a.u.r[i]);                       \
+        REAL_VEC_LOOP(i) res[i] = yask_fn(a.u.r[i]);                       \
         return res;                                                     \
     }
 #else
-#define SVML_UNARY(func, svml_fn, libm_dpfn, libm_spfn)         \
-    SVML_UNARY_SCALAR(func, libm_dpfn, libm_spfn)                 \
-    ALWAYS_INLINE real_vec_t func(const real_vec_t& a) {       \
+#define SVML_UNARY(yask_fn, svml_fn, libm_dpfn, libm_spfn)         \
+    SVML_UNARY_SCALAR(yask_fn, libm_dpfn, libm_spfn)                 \
+    ALWAYS_INLINE real_vec_t yask_fn(const real_vec_t& a) {       \
         real_vec_t res;                                                 \
         res.u.mr = INAME(svml_fn)(a.u.mr);                              \
         return res;                                                     \
     }
 #endif
-    SVML_UNARY(yc_sqrt, sqrt, sqrt, sqrtf) // square root.
-    SVML_UNARY(yc_cbrt, cbrt, cbrt, cbrtf) // cube root.
+    SVML_UNARY(yask_sqrt, sqrt, sqrt, sqrtf) // square root.
+    SVML_UNARY(yask_cbrt, cbrt, cbrt, cbrtf) // cube root.
+    SVML_UNARY(yask_sin, sin, sin, sinf) // sine.
+    SVML_UNARY(yask_cos, cos, cos, cosf) // cosine.
 
     // Get consecutive elements from two vectors.
     // Concat a and b, shift right by count elements, keep _right_most elements.
