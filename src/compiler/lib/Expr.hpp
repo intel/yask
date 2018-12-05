@@ -482,7 +482,6 @@ namespace yask {
         virtual bool isConstVal() const {
             return _rhs->isConstVal();
         }
-        virtual void accept(ExprVisitor* ev);
         virtual NumExprPtr clone() const {
             return make_shared<FuncExpr>(*this);
         }
@@ -490,12 +489,13 @@ namespace yask {
             return _rhs;
         }
     };
-#define MATH_FUNC(fn_name) NumExprPtr fn_name(const NumExprPtr rhs);
-    MATH_FUNC(sqrt);
-    MATH_FUNC(cbrt);
-    MATH_FUNC(sin);
-    MATH_FUNC(cos);
-#undef MATH_FUNC
+#define FUNC_EXPR(fn_name) NumExprPtr fn_name(const NumExprPtr rhs);
+    FUNC_EXPR(sqrt);
+    FUNC_EXPR(cbrt);
+    FUNC_EXPR(fabs);
+    FUNC_EXPR(sin);
+    FUNC_EXPR(cos);
+#undef FUNC_EXPR
 
     // Base class for any generic binary operator.
     // Still pure virtual because clone() not implemented.

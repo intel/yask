@@ -93,11 +93,6 @@ namespace yask {
         // - For each child,
         //   - Redirect child pointer to matching node if one exists,
         //     otherwise, visit child.
-        virtual void visit(FuncExpr* ue) {
-            auto& rhs = ue->getRhs();
-            if (!findMatchTo(rhs))
-                rhs->accept(this);
-        }
         virtual void visit(UnaryNumExpr* ue) {
             auto& rhs = ue->getRhs();
             if (!findMatchTo(rhs))
@@ -228,12 +223,6 @@ namespace yask {
         }
 
         // Unary: Count as one op if num type and visit operand.
-        virtual void visit(FuncExpr* ue) {
-            if (alreadyVisited(ue)) return;
-            _numNodes++;
-            _numOps++;
-            ue->getRhs()->accept(this);
-        }
         virtual void visit(UnaryNumExpr* ue) {
             if (alreadyVisited(ue)) return;
             _numNodes++;

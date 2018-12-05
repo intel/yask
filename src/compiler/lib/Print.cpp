@@ -81,19 +81,12 @@ namespace yask {
         _numCommon += _ph.getNumCommon(ce);
     }
 
-    // Function call.
-    void PrintVisitorTopDown::visit(FuncExpr* ue) {
+    // Generic unary operators including function calls.
+    // Add parens around args to make function calls work.
+    void PrintVisitorTopDown::visit(UnaryNumExpr* ue) {
         _exprStr += ue->getOpStr() + "(";
         ue->getRhs()->accept(this);
         _exprStr += ")";
-        _numCommon += _ph.getNumCommon(ue);
-    }
-    
-    // Generic unary operators.
-    // Assumes unary operators have highest precedence, so no ()'s added.
-    void PrintVisitorTopDown::visit(UnaryNumExpr* ue) {
-        _exprStr += ue->getOpStr();
-        ue->getRhs()->accept(this);
         _numCommon += _ph.getNumCommon(ue);
     }
     void PrintVisitorTopDown::visit(UnaryBoolExpr* ue) {
@@ -270,11 +263,11 @@ namespace yask {
         // Expand the RHS, then apply operator to result.
         // Example: '-(a * b)' might output the following:
         // temp1 = a * b;
-        // temp2 = -temp1;
+        // temp2 = -(temp1);
         // with 'temp2' saved in _exprStr.
         ue->getRhs()->accept(this); // sets _exprStr.
         string rhs = getExprStrAndClear();
-        makeNextTempVar(ue) << ue->getOpStr() << ' ' << rhs << _ph.getLineSuffix();
+        makeNextTempVar(ue) << ue->getOpStr() << '(' << rhs << ')' << _ph.getLineSuffix();
     }
 
     // A numerical binary operator.

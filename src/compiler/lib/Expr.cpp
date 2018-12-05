@@ -354,15 +354,16 @@ namespace yask {
     NumExprPtr operator-(const NumExprPtr rhs) {
         return make_shared<NegExpr>(rhs);
     }
-#define MATH_FUNC(dsl_fn, yask_fn)                         \
+#define FUNC_EXPR(dsl_fn, yask_fn)                         \
     NumExprPtr dsl_fn(const NumExprPtr rhs) {              \
         return make_shared<FuncExpr>(#yask_fn, rhs);       \
     }
-    MATH_FUNC(sqrt, yask_sqrt);
-    MATH_FUNC(cbrt, yask_cbrt);
-    MATH_FUNC(sin, yask_sin);
-    MATH_FUNC(cos, yask_cos);
-#undef MATH_FUNC
+    FUNC_EXPR(sqrt, yask_sqrt);
+    FUNC_EXPR(cbrt, yask_cbrt);
+    FUNC_EXPR(fabs, yask_fabs);
+    FUNC_EXPR(sin, yask_sin);
+    FUNC_EXPR(cos, yask_cos);
+#undef FUNC_EXPR
 
     // A free function to create a constant expression.
     NumExprPtr constNum(double rhs) {
@@ -553,9 +554,6 @@ namespace yask {
         ev->visit(this);
     }
     void CodeExpr::accept(ExprVisitor* ev) {
-        ev->visit(this);
-    }
-    void FuncExpr::accept(ExprVisitor* ev) {
         ev->visit(this);
     }
     template<>

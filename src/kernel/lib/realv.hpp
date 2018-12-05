@@ -42,12 +42,16 @@ namespace yask {
     const ctrl_t ctrl_sel_bit = 0x10;
 #ifdef USE_INTRIN256
     const idx_t vec_elems = 8;
+    typedef __m256 simd_t;
+    typedef __m256i isimd_t;
     typedef float imem_t;
 #define VEC_ELEMS 8
 #define INAME(op) _mm256_ ## op ## _ps
 #define INAMEI(op) _mm256_ ## op ## _epi32
 #elif defined(USE_INTRIN512)
     const idx_t vec_elems = 16;
+    typedef __m512 simd_t;
+    typedef __m512i isimd_t;
     typedef void imem_t;
     typedef __mmask16 real_mask_t;
 #define VEC_ELEMS 16
@@ -63,12 +67,16 @@ namespace yask {
     const ctrl_t ctrl_sel_bit = 0x8;
 #ifdef USE_INTRIN256
     const idx_t vec_elems = 4;
+    typedef __m256d simd_t;
+    typedef __m256i isimd_t;
     typedef double imem_t;
 #define VEC_ELEMS 4
 #define INAME(op) _mm256_ ## op ## _pd
 #define INAMEI(op) _mm256_ ## op ## _epi64
 #elif defined(USE_INTRIN512)
     const idx_t vec_elems = 8;
+    typedef __m512d simd_t;
+    typedef __m512i isimd_t;
     typedef void imem_t;
     typedef __mmask8 real_mask_t;
 #define VEC_ELEMS 8
@@ -142,23 +150,10 @@ namespace yask {
 #ifndef NO_INTRINSICS
 
         // Real SIMD-type overlay.
-#if REAL_BYTES == 4 && defined(USE_INTRIN256)
-        __m256  mr;
-#elif REAL_BYTES == 4 && defined(USE_INTRIN512)
-        __m512  mr;
-#elif REAL_BYTES == 8 && defined(USE_INTRIN256)
-        __m256d mr;
-#elif REAL_BYTES == 8 && defined(USE_INTRIN512)
-        __m512d mr;
-#endif
+        simd_t mr;
 
         // Integer SIMD-type overlay.
-#if defined(USE_INTRIN256)
-        __m256i mi;
-#elif defined(USE_INTRIN512)
-        __m512i mi;
-#endif
-
+        isimd_t mi;
 #endif
     };
 
@@ -179,6 +174,11 @@ namespace yask {
         ALWAYS_INLINE real_vec_t(const real_vec_t_data& val) {
             operator=(val);
         }
+#ifndef NO_INTRINSICS
+        ALWAYS_INLINE real_vec_t(const simd_t& val) {
+            operator=(val);
+        }
+#endif
 
         // broadcast scalar.
         ALWAYS_INLINE real_vec_t(float val) {
@@ -212,6 +212,12 @@ namespace yask {
             u = rhs;
             return *this;
         }
+#ifndef NO_INTRINSICS
+        ALWAYS_INLINE real_vec_t& operator=(const simd_t& rhs) {
+            u.mr = rhs;
+            return *this;
+        }
+#endif
 
         // assignment: single value broadcast.
         ALWAYS_INLINE void operator=(double val) {
@@ -477,9 +483,30 @@ namespace yask {
         return real_vec_t(lhs) / rhs;
     }
 
-    // wrappers around some intrinsics w/non-intrinsic equivalents.
+    // Missing vector functions.
+#if !defined(NO_INTRINSICS)
+#define MAKE_INTRIN(op, libm_fn)                                        \
+    ALWAYS_INLINE simd_t INAME(op)(simd_t a) {                          \
+        real_vec_t rva(a);                                              \
+        real_vec_t res;                                                 \
+        REAL_VEC_LOOP(i) res[i] = libm_fn(rva.u.r[i]);                  \
+        return res.u.mr;                                                \
+    }
 
-    // SVML library.
+    // Need simd abs for 256 bits only.
+#ifdef USE_INTRIN256
+#if REAL_BYTES == 4
+    //#warning "Emulating abs intrinsic"
+    MAKE_INTRIN(abs, fabsf)
+#else
+    //#warning "Emulating abs intrinsic"
+    MAKE_INTRIN(abs, fabs)
+#endif
+#endif
+
+#endif
+
+    // Scalar math func wrappers.
 #if REAL_BYTES == 4
 #define SVML_UNARY_SCALAR(yask_fn, libm_dpfn, libm_spfn)     \
     ALWAYS_INLINE real_t yask_fn(const real_t& a) {          \
@@ -491,6 +518,8 @@ namespace yask {
         return libm_dpfn(a);                             \
     }
 #endif
+
+    // SVML library wrappers.
 #if defined(NO_INTRINSICS)
 #define SVML_UNARY(yask_fn, svml_fn, libm_dpfn, libm_spfn)         \
     SVML_UNARY_SCALAR(yask_fn, libm_dpfn, libm_spfn)                 \
@@ -510,8 +539,10 @@ namespace yask {
 #endif
     SVML_UNARY(yask_sqrt, sqrt, sqrt, sqrtf) // square root.
     SVML_UNARY(yask_cbrt, cbrt, cbrt, cbrtf) // cube root.
+    SVML_UNARY(yask_fabs, abs, fabs, fabsf) // abs value.
     SVML_UNARY(yask_sin, sin, sin, sinf) // sine.
     SVML_UNARY(yask_cos, cos, cos, cosf) // cosine.
+#undef SVML_UNARY
 
     // Get consecutive elements from two vectors.
     // Concat a and b, shift right by count elements, keep _right_most elements.
