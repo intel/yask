@@ -361,8 +361,12 @@ namespace yask {
     FUNC_EXPR(sqrt, yask_sqrt);
     FUNC_EXPR(cbrt, yask_cbrt);
     FUNC_EXPR(fabs, yask_fabs);
+    FUNC_EXPR(erf, yask_erf);
+    FUNC_EXPR(exp, yask_exp);
+    FUNC_EXPR(log, yask_log);
     FUNC_EXPR(sin, yask_sin);
     FUNC_EXPR(cos, yask_cos);
+    FUNC_EXPR(atan, yask_atan);
 #undef FUNC_EXPR
 
     // A free function to create a constant expression.

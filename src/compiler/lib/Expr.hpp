@@ -493,8 +493,12 @@ namespace yask {
     FUNC_EXPR(sqrt);
     FUNC_EXPR(cbrt);
     FUNC_EXPR(fabs);
+    FUNC_EXPR(erf);
+    FUNC_EXPR(exp);
+    FUNC_EXPR(log);
     FUNC_EXPR(sin);
     FUNC_EXPR(cos);
+    FUNC_EXPR(atan);
 #undef FUNC_EXPR
 
     // Base class for any generic binary operator.

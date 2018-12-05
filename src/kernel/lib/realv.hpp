@@ -540,8 +540,12 @@ namespace yask {
     SVML_UNARY(yask_sqrt, sqrt, sqrt, sqrtf) // square root.
     SVML_UNARY(yask_cbrt, cbrt, cbrt, cbrtf) // cube root.
     SVML_UNARY(yask_fabs, abs, fabs, fabsf) // abs value.
+    SVML_UNARY(yask_erf, erf, erf, erff) // error fn.
+    SVML_UNARY(yask_exp, exp, exp, expf) // natural exp.
+    SVML_UNARY(yask_log, log, log, logf) // natural log.
     SVML_UNARY(yask_sin, sin, sin, sinf) // sine.
     SVML_UNARY(yask_cos, cos, cos, cosf) // cosine.
+    SVML_UNARY(yask_atan, atan, atan, atanf) // inv (arc) tangent.
 #undef SVML_UNARY
 
     // Get consecutive elements from two vectors.
