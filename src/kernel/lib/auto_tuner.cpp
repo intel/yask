@@ -293,20 +293,20 @@ namespace yask {
                     auto dmax = opts->_region_sizes[dname];
 
                     // Determine distance of GD neighbors.
-                    auto step = dmin; // step by cluster size.
-                    step = max(step, min_step);
-                    step *= radius;
+                    auto dist = dmin; // step by cluster size.
+                    dist = max(dist, min_dist);
+                    dist *= radius;
 
                     auto sz = center_block[dname];
                     switch (dofs) {
                     case 0:     // reduce size in 'odim'.
-                        sz -= step;
+                        sz -= dist;
                         mdist++;
                         break;
                     case 1:     // keep size in 'odim'.
                         break;
                     case 2:     // increase size in 'odim'.
-                        sz += step;
+                        sz += dist;
                         mdist++;
                         break;
                     default:
