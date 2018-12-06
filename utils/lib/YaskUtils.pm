@@ -39,9 +39,9 @@ our @special_log_keys =
    );
 
 # Values to get from log file.
+# First one should be "fitness".
 # Key must start with the following string.
-# Case ignored.
-# Spaces and hyphens interchangeable.
+# Case ignored and spaces and hyphens interchangeable.
 our @log_keys =
   (
    # values from binary.

@@ -313,7 +313,6 @@ $outFH->open(">$outFile") or die "error: cannot write to '$outFile'\n"
   unless $checking;
 
 # things to get from the run.
-my $fitnessMetric = 'best-throughput (num-points/sec)';
 if ($showGroups) {
   push @YaskUtils::log_keys,
     'block-group-size',
@@ -811,9 +810,13 @@ sub results2fitness($) {
   my $results = shift;
   my $fitness = 0;
 
+  my $fitnessMetric = $YaskUtils::log_keys[0]; # first one is fitness.
+
   # simple lookup.
   if (defined $results->{$fitnessMetric}) {
     $fitness = $results->{$fitnessMetric};
+  } else {
+    print "WARNING: not fitness result found.\n";
   }
 
   # any adjustments can go here.
@@ -1396,10 +1399,10 @@ sub fitness {
     push @cols, $fixedVals{$fk};
   }
   push @cols, @$values, '"'.$makeCmd.'"', '"'.$longRunCmd.'"';
-  print $outFH join(',', @cols);
+  print $outFH join(',', @cols,'');
   YaskUtils::printCsvValues($results, $outFH);
   @cols = ( $fitness, $bestGen, $bestFit, $isBest ? 'TRUE':'FALSE' );
-  print $outFH join(',', @cols), "\n";
+  print $outFH join(',', '',@cols), "\n";
 
   print "final fitness = $fitness\n".
     "=====================================\n";
