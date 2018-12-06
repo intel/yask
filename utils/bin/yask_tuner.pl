@@ -155,6 +155,7 @@ $| = 1;
 print "Invocation: $0 @ARGV\n";
 for my $origOpt (@ARGV) {
   my $opt = lc $origOpt;
+  my ($lhs, $rhs) = split /=/, $origOpt, 2;
 
   if ($opt eq '-h' || $opt eq '-help') {
     usage();
@@ -168,41 +169,41 @@ for my $origOpt (@ARGV) {
   elsif ($opt eq '-debugcheck') {
     $debugCheck = 1;
   }
-  elsif ($origOpt =~ /^-killcmd=(.*)$/i) {
-    $killCmd = $1;
+  elsif ($opt =~ /^-?killcmd=(.*)$/i) {
+    $killCmd = $rhs;
   }
-  elsif ($origOpt =~ /^-outdir=(.*)$/i) {
-    $outDir = $1;
+  elsif ($opt =~ /^-?outdir=(.*)$/i) {
+    $outDir = $rhs;
   }
-  elsif ($origOpt =~ /^-makeargs=(.*)$/i) {
-    $makeArgs = $1;
+  elsif ($opt =~ /^-?makeargs=(.*)$/i) {
+    $makeArgs = $rhs;
   }
-  elsif ($origOpt =~ /^-makeprefix=(.*)$/i) {
-    $makePrefix = $1;
+  elsif ($opt =~ /^-?makeprefix=(.*)$/i) {
+    $makePrefix = $rhs;
   }
-  elsif ($opt =~ '^-maketimeout=(\d+)$') {
-    $makeTimeout = $1;
+  elsif ($opt =~ '^-?maketimeout=(\d+)$') {
+    $makeTimeout = $rhs;
   }
-  elsif ($origOpt =~ /^-runargs=(.*)$/i) {
-    $runArgs = $1;
+  elsif ($opt =~ /^-?runargs=(.*)$/i) {
+    $runArgs = $rhs;
   }
   elsif ($opt eq '-sde') {
     $sde = 1;
     $sim = 1;
   }
-  elsif ($opt =~ '^-ranks=(\d+)$') {
-    $nranks = $1;
+  elsif ($opt =~ '^-?ranks=(\d+)$') {
+    $nranks = $rhs;
   }
-  elsif ($opt =~ '^-mic=(\d+)$') {
-    $mic = $1;
+  elsif ($opt =~ '^-?mic=(\d+)$') {
+    $mic = $rhs;
     $arch = 'knc';
     $host = hostname()."-mic$mic";
   }
-  elsif ($opt =~ '^-arch=(\S+)$') {
-    $arch = $1;
+  elsif ($opt =~ '^-?arch=(\S+)$') {
+    $arch = $rhs;
   }
-  elsif ($origOpt =~ /^-host=(\S+)$/) {
-    $host = $1;
+  elsif ($opt =~ /^-?host=(\S+)$/) {
+    $host = $rhs;
   }
   elsif ($opt eq '-dp') {
     $dp = 1;
@@ -210,22 +211,22 @@ for my $origOpt (@ARGV) {
   elsif ($opt eq '-sp') {
     $dp = 0;
   }
-  elsif ($opt =~ '^-mem=([.\d]+)-([.\d]+)$') {
+  elsif ($opt =~ '^-?mem=([.\d]+)-([.\d]+)$') {
     $minGB = $1;
     $maxGB = $2;
   }
-  elsif ($opt =~ '^-radius=(\d+)$') {
-    $radius = $1;
+  elsif ($opt =~ '^-?radius=(\d+)$') {
+    $radius = $rhs;
   }
-  elsif ($opt =~ '^-stencil=(\w+)$') {
-    $stencil = $1;
+  elsif ($opt =~ '^-?stencil=(\w+)$') {
+    $stencil = $rhs;
   }
   elsif ($opt eq '-noprefetch') {
     $geneRanges{$autoKey.'pfd_l1'} = [ 0 ];
     $geneRanges{$autoKey.'pfd_l2'} = [ 0 ];
   }
-  elsif ($opt =~ '^-maxvecsincluster=(\d+)$') {
-    $maxVecsInCluster = $1;
+  elsif ($opt =~ '^-?maxvecsincluster=(\d+)$') {
+    $maxVecsInCluster = $rhs;
   }
   elsif ($opt eq '-zvec') {
     $zVec = 1;
@@ -244,8 +245,8 @@ for my $origOpt (@ARGV) {
     $sweep = 1;
     print "Sweeping all values instead of searching with GA.\n";
   }
-  elsif ($opt =~ '^-folds=(\s*\d+\s+\d+\s+\d+\s*(,\s*\d+\s+\d+\s+\d+\s*)*)$') {
-    my $val = $1; 
+  elsif ($opt =~ '^-?folds=(\s*\d+\s+\d+\s+\d+\s*(,\s*\d+\s+\d+\s+\d+\s*)*)$') {
+    my $val = $rhs;
     $val =~ tr/ //s;
     $val =~ s/^\s+|\s+$//g;
     $val =~ s/,\s+/,/g;
@@ -254,7 +255,7 @@ for my $origOpt (@ARGV) {
   }
 
   # Assume a gene name if nothing else matches.
-  elsif ($opt =~ /^-?(.+)=(\d+)(-(\d+))?(:(\d+))?$/) {
+  elsif ($opt =~ /^-?(\S+)=(\d+)(-(\d+))?(:(\d+))?$/) {
     my ($key, $min, $max, $stride) = ($1, $2, $4, $6);
     $max = $min if !defined $max;
     $stride = 1 if !defined $stride;
