@@ -983,9 +983,10 @@ echo-settings:
 	echo streaming_stores=$(streaming_stores)
 
 # Print stats on inner SIMD loops from asm file.
+# Compile with EXTRA_YK_CXXFLAGS=-Fa to make asm file.
 code-stats:
 	@echo "Code stats for stencil computation:"
-	$(PERL) $(GET_LOOP_STATS) -t=$(YK_CODE_FILE) factory.s
+	$(PERL) $(GET_LOOP_STATS) -f=calc_loop_of_clusters factory.s
 
 # Print some usage info.
 help:
