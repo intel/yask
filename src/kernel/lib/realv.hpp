@@ -114,10 +114,10 @@ namespace yask {
     for (int i=0; i<VLEN; i++)
 #else
 #define REAL_VEC_LOOP(i)                                                \
-    _Pragma("vector aligned") _Pragma("vector always") _Pragma("omp simd")  \
+    _Pragma("vector aligned") _Pragma("vector always") _Pragma("omp simd") \
     for (int i=0; i<VLEN; i++)
-#define REAL_VEC_LOOP_UNALIGNED(i)              \
-    _Pragma("vector always") _Pragma("omp simd")    \
+#define REAL_VEC_LOOP_UNALIGNED(i)                      \
+    _Pragma("vector always") _Pragma("omp simd")        \
     for (int i=0; i<VLEN; i++)
 #endif
 
@@ -483,61 +483,82 @@ namespace yask {
         return real_vec_t(lhs) / rhs;
     }
 
+    // Safe sqrt.
+    ALWAYS_INLINE real_t sqrt_absf(real_t a) {
+        return sqrtf(fabsf(a));
+    }
+    ALWAYS_INLINE real_t sqrt_abs(real_t a) {
+        return sqrt(fabs(a));
+    }
+
     // Missing vector functions.
 #if !defined(NO_INTRINSICS)
-#define MAKE_INTRIN(op, libm_fn)                                        \
-    ALWAYS_INLINE simd_t INAME(op)(simd_t a) {                          \
-        real_vec_t rva(a);                                              \
-        real_vec_t res;                                                 \
-        REAL_VEC_LOOP(i) res[i] = libm_fn(rva.u.r[i]);                  \
-        return res.u.mr;                                                \
+#define MAKE_INTRIN(op, libm_fn)                        \
+    ALWAYS_INLINE simd_t INAME(op)(simd_t a) {          \
+        real_vec_t rva(a);                              \
+        real_vec_t res;                                 \
+        REAL_VEC_LOOP(i) res[i] = libm_fn(rva.u.r[i]);  \
+        return res.u.mr;                                \
     }
 
     // Need simd abs for 256 bits only.
 #ifdef USE_INTRIN256
 #if REAL_BYTES == 4
-    //#warning "Emulating abs intrinsic"
     MAKE_INTRIN(abs, fabsf)
 #else
-    //#warning "Emulating abs intrinsic"
     MAKE_INTRIN(abs, fabs)
 #endif
+#endif
+
+    // Safe sqrt.
+#if REAL_BYTES == 4
+    MAKE_INTRIN(sqrt_abs, sqrt_absf)
+#else
+    MAKE_INTRIN(sqrt_abs, sqrt_abs)
 #endif
 
 #endif
 
     // Scalar math func wrappers.
 #if REAL_BYTES == 4
-#define SVML_UNARY_SCALAR(yask_fn, libm_dpfn, libm_spfn)     \
-    ALWAYS_INLINE real_t yask_fn(const real_t& a) {          \
-        return libm_spfn(a);                              \
+#define SVML_UNARY_SCALAR(yask_fn, libm_dpfn, libm_spfn)        \
+    ALWAYS_INLINE real_t yask_fn(const real_t& a) {             \
+        return libm_spfn(a);                                    \
     }
 #else
-#define SVML_UNARY_SCALAR(yask_fn, libm_dpfn, libm_spfn)     \
-    ALWAYS_INLINE real_t yask_fn(const real_t& a) {          \
-        return libm_dpfn(a);                             \
+#define SVML_UNARY_SCALAR(yask_fn, libm_dpfn, libm_spfn)        \
+    ALWAYS_INLINE real_t yask_fn(const real_t& a) {             \
+        return libm_dpfn(a);                                    \
     }
 #endif
 
     // SVML library wrappers.
 #if defined(NO_INTRINSICS)
-#define SVML_UNARY(yask_fn, svml_fn, libm_dpfn, libm_spfn)         \
-    SVML_UNARY_SCALAR(yask_fn, libm_dpfn, libm_spfn)                 \
-    ALWAYS_INLINE real_vec_t yask_fn(const real_vec_t& a) {          \
-        real_vec_t res;                                                 \
-        REAL_VEC_LOOP(i) res[i] = yask_fn(a.u.r[i]);                       \
-        return res;                                                     \
+#define SVML_UNARY(yask_fn, svml_fn, libm_dpfn, libm_spfn)      \
+    SVML_UNARY_SCALAR(yask_fn, libm_dpfn, libm_spfn)            \
+    ALWAYS_INLINE real_vec_t yask_fn(const real_vec_t& a) {     \
+        real_vec_t res;                                         \
+        REAL_VEC_LOOP(i) res[i] = yask_fn(a.u.r[i]);            \
+        return res;                                             \
     }
 #else
-#define SVML_UNARY(yask_fn, svml_fn, libm_dpfn, libm_spfn)         \
-    SVML_UNARY_SCALAR(yask_fn, libm_dpfn, libm_spfn)                 \
-    ALWAYS_INLINE real_vec_t yask_fn(const real_vec_t& a) {       \
-        real_vec_t res;                                                 \
-        res.u.mr = INAME(svml_fn)(a.u.mr);                              \
-        return res;                                                     \
+#define SVML_UNARY(yask_fn, svml_fn, libm_dpfn, libm_spfn)      \
+    SVML_UNARY_SCALAR(yask_fn, libm_dpfn, libm_spfn)            \
+    ALWAYS_INLINE real_vec_t yask_fn(const real_vec_t& a) {     \
+        real_vec_t res;                                         \
+        res.u.mr = INAME(svml_fn)(a.u.mr);                      \
+        return res;                                             \
     }
 #endif
+
+    // Use safe sqrt when running checked code to avoid NaNs.
+    // In production usage, it is the responsibility of the user
+    // to guarantee that the arguments to sqrt() are non-negative.
+#ifdef CHECK
+    SVML_UNARY(yask_sqrt, sqrt_abs, sqrt_abs, sqrt_absf) // square root.
+#else
     SVML_UNARY(yask_sqrt, sqrt, sqrt, sqrtf) // square root.
+#endif
     SVML_UNARY(yask_cbrt, cbrt, cbrt, cbrtf) // cube root.
     SVML_UNARY(yask_fabs, abs, fabs, fabsf) // abs value.
     SVML_UNARY(yask_erf, erf, erf, erff) // error fn.
