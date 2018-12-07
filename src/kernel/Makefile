@@ -461,8 +461,8 @@ endif
 ifneq ($(filter %icpc %icc,$(notdir $(YK_CXX))),)  # Intel compiler
 
  YK_CXXFLAGS	+=	$(ISA) -debug extended -restrict -ansi-alias -fno-alias
- YK_CXXFLAGS	+=	-fimf-precision=low -fast-transcendentals -no-prec-sqrt \
-			-no-prec-div -fp-model fast=2 -fno-protect-parens -ftz \
+ YK_CXXFLAGS	+=	-fimf-use-svml=true -fimf-precision=low -fast-transcendentals \
+			-no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -ftz \
 			-fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
  YK_CXXFLAGS	+=	-no-diag-message-catalog
  YK_CXXFLAGS	+=	-vec-threshold0
@@ -986,7 +986,7 @@ echo-settings:
 # Compile with EXTRA_YK_CXXFLAGS=-Fa to make asm file.
 code-stats:
 	@echo "Code stats for stencil computation:"
-	$(PERL) $(GET_LOOP_STATS) -f=calc_loop_of_clusters factory.s
+	$(PERL) $(GET_LOOP_STATS) -p -f=calc_loop_of_clusters factory.s
 
 # Print some usage info.
 help:
