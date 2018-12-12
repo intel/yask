@@ -80,7 +80,7 @@ else ifneq ($(findstring iso3dfd,$(stencil)),)
   cluster			:=	z=2
   pfd_l1			:=	0
   pfd_l2			:=	0
- else ifneq ($(filter $(arch),skx skl),)
+ else ifneq ($(filter $(arch),skx skl clx),)
   fold_4byte			:=	x=4,y=4
   def_thread_divisor		:=	1
   def_block_threads		:=	2
@@ -113,7 +113,7 @@ else ifneq ($(findstring awp,$(stencil)),)
   more_def_args			+=	-sbx 32 -sby 2 -sbz 32
   pfd_l1			:=	1
   pfd_l2			:=	2
- else ifneq ($(filter $(arch),skx skl),)
+ else ifneq ($(filter $(arch),skx skl clx),)
   fold_4byte			:=	x=2,y=8
   def_block_args		:=	-b 32 -bx 96
   pfd_l1			:=	1
@@ -123,7 +123,7 @@ else ifneq ($(findstring awp,$(stencil)),)
 else ifneq ($(findstring ssg,$(stencil)),)
  time_alloc		:=	1
  def_rank_args		:=	-d 512
- ifneq ($(filter $(arch),skx skl),)
+ ifneq ($(filter $(arch),skx skl clx),)
   def_rank_args		:=	-d 640 -dx 320
   fold_4byte		:=	x=4,y=4
   def_block_args	:=	-bx 96 -by 16 -bz 80
@@ -140,7 +140,7 @@ else ifneq ($(findstring fsg,$(stencil)),)
   def_block_threads	:=	2
   pfd_l1		:=	0
   pfd_l2		:=	2
- else ifneq ($(filter $(arch),skx skl),)
+ else ifneq ($(filter $(arch),skx skl clx),)
   fold_4byte		:=	x=4,y=4
   def_block_args	:=	-bx 188 -by 12 -bz 24
   def_block_threads	:=	1
@@ -150,7 +150,7 @@ else ifeq ($(stencil),tti)
  MACROS			+=	MAX_EXCH_DIST=3
  radius			:=	2
  def_rank_args		:=	-d 512
- ifneq ($(filter $(arch),skx skl),)
+ ifneq ($(filter $(arch),skx skl clx),)
   fold_4byte		:=	x=4,y=4
   def_block_args	:=	-bx 80 -by 16 -bz 40
   def_block_threads	:=	1
@@ -185,8 +185,10 @@ else ifeq ($(arch),knl)
  pfd_l1		?=	1
  pfd_l2		?=	0
 
-else ifneq ($(filter $(arch),skx skl),)
+else ifneq ($(filter $(arch),skx skl clx),)
 
+ # Note that 'skl' targets the server SKUs with avx512 ISA,
+ # not the client SKUs without.
  ISA		?=	-xCORE-AVX512
  GCXX_ISA	?=	-march=knl -mno-avx512er -mno-avx512pf
  MACROS		+=	USE_INTRIN512
@@ -472,9 +474,9 @@ ifneq ($(filter %icpc %icc,$(notdir $(YK_CXX))),)  # Intel compiler
  #YK_CXXFLAGS	+=	-qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
  YK_CXX_VER_CMD :=	$(YK_CXX) -V
 
-# Use 512-bit code on SKL.
+# Use 512-bit code on SKX and CLX.
 # (Commented out because it doesn't help performance, and it breaks Devito.)
-ifneq ($(filter $(arch),skx skl),)
+ifneq ($(filter $(arch),skx skl clx),)
  #YK_CXXFLAGS	+=	-qopt-zmm-usage=high
 endif
 
@@ -675,6 +677,7 @@ $(YK_GEN_DIR)/yask_grid_code.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
 $(YK_CODE_FILE): $(YC_EXEC)
 	$(MKDIR) $(dir $@)
 	$(RUN_PREFIX) $< $(YC_FLAGS) $(EXTRA_YC_FLAGS) -p $(YC_TARGET) $@ | tee $(YC_REPORT_FILE) 2>&1
+	@ grep -q -E 'End of .* code' $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because no indent program was found."
@@ -983,7 +986,7 @@ echo-settings:
 	echo streaming_stores=$(streaming_stores)
 
 # Print stats on inner SIMD loops from asm file.
-# Compile with EXTRA_YK_CXXFLAGS=-Fa to make asm file.
+# Compile with 'EXTRA_YK_CXXFLAGS=-Fa CXX_PREFIX=' to make asm file.
 code-stats:
 	@echo "Code stats for stencil computation:"
 	$(PERL) $(GET_LOOP_STATS) -p -f=calc_loop_of_clusters factory.s
