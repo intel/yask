@@ -218,9 +218,8 @@ namespace yask {
             else if (force) {
                 if (tooSmall)
                     res = td_res;
-                else {
-                    makeNextTempVar(res, ex) << res << _ph.getLineSuffix();
-                }
+                else
+                    makeNextTempVar(res, ex) << td_res << _ph.getLineSuffix();
             }
 
             // otherwise, there are common subexprs, and top-down is not forced,

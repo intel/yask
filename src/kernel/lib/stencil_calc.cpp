@@ -741,13 +741,16 @@ namespace yask {
                 int posn = gp->get_dim_posn(dname);
                 if (posn >= 0) {
 
-                    // Adjust begin & end scan indices based on halos.
-                    // Round up to fold sizes because it shouldn't hurt to
-                    // calculate extra scratch values.
+                    // Get halos, which need to be written to for
+                    // scratch vars.
                     idx_t lh = gp->get_left_halo_size(posn);
                     idx_t rh = gp->get_right_halo_size(posn);
+
+                    // Round up halos to fold sizes.
                     lh = ROUND_UP(lh, fold_pts[j]);
                     rh = ROUND_UP(rh, fold_pts[j]);
+
+                    // Adjust begin & end scan indices based on halos.
                     adj_idxs.begin[i] = idxs.begin[i] - lh;
                     adj_idxs.end[i] = idxs.end[i] + rh;
 
