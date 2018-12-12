@@ -101,15 +101,24 @@ namespace yask {
         virtual ~Expr() { }
 
         // For visitors.
-        virtual void accept(ExprVisitor* ev) =0;
-        virtual void accept(ExprVisitor* ev) const;
+        virtual string accept(ExprVisitor* ev) =0;
+        virtual string accept(ExprVisitor* ev) const;
 
         // check for expression equivalency.
         // Does *not* check value equivalency except for
         // constants.
         virtual bool isSame(const Expr* other) const =0;
-        virtual bool isSame(const ExprPtr other) const {
+        virtual bool isSame(const ExprPtr& other) const {
             return isSame(other.get());
+        }
+
+        // Make pair if possible.
+        // Return whether pair made.
+        virtual bool makePair(Expr* other) {
+            return false;
+        }
+        virtual bool makePair(ExprPtr other) {
+            return makePair(other.get());
         }
 
         // Return a simple string expr.
@@ -256,7 +265,7 @@ namespace yask {
                     return _dimName;
             }
         }
-        virtual void accept(ExprVisitor* ev);
+        virtual string accept(ExprVisitor* ev);
 
         // Simple offset?
         virtual bool isOffsetFrom(string dim, int& offset);
@@ -340,7 +349,7 @@ namespace yask {
         virtual bool isConstVal() const { return true; }
         double getNumVal() const { return _f; }
 
-        virtual void accept(ExprVisitor* ev);
+        virtual string accept(ExprVisitor* ev);
 
         // Check for equivalency.
         virtual bool isSame(const Expr* other) const {
@@ -373,7 +382,7 @@ namespace yask {
             return _code;
         }
 
-        virtual void accept(ExprVisitor* ev);
+        virtual string accept(ExprVisitor* ev);
 
         // Check for equivalency.
         virtual bool isSame(const Expr* other) const {
@@ -407,7 +416,7 @@ namespace yask {
         const ArgT& getRhs() const { return _rhs; }
         const string& getOpStr() const { return _opStr; }
 
-        virtual void accept(ExprVisitor* ev);
+        virtual string accept(ExprVisitor* ev);
 
         // Check for equivalency.
         virtual bool isSame(const Expr* other) const {
@@ -471,35 +480,6 @@ namespace yask {
         }
     };
 
-    // Math functions.
-    // TODO: create API access.
-    class FuncExpr : public UnaryNumExpr {
-    public:
-        FuncExpr(const string& opStr, NumExprPtr rhs) :
-            UnaryNumExpr(opStr, rhs) { }
-        FuncExpr(const FuncExpr& src) :
-            UnaryExpr(src) { }
-        virtual bool isConstVal() const {
-            return _rhs->isConstVal();
-        }
-        virtual NumExprPtr clone() const {
-            return make_shared<FuncExpr>(*this);
-        }
-        virtual yc_number_node_ptr get_rhs() {
-            return _rhs;
-        }
-    };
-#define FUNC_EXPR(fn_name) NumExprPtr fn_name(const NumExprPtr rhs);
-    FUNC_EXPR(sqrt);
-    FUNC_EXPR(cbrt);
-    FUNC_EXPR(fabs);
-    FUNC_EXPR(erf);
-    FUNC_EXPR(exp);
-    FUNC_EXPR(log);
-    FUNC_EXPR(sin);
-    FUNC_EXPR(cos);
-    FUNC_EXPR(atan);
-#undef FUNC_EXPR
 
     // Base class for any generic binary operator.
     // Still pure virtual because clone() not implemented.
@@ -520,7 +500,7 @@ namespace yask {
 
         ArgT& getLhs() { return _lhs; }
         const ArgT& getLhs() const { return _lhs; }
-        virtual void accept(ExprVisitor* ev);
+        virtual string accept(ExprVisitor* ev);
 
         // Check for equivalency.
         virtual bool isSame(const Expr* other) const {
@@ -700,10 +680,18 @@ namespace yask {
             _opStr.swap(ce->_opStr);
         }
 
-        virtual void accept(ExprVisitor* ev);
+        virtual string accept(ExprVisitor* ev);
 
         // Check for equivalency.
         virtual bool isSame(const Expr* other) const;
+
+        virtual bool isConstVal() const {
+            for(auto op : _ops) {
+                if (!op->isConstVal())
+                    return false;
+            }
+            return true;
+        }
 
         // APIs.
         virtual int get_num_operands() {
@@ -736,14 +724,6 @@ namespace yask {
     virtual ~type() { }                                                 \
     static string opStr() { return opstr; }                             \
     virtual bool isOffsetFrom(string dim, int& offset);                 \
-    virtual bool isConstVal() const {                                   \
-        bool is_const = true;                                           \
-        for(auto op : _ops) {                                           \
-            bool rhs = op->isConstVal();                                \
-            is_const &= rhs;                                            \
-        }                                                               \
-        return is_const;                                                \
-    }                                                                   \
     virtual double getNumVal() const {                                  \
         double val = baseVal;                                           \
         for(auto op : _ops) {                                           \
@@ -754,10 +734,89 @@ namespace yask {
         return val;                                                     \
     }                                                                   \
     virtual NumExprPtr clone() const { return make_shared<type>(*this); } \
-    }
-    COMM_EXPR(MultExpr, yc_multiply_node, "*", 1.0, lhs * rhs);
-    COMM_EXPR(AddExpr, yc_add_node, "+", 0.0, lhs + rhs);
+    };
+    COMM_EXPR(MultExpr, yc_multiply_node, "*", 1.0, lhs * rhs)
+    COMM_EXPR(AddExpr, yc_add_node, "+", 0.0, lhs + rhs)
 #undef COMM_EXPR
+
+    // An FP function call with an arbitrary number of FP args.
+    // e.g., sin(a).
+    // TODO: add APIs.
+    class FuncExpr : public NumExpr {
+    protected:
+        string _opStr;          // name of function.
+        NumExprPtrVec _ops;     // args to function.
+
+        // Special handler for pairable functions like sincos().
+        FuncExpr* _paired = nullptr;     // ptr to counterpart.
+
+    public:
+        FuncExpr(const string& opStr, const std::initializer_list< const NumExprPtr > & ops) :
+            _opStr(opStr) {
+            for (auto& op : ops)
+                _ops.push_back(op->clone());
+        }
+        FuncExpr(const FuncExpr& src) :
+            _opStr(src._opStr, {}) {
+
+            // Deep copy.
+            for (auto& op : src._ops)
+                _ops.push_back(op->clone());
+        }
+
+        // Accessors.
+        NumExprPtrVec& getOps() { return _ops; }
+        const NumExprPtrVec& getOps() const { return _ops; }
+        const string& getOpStr() const { return _opStr; }
+
+        virtual string accept(ExprVisitor* ev);
+
+        // Check for equivalency.
+        virtual bool isSame(const Expr* other) const;
+
+        virtual bool makePair(Expr* other);
+        virtual FuncExpr* getPair() { return _paired; }
+
+        virtual bool isConstVal() const {
+            for(auto op : _ops) {
+                if (!op->isConstVal())
+                    return false;
+            }
+            return true;
+        }
+        virtual NumExprPtr clone() const {
+            return make_shared<FuncExpr>(*this);
+        }
+
+        // APIs.
+        virtual int get_num_operands() {
+            return _ops.size();
+        }
+        virtual std::vector<yc_number_node_ptr> get_operands() {
+            std::vector<yc_number_node_ptr> nv;
+            for (int i = 0; i < get_num_operands(); i++)
+                nv.push_back(_ops.at(i));
+            return nv;
+        }
+    };
+
+#define FUNC_EXPR(fn_name) NumExprPtr fn_name(const NumExprPtr rhs)
+    FUNC_EXPR(sqrt);
+    FUNC_EXPR(cbrt);
+    FUNC_EXPR(fabs);
+    FUNC_EXPR(erf);
+    FUNC_EXPR(exp);
+    FUNC_EXPR(log);
+    FUNC_EXPR(sin);
+    FUNC_EXPR(cos);
+    FUNC_EXPR(atan);
+#undef FUNC_EXPR
+#define FUNC_EXPR(fn_name) \
+    NumExprPtr fn_name(const NumExprPtr arg1, const NumExprPtr arg2); \
+    NumExprPtr fn_name(double arg1, const NumExprPtr arg2); \
+    NumExprPtr fn_name(const NumExprPtr arg1, double arg2)
+    FUNC_EXPR(pow);
+#undef FUNC_EXPR
 
     // One specific point in a grid.
     // This is an expression leaf-node.
@@ -857,7 +916,7 @@ namespace yask {
         bool operator<(const GridPoint& rhs) const;
 
         // Take ev to each value.
-        virtual void accept(ExprVisitor* ev);
+        virtual string accept(ExprVisitor* ev);
 
         // Check for equivalency.
         virtual bool isSame(const Expr* other) const {
@@ -965,7 +1024,7 @@ namespace yask {
         BoolExprPtr& getStepCond() { return _step_cond; }
         const BoolExprPtr& getStepCond() const { return _step_cond; }
         void setStepCond(BoolExprPtr step_cond) { _step_cond = step_cond; }
-        virtual void accept(ExprVisitor* ev);
+        virtual string accept(ExprVisitor* ev);
         static string exprOpStr() { return "EQUALS"; }
         static string condOpStr() { return "IF"; }
         static string stepCondOpStr() { return "IF_STEP"; }

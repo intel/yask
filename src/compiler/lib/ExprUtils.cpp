@@ -31,7 +31,7 @@ using namespace std;
 
 namespace yask {
 
-    void CombineVisitor::visit(CommutativeExpr* ce) {
+    string CombineVisitor::visit(CommutativeExpr* ce) {
         auto& ops = ce->getOps();
 
         // Visit ops first (depth-first).
@@ -66,6 +66,7 @@ namespace yask {
                 }
             }
         }
+        return "";
     }
 
 
@@ -113,4 +114,41 @@ namespace yask {
         _seen.insert(ep);
         return false;
     }
+
+    // Look for function pairs.
+    string PairingVisitor::visit(FuncExpr* fe) {
+
+        // Already visited this node?
+        if (_seen.count(fe)) {
+#if DEBUG_PAIR >= 2
+            cout << "  //** already seen '" << ep->makeStr() << "'@" << ep << endl;
+#endif
+            return "";
+        }
+
+        // Loop through func nodes already seen.
+        for (auto& oep : _seen) {
+#if DEBUG_PAIR >= 3
+            cout << "  //** comparing '" << fe->makeStr() << "'@" << ep <<
+                " to '" << oep->makeStr() << "'@" << oep << endl;
+#endif
+
+            // Pair?
+            if (fe->makePair(oep)) {
+#if DEBUG_PAIR >= 1
+                cout << "   //** found pair: '" << ep->makeStr() << "'@" << ep <<
+                    " to '" << oep->makeStr() << "'@" << oep << endl;
+#endif
+
+                // Count and done.
+                _numChanges++;
+                break;
+            }
+        }
+
+        // Mark as seen.
+        _seen.insert(fe);
+        return "";
+    }
+
 } // namespace yask.

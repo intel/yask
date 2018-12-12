@@ -605,7 +605,9 @@ protected:
     MAKE_DOMAIN_INDEX(x);         // spatial dim.
 
     // Vars.
-    MAKE_GRID(A, t, x); // time-varying grid.
+    MAKE_GRID(A, t, x);
+    MAKE_GRID(B, t, x);
+    MAKE_GRID(C, t, x);
 
 public:
 
@@ -613,7 +615,9 @@ public:
         StencilBase("test_func_1d", stencils) { }
 
     virtual void define() {
-        A(t+1, x) EQUALS sqrt(A(t, x)) + cos(A(t, x+1));
+        A(t+1, x) EQUALS cos(A(t, x)) - 2 * sin(A(t, x));
+        B(t+1, x) EQUALS pow(B(t, x), 1.0/2.5);
+        C(t+1, x) EQUALS atan(A(t+1, x) + cbrt(C(t, x+1)));
     }
 };
 

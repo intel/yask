@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// Support for vector code generation using 512-bit instrinsics.
+// Support for vector code generation using SIMD instrinsics.
 
 #ifndef CPPINTRIN_HPP
 #define CPPINTRIN_HPP

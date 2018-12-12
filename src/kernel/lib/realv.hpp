@@ -484,10 +484,10 @@ namespace yask {
     }
 
     // Safe sqrt.
-    ALWAYS_INLINE real_t sqrt_absf(real_t a) {
+    ALWAYS_INLINE float sqrt_absf(float a) {
         return sqrtf(fabsf(a));
     }
-    ALWAYS_INLINE real_t sqrt_abs(real_t a) {
+    ALWAYS_INLINE double sqrt_abs(double a) {
         return sqrt(fabs(a));
     }
 
@@ -519,34 +519,56 @@ namespace yask {
 
 #endif
 
-    // Scalar math func wrappers.
+    // math func wrappers.
 #if REAL_BYTES == 4
-#define SVML_UNARY_SCALAR(yask_fn, libm_dpfn, libm_spfn)        \
+#define SVML_1ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)        \
     ALWAYS_INLINE real_t yask_fn(const real_t& a) {             \
         return libm_spfn(a);                                    \
     }
+#define SVML_2ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)        \
+    ALWAYS_INLINE real_t yask_fn(const real_t& a, const real_t& b) {    \
+        return libm_spfn(a, b);                                         \
+    }
 #else
-#define SVML_UNARY_SCALAR(yask_fn, libm_dpfn, libm_spfn)        \
+#define SVML_1ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)        \
     ALWAYS_INLINE real_t yask_fn(const real_t& a) {             \
         return libm_dpfn(a);                                    \
+    }
+#define SVML_2ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)        \
+    ALWAYS_INLINE real_t yask_fn(const real_t& a, const real_t& b) {    \
+        return libm_dpfn(a, b);                                         \
     }
 #endif
 
     // SVML library wrappers.
 #if defined(NO_INTRINSICS)
-#define SVML_UNARY(yask_fn, svml_fn, libm_dpfn, libm_spfn)      \
-    SVML_UNARY_SCALAR(yask_fn, libm_dpfn, libm_spfn)            \
+#define SVML_1ARG(yask_fn, svml_fn, libm_dpfn, libm_spfn)      \
+    SVML_1ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)            \
     ALWAYS_INLINE real_vec_t yask_fn(const real_vec_t& a) {     \
         real_vec_t res;                                         \
         REAL_VEC_LOOP(i) res[i] = yask_fn(a.u.r[i]);            \
         return res;                                             \
     }
+#define SVML_2ARG(yask_fn, svml_fn, libm_dpfn, libm_spfn)      \
+    SVML_2ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)            \
+    ALWAYS_INLINE real_vec_t yask_fn(const real_vec_t& a, const real_vec_t& b) {    \
+        real_vec_t res;                                         \
+        REAL_VEC_LOOP(i) res[i] = yask_fn(a.u.r[i], b.u.r[i]);  \
+        return res;                                             \
+    }
 #else
-#define SVML_UNARY(yask_fn, svml_fn, libm_dpfn, libm_spfn)      \
-    SVML_UNARY_SCALAR(yask_fn, libm_dpfn, libm_spfn)            \
+#define SVML_1ARG(yask_fn, svml_fn, libm_dpfn, libm_spfn)      \
+    SVML_1ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)            \
     ALWAYS_INLINE real_vec_t yask_fn(const real_vec_t& a) {     \
         real_vec_t res;                                         \
         res.u.mr = INAME(svml_fn)(a.u.mr);                      \
+        return res;                                             \
+    }
+#define SVML_2ARG(yask_fn, svml_fn, libm_dpfn, libm_spfn)      \
+    SVML_2ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)            \
+    ALWAYS_INLINE real_vec_t yask_fn(const real_vec_t& a, const real_vec_t& b) {    \
+        real_vec_t res;                                         \
+        res.u.mr = INAME(svml_fn)(a.u.mr, b.u.mr);              \
         return res;                                             \
     }
 #endif
@@ -555,19 +577,49 @@ namespace yask {
     // In production usage, it is the responsibility of the user
     // to guarantee that the arguments to sqrt() are non-negative.
 #ifdef CHECK
-    SVML_UNARY(yask_sqrt, sqrt_abs, sqrt_abs, sqrt_absf) // square root.
+    SVML_1ARG(yask_sqrt, sqrt_abs, sqrt_abs, sqrt_absf) // square root.
 #else
-    SVML_UNARY(yask_sqrt, sqrt, sqrt, sqrtf) // square root.
+    SVML_1ARG(yask_sqrt, sqrt, sqrt, sqrtf) // square root.
 #endif
-    SVML_UNARY(yask_cbrt, cbrt, cbrt, cbrtf) // cube root.
-    SVML_UNARY(yask_fabs, abs, fabs, fabsf) // abs value.
-    SVML_UNARY(yask_erf, erf, erf, erff) // error fn.
-    SVML_UNARY(yask_exp, exp, exp, expf) // natural exp.
-    SVML_UNARY(yask_log, log, log, logf) // natural log.
-    SVML_UNARY(yask_sin, sin, sin, sinf) // sine.
-    SVML_UNARY(yask_cos, cos, cos, cosf) // cosine.
-    SVML_UNARY(yask_atan, atan, atan, atanf) // inv (arc) tangent.
-#undef SVML_UNARY
+    SVML_1ARG(yask_cbrt, cbrt, cbrt, cbrtf) // cube root.
+    SVML_1ARG(yask_fabs, abs, fabs, fabsf) // abs value.
+    SVML_1ARG(yask_erf, erf, erf, erff) // error fn.
+    SVML_1ARG(yask_exp, exp, exp, expf) // natural exp.
+    SVML_1ARG(yask_log, log, log, logf) // natural log.
+    SVML_1ARG(yask_sin, sin, sin, sinf) // sine.
+    SVML_1ARG(yask_cos, cos, cos, cosf) // cosine.
+    SVML_1ARG(yask_atan, atan, atan, atanf) // inv (arc) tangent.
+    SVML_2ARG(yask_pow, pow, pow, powf) // inv (arc) tangent.
+#undef SVML_1ARG_SCALAR
+#undef SVML_1ARG
+#undef SVML_2ARG_SCALAR
+#undef SVML_2ARG
+
+    // Sin+cos.
+    ALWAYS_INLINE void yask_sin_and_cos(real_t& sin_res, real_t& cos_res, real_t a) {
+#if REAL_BYTES == 4
+        sincosf(a, &sin_res, &cos_res);
+#else
+        sincos(a, &sin_res, &cos_res);
+#endif
+    }
+    ALWAYS_INLINE void yask_cos_and_sin(real_t& cos_res, real_t& sin_res, real_t a) {
+#if REAL_BYTES == 4
+        sincosf(a, &sin_res, &cos_res);
+#else
+        sincos(a, &sin_res, &cos_res);
+#endif
+    }
+    ALWAYS_INLINE void yask_sin_and_cos(real_vec_t& sin_res, 
+                                              real_vec_t& cos_res, 
+                                              const real_vec_t& a) {
+        sin_res.u.mr = INAME(sincos)(&cos_res.u.mr, a.u.mr);
+    }
+    ALWAYS_INLINE void yask_cos_and_sin(real_vec_t& cos_res, 
+                                              real_vec_t& sin_res, 
+                                              const real_vec_t& a) {
+        sin_res.u.mr = INAME(sincos)(&cos_res.u.mr, a.u.mr);
+    }
 
     // Get consecutive elements from two vectors.
     // Concat a and b, shift right by count elements, keep _right_most elements.

@@ -32,23 +32,21 @@ namespace yask {
 
     ////////////// Print visitors ///////////////
 
-    // Declare a new temp var.
-    // Set _exprStr to it.
+    // Declare a new temp var and set 'res' to it.
     // Print LHS of assignment to it.
-    // If 'ex' is non-null, it is used as key to save name of temp var and
-    // to write a comment.
+    // 'ex' is used as key to save name of temp var and to write a comment.
     // If 'comment' is set, use it for the comment.
     // Return stream to continue w/RHS.
-    ostream& PrintVisitorBase::makeNextTempVar(Expr* ex, string comment) {
-        _exprStr = _ph.makeVarName();
+    ostream& PrintVisitorBase::makeNextTempVar(string& res, Expr* ex, string comment) {
+        res = _ph.makeVarName();
         if (ex) {
-            _tempVars[ex] = _exprStr;
+            _tempVars[ex] = res;
             if (comment.length() == 0)
-                _os << endl << " // " << _exprStr << " = " << ex->makeStr() << "." << endl;
+                comment = ex->makeStr();
         }
         if (comment.length())
-            _os << endl << " // " << _exprStr << " = " << comment << "." << endl;
-        _os << _ph.getLinePrefix() << _ph.getVarType() << " " << _exprStr << " = ";
+            _os << endl << " // " << res << " = " << comment << "." << endl;
+        _os << _ph.getLinePrefix() << _ph.getVarType() << " " << res << " = ";
         return _os;
     }
 
@@ -56,97 +54,106 @@ namespace yask {
 
     // A grid read.
     // Uses the PrintHelper to format.
-    void PrintVisitorTopDown::visit(GridPoint* gp) {
-        _exprStr += _ph.readFromPoint(_os, *gp);
+    string PrintVisitorTopDown::visit(GridPoint* gp) {
         _numCommon += _ph.getNumCommon(gp);
+        return _ph.readFromPoint(_os, *gp);
     }
 
     // An index expression.
-    void PrintVisitorTopDown::visit(IndexExpr* ie) {
-        _exprStr += ie->format(_varMap);
+    string PrintVisitorTopDown::visit(IndexExpr* ie) {
         _numCommon += _ph.getNumCommon(ie);
+        return ie->format(_varMap);
     }
 
     // A constant.
     // Uses the PrintHelper to format.
-    void PrintVisitorTopDown::visit(ConstExpr* ce) {
-        _exprStr += _ph.addConstExpr(_os, ce->getNumVal());
+    string PrintVisitorTopDown::visit(ConstExpr* ce) {
         _numCommon += _ph.getNumCommon(ce);
+        return _ph.addConstExpr(_os, ce->getNumVal());
     }
 
     // Some hand-written code.
     // Uses the PrintHelper to format.
-    void PrintVisitorTopDown::visit(CodeExpr* ce) {
-        _exprStr += _ph.addCodeExpr(_os, ce->getCode());
+    string PrintVisitorTopDown::visit(CodeExpr* ce) {
         _numCommon += _ph.getNumCommon(ce);
+        return _ph.addCodeExpr(_os, ce->getCode());
     }
 
-    // Generic unary operators including function calls.
-    // Add parens around args to make function calls work.
-    void PrintVisitorTopDown::visit(UnaryNumExpr* ue) {
-        _exprStr += ue->getOpStr() + "(";
-        ue->getRhs()->accept(this);
-        _exprStr += ")";
+    // Generic unary operators.
+    string PrintVisitorTopDown::visit(UnaryNumExpr* ue) {
         _numCommon += _ph.getNumCommon(ue);
+        return ue->getOpStr() + ue->getRhs()->accept(this);
     }
-    void PrintVisitorTopDown::visit(UnaryBoolExpr* ue) {
-        _exprStr += ue->getOpStr();
-        ue->getRhs()->accept(this);
+    string PrintVisitorTopDown::visit(UnaryBoolExpr* ue) {
         _numCommon += _ph.getNumCommon(ue);
+        return ue->getOpStr() + ue->getRhs()->accept(this);
     }
-    void PrintVisitorTopDown::visit(UnaryNum2BoolExpr* ue) {
-        _exprStr += ue->getOpStr();
-        ue->getRhs()->accept(this);
+    string PrintVisitorTopDown::visit(UnaryNum2BoolExpr* ue) {
         _numCommon += _ph.getNumCommon(ue);
+        return ue->getOpStr() + ue->getRhs()->accept(this);
     }
 
     // Generic binary operators.
-    void PrintVisitorTopDown::visit(BinaryNumExpr* be) {
-        _exprStr += "(";
-        be->getLhs()->accept(this); // adds LHS to _exprStr.
-        _exprStr += " " + be->getOpStr() + " ";
-        be->getRhs()->accept(this); // adds RHS to _exprStr.
-        _exprStr += ")";
+    string PrintVisitorTopDown::visit(BinaryNumExpr* be) {
         _numCommon += _ph.getNumCommon(be);
+        return "(" + be->getLhs()->accept(this) +
+            " " + be->getOpStr() + " " +
+            be->getRhs()->accept(this) + ")";
     }
-    void PrintVisitorTopDown::visit(BinaryBoolExpr* be) {
-        _exprStr += "(";
-        be->getLhs()->accept(this); // adds LHS to _exprStr.
-        _exprStr += " " + be->getOpStr() + " ";
-        be->getRhs()->accept(this); // adds RHS to _exprStr.
-        _exprStr += ")";
+    string PrintVisitorTopDown::visit(BinaryBoolExpr* be) {
         _numCommon += _ph.getNumCommon(be);
+        return "(" + be->getLhs()->accept(this) +
+            " " + be->getOpStr() + " " +
+            be->getRhs()->accept(this) + ")";
     }
-    void PrintVisitorTopDown::visit(BinaryNum2BoolExpr* be) {
-        _exprStr += "(";
-        be->getLhs()->accept(this); // adds LHS to _exprStr.
-        _exprStr += " " + be->getOpStr() + " ";
-        be->getRhs()->accept(this); // adds RHS to _exprStr.
-        _exprStr += ")";
+    string PrintVisitorTopDown::visit(BinaryNum2BoolExpr* be) {
         _numCommon += _ph.getNumCommon(be);
+        return "(" + be->getLhs()->accept(this) +
+            " " + be->getOpStr() + " " +
+            be->getRhs()->accept(this) + ")";
     }
 
     // A commutative operator.
-    void PrintVisitorTopDown::visit(CommutativeExpr* ce) {
-        _exprStr += "(";
+    string PrintVisitorTopDown::visit(CommutativeExpr* ce) {
+        _numCommon += _ph.getNumCommon(ce);
+        string res = "(";
         auto& ops = ce->getOps();
         int opNum = 0;
         for (auto ep : ops) {
             if (opNum > 0)
-                _exprStr += " " + ce->getOpStr() + " ";
-            ep->accept(this);   // adds operand to _exprStr;
+                res += " " + ce->getOpStr() + " ";
+            res += ep->accept(this);
             opNum++;
         }
-        _exprStr += ")";
-        _numCommon += _ph.getNumCommon(ce);
+        return res + ")";
+    }
+
+    // A function call.
+    string PrintVisitorTopDown::visit(FuncExpr* fe) {
+        _numCommon += _ph.getNumCommon(fe);
+
+        // Special case: increment common node count
+        // for pairs.
+        if (fe->getPair())
+            _numCommon++;
+
+        string res = _funcPrefix + fe->getOpStr() + "(";
+        auto& ops = fe->getOps();
+        int opNum = 0;
+        for (auto ep : ops) {
+            if (opNum > 0)
+                res += ", ";
+            res += ep->accept(this);
+            opNum++;
+        }
+        return res + ")";
     }
 
     // An equals operator.
-    void PrintVisitorTopDown::visit(EqualsExpr* ee) {
+    string PrintVisitorTopDown::visit(EqualsExpr* ee) {
 
-        // Get RHS and clear expr.
-        ee->getRhs()->accept(this); // writes to _exprStr;
-        string rhs = getExprStrAndClear();
+        // Get RHS.
+        string rhs = ee->getRhs()->accept(this);
 
         // Write statement with embedded rhs.
         GridPointPtr gpp = ee->getLhs();
@@ -154,29 +161,27 @@ namespace yask {
 
         // Null ptr => no condition.
         if (ee->getCond()) {
-            ee->getCond()->accept(this); // sets _exprStr;
-            string cond = getExprStrAndClear();
+            string cond = ee->getCond()->accept(this);
 
             // pseudo-code format.
             _os << " IF (" << cond << ")";
         }
         _os << _ph.getLineSuffix();
 
-        // note: _exprStr is now empty.
         // note: no need to update num-common.
+        return "";              // EQUALS doesn't return a value.
     }
 
     /////// Bottom-up
 
     // Try some simple printing techniques.
-    // Return true if printing is done.
-    // Return false if more complex method should be used.
+    // Return expr if printing is done.
+    // Return empty string if more complex method should be used.
     // TODO: the current code causes all nodes in an expr above a certain
     // point to avoid top-down printing because it looks at the original expr,
     // not the new one with temp vars. Fix this.
-    bool PrintVisitorBottomUp::trySimplePrint(Expr* ex, bool force) {
-
-        bool exprDone = false;
+    string PrintVisitorBottomUp::trySimplePrint(Expr* ex, bool force) {
+        string res;
 
         // How many nodes in ex?
         int exprSize = ex->getNumNodes();
@@ -189,8 +194,7 @@ namespace yask {
         if (p != _tempVars.end()) {
 
             // if so, just use the existing var.
-            _exprStr = p->second;
-            exprDone = true;
+            res = p->second;
         }
 
         // Consider top down if forcing or expr <= maxExprSize.
@@ -198,16 +202,14 @@ namespace yask {
 
             // use a top-down printer to render the expr.
             PrintVisitorTopDown* topDown = newPrintVisitorTopDown();
-            ex->accept(topDown);
+            string td_res = ex->accept(topDown);
 
             // were there any common subexprs found?
             int numCommon = topDown->getNumCommon();
 
             // if no common subexprs, use the top-down expression.
-            if (numCommon == 0) {
-                _exprStr = topDown->getExprStr();
-                exprDone = true;
-            }
+            if (numCommon == 0)
+                res = td_res;
 
             // if common subexprs exist, and top-down is forced, use the
             // top-down expression regardless.  If node is big enough for
@@ -215,10 +217,10 @@ namespace yask {
             // later.
             else if (force) {
                 if (tooSmall)
-                    _exprStr = topDown->getExprStr();
-                else
-                    makeNextTempVar(ex) << topDown->getExprStr() << _ph.getLineSuffix();
-                exprDone = true;
+                    res = td_res;
+                else {
+                    makeNextTempVar(res, ex) << res << _ph.getLineSuffix();
+                }
             }
 
             // otherwise, there are common subexprs, and top-down is not forced,
@@ -227,57 +229,59 @@ namespace yask {
             delete topDown;
         }
 
-        if (force) assert(exprDone);
-        return exprDone;
+        if (force) assert(res.length());
+        return res;
     }
 
     // A grid point: just set expr.
-    void PrintVisitorBottomUp::visit(GridPoint* gp) {
-        trySimplePrint(gp, true);
+    string PrintVisitorBottomUp::visit(GridPoint* gp) {
+        return trySimplePrint(gp, true);
     }
 
     // A grid index.
-    void PrintVisitorBottomUp::visit(IndexExpr* ie) {
-        trySimplePrint(ie, true);
+    string PrintVisitorBottomUp::visit(IndexExpr* ie) {
+        return trySimplePrint(ie, true);
     }
 
     // A constant: just set expr.
-    void PrintVisitorBottomUp::visit(ConstExpr* ce) {
-        trySimplePrint(ce, true);
+    string PrintVisitorBottomUp::visit(ConstExpr* ce) {
+        return trySimplePrint(ce, true);
     }
 
     // Code: just set expr.
-    void PrintVisitorBottomUp::visit(CodeExpr* ce) {
-        trySimplePrint(ce, true);
+    string PrintVisitorBottomUp::visit(CodeExpr* ce) {
+        return trySimplePrint(ce, true);
     }
 
     // A numerical unary operator.
-    void PrintVisitorBottomUp::visit(UnaryNumExpr* ue) {
+    string PrintVisitorBottomUp::visit(UnaryNumExpr* ue) {
 
         // Try top-down on whole expression.
         // Example: '-a' creates no immediate output,
-        // and '-a' is saved in _exprStr.
-        if (trySimplePrint(ue, false))
-            return;
+        // and '-(a)' is saved in _exprStr.
+        string res = trySimplePrint(ue, false);
+        if (res.length())
+            return res;
 
         // Expand the RHS, then apply operator to result.
         // Example: '-(a * b)' might output the following:
         // temp1 = a * b;
-        // temp2 = -(temp1);
+        // temp2 = -temp1;
         // with 'temp2' saved in _exprStr.
-        ue->getRhs()->accept(this); // sets _exprStr.
-        string rhs = getExprStrAndClear();
-        makeNextTempVar(ue) << ue->getOpStr() << '(' << rhs << ')' << _ph.getLineSuffix();
+        string rhs = ue->getRhs()->accept(this);
+        makeNextTempVar(res, ue) << ue->getOpStr() << rhs << _ph.getLineSuffix();
+        return res;
     }
 
     // A numerical binary operator.
-    void PrintVisitorBottomUp::visit(BinaryNumExpr* be) {
+    string PrintVisitorBottomUp::visit(BinaryNumExpr* be) {
 
         // Try top-down on whole expression.
         // Example: 'a/b' creates no immediate output,
         // and 'a/b' is saved in _exprStr.
-        if (trySimplePrint(be, false))
-            return;
+        string res = trySimplePrint(be, false);
+        if (res.length())
+            return res;
 
         // Expand both sides, then apply operator to result.
         // Example: '(a * b) / (c * d)' might output the following:
@@ -285,35 +289,94 @@ namespace yask {
         // temp2 = b * c;
         // temp3 = temp1 / temp2;
         // with 'temp3' saved in _exprStr.
-        be->getLhs()->accept(this); // sets _exprStr.
-        string lhs = getExprStrAndClear();
-        be->getRhs()->accept(this); // sets _exprStr.
-        string rhs = getExprStrAndClear();
-        makeNextTempVar(be) << lhs << ' ' << be->getOpStr() << ' ' << rhs << _ph.getLineSuffix();
+        string lhs = be->getLhs()->accept(this);
+        string rhs = be->getRhs()->accept(this);
+        makeNextTempVar(res, be) << lhs << ' ' << be->getOpStr() << ' ' << rhs << _ph.getLineSuffix();
+        return res;
     }
 
     // Boolean unary and binary operators.
     // For now, don't try to use bottom-up for these.
     // TODO: investigate whether there is any potential
     // benefit in doing this.
-    void PrintVisitorBottomUp::visit(UnaryBoolExpr* ue) {
-        trySimplePrint(ue, true);
+    string PrintVisitorBottomUp::visit(UnaryBoolExpr* ue) {
+        return trySimplePrint(ue, true);
     }
-    void PrintVisitorBottomUp::visit(BinaryBoolExpr* be) {
-        trySimplePrint(be, true);
+    string PrintVisitorBottomUp::visit(BinaryBoolExpr* be) {
+        return trySimplePrint(be, true);
     }
-    void PrintVisitorBottomUp::visit(BinaryNum2BoolExpr* be) {
-        trySimplePrint(be, true);
+    string PrintVisitorBottomUp::visit(BinaryNum2BoolExpr* be) {
+        return trySimplePrint(be, true);
+    }
+
+    // Function call.
+    string PrintVisitorBottomUp::visit(FuncExpr* fe) {
+        string res;
+
+        // If this is a paired function, handle it specially.
+        auto* paired = fe->getPair();
+        if (paired) {
+
+            // Do we already have this result?
+            if (_tempVars.count(fe)) {
+                
+                // Just use existing result.
+                res = _tempVars.at(fe);
+            }
+
+            // No result yet.
+            else {
+
+                _os << endl << " // Combining " << fe->getOpStr() << " and " << paired->getOpStr() <<
+                    "...\n";
+
+                // First, eval all the args.
+                string args;
+                auto& ops = fe->getOps();
+                for (auto ep : ops)
+                    args += ", " + ep->accept(this); // sets _exprStr;
+
+                // Make 2 temp vars.
+                string res2;
+                makeNextTempVar(res, fe) << "0" << _ph.getLineSuffix();
+                makeNextTempVar(res2, paired) << "0" << _ph.getLineSuffix();
+
+                // Call function to set both.
+                _os << _ph.getLinePrefix() << 
+                    _funcPrefix << fe->getOpStr() << "_and_" << paired->getOpStr() << 
+                    "(" << res << ", " << res2 << args <<
+                    ")" << _ph.getLineSuffix();
+            }
+        }
+
+        // If not paired, handle normally.
+        else {
+            res = trySimplePrint(fe, false);
+            if (res.length())
+                return res;
+
+            string args;
+            auto& ops = fe->getOps();
+            for (auto ep : ops) {
+                if (args.length())
+                    args += ", ";
+                args += ep->accept(this);
+            }
+            makeNextTempVar(res, fe) << _funcPrefix << fe->getOpStr() <<
+                "(" << args << ")" << _ph.getLineSuffix();
+        }
+        return res;
     }
 
     // A commutative operator.
-    void PrintVisitorBottomUp::visit(CommutativeExpr* ce) {
+    string PrintVisitorBottomUp::visit(CommutativeExpr* ce) {
 
         // Try top-down on whole expression.
         // Example: 'a*b' creates no immediate output,
         // and 'a*b' is saved in _exprStr.
-        if (trySimplePrint(ce, false))
-            return;
+        string res = trySimplePrint(ce, false);
+        if (res.length())
+            return res;
 
         // Make separate assignment for N-1 operands.
         // Example: 'a + b + c + d' might output the following:
@@ -328,9 +391,8 @@ namespace yask {
         for (auto ep : ops) {
             opNum++;
 
-            // eval the operand; sets _exprStr.
-            ep->accept(this);
-            string opStr = getExprStrAndClear();
+            // eval the operand.
+            string opStr = ep->accept(this);
 
             // first operand; just save as LHS for next iteration.
             if (opNum == 1) {
@@ -350,30 +412,28 @@ namespace yask {
                 exStr += ' ' + ce->getOpStr() + ' ' + ep->makeStr();
 
                 // Output this step.
-                makeNextTempVar(ex, exStr) << lhs << ' ' << ce->getOpStr() << ' ' <<
+                string tmp;
+                makeNextTempVar(tmp, ex, exStr) << lhs << ' ' << ce->getOpStr() << ' ' <<
                     opStr << _ph.getLineSuffix();
-                lhs = getExprStr(); // result used in next iteration, if any.
+                lhs = tmp; // result returned and/or used in next iteration.
             }
         }
-
-        // note: _exprStr contains result of last operation.
+        return lhs;
     }
 
     // An equality.
-    void PrintVisitorBottomUp::visit(EqualsExpr* ee) {
+    string PrintVisitorBottomUp::visit(EqualsExpr* ee) {
 
         // Note that we don't try top-down here.
-        // We always assign the RHS to a temp var and then
-        // write the temp var to the grid.
+        // We always assign the RHS to the grid.
 
         // Eval RHS.
         Expr* rp = ee->getRhs().get();
-        rp->accept(this); // sets _exprStr.
-        string rhs = _exprStr;
+        string rhs = rp->accept(this);
 
         // Assign RHS to a temp var.
-        makeNextTempVar(rp) << rhs << _ph.getLineSuffix(); // sets _exprStr.
-        string tmp = getExprStrAndClear();
+        string tmp;
+        makeNextTempVar(tmp, rp) << rhs << _ph.getLineSuffix(); // sets _exprStr.
 
         // Comment about update.
         GridPointPtr gpp = ee->getLhs();
@@ -382,29 +442,30 @@ namespace yask {
         // Comment about condition.
         // Null ptr => no condition.
         if (ee->getCond()) {
-            ee->getCond()->accept(this); // sets _exprStr;
-            string cond = getExprStrAndClear();
-
-            // pseudo-code format.
+            string cond = ee->getCond()->accept(this);
             _os << " IF (" << cond << ")";
+        }
+        if (ee->getStepCond()) {
+            string cond = ee->getStepCond()->accept(this);
+            _os << " IF_STEP (" << cond << ")";
         }
         _os << ".\n";
 
-        // Write temp var to grid.
+        // Write RHS expr to grid.
         _os << _ph.getLinePrefix() << _ph.writeToPoint(_os, *gpp, tmp) << _ph.getLineSuffix();
 
-        // note: _exprStr is now empty.
+        return "";              // EQUALS doesn't return a value.
     }
 
     ///////// POVRay.
 
     // Only want to visit the RHS of an equality.
-    void POVRayPrintVisitor::visit(EqualsExpr* ee) {
-        ee->getRhs()->accept(this);
+    string POVRayPrintVisitor::visit(EqualsExpr* ee) {
+        return ee->getRhs()->accept(this);
     }
 
     // A point: output it.
-    void POVRayPrintVisitor::visit(GridPoint* gp) {
+    string POVRayPrintVisitor::visit(GridPoint* gp) {
         _numPts++;
 
         // Pick a color based on its distance.
@@ -412,44 +473,49 @@ namespace yask {
         ci %= _colors.size();
 
         _os << "point(" + _colors[ci] + ", " << gp->getArgOffsets().makeValStr() << ")" << endl;
+        return "";
     }
 
     ////// DOT-language.
 
     // A grid access.
-    void DOTPrintVisitor::visit(GridPoint* gp) {
+    string DOTPrintVisitor::visit(GridPoint* gp) {
         string label = getLabel(gp);
         if (label.size())
             _os << label << " [ shape = box ];" << endl;
+        return "";
     }
 
     // A constant.
     // TODO: don't share node.
-    void DOTPrintVisitor::visit(ConstExpr* ce) {
+    string DOTPrintVisitor::visit(ConstExpr* ce) {
         string label = getLabel(ce);
         if (label.size())
             _os << label << endl;
+        return "";
     }
 
     // Some hand-written code.
-    void DOTPrintVisitor::visit(CodeExpr* ce) {
+    string DOTPrintVisitor::visit(CodeExpr* ce) {
         string label = getLabel(ce);
         if (label.size())
             _os << label << endl;
+        return "";
     }
 
     // Generic numeric unary operators.
-    void DOTPrintVisitor::visit(UnaryNumExpr* ue) {
+    string DOTPrintVisitor::visit(UnaryNumExpr* ue) {
         string label = getLabel(ue);
         if (label.size()) {
             _os << label << " [ label = \"" << ue->getOpStr() << "\" ];" << endl;
             _os << getLabel(ue, false) << " -> " << getLabel(ue->getRhs(), false) << ";" << endl;
             ue->getRhs()->accept(this);
         }
+        return "";
     }
 
     // Generic numeric binary operators.
-    void DOTPrintVisitor::visit(BinaryNumExpr* be) {
+    string DOTPrintVisitor::visit(BinaryNumExpr* be) {
         string label = getLabel(be);
         if (label.size()) {
             _os << label << " [ label = \"" << be->getOpStr() << "\" ];" << endl;
@@ -458,10 +524,11 @@ namespace yask {
             be->getLhs()->accept(this);
             be->getRhs()->accept(this);
         }
+        return "";
     }
 
     // A commutative operator.
-    void DOTPrintVisitor::visit(CommutativeExpr* ce) {
+    string DOTPrintVisitor::visit(CommutativeExpr* ce) {
         string label = getLabel(ce);
         if (label.size()) {
             _os << label << " [ label = \"" << ce->getOpStr() << "\" ];" << endl;
@@ -470,10 +537,24 @@ namespace yask {
                 ep->accept(this);
             }
         }
+        return "";
+    }
+
+    // A function call.
+    string DOTPrintVisitor::visit(FuncExpr* fe) {
+        string label = getLabel(fe);
+        if (label.size()) {
+            _os << label << " [ label = \"" << fe->getOpStr() << "\" ];" << endl;
+            for (auto ep : fe->getOps()) {
+                _os << getLabel(fe, false) << " -> " << getLabel(ep, false) << ";" << endl;
+                ep->accept(this);
+            }
+        }
+        return "";
     }
 
     // An equals operator.
-    void DOTPrintVisitor::visit(EqualsExpr* ee) {
+    string DOTPrintVisitor::visit(EqualsExpr* ee) {
         string label = getLabel(ee);
         if (label.size()) {
             _os << label << " [ label = \"EQUALS\" ];" << endl;
@@ -488,36 +569,48 @@ namespace yask {
                 ee->getCond()->accept(this);
             }
         }
+        return "";
     }
 
     // A grid access.
-    void SimpleDOTPrintVisitor::visit(GridPoint* gp) {
+    string SimpleDOTPrintVisitor::visit(GridPoint* gp) {
         string label = getLabel(gp);
         if (label.size()) {
             _os << label << " [ shape = box ];" << endl;
             _gridsSeen.insert(label);
         }
+        return "";
     }
 
     // Generic numeric unary operators.
-    void SimpleDOTPrintVisitor::visit(UnaryNumExpr* ue) {
+    string SimpleDOTPrintVisitor::visit(UnaryNumExpr* ue) {
         ue->getRhs()->accept(this);
+        return "";
     }
 
     // Generic numeric binary operators.
-    void SimpleDOTPrintVisitor::visit(BinaryNumExpr* be) {
+    string SimpleDOTPrintVisitor::visit(BinaryNumExpr* be) {
         be->getLhs()->accept(this);
         be->getRhs()->accept(this);
+        return "";
     }
 
     // A commutative operator.
-    void SimpleDOTPrintVisitor::visit(CommutativeExpr* ce) {
-        for (auto ep : ce->getOps())
+    string SimpleDOTPrintVisitor::visit(CommutativeExpr* ce) {
+        for (auto& ep : ce->getOps())
             ep->accept(this);
+        return "";
+    }
+
+    // A function call.
+    string SimpleDOTPrintVisitor::visit(FuncExpr* fe) {
+        for (auto& ep : fe->getOps())
+            ep->accept(this);
+        return "";
     }
 
     // An equals operator.
-    void SimpleDOTPrintVisitor::visit(EqualsExpr* ee) {
+    string SimpleDOTPrintVisitor::visit(EqualsExpr* ee) {
 
         // LHS is source.
         ee->getLhs()->accept(this);
@@ -532,7 +625,8 @@ namespace yask {
             _os << label << " -> " << g  << ";" << endl;
         _gridsSeen.clear();
 
-        // Ignoring condition.
+        // Ignoring conditions.
+        return "";
     }
 
     ////////////// Printers ///////////////

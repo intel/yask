@@ -727,7 +727,7 @@ namespace yask {
                 // Print pointers and pre-loop prefetches.
                 vp->printBasePtrs(os);
 
-                // Actual Loop.
+                // Actual computation loop.
                 os << "\n // Inner loop.\n"
                     " for (idx_t " << idim << " = " << istart << "; " <<
                     idim << " < " << istop << "; " <<
