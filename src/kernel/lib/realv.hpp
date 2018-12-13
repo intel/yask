@@ -604,21 +604,21 @@ namespace yask {
 #endif
     }
     ALWAYS_INLINE void yask_cos_and_sin(real_t& cos_res, real_t& sin_res, real_t a) {
-#if REAL_BYTES == 4
-        sincosf(a, &sin_res, &cos_res);
-#else
-        sincos(a, &sin_res, &cos_res);
-#endif
+        yask_sin_and_cos(sin_res, cos_res, a);
     }
     ALWAYS_INLINE void yask_sin_and_cos(real_vec_t& sin_res, 
-                                              real_vec_t& cos_res, 
-                                              const real_vec_t& a) {
+                                        real_vec_t& cos_res, 
+                                        const real_vec_t& a) {
+#if defined(NO_INTRINSICS)
+        REAL_VEC_LOOP(i) yask_sin_and_cos(sin_res[i], cos_res[i], a[i]);
+#else
         sin_res.u.mr = INAME(sincos)(&cos_res.u.mr, a.u.mr);
+#endif
     }
     ALWAYS_INLINE void yask_cos_and_sin(real_vec_t& cos_res, 
-                                              real_vec_t& sin_res, 
-                                              const real_vec_t& a) {
-        sin_res.u.mr = INAME(sincos)(&cos_res.u.mr, a.u.mr);
+                                        real_vec_t& sin_res, 
+                                        const real_vec_t& a) {
+        yask_sin_and_cos(sin_res, cos_res, a);
     }
 
     // Get consecutive elements from two vectors.

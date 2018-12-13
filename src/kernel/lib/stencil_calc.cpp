@@ -231,10 +231,10 @@ namespace yask {
         /*
           Indices in each domain dim:
 
-          sub_block_eidxs.begin                      rem_masks used here
-          |peel_masks used here                      | sub_block_eidxs.end
-          ||                                         | |
-          vv                                         v v
+          sub_block_eidxs.begin                        rem_masks used here
+          | peel_masks used here                       | sub_block_eidxs.end
+          | |                                          | |
+          v v                                          v v
           |---+-------+---------------------------+---+---|   "+" => vec boundaries.
           ^   ^       ^                            ^   ^   ^
           |   |       |                            |   |   |
@@ -708,16 +708,15 @@ namespace yask {
 
     // If this bundle is updating scratch grid(s),
     // expand begin & end of 'idxs' by sizes of halos.
-    // This will often change vec-len aligned indices to non-aligned.
     // Step indices may also change.
     // NB: it is not necessary that the domain of each grid
     // is the same as the span of 'idxs'. However, it should be
     // at least that large to ensure that grid is able to hold
-    // calculated results.
+    // calculated results. This is checked when 'CHECK' is defined.
     // In other words, grid can be larger than span of 'idxs', but
     // its halo sizes are still used to specify how much to
     // add to 'idxs'.
-    // Return adjusted indices.
+    // Returns adjusted indices.
     ScanIndices StencilBundleBase::adjust_span(int region_thread_idx,
                                                const ScanIndices& idxs) const {
         CONTEXT_VARS(_generic_context);

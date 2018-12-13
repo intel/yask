@@ -37,7 +37,6 @@ real_bytes		?=	4
 radius			?=	2
 allow_new_grid_types	?=	1
 
-
 # Defaults based on stencil type (and arch for some stencils).
 ifeq ($(stencil),)
  $(error Stencil not specified)
@@ -399,13 +398,13 @@ ifneq ($(shell find /usr/include -name 'numaif.h' | wc -l),0)
  MACROS		+=	USE_NUMAIF_H
 endif
 
+endif
+
 # Add options for PMEM.
 ifeq ($(pmem),1)
  YK_CXXFLAGS	+=	-I/opt/intel/memkind/include
  YK_LIBS		+=	-L/opt/intel/memkind/lib -lmemkind
  MACROS		+=	USE_PMEM
-endif
-
 endif
 
 # Turn off prefetching at O0 or O1.
@@ -416,6 +415,11 @@ endif
 
 # Turn on checking at O0.
 ifneq ($(filter -O0,$(YK_CXXOPT)),)
+ check		?=	1
+endif
+
+# Turn on checking macro.
+ifeq ($(check),1)
  MACROS		+=	CHECK
 endif
 
@@ -1005,11 +1009,11 @@ help:
 	echo " $(MAKE) clean; $(MAKE) -j arch=skl stencil=awp yk-api"; \
 	echo " "; \
 	echo "Example debug builds of kernel cmd-line tool:"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='CHECK' # No OpenMP or MPI, internal checking"; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=test_2d mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' EXTRA_MACROS='CHECK TRACE'	 # TRACE is a useful debug setting!"; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' EXTRA_MACROS='CHECK TRACE TRACE_MEM TRACE_INTRINSICS'"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' check=1 # No OpenMP or MPI, internal checking"; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=test_2d mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' check=1 EXTRA_MACROS='TRACE'	 # TRACE is a useful debug setting!"; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' check=1 EXTRA_MACROS='TRACE TRACE_MEM TRACE_INTRINSICS'"; \
 	echo " "; \
 	echo "Example builds with test runs:"; \
 	echo " $(MAKE) -j all # Normal full API and stencil tests"; \
 	echo " $(MAKE) -j all YK_CXXOPT=-O2 YK_CXX=g++ mpi=0 ranks=1 # g++ w/o MPI"; \
-	echo " $(MAKE) -j all YK_CXXOPT=-O1 ranks=3 EXTRA_MACROS='CHECK' # Run 3 ranks w/checking"
+	echo " $(MAKE) -j all YK_CXXOPT=-O1 ranks=3 check=1 # Run 3 ranks w/checking"
