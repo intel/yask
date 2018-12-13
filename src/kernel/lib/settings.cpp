@@ -327,7 +327,8 @@ namespace yask {
                            "one, effectively disabling parallelism across sub-blocks in the "
                            "inner-most domain dimension. "
                            "May increase cache locality when using multiple "
-                           "block-threads when temporal blocking is active.",
+                           "block-threads when scrach-grid vars are used and/or "
+                           "when temporal blocking is active.",
                            bind_block_threads));
 #ifdef USE_NUMA
         stringstream msg;

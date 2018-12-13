@@ -105,7 +105,7 @@ namespace yask {
             CONTEXT_VARS(context);
 
             // Find index posn of inner loop in stencil dims.
-            for (int i = 0; i < nsdims; i++) {
+            DOMAIN_VAR_LOOP(i, j) {
                 auto& dname = stencil_dims.getDimName(i);
                 if (dname == dims->_inner_dim) {
                     _inner_posn = i;

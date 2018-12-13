@@ -1469,10 +1469,10 @@ namespace yask {
     }
     
     // Adjust offsets of scratch grids based on thread number 'thread_idx'
-    // and beginning point of block 'idxs'.  Each scratch-grid is assigned
-    // to a thread, so it must "move around" as the thread is assigned to
-    // each block.  This move is accomplished by changing the grids' global
-    // and local offsets.
+    // and beginning point of mini-block 'idxs'.  Each scratch-grid is
+    // assigned to a thread, so it must "move around" as the thread is
+    // assigned to each mini-block.  This move is accomplished by changing
+    // the grids' global and local offsets.
     void StencilContext::update_scratch_grid_info(int thread_idx,
                                                   const Indices& idxs) {
         CONTEXT_VARS(this);

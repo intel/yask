@@ -456,7 +456,7 @@ namespace yask {
             if (opts->bind_block_threads) {
 
                 // Set up tuples to find the linear position of a sub-blk
-                // within a mini-blk. TODO: move out of this function.
+                // within a mini-blk.
                 IdxTuple sub_blks_per_mini_blk(domain_dims);
                 DOMAIN_VAR_LOOP(i, j) {
                     sub_blks_per_mini_blk[j] =
@@ -477,8 +477,9 @@ namespace yask {
                     DOMAIN_VAR_LOOP(i, j) {                             \
                         idx_t clus_idx = loop_idxs.start[i];            \
                         idx_t elem_idx = clus_idx * dims->_cluster_pts[j]; \
-                        sub_blk_idxs[j] = (i == _inner_posn) ? 0 :      \
-                            abs(idiv_flr(elem_idx, settings._sub_block_sizes[i])) % \
+                        sub_blk_idxs[j] = \
+                            (i == _inner_posn || sub_blks_per_mini_blk[j] <= 1) ? 0 : \
+                            (abs(elem_idx) / settings._sub_block_sizes[i]) % \
                             sub_blks_per_mini_blk[j]; }                 \
                     idx_t sub_blk_idx = sub_blks_per_mini_blk.layout(sub_blk_idxs); \
                     idx_t thr = sub_blk_idx % num_thr;                  \
@@ -753,7 +754,15 @@ namespace yask {
                     adj_idxs.begin[i] = idxs.begin[i] - lh;
                     adj_idxs.end[i] = idxs.end[i] + rh;
 
-                    // Make sure grid covers block.
+                    // Make sure grid covers index bounds.
+                    TRACE_MSG3("adjust_span: mini-blk [" << 
+                               idxs.begin[i] << "..." <<
+                               idxs.end[i] << ") adjusted to [" << 
+                               adj_idxs.begin[i] << "..." <<
+                               adj_idxs.end[i] << ") within scratch-grid '" << 
+                               gp->get_name() << "' allocated [" <<
+                               gp->get_first_rank_alloc_index(posn) << "..." <<
+                               gp->get_last_rank_alloc_index(posn) << "] in dim '" << dname << "'");
                     assert(adj_idxs.begin[i] >= gp->get_first_rank_alloc_index(posn));
                     assert(adj_idxs.end[i] <= gp->get_last_rank_alloc_index(posn) + 1);
 
