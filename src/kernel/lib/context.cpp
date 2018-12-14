@@ -79,10 +79,12 @@ namespace yask {
         TRACE_MSG("run_ref: [" << begin.makeDimValStr() << " ... " <<
                   end.makeDimValStr() << ")");
 
-        // Force region & block sizes to whole rank size so that scratch
+        // Force sub-sizes to whole rank size so that scratch
         // grids will be large enough. Turn off any temporal blocking.
         _opts->_region_sizes.setValsSame(0);
         _opts->_block_sizes.setValsSame(0);
+        _opts->_mini_block_sizes.setValsSame(0);
+        _opts->_sub_block_sizes.setValsSame(0);
         _opts->adjustSettings(get_env());
         update_grid_info();
 
