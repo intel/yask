@@ -217,6 +217,14 @@ namespace yask {
         bool do_mpi_right = true;        // right exterior in given dim.
         idx_t mpi_exterior_dim = -1;      // which domain dim in left/right.
 
+        // Position of inner domain dim in stencil-dims tuple.
+        // Misc dims will follow this if/when using interleaving.
+        int _inner_posn = -1;   // -1 => not set.
+
+        // Position of outer domain dim in stencil-dims tuple.
+        // For 1D stencils, _outer_posn == _inner_posn.
+        int _outer_posn = -1;   // -1 => not set.
+
         // Is overlap currently enabled?
         inline bool is_overlap_active() const {
             bool active = !do_mpi_interior || !do_mpi_left || !do_mpi_right;
@@ -750,6 +758,7 @@ namespace yask {
     }; // StencilContext.
 
     // Macro to get commonly-needed vars for stencil calcs efficiently.
+    // *_posn vars are positions in stencil_dims.
 #define CONTEXT_VARS0(ctx_p, pfx)                                       \
     pfx auto* cp = ctx_p;                                               \
     auto& os = cp->get_ostr();                                          \
@@ -759,13 +768,15 @@ namespace yask {
     pfx auto* env = cp->get_env().get();                                \
     const auto& step_dim = dims->_step_dim;                             \
     const auto& domain_dims = dims->_domain_dims;                       \
-    const auto& stencil_dims = dims->_stencil_dims;                     \
-    constexpr idx_t step_posn = 0;                                      \
-    assert(step_posn == +Indices::step_posn);                           \
-    const int nddims = NUM_DOMAIN_DIMS;                                 \
+    constexpr int nddims = NUM_DOMAIN_DIMS;                             \
     assert(nddims == domain_dims.size());                               \
-    const int nsdims = NUM_STENCIL_DIMS;                                \
-    assert(nsdims == stencil_dims.size())
+    const auto& stencil_dims = dims->_stencil_dims;                     \
+    constexpr int nsdims = NUM_STENCIL_DIMS;                            \
+    assert(nsdims == stencil_dims.size());                              \
+    constexpr int step_posn = 0;                                        \
+    assert(step_posn == +Indices::step_posn);                           \
+    constexpr int outer_posn = 1;                                       \
+    const int inner_posn = cp->_inner_posn
 #define CONTEXT_VARS(ctx_p) CONTEXT_VARS0(ctx_p,)
 #define CONTEXT_VARS_CONST(ctx_p) CONTEXT_VARS0(ctx_p, const)
 

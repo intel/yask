@@ -557,13 +557,12 @@ BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_ORDER)) { \
 # a *nested* OpenMP loop so that each sub-block is assigned to a nested OpenMP
 # thread.
 MINI_BLOCK_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar adj_mb_idxs \
-				-ompConstruct '$(omp_for) schedule($(omp_block_schedule)) nowait' \
-				-callPrefix 'sg->'
+				-ompConstruct '$(omp_for) schedule($(omp_block_schedule)) nowait'
 MINI_BLOCK_LOOP_OUTER_MODS ?=	omp
 MINI_BLOCK_LOOP_ORDER	?=	1 .. N-1
 MINI_BLOCK_LOOP_CODE	?=	$(MINI_BLOCK_LOOP_OUTER_MODS) loop($(MINI_BLOCK_LOOP_ORDER)) { \
 				$(MINI_BLOCK_LOOP_INNER_MODS) \
-				call(calc_sub_block(region_thread_idx, block_thread_idx, settings)); }
+				call(CALC_SUB_BLOCK); }
 
 # Sub-block loops break up a sub-block into clusters or vectors.  These
 # loops are run by a single OMP thread.  The N-1 (inner) loop is generated
@@ -574,7 +573,7 @@ SUB_BLOCK_LOOP_OUTER_MODS ?=
 SUB_BLOCK_LOOP_ORDER	?=	1 .. N-2
 SUB_BLOCK_LOOP_CODE	?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop($(SUB_BLOCK_LOOP_ORDER)) { \
 				$(SUB_BLOCK_LOOP_INNER_MODS) \
-				call(calc_inner_loop(region_thread_idx, block_thread_idx)); }
+				call(CALC_INNER_LOOP); }
 
 # General-purpose parallel loop.
 MISC_LOOP_OPTS		?=	-ndims $(NSDIMS) -inVar misc_idxs \
@@ -582,7 +581,7 @@ MISC_LOOP_OPTS		?=	-ndims $(NSDIMS) -inVar misc_idxs \
 MISC_LOOP_OUTER_MODS	?=	omp
 MISC_LOOP_ORDER		?=	1 .. N-1
 MISC_LOOP_CODE		?=	$(MISC_LOOP_OUTER_MODS) loop($(MISC_LOOP_ORDER)) \
-				$(MISC_LOOP_INNER_MODS) { call(misc_fn); }
+				$(MISC_LOOP_INNER_MODS) { call(MISC_FN); }
 
 # Compile rules.
 

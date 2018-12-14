@@ -164,7 +164,8 @@ namespace yask {
                     // ignore misc_stop.  If point is in sub-domain for this
                     // bundle, then evaluate the reference scalar code.
                     // TODO: fix domain of scratch grids.
-#define misc_fn(misc_idxs)   do {                                       \
+#define MISC_FN(misc_idxs) \
+                    do {                                                \
                         if (sg->is_in_valid_domain(misc_idxs.start))    \
                             sg->calc_scalar(scratch_grid_idx, misc_idxs.start); \
                     } while(0)
@@ -1062,6 +1063,7 @@ namespace yask {
                     bp->start_timers();
                 
                 // Steps within a mini-blk are based on sub-blk sizes.
+                // This will get overridden later if thread binding is enabled.
                 auto& settings = bp->getActiveSettings();
                 mini_block_idxs.step = settings._sub_block_sizes;
                 mini_block_idxs.step[step_posn] = step_t;
@@ -1474,7 +1476,7 @@ namespace yask {
     // and beginning point of mini-block 'idxs'.  Each scratch-grid is
     // assigned to a thread, so it must "move around" as the thread is
     // assigned to each mini-block.  This move is accomplished by changing
-    // the grids' global and local offsets.
+    // the grids' local offsets.
     void StencilContext::update_scratch_grid_info(int thread_idx,
                                                   const Indices& idxs) {
         CONTEXT_VARS(this);

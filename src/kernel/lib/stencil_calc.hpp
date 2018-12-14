@@ -40,10 +40,6 @@ namespace yask {
         int _scalar_points_read = 0;
         int _scalar_points_written = 0;
 
-        // Position of inner domain dim in stencil-dims tuple.
-        // Misc dims will follow this.
-        int _inner_posn = 0;
-
         // Other bundles that this one depends on.
         StencilBundleSet _depends_on;
 
@@ -102,16 +98,7 @@ namespace yask {
         // ctor, dtor.
         StencilBundleBase(StencilContext* context) :
             _generic_context(context) {
-            CONTEXT_VARS(context);
-
-            // Find index posn of inner loop in stencil dims.
-            DOMAIN_VAR_LOOP(i, j) {
-                auto& dname = stencil_dims.getDimName(i);
-                if (dname == dims->_inner_dim) {
-                    _inner_posn = i;
-                    break;
-                }
-            }
+            //CONTEXT_VARS(context);
         }
 
         virtual ~StencilBundleBase() { }
@@ -218,15 +205,27 @@ namespace yask {
 
         // Calculate results within a sub-block.
         void
-        calc_sub_block(int region_thread_idx,
-                       int block_thread_idx,
-                       KernelSettings& settings,
-                       const ScanIndices& mini_block_idxs);
+        calc_sub_block_vec(int region_thread_idx,
+                           int block_thread_idx,
+                           KernelSettings& settings,
+                           const ScanIndices& mini_block_idxs);
         void
         calc_sub_block_scalar(int region_thread_idx,
                               int block_thread_idx,
                               KernelSettings& settings,
                               const ScanIndices& mini_block_idxs);
+        inline void
+        calc_sub_block(int region_thread_idx,
+                       int block_thread_idx,
+                       KernelSettings& settings,
+                       const ScanIndices& mini_block_idxs) {
+            if (settings.force_scalar)
+                calc_sub_block_scalar(region_thread_idx, block_thread_idx,
+                                      settings, mini_block_idxs);
+            else
+                calc_sub_block_vec(region_thread_idx, block_thread_idx,
+                                   settings, mini_block_idxs);
+        }
 
         // Calculate a series of cluster results within an inner loop.
         // All indices start at 'start_idxs'. Inner loop iterates to

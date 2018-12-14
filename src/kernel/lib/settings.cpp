@@ -321,14 +321,14 @@ namespace yask {
                            num_block_threads));
         parser.add_option(new CommandLineParser::BoolOption
                           ("bind_block_threads",
-                           "Execute stencils at each vector-cluster index on a fixed thread-id "
-                           "based on sub-block and mini-block sizes. "
-                           "Applies only to domain dimensions not including the inner-most "
-                           "one, effectively disabling parallelism across sub-blocks in the "
-                           "inner-most domain dimension. "
+                           "Override any sub-block-size settings and divide mini-blocks into "
+                           "sub-blocks of slabs along the outer-domain dimension, where each "
+                           "slab's width is the size of a vector-cluster in the outer-domain dimension. "
+                           "Assign each slab to a block thread based on its global index. "
                            "May increase cache locality when using multiple "
                            "block-threads when scrach-grid vars are used and/or "
-                           "when temporal blocking is active.",
+                           "when temporal blocking is active. "
+                           "This option is ignored if there are fewer than two block threads.",
                            bind_block_threads));
 #ifdef USE_NUMA
         stringstream msg;
@@ -614,6 +614,9 @@ namespace yask {
         os << " num-sub-blocks-per-block-per-step: " << (nsb * nmb) << endl;
         os << " num-sub-blocks-per-region-per-step: " << (nsb * nmb * nb) << endl;
         os << " num-sub-blocks-per-rank-per-step: " << (nsb * nmb * nb * nr) << endl;
+        if (bind_block_threads && num_block_threads)
+            os << " These sub-block sizes may be overridden at run-time because block-thread "
+                "binding is enabled on " << num_block_threads << " block threads.\n";
 
         // Now, we adjust groups. These are done after all the above sizes
         // because group sizes are more like 'guidelines' and don't have

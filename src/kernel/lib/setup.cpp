@@ -32,12 +32,12 @@ using namespace std;
 namespace yask {
 
     // Constructor.
-    StencilContext::StencilContext(KernelEnvPtr env,
-                                   KernelSettingsPtr settings) :
+    StencilContext::StencilContext(KernelEnvPtr kenv,
+                                   KernelSettingsPtr ksettings) :
         _ostr(&std::cout),
-        _env(env),
-        _opts(settings),
-        _dims(settings->_dims),
+        _env(kenv),
+        _opts(ksettings),
+        _dims(ksettings->_dims),
         _at(this, _opts.get())
     {
         // Set debug output object.
@@ -45,10 +45,25 @@ namespace yask {
         set_debug_output(yof.new_stdout_output());
 
         // Create MPI Info object.
-        _mpiInfo = std::make_shared<MPIInfo>(settings->_dims);
+        _mpiInfo = std::make_shared<MPIInfo>(ksettings->_dims);
+
+        // Set output to msg-rank per settings.
+        set_ostr();
+
+        // Set standard context vars after above init code.
+        CONTEXT_VARS(this);
+
+        // Find index posns in stencil dims.
+        DOMAIN_VAR_LOOP(i, j) {
+            auto& dname = stencil_dims.getDimName(i);
+            if (_outer_posn < 0)
+                _outer_posn = i;
+            if (dname == dims->_inner_dim)
+                _inner_posn = i;
+        }
+        assert(outer_posn == _outer_posn);
 
         // Init various tuples to make sure they have the correct dims.
-        auto& domain_dims = _dims->_domain_dims;
         rank_domain_offsets = domain_dims;
         rank_domain_offsets.setValsSame(-1); // indicates prepare_solution() not called.
         overall_domain_sizes = domain_dims;
@@ -61,9 +76,6 @@ namespace yask {
         mb_angles = domain_dims;
         left_wf_exts = domain_dims;
         right_wf_exts = domain_dims;
-
-        // Set output to msg-rank per settings.
-        set_ostr();
     }
 
     // Init MPI-related vars and other vars related to my rank's place in
@@ -728,7 +740,7 @@ namespace yask {
 
         // Divide the overall BB into a slice for each thread
         // across the outer dim.
-        const int odim = 0;
+        const int odim = 0;     // Use 0 instead of outer_posn because BB lens are in domain dims.
         idx_t outer_len = _bundle_bb.bb_len[odim];
         idx_t nthreads = yask_get_num_threads();
         idx_t len_per_thr = CEIL_DIV(outer_len, nthreads);
