@@ -321,11 +321,10 @@ namespace yask {
                            num_block_threads));
         parser.add_option(new CommandLineParser::BoolOption
                           ("bind_block_threads",
-                           "Override any sub-block-size settings and divide mini-blocks into "
-                           "sub-blocks of slabs along the outer-domain dimension, where each "
-                           "slab's width is the size of a vector-cluster in the outer-domain dimension. "
-                           "Assign each slab to a block thread based on its global index. "
-                           "May increase cache locality when using multiple "
+                           "Divide mini-blocks into sub-blocks of slabs along the first valid dimension "
+                           "(usually the outer-domain dimension), ignoring other sub-block sizes. "
+                           "Assign each slab to a block thread based on its global index in that dimension. "
+                           "This setting may increase cache locality when using multiple "
                            "block-threads when scrach-grid vars are used and/or "
                            "when temporal blocking is active. "
                            "This option is ignored if there are fewer than two block threads.",
@@ -515,13 +514,16 @@ namespace yask {
 
     // Make sure all user-provided settings are valid and finish setting up some
     // other vars before allocating memory.
-    // Called from prepare_solution(), so it doesn't normally need to be called from user code.
+    // Called from prepare_solution(), during auto-tuning, etc.
     void KernelSettings::adjustSettings(std::ostream& os, KernelEnvPtr env) {
 
         auto& step_dim = _dims->_step_dim;
+        auto& inner_dim = _dims->_inner_dim;
         auto& rt = _region_sizes[step_dim];
         auto& bt = _block_sizes[step_dim];
         auto& mbt = _mini_block_sizes[step_dim];
+        auto& cluster_pts = _dims->_cluster_pts;
+        int nddims = _dims->_domain_dims.getNumDims();
         
         // Fix up step-dim sizes.
         rt = max(rt, idx_t(0));
@@ -540,7 +542,7 @@ namespace yask {
         os << "\nRegions:" << endl;
         auto nr = findNumSubsets(os, _region_sizes, "region",
                                  _rank_sizes, "rank-domain",
-                                 _dims->_cluster_pts, step_dim);
+                                 cluster_pts, step_dim);
         os << " num-regions-per-rank-domain-per-step: " << nr << endl;
         os << " Since the region size in the '" << step_dim <<
             "' dim is " << rt << ", temporal wave-front rank tiling is ";
@@ -553,7 +555,7 @@ namespace yask {
         os << "\nBlocks:" << endl;
         auto nb = findNumSubsets(os, _block_sizes, "block",
                                  _region_sizes, "region",
-                                 _dims->_cluster_pts, step_dim);
+                                 cluster_pts, step_dim);
         os << " num-blocks-per-region-per-step: " << nb << endl;
         os << " num-blocks-per-rank-domain-per-step: " << (nb * nr) << endl;
         os << " Since the block size in the '" << step_dim <<
@@ -566,7 +568,7 @@ namespace yask {
         os << "\nMini-blocks:" << endl;
         auto nmb = findNumSubsets(os, _mini_block_sizes, "mini-block",
                                  _block_sizes, "block",
-                                 _dims->_cluster_pts, step_dim);
+                                 cluster_pts, step_dim);
         os << " num-mini-blocks-per-block-per-step: " << nmb << endl;
         os << " num-mini-blocks-per-region-per-step: " << (nmb * nb) << endl;
         os << " num-mini-blocks-per-rank-domain-per-step: " << (nmb * nb * nr) << endl;
@@ -580,28 +582,42 @@ namespace yask {
         // Otherwise, findNumSubsets() would set default
         // to entire block.
         if (num_block_threads > 1 && _sub_block_sizes.sum() == 0) {
+
+            // Look for best dim to split.
+            _bind_posn = 1;
             DOMAIN_VAR_LOOP(i, j) {
+
+                // Don't pick inner dim.
+                auto& dname = _dims->_domain_dims.getDimName(j);
+                if (dname == inner_dim)
+                    continue;
+
                 auto bsz = _block_sizes[i];
-                auto fpts = fold_pts[j];
-                auto vecs_per_blk = bsz / fpts;
+                auto cpts = cluster_pts[j];
+                auto clus_per_blk = bsz / cpts;
 
-                // Subdivide this dim if there are enough vectors in
+                // Subdivide this dim if there are enough clusters in
                 // the block for each thread.
-                if (vecs_per_blk >= num_block_threads) {
+                if (clus_per_blk >= num_block_threads) {
+                    _bind_posn = i;
 
-                    // Use narrow slabs if at least 3D.
-                    // TODO: consider a better heuristic.
-                    if (_dims->_domain_dims.getNumDims() >= 3)
-                        _sub_block_sizes[i] = 1; // will be rounded up to min size.
-
-                    // Divide equally.
-                    else
-                        _sub_block_sizes[i] = CEIL_DIV(vecs_per_blk, num_block_threads) * fpts;
-
-                    // Only want to set 1 dim; others will be set to max.
+                    // Stop when first dim picked.
                     break;
-                }                        
+                }
             }
+
+            // Divide on best dim.
+            auto bsz = _block_sizes[_bind_posn - 1]; // "-1" to adjust stencil to domain dims.
+            auto cpts = cluster_pts[_bind_posn - 1];
+
+            // Use narrow slabs if at least 2D.
+            // TODO: consider a better heuristic.
+            if (nddims >= 2)
+                _sub_block_sizes[_bind_posn] = cpts;
+
+            // Divide block equally.
+            else
+                _sub_block_sizes[_bind_posn] = ROUND_UP(bsz / num_block_threads, cpts);
         }
 
         // Determine num sub-blocks.
@@ -609,14 +625,37 @@ namespace yask {
         os << "\nSub-blocks:" << endl;
         auto nsb = findNumSubsets(os, _sub_block_sizes, "sub-block",
                                   _mini_block_sizes, "mini-block",
-                                 _dims->_cluster_pts, step_dim);
+                                 cluster_pts, step_dim);
         os << " num-sub-blocks-per-mini-block-per-step: " << nsb << endl;
         os << " num-sub-blocks-per-block-per-step: " << (nsb * nmb) << endl;
         os << " num-sub-blocks-per-region-per-step: " << (nsb * nmb * nb) << endl;
         os << " num-sub-blocks-per-rank-per-step: " << (nsb * nmb * nb * nr) << endl;
-        if (bind_block_threads && num_block_threads)
-            os << " These sub-block sizes may be overridden at run-time because block-thread "
-                "binding is enabled on " << num_block_threads << " block threads.\n";
+
+        // Determine binding dimension. Do this again if it was done above
+        // by default because it may have changed during adjustment.
+        if (bind_block_threads && num_block_threads > 1) {
+            DOMAIN_VAR_LOOP(i, j) {
+
+                // Don't pick inner dim.
+                auto& dname = _dims->_domain_dims.getDimName(j);
+                if (dname == inner_dim)
+                    continue;
+
+                auto bsz = _block_sizes[i];
+                auto sbsz = _sub_block_sizes[i];
+                auto sb_per_b = CEIL_DIV(bsz, sbsz);
+
+                // Choose first dim with enough sub-blocks
+                // per block.
+                if (sb_per_b >= num_block_threads) {
+                    _bind_posn = i;
+                    break;
+                }                        
+            }
+            os << " Note: only the sub-block size in the '" << 
+                _dims->_stencil_dims.getDimName(_bind_posn) << "' dimension may be used at run-time\n"
+                "  because block-thread binding is enabled on " << num_block_threads << " block threads.\n";
+        }
 
         // Now, we adjust groups. These are done after all the above sizes
         // because group sizes are more like 'guidelines' and don't have
@@ -645,7 +684,7 @@ namespace yask {
         os << " num-block-groups-per-region-per-step: " << nbg << endl;
         auto nb_g = findNumSubsets(os, _block_sizes, "block",
                                    _block_group_sizes, "block-group",
-                                   _dims->_cluster_pts, step_dim);
+                                   cluster_pts, step_dim);
         os << " num-blocks-per-block-group-per-step: " << nb_g << endl;
 
         // Show num mini-block-groups.
@@ -656,7 +695,7 @@ namespace yask {
         os << " num-mini-block-groups-per-block-per-step: " << nmbg << endl;
         auto nmb_g = findNumSubsets(os, _mini_block_sizes, "mini-block",
                                     _mini_block_group_sizes, "mini-block-group",
-                                    _dims->_cluster_pts, step_dim);
+                                    cluster_pts, step_dim);
         os << " num-mini-blocks-per-block-group-per-step: " << nmb_g << endl;
 
         // Show num sub-block-groups.

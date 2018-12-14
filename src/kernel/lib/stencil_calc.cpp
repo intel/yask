@@ -62,6 +62,15 @@ namespace yask {
         }
         
         // TODO: if >1 BB, check limits of outer one first to save time.
+
+        // Lookup some thread-binding info.
+        int bind_posn = settings._bind_posn;
+        string bind_dim;
+        idx_t bind_slab_pts = 1;
+        if (settings.bind_block_threads) {
+            bind_dim = stencil_dims.getDimName(bind_posn);
+            bind_slab_pts = settings._sub_block_sizes[bind_posn];
+        }
         
         // Loop through each solid BB for this bundle.
         // For each BB, calc intersection between it and 'mini_block_idxs'.
@@ -120,7 +129,7 @@ namespace yask {
                 // an OMP region thread.  If there is only one block per thread,
                 // nested OMP is disabled, and this OMP pragma does nothing.
                 int nbt = cp->set_block_threads();
-                bool bind_threads = nbt > 1 && opts->bind_block_threads;
+                bool bind_threads = nbt > 1 && settings.bind_block_threads;
                 _Pragma("omp parallel proc_bind(spread)") {
                     int block_thread_idx = (nbt <= 1) ? 0 : omp_get_thread_num();
                     
@@ -132,11 +141,10 @@ namespace yask {
                     // [or auto-tuned] sub-block covers entire mini-block,
                     // set step size to full width.  If binding threads to
                     // sub-blocks, set step size to full width in all but
-                    // the outer dim, which is set to a cluster width.
-                    idx_t outer_cluster_pts = dims->_cluster_pts[0];
+                    // the binding dim.
                     DOMAIN_VAR_LOOP(i, j) {
-                        if (bind_threads && i == outer_posn)
-                            adj_mb_idxs.step[i] = outer_cluster_pts;
+                        if (bind_threads && i == bind_posn)
+                            adj_mb_idxs.step[i] = bind_slab_pts;
                         else if ((settings._sub_block_sizes[i] >= settings._mini_block_sizes[i]) ||
                                  bind_threads)
                             adj_mb_idxs.step[i] = adj_mb_idxs.end[i] - adj_mb_idxs.begin[i];
@@ -152,16 +160,16 @@ namespace yask {
 
                     // If binding threads to sub-blocks, run the mini-block
                     // loops on all block threads and call calc_sub_block()
-                    // only by the designated thread for the given cluster
-                    // index in the outer dim.
+                    // only by the designated thread for the given slab
+                    // index in the binding dim.
                     if (bind_threads) {
                         const idx_t idx_ofs = 0x1000; // to help keep pattern when idx is neg.
 #define OMP_PRAGMA
 #define CALC_SUB_BLOCK(mb_idxs)                                         \
-                        auto outer_elem_idx = mb_idxs.start[outer_posn]; \
-                        auto outer_clus_idx = idiv_flr(outer_elem_idx + idx_ofs, outer_cluster_pts); \
-                        auto outer_clus_thr = imod_flr<idx_t>(outer_clus_idx, nbt); \
-                        if (block_thread_idx == outer_clus_thr)         \
+                        auto bind_elem_idx = mb_idxs.start[bind_posn]; \
+                        auto bind_slab_idx = idiv_flr(bind_elem_idx + idx_ofs, bind_slab_pts); \
+                        auto bind_thr = imod_flr<idx_t>(bind_slab_idx, nbt); \
+                        if (block_thread_idx == bind_thr)               \
                             sg->calc_sub_block(region_thread_idx, block_thread_idx, settings, mb_idxs)
 #include "yask_mini_block_loops.hpp"
 #undef CALC_SUB_BLOCK

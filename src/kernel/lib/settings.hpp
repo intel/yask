@@ -885,6 +885,9 @@ namespace yask {
         int num_block_threads = 1; // Number of threads to use for a block.
         bool bind_block_threads = false; // Bind block threads to indices.
 
+        // Stencil-dim posn in which to apply block-thread binding.
+        int _bind_posn = 1;
+
         // Debug.
         bool force_scalar = false; // Do only scalar ops.
 
