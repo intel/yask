@@ -155,11 +155,12 @@ namespace yask {
                     // only by the designated thread for the given cluster
                     // index in the outer dim.
                     if (bind_threads) {
-                        const idx_t clus_idx_ofs = 1000; // to help keep pattern when idx is neg.
+                        const idx_t idx_ofs = 0x1000; // to help keep pattern when idx is neg.
 #define OMP_PRAGMA
 #define CALC_SUB_BLOCK(mb_idxs)                                         \
-                        auto outer_clus_idx = abs(idiv_flr(clus_idx_ofs + mb_idxs.start[outer_posn], outer_cluster_pts)); \
-                        auto outer_clus_thr = outer_clus_idx % nbt;     \
+                        auto outer_elem_idx = mb_idxs.start[outer_posn]; \
+                        auto outer_clus_idx = idiv_flr(outer_elem_idx + idx_ofs, outer_cluster_pts); \
+                        auto outer_clus_thr = imod_flr<idx_t>(outer_clus_idx, nbt); \
                         if (block_thread_idx == outer_clus_thr)         \
                             sg->calc_sub_block(region_thread_idx, block_thread_idx, settings, mb_idxs)
 #include "yask_mini_block_loops.hpp"
