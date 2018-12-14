@@ -345,11 +345,11 @@ my $maxPoints;
 my $minClustersInBlock = 10;
 my $minBlocksInRegion = 10;
 
-# 'Exp' means exponent of 2.
-my $minThreadDivisorExp = 0; # 2^0 = 1.
-my $maxThreadDivisorExp = 2; # 2^2 = 4.
-my $minBlockThreadsExp = 0; # 2^0 = 1.
-my $maxBlockThreadsExp = 6; # 2^6 = 64.
+# Threads.
+my $minThreadDivisor = 1;
+my $maxThreadDivisor = 4;
+my $minBlockThreads = 1;
+my $maxBlockThreads = 32;       # TODO: set to number of CPUs.
 
 # List of possible loop orders.
 my @loopOrders =
@@ -428,8 +428,9 @@ my @rangesAll =
    [ 0, $maxPad, 1, 'epz' ],
 
    # threads.
-   [ $minThreadDivisorExp, $maxThreadDivisorExp, 1, 'thread_divisor_exp' ],
-   [ $minBlockThreadsExp, $maxBlockThreadsExp, 1, 'bthreads_exp' ],
+   [ $minThreadDivisor, $maxThreadDivisor, 1, 'thread_divisor' ],
+   [ $minBlockThreads, $maxBlockThreads, 1, 'block_threads' ],
+   [ 0, 1, 1, 'bind_block_threads' ],
   );
 
 if ($showGroups) {
@@ -1136,8 +1137,9 @@ sub fitness {
   my @ps = readHashes($h, 'ep', 0);
   my $fold = readHash($h, 'fold', 1);
   my $exprSize = readHash($h, 'exprSize', 1);
-  my $thread_divisor_exp = readHash($h, 'thread_divisor_exp', 0);
-  my $bthreads_exp = readHash($h, 'bthreads_exp', 0);
+  my $thread_divisor = readHash($h, 'thread_divisor', 0);
+  my $block_threads = readHash($h, 'block_threads', 0);
+  my $bind_block_threads = readHash($h, 'bind_block_threads', 0);
   my $pfd_l1 = readHash($h, 'pfd_l1', 1);
   my $pfd_l2 = readHash($h, 'pfd_l2', 1);
   my $ompRegionSchedule = readHash($h, 'ompRegionSchedule', 1);
@@ -1314,8 +1316,9 @@ sub fitness {
   my $runCmd = getRunCmd();     # shell command plus any initial args.
   $runCmd .= " -ranks $nranks" if $nranks > 1;
   my $args = "";             # exe args.
-  $args .= " -thread_divisor ".(1 << $thread_divisor_exp);
-  $args .= " -block_threads ".(1 << $bthreads_exp);
+  $args .= " -thread_divisor $thread_divisor";
+  $args .= " -block_threads $block_threads";
+  $args .= ($bind_block_threads ? " " : " -no") "-bind_block_threads"
 
   # sizes.
   $args .= " -dx $ds[0] -dy $ds[1] -dz $ds[2]";
