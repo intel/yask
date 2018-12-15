@@ -31,7 +31,7 @@ namespace yask {
 
     // Determine vectorizability information about this grid point.
     // Called when a grid point is read in a stencil function.
-    void VecInfoVisitor::visit(GridPoint* gp) {
+    string VecInfoVisitor::visit(GridPoint* gp) {
 
         // Nothing to do if this grid-point is not vectorizable.
         if (gp->getVecType() == GridPoint::VEC_NONE) {
@@ -39,14 +39,14 @@ namespace yask {
             cout << " //** cannot vectorize scalar-access " << gp->makeQuotedStr() << endl;
 #endif
             _scalarPoints.insert(*gp);
-            return;
+            return "";
         }
         else if (gp->getVecType() == GridPoint::VEC_PARTIAL) {
 #ifdef DEBUG_VV
             cout << " //** cannot vectorize non-standard-access " << gp->makeQuotedStr() << endl;
 #endif
             _nonVecPoints.insert(*gp);
-            return;
+            return "";
         }
         assert(gp->getVecType() == GridPoint::VEC_FULL);
 
@@ -54,7 +54,7 @@ namespace yask {
         if (_vecPoints.count(*gp) > 0) {
             assert(_vblk2elemLists.count(*gp) > 0);
             assert(_vblk2avblks.count(*gp) > 0);
-            return;
+            return "";
         }
         assert(_vblk2elemLists.count(*gp) == 0);
         assert(_vblk2avblks.count(*gp) == 0);
@@ -127,6 +127,7 @@ namespace yask {
 
         // Mark as done.
         _vecPoints.insert(*gp);
+        return "";
     }                   // end of visit() method.
 
     // Return code containing a vector of grid points, e.g., code fragment
@@ -214,9 +215,8 @@ namespace yask {
         return "";
     }
 
-
     // Sort a commutative expression.
-    void ExprReorderVisitor::visit(CommutativeExpr* ce) {
+    string ExprReorderVisitor::visit(CommutativeExpr* ce) {
 
         auto& oev = ce->getOps(); // old exprs.
         NumExprPtrVec nev; // new exprs.
@@ -293,6 +293,7 @@ namespace yask {
         // Replace the old vector w/the new one.
         assert(nev.size() == oev.size());
         oev.swap(nev);
+        return "";
     }
 
     // TODO: fix this old code and make it available as an output.

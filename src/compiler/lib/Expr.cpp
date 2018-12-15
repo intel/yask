@@ -355,6 +355,34 @@ namespace yask {
         return make_shared<NegExpr>(rhs);
     }
 
+    // Function calls.
+#define FUNC_EXPR(fn) \
+    NumExprPtr fn(const NumExprPtr rhs) {             \
+        return make_shared<FuncExpr>(#fn, std::initializer_list< const NumExprPtr >{ rhs });   \
+    }
+    FUNC_EXPR(sqrt)
+    FUNC_EXPR(cbrt)
+    FUNC_EXPR(fabs)
+    FUNC_EXPR(erf)
+    FUNC_EXPR(exp)
+    FUNC_EXPR(log)
+    FUNC_EXPR(atan)
+    FUNC_EXPR(sin)
+    FUNC_EXPR(cos)
+#undef FUNC_EXPR
+#define FUNC_EXPR(fn) \
+    NumExprPtr fn(const NumExprPtr arg1, const NumExprPtr arg2) {   \
+        return make_shared<FuncExpr>(#fn, std::initializer_list< const NumExprPtr >{ arg1, arg2 });         \
+    } \
+    NumExprPtr fn(const NumExprPtr arg1, double arg2) {   \
+        return make_shared<FuncExpr>(#fn, std::initializer_list< const NumExprPtr >{ arg1, constNum(arg2) }); \
+    } \
+    NumExprPtr fn(double arg1, const NumExprPtr arg2) {   \
+        return make_shared<FuncExpr>(#fn, std::initializer_list< const NumExprPtr >{ constNum(arg1), arg2 }); \
+    }
+    FUNC_EXPR(pow)
+#undef FUNC_EXPR
+
     // A free function to create a constant expression.
     NumExprPtr constNum(double rhs) {
         return make_shared<ConstExpr>(rhs);
@@ -540,47 +568,50 @@ namespace yask {
     }
 
     // Visitor acceptors.
-    void ConstExpr::accept(ExprVisitor* ev) {
-        ev->visit(this);
+    string ConstExpr::accept(ExprVisitor* ev) {
+        return ev->visit(this);
     }
-    void CodeExpr::accept(ExprVisitor* ev) {
-        ev->visit(this);
-    }
-    template<>
-    void UnaryNumExpr::accept(ExprVisitor* ev) {
-        ev->visit(this);
+    string CodeExpr::accept(ExprVisitor* ev) {
+        return ev->visit(this);
     }
     template<>
-    void UnaryBoolExpr::accept(ExprVisitor* ev) {
-        ev->visit(this);
+    string UnaryNumExpr::accept(ExprVisitor* ev) {
+        return ev->visit(this);
     }
     template<>
-    void UnaryNum2BoolExpr::accept(ExprVisitor* ev) {
-        ev->visit(this);
+    string UnaryBoolExpr::accept(ExprVisitor* ev) {
+        return ev->visit(this);
     }
     template<>
-    void BinaryNumExpr::accept(ExprVisitor* ev) {
-        ev->visit(this);
+    string UnaryNum2BoolExpr::accept(ExprVisitor* ev) {
+        return ev->visit(this);
     }
     template<>
-    void BinaryBoolExpr::accept(ExprVisitor* ev) {
-        ev->visit(this);
+    string BinaryNumExpr::accept(ExprVisitor* ev) {
+        return ev->visit(this);
     }
     template<>
-    void BinaryNum2BoolExpr::accept(ExprVisitor* ev) {
-        ev->visit(this);
+    string BinaryBoolExpr::accept(ExprVisitor* ev) {
+        return ev->visit(this);
     }
-    void CommutativeExpr::accept(ExprVisitor* ev) {
-        ev->visit(this);
+    template<>
+    string BinaryNum2BoolExpr::accept(ExprVisitor* ev) {
+        return ev->visit(this);
     }
-    void GridPoint::accept(ExprVisitor* ev) {
-        ev->visit(this);
+    string CommutativeExpr::accept(ExprVisitor* ev) {
+        return ev->visit(this);
     }
-    void EqualsExpr::accept(ExprVisitor* ev) {
-        ev->visit(this);
+    string FuncExpr::accept(ExprVisitor* ev) {
+        return ev->visit(this);
     }
-    void IndexExpr::accept(ExprVisitor* ev) {
-        ev->visit(this);
+    string GridPoint::accept(ExprVisitor* ev) {
+        return ev->visit(this);
+    }
+    string EqualsExpr::accept(ExprVisitor* ev) {
+        return ev->visit(this);
+    }
+    string IndexExpr::accept(ExprVisitor* ev) {
+        return ev->visit(this);
     }
 
     // EqualsExpr methods.
@@ -593,7 +624,8 @@ namespace yask {
         return p &&
             _lhs->isSame(p->_lhs.get()) &&
             _rhs->isSame(p->_rhs.get()) &&
-            areExprsSame(_cond, p->_cond); // might be null.
+            areExprsSame(_cond, p->_cond) && // might be null.
+            areExprsSame(_step_cond, p->_step_cond); // might be null.
     }
 
     // Commutative methods.
@@ -606,6 +638,7 @@ namespace yask {
 
         // Operands must be the same, but not necessarily in same order.  This
         // tracks the indices in 'other' that have already been matched.
+        // Use a set to correctly handle repeating ops, e.g., a + b + a.
         set<size_t> matches;
 
         // Loop through this set of ops.
@@ -629,6 +662,43 @@ namespace yask {
 
         // Do all match?
         return matches.size() == _ops.size();
+    }
+
+    // FuncExpr methods.
+    bool FuncExpr::isSame(const Expr* other) const {
+        auto p = dynamic_cast<const FuncExpr*>(other);
+        if (!p || _opStr != p->_opStr)
+            return false;
+        if (_ops.size() != p->_ops.size())
+            return false;
+        for (size_t i = 0; i < p->_ops.size(); i++) {
+            if (!_ops[i]->isSame(p->_ops[i]))
+                return false;
+        }
+        return true;
+    }
+    bool FuncExpr::makePair(Expr* other) {
+        auto p = dynamic_cast<FuncExpr*>(other);
+
+        // Must be another FuncExpr w/all the same operands.
+        if (!p || _ops.size() != p->_ops.size())
+            return false;
+        for (size_t i = 0; i < p->_ops.size(); i++) {
+            if (!_ops[i]->isSame(p->_ops[i]))
+                return false;
+        }
+
+        // Possible pairs.
+        // TODO: make list of other options.
+        string f1 = "sin";
+        string f2 = "cos";
+        if ((_opStr == f1 && p->_opStr == f2) ||
+            (_opStr == f2 && p->_opStr == f1)) {
+            _paired = p;
+            p->_paired = this;
+            return true;
+        }
+        return false;
     }
 
     // GridPoint methods.
@@ -956,12 +1026,12 @@ namespace yask {
         PrintHelper ph(_dummySettings, _dummyDims, NULL, "temp", "", "", ""); // default helper.
         CompilerSettings settings; // default settings.
         PrintVisitorTopDown pv(oss, ph, varMap);
-        accept(&pv);
+        string res = accept(&pv);
 
         // Return anything written to the stream
         // concatenated with anything left in the
         // PrintVisitor.
-        return oss.str() + pv.getExprStr();
+        return oss.str() + res;
     }
 
     // Return number of nodes.
@@ -975,8 +1045,8 @@ namespace yask {
     }
 
     // Const version of accept.
-    void Expr::accept(ExprVisitor* ev) const {
-        const_cast<Expr*>(this)->accept(ev);
+    string Expr::accept(ExprVisitor* ev) const {
+        return const_cast<Expr*>(this)->accept(ev);
     }
 
 } // namespace yask.

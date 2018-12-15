@@ -350,6 +350,7 @@ namespace yask {
         int _minExprSize = 2;
         bool _doCse = true;      // do common-subexpr elim.
         bool _doComb = true;    // combine commutative operations.
+        bool _doPairs = true;   // find equation pairs.
         bool _doOptCluster = true; // apply optimizations also to cluster.
         string _eqBundleTargets;  // how to bundle equations.
         string _gridRegex;       // grids to update.

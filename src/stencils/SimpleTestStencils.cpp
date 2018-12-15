@@ -29,7 +29,7 @@ IN THE SOFTWARE.
 
 // Simple tests for various YASK DSL features.
 
-// A base class for 1-D stencils.
+// A base class for 1-D stencil tests.
 class Test1dBase : public StencilRadiusBase {
     
 protected:
@@ -594,6 +594,34 @@ public:
 };
 
 REGISTER_STENCIL(TestScratchSubdomainStencil1);
+
+// A stencil that uses svml math functions.
+class TestFuncStencil1 : public StencilBase {
+
+protected:
+
+    // Indices & dimensions.
+    MAKE_STEP_INDEX(t);           // step in time dim.
+    MAKE_DOMAIN_INDEX(x);         // spatial dim.
+
+    // Vars.
+    MAKE_GRID(A, t, x);
+    MAKE_GRID(B, t, x);
+    MAKE_GRID(C, t, x);
+
+public:
+
+    TestFuncStencil1(StencilList& stencils) :
+        StencilBase("test_func_1d", stencils) { }
+
+    virtual void define() {
+        A(t+1, x) EQUALS cos(A(t, x)) - 2 * sin(A(t, x));
+        B(t+1, x) EQUALS pow(B(t, x), 1.0/2.5);
+        C(t+1, x) EQUALS atan(A(t+1, x) + cbrt(C(t, x+1)));
+    }
+};
+
+REGISTER_STENCIL(TestFuncStencil1);
 
 // A stencil that has grids, but no stencil equation.
 class TestEmptyStencil1 : public StencilBase {

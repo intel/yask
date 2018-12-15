@@ -79,10 +79,12 @@ namespace yask {
         TRACE_MSG("run_ref: [" << begin.makeDimValStr() << " ... " <<
                   end.makeDimValStr() << ")");
 
-        // Force region & block sizes to whole rank size so that scratch
+        // Force sub-sizes to whole rank size so that scratch
         // grids will be large enough. Turn off any temporal blocking.
         _opts->_region_sizes.setValsSame(0);
         _opts->_block_sizes.setValsSame(0);
+        _opts->_mini_block_sizes.setValsSame(0);
+        _opts->_sub_block_sizes.setValsSame(0);
         _opts->adjustSettings(get_env());
         update_grid_info();
 
@@ -162,7 +164,8 @@ namespace yask {
                     // ignore misc_stop.  If point is in sub-domain for this
                     // bundle, then evaluate the reference scalar code.
                     // TODO: fix domain of scratch grids.
-#define misc_fn(misc_idxs)   do {                                       \
+#define MISC_FN(misc_idxs) \
+                    do {                                                \
                         if (sg->is_in_valid_domain(misc_idxs.start))    \
                             sg->calc_scalar(scratch_grid_idx, misc_idxs.start); \
                     } while(0)
@@ -1060,6 +1063,7 @@ namespace yask {
                     bp->start_timers();
                 
                 // Steps within a mini-blk are based on sub-blk sizes.
+                // This will get overridden later if thread binding is enabled.
                 auto& settings = bp->getActiveSettings();
                 mini_block_idxs.step = settings._sub_block_sizes;
                 mini_block_idxs.step[step_posn] = step_t;
@@ -1469,10 +1473,10 @@ namespace yask {
     }
     
     // Adjust offsets of scratch grids based on thread number 'thread_idx'
-    // and beginning point of block 'idxs'.  Each scratch-grid is assigned
-    // to a thread, so it must "move around" as the thread is assigned to
-    // each block.  This move is accomplished by changing the grids' global
-    // and local offsets.
+    // and beginning point of mini-block 'idxs'.  Each scratch-grid is
+    // assigned to a thread, so it must "move around" as the thread is
+    // assigned to each mini-block.  This move is accomplished by changing
+    // the grids' local offsets.
     void StencilContext::update_scratch_grid_info(int thread_idx,
                                                   const Indices& idxs) {
         CONTEXT_VARS(this);

@@ -39,9 +39,9 @@ our @special_log_keys =
    );
 
 # Values to get from log file.
+# First one should be "fitness".
 # Key must start with the following string.
-# Case ignored.
-# Spaces and hyphens interchangeable.
+# Case ignored and spaces and hyphens interchangeable.
 our @log_keys =
   (
    # values from binary.
@@ -86,8 +86,9 @@ our @log_keys =
    'core(s) per socket',
    'socket(s)',
    'NUMA node(s)',
-   'mem total',
-   'mem free',
+   'MemTotal',
+   'MemFree',
+   'ShMem',
   );
 
 our @all_log_keys = ( @log_keys, @special_log_keys );
@@ -197,15 +198,27 @@ sub getResultsFromLine($$) {
   # TODO: catch output of auto-tuner and update relevant results.
 
   # Output of 'uname -a'
-  if ($line =~ /^\s*Linux\s+\w+\s+(\S+)/) {
-    $results->{$linux_key} = $1;
+  if ($line =~ /^\s*Linux\s/) {
+    my @w = split ' ', $line;
+    $results->{$linux_key} = $w[2]; # 'Linux' hostname kernel ...
   }
 
+  # MPI node names.
   # [0] MPI startup(): 0       97842    epb333     {0,1,2,3,4,...
-  elsif ($line =~ /MPI startup\(\):\s*\d+\s+\d+\s+(\w+)/) {
+  elsif ($line =~ /MPI startup\(\):\s*\d+\s+\d+\s+(\S+)/) {
     my $nname = $1;
     $results->{$nodes_key} .= ' ' if defined $results->{$nodes_key};
     $results->{$nodes_key} .= $nname;
+  }
+
+  # Invalidate settings overridden by auto-tuner.
+  # TODO: save new values, but need to handle multiple packs.
+  elsif (/Auto-tuner done/i) {
+    for my $k ('block size',
+               'mini-block size',
+               'sub-block size',) {
+      $results->{$k} = 'auto-tuned';
+    }
   }
   
   # look for matches to all other keys.

@@ -268,13 +268,17 @@ namespace yask {
         // Report changes in TRACE mode.
         if (old_allocs != new_allocs || old_dirty != new_dirty) {
             Indices first_allocs = _rank_offsets.subElements(_actl_left_pads);
-            Indices last_allocs = first_allocs.addElements(_allocs).subConst(1);
+            Indices end_allocs = first_allocs.addElements(_allocs);
             TRACE_MSG0(get_ostr(), "grid '" << get_name() << "' resized from " <<
-                       makeIndexString(old_allocs, " * ") <<
-                       " to " << makeIndexString(new_allocs, " * ") <<
-                       " at " << makeIndexString(first_allocs) <<
-                       " ... " << makeIndexString(last_allocs) <<
-                       " with " << _dirty_steps.size() << " dirty flag(s)");
+                       makeIndexString(old_allocs, " * ") << " to " <<
+                       makeIndexString(new_allocs, " * ") << " at [" <<
+                       makeIndexString(first_allocs) << " ... " << 
+                       makeIndexString(end_allocs) << ") with left-halos " <<
+                       makeIndexString(_left_halos) << ", right-halos " <<
+                       makeIndexString(_right_halos) << ", left-wf-exts " <<
+                       makeIndexString(_left_wf_exts) << ", right-wf-exts " <<
+                       makeIndexString(_right_wf_exts) << ", and " <<
+                       _dirty_steps.size() << " dirty flag(s)");
         }
     }
 

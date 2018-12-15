@@ -125,6 +125,9 @@ void usage(const string& cmd) {
         "    Do [not] combine commutative operations (default=" << settings._doComb << ").\n"
         " [-no]-opt-cse\n"
         "    Do [not] eliminate common subexpressions (default=" << settings._doCse << ").\n"
+        " [-no]-opt-pair\n"
+        "    Do [not] pair eligible function calls (default=" << settings._doPairs << ").\n"
+        "      Currently enables 'sin(x)' and 'cos(x)' to be replaced with 'sincos(x)'.\n"
         " [-no]-opt-cluster\n"
         "    Do [not] apply optimizations across the cluster (default=" << settings._doOptCluster << ").\n"
         " -max-es <num-nodes>\n"
@@ -189,6 +192,10 @@ void parseOpts(int argc, const char* argv[])
                 settings._doCse = true;
             else if (opt == "-no-opt-cse")
                 settings._doCse = false;
+            else if (opt == "-opt-pair")
+                settings._doPairs = true;
+            else if (opt == "-no-opt-pair")
+                settings._doPairs = false;
             else if (opt == "-opt-cluster")
                 settings._doOptCluster = true;
             else if (opt == "-no-opt-cluster")

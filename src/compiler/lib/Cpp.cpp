@@ -646,19 +646,20 @@ namespace yask {
     }
 
     // Print invariant grid-access vars for non-time loop(s).
-    void CppStepVarPrintVisitor::visit(GridPoint* gp) {
+    string CppStepVarPrintVisitor::visit(GridPoint* gp) {
 
         // Pointer to grid.
         string gridPtr = _cvph.getLocalVar(_os, gp->getGridPtr(), CppPrintHelper::_grid_ptr_type);
 
         // Time var.
         auto& dims = _cvph.getDims();
-        string stepArgVar = _cvph.getLocalVar(_os, gp->makeStepArgStr(gridPtr, dims),
-                                              CppPrintHelper::_step_val_type);
+        _cvph.getLocalVar(_os, gp->makeStepArgStr(gridPtr, dims),
+                          CppPrintHelper::_step_val_type);
+        return "";
     }
 
     // Print invariant grid-access vars for an inner loop.
-    void CppLoopVarPrintVisitor::visit(GridPoint* gp) {
+    string CppLoopVarPrintVisitor::visit(GridPoint* gp) {
 
         // Retrieve prior analysis of this grid point.
         auto loopType = gp->getLoopType();
@@ -669,13 +670,14 @@ namespace yask {
             // Not already loaded?
             if (!_cvph.lookupPointVar(*gp)) {
                 string expr = _ph.readFromPoint(_os, *gp);
-                makeNextTempVar(gp) << expr << _ph.getLineSuffix();
+                string res;
+                makeNextTempVar(res, gp) << expr << _ph.getLineSuffix();
 
                 // Save for future use.
-                string res = getExprStrAndClear();
                 _cvph.savePointVar(*gp, res);
             }
         }
+        return "";
     }
 
 } // namespace yask.

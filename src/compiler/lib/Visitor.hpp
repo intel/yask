@@ -33,56 +33,69 @@ IN THE SOFTWARE.
 namespace yask {
 
     // Base class for an Expr-tree visitor.
+    // Visitation returns a string.
+    // By default, visitors return empty strings or the last accepted result.
     class ExprVisitor {
+    protected:
+        bool _visitEqualsLhs = false; // whether to visit LHS of EQUALS.
+
     public:
         virtual ~ExprVisitor() { }
 
         // By default, leaf-node visitors do nothing.
-        virtual void visit(ConstExpr* ce) { }
-        virtual void visit(CodeExpr* ce) { }
-        virtual void visit(IndexExpr* ie) { }
-        virtual void visit(GridPoint* gp) { } // does NOT visit arg exprs by default.
+        virtual string visit(ConstExpr* ce) { return ""; }
+        virtual string visit(CodeExpr* ce) { return ""; }
+        virtual string visit(IndexExpr* ie) { return ""; }
+        virtual string visit(GridPoint* gp) { return ""; } // does NOT visit arg exprs by default.
 
-        // By default, a unary visitor just visits its operand.
-        virtual void visit(UnaryNumExpr* ue) {
-            ue->getRhs()->accept(this);
+        // By default, a unary visitor visits its operand.
+        virtual string visit(UnaryNumExpr* ue) {
+            return ue->getRhs()->accept(this);
         }
-        virtual void visit(UnaryNum2BoolExpr* ue) {
-            ue->getRhs()->accept(this);
+        virtual string visit(UnaryNum2BoolExpr* ue) {
+            return ue->getRhs()->accept(this);
         }
-        virtual void visit(UnaryBoolExpr* ue) {
-            ue->getRhs()->accept(this);
-        }
-
-        // By default, a binary visitor just visits its operands.
-        virtual void visit(BinaryNumExpr* be) {
-            be->getLhs()->accept(this);
-            be->getRhs()->accept(this);
-        }
-        virtual void visit(BinaryNum2BoolExpr* be) {
-            be->getLhs()->accept(this);
-            be->getRhs()->accept(this);
-        }
-        virtual void visit(BinaryBoolExpr* be) {
-            be->getLhs()->accept(this);
-            be->getRhs()->accept(this);
+        virtual string visit(UnaryBoolExpr* ue) {
+            return ue->getRhs()->accept(this);
         }
 
-        // By default, a commutative visitor just visits its operands.
-        virtual void visit(CommutativeExpr* ce) {
+        // By default, a binary visitor visits its operands.
+        virtual string visit(BinaryNumExpr* be) {
+            be->getLhs()->accept(this);
+            return be->getRhs()->accept(this);
+        }
+        virtual string visit(BinaryNum2BoolExpr* be) {
+            be->getLhs()->accept(this);
+            return be->getRhs()->accept(this);
+        }
+        virtual string visit(BinaryBoolExpr* be) {
+            be->getLhs()->accept(this);
+            return be->getRhs()->accept(this);
+        }
+
+        // By default, commutative and function visitors visit their operands.
+        virtual string visit(CommutativeExpr* ce) {
             auto& ops = ce->getOps();
-            for (auto ep : ops) {
-                ep->accept(this);
-            }
+            string res;
+            for (auto ep : ops)
+                res = ep->accept(this);
+            return res;
         }
+        virtual string visit(FuncExpr* ce) {
+            auto& ops = ce->getOps();
+            string res;
+            for (auto ep : ops)
+                res = ep->accept(this);
+            return res;
+        }
+        virtual string visit(EqualsExpr* ee) {
 
-        // By default, an equality visitor just visits its operands
-        // and the conditional if it exists.
-        virtual void visit(EqualsExpr* ee) {
-            ee->getLhs()->accept(this);
-            ee->getRhs()->accept(this);
-            if (ee->getCond())
-                ee->getCond()->accept(this);
+            // Visit LHS if flag is set.
+            if (_visitEqualsLhs)
+                ee->getLhs()->accept(this);
+            return ee->getRhs()->accept(this);
+
+            // Conditions are not visited.
         }
     };
 

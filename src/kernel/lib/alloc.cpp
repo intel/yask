@@ -812,20 +812,21 @@ namespace yask {
         // Create new scratch grids.
         makeScratchGrids(rthreads);
 
-        // Find the max block size across all packs.  TODO: use the specific
-        // block size for the pack containing a given scratch grid.
-        IdxTuple blksize(_dims->_domain_dims);
+        // Find the max mini-block size across all packs.
+        // They can be different across packs when pack-specific
+        // auto-tuning has been used.
+        IdxTuple mblksize(_dims->_domain_dims);
         for (auto& sp : stPacks) {
             auto& psettings = sp->getActiveSettings();
             DOMAIN_VAR_LOOP(i, j) {
 
-                auto sz = round_up_flr(psettings._block_sizes[i],
+                auto sz = round_up_flr(psettings._mini_block_sizes[i],
                                        fold_pts[j]);
-                blksize[j] = max(blksize[j], sz);
+                mblksize[j] = max(mblksize[j], sz);
             }
         }
-        TRACE_MSG("allocScratchData: max block size across pack(s) is " <<
-                  blksize.makeDimValStr(" * "));
+        TRACE_MSG("allocScratchData: max mini-block size across pack(s) is " <<
+                  mblksize.makeDimValStr(" * "));
         
         // Pass 0: count required size, allocate chunk of memory at end.
         // Pass 1: distribute parts of already-allocated memory chunk.
@@ -855,8 +856,13 @@ namespace yask {
 
                         if (gp->is_dim_used(dname)) {
 
-                            // Set domain size of grid to block size.
-                            gp->_set_domain_size(dname, blksize[dname]);
+                            // Set domain size of scratch grid to mini-block size.
+                            gp->_set_domain_size(dname, mblksize[dname]);
+
+                            // Conservative allowance for WF exts and/or temporal shifts.
+                            idx_t shift_pts = max(wf_shift_pts[dname], tb_angles[dname] * num_tb_shifts) * 2;
+                            gp->_set_left_wf_ext(dname, shift_pts);
+                            gp->_set_right_wf_ext(dname, shift_pts);
 
                             // Pads.
                             // Set via both 'extra' and 'min'; larger result will be used.

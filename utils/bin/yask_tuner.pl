@@ -155,6 +155,7 @@ $| = 1;
 print "Invocation: $0 @ARGV\n";
 for my $origOpt (@ARGV) {
   my $opt = lc $origOpt;
+  my ($lhs, $rhs) = split /=/, $origOpt, 2;
 
   if ($opt eq '-h' || $opt eq '-help') {
     usage();
@@ -168,41 +169,41 @@ for my $origOpt (@ARGV) {
   elsif ($opt eq '-debugcheck') {
     $debugCheck = 1;
   }
-  elsif ($origOpt =~ /^-killcmd=(.*)$/i) {
-    $killCmd = $1;
+  elsif ($opt =~ /^-?killcmd=(.*)$/i) {
+    $killCmd = $rhs;
   }
-  elsif ($origOpt =~ /^-outdir=(.*)$/i) {
-    $outDir = $1;
+  elsif ($opt =~ /^-?outdir=(.*)$/i) {
+    $outDir = $rhs;
   }
-  elsif ($origOpt =~ /^-makeargs=(.*)$/i) {
-    $makeArgs = $1;
+  elsif ($opt =~ /^-?makeargs=(.*)$/i) {
+    $makeArgs = $rhs;
   }
-  elsif ($origOpt =~ /^-makeprefix=(.*)$/i) {
-    $makePrefix = $1;
+  elsif ($opt =~ /^-?makeprefix=(.*)$/i) {
+    $makePrefix = $rhs;
   }
-  elsif ($opt =~ '^-maketimeout=(\d+)$') {
-    $makeTimeout = $1;
+  elsif ($opt =~ '^-?maketimeout=(\d+)$') {
+    $makeTimeout = $rhs;
   }
-  elsif ($origOpt =~ /^-runargs=(.*)$/i) {
-    $runArgs = $1;
+  elsif ($opt =~ /^-?runargs=(.*)$/i) {
+    $runArgs = $rhs;
   }
   elsif ($opt eq '-sde') {
     $sde = 1;
     $sim = 1;
   }
-  elsif ($opt =~ '^-ranks=(\d+)$') {
-    $nranks = $1;
+  elsif ($opt =~ '^-?ranks=(\d+)$') {
+    $nranks = $rhs;
   }
-  elsif ($opt =~ '^-mic=(\d+)$') {
-    $mic = $1;
+  elsif ($opt =~ '^-?mic=(\d+)$') {
+    $mic = $rhs;
     $arch = 'knc';
     $host = hostname()."-mic$mic";
   }
-  elsif ($opt =~ '^-arch=(\S+)$') {
-    $arch = $1;
+  elsif ($opt =~ '^-?arch=(\S+)$') {
+    $arch = $rhs;
   }
-  elsif ($origOpt =~ /^-host=(\S+)$/) {
-    $host = $1;
+  elsif ($opt =~ /^-?host=(\S+)$/) {
+    $host = $rhs;
   }
   elsif ($opt eq '-dp') {
     $dp = 1;
@@ -210,22 +211,22 @@ for my $origOpt (@ARGV) {
   elsif ($opt eq '-sp') {
     $dp = 0;
   }
-  elsif ($opt =~ '^-mem=([.\d]+)-([.\d]+)$') {
+  elsif ($opt =~ '^-?mem=([.\d]+)-([.\d]+)$') {
     $minGB = $1;
     $maxGB = $2;
   }
-  elsif ($opt =~ '^-radius=(\d+)$') {
-    $radius = $1;
+  elsif ($opt =~ '^-?radius=(\d+)$') {
+    $radius = $rhs;
   }
-  elsif ($opt =~ '^-stencil=(\w+)$') {
-    $stencil = $1;
+  elsif ($opt =~ '^-?stencil=(\w+)$') {
+    $stencil = $rhs;
   }
   elsif ($opt eq '-noprefetch') {
     $geneRanges{$autoKey.'pfd_l1'} = [ 0 ];
     $geneRanges{$autoKey.'pfd_l2'} = [ 0 ];
   }
-  elsif ($opt =~ '^-maxvecsincluster=(\d+)$') {
-    $maxVecsInCluster = $1;
+  elsif ($opt =~ '^-?maxvecsincluster=(\d+)$') {
+    $maxVecsInCluster = $rhs;
   }
   elsif ($opt eq '-zvec') {
     $zVec = 1;
@@ -244,8 +245,8 @@ for my $origOpt (@ARGV) {
     $sweep = 1;
     print "Sweeping all values instead of searching with GA.\n";
   }
-  elsif ($opt =~ '^-folds=(\s*\d+\s+\d+\s+\d+\s*(,\s*\d+\s+\d+\s+\d+\s*)*)$') {
-    my $val = $1; 
+  elsif ($opt =~ '^-?folds=(\s*\d+\s+\d+\s+\d+\s*(,\s*\d+\s+\d+\s+\d+\s*)*)$') {
+    my $val = $rhs;
     $val =~ tr/ //s;
     $val =~ s/^\s+|\s+$//g;
     $val =~ s/,\s+/,/g;
@@ -254,7 +255,7 @@ for my $origOpt (@ARGV) {
   }
 
   # Assume a gene name if nothing else matches.
-  elsif ($opt =~ /^-?(.+)=(\d+)(-(\d+))?(:(\d+))?$/) {
+  elsif ($opt =~ /^-?(\S+)=(\d+)(-(\d+))?(:(\d+))?$/) {
     my ($key, $min, $max, $stride) = ($1, $2, $4, $6);
     $max = $min if !defined $max;
     $stride = 1 if !defined $stride;
@@ -312,7 +313,6 @@ $outFH->open(">$outFile") or die "error: cannot write to '$outFile'\n"
   unless $checking;
 
 # things to get from the run.
-my $fitnessMetric = 'best-throughput (num-points/sec)';
 if ($showGroups) {
   push @YaskUtils::log_keys,
     'block-group-size',
@@ -345,11 +345,11 @@ my $maxPoints;
 my $minClustersInBlock = 10;
 my $minBlocksInRegion = 10;
 
-# 'Exp' means exponent of 2.
-my $minThreadDivisorExp = 0; # 2^0 = 1.
-my $maxThreadDivisorExp = 2; # 2^2 = 4.
-my $minBlockThreadsExp = 0; # 2^0 = 1.
-my $maxBlockThreadsExp = 6; # 2^6 = 64.
+# Threads.
+my $minThreadDivisor = 1;
+my $maxThreadDivisor = 4;
+my $minBlockThreads = 1;
+my $maxBlockThreads = 32;       # TODO: set to number of CPUs.
 
 # List of possible loop orders.
 my @loopOrders =
@@ -428,8 +428,9 @@ my @rangesAll =
    [ 0, $maxPad, 1, 'epz' ],
 
    # threads.
-   [ $minThreadDivisorExp, $maxThreadDivisorExp, 1, 'thread_divisor_exp' ],
-   [ $minBlockThreadsExp, $maxBlockThreadsExp, 1, 'bthreads_exp' ],
+   [ $minThreadDivisor, $maxThreadDivisor, 1, 'thread_divisor' ],
+   [ $minBlockThreads, $maxBlockThreads, 1, 'block_threads' ],
+   [ 0, 1, 1, 'bind_block_threads' ],
   );
 
 if ($showGroups) {
@@ -810,9 +811,13 @@ sub results2fitness($) {
   my $results = shift;
   my $fitness = 0;
 
+  my $fitnessMetric = $YaskUtils::log_keys[0]; # first one is fitness.
+
   # simple lookup.
   if (defined $results->{$fitnessMetric}) {
     $fitness = $results->{$fitnessMetric};
+  } else {
+    print "WARNING: not fitness result found.\n";
   }
 
   # any adjustments can go here.
@@ -1132,8 +1137,9 @@ sub fitness {
   my @ps = readHashes($h, 'ep', 0);
   my $fold = readHash($h, 'fold', 1);
   my $exprSize = readHash($h, 'exprSize', 1);
-  my $thread_divisor_exp = readHash($h, 'thread_divisor_exp', 0);
-  my $bthreads_exp = readHash($h, 'bthreads_exp', 0);
+  my $thread_divisor = readHash($h, 'thread_divisor', 0);
+  my $block_threads = readHash($h, 'block_threads', 0);
+  my $bind_block_threads = readHash($h, 'bind_block_threads', 0);
   my $pfd_l1 = readHash($h, 'pfd_l1', 1);
   my $pfd_l2 = readHash($h, 'pfd_l2', 1);
   my $ompRegionSchedule = readHash($h, 'ompRegionSchedule', 1);
@@ -1310,8 +1316,9 @@ sub fitness {
   my $runCmd = getRunCmd();     # shell command plus any initial args.
   $runCmd .= " -ranks $nranks" if $nranks > 1;
   my $args = "";             # exe args.
-  $args .= " -thread_divisor ".(1 << $thread_divisor_exp);
-  $args .= " -block_threads ".(1 << $bthreads_exp);
+  $args .= " -thread_divisor $thread_divisor";
+  $args .= " -block_threads $block_threads";
+  $args .= ($bind_block_threads ? " " : " -no") "-bind_block_threads"
 
   # sizes.
   $args .= " -dx $ds[0] -dy $ds[1] -dz $ds[2]";
@@ -1395,10 +1402,10 @@ sub fitness {
     push @cols, $fixedVals{$fk};
   }
   push @cols, @$values, '"'.$makeCmd.'"', '"'.$longRunCmd.'"';
-  print $outFH join(',', @cols);
+  print $outFH join(',', @cols,'');
   YaskUtils::printCsvValues($results, $outFH);
   @cols = ( $fitness, $bestGen, $bestFit, $isBest ? 'TRUE':'FALSE' );
-  print $outFH join(',', @cols), "\n";
+  print $outFH join(',', '',@cols), "\n";
 
   print "final fitness = $fitness\n".
     "=====================================\n";

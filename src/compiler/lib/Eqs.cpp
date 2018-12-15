@@ -94,7 +94,7 @@ namespace yask {
 
         // Callback at an equality.
         // Handles LHS grid pt explicitly, then visits RHS.
-        virtual void visit(EqualsExpr* ee) {
+        virtual string visit(EqualsExpr* ee) {
 
             // Set this equation as current one.
             _eq = ee;
@@ -118,10 +118,11 @@ namespace yask {
             rhs->accept(this);
 
             // Don't visit LHS because we've already saved it.
+            return "";
         }
 
         // Callback at a grid point on the RHS.
-        virtual void visit(GridPoint* gp) {
+        virtual string visit(GridPoint* gp) {
             assert(_eq);
 
             // Store RHS point.
@@ -130,6 +131,7 @@ namespace yask {
             // Add grid.
             auto* g = gp->getGrid();
             _rhs_grids[_eq].insert(g);
+            return "";
         }
     };
 
@@ -516,16 +518,18 @@ namespace yask {
 
     public:
         SetVecVisitor(const Dimensions& dims) :
-            _dims(dims) { }
+            _dims(dims) { 
+            _visitEqualsLhs = true;
+        }
 
         // Check each grid point in expr.
-        virtual void visit(GridPoint* gp) {
+        virtual string visit(GridPoint* gp) {
             auto* grid = gp->getGrid();
 
             // Never vectorize scalars.
             if (grid->get_num_dims() == 0) {
                 gp->setVecType(GridPoint::VEC_NONE);
-                return;
+                return "";
             }
 
             // Amount of vectorization allowed primarily depends on number
@@ -556,6 +560,7 @@ namespace yask {
             // Uses no folded dims, so scalar only.
             else
                 gp->setVecType(GridPoint::VEC_NONE);
+            return "";
         }
     };
 
@@ -575,8 +580,9 @@ namespace yask {
         set<string> vars_used;
 
         // Check each index expr;
-        virtual void visit(IndexExpr* ie) {
+        virtual string visit(IndexExpr* ie) {
             vars_used.insert(ie->getName());
+            return "";
         }
     };
 
@@ -586,10 +592,12 @@ namespace yask {
 
     public:
         SetLoopVisitor(const Dimensions& dims) :
-            _dims(dims) { }
+            _dims(dims) { 
+            _visitEqualsLhs = true;
+        }
 
         // Check each grid point in expr.
-        virtual void visit(GridPoint* gp) {
+        virtual string visit(GridPoint* gp) {
 
             // Info from grid.
             auto* grid = gp->getGrid();
@@ -631,6 +639,7 @@ namespace yask {
                 }
             }
             gp->setLoopType(lt);
+            return "";
         }
     };
 
@@ -834,15 +843,18 @@ namespace yask {
 
     public:
         OffsetVisitor(const IntTuple& ofs) :
-            _ofs(ofs) {}
+            _ofs(ofs) {
+            _visitEqualsLhs = true;
+        }
 
         // Visit a grid point.
-        virtual void visit(GridPoint* gp) {
+        virtual string visit(GridPoint* gp) {
 
             // Shift grid _ofs points.
             auto ofs0 = gp->getArgOffsets();
             IntTuple new_loc = ofs0.addElements(_ofs, false);
             gp->setArgOffsets(new_loc);
+            return "";
         }
     };
 
@@ -1323,7 +1335,7 @@ namespace yask {
                                     bool printSets,
                                     ostream& os) {
         // print stats.
-        os << "Stats across " << getNum() << " equation-bundle(s) before optimization(s):\n";
+        os << "Stats across " << getNum() << " equation-bundle(s):\n";
         string edescr = "for " + descr + " equation-bundle(s)";
         printStats(os, edescr);
 
@@ -1344,6 +1356,10 @@ namespace yask {
                 opts.push_back(new CseVisitor);
         }
 
+        // Pairs.
+        if (settings._doPairs)
+            opts.push_back(new PairingVisitor);
+
         // Apply opts.
         for (auto optimizer : opts) {
 
@@ -1356,7 +1372,7 @@ namespace yask {
             if (numChanges)
                 printStats(os, odescr);
             else
-                os << "No changes " << odescr << '.' << endl;
+                os << " No changes " << odescr << '.' << endl;
         }
 
         // Final stats per equation bundle.
