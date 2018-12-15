@@ -732,6 +732,7 @@ sub getRunCmd() {
     $runCmd .= " -host $host" if defined $host;
   }
   $runCmd .= " -exe_prefix '$exePrefix' -stencil $stencil -arch $arch -no-pre_auto_tune";
+  $runCmd .= " -ranks $nranks" if $nranks > 1;
   return $runCmd;
 }
 
@@ -787,7 +788,7 @@ sub calcSize($$$) {
       close CMD;
     }
     if (!$numSpatialGrids) {
-      map { print ">> $_"; } @cmdOut;
+      map { print ">> $_\n"; } @cmdOut;
       die "error: no relevant grid allocations found in '$cmd'; $0 only works with 'x, y, z' 3-D stencils.\n";
     }
     print "Determined that $numSpatialGrids XYZ grids are allocated.\n";
@@ -1314,11 +1315,10 @@ sub fitness {
 
   # how to run.
   my $runCmd = getRunCmd();     # shell command plus any initial args.
-  $runCmd .= " -ranks $nranks" if $nranks > 1;
   my $args = "";             # exe args.
   $args .= " -thread_divisor $thread_divisor";
   $args .= " -block_threads $block_threads";
-  $args .= ($bind_block_threads ? " " : " -no") "-bind_block_threads"
+  $args .= ($bind_block_threads ? " " : " -no"). "-bind_block_threads";
 
   # sizes.
   $args .= " -dx $ds[0] -dy $ds[1] -dz $ds[2]";
