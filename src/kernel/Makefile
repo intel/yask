@@ -810,8 +810,8 @@ val1	:=	$(DEF_TEST_ARGS) -d 48 -r 32 -b 24 -mb 16 -rt 1 $(EXTRA_TEST_ARGS)
 val2	:=	$(DEF_TEST_ARGS) -d 63 -r 32 -b 24 -mb 16 -rt 2 $(EXTRA_TEST_ARGS)
 val3	:=	$(DEF_TEST_ARGS) -d 63 -r 48 -b 24 -mb 16 -bt 2 $(EXTRA_TEST_ARGS)
 val4a	:=	$(DEF_TEST_ARGS) -d 48 -b 24 -mb 16 -bt 2 -bind_block_threads $(EXTRA_TEST_ARGS)
+val4b	:=	$(DEF_TEST_ARGS) -d 48 -b 24 -mb 16 -bt 2 -use_shm -overlap_comms $(EXTRA_TEST_ARGS)
 val4c	:=	$(DEF_TEST_ARGS) -d 48 -b 24 -mb 16 -bt 2 -use_shm -no-overlap_comms $(EXTRA_TEST_ARGS)
-val4b	:=	$(DEF_TEST_ARGS) -d 48 -b 24 -mb 16 -bt 2 -use_shm $(EXTRA_TEST_ARGS)
 ranks	:=	2
 
 # Run the kernel binary using several combos of sizes and ranks.
