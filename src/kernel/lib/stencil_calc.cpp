@@ -141,10 +141,14 @@ namespace yask {
                     // [or auto-tuned] sub-block covers entire mini-block,
                     // set step size to full width.  If binding threads to
                     // sub-blocks, set step size to full width in all but
-                    // the binding dim.
+                    // the binding dim, which is set to the slab width, and
+                    // also set alignment for binding.
                     DOMAIN_VAR_LOOP(i, j) {
-                        if (bind_threads && i == bind_posn)
+                        if (bind_threads && i == bind_posn) {
                             adj_mb_idxs.step[i] = bind_slab_pts;
+                            adj_mb_idxs.align[i] = bind_slab_pts;
+                            adj_mb_idxs.align_ofs[i] = adj_mb_idxs.begin[i];
+                        }
                         else if ((settings._sub_block_sizes[i] >= settings._mini_block_sizes[i]) ||
                                  bind_threads)
                             adj_mb_idxs.step[i] = adj_mb_idxs.end[i] - adj_mb_idxs.begin[i];

@@ -494,8 +494,8 @@ namespace yask {
         Indices align_ofs;      // adjustment for alignment (see below).
         Indices group_size;     // proximity grouping within range.
 
-        // Alignment: when possible, each step will be aligned
-        // such that ((start - align_ofs) % align) == 0.
+        // Alignment: when possible, start positions after the first
+        // in each dim will be aligned such that ((start - align_ofs) % align) == 0.
 
         // Output values; set once for entire range.
         Indices num_indices;    // number of indices in each dim.
