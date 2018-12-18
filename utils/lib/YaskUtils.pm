@@ -39,7 +39,7 @@ our @special_log_keys =
    );
 
 # Values to get from log file.
-# First one should be "fitness".
+# First one should be overall "fitness".
 # Key must start with the following string.
 # Case ignored and spaces and hyphens interchangeable.
 our @log_keys =
