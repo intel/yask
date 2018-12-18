@@ -236,7 +236,6 @@ omp_block_schedule	?=	static,1
 omp_misc_schedule	?=	guided
 def_thread_divisor	?=	1
 def_block_threads	?=	2
-real_bytes		?=	4
 def_rank_args		?=	-d 128
 def_block_args		?=	-b 64
 cluster			?=	x=1
