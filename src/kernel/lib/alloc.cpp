@@ -138,7 +138,7 @@ namespace yask {
         os << "PMEM grid-allocation priority:" << endl;
         for (auto sp : sortedGridPtrs) {
             os << " '" << sp->get_name() << "'";
-            if (gridPtrSet.find(sp)!=gridPtrSet.end())
+            if (done.find(sp)!=done.end())
                 os << " (output)";
             os << endl;
         }
@@ -152,7 +152,7 @@ namespace yask {
         map <int, shared_ptr<char>> _grid_data_buf;
 
 #ifdef USE_PMEM
-        auto preferredNUMASize = opts->_numa_pref_max * 1024*1024*1024;
+        auto preferredNUMASize = opts->_numa_pref_max * 1024*1024*(size_t)1024;
 #endif
         
         // Pass 0: assign PMEM node when preferred NUMA node is not enough.
