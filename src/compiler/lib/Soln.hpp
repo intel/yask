@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2018, Intel Corporation
+Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -301,7 +301,8 @@ namespace yask {
 
 } // namespace yask.
 
-// Convenience macro for registering a stencil in a list.
+// Convenience macro for declaring an instance of a stencil and registering
+// it in the list used by the default YASK compiler.
 #define REGISTER_STENCIL(Class) static Class registered_ ## Class(stencils)
 
 // Convenience macros for adding 'extension' code to a stencil.

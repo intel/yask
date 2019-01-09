@@ -25,7 +25,7 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
   for multi-socket and multi-node operation or
   Intel(R) Parallel Studio XE Composer Edition for C++ Linux
   for single-socket only
-  (2016 or later, 2018 update 2 recommended).
+  (2016 or later, 2018 update 2 or later recommended).
   Building a YASK kernel with the Gnu compiler is possible, but only useful
   for functional testing. The performance
   of the kernel built from the Gnu compiler has been observed to be up to 7x lower

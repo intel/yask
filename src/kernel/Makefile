@@ -1,6 +1,6 @@
 ##############################################################################
 ## YASK: Yet Another Stencil Kernel
-## Copyright (c) 2014-2018, Intel Corporation
+## Copyright (c) 2014-2019, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -449,8 +449,8 @@ ifeq ($(vtune),1)
  MACROS		+=	USE_VTUNE
 ifneq ($(VTUNE_AMPLIFIER_2019_DIR),)
  VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_2019_DIR)
-else ifneq ($(VTUNE_AMPLIFIER_2018_DIR),)
- VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_2018_DIR)
+else ifneq ($(VTUNE_AMPLIFIER_2019_DIR),)
+ VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_2019_DIR)
 else ifneq ($(VTUNE_AMPLIFIER_XE_2017_DIR),)
  VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_XE_2017_DIR)
 else ifneq ($(VTUNE_AMPLIFIER_XE_2016_DIR),)
