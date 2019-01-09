@@ -58,6 +58,7 @@ typedef int MPI_Request;
 
 // Standard C and C++ headers.
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
@@ -68,7 +69,6 @@ typedef int MPI_Request;
 #include <malloc.h>
 #include <map>
 #include <unordered_map>
-#include <math.h>
 #include <set>
 #include <sstream>
 #include <stddef.h>

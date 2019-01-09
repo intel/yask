@@ -28,7 +28,7 @@ IN THE SOFTWARE.
 #ifndef PARSE_HPP
 #define PARSE_HPP
 
-#include <math.h>
+#include <cmath>
 #include <iostream>
 #include <iomanip>
 #include <memory>
