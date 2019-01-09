@@ -2,7 +2,7 @@
 
 ##############################################################################
 ## YASK: Yet Another Stencil Kernel
-## Copyright (c) 2014-2018, Intel Corporation
+## Copyright (c) 2014-2019, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -43,9 +43,8 @@ my $outFH = new FileHandle;
 $outFH = *STDOUT;
 
 # Header.
-print $outFH "log file,";
 YaskUtils::printCsvHeader($outFH);
-print $outFH "\n";
+print $outFH ",log file\n";
 
 # Values from files.
 for my $arg (@ARGV) {
@@ -53,8 +52,7 @@ for my $arg (@ARGV) {
     my %results;
     YaskUtils::getResultsFromFile(\%results, $fn);
 
-    print $outFH "\"$fn\",";
     YaskUtils::printCsvValues(\%results, $outFH);
-    print $outFH "\n";
+    print $outFH ",\"$fn\"\n";
   }
 }

@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2018, Intel Corporation
+Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -86,16 +86,16 @@ namespace yask {
 
             // Trim the mini-block indices based on the bounding box(es)
             // for this bundle.
-            ScanIndices bb_idxs(mini_block_idxs);
+            ScanIndices mb_idxs(mini_block_idxs);
             DOMAIN_VAR_LOOP(i, j) {
 
                 // Begin point.
                 auto bbegin = max(mini_block_idxs.begin[i], bb.bb_begin[j]);
-                bb_idxs.begin[i] = bbegin;
+                mb_idxs.begin[i] = bbegin;
 
                 // End point.
                 auto bend = min(mini_block_idxs.end[i], bb.bb_end[j]);
-                bb_idxs.end[i] = bend;
+                mb_idxs.end[i] = bend;
 		
                 // Anything to do?
                 if (bend <= bbegin) {
@@ -113,8 +113,8 @@ namespace yask {
             
             TRACE_MSG3("calc_mini_block('" << get_name() <<
                        "'): after trimming for BB " << bbn << ": [" <<
-                       bb_idxs.begin.makeValStr(nsdims) <<
-                       " ... " << bb_idxs.end.makeValStr(nsdims) << ")");
+                       mb_idxs.begin.makeValStr(nsdims) <<
+                       " ... " << mb_idxs.end.makeValStr(nsdims) << ")");
 
             // Get the bundles that need to be processed in
             // this block. This will be any prerequisite scratch-grid
@@ -134,17 +134,25 @@ namespace yask {
                     int block_thread_idx = (nbt <= 1) ? 0 : omp_get_thread_num();
                     
                     // Indices needed for the generated loops.  Will normally be a
-                    // copy of 'bb_idxs' except when updating scratch-grids.
-                    ScanIndices adj_mb_idxs = sg->adjust_span(region_thread_idx, bb_idxs);
+                    // copy of 'mb_idxs' except when updating scratch-grids.
+                    ScanIndices adj_mb_idxs = sg->adjust_span(region_thread_idx, mb_idxs);
 
-                    // Tweak step sizes for adjusted indices.  If original
-                    // [or auto-tuned] sub-block covers entire mini-block,
-                    // set step size to full width.  If binding threads to
-                    // sub-blocks, set step size to full width in all but
-                    // the binding dim.
+                    // Tweak settings for adjusted indices.
                     DOMAIN_VAR_LOOP(i, j) {
-                        if (bind_threads && i == bind_posn)
+
+                        // If binding threads to sub-blocks and this is the
+                        // binding dim, set step size and alignment
+                        // granularity to the slab width. Setting the
+                        // alignment keeps slabs aligned between packs.
+                        if (bind_threads && i == bind_posn) {
                             adj_mb_idxs.step[i] = bind_slab_pts;
+                            adj_mb_idxs.align[i] = bind_slab_pts;
+                        }
+
+                        // If original [or auto-tuned] sub-block covers
+                        // entire mini-block, set step size to full width.
+                        // Also do this when binding and this is not the
+                        // binding dim.
                         else if ((settings._sub_block_sizes[i] >= settings._mini_block_sizes[i]) ||
                                  bind_threads)
                             adj_mb_idxs.step[i] = adj_mb_idxs.end[i] - adj_mb_idxs.begin[i];
@@ -158,15 +166,15 @@ namespace yask {
                                " by region thread " << region_thread_idx <<
                                " and block thread " << block_thread_idx);
 
-                    // If binding threads to sub-blocks, run the mini-block
+                    // If binding threads to data, run the mini-block
                     // loops on all block threads and call calc_sub_block()
                     // only by the designated thread for the given slab
                     // index in the binding dim.
                     if (bind_threads) {
                         const idx_t idx_ofs = 0x1000; // to help keep pattern when idx is neg.
 #define OMP_PRAGMA
-#define CALC_SUB_BLOCK(mb_idxs)                                         \
-                        auto bind_elem_idx = mb_idxs.start[bind_posn]; \
+#define CALC_SUB_BLOCK(mb_idxs)                                        \
+                        auto bind_elem_idx = mb_idxs.start[bind_posn];  \
                         auto bind_slab_idx = idiv_flr(bind_elem_idx + idx_ofs, bind_slab_pts); \
                         auto bind_thr = imod_flr<idx_t>(bind_slab_idx, nbt); \
                         if (block_thread_idx == bind_thr)               \
@@ -176,8 +184,9 @@ namespace yask {
 #undef OMP_PRAGMA
                     }
 
-                    // Call calc_sub_block() with a different thread for each
-                    // sub-block.
+                    // If not binding therads to data, call calc_sub_block()
+                    // with a different thread for each sub-block using
+                    // standard OpenMP scheduling.
                     else {
 #define CALC_SUB_BLOCK(mb_idxs)                                         \
                         sg->calc_sub_block(region_thread_idx, block_thread_idx, settings, mb_idxs)

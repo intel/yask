@@ -1,6 +1,6 @@
 ##############################################################################
 ## YASK: Yet Another Stencil Kernel
-## Copyright (c) 2014-2018, Intel Corporation
+## Copyright (c) 2014-2019, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -39,7 +39,7 @@ our @special_log_keys =
    );
 
 # Values to get from log file.
-# First one should be "fitness".
+# First one should be overall "fitness".
 # Key must start with the following string.
 # Case ignored and spaces and hyphens interchangeable.
 our @log_keys =

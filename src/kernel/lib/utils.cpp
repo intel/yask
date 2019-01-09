@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2018, Intel Corporation
+Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -278,7 +278,8 @@ namespace yask {
         int err = 0;
         int fd;
         // 'X' of pmemX should be matched with the NUMA node.
-        string pmem_name("/mnt/pmem") + to_string(dev_num);
+        string pmem_name("/mnt/pmem");
+        pmem_name += to_string(dev_num);
         err = pmem_tmpfile(pmem_name.c_str(), nbytes, &fd, &p);
         if (err)
             THROW_YASK_EXCEPTION("Error: Unable to create temporary file for PMEM");
