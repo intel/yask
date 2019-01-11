@@ -557,7 +557,9 @@ namespace yask {
                     os << " return " << eq->cond->makeStr() << ";\n";
                 else
                     os << " return true; // full domain.\n";
-                os << " }\n"
+                os << " }\n";
+
+                os << "\n // Return whether there is a sub-domain expression.\n"
                     " virtual bool is_sub_domain_expr() const {\n"
                     "  return " << (eq->cond ? "true" : "false") <<
                     ";\n }\n";
@@ -573,15 +575,39 @@ namespace yask {
 
             // Step condition.
             {
-                os << endl << " // Determine whether " << egsName << " is valid at the step " <<
-                    _dims._stencilDims.makeDimStr() << ".\n"
-                    " // Return true if indices are within the valid sub-domain or false otherwise.\n"
+                os << endl << " // Determine whether " << egsName <<
+                    " is valid at the step input_step_index.\n" <<
+                    " // Return true if valid or false otherwise.\n"
                     " virtual bool is_in_valid_step(idx_t input_step_index) const final {\n";
-                if (eq->step_cond)
+                if (eq->step_cond) {
                     os << " idx_t " << _dims._stepDim << " = input_step_index;\n"
-                        " return " << eq->step_cond->makeStr() << ";\n";
+                        "\n // " << eq->step_cond->makeStr() << "\n";
+                    
+                    // C++ scalar print assistant.
+                    CounterVisitor cv;
+                    eq->step_cond->accept(&cv);
+                    CppPrintHelper* sp = new CppPrintHelper(_settings, _dims, &cv, "temp", "real_t", " ", ";\n");
+
+                    // Generate the code.
+                    PrintVisitorTopDown pcv(os, *sp);
+                    string expr = eq->step_cond->accept(&pcv);
+                    os << " return " << expr << ";\n";
+                }
                 else
                     os << " return true; // any step.\n";
+                os << " }\n";
+
+                os << "\n // Return whether there is a step-condition expression.\n"
+                    " virtual bool is_step_cond_expr() const {\n"
+                    "  return " << (eq->step_cond ? "true" : "false") <<
+                    ";\n }\n";
+
+                os << "\n // Return human-readable description of step condition.\n"
+                    " virtual std::string get_step_cond_description() const {\n";
+                if (eq->step_cond)
+                    os << " return \"" << eq->step_cond->makeStr() << "\";\n";
+                else
+                    os << " return \"true\"; // any step.\n";
                 os << " }\n";
             }
 
@@ -620,8 +646,8 @@ namespace yask {
 
                 // C++ scalar print assistant.
                 CounterVisitor cv;
-                    eq->visitEqs(&cv);
-                    CppPrintHelper* sp = new CppPrintHelper(_settings, _dims, &cv, "temp", "real_t", " ", ";\n");
+                eq->visitEqs(&cv);
+                CppPrintHelper* sp = new CppPrintHelper(_settings, _dims, &cv, "temp", "real_t", " ", ";\n");
 
                 // Generate the code.
                 PrintVisitorBottomUp pcv(os, *sp);

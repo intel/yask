@@ -34,6 +34,10 @@ namespace yask {
     // Format a real, preserving precision.
     string CppPrintHelper::formatReal(double v) {
 
+        // Int representation equivalent?
+        if (double(int(v)) == v)
+            return to_string(int(v));
+        
         // IEEE double gives 15-17 significant decimal digits of precision per
         // https://en.wikipedia.org/wiki/Double-precision_floating-point_format.
         // Some precision might be lost if/when cast to a float, but that's ok.

@@ -817,6 +817,11 @@ namespace yask {
                 "  num reqd scratch bundles:   " << (sg_list.size() - 1) << endl;
             // TODO: add info on scratch bundles here.
 
+            if (sg->is_sub_domain_expr())
+                os << "  sub-domain expr:            '" << sg->get_domain_description() << "'\n";
+            if (sg->is_step_cond_expr())
+                os << "  step-condition expr:        '" << sg->get_step_cond_description() << "'\n";
+
             os <<
                 "  bundle size (points):       " << makeNumStr(bb.bb_size) << endl;
             if (bb.bb_size) {

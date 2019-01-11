@@ -518,50 +518,51 @@ public:
 
 REGISTER_STENCIL(TestSubdomainStencil3);
 
-class TestStepCondStencil1 : public StencilRadiusBase {
+// Test step condition.
+class TestStepCondStencil1 : public Test1dBase {
 
 protected:
 
-    // Indices & dimensions.
-    MAKE_STEP_INDEX(t);           // step in time dim.
-    MAKE_DOMAIN_INDEX(x);         // spatial dim.
+    // Indices.
+    MAKE_MISC_INDEX(b);
 
     // Vars.
     MAKE_GRID(A, t, x); // time-varying grid.
+    MAKE_ARRAY(B, b);
 
 public:
 
     TestStepCondStencil1(StencilList& stencils, int radius=2) :
-        StencilRadiusBase("test_step_cond_1d", stencils, radius) { }
+        Test1dBase("test_step_cond_1d", stencils, radius) { }
 
     // Define equation to apply to all points in 'A' grid.
     virtual void define() {
 
         // Time condition.
         Condition tc0 = (t % 2 == 0);
+
+        // Var condition.
+        Condition vc0 = (B(0) > B(1));
         
-        // Set A w/different stencils.
+        // Set A w/different stencils depending on the conditions.  It is
+        // the programmer's responsibility to ensure that the conditions are
+        // exclusive when necessary. It is not checked at compile or
+        // run-time.
 
-        GridValue u = A(t, x);
-        for (int r = 1; r <= _radius; r++)
-            u += A(t, x-r);
-        for (int r = 1; r <= _radius + 1; r++)
-            u += A(t, x+r);
-        A(t+1, x) EQUALS u / (_radius * 2 + 2) IF_STEP tc0;
+        // Use this equation when t is even.
+        A(t+1, x) EQUALS def_1d(A, t, x, 0, 0) IF_STEP tc0;
 
-        GridValue v = A(t, x);
-        for (int r = 1; r <= _radius + 3; r++)
-            v += A(t, x-r);
-        for (int r = 1; r <= _radius + 2; r++)
-            v += A(t, x+r);
-        A(t+1, x) EQUALS v / (_radius * 2 + 6) IF_STEP !tc0;
+        // Use this equation when t is odd and B(0) > B(1).
+        A(t+1, x) EQUALS def_1d(A, t, x, 1, 2) IF_STEP !tc0 && vc0;
+
+        // Use this equation when t is even and B(0) <= B(1).
+        A(t+1, x) EQUALS def_1d(A, t, x, 2, 3) IF_STEP !tc0 && !vc0;
     }
 };
 
 REGISTER_STENCIL(TestStepCondStencil1);
 
 // Test the use of conditional updates with scratch-pad grids.
-
 class TestScratchSubdomainStencil1 : public Test1dBase {
 
 protected:

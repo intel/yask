@@ -172,13 +172,17 @@ namespace yask {
         virtual bool
         is_in_valid_domain(const Indices& idxs) const =0;
 
-        // Return true if there is a non-default sub-domain expression.
+        // Return true if there is a non-default conditions.
         virtual bool
         is_sub_domain_expr() const { return false; }
+        virtual bool
+        is_step_cond_expr() const { return false; }
 
-        // Return human-readable description of sub-domain.
+        // Return human-readable description of conditions.
         virtual std::string
         get_domain_description() const =0;
+        virtual std::string
+        get_step_cond_description() const =0;
         
         // Determine whether step index is enabled.
         virtual bool

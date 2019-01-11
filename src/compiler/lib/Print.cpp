@@ -441,11 +441,11 @@ namespace yask {
         // Comment about condition.
         // Null ptr => no condition.
         if (ee->getCond()) {
-            string cond = ee->getCond()->accept(this);
+            string cond = ee->getCond()->makeStr();
             _os << " IF (" << cond << ")";
         }
         if (ee->getStepCond()) {
-            string cond = ee->getStepCond()->accept(this);
+            string cond = ee->getStepCond()->makeStr();
             _os << " IF_STEP (" << cond << ")";
         }
         _os << ".\n";
