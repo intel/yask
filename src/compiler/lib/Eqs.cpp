@@ -552,8 +552,6 @@ namespace yask {
         virtual string visit(GridPoint* gp) {
             auto* grid = gp->getGrid();
 
-            cout << "** SetVecVisitor at " << gp->makeStr() << endl;
-
             // Never vectorize scalars.
             if (grid->get_num_dims() == 0) {
                 gp->setVecType(GridPoint::VEC_NONE);
