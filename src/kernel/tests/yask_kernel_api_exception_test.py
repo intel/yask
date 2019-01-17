@@ -339,7 +339,7 @@ if __name__ == "__main__":
     print("Running the solution for 10 more steps...")
     soln.run_solution(1, 10)
 
-    # Print final result at timestep 11.
+    # Print final result at timestep 11, assuming update was to t+1.
     for grid in soln.get_grids() :
         read_grid(grid, 11)
 

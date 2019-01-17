@@ -30,58 +30,69 @@ import ctypes as ct
 import argparse
 import yask_kernel as yk
 
+# Prepare an NymPy ndarray to hold a slice of 'grid'.
+def make_ndarray(grid, timestep) :
+
+    # Create indices for YASK and shape for NumPy.
+    first_indices = []
+    last_indices = []
+    shape = []
+    point = ()
+    nelems = 1
+    for dname in grid.get_dim_names() :
+
+        if dname == soln.get_step_dim_name() :
+
+            # Slice in requested time.
+            first_idx = timestep
+            last_idx = timestep
+
+        # Domain dim?
+        elif dname in soln.get_domain_dim_names() :
+
+            # Cover full alloc in this rank.
+            first_idx = grid.get_first_rank_alloc_index(dname)
+            last_idx = grid.get_last_rank_alloc_index(dname)
+
+        # Misc dim?
+        else :
+
+            # Cover all misc values.
+            first_idx = grid.get_first_misc_index(dname)
+            last_idx = grid.get_last_misc_index(dname)
+
+        # Add indices to API vars.
+        first_indices += [first_idx]
+        last_indices += [last_idx]
+        ne = last_idx - first_idx + 1
+        shape += [ne]
+        nelems *= ne
+
+        # Define first point in ndarray.
+        point += (0, )
+
+    # Create a NumPy ndarray to hold the extracted data.
+    print("Creating a NumPy ndarray with shape " + repr(shape) + " and " +
+          repr(nelems) + " element(s)...")
+    ndarray = np.zeros(shape, dtype, 'C');
+    return ndarray, first_indices, last_indices, point
+
 # Read data from grid using NumPy ndarray.
 def read_grid(grid, timestep) :
 
     # Ignore with fixed-sized grids.
     if grid.is_fixed_size():
         return
+    print("Testing reading grid '" + grid.get_name() + "' at time " + repr(timestep) + "...")
+    ndarray, first_indices, last_indices, point = make_ndarray(grid, timestep)
 
-    print("Reading grid '" + grid.get_name() + "' at time " + repr(timestep) + "...")
+    print("Reading 1 element...")
+    val1 = grid.get_element(first_indices)
+    print("Read value " + repr(val1))
 
-    # Create indices for YASK and shape for NumPy.
-    first_indices = []
-    last_indices = []
-    shape = []
-    nelems = 1
-    for dname in grid.get_dim_names() :
-
-        if dname == soln.get_step_dim_name() :
-
-            # Read one timestep only.
-            # So, we don't need to add a time axis in 'shape'.
-            first_indices += [timestep]
-            last_indices += [timestep]
-
-        # Domain dim?
-        elif dname in soln.get_domain_dim_names() :
-
-            # Full domain in this rank.
-            first_idx = soln.get_first_rank_domain_index(dname)
-            last_idx = soln.get_last_rank_domain_index(dname)
-
-            # Read one point in the halo, too.
-            first_idx -= 1
-            last_idx += 1
-
-            first_indices += [first_idx]
-            last_indices += [last_idx]
-            shape += [last_idx - first_idx + 1]
-            nelems *= last_idx - first_idx + 1
-
-        # Misc dim?
-        else :
-
-            # Read first index only.
-            first_indices += [grid.get_first_misc_index(dname)]
-            last_indices += [grid.get_first_misc_index(dname)]
-
-    # Create a NumPy ndarray to hold the extracted data.
-    ndarray1 = np.empty(shape, dtype, 'C');
-
-    print("Reading " + repr(nelems) + " element(s)...")
-    nread = grid.get_elements_in_slice(ndarray1.data, first_indices, last_indices)
-    print(ndarray1)
+    print("Reading all element(s) in ndarray...")
+    nread = grid.get_elements_in_slice(ndarray.data, first_indices, last_indices)
+    print(ndarray)
 
     # Raw access to this grid.
     if soln.get_element_bytes() == 4 :
@@ -92,66 +103,53 @@ def read_grid(grid, timestep) :
     fp_ptr = ct.cast(int(raw_ptr), ptype)
     num_elems = grid.get_num_storage_elements()
     print("Raw data: " + repr(fp_ptr[0]) + ", ..., " + repr(fp_ptr[num_elems-1]))
-    #ndarray2 = np.fromiter(fp_ptr, dtype, num_elems); print(ndarray2)
 
 # Init grid using NumPy ndarray.
 def init_grid(grid, timestep) :
     print("Initializing grid '" + grid.get_name() + "' at time " + repr(timestep) + "...")
-
-    # Create indices for YASK, shape & point for NumPy.
-    first_indices = []
-    last_indices = []
-    shape = []
-    point = ()
-    nelems = 1
-    for dname in grid.get_dim_names() :
-
-        if dname == soln.get_step_dim_name() :
-
-            # Write one timestep only.
-            # So, we don't need to add a time axis in 'shape'.
-            first_indices += [timestep]
-            last_indices += [timestep]
-
-        # Domain dim?
-        elif dname in soln.get_domain_dim_names() :
-
-            # Full domain in this rank.
-            first_idx = soln.get_first_rank_domain_index(dname)
-            last_idx = soln.get_last_rank_domain_index(dname)
-
-            # Write one point in the halo, too.
-            first_idx -= 1
-            last_idx += 1
-
-            first_indices += [first_idx]
-            last_indices += [last_idx]
-            shape += [last_idx - first_idx + 1]
-            nelems *= last_idx - first_idx + 1
-
-            # Since the array covers one layer of points in the halo
-            # starting at 0,..,0, 1,..,1 is the first point in the
-            # computable domain.
-            point += (1,)
-
-        # Misc dim?
-        else :
-
-            # Write first index only.
-            first_indices += [grid.get_first_misc_index(dname)]
-            last_indices += [grid.get_first_misc_index(dname)]
-
-    # Create a NumPy ndarray to hold the data.
-    ndarray = np.zeros(shape, dtype, 'C');
+    ndarray, first_indices, last_indices, point = make_ndarray(grid, timestep)
 
     # Set one point to a non-zero value.
-    ndarray[point] = 21.0;
+    val1 = 21.0
+    ndarray[point] = val1
     print(ndarray)
 
-    print("Writing " + repr(nelems) + " element(s)...")
+    print("Setting grid from all element(s) in ndarray...")
     nset = grid.set_elements_in_slice(ndarray.data, first_indices, last_indices)
     print("Set " + repr(nset) + " element(s) in rank " + repr(env.get_rank_index()))
 
+    # Check that set worked.
+    print("Reading those element(s)...")
+    val2 = grid.get_element(first_indices)
+    assert val2 == val1
+    val2 = grid.get_element(last_indices)
+    if nset > 1 :
+        assert val2 == 0.0
+    else :
+        assert val2 == val1  # Only 1 val => first == last.
+    ndarray2 = ndarray
+    ndarray2.fill(5.0)
+    nread = grid.get_elements_in_slice(ndarray2.data, first_indices, last_indices)
+    assert nread == ndarray2.size
+    assert ndarray2[point] == val1
+    assert ndarray2.sum() == val1  # One point is val1; others are zero.
+
+    # Test element set.
+    print("Testing setting 1 point at " + repr(last_indices) + "...")
+    val1 += 1.0
+    nset = grid.set_element(val1, last_indices);
+    assert nset == 1
+    val2 = grid.get_element(last_indices)
+    assert val2 == val1
+
+    # Test add.
+    val3 = 2.0
+    print("Testing adding to 1 point at " + repr(last_indices) + "...")
+    nset = grid.add_to_element(val3, last_indices);
+    assert nset == 1
+    val2 = grid.get_element(last_indices)
+    assert val2 == val1 + val3
+    
 # Main script.
 if __name__ == "__main__":
 
@@ -242,8 +240,9 @@ if __name__ == "__main__":
             continue
         
         # Init timestep 0 using NumPy.
-        # This will set one point in each rank.
         init_grid(grid, 0)
+
+        # Print out the values.
         read_grid(grid, 0)
 
         # Simple one-index example.
@@ -302,9 +301,8 @@ if __name__ == "__main__":
         nset = grid.set_elements_in_slice_same(0.5, first_indices, last_indices)
         print("Set " + repr(nset) + " element(s) in rank " + repr(env.get_rank_index()))
 
-        # Print the initial contents of the grid at timesteps 0 and 1.
+        # Print the initial contents of the grid.
         read_grid(grid, 0)
-        read_grid(grid, 1)
 
     # Apply the stencil solution to the data.
     env.global_barrier()
@@ -318,7 +316,7 @@ if __name__ == "__main__":
     print("Running the solution for 10 more steps...")
     soln.run_solution(1, 10)
 
-    # Print final result at timestep 11.
+    # Print final result at timestep 11, assuming update was to t+1.
     for grid in soln.get_grids() :
         read_grid(grid, 11)
 
