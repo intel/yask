@@ -276,8 +276,8 @@ END
       my $wrap = $w ? "true" : "false";
     
       # Creation.
-      print " else if (ndims == $n && do_wrap == $wrap)\n",
-        "  gp = make_shared<YkElemGrid<$layout, $wrap>>(_dims, name, dims, &_opts, &_ostr);\n";
+      print " else if (ndims == $n && step_used == $wrap)\n",
+        "  gp = make_shared<YkElemGrid<$layout, $wrap>>(*this, name, gdims);\n";
     }
   }
   

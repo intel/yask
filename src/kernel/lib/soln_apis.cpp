@@ -36,43 +36,45 @@ namespace yask {
 
 #define GET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
     idx_t StencilContext::api_name(const string& dim) const {           \
+        STATE_VARS(this);                                               \
         if (prep_req && !rank_bb.bb_valid)                              \
             THROW_YASK_EXCEPTION("Error: '" #api_name \
                                  "()' called before calling 'prepare_solution()'"); \
-        checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
+        dims->checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok); \
         return expr;                                                    \
     }
-    GET_SOLN_API(get_num_ranks, _opts->_num_ranks[dim], false, true, false, false)
+    GET_SOLN_API(get_num_ranks, opts->_num_ranks[dim], false, true, false, false)
     GET_SOLN_API(get_overall_domain_size, overall_domain_sizes[dim], false, true, false, true)
-    GET_SOLN_API(get_rank_domain_size, _opts->_rank_sizes[dim], false, true, false, false)
-    GET_SOLN_API(get_region_size, _opts->_region_sizes[dim], true, true, false, false)
-    GET_SOLN_API(get_block_size, _opts->_block_sizes[dim], true, true, false, false)
+    GET_SOLN_API(get_rank_domain_size, opts->_rank_sizes[dim], false, true, false, false)
+    GET_SOLN_API(get_region_size, opts->_region_sizes[dim], true, true, false, false)
+    GET_SOLN_API(get_block_size, opts->_block_sizes[dim], true, true, false, false)
     GET_SOLN_API(get_first_rank_domain_index, rank_bb.bb_begin[dim], false, true, false, true)
     GET_SOLN_API(get_last_rank_domain_index, rank_bb.bb_end[dim] - 1, false, true, false, true)
-    GET_SOLN_API(get_min_pad_size, _opts->_min_pad_sizes[dim], false, true, false, false)
-    GET_SOLN_API(get_rank_index, _opts->_rank_indices[dim], false, true, false, true)
+    GET_SOLN_API(get_min_pad_size, opts->_min_pad_sizes[dim], false, true, false, false)
+    GET_SOLN_API(get_rank_index, opts->_rank_indices[dim], false, true, false, true)
 #undef GET_SOLN_API
 
     // The grid sizes updated any time these settings are changed.
 #define SET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok, reset_prep) \
     void StencilContext::api_name(const string& dim, idx_t n) {         \
-        checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
+        STATE_VARS(this);                                               \
+        dims->checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok); \
         expr;                                                           \
         update_grid_info();                                             \
         if (reset_prep) rank_bb.bb_valid = ext_bb.bb_valid = false;     \
     }
-    SET_SOLN_API(set_rank_index, _opts->_rank_indices[dim] = n, false, true, false, true)
-    SET_SOLN_API(set_num_ranks, _opts->_num_ranks[dim] = n, false, true, false, true)
-    SET_SOLN_API(set_rank_domain_size, _opts->_rank_sizes[dim] = n, false, true, false, true)
-    SET_SOLN_API(set_region_size, _opts->_region_sizes[dim] = n, true, true, false, true)
-    SET_SOLN_API(set_block_size, _opts->_block_sizes[dim] = n, true, true, false, true)
-    SET_SOLN_API(set_min_pad_size, _opts->_min_pad_sizes[dim] = n, false, true, false, false)
+    SET_SOLN_API(set_rank_index, opts->_rank_indices[dim] = n, false, true, false, true)
+    SET_SOLN_API(set_num_ranks, opts->_num_ranks[dim] = n, false, true, false, true)
+    SET_SOLN_API(set_rank_domain_size, opts->_rank_sizes[dim] = n, false, true, false, true)
+    SET_SOLN_API(set_region_size, opts->_region_sizes[dim] = n, true, true, false, true)
+    SET_SOLN_API(set_block_size, opts->_block_sizes[dim] = n, true, true, false, true)
+    SET_SOLN_API(set_min_pad_size, opts->_min_pad_sizes[dim] = n, false, true, false, false)
 #undef SET_SOLN_API
 
     // Allocate grids and MPI bufs.
     // Initialize some data structures.
     void StencilContext::prepare_solution() {
-        CONTEXT_VARS(this);
+        STATE_VARS(this);
 
         // Don't continue until all ranks are this far.
         env->global_barrier();
@@ -99,22 +101,22 @@ namespace yask {
         // Adjust all settings before setting MPI buffers or sizing grids.
         // Prints adjusted settings.
         // TODO: print settings again after auto-tuning.
-        _opts->adjustSettings(os, _env);
+        opts->adjustSettings(os);
 
         // Copy current settings to packs.
         // Needed here because settings may have been changed via APIs
         // since last call to prepare_solution().
         // This will wipe out any previous auto-tuning.
         for (auto& sp : stPacks)
-            sp->getLocalSettings() = *_opts;
+            sp->getLocalSettings() = *opts;
 
         // Init auto-tuner to run silently during normal operation.
         reset_auto_tuner(true, false);
 
         // Report ranks.
         os << endl;
-        os << "Num MPI ranks:            " << _env->get_num_ranks() << endl;
-        os << "This MPI rank index:      " << _env->get_rank_index() << endl;
+        os << "Num MPI ranks:            " << env->get_num_ranks() << endl;
+        os << "This MPI rank index:      " << env->get_rank_index() << endl;
 
         // report threads.
         {
@@ -189,36 +191,36 @@ namespace yask {
     }
     
     void StencilContext::print_info() {
-        CONTEXT_VARS(this);
+        STATE_VARS(this);
 
         // Calc and report total allocation and domain sizes.
         rank_nbytes = get_num_bytes();
-        tot_nbytes = sumOverRanks(rank_nbytes, _env->comm);
+        tot_nbytes = sumOverRanks(rank_nbytes, env->comm);
         rank_domain_pts = rank_bb.bb_num_points;
-        tot_domain_pts = sumOverRanks(rank_domain_pts, _env->comm);
+        tot_domain_pts = sumOverRanks(rank_domain_pts, env->comm);
         os <<
             "\nDomain size in this rank (points):          " << makeNumStr(rank_domain_pts) <<
             "\nTotal allocation in this rank:              " << makeByteStr(rank_nbytes) <<
-            "\nOverall problem size in " << _env->num_ranks << " rank(s) (points): " <<
+            "\nOverall problem size in " << env->num_ranks << " rank(s) (points): " <<
             makeNumStr(tot_domain_pts) <<
-            "\nTotal overall allocation in " << _env->num_ranks << " rank(s):      " <<
+            "\nTotal overall allocation in " << env->num_ranks << " rank(s):      " <<
             makeByteStr(tot_nbytes) <<
             endl;
 
         // Report some sizes and settings.
         os << "\nWork-unit sizes in points (from smallest to largest):\n"
-            " vector-size:           " << _dims->_fold_pts.makeDimValStr(" * ") << endl <<
-            " cluster-size:          " << _dims->_cluster_pts.makeDimValStr(" * ") << endl <<
-            " sub-block-size:        " << _opts->_sub_block_sizes.makeDimValStr(" * ") << endl <<
-            " mini-block-size:       " << _opts->_mini_block_sizes.makeDimValStr(" * ") << endl <<
-            " block-size:            " << _opts->_block_sizes.makeDimValStr(" * ") << endl <<
-            " region-size:           " << _opts->_region_sizes.makeDimValStr(" * ") << endl <<
-            " rank-domain-size:      " << _opts->_rank_sizes.makeDimValStr(" * ") << endl <<
+            " vector-size:           " << dims->_fold_pts.makeDimValStr(" * ") << endl <<
+            " cluster-size:          " << dims->_cluster_pts.makeDimValStr(" * ") << endl <<
+            " sub-block-size:        " << opts->_sub_block_sizes.makeDimValStr(" * ") << endl <<
+            " mini-block-size:       " << opts->_mini_block_sizes.makeDimValStr(" * ") << endl <<
+            " block-size:            " << opts->_block_sizes.makeDimValStr(" * ") << endl <<
+            " region-size:           " << opts->_region_sizes.makeDimValStr(" * ") << endl <<
+            " rank-domain-size:      " << opts->_rank_sizes.makeDimValStr(" * ") << endl <<
             " overall-problem-size:  " << overall_domain_sizes.makeDimValStr(" * ") << endl;
 #ifdef SHOW_GROUPS
         os << 
-            " sub-block-group-size:  " << _opts->_sub_block_group_sizes.makeDimValStr(" * ") << endl <<
-            " block-group-size:      " << _opts->_block_group_sizes.makeDimValStr(" * ") << endl <<
+            " sub-block-group-size:  " << opts->_sub_block_group_sizes.makeDimValStr(" * ") << endl <<
+            " block-group-size:      " << opts->_block_group_sizes.makeDimValStr(" * ") << endl <<
 #endif
         os << "\nOther settings:\n"
             " yask-version:          " << yask_get_version_string() << endl <<
@@ -228,8 +230,8 @@ namespace yask {
             " ... " << rank_bb.bb_end.subElements(1).makeDimValStr() << endl;
 #ifdef USE_MPI
         os <<
-            " num-ranks:             " << _opts->_num_ranks.makeDimValStr(" * ") << endl <<
-            " rank-indices:          " << _opts->_rank_indices.makeDimValStr() << endl <<
+            " num-ranks:             " << opts->_num_ranks.makeDimValStr(" * ") << endl <<
+            " rank-indices:          " << opts->_rank_indices.makeDimValStr() << endl <<
             " rank-domain-offsets:   " << rank_domain_offsets.makeDimValOffsetStr() << endl;
         if (opts->overlap_comms)
             os <<
@@ -238,8 +240,8 @@ namespace yask {
 #endif
         os <<
             " vector-len:            " << VLEN << endl <<
-            " extra-padding:         " << _opts->_extra_pad_sizes.makeDimValStr() << endl <<
-            " minimum-padding:       " << _opts->_min_pad_sizes.makeDimValStr() << endl <<
+            " extra-padding:         " << opts->_extra_pad_sizes.makeDimValStr() << endl <<
+            " minimum-padding:       " << opts->_min_pad_sizes.makeDimValStr() << endl <<
             " L1-prefetch-distance:  " << PFD_L1 << endl <<
             " L2-prefetch-distance:  " << PFD_L2 << endl <<
             " max-halos:             " << max_halos.makeDimValStr() << endl;
@@ -259,7 +261,7 @@ namespace yask {
 
     // Dealloc grids, etc.
     void StencilContext::end_solution() {
-        CONTEXT_VARS(this);
+        STATE_VARS(this);
 
         // Final halo exchange (usually not needed).
         exchange_halos();
@@ -294,10 +296,11 @@ namespace yask {
     }
 
     string StencilContext::apply_command_line_options(const string& args) {
+        STATE_VARS(this);
 
         // Create a parser and add base options to it.
         CommandLineParser parser;
-        _opts->add_options(parser);
+        opts->add_options(parser);
 
         // Tokenize default args.
         vector<string> argsv;
@@ -318,7 +321,7 @@ namespace yask {
 
     // Add a new grid to the containers.
     void StencilContext::addGrid(YkGridPtr gp, bool is_output) {
-        CONTEXT_VARS(this);
+        STATE_VARS(this);
         assert(gp);
         auto& gname = gp->get_name();
         if (gridMap.count(gname))
@@ -345,7 +348,7 @@ namespace yask {
 
     /// Get statistics associated with preceding calls to run_solution().
     yk_stats_ptr StencilContext::get_stats() {
-        CONTEXT_VARS(this);
+        STATE_VARS(this);
 
         // Numbers of threads.
         int rthr, bthr;

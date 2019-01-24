@@ -149,42 +149,17 @@ namespace yask {
     // This is a pure-virtual class that must be implemented
     // for a specific problem.
     class StencilContext :
+        public KernelStateBase,
         public virtual yk_solution {
 
     protected:
 
-        // Output stream for messages.
-        std::ostream* _ostr = 0;
-        yask_output_ptr _debug;
-
-        // Env.
-        KernelEnvPtr _env;
-
-        // Command-line and env parameters.
-        KernelSettingsPtr _opts;
-
-        // Problem dims.
-        DimsPtr _dims;
-
-        // MPI info.
-        MPIInfoPtr _mpiInfo;
-
         // Auto-tuner for global settings.
         AutoTuner _at;
-        bool _use_pack_tuners = false;
 
         // Bytes between each buffer to help avoid aliasing
         // in the HW.
         static constexpr size_t _data_buf_pad = YASK_PAD_BYTES;
-
-        // Check whether dim is appropriate type.
-        virtual void checkDimType(const std::string& dim,
-                                  const std::string& fn_name,
-                                  bool step_ok,
-                                  bool domain_ok,
-                                  bool misc_ok) const {
-            _dims->checkDimType(dim, fn_name, step_ok, domain_ok, misc_ok);
-        }
 
         // Alloc given bytes on each NUMA node.
         virtual void _alloc_data(const std::map <int, size_t>& nbytes,
@@ -216,14 +191,6 @@ namespace yask {
         bool do_mpi_left = true;        // left exterior in given dim.
         bool do_mpi_right = true;        // right exterior in given dim.
         idx_t mpi_exterior_dim = -1;      // which domain dim in left/right.
-
-        // Position of inner domain dim in stencil-dims tuple.
-        // Misc dims will follow this if/when using interleaving.
-        int _inner_posn = -1;   // -1 => not set.
-
-        // Position of outer domain dim in stencil-dims tuple.
-        // For 1D stencils, _outer_posn == _inner_posn.
-        int _outer_posn = -1;   // -1 => not set.
 
         // Is overlap currently enabled?
         inline bool is_overlap_active() const {
@@ -316,8 +283,8 @@ namespace yask {
         std::map<std::string, MPIData> mpiData;
 
         // Constructor.
-        StencilContext(KernelEnvPtr env,
-                       KernelSettingsPtr settings);
+        StencilContext(KernelEnvPtr& env,
+                       KernelSettingsPtr& settings);
 
         // Destructor.
         virtual ~StencilContext() {
@@ -327,42 +294,17 @@ namespace yask {
                 get_stats();
         }
 
-        // Set debug output to cout if my_rank == msg_rank
-        // or a null stream otherwise.
-        std::ostream& set_ostr();
-
-        // Get the messsage output stream.
-        std::ostream& get_ostr() const {
-            assert(_ostr);
-            return *_ostr;
+        // Modify settings in shared state and auto-tuner.
+        void set_settings(KernelSettingsPtr opts) {
+            _state->_opts = opts;
+            _at.set_settings(opts.get());
         }
 
         // Reset elapsed times to zero.
         void clear_timers();
 
-        // Access to settings.
-        KernelSettingsPtr& get_settings() {
-            assert(_opts);
-            return _opts;
-        }
-        const KernelSettingsPtr& get_settings() const {
-            assert(_opts);
-            return _opts;
-        }
-        void set_settings(KernelSettingsPtr opts) {
-            _opts = opts;
-            _at.set_settings(_opts.get());
-        }
-
         // Misc accessors.
-        KernelEnvPtr& get_env() { return _env; }
-        const KernelEnvPtr& get_env() const { return _env; }
-        DimsPtr& get_dims() { return _dims; }
-        const DimsPtr& get_dims() const { return _dims; }
-        MPIInfoPtr& get_mpi_info() { return _mpiInfo; }
-        const MPIInfoPtr& get_mpi_info() const { return _mpiInfo; }
         AutoTuner& getAT() { return _at; }
-        bool use_pack_tuners() const { return _use_pack_tuners; }
 
         // Add a new grid to the containers.
         virtual void addGrid(YkGridPtr gp, bool is_output);
@@ -468,92 +410,6 @@ namespace yask {
         // Return number of mis-compares.
         virtual idx_t compareData(const StencilContext& ref) const;
 
-        // Set number of threads w/o using thread-divisor.
-        // Return number of threads.
-        // Do nothing and return 0 if not properly initialized.
-        int set_max_threads() {
-
-            // Get max number of threads.
-            int mt = std::max(_opts->max_threads, 1);
-
-            // Reset number of OMP threads to max allowed.
-            omp_set_num_threads(mt);
-            return mt;
-        }
-
-        // Get total number of computation threads to use.
-        int get_num_comp_threads(int& region_threads, int& blk_threads) const {
-
-            // Max threads / divisor.
-            int mt = std::max(_opts->max_threads, 1);
-            int td = std::max(_opts->thread_divisor, 1);
-            int at = mt / td;
-            at = std::max(at, 1);
-
-            // Blk threads per region thread.
-            int bt = std::max(_opts->num_block_threads, 1);
-            bt = std::min(bt, at); // Cannot be > 'at'.
-            blk_threads = bt;
-
-            // Region threads.
-            int rt = at / bt;
-            rt = std::max(rt, 1);
-            region_threads = rt;
-
-            // Total number of block threads.
-            return bt * rt;
-        }
-        
-        // Set number of threads to use for something other than a region.
-        // Return number of threads.
-        // Do nothing and return 0 if not properly initialized.
-        int set_all_threads() {
-            int rt, bt;
-            int at = get_num_comp_threads(rt, bt);
-            omp_set_num_threads(at);
-            return at;
-        }
-
-        // Set number of threads to use for a region.
-        // Enable nested OMP if there are >1 block threads,
-        // disable otherwise.
-        // Return number of threads.
-        // Do nothing and return 0 if not properly initialized.
-        int set_region_threads() {
-            int rt, bt;
-            int at = get_num_comp_threads(rt, bt);
-
-            // Limit outer nesting to allow num_block_threads per nested
-            // block loop.
-            yask_num_threads[0] = rt;
-
-            if (bt > 1) {
-                omp_set_nested(1);
-                omp_set_max_active_levels(2);
-                yask_num_threads[1] = bt;
-            }
-            else {
-                omp_set_nested(0);
-                omp_set_max_active_levels(1);
-                yask_num_threads[1] = 0;
-            }
-
-            omp_set_num_threads(rt);
-            return rt;
-        }
-
-        // Set number of threads for a block.
-        // Return number of threads.
-        // Do nothing and return 0 if not properly initialized.
-        int set_block_threads() {
-            int rt, bt;
-            int at = get_num_comp_threads(rt, bt);
-
-            if (omp_get_max_active_levels() > 1)
-                omp_set_num_threads(bt);
-            return bt;
-        }
-
         // Reference stencil calculations.
         void run_ref(idx_t first_step_index,
                      idx_t last_step_index);
@@ -630,19 +486,13 @@ namespace yask {
                                   const GridDimNames& dims,
                                   const GridDimSizes* sizes);
 
-        // Get output object.
-        virtual yask_output_ptr get_debug_output() const {
-            return _debug;
-        }
-
         // APIs.
         // See yask_kernel_api.hpp.
-        virtual void set_debug_output(yask_output_ptr debug) {
-            _debug = debug;     // to share ownership of referent.
-            _ostr = &debug->get_ostream();
-        }
         virtual const std::string& get_name() const {
             return name;
+        }
+        virtual void set_debug_output(yask_output_ptr debug) {
+            KernelStateBase::set_debug_output(debug);
         }
         virtual int get_element_bytes() const {
             return REAL_BYTES;
@@ -691,22 +541,26 @@ namespace yask {
         }
 
         virtual std::string get_step_dim_name() const {
-            return _dims->_step_dim;
+            STATE_VARS_CONST(this);
+            return dims->_step_dim;
         }
         virtual int get_num_domain_dims() const {
-            return _dims->_domain_dims.getNumDims();
+            STATE_VARS_CONST(this);
+            return dims->_domain_dims.getNumDims();
         }
         virtual std::vector<std::string> get_domain_dim_names() const {
-            std::vector<std::string> dims;
-            for (auto& dim : _dims->_domain_dims.getDims())
-                dims.push_back(dim.getName());
-            return dims;
+            STATE_VARS_CONST(this);
+            std::vector<std::string> ddims;
+            for (auto& dim : dims->_domain_dims.getDims())
+                ddims.push_back(dim.getName());
+            return ddims;
         }
         virtual std::vector<std::string> get_misc_dim_names() const {
-            std::vector<std::string> dims;
-            for (auto& dim : _dims->_misc_dims.getDims())
-                dims.push_back(dim.getName());
-            return dims;
+            STATE_VARS_CONST(this);
+            std::vector<std::string> mdims;
+            for (auto& dim : dims->_misc_dims.getDims())
+                mdims.push_back(dim.getName());
+            return mdims;
         }
 
         virtual idx_t get_first_rank_domain_index(const std::string& dim) const;
@@ -735,16 +589,18 @@ namespace yask {
         virtual idx_t get_rank_index(const std::string& dim) const;
         virtual std::string apply_command_line_options(const std::string& args);
         virtual bool set_default_numa_preferred(int numa_node) {
+            STATE_VARS(this);
 #ifdef USE_NUMA
-            _opts->_numa_pref = numa_node;
+            opts->_numa_pref = numa_node;
             return true;
 #else
-            _opts->_numa_pref = yask_numa_none;
+            opts->_numa_pref = yask_numa_none;
             return numa_node == yask_numa_none;
 #endif
         }
         virtual int get_default_numa_preferred() const {
-            return _opts->_numa_pref;
+            STATE_VARS_CONST(this);
+            return opts->_numa_pref;
         }
 
         // Auto-tuner methods.
@@ -756,28 +612,5 @@ namespace yask {
         virtual bool is_auto_tuner_enabled() const;
 
     }; // StencilContext.
-
-    // Macro to get commonly-needed vars for stencil calcs efficiently.
-    // *_posn vars are positions in stencil_dims.
-#define CONTEXT_VARS0(ctx_p, pfx)                                       \
-    pfx auto* cp = ctx_p;                                               \
-    auto& os = cp->get_ostr();                                          \
-    pfx auto* opts = cp->get_settings().get();                          \
-    pfx auto* mpiInfo = cp->get_mpi_info().get();                       \
-    pfx auto* dims = cp->get_dims().get();                              \
-    pfx auto* env = cp->get_env().get();                                \
-    const auto& step_dim = dims->_step_dim;                             \
-    const auto& domain_dims = dims->_domain_dims;                       \
-    constexpr int nddims = NUM_DOMAIN_DIMS;                             \
-    assert(nddims == domain_dims.size());                               \
-    const auto& stencil_dims = dims->_stencil_dims;                     \
-    constexpr int nsdims = NUM_STENCIL_DIMS;                            \
-    assert(nsdims == stencil_dims.size());                              \
-    constexpr int step_posn = 0;                                        \
-    assert(step_posn == +Indices::step_posn);                           \
-    constexpr int outer_posn = 1;                                       \
-    const int inner_posn = cp->_inner_posn
-#define CONTEXT_VARS(ctx_p) CONTEXT_VARS0(ctx_p,)
-#define CONTEXT_VARS_CONST(ctx_p) CONTEXT_VARS0(ctx_p, const)
 
 } // yask namespace.

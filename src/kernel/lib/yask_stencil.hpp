@@ -72,6 +72,7 @@ IN THE SOFTWARE.
 #include "realv.hpp"
 
 // Base types for stencil context, etc.
+#include "indices.hpp"
 #include "settings.hpp"
 #include "generic_grids.hpp"
 #include "realv_grids.hpp"

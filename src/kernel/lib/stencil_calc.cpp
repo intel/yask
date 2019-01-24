@@ -40,8 +40,8 @@ namespace yask {
     void StencilBundleBase::calc_mini_block(int region_thread_idx,
                                             KernelSettings& settings,
                                             const ScanIndices& mini_block_idxs) {
-        CONTEXT_VARS(_generic_context);
-        TRACE_MSG3("calc_mini_block('" << get_name() << "'): [" <<
+        STATE_VARS(this);
+        TRACE_MSG("calc_mini_block('" << get_name() << "'): [" <<
                    mini_block_idxs.begin.makeValStr(nsdims) << " ... " <<
                    mini_block_idxs.end.makeValStr(nsdims) << ") by " <<
                    mini_block_idxs.step.makeValStr(nsdims) <<
@@ -57,7 +57,7 @@ namespace yask {
 
         // Nothing to do if outer BB is empty.
         if (_bundle_bb.bb_num_points == 0) {
-            TRACE_MSG3("calc_mini_block: empty BB");
+            TRACE_MSG("calc_mini_block: empty BB");
             return;
         }
         
@@ -75,7 +75,7 @@ namespace yask {
         // Loop through each solid BB for this bundle.
         // For each BB, calc intersection between it and 'mini_block_idxs'.
         // If this is non-empty, apply the bundle to all its required sub-blocks.
-        TRACE_MSG3("calc_mini_block('" << get_name() << "'): checking " <<
+        TRACE_MSG("calc_mini_block('" << get_name() << "'): checking " <<
                    _bb_list.size() << " BB(s)");
         int bbn = 0;
   	for (auto& bb : _bb_list) {
@@ -106,12 +106,12 @@ namespace yask {
 
             // nothing to do?
             if (!bb_ok) {
-                TRACE_MSG3("calc_mini_block for bundle '" << get_name() <<
+                TRACE_MSG("calc_mini_block for bundle '" << get_name() <<
                            "': no overlap between bundle " << bbn << " and current block");
                 continue; // to next BB.
             }
             
-            TRACE_MSG3("calc_mini_block('" << get_name() <<
+            TRACE_MSG("calc_mini_block('" << get_name() <<
                        "'): after trimming for BB " << bbn << ": [" <<
                        mb_idxs.begin.makeValStr(nsdims) <<
                        " ... " << mb_idxs.end.makeValStr(nsdims) << ")");
@@ -128,7 +128,7 @@ namespace yask {
                 // eventually work on a separate sub-block.  This is nested within
                 // an OMP region thread.  If there is only one block per thread,
                 // nested OMP is disabled, and this OMP pragma does nothing.
-                int nbt = cp->set_block_threads();
+                int nbt = _context->set_block_threads();
                 bool bind_threads = nbt > 1 && settings.bind_block_threads;
                 _Pragma("omp parallel proc_bind(spread)") {
                     int block_thread_idx = (nbt <= 1) ? 0 : omp_get_thread_num();
@@ -158,7 +158,7 @@ namespace yask {
                             adj_mb_idxs.step[i] = adj_mb_idxs.end[i] - adj_mb_idxs.begin[i];
                     }
 
-                    TRACE_MSG3("calc_mini_block('" << get_name() << "'): " <<
+                    TRACE_MSG("calc_mini_block('" << get_name() << "'): " <<
                                " for reqd bundle '" << sg->get_name() << "': [" <<
                                adj_mb_idxs.begin.makeValStr(nsdims) << " ... " <<
                                adj_mb_idxs.end.makeValStr(nsdims) << ") by " <<
@@ -205,8 +205,8 @@ namespace yask {
                                                   int block_thread_idx,
                                                   KernelSettings& settings,
                                                   const ScanIndices& mini_block_idxs) {
-        CONTEXT_VARS(_generic_context);
-        TRACE_MSG3("calc_sub_block_scalar for bundle '" << get_name() << "': [" <<
+        STATE_VARS(this);
+        TRACE_MSG("calc_sub_block_scalar for bundle '" << get_name() << "': [" <<
                    mini_block_idxs.start.makeValStr(nsdims) <<
                    " ... " << mini_block_idxs.stop.makeValStr(nsdims) <<
                    ") by region thread " << region_thread_idx <<
@@ -243,8 +243,8 @@ namespace yask {
                                                int block_thread_idx,
                                                KernelSettings& settings,
                                                const ScanIndices& mini_block_idxs) {
-        CONTEXT_VARS(_generic_context);        
-        TRACE_MSG3("calc_sub_block_vec for bundle '" << get_name() << "': [" <<
+        STATE_VARS(this);
+        TRACE_MSG("calc_sub_block_vec for bundle '" << get_name() << "': [" <<
                    mini_block_idxs.start.makeValStr(nsdims) <<
                    " ... " << mini_block_idxs.stop.makeValStr(nsdims) <<
                    ") by region thread " << region_thread_idx <<
@@ -308,7 +308,7 @@ namespace yask {
         DOMAIN_VAR_LOOP(i, j) {
 
             // Rank offset.
-            auto rofs = cp->rank_domain_offsets[j];
+            auto rofs = _context->rank_domain_offsets[j];
 
             // Begin/end of rank-relative scalar elements in this dim.
             auto ebgn = sub_block_idxs.begin[i] - rofs;
@@ -459,7 +459,7 @@ namespace yask {
 
         // Full rectilinear polytope of aligned clusters: use optimized code.
         if (do_clusters) {
-            TRACE_MSG3("calc_sub_block_vec:  using cluster code for [" <<
+            TRACE_MSG("calc_sub_block_vec:  using cluster code for [" <<
                        sub_block_fcidxs.begin.makeValStr(nsdims) <<
                        " ... " << sub_block_fcidxs.end.makeValStr(nsdims) <<
                        ") by region thread " << region_thread_idx <<
@@ -486,7 +486,7 @@ namespace yask {
         // Full and partial peel/remainder vectors in all dims except
         // the inner one.
         if (do_vectors) {
-            TRACE_MSG3("calc_sub_block_vec:  using vector code for [" <<
+            TRACE_MSG("calc_sub_block_vec:  using vector code for [" <<
                        sub_block_vidxs.begin.makeValStr(nsdims) <<
                        " ... " << sub_block_vidxs.end.makeValStr(nsdims) <<
                        ") *not* within full vector-clusters at [" <<
@@ -570,7 +570,7 @@ namespace yask {
             misc_idxs.step.setFromConst(1);
             misc_idxs.align.setFromConst(1);
 
-            TRACE_MSG3("calc_sub_block_vec:  using scalar code for [" <<
+            TRACE_MSG("calc_sub_block_vec:  using scalar code for [" <<
                        misc_idxs.begin.makeValStr(nsdims) << " ... " <<
                        misc_idxs.end.makeValStr(nsdims) <<
                        ") *not* within vectors at [" <<
@@ -587,13 +587,13 @@ namespace yask {
 #define MISC_FN(pt_idxs)  do {                                          \
                 bool ok = false;                                        \
                 DOMAIN_VAR_LOOP(i, j) {                                 \
-                    auto rofs = cp->rank_domain_offsets[j];             \
+                    auto rofs = _context->rank_domain_offsets[j];       \
                     if (pt_idxs.start[i] < rofs + sub_block_vidxs.begin[i] || \
                         pt_idxs.start[i] >= rofs + sub_block_vidxs.end[i]) { \
                         ok = true; break; }                             \
                 }                                                       \
                 if (ok) {                                               \
-                    TRACE_MSG3("calc_sub_block_vec:   at pt " <<            \
+                    TRACE_MSG("calc_sub_block_vec:   at pt " <<            \
                                pt_idxs.start.makeValStr(nsdims));       \
                     calc_scalar(region_thread_idx, pt_idxs.start);      \
                 }                                                       \
@@ -615,8 +615,8 @@ namespace yask {
     void StencilBundleBase::calc_loop_of_clusters(int region_thread_idx,
                                                   int block_thread_idx,
                                                   const ScanIndices& loop_idxs) {
-        CONTEXT_VARS(_generic_context);
-        TRACE_MSG3("calc_loop_of_clusters: local vector-indices [" <<
+        STATE_VARS(this);
+        TRACE_MSG("calc_loop_of_clusters: local vector-indices [" <<
                    loop_idxs.start.makeValStr(nsdims) <<
                    " ... " << loop_idxs.stop.makeValStr(nsdims) <<
                    ") by region thread " << region_thread_idx <<
@@ -649,8 +649,8 @@ namespace yask {
                                                  int block_thread_idx,
                                                  const ScanIndices& loop_idxs,
                                                  idx_t write_mask) {
-        CONTEXT_VARS(_generic_context);
-        TRACE_MSG3("calc_loop_of_vectors: local vector-indices [" <<
+        STATE_VARS(this);
+        TRACE_MSG("calc_loop_of_vectors: local vector-indices [" <<
                    loop_idxs.start.makeValStr(nsdims) <<
                    " ... " << loop_idxs.stop.makeValStr(nsdims) <<
                    ") w/write-mask = 0x" << hex << write_mask << dec <<
@@ -688,7 +688,7 @@ namespace yask {
     // Returns adjusted indices.
     ScanIndices StencilBundleBase::adjust_span(int region_thread_idx,
                                                const ScanIndices& idxs) const {
-        CONTEXT_VARS(_generic_context);
+        STATE_VARS(this);
         ScanIndices adj_idxs(idxs);
 
         // Loop thru vecs of scratch grids for this bundle.
@@ -723,7 +723,7 @@ namespace yask {
                     adj_idxs.end[i] = idxs.end[i] + rh;
 
                     // Make sure grid covers index bounds.
-                    TRACE_MSG3("adjust_span: mini-blk [" << 
+                    TRACE_MSG("adjust_span: mini-blk [" << 
                                idxs.begin[i] << "..." <<
                                idxs.end[i] << ") adjusted to [" << 
                                adj_idxs.begin[i] << "..." <<

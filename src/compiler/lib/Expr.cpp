@@ -749,7 +749,7 @@ namespace yask {
     }
     string GridPoint::getGridPtr() const {
         string gname = _grid->getName();
-        string expr = "static_cast<_context_type::" + gname + "_type*>(_context->" + gname;
+        string expr = "static_cast<_context_type::" + gname + "_type*>(_context_data->" + gname;
         if (_grid->isScratch())
             expr += "_list[region_thread_idx].get()";
         expr += ")";

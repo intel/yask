@@ -336,7 +336,7 @@ namespace yask {
             ctorCode += " " + grid + "_dim_names = {" +
                 gdims.makeDimStr(", ", "\"", "\"") + "};\n";
             string initCode = " " + grid + "_ptr = std::make_shared<" + typeDef +
-                ">(_dims, \"" + grid + "\", " + grid + "_dim_names, &_opts, &_ostr);\n"
+                ">(*this, \"" + grid + "\", " + grid + "_dim_names);\n"
                 " assert(" + grid + "_ptr);\n";
 
             // Grid vars.
@@ -448,7 +448,7 @@ namespace yask {
                 if (!firstGrid)
                     newGridCode += " else";
                 newGridCode += " if (dims == " + grid + "_dim_names) gp = std::make_shared<" +
-                    typeDef + ">(_dims, name, dims, &_opts, &_ostr);\n";
+                    typeDef + ">(*this, name, dims);\n";
             }
 
         } // grids.
@@ -503,7 +503,7 @@ namespace yask {
                 "\n class " << egsName << " : public StencilBundleBase {\n"
                 " protected:\n"
                 " typedef " << _context_base << " _context_type;\n"
-                " _context_type* _context = 0;\n"
+                " _context_type* _context_data = 0;\n"
                 " public:\n";
 
             // Stats for this eqBundle.
@@ -518,7 +518,7 @@ namespace yask {
             {
                 os << " " << egsName << "(" << _context_base << "* context) :\n"
                     " StencilBundleBase(context),\n"
-                    " _context(context) {\n"
+                    " _context_data(context) {\n"
                     " _name = \"" << egName << "\";\n"
                     " _scalar_fp_ops = " << stats.getNumOps() << ";\n"
                     " _scalar_points_read = " << stats.getNumReads() << ";\n"
@@ -529,9 +529,9 @@ namespace yask {
                 os << "\n // The following grid(s) are read by " << egsName << endl;
                 for (auto gp : eq->getInputGrids()) {
                     if (gp->isScratch())
-                        os << "  inputScratchVecs.push_back(&_context->" << gp->getName() << "_list);\n";
+                        os << "  inputScratchVecs.push_back(&_context_data->" << gp->getName() << "_list);\n";
                     else
-                        os << "  inputGridPtrs.push_back(_context->" << gp->getName() << "_ptr);\n";
+                        os << "  inputGridPtrs.push_back(_context_data->" << gp->getName() << "_ptr);\n";
                 }
                 os << "\n // The following grid(s) are written by " << egsName;
                 if (eq->step_expr)
@@ -539,9 +539,9 @@ namespace yask {
                 os << ".\n";
                 for (auto gp : eq->getOutputGrids()) {
                     if (gp->isScratch())
-                        os << "  outputScratchVecs.push_back(&_context->" << gp->getName() << "_list);\n";
+                        os << "  outputScratchVecs.push_back(&_context_data->" << gp->getName() << "_list);\n";
                     else
-                        os << "  outputGridPtrs.push_back(_context->" << gp->getName() << "_ptr);\n";
+                        os << "  outputGridPtrs.push_back(_context_data->" << gp->getName() << "_ptr);\n";
                 }
                 os << " } // Ctor." << endl;
             }
@@ -849,8 +849,8 @@ namespace yask {
             if (bp->isScratch())
                 continue;
             string bpName = bp->getName();
-            os << "  auto " << bpName << " = std::make_shared<BundlePack>(\"" <<
-                bpName << "\", this);\n";
+            os << "  auto " << bpName << " = std::make_shared<BundlePack>(this, \"" <<
+                bpName << "\");\n";
             for (auto& eg : bp->getBundles()) {
                 if (eg->isScratch())
                     continue;

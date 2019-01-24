@@ -28,10 +28,16 @@ IN THE SOFTWARE.
 namespace yask {
 
     // Auto-tuner for setting block size.
-    class AutoTuner {
+    class AutoTuner :
+        public ContextLinker {
+
     protected:
-        StencilContext* _context = 0;
-        KernelSettings* _settings = 0; // settings to change.
+
+        // Settings to change. May be pointer to solution settings
+        // or local settings for a pack.
+        KernelSettings* _settings = 0;
+
+        // Name of tuner.
         std::string _name;
 
         // Null stream to throw away debug info.
@@ -75,15 +81,10 @@ namespace yask {
     public:
         static constexpr idx_t max_step_t = 4;
 
-        AutoTuner(StencilContext* ctx,
+        AutoTuner(StencilContext* context,
                   KernelSettings* settings,
-                  const std::string& name = "") :
-            _context(ctx),
-            _settings(settings) {
-            _name = "auto-tuner";
-            if (name.length())
-                _name += "(" + name + ")";
-        }
+                  const std::string& name = "");
+        virtual ~AutoTuner() {}
 
         // Start & stop this timer to track elapsed time.
         YaskTimer timer;

@@ -32,9 +32,10 @@ namespace yask {
     // A stencil context contains one or more packs.
 
     // A pure-virtual class base for a stencil bundle.
-    class StencilBundleBase {
+    class StencilBundleBase : 
+        public ContextLinker {
+
     protected:
-        StencilContext* _generic_context = 0;
         std::string _name;
         int _scalar_fp_ops = 0;
         int _scalar_points_read = 0;
@@ -65,7 +66,7 @@ namespace yask {
         // Ranks offsets must already be subtracted.
         // Each dim in 'orig' must be a multiple of corresponding vec len.
         void normalize_indices(const Indices& orig, Indices& norm) const {
-            CONTEXT_VARS(_generic_context);
+            STATE_VARS(this);
             assert(orig.getNumDims() == nsdims);
             assert(norm.getNumDims() == nsdims);
 
@@ -97,19 +98,8 @@ namespace yask {
 
         // ctor, dtor.
         StencilBundleBase(StencilContext* context) :
-            _generic_context(context) {
-            //CONTEXT_VARS(context);
-        }
-
+            ContextLinker(context) { }
         virtual ~StencilBundleBase() { }
-
-        // Access to dims and MPI info.
-        DimsPtr& get_dims() const {
-            return _generic_context->get_dims();
-        }
-        MPIInfoPtr& get_mpi_info() {
-            return _generic_context->get_mpi_info();
-        }
 
         // Get name of this bundle.
         const std::string& get_name() const { return _name; }
@@ -281,20 +271,18 @@ namespace yask {
     // "Independent" implies that they may be evaluated
     // in any order.
     class BundlePack :
+        public ContextLinker,
         public std::vector<StencilBundleBase*> {
 
     protected:
         std::string _name;
 
-        // Parent solution.
-        StencilContext* _context = 0;
-        
         // Union of bounding boxes for all bundles in this pack.
         BoundingBox _pack_bb;
 
         // Local pack settings.
         // Only some of these will be used.
-        KernelSettings _opts;
+        KernelSettings _pack_opts;
 
         // Auto-tuner for pack settings.
         AutoTuner _at;
@@ -316,12 +304,12 @@ namespace yask {
         idx_t tot_writes_per_step = 0;
         idx_t tot_fpops_per_step = 0;
         
-        BundlePack(const std::string& name,
-                   StencilContext* ctx) :
+        BundlePack(StencilContext* context,
+                   const std::string& name) :
+            ContextLinker(context),
             _name(name),
-            _context(ctx),
-            _opts(*ctx->get_settings()), // make a copy of the context settings.
-            _at(ctx, &_opts, name) { }
+            _pack_opts(*context->get_state()->_opts), // init w/a copy of the base settings.
+            _at(context, &_pack_opts, name) { }
         virtual ~BundlePack() { }
 
         const std::string& get_name() {
@@ -346,13 +334,14 @@ namespace yask {
         // Accessors.
         BoundingBox& getBB() { return _pack_bb; }
         AutoTuner& getAT() { return _at; }
-        KernelSettings& getLocalSettings() { return _opts; }
+        KernelSettings& getLocalSettings() { return _pack_opts; }
 
         // If using separate pack tuners, return local settings.
         // Otherwise, return one in context.
         KernelSettings& getActiveSettings() {
-            return _context->use_pack_tuners() ? _opts :
-                *_context->get_settings().get(); }
+            STATE_VARS(this);
+            return use_pack_tuners() ? _pack_opts : *opts;
+        }
 
         // Perf-tracking methods.
         void start_timers();

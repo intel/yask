@@ -1015,7 +1015,7 @@ help:
 	echo "Example debug builds of kernel cmd-line tool:"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' check=1 # No OpenMP or MPI, internal checking"; \
 	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=test_2d mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' check=1 trace=1 # trace is a useful debug setting!"; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' check=1 trace=1 trace_mem=1"
+	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' check=1 trace=1 trace_mem=1"; \
 	echo " "; \
 	echo "Example builds with test runs:"; \
 	echo " $(MAKE) -j all # Normal full API and stencil tests"; \

@@ -28,6 +28,20 @@ using namespace std;
 
 namespace yask {
 
+    // Set debug output to cout if my_rank == msg_rank
+    // or a null stream otherwise.
+    ostream& KernelStateBase::set_ostr() {
+        assert(_state);
+        assert(_state->_env);
+        assert(_state->_opts);
+        yask_output_factory yof;
+        if (_state->_env->my_rank == _state->_opts->msg_rank)
+            set_debug_output(yof.new_stdout_output());
+        else
+            set_debug_output(yof.new_null_output());
+        return get_debug_output()->get_ostream();
+    }
+
     // Check whether dim is of allowed type.
     void Dims::checkDimType(const std::string& dim,
                             const std::string& fn_name,
@@ -66,8 +80,7 @@ namespace yask {
         return new_env(MPI_COMM_NULL);
     }
 
-    ///// KernelEnv functions:
-
+    // KernelEnv global lock objects.
     omp_lock_t KernelEnv::_debug_lock;
     bool KernelEnv::_debug_lock_init_done = false;
     
@@ -219,6 +232,52 @@ namespace yask {
         auto i = _mpiInfo->getNeighborIndex(offsets); // 1D index.
         assert(i < _mpiInfo->neighborhood_size);
         return bufs[i].bufs[bd];
+    }
+
+    // Settings ctor.
+    KernelSettings::KernelSettings(DimsPtr dims, KernelEnvPtr env) :
+        _dims(dims), max_threads(env->max_threads) {
+        auto& step_dim = dims->_step_dim;
+
+        // Use both step and domain dims for all size tuples.
+        _rank_sizes = dims->_stencil_dims;
+        _rank_sizes.setValsSame(def_rank);             // size of rank.
+        _rank_sizes.setVal(step_dim, 0);        // not used.
+
+        _region_sizes = dims->_stencil_dims;
+        _region_sizes.setValsSame(0);          // 0 => default settings.
+
+        _block_group_sizes = dims->_stencil_dims;
+        _block_group_sizes.setValsSame(0); // 0 => min size.
+
+        _block_sizes = dims->_stencil_dims;
+        _block_sizes.setValsSame(def_block); // size of block.
+        _block_sizes.setVal(step_dim, 0); // 0 => default.
+
+        _mini_block_group_sizes = dims->_stencil_dims;
+        _mini_block_group_sizes.setValsSame(0); // 0 => min size.
+
+        _mini_block_sizes = dims->_stencil_dims;
+        _mini_block_sizes.setValsSame(0);            // 0 => default settings.
+
+        _sub_block_group_sizes = dims->_stencil_dims;
+        _sub_block_group_sizes.setValsSame(0); // 0 => min size.
+
+        _sub_block_sizes = dims->_stencil_dims;
+        _sub_block_sizes.setValsSame(0);            // 0 => default settings.
+
+        _min_pad_sizes = dims->_stencil_dims;
+        _min_pad_sizes.setValsSame(0);
+
+        _extra_pad_sizes = dims->_stencil_dims;
+        _extra_pad_sizes.setValsSame(0);
+
+        // Use only domain dims for MPI tuples.
+        _num_ranks = dims->_domain_dims;
+        _num_ranks.setValsSame(1);
+
+        _rank_indices = dims->_domain_dims;
+        _rank_indices.setValsSame(0);
     }
 
     // Add options to set one domain var to a cmd-line parser.
@@ -515,7 +574,7 @@ namespace yask {
     // Make sure all user-provided settings are valid and finish setting up some
     // other vars before allocating memory.
     // Called from prepare_solution(), during auto-tuning, etc.
-    void KernelSettings::adjustSettings(std::ostream& os, KernelEnvPtr env) {
+    void KernelSettings::adjustSettings(std::ostream& os) {
 
         auto& step_dim = _dims->_step_dim;
         auto& inner_dim = _dims->_inner_dim;
@@ -709,6 +768,46 @@ namespace yask {
                                    _dims->_cluster_pts, step_dim);
         os << " num-sub-blocks-per-sub-block-group-per-step: " << nsb_g << endl;
 #endif
+    }
+
+    // Ctor.
+    KernelStateBase::KernelStateBase(KernelEnvPtr& kenv,
+                                     KernelSettingsPtr& ksettings)
+    {
+        // Create state. All other objects that need to share
+        // this state should use a shared ptr to it.
+        _state = make_shared<KernelState>();
+
+        // Share passed ptrs.
+        _state->_env = kenv;
+        _state->_opts = ksettings;
+        _state->_dims = ksettings->_dims;
+
+        // Set _state->_debug per settings.
+        set_ostr();
+
+        // Create MPI Info object.
+        _state->_mpiInfo = make_shared<MPIInfo>(ksettings->_dims);
+
+        // Set vars after above inits.
+        STATE_VARS(this);
+
+        // Find index posns in stencil dims.
+        DOMAIN_VAR_LOOP(i, j) {
+            auto& dname = stencil_dims.getDimName(i);
+            if (state->_outer_posn < 0)
+                state->_outer_posn = i;
+            if (dname == dims->_inner_dim)
+                state->_inner_posn = i;
+        }
+        assert(outer_posn == state->_outer_posn);
+    }
+
+    // ContextLinker ctor.
+    ContextLinker::ContextLinker(StencilContext* context) :
+        KernelStateBase(context->get_state()),
+        _context(context) {
+        assert(context);
     }
 
 } // namespace yask.

@@ -34,6 +34,7 @@ namespace yask {
     // Base class implementing all yk_grids. Can be used for grids
     // that contain either individual elements or vectors.
     class YkGridBase :
+        public KernelStateBase,
         public virtual yk_grid {
 
         // Rank and local offsets in domain dim:
@@ -61,9 +62,6 @@ namespace yask {
         // actual data, message stream.
         GenericGridBase* _ggb = 0;
 
-        // Problem dimensions. (NOT grid dims.)
-        DimsPtr _dims;
-
         // The following masks have one bit for each dim in the grid.
         idx_t _step_dim_mask = 0;
         idx_t _domain_dim_mask = 0;
@@ -83,7 +81,7 @@ namespace yask {
         Indices _allocs;    // actual grid alloc in reals | same.
 
         // Sizes in vectors for sizes that are always vec lens (to avoid division).
-        // Each entry _vec_lens may be same as _dims->_fold_pts or one, depending
+        // Each entry _vec_lens may be same as dims->_fold_pts or one, depending
         // on whether grid is fully vectorized.
         Indices _vec_lens;  // num reals in each elem | one.
         Indices _vec_left_pads; // same as _actl_left_pads.
@@ -178,9 +176,9 @@ namespace yask {
                                  const Indices& last_indices) const;
 
     public:
-        YkGridBase(GenericGridBase* ggb,
-                   const GridDimNames& dimNames,
-                   DimsPtr dims);
+        YkGridBase(KernelStateBase& state,
+                   GenericGridBase* ggb,
+                   const GridDimNames& dimNames);
         virtual ~YkGridBase() { }
 
         // Halo-exchange flag accessors.
@@ -295,8 +293,7 @@ namespace yask {
         // Return number of mismatches greater than epsilon.
         virtual idx_t compare(const YkGridBase* ref,
                               real_t epsilon = EPSILON,
-                              int maxPrint = 20,
-                              std::ostream& os = std::cerr) const;
+                              int maxPrint = 20) const;
 
         // Make sure indices are in range.
         // Optionally fix them to be in range and return in 'fixed_indices'.
@@ -610,13 +607,11 @@ namespace yask {
         }
 
     public:
-        YkElemGrid(DimsPtr dims,
+        YkElemGrid(KernelStateBase& state,
                    std::string name,
-                   const GridDimNames& dimNames,
-                   KernelSettingsPtr* settings,
-                   std::ostream** ostr) :
-            YkGridBase(&_data, dimNames, dims),
-            _data(name, dimNames, settings, ostr) {
+                   const GridDimNames& dimNames) :
+            YkGridBase(state, &_data, dimNames),
+            _data(state, name, dimNames) {
             _has_step_dim = _use_step_idx;
             resize();
         }
@@ -730,14 +725,13 @@ namespace yask {
         }
 
     public:
-        YkVecGrid(DimsPtr dims,
+        YkVecGrid(KernelStateBase& stateb,
                   const std::string& name,
-                  const GridDimNames& dimNames,
-                  KernelSettingsPtr* settings,
-                  std::ostream** ostr) :
-            YkGridBase(&_data, dimNames, dims),
-            _data(name, dimNames, settings, ostr),
+                  const GridDimNames& dimNames) :
+            YkGridBase(stateb, &_data, dimNames),
+            _data(stateb, name, dimNames),
             _vec_fold_posns(idx_t(0), int(dimNames.size())) {
+            STATE_VARS(this);
             _has_step_dim = _use_step_idx;
 
             // Template vec lengths.
@@ -805,9 +799,10 @@ namespace yask {
         virtual const real_t* getElemPtr(const Indices& idxs,
                                          idx_t alloc_step_idx,
                                          bool checkBounds=true) const final {
+            STATE_VARS_CONST(this);
 
 #ifdef TRACE_MEM
-            _data.get_ostr() << get_name() << "." << "YkVecGrid::getElemPtr(" <<
+            ostr << get_name() << "." << "YkVecGrid::getElemPtr(" <<
                 idxs.makeValStr(get_num_dims()) << ")";
 #endif
             // Use template vec lengths instead of run-time values for
@@ -865,13 +860,13 @@ namespace yask {
             }
 
             // Get 1D element index into vector.
-            auto i = _dims.get()->getElemIndexInVec(fold_ofs);
+            auto i = dims->getElemIndexInVec(fold_ofs);
 
 #ifdef DEBUG_LAYOUT
             // Compare to more explicit offset extraction.
             IdxTuple eofs = get_allocs(); // get dims for this grid.
             elem_ofs.setTupleVals(eofs);  // set vals from elem_ofs.
-            auto i2 = _dims->getElemIndexInVec(eofs);
+            auto i2 = dims->getElemIndexInVec(eofs);
             assert(i == i2);
 #endif
 
@@ -1029,6 +1024,7 @@ namespace yask {
                                         idx_t first_alloc_step_idx,
                                         const Indices& last_indices,
                                         idx_t last_alloc_step_idx) {
+            STATE_VARS(this);
             if (!is_storage_allocated())
                 return 0;
             Indices firstv, lastv;
@@ -1037,7 +1033,7 @@ namespace yask {
 
             // Find range.
             IdxTuple numVecsTuple = get_slice_range(firstv, lastv);
-            TRACE_MSG0(get_ostr(), "set_vecs_in_slice: setting " <<
+            TRACE_MSG("set_vecs_in_slice: setting " <<
                        numVecsTuple.makeDimValStr(" * ") << " vecs at [" <<
                        makeIndexString(firstv) << " ... " <<
                        makeIndexString(lastv) << "]");
@@ -1083,22 +1079,17 @@ namespace yask {
                                         idx_t first_alloc_step_idx,
                                         const Indices& last_indices,
                                         idx_t last_alloc_step_idx) const {
-            if (!is_storage_allocated()) {
-                yask_exception e;
-                std::stringstream err;
-                err << "Error: call to 'get_vecs_in_slice' with no data allocated for grid '" <<
-                    get_name() << "'.\n";
-                e.add_message(err.str());
-                throw e;
-                //exit_yask(1);
-            }
+            STATE_VARS(this);
+            if (!is_storage_allocated())
+                FORMAT_AND_THROW_YASK_EXCEPTION("Error: call to 'get_vecs_in_slice' with no data allocated for grid '" <<
+                                                get_name());
             Indices firstv, lastv;
             checkIndices(first_indices, "get_vecs_in_slice", true, true, &firstv);
             checkIndices(last_indices, "get_vecs_in_slice", true, true, &lastv);
 
             // Find range.
             IdxTuple numVecsTuple = get_slice_range(firstv, lastv);
-            TRACE_MSG0(get_ostr(), "get_vecs_in_slice: getting " <<
+            TRACE_MSG("get_vecs_in_slice: getting " <<
                        numVecsTuple.makeDimValStr(" * ") << " vecs at " <<
                        makeIndexString(firstv) << " ... " <<
                        makeIndexString(lastv));
