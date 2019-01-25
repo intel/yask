@@ -759,8 +759,8 @@ namespace yask {
                                 nbufs[numa_pref]++;
                                 if (pass == 0)
                                     TRACE_MSG("  MPI buf '" << buf.name << "' needs " <<
-                                              makeByteStr(sbytes) <<
-                                              " using mem-key " << numa_pref);
+                                              makeByteStr(sbytes) << 
+                                              " (mem-key = " << numa_pref << ")");
                             }
                         } // snd/rcv.
                     } );  // neighbors.
@@ -769,7 +769,8 @@ namespace yask {
                 if (pass == 1 && do_shm) {
 
                     for (int rn = 0; rn < env->num_shm_ranks; rn++) {
-                        TRACE_MSG("Sharing MPI shm offsets from shm-rank " << rn);
+                        TRACE_MSG("Sharing MPI shm offsets from shm-rank " << rn <<
+                                  " for grid '" << gname << "'");
                         MPI_Bcast(sb_ofs[gname][rn].data(), env->num_shm_ranks, MPI_INTEGER8,
                                   rn, env->shm_comm);
                         for (int rn2 = 0; rn2 < env->num_shm_ranks; rn2++)
