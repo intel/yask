@@ -518,16 +518,6 @@ namespace yask {
         return expr;
     }
 
-    // Unused operators.
-    EqualsExprPtr operator BAD_OPER1(GridPointPtr gpp, const NumExprPtr rhs) {
-        THROW_YASK_EXCEPTION("Error: operator '==' is not allowed on a grid point;"
-                             " use 'EQUALS' to assert equality between a grid point (LHS)"
-                             " and an equation (RHS)");
-    }
-    EqualsExprPtr operator BAD_OPER1(GridPointPtr gpp, double rhs) {
-        return gpp EQUALS_OPER constNum(rhs);
-    }
-    
     // Define the value of a grid point.
     // Add this equation to the list of eqs for this stencil.
     EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, const NumExprPtr rhs) {
@@ -759,7 +749,7 @@ namespace yask {
     }
     string GridPoint::getGridPtr() const {
         string gname = _grid->getName();
-        string expr = "static_cast<_context_type::" + gname + "_type*>(_context->" + gname;
+        string expr = "static_cast<_context_type::" + gname + "_type*>(_context_data->" + gname;
         if (_grid->isScratch())
             expr += "_list[region_thread_idx].get()";
         expr += ")";

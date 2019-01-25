@@ -68,6 +68,8 @@ namespace yask {
     class NumExpr;
     typedef shared_ptr<NumExpr> NumExprPtr;
     typedef vector<NumExprPtr> NumExprPtrVec;
+    class GridPoint;
+    typedef shared_ptr<GridPoint> GridPointPtr;
     class IndexExpr;
     typedef shared_ptr<IndexExpr> IndexExprPtr;
     typedef vector<IndexExprPtr> IndexExprPtrVec;
@@ -79,8 +81,6 @@ namespace yask {
     // More forward-decls.
     class ExprVisitor;
     class Grid;
-    class GridPoint;
-    typedef shared_ptr<GridPoint> GridPointPtr;
     class StencilSolution;
     struct Dimensions;
 
@@ -1129,26 +1129,35 @@ namespace yask {
 #define IS_EQUIV_TO EQUALS_OPER
 #define IS_EQUIVALENT_TO EQUALS_OPER
 
-    // Catch use of the old '==' operator.
-#define BAD_OPER1 ==
-    EqualsExprPtr operator BAD_OPER1(GridPointPtr gpp, const NumExprPtr rhs);
-    EqualsExprPtr operator BAD_OPER1(GridPointPtr gpp, double rhs);
-
-    // Binary numerical-to-boolean operators.
-    // Must provide explicit IndexExprPtr operands to keep compiler from
-    // using built-in pointer comparison.
+    // Binary numerical-to-boolean operators.  Must provide more explicit
+    // ptr-type operands than used with math operators to keep compiler from
+    // using built-in pointer comparison. This means we need all
+    // permutations of {NumExpr,IndexExpr,GridPoint}Ptr.  Const values must
+    // be on RHS of operator, e.g., 'x > 5' is ok, but '5 < x' is not.
 #define BOOL_OPER(oper, type, implType)                                          \
     inline BoolExprPtr operator oper(const NumExprPtr lhs, const NumExprPtr rhs) { \
         return make_shared<type>(lhs, rhs); } \
-    inline BoolExprPtr operator oper(const IndexExprPtr lhs, const NumExprPtr rhs) { \
-        return make_shared<type>(lhs, rhs); } \
     inline BoolExprPtr operator oper(const NumExprPtr lhs, const IndexExprPtr rhs) { \
         return make_shared<type>(lhs, rhs); } \
+    inline BoolExprPtr operator oper(const NumExprPtr lhs, const GridPointPtr rhs) { \
+        return make_shared<type>(lhs, rhs); } \
+    inline BoolExprPtr operator oper(const IndexExprPtr lhs, const NumExprPtr rhs) { \
+        return make_shared<type>(lhs, rhs); } \
     inline BoolExprPtr operator oper(const IndexExprPtr lhs, const IndexExprPtr rhs) { \
+        return make_shared<type>(lhs, rhs); } \
+    inline BoolExprPtr operator oper(const IndexExprPtr lhs, const GridPointPtr rhs) { \
+        return make_shared<type>(lhs, rhs); } \
+    inline BoolExprPtr operator oper(const GridPointPtr lhs, const NumExprPtr rhs) { \
+        return make_shared<type>(lhs, rhs); } \
+    inline BoolExprPtr operator oper(const GridPointPtr lhs, const IndexExprPtr rhs) { \
+        return make_shared<type>(lhs, rhs); } \
+    inline BoolExprPtr operator oper(const GridPointPtr lhs, const GridPointPtr rhs) { \
         return make_shared<type>(lhs, rhs); } \
     inline BoolExprPtr operator oper(const NumExprPtr lhs, double rhs) { \
         return make_shared<type>(lhs, constNum(rhs)); }                 \
     inline BoolExprPtr operator oper(const IndexExprPtr lhs, double rhs) { \
+        return make_shared<type>(lhs, constNum(rhs)); }                 \
+    inline BoolExprPtr operator oper(const GridPointPtr lhs, double rhs) { \
         return make_shared<type>(lhs, constNum(rhs)); }
 
     BOOL_OPER(==, IsEqualExpr, yc_equals_node)
@@ -1196,15 +1205,9 @@ namespace yask {
     // - A variable within the global or current namespace where it will be used.
     // - A local variable in the 'value' method; in this case, the value
     //   of the local var must be evaluated and inserted in the expr.
-    // Example code:
-    //   GridValue v;
-    //   SET_VALUE_FROM_EXPR(v =, "_context->temp * " << 0.2);
-    //   SET_VALUE_FROM_EXPR(v +=, "_context->coeff[" << r << "]");
-    // This example would generate the following partial expression (when r=9):
-    //   (_context->temp * 2.00000000000000000e-01) + (_context->coeff[9])
 #define SET_VALUE_FROM_EXPR(lhs, rhs) do {      \
         ostringstream oss;                      \
-        oss << setprecision(17) << scientific;  \
+        oss << setprecision(15) << scientific;  \
         oss << "(" << rhs << ")";               \
         lhs  make_shared<CodeExpr>(oss.str());  \
     } while(0)

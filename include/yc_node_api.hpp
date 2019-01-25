@@ -178,20 +178,22 @@ namespace yask {
             LHS.
 
             An optional domain condition may be provided to define the sub-domain
-            to which this equation applies. See new_first_domain_index()
-            for more information and an example.
-            Conditions are always evaluated with respect to the overall
+            to which this equation applies. 
+            Domain conditions are always evaluated with respect to the overall
             problem domain, i.e., independent of any specific
             MPI domain decomposition that might occur at run-time.
-            If a condition is not provided, the equation applies to the
+            If a domain condition is not provided, the equation applies to the
             entire problem domain.
             A domain condition can be added to an equation after its creation
             via yc_equation_node.set_cond().
+            See yc_equation_node.set_cond() for more information and an example.
 
-            A step-index condition is similar to a domain condition, but
-            applies to the current step (usually time).
-            A step-index condition can be added to an equation after its creation
+            A step condition is similar to a domain condition, but
+            enables or disables the entire equation based on the current step (usually time)
+            and/or other values.
+            A step condition can only be added to an equation after its creation
             via yc_equation_node.set_step_cond().
+            See yc_equation_node.set_step_cond() for more information and an example.
 
             @returns Pointer to new \ref yc_equation_node object.
         */
@@ -200,7 +202,7 @@ namespace yask {
                           /**< [in] Grid-point before EQUALS operator. */,
                           yc_number_node_ptr rhs
                           /**< [in] Expression after EQUALS operator. */,
-                          yc_bool_node_ptr cond = nullptr
+                          yc_bool_node_ptr sub_domain_cond = nullptr
                           /**< [in] Optional expression defining sub-domain
                              where `lhs EQUALS rhs` is valid. */ );
 
@@ -291,35 +293,7 @@ namespace yask {
            domain in `dim` dimension.
            The `dim` argument is created via new_domain_index().
 
-           Typical C++ usage:
-
-           \code{.cpp}
-           auto x = node_fac.new_domain_index("x");
-
-           // Create boolean expression for the
-           // boundary sub-domain "x < first_x + 10".
-           auto first_x = node_fac.new_first_domain_index(x);
-           auto left_bc_cond = node_fac.new_less_than_node(x, first_x + 10);
-
-           // Create a new equation that is valid in this range.
-           auto left_bc_eq =
-             node_fac.new_equation_node(grid_pt_expr, left_bc_expr, left_bc_cond);
-           \endcode
-
-           Specification of the "interior" part of a 2-D domain could be
-           represented by an expression similar to
-           `x >= new_first_domain_index(x) + 20 &&
-           x <= new_last_domain_index(x) - 20 &&
-           y >= new_first_domain_index(y) + 20 &&
-           y <= new_last_domain_index(y) - 20`.
-
-           @note The entire domain in dimension "x" would be represented by
-           `x >= new_first_domain_index(x) && x <= new_last_domain_index(x)`, but
-           that is the default condition so does not need to be specified.
-
-           @note Be sure to use an expression like "x < first_x + 10"
-           instead of merely "x < 10" to avoid the assumption that
-           the first index is always zero (0).
+           See yc_equation_node.set_cond() for more information and an example.
 
            @returns Pointer to new \ref yc_index_node object.
         */
@@ -332,6 +306,8 @@ namespace yask {
            Create an expression that indicates the last value in the overall problem
            domain in `dim` dimension.
            The `dim` argument is created via new_domain_index().
+
+           See yc_equation_node.set_cond() for more information and an example.
 
            @returns Pointer to new \ref yc_index_node object.
         */
@@ -466,15 +442,80 @@ namespace yask {
             `nullptr` if not defined. */
         virtual yc_bool_node_ptr get_cond() =0;
 
-        /// Set the condition describing the sub-domain.
-        /** See yc_node_factory::new_equation_node(). */
-        virtual void set_cond(yc_bool_node_ptr cond
-                              /**< [in] Boolean expression describing the sub-domain
+        /// Set the condition describing the sub-domain for this equation.
+        /**
+           See yc_node_factory::new_equation_node() for an overall description
+           of conditions.
+        
+           Typical C++ usage to create a sub-domain condition:
+
+           \code{.cpp}
+           auto x = node_fac.new_domain_index("x");
+
+           // Create boolean expression for a 10-point wide left boundary area.
+           auto first_x = node_fac.new_first_domain_index(x);
+           auto left_bc_cond = x < first_x + 10;
+
+           // Indicate that an expression is valid only in this area.
+           // (Assumes left_bc_expr was already defined.)
+           left_bc_expr.set_cond(left_bc_cond);
+           \endcode
+
+           Specification of the "interior" part of a 2-D domain could be
+           represented by an expression like
+           `(x >= node_fac.new_first_domain_index(x) + 20) && (x <= node_fac.new_last_domain_index(x) - 20) && (y >= node_fac.new_first_domain_index(y) + 20) && (y <= node_fac.new_last_domain_index(y) - 20)`.
+
+           @warning For performance, sub-domain expressions are only
+           evaluated once when yk_solution::prepare_solution() is called,
+           and the results are analyzed and cached internally.  Thus,
+           sub-domain expressions should not include a step index or a
+           reference to any other varible that might change during or
+           between time-steps. See set_step_cond() for the mechanism to
+           enable equations based on variables that can change between
+           time-steps.
+
+           @note The entire domain in dimension "x" would be represented by
+           `(x >= node_fac.new_first_domain_index(x)) && (x <= node_fac.new_last_domain_index(x))`, but
+           that is the default condition so does not need to be specified.
+
+           @note Be sure to use an expression like `x < first_x + 10`
+           instead of merely `x < 10` to avoid the assumption that
+           the first index is always zero (0). More importantly, use
+           an expression like `x > last_x - 10` instead of hard-coding
+           the last index.
+        */
+        virtual void set_cond(yc_bool_node_ptr sub_domain_cond
+                              /**< [in] Boolean expression describing
+                                 where in the sub-domain this expression is valid
                                  or `nullptr` to remove the condition. */ ) =0;
 
-        /// Set the condition describing the valid step indices.
+        /// Set the condition describing when the equation is valid.
+        /**
+           See yc_node_factory::new_equation_node() for an overall description
+           of conditions.
+        
+           Typical C++ usage to create a step condition:
+
+           \code{.cpp}
+           auto t = node_fac.new_step_index("t");
+
+           // Create boolean expression that is true every third step.
+           auto my_step_cond = (t % 3 == 0);
+
+           // Indicate that an expression is valid only when step_cond is true.
+           // (Assumes my_expr was already defined.)
+           my_expr.set_step_cond(my_step_cond);
+           \endcode
+
+           Step conditions may also refer to elements in grid variables including
+           scalars (1-D) and arrays (2-D). For non-scalar variables, indices
+           used in a step condition _cannot_ include domain variables like `x` or `y`, but 
+           constants are allowed. In this way, equations can be enabled or
+           disabled programmatically by setting elements in the tested variables.
+        */
         virtual void set_step_cond(yc_bool_node_ptr step_cond
-                                   /**< [in] Boolean expression describing a valid step
+                                   /**< [in] Boolean expression describing 
+                                      when the expression is valid
                                       or `nullptr` to remove the condition. */ ) =0;
 
         /// Create a deep copy of AST starting with this node.

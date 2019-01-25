@@ -91,7 +91,8 @@ namespace yask {
         StencilSolution(const string& name) :
             _name(name) {
             yask_output_factory ofac;
-            set_debug_output(ofac.new_stdout_output());
+            auto so = ofac.new_stdout_output();
+            set_debug_output(so);
         }
         virtual ~StencilSolution() {}
 

@@ -38,6 +38,8 @@ namespace yask {
     class ExprVisitor {
     protected:
         bool _visitEqualsLhs = false; // whether to visit LHS of EQUALS.
+        bool _visitGridPointArgs = false;   // whether to visit exprs in grid point args.
+        bool _visitConds = false;           // whether to visit conditional exprs.
 
     public:
         virtual ~ExprVisitor() { }
@@ -46,7 +48,16 @@ namespace yask {
         virtual string visit(ConstExpr* ce) { return ""; }
         virtual string visit(CodeExpr* ce) { return ""; }
         virtual string visit(IndexExpr* ie) { return ""; }
-        virtual string visit(GridPoint* gp) { return ""; } // does NOT visit arg exprs by default.
+
+        // Visit grid-point args only if flag is set.
+        virtual string visit(GridPoint* gp) {
+            string res;
+            if (_visitGridPointArgs) {
+                for (auto& arg : gp->getArgs())
+                    res = arg->accept(this);
+            }
+            return res; 
+        }
 
         // By default, a unary visitor visits its operand.
         virtual string visit(UnaryNumExpr* ue) {
@@ -88,14 +99,22 @@ namespace yask {
                 res = ep->accept(this);
             return res;
         }
-        virtual string visit(EqualsExpr* ee) {
 
-            // Visit LHS if flag is set.
+        // Visit RHS of equals and LHS and conditions per flags.
+        virtual string visit(EqualsExpr* ee) {
             if (_visitEqualsLhs)
                 ee->getLhs()->accept(this);
-            return ee->getRhs()->accept(this);
+            if (_visitConds) {
+                auto& cp = ee->getCond();
+                if (cp)
+                    cp->accept(this);
+                auto& scp = ee->getStepCond();
+                if (scp)
+                    scp->accept(this);
+            }
 
-            // Conditions are not visited.
+            // Always visit RHS.
+            return ee->getRhs()->accept(this);
         }
     };
 

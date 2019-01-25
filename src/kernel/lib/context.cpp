@@ -31,24 +31,12 @@ using namespace std;
 
 namespace yask {
 
-    // Set debug output to cout if my_rank == msg_rank
-    // or a null stream otherwise.
-    ostream& StencilContext::set_ostr() {
-        yask_output_factory yof;
-        if (_env->my_rank == _opts->msg_rank)
-            set_debug_output(yof.new_stdout_output());
-        else
-            set_debug_output(yof.new_null_output());
-        assert(_ostr);
-        return *_ostr;
-    }
-
     ///// Top-level methods for evaluating reference and optimized stencils.
 
     // Eval stencil bundle(s) over grid(s) using reference scalar code.
     void StencilContext::run_ref(idx_t first_step_index,
                                  idx_t last_step_index) {
-        CONTEXT_VARS(this);
+        STATE_VARS(this);
         run_time.start();
 
         // Determine step dir from order of first/last.
@@ -69,10 +57,10 @@ namespace yask {
         // Begin & end tuples.
         // Based on rank bounding box, not extended
         // BB because we don't use wave-fronts in the ref code.
-        IdxTuple begin(_dims->_stencil_dims);
+        IdxTuple begin(stencil_dims);
         begin.setVals(rank_bb.bb_begin, false);
         begin[step_dim] = begin_t;
-        IdxTuple end(_dims->_stencil_dims);
+        IdxTuple end(stencil_dims);
         end.setVals(rank_bb.bb_end, false);
         end[step_dim] = end_t;
 
@@ -81,16 +69,16 @@ namespace yask {
 
         // Force sub-sizes to whole rank size so that scratch
         // grids will be large enough. Turn off any temporal blocking.
-        _opts->_region_sizes.setValsSame(0);
-        _opts->_block_sizes.setValsSame(0);
-        _opts->_mini_block_sizes.setValsSame(0);
-        _opts->_sub_block_sizes.setValsSame(0);
-        _opts->adjustSettings(get_env());
+        opts->_region_sizes.setValsSame(0);
+        opts->_block_sizes.setValsSame(0);
+        opts->_mini_block_sizes.setValsSame(0);
+        opts->_sub_block_sizes.setValsSame(0);
+        opts->adjustSettings();
         update_grid_info();
 
         // Copy these settings to packs and realloc scratch grids.
         for (auto& sp : stPacks)
-            sp->getLocalSettings() = *_opts;
+            sp->getLocalSettings() = *opts;
         allocScratchData();
 
         // Use only one set of scratch grids.
@@ -98,7 +86,7 @@ namespace yask {
 
         // Indices to loop through.
         // Init from begin & end tuples.
-        ScanIndices rank_idxs(*_dims, false, &rank_domain_offsets);
+        ScanIndices rank_idxs(*dims, false, &rank_domain_offsets);
         rank_idxs.begin = begin;
         rank_idxs.end = end;
 
@@ -201,7 +189,7 @@ namespace yask {
     void StencilContext::run_solution(idx_t first_step_index,
                                       idx_t last_step_index)
     {
-        CONTEXT_VARS(this);
+        STATE_VARS(this);
         run_time.start();
 
         // Determine step dir from order of first/last.
@@ -219,14 +207,14 @@ namespace yask {
         // Begin, end, step tuples.
         // Based on overall bounding box, which includes
         // any needed extensions for wave-fronts.
-        IdxTuple begin(_dims->_stencil_dims);
+        IdxTuple begin(stencil_dims);
         begin.setVals(ext_bb.bb_begin, false);
         begin[step_posn] = begin_t;
-        IdxTuple end(_dims->_stencil_dims);
+        IdxTuple end(stencil_dims);
         end.setVals(ext_bb.bb_end, false);
         end[step_posn] = end_t;
-        IdxTuple step(_dims->_stencil_dims);
-        step.setVals(_opts->_region_sizes, false); // step by region sizes.
+        IdxTuple step(stencil_dims);
+        step.setVals(opts->_region_sizes, false); // step by region sizes.
         step[step_posn] = step_t;
 
         TRACE_MSG("run_solution: [" <<
@@ -241,8 +229,7 @@ namespace yask {
         }
 
 #ifdef MODEL_CACHE
-        ostream& os = get_ostr();
-        if (context.my_rank != context.msg_rank)
+        if (env.my_rank != env.msg_rank)
             cache_model.disable();
         if (cache_model.isEnabled())
             os << "Modeling cache...\n";
@@ -303,7 +290,7 @@ namespace yask {
         // calculations are made.
 
         // Indices needed for the 'rank' loops.
-        ScanIndices rank_idxs(*_dims, true, &rank_domain_offsets);
+        ScanIndices rank_idxs(*dims, true, &rank_domain_offsets);
         rank_idxs.begin = begin;
         rank_idxs.end = end;
         rank_idxs.step = step;
@@ -573,7 +560,7 @@ namespace yask {
     // eval only the one pointed to.
     void StencilContext::calc_region(BundlePackPtr& sel_bp,
                                      const ScanIndices& rank_idxs) {
-        CONTEXT_VARS(this);
+        STATE_VARS(this);
         TRACE_MSG("calc_region: region [" <<
                   rank_idxs.start.makeValStr(nsdims) << " ... " <<
                   rank_idxs.stop.makeValStr(nsdims) << ") within rank [" <<
@@ -587,7 +574,7 @@ namespace yask {
             int_time.start();
 
         // Init region begin & end from rank start & stop indices.
-        ScanIndices region_idxs(*_dims, true, &rank_domain_offsets);
+        ScanIndices region_idxs(*dims, true, &rank_domain_offsets);
         region_idxs.initFromOuter(rank_idxs);
 
         // Time range.
@@ -698,7 +685,7 @@ namespace yask {
                 BundlePackPtr bp;
 
                 // Steps within a region are based on rank block sizes.
-                auto& settings = *_opts;
+                auto& settings = *opts;
                 region_idxs.step = settings._block_sizes;
                 region_idxs.step[step_posn] = step_t;
 
@@ -780,7 +767,7 @@ namespace yask {
                                     const ScanIndices& rank_idxs,
                                     const ScanIndices& region_idxs) {
 
-        CONTEXT_VARS(this);
+        STATE_VARS(this);
         auto* bp = sel_bp.get();
         int region_thread_idx = omp_get_thread_num();
         TRACE_MSG("calc_block: phase " << phase << ", block [" <<
@@ -830,7 +817,7 @@ namespace yask {
 #endif
         
         // Init block begin & end from region start & stop indices.
-        ScanIndices block_idxs(*_dims, true, 0);
+        ScanIndices block_idxs(*dims, true, 0);
         block_idxs.initFromOuter(region_idxs);
 
         // Time range.
@@ -901,7 +888,7 @@ namespace yask {
             block_idxs.stop[step_posn] = end_t;
 
             // Steps within a block are based on rank mini-block sizes.
-            auto& settings = *_opts;
+            auto& settings = *opts;
             block_idxs.step = settings._mini_block_sizes;
             block_idxs.step[step_posn] = step_dir;
 
@@ -982,7 +969,7 @@ namespace yask {
                                          const ScanIndices& base_block_idxs,
                                          const ScanIndices& adj_block_idxs) {
 
-        CONTEXT_VARS(this);
+        STATE_VARS(this);
         TRACE_MSG("calc_mini_block: phase " << phase <<
                   ", shape " << shape <<
                   ", mini-block [" <<
@@ -1003,7 +990,7 @@ namespace yask {
         }
 
         // Init mini-block begin & end from blk start & stop indices.
-        ScanIndices mini_block_idxs(*_dims, true, 0);
+        ScanIndices mini_block_idxs(*dims, true, 0);
         mini_block_idxs.initFromOuter(adj_block_idxs);
 
         // Time range.
@@ -1100,7 +1087,7 @@ namespace yask {
                     // Update offsets of scratch grids based on the current
                     // mini-block location.
                     if (scratchVecs.size())
-                        cp->update_scratch_grid_info(region_thread_idx, mini_block_idxs.begin);
+                        update_scratch_grid_info(region_thread_idx, mini_block_idxs.begin);
 
                     // Call calc_mini_block() for each non-scratch bundle.
                     for (auto* sb : *bp)
@@ -1132,7 +1119,7 @@ namespace yask {
                                       idx_t shift_num,
                                       BundlePackPtr& bp,
                                       ScanIndices& idxs) {
-        CONTEXT_VARS(this);
+        STATE_VARS(this);
 
         // For wavefront adjustments, see conceptual diagram in
         // run_solution().  At each pack and time-step, the parallelogram
@@ -1322,7 +1309,7 @@ namespace yask {
                                           idx_t nshapes, idx_t shape,
                                           const BridgeMask& bridge_mask,
                                           ScanIndices& idxs) {
-        CONTEXT_VARS(this);
+        STATE_VARS(this);
         auto npacks = stPacks.size();
         bool ok = true;
         
@@ -1479,7 +1466,7 @@ namespace yask {
     // the grids' local offsets.
     void StencilContext::update_scratch_grid_info(int thread_idx,
                                                   const Indices& idxs) {
-        CONTEXT_VARS(this);
+        STATE_VARS(this);
 
         // Loop thru vecs of scratch grids.
         for (auto* sv : scratchVecs) {
@@ -1525,7 +1512,7 @@ namespace yask {
     // Compare grids in contexts.
     // Return number of mis-compares.
     idx_t StencilContext::compareData(const StencilContext& ref) const {
-        CONTEXT_VARS_CONST(this);
+        STATE_VARS_CONST(this);
 
         os << "Comparing grid(s) in '" << name << "' to '" << ref.name << "'..." << endl;
         if (gridPtrs.size() != ref.gridPtrs.size()) {
@@ -1544,10 +1531,10 @@ namespace yask {
     // Call MPI_Test() on all unfinished requests to promote MPI progress.
     // TODO: replace with more direct and less intrusive techniques.
     void StencilContext::poke_halo_exchange() {
-        CONTEXT_VARS(this);
+        STATE_VARS(this);
 
 #ifdef USE_MPI
-        if (!enable_halo_exchange || _env->num_ranks < 2)
+        if (!enable_halo_exchange || env->num_ranks < 2)
             return;
 
         test_time.start();
@@ -1601,11 +1588,11 @@ namespace yask {
 
     // Exchange dirty halo data for all grids and all steps.
     void StencilContext::exchange_halos() {
-
+        
 #ifdef USE_MPI
-        if (!enable_halo_exchange || _env->num_ranks < 2)
+        STATE_VARS(this);
+        if (!enable_halo_exchange || env->num_ranks < 2)
             return;
-        CONTEXT_VARS(this);
 
         halo_time.start();
         double wait_delta = 0.;
@@ -1737,7 +1724,7 @@ namespace yask {
                                     auto& r = grid_recv_reqs[ni];
                                     MPI_Irecv(buf, nbytes, MPI_BYTE,
                                               neighbor_rank, int(gi),
-                                              _env->comm, &r);
+                                              env->comm, &r);
                                     num_recv_reqs++;
                                 }
                             }
@@ -1788,7 +1775,7 @@ namespace yask {
                                                                    last, lastStepsToSwap[gp]);
                                 else
                                     nelems = gp->get_elements_in_slice(buf, first, last);
-                                idx_t nbytes = nelems * cp->get_element_bytes();
+                                idx_t nbytes = nelems * get_element_bytes();
 
                                 if (using_shm) {
                                     TRACE_MSG("exchange_halos:    no send req due to shm");
@@ -1801,7 +1788,7 @@ namespace yask {
                                     TRACE_MSG("exchange_halos:    sending " << makeByteStr(nbytes));
                                     auto& r = grid_send_reqs[ni];
                                     MPI_Isend(buf, nbytes, MPI_BYTE,
-                                              neighbor_rank, int(gi), _env->comm, &r);
+                                              neighbor_rank, int(gi), env->comm, &r);
                                     num_send_reqs++;
                                 }
                             }
@@ -1926,6 +1913,7 @@ namespace yask {
     // TODO: track sub-domain of grid that is dirty.
     void StencilContext::mark_grids_dirty(const BundlePackPtr& sel_bp,
                                           idx_t start, idx_t stop) {
+        STATE_VARS(this);
         idx_t step = (start > stop) ? -1 : 1;
         map<YkGridPtr, set<idx_t>> grids_done;
 

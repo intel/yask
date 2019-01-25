@@ -31,13 +31,14 @@ using namespace std;
 namespace yask {
 
     // Ctor.
-    YkGridBase::YkGridBase(GenericGridBase* ggb,
-                           const GridDimNames& dimNames,
-                           DimsPtr dims) :
-    _ggb(ggb), _dims(dims) {
-
+    // Important: '*ggb' is NOT yet constructed.
+    YkGridBase::YkGridBase(KernelStateBase& stateb,
+                           GenericGridBase* ggb,
+                           const GridDimNames& dimNames) :
+        KernelStateBase(stateb),
+        _ggb(ggb) {
+        STATE_VARS(this);
         assert(ggb);
-        assert(dims.get());
 
         // Init indices.
         int n = int(dimNames.size());
@@ -62,9 +63,9 @@ namespace yask {
         for (int i = 0; i < dimNames.size(); i++) {
             idx_t mbit = 1LL << i;
             auto& dname = dimNames[i];
-            if (dname == _dims->_step_dim)
+            if (dname == step_dim)
                 _step_dim_mask |= mbit;
-            else if (_dims->_domain_dims.lookup(dname))
+            else if (domain_dims.lookup(dname))
                 _domain_dim_mask |= mbit;
             else
                 _misc_dim_mask |= mbit;
@@ -127,6 +128,7 @@ namespace yask {
     // Does not include user-specified min padding or
     // final rounding for left pad.
     Indices YkGridBase::getReqdPad(const Indices& halos, const Indices& wf_exts) const {
+        STATE_VARS(this);
 
         // Start with halos plus WF exts.
         Indices mp = halos.addElements(wf_exts);
@@ -144,7 +146,7 @@ namespace yask {
         for (int i = 0; i < get_num_dims(); i++) {
             if (mp[i] >= 1) {
                 auto& dname = get_dim_name(i);
-                auto* p = _dims->_fold_pts.lookup(dname);
+                auto* p = dims->_fold_pts.lookup(dname);
                 if (p) {
                     assert (*p >= 1);
                     mp[i] += *p - 1;
@@ -158,6 +160,7 @@ namespace yask {
     // Modifies _pads and _allocs.
     // Fails if mem different and already alloc'd.
     void YkGridBase::resize() {
+        STATE_VARS(this);
 
         // Original size.
         auto p = get_raw_storage_buffer();
@@ -216,7 +219,7 @@ namespace yask {
 
                 // Make inner dim an odd number of vecs.
                 // This reportedly helps avoid some uarch aliasing.
-                if (!p && get_dim_name(i) == _dims->_inner_dim &&
+                if (!p && get_dim_name(i) == inner_dim &&
                     (new_allocs[i] / _vec_lens[i]) % 2 == 0) {
                     new_right_pads[i] += _vec_lens[i];
                     new_allocs[i] += _vec_lens[i];
@@ -269,7 +272,7 @@ namespace yask {
         if (old_allocs != new_allocs || old_dirty != new_dirty) {
             Indices first_allocs = _rank_offsets.subElements(_actl_left_pads);
             Indices end_allocs = first_allocs.addElements(_allocs);
-            TRACE_MSG0(get_ostr(), "grid '" << get_name() << "' resized from " <<
+            TRACE_MSG("grid '" << get_name() << "' resized from " <<
                        makeIndexString(old_allocs, " * ") << " to " <<
                        makeIndexString(new_allocs, " * ") << " at [" <<
                        makeIndexString(first_allocs) << " ... " << 
@@ -288,18 +291,19 @@ namespace yask {
                                   bool step_ok,
                                   bool domain_ok,
                                   bool misc_ok) const {
+        STATE_VARS(this);
         if (!is_dim_used(dim))
             THROW_YASK_EXCEPTION("Error in " + fn_name + "(): dimension '" +
                                  dim + "' not found in " + make_info_string());
-        _dims->checkDimType(dim, fn_name, step_ok, domain_ok, misc_ok);
+        dims->checkDimType(dim, fn_name, step_ok, domain_ok, misc_ok);
     }
 
     // Check for equality.
     // Return number of mismatches greater than epsilon.
     idx_t YkGridBase::compare(const YkGridBase* ref,
                               real_t epsilon,
-                              int maxPrint,
-                              std::ostream& os) const {
+                              int maxPrint) const {
+        STATE_VARS(this);
         if (!ref) {
             os << "** mismatch: no reference grid.\n";
             return get_num_storage_elements();
@@ -316,7 +320,7 @@ namespace yask {
         // same values in extra-padding area.
         // TODO: check layout.
         idx_t errs = _ggb->count_diffs(ref->_ggb, epsilon);
-        TRACE_MSG0(get_ostr(), "count_diffs() returned " << errs);
+        TRACE_MSG("count_diffs() returned " << errs);
         if (!errs)
             return 0;
 
@@ -345,7 +349,7 @@ namespace yask {
                     // Don't compare points outside the domain.
                     // TODO: check points in halo.
                     auto& dname = pt.getDimName(i);
-                    if (_dims->_domain_dims.lookup(dname)) {
+                    if (domain_dims.lookup(dname)) {
                         auto first_ok = get_first_rank_domain_index(dname);
                         auto last_ok = get_last_rank_domain_index(dname);
                         if (opt[i] < first_ok || opt[i] > last_ok)
@@ -374,7 +378,7 @@ namespace yask {
                 }
                 return true;    // keep visiting.
             });
-        TRACE_MSG0(get_ostr(), "detailed compare returned " << errs);
+        TRACE_MSG("detailed compare returned " << errs);
         return errs;
     }
 
@@ -492,6 +496,7 @@ namespace yask {
                                           const real_vec_t& val,
                                           int line,
                                           bool newline) const {
+        STATE_VARS(this);
 
         // Convert to elem indices.
         Indices eidxs = idxs.mulElements(_vec_lens);
@@ -503,7 +508,7 @@ namespace yask {
         eidxs.setTupleVals(idxs2);      // set vals from eidxs.
 
         // Visit every point in fold.
-        IdxTuple folds = _dims->_fold_pts;
+        IdxTuple folds = dims->_fold_pts;
         folds.visitAllPoints([&](const IdxTuple& fofs,
                                  size_t idx) {
 

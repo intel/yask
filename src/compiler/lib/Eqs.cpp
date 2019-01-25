@@ -39,10 +39,6 @@ namespace yask {
     // and its input grids and points.
     class PointVisitor : public ExprVisitor {
 
-        // A set of all points to ensure pointers to each
-        // unique point have same value.
-        set<GridPoint> _all_pts;
-
         // A type to hold a mapping of equations to a set of grids in each.
         typedef unordered_set<Grid*> GridSet;
         typedef unordered_map<EqualsExpr*, Grid*> GridMap;
@@ -58,79 +54,105 @@ namespace yask {
 
         PointMap _lhs_pts; // outputs of eqs.
         PointSetMap _rhs_pts; // inputs of eqs.
+        PointSetMap _cond_pts;  // sub-domain expr inputs.
+        PointSetMap _step_cond_pts;  // step-cond expr inputs.
+        PointSetMap _all_pts;  // all points in each eq (union of above).
 
-        EqualsExpr* _eq=0;   // Current equation.
+        // Vars for indexing data.
+        EqualsExpr* _eq = 0;   // Current equation.
+        enum State { _in_lhs, _in_rhs, _in_cond, _in_step_cond } _state;
 
     public:
 
         // Ctor.
-        // 'pts' contains offsets from each point to create.
         PointVisitor() {}
         virtual ~PointVisitor() {}
 
+        // Get access to grids per eq.
         GridMap& getOutputGrids() { return _lhs_grids; }
         GridSetMap& getInputGrids() { return _rhs_grids; }
+
+        // Get access to pts per eq.
+        // Contains unique ptrs to pts, but pts may not
+        // be unique.
         PointMap& getOutputPts() { return _lhs_pts; }
         PointSetMap& getInputPts() { return _rhs_pts; }
+        PointSetMap& getCondPts() { return _cond_pts; }
+        PointSetMap& getStepCondPts() { return _step_cond_pts; }
+        PointSetMap& getAllPts() { return _all_pts; }
+
         int getNumEqs() const { return (int)_lhs_pts.size(); }
 
-        // Determine whether 2 sets have any common points.
-        virtual bool do_sets_intersect(const GridSet& a,
-                                       const GridSet& b) {
-            for (auto ai : a) {
-                if (b.count(ai) > 0)
-                    return true;
-            }
-            return false;
-        }
-        virtual bool do_sets_intersect(const PointSet& a,
-                                       const PointSet& b) {
-            for (auto ai : a) {
-                if (b.count(ai) > 0)
-                    return true;
-            }
-            return false;
-        }
-
         // Callback at an equality.
-        // Handles LHS grid pt explicitly, then visits RHS.
+        // Visits all parts that might have grid points.
         virtual string visit(EqualsExpr* ee) {
 
             // Set this equation as current one.
             _eq = ee;
 
-            // Make sure map entries exist for this eq.
+            // Make sure all map entries exist for this eq.
             _lhs_grids[_eq];
             _rhs_grids[_eq];
             _lhs_pts[_eq];
             _rhs_pts[_eq];
+            _cond_pts[_eq];
+            _step_cond_pts[_eq];
+            _all_pts[_eq];
 
-            // Store LHS point.
-            auto* lhs = ee->getLhs().get();
-            _lhs_pts[_eq] = lhs;
-
-            // Add grid.
-            auto* g = lhs->getGrid();
-            _lhs_grids[_eq] = g;
-
+            // visit LHS.
+            auto& lhs = ee->getLhs();
+            _state = _in_lhs;
+            lhs->accept(this);
+            
             // visit RHS.
             NumExprPtr rhs = ee->getRhs();
+            _state = _in_rhs;
             rhs->accept(this);
 
-            // Don't visit LHS because we've already saved it.
+            // visit conds.
+            auto& cp = ee->getCond();
+            if (cp) {
+                _state = _in_cond;
+                cp->accept(this);
+            }
+            auto& scp = ee->getStepCond();
+            if (scp) {
+                _state = _in_step_cond;
+                scp->accept(this);
+            }
             return "";
         }
 
-        // Callback at a grid point on the RHS.
+        // Callback at a grid point.
         virtual string visit(GridPoint* gp) {
             assert(_eq);
-
-            // Store RHS point.
-            _rhs_pts[_eq].insert(gp);
-
-            // Add grid.
             auto* g = gp->getGrid();
-            _rhs_grids[_eq].insert(g);
+            _all_pts[_eq].insert(gp);
+
+            // Save pt and/or grid based on state.
+            switch (_state) {
+
+            case _in_lhs:
+                _lhs_pts[_eq] = gp;
+                _lhs_grids[_eq] = g;
+                break;
+
+            case _in_rhs:
+                _rhs_pts[_eq].insert(gp);
+                _rhs_grids[_eq].insert(g);
+                break;
+
+            case _in_cond:
+                _cond_pts[_eq].insert(gp);
+                break;
+
+            case _in_step_cond:
+                _step_cond_pts[_eq].insert(gp);
+                break;
+
+            default:
+                assert(0 && "illegal state");
+            }
             return "";
         }
     };
@@ -155,6 +177,8 @@ namespace yask {
         auto& inGrids = pt_vis.getInputGrids();
         auto& outPts = pt_vis.getOutputPts();
         auto& inPts = pt_vis.getInputPts();
+        //auto& condPts = pt_vis.getCondPts();
+        //auto& stepCondPts = pt_vis.getStepCondPts();
 
         // 1. Check each eq internally.
         os << "\nProcessing " << getNum() << " stencil equation(s)...\n";
@@ -317,10 +341,10 @@ namespace yask {
                         argn->getIntVal(); // throws exception if not an integer.
                     }
                 }
-            }
+            } // input pts.
 
             // TODO: check to make sure cond1 depends only on domain indices.
-            // TODO: check to make sure stcond1 depends only on step index.
+            // TODO: check to make sure stcond1 does not depend on domain indices.
         } // for all eqs.
 
         // 2. Check each pair of eqs.
@@ -520,6 +544,8 @@ namespace yask {
         SetVecVisitor(const Dimensions& dims) :
             _dims(dims) { 
             _visitEqualsLhs = true;
+            _visitGridPointArgs = true;
+            _visitConds = true;
         }
 
         // Check each grid point in expr.
@@ -529,7 +555,7 @@ namespace yask {
             // Never vectorize scalars.
             if (grid->get_num_dims() == 0) {
                 gp->setVecType(GridPoint::VEC_NONE);
-                return "";
+                return "";      // Also, no args to visit.
             }
 
             // Amount of vectorization allowed primarily depends on number
@@ -550,6 +576,8 @@ namespace yask {
             assert(fdoffsets <= grid_nfd);
 
             // All folded dims are vectorizable?
+            // NB: this will always be the case when there is
+            // no folding in the soln.
             if (fdoffsets == soln_nfd)
                 gp->setVecType(GridPoint::VEC_FULL); // all good.
 
@@ -560,7 +588,9 @@ namespace yask {
             // Uses no folded dims, so scalar only.
             else
                 gp->setVecType(GridPoint::VEC_NONE);
-            return "";
+
+            // Also check args of this grid point.
+            return ExprVisitor::visit(gp);
         }
     };
 
@@ -662,13 +692,8 @@ namespace yask {
         // Analyze each eq.
         for (auto& eq : getAll()) {
 
-            // Get sets of points for this eq.
-            auto* outPt1 = pv.getOutputPts().at(eq.get());
-            auto& inPts1 = pv.getInputPts().at(eq.get());
-
-            // Union of all input and output points for 'eq'.
-            auto allPts1 = inPts1;
-            allPts1.insert(outPt1);
+            // Get all grid points touched by this eq.
+            auto& allPts1 = pv.getAllPts().at(eq.get());
 
             // Update stats of each grid accessed in 'eq'.
             for (auto ap : allPts1) {
