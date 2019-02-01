@@ -491,7 +491,7 @@ namespace yask {
         return sqrt(fabs(a));
     }
 
-    // Missing vector functions.
+    // A macro to emulate missing SVML vector functions.
 #if !defined(NO_INTRINSICS)
 #define MAKE_INTRIN(op, libm_fn)                        \
     ALWAYS_INLINE simd_t INAME(op)(simd_t a) {          \
@@ -510,7 +510,8 @@ namespace yask {
 #endif
 #endif
 
-    // Safe sqrt.
+    // Safe sqrt(x), i.e., sqrt(abs(x)).
+    // Used mainly for validation tests.
 #if REAL_BYTES == 4
     MAKE_INTRIN(sqrt_abs, sqrt_absf)
 #else
@@ -540,8 +541,8 @@ namespace yask {
     }
 #endif
 
-    // SVML library wrappers.
-#if defined(NO_INTRINSICS)
+    // SVML emulation.
+#if defined(NO_INTRINSICS) || !defined(USE_SVML)
 #define SVML_1ARG(yask_fn, svml_fn, libm_dpfn, libm_spfn)      \
     SVML_1ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)            \
     ALWAYS_INLINE real_vec_t yask_fn(const real_vec_t& a) {     \
@@ -556,6 +557,8 @@ namespace yask {
         REAL_VEC_LOOP(i) res[i] = yask_fn(a.u.r[i], b.u.r[i]);  \
         return res;                                             \
     }
+
+    // SVML library wrappers.
 #else
 #define SVML_1ARG(yask_fn, svml_fn, libm_dpfn, libm_spfn)      \
     SVML_1ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)            \
@@ -609,7 +612,7 @@ namespace yask {
     ALWAYS_INLINE void yask_sin_and_cos(real_vec_t& sin_res, 
                                         real_vec_t& cos_res, 
                                         const real_vec_t& a) {
-#if defined(NO_INTRINSICS)
+#if defined(NO_INTRINSICS) || !defined(USE_SVML)
         REAL_VEC_LOOP(i) yask_sin_and_cos(sin_res[i], cos_res[i], a[i]);
 #else
         sin_res.u.mr = INAME(sincos)(&cos_res.u.mr, a.u.mr);

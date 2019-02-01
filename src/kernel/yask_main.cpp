@@ -532,7 +532,7 @@ int main(int argc, char** argv)
         MPI_Finalize();
         os << "YASK DONE." << endl << divLine << flush;
     }
-    catch (yask_exception e) {
+    catch (yask_exception& e) {
         cerr << "YASK Kernel: " << e.get_message() << ".\n";
         exit_yask(1);
     }

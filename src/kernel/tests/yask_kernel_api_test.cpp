@@ -248,7 +248,7 @@ int main() {
         os << "End of YASK kernel API test.\n";
         return 0;
     }
-    catch (yask_exception e) {
+    catch (yask_exception& e) {
         cerr << "YASK kernel API test: " << e.get_message() <<
             " on rank " << env->get_rank_index() << ".\n";
         return 1;

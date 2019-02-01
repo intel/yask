@@ -682,7 +682,9 @@ namespace yask {
         visitEqs(&slv);
     }
 
-    // Update access stats for the grids, i.e., halos and const indices.
+    // Update access stats for the grids.
+    // For now, this us just const indices.
+    // Halos are updated later, after packs are established.
     void Eqs::updateGridStats() {
 
         // Find all LHS and RHS points and grids for all eqs.
@@ -698,7 +700,6 @@ namespace yask {
             // Update stats of each grid accessed in 'eq'.
             for (auto ap : allPts1) {
                 auto* g = ap->getGrid(); // grid for point 'ap'.
-                g->updateHalo(ap->getArgOffsets());
                 g->updateConstIndices(ap->getArgConsts());
             }
         }
@@ -1048,8 +1049,35 @@ namespace yask {
         return newBundle;
     }
 
-    // Adjust scratch-grid halos as needed.
-    void EqBundles::adjustScratchHalos() {
+    // Find halos needed for each grid.
+    void EqBundlePacks::calcHalos(EqBundles& allBundles) {
+
+        // Find all LHS and RHS points and grids for all eqs.
+        PointVisitor pv;
+        visitEqs(&pv);
+
+#ifdef DEBUG_SCRATCH
+        cout << "* cH: analyzing " << getAll().size() << " eqs...\n";
+#endif
+        
+        // First, set halos based only on immediate accesses.
+        for (auto& bp : getAll()) {
+            auto pname = bp->getName();
+            
+            for (auto& eq : bp->getEqs()) {
+
+                // Get all grid points touched by this eq.
+                auto& allPts1 = pv.getAllPts().at(eq.get());
+
+                // Update stats of each grid accessed in 'eq'.
+                for (auto ap : allPts1) {
+                    auto* g = ap->getGrid(); // grid for point 'ap'.
+                    g->updateHalo(pname, ap->getArgOffsets());
+                }
+            }
+        }
+
+        // Next, propagate halos through scratch grids as needed.
 
         // Example:
         // eq1: scr(x) EQUALS u(t,x+1); <-- orig halo of u = 1.
@@ -1086,149 +1114,151 @@ namespace yask {
         // from the shadows.
         vector< map<Grid*, Grid*>> shadows;
 
-        // Find all LHS and RHS points and grids for all eqs.
-        PointVisitor pv;
-        visitEqs(&pv);
+        // Packs.
+        for (auto& bp : getAll()) {
+            auto pname = bp->getName();
+            auto& pbundles = bp->getBundles(); // list of bundles.
 
+            // Bundles with their dependency info.
+            for (auto& b1 : allBundles.getAll()) {
+
+                // Only need bundles in this pack.
+                if (pbundles.count(b1) == 0)
+                    continue;
+
+                // Only need to look at dep paths starting from non-scratch bundles.
+                if (b1->isScratch())
+                    continue;
+
+                // We start with each non-scratch bundle and walk the dep
+                // tree to find all dependent scratch bundles.  It's
+                // important to then visit them in dep order using 'path' to
+                // get only unbroken chains of scratch bundles.
 #ifdef DEBUG_SCRATCH
-        cout << "* uSH: analyzing " << getAll().size() << " eqs...\n";
+                cout << "* cH: visiting deps of " << b1->getDescr() << endl;
 #endif
-        
-        // Bundles.
-        for (auto& b1 : getAll()) {
-
-            // Only need to look at dep paths starting from non-scratch bundles.
-            if (b1->isScratch())
-                continue;
-
-            // We start with each non-scratch bundle and walk the dep
-            // tree to find all dependent scratch bundles.  It's
-            // important to then visit them in dep order using 'path' to
-            // get only unbroken chains of scratch bundles.
-#ifdef DEBUG_SCRATCH
-            cout << "* uSH: visiting deps of " << b1->getDescr() << endl;
-#endif
-            getDeps().visitDeps
+                allBundles.getDeps().visitDeps
                 
-                // For each 'bn', 'b1' is 'bn' or depends on 'bn',
-                // immediately or indirectly; 'path' leads from
-                // 'b1' to 'bn'.
-                (b1, [&](Tp bn, TpList& path) {
+                    // For each 'bn', 'b1' is 'bn' or depends on 'bn',
+                    // immediately or indirectly; 'path' leads from
+                    // 'b1' to 'bn'.
+                    (b1, [&](EqBundlePtr bn, EqBundleList& path) {
 
-                    // Create a new empty map of shadow grids for this path.
-                    shadows.resize(shadows.size() + 1);
-                    auto& shadow_map = shadows.back();
+                        // Create a new empty map of shadow grids for this path.
+                        shadows.resize(shadows.size() + 1);
+                        auto& shadow_map = shadows.back();
 
-                    // Walk path from 'b1', stopping at end of scratch
-                    // chain.
-                    for (auto b2 : path) {
+                        // Walk path from 'b1', stopping at end of scratch
+                        // chain.
+                        for (auto b2 : path) {
 
-                        // Don't process 'b1', the initial non-scratch bundle.
-                        if (b2 == b1)
-                            continue;
+                            // Don't process 'b1', the initial non-scratch bundle.
+                            if (b2 == b1)
+                                continue;
                         
-                        // If this isn't a scratch bundle, we are done
-                        // w/this path because we only want the bundles
-                        // from 'b1' through an *unbroken* chain of
-                        // scratch bundles.
-                        if (!b2->isScratch())
-                            break;
+                            // If this isn't a scratch bundle, we are done
+                            // w/this path because we only want the bundles
+                            // from 'b1' through an *unbroken* chain of
+                            // scratch bundles.
+                            if (!b2->isScratch())
+                                break;
 
-                        // Make shadow copies of all grids touched by 'eq2'.
-                        // All changes will be applied to these shadow grids
-                        // for the current 'path'.
-                        for (auto& eq : b2->getEqs()) {
+                            // Make shadow copies of all grids touched by 'eq2'.
+                            // All changes will be applied to these shadow grids
+                            // for the current 'path'.
+                            for (auto& eq : b2->getEqs()) {
 
-                            // Output grid.
-                            auto* og = pv.getOutputGrids().at(eq.get());
-                            if (shadow_map.count(og) == 0)
-                                shadow_map[og] = new Grid(*og);
+                                // Output grid.
+                                auto* og = pv.getOutputGrids().at(eq.get());
+                                if (shadow_map.count(og) == 0)
+                                    shadow_map[og] = new Grid(*og);
 
-                            // Input grids.
-                            auto& inPts = pv.getInputPts().at(eq.get());
-                            for (auto* ip : inPts) {
-                                auto* ig = ip->getGrid();
-                                if (shadow_map.count(ig) == 0)
-                                    shadow_map[ig] = new Grid(*ig);
+                                // Input grids.
+                                auto& inPts = pv.getInputPts().at(eq.get());
+                                for (auto* ip : inPts) {
+                                    auto* ig = ip->getGrid();
+                                    if (shadow_map.count(ig) == 0)
+                                        shadow_map[ig] = new Grid(*ig);
+                                }
                             }
-                        }
                         
-                        // For each scratch bundle, set the size of all its
-                        // output grids' halos to the max across its
-                        // halos. We need to do this because halos are
-                        // written in a scratch grid.  Since they are
-                        // bundled, all the writes must be over the same
-                        // area.
+                            // For each scratch bundle, set the size of all its
+                            // output grids' halos to the max across its
+                            // halos. We need to do this because halos are
+                            // written in a scratch grid.  Since they are
+                            // bundled, all the writes must be over the same
+                            // area.
 
-                        // First, set first eq halo the max of all.
-                        auto& eq1 = b2->getEqs().front();
-                        auto* og1 = shadow_map[eq1->getGrid()];
-                        for (auto& eq2 : b2->getEqs()) {
-                            if (eq1 == eq2)
-                                continue;
+                            // First, set first eq halo the max of all.
+                            auto& eq1 = b2->getEqs().front();
+                            auto* og1 = shadow_map[eq1->getGrid()];
+                            for (auto& eq2 : b2->getEqs()) {
+                                if (eq1 == eq2)
+                                    continue;
 
-                            // Adjust g1 to max(g1, g2).
-                            auto* og2 = shadow_map[eq2->getGrid()];
-                            og1->updateHalo(*og2);
-                        }
+                                // Adjust g1 to max(g1, g2).
+                                auto* og2 = shadow_map[eq2->getGrid()];
+                                og1->updateHalo(*og2);
+                            }
 
-                        // Then, update all others based on first.
-                        for (auto& eq2 : b2->getEqs()) {
-                            if (eq1 == eq2)
-                                continue;
+                            // Then, update all others based on first.
+                            for (auto& eq2 : b2->getEqs()) {
+                                if (eq1 == eq2)
+                                    continue;
 
-                            // Adjust g2 to g1.
-                            auto* og2 = shadow_map[eq2->getGrid()];
-                            og2->updateHalo(*og1);
-                        }
+                                // Adjust g2 to g1.
+                                auto* og2 = shadow_map[eq2->getGrid()];
+                                og2->updateHalo(*og1);
+                            }
 
-                        // Get updated halos from the scratch bundle.  These
-                        // are the points that are read from the dependent
-                        // eq(s).  For scratch grids, the halo areas must
-                        // also be written to.
-                        auto left_ohalo = og1->getHaloSizes(true);
-                        auto right_ohalo = og1->getHaloSizes(false);
+                            // Get updated halos from the scratch bundle.  These
+                            // are the points that are read from the dependent
+                            // eq(s).  For scratch grids, the halo areas must
+                            // also be written to.
+                            auto left_ohalo = og1->getHaloSizes(pname, true);
+                            auto right_ohalo = og1->getHaloSizes(pname, false);
 
 #ifdef DEBUG_SCRATCH
-                        cout << "** uSH: processing " << b2->getDescr() << "...\n" 
-                            "*** uSH: LHS halos: " << left_ohalo.makeDimValStr() <<
-                            " & " << right_ohalo.makeDimValStr() << endl;
+                            cout << "** cH: processing " << b2->getDescr() << "...\n" 
+                                "*** cH: LHS halos: " << left_ohalo.makeDimValStr() <<
+                                " & " << right_ohalo.makeDimValStr() << endl;
 #endif
                         
-                        // Recalc min halos of all input grids of all
-                        // scratch eqs in this bundle by adding size of
-                        // output-grid halos.
-                        for (auto& eq : b2->getEqs()) {
-                            auto& inPts = pv.getInputPts().at(eq.get());
+                            // Recalc min halos of all input grids of all
+                            // scratch eqs in this bundle by adding size of
+                            // output-grid halos.
+                            for (auto& eq : b2->getEqs()) {
+                                auto& inPts = pv.getInputPts().at(eq.get());
 
-                            // Input points.
-                            for (auto ip : inPts) {
-                                auto* ig = shadow_map[ip->getGrid()];
-                                auto& ao = ip->getArgOffsets(); // e.g., '2' for 'x+2'.
+                                // Input points.
+                                for (auto ip : inPts) {
+                                    auto* ig = shadow_map[ip->getGrid()];
+                                    auto& ao = ip->getArgOffsets(); // e.g., '2' for 'x+2'.
 
-                                // Increase range by subtracting left halos and
-                                // adding right halos.
-                                auto left_ihalo = ao.subElements(left_ohalo, false);
-                                ig->updateHalo(left_ihalo);
-                                auto right_ihalo = ao.addElements(right_ohalo, false);
-                                ig->updateHalo(right_ihalo);
+                                    // Increase range by subtracting left halos and
+                                    // adding right halos.
+                                    auto left_ihalo = ao.subElements(left_ohalo, false);
+                                    ig->updateHalo(pname, left_ihalo);
+                                    auto right_ihalo = ao.addElements(right_ohalo, false);
+                                    ig->updateHalo(pname, right_ihalo);
 #ifdef DEBUG_SCRATCH
-                                cout << "*** uSH: updated min halos of '" << ig->get_name() << "' to " <<
-                                    left_ihalo.makeDimValStr() <<
-                                    " & " << right_ihalo.makeDimValStr() << endl;
+                                    cout << "*** cH: updated min halos of '" << ig->get_name() << "' to " <<
+                                        left_ihalo.makeDimValStr() <<
+                                        " & " << right_ihalo.makeDimValStr() << endl;
 #endif
-                            } // input pts.
-                        } // eqs in bundle.
-                    } // path.
-                }); // lambda fn.
-        } // bundles.
+                                } // input pts.
+                            } // eqs in bundle.
+                        } // path.
+                    }); // lambda fn.
+            } // bundles.
+        } // packs.
 
         // Apply the changes from the shadow grids.
         // This will result in the grids containing the max
         // of the shadow halos.
         for (auto& shadow_map : shadows) {
 #ifdef DEBUG_SCRATCH
-            cout << "* uSH: applying changes from a shadow map...\n";
+            cout << "* cH: applying changes from a shadow map...\n";
 #endif
             for (auto& si : shadow_map) {
                 auto* orig_gp = si.first;
@@ -1239,7 +1269,7 @@ namespace yask {
                 // Update the original.
                 orig_gp->updateHalo(*shadow_gp);
 #ifdef DEBUG_SCRATCH
-                cout << "** uSH: updated '" << orig_gp->get_name() << "'.\n";
+                cout << "** cH: updated '" << orig_gp->get_name() << "'.\n";
 #endif
 
                 // Release the shadow grid.
@@ -1247,7 +1277,7 @@ namespace yask {
                 shadow_map.at(orig_gp) = NULL;
             }
         }
-    }
+    } // calcHalos().
 
     // Divide all equations into eqBundles.
     // Only process updates to grids in 'gridRegex'.
@@ -1328,12 +1358,9 @@ namespace yask {
         os << "Topologically ordering bundles...\n";
         topo_sort();
 
-        os << "Adjusting scratch halos...\n";
-        adjustScratchHalos();
-        
         // Dump info.
         os << "Created " << getNum() << " equation bundle(s):\n";
-        for (auto& eg1 : _all) {
+        for (auto& eg1 : getAll()) {
             os << " " << eg1->getDescr() << ":\n"
                 "  Contains " << eg1->getNumEqs() << " equation(s).\n"
                 "  Updates the following grid(s): ";
@@ -1529,7 +1556,7 @@ namespace yask {
 
         // Dump info.
         os << "Created " << getNum() << " equation bundle pack(s):\n";
-        for (auto& bp1 : _all) {
+        for (auto& bp1 : getAll()) {
             os << " " << bp1->getDescr() << ":\n"
                 "  Contains " << bp1->getBundles().size() << " bundle(s): ";
             int i = 0;

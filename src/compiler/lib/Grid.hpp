@@ -68,10 +68,10 @@ namespace yask {
 
         // Max abs-value of domain-index halos required by all eqs at
         // various step-index values.
+        // string key: name of pack.
         // bool key: true=left, false=right.
         // int key: step-dim offset or 0 if no step-dim.
-        // TODO: keep separate halos for each equation bundle.
-        map<bool, map<int, IntTuple>> _halos;
+        map<string, map<bool, map<int, IntTuple>>> _halos;
 
     public:
         // Ctors.
@@ -129,28 +129,32 @@ namespace yask {
         virtual const IntTuple& getMinIndices() const { return _minIndices; }
         virtual const IntTuple& getMaxIndices() const { return _maxIndices; }
 
-        // Get the max sizes of halo across all steps.
-        virtual IntTuple getHaloSizes(bool left) const {
+        // Get the max sizes of halo across all steps for given pack.
+        virtual IntTuple getHaloSizes(const string& packName, bool left) const {
             IntTuple halo;
-            if (_halos.count(left)) {
-                for (auto i : _halos.at(left)) {
-                    auto& right = i.second; // halo at step-val 'i'.
-                    halo = halo.makeUnionWith(right);
-                    halo = halo.maxElements(right, false);
+            if (_halos.count(packName) && _halos.at(packName).count(left)) {
+                for (auto i : _halos.at(packName).at(left)) {
+                    auto& hs = i.second; // halo at step-val 'i'.
+                    halo = halo.makeUnionWith(hs);
+                    halo = halo.maxElements(hs, false);
                 }
             }
             return halo;
         }
 
-        // Get the max size in 'dim' of halo across all steps.
+        // Get the max size in 'dim' of halo across all packs and steps.
         virtual int getHaloSize(const string& dim, bool left) const {
             int h = 0;
-            if (_halos.count(left)) {
-                for (auto i : _halos.at(left)) {
-                    auto& hs = i.second; // halo at step-val 'i'.
-                    auto* p = hs.lookup(dim);
-                    if (p)
-                        h = std::max(h, *p);
+            for (auto& hi : _halos) {
+                //auto& pname = hi.first;
+                auto& h2 = hi.second;
+                if (h2.count(left)) {
+                    for (auto i : h2.at(left)) {
+                        auto& hs = i.second; // halo at step-val 'i'.
+                        auto* p = hs.lookup(dim);
+                        if (p)
+                            h = std::max(h, *p);
+                    }
                 }
             }
             return h;
@@ -183,7 +187,7 @@ namespace yask {
         virtual void updateHalo(const Grid& other);
 
         // Update halos based on each value in 'offsets'.
-        virtual void updateHalo(const IntTuple& offsets);
+        virtual void updateHalo(const string& packName, const IntTuple& offsets);
 
         // Update const indices based on 'indices'.
         virtual void updateConstIndices(const IntTuple& indices);

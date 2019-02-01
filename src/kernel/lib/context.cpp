@@ -1180,10 +1180,10 @@ namespace yask {
                         // the minimum width at the top.  Thus, the interior is
                         // an inverted trapezoid between the exterior ones.
                         
-                        //       +----+---------------+----+
-                        // t    / ext  \  interior   / ext  \
-                        // ^   /  left  \           /  right \
-                        // |  +----------+---------+----------+
+                        //       +----+---------------+----+ 
+                        // t    / ext  \  interior   / ext  \    .
+                        // ^   /  left  \           /  right \   .
+                        // |  +----------+---------+----------+  
                         // +--->x        ^          ^
                         //               |          |
                         //             int_begin  int_end

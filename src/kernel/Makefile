@@ -57,9 +57,6 @@ else ifeq ($(stencil),cube)
  MACROS		+=	MAX_EXCH_DIST=3
  radius		:=	2
 
-else ifneq ($(findstring test_dep,$(stencil)),)
- time_alloc	:=	1
-
 else ifneq ($(findstring iso3dfd,$(stencil)),)
  MACROS				+=	MAX_EXCH_DIST=1
  radius				:=	8
@@ -90,9 +87,6 @@ else ifneq ($(findstring iso3dfd,$(stencil)),)
  endif
 
 else ifneq ($(findstring awp,$(stencil)),)
- ifeq ($(stencil),awp)
-  time_alloc			:=	1 # only allowed w/o surface conditions.
- endif
  def_block_args			:=	-b 32
  YC_FLAGS			+=	-min-es 1
  def_rank_args			:=	-d 1024 -dz 128
@@ -120,7 +114,6 @@ else ifneq ($(findstring awp,$(stencil)),)
  endif
 
 else ifneq ($(findstring ssg,$(stencil)),)
- time_alloc		:=	1
  def_rank_args		:=	-d 512
  ifneq ($(filter $(arch),skx skl clx),)
   def_rank_args		:=	-d 640 -dx 320
@@ -130,7 +123,6 @@ else ifneq ($(findstring ssg,$(stencil)),)
  endif
 
 else ifneq ($(findstring fsg,$(stencil)),)
- time_alloc		:=	1
  def_rank_args		:=	-d 256
  ifeq ($(arch),knl)
   omp_region_schedule	:=	guided
@@ -291,8 +283,8 @@ endif
 ifneq ($(halo),)
  YC_FLAGS	+=	-halo $(halo)
 endif
-ifneq ($(time_alloc),)
- YC_FLAGS	+=	-step-alloc $(time_alloc)
+ifneq ($(step_alloc),)
+ YC_FLAGS	+=	-step-alloc $(step_alloc)
 endif
 
 # Kernel base names.
@@ -482,6 +474,7 @@ ifneq ($(filter %icpc %icc,$(notdir $(YK_CXX))),)  # Intel compiler
  #YK_CXXFLAGS	+=	-qopt-report=5
  #YK_CXXFLAGS	+=	-qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
  YK_CXX_VER_CMD :=	$(YK_CXX) -V
+ MACROS		+=	USE_SVML
 
 # Use 512-bit code on SKX and CLX.
 # (Commented out because it doesn't help performance, and it breaks Devito.)

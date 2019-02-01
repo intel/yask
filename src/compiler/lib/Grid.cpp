@@ -238,29 +238,33 @@ namespace yask {
         assert(areDimsSame(other));
 
         // Loop thru other grid's halo values.
-        for (auto& i0 : other._halos) {
-            auto& left = i0.first;
-            auto& m1 = i0.second;
-            for (auto& i1 : m1) {
-                auto& step = i1.first;
-                const IntTuple& ohalos = i1.second;
-                for (auto& dim : ohalos.getDims()) {
-                    auto& dname = dim.getName();
-                    auto& val = dim.getVal();
+        for (auto& hi : other._halos) {
+            auto& pname = hi.first;
+            auto& h2 = hi.second;
+            for (auto& i0 : h2) {
+                auto& left = i0.first;
+                auto& m1 = i0.second;
+                for (auto& i1 : m1) {
+                    auto& step = i1.first;
+                    const IntTuple& ohalos = i1.second;
+                    for (auto& dim : ohalos.getDims()) {
+                        auto& dname = dim.getName();
+                        auto& val = dim.getVal();
+                        
+                        // Any existing value?
+                        auto& halos = _halos[pname][left][step];
+                        auto* p = halos.lookup(dname);
 
-                    // Any existing value?
-                    auto& halos = _halos[left][step];
-                    auto* p = halos.lookup(dname);
+                        // If not, add this one.
+                        if (!p)
+                            halos.addDimBack(dname, val);
 
-                    // If not, add this one.
-                    if (!p)
-                        halos.addDimBack(dname, val);
+                        // Keep larger value.
+                        else if (val > *p)
+                            *p = val;
 
-                    // Keep larger value.
-                    else if (val > *p)
-                        *p = val;
-
-                    // Else, current value is larger than val, so don't update.
+                        // Else, current value is larger than val, so don't update.
+                    }
                 }
             }
         }
@@ -269,7 +273,7 @@ namespace yask {
     // Update halos based on each value in 'offsets' in some
     // read or write to this grid.
     // This grid's halos can only be increased.
-    void Grid::updateHalo(const IntTuple& offsets) {
+    void Grid::updateHalo(const string& packName, const IntTuple& offsets) {
 
         // Find step value or use 0 if none.
         int stepVal = 0;
@@ -285,7 +289,8 @@ namespace yask {
             auto& dname = dim.getName();
             int val = dim.getVal();
             bool left = val <= 0;
-            auto& halos = _halos[left][stepVal];
+            auto& halos = _halos[packName][left][stepVal];
+
             // Don't keep halo in step dim.
             if (stepDim && dname == stepDim->getName())
                 continue;
@@ -332,8 +337,6 @@ namespace yask {
     }
 
     // Determine how many values in step-dim are needed.
-    // TODO: fix this for staggered grids; it currently does not
-    // understand the per-pack reuse.
     int Grid::getStepDimSize() const
     {
         // Specified by API.
@@ -353,49 +356,81 @@ namespace yask {
         if (_halos.size() == 0)
             return 1;
 
-        // First and last step-dim.
-        int first_ofs = 0, last_ofs = 0;
+        // Need the max across all packs.
+        int max_sz = 1;
 
-        // left and right.
-        for (auto& i : _halos) {
-            //auto left = i.first;
-            auto& h2 = i.second; // map of step-dims to halos.
+        // Loop thru each pack w/halos.
+        for (auto& hi : _halos) {
+#ifdef DEBUG_HALOS
+            auto& pname = hi.first;
+#endif
+            auto& h2 = hi.second;
 
-            // Step-dim ofs.
-            for (auto& j : h2) {
-                auto ofs = j.first;
-                //auto& halo = j.second; // halo tuple at step-val 'ofs'.
+            // First and last step-dim.
+            int first_ofs = -1, last_ofs = -1;
 
-                // Update vars.
-                first_ofs = min(first_ofs, ofs);
-                last_ofs = max(last_ofs, ofs);
+            // left and right.
+            for (auto& i : h2) {
+                //auto left = i.first;
+                auto& h3 = i.second; // map of step-dims to halos.
+
+                // Step-dim ofs.
+                for (auto& j : h3) {
+                    auto ofs = j.first;
+                    auto& halo = j.second; // halo tuple at step-val 'ofs'.
+
+                    // Any existing value?
+                    if (halo.size()) {
+#ifdef DEBUG_HALOS
+                        cout << "** grid " << _name << " has halo " << halo.makeDimValStr() <<
+                            " at ofs " << ofs << " in pack " << pname << endl;
+#endif
+
+                        // Update vars.
+                        if (first_ofs < 0)
+                            first_ofs = last_ofs = ofs;
+                        else {
+                            first_ofs = min(first_ofs, ofs);
+                            last_ofs = max(last_ofs, ofs);
+                        }
+                    }
+                }
             }
-        }
+#ifdef DEBUG_HALOS
+            cout << "** grid " << _name << " has halos from " << first_ofs <<
+                " to " << last_ofs << " in pack " << pname << endl;
+#endif
 
-        // First and last largest halos.
-        int first_max_halo = 0, last_max_halo = 0;
-        for (auto& i : _halos) {
-            //auto left = i.first;
-            auto& h2 = i.second; // map of step-dims to halos.
+            // Only need to process if >1 offset.
+            if (last_ofs >= 0 && first_ofs >= 0 && last_ofs > first_ofs) {
 
-            if (h2.count(first_ofs))
-                first_max_halo = max(first_max_halo, h2.at(first_ofs).max());
-            if (h2.count(last_ofs))
-                last_max_halo = max(last_max_halo, h2.at(last_ofs).max());
-        }
+                // Default step-dim size is range of step offsets.
+                int sz = last_ofs - first_ofs + 1;
 
-        // Default step-dim size is range of offsets.
-        assert(last_ofs >= first_ofs);
-        int sz = last_ofs - first_ofs + 1;
+                // First and last largest halos.
+                int first_max_halo = 0, last_max_halo = 0;
+                for (auto& i : h2) {
+                    //auto left = i.first;
+                    auto& h3 = i.second; // map of step-dims to halos.
 
-        // If first and last halos are zero, we can further optimize storage by
-        // immediately reusing memory location.
-        // TODO: recognize that reading in one pack and then writing in
-        // another can also reuse storage.
-        if (sz > 1 && first_max_halo == 0 && last_max_halo == 0)
-            sz--;
+                    if (h3.count(first_ofs) && h3.at(first_ofs).size())
+                        first_max_halo = max(first_max_halo, h3.at(first_ofs).max());
+                    if (h3.count(last_ofs) && h3.at(last_ofs).size())
+                        last_max_halo = max(last_max_halo, h3.at(last_ofs).max());
+                }
 
-        return sz;
+                // If first and last halos are zero, we can further optimize storage by
+                // immediately reusing memory location.
+                if (sz > 1 && first_max_halo == 0 && last_max_halo == 0)
+                    sz--;
+
+                // Keep max so far.
+                max_sz = max(max_sz, sz);
+            }
+
+        } // packs.
+
+        return max_sz;
     }
 
     // Description of this grid.
