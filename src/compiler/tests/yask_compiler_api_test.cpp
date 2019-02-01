@@ -121,7 +121,7 @@ int main() {
         cout << "End of YASK compiler API test.\n";
         return 0;
 
-    } catch(yask_exception e) {
+    } catch(yask_exception& e) {
         cerr << e.get_message() << endl;
         return 1;
     }

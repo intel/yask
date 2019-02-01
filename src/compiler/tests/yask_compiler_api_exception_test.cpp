@@ -67,7 +67,7 @@ int main() {
     cout << "Exception Test: Call 'new_relative_grid_point' with wrong argument.\n";
     try {
         auto n3 = g1->new_relative_grid_point({0, +1, 0, -2, 1});
-    } catch (yask_exception e) {
+    } catch (yask_exception& e) {
         cout << "YASK threw an expected exception.\n";
         cout << e.get_message() << endl;
         cout << "Exception Test: Catch exception correctly.\n";
@@ -104,7 +104,7 @@ int main() {
     cout << "Exception Test: Call 'new_file_output' with invalid dir.\n";
     try {
         auto dot_file = ofac.new_file_output("/does-not-exist/foo.dot");
-    } catch (yask_exception e) {
+    } catch (yask_exception& e) {
         cout << "YASK threw an expected exception.\n";
         cout << e.get_message() << endl;
         cout << "Exception Test: Catch exception correctly.\n";
@@ -125,7 +125,7 @@ int main() {
     cout << "Exception Test: Call 'format' with wrong format.\n";
     try {
         soln->format("wrong_format", dot_file);
-    } catch (yask_exception e) {
+    } catch (yask_exception& e) {
         cout << "YASK threw an expected exception.\n";
         cout << e.get_message() << endl;
         cout << "Exception Test: Catch exception correctly.\n";

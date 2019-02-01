@@ -474,6 +474,7 @@ ifneq ($(filter %icpc %icc,$(notdir $(YK_CXX))),)  # Intel compiler
  #YK_CXXFLAGS	+=	-qopt-report=5
  #YK_CXXFLAGS	+=	-qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
  YK_CXX_VER_CMD :=	$(YK_CXX) -V
+ MACROS		+=	USE_SVML
 
 # Use 512-bit code on SKX and CLX.
 # (Commented out because it doesn't help performance, and it breaks Devito.)

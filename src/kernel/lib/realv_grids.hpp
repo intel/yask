@@ -224,9 +224,10 @@ namespace yask {
         virtual bool is_new_grid() const { return _is_new_grid; }
         virtual void set_new_grid(bool is_new_grid) {
             _is_new_grid = is_new_grid;
-            if (_is_new_grid)
+            if (_is_new_grid) {
                 _is_dynamic_step_alloc = true;
                 _is_dynamic_misc_alloc = true;
+            }
         }        
 
         // NUMA accessors.

@@ -60,7 +60,7 @@ namespace yask {
         _vec_local_offsets.setFromConst(0, n);
 
         // Set masks.
-        for (int i = 0; i < dimNames.size(); i++) {
+        for (size_t i = 0; i < dimNames.size(); i++) {
             idx_t mbit = 1LL << i;
             auto& dname = dimNames[i];
             if (dname == step_dim)

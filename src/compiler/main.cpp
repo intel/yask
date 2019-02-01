@@ -359,7 +359,7 @@ int main(int argc, const char* argv[]) {
                 os = ofac.new_file_output(fname);
             stencilSoln->format(type, os);
         }
-    } catch (yask_exception e) {
+    } catch (yask_exception& e) {
         cerr << "YASK Stencil Compiler: " << e.get_message() << ".\n";
         exit(1);
     }

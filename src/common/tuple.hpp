@@ -736,8 +736,8 @@ namespace std {
     public :
         size_t operator()(const yask::Tuple<T> &x ) const {
             size_t h = 0;
-            for (size_t i = 0; i < x.getNumDims(); i++) {
-                h ^= i ^ std::hash<T>()(x.getVal(i)) ^ std::hash<std::string>()(x.getDimName(i));
+            for (int i = 0; i < x.getNumDims(); i++) {
+                h ^= size_t(i) ^ std::hash<T>()(x.getVal(i)) ^ std::hash<std::string>()(x.getDimName(i));
             }
             return h;
         }
