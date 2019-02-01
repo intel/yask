@@ -105,6 +105,9 @@ namespace yask {
         // Separate bundles into packs.
         _eqBundlePacks.makePacks(_eqBundles, *_dos);
 
+        // Compute halos.
+        _eqBundlePacks.calcHalos(_eqBundles);
+
         // Make a copy of each equation at each cluster offset.
         // We will use these for inter-cluster optimizations and code generation.
         // NB: these cluster bundles do not maintain dependencies, so cannot be used
