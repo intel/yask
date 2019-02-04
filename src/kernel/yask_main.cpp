@@ -39,7 +39,6 @@ struct AppSettings : public KernelSettings {
     bool help = false;          // help requested.
     bool doWarmup = true;       // whether to do warmup run.
     bool doPreAutoTune = true;  // whether to do pre-auto-tuning.
-    bool doAutoTune = false;    // whether to do auto-tuning.
     int step_alloc = 0;         // if >0, override number of steps to alloc.
     int num_trials = 3;         // number of trials.
     bool validate = false;      // whether to do validation run.
@@ -69,7 +68,6 @@ struct AppSettings : public KernelSettings {
             if (_check_arg(args, argi, _name)) {
                 _as.validate = true;
                 _as.doPreAutoTune = false;
-                _as.doAutoTune = false;
                 _as.doWarmup = false;
                 _as.num_trials = 1;
                 _as.trial_steps = 1;
@@ -107,12 +105,6 @@ struct AppSettings : public KernelSettings {
                            "values for block sizes. "
                            "Uses default values or command-line-provided values as a starting point.",
                            doPreAutoTune));
-        parser.add_option(new CommandLineParser::BoolOption
-                          ("auto_tune",
-                           "Run iteration(s) *during* performance trial(s) to find good-performing "
-                           "values for block sizes. "
-                           "Uses default values or command-line-provided values as a starting point.",
-                           doAutoTune));
         parser.add_option(new CommandLineParser::BoolOption
                           ("warmup",
                            "Run warmup iteration(s) before performance "
@@ -306,7 +298,7 @@ int main(int argc, char** argv)
             ksoln->run_auto_tuner_now();
 
         // Enable/disable further auto-tuning.
-        ksoln->reset_auto_tuner(opts->doAutoTune);
+        ksoln->reset_auto_tuner(opts->_do_auto_tune);
 
         // Warmup caches, threading, etc.
         // Measure time to change number of steps.

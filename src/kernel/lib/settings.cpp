@@ -405,6 +405,16 @@ namespace yask {
                            "Maximum GiB to allocate on preferred NUMA node before allocating on pmem device.",
                            _numa_pref_max));
 #endif
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("auto_tune",
+                           "Adjust block sizes *during* normal operation to tune for performance. "
+                           "May cause varying performance between steps.",
+                           _do_auto_tune));
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("auto_tune_mini_blocks",
+                           "Apply the auto-tuner to mini-block sizes instead of block sizes. "
+                           "Particularly useful when using temporal block tiling.",
+                           _tune_mini_blks));
     }
 
     // Print usage message.
