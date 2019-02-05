@@ -29,13 +29,16 @@
 
 # Initial defaults.
 stencil			?=	iso3dfd
-arch			?=	snb
 mpi			?=	1
 numa			?=	1
 pmem			?=	0
 real_bytes		?=	4
 radius			?=	2
 allow_new_grid_types	?=	1
+
+# Determine default architecture by running kernel script w/special knob.
+# Do not assume it has been installed in $(BIN_OUT_DIR) yet.
+arch			?=	$(shell $(BASH) ./yask.sh -show_arch)
 
 # Defaults based on stencil type (and arch for some stencils).
 ifeq ($(stencil),)
@@ -214,7 +217,7 @@ else ifeq ($(arch),intel64)
 
 else
 
-$(error Architecture not recognized; use arch=knl, knc, skl, hsw, bdw, ivb, snb, or intel64 (no explicit vectorization))
+$(error Architecture not recognized; use arch=knl, knc, clx, skx, hsw, bdw, ivb, snb, or intel64 (no explicit vectorization))
 
 endif # arch-specific.
 
