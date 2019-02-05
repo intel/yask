@@ -309,7 +309,7 @@ int main(int argc, char** argv)
             context->set_debug_output(yof.new_null_output());
             os << endl << divLine;
 
-            // Warmup phases.
+            // Warmup and calibration phases.
             double rate = 1.0;
             idx_t warmup_steps = 1;
             idx_t max_wsteps = 10;
@@ -347,6 +347,15 @@ int main(int argc, char** argv)
             if (opts->trial_steps <= 0) {
                 idx_t tsteps = ceil(rate * opts->trial_time);
                 tsteps = CEIL_DIV(sumOverRanks(tsteps, ep->comm), num_ranks);
+
+                // Round up to multiple of temporal tiling if not too big.
+                auto step_dim = ksoln->get_step_dim_name();
+                auto rt = opts->_region_sizes[step_dim];
+                auto bt = opts->_block_sizes[step_dim];
+                auto tt = max(rt, bt);
+                if (tt > 1 && tt < 2 * tsteps)
+                    tsteps = ROUND_UP(tsteps, tt);
+                
                 opts->trial_steps = tsteps;
             }
             
