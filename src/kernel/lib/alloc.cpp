@@ -49,7 +49,7 @@ namespace yask {
     constexpr int _pmem_key = 2000; // leave space after this for pmem devices.
 
     // Alloc 'nbytes' for each requested mem type.
-    // Pointers are returned in '_data_buf'.
+    // Pointers are returned in 'data_buf'.
     // 'ngrids' and 'type' are only used for debug msg.
     void StencilContext::_alloc_data(const map <int, size_t>& nbytes,
                                      const map <int, size_t>& ngrids,
@@ -810,7 +810,8 @@ namespace yask {
         int rthreads = set_region_threads();
 
         // Delete any existing scratch grids.
-        // Create new scratch grids.
+        // Create new scratch grids, but without any
+        // data allocated.
         makeScratchGrids(rthreads);
 
         // Find the max mini-block size across all packs.

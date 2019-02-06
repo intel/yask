@@ -458,7 +458,7 @@ namespace yask {
 
     public:
 
-        // Problem dimensions (not sizes).
+        // Copy of problem dimensions (NOT sizes).
         DimsPtr _dims;
 
         // Sizes in elements (points).
@@ -491,6 +491,10 @@ namespace yask {
         // Stencil-dim posn in which to apply block-thread binding.
         int _bind_posn = 1;
 
+        // Tuning.
+        bool _do_auto_tune = false;    // whether to do auto-tuning.
+        bool _tune_mini_blks = false; // auto-tune mini-blks instead of blks.
+        
         // Debug.
         bool force_scalar = false; // Do only scalar ops.
 

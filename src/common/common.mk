@@ -68,6 +68,7 @@ YC_SRC_DIR	:=	$(SRC_DIR)/compiler
 SWIG		:=	swig
 PERL		:=	perl
 MKDIR		:=	mkdir -p -v
+BASH		:=	bash
 
 # Find include path needed for python interface.
 # NB: constructing string inside print() to work for python 2 or 3.

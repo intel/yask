@@ -213,9 +213,15 @@ sub getResultsFromLine($$) {
 
   # Invalidate settings overridden by auto-tuner.
   # TODO: save new values, but need to handle multiple packs.
-  elsif (/Auto-tuner done/i) {
+  elsif (/best-block-size:/i) {
     for my $k ('block size',
                'mini-block size',
+               'sub-block size',) {
+      $results->{$k} = 'auto-tuned';
+    }
+  }
+  elsif (/best-mini-block-size:/i) {
+    for my $k ('mini-block size',
                'sub-block size',) {
       $results->{$k} = 'auto-tuned';
     }

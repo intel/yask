@@ -62,12 +62,12 @@ namespace yask {
         int n2big = 0, n2small = 0, n2far = 0;
 
         // Best so far.
-        IdxTuple best_block;
+        IdxTuple best_sizes;
         double best_rate = 0.;
 
         // Current point in search.
-        IdxTuple center_block;
-        idx_t block_steps = 0;
+        IdxTuple center_sizes;
+        idx_t target_steps = 0;
         idx_t radius = 0;
         bool done = false;
         idx_t neigh_idx = 0;
@@ -92,7 +92,26 @@ namespace yask {
         // Increment this to track steps.
         idx_t steps_done = 0;
 
-        // Change settings pointer.
+        // Access settings.
+        bool tune_mini_blks() const;
+        IdxTuple& target_sizes() {
+            return tune_mini_blks() ?
+                _settings->_mini_block_sizes : _settings->_block_sizes;
+        }
+        IdxTuple& outer_sizes() {
+            return tune_mini_blks() ?
+                _settings->_block_sizes : _settings->_region_sizes;
+        }
+        IdxTuple& target_sizes() const {
+            return tune_mini_blks() ?
+                _settings->_mini_block_sizes : _settings->_block_sizes;
+        }
+        IdxTuple& outer_sizes() const {
+            return tune_mini_blks() ?
+                _settings->_block_sizes : _settings->_region_sizes;
+        }
+        
+        // Change settings pointers.
         void set_settings(KernelSettings* p) {
             _settings = p;
         }
