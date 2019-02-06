@@ -58,8 +58,9 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
       for functional testing if you don't have native support for any given instruction set.
 
 ### Backward-compatibility notices:
-* Version 2.16.06 determined the host architecture in `make` and `bin/yask.sh` and number of MPI ranks in `bin/yask.sh`.
+* Version 2.17.00 determined the host architecture in `make` and `bin/yask.sh` and number of MPI ranks in `bin/yask.sh`.
 This changed the old behavior of `make` defaulting to `snb` architecture and `bin/yask.sh` requiring `-arch` and `-ranks`.
+Those options are still available to override the host-based default.
 * Version 2.16.03 moved the position of the log-file name to the last column in the CSV output of `utils/bin/yask_log_to_csv.pl`.
 * Version 2.15.04 required a call to `yc_grid::set_dynamic_step_alloc(true)` to allow changing the
 allocation in the step (time) dimension for grid variables created at YASK compile-time.
