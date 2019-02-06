@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2018, Intel Corporation
+Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -31,24 +31,44 @@ using namespace std;
 
 namespace yask {
 
-    // Constructor.
-    StencilContext::StencilContext(KernelEnvPtr env,
-                                   KernelSettingsPtr settings) :
-        _ostr(&std::cout),
-        _env(env),
-        _opts(settings),
-        _dims(settings->_dims),
-        _at(this, _opts.get())
-    {
-        // Set debug output object.
-        yask_output_factory yof;
-        set_debug_output(yof.new_stdout_output());
+    // ScanIndices ctor.
+    ScanIndices::ScanIndices(const Dims& dims, bool use_vec_align, IdxTuple* ofs) :
+        ndims(NUM_STENCIL_DIMS),
+        begin(idx_t(0), ndims),
+        end(idx_t(0), ndims),
+        step(idx_t(1), ndims),
+        align(idx_t(1), ndims),
+        align_ofs(idx_t(0), ndims),
+        group_size(idx_t(1), ndims),
+        num_indices(idx_t(1), ndims),
+        start(idx_t(0), ndims),
+        stop(idx_t(0), ndims),
+        index(idx_t(0), ndims) {
 
-        // Create MPI Info object.
-        _mpiInfo = std::make_shared<MPIInfo>(settings->_dims);
+        // i: index for stencil dims, j: index for domain dims.
+        DOMAIN_VAR_LOOP(i, j) {
+
+            // Set alignment to vector lengths.
+            if (use_vec_align)
+                align[i] = fold_pts[j];
+
+            // Set alignment offset.
+            if (ofs) {
+                assert(ofs->getNumDims() == ndims - 1);
+                align_ofs[i] = ofs->getVal(j);
+            }
+        }
+    }
+
+    // Context ctor.
+    StencilContext::StencilContext(KernelEnvPtr& kenv,
+                                   KernelSettingsPtr& ksettings) :
+        KernelStateBase(kenv, ksettings),
+        _at(this, ksettings.get())
+    {
+        STATE_VARS(this);
 
         // Init various tuples to make sure they have the correct dims.
-        auto& domain_dims = _dims->_domain_dims;
         rank_domain_offsets = domain_dims;
         rank_domain_offsets.setValsSame(-1); // indicates prepare_solution() not called.
         overall_domain_sizes = domain_dims;
@@ -61,9 +81,6 @@ namespace yask {
         mb_angles = domain_dims;
         left_wf_exts = domain_dims;
         right_wf_exts = domain_dims;
-
-        // Set output to msg-rank per settings.
-        set_ostr();
     }
 
     // Init MPI-related vars and other vars related to my rank's place in
@@ -71,7 +88,7 @@ namespace yask {
     // if not using MPI to properly init these vars.  Called from
     // prepare_solution(), so it doesn't normally need to be called from user code.
     void StencilContext::setupRank() {
-        CONTEXT_VARS(this);
+        STATE_VARS(this);
 
         auto me = env->my_rank;
         int num_neighbors = 0;
@@ -117,9 +134,9 @@ namespace yask {
         // Exchange coord and size info between all ranks.
         for (int rn = 0; rn < env->num_ranks; rn++) {
             MPI_Bcast(&coords[rn][0], nddims, MPI_INTEGER8,
-                      rn, _env->comm);
+                      rn, env->comm);
             MPI_Bcast(&rsizes[rn][0], nddims, MPI_INTEGER8,
-                      rn, _env->comm);
+                      rn, env->comm);
         }
         // Now, the tables are filled in for all ranks.
 
@@ -193,7 +210,7 @@ namespace yask {
                             auto mysz = rsizes[me][dj];
                             auto rnsz = rsizes[rn][dj];
                             if (mysz != rnsz) {
-                                auto& dnamej = _opts->_rank_indices.getDimName(dj);
+                                auto& dnamej = opts->_rank_indices.getDimName(dj);
                                 FORMAT_AND_THROW_YASK_EXCEPTION
                                     ("Error: rank " << rn << " and " << me <<
                                      " are both at rank-index " << coords[me][di] <<
@@ -224,11 +241,11 @@ namespace yask {
                 assert(roffsets.max() <= 2);
 
                 // Convert the offsets into a 1D index.
-                auto rn_ofs = _mpiInfo->getNeighborIndex(roffsets);
-                TRACE_MSG("neighborhood size = " << _mpiInfo->neighborhood_sizes.makeDimValStr() <<
+                auto rn_ofs = mpiInfo->getNeighborIndex(roffsets);
+                TRACE_MSG("neighborhood size = " << mpiInfo->neighborhood_sizes.makeDimValStr() <<
                           " & roffsets of rank " << rn << " = " << roffsets.makeDimValStr() <<
                           " => " << rn_ofs);
-                assert(idx_t(rn_ofs) < _mpiInfo->neighborhood_size);
+                assert(idx_t(rn_ofs) < mpiInfo->neighborhood_size);
 
                 // Save rank of this neighbor into the MPI info object.
                 mpiInfo->my_neighbors.at(rn_ofs) = rn;
@@ -271,7 +288,7 @@ namespace yask {
                     auto rnsz = rsizes[rn][j];
                     auto vlen = fold_pts[j];
                     if (rnsz % vlen != 0) {
-                        auto& dname = _opts->_rank_indices.getDimName(j);
+                        auto& dname = opts->_rank_indices.getDimName(j);
                         TRACE_MSG("cannot use vector halo exchange with rank " << rn <<
                                   " because its size in '" << dname << "' is " << rnsz);
                         vlen_mults = false;
@@ -279,7 +296,7 @@ namespace yask {
                 }
 
                 // Save vec-mult flag.
-                _mpiInfo->has_all_vlen_mults.at(rn_ofs) = vlen_mults;
+                mpiInfo->has_all_vlen_mults.at(rn_ofs) = vlen_mults;
 
             } // self or immediate neighbor in any direction.
 
@@ -300,7 +317,7 @@ namespace yask {
     // Set wave-front settings.
     // This should be called anytime a setting or rank offset is changed.
     void StencilContext::update_grid_info() {
-        CONTEXT_VARS(this);
+        STATE_VARS(this);
 
         // If we haven't finished constructing the context, it's too early
         // to do this.
@@ -319,18 +336,18 @@ namespace yask {
                 continue;
 
             // Loop through each domain dim.
-            for (auto& dim : _dims->_domain_dims.getDims()) {
+            for (auto& dim : domain_dims.getDims()) {
                 auto& dname = dim.getName();
 
                 if (gp->is_dim_used(dname)) {
 
                     // Rank domains.
-                    gp->_set_domain_size(dname, _opts->_rank_sizes[dname]);
+                    gp->_set_domain_size(dname, opts->_rank_sizes[dname]);
 
                     // Pads.
                     // Set via both 'extra' and 'min'; larger result will be used.
-                    gp->set_extra_pad_size(dname, _opts->_extra_pad_sizes[dname]);
-                    gp->set_min_pad_size(dname, _opts->_min_pad_sizes[dname]);
+                    gp->set_extra_pad_size(dname, opts->_extra_pad_sizes[dname]);
+                    gp->set_min_pad_size(dname, opts->_min_pad_sizes[dname]);
 
                     // Offsets.
                     gp->_set_rank_offset(dname, rank_domain_offsets[dname]);
@@ -346,9 +363,9 @@ namespace yask {
         // Calculate wave-front shifts.
         // See the wavefront diagram in run_solution() for description
         // of angles and extensions.
-        idx_t tb_steps = _opts->_block_sizes[step_dim]; // use requested size; actual may be less.
+        idx_t tb_steps = opts->_block_sizes[step_dim]; // use requested size; actual may be less.
         assert(tb_steps >= 0);
-        wf_steps = _opts->_region_sizes[step_dim];
+        wf_steps = opts->_region_sizes[step_dim];
         wf_steps = max(wf_steps, tb_steps); // round up WF steps if less than TB steps.
         assert(wf_steps >= 0);
         num_wf_shifts = 0;
@@ -365,18 +382,18 @@ namespace yask {
         assert(num_wf_shifts >= 0);
 
         // Determine whether separate tuners can be used.
-        _use_pack_tuners = (tb_steps == 0) && (stPacks.size() > 1);
+        state->_use_pack_tuners = (tb_steps == 0) && (stPacks.size() > 1);
 
         // Calculate angles and related settings.
-        for (auto& dim : _dims->_domain_dims.getDims()) {
+        for (auto& dim : domain_dims.getDims()) {
             auto& dname = dim.getName();
-            auto rnsize = _opts->_region_sizes[dname];
-            auto rksize = _opts->_rank_sizes[dname];
-            auto nranks = _opts->_num_ranks[dname];
+            auto rnsize = opts->_region_sizes[dname];
+            auto rksize = opts->_rank_sizes[dname];
+            auto nranks = opts->_num_ranks[dname];
 
             // Req'd shift in this dim based on max halos.
             // TODO: use different angle for L & R side of each pack.
-            idx_t angle = ROUND_UP(max_halos[dname], _dims->_fold_pts[dname]);
+            idx_t angle = ROUND_UP(max_halos[dname], dims->_fold_pts[dname]);
             
             // Determine the spatial skewing angles for WF tiling.  We
             // only need non-zero angles if the region size is less than the
@@ -397,7 +414,7 @@ namespace yask {
             // Is domain size at least as large as halo + wf_ext in direction
             // when there are multiple ranks?
             auto min_size = max_halos[dname] + shifts;
-            if (_opts->_num_ranks[dname] > 1 && rksize < min_size) {
+            if (opts->_num_ranks[dname] > 1 && rksize < min_size) {
                 FORMAT_AND_THROW_YASK_EXCEPTION("Error: rank-domain size of " << rksize << " in '" <<
                                                 dname << "' dim is less than minimum size of " << min_size <<
                                                 ", which is based on stencil halos and temporal wave-front sizes");
@@ -405,11 +422,11 @@ namespace yask {
 
             // If there is another rank to the left, set wave-front
             // extension on the left.
-            left_wf_exts[dname] = _opts->is_first_rank(dname) ? 0 : shifts;
+            left_wf_exts[dname] = opts->is_first_rank(dname) ? 0 : shifts;
 
             // If there is another rank to the right, set wave-front
             // extension on the right.
-            right_wf_exts[dname] = _opts->is_last_rank(dname) ? 0 : shifts;
+            right_wf_exts[dname] = opts->is_last_rank(dname) ? 0 : shifts;
         }
 
         // Now that wave-front settings are known, we can push this info
@@ -424,7 +441,7 @@ namespace yask {
                 continue;
 
             // Loop through each domain dim.
-            for (auto& dim : _dims->_domain_dims.getDims()) {
+            for (auto& dim : domain_dims.getDims()) {
                 auto& dname = dim.getName();
                 if (gp->is_dim_used(dname)) {
 
@@ -447,7 +464,7 @@ namespace yask {
     // considering temporal conditions; this assumes worst-case, which is
     // all packs always done.
     void StencilContext::update_tb_info() {
-        CONTEXT_VARS(this);
+        STATE_VARS(this);
 
         // Get requested size.
         tb_steps = opts->_block_sizes[step_dim];
@@ -473,21 +490,21 @@ namespace yask {
 
             // Loop through each domain dim.
             DOMAIN_VAR_LOOP(i, j) {
-                auto& dim = _dims->_domain_dims.getDim(j);
+                auto& dim = domain_dims.getDim(j);
                 auto& dname = dim.getName();
-                auto rnsize = _opts->_region_sizes[i];
+                auto rnsize = opts->_region_sizes[i];
 
                 // There must be only one block size when using TB, so get
                 // sizes from context settings instead of packs.
-                assert(_use_pack_tuners == false);
-                auto blksize = _opts->_block_sizes[i];
-                auto mblksize = _opts->_mini_block_sizes[i];
+                assert(state->_use_pack_tuners == false);
+                auto blksize = opts->_block_sizes[i];
+                auto mblksize = opts->_mini_block_sizes[i];
 
                 // Req'd shift in this dim based on max halos.
                 // Can't use separate L & R shift because of possible data reuse in grids.
                 // Can't use separate shifts for each pack for same reason.
                 // TODO: make round-up optional.
-                auto fpts = _dims->_fold_pts[j];
+                auto fpts = dims->_fold_pts[j];
                 idx_t angle = ROUND_UP(max_halos[j], fpts);
             
                 // Determine the spatial skewing angles for MB.
@@ -579,7 +596,7 @@ namespace yask {
         // TODO: use actual number of shifts dynamically instead of this
         // max.
         DOMAIN_VAR_LOOP(i, j) {
-            auto blk_sz = _opts->_block_sizes[i];
+            auto blk_sz = opts->_block_sizes[i];
             auto tb_angle = tb_angles[j];
             tb_widths[j] = blk_sz;
             tb_tops[j] = blk_sz;
@@ -589,7 +606,7 @@ namespace yask {
             if (num_tb_shifts > 0 && tb_angle > 0) {
                 
                 // See equations above for block size.
-                auto fpts = _dims->_fold_pts[j];
+                auto fpts = dims->_fold_pts[j];
                 idx_t min_top_sz = fpts;
                 idx_t sa = num_tb_shifts * tb_angle;
                 idx_t min_blk_width = min_top_sz + 2 * sa;
@@ -607,7 +624,7 @@ namespace yask {
     // Init all grids & params by calling initFn.
     void StencilContext::initValues(function<void (YkGridPtr gp,
                                                    real_t seed)> realInitFn) {
-        CONTEXT_VARS(this);
+        STATE_VARS(this);
 
         real_t seed = 0.1;
         os << "Initializing grids...\n" << flush;
@@ -625,7 +642,7 @@ namespace yask {
     // Set the bounding-box for each stencil-bundle and whole domain.
     void StencilContext::find_bounding_boxes()
     {
-        ostream& os = get_ostr();
+        STATE_VARS(this);
         os << "Constructing bounding boxes for " <<
             stBundles.size() << " stencil-bundles(s)...\n" << flush;
         YaskTimer bbtimer;
@@ -633,7 +650,7 @@ namespace yask {
 
         // Rank BB is based only on rank offsets and rank domain sizes.
         rank_bb.bb_begin = rank_domain_offsets;
-        rank_bb.bb_end = rank_domain_offsets.addElements(_opts->_rank_sizes, false);
+        rank_bb.bb_end = rank_domain_offsets.addElements(opts->_rank_sizes, false);
         rank_bb.update_bb("rank", *this, true, &os);
 
         // BB may be extended for wave-fronts.
@@ -647,8 +664,8 @@ namespace yask {
         // Find BB for each pack.
         for (auto sp : stPacks) {
             auto& spbb = sp->getBB();
-            spbb.bb_begin = _dims->_domain_dims;
-            spbb.bb_end = _dims->_domain_dims;
+            spbb.bb_begin = domain_dims;
+            spbb.bb_end = domain_dims;
 
             // Find BB for each bundle in this pack.
             for (auto sb : *sp) {
@@ -687,8 +704,8 @@ namespace yask {
 
     // Copy BB vars from another.
     void StencilBundleBase::copy_bounding_box(const StencilBundleBase* src) {
-        CONTEXT_VARS(_generic_context);
-        TRACE_MSG3("copy_bounding_box for '" << get_name() << "' from '" <<
+        STATE_VARS(this);
+        TRACE_MSG("copy_bounding_box for '" << get_name() << "' from '" <<
                    src->get_name() << "'...");
 
         _bundle_bb = src->_bundle_bb;
@@ -701,11 +718,12 @@ namespace yask {
     // Step-vars are tested dynamically for each step
     // as it is executed.
     void StencilBundleBase::find_bounding_box() {
-        CONTEXT_VARS(_generic_context);
-        TRACE_MSG3("find_bounding_box for '" << get_name() << "'...");
+        STATE_VARS(this);
+        TRACE_MSG("find_bounding_box for '" << get_name() << "'...");
 
         // Init overall bundle BB to that of parent and clear list.
-        _bundle_bb = cp->ext_bb;
+        assert(_context);
+        _bundle_bb = _context->ext_bb;
         assert(_bundle_bb.bb_valid);
         _bb_list.clear();
         
@@ -715,7 +733,7 @@ namespace yask {
 
         // If there is no condition, just add full BB to list.
         if (!is_sub_domain_expr()) {
-            TRACE_MSG3("adding 1 sub-BB: [" << _bundle_bb.bb_begin.makeDimValStr() <<
+            TRACE_MSG("adding 1 sub-BB: [" << _bundle_bb.bb_begin.makeDimValStr() <<
                        " ... " << _bundle_bb.bb_end.makeDimValStr() << ")");
             _bb_list.push_back(_bundle_bb);
             return;
@@ -728,11 +746,11 @@ namespace yask {
 
         // Divide the overall BB into a slice for each thread
         // across the outer dim.
-        const int odim = 0;
+        const int odim = 0;     // Use 0 instead of outer_posn because BB lens are in domain dims.
         idx_t outer_len = _bundle_bb.bb_len[odim];
         idx_t nthreads = yask_get_num_threads();
         idx_t len_per_thr = CEIL_DIV(outer_len, nthreads);
-        TRACE_MSG3("find_bounding_box: running " << nthreads << " thread(s) over " <<
+        TRACE_MSG("find_bounding_box: running " << nthreads << " thread(s) over " <<
                    outer_len << " point(s) in outer dim");
 
         // List of full BBs for each thread.
@@ -806,7 +824,7 @@ namespace yask {
                             while (do_scan) {
                                 do_scan = false;
 
-                                TRACE_MSG3("scanning " << scan_len.makeDimValStr(" * ") <<
+                                TRACE_MSG("scanning " << scan_len.makeDimValStr(" * ") <<
                                            " starting at " << bdpt.makeDimValStr());
                                 scan_len.visitAllPoints
                                     ([&](const IdxTuple& eofs, size_t eidx) {
@@ -862,14 +880,14 @@ namespace yask {
                                         return true; // keep looking for invalid point.
                                     }); // Looking for invalid point.
                             } // while scan is adjusted.
-                            TRACE_MSG3("found BB " << scan_len.makeDimValStr(" * ") <<
+                            TRACE_MSG("found BB " << scan_len.makeDimValStr(" * ") <<
                                        " starting at " << bdpt.makeDimValStr());
 
                             // 'scan_len' now contains sizes of the new BB.
                             BoundingBox new_bb;
                             new_bb.bb_begin = bdpt;
                             new_bb.bb_end = bdpt.addElements(scan_len);
-                            new_bb.update_bb("sub-bb", *cp, true);
+                            new_bb.update_bb("sub-bb", *_context, true);
                             cur_bb_list.push_back(new_bb);
                             
                         } // new rect found.
@@ -877,7 +895,7 @@ namespace yask {
                         return true;  // from labmda; keep looking.
                     }); // Looking for new rects.
             }); // threads/slices.
-        TRACE_MSG3("sub-bbs found in " <<
+        TRACE_MSG("sub-bbs found in " <<
                    bbtimer.get_secs_since_start() << " secs.");
         // At this point, we have a set of full BBs.
 
@@ -888,13 +906,13 @@ namespace yask {
         // TODO: merge in a parallel binary tree instead of sequentially.
         for (int n = 0; n < nthreads; n++) {
             auto& cur_bb_list = bb_lists[n];
-            TRACE_MSG3("processing " << cur_bb_list.size() <<
+            TRACE_MSG("processing " << cur_bb_list.size() <<
                        " sub-BB(s) in bundle '" << get_name() <<
                        "' from thread " << n);
 
             // BBs in slice 'n'.
             for (auto& bbn : cur_bb_list) {
-                TRACE_MSG3(" sub-BB: [" << bbn.bb_begin.makeDimValStr() <<
+                TRACE_MSG(" sub-BB: [" << bbn.bb_begin.makeDimValStr() <<
                            " ... " << bbn.bb_end.makeDimValStr() << ")");
 
                 // Don't bother with empty BB.
@@ -936,9 +954,9 @@ namespace yask {
 
                         // Merge by just increasing the size of 'bb'.
                         bb.bb_end[odim] = bbn.bb_end[odim];
-                        TRACE_MSG3("  merging to form [" << bb.bb_begin.makeDimValStr() <<
+                        TRACE_MSG("  merging to form [" << bb.bb_begin.makeDimValStr() <<
                                    " ... " << bb.bb_end.makeDimValStr() << ")");
-                        bb.update_bb("sub-bb", *cp, true);
+                        bb.update_bb("sub-bb", *_context, true);
                         break;
                     }
                 }
@@ -946,15 +964,15 @@ namespace yask {
                 // If not merged, add 'bbn' as new.
                 if (!do_merge) {
                     _bb_list.push_back(bbn);
-                    TRACE_MSG3("  adding as final sub-BB #" << _bb_list.size());
+                    TRACE_MSG("  adding as final sub-BB #" << _bb_list.size());
                 }
             }
         }
 
         // Finalize overall BB.
-        _bundle_bb.update_bb(get_name(), *cp, false);
+        _bundle_bb.update_bb(get_name(), *_context, false);
         bbtimer.stop();
-        TRACE_MSG3("find-bounding-box: done in " <<
+        TRACE_MSG("find-bounding-box: done in " <<
                    bbtimer.get_elapsed_secs() << " secs.");
     }
 

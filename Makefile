@@ -1,6 +1,6 @@
 ##############################################################################
 ## YASK: Yet Another Stencil Kernel
-## Copyright (c) 2014-2018, Intel Corporation
+## Copyright (c) 2014-2019, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -45,8 +45,6 @@
 # real_bytes: FP precision: 4=float, 8=double.
 #
 # fold: How to fold vectors (x*y*z).
-#   Vectorization in dimensions perpendicular to the inner loop
-#   (defined by SUB_BLOCK_LOOP_INNER_VARS below) often works well.
 # fold_4byte: How to fold vectors when real_bytes=4.
 # fold_8byte: How to fold vectors when real_bytes=8.
 #

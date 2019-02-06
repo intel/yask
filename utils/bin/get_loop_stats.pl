@@ -2,7 +2,7 @@
 
 ##############################################################################
 ## YASK: Yet Another Stencil Kernel
-## Copyright (c) 2014-2018, Intel Corporation
+## Copyright (c) 2014-2019, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -31,6 +31,7 @@ my $minInstrs = 2;
 my $printAsm = 0;
 my $targetLabel = "";
 my $targetText = "";
+my $targetFn = "";
 
 sub usage {
   my $msg = shift;
@@ -39,6 +40,7 @@ sub usage {
   die "usage: [options] file...\n".
     "options:\n".
     " -p           print instrs\n".
+    " -f=<regex>   print only loops in matching function\n".
     " -l=<regex>   print only loops at matching label\n".
     " -t=<regex>   print only loops with matching text\n";
 }
@@ -56,6 +58,7 @@ for my $arg (@ARGV) {
     my ($key, $val) = ($1, $2);
     if ($key eq "l") { $targetLabel = $val; }
     elsif ($key eq "t") { $targetText = $val; }
+    elsif ($key eq "f") { $targetFn = $val; }
     else { usage("error: unknown option '$key'"); }
     next;
   }
@@ -73,7 +76,7 @@ for my $arg (@ARGV) {
     my %labels;
     my $asmLine = 0;
     my $getData = 0;
-    my ($locInfo, $srcFile);      # strings describing current location.
+    my ($locInfo, $srcFile, $curFn); # strings describing current location.
     my @lines;                  # lines to print.
 
     open F, "<$fname" or usage("error: cannot open '$fname'");
@@ -99,6 +102,17 @@ for my $arg (@ARGV) {
           $srcFile = "";
           $locInfo = "";
         }
+      }
+
+      # new function.
+      elsif (/^\s*\.section/) {
+        undef $curFn;
+      }
+
+      # unmangled function name, e.g.,
+      # # --- yask::Indices::setFromInitList(yask::Indices *, const std::initializer_list<yask::idx_t> &)
+      elsif (/^\#\s+---\s+(.*)/) {
+        $curFn = $1;
       }
 
       # label, e.g.,
@@ -232,9 +246,11 @@ for my $arg (@ARGV) {
             if ($pass &&
                 $dist > $minInstrs &&
                 scalar keys %rstats &&
+                (!$targetFn || $curFn =~ /$targetFn/) &&
                 (!$targetLabel || $lab =~ /$targetLabel/) &&
                 (!$targetText || grep(/$targetText/, @lines))) {
               print "\nSIMD loop $lab:\n";
+              print "'$curFn'\n" if defined $curFn;
               print @lines if $printAsm;
               print "$dist total instrs\n";
               print "Instr counts per instr type (FLOP count is a subtotal):\n";

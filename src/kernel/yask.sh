@@ -2,7 +2,7 @@
 
 ##############################################################################
 ## YASK: Yet Another Stencil Kernel
-## Copyright (c) 2014-2018, Intel Corporation
+## Copyright (c) 2014-2019, Intel Corporation
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -24,8 +24,17 @@
 ##############################################################################
 
 # Purpose: run stencil kernel in specified environment.
-invo="Invocation: $0 $@"
-echo $invo
+
+# Create invocation string.
+invo="Invocation: $0"
+whitespace="[[:space:]]"
+for i in "$@"
+do
+    if [[ $i =~ $whitespace ]]; then
+        i=\'$i\'
+    fi
+    invo="$invo $i"
+done
 
 # Default env vars to print debug info.
 envs="OMP_DISPLAY_ENV=VERBOSE"
@@ -37,6 +46,30 @@ if [[ `uname -o` == "Cygwin" ]]; then
 	envs="$envs PATH='$PATH':"`dirname $0`/../lib
 fi
 
+# Default arch.
+cpu_flags=`grep -m1 '^flags' /proc/cpuinfo`
+if [[ $cpu_flags =~ avx512dq ]]; then
+    arch=skx
+elif [[ $cpu_flags =~ avx512pf ]]; then
+    arch=knl
+elif [[ $cpu_flags =~ avx2 ]]; then
+    arch=hsw
+elif [[ $cpu_flags =~ avx ]]; then
+    arch=snb
+else
+    arch=intel64
+fi
+
+# Default ranks.
+nranks=1
+if command -v numactl >/dev/null; then
+    cpubind=`numactl -s | grep -m1 '^cpubind:'`
+    if [[ -n "$cpubind" ]]; then
+        cbwords=( $cpubind )
+        nranks=$(( ${#cbwords[@]} - 1 ))
+    fi
+fi
+
 # Extra options for exe.
 opts=""
 
@@ -44,13 +77,12 @@ opts=""
 pre_cmd=true
 post_cmd=true
 
-unset arch                      # Don't want to inherit this from env.
-
-# Display stencils and exit.
+# Display stencils in this dir and exit.
 bindir=`dirname $0`
 function show_stencils {
-    echo "Available stencil/arch combos:"
+    echo "Available stencil.arch combos in '$bindir' directory:"
     find $bindir -name 'yask_kernel.*.*.exe' | sed -e 's/.*yask_kernel\./ -stencil /' -e 's/\./ -arch /' -e 's/.exe//'
+    echo "The default -arch argument for this host is '$arch'."
     exit 1
 }
 
@@ -63,13 +95,11 @@ while true; do
     elif [[ "$1" == "-h" ]]; then
         shift
         echo "$0 is a wrapper around the YASK executable to set up the proper environment."
-        echo "Usage: $0 -stencil <stencil> -arch <arch> [options]"
-        echo " "
-        echo "Required parameters to specify the executable:"
+        echo "Usage: $0 -stencil <stencil> [options]"
         echo "  -stencil <stencil>"
-        echo "     Corresponds to stencil=<stencil> used during compilation"
-        echo "  -arch <arch>"
-        echo "     Corresponds to arch=<arch> used during compilation"
+        echo "     Specify the solution-name part of the kernel executable."
+        echo "     Should correspond to stencil=<stencil> used during compilation."
+        echo "     Run this script without any options to see the available stencils."
         echo " "
         echo "Some options are generic (parsed by the driver script and applied to any stencil),"
         echo " and some options are parsed by the stencil executable determined by the -stencil."
@@ -78,7 +108,12 @@ while true; do
         echo "Generic (script) options:"
         echo "  -h"
         echo "     Print this help."
-        echo "     To see YASK stencil-specific options, run '$0 -stencil <stencil> -arch <arch> -help'"
+        echo "     To see YASK stencil-specific options, run '$0 -stencil <stencil> [-arch <arch>] -help'."
+        echo "  -arch <arch>"
+        echo "     Specify the architecture-name part of the kernel executable."
+        echo "     Overrides the default architecture determined from /proc/cpuinfo flags."
+        echo "     The default <arch> for this host is '$arch'."
+        echo "     Should correspond to arch=<arch> used during compilation."
         echo "  -host <hostname>|-mic <N>"
         echo "     Specify host to run executable on."
         echo "     'ssh <hostname>' will be pre-pended to the sh_prefix command."
@@ -97,19 +132,27 @@ while true; do
         echo "     Run <command> before the executable (and before the -exe_prefix argument)."
         echo "  -ranks <N>"
         echo "     Simplified MPI run (x-dimension partition only)."
-        echo "     Implies the following:"
-        echo "       -mpi_cmd mpirun -np <N>"
-        echo "     The option '-nrx' <N> is passed to the executable."
+        echo "     Shortcut for the following options if <N> > 1:"
+        echo "       -mpi_cmd mpirun -np <N> -nrx <N>"
         echo "     If a different MPI command or config is needed, use -mpi_cmd <command>"
         echo "     explicitly and -nr* options as needed instead."
+        if [[ -n "$nranks" ]]; then
+            echo "     The default <N> for this host is '$nranks'."
+        fi
         echo "  -log <file>"
         echo "     Write copy of output to <file>."
         echo "     Default is based on stencil, arch, host-name, and time-stamp."
         echo "     Use '/dev/null' to avoid making a log."
+        echo "  -show_arch"
+        echo "     Print the architecture string and exit."
         echo "  <env-var=value>"
         echo "     Set environment variable <env-var> to <value>."
         echo "     Repeat as necessary to set multiple vars."
         exit 1
+
+    elif [[ "$1" == "-show_arch" ]]; then
+        echo $arch
+        exit 0
 
     elif [[ "$1" == "-stencil" && -n ${2+set} ]]; then
         stencil=$2
@@ -164,7 +207,6 @@ while true; do
 
     elif [[ "$1" == "-ranks" && -n ${2+set} ]]; then
         nranks=$2
-        opts="$opts -nrx $nranks"
         shift
         shift
 
@@ -187,24 +229,18 @@ while true; do
     fi
 
 done                            # parsing options.
+echo $invo
 
-# Check required opts.
+# Check required opt (yes, it's an oxymoron).
 if [[ -z ${stencil:+ok} ]]; then
-    if [[ -z ${arch:+ok} ]]; then
-        echo "error: missing required options: -stencil <stencil> -arch <arch>"
-        show_stencils
-    fi
     echo "error: missing required option: -stencil <stencil>"
-    show_stencils
-fi
-if [[ -z ${arch:+ok} ]]; then
-    echo "error: missing required option: -arch <arch>"
     show_stencils
 fi
 
 # Simplified MPI in x-dim only.
-if [[ -n "$nranks" ]]; then
+if [[ -n "$nranks" && $nranks > 1 ]]; then
     true ${mpi_cmd="mpirun -np $nranks"}
+    opts="-nrx $nranks $opts"   # Put this opt at beginning to allow override.
 fi
 
 # Bail on errors past this point, but only errors
@@ -275,7 +311,7 @@ else
 fi
 
 # Commands to capture some important system status and config info for benchmark documentation.
-config_cmds="uname -a; uptime; sed '/^$/q' /proc/cpuinfo; lscpu; $dump /proc/cmdline; $dump /proc/meminfo; free -gt; numactl -H"
+config_cmds="uname -a; sleep 1; uptime; sed '/^$/q' /proc/cpuinfo; lscpu; $dump /proc/cmdline; $dump /proc/meminfo; free -gt; numactl -H"
 
 # Command sequence to be run in a shell.
 # Captures
@@ -290,6 +326,7 @@ else
     $sh_prefix "sh -c -x '$cmds'" 2>&1 | tee -a $logfile
 fi
 
+echo $invo
 echo "Log saved in '$logfile'."
 
 # A summary of the command to print.

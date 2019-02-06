@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2018, Intel Corporation
+Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -30,75 +30,76 @@ namespace yask {
 
     // Make a new grid.
     YkGridPtr StencilContext::newGrid(const std::string& name,
-                                      const GridDimNames& dims,
+                                      const GridDimNames& gdims,
                                       const GridDimSizes* sizes) {
+        STATE_VARS(this);
 
         // Check parameters.
         bool got_sizes = sizes != NULL;
         if (got_sizes) {
-            if (dims.size() != sizes->size()) {
+            if (gdims.size() != sizes->size()) {
                 FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to create grid '" << name << "' with " <<
-                                                dims.size() << " dimension names but " << sizes->size() <<
+                                                gdims.size() << " dimension names but " << sizes->size() <<
                                                 " dimension sizes");
             }
         }
 
         // First, try to make a grid that matches the layout in
         // the stencil.
-        YkGridPtr gp = newStencilGrid(name, dims);
+        YkGridPtr gp = newStencilGrid(name, gdims);
 
         // No match.
         if (!gp) {
 
             // Tuple of dims.
             IdxTuple dtup;
-            for (auto& d : dims)
+            for (auto& d : gdims)
                 dtup.addDimBack(d, 0);
 
 #if ALLOW_NEW_GRIDS
             // Allow new grid types.
             
             // Check dims.
-            int ndims = dims.size();
-            int step_posn = -1;      // -1 => not used.
+            int ndims = gdims.size();
+            bool step_used = false;
             set<string> seenDims;
             for (int i = 0; i < ndims; i++) {
+                auto& gdim = gdims[i];
 
                 // Already used?
-                if (seenDims.count(dims[i])) {
+                if (seenDims.count(gdim)) {
                     THROW_YASK_EXCEPTION("Error: cannot create grid '" + name +
-                                         "' because dimension '" + dims[i] +
+                                         "' because dimension '" + gdim +
                                          "' is used more than once");
                 }
 
                 // Step dim?
-                if (dims[i] == _dims->_step_dim) {
-                    step_posn = i;
-                    if (i > 0) {
+                if (gdim == step_dim) {
+                    step_used = true;
+                    if (i != step_posn) {
                         THROW_YASK_EXCEPTION("Error: cannot create grid '" + name +
-                                             "' because step dimension '" + dims[i] +
-                                             "' must be first dimension");
+                                             "' because step dimension '" + gdim +
+                                             "' is not first dimension");
                     }
                 }
 
                 // Domain dim?
-                else if (_dims->_domain_dims.lookup(dims[i])) {
+                else if (domain_dims.lookup(gdim)) {
                 }
 
                 // Known misc dim?
-                else if (_dims->_misc_dims.lookup(dims[i])) {
+                else if (misc_dims.lookup(gdim)) {
                 }
 
                 // New misc dim?
                 else {
-                    _dims->_misc_dims.addDimBack(dims[i], 0);
+                    misc_dims.addDimBack(gdim, 0);
                 }
             }
-            bool do_wrap = step_posn >= 0;
 
             // Scalar?
             if (ndims == 0)
-                gp = make_shared<YkElemGrid<Layout_0d, false>>(_dims, name, dims, &_opts, &_ostr);
+                gp = make_shared<YkElemGrid<Layout_0d, false>>(*this, name, gdims);
 
             // Include auto-gen code for all other cases.
 #include "yask_grid_code.hpp"
@@ -123,20 +124,20 @@ namespace yask {
         // Add to context.
         addGrid(gp, false);     // mark as non-output grid.
 
-        // Set sizes as provided or via solution settings.
+        // Set sizes as provided.
         if (got_sizes) {
-            int ndims = dims.size();
+            int ndims = gdims.size();
             for (int i = 0; i < ndims; i++) {
-                auto& dname = dims[i];
+                auto& gdim = gdims[i];
 
                 // Domain size.
                 gp->_set_domain_size(i, sizes->at(i));
 
                 // Pads.
                 // Set via both 'extra' and 'min'; larger result will be used.
-                if (_dims->_domain_dims.lookup(dname)) {
-                    gp->set_extra_pad_size(i, _opts->_extra_pad_sizes[dname]);
-                    gp->set_min_pad_size(i, _opts->_min_pad_sizes[dname]);
+                if (domain_dims.lookup(gdim)) {
+                    gp->set_extra_pad_size(i, opts->_extra_pad_sizes[gdim]);
+                    gp->set_min_pad_size(i, opts->_min_pad_sizes[gdim]);
                 }
 
                 // Offsets.
@@ -145,9 +146,11 @@ namespace yask {
             }
         }
 
+        // Set sizes based on solution settings.
         else
             update_grid_info();
 
+        // Mark as created via API.
         gp->set_new_grid(true);
         return gp;
     }

@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2018, Intel Corporation
+Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -37,7 +37,8 @@ namespace yask {
     // APIs to get info from vars.
 #define GET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
     idx_t YkGridBase::api_name(const string& dim) const {               \
-        checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
+        STATE_VARS(this);                                               \
+        dims->checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok); \
         int posn = get_dim_posn(dim, true, #api_name);                  \
         idx_t mbit = 1LL << posn;                                       \
         if (prep_req && _rank_offsets[posn] < 0)                        \
@@ -47,6 +48,7 @@ namespace yask {
         return rtn;                                                     \
     }                                                                   \
     idx_t YkGridBase::api_name(int posn) const {                        \
+        STATE_VARS(this);                                               \
         idx_t mbit = 1LL << posn;                                       \
         auto rtn = expr;                                                \
         return rtn;                                                     \
@@ -63,8 +65,8 @@ namespace yask {
     GET_GRID_API(get_alloc_size, _allocs[posn], true, true, true, false)
     GET_GRID_API(get_first_rank_domain_index, _rank_offsets[posn], false, true, false, true)
     GET_GRID_API(get_last_rank_domain_index, _rank_offsets[posn] + _domains[posn] - 1, false, true, false, true)
-    GET_GRID_API(get_first_rank_halo_index, _rank_offsets[posn] - _left_halos[posn], false, false, true, true)
-    GET_GRID_API(get_last_rank_halo_index, _rank_offsets[posn] + _domains[posn] + _right_halos[posn] - 1, false, false, true, true)
+    GET_GRID_API(get_first_rank_halo_index, _rank_offsets[posn] - _left_halos[posn], false, true, false, true)
+    GET_GRID_API(get_last_rank_halo_index, _rank_offsets[posn] + _domains[posn] + _right_halos[posn] - 1, false, true, false, true)
     GET_GRID_API(get_first_rank_alloc_index, _rank_offsets[posn] + _local_offsets[posn] - _actl_left_pads[posn], false, true, false, true)
     GET_GRID_API(get_last_rank_alloc_index, _rank_offsets[posn] + _local_offsets[posn] + _domains[posn] + _actl_right_pads[posn] - 1, false, true, false, true)
     GET_GRID_API(_get_left_wf_ext, _left_wf_exts[posn], true, true, true, false)
@@ -84,14 +86,16 @@ namespace yask {
 #define COMMA ,
 #define SET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
     void YkGridBase::api_name(const string& dim, idx_t n) {             \
-        TRACE_MSG0(get_ostr(), "grid '" << get_name() << "'."           \
+        STATE_VARS(this);                                               \
+        TRACE_MSG("grid '" << get_name() << "'."                        \
                    #api_name "('" << dim << "', " << n << ")");         \
-        checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok);      \
+        dims->checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok); \
         int posn = get_dim_posn(dim, true, #api_name);                  \
         idx_t mbit = 1LL << posn;                                       \
         expr;                                                           \
     }                                                                   \
     void YkGridBase::api_name(int posn, idx_t n) {                      \
+        STATE_VARS(this);                                               \
         idx_t mbit = 1LL << posn;                                       \
         int dim = posn;                                                 \
         expr;                                                           \
@@ -160,6 +164,7 @@ namespace yask {
     }
 
     void YkGridBase::share_storage(yk_grid_ptr source) {
+        STATE_VARS(this);
         auto sp = dynamic_pointer_cast<YkGridBase>(source);
         assert(sp);
 
@@ -193,7 +198,7 @@ namespace yask {
             }
 
             // Not a domain dim?
-            bool is_domain = _dims->_domain_dims.lookup(dname) != 0;
+            bool is_domain = domain_dims.lookup(dname) != 0;
             if (!is_domain) {
                 auto tas = get_alloc_size(dname);
                 auto sas = sp->get_alloc_size(dname);
@@ -239,7 +244,7 @@ namespace yask {
         // Copy pad sizes.
         for (int i = 0; i < get_num_dims(); i++) {
             auto dname = get_dim_name(i);
-            bool is_domain = _dims->_domain_dims.lookup(dname) != 0;
+            bool is_domain = domain_dims.lookup(dname) != 0;
             if (is_domain) {
                 _actl_left_pads[i] = sp->_actl_left_pads[i];
                 _actl_right_pads[i] = sp->_actl_right_pads[i];

@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2018, Intel Corporation
+Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -113,18 +113,34 @@ int main() {
 
         // Print out some info about the grids and init their data.
         for (auto grid : soln->get_grids()) {
-            os << "    " << grid->get_name() << "(";
-            for (auto dname : grid->get_dim_names())
-                os << " '" << dname << "'";
-            os << " )\n";
+            os << "    grid-var '" << grid->get_name() << ":\n";
             for (auto dname : grid->get_dim_names()) {
+                os << "      '" << dname << "' dim:\n";
+                os << "        alloc-size on this rank: " <<
+                    grid->get_alloc_size(dname) << endl;
+                
+                // Is this a domain dim?
                 if (domain_dim_set.count(dname)) {
-                    os << "      '" << dname << "' domain index range on this rank: " <<
+                    os << "        domain index range on this rank: " <<
                         grid->get_first_rank_domain_index(dname) << " ... " <<
                         grid->get_last_rank_domain_index(dname) << endl;
-                    os << "      '" << dname << "' allowed index range on this rank: " <<
+                    os << "        domain+halo index range on this rank: " <<
+                        grid->get_first_rank_halo_index(dname) << " ... " <<
+                        grid->get_last_rank_halo_index(dname) << endl;
+                    os << "        allowed index range on this rank: " <<
                         grid->get_first_rank_alloc_index(dname) << " ... " <<
                         grid->get_last_rank_alloc_index(dname) << endl;
+                }
+
+                // Step dim?
+                else if (dname == soln->get_step_dim_name()) {
+                }
+
+                // Misc dim?
+                else {
+                    os << "        misc index range: " <<
+                        grid->get_first_misc_index(dname) << " ... " <<
+                        grid->get_last_misc_index(dname) << endl;
                 }
             }
 
@@ -138,35 +154,39 @@ int main() {
             // Create indices describing a subset of the overall domain.
             vector<idx_t> first_indices, last_indices;
             for (auto dname : grid->get_dim_names()) {
+                idx_t first_idx = 0, last_idx = 0;
 
                 // Is this a domain dim?
                 if (domain_dim_set.count(dname)) {
 
                     // Set indices to create a small cube (assuming 3D)
                     // in center of overall problem.
+                    // Using global indices.
                     idx_t psize = soln->get_overall_domain_size(dname);
-                    idx_t first_idx = psize/2 - 30;
-                    idx_t last_idx = psize/2 + 30;
-                    first_indices.push_back(first_idx);
-                    last_indices.push_back(last_idx);
+                    first_idx = psize/2 - 30;
+                    last_idx = psize/2 + 30;
                 }
 
                 // Step dim?
                 else if (dname == soln->get_step_dim_name()) {
 
-                    // Add indices for timestep zero (0) only.
-                    first_indices.push_back(0);
-                    last_indices.push_back(0);
+                    // Set indices for one time-step.
+                    first_idx = 0;
+                    last_idx = 0;
                 }
 
                 // Misc dim?
                 else {
 
-                    // Add indices to set all allowed values.
-                    // (This isn't really meaningful; it's just illustrative.)
-                    first_indices.push_back(grid->get_first_misc_index(dname));
-                    last_indices.push_back(grid->get_last_misc_index(dname));
+                    // Set indices to set all allowed values.
+                    first_idx = grid->get_first_misc_index(dname);
+                    last_idx = grid->get_last_misc_index(dname);
+                    assert(last_idx - first_idx + 1 == grid->get_alloc_size(dname));
                 }
+
+                // Add indices to index vectors.
+                first_indices.push_back(first_idx);
+                last_indices.push_back(last_idx);
             }
 
             // Init the values using the indices created above.
@@ -228,7 +248,7 @@ int main() {
         os << "End of YASK kernel API test.\n";
         return 0;
     }
-    catch (yask_exception e) {
+    catch (yask_exception& e) {
         cerr << "YASK kernel API test: " << e.get_message() <<
             " on rank " << env->get_rank_index() << ".\n";
         return 1;

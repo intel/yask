@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2018, Intel Corporation
+Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -104,6 +104,9 @@ namespace yask {
         
         // Separate bundles into packs.
         _eqBundlePacks.makePacks(_eqBundles, *_dos);
+
+        // Compute halos.
+        _eqBundlePacks.calcHalos(_eqBundles);
 
         // Make a copy of each equation at each cluster offset.
         // We will use these for inter-cluster optimizations and code generation.

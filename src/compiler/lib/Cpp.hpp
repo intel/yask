@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2018, Intel Corporation
+Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -25,8 +25,7 @@ IN THE SOFTWARE.
 
 ////////// Support for YASK C++ scalar and vector-code generation //////////////
 
-// NB: This file does *not* support vector-code with intrinsics; see
-// CppIntrin.hpp for that.
+// See CppIntrin.hpp for explicit intrinsic generation.
 
 #ifndef CPP_HPP
 #define CPP_HPP
@@ -234,7 +233,7 @@ namespace yask {
             _cvph(ph) { }
 
         // A grid access.
-        virtual void visit(GridPoint* gp);
+        virtual string visit(GridPoint* gp);
     };
 
     // Outputs the loop-invariant variables for an inner loop.
@@ -250,7 +249,7 @@ namespace yask {
             _cvph(ph) { }
 
         // A grid access.
-        virtual void visit(GridPoint* gp);
+        virtual string visit(GridPoint* gp);
     };
 
     // Print out a stencil in C++ form for YASK.

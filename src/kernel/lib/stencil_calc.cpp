@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2018, Intel Corporation
+Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// This file contains implementations of StencilBundleBase methods.
+// This file contains implementations of bundle and pack methods.
 // Also see context_setup.cpp.
 
 #include "yask_stencil.hpp"
@@ -40,8 +40,8 @@ namespace yask {
     void StencilBundleBase::calc_mini_block(int region_thread_idx,
                                             KernelSettings& settings,
                                             const ScanIndices& mini_block_idxs) {
-        CONTEXT_VARS(_generic_context);
-        TRACE_MSG3("calc_mini_block('" << get_name() << "'): [" <<
+        STATE_VARS(this);
+        TRACE_MSG("calc_mini_block('" << get_name() << "'): [" <<
                    mini_block_idxs.begin.makeValStr(nsdims) << " ... " <<
                    mini_block_idxs.end.makeValStr(nsdims) << ") by " <<
                    mini_block_idxs.step.makeValStr(nsdims) <<
@@ -57,16 +57,25 @@ namespace yask {
 
         // Nothing to do if outer BB is empty.
         if (_bundle_bb.bb_num_points == 0) {
-            TRACE_MSG3("calc_mini_block: empty BB");
+            TRACE_MSG("calc_mini_block: empty BB");
             return;
         }
         
         // TODO: if >1 BB, check limits of outer one first to save time.
+
+        // Lookup some thread-binding info.
+        int bind_posn = settings._bind_posn;
+        string bind_dim;
+        idx_t bind_slab_pts = 1;
+        if (settings.bind_block_threads) {
+            bind_dim = stencil_dims.getDimName(bind_posn);
+            bind_slab_pts = settings._sub_block_sizes[bind_posn];
+        }
         
         // Loop through each solid BB for this bundle.
         // For each BB, calc intersection between it and 'mini_block_idxs'.
         // If this is non-empty, apply the bundle to all its required sub-blocks.
-        TRACE_MSG3("calc_mini_block('" << get_name() << "'): checking " <<
+        TRACE_MSG("calc_mini_block('" << get_name() << "'): checking " <<
                    _bb_list.size() << " BB(s)");
         int bbn = 0;
   	for (auto& bb : _bb_list) {
@@ -77,16 +86,16 @@ namespace yask {
 
             // Trim the mini-block indices based on the bounding box(es)
             // for this bundle.
-            ScanIndices bb_idxs(mini_block_idxs);
+            ScanIndices mb_idxs(mini_block_idxs);
             DOMAIN_VAR_LOOP(i, j) {
 
                 // Begin point.
                 auto bbegin = max(mini_block_idxs.begin[i], bb.bb_begin[j]);
-                bb_idxs.begin[i] = bbegin;
+                mb_idxs.begin[i] = bbegin;
 
                 // End point.
                 auto bend = min(mini_block_idxs.end[i], bb.bb_end[j]);
-                bb_idxs.end[i] = bend;
+                mb_idxs.end[i] = bend;
 		
                 // Anything to do?
                 if (bend <= bbegin) {
@@ -97,15 +106,15 @@ namespace yask {
 
             // nothing to do?
             if (!bb_ok) {
-                TRACE_MSG3("calc_mini_block for bundle '" << get_name() <<
+                TRACE_MSG("calc_mini_block for bundle '" << get_name() <<
                            "': no overlap between bundle " << bbn << " and current block");
                 continue; // to next BB.
             }
             
-            TRACE_MSG3("calc_mini_block('" << get_name() <<
+            TRACE_MSG("calc_mini_block('" << get_name() <<
                        "'): after trimming for BB " << bbn << ": [" <<
-                       bb_idxs.begin.makeValStr(nsdims) <<
-                       " ... " << bb_idxs.end.makeValStr(nsdims) << ")");
+                       mb_idxs.begin.makeValStr(nsdims) <<
+                       " ... " << mb_idxs.end.makeValStr(nsdims) << ")");
 
             // Get the bundles that need to be processed in
             // this block. This will be any prerequisite scratch-grid
@@ -117,55 +126,76 @@ namespace yask {
 
                 // Start threads within a block.  Each of these threads will
                 // eventually work on a separate sub-block.  This is nested within
-                // an OMP region thread.
-                cp->set_block_threads();
+                // an OMP region thread.  If there is only one block per thread,
+                // nested OMP is disabled, and this OMP pragma does nothing.
+                int nbt = _context->set_block_threads();
+                bool bind_threads = nbt > 1 && settings.bind_block_threads;
                 _Pragma("omp parallel proc_bind(spread)") {
-                    int block_thread_idx = omp_get_thread_num();
+                    int block_thread_idx = (nbt <= 1) ? 0 : omp_get_thread_num();
                     
                     // Indices needed for the generated loops.  Will normally be a
-                    // copy of 'bb_idxs' except when updating scratch-grids.
-                    ScanIndices adj_mb_idxs = sg->adjust_span(region_thread_idx, bb_idxs);
+                    // copy of 'mb_idxs' except when updating scratch-grids.
+                    ScanIndices adj_mb_idxs = sg->adjust_span(region_thread_idx, mb_idxs);
 
-                    // Tweak step sizes for adjusted indices.  If original
-                    // [or auto-tuned] sub-block covers entire mini-block,
-                    // set step size to full width.  If binding threads to
-                    // sub-blocks, set step size to full width in all but
-                    // the inner dim.
+                    // Tweak settings for adjusted indices.
                     DOMAIN_VAR_LOOP(i, j) {
-                        if ((settings._sub_block_sizes[i] >= settings._mini_block_sizes[i]) ||
-                            (opts->bind_block_threads && i != _inner_posn)) {
-                            adj_mb_idxs.step[i] = adj_mb_idxs.end[i] - adj_mb_idxs.begin[i];
+
+                        // If binding threads to sub-blocks and this is the
+                        // binding dim, set step size and alignment
+                        // granularity to the slab width. Setting the
+                        // alignment keeps slabs aligned between packs.
+                        if (bind_threads && i == bind_posn) {
+                            adj_mb_idxs.step[i] = bind_slab_pts;
+                            adj_mb_idxs.align[i] = bind_slab_pts;
                         }
+
+                        // If original [or auto-tuned] sub-block covers
+                        // entire mini-block, set step size to full width.
+                        // Also do this when binding and this is not the
+                        // binding dim.
+                        else if ((settings._sub_block_sizes[i] >= settings._mini_block_sizes[i]) ||
+                                 bind_threads)
+                            adj_mb_idxs.step[i] = adj_mb_idxs.end[i] - adj_mb_idxs.begin[i];
                     }
 
-                    TRACE_MSG3("calc_mini_block('" << get_name() << "'): " <<
-                               " in reqd bundle '" << sg->get_name() << "': [" <<
+                    TRACE_MSG("calc_mini_block('" << get_name() << "'): " <<
+                               " for reqd bundle '" << sg->get_name() << "': [" <<
                                adj_mb_idxs.begin.makeValStr(nsdims) << " ... " <<
                                adj_mb_idxs.end.makeValStr(nsdims) << ") by " <<
                                adj_mb_idxs.step.makeValStr(nsdims) <<
                                " by region thread " << region_thread_idx <<
                                " and block thread " << block_thread_idx);
 
-                    // If binding threads to sub-blocks, call
-                    // calc_sub_block() with all threads by removing the OMP
-                    // pragma. Since we adjusted the step size above,
-                    // calc_sub_block() will be called sequentially across
-                    // the inner-dim indices. Assignment of threads to
-                    // clusters will be done in calc_sub_block().
-                    if (opts->bind_block_threads) {
+                    // If binding threads to data, run the mini-block
+                    // loops on all block threads and call calc_sub_block()
+                    // only by the designated thread for the given slab
+                    // index in the binding dim.
+                    if (bind_threads) {
+                        const idx_t idx_ofs = 0x1000; // to help keep pattern when idx is neg.
 #define OMP_PRAGMA
+#define CALC_SUB_BLOCK(mb_idxs)                                        \
+                        auto bind_elem_idx = mb_idxs.start[bind_posn];  \
+                        auto bind_slab_idx = idiv_flr(bind_elem_idx + idx_ofs, bind_slab_pts); \
+                        auto bind_thr = imod_flr<idx_t>(bind_slab_idx, nbt); \
+                        if (block_thread_idx == bind_thr)               \
+                            sg->calc_sub_block(region_thread_idx, block_thread_idx, settings, mb_idxs)
 #include "yask_mini_block_loops.hpp"
+#undef CALC_SUB_BLOCK
 #undef OMP_PRAGMA
                     }
 
-                    // Call calc_sub_block() with a different thread for each
-                    // sub-block.
+                    // If not binding therads to data, call calc_sub_block()
+                    // with a different thread for each sub-block using
+                    // standard OpenMP scheduling.
                     else {
+#define CALC_SUB_BLOCK(mb_idxs)                                         \
+                        sg->calc_sub_block(region_thread_idx, block_thread_idx, settings, mb_idxs)
 #include "yask_mini_block_loops.hpp"
+#undef CALC_SUB_BLOCK
                     }
-                } // OMP parallel.
-            }
 
+                } // OMP parallel.
+            } // bundles.
         } // BB list.
     }
 
@@ -175,16 +205,12 @@ namespace yask {
                                                   int block_thread_idx,
                                                   KernelSettings& settings,
                                                   const ScanIndices& mini_block_idxs) {
-        CONTEXT_VARS(_generic_context);
-        TRACE_MSG3("calc_sub_block_scalar for bundle '" << get_name() << "': [" <<
+        STATE_VARS(this);
+        TRACE_MSG("calc_sub_block_scalar for bundle '" << get_name() << "': [" <<
                    mini_block_idxs.start.makeValStr(nsdims) <<
                    " ... " << mini_block_idxs.stop.makeValStr(nsdims) <<
                    ") by region thread " << region_thread_idx <<
                    " and block thread " << block_thread_idx);
-
-        // If called by all threads, just use first one.
-        if (opts->bind_block_threads && block_thread_idx != 0)
-            return;
 
         // Init sub-block begin & end from block start & stop indices.
         // Use the 'misc' loops. Indices for these loops will be scalar and
@@ -198,7 +224,7 @@ namespace yask {
 
         // Define misc-loop function.
         // Since step is always 1, we ignore misc_idxs.stop.
-#define misc_fn(pt_idxs)  do {                                          \
+#define MISC_FN(pt_idxs)  do {                                          \
             calc_scalar(region_thread_idx, pt_idxs.start);              \
         } while(0)
 
@@ -206,23 +232,19 @@ namespace yask {
         // The OMP in the misc loops will be ignored if we're already in
         // the max allowed nested OMP region.
 #include "yask_misc_loops.hpp"
-#undef misc_fn
+#undef MISC_FN
     }
 
     // Calculate results for one sub-block.
     // The index ranges in 'mini_block_idxs' are sub-divided
     // into full vector-clusters, full vectors, and sub-vectors
     // and finally evaluated by the YASK-compiler-generated loops.
-    void StencilBundleBase::calc_sub_block(int region_thread_idx,
-                                           int block_thread_idx,
-                                           KernelSettings& settings,
-                                           const ScanIndices& mini_block_idxs) {
-        CONTEXT_VARS(_generic_context);
-        if (opts->force_scalar)
-            return calc_sub_block_scalar(region_thread_idx, block_thread_idx,
-                                         settings, mini_block_idxs);
-        
-        TRACE_MSG3("calc_sub_block for bundle '" << get_name() << "': [" <<
+    void StencilBundleBase::calc_sub_block_vec(int region_thread_idx,
+                                               int block_thread_idx,
+                                               KernelSettings& settings,
+                                               const ScanIndices& mini_block_idxs) {
+        STATE_VARS(this);
+        TRACE_MSG("calc_sub_block_vec for bundle '" << get_name() << "': [" <<
                    mini_block_idxs.start.makeValStr(nsdims) <<
                    " ... " << mini_block_idxs.stop.makeValStr(nsdims) <<
                    ") by region thread " << region_thread_idx <<
@@ -231,10 +253,10 @@ namespace yask {
         /*
           Indices in each domain dim:
 
-          sub_block_eidxs.begin                      rem_masks used here
-          |peel_masks used here                      | sub_block_eidxs.end
-          ||                                         | |
-          vv                                         v v
+          sub_block_eidxs.begin                        rem_masks used here
+          | peel_masks used here                       | sub_block_eidxs.end
+          | |                                          | |
+          v v                                          v v
           |---+-------+---------------------------+---+---|   "+" => vec boundaries.
           ^   ^       ^                            ^   ^   ^
           |   |       |                            |   |   |
@@ -286,7 +308,7 @@ namespace yask {
         DOMAIN_VAR_LOOP(i, j) {
 
             // Rank offset.
-            auto rofs = cp->rank_domain_offsets[j];
+            auto rofs = _context->rank_domain_offsets[j];
 
             // Begin/end of rank-relative scalar elements in this dim.
             auto ebgn = sub_block_idxs.begin[i] - rofs;
@@ -325,7 +347,7 @@ namespace yask {
                 auto fvend = round_down_flr(eend, vpts);
                 auto vbgn = round_down_flr(ebgn, vpts);
                 auto vend = round_up_flr(eend, vpts);
-                if (i == _inner_posn) {
+                if (i == inner_posn) {
 
                     // Don't do any full and/or partial vectors in plane of
                     // inner domain dim.  We'll do these with scalars.  This
@@ -407,7 +429,7 @@ namespace yask {
                 // Anything not covered?
                 // This will only be needed in inner dim because we
                 // will do partial vectors in other dims.
-                if (i == _inner_posn && (ebgn < vbgn || eend > vend))
+                if (i == inner_posn && (ebgn < vbgn || eend > vend))
                     do_scalars = true;
             }
 
@@ -437,13 +459,11 @@ namespace yask {
 
         // Full rectilinear polytope of aligned clusters: use optimized code.
         if (do_clusters) {
-            idx_t num_thr = omp_get_num_threads();
-            TRACE_MSG3("calc_sub_block:  using cluster code for [" <<
+            TRACE_MSG("calc_sub_block_vec:  using cluster code for [" <<
                        sub_block_fcidxs.begin.makeValStr(nsdims) <<
                        " ... " << sub_block_fcidxs.end.makeValStr(nsdims) <<
                        ") by region thread " << region_thread_idx <<
-                       " and block thread " << block_thread_idx <<
-                       "/" << num_thr);
+                       " and block thread " << block_thread_idx);
 
             // Step sizes are based on cluster lengths (in vector units).
             // The step in the inner loop is hard-coded in the generated code.
@@ -451,82 +471,29 @@ namespace yask {
                 norm_sub_block_idxs.step[i] = dims->_cluster_mults[j]; // N vecs.
             }
 
-            // If binding threads to sub-blocks, determine the thread
-            // to use for each cluster based on its index.
-            if (opts->bind_block_threads) {
-
-                // Set up tuples to find the linear position of a sub-blk
-                // within a mini-blk. TODO: move out of this function.
-                IdxTuple sub_blks_per_mini_blk(domain_dims);
-                DOMAIN_VAR_LOOP(i, j) {
-                    sub_blks_per_mini_blk[j] =
-                        (i == _inner_posn) ? 1 :
-                        CEIL_DIV(settings._mini_block_sizes[i],
-                                 settings._sub_block_sizes[i]);
-                }
-                IdxTuple sub_blk_idxs(domain_dims);
-                TRACE_MSG3("calc_sub_block:   binding threads to " <<
-                           sub_blks_per_mini_blk.makeDimValStr() <<
-                           " sub-blks per mini-blk");
-
-                // For each cluster, determine its global sub-blk indices
-                // per dim, its linear sub-blk index within a mini-blk,
-                // and its thread assignment. If that assignment matches
-                // the current thread, calc the clusters.
-#define calc_inner_loop(region_thread_idx, block_thread_idx, loop_idxs) do { \
-                    DOMAIN_VAR_LOOP(i, j) {                             \
-                        idx_t clus_idx = loop_idxs.start[i];            \
-                        idx_t elem_idx = clus_idx * dims->_cluster_pts[j]; \
-                        sub_blk_idxs[j] = (i == _inner_posn) ? 0 :      \
-                            abs(idiv_flr(elem_idx, settings._sub_block_sizes[i])) % \
-                            sub_blks_per_mini_blk[j]; }                 \
-                    idx_t sub_blk_idx = sub_blks_per_mini_blk.layout(sub_blk_idxs); \
-                    idx_t thr = sub_blk_idx % num_thr;                  \
-                    if (thr == block_thread_idx) {                      \
-                        TRACE_MSG3("calc_sub_block:   cluster at [" <<  \
-                                   loop_idxs.start.makeValStr(nsdims) << " ... " << \
-                                   loop_idxs.stop.makeValStr(nsdims) << \
-                                   ") by region thread " << region_thread_idx << \
-                                   " and block thread " << block_thread_idx << \
-                                   " is in sub-blk " << sub_blk_idxs.makeDimValStr() << \
-                                   " assigned to thread " << thr);      \
-                        calc_loop_of_clusters(region_thread_idx, block_thread_idx, loop_idxs); } \
-                } while(0)
-                
-            // Include automatically-generated loop code that calls
-            // calc_inner_loop().
-#include "yask_sub_block_loops.hpp"
-#undef calc_inner_loop
-            }
-
-            // If not binding threads, define the function called from the
-            // generated loops to simply call the loop-of-clusters
-            // functions.
-            else {
-#define calc_inner_loop(region_thread_idx, block_thread_idx, loop_idxs) \
-                calc_loop_of_clusters(region_thread_idx, block_thread_idx, loop_idxs)
+            // Define the function called from the generated loops to simply
+            // call the loop-of-clusters functions.
+#define CALC_INNER_LOOP(loop_idxs) \
+            calc_loop_of_clusters(region_thread_idx, block_thread_idx, loop_idxs)
 
             // Include automatically-generated loop code that calls
             // calc_inner_loop().
 #include "yask_sub_block_loops.hpp"
-#undef calc_inner_loop
-            }
-        }
+#undef CALC_INNER_LOOP
 
-        // If called by all threads, just use first one beyond this point.
-        // TODO: use threads to distribute work.
-        if (opts->bind_block_threads && block_thread_idx != 0)
-            return;
+        } // whole clusters.
 
         // Full and partial peel/remainder vectors in all dims except
         // the inner one.
         if (do_vectors) {
-            TRACE_MSG3("calc_sub_block:  using vector code for [" <<
+            TRACE_MSG("calc_sub_block_vec:  using vector code for [" <<
                        sub_block_vidxs.begin.makeValStr(nsdims) <<
                        " ... " << sub_block_vidxs.end.makeValStr(nsdims) <<
                        ") *not* within full vector-clusters at [" <<
                        sub_block_fcidxs.begin.makeValStr(nsdims) <<
-                       " ... " << sub_block_fcidxs.end.makeValStr(nsdims) << ")");
+                       " ... " << sub_block_fcidxs.end.makeValStr(nsdims) <<
+                       ") by region thread " << region_thread_idx <<
+                       " and block thread " << block_thread_idx);
 
             // Keep a copy of the normalized cluster indices
             // that were calculated above.
@@ -567,11 +534,11 @@ namespace yask {
             // w/appropriate mask.  See the mask diagrams above that show
             // how the masks are ANDed together.  Since step is always 1, we
             // ignore loop_idxs.stop.
-#define calc_inner_loop(region_thread_idx, block_thread_idx, loop_idxs) \
+#define CALC_INNER_LOOP(loop_idxs) \
             bool ok = false;                                            \
             idx_t mask = idx_t(-1);                                     \
             DOMAIN_VAR_LOOP(i, j) {                                     \
-                if (i != _inner_posn &&                                 \
+                if (i != inner_posn &&                                 \
                     (loop_idxs.start[i] < norm_sub_block_fcidxs.begin[i] || \
                      loop_idxs.start[i] >= norm_sub_block_fcidxs.end[i])) { \
                     ok = true;                                          \
@@ -586,7 +553,7 @@ namespace yask {
             // Include automatically-generated loop code that calls
             // calc_inner_loop().
 #include "yask_sub_block_loops.hpp"
-#undef calc_inner_loop
+#undef CALC_INNER_LOOP
         }
 
         // Use scalar code for anything not done above.  This should only be
@@ -603,28 +570,30 @@ namespace yask {
             misc_idxs.step.setFromConst(1);
             misc_idxs.align.setFromConst(1);
 
-            TRACE_MSG3("calc_sub_block:  using scalar code for [" <<
+            TRACE_MSG("calc_sub_block_vec:  using scalar code for [" <<
                        misc_idxs.begin.makeValStr(nsdims) << " ... " <<
                        misc_idxs.end.makeValStr(nsdims) <<
                        ") *not* within vectors at [" <<
                        sub_block_vidxs.begin.makeValStr(nsdims) << " ... " <<
-                       sub_block_vidxs.end.makeValStr(nsdims) << ")");
+                       sub_block_vidxs.end.makeValStr(nsdims) << 
+                       ") by region thread " << region_thread_idx <<
+                       " and block thread " << block_thread_idx);
 
             // Define misc-loop function.  This is called at each point in
             // the sub-block.  Since step is always 1, we ignore
             // misc_idxs.stop.  TODO: handle more efficiently: do one slab
             // for inner-peel and one for outer-peel, calculate masks, and
             // call vector code.
-#define misc_fn(pt_idxs)  do {                                          \
+#define MISC_FN(pt_idxs)  do {                                          \
                 bool ok = false;                                        \
                 DOMAIN_VAR_LOOP(i, j) {                                 \
-                    auto rofs = cp->rank_domain_offsets[j];             \
+                    auto rofs = _context->rank_domain_offsets[j];       \
                     if (pt_idxs.start[i] < rofs + sub_block_vidxs.begin[i] || \
                         pt_idxs.start[i] >= rofs + sub_block_vidxs.end[i]) { \
                         ok = true; break; }                             \
                 }                                                       \
                 if (ok) {                                               \
-                    TRACE_MSG3("calc_sub_block:   at pt " <<            \
+                    TRACE_MSG("calc_sub_block_vec:   at pt " <<            \
                                pt_idxs.start.makeValStr(nsdims));       \
                     calc_scalar(region_thread_idx, pt_idxs.start);      \
                 }                                                       \
@@ -634,10 +603,10 @@ namespace yask {
             // The OMP in the misc loops will be ignored if we're already in
             // the max allowed nested OMP region.
 #include "yask_misc_loops.hpp"
-#undef misc_fn
+#undef MISC_FN
         }
         
-    } // calc_sub_block.
+    } // calc_sub_block_vec.
 
     // Calculate a series of cluster results within an inner loop.
     // The 'loop_idxs' must specify a range only in the inner dim.
@@ -646,8 +615,8 @@ namespace yask {
     void StencilBundleBase::calc_loop_of_clusters(int region_thread_idx,
                                                   int block_thread_idx,
                                                   const ScanIndices& loop_idxs) {
-        CONTEXT_VARS(_generic_context);
-        TRACE_MSG3("calc_loop_of_clusters: local vector-indices [" <<
+        STATE_VARS(this);
+        TRACE_MSG("calc_loop_of_clusters: local vector-indices [" <<
                    loop_idxs.start.makeValStr(nsdims) <<
                    " ... " << loop_idxs.stop.makeValStr(nsdims) <<
                    ") by region thread " << region_thread_idx <<
@@ -656,7 +625,7 @@ namespace yask {
 #ifdef CHECK
         // Check that only the inner dim has a range greater than one cluster.
         DOMAIN_VAR_LOOP(i, j) {
-            if (i != _inner_posn)
+            if (i != inner_posn)
                 assert(loop_idxs.start[i] + dims->_cluster_mults[j] >=
                        loop_idxs.stop[i]);
         }
@@ -666,7 +635,7 @@ namespace yask {
         const Indices& start_idxs = loop_idxs.start;
 
         // Need stop for inner loop only.
-        idx_t stop_inner = loop_idxs.stop[_inner_posn];
+        idx_t stop_inner = loop_idxs.stop[inner_posn];
 
         // Call code from stencil compiler.
         calc_loop_of_clusters(region_thread_idx, block_thread_idx, start_idxs, stop_inner);
@@ -680,8 +649,8 @@ namespace yask {
                                                  int block_thread_idx,
                                                  const ScanIndices& loop_idxs,
                                                  idx_t write_mask) {
-        CONTEXT_VARS(_generic_context);
-        TRACE_MSG3("calc_loop_of_vectors: local vector-indices [" <<
+        STATE_VARS(this);
+        TRACE_MSG("calc_loop_of_vectors: local vector-indices [" <<
                    loop_idxs.start.makeValStr(nsdims) <<
                    " ... " << loop_idxs.stop.makeValStr(nsdims) <<
                    ") w/write-mask = 0x" << hex << write_mask << dec <<
@@ -691,7 +660,7 @@ namespace yask {
 #ifdef CHECK
         // Check that only the inner dim has a range greater than one vector.
         for (int i = 0; i < nsdims; i++) {
-            if (i != step_posn && i != _inner_posn)
+            if (i != step_posn && i != inner_posn)
                 assert(loop_idxs.start[i] + 1 >= loop_idxs.stop[i]);
         }
 #endif
@@ -700,7 +669,7 @@ namespace yask {
         const Indices& start_idxs = loop_idxs.start;
 
         // Need stop for inner loop only.
-        idx_t stop_inner = loop_idxs.stop[_inner_posn];
+        idx_t stop_inner = loop_idxs.stop[inner_posn];
 
         // Call code from stencil compiler.
         calc_loop_of_vectors(region_thread_idx, block_thread_idx, start_idxs, stop_inner, write_mask);
@@ -708,19 +677,18 @@ namespace yask {
 
     // If this bundle is updating scratch grid(s),
     // expand begin & end of 'idxs' by sizes of halos.
-    // This will often change vec-len aligned indices to non-aligned.
     // Step indices may also change.
     // NB: it is not necessary that the domain of each grid
     // is the same as the span of 'idxs'. However, it should be
     // at least that large to ensure that grid is able to hold
-    // calculated results.
+    // calculated results. This is checked when 'CHECK' is defined.
     // In other words, grid can be larger than span of 'idxs', but
     // its halo sizes are still used to specify how much to
     // add to 'idxs'.
-    // Return adjusted indices.
+    // Returns adjusted indices.
     ScanIndices StencilBundleBase::adjust_span(int region_thread_idx,
                                                const ScanIndices& idxs) const {
-        CONTEXT_VARS(_generic_context);
+        STATE_VARS(this);
         ScanIndices adj_idxs(idxs);
 
         // Loop thru vecs of scratch grids for this bundle.
@@ -741,13 +709,28 @@ namespace yask {
                 int posn = gp->get_dim_posn(dname);
                 if (posn >= 0) {
 
-                    // Adjust begin & end scan indices based on halos.
+                    // Get halos, which need to be written to for
+                    // scratch vars.
                     idx_t lh = gp->get_left_halo_size(posn);
                     idx_t rh = gp->get_right_halo_size(posn);
+
+                    // Round up halos to fold sizes.
+                    lh = ROUND_UP(lh, fold_pts[j]);
+                    rh = ROUND_UP(rh, fold_pts[j]);
+
+                    // Adjust begin & end scan indices based on halos.
                     adj_idxs.begin[i] = idxs.begin[i] - lh;
                     adj_idxs.end[i] = idxs.end[i] + rh;
 
-                    // Make sure grid covers block.
+                    // Make sure grid covers index bounds.
+                    TRACE_MSG("adjust_span: mini-blk [" << 
+                               idxs.begin[i] << "..." <<
+                               idxs.end[i] << ") adjusted to [" << 
+                               adj_idxs.begin[i] << "..." <<
+                               adj_idxs.end[i] << ") within scratch-grid '" << 
+                               gp->get_name() << "' allocated [" <<
+                               gp->get_first_rank_alloc_index(posn) << "..." <<
+                               gp->get_last_rank_alloc_index(posn) << "] in dim '" << dname << "'");
                     assert(adj_idxs.begin[i] >= gp->get_first_rank_alloc_index(posn));
                     assert(adj_idxs.end[i] <= gp->get_last_rank_alloc_index(posn) + 1);
 
@@ -833,6 +816,11 @@ namespace yask {
             os << " Bundle '" << sg->get_name() << "':\n" <<
                 "  num reqd scratch bundles:   " << (sg_list.size() - 1) << endl;
             // TODO: add info on scratch bundles here.
+
+            if (sg->is_sub_domain_expr())
+                os << "  sub-domain expr:            '" << sg->get_domain_description() << "'\n";
+            if (sg->is_step_cond_expr())
+                os << "  step-condition expr:        '" << sg->get_step_cond_description() << "'\n";
 
             os <<
                 "  bundle size (points):       " << makeNumStr(bb.bb_size) << endl;

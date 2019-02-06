@@ -1,13 +1,15 @@
-Previous YASK users may want to jump to the [compatibility notices](#backward-compatibility-notices).
+# YASK--Yet Another Stencil Kernel
+
+* New YASK users may want to start with the [YASK tutorial](https://www.ixpug.org/components/com_solutionlibrary/assets/documents/1538169451-IXPUG_Fall_Conf_2018_paper_2%20-%20Rev3%20-%20Charles%20Yount.pdf).
+* Existing YASK users may want to jump to the [backward-compatibility notices](#backward-compatibility-notices).
 
 ## Overview
-YASK--Yet Another Stencil Kernel: A framework to rapidly create high-performance stencil code including optimizations and features such as
-* Vector folding,
-* Automatically-tuned cache blocking,
-* Multi-level OpenMP parallelism,
-* Encapsulated memory layout,
-* Temporal wave-front blocking,
-* MPI halo exchange, overlapping MPI communication and compute, and
+YASK is a framework to rapidly create high-performance stencil code including optimizations and features such as
+* Vector-folding to increase data reuse via non-traditional data layout,
+* Multi-level OpenMP parallelism to exploit multiple cores and threads,
+* Scaling to multiple sockets and nodes via MPI with overlapped communication and compute, and
+* Spatial tiling with automatically-tuned block sizes,
+* Temporal tiling to further increase cache locality,
 * APIs for C++ and Python: [API documentation](https://rawgit.com/intel/yask/api-docs/html/index.html).
 
 YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-optimized code for Intel(R) Xeon Phi(TM) and Intel(R) Xeon(R) processors.
@@ -23,7 +25,7 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
   for multi-socket and multi-node operation or
   Intel(R) Parallel Studio XE Composer Edition for C++ Linux
   for single-socket only
-  (2016 or later, 2018 update 2 recommended).
+  (2016 or later, 2018 update 2 or later recommended).
   Building a YASK kernel with the Gnu compiler is possible, but only useful
   for functional testing. The performance
   of the kernel built from the Gnu compiler has been observed to be up to 7x lower
@@ -34,6 +36,7 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
 * Awk.
 * Gnu make.
 * Bash shell.
+* Numactl.
 * Optional utilities and their purposes:
     * The `indent` or `gindent` utility, used automatically during the build process
       to make the generated code easier for humans to read.
@@ -54,9 +57,11 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
       https://software.intel.com/en-us/articles/intel-software-development-emulator,
       for functional testing if you don't have native support for any given instruction set.
 
-To continue with building and running, see the [YASK tutorial](https://www.ixpug.org/components/com_solutionlibrary/assets/documents/1538169451-IXPUG_Fall_Conf_2018_paper_2%20-%20Rev3%20-%20Charles%20Yount.pdf).
-
 ### Backward-compatibility notices:
+* Version 2.17.00 determined the host architecture in `make` and `bin/yask.sh` and number of MPI ranks in `bin/yask.sh`.
+This changed the old behavior of `make` defaulting to `snb` architecture and `bin/yask.sh` requiring `-arch` and `-ranks`.
+Those options are still available to override the host-based default.
+* Version 2.16.03 moved the position of the log-file name to the last column in the CSV output of `utils/bin/yask_log_to_csv.pl`.
 * Version 2.15.04 required a call to `yc_grid::set_dynamic_step_alloc(true)` to allow changing the
 allocation in the step (time) dimension for grid variables created at YASK compile-time.
 * Version 2.15.02 required all "misc" indices to be yask-compiler-time constants.

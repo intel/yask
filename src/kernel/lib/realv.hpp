@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2018, Intel Corporation
+Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -42,12 +42,16 @@ namespace yask {
     const ctrl_t ctrl_sel_bit = 0x10;
 #ifdef USE_INTRIN256
     const idx_t vec_elems = 8;
+    typedef __m256 simd_t;
+    typedef __m256i isimd_t;
     typedef float imem_t;
 #define VEC_ELEMS 8
 #define INAME(op) _mm256_ ## op ## _ps
 #define INAMEI(op) _mm256_ ## op ## _epi32
 #elif defined(USE_INTRIN512)
     const idx_t vec_elems = 16;
+    typedef __m512 simd_t;
+    typedef __m512i isimd_t;
     typedef void imem_t;
     typedef __mmask16 real_mask_t;
 #define VEC_ELEMS 16
@@ -63,12 +67,16 @@ namespace yask {
     const ctrl_t ctrl_sel_bit = 0x8;
 #ifdef USE_INTRIN256
     const idx_t vec_elems = 4;
+    typedef __m256d simd_t;
+    typedef __m256i isimd_t;
     typedef double imem_t;
 #define VEC_ELEMS 4
 #define INAME(op) _mm256_ ## op ## _pd
 #define INAMEI(op) _mm256_ ## op ## _epi64
 #elif defined(USE_INTRIN512)
     const idx_t vec_elems = 8;
+    typedef __m512d simd_t;
+    typedef __m512i isimd_t;
     typedef void imem_t;
     typedef __mmask8 real_mask_t;
 #define VEC_ELEMS 8
@@ -106,10 +114,10 @@ namespace yask {
     for (int i=0; i<VLEN; i++)
 #else
 #define REAL_VEC_LOOP(i)                                                \
-    _Pragma("vector aligned") _Pragma("vector always") _Pragma("omp simd")  \
+    _Pragma("vector aligned") _Pragma("vector always") _Pragma("omp simd") \
     for (int i=0; i<VLEN; i++)
-#define REAL_VEC_LOOP_UNALIGNED(i)              \
-    _Pragma("vector always") _Pragma("omp simd")    \
+#define REAL_VEC_LOOP_UNALIGNED(i)                      \
+    _Pragma("vector always") _Pragma("omp simd")        \
     for (int i=0; i<VLEN; i++)
 #endif
 
@@ -142,23 +150,10 @@ namespace yask {
 #ifndef NO_INTRINSICS
 
         // Real SIMD-type overlay.
-#if REAL_BYTES == 4 && defined(USE_INTRIN256)
-        __m256  mr;
-#elif REAL_BYTES == 4 && defined(USE_INTRIN512)
-        __m512  mr;
-#elif REAL_BYTES == 8 && defined(USE_INTRIN256)
-        __m256d mr;
-#elif REAL_BYTES == 8 && defined(USE_INTRIN512)
-        __m512d mr;
-#endif
+        simd_t mr;
 
         // Integer SIMD-type overlay.
-#if defined(USE_INTRIN256)
-        __m256i mi;
-#elif defined(USE_INTRIN512)
-        __m512i mi;
-#endif
-
+        isimd_t mi;
 #endif
     };
 
@@ -179,6 +174,11 @@ namespace yask {
         ALWAYS_INLINE real_vec_t(const real_vec_t_data& val) {
             operator=(val);
         }
+#ifndef NO_INTRINSICS
+        ALWAYS_INLINE real_vec_t(const simd_t& val) {
+            operator=(val);
+        }
+#endif
 
         // broadcast scalar.
         ALWAYS_INLINE real_vec_t(float val) {
@@ -212,6 +212,12 @@ namespace yask {
             u = rhs;
             return *this;
         }
+#ifndef NO_INTRINSICS
+        ALWAYS_INLINE real_vec_t& operator=(const simd_t& rhs) {
+            u.mr = rhs;
+            return *this;
+        }
+#endif
 
         // assignment: single value broadcast.
         ALWAYS_INLINE void operator=(double val) {
@@ -477,8 +483,146 @@ namespace yask {
         return real_vec_t(lhs) / rhs;
     }
 
-    // wrappers around some intrinsics w/non-intrinsic equivalents.
-    // TODO: make these methods in the real_vec_t union.
+    // Safe sqrt.
+    ALWAYS_INLINE float sqrt_absf(float a) {
+        return sqrtf(fabsf(a));
+    }
+    ALWAYS_INLINE double sqrt_abs(double a) {
+        return sqrt(fabs(a));
+    }
+
+    // A macro to emulate missing SVML vector functions.
+#if !defined(NO_INTRINSICS)
+#define MAKE_INTRIN(op, libm_fn)                        \
+    ALWAYS_INLINE simd_t INAME(op)(simd_t a) {          \
+        real_vec_t rva(a);                              \
+        real_vec_t res;                                 \
+        REAL_VEC_LOOP(i) res[i] = libm_fn(rva.u.r[i]);  \
+        return res.u.mr;                                \
+    }
+
+    // Need simd abs for 256 bits only.
+#ifdef USE_INTRIN256
+#if REAL_BYTES == 4
+    MAKE_INTRIN(abs, fabsf)
+#else
+    MAKE_INTRIN(abs, fabs)
+#endif
+#endif
+
+    // Safe sqrt(x), i.e., sqrt(abs(x)).
+    // Used mainly for validation tests.
+#if REAL_BYTES == 4
+    MAKE_INTRIN(sqrt_abs, sqrt_absf)
+#else
+    MAKE_INTRIN(sqrt_abs, sqrt_abs)
+#endif
+
+#endif
+
+    // math func wrappers.
+#if REAL_BYTES == 4
+#define SVML_1ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)        \
+    ALWAYS_INLINE real_t yask_fn(const real_t& a) {             \
+        return libm_spfn(a);                                    \
+    }
+#define SVML_2ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)        \
+    ALWAYS_INLINE real_t yask_fn(const real_t& a, const real_t& b) {    \
+        return libm_spfn(a, b);                                         \
+    }
+#else
+#define SVML_1ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)        \
+    ALWAYS_INLINE real_t yask_fn(const real_t& a) {             \
+        return libm_dpfn(a);                                    \
+    }
+#define SVML_2ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)        \
+    ALWAYS_INLINE real_t yask_fn(const real_t& a, const real_t& b) {    \
+        return libm_dpfn(a, b);                                         \
+    }
+#endif
+
+    // SVML emulation.
+#if defined(NO_INTRINSICS) || !defined(USE_SVML)
+#define SVML_1ARG(yask_fn, svml_fn, libm_dpfn, libm_spfn)      \
+    SVML_1ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)            \
+    ALWAYS_INLINE real_vec_t yask_fn(const real_vec_t& a) {     \
+        real_vec_t res;                                         \
+        REAL_VEC_LOOP(i) res[i] = yask_fn(a.u.r[i]);            \
+        return res;                                             \
+    }
+#define SVML_2ARG(yask_fn, svml_fn, libm_dpfn, libm_spfn)      \
+    SVML_2ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)            \
+    ALWAYS_INLINE real_vec_t yask_fn(const real_vec_t& a, const real_vec_t& b) {    \
+        real_vec_t res;                                         \
+        REAL_VEC_LOOP(i) res[i] = yask_fn(a.u.r[i], b.u.r[i]);  \
+        return res;                                             \
+    }
+
+    // SVML library wrappers.
+#else
+#define SVML_1ARG(yask_fn, svml_fn, libm_dpfn, libm_spfn)      \
+    SVML_1ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)            \
+    ALWAYS_INLINE real_vec_t yask_fn(const real_vec_t& a) {     \
+        real_vec_t res;                                         \
+        res.u.mr = INAME(svml_fn)(a.u.mr);                      \
+        return res;                                             \
+    }
+#define SVML_2ARG(yask_fn, svml_fn, libm_dpfn, libm_spfn)      \
+    SVML_2ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)            \
+    ALWAYS_INLINE real_vec_t yask_fn(const real_vec_t& a, const real_vec_t& b) {    \
+        real_vec_t res;                                         \
+        res.u.mr = INAME(svml_fn)(a.u.mr, b.u.mr);              \
+        return res;                                             \
+    }
+#endif
+
+    // Use safe sqrt when running checked code to avoid NaNs.
+    // In production usage, it is the responsibility of the user
+    // to guarantee that the arguments to sqrt() are non-negative.
+#ifdef CHECK
+    SVML_1ARG(yask_sqrt, sqrt_abs, sqrt_abs, sqrt_absf) // square root.
+#else
+    SVML_1ARG(yask_sqrt, sqrt, sqrt, sqrtf) // square root.
+#endif
+    SVML_1ARG(yask_cbrt, cbrt, cbrt, cbrtf) // cube root.
+    SVML_1ARG(yask_fabs, abs, fabs, fabsf) // abs value.
+    SVML_1ARG(yask_erf, erf, erf, erff) // error fn.
+    SVML_1ARG(yask_exp, exp, exp, expf) // natural exp.
+    SVML_1ARG(yask_log, log, log, logf) // natural log.
+    SVML_1ARG(yask_sin, sin, sin, sinf) // sine.
+    SVML_1ARG(yask_cos, cos, cos, cosf) // cosine.
+    SVML_1ARG(yask_atan, atan, atan, atanf) // inv (arc) tangent.
+    SVML_2ARG(yask_pow, pow, pow, powf) // inv (arc) tangent.
+#undef SVML_1ARG_SCALAR
+#undef SVML_1ARG
+#undef SVML_2ARG_SCALAR
+#undef SVML_2ARG
+
+    // Sin+cos.
+    ALWAYS_INLINE void yask_sin_and_cos(real_t& sin_res, real_t& cos_res, real_t a) {
+#if REAL_BYTES == 4
+        sincosf(a, &sin_res, &cos_res);
+#else
+        sincos(a, &sin_res, &cos_res);
+#endif
+    }
+    ALWAYS_INLINE void yask_cos_and_sin(real_t& cos_res, real_t& sin_res, real_t a) {
+        yask_sin_and_cos(sin_res, cos_res, a);
+    }
+    ALWAYS_INLINE void yask_sin_and_cos(real_vec_t& sin_res, 
+                                        real_vec_t& cos_res, 
+                                        const real_vec_t& a) {
+#if defined(NO_INTRINSICS) || !defined(USE_SVML)
+        REAL_VEC_LOOP(i) yask_sin_and_cos(sin_res[i], cos_res[i], a[i]);
+#else
+        sin_res.u.mr = INAME(sincos)(&cos_res.u.mr, a.u.mr);
+#endif
+    }
+    ALWAYS_INLINE void yask_cos_and_sin(real_vec_t& cos_res, 
+                                        real_vec_t& sin_res, 
+                                        const real_vec_t& a) {
+        yask_sin_and_cos(sin_res, cos_res, a);
+    }
 
     // Get consecutive elements from two vectors.
     // Concat a and b, shift right by count elements, keep _right_most elements.

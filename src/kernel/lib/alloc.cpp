@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2018, Intel Corporation
+Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -49,13 +49,13 @@ namespace yask {
     constexpr int _pmem_key = 2000; // leave space after this for pmem devices.
 
     // Alloc 'nbytes' for each requested mem type.
-    // Pointers are returned in '_data_buf'.
+    // Pointers are returned in 'data_buf'.
     // 'ngrids' and 'type' are only used for debug msg.
     void StencilContext::_alloc_data(const map <int, size_t>& nbytes,
                                      const map <int, size_t>& ngrids,
                                      map <int, shared_ptr<char>>& data_buf,
                                      const std::string& type) {
-        CONTEXT_VARS(this);
+        STATE_VARS(this);
 
         // Loop through each mem type.
         for (const auto& i : nbytes) {
@@ -119,7 +119,7 @@ namespace yask {
 
     // Allocate memory for grids that do not already have storage.
     void StencilContext::allocGridData() {
-        CONTEXT_VARS(this);
+        STATE_VARS(this);
 
         // Allocate I/O grids before read-only grids.
         GridPtrs sortedGridPtrs;
@@ -138,7 +138,7 @@ namespace yask {
         os << "PMEM grid-allocation priority:" << endl;
         for (auto sp : sortedGridPtrs) {
             os << " '" << sp->get_name() << "'";
-            if (gridPtrSet.find(sp)!=gridPtrSet.end())
+            if (done.find(sp)!=done.end())
                 os << " (output)";
             os << endl;
         }
@@ -152,7 +152,7 @@ namespace yask {
         map <int, shared_ptr<char>> _grid_data_buf;
 
 #ifdef USE_PMEM
-        auto preferredNUMASize = opts->_numa_pref_max * 1024*1024*1024;
+        auto preferredNUMASize = opts->_numa_pref_max * 1024*1024*(size_t)1024;
 #endif
         
         // Pass 0: assign PMEM node when preferred NUMA node is not enough.
@@ -231,7 +231,7 @@ namespace yask {
     // Determine the size and shape of all MPI buffers.
     // Create buffers and allocate them.
     void StencilContext::allocMpiData() {
-        CONTEXT_VARS(this);
+        STATE_VARS(this);
 
         // Remove any old MPI data.
         env->global_barrier();
@@ -245,11 +245,11 @@ namespace yask {
 
         map<int, int> num_exchanges; // send/recv => count.
         map<int, idx_t> num_elems; // send/recv => count.
-        auto me = _env->my_rank;
+        auto me = env->my_rank;
 
         // Need to determine the size and shape of all MPI buffers.
         // Loop thru all neighbors of this rank.
-        _mpiInfo->visitNeighbors
+        mpiInfo->visitNeighbors
             ([&](const IdxTuple& neigh_offsets, int neigh_rank, int neigh_idx) {
                 if (neigh_rank == MPI_PROC_NULL)
                     return; // from lambda fn.
@@ -269,7 +269,7 @@ namespace yask {
                     maxdist = NUM_STENCIL_DIMS - 1;
 
                 // Manhattan dist. of current neighbor.
-                int mandist = _mpiInfo->man_dists.at(neigh_idx);
+                int mandist = mpiInfo->man_dists.at(neigh_idx);
 
                 // Check distance.
                 if (mandist > maxdist) {
@@ -282,8 +282,8 @@ namespace yask {
                 // Both my rank and neighbor rank must have *all* domain sizes
                 // of vector multiples.
                 bool vec_ok = allow_vec_exchange &&
-                    _mpiInfo->has_all_vlen_mults[_mpiInfo->my_neighbor_index] &&
-                    _mpiInfo->has_all_vlen_mults[neigh_idx];
+                    mpiInfo->has_all_vlen_mults[mpiInfo->my_neighbor_index] &&
+                    mpiInfo->has_all_vlen_mults[neigh_idx];
 
                 // Determine size of MPI buffers between neigh_rank and my
                 // rank for each grid and create those that are needed.  It
@@ -306,7 +306,7 @@ namespace yask {
                     IdxTuple my_halo_sizes, neigh_halo_sizes;
                     IdxTuple first_inner_idx, last_inner_idx;
                     IdxTuple first_outer_idx, last_outer_idx;
-                    for (auto& dim : _dims->_domain_dims.getDims()) {
+                    for (auto& dim : domain_dims.getDims()) {
                         auto& dname = dim.getName();
 
                         // Only consider domain dims that are used in this grid.
@@ -324,9 +324,9 @@ namespace yask {
                             idx_t lidx = gp->get_last_rank_domain_index(dname);
                             first_inner_idx.addDimBack(dname, fidx);
                             last_inner_idx.addDimBack(dname, lidx);
-                            if (_opts->is_first_rank(dname))
+                            if (opts->is_first_rank(dname))
                                 fidx -= lhalo; // extend into left halo.
-                            if (_opts->is_last_rank(dname))
+                            if (opts->is_last_rank(dname))
                                 lidx += rhalo; // extend into right halo.
                             first_outer_idx.addDimBack(dname, fidx);
                             last_outer_idx.addDimBack(dname, lidx);
@@ -414,7 +414,7 @@ namespace yask {
                     // to be so.
                     // TODO: add a heuristic to avoid increasing by a large factor.
                     if (grid_vec_ok) {
-                        for (auto& dim : _dims->_domain_dims.getDims()) {
+                        for (auto& dim : domain_dims.getDims()) {
                             auto& dname = dim.getName();
                             if (gp->is_dim_used(dname)) {
                                 auto vlen = gp->_get_vec_len(dname);
@@ -448,7 +448,7 @@ namespace yask {
                         IdxTuple copy_end = gp->get_allocs(); // one past last!
 
                         // Adjust along domain dims in this grid.
-                        for (auto& dim : _dims->_domain_dims.getDims()) {
+                        for (auto& dim : domain_dims.getDims()) {
                             auto& dname = dim.getName();
                             if (gp->is_dim_used(dname)) {
 
@@ -480,7 +480,7 @@ namespace yask {
                                         // Adjust LHS of interior.
                                         idx_t ext_end = ROUND_UP(first_inner_idx[dname] +
                                                                  max(min_ext, neigh_halo_sizes[dname]),
-                                                                 _dims->_fold_pts[dname]);
+                                                                 dims->_fold_pts[dname]);
                                         mpi_interior.bb_begin[dname] =
                                             max(mpi_interior.bb_begin[dname], ext_end);
                                     }
@@ -495,7 +495,7 @@ namespace yask {
                                         // Adjust RHS of interior.
                                         idx_t ext_begin = ROUND_DOWN(last_inner_idx[dname] + 1 -
                                                                      max(min_ext, neigh_halo_sizes[dname]),
-                                                                     _dims->_fold_pts[dname]);
+                                                                     dims->_fold_pts[dname]);
                                         mpi_interior.bb_end[dname] =
                                             min(mpi_interior.bb_end[dname], ext_begin);
                                     }
@@ -538,7 +538,7 @@ namespace yask {
                             idx_t dsize = 1;
 
                             // domain dim?
-                            if (_dims->_domain_dims.lookup(dname)) {
+                            if (domain_dims.lookup(dname)) {
                                 dsize = copy_end[dname] - copy_begin[dname];
 
                                 // Check whether alignment and size are multiple of vlen.
@@ -600,7 +600,7 @@ namespace yask {
                         IdxTuple copy_last = copy_end.subElements(1);
 
                         // Make MPI data entry for this grid.
-                        auto gbp = mpiData.emplace(gname, _mpiInfo);
+                        auto gbp = mpiData.emplace(gname, state->_mpiInfo);
                         auto& gbi = gbp.first; // iterator from pair returned by emplace().
                         auto& gbv = gbi->second; // value from iterator.
                         auto& buf = gbv.getBuf(MPIBufs::BufDir(bd), neigh_offsets);
@@ -759,8 +759,8 @@ namespace yask {
                                 nbufs[numa_pref]++;
                                 if (pass == 0)
                                     TRACE_MSG("  MPI buf '" << buf.name << "' needs " <<
-                                              makeByteStr(sbytes) <<
-                                              " using mem-key " << numa_pref);
+                                              makeByteStr(sbytes) << 
+                                              " (mem-key = " << numa_pref << ")");
                             }
                         } // snd/rcv.
                     } );  // neighbors.
@@ -769,7 +769,8 @@ namespace yask {
                 if (pass == 1 && do_shm) {
 
                     for (int rn = 0; rn < env->num_shm_ranks; rn++) {
-                        TRACE_MSG("Sharing MPI shm offsets from shm-rank " << rn);
+                        TRACE_MSG("Sharing MPI shm offsets from shm-rank " << rn <<
+                                  " for grid '" << gname << "'");
                         MPI_Bcast(sb_ofs[gname][rn].data(), env->num_shm_ranks, MPI_INTEGER8,
                                   rn, env->shm_comm);
                         for (int rn2 = 0; rn2 < env->num_shm_ranks; rn2++)
@@ -793,7 +794,7 @@ namespace yask {
     // Allocate memory for scratch grids based on number of threads and
     // block sizes.
     void StencilContext::allocScratchData() {
-        CONTEXT_VARS(this);
+        STATE_VARS(this);
 
         // Remove any old scratch data.
         freeScratchData();
@@ -809,23 +810,25 @@ namespace yask {
         int rthreads = set_region_threads();
 
         // Delete any existing scratch grids.
-        // Create new scratch grids.
+        // Create new scratch grids, but without any
+        // data allocated.
         makeScratchGrids(rthreads);
 
-        // Find the max block size across all packs.  TODO: use the specific
-        // block size for the pack containing a given scratch grid.
-        IdxTuple blksize(_dims->_domain_dims);
+        // Find the max mini-block size across all packs.
+        // They can be different across packs when pack-specific
+        // auto-tuning has been used.
+        IdxTuple mblksize(domain_dims);
         for (auto& sp : stPacks) {
             auto& psettings = sp->getActiveSettings();
             DOMAIN_VAR_LOOP(i, j) {
 
-                auto sz = round_up_flr(psettings._block_sizes[i],
+                auto sz = round_up_flr(psettings._mini_block_sizes[i],
                                        fold_pts[j]);
-                blksize[j] = max(blksize[j], sz);
+                mblksize[j] = max(mblksize[j], sz);
             }
         }
-        TRACE_MSG("allocScratchData: max block size across pack(s) is " <<
-                  blksize.makeDimValStr(" * "));
+        TRACE_MSG("allocScratchData: max mini-block size across pack(s) is " <<
+                  mblksize.makeDimValStr(" * "));
         
         // Pass 0: count required size, allocate chunk of memory at end.
         // Pass 1: distribute parts of already-allocated memory chunk.
@@ -850,18 +853,23 @@ namespace yask {
                     int numa_pref = gp->get_numa_preferred();
 
                     // Loop through each domain dim.
-                    for (auto& dim : _dims->_domain_dims.getDims()) {
+                    for (auto& dim : domain_dims.getDims()) {
                         auto& dname = dim.getName();
 
                         if (gp->is_dim_used(dname)) {
 
-                            // Set domain size of grid to block size.
-                            gp->_set_domain_size(dname, blksize[dname]);
+                            // Set domain size of scratch grid to mini-block size.
+                            gp->_set_domain_size(dname, mblksize[dname]);
+
+                            // Conservative allowance for WF exts and/or temporal shifts.
+                            idx_t shift_pts = max(wf_shift_pts[dname], tb_angles[dname] * num_tb_shifts) * 2;
+                            gp->_set_left_wf_ext(dname, shift_pts);
+                            gp->_set_right_wf_ext(dname, shift_pts);
 
                             // Pads.
                             // Set via both 'extra' and 'min'; larger result will be used.
-                            gp->set_extra_pad_size(dname, _opts->_extra_pad_sizes[dname]);
-                            gp->set_min_pad_size(dname, _opts->_min_pad_sizes[dname]);
+                            gp->set_extra_pad_size(dname, opts->_extra_pad_sizes[dname]);
+                            gp->set_min_pad_size(dname, opts->_min_pad_sizes[dname]);
                         }
                     } // dims.
 

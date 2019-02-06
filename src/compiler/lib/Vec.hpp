@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2018, Intel Corporation
+Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -183,7 +183,7 @@ namespace yask {
 #endif
 
         // Equality.
-        virtual void visit(EqualsExpr* ee) {
+        virtual string visit(EqualsExpr* ee) {
 
             // Only want to continue visit on RHS of an eqGroup.
             ee->getRhs()->accept(this);
@@ -191,10 +191,11 @@ namespace yask {
             // For LHS, just save point.
             auto lhs = ee->getLhs();
             _vecWrites.insert(*lhs);
+            return "";
         }
 
         // Called when a grid point is read in a stencil function.
-        virtual void visit(GridPoint* gp);
+        virtual string visit(GridPoint* gp);
     };
 
     // Define methods for printing a vectorized version of the stencil.
@@ -300,7 +301,7 @@ namespace yask {
         virtual ~ExprReorderVisitor() {}
 
         // Sort a commutative expression.
-        virtual void visit(CommutativeExpr* ce);
+        virtual string visit(CommutativeExpr* ce);
     };
 
 } // namespace yask.

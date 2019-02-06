@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2018, Intel Corporation
+Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -79,6 +79,7 @@ namespace yask {
         }
 
         // Return count from counter visitor.
+        // Relies on counter visitor visiting all nodes.
         int getCount(Expr* ep) {
             if (!_cv)
                 return 0;
@@ -86,6 +87,7 @@ namespace yask {
         }
 
         // Return number of times 'ep' node is shared.
+        // Relies on counter visitor visiting all nodes.
         int getNumCommon(Expr* ep) {
             if (!_cv)
                 return 0;
@@ -153,12 +155,11 @@ namespace yask {
     class PrintVisitorBase : public ExprVisitor {
 
     protected:
-        ostream& _os;               // used for printing intermediate results as needed.
+        ostream& _os;               // used for printing non-returned results as needed.
         PrintHelper& _ph;           // used to format items for printing.
 
-        // After visiting an expression, the part of the result not written to _os
-        // is stored in _exprStr.
-        string _exprStr;
+        // Prefix for function calls.
+        string _funcPrefix = "yask_";
 
         // Make these substitutions to indices in expressions.
         const VarMap* _varMap = 0;
@@ -166,14 +167,12 @@ namespace yask {
         // Map sub-expressions to var names.
         map<Expr*, string> _tempVars;
 
-        // Declare a new temp var.
-        // Set _exprStr to it.
+        // Declare a new temp var and set 'res' to it.
         // Print LHS of assignment to it.
-        // If 'ex' is non-null, it is used as key to save name of temp var and
-        // to write a comment.
+        // 'ex' is used as key to save name of temp var and to write a comment.
         // If 'comment' is set, use it for the comment.
         // Return stream to continue w/RHS.
-        virtual ostream& makeNextTempVar(Expr* ex, string comment = "");
+        virtual ostream& makeNextTempVar(string& res, Expr* ex, string comment = "");
 
     public:
         // os is used for printing intermediate results as needed.
@@ -190,19 +189,6 @@ namespace yask {
         }
         const CompilerSettings& getSettings() const {
             return _ph.getSettings();
-        }
-
-        // Get unwritten result expression, if any.
-        virtual string getExprStr() const {
-            return _exprStr;
-        }
-
-        // Get unwritten result expression, if any.
-        // Clear result.
-        virtual string getExprStrAndClear() {
-            string v = _exprStr;
-            _exprStr = "";
-            return v;
         }
     };
 
@@ -221,32 +207,35 @@ namespace yask {
         int getNumCommon() const { return _numCommon; }
 
         // A grid access.
-        virtual void visit(GridPoint* gp);
+        virtual string visit(GridPoint* gp);
 
         // A grid index.
-        virtual void visit(IndexExpr* ie);
+        virtual string visit(IndexExpr* ie);
 
         // A constant.
-        virtual void visit(ConstExpr* ce);
+        virtual string visit(ConstExpr* ce);
 
         // Some hand-written code.
-        virtual void visit(CodeExpr* ce);
+        virtual string visit(CodeExpr* ce);
 
         // Generic unary operators.
-        virtual void visit(UnaryNumExpr* ue);
-        virtual void visit(UnaryBoolExpr* ue);
-        virtual void visit(UnaryNum2BoolExpr* ue);
+        virtual string visit(UnaryNumExpr* ue);
+        virtual string visit(UnaryBoolExpr* ue);
+        virtual string visit(UnaryNum2BoolExpr* ue);
 
         // Generic binary operators.
-        virtual void visit(BinaryNumExpr* be);
-        virtual void visit(BinaryBoolExpr* be);
-        virtual void visit(BinaryNum2BoolExpr* be);
+        virtual string visit(BinaryNumExpr* be);
+        virtual string visit(BinaryBoolExpr* be);
+        virtual string visit(BinaryNum2BoolExpr* be);
 
         // A commutative operator.
-        virtual void visit(CommutativeExpr* ce);
+        virtual string visit(CommutativeExpr* ce);
+
+        // A function call.
+        virtual string visit(FuncExpr* fe);
 
         // An equals operator.
-        virtual void visit(EqualsExpr* ee);
+        virtual string visit(EqualsExpr* ee);
     };
 
     // Outputs an AST traversed in a bottom-up fashion with multiple
@@ -267,36 +256,39 @@ namespace yask {
         }
 
         // Try some simple printing techniques.
-        // Return true if printing is done.
-        // Return false if more complex method should be used.
-        virtual bool trySimplePrint(Expr* ex, bool force);
+        // Return string if printing is done.
+        // Return empty string if more complex method should be used.
+        virtual string trySimplePrint(Expr* ex, bool force);
 
         // A grid point.
-        virtual void visit(GridPoint* gp);
+        virtual string visit(GridPoint* gp);
 
         // An index.
-        virtual void visit(IndexExpr* ie);
+        virtual string visit(IndexExpr* ie);
 
         // A constant.
-        virtual void visit(ConstExpr* ce);
+        virtual string visit(ConstExpr* ce);
 
         // Code.
-        virtual void visit(CodeExpr* ce);
+        virtual string visit(CodeExpr* ce);
 
         // Unary operators.
-        virtual void visit(UnaryNumExpr* ue);
-        virtual void visit(UnaryBoolExpr* ue);
+        virtual string visit(UnaryNumExpr* ue);
+        virtual string visit(UnaryBoolExpr* ue);
 
         // Binary operators.
-        virtual void visit(BinaryNumExpr* be);
-        virtual void visit(BinaryBoolExpr* be);
-        virtual void visit(BinaryNum2BoolExpr* be);
+        virtual string visit(BinaryNumExpr* be);
+        virtual string visit(BinaryBoolExpr* be);
+        virtual string visit(BinaryNum2BoolExpr* be);
 
         // A commutative operator.
-        virtual void visit(CommutativeExpr* ce);
+        virtual string visit(CommutativeExpr* ce);
+
+        // A function call.
+        virtual string visit(FuncExpr* fe);
 
         // An equality.
-        virtual void visit(EqualsExpr* ee);
+        virtual string visit(EqualsExpr* ee);
     };
 
 
@@ -326,10 +318,10 @@ namespace yask {
         }
 
         // Equals op.
-        virtual void visit(EqualsExpr* ee);
+        virtual string visit(EqualsExpr* ee);
 
         // A point.
-        virtual void visit(GridPoint* gp);
+        virtual string visit(GridPoint* gp);
     };
 
     // Outputs a full GraphViz input file.
@@ -357,25 +349,28 @@ namespace yask {
         DOTPrintVisitor(ostream& os) : _os(os) { }
 
         // A grid read.
-        virtual void visit(GridPoint* gp);
+        virtual string visit(GridPoint* gp);
 
         // A constant.
-        virtual void visit(ConstExpr* ce);
+        virtual string visit(ConstExpr* ce);
 
         // Some hand-written code.
-        virtual void visit(CodeExpr* ce);
+        virtual string visit(CodeExpr* ce);
 
         // Generic numeric unary operators.
-        virtual void visit(UnaryNumExpr* ue);
+        virtual string visit(UnaryNumExpr* ue);
 
         // Generic numeric binary operators.
-        virtual void visit(BinaryNumExpr* be);
+        virtual string visit(BinaryNumExpr* be);
 
         // A commutative operator.
-        virtual void visit(CommutativeExpr* ce);
+        virtual string visit(CommutativeExpr* ce);
+
+        // A function call.
+        virtual string visit(FuncExpr* fe);
 
         // An equals operator.
-        virtual void visit(EqualsExpr* ee);
+        virtual string visit(EqualsExpr* ee);
     };
 
     // Outputs a simple GraphViz input file.
@@ -388,25 +383,28 @@ namespace yask {
             DOTPrintVisitor(os) { }
 
         // A grid read.
-        virtual void visit(GridPoint* gp);
+        virtual string visit(GridPoint* gp);
 
         // A constant.
-        virtual void visit(ConstExpr* ce) {}
+        virtual string visit(ConstExpr* ce) { return ""; }
 
         // Some hand-written code.
-        virtual void visit(CodeExpr* ce) {}
+        virtual string visit(CodeExpr* ce) { return ""; }
 
         // Generic numeric unary operators.
-        virtual void visit(UnaryNumExpr* ue);
+        virtual string visit(UnaryNumExpr* ue);
 
         // Generic numeric binary operators.
-        virtual void visit(BinaryNumExpr* be);
+        virtual string visit(BinaryNumExpr* be);
 
         // A commutative operator.
-        virtual void visit(CommutativeExpr* ce);
+        virtual string visit(CommutativeExpr* ce);
+
+        // A function call.
+        virtual string visit(FuncExpr* fe);
 
         // An equals operator.
-        virtual void visit(EqualsExpr* ee);
+        virtual string visit(EqualsExpr* ee);
     };
 
     // PrinterBase is the main class for defining how to print a stencil.

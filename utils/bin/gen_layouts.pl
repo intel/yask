@@ -2,7 +2,7 @@
 
 ##############################################################################
 ## YASK: Yet Another Stencil Kernel
-## Copyright (c) 2014-2018, Intel Corporation
+## Copyright (c) 2014-2019, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -276,8 +276,8 @@ END
       my $wrap = $w ? "true" : "false";
     
       # Creation.
-      print " else if (ndims == $n && do_wrap == $wrap)\n",
-        "  gp = make_shared<YkElemGrid<$layout, $wrap>>(_dims, name, dims, &_opts, &_ostr);\n";
+      print " else if (ndims == $n && step_used == $wrap)\n",
+        "  gp = make_shared<YkElemGrid<$layout, $wrap>>(*this, name, gdims);\n";
     }
   }
   

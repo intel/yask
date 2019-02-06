@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2018, Intel Corporation
+Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -736,8 +736,8 @@ namespace std {
     public :
         size_t operator()(const yask::Tuple<T> &x ) const {
             size_t h = 0;
-            for (size_t i = 0; i < x.getNumDims(); i++) {
-                h ^= i ^ std::hash<T>()(x.getVal(i)) ^ std::hash<std::string>()(x.getDimName(i));
+            for (int i = 0; i < x.getNumDims(); i++) {
+                h ^= size_t(i) ^ std::hash<T>()(x.getVal(i)) ^ std::hash<std::string>()(x.getDimName(i));
             }
             return h;
         }

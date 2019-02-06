@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2018, Intel Corporation
+Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -58,6 +58,7 @@ typedef int MPI_Request;
 
 // Standard C and C++ headers.
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <fstream>
@@ -68,7 +69,6 @@ typedef int MPI_Request;
 #include <malloc.h>
 #include <map>
 #include <unordered_map>
-#include <math.h>
 #include <set>
 #include <sstream>
 #include <stddef.h>
@@ -154,15 +154,8 @@ typedef std::uint64_t uidx_t;
 #define TRACE_MSG0(os, msg) ((void)0)
 #endif
 
-// macro for debug message from a StencilContext method.
-#define TRACE_MSG1(msg) TRACE_MSG0(get_ostr(), msg)
-#define TRACE_MSG(msg) TRACE_MSG1(msg)
-
-// macro for debug message when _context ptr is defined.
-#define TRACE_MSG2(msg) TRACE_MSG0(_context->get_ostr(), msg)
-
-// macro for debug message when _generic_context ptr is defined.
-#define TRACE_MSG3(msg) TRACE_MSG0(_generic_context->get_ostr(), msg)
+// macro for debug message when 'os' is defined.
+#define TRACE_MSG(msg) TRACE_MSG0(os, msg)
 
 // breakpoint.
 #define INT3 asm volatile("int $3")

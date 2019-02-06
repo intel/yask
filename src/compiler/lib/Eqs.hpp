@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2018, Intel Corporation
+Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -590,9 +590,6 @@ namespace yask {
                                        const string& descr,
                                        bool printSets,
                                        ostream& os);
-
-        // Adjust scratch-grid halos as needed.
-        virtual void adjustScratchHalos();
     };
 
     typedef shared_ptr<EqBundle> EqBundlePtr;
@@ -695,7 +692,11 @@ namespace yask {
             for (auto& bp : _all)
                 bp->visitEqs(ev);
         }
-    };
+
+        // Find halos needed for each grid.
+        virtual void calcHalos(EqBundles& allBundles);
+
+    }; // EqBundlePacks.
 
 } // namespace yask.
 

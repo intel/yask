@@ -1,6 +1,6 @@
 ##############################################################################
 ## YASK: Yet Another Stencil Kernel
-## Copyright (c) 2014-2018, Intel Corporation
+## Copyright (c) 2014-2019, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -68,6 +68,7 @@ YC_SRC_DIR	:=	$(SRC_DIR)/compiler
 SWIG		:=	swig
 PERL		:=	perl
 MKDIR		:=	mkdir -p -v
+BASH		:=	bash
 
 # Find include path needed for python interface.
 # NB: constructing string inside print() to work for python 2 or 3.

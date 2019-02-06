@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2018, Intel Corporation
+Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -72,6 +72,7 @@ void usage(const string& cmd) {
         "\n"
         " -elem-bytes <n>"
         "    Set number of bytes in each FP element (default=" << settings._elem_bytes << ").\n"
+        "      Currently, only 4 (single-precision) and 8 (double) are allowed.\n"
         " -fold <dim>=<size>,...\n"
         "    Set number of elements in each given dimension in a vector block.\n"
         "    Default depends on -elem-bytes setting and print format (below).\n"
@@ -101,12 +102,12 @@ void usage(const string& cmd) {
         " [-no]-bundle-scratch\n"
         "    Bundle scratch equations even if the sizes of their scratch grids must be increased\n"
         "      to do so (default=" << settings._bundleScratch << ").\n"
-        " -step-alloc <size>\n"
-        "    Specify the size of the step-dimension memory allocation.\n"
-        "      By default, allocations are calculated automatically for each grid.\n"
         " -halo <size>\n"
-        "    Specify the sizes of the halos.\n"
+        "    Specify the size of the halos on all grids.\n"
         "      By default, halos are calculated automatically for each grid.\n"
+        " -step-alloc <size>\n"
+        "    Specify the size of the step-dimension memory allocation on all grids.\n"
+        "      By default, allocations are calculated automatically for each grid.\n"
         " [-no]-interleave-misc\n"
         "    Allocate grid vars with the 'misc' dims as the inner-most dims (default=" << settings._innerMisc << ").\n"
         "      This disallows dynamcally changing the 'misc' dim sizes during run-time.\n"
@@ -117,14 +118,16 @@ void usage(const string& cmd) {
         "    Make last dimension of fold unit stride (default=" << (!settings._firstInner) << ").\n"
         "      This controls the intra-vector memory layout.\n"
         " [-no]-ul\n"
-        "    Do [not] generate simple unaligned loads (default=" <<
-        settings._allowUnalignedLoads << ").\n"
+        "    Do [not] generate simple unaligned loads (default=" << settings._allowUnalignedLoads << ").\n"
         "      [Advanced] To use this correctly, only 1D folds are allowed, and\n"
         "        the memory layout used by YASK must have that same dimension in unit stride.\n"
         " [-no]-opt-comb\n"
         "    Do [not] combine commutative operations (default=" << settings._doComb << ").\n"
         " [-no]-opt-cse\n"
         "    Do [not] eliminate common subexpressions (default=" << settings._doCse << ").\n"
+        " [-no]-opt-pair\n"
+        "    Do [not] pair eligible function calls (default=" << settings._doPairs << ").\n"
+        "      Currently enables 'sin(x)' and 'cos(x)' to be replaced with 'sincos(x)'.\n"
         " [-no]-opt-cluster\n"
         "    Do [not] apply optimizations across the cluster (default=" << settings._doOptCluster << ").\n"
         " -max-es <num-nodes>\n"
@@ -189,6 +192,10 @@ void parseOpts(int argc, const char* argv[])
                 settings._doCse = true;
             else if (opt == "-no-opt-cse")
                 settings._doCse = false;
+            else if (opt == "-opt-pair")
+                settings._doPairs = true;
+            else if (opt == "-no-opt-pair")
+                settings._doPairs = false;
             else if (opt == "-opt-cluster")
                 settings._doOptCluster = true;
             else if (opt == "-no-opt-cluster")
@@ -332,7 +339,7 @@ int main(int argc, const char* argv[]) {
 
     cout << "YASK -- Yet Another Stencil Kernel\n"
         "YASK Stencil Compiler\n"
-        "Copyright (c) 2014-2018, Intel Corporation.\n"
+        "Copyright (c) 2014-2019, Intel Corporation.\n"
         "Version: " << yask_get_version_string() << endl;
 
     try {
@@ -352,7 +359,7 @@ int main(int argc, const char* argv[]) {
                 os = ofac.new_file_output(fname);
             stencilSoln->format(type, os);
         }
-    } catch (yask_exception e) {
+    } catch (yask_exception& e) {
         cerr << "YASK Stencil Compiler: " << e.get_message() << ".\n";
         exit(1);
     }

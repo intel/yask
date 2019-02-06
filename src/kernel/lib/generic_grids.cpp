@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2018, Intel Corporation
+Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -29,16 +29,16 @@ using namespace std;
 namespace yask {
 
     // Ctor. No allocation is done. See notes on default_alloc().
-    GenericGridBase::GenericGridBase(string name,
+    GenericGridBase::GenericGridBase(KernelStateBase& state,
+                                     const string& name,
                                      Layout& layout_base,
-                                     const GridDimNames& dimNames,
-                                     KernelSettingsPtr* settings,
-                                     ostream** ostr) :
-        _name(name), _layout_base(&layout_base), _opts(settings), _ostr(ostr) {
+                                     const GridDimNames& dimNames) :
+        KernelStateBase(state),
+        _name(name),
+        _layout_base(&layout_base) {
         for (auto& dn : dimNames)
-            _dims.addDimBack(dn, 1);
+            _grid_dims.addDimBack(dn, 1);
         _sync_layout_with_dims();
-
     }
 
     // Perform default allocation.
@@ -46,7 +46,7 @@ namespace yask {
     // programmer should call get_num_elems() or get_num_bytes() and
     // then provide allocated memory via set_storage().
     void GenericGridBase::default_alloc() {
-        auto& os = get_ostr();
+        STATE_VARS(this);
 
         // Release any old data if last owner.
         release_storage();
@@ -74,11 +74,11 @@ namespace yask {
     // Make some descriptive info.
     string GenericGridBase::make_info_string(const string& elem_name) const {
         stringstream oss;
-        if (_dims.getNumDims() == 0)
+        if (_grid_dims.getNumDims() == 0)
             oss << "scalar";
         else
-            oss << _dims.getNumDims() << "-D grid (" <<
-                _dims.makeDimValStr(" * ") << ")";
+            oss << _grid_dims.getNumDims() << "-D grid (" <<
+                _grid_dims.makeDimValStr(" * ") << ")";
         oss << " '" << _name << "'";
         if (_elems)
             oss << " with data at " << _elems << " containing ";
@@ -147,7 +147,7 @@ namespace yask {
             return get_num_elems();
 
         // Dims & sizes same?
-        if (_dims != p->_dims)
+        if (_grid_dims != p->_grid_dims)
             return get_num_elems();
 
         // Count abs diffs > epsilon.

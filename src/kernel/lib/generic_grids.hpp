@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2018, Intel Corporation
+Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -33,7 +33,8 @@ namespace yask {
 
     // A base class for a generic n-D grid.
     // This class does not define a type or memory layout.
-    class GenericGridBase {
+    class GenericGridBase :
+        public KernelStateBase {
 
     protected:
         std::string _name;      // name for grid.
@@ -52,35 +53,41 @@ namespace yask {
 
         // Note that both _dims and *_layout_base hold dimensions unless this
         // is a scalar. For a scalar, _dims is empty and _layout_base = 0.
-        IdxTuple _dims;         // names and lengths of grid dimensions.
+        IdxTuple _grid_dims;         // names and lengths of grid dimensions.
         Layout* _layout_base = 0; // memory layout.
-
-        // Command-line and env parameters.
-        KernelSettingsPtr* _opts;
-
-        // Output stream for messages.
-        // Pointer-to-pointer to let it follow a parent's pointer.
-        std::ostream** _ostr = 0;
 
         void _sync_dims_with_layout() {
             Indices idxs(_layout_base->get_sizes());
-            idxs.setTupleVals(_dims);
+            idxs.setTupleVals(_grid_dims);
         }
         void _sync_layout_with_dims() {
-            Indices idxs(_dims);
+            Indices idxs(_grid_dims);
             _layout_base->set_sizes(idxs);
         }
 
     public:
 
         // Ctor. No allocation is done. See notes on default_alloc().
-        GenericGridBase(std::string name,
+        GenericGridBase(KernelStateBase& state,
+                        const std::string& name,
                         Layout& layout_base,
-                        const GridDimNames& dimNames,
-                        KernelSettingsPtr* settings,
-                        std::ostream** ostr);
+                        const GridDimNames& dimNames);
 
         virtual ~GenericGridBase() { }
+
+        // Get state info.
+        KernelStatePtr& get_state() {
+            assert(_state);
+            return _state;
+        }
+        const KernelStatePtr& get_state() const {
+            assert(_state);
+            return _state;
+        }
+        std::ostream& get_ostr() const {
+            STATE_VARS(this);
+            return os;
+        }
 
         // Perform default allocation.
         // For other options,
@@ -94,8 +101,9 @@ namespace yask {
 
         // NUMA accessors.
         virtual int get_numa_pref() const {
+            STATE_VARS_CONST(this);
             return (_numa_pref != _numa_unset) ?
-                _numa_pref : (*_opts)->_numa_pref;
+                _numa_pref : opts->_numa_pref;
         }
         virtual bool set_numa_pref(int numa_node) {
 #ifdef USE_NUMA
@@ -107,19 +115,12 @@ namespace yask {
 #endif
         }
 
-        // Access dims.
-        const IdxTuple& get_dims() const { return _dims; }
-
-        // Get the messsage output stream.
-        virtual std::ostream& get_ostr() const {
-            assert(_ostr);
-            assert(*_ostr);
-            return **_ostr;
-        }
+        // Access dims of this grid.
+        const IdxTuple& get_dims() const { return _grid_dims; }
 
         // Get number of elements.
         virtual idx_t get_num_elems() const {
-            return _dims.product();
+            return _grid_dims.product();
         }
 
         // Get size of one element.
@@ -130,25 +131,25 @@ namespace yask {
 
         // Get number of dimensions.
         virtual int get_num_dims() const {
-            return _dims.getNumDims();
+            return _grid_dims.getNumDims();
         }
 
         // Get the nth dim name.
         virtual const std::string& get_dim_name(int n) const {
-            return _dims.getDimName(n);
+            return _grid_dims.getDimName(n);
         }
 
         // Is dim used?
         virtual bool is_dim_used(const std::string& dim) const {
-            return _dims.lookup(dim) != 0;
+            return _grid_dims.lookup(dim) != 0;
         }
 
         // Access nth dim size.
         idx_t get_dim_size(int n) const {
-            return _dims.getVal(n);
+            return _grid_dims.getVal(n);
         }
         void set_dim_size(int n, idx_t size) {
-            _dims.setVal(n, size);
+            _grid_dims.setVal(n, size);
             _sync_layout_with_dims();
         }
 
@@ -157,15 +158,15 @@ namespace yask {
             return _layout_base->get_sizes();
         }
         void set_dim_sizes(const Indices& sizes) {
-            for (int i = 0; i < _dims.size(); i++)
-                _dims.setVal(i, sizes[i]);
+            for (int i = 0; i < _grid_dims.size(); i++)
+                _grid_dims.setVal(i, sizes[i]);
             _sync_layout_with_dims();
         }
 
         // Return 'true' if dimensions are same names
         // and sizes, 'false' otherwise.
         inline bool are_dims_and_sizes_same(const GenericGridBase& src) {
-            return _dims == src._dims;
+            return _grid_dims == src._grid_dims;
         }
 
         // Print some descriptive info.
@@ -174,7 +175,7 @@ namespace yask {
         // Get linear index.
         virtual idx_t get_index(const Indices& idxs, bool check=true) const =0;
         virtual idx_t get_index(const IdxTuple& pt, bool check=true) const {
-            assert(_dims.areDimsSame(pt));
+            assert(_grid_dims.areDimsSame(pt));
             Indices idxs(pt);
             return get_index(idxs, check);
         }
@@ -213,12 +214,11 @@ namespace yask {
     public:
 
         // Ctor. No allocation is done. See notes on default_alloc().
-        GenericGridTemplate(std::string name,
+        GenericGridTemplate(KernelStateBase& state,
+                            const std::string& name,
                             Layout& layout_base,
-                            const GridDimNames& dimNames,
-                            KernelSettingsPtr* settings,
-                            std::ostream** ostr) :
-            GenericGridBase(name, layout_base, dimNames, settings, ostr) { }
+                            const GridDimNames& dimNames) :
+            GenericGridBase(state, name, layout_base, dimNames) { }
 
         // Dealloc _base when last pointer to it is destructed.
         virtual ~GenericGridTemplate() {
@@ -282,11 +282,10 @@ namespace yask {
     public:
 
         // Construct an unallocated grid.
-        GenericGrid(std::string name,
-                    const GridDimNames& dimNames,
-                    KernelSettingsPtr* settings,
-                    std::ostream** ostr) :
-            GenericGridTemplate<T>(name, _layout, dimNames, settings, ostr) {
+        GenericGrid(KernelStateBase& state,
+                    std::string name,
+                    const GridDimNames& dimNames) :
+            GenericGridTemplate<T>(state, name, _layout, dimNames) {
             assert(int(dimNames.size()) == _layout.get_num_sizes());
         }
 
@@ -306,10 +305,10 @@ namespace yask {
         virtual idx_t get_index(const Indices& idxs, bool check=true) const final {
 #ifdef CHECK
             if (check) {
-                for (int i = 0; i < this->_dims.size(); i++) {
+                for (int i = 0; i < this->_grid_dims.size(); i++) {
                     idx_t j = idxs[i];
                     assert(j >= 0);
-                    assert(j < this->_dims.getVal(i));
+                    assert(j < this->_grid_dims.getVal(i));
                 }
             }
 #endif
@@ -347,8 +346,9 @@ namespace yask {
     public:
 
         // Construct an unallocated scalar.
-        GenericScalar(std::string name) :
-            GenericGrid<T, Layout_0d>(name, _dimNames) { }
+        GenericScalar(KernelStateBase& state,
+                      std::string name) :
+            GenericGrid<T, Layout_0d>(state, name, _dimNames) { }
     };
 
 } // namespace yask.

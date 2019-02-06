@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2018, Intel Corporation
+Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -27,315 +27,8 @@ IN THE SOFTWARE.
 
 namespace yask {
 
-    typedef Tuple<idx_t> IdxTuple;
-    typedef std::vector<idx_t> GridIndices;
-    typedef std::vector<idx_t> GridDimSizes;
-    typedef std::vector<std::string> GridDimNames;
-
-    // A class to hold up to a given number of sizes or indices efficiently.
-    // Similar to a Tuple, but less overhead and doesn't keep names.
-    // Make sure this stays non-virtual.
-    // TODO: make this a template with _ndims as a parameter.
-    // TODO: ultimately, combine with Tuple w/o loss of efficiency.
-    class Indices {
-
-    public:
-
-        // Max number of indices that can be held.
-        // Note use of "+max_idxs" in code below to avoid compiler
-        // trying to take a reference to it, resulting in a undefined
-        // symbol (sometimes).
-        static constexpr int max_idxs = MAX_DIMS;
-
-        // Step dim is always in [0] of an Indices type (if it is used).
-        static constexpr int step_posn = 0;
-
-    protected:
-        idx_t _idxs[max_idxs];
-        int _ndims;
-
-    public:
-        // Ctors.
-        Indices() : _ndims(0) { }
-        Indices(int ndims) : _ndims(ndims) { } // NB: _idxs remain uninit!
-        Indices(const IdxTuple& src) {
-            setFromTuple(src);
-        }
-        Indices(const GridIndices& src) {
-            setFromVec(src);
-        }
-        Indices(const std::initializer_list<idx_t>& src) {
-            setFromInitList(src);
-        }
-        Indices(const idx_t src[], int ndims) {
-            setFromArray(src, ndims);
-        }
-        Indices(idx_t src, int ndims) {
-            setFromConst(src, ndims);
-        }
-
-        // Default copy ctor, copy operator should be okay.
-
-        // Access size.
-        inline int getNumDims() const {
-            return _ndims;
-        }
-        inline void setNumDims(int n) {
-            _ndims = n;
-        }
-
-        // Access indices.
-        inline idx_t& operator[](int i) {
-            assert(i >= 0);
-            assert(i < _ndims);
-            return _idxs[i];
-        }
-        inline const idx_t& operator[](int i) const {
-            assert(i >= 0);
-            assert(i < _ndims);
-            return _idxs[i];
-        }
-
-        // Write to an IdxTuple.
-        // The 'tgt' must have the same number of dims.
-        void setTupleVals(IdxTuple& tgt) const {
-            assert(tgt.size() == _ndims);
-            for (int i = 0; i < _ndims; i++)
-                if (i < tgt.size())
-                    tgt.setVal(i, _idxs[i]);
-        }
-
-        // Read from an IdxTuple.
-        void setFromTuple(const IdxTuple& src) {
-            assert(src.size() <= +max_idxs);
-            int n = int(src.size());
-            for (int i = 0; i < n; i++)
-                _idxs[i] = src.getVal(i);
-            _ndims = n;
-        }
-
-        // Other inits.
-        void setFromVec(const GridIndices& src) {
-            assert(src.size() <= +max_idxs);
-            int n = int(src.size());
-            for (int i = 0; i < n; i++)
-                _idxs[i] = src[i];
-            _ndims = n;
-        }
-
-        // default n => don't change _ndims.
-        void setFromArray(const idx_t src[], int n = -1) {
-            if (n < 0)
-                n = _ndims;
-            assert(n <= +max_idxs);
-            for (int i = 0; i < n; i++)
-                _idxs[i] = src[i];
-            _ndims = n;
-        }
-        void setFromInitList(const std::initializer_list<idx_t>& src) {
-            assert(src.size() <= +max_idxs);
-            int i = 0;
-            for (auto idx : src)
-                _idxs[i++] = idx;
-            _ndims = i;
-        }
-
-        // default n => don't change _ndims.
-        void setFromConst(idx_t val, int n = -1) {
-            if (n < 0)
-                n = _ndims;
-            assert(n <= +max_idxs);
-            for (int i = 0; i < n; i++)
-                _idxs[i] = val;
-            _ndims = n;
-        }
-
-        // Some comparisons.
-        // These assume all the indices are valid or
-        // initialized to the same value.
-        bool operator==(const Indices& rhs) const {
-            if (_ndims != rhs._ndims)
-                return false;
-            for (int i = 0; i < _ndims; i++)
-                if (_idxs[i] != rhs._idxs[i])
-                    return false;
-            return true;
-        }
-        bool operator!=(const Indices& rhs) const {
-            return !operator==(rhs);
-        }
-        bool operator<(const Indices& rhs) const {
-            if (_ndims < rhs._ndims)
-                return true;
-            else if (_ndims > rhs._ndims)
-                return false;
-            for (int i = 0; i < _ndims; i++)
-                if (_idxs[i] < rhs._idxs[i])
-                    return true;
-                else if (_idxs[i] > rhs._idxs[i])
-                    return false;
-            return false;       // equal, so not less than.
-        }
-        bool operator>(const Indices& rhs) const {
-            if (_ndims > rhs._ndims)
-                return true;
-            else if (_ndims < rhs._ndims)
-                return false;
-            for (int i = 0; i < _ndims; i++)
-                if (_idxs[i] > rhs._idxs[i])
-                    return true;
-                else if (_idxs[i] < rhs._idxs[i])
-                    return false;
-            return false;       // equal, so not greater than.
-        }
-
-        // Generic element-wise operator.
-        // Returns a new object.
-        inline Indices combineElements(std::function<void (idx_t& lhs, idx_t rhs)> func,
-                                       const Indices& other) const {
-            Indices res(*this);
-
-#if EXACT_INDICES
-            // Use just the used elements.
-            for (int i = 0; i < _ndims; i++)
-#else
-            // Use all to allow unroll and avoid jumps.
-#pragma unroll
-            for (int i = 0; i < max_idxs; i++)
-#endif
-                func(res._idxs[i], other._idxs[i]);
-            return res;
-        }
-
-        // Some element-wise operators.
-        // These all return a new set of Indices rather
-        // than modifying this object.
-        inline Indices addElements(const Indices& other) const {
-            return combineElements([&](idx_t& lhs, idx_t rhs) { lhs += rhs; },
-                                   other);
-        }
-        inline Indices subElements(const Indices& other) const {
-            return combineElements([&](idx_t& lhs, idx_t rhs) { lhs -= rhs; },
-                                   other);
-        }
-        inline Indices mulElements(const Indices& other) const {
-            return combineElements([&](idx_t& lhs, idx_t rhs) { lhs *= rhs; },
-                                   other);
-        }
-        inline Indices divElements(const Indices& other) const {
-            return combineElements([&](idx_t& lhs, idx_t rhs) { lhs /= rhs; },
-                                   other);
-        }
-        inline Indices minElements(const Indices& other) const {
-            return combineElements([&](idx_t& lhs, idx_t rhs) { lhs = std::min(lhs, rhs); },
-                                   other);
-        }
-        inline Indices maxElements(const Indices& other) const {
-            return combineElements([&](idx_t& lhs, idx_t rhs) { lhs = std::max(lhs, rhs); },
-                                   other);
-        }
-
-        // Generic element-wise operator with RHS const.
-        // Returns a new object.
-        inline Indices mapElements(std::function<void (idx_t& lhs, idx_t rhs)> func,
-                                   idx_t crhs) const {
-            Indices res(*this);
-
-#if EXACT_INDICES
-            // Use just the used elements.
-            for (int i = 0; i < _ndims; i++)
-#else
-            // Use all to allow unroll and avoid jumps.
-#pragma unroll
-            for (int i = 0; i < max_idxs; i++)
-#endif
-                func(res._idxs[i], crhs);
-            return res;
-        }
-
-        // Operate on all elements.
-        Indices addConst(idx_t crhs) const {
-            return mapElements([&](idx_t& lhs, idx_t rhs) { lhs += rhs; },
-                               crhs);
-        }
-        Indices subConst(idx_t crhs) const {
-            return mapElements([&](idx_t& lhs, idx_t rhs) { lhs -= rhs; },
-                               crhs);
-        }
-        Indices mulConst(idx_t crhs) const {
-            return mapElements([&](idx_t& lhs, idx_t rhs) { lhs *= rhs; },
-                               crhs);
-        }
-        Indices divConst(idx_t crhs) const {
-            return mapElements([&](idx_t& lhs, idx_t rhs) { lhs /= rhs; },
-                               crhs);
-        }
-        Indices minConst(idx_t crhs) const {
-            return mapElements([&](idx_t& lhs, idx_t rhs) { lhs = std::min(lhs, rhs); },
-                               crhs);
-        }
-        Indices maxConst(idx_t crhs) const {
-            return mapElements([&](idx_t& lhs, idx_t rhs) { lhs = std::max(lhs, rhs); },
-                               crhs);
-        }
-
-        // Reduce over all elements.
-        idx_t sum() const {
-            idx_t res = 0;
-            for (int i = 0; i < _ndims; i++)
-                res += _idxs[i];
-            return res;
-        }
-        idx_t product() const {
-            idx_t res = 1;
-            for (int i = 0; i < _ndims; i++)
-                res *= _idxs[i];
-            return res;
-        }
-
-        // Make string like "x=4, y=8".
-        std::string makeDimValStr(const GridDimNames& names,
-                                  std::string separator=", ",
-                                  std::string infix="=",
-                                  std::string prefix="",
-                                  std::string suffix="") const {
-            assert((int)names.size() == _ndims);
-
-            // Make a Tuple from names.
-            IdxTuple tmp;
-            for (int i = 0; i < int(names.size()); i++)
-                tmp.addDimBack(names[i], _idxs[i]);
-            return tmp.makeDimValStr(separator, infix, prefix, suffix);
-        }
-
-        // Make string like "4, 3, 2".
-        std::string makeValStr(int nvals,
-                               std::string separator=", ",
-                               std::string prefix="",
-                               std::string suffix="") const {
-            assert(nvals == _ndims);
-
-            // Make a Tuple w/o useful names.
-            IdxTuple tmp;
-            for (int i = 0; i < nvals; i++)
-                tmp.addDimBack(std::string(1, '0' + char(i)), _idxs[i]);
-            return tmp.makeValStr(separator, prefix, suffix);
-        }
-    };
-
-    // Define OMP reductions on Indices.
-#pragma omp declare reduction(min_idxs : Indices : \
-                              omp_out = omp_out.minElements(omp_in) )   \
-    initializer (omp_priv = omp_orig)
-#pragma omp declare reduction(max_idxs : Indices : \
-                              omp_out = omp_out.maxElements(omp_in) )   \
-    initializer (omp_priv = omp_orig)
-
-    // Layout algorithms using Indices.
-#include "yask_layouts.hpp"
-
     // Forward defns.
-    struct StencilContext;
+    class StencilContext;
     class YkGridBase;
 
     // Some derivations from grid types.
@@ -479,96 +172,6 @@ namespace yask {
         }
     };
     typedef std::shared_ptr<Dims> DimsPtr;
-
-    // A group of Indices needed for generated loops.
-    // See the help message from gen_loops.pl for the
-    // documentation of the indices.
-    // Make sure this stays non-virtual.
-    struct ScanIndices {
-        int ndims = 0;
-
-        // Input values; not modified.
-        Indices begin, end;     // first and end (beyond last) range of each index.
-        Indices step;           // step value within range.
-        Indices align;          // alignment of steps after first one.
-        Indices align_ofs;      // adjustment for alignment (see below).
-        Indices group_size;     // proximity grouping within range.
-
-        // Alignment: when possible, each step will be aligned
-        // such that ((start - align_ofs) % align) == 0.
-
-        // Output values; set once for entire range.
-        Indices num_indices;    // number of indices in each dim.
-        idx_t   linear_indices = 0; // total indices over all dims (product of num_indices).
-
-        // Output values; set for each index by loop code.
-        Indices start, stop;    // first and last+1 for this sub-range.
-        Indices index;          // 0-based unique index for each sub-range in each dim.
-        idx_t   linear_index = 0;   // 0-based index over all dims.
-
-        // Example w/3 sub-ranges in overall range:
-        // begin                                         end
-        //   |--------------------------------------------|
-        //   |------------------|------------------|------|
-        // start               stop                            (index = 0)
-        //                    start               stop         (index = 1)
-        //                                       start   stop  (index = 2)
-
-        // Default init.
-        ScanIndices(const Dims& dims, bool use_vec_align, IdxTuple* ofs) :
-            ndims(NUM_STENCIL_DIMS),
-            begin(idx_t(0), ndims),
-            end(idx_t(0), ndims),
-            step(idx_t(1), ndims),
-            align(idx_t(1), ndims),
-            align_ofs(idx_t(0), ndims),
-            group_size(idx_t(1), ndims),
-            num_indices(idx_t(1), ndims),
-            start(idx_t(0), ndims),
-            stop(idx_t(0), ndims),
-            index(idx_t(0), ndims) {
-
-            // i: index for stencil dims, j: index for domain dims.
-            DOMAIN_VAR_LOOP(i, j) {
-
-                // Set alignment to vector lengths.
-                if (use_vec_align)
-                    align[i] = fold_pts[j];
-
-                // Set alignment offset.
-                if (ofs) {
-                    assert(ofs->getNumDims() == ndims - 1);
-                    align_ofs[i] = ofs->getVal(j);
-                }
-            }
-        }
-
-        // Init from outer-loop indices.
-        // Start..stop from point in outer loop become begin..end
-        // for this loop.
-        //
-        // Example:
-        // begin              (outer)                    end
-        //   |--------------------------------------------|
-        //   |------------------|------------------|------|
-        // start      |        stop
-        //            V
-        // begin    (this)     end
-        //   |------------------|
-        // start               stop  (may be sub-dividied later)
-        void initFromOuter(const ScanIndices& outer) {
-
-            // Begin & end set from start & stop of outer loop.
-            begin = start = outer.start;
-            end = stop = outer.stop;
-
-            // Pass some values through.
-            align = outer.align;
-            align_ofs = outer.align_ofs;
-
-            // Leave others alone.
-        }
-    };
 
     // MPI neighbor info.
     class MPIInfo {
@@ -855,7 +458,7 @@ namespace yask {
 
     public:
 
-        // Problem dimensions (not sizes).
+        // Copy of problem dimensions (NOT sizes).
         DimsPtr _dims;
 
         // Sizes in elements (points).
@@ -885,6 +488,13 @@ namespace yask {
         int num_block_threads = 1; // Number of threads to use for a block.
         bool bind_block_threads = false; // Bind block threads to indices.
 
+        // Stencil-dim posn in which to apply block-thread binding.
+        int _bind_posn = 1;
+
+        // Tuning.
+        bool _do_auto_tune = false;    // whether to do auto-tuning.
+        bool _tune_mini_blks = false; // auto-tune mini-blks instead of blks.
+        
         // Debug.
         bool force_scalar = false; // Do only scalar ops.
 
@@ -897,52 +507,8 @@ namespace yask {
         int _numa_pref = NUMA_PREF;
         int _numa_pref_max = 128; // GiB to alloc before using PMEM.
 
-        // Ctor.
-        // TODO: move code to settings.cpp.
-        KernelSettings(DimsPtr dims, KernelEnvPtr env) :
-            _dims(dims), max_threads(env->max_threads) {
-            auto& step_dim = dims->_step_dim;
-
-            // Use both step and domain dims for all size tuples.
-            _rank_sizes = dims->_stencil_dims;
-            _rank_sizes.setValsSame(def_rank);             // size of rank.
-            _rank_sizes.setVal(step_dim, 0);        // not used.
-
-            _region_sizes = dims->_stencil_dims;
-            _region_sizes.setValsSame(0);          // 0 => default settings.
-
-            _block_group_sizes = dims->_stencil_dims;
-            _block_group_sizes.setValsSame(0); // 0 => min size.
-
-            _block_sizes = dims->_stencil_dims;
-            _block_sizes.setValsSame(def_block); // size of block.
-            _block_sizes.setVal(step_dim, 0); // 0 => default.
-
-            _mini_block_group_sizes = dims->_stencil_dims;
-            _mini_block_group_sizes.setValsSame(0); // 0 => min size.
-
-            _mini_block_sizes = dims->_stencil_dims;
-            _mini_block_sizes.setValsSame(0);            // 0 => default settings.
-
-            _sub_block_group_sizes = dims->_stencil_dims;
-            _sub_block_group_sizes.setValsSame(0); // 0 => min size.
-
-            _sub_block_sizes = dims->_stencil_dims;
-            _sub_block_sizes.setValsSame(0);            // 0 => default settings.
-
-            _min_pad_sizes = dims->_stencil_dims;
-            _min_pad_sizes.setValsSame(0);
-
-            _extra_pad_sizes = dims->_stencil_dims;
-            _extra_pad_sizes.setValsSame(0);
-
-            // Use only domain dims for MPI tuples.
-            _num_ranks = dims->_domain_dims;
-            _num_ranks.setValsSame(1);
-
-            _rank_indices = dims->_domain_dims;
-            _rank_indices.setValsSame(0);
-        }
+        // Ctor/dtor.
+        KernelSettings(DimsPtr dims, KernelEnvPtr env);
         virtual ~KernelSettings() { }
 
     protected:
@@ -973,9 +539,9 @@ namespace yask {
         // values as needed.
         // Called from prepare_solution(), so it doesn't normally need to be called from user code.
         // Prints informational info to 'os'.
-        virtual void adjustSettings(std::ostream& os, KernelEnvPtr env);
-        virtual void adjustSettings(KernelEnvPtr env) {
-            adjustSettings(nullop->get_ostream(), env);
+        virtual void adjustSettings(std::ostream& os);
+        virtual void adjustSettings() {
+            adjustSettings(nullop->get_ostream());
         }
 
         // Determine if this is the first or last rank in given dim.
@@ -987,5 +553,223 @@ namespace yask {
         }
     };
     typedef std::shared_ptr<KernelSettings> KernelSettingsPtr;
+
+    // A collection of solution meta-data whose ownership is shared between
+    // various objects.
+    struct KernelState {
+        virtual ~KernelState() { }
+
+        // Output stream for messages.
+        yask_output_ptr _debug;
+
+        // Env.
+        KernelEnvPtr _env;
+
+        // Command-line and env parameters.
+        KernelSettingsPtr _opts;
+        bool _use_pack_tuners = false;
+
+        // Problem dims.
+        DimsPtr _dims;
+
+        // Position of inner domain dim in stencil-dims tuple.
+        // Misc dims will follow this if/when using interleaving.
+        // TODO: move to Dims.
+        int _inner_posn = -1;   // -1 => not set.
+
+        // Position of outer domain dim in stencil-dims tuple.
+        // For 1D stencils, _outer_posn == _inner_posn.
+        // TODO: move to Dims.
+        int _outer_posn = -1;   // -1 => not set.
+
+        // MPI info.
+        MPIInfoPtr _mpiInfo;
+    };
+    typedef std::shared_ptr<KernelState> KernelStatePtr;
+
+    // Macro to define and set commonly-needed state vars efficiently.
+    // 'parent_p' is pointer to object containing 'KernelStatePtr _state'.
+    // '*_posn' vars are positions in stencil_dims.
+#define STATE_VARS0(parent_p, pfx)                                      \
+    pfx auto* pp = parent_p;                                            \
+    assert(pp);                                                         \
+    pfx auto* state = pp->_state.get();                                 \
+    assert(state);                                                      \
+    assert(state->_debug.get());                                        \
+    auto& os = state->_debug.get()->get_ostream();                      \
+    pfx auto* env = state->_env.get();                                  \
+    assert(env);                                                        \
+    pfx auto* opts = state->_opts.get();                                \
+    assert(opts);                                                       \
+    pfx auto* dims = state->_dims.get();                                \
+    assert(dims);                                                       \
+    pfx auto* mpiInfo = state->_mpiInfo.get();                          \
+    assert(mpiInfo);                                                    \
+    const auto& step_dim = dims->_step_dim;                             \
+    const auto& inner_dim = dims->_inner_dim;                           \
+    const auto& domain_dims = dims->_domain_dims;                       \
+    constexpr int nddims = NUM_DOMAIN_DIMS;                             \
+    assert(nddims == domain_dims.size());                               \
+    const auto& stencil_dims = dims->_stencil_dims;                     \
+    constexpr int nsdims = NUM_STENCIL_DIMS;                            \
+    assert(nsdims == stencil_dims.size());                              \
+    auto& misc_dims = dims->_misc_dims;                                 \
+    constexpr int step_posn = 0;                                        \
+    assert(step_posn == +Indices::step_posn);                           \
+    constexpr int outer_posn = 1;                                       \
+    const int inner_posn = state->_inner_posn
+#define STATE_VARS(parent_p) STATE_VARS0(parent_p,)
+#define STATE_VARS_CONST(parent_p) STATE_VARS0(parent_p, const)
+
+    // A base class containing a shared pointer to a kernel state.
+    // Used to ensure that the shared state object stays allocated when
+    // at least one of its owners exists.
+    class KernelStateBase {
+    protected:
+
+        // Common state. This is a separate object to allow
+        // multiple objects to keep it alive via shared ptrs.
+        KernelStatePtr _state;
+
+    public:
+        KernelStateBase(KernelStatePtr& state) :
+            _state(state) {}
+        KernelStateBase(KernelEnvPtr& env,
+                        KernelSettingsPtr& settings);
+        virtual ~KernelStateBase() {}
+
+        // Access to state.
+        KernelStatePtr& get_state() {
+            assert(_state);
+            return _state;
+        }
+        const KernelStatePtr& get_state() const {
+            assert(_state);
+            return _state;
+        }
+        KernelSettingsPtr& get_settings() { return _state->_opts; }
+        const KernelSettingsPtr& get_settings() const { return _state->_opts; }
+        KernelEnvPtr& get_env() { return _state->_env; }
+        const KernelEnvPtr& get_env() const { return _state->_env; }
+        DimsPtr& get_dims() { return _state->_dims; }
+        const DimsPtr& get_dims() const { return _state->_dims; }
+        MPIInfoPtr& get_mpi_info() { return _state->_mpiInfo; }
+        const MPIInfoPtr& get_mpi_info() const { return _state->_mpiInfo; }
+        bool use_pack_tuners() const { return _state->_use_pack_tuners; }
+        virtual yask_output_ptr get_debug_output() const { return _state->_debug; }
+        virtual void set_debug_output(yask_output_ptr debug) { _state->_debug = debug; }
+
+        // Set debug output to cout if my_rank == msg_rank
+        // or a null stream otherwise.
+        std::ostream& set_ostr();
+        std::ostream& get_ostr() const {
+            STATE_VARS(this);
+            return os;
+        }
+
+        // Set number of threads w/o using thread-divisor.
+        // Return number of threads.
+        // Do nothing and return 0 if not properly initialized.
+        int set_max_threads() {
+            STATE_VARS(this);
+
+            // Get max number of threads.
+            int mt = std::max(opts->max_threads, 1);
+
+            // Reset number of OMP threads to max allowed.
+            omp_set_num_threads(mt);
+            return mt;
+        }
+
+        // Get total number of computation threads to use.
+        int get_num_comp_threads(int& region_threads, int& blk_threads) const {
+            STATE_VARS(this);
+
+            // Max threads / divisor.
+            int mt = std::max(opts->max_threads, 1);
+            int td = std::max(opts->thread_divisor, 1);
+            int at = mt / td;
+            at = std::max(at, 1);
+
+            // Blk threads per region thread.
+            int bt = std::max(opts->num_block_threads, 1);
+            bt = std::min(bt, at); // Cannot be > 'at'.
+            blk_threads = bt;
+
+            // Region threads.
+            int rt = at / bt;
+            rt = std::max(rt, 1);
+            region_threads = rt;
+
+            // Total number of block threads.
+            return bt * rt;
+        }
+        
+        // Set number of threads to use for something other than a region.
+        // Return number of threads.
+        // Do nothing and return 0 if not properly initialized.
+        int set_all_threads() {
+            int rt, bt;
+            int at = get_num_comp_threads(rt, bt);
+            omp_set_num_threads(at);
+            return at;
+        }
+
+        // Set number of threads to use for a region.
+        // Enable nested OMP if there are >1 block threads,
+        // disable otherwise.
+        // Return number of threads.
+        // Do nothing and return 0 if not properly initialized.
+        int set_region_threads() {
+            int rt, bt;
+            int at = get_num_comp_threads(rt, bt);
+
+            // Limit outer nesting to allow num_block_threads per nested
+            // block loop.
+            yask_num_threads[0] = rt;
+
+            if (bt > 1) {
+                omp_set_nested(1);
+                omp_set_max_active_levels(2);
+                yask_num_threads[1] = bt;
+            }
+            else {
+                omp_set_nested(0);
+                omp_set_max_active_levels(1);
+                yask_num_threads[1] = 0;
+            }
+
+            omp_set_num_threads(rt);
+            return rt;
+        }
+
+        // Set number of threads for a block.
+        // Return number of threads.
+        // Do nothing and return 0 if not properly initialized.
+        int set_block_threads() {
+            int rt, bt;
+            int at = get_num_comp_threads(rt, bt);
+
+            if (omp_get_max_active_levels() > 1)
+                omp_set_num_threads(bt);
+            return bt;
+        }
+
+    };
+
+    // An object that is created from a context, shares ownership of the
+    // state, and keeps a pointer back to the context. However, it does not
+    // share ownership of the context itself. That would create an ownership
+    // loop that would not allow the context to be deleted.
+    class ContextLinker :
+        public KernelStateBase {
+
+    protected:
+        StencilContext* _context;
+
+    public:
+        ContextLinker(StencilContext* context);
+        virtual ~ContextLinker() { }
+    };
 
 } // yask namespace.

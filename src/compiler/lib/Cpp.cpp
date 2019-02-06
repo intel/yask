@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2018, Intel Corporation
+Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -34,6 +34,10 @@ namespace yask {
     // Format a real, preserving precision.
     string CppPrintHelper::formatReal(double v) {
 
+        // Int representation equivalent?
+        if (double(int(v)) == v)
+            return to_string(int(v));
+        
         // IEEE double gives 15-17 significant decimal digits of precision per
         // https://en.wikipedia.org/wiki/Double-precision_floating-point_format.
         // Some precision might be lost if/when cast to a float, but that's ok.
@@ -646,19 +650,20 @@ namespace yask {
     }
 
     // Print invariant grid-access vars for non-time loop(s).
-    void CppStepVarPrintVisitor::visit(GridPoint* gp) {
+    string CppStepVarPrintVisitor::visit(GridPoint* gp) {
 
         // Pointer to grid.
         string gridPtr = _cvph.getLocalVar(_os, gp->getGridPtr(), CppPrintHelper::_grid_ptr_type);
 
         // Time var.
         auto& dims = _cvph.getDims();
-        string stepArgVar = _cvph.getLocalVar(_os, gp->makeStepArgStr(gridPtr, dims),
-                                              CppPrintHelper::_step_val_type);
+        _cvph.getLocalVar(_os, gp->makeStepArgStr(gridPtr, dims),
+                          CppPrintHelper::_step_val_type);
+        return "";
     }
 
     // Print invariant grid-access vars for an inner loop.
-    void CppLoopVarPrintVisitor::visit(GridPoint* gp) {
+    string CppLoopVarPrintVisitor::visit(GridPoint* gp) {
 
         // Retrieve prior analysis of this grid point.
         auto loopType = gp->getLoopType();
@@ -669,13 +674,14 @@ namespace yask {
             // Not already loaded?
             if (!_cvph.lookupPointVar(*gp)) {
                 string expr = _ph.readFromPoint(_os, *gp);
-                makeNextTempVar(gp) << expr << _ph.getLineSuffix();
+                string res;
+                makeNextTempVar(res, gp) << expr << _ph.getLineSuffix();
 
                 // Save for future use.
-                string res = getExprStrAndClear();
                 _cvph.savePointVar(*gp, res);
             }
         }
+        return "";
     }
 
 } // namespace yask.

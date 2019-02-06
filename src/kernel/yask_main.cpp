@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2018, Intel Corporation
+Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -39,7 +39,6 @@ struct AppSettings : public KernelSettings {
     bool help = false;          // help requested.
     bool doWarmup = true;       // whether to do warmup run.
     bool doPreAutoTune = true;  // whether to do pre-auto-tuning.
-    bool doAutoTune = false;    // whether to do auto-tuning.
     int step_alloc = 0;         // if >0, override number of steps to alloc.
     int num_trials = 3;         // number of trials.
     bool validate = false;      // whether to do validation run.
@@ -69,7 +68,6 @@ struct AppSettings : public KernelSettings {
             if (_check_arg(args, argi, _name)) {
                 _as.validate = true;
                 _as.doPreAutoTune = false;
-                _as.doAutoTune = false;
                 _as.doWarmup = false;
                 _as.num_trials = 1;
                 _as.trial_steps = 1;
@@ -107,12 +105,6 @@ struct AppSettings : public KernelSettings {
                            "values for block sizes. "
                            "Uses default values or command-line-provided values as a starting point.",
                            doPreAutoTune));
-        parser.add_option(new CommandLineParser::BoolOption
-                          ("auto_tune",
-                           "Run iteration(s) *during* performance trial(s) to find good-performing "
-                           "values for block sizes. "
-                           "Uses default values or command-line-provided values as a starting point.",
-                           doAutoTune));
         parser.add_option(new CommandLineParser::BoolOption
                           ("warmup",
                            "Run warmup iteration(s) before performance "
@@ -197,7 +189,7 @@ struct AppSettings : public KernelSettings {
             "┌────────────────────────────────────────────┐\n"
             "│   Y.A.S.K. ── Yet Another Stencil Kernel   │\n"
             "│       https://github.com/intel/yask        │\n"
-            "│ Copyright (c) 2014-2018, Intel Corporation │\n"
+            "│ Copyright (c) 2014-2019, Intel Corporation │\n"
             "└────────────────────────────────────────────┘\n"
             "\n"
             "Version: " << yask_get_version_string() << endl <<
@@ -306,7 +298,7 @@ int main(int argc, char** argv)
             ksoln->run_auto_tuner_now();
 
         // Enable/disable further auto-tuning.
-        ksoln->reset_auto_tuner(opts->doAutoTune);
+        ksoln->reset_auto_tuner(opts->_do_auto_tune);
 
         // Warmup caches, threading, etc.
         // Measure time to change number of steps.
@@ -317,7 +309,7 @@ int main(int argc, char** argv)
             context->set_debug_output(yof.new_null_output());
             os << endl << divLine;
 
-            // Warmup phases.
+            // Warmup and calibration phases.
             double rate = 1.0;
             idx_t warmup_steps = 1;
             idx_t max_wsteps = 10;
@@ -355,6 +347,15 @@ int main(int argc, char** argv)
             if (opts->trial_steps <= 0) {
                 idx_t tsteps = ceil(rate * opts->trial_time);
                 tsteps = CEIL_DIV(sumOverRanks(tsteps, ep->comm), num_ranks);
+
+                // Round up to multiple of temporal tiling if not too big.
+                auto step_dim = ksoln->get_step_dim_name();
+                auto rt = opts->_region_sizes[step_dim];
+                auto bt = opts->_block_sizes[step_dim];
+                auto tt = max(rt, bt);
+                if (tt > 1 && tt < 2 * tsteps)
+                    tsteps = ROUND_UP(tsteps, tt);
+                
                 opts->trial_steps = tsteps;
             }
             
@@ -532,7 +533,7 @@ int main(int argc, char** argv)
         MPI_Finalize();
         os << "YASK DONE." << endl << divLine << flush;
     }
-    catch (yask_exception e) {
+    catch (yask_exception& e) {
         cerr << "YASK Kernel: " << e.get_message() << ".\n";
         exit_yask(1);
     }

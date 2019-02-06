@@ -2,7 +2,7 @@
 
 ##############################################################################
 ## YASK: Yet Another Stencil Kernel
-## Copyright (c) 2014-2018, Intel Corporation
+## Copyright (c) 2014-2019, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -339,7 +339,7 @@ if __name__ == "__main__":
     print("Running the solution for 10 more steps...")
     soln.run_solution(1, 10)
 
-    # Print final result at timestep 11.
+    # Print final result at timestep 11, assuming update was to t+1.
     for grid in soln.get_grids() :
         read_grid(grid, 11)
 

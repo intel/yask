@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2018, Intel Corporation
+Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -78,7 +78,7 @@ int main() {
     cout << "Exception Test: Call 'run_solution' without calling prepare_solution().\n";
     try {
         soln->run_solution(0);
-    } catch (yask_exception e) {
+    } catch (yask_exception& e) {
         cout << "YASK throws an exception.\n";
         cout << e.get_message();
         cout << "Exception Test: Catch exception correctly.\n";
@@ -89,7 +89,7 @@ int main() {
     cout << "Exception Test: Call 'run_auto_tuner_now' without calling prepare_solution().\n";
     try {
         soln->run_auto_tuner_now(false);
-    } catch (yask_exception e) {
+    } catch (yask_exception& e) {
         cout << "YASK throws an exception.\n";
         cout << e.get_message();
         cout << "Exception Test: Catch exception correctly.\n";

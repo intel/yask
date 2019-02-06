@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kernel
-Copyright (c) 2014-2018, Intel Corporation
+Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -28,10 +28,16 @@ IN THE SOFTWARE.
 namespace yask {
 
     // Auto-tuner for setting block size.
-    class AutoTuner {
+    class AutoTuner :
+        public ContextLinker {
+
     protected:
-        StencilContext* _context = 0;
-        KernelSettings* _settings = 0; // settings to change.
+
+        // Settings to change. May be pointer to solution settings
+        // or local settings for a pack.
+        KernelSettings* _settings = 0;
+
+        // Name of tuner.
         std::string _name;
 
         // Null stream to throw away debug info.
@@ -42,12 +48,12 @@ namespace yask {
         bool verbose = false;
 
         // AT parameters.
-        double warmup_steps = 10;
-        double warmup_secs = 0.5;
-        idx_t min_steps = 10;
-        double min_secs = 0.25; // eval when either min_steps or min_secs is reached.
-        idx_t min_step = 4;
-        idx_t max_radius = 16;
+        double warmup_steps = 100;
+        double warmup_secs = 0.5; // end warmup when either warmup_steps OR warmup_secs is reached.
+        idx_t min_steps = 100;
+        double min_secs = 0.25; // eval when either min_steps OR min_secs is reached.
+        idx_t min_dist = 4;     // min distance to move in any direction per eval.
+        idx_t max_radius = 8;
         idx_t min_pts = 512; // 8^3.
         idx_t min_blks = 4;
 
@@ -56,12 +62,12 @@ namespace yask {
         int n2big = 0, n2small = 0, n2far = 0;
 
         // Best so far.
-        IdxTuple best_block;
+        IdxTuple best_sizes;
         double best_rate = 0.;
 
         // Current point in search.
-        IdxTuple center_block;
-        idx_t block_steps = 0;
+        IdxTuple center_sizes;
+        idx_t target_steps = 0;
         idx_t radius = 0;
         bool done = false;
         idx_t neigh_idx = 0;
@@ -75,15 +81,10 @@ namespace yask {
     public:
         static constexpr idx_t max_step_t = 4;
 
-        AutoTuner(StencilContext* ctx,
+        AutoTuner(StencilContext* context,
                   KernelSettings* settings,
-                  const std::string& name = "") :
-            _context(ctx),
-            _settings(settings) {
-            _name = "auto-tuner";
-            if (name.length())
-                _name += "(" + name + ")";
-        }
+                  const std::string& name = "");
+        virtual ~AutoTuner() {}
 
         // Start & stop this timer to track elapsed time.
         YaskTimer timer;
@@ -91,7 +92,26 @@ namespace yask {
         // Increment this to track steps.
         idx_t steps_done = 0;
 
-        // Change settings pointer.
+        // Access settings.
+        bool tune_mini_blks() const;
+        IdxTuple& target_sizes() {
+            return tune_mini_blks() ?
+                _settings->_mini_block_sizes : _settings->_block_sizes;
+        }
+        IdxTuple& outer_sizes() {
+            return tune_mini_blks() ?
+                _settings->_block_sizes : _settings->_region_sizes;
+        }
+        IdxTuple& target_sizes() const {
+            return tune_mini_blks() ?
+                _settings->_mini_block_sizes : _settings->_block_sizes;
+        }
+        IdxTuple& outer_sizes() const {
+            return tune_mini_blks() ?
+                _settings->_block_sizes : _settings->_region_sizes;
+        }
+        
+        // Change settings pointers.
         void set_settings(KernelSettings* p) {
             _settings = p;
         }
