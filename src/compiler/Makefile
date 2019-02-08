@@ -74,17 +74,17 @@ YC_LFLAGS	:=	-lrt -Wl,-rpath=$(LIB_OUT_DIR) -L$(LIB_OUT_DIR) -l$(YC_BASE)
 
 $(YC_OBJ_DIR)/%.o: $(YC_STENCIL_DIR)/%.cpp $(YC_INC_GLOB) $(YC_STENCIL_INC_GLOB)
 	$(MKDIR) $(YC_OBJ_DIR)
-	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -DUSE_INTERNAL_DSL -O0 -c -o $@ $<
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -x c++ -DUSE_INTERNAL_DSL -O0 -c -o $@ $<
 	@ls -l $@
 
 $(YC_OBJ_DIR)/%.o: $(YC_LIB_SRC_DIR)/%.cpp $(YC_INC_GLOB)
 	$(MKDIR) $(YC_OBJ_DIR)
-	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
 $(YC_OBJ_DIR)/%.o: $(COMM_DIR)/%.cpp $(YC_INC_GLOB)
 	$(MKDIR) $(YC_OBJ_DIR)
-	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
 ######## Primary targets.
@@ -127,7 +127,7 @@ $(YC_SWIG_OUT_DIR)/yask_compiler_api_wrap.cpp: $(YC_SWIG_DIR)/yask*.i $(INC_DIR)
 # https://github.com/swig/swig/issues/773
 $(YC_OBJ_DIR)/yask_compiler_api_wrap.o: $(YC_SWIG_OUT_DIR)/yask_compiler_api_wrap.cpp
 	$(MKDIR) $(YC_OBJ_DIR)
-	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -DNDEBUG $(PYINC) -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -x c++ $(SWIG_CXXFLAGS) -DNDEBUG $(PYINC) -fPIC -c -o $@ $<
 	@ls -l $@
 
 $(YC_PY_LIB): $(YC_OBJS) $(YC_OBJ_DIR)/yask_compiler_api_wrap.o

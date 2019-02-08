@@ -710,7 +710,7 @@ $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i $(INC_DIR)/*
 
 $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.cpp
 	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -x c++ $(SWIG_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
 	@ls -l $@
 
 $(YK_PY_LIB): $(YK_OBJS)  $(YK_EXT_OBJS) $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.o
