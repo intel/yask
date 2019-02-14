@@ -312,9 +312,12 @@ namespace yask {
         }
 
         // Option for setting all domain dims.
+        auto shortcut = prefix;
+        if (shortcut.back() == '_')
+            shortcut.pop_back();
         parser.add_option(new CommandLineParser::MultiIdxOption
-                          (prefix,
-                           "Shorthand for" + multi_help,
+                          (shortcut,
+                           "Shortcut for" + multi_help,
                            multi_vars));
     }
 
