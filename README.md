@@ -1,6 +1,6 @@
 # YASK--Yet Another Stencil Kernel
 
-* New YASK users may want to start with the [YASK tutorial](https://www.ixpug.org/components/com_solutionlibrary/assets/documents/1538169451-IXPUG_Fall_Conf_2018_paper_2%20-%20Rev3%20-%20Charles%20Yount.pdf).
+* New YASK users may want to start with the [YASK tutorial](docs/YASK-tutorial.pdf).
 * Existing YASK users may want to jump to the [backward-compatibility notices](#backward-compatibility-notices).
 
 ## Overview
