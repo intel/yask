@@ -200,13 +200,10 @@ namespace yask {
 
         // Can fold if ALL fold dims >1 are used in this grid.
 
-#if 1
-        // NB: this will always be true if there is no vectorization.
-        // We do this because the compiler expects stencils to be vectorizable.
-        _isFoldable = _numFoldableDims == dims._foldGT1.size();
-#else
-        _isFoldable = (_numFoldableDims > 0 ) && (_numFoldableDims == dims._foldGT1.size());
-#endif
+        // NB: this will always be true if there is no vectorization, i.e.,
+        // both are zero.  We do this because the compiler expects stencils
+        // to be vectorizable.
+        _isFoldable = _numFoldableDims == int(dims._foldGT1.size());
     }
     
     // Determine whether halo sizes are equal.
