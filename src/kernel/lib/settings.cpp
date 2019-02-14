@@ -537,12 +537,21 @@ namespace yask {
             "  To 'weak-scale' to a larger overall-problem size, use multiple MPI ranks\n"
             "   and keep the local-domain sizes constant.\n" <<
 #endif
-            appNotes <<
-            "Examples for a 3D (x, y, z) over time (t) problem:\n"
-            " " << pgmName << " -d 768\n"
-            " " << pgmName << " -dx 512 -dy 256 -dz 128\n"
-            " " << pgmName << " -d 2048 -r 512 -rt 10  # temporal rank tiling.\n"
-            " " << pgmName << " -d 512 -nrx 2 -nry 1 -nrz 2   # multi-rank.\n";
+            appNotes;
+
+        // Make example knobs.
+        string ex1, ex2;
+        DOMAIN_VAR_LOOP(i, j) {
+            auto& dname = _dims->_domain_dims.getDimName(j);
+            ex1 += " -g" + dname + " " + to_string(i * 128);
+            ex2 += " -nr" + dname + " " + to_string(i + 1);
+        }
+        os <<
+            "\nExamples:\n"
+            " " << pgmName << " -g 768  # global-domain size in all dims.\n"
+            " " << pgmName << ex1 << "  # global-domain size in each dim.\n"
+            " " << pgmName << " -l 2048 -r 512 -rt 10  # local-domain size and temporal rank tiling.\n"
+            " " << pgmName << " -g 512" << ex2 << "  # number of ranks in each dim.\n";
         for (auto ae : appExamples)
             os << " " << pgmName << " " << ae << endl;
         os << flush;

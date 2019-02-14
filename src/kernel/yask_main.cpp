@@ -161,12 +161,12 @@ struct AppSettings : public KernelSettings {
 
         if (help) {
             string appNotes =
-                "Validation is very slow and uses 2x memory,\n"
+                "\nValidation is very slow and uses 2x memory,\n"
                 " so run with very small sizes and number of time-steps.\n"
                 " If validation fails, it may be due to rounding error;\n"
                 "  try building with 8-byte reals.\n";
             vector<string> appExamples;
-            appExamples.push_back("-t 2");
+            appExamples.push_back("-g 768 -t 2");
             appExamples.push_back("-v");
             print_usage(cout, parser, argv[0], appNotes, appExamples);
             exit_yask(1);

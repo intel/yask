@@ -62,16 +62,18 @@ namespace yask {
     // Fatal error.
     // TODO: enable exception throwing that works w/SWIG.
     inline void exit_yask(int code) {
+
 #ifdef USE_MPI
         int flag;
         MPI_Initialized(&flag);
-        if (flag)
-            MPI_Abort(MPI_COMM_WORLD, code);
-        else
-            exit(code);
-#else
-        exit(code);
+        if (flag) {
+            int num_ranks = 1;
+            MPI_Comm_size(MPI_COMM_WORLD, &num_ranks);
+            if (num_ranks > 1)
+                MPI_Abort(MPI_COMM_WORLD, code);
+        }
 #endif
+        exit(code);
     }
 
     // Return num with SI multiplier and "iB" suffix,

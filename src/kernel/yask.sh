@@ -25,7 +25,7 @@
 
 # Purpose: run stencil kernel in specified environment.
 
-# Create invocation string.
+# Create invocation string w/proper quoting.
 invo="Invocation: $0"
 whitespace="[[:space:]]"
 for i in "$@"
@@ -70,12 +70,11 @@ if command -v numactl >/dev/null; then
     fi
 fi
 
-# Extra options for exe.
-opts=""
-
 # Other defaults.
 pre_cmd=true
-post_cmd=true
+post_cmd=""
+helping=0
+opts=""
 
 # Display stencils in this dir and exit.
 bindir=`dirname $0`
@@ -123,7 +122,7 @@ while true; do
         echo "  -sh_prefix <command>"
         echo "     Run sub-shell under <command>, e.g., a custom ssh command."
         echo "  -exe_prefix <command>"
-        echo "     Run YASK executable under <command>, e.g., 'numactl'."
+        echo "     Run YASK executable under <command>, e.g., 'numactl -N 0'."
         echo "  -pre_cmd <command(s)>"
         echo "     One or more commands to run before YASK executable."
         echo "  -post_cmd <command(s)>"
@@ -147,7 +146,16 @@ while true; do
         echo "  <env-var=value>"
         echo "     Set environment variable <env-var> to <value>."
         echo "     Repeat as necessary to set multiple vars."
-        exit 1
+        exit 0
+
+    elif [[ "$1" == "-help" ]]; then
+        helping=1
+        nranks=1
+        logfile='/dev/null'
+
+        # Pass option to executable.
+        opts+=" $1"
+        shift
 
     elif [[ "$1" == "-show_arch" ]]; then
         echo $arch
@@ -217,12 +225,12 @@ while true; do
         shift
 
         # Pass all remaining options to executable and stop parsing.
-        opts="$opts $@"
+        opts+=" $@"
         break
 
     else
         # Pass this unknown option to executable.
-        opts="$opts $1"
+        opts+=" $1"
         shift
         
     fi
@@ -313,15 +321,26 @@ config_cmds="uname -a; sleep 1; uptime; sed '/^$/q' /proc/cpuinfo; lscpu; $dump 
 
 # Command sequence to be run in a shell.
 # Captures
-cmds="cd $dir; $config_cmds; ldd $exe; date; $pre_cmd; env $envs $mpi_cmd $exe_prefix $exe $opts; $post_cmd; date"
+cmds="cd $dir; $config_cmds; ldd $exe; date; $pre_cmd; env $envs $mpi_cmd $exe_prefix $exe $opts"
+if [[ -n "$post_cmd" ]]; then
+    cmds+="; $post_cmd"
+fi
 
 echo "===================" | tee -a $logfile
 
+# Finally, invoke the binary.
 if [[ -z "$sh_prefix" ]]; then
     sh -c -x "$cmds" 2>&1 | tee -a $logfile
 else
     echo "Running shell under '$sh_prefix'..."
     $sh_prefix "sh -c -x '$cmds'" 2>&1 | tee -a $logfile
+fi
+date
+echo "===================" | tee -a $logfile
+
+# Exit if just getting help.
+if [[ $helping == 1 ]]; then
+    exit 0
 fi
 
 echo $invo
@@ -333,14 +352,14 @@ exe_str="'$mpi_cmd $exe_prefix $exe $opts'"
 # Return a non-zero exit condition if test failed.
 if [[ `grep -c 'TEST FAILED' $logfile` > 0 ]]; then
     echo $exe_str did not pass internal validation test. | tee -a $logfile
-    exit 1;
+    exit 1
 fi
 
 # Return a non-zero exit condition if executable didn't exit cleanly.
 if [[ `grep -c 'YASK DONE' $logfile` == 0 ]]; then
     echo $exe_str did not exit cleanly. | tee -a $logfile
-    exit 1;
+    exit 1
 fi
 
 echo $exe_str ran successfully. | tee -a $logfile
-exit 0;
+exit 0
