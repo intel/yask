@@ -240,31 +240,33 @@ namespace yask {
         auto& step_dim = dims->_step_dim;
 
         // Use both step and domain dims for all size tuples.
+        _global_sizes = dims->_stencil_dims;
+        _global_sizes.setValsSame(0); // 0 => calc from rank.
+
         _rank_sizes = dims->_stencil_dims;
-        _rank_sizes.setValsSame(def_rank);             // size of rank.
-        _rank_sizes.setVal(step_dim, 0);        // not used.
+        _rank_sizes.setValsSame(0); // 0 => calc from global.
 
         _region_sizes = dims->_stencil_dims;
-        _region_sizes.setValsSame(0);          // 0 => default settings.
+        _region_sizes.setValsSame(0);   // 0 => rank size.
 
         _block_group_sizes = dims->_stencil_dims;
         _block_group_sizes.setValsSame(0); // 0 => min size.
 
         _block_sizes = dims->_stencil_dims;
-        _block_sizes.setValsSame(def_block); // size of block.
+        _block_sizes.setValsSame(def_block); // size of block. TODO: calculate good value.
         _block_sizes.setVal(step_dim, 0); // 0 => default.
 
         _mini_block_group_sizes = dims->_stencil_dims;
         _mini_block_group_sizes.setValsSame(0); // 0 => min size.
 
         _mini_block_sizes = dims->_stencil_dims;
-        _mini_block_sizes.setValsSame(0);            // 0 => default settings.
+        _mini_block_sizes.setValsSame(0);            // 0 => calc from block.
 
         _sub_block_group_sizes = dims->_stencil_dims;
         _sub_block_group_sizes.setValsSame(0); // 0 => min size.
 
         _sub_block_sizes = dims->_stencil_dims;
-        _sub_block_sizes.setValsSame(0);            // 0 => default settings.
+        _sub_block_sizes.setValsSame(0);            // 0 => calc from mini-block.
 
         _min_pad_sizes = dims->_stencil_dims;
         _min_pad_sizes.setValsSame(0);
@@ -274,7 +276,7 @@ namespace yask {
 
         // Use only domain dims for MPI tuples.
         _num_ranks = dims->_domain_dims;
-        _num_ranks.setValsSame(1);
+        _num_ranks.setValsSame(0); // 0 => set using heuristic.
 
         _rank_indices = dims->_domain_dims;
         _rank_indices.setValsSame(0);
@@ -319,7 +321,9 @@ namespace yask {
     // Add these settigns to a cmd-line parser.
     void KernelSettings::add_options(CommandLineParser& parser)
     {
-        _add_domain_option(parser, "d", "Rank-domain size", _rank_sizes);
+        _add_domain_option(parser, "g", "Global-domain (overall-problem) size", _global_sizes);
+        _add_domain_option(parser, "l", "Local-domain (rank) size", _rank_sizes);
+        _add_domain_option(parser, "d", "Alias for local-domain size (deprecated)", _rank_sizes);
         _add_domain_option(parser, "r", "Region size", _region_sizes, true);
         _add_domain_option(parser, "b", "Block size", _block_sizes, true);
         _add_domain_option(parser, "mb", "Mini-block size", _mini_block_sizes);
@@ -455,14 +459,14 @@ namespace yask {
             "   then this is the unit of work for each wave-front rank tile;\n"
             "   else, there is typically only one region the size of the rank-domain.\n"
             "  Regions are evaluated sequentially within ranks.\n"
-            " A 'rank-domain' is composed of regions.\n"
+            " A 'local-domain' or 'rank-domain' is composed of regions.\n"
             "  This is the unit of work for one MPI rank.\n"
             "  Ranks are evaluated in parallel in separate MPI processes.\n"
-            " The 'overall-problem' is composed of rank-domains.\n"
+            " The 'global-domain' or 'overall-problem' is composed of local-domains.\n"
             "  This is the unit of work across all MPI ranks.\n" <<
 #ifndef USE_MPI
             "   This binary has NOT been compiled with MPI support,\n"
-            "   so the overall-problem is equivalent to the single rank-domain.\n" <<
+            "   so the global-domain is equivalent to the single local-domain.\n" <<
 #endif
             "\nGuidelines for setting tiling sizes:\n"
             " The vector and vector-cluster sizes are set at compile-time, so\n"
@@ -501,9 +505,13 @@ namespace yask {
             "  The region size in the step dimension affects how often MPI halo-exchanges occur:\n"
             "   A region size of 0 in the step dimension => exchange after every pack.\n"
             "   A region size >0 in the step dimension => exchange after that many steps.\n"
-            " Set rank-domain sizes to specify the work done on this rank.\n"
-            "  Set the domain sizes to specify the problem size for this rank.\n"
+            " Set local-domain sizes to specify the work done on this MPI rank.\n"
+            "  A local-domain size of 0 in a given domain dimension =>\n"
+            "   local-domain size is determined by the global-domain size in that dimension.\n"
             "  This and the number of grids affect the amount of memory used.\n"
+            " Set global-domain sizes to specify the work done across all MPI ranks.\n"
+            "  A global-domain size of 0 in a given domain dimension =>\n"
+            "   global-domain size is the sum of local-domain sizes in that dimension.\n"
 #ifdef SHOW_GROUPS
             " Setting 'group' sizes controls only the order of tiles.\n"
             "  These are advanced settings that are not commonly used.\n"
@@ -521,10 +529,10 @@ namespace yask {
             "  Num threads used for halo exchange is same as num per region.\n" <<
 #ifdef USE_MPI
             "\nControlling MPI scaling:\n"
-            "  To 'weak-scale' to a larger overall-problem size, use multiple MPI ranks\n"
-            "   and keep the rank-domain sizes constant.\n"
             "  To 'strong-scale' a given overall-problem size, use multiple MPI ranks\n"
-            "   and reduce the size of each rank-domain appropriately.\n" <<
+            "   and keep the global-domain sizes constant.\n"
+            "  To 'weak-scale' to a larger overall-problem size, use multiple MPI ranks\n"
+            "   and keep the local-domain sizes constant.\n" <<
 #endif
             appNotes <<
             "Examples for a 3D (x, y, z) over time (t) problem:\n"
@@ -610,9 +618,9 @@ namespace yask {
         // Default region size (if 0) will be size of rank-domain.
         os << "\nRegions:" << endl;
         auto nr = findNumSubsets(os, _region_sizes, "region",
-                                 _rank_sizes, "rank-domain",
+                                 _rank_sizes, "local-domain",
                                  cluster_pts, step_dim);
-        os << " num-regions-per-rank-domain-per-step: " << nr << endl;
+        os << " num-regions-per-local-domain-per-step: " << nr << endl;
         os << " Since the region size in the '" << step_dim <<
             "' dim is " << rt << ", temporal wave-front rank tiling is ";
         if (!rt) os << "NOT ";
@@ -626,7 +634,7 @@ namespace yask {
                                  _region_sizes, "region",
                                  cluster_pts, step_dim);
         os << " num-blocks-per-region-per-step: " << nb << endl;
-        os << " num-blocks-per-rank-domain-per-step: " << (nb * nr) << endl;
+        os << " num-blocks-per-local-domain-per-step: " << (nb * nr) << endl;
         os << " Since the block size in the '" << step_dim <<
             "' dim is " << bt << ", temporal blocking is ";
         if (!bt) os << "NOT ";
@@ -640,7 +648,7 @@ namespace yask {
                                  cluster_pts, step_dim);
         os << " num-mini-blocks-per-block-per-step: " << nmb << endl;
         os << " num-mini-blocks-per-region-per-step: " << (nmb * nb) << endl;
-        os << " num-mini-blocks-per-rank-domain-per-step: " << (nmb * nb * nr) << endl;
+        os << " num-mini-blocks-per-local-domain-per-step: " << (nmb * nb * nr) << endl;
         os << " Since the mini-block size in the '" << step_dim <<
             "' dim is " << mbt << ", temporal wave-front block tiling is ";
         if (!mbt) os << "NOT ";

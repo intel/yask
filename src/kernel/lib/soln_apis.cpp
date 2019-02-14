@@ -44,7 +44,7 @@ namespace yask {
         return expr;                                                    \
     }
     GET_SOLN_API(get_num_ranks, opts->_num_ranks[dim], false, true, false, false)
-    GET_SOLN_API(get_overall_domain_size, overall_domain_sizes[dim], false, true, false, true)
+    GET_SOLN_API(get_overall_domain_size, opts->_global_sizes[dim], false, true, false, true)
     GET_SOLN_API(get_rank_domain_size, opts->_rank_sizes[dim], false, true, false, false)
     GET_SOLN_API(get_region_size, opts->_region_sizes[dim], true, true, false, false)
     GET_SOLN_API(get_block_size, opts->_block_sizes[dim], true, true, false, false)
@@ -63,9 +63,13 @@ namespace yask {
         update_grid_info();                                             \
         if (reset_prep) rank_bb.bb_valid = ext_bb.bb_valid = false;     \
     }
-    SET_SOLN_API(set_rank_index, opts->_rank_indices[dim] = n, false, true, false, true)
+    SET_SOLN_API(set_rank_index, opts->_rank_indices[dim] = n;
+                 opts->find_loc = false, false, true, false, true)
     SET_SOLN_API(set_num_ranks, opts->_num_ranks[dim] = n, false, true, false, true)
-    SET_SOLN_API(set_rank_domain_size, opts->_rank_sizes[dim] = n, false, true, false, true)
+    SET_SOLN_API(set_overall_domain_size, opts->_global_sizes[dim] = n;
+                 if (n) opts->_rank_sizes[dim] = 0, false, true, false, true)
+    SET_SOLN_API(set_rank_domain_size, opts->_rank_sizes[dim] = n;
+                 if (n) opts->_global_sizes[dim] = 0, false, true, false, true)
     SET_SOLN_API(set_region_size, opts->_region_sizes[dim] = n, true, true, false, true)
     SET_SOLN_API(set_block_size, opts->_block_sizes[dim] = n, true, true, false, true)
     SET_SOLN_API(set_min_pad_size, opts->_min_pad_sizes[dim] = n, false, true, false, false)
@@ -88,6 +92,9 @@ namespace yask {
 #ifdef MODEL_CACHE
         os << "*** WARNING: YASK compiled with MODEL_CACHE; ignore performance results.\n";
 #endif
+#ifdef TRACE
+        os << "*** WARNING: YASK compiled with TRACE; ignore performance results.\n";
+#endif
 #ifdef TRACE_MEM
         os << "*** WARNING: YASK compiled with TRACE_MEM; ignore performance results.\n";
 #endif
@@ -97,18 +104,6 @@ namespace yask {
 
         // reset time keepers.
         clear_timers();
-
-        // Adjust all settings before setting MPI buffers or sizing grids.
-        // Prints adjusted settings.
-        // TODO: print settings again after auto-tuning.
-        opts->adjustSettings(os);
-
-        // Copy current settings to packs.
-        // Needed here because settings may have been changed via APIs
-        // since last call to prepare_solution().
-        // This will wipe out any previous auto-tuning.
-        for (auto& sp : stPacks)
-            sp->getLocalSettings() = *opts;
 
         // Init auto-tuner to run silently during normal operation.
         reset_auto_tuner(true, false);
@@ -144,9 +139,29 @@ namespace yask {
         os << "Num grids: " << gridPtrs.size() << endl;
         os << "Num grids to be updated: " << outputGridPtrs.size() << endl;
 
-        // Set up data based on MPI rank, including grid positions.
-        // Update all the grid sizes.
+        // Set up data based on MPI rank, including local or global sizes,
+        // grid positions.
         setupRank();
+
+        // Adjust all settings before setting MPI buffers or sizing grids.
+        // Prints adjusted settings.
+        // TODO: print settings again after auto-tuning.
+        opts->adjustSettings(os);
+
+        // Set offsets in grids and find WF extensions
+        // based on the grids' halos.
+        update_grid_info();
+
+        // Determine bounding-boxes for all bundles.
+        // This must be done after finding WF extensions.
+        find_bounding_boxes();
+
+        // Copy current settings to packs.  Needed here because settings may
+        // have been changed via APIs or from call to setupRank() since last
+        // call to prepare_solution().  This will wipe out any previous
+        // auto-tuning.
+        for (auto& sp : stPacks)
+            sp->getLocalSettings() = *opts;
 
         // Alloc grids, scratch grids, MPI bufs.
         // This is the order in which preferred NUMA nodes (e.g., HBW mem)
@@ -179,7 +194,7 @@ namespace yask {
                 " wave-front-shift-amounts:  " << wf_shift_pts.makeDimValStr() << endl <<
                 " left-wave-front-exts:      " << left_wf_exts.makeDimValStr() << endl <<
                 " right-wave-front-exts:     " << right_wf_exts.makeDimValStr() << endl <<
-                " ext-rank-domain:           " << ext_bb.bb_begin.makeDimValStr() <<
+                " ext-local-domain:          " << ext_bb.bb_begin.makeDimValStr() <<
                 " ... " << ext_bb.bb_end.subElements(1).makeDimValStr() << endl <<
                 " num-temporal-block-steps:  " << tb_steps << endl <<
                 " temporal-block-angles:     " << tb_angles.makeDimValStr() << endl <<
@@ -211,12 +226,12 @@ namespace yask {
         os << "\nWork-unit sizes in points (from smallest to largest):\n"
             " vector-size:           " << dims->_fold_pts.makeDimValStr(" * ") << endl <<
             " cluster-size:          " << dims->_cluster_pts.makeDimValStr(" * ") << endl <<
-            " sub-block-size:        " << opts->_sub_block_sizes.makeDimValStr(" * ") << endl <<
+            " sub-block-size:        " << opts->_sub_block_sizes.removeDim(step_posn).makeDimValStr(" * ") << endl <<
             " mini-block-size:       " << opts->_mini_block_sizes.makeDimValStr(" * ") << endl <<
             " block-size:            " << opts->_block_sizes.makeDimValStr(" * ") << endl <<
             " region-size:           " << opts->_region_sizes.makeDimValStr(" * ") << endl <<
-            " rank-domain-size:      " << opts->_rank_sizes.makeDimValStr(" * ") << endl <<
-            " overall-problem-size:  " << overall_domain_sizes.makeDimValStr(" * ") << endl;
+            " local-domain-size:     " << opts->_rank_sizes.removeDim(step_posn).makeDimValStr(" * ") << endl <<
+            " global-domain-size:    " << opts->_global_sizes.removeDim(step_posn).makeDimValStr(" * ") << endl;
 #ifdef SHOW_GROUPS
         os << 
             " sub-block-group-size:  " << opts->_sub_block_group_sizes.makeDimValStr(" * ") << endl <<
@@ -226,13 +241,13 @@ namespace yask {
             " yask-version:          " << yask_get_version_string() << endl <<
             " stencil-name:          " << get_name() << endl <<
             " element-size:          " << makeByteStr(get_element_bytes()) << endl <<
-            " rank-domain:           " << rank_bb.bb_begin.makeDimValStr() <<
+            " local-domain:          " << rank_bb.bb_begin.makeDimValStr() <<
             " ... " << rank_bb.bb_end.subElements(1).makeDimValStr() << endl;
 #ifdef USE_MPI
         os <<
             " num-ranks:             " << opts->_num_ranks.makeDimValStr(" * ") << endl <<
             " rank-indices:          " << opts->_rank_indices.makeDimValStr() << endl <<
-            " rank-domain-offsets:   " << rank_domain_offsets.makeDimValOffsetStr() << endl;
+            " local-domain-offsets:  " << rank_domain_offsets.makeDimValStr() << endl;
         if (opts->overlap_comms)
             os <<
                 " mpi-interior:          " << mpi_interior.bb_begin.makeDimValStr() <<

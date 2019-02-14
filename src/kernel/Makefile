@@ -63,7 +63,6 @@ else ifeq ($(stencil),cube)
 else ifneq ($(findstring iso3dfd,$(stencil)),)
  MACROS				+=	MAX_EXCH_DIST=1
  radius				:=	8
- def_rank_args			:=	-d 1024
  def_pad_args			:=	-ep 1
  ifeq ($(arch),knl)
   fold_4byte			:=	x=2,y=8
@@ -92,7 +91,6 @@ else ifneq ($(findstring iso3dfd,$(stencil)),)
 else ifneq ($(findstring awp,$(stencil)),)
  def_block_args			:=	-b 32
  YC_FLAGS			+=	-min-es 1
- def_rank_args			:=	-d 1024 -dz 128
  def_pad_args			:=	-ep 1
  ifeq ($(arch),knl)
   fold_4byte			:=	x=4,y=4
@@ -117,16 +115,13 @@ else ifneq ($(findstring awp,$(stencil)),)
  endif
 
 else ifneq ($(findstring ssg,$(stencil)),)
- def_rank_args		:=	-d 512
  ifneq ($(filter $(arch),skx skl clx),)
-  def_rank_args		:=	-d 640 -dx 320
   fold_4byte		:=	x=4,y=4
   def_block_args	:=	-bx 96 -by 16 -bz 80
   def_block_threads	:=	2
  endif
 
 else ifneq ($(findstring fsg,$(stencil)),)
- def_rank_args		:=	-d 256
  ifeq ($(arch),knl)
   omp_region_schedule	:=	guided
   def_block_args	:=	-b 16
@@ -143,7 +138,6 @@ else ifneq ($(findstring fsg,$(stencil)),)
 else ifeq ($(stencil),tti)
  MACROS			+=	MAX_EXCH_DIST=3
  radius			:=	2
- def_rank_args		:=	-d 512
  ifneq ($(filter $(arch),skx skl clx),)
   fold_4byte		:=	x=4,y=4
   def_block_args	:=	-bx 80 -by 16 -bz 40
@@ -231,7 +225,6 @@ omp_block_schedule	?=	static,1
 omp_misc_schedule	?=	guided
 def_thread_divisor	?=	1
 def_block_threads	?=	2
-def_rank_args		?=	-d 128
 def_block_args		?=	-b 64
 cluster			?=	x=1
 pfd_l1			?=	0
@@ -433,7 +426,7 @@ MACROS		+=	ALLOW_NEW_GRIDS=$(allow_new_grid_types)
 # Default cmd-line args.
 DEF_ARGS	+=	-thread_divisor $(def_thread_divisor)
 DEF_ARGS	+=	-block_threads $(def_block_threads)
-DEF_ARGS	+=	$(def_rank_args) $(def_block_args) $(def_pad_args) $(more_def_args) 
+DEF_ARGS	+=	$(def_block_args) $(def_pad_args) $(more_def_args) 
 YK_CXXFLAGS	+=	-DDEF_ARGS='"$(DEF_ARGS) $(EXTRA_DEF_ARGS)"'
 
 # arch.
@@ -1016,4 +1009,4 @@ help:
 	echo "Example builds with test runs:"; \
 	echo " $(MAKE) -j all # Normal full API and stencil tests"; \
 	echo " $(MAKE) -j all YK_CXXOPT=-O2 YK_CXX=g++ mpi=0 ranks=1 # g++ w/o MPI"; \
-	echo " $(MAKE) -j all YK_CXXOPT=-O1 ranks=3 check=1 # Run 3 ranks w/checking"
+	echo " $(MAKE) -j all YK_CXXOPT=-O1 ranks=4 check=1 # Run 4 ranks w/checking"

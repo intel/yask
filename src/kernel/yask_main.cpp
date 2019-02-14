@@ -53,13 +53,15 @@ struct AppSettings : public KernelSettings {
     // A custom option-handler for '-v'.
     class ValOption : public CommandLineParser::OptionBase {
         AppSettings& _as;
+        static constexpr idx_t _lsz=63, _bsz=24;
 
     public:
 
         ValOption(AppSettings& as) :
                 OptionBase("v",
                            "Minimal validation: shortcut for '-validate -no-pre-auto_tune -no-auto_tune"
-                           " -no-warmup -t 1 -trial_steps 1 -d 63 -b 24'."),
+                           " -no-warmup -t 1 -trial_steps 1 -l " + to_string(_lsz) +
+                           " -b " + to_string(_bsz) + "'."),
                 _as(as) { }
 
         // Set multiple vars.
@@ -73,8 +75,8 @@ struct AppSettings : public KernelSettings {
                 _as.trial_steps = 1;
                 for (auto dim : _as._dims->_domain_dims.getDims()) {
                     auto& dname = dim.getName();
-                    _as._rank_sizes[dname] = 63;
-                    _as._block_sizes[dname] = 24;
+                    _as._rank_sizes[dname] = _lsz;
+                    _as._block_sizes[dname] = _bsz;
                 }
                 return true;
             }

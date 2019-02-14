@@ -58,6 +58,9 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
       for functional testing if you don't have native support for any given instruction set.
 
 ### Backward-compatibility notices:
+* Version 2.18.00 added the ability to specify the global-domain size, and it will calculate the local-domain sizes from it.
+There is no longer a default local-domain size.
+Output changed terms "overall-problem" to "global-domain" and "rank-domain" to "local-domain".
 * Version 2.17.00 determined the host architecture in `make` and `bin/yask.sh` and number of MPI ranks in `bin/yask.sh`.
 This changed the old behavior of `make` defaulting to `snb` architecture and `bin/yask.sh` requiring `-arch` and `-ranks`.
 Those options are still available to override the host-based default.

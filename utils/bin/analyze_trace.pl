@@ -143,6 +143,6 @@ for my $key (sort keys %writes) {
   print " ".(scalar @{$writes{$key}})." $key write(s) checked.\n";
 }
 print " $nissues issue(s) flagged.\n";
-print " (Ignore issues outside of rank domain when using temporal tiling and MPI.)\n"
+print " (Ignore issues outside of local domain when using temporal tiling and MPI.)\n"
   if $nissues;
 exit $nissues;

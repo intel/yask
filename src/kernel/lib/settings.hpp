@@ -449,8 +449,7 @@ namespace yask {
     protected:
 
         // Default sizes.
-        idx_t def_rank = 128;
-        idx_t def_block = 32;
+        idx_t def_block = 32;   // TODO: calculate this.
 
         // Make a null output stream.
         yask_output_factory yof;
@@ -462,6 +461,7 @@ namespace yask {
         DimsPtr _dims;
 
         // Sizes in elements (points).
+        IdxTuple _global_sizes;     // Overall problem domain sizes.
         IdxTuple _rank_sizes;     // This rank's domain sizes.
         IdxTuple _region_sizes;   // region size (used for wave-front tiling).
         IdxTuple _block_group_sizes; // block-group size (only used for 'grouped' region loops).
@@ -470,8 +470,8 @@ namespace yask {
         IdxTuple _mini_block_sizes;       // mini-block size (used for wave-fronts in blocks).
         IdxTuple _sub_block_group_sizes; // sub-block-group size (only used for 'grouped' mini-block loops).
         IdxTuple _sub_block_sizes;       // sub-block size (used for each nested thread).
-        IdxTuple _min_pad_sizes;         // minimum spatial padding.
-        IdxTuple _extra_pad_sizes;       // extra spatial padding.
+        IdxTuple _min_pad_sizes;         // minimum spatial padding (including halos).
+        IdxTuple _extra_pad_sizes;       // extra spatial padding (outside of halos).
 
         // MPI settings.
         IdxTuple _num_ranks;       // number of ranks in each dim.

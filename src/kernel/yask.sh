@@ -131,11 +131,10 @@ while true; do
         echo "  -mpi_cmd <command>"
         echo "     Run <command> before the executable (and before the -exe_prefix argument)."
         echo "  -ranks <N>"
-        echo "     Simplified MPI run (x-dimension partition only)."
+        echo "     Simplified MPI run (<N> ranks on current host)."
         echo "     Shortcut for the following options if <N> > 1:"
-        echo "       -mpi_cmd mpirun -np <N> -nrx <N>"
-        echo "     If a different MPI command or config is needed, use -mpi_cmd <command>"
-        echo "     explicitly and -nr* options as needed instead."
+        echo "       -mpi_cmd 'mpirun -np <N>'"
+        echo "     If a different MPI command is needed, use -mpi_cmd <command> explicitly."
         if [[ -n "$nranks" ]]; then
             echo "     The default <N> for this host is '$nranks'."
         fi
@@ -240,7 +239,6 @@ fi
 # Simplified MPI in x-dim only.
 if [[ -n "$nranks" && $nranks > 1 ]]; then
     true ${mpi_cmd="mpirun -np $nranks"}
-    opts="-nrx $nranks $opts"   # Put this opt at beginning to allow override.
 fi
 
 # Bail on errors past this point, but only errors

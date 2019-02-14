@@ -61,15 +61,15 @@ our @log_keys =
    'num threads per region',
    'num threads per block',
    'total overall allocation',
-   'overall problem size',
-   'rank-domain size',
+   'global-domain size',
+   'local-domain size',
    'region size',
    'block size',
    'mini-block size',
    'sub-block size',
    'cluster size',
    'vector size',
-   'num regions per rank-domain per step',
+   'num regions per local-domain per step',
    'num blocks per region per step',
    'num mini-blocks per block per step',
    'num sub-blocks per mini-block per step',
@@ -171,7 +171,7 @@ sub getResultsFromLine($$) {
 
   chomp($line);
 
-  # pre-process keys.
+  # pre-process keys one time.
   if (scalar keys %proc_keys == 0) {
     undef %proc_keys;
     for my $m (@log_keys) {
@@ -193,6 +193,10 @@ sub getResultsFromLine($$) {
       $proc_keys{$sk}{$pm} = $m;
     }
   }
+
+  # Substitutions to handle old formats.
+  $line =~ s/overall.problem/global-domain/g;
+  $line =~ s/rank.domain/local-domain/g;
   
   # special cases for manual parsing...
   # TODO: catch output of auto-tuner and update relevant results.

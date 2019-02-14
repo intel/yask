@@ -162,15 +162,15 @@ namespace yask {
 
     public:
         Tuple() {}
-        ~Tuple() {}
+        ~Tuple() {}             // NOT a virtual class!
 
         // first-inner (first dim is unit stride) accessors.
         bool isFirstInner() const { return _firstInner; }
         void setFirstInner(bool fi) { _firstInner = fi; }
 
         // Query number of dims.
-        int size() const {
-            return int(_q.size());
+        size_t size() const {
+            return _q.size();
         }
         int getNumDims() const {
             return int(_q.size());
@@ -328,7 +328,7 @@ namespace yask {
         // extra values are ignored.  If there are fewer values in 'vals'
         // than 'this', only the number of values supplied will be updated.
         void setVals(int numVals, const T vals[]) {
-            int end = int(std::min(numVals, size()));
+            int end = std::min(numVals, int(_q.size()));
             for (int i = 0; i < end; i++)
                 setVal(i, vals[i]);
         }
@@ -552,6 +552,9 @@ namespace yask {
         }
         Tuple negElements() const {
             return mapElements([&](T in){ return -in; });
+        }
+        Tuple absElements() const {
+            return mapElements([&](T in){ return abs(in); });
         }
 
         // make string like "4x3x2" or "4, 3, 2".
