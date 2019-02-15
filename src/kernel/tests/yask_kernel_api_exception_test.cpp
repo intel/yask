@@ -52,16 +52,10 @@ int main() {
     for (auto dim_name : soln_dims) {
 
         // Set domain size in each dim.
-        soln->set_rank_domain_size(dim_name, 128);
+        soln->set_overall_domain_size(dim_name, 128);
 
-        // Ensure some minimal padding on all grids.
-        soln->set_min_pad_size(dim_name, 1);
-
-        // Set block size to 64 in z dim and 32 in other dims.
-        if (dim_name == "z")
-            soln->set_block_size(dim_name, 64);
-        else
-            soln->set_block_size(dim_name, 32);
+        // Set block size.
+        soln->set_block_size(dim_name, 32);
     }
 
     // Make a test fixed-size grid.
@@ -69,10 +63,6 @@ int main() {
     for (auto dim_name : soln_dims)
         fgrid_sizes.push_back(5);
     auto fgrid = soln->new_fixed_size_grid("fgrid", soln_dims, fgrid_sizes);
-
-    // Simple rank configuration in 1st dim only.
-    auto ddim1 = soln_dims[0];
-    soln->set_num_ranks(ddim1, env->get_num_ranks());
 
     // Exception test
     cout << "Exception Test: Call 'run_solution' without calling prepare_solution().\n";

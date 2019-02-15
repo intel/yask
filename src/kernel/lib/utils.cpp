@@ -463,7 +463,7 @@ namespace yask {
 #endif
 
         if (min_val != rank_val || max_val != rank_val) {
-            FORMAT_AND_THROW_YASK_EXCEPTION("error: " << descr << " values range from " << min_val << " to " <<
+            FORMAT_AND_THROW_YASK_EXCEPTION("error: " << descr << " ranges from " << min_val << " to " <<
                                             max_val << " across the ranks; they should all be identical");
         }
     }

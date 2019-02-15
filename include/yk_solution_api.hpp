@@ -134,24 +134,31 @@ namespace yask {
         virtual std::vector<std::string>
         get_misc_dim_names() const =0;
 
-        /// Set the size of the solution domain for this rank.
+        /// Set the local-domain size in the specified dimension, i.e., the size of the part of the domain that is in this rank.
         /**
            The domain defines the number of elements that will be evaluated with the stencil(s).
-           If MPI is not enabled, this is the entire problem domain.
-           If MPI is enabled, this is the domain for the current rank only,
-           and the problem domain consists of the sum of all rank domains
-           in each dimension (weak-scaling).
-           The domain size in each rank does not have to be the same, but
-           all domains in the same column must have the same width,
-           all domains in the same row must have the same height,
+           If MPI is not enabled, this is equivalent to the global-domain size.
+           If MPI is enabled, this is the domain size for the current rank only,
+           and the global-domain size is the sum of all local-domain sizes
+           in each dimension.
+           The local-domain size in each rank does not have to be the same, but
+           all local-domains in the same column of ranks must have the same width,
+           all local-domains in the same row must have the same height,
            and so forth, for each domain dimension.
-           The domain size does *not* include the halo area or any padding.
-           For best performance, set the rank domain
+           The local-domain size does *not* include the halo area or any padding.
+           For best performance, set the local-domain
            size to a multiple of the number of elements in a vector-cluster in
-           each dimension whenever possible.
+           each dimension.
+
+           You should set either the local-domain size or the global-domain size
+           in each dimension. The unspecified (zero) sizes will be calculated based on the 
+           specified ones when prepare_solution() is called.
+           Setting the local-domain size to a non-zero value will clear the
+           global-domain size in that dimension until prepare_solution() is called.
+
            See the "Detailed Description" for \ref yk_grid for more information on grid sizes.
            There is no domain-size setting allowed in the
-           solution-step dimension (usually "t").
+           solution-step dimension (e.g., "t").
         */
         virtual void
         set_rank_domain_size(const std::string& dim
@@ -159,14 +166,59 @@ namespace yask {
                                 the names from get_domain_dim_names(). */,
                              idx_t size /**< [in] Elements in the domain in this `dim`. */ ) =0;
 
-        /// Get the domain size for this rank.
+        /// Get the local-domain size in the specified dimension, i.e., the size in this rank.
         /**
+           See documentation for set_rank_domain_size().
+
+           If you have called set_overall_domain_size() in a given dimension,
+           get_rank_domain_size() will return zero in that dimension until
+           prepare_solution() is called. After prepare_solution() is called,
+           the computed size will be returned.
+
            @returns Current setting of rank domain size in specified dimension.
         */
         virtual idx_t
         get_rank_domain_size(const std::string& dim
                              /**< [in] Name of dimension to get.  Must be one of
                                 the names from get_domain_dim_names(). */) const =0;
+
+        /// Get the global-domain size in the specified dimension, i.e., the total size across all MPI ranks.
+        /**
+           You should set either the local-domain size or the global-domain size
+           in each dimension. The unspecified (zero) sizes will be calculated based on the 
+           specified ones when prepare_solution() is called.
+           Setting the global-domain size to a non-zero value will clear the
+           local-domain size in that dimension until prepare_solution() is called.
+
+           See documentation for set_rank_domain_size().
+           See the "Detailed Description" for \ref yk_grid for more information on grid sizes.
+           There is no domain-size setting allowed in the
+           solution-step dimension (e.g., "t").
+        */
+        virtual void
+        set_overall_domain_size(const std::string& dim
+                                /**< [in] Name of dimension to set.  Must be one of
+                                   the names from get_domain_dim_names(). */,
+                                idx_t size /**< [in] Elements in the domain in this `dim`. */ ) =0;
+
+        /// Get the global-domain size in the specified dimension, i.e., the total size across all MPI ranks.
+        /**
+           The global-domain indices in the specified dimension will range from
+           zero (0) to get_overall_domain_size() - 1, inclusive.
+           Call get_first_rank_domain_index() and get_last_rank_domain_index()
+           to find the subset of this domain in each rank.
+
+           If you have called set_rank_domain_size() in a given dimension,
+           get_overall_domain_size() will return zero in that dimension until
+           prepare_solution() is called. After prepare_solution() is called,
+           the computed size will be returned.
+
+           @returns Sum of all ranks' domain sizes in the given dimension.
+        */
+        virtual idx_t
+        get_overall_domain_size(const std::string& dim
+                                /**< [in] Name of dimension to get.  Must be one of
+                                   the names from get_domain_dim_names(). */ ) const =0;
 
         /// Set the block size in the given dimension.
         /**
@@ -208,8 +260,16 @@ namespace yask {
 
         /// Set the number of MPI ranks in the given dimension.
         /**
-           The *product* of the number of ranks across all dimensions must
-           equal yk_env::get_num_ranks().
+           If set_num_ranks() is set to a non-zero value in all
+           dimensions, then
+           the *product* of the number of ranks across all dimensions must
+           equal the value returned by yk_env::get_num_ranks().
+           If the number of ranks is zero in one or more 
+           dimensions, those values will be set by a heuristic when
+           prepare_solution() is called.
+           An exception will be thrown if no legal values are possible
+           given the specified (non-zero) values.
+
            The curent MPI rank will be assigned a unique location
            within the overall problem domain based on its MPI rank index.
            Or, you can set it explicitly via set_rank_index().
@@ -355,22 +415,6 @@ namespace yask {
         get_last_rank_domain_index(const std::string& dim
                                    /**< [in] Name of dimension to get.  Must be one of
                                       the names from get_domain_dim_names(). */ ) const =0;
-
-        /// Get the overall problem size in the specified dimension.
-        /**
-           The overall domain indices in the specified dimension will range from
-           zero (0) to get_overall_domain_size() - 1, inclusive.
-           Call get_first_rank_domain_index() and get_last_rank_domain_index()
-           to find the subset of this domain in each rank.
-
-           @note This function should be called only *after* calling prepare_solution()
-           because prepare_solution() obtains the sub-domain sizes from other ranks.
-           @returns Sum of all ranks' domain sizes in the given dimension.
-        */
-        virtual idx_t
-        get_overall_domain_size(const std::string& dim
-                                /**< [in] Name of dimension to get.  Must be one of
-                                   the names from get_domain_dim_names(). */ ) const =0;
 
         /// Run the stencil solution for the specified steps.
         /**

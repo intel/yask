@@ -239,7 +239,7 @@ namespace yask {
         // For some reason, copying *this and erasing
         // the element in newt._q causes an exception.
         Tuple newt;
-        for (int i = 0; i < size(); i++) {
+        for (int i = 0; i < getNumDims(); i++) {
             if (i != posn)
                 newt.addDimBack(getDimName(i), getVal(i));
         }

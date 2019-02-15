@@ -104,13 +104,13 @@ sub usage {
       "\nsearch-space options:\n".
       " -<gene_name>=<N>   Force <gene_name> to fixed value <N>.\n".
       "                    Run with -check for list of genes and default ranges.\n".
-      "                    Setting rank-domain size (d) also sets upper block and region sizes.\n".
+      "                    Setting local-domain size (l) also sets upper block and region sizes.\n".
       "                    Leave off 'x', 'y', 'z' suffix to set these 3 vars to same val.\n".
-      "                    Examples: '-d=512'      Set problem size to 512^3.\n".
+      "                    Examples: '-l=512'      Set local-domain size to 512^3.\n".
       "                              '-bx=64'      Set block size to 64 in 'x' dim.\n".
       "                              '-ep=0'       Disable extra padding.\n".
       "                              '-c=1'        Allow only one vector in a cluster.\n".
-      "                              '-r=0'        Allow only one OpenMP region (region size=0 => rank size).\n".
+      "                              '-r=0'        Allow only one OpenMP region (region size=0 => local-domain size).\n".
       " -<gene_name>=<N>-<M> Restrict <gene_name> between <N> and <M>, inclusive.\n".
       "                    Example:  '-bx=8-128'.\n".
       "                    See the notes above on <gene_name> specification.\n".
@@ -263,8 +263,8 @@ for my $origOpt (@ARGV) {
     usage("min value $min for '$key' > max value $max.")
       if ($min > $max);
 
-    # special case for problem size: also set default for other max sizes.
-    if ($key =~ /^d[xyz]?$/ && $max > 0) {
+    # special case for local-domain size: also set default for other max sizes.
+    if ($key =~ /^[ld][xyz]?$/ && $max > 0) {
       my @szs = qw(r b mb sb);
       push @szs, qw(bg mbg sbg) if $showGroups;
       for my $i (@szs) {
@@ -396,9 +396,9 @@ my @schedules =
 my @rangesAll = 
   (
    # rank size.
-   [ $minDim, $maxDim, 16, 'dx' ],
-   [ $minDim, $maxDim, 16, 'dy' ],
-   [ $minDim, $maxDim, 16, 'dz' ],
+   [ $minDim, $maxDim, 16, 'lx' ],
+   [ $minDim, $maxDim, 16, 'ly' ],
+   [ $minDim, $maxDim, 16, 'lz' ],
 
    # region size.
    [ 1, $maxTimeBlock, 1, 'rt' ],
@@ -1201,13 +1201,13 @@ sub fitness {
 
   if ($debugCheck) {
     print "Sizes:\n";
-    print "  rank size = $dPts\n";
+    print "  local-domain size = $dPts\n";
     print "  region size = $rPts\n";
     print "  block size = $bPts\n";
     print "  sub-block size = $sbPts\n";
     print "  cluster size = $cPts\n";
     print "  fold size = $fPts\n";
-    print "  regions per rank = $dRegs\n";
+    print "  regions per local-domain = $dRegs\n";
     print "  blocks per region = $rBlks\n";
     print "  clusters per block = $bCls\n";
     print "  mini-blocks per block = $bMbs\n";
@@ -1259,13 +1259,13 @@ sub fitness {
   $numChecks++;
   $checkStats{'ok'} += $ok;
   addStat($ok, 'mem estimate', $overallSize);
-  addStat($ok, 'rank size', $dPts);
+  addStat($ok, 'local-domain size', $dPts);
   addStat($ok, 'region size', $rPts);
   addStat($ok, 'block size', $bPts);
   addStat($ok, 'mini-block size', $mbPts);
   addStat($ok, 'sub-block size', $sbPts);
   addStat($ok, 'cluster size', $cPts);
-  addStat($ok, 'regions per rank', $dRegs);
+  addStat($ok, 'regions per local-domain', $dRegs);
   addStat($ok, 'blocks per region', $rBlks);
   addStat($ok, 'clusters per block', $bCls);
   addStat($ok, 'mini-blocks per block', $bMbs);

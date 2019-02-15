@@ -1,6 +1,6 @@
 # YASK--Yet Another Stencil Kernel
 
-* New YASK users may want to start with the [YASK tutorial](https://www.ixpug.org/components/com_solutionlibrary/assets/documents/1538169451-IXPUG_Fall_Conf_2018_paper_2%20-%20Rev3%20-%20Charles%20Yount.pdf).
+* New YASK users may want to start with the [YASK tutorial](docs/YASK-tutorial.pdf).
 * Existing YASK users may want to jump to the [backward-compatibility notices](#backward-compatibility-notices).
 
 ## Overview
@@ -25,12 +25,12 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
   for multi-socket and multi-node operation or
   Intel(R) Parallel Studio XE Composer Edition for C++ Linux
   for single-socket only
-  (2016 or later, 2018 update 2 or later recommended).
+  (2018 or later; 2019 or later recommended and required when using g++ 8 or later).
   Building a YASK kernel with the Gnu compiler is possible, but only useful
   for functional testing. The performance
   of the kernel built from the Gnu compiler has been observed to be up to 7x lower
   than the same kernel built using the Intel compiler. 
-* Gnu C++ compiler, g++ (4.9.0 or later; 6.1.0 or later recommended).
+* Gnu C++ compiler, g++ (4.9.0 or later; 8.2.0 or later recommended).
 * Linux libraries `librt` and `libnuma`.
 * Perl (5.010 or later).
 * Awk.
@@ -45,7 +45,7 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
       Reading the generated code is only necessary for debug or curiosity.
     * SWIG (3.0.12 or later),
       http://www.swig.org, for creating the Python interface.
-    * Python 2 (2.7.5 or later) or 3 (3.6.1 or later, recommended),
+    * Python 2 (2.7.5 or later) or 3 (3.6.1 or later),
       https://www.python.org/downloads, for creating and using the Python interface.
     * Doxygen (1.8.11 or later),
       http://doxygen.org, for creating updated API documentation.
@@ -58,6 +58,9 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
       for functional testing if you don't have native support for any given instruction set.
 
 ### Backward-compatibility notices:
+* Version 2.18.00 added the ability to specify the global-domain size, and it will calculate the local-domain sizes from it.
+There is no longer a default local-domain size.
+Output changed terms "overall-problem" to "global-domain" and "rank-domain" to "local-domain".
 * Version 2.17.00 determined the host architecture in `make` and `bin/yask.sh` and number of MPI ranks in `bin/yask.sh`.
 This changed the old behavior of `make` defaulting to `snb` architecture and `bin/yask.sh` requiring `-arch` and `-ranks`.
 Those options are still available to override the host-based default.

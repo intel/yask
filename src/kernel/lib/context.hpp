@@ -231,7 +231,6 @@ namespace yask {
 
         // Some calculated sizes for this rank and overall.
         IdxTuple rank_domain_offsets;       // Domain index offsets for this rank.
-        IdxTuple overall_domain_sizes;       // Total of rank domains over all ranks.
         idx_t rank_nbytes=0, tot_nbytes=0;
         idx_t rank_domain_pts=0, tot_domain_pts=0;
 
@@ -565,7 +564,6 @@ namespace yask {
 
         virtual idx_t get_first_rank_domain_index(const std::string& dim) const;
         virtual idx_t get_last_rank_domain_index(const std::string& dim) const;
-        virtual idx_t get_overall_domain_size(const std::string& dim) const;
 
         virtual void run_solution(idx_t first_step_index,
                                   idx_t last_step_index);
@@ -575,12 +573,14 @@ namespace yask {
         virtual void share_grid_storage(yk_solution_ptr source);
 
         // APIs that access settings.
+        virtual void set_overall_domain_size(const std::string& dim, idx_t size);
         virtual void set_rank_domain_size(const std::string& dim, idx_t size);
         virtual void set_min_pad_size(const std::string& dim, idx_t size);
         virtual void set_block_size(const std::string& dim, idx_t size);
         virtual void set_region_size(const std::string& dim, idx_t size);
         virtual void set_num_ranks(const std::string& dim, idx_t size);
         virtual void set_rank_index(const std::string& dim, idx_t size);
+        virtual idx_t get_overall_domain_size(const std::string& dim) const;
         virtual idx_t get_rank_domain_size(const std::string& dim) const;
         virtual idx_t get_min_pad_size(const std::string& dim) const;
         virtual idx_t get_block_size(const std::string& dim) const;
