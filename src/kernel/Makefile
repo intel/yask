@@ -35,7 +35,7 @@ pmem			?=	0
 real_bytes		?=	4
 radius			?=	2
 allow_new_grid_types	?=	1
-trace			?=	1
+trace			?=	0
 trace_mem		?=	0
 check			?=	0
 
@@ -1004,9 +1004,9 @@ help:
 	echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=iso3dfd yk-api"; \
 	echo " $(MAKE) clean; $(MAKE) -j arch=skl stencil=awp yk-api"; \
 	echo " "; \
-	echo "Example debug builds of kernel cmd-line tool (also can run with '-trace'):"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' check=1 # No OpenMP or MPI, internal checking"; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=test_2d mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' check=1
+	echo "Example debug builds of kernel cmd-line tool ('trace=1' enables tracing; run with '-trace' to get trace):"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' check=1 trace=1 # No OpenMP or MPI, internal checking"; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=test_2d mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' check=1 trace=1
 	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' check=1 trace_mem=1"; \
 	echo " "; \
 	echo "Example builds with test runs:"; \
