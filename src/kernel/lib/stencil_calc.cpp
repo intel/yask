@@ -593,8 +593,6 @@ namespace yask {
                         ok = true; break; }                             \
                 }                                                       \
                 if (ok) {                                               \
-                    TRACE_MSG("calc_sub_block_vec:   at pt " <<            \
-                               pt_idxs.start.makeValStr(nsdims));       \
                     calc_scalar(region_thread_idx, pt_idxs.start);      \
                 }                                                       \
             } while(0)
