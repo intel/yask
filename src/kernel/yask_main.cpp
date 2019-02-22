@@ -441,7 +441,7 @@ int main(int argc, char** argv)
                 " best-throughput (num-points/sec): " << makeNumStr(best_trial->pts_ps) << endl <<
                 divLine <<
                 "Notes:\n"
-                " Num-reads and writes/sec and FLOPS are metrics based on\n"
+                " Num-reads/sec, num-writes/sec, and FLOPS are metrics based on\n"
                 "  stencil specifications and can vary due to differences in\n"
                 "  implementations and optimizations.\n"
                 " Num-points/sec is based on overall problem size and is\n"
