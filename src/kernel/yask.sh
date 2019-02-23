@@ -317,11 +317,11 @@ else
 fi
 
 # Commands to capture some important system status and config info for benchmark documentation.
-config_cmds="uname -a; sleep 1; uptime; sed '/^$/q' /proc/cpuinfo; lscpu; $dump /proc/cmdline; $dump /proc/meminfo; free -gt; numactl -H"
+config_cmds="uname -a; sleep 1; uptime; sed '/^$/q' /proc/cpuinfo; lscpu; $dump /proc/cmdline; $dump /proc/meminfo; free -gt; numactl -H; ulimit -a"
 
 # Command sequence to be run in a shell.
 # Captures
-cmds="cd $dir; $config_cmds; ldd $exe; date; $pre_cmd; env $envs $mpi_cmd $exe_prefix $exe $opts"
+cmds="cd $dir; ulimit -s unlimited; $config_cmds; ldd $exe; date; $pre_cmd; env $envs $mpi_cmd $exe_prefix $exe $opts"
 if [[ -n "$post_cmd" ]]; then
     cmds+="; $post_cmd"
 fi
