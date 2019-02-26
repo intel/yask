@@ -57,7 +57,7 @@ protected:
     virtual void addPoints(GridValue& v) =0;
 
 public:
-    ExampleStencil(const string& name, StencilList& stencils, int radius=2) :
+    ExampleStencil(const string& name, StencilList& stencils, int radius) :
         StencilRadiusBase(name, stencils, radius) { }
 
     // Define equation at t+1 based on values at t.
@@ -75,7 +75,7 @@ public:
 };
 
 // Add points from x, y, and z axes.
-class AxisStencil : public ExampleStencil {
+class LineStencil : public ExampleStencil {
 protected:
 
     // Add additional points to v.
@@ -104,23 +104,23 @@ protected:
     }
 
 public:
-    AxisStencil(StencilList& stencils, int radius=2) :
-        ExampleStencil("3axis", stencils, radius) { }
-    AxisStencil(const string& name, StencilList& stencils, int radius=2) :
+    LineStencil(StencilList& stencils, int radius=4) :
+        ExampleStencil("3line", stencils, radius) { }
+    LineStencil(const string& name, StencilList& stencils, int radius=4) :
         ExampleStencil(name, stencils, radius) { }
 };
 
-REGISTER_STENCIL(AxisStencil);
+REGISTER_STENCIL(LineStencil);
 
 // Add points from x-y, x-z, and y-z diagonals.
-class DiagStencil : public AxisStencil {
+class DiagStencil : public LineStencil {
 protected:
 
     // Add additional points to v.
     virtual void addPoints(GridValue& v)
     {
         // Get points from axes.
-        AxisStencil::addPoints(v);
+        LineStencil::addPoints(v);
 
         // Add points from diagonals.
         for (int r = 1; r <= _radius; r++) {
@@ -146,10 +146,10 @@ protected:
     }
 
 public:
-    DiagStencil(StencilList& stencils, int radius=2) :
-        AxisStencil("9axis", stencils, radius) { }
-    DiagStencil(const string& name, StencilList& stencils, int radius=2) :
-        AxisStencil(name, stencils, radius) { }
+    DiagStencil(StencilList& stencils, int radius=4) :
+        LineStencil("9line", stencils, radius) { }
+    DiagStencil(const string& name, StencilList& stencils, int radius=4) :
+        LineStencil(name, stencils, radius) { }
 };
 
 REGISTER_STENCIL(DiagStencil);
@@ -202,9 +202,9 @@ protected:
     }
 
 public:
-    PlaneStencil(StencilList& stencils, int radius=2) :
+    PlaneStencil(StencilList& stencils, int radius=3) :
         DiagStencil("3plane", stencils, radius) { }
-    PlaneStencil(const string& name, StencilList& stencils, int radius=2) :
+    PlaneStencil(const string& name, StencilList& stencils, int radius=3) :
         DiagStencil(name, stencils, radius) { }
 };
 
@@ -238,9 +238,9 @@ protected:
     }
 
 public:
-    CubeStencil(StencilList& stencils, int radius=1) :
+    CubeStencil(StencilList& stencils, int radius=2) :
         PlaneStencil("cube", stencils, radius) { }
-    CubeStencil(const string& name, StencilList& stencils, int radius=1) :
+    CubeStencil(const string& name, StencilList& stencils, int radius=2) :
         PlaneStencil(name, stencils, radius) { }
 };
 

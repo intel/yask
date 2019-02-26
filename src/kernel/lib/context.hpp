@@ -170,7 +170,7 @@ namespace yask {
     public:
 
         // Name.
-        std::string name;
+        std::string name, long_name;
 
         // BB without any extensions for wave-fronts.
         // This is the BB for the domain in this rank only.
@@ -489,6 +489,9 @@ namespace yask {
         // See yask_kernel_api.hpp.
         virtual const std::string& get_name() const {
             return name;
+        }
+        virtual const std::string& get_description() const {
+            return long_name;
         }
         virtual void set_debug_output(yask_output_ptr debug) {
             KernelStateBase::set_debug_output(debug);

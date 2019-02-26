@@ -240,6 +240,7 @@ namespace yask {
         os << "\nOther settings:\n"
             " yask-version:          " << yask_get_version_string() << endl <<
             " stencil-name:          " << get_name() << endl <<
+            " stencil-description:   " << get_description() << endl <<
             " element-size:          " << makeByteStr(get_element_bytes()) << endl <<
             " local-domain:          " << rank_bb.bb_begin.makeDimValStr() <<
             " ... " << rank_bb.bb_end.subElements(1).makeDimValStr() << endl;

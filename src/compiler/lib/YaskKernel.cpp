@@ -458,7 +458,8 @@ namespace yask {
             os << "\n // Constructor.\n" <<
                 " " << _context_base << "(KernelEnvPtr env, KernelSettingsPtr settings) :"
                 " StencilContext(env, settings)" << ctorList <<
-                " {\n  name = \"" << _stencil.getName() << "\";\n";
+                " {\n  name = \"" << _stencil.getName() << "\";\n"
+                " long_name = \"" << _stencil.getLongName() << "\";\n";
 
             os << "\n // Create grids (but do not allocate data in them).\n" <<
                 ctorCode <<

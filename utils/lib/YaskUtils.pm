@@ -53,6 +53,7 @@ our @log_keys =
    'best num-steps-done',
    'version',
    'stencil name',
+   'stencil description',
    'invocation',
    'binary invocation',
    'num MPI ranks',

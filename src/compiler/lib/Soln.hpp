@@ -55,8 +55,11 @@ namespace yask {
         public virtual yc_solution {
     protected:
 
-        // Simple name for the stencil soln.
+        // Simple name for the stencil soln. Must be a legal C++ var name.
         string _name;
+
+        // Longer descriptive string.
+        string _long_name;
 
         // Debug output.
         yask_output_ptr _debug_output;
@@ -98,6 +101,9 @@ namespace yask {
 
         // Identification.
         virtual const string& getName() const { return _name; }
+        virtual const string& getLongName() const {
+            return _long_name.length() ? _long_name : _name;
+        }
 
         // Simple accessors.
         virtual Grids& getGrids() { return _grids; }
@@ -145,8 +151,14 @@ namespace yask {
         virtual void set_name(std::string name) {
             _name = name;
         }
+        virtual void set_description(std::string str) {
+            _long_name = str;
+        }
         virtual const std::string& get_name() const {
             return _name;
+        }
+        virtual const std::string get_description() const {
+            return getLongName();
         }
 
         virtual yc_grid_ptr new_grid(const std::string& name,
@@ -284,7 +296,9 @@ namespace yask {
 
     public:
         StencilRadiusBase(const string name, StencilList& stencils, int radius) :
-            StencilBase(name, stencils), _radius(radius) {}
+            StencilBase(name, stencils) {
+            setRadius(radius);
+        }
 
         // Does use radius.
         virtual bool usesRadius() const { return true; }
@@ -293,6 +307,7 @@ namespace yask {
         // Return true if successful.
         virtual bool setRadius(int radius) {
             _radius = radius;
+            _long_name = _name + " with radius " + to_string(radius);
             return radius >= 0;  // support only non-neg. radius.
         }
 
