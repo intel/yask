@@ -331,7 +331,7 @@ namespace yask {
         // This will loop over the entire allocation.
         // We use this as a handy way to get offsets,
         // but not all will be used.
-        allocs.visitAllPoints
+        allocs.visitAllPointsInParallel
             ([&](const IdxTuple& pt, size_t idx) {
 
                 // Adjust alloc indices to overall indices.
@@ -347,7 +347,7 @@ namespace yask {
                         opt[i] += _rank_offsets[i] + _local_offsets[i];
 
                     // Don't compare points outside the domain.
-                    // TODO: check points in halo.
+                    // TODO: check points in outermost halo.
                     auto& dname = pt.getDimName(i);
                     if (domain_dims.lookup(dname)) {
                         auto first_ok = get_first_rank_domain_index(dname);
@@ -363,17 +363,18 @@ namespace yask {
                 auto te = readElem(opt, asi, __LINE__);
                 auto re = ref->readElem(opt, asi, __LINE__);
                 if (!within_tolerance(te, re, epsilon)) {
-                    errs++;
-                    if (errs < maxPrint) {
-                        os << "** mismatch at " << get_name() <<
-                            "(" << opt.makeDimValStr() << "): " <<
-                            te << " != " << re << std::endl;
-                    }
-                    else if (errs == maxPrint)
-                        os << "** Additional errors not printed." << std::endl;
-                    else {
-                        // errs > maxPrint.
-                        return false; // stop visits.
+#pragma omp critical
+                    {
+                        errs++;
+                        if (errs <= maxPrint) {
+                            if (errs < maxPrint)
+                                os << "** mismatch at " << get_name() <<
+                                    "(" << opt.makeDimValStr() << "): " <<
+                                    te << " != " << re << endl;
+                            else
+                                os << "** Additional errors not printed for grid '" <<
+                                    get_name() << "'.\n";
+                        }
                     }
                 }
                 return true;    // keep visiting.
@@ -475,14 +476,14 @@ namespace yask {
     // "message: mygrid[x=4, y=7] = 3.14 at line 35".
     void YkGridBase::printElem(const std::string& msg,
                                const Indices& idxs,
-                               real_t e,
+                               real_t eval,
                                int line,
                                bool newline) const {
         ostream& os = _ggb->get_ostr();
         if (msg.length())
             os << msg << ": ";
         os << get_name() << "[" <<
-            makeIndexString(idxs) << "] = " << e;
+            makeIndexString(idxs) << "] = " << eval;
         if (line)
             os << " at line " << line;
         if (newline)
