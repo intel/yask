@@ -75,7 +75,7 @@ public:
 };
 
 // Add points from x, y, and z axes.
-class LineStencil : public ExampleStencil {
+class AxisStencil : public ExampleStencil {
 protected:
 
     // Add additional points to v.
@@ -104,23 +104,23 @@ protected:
     }
 
 public:
-    LineStencil(StencilList& stencils, int radius=4) :
-        ExampleStencil("3line", stencils, radius) { }
-    LineStencil(const string& name, StencilList& stencils, int radius=4) :
+    AxisStencil(StencilList& stencils, int radius=4) :
+        ExampleStencil("3axis", stencils, radius) { }
+    AxisStencil(const string& name, StencilList& stencils, int radius=4) :
         ExampleStencil(name, stencils, radius) { }
 };
 
-REGISTER_STENCIL(LineStencil);
+REGISTER_STENCIL(AxisStencil);
 
 // Add points from x-y, x-z, and y-z diagonals.
-class DiagStencil : public LineStencil {
+class DiagStencil : public AxisStencil {
 protected:
 
     // Add additional points to v.
     virtual void addPoints(GridValue& v)
     {
         // Get points from axes.
-        LineStencil::addPoints(v);
+        AxisStencil::addPoints(v);
 
         // Add points from diagonals.
         for (int r = 1; r <= _radius; r++) {
@@ -147,9 +147,9 @@ protected:
 
 public:
     DiagStencil(StencilList& stencils, int radius=4) :
-        LineStencil("9line", stencils, radius) { }
+        AxisStencil("3axis_with_diags", stencils, radius) { }
     DiagStencil(const string& name, StencilList& stencils, int radius=4) :
-        LineStencil(name, stencils, radius) { }
+        AxisStencil(name, stencils, radius) { }
 };
 
 REGISTER_STENCIL(DiagStencil);

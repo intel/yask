@@ -46,10 +46,10 @@ arch			?=	$(shell $(BASH) ./yask.sh -show_arch)
 ifeq ($(stencil),)
  $(error Stencil not specified)
 
-else ifeq ($(stencil),3line)
+else ifeq ($(stencil),3axis)
  MACROS		+=	MAX_EXCH_DIST=1
 
-else ifeq ($(stencil),9line)
+else ifeq ($(stencil),3axis_with_diags)
  MACROS		+=	MAX_EXCH_DIST=2
 
 else ifeq ($(stencil),3plane)
@@ -859,9 +859,9 @@ stencil-tests:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_scratch_subdomain_1d fold=x=4
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=iso3dfd radius=3 fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=iso3dfd_sponge radius=3 fold=x=2,z=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=9line fold=x=2,z=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=3line fold=x=2,y=2 cluster=x=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=3line fold=x=2,y=2 cluster=z=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=3axis fold=x=2,y=2 cluster=x=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=3axis fold=x=2,y=2 cluster=z=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=3axis_with_diags fold=x=2,z=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=3plane fold=y=2,z=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=cube fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=ssg fold=x=2,y=2
@@ -989,8 +989,8 @@ help:
 	@echo "Example performance builds of kernel cmd-line tool:"; \
 	echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=iso3dfd"; \
 	echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=awp EXTRA_YK_CXXFLAGS=-qopt-report"; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=skl stencil=3line fold='x=1,y=2,z=4' cluster='x=2'"; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=hsw stencil=3line radius=4 real_bytes=8 # DP FP"; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=skl stencil=3axis fold='x=1,y=2,z=4' cluster='x=2'"; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=hsw stencil=3axis radius=4 real_bytes=8 # DP FP"; \
 	echo " "; \
 	echo "Example performance builds of kernel API for C++ and Python apps:"; \
 	echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=iso3dfd yk-api"; \
@@ -999,7 +999,7 @@ help:
 	echo "Example debug builds of kernel cmd-line tool ('trace=1' enables tracing; run with '-trace' to get trace):"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' check=1 trace=1 # No OpenMP or MPI, internal checking"; \
 	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=test_2d mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' check=1 trace=1"; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3line radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' check=1 trace_mem=1"; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' check=1 trace_mem=1"; \
 	echo " "; \
 	echo "Example builds with test runs:"; \
 	echo " $(MAKE) -j all # Normal full API and stencil tests"; \

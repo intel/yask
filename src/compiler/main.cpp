@@ -154,7 +154,7 @@ void usage(const string& cmd) {
         //" -ps <vec-len>         Print stats for all folding options for given vector length.\n"
         "\n"
         "Examples:\n"
-        " " << cmd << " -stencil 3line -radius 2 -fold x=4,y=4 -p pseudo -  # '-' for stdout\n"
+        " " << cmd << " -stencil 3axis -radius 2 -fold x=4,y=4 -p pseudo -  # '-' for stdout\n"
         " " << cmd << " -stencil awp -elem-bytes 8 -fold x=4,y=2 -p avx2 stencil_code.hpp\n"
         " " << cmd << " -stencil iso3dfd -radius 8 -cluster y=2 -p avx512 stencil_code.hpp\n";
     exit(1);
