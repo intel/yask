@@ -58,6 +58,7 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
       for functional testing if you don't have native support for any given instruction set.
 
 ### Backward-compatibility notices:
+* Version 2.18.03 allowed the default radius to be stencil-specific and changed the names of example stencil "9axis" to "3axis_with_diags".
 * Version 2.18.00 added the ability to specify the global-domain size, and it will calculate the local-domain sizes from it.
 There is no longer a default local-domain size.
 Output changed terms "overall-problem" to "global-domain" and "rank-domain" to "local-domain".

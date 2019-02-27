@@ -53,6 +53,7 @@ our @log_keys =
    'best num-steps-done',
    'version',
    'stencil name',
+   'stencil description',
    'invocation',
    'binary invocation',
    'num MPI ranks',
@@ -215,29 +216,32 @@ sub getResultsFromLine($$) {
     $results->{$nodes_key} .= $nname;
   }
 
-  # Invalidate settings overridden by auto-tuner.
-  # TODO: save new values, but need to handle multiple packs.
-  elsif (/best-block-size:/i) {
+  # If auto-tuner is run on one pack, capture updated values.
+  # Invalidate settings overridden by auto-tuner on multiple packs.
+  elsif ($line =~ /^auto-tuner(.).*size:/) {
+    my $c = $1;
+
+    # If colon found above, only one pack tuned.
+    my $onep = ($c eq ':');
+    
     for my $k ('block size',
                'mini-block size',
                'sub-block size',) {
-      $results->{$k} = 'auto-tuned';
+      $line =~ s/-size/ size/;
+      if ($line =~ /$k:\s*(t=.*)/i) {
+        my $val = $onep ? $1 : 'auto-tuned';
+        $results->{$k} = $val;
+      }
     }
   }
-  elsif (/best-mini-block-size:/i) {
-    for my $k ('mini-block size',
-               'sub-block size',) {
-      $results->{$k} = 'auto-tuned';
-    }
-  }
-  
+
   # look for matches to all other keys.
   else {
     my ($key, $val) = split /:/,$line,2;
     if (defined $val) {
       $key = lc $key;
       $key =~ s/^\s+//;
-      $key =~ s/[- ]+/-/g; # relax hyphen and space match.
+      $key =~ s/[- ]+/-/g;      # relax hyphen and space match.
 
       # short key.
       my $sk = substr $key,0,$klen;

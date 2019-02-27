@@ -33,8 +33,10 @@ mpi			?=	1
 numa			?=	1
 pmem			?=	0
 real_bytes		?=	4
-radius			?=	2
 allow_new_grid_types	?=	1
+trace			?=	0
+trace_mem		?=	0
+check			?=	0
 
 # Determine default architecture by running kernel script w/special knob.
 # Do not assume it has been installed in $(BIN_OUT_DIR) yet.
@@ -46,23 +48,18 @@ ifeq ($(stencil),)
 
 else ifeq ($(stencil),3axis)
  MACROS		+=	MAX_EXCH_DIST=1
- radius		:=	4
 
-else ifeq ($(stencil),9axis)
+else ifeq ($(stencil),3axis_with_diags)
  MACROS		+=	MAX_EXCH_DIST=2
- radius		:=	4
 
 else ifeq ($(stencil),3plane)
  MACROS		+=	MAX_EXCH_DIST=2
- radius		:=	3
 
 else ifeq ($(stencil),cube)
  MACROS		+=	MAX_EXCH_DIST=3
- radius		:=	2
 
 else ifneq ($(findstring iso3dfd,$(stencil)),)
  MACROS				+=	MAX_EXCH_DIST=1
- radius				:=	8
  def_pad_args			:=	-ep 1
  ifeq ($(arch),knl)
   fold_4byte			:=	x=2,y=8
@@ -137,7 +134,6 @@ else ifneq ($(findstring fsg,$(stencil)),)
 
 else ifeq ($(stencil),tti)
  MACROS			+=	MAX_EXCH_DIST=3
- radius			:=	2
  ifneq ($(filter $(arch),skx skl clx),)
   fold_4byte		:=	x=4,y=4
   def_block_args	:=	-bx 80 -by 16 -bz 40
@@ -146,7 +142,6 @@ else ifeq ($(stencil),tti)
 
 else ifeq ($(stencil),stream)
  MACROS		+=	MAX_EXCH_DIST=0
- radius		:=	2
  cluster	:=	x=2
 
 endif # stencil-specific.
@@ -864,9 +859,9 @@ stencil-tests:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_scratch_subdomain_1d fold=x=4
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=iso3dfd radius=3 fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=iso3dfd_sponge radius=3 fold=x=2,z=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=9axis fold=x=2,z=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=3axis fold=x=2,y=2 cluster=x=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=3axis fold=x=2,y=2 cluster=z=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=3axis_with_diags fold=x=2,z=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=3plane fold=y=2,z=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=cube fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=ssg fold=x=2,y=2
@@ -1001,10 +996,10 @@ help:
 	echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=iso3dfd yk-api"; \
 	echo " $(MAKE) clean; $(MAKE) -j arch=skl stencil=awp yk-api"; \
 	echo " "; \
-	echo "Example debug builds of kernel cmd-line tool:"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' check=1 # No OpenMP or MPI, internal checking"; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=test_2d mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' check=1 trace=1 # trace is a useful debug setting!"; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' check=1 trace=1 trace_mem=1"; \
+	echo "Example debug builds of kernel cmd-line tool ('trace=1' enables tracing; run with '-trace' to get trace):"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' check=1 trace=1 # No OpenMP or MPI, internal checking"; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=test_2d mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' check=1 trace=1"; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' check=1 trace_mem=1"; \
 	echo " "; \
 	echo "Example builds with test runs:"; \
 	echo " $(MAKE) -j all # Normal full API and stencil tests"; \

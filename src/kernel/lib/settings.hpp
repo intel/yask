@@ -452,6 +452,7 @@ namespace yask {
         idx_t def_block = 32;   // TODO: calculate this.
 
         // Make a null output stream.
+        // TODO: put this somewhere else.
         yask_output_factory yof;
         yask_output_ptr nullop = yof.new_null_output();
 
@@ -497,6 +498,7 @@ namespace yask {
         
         // Debug.
         bool force_scalar = false; // Do only scalar ops.
+        bool _trace = false;       // Print verbose tracing.
 
         // Prefetch distances.
         // Prefetching must be enabled via YASK_PREFETCH_L[12] macros.

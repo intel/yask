@@ -118,8 +118,12 @@ struct AppSettings : public KernelSettings {
                            "overriding default value from YASK compiler.",
                            step_alloc));
         parser.add_option(new CommandLineParser::IntOption
-                          ("t",
+                          ("num_trials",
                            "Number of performance trials.",
+                           num_trials));
+        parser.add_option(new CommandLineParser::IntOption
+                          ("t",
+                           "Alias for '-num_trials'; for backward-compatibility.",
                            num_trials));
         parser.add_option(new CommandLineParser::IntOption
                           ("trial_steps",
@@ -128,7 +132,7 @@ struct AppSettings : public KernelSettings {
                            trial_steps));
         parser.add_option(new CommandLineParser::IntOption
                           ("dt",
-                           "Same as 'trial_steps'; for backward-compatibility.",
+                           "Alias for '-trial_steps'; for backward-compatibility.",
                            trial_steps));
         parser.add_option(new CommandLineParser::IntOption
                           ("trial_time",
@@ -441,7 +445,7 @@ int main(int argc, char** argv)
                 " best-throughput (num-points/sec): " << makeNumStr(best_trial->pts_ps) << endl <<
                 divLine <<
                 "Notes:\n"
-                " Num-reads and writes/sec and FLOPS are metrics based on\n"
+                " Num-reads/sec, num-writes/sec, and FLOPS are metrics based on\n"
                 "  stencil specifications and can vary due to differences in\n"
                 "  implementations and optimizations.\n"
                 " Num-points/sec is based on overall problem size and is\n"
@@ -508,19 +512,33 @@ int main(int argc, char** argv)
             ref_context->set_debug_output(yof.new_null_output());
             auto rstats = ref_context->get_stats();
             ref_context->set_debug_output(dbg_out);
-            os << "  Done in " << makeNumStr(rstats->get_elapsed_secs()) << " secs.\n";
+            os << "  Done in " << makeNumStr(rstats->get_elapsed_secs()) << " secs.\n" << flush;
 #endif
             // check for equality.
-            os << "\nChecking results..." << endl;
+            os << "\nChecking results...\n";
             idx_t errs = context->compareData(*ref_context);
             auto ri = kenv->get_rank_index();
-            if( errs == 0 ) {
-                os << "TEST PASSED on rank " << ri << ".\n" << flush;
-            } else {
-                cerr << "TEST FAILED on rank " << ri << ": >= " << errs << " mismatch(es).\n" << flush;
-                if (REAL_BYTES < 8)
-                    cerr << "Small differences are not uncommon for low-precision FP; try with 8-byte reals." << endl;
-                ok = false;
+
+            // Trick to emulate MPI critical section.
+            // This cannot be in a conditional block--otherwise
+            // it will deadlock if some ranks pass and some fail.
+            for (int r = 0; r < kenv->get_num_ranks(); r++) {
+                kenv->global_barrier();
+                if (r == ri) {
+                    if( errs == 0 )
+                        os << "TEST PASSED on rank " << ri << ".\n" << flush;
+                    else {
+
+                        // Use 'cerr' to print on all ranks in case rank printing to 'os'
+                        // passed and other(s) failed.
+                        cerr << "TEST FAILED on rank " << ri << ": " << errs << " mismatch(es).\n";
+                        if (REAL_BYTES < 8)
+                            cerr << " Small differences are not uncommon for low-precision FP; "
+                                "try with 8-byte reals.\n";
+                        cerr << flush;
+                        ok = false;
+                    }
+                }
             }
             ref_soln->end_solution();
         }

@@ -358,6 +358,12 @@ namespace yask {
                            "Minimum width of MPI exterior section to compute before starting MPI communication.",
                            _min_exterior));
 #endif
+#ifdef TRACE
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("trace",
+                           "Print internal debug messages.",
+                           _trace));
+#endif
         parser.add_option(new CommandLineParser::BoolOption
                           ("force_scalar",
                            "Evaluate every grid point with scalar stencil operations (for debug).",
