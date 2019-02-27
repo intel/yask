@@ -301,18 +301,18 @@ namespace yask {
         }
 
         // Does use radius.
-        virtual bool usesRadius() const { return true; }
+        virtual bool usesRadius() const override { return true; }
 
         // Set radius.
         // Return true if successful.
-        virtual bool setRadius(int radius) {
+        virtual bool setRadius(int radius) override {
             _radius = radius;
             _long_name = _name + " with radius " + to_string(radius);
             return radius >= 0;  // support only non-neg. radius.
         }
 
         // Get radius.
-        virtual int getRadius() { return _radius; }
+        virtual int getRadius() const override { return _radius; }
     };
 
 } // namespace yask.
