@@ -678,8 +678,11 @@ namespace yask {
         // to entire block.
         if (num_block_threads > 1 && _sub_block_sizes.sum() == 0) {
 
-            // Look for best dim to split.
+            // Default dim is outer one.
             _bind_posn = 1;
+
+            // Look for best dim to split and bind threads to
+            // if binding is enabled.
             DOMAIN_VAR_LOOP(i, j) {
 
                 // Don't pick inner dim.
