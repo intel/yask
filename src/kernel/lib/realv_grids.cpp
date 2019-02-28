@@ -84,6 +84,21 @@ namespace yask {
         return tmp.makeDimValStr(separator, infix, prefix, suffix);
     }
 
+    // Does this var cover the N-D domain?
+    bool YkGridBase::is_domain_var() const {
+
+        // Problem dims.
+        auto* dims = get_dims().get();
+        const auto& domain_dims = dims->_domain_dims;
+
+        for (auto& d : domain_dims.getDims()) {
+            auto& dname = d.getName();
+            if (!is_dim_used(dname))
+                return false;
+        }
+        return true;
+    }
+    
     // Halo-exchange flag accessors.
     bool YkGridBase::is_dirty(idx_t step_idx) const {
         if (_dirty_steps.size() == 0)
