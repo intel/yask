@@ -731,7 +731,7 @@ sub getRunCmd() {
   } else {
     $runCmd .= " -host $host" if defined $host;
   }
-  $runCmd .= " -exe_prefix '$exePrefix' -stencil $stencil -arch $arch -no-pre_auto_tune";
+  $runCmd .= " -exe_prefix '$exePrefix' -stencil $stencil -arch $arch -no-pre_auto_tune -no-print_suffixes";
   $runCmd .= " -ranks $nranks" if $nranks > 1;
   return $runCmd;
 }

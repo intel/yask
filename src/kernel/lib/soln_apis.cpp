@@ -487,7 +487,7 @@ namespace yask {
                     idx_t nwrites = sp->tot_writes_per_step;
                     idx_t nfpops = sp->tot_fpops_per_step;
                     string pfx = "  '" + sp->get_name() + "' ";
-                    os << pfx << "num-steps-done:           " << makeNumStr(ns) << endl <<
+                    os << pfx << "num-steps-done:           " << ns << endl <<
                         pfx << "num-reads-per-step:       " << makeNumStr(nreads) << endl <<
                         pfx << "num-writes-per-step:      " << makeNumStr(nwrites) << endl <<
                         pfx << "num-est-FP-ops-per-step:  " << makeNumStr(nfpops) << endl;
