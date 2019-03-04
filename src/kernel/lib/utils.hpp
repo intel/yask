@@ -82,11 +82,6 @@ namespace yask {
     extern void assertEqualityOverRanks(idx_t rank_val, MPI_Comm comm,
                                         const std::string& descr);
 
-    // Round up val to a multiple of mult.
-    // Print a message if rounding is done and do_print is set.
-    extern idx_t roundUp(std::ostream& os, idx_t val, idx_t mult,
-                         const std::string& name, bool do_print);
-
     // Helpers for aligned malloc and free.
     extern char* alignedAlloc(std::size_t nbytes);
     struct AlignedDeleter {

@@ -347,22 +347,6 @@ namespace yask {
 #endif
     }
         
-    // Round up val to a multiple of mult.
-    // Print a message if rounding is done and do_print is set.
-    idx_t roundUp(ostream& os, idx_t val, idx_t mult,
-                  const string& name, bool do_print)
-    {
-        assert(mult > 0);
-        idx_t res = val;
-        if (val % mult != 0) {
-            res = ROUND_UP(res, mult);
-            if (do_print)
-                os << "Adjusting " << name << " from " << val << " to " <<
-                    res << " to be a multiple of " << mult << endl;
-        }
-        return res;
-    }
-
     // Find sum of rank_vals over all ranks.
     idx_t sumOverRanks(idx_t rank_val, MPI_Comm comm) {
         idx_t sum_val = rank_val;
