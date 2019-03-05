@@ -130,8 +130,8 @@ sub usage {
       "* indicates options that are invalid if -noBuild is used.\n".
       "\n".
       "examples:\n".
-      " $0 -stencil=iso3dfd -arch=skl -d=768 -r=0 -noPrefetch\n".
-      " $0 -stencil=awp -arch=knl -dx=512 -dy=512 -dz=256 -b=4-512:4\n".
+      " $0 -stencil=iso3dfd -arch=skl -l=768 -r=0 -noPrefetch\n".
+      " $0 -stencil=awp -arch=knl -lx=512 -ly=512 -lz=256 -b=4-512:4\n".
       " $0 -stencil=3axis -arch=snb -mem=8-10 -noBuild\n";
 
   exit(defined $msg ? 1 : 0);
@@ -264,12 +264,12 @@ for my $origOpt (@ARGV) {
       if ($min > $max);
 
     # special case for local-domain size: also set default for other max sizes.
-    if ($key =~ /^[ld][xyz]?$/ && $max > 0) {
+    if ($key =~ /^l[xyz]?$/ && $max > 0) {
       my @szs = qw(r b mb sb);
       push @szs, qw(bg mbg sbg) if $showGroups;
       for my $i (@szs) {
         my $key2 = $key;
-        $key2 =~ s/^d/$i/;
+        $key2 =~ s/^l/$i/;
         $geneRanges{$autoKey.$key2} = [ 1, $max ];
       }
     }
@@ -515,10 +515,10 @@ for my $i (0..$#rangesAll) {
   # Look for match in dynamic limits.
   # Try full-match of key, then w/o x,y,z suffix.
   # Try each w/cmd-line specified key, then w/auto-gen key.
-  # E.g., for 'dx', try the following: 'dx', 'd', 'auto_dx', 'auto_d'.
+  # E.g., for 'lx', try the following: 'lx', 'l', 'auto_lx', 'auto_l'.
   my $rkey = lc $key;
   my $rkey2 = $rkey;
-  $rkey2 =~ s/[xyz]$//;          # e.g., 'dx' -> 'd'.
+  $rkey2 =~ s/[xyz]$//;          # e.g., 'lx' -> 'l'.
   for my $rk ($rkey, $rkey2, $autoKey.$rkey, $autoKey.$rkey2) {
     if (exists $geneRanges{$rk}) {
       my ($min, $max, $step) = @{$geneRanges{$rk}};
@@ -549,7 +549,7 @@ for my $i (0..$#rangesAll) {
 }
 
 # disable memory range if all domain sizes fixed.
-if ((scalar grep { exists $fixedVals{"d$_"} } @dirs) == scalar @dirs) {
+if ((scalar grep { exists $fixedVals{"l$_"} } @dirs) == scalar @dirs) {
   undef $minGB;
   undef $maxGB;
 }
@@ -749,7 +749,7 @@ sub calcSize($$$) {
 
     my $makeCmd = getMakeCmd('', 'EXTRA_CXXFLAGS=-O1');
     my $runCmd = getRunCmd();
-    $runCmd .= " -t 0 -d 32 $runArgs";
+    $runCmd .= " -t 0 -l 32 $runArgs";
     my $cmd = "$makeCmd 2>&1 && $runCmd";
 
     my $timeDim = 0;
@@ -1125,7 +1125,7 @@ sub fitness {
 
   # get individual vars from hash or fixed values.
   my $h = makeHash($values);
-  my @ds = readHashes($h, 'd', 0);
+  my @ds = readHashes($h, 'l', 0);
   my $rt = readHash($h, 'rt', 1);
   my @rs = readHashes($h, 'r', 0);
   my $bt = readHash($h, 'bt', 1);
@@ -1321,7 +1321,7 @@ sub fitness {
   $args .= ($bind_block_threads ? " " : " -no"). "-bind_block_threads";
 
   # sizes.
-  $args .= " -dx $ds[0] -dy $ds[1] -dz $ds[2]";
+  $args .= " -lx $ds[0] -ly $ds[1] -lz $ds[2]";
   $args .= " -rt $rt -rx $rs[0] -ry $rs[1] -rz $rs[2]";
   $args .= " -bt $bt -bx $bs[0] -by $bs[1] -bz $bs[2]";
   $args .= " -mbx $mbs[0] -mby $mbs[1] -mbz $mbs[2]";
