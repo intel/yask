@@ -39,6 +39,7 @@ use Sys::Hostname;
 use List::Util qw(first max maxstr min minstr reduce shuffle sum);
 use YaskUtils;
 use POSIX;
+use Digest::MD5 qw(md5 md5_hex md5_base64);
 
 # constants.
 my @dirs = qw(x y z);           # not including t.
@@ -72,6 +73,10 @@ my $maxVecsInCluster = 4;      # max vectors in a cluster.
 my @folds = ();                # folding variations to explore.
 my $killCmd = '/usr/bin/timeout'; # command to kill runaway jobs.
 
+# Set default arch.
+$arch = `bash src/kernel/yask.sh -show_arch`;
+chomp $arch;
+
 sub usage {
   my $msg = shift;              # error message or undef.
 
@@ -79,8 +84,6 @@ sub usage {
   warn
       "usage: $0 [options]\n".
       "\nhigh-level control options:\n".
-      " -noBuild           Do not compile kernel; kernel binary must already exist.\n".
-      " -sweep             Use exhausitive search instead of GA.\n".
       " -val               Run validation before each performance test.\n".
       " -outDir            Directory to write output into (default is '$outDir').\n".
       " -check             Print the settings, sanity-check the initial population, and exit.\n".
@@ -88,7 +91,7 @@ sub usage {
       " -debugCheck        Print detailed results of sanity-checks.\n".
       " -killCmd=<PATH>    Command to kill runaway jobs (default is '$killCmd').\n".
       "\ntarget options:\n".
-      " -arch=<ARCH>       Specify target architecture: knc, knl, hsw, ... (required).\n".
+      " -arch=<ARCH>       Specify target architecture: knc, knl, hsw, ... (default is '$arch').\n".
       " -host=<NAME>       Run binary on host <NAME> using ssh.\n".
       " -mic=<N>           Set hostname to current hostname appended with -mic<N>; sets arch to 'knc'.\n".
       " -sde               Run binary on SDE (for testing only).\n".
@@ -102,6 +105,9 @@ sub usage {
       " -dp|-sp            Specify FP precision (default is SP).*\n".
       " -radius=<N>        Specify stencil radius for stencils that use this option (default is 8).*\n".
       "\nsearch-space options:\n".
+      " -noBuild           Do not compile kernel; kernel binary must already exist.\n".
+      "                    Disables all build-related genes.\n".
+      " -sweep             Use exhausitive search instead of GA.\n".
       " -<gene_name>=<N>   Force <gene_name> to fixed value <N>.\n".
       "                    Run with -check for list of genes and default ranges.\n".
       "                    Setting local-domain size (l) also sets upper block and region sizes.\n".
@@ -332,7 +338,7 @@ my $secPerTrial = 60;           # used to estimate time required.
 
 # prefetching.
 my $maxPfd_l1 = 4;
-my $maxPfd_l2 = 12;
+my $maxPfd_l2 = 8;
 
 # dimension-related vars.
 my $minDim = 128;        # min dimension on any axis.
@@ -478,7 +484,6 @@ if ($doBuild) {
      [ -$maxPfd_l2, $maxPfd_l2, 1, 'pfd_l2' ],
 
      # other build options.
-     [ 0, 100, 1, 'exprSize' ],          # expression-size threshold.
      [ 0, $#schedules, 1, 'ompRegionSchedule' ], # OMP schedule for region loop.
      [ 0, $#schedules, 1, 'ompBlockSchedule' ], # OMP schedule for block loop.
 
@@ -707,21 +712,37 @@ sub roundValuesToMult($) {
   }
 }
 
-# create the basic make command.
+# create the basic make command and stencil tag.
 sub getMakeCmd($$) {
   my $macros = shift;
   my $margs = shift;
 
-  my $makeCmd = "$makePrefix make clean; ".
-    "$makePrefix make -j EXTRA_MACROS='$macros' ".
-    "stencil=$stencil arch=$arch real_bytes=$realBytes radius=$radius $margs $makeArgs";
-  $makeCmd = "echo 'build disabled'" if !$doBuild;
-  return $makeCmd;
+  my $tag = $stencil;
+  my $makeCmd = "echo 'build disabled'";
+
+  if ($doBuild) {
+    $tag .= "_".md5_hex($macros, $margs, $makeArgs, $realBytes, $radius);
+
+    # Already exists?
+    if (-x "bin/yask_kernel.$tag.$arch.exe") {
+      $makeCmd = "echo 'binary exists'";
+    }
+    else {
+      $makeCmd =
+        "$makePrefix make -j EXTRA_MACROS='$macros' YK_TAG=$tag.$arch ".
+        "stencil=$stencil arch=$arch real_bytes=$realBytes radius=$radius $margs $makeArgs";
+      $makeCmd = "$makeCmd default; $makeCmd clean";
+    }
+  }
+
+  return ( $makeCmd, $tag );
 }
 
 # create the basic run command.
 my $timeCmd = 'time';
-sub getRunCmd() {
+sub getRunCmd($) {
+  my $tag = shift;
+  
   my $exePrefix = $timeCmd;
   $exePrefix .= " sde -$arch --" if $sde;
 
@@ -731,7 +752,7 @@ sub getRunCmd() {
   } else {
     $runCmd .= " -host $host" if defined $host;
   }
-  $runCmd .= " -exe_prefix '$exePrefix' -stencil $stencil -arch $arch -no-pre_auto_tune -no-print_suffixes";
+  $runCmd .= " -exe_prefix '$exePrefix' -stencil $tag -arch $arch -no-pre_auto_tune -no-print_suffixes";
   $runCmd .= " -ranks $nranks" if $nranks > 1;
   return $runCmd;
 }
@@ -747,9 +768,8 @@ sub calcSize($$$) {
   # TODO: get info from compiler report.
   if (!$numSpatialGrids) {
 
-    my $makeCmd = getMakeCmd('', 'EXTRA_CXXFLAGS=-O1');
-    my $runCmd = getRunCmd();
-    $runCmd .= " -t 0 -l 32 $runArgs";
+    my ( $makeCmd, $tag ) = getMakeCmd('', 'EXTRA_CXXFLAGS=-O1');
+    my $runCmd = getRunCmd($tag)." -t 0 -l 32 $runArgs";
     my $cmd = "$makeCmd 2>&1 && $runCmd";
 
     my $timeDim = 0;
@@ -841,17 +861,13 @@ my %resultsCache;
 my %fitnessCache;
 my %testCache;
 
-# previous make command.
-my $prevMakeCmd = '';
-
 # run the command and return fitness and various associated data in a hash.
-sub evalIndiv($$$$$$$) {
+sub evalIndiv($$$$$$) {
   my $makeCmd = shift;
   my $testCmd = shift;
   my $simCmd = shift;
   my $shortRunCmd = shift;
   my $longRunCmd = shift;
-  my $cleanCmd = shift;
   my $pts = shift;
 
   # check result cache.
@@ -882,24 +898,12 @@ sub evalIndiv($$$$$$$) {
     $passed = 1;                # no test to run.
   }
 
-  # skip make if not building or same as previous.
-  my $made = 0;
-  if (!$doBuild) {
-    print "skipping '$makeCmd' because building is disabled.\n";
-    $made = 1;
-  }
-  elsif ($prevMakeCmd eq $makeCmd) {
-    print "skipping '$makeCmd' because it is the same as the previous one.\n";
-    $made = 1;
-  } else {
-    $prevMakeCmd = $makeCmd;
-  }
-
   # just make a nonsense fitness value if testing script.
   if ($testing) {
-    $fitness = length($simCmd);
+    $fitness = md5($simCmd);
     $passed = 1;
   } else {
+    my $made = 0;
 
     # do several runs:
     # 0=test
@@ -992,14 +996,6 @@ sub evalIndiv($$$$$$$) {
         }
       }
     } # N
-
-    my $cmd = $cleanCmd;
-    print "running '$cmd' ...\n";
-    open CMD, "$cmd 2>&1 |" or die "error: cannot run '$cmd'\n";
-    while (<CMD>) {
-      print ">> $_";
-    }
-    close CMD;
   }
 
   $testCache{$tkey} = $passed;
@@ -1137,7 +1133,6 @@ sub fitness {
   my @cvs = readHashes($h, 'c', 1); # in vectors, not in points!
   my @ps = readHashes($h, 'ep', 0);
   my $fold = readHash($h, 'fold', 1);
-  my $exprSize = readHash($h, 'exprSize', 1);
   my $thread_divisor = readHash($h, 'thread_divisor', 0);
   my $block_threads = readHash($h, 'block_threads', 0);
   my $bind_block_threads = readHash($h, 'bind_block_threads', 0);
@@ -1307,14 +1302,14 @@ sub fitness {
   $mvars .= makeLoopVars($h, 'SUB_BLOCK', 'subBlock', '', 2);
 
   # other vars.
-  $mvars .= " omp_region_schedule=$regionScheduleStr omp_block_schedule=$blockScheduleStr expr_size=$exprSize";
+  $mvars .= " omp_region_schedule=$regionScheduleStr omp_block_schedule=$blockScheduleStr";
   $mvars .= " mpi=1" if $nranks > 1;
 
   # how to make.
-  my $makeCmd = getMakeCmd($macros, $mvars);
+  my ( $makeCmd, $tag ) = getMakeCmd($macros, $mvars);
 
   # how to run.
-  my $runCmd = getRunCmd();     # shell command plus any initial args.
+  my $runCmd = getRunCmd($tag);     # shell command plus any initial args.
   my $args = "";             # exe args.
   $args .= " -thread_divisor $thread_divisor";
   $args .= " -block_threads $block_threads";
@@ -1343,7 +1338,6 @@ sub fitness {
   my $simCmd = "$runCmd $args -t 1 -dt 1 $runArgs";  # simulation w/1 trial & 1 step.
   my $shortRunCmd = "$runCmd $args -t $shortTrials -trial_time $shortTime $runArgs"; # fast run for 'upper-bound' time.
   my $longRunCmd = "$runCmd $args -t $longTrials -trial_time $longTime $runArgs";  # normal run w/more trials.
-  my $cleanCmd = "make clean";
 
   # add kill command to prevent runaway code.
   if (-x $killCmd) {
@@ -1371,7 +1365,7 @@ sub fitness {
   my $fitness;
   my $results = {};
   if ($ok) {
-    ($fitness, $results) = evalIndiv($makeCmd, $testCmd, $simCmd, $shortRunCmd, $longRunCmd, $cleanCmd, $dPts);
+    ($fitness, $results) = evalIndiv($makeCmd, $testCmd, $simCmd, $shortRunCmd, $longRunCmd, $dPts);
     print "results:\n";
     for my $k (sort keys %$results) {
       print "  $k: $results->{$k}\n";
