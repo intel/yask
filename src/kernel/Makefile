@@ -25,7 +25,7 @@
 # Type 'make help' for usage.
 
 # See top-level YASK Makefile for explanation of vars commonly set via the
-#   command-line that control kernel configuration and performance.
+# command-line that control kernel configuration and performance.
 
 # Initial defaults.
 stencil			?=	iso3dfd
@@ -37,6 +37,11 @@ allow_new_grid_types	?=	1
 trace			?=	0
 trace_mem		?=	0
 check			?=	0
+# NB: setting the "trace" var just includes the tracing code.
+# To actually output the trace, you must also use the "-trace"
+# run-time option. Enabling tracing is off by default because
+# it adds a few MiB to the binary and can impact perfomance
+# even if not used, but only around 1%.
 
 # Determine default architecture by running kernel script w/special knob.
 # Do not assume it has been installed in $(BIN_OUT_DIR) yet.
@@ -159,6 +164,10 @@ ifeq ($(arch),knc)
 
 else ifeq ($(arch),knl)
 
+ # NUMA_PREF=1 causes YASK to use MCDRAM on a node in "flat" memory mode. It
+ # will fall-back to NUMA node 0 in "cache" memory mode. It will *NOT* do
+ # the right thing by default in SNC-2 or SNC-4 clustering modes (using
+ # either flat or cache memory modes, but these configurations are uncommon.
  ISA		?=	-xMIC-AVX512
  GCXX_ISA	?=	-march=knl
  MACROS		+=	USE_INTRIN512 USE_RCP28 NUMA_PREF=1

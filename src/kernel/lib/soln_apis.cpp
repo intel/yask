@@ -540,6 +540,9 @@ namespace yask {
                 "  packing, unpacking, etc. (sec):    " << makeNumStr(ohtime);
             print_pct(os, ohtime, htime);
 #endif
+
+            // Note that rates are reported with base-10 suffixes per common convention, not base-2.
+            // See https://www.speedguide.net/articles/bits-bytes-and-bandwidth-reference-guide-115.
             os <<
                 "\nRate stats:\n"
                 " throughput (num-reads/sec):       " << makeNumStr(p->reads_ps) << endl <<

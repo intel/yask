@@ -436,6 +436,12 @@ namespace yask {
                            "Apply the auto-tuner to mini-block sizes instead of block sizes. "
                            "Particularly useful when using temporal block tiling.",
                            _tune_mini_blks));
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("auto_tune_each_pass",
+                           "Apply the auto-tuner separately to each stencil pack when "
+                           "those packs are applied in separate passes across the entire grid, "
+                           "i.e., when no temporal tiling is used.",
+                           _allow_pack_tuners));
     }
 
     // Print usage message.

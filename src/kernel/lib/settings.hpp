@@ -495,6 +495,7 @@ namespace yask {
         // Tuning.
         bool _do_auto_tune = false;    // whether to do auto-tuning.
         bool _tune_mini_blks = false; // auto-tune mini-blks instead of blks.
+        bool _allow_pack_tuners = false; // allow per-pack tuners when possible.
         
         // Debug.
         bool force_scalar = false; // Do only scalar ops.
