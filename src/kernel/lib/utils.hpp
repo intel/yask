@@ -60,7 +60,6 @@ extern "C" {
 namespace yask {
 
     // Fatal error.
-    // TODO: enable exception throwing that works w/SWIG.
     inline void exit_yask(int code) {
 
 #ifdef USE_MPI
@@ -76,24 +75,12 @@ namespace yask {
         exit(code);
     }
 
-    // Return num with SI multiplier and "iB" suffix,
-    // e.g., 41.2KiB.
-    extern std::string makeByteStr(size_t nbytes);
-
-    // Return num with SI multiplier, e.g., 4.23M.
-    extern std::string makeNumStr(double num);
-
     // Find sum of rank_vals over all ranks.
     extern idx_t sumOverRanks(idx_t rank_val, MPI_Comm comm);
 
     // Make sure rank_val is same over all ranks.
     extern void assertEqualityOverRanks(idx_t rank_val, MPI_Comm comm,
                                         const std::string& descr);
-
-    // Round up val to a multiple of mult.
-    // Print a message if rounding is done and do_print is set.
-    extern idx_t roundUp(std::ostream& os, idx_t val, idx_t mult,
-                         const std::string& name, bool do_print);
 
     // Helpers for aligned malloc and free.
     extern char* alignedAlloc(std::size_t nbytes);

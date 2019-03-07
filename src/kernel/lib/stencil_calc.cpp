@@ -769,6 +769,24 @@ namespace yask {
         // Don't add to context steps to avoid over-counting.
     }
 
+    static void print_grid_list(ostream& os, const GridPtrs& gps, const string& type) {
+        os << "  num " << type << " vars:";
+        for (size_t i = 0; i < max(21ULL - type.length(), 1ULL); i++)
+            os << ' ';
+        os << gps.size() << endl;
+        if (gps.size()) {
+            os << "  " << type << " vars:";
+            for (size_t i = 0; i < max(25ULL - type.length(), 1ULL); i++)
+                os << ' ';
+            int i = 0;
+            for (auto gp : gps) {
+                if (i++) os << ", ";
+                os << gp->get_name();
+            }
+            os << endl;
+        }
+    }
+    
     // Calc the work stats.
     // Requires MPI barriers!
     void BundlePack::init_work_stats() {
@@ -855,20 +873,42 @@ namespace yask {
                 "  est FP-ops per point:       " << fpops1 << endl <<
                 "  est FP-ops in rank:         " << makeNumStr(fpops_bb) << endl;
 
-            os << "  input-grids:                ";
-            int i = 0;
+            // Classify vars.
+            GridPtrs idvars, imvars, odvars, omvars, iodvars, iomvars; // i[nput], o[utput], d[omain], m[isc].
             for (auto gp : sg->inputGridPtrs) {
-                if (i++) os << ", ";
-                os << gp->get_name();
+                bool isdom = gp->is_domain_var();
+                auto& ogps = sg->outputGridPtrs;
+                bool isout = find(ogps.begin(), ogps.end(), gp) != ogps.end();
+                if (isout) {
+                    if (isdom)
+                        iodvars.push_back(gp);
+                    else
+                        iomvars.push_back(gp);
+                } else {
+                    if (isdom)
+                        idvars.push_back(gp);
+                    else
+                        imvars.push_back(gp);
+                }
             }
-            os << "\n  output-grids:               ";
-            i = 0;
             for (auto gp : sg->outputGridPtrs) {
-                if (i++) os << ", ";
-                os << gp->get_name();
+                bool isdom = gp->is_domain_var();
+                auto& igps = sg->inputGridPtrs;
+                bool isin = find(igps.begin(), igps.end(), gp) != igps.end();
+                if (!isin) {
+                    if (isdom)
+                        odvars.push_back(gp);
+                    else
+                        omvars.push_back(gp);
+                }
             }
-            os << endl;
-
+            print_grid_list(os, idvars, "input-only domain");
+            print_grid_list(os, odvars, "output-only domain");
+            print_grid_list(os, iodvars, "input-output domain");
+            print_grid_list(os, imvars, "input-only other");
+            print_grid_list(os, omvars, "output-only other");
+            print_grid_list(os, iomvars, "input-output other");
+            
         } // bundles.
 
         // Sum across ranks.

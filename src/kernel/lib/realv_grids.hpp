@@ -211,6 +211,9 @@ namespace yask {
         virtual void _set_dynamic_misc_alloc(bool is_dynamic) {
             _is_dynamic_misc_alloc = is_dynamic;
         }
+
+        // Does this var cover the N-D domain?
+        virtual bool is_domain_var() const;
         
         // Scratch accessors.
         virtual bool is_scratch() const { return _is_scratch; }

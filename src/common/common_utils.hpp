@@ -77,13 +77,27 @@ inline void omp_unset_lock(omp_lock_t* p) { }
     } while(0)
 
 namespace yask {
+
+    // Controls whether make*Str() functions add
+    // suffixes or just print full number for
+    // machine parsing.
+    extern bool is_suffix_print_enabled;
     
+    // Return num with SI multiplier and "iB" suffix,
+    // e.g., 41.2KiB.
+    extern std::string makeByteStr(size_t nbytes);
+
+    // Return num with SI multiplier, e.g., 4.23M.
+    extern std::string makeNumStr(idx_t num);
+    extern std::string makeNumStr(double num);
+
     // A var that behaves like OMP_NUM_THREADS to specify the
     // default number of threads in each level.
     constexpr int yask_max_levels = 2;
     extern int yask_num_threads[];
 
-    // Get number of threads that will execute a yask_for() loop.
+    // Get number of threads that will execute a yask_for() loop
+    // based on the current OpenMP nesting level.
     inline idx_t yask_get_num_threads() {
         if (omp_get_max_active_levels() > 1 &&
             yask_num_threads[0] && yask_num_threads[1])

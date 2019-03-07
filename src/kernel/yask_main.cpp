@@ -437,7 +437,7 @@ int main(int argc, char** argv)
         if (best_trial != nullptr) {
             os << divLine <<
                 "Performance stats of best trial:\n"
-                " best-num-steps-done:              " << makeNumStr(best_trial->nsteps) << endl <<
+                " best-num-steps-done:              " << best_trial->nsteps << endl <<
                 " best-elapsed-time (sec):          " << makeNumStr(best_trial->run_time) << endl <<
                 " best-throughput (num-reads/sec):  " << makeNumStr(best_trial->reads_ps) << endl <<
                 " best-throughput (num-writes/sec): " << makeNumStr(best_trial->writes_ps) << endl <<

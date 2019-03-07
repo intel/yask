@@ -324,6 +324,14 @@ namespace yask {
     // Add these settigns to a cmd-line parser.
     void KernelSettings::add_options(CommandLineParser& parser)
     {
+        // Following options are in the 'yask' namespace, i.e., no object.
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("print_suffixes",
+                           "Format output with suffixes for human readibility, e.g., 6.15K, 12.3GiB, 7.45m."
+                           " If disabled, prints without suffixes for computer parsing, e.g., 6150, 1.23e+10, 7.45e-3.",
+                           yask::is_suffix_print_enabled));
+
+        // Following options are in 'this' object.
         _add_domain_option(parser, "g", "Global-domain (overall-problem) size", _global_sizes);
         _add_domain_option(parser, "l", "Local-domain (rank) size", _rank_sizes);
         _add_domain_option(parser, "d", "Alias for local-domain size (deprecated)", _rank_sizes);
