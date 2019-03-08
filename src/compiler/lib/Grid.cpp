@@ -646,32 +646,32 @@ namespace yask {
     // Make string like "+(4/VLEN_X)" or "-(2/VLEN_Y)" or "" if ofs==zero.
     // given signed offset and direction.
     string Dimensions::makeNormStr(int ofs, string dname) const {
-        ostringstream oss;
 
         if (ofs == 0)
             return "";
 
+        string res;
         if (_fold.lookup(dname)) {
 
             // Positive offset, e.g., '+(4 / VLEN_X)'.
             if (ofs > 0)
-                oss << "+(" << ofs;
+                res += "+(" + to_string(ofs);
 
             // Neg offset, e.g., '-(4 / VLEN_X)'.
             // Put '-' sign outside division to fix truncated division problem.
             else
-                oss << "-(" << (-ofs);
+                res += "-(" + to_string(-ofs);
 
             // add divisor.
             string cap_dname = PrinterBase::allCaps(dname);
-            oss << " / VLEN_" << cap_dname << ")";
+            res += " / VLEN_" + cap_dname + ")";
         }
 
         // No fold const avail.
         else
-            oss << ofs;
+            res += to_string(ofs);
 
-        return oss.str();
+        return res;
     }
 
     // Make string like "t+1" or "t-1".

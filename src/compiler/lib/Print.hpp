@@ -97,9 +97,7 @@ namespace yask {
 
         // Make and return next var name.
         virtual string makeVarName() {
-            ostringstream oss;
-            oss << _varPrefix << _varNum++;
-            return oss.str();
+            return _varPrefix + to_string(_varNum++);
         }
 
         // If var exists for 'expr', return it.
@@ -131,9 +129,12 @@ namespace yask {
         // The 'os' parameter is provided for derived types that
         // need to write intermediate code to a stream.
         virtual string addConstExpr(ostream& os, double v) {
-            ostringstream oss;
-            oss << v;
-            return oss.str();
+
+            // Int representation equivalent?
+            if (double(int(v)) == v)
+                return to_string(int(v));
+        
+            return to_string(v);
         }
 
         // Return a grid reference.

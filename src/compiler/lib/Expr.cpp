@@ -735,6 +735,7 @@ namespace yask {
 #endif
             }
         }
+        _updateStr();
     }
     const NumExprPtr GridPoint::getArg(const string& dim) const {
         for (int di = 0; di < _grid->get_num_dims(); di++) {
@@ -757,21 +758,6 @@ namespace yask {
     }
     bool GridPoint::isGridFoldable() const {
         return _grid->isFoldable();
-    }
-    bool GridPoint::operator==(const GridPoint& rhs) const {
-        return _grid == rhs._grid &&
-            _offsets == rhs._offsets &&
-            _consts == rhs._consts &&
-            makeStr() == rhs.makeStr(); // TODO: make more efficient.
-    }
-    bool GridPoint::operator<(const GridPoint& rhs) const {
-        return (_grid < rhs._grid) ? true :
-            (_grid > rhs._grid) ? false :
-            (_offsets < rhs._offsets) ? true :
-            (_offsets > rhs._offsets) ? false :
-            (_consts < rhs._consts) ? true :
-            (_consts > rhs._consts) ? false :
-            makeStr() < rhs.makeStr(); // TODO: make more efficient.
     }
     string GridPoint::makeArgStr(const VarMap* varMap) const {
         string str;
@@ -804,13 +790,12 @@ namespace yask {
     string GridPoint::makeNormArgStr(const string& dname,
                                      const Dimensions& dims,
                                      const VarMap* varMap) const {
-        ostringstream oss;
+        string res;
 
         // Non-0 const offset and dname exists in fold?
         auto* ofs = _offsets.lookup(dname);
-        if (ofs && *ofs && dims._fold.lookup(dname)) {
-            oss << "(" << dname << dims.makeNormStr(*ofs, dname) << ")";
-        }
+        if (ofs && *ofs && dims._fold.lookup(dname))
+            res = "(" + dname + dims.makeNormStr(*ofs, dname) + ")";
 
         // Otherwise, just find and format arg as-is.
         else {
@@ -818,11 +803,11 @@ namespace yask {
             for (size_t i = 0; i < gdims.size(); i++) {
                 auto gdname = gdims[i]->getName();
                 if (gdname == dname)
-                    oss << _args.at(i)->makeStr(varMap);
+                    res += _args.at(i)->makeStr(varMap);
             }
         }
 
-        return oss.str();
+        return res;
     }
 
     // Make string like "x+(4/VLEN_X), y, z-(2/VLEN_Z)" from
@@ -832,22 +817,22 @@ namespace yask {
     string GridPoint::makeNormArgStr(const Dimensions& dims,
                                      const VarMap* varMap) const {
 
-        ostringstream oss;
+        string res;
         auto& gd = _grid->getDims();
         for (size_t i = 0; i < gd.size(); i++) {
             if (i)
-                oss << ", ";
+                res += ", ";
             auto dname = gd[i]->getName();
-            oss << makeNormArgStr(dname, dims, varMap);
+            res += makeNormArgStr(dname, dims, varMap);
         }
-        return oss.str();
+        return res;
     }
 
     // Make string like "g->_wrap_step(t+1)" from original arg "t+1"
     // if grid uses step dim, "0" otherwise.
     // If grid doesn't allow dynamic alloc, set to fixed value.
     string GridPoint::makeStepArgStr(const string& gridPtr, const Dimensions& dims) const {
-        ostringstream oss;
+
         auto& gd = _grid->getDims();
         for (size_t i = 0; i < gd.size(); i++) {
             auto dname = gd[i]->getName();
@@ -910,6 +895,7 @@ namespace yask {
                 break;
             }
         }
+        _updateStr();
     }
 
     // Set given arg to given const;
@@ -939,6 +925,7 @@ namespace yask {
                 break;
             }
         }
+        _updateStr();
     }
 
     // Is this expr a simple offset?
@@ -1008,9 +995,9 @@ namespace yask {
 
     // Make a readable string from an expression.
     string Expr::makeStr(const VarMap* varMap) const {
-        ostringstream oss;
 
         // Use a print visitor to make a string.
+        ostringstream oss;
         CompilerSettings _dummySettings;
         Dimensions _dummyDims;
         PrintHelper ph(_dummySettings, _dummyDims, NULL, "temp", "", "", ""); // default helper.
