@@ -72,7 +72,7 @@ protected:
                              const GridIndex& y0,
                              int y_left_ext, int y_right_ext) {
         GridValue v;
-        int n = 1;
+        int n = 0;
         for (int i = -_radius - x_left_ext; i <= _radius + x_right_ext; i++)
             for (int j = -_radius - y_left_ext; j <= _radius + y_right_ext; j++, n++)
                 if (i * j == 0 || i == j)
@@ -91,7 +91,7 @@ protected:
                              const GridIndex& z0,
                              int z_left_ext, int z_right_ext) {
         GridValue v;
-        int n = 1;
+        int n = 0;
         for (int i = -_radius - x_left_ext; i <= _radius + x_right_ext; i++)
             for (int j = -_radius - y_left_ext; j <= _radius + y_right_ext; j++)
                 for (int k = -_radius - z_left_ext; k <= _radius + z_right_ext; k++, n++)
@@ -111,7 +111,7 @@ protected:
                                      const GridIndex& z0,
                                      int z_left_ext, int z_right_ext) {
         GridValue v;
-        int n = 1;
+        int n = 0;
         for (int i = -_radius - x_left_ext; i <= _radius + x_right_ext; i++)
             for (int j = -_radius - y_left_ext; j <= _radius + y_right_ext; j++)
                 for (int k = -_radius - z_left_ext; k <= _radius + z_right_ext; k++, n++)
@@ -133,13 +133,15 @@ protected:
                              const GridIndex& z0,
                              int z_left_ext, int z_right_ext) {
         GridValue v;
-        int n = 1;
-        for (int h = -_radius - w_left_ext; h <= _radius + w_right_ext; h++)
-            for (int i = -_radius - x_left_ext; i <= _radius + x_right_ext; i++)
-                for (int j = -_radius - y_left_ext; j <= _radius + y_right_ext; j++)
-                    for (int k = -_radius - z_left_ext; k <= _radius + z_right_ext; k++, n++)
+        int n = 0;
+        for (int h : { -_radius - w_left_ext, 0, _radius + w_right_ext })
+            for (int i : { -_radius - x_left_ext, 0, _radius + x_right_ext })
+                for (int j : { -_radius - y_left_ext, 0, _radius + y_right_ext })
+                    for (int k : { -_radius - z_left_ext, 0, _radius + z_right_ext }) {
+                        n++;
                         if (h * i * j * k == 0 || (h == i && i == j && j == k))
                             v += V(t0, w0+h, x0+i, y0+j, z0+k);
+                    }
         return v / n;
     }    
 
