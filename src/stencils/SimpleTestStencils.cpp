@@ -349,6 +349,8 @@ public:
 REGISTER_STENCIL(TestReverseStencil);
 
 // Test dependent equations.
+// These will create 2 stencil packs that will be applied in sequence
+// for each time-step.
 class TestDepStencil1 : public TestBase {
 
 protected:
@@ -374,6 +376,32 @@ public:
 };
 
 REGISTER_STENCIL(TestDepStencil1);
+
+class TestDepStencil2 : public TestBase {
+
+protected:
+
+    // Vars.
+    MAKE_GRID(A, t, x, y); // time-varying grid.
+    MAKE_GRID(B, t, x, y); // time-varying grid.
+
+public:
+
+    TestDepStencil2(StencilList& stencils, int radius=2) :
+        TestBase("test_dep_2d", stencils, radius) { }
+
+    // Define equation to apply to all points in 'A' and 'B' grids.
+    virtual void define() {
+
+        // Define A(t+1) from A(t) & stencil at B(t).
+        A(t+1, x, y) EQUALS A(t, x, y) - def_2d(B, t, x, 0, 1, y, 2, 1);
+
+        // Define B(t+1) from B(t) & stencil at A(t+1).
+        B(t+1, x, y) EQUALS B(t, x, y) - def_2d(A, t+1, x, 3, 2, y, 0, 1);
+    }
+};
+
+REGISTER_STENCIL(TestDepStencil2);
 
 // Test the use of scratch-pad grids.
 
