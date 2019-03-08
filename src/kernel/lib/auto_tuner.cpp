@@ -268,7 +268,7 @@ namespace yask {
 
         // Calc perf and reset vars for next time.
         double rate = (ctime > 0.) ? double(csteps) / ctime : 0.;
-        os << _name << ": radius=" << radius << ": " <<
+        os << _name << ": search-radius=" << radius << ": " <<
             csteps << " steps(s) in " << ctime <<
             " secs (" << rate <<
             " steps/sec) with size " <<
