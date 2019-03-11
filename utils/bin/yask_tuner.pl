@@ -136,7 +136,7 @@ sub usage {
       "* indicates options that are invalid if -noBuild is used.\n".
       "\n".
       "examples:\n".
-      " $0 -stencil=iso3dfd -arch=skl -l=768 -r=0 -noPrefetch\n".
+      " $0 -stencil=iso3dfd -arch=skx -l=768 -r=0 -noPrefetch\n".
       " $0 -stencil=awp -arch=knl -lx=512 -ly=512 -lz=256 -b=4-512:4\n".
       " $0 -stencil=3axis -arch=snb -mem=8-10 -noBuild\n";
 
@@ -729,8 +729,8 @@ sub getMakeCmd($$) {
     }
     else {
       $makeCmd =
-        "$makePrefix make -j EXTRA_MACROS='$macros' YK_TAG=$tag.$arch ".
-        "stencil=$stencil arch=$arch real_bytes=$realBytes radius=$radius $margs $makeArgs";
+        "$makePrefix make -j EXTRA_MACROS='$macros' stencil=$tag ".
+        "YC_STENCIL=$stencil arch=$arch real_bytes=$realBytes radius=$radius $margs $makeArgs";
       $makeCmd = "$makeCmd default; $makeCmd clean";
     }
   }
