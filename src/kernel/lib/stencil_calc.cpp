@@ -749,24 +749,20 @@ namespace yask {
     } // adjust_span().
 
     // Timer methods.
-    // Start and stop timers for final stats and auto-tuners.
+    // Start and stop pack timers for final stats and auto-tuners.
     void BundlePack::start_timers() {
         auto ts = YaskTimer::get_timespec();
         timer.start(&ts);
         getAT().timer.start(&ts);
-        _context->getAT().timer.start(&ts);
     }
     void BundlePack::stop_timers() {
         auto ts = YaskTimer::get_timespec();
         timer.stop(&ts);
         getAT().timer.stop(&ts);
-        _context->getAT().timer.stop(&ts);
     }
     void BundlePack::add_steps(idx_t num_steps) {
         steps_done += num_steps;
         getAT().steps_done += num_steps;
-
-        // Don't add to context steps to avoid over-counting.
     }
 
     static void print_grid_list(ostream& os, const GridPtrs& gps, const string& type) {

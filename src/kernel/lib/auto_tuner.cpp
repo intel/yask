@@ -48,6 +48,7 @@ namespace yask {
     void StencilContext::eval_auto_tuner(idx_t num_steps) {
         STATE_VARS(this);
         _at.steps_done += num_steps;
+        _at.timer.stop();
 
         if (state->_use_pack_tuners) {
             for (auto& sp : stPacks)
@@ -132,7 +133,7 @@ namespace yask {
         // Report results.
         at_timer.stop();
         os << "Auto-tuner done after " << steps_done << " step(s) in " <<
-            at_timer.get_elapsed_secs() << " secs.\n";
+            makeNumStr(at_timer.get_elapsed_secs()) << " secs.\n";
         if (state->_use_pack_tuners) {
             for (auto& sp : stPacks)
                 sp->getAT().print_settings(os);
@@ -252,7 +253,9 @@ namespace yask {
                 return;
 
             // Done.
-            os << _name << ": finished warmup for " << makeNumStr(ctime) << " secs\n" <<
+            os << _name << ": finished warmup for " <<
+                csteps << " steps(s) in " <<
+                makeNumStr(ctime) << " secs\n" <<
                 _name << ": tuning " << (tune_mini_blks() ? "mini-" : "") <<
                 "block sizes...\n";
             in_warmup = false;
