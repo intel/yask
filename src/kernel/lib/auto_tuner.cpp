@@ -252,12 +252,12 @@ namespace yask {
                 return;
 
             // Done.
-            os << _name << ": finished warmup for " << ctime << " secs\n" <<
+            os << _name << ": finished warmup for " << makeNumStr(ctime) << " secs\n" <<
                 _name << ": tuning " << (tune_mini_blks() ? "mini-" : "") <<
                 "block sizes...\n";
             in_warmup = false;
 
-            // Measure this step only.
+            // Include only the current results in the 1st measurement.
             csteps = steps;
             ctime = etime;
         }
@@ -267,11 +267,11 @@ namespace yask {
             return;
 
         // Calc perf and reset vars for next time.
-        double rate = (ctime > 0.) ? double(csteps) / ctime : 0.;
+        double rate = (ctime > 0.) ? (double(csteps) / ctime) : 0.;
         os << _name << ": search-radius=" << radius << ": " <<
-            csteps << " steps(s) in " << ctime <<
-            " secs (" << rate <<
-            " steps/sec) with size " <<
+            csteps << " steps(s) in " <<
+            makeNumStr(ctime) << " secs (" <<
+            makeNumStr(rate) << " steps/sec) with size " <<
             target_sizes().makeDimValStr(" * ") << endl;
         csteps = 0;
         ctime = 0.;
