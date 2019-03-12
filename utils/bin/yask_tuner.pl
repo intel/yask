@@ -158,7 +158,8 @@ my $showGroups = 0;
 $| = 1;
 
 # process args.
-print "Invocation: $0 @ARGV\n";
+my $invo = join(' ', map { s/\"/\\\"/g; '"'.$_.'"' } $0, @ARGV);
+print "Invocation: $invo\n";
 for my $origOpt (@ARGV) {
   my $opt = lc $origOpt;
   my ($lhs, $rhs) = split /=/, $origOpt, 2;
@@ -313,6 +314,14 @@ print "Output will be saved in '$outDir'.\n";
 
 # open output.
 mkpath($outDir,1);
+if (!$checking) {
+  my $outTxtFile = "$outDir/$baseName.txt";
+  my $outTFH = new FileHandle;
+  $outTFH->open(">$outTxtFile") or die "error: cannot write to '$outTxtFile'\n";
+  print $outTFH "$invo\n";
+  $outTFH->close();
+}
+
 my $outFile = "$outDir/$baseName.csv";
 my $outFH = new FileHandle;
 $outFH->open(">$outFile") or die "error: cannot write to '$outFile'\n"
@@ -729,8 +738,8 @@ sub getMakeCmd($$) {
     }
     else {
       $makeCmd =
-        "$makePrefix make -j EXTRA_MACROS='$macros' stencil=$tag ".
-        "YC_STENCIL=$stencil arch=$arch real_bytes=$realBytes radius=$radius $margs $makeArgs";
+        "$makePrefix make -j EXTRA_MACROS='$macros' YK_STENCIL=$tag ".
+        "stencil=$stencil arch=$arch real_bytes=$realBytes radius=$radius $margs $makeArgs";
       $makeCmd = "$makeCmd default; $makeCmd clean";
     }
   }

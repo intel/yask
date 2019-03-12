@@ -999,7 +999,7 @@ help:
 	@echo "Example performance builds of kernel cmd-line tool:"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd arch=knl # Explicit arch target."; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd_r4 YC_STENCIL=iso3dfd radius=4 # New stencil name."; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd radius=4 YK_STENCIL=iso3dfd_rt # Specify binary stencil name."; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=awp EXTRA_YK_CXXFLAGS=-qopt-report"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis fold='x=1,y=2,z=4' cluster='x=2'"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis radius=4 real_bytes=8 # DP FP."; \
