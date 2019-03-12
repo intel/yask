@@ -673,90 +673,22 @@ namespace yask {
         // Set number of threads w/o using thread-divisor.
         // Return number of threads.
         // Do nothing and return 0 if not properly initialized.
-        int set_max_threads() {
-            STATE_VARS(this);
-
-            // Get max number of threads.
-            int mt = std::max(opts->max_threads, 1);
-
-            // Reset number of OMP threads to max allowed.
-            omp_set_num_threads(mt);
-            return mt;
-        }
+        int set_max_threads();
 
         // Get total number of computation threads to use.
-        int get_num_comp_threads(int& region_threads, int& blk_threads) const {
-            STATE_VARS(this);
-
-            // Max threads / divisor.
-            int mt = std::max(opts->max_threads, 1);
-            int td = std::max(opts->thread_divisor, 1);
-            int at = mt / td;
-            at = std::max(at, 1);
-
-            // Blk threads per region thread.
-            int bt = std::max(opts->num_block_threads, 1);
-            bt = std::min(bt, at); // Cannot be > 'at'.
-            blk_threads = bt;
-
-            // Region threads.
-            int rt = at / bt;
-            rt = std::max(rt, 1);
-            region_threads = rt;
-
-            // Total number of block threads.
-            return bt * rt;
-        }
+        int get_num_comp_threads(int& region_threads, int& blk_threads) const;
         
-        // Set number of threads to use for something other than a region.
-        // Return number of threads.
-        // Do nothing and return 0 if not properly initialized.
-        int set_all_threads() {
-            int rt, bt;
-            int at = get_num_comp_threads(rt, bt);
-            omp_set_num_threads(at);
-            return at;
-        }
-
         // Set number of threads to use for a region.
         // Enable nested OMP if there are >1 block threads,
         // disable otherwise.
         // Return number of threads.
         // Do nothing and return 0 if not properly initialized.
-        int set_region_threads() {
-            int rt, bt;
-            int at = get_num_comp_threads(rt, bt);
-
-            // Limit outer nesting to allow num_block_threads per nested
-            // block loop.
-            yask_num_threads[0] = rt;
-
-            if (bt > 1) {
-                omp_set_nested(1);
-                omp_set_max_active_levels(2);
-                yask_num_threads[1] = bt;
-            }
-            else {
-                omp_set_nested(0);
-                omp_set_max_active_levels(1);
-                yask_num_threads[1] = 0;
-            }
-
-            omp_set_num_threads(rt);
-            return rt;
-        }
+        int set_region_threads();
 
         // Set number of threads for a block.
         // Return number of threads.
         // Do nothing and return 0 if not properly initialized.
-        int set_block_threads() {
-            int rt, bt;
-            int at = get_num_comp_threads(rt, bt);
-
-            if (omp_get_max_active_levels() > 1)
-                omp_set_num_threads(bt);
-            return bt;
-        }
+        int set_block_threads();
 
     };
 

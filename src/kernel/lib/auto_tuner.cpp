@@ -200,7 +200,9 @@ namespace yask {
         steps_done = 0;
 
         // Set min blocks to number of region threads.
-        min_blks = set_region_threads();
+        int rt=0, bt=0;
+        get_num_comp_threads(rt, bt);
+        min_blks = rt;
 
         // Adjust starting block if needed.
         for (auto dim : center_sizes.getDims()) {
