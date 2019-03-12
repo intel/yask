@@ -83,23 +83,6 @@ namespace yask {
         // Don't continue until all ranks are this far.
         env->global_barrier();
 
-#ifdef CHECK
-        os << "*** WARNING: YASK compiled with CHECK; ignore performance results.\n";
-#endif
-#if defined(NO_INTRINSICS) && (VLEN > 1)
-        os << "*** WARNING: YASK compiled with NO_INTRINSICS; ignore performance results.\n";
-#endif
-#ifdef MODEL_CACHE
-        os << "*** WARNING: YASK compiled with MODEL_CACHE; ignore performance results.\n";
-#endif
-#ifdef TRACE_MEM
-        os << "*** WARNING: YASK compiled with TRACE_MEM; ignore performance results.\n";
-#endif
-#ifdef TRACE_INTRINSICS
-        os << "*** WARNING: YASK compiled with TRACE_INTRINSICS; ignore performance results.\n";
-#endif
-        TRACE_MSG(" WARNING: YASK run with -trace; ignore performance results");
-
         // reset time keepers.
         clear_timers();
 
@@ -176,12 +159,32 @@ namespace yask {
         os << "Allocation done in " <<
             makeNumStr(allocTimer.get_elapsed_secs()) << " secs.\n" << flush;
 
-        print_info();
+        init_stats();
 
     } // prepare_solution().
 
-    void StencilContext::print_temporal_tiling_info() {
-        ostream& os = get_ostr();
+    void StencilContext::print_warnings() const {
+        STATE_VARS(this);
+#ifdef CHECK
+        os << "*** WARNING: YASK compiled with CHECK; ignore performance results.\n";
+#endif
+#if defined(NO_INTRINSICS) && (VLEN > 1)
+        os << "*** WARNING: YASK compiled with NO_INTRINSICS; ignore performance results.\n";
+#endif
+#ifdef MODEL_CACHE
+        os << "*** WARNING: YASK compiled with MODEL_CACHE; ignore performance results.\n";
+#endif
+#ifdef TRACE_MEM
+        os << "*** WARNING: YASK compiled with TRACE_MEM; ignore performance results.\n";
+#endif
+#ifdef TRACE_INTRINSICS
+        os << "*** WARNING: YASK compiled with TRACE_INTRINSICS; ignore performance results.\n";
+#endif
+        TRACE_MSG(" WARNING: YASK run with -trace; ignore performance results");
+    }
+    
+    void StencilContext::print_temporal_tiling_info() const {
+        STATE_VARS(this);
 
         os <<
             " num-wave-front-steps:      " << wf_steps << endl;
@@ -203,7 +206,7 @@ namespace yask {
         }
     }
     
-    void StencilContext::print_info() {
+    void StencilContext::init_stats() {
         STATE_VARS(this);
 
         // Calc and report total allocation and domain sizes.

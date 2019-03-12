@@ -474,6 +474,7 @@ int main(int argc, char** argv)
                 " The 50th-percentile trial is the same as the median trial\n"
                 "  when there is an odd number of trials. When there is an even\n"
                 "  number of trials, the nearest-rank method is used.\n";
+            context->print_warnings();
         }
 
         /////// Validation run.
