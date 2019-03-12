@@ -806,7 +806,7 @@ namespace yask {
             STATE_VARS_CONST(this);
 
 #ifdef TRACE_MEM
-            ostr << get_name() << "." << "YkVecGrid::getElemPtr(" <<
+            os << get_name() << "." << "YkVecGrid::getElemPtr(" <<
                 idxs.makeValStr(get_num_dims()) << ")";
 #endif
             // Use template vec lengths instead of run-time values for
