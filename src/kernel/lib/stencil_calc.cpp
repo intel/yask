@@ -131,7 +131,12 @@ namespace yask {
                 int nbt = _context->set_block_threads();
                 bool bind_threads = nbt > 1 && settings.bind_block_threads;
                 _Pragma("omp parallel proc_bind(spread)") {
-                    int block_thread_idx = (nbt <= 1) ? 0 : omp_get_thread_num();
+                    int block_thread_idx = 0;
+                    if (nbt > 1) {
+                        assert(omp_get_level() == 2);
+                        assert(omp_get_num_threads() == nbt);
+                        block_thread_idx = omp_get_thread_num();
+                    }
                     
                     // Indices needed for the generated loops.  Will normally be a
                     // copy of 'mb_idxs' except when updating scratch-grids.
@@ -172,6 +177,8 @@ namespace yask {
                     // index in the binding dim.
                     if (bind_threads) {
                         const idx_t idx_ofs = 0x1000; // to help keep pattern when idx is neg.
+
+                        // Disable the OpenMP construct in the mini-block loop.
 #define OMP_PRAGMA
 #define CALC_SUB_BLOCK(mb_idxs)                                        \
                         auto bind_elem_idx = mb_idxs.start[bind_posn];  \
@@ -184,7 +191,7 @@ namespace yask {
 #undef OMP_PRAGMA
                     }
 
-                    // If not binding therads to data, call calc_sub_block()
+                    // If not binding threads to data, call calc_sub_block()
                     // with a different thread for each sub-block using
                     // standard OpenMP scheduling.
                     else {

@@ -525,65 +525,57 @@ NGDIMS		:=	`awk '/NUM_GRID_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
 # wavefronts. The time loop may be found in
 # StencilEquations::run_solution().
 RANK_LOOP_OPTS		?=	-ndims $(NSDIMS) -inVar rank_idxs
-RANK_LOOP_OUTER_MODS	?=	grouped
 RANK_LOOP_ORDER		?=	1 .. N-1
-RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_ORDER)) \
-				{ $(RANK_LOOP_INNER_MODS) call(calc_region(bp)); }
+RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_ORDER)) { \
+				 $(RANK_LOOP_INNER_MODS) call(calc_region(bp)); }
 
 # Region loops break up a region using OpenMP threading into blocks.  The
 # 'omp' modifier creates an outer OpenMP loop so that each block is assigned
 # to a top-level OpenMP thread.
 REGION_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar region_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_region_schedule)) proc_bind(spread)'
-REGION_LOOP_OUTER_MODS	?=	grouped omp
 REGION_LOOP_ORDER	?=	1 .. N-1
-REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop($(REGION_LOOP_ORDER)) { \
-				$(REGION_LOOP_INNER_MODS) \
-				  call(calc_block(bp, region_shift_num, \
-					nphases, phase, rank_idxs)); }
+REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) omp loop($(REGION_LOOP_ORDER)) { \
+				 $(REGION_LOOP_INNER_MODS) \
+				  call(calc_block(bp, region_shift_num, nphases, phase, rank_idxs)); }
 
 # Block loops break up a block into mini-blocks.
 # These are executed sequentially, so no OpenMP.
 # Like with rank loops, in order for temporal wavefronts to operate properly,
 # the scanning paths must have strictly incrementing indices. 
 BLOCK_LOOP_OPTS		?=	-ndims $(NSDIMS) -inVar adj_block_idxs
-BLOCK_LOOP_OUTER_MODS	?=	grouped
 BLOCK_LOOP_ORDER	?=	1 .. N-1
 BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_ORDER)) { \
-				$(BLOCK_LOOP_INNER_MODS) \
+				 $(BLOCK_LOOP_INNER_MODS) \
 				  call(calc_mini_block(region_thread_idx, bp, region_shift_num, \
 					nphases, phase, nshapes, shape, \
 					bridge_mask, rank_idxs, region_idxs, block_idxs)); }
 
-# Mini-Block loops break up a mini-block into sub-blocks. The 'omp' modifier creates
-# a *nested* OpenMP loop so that each sub-block is assigned to a nested OpenMP
-# thread.
+# Mini-Block loops break up a mini-block into sub-blocks. The 'omp' modifier
+# creates a *nested* OpenMP loop (but not a parallem region) so that each
+# sub-block is assigned to a nested OpenMP thread. The OpenMP construct is
+# not used when running with '-bind_block_threads'.
 MINI_BLOCK_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar adj_mb_idxs \
 				-ompConstruct '$(omp_for) schedule($(omp_block_schedule)) nowait'
-MINI_BLOCK_LOOP_OUTER_MODS ?=	omp
 MINI_BLOCK_LOOP_ORDER	?=	1 .. N-1
-MINI_BLOCK_LOOP_CODE	?=	$(MINI_BLOCK_LOOP_OUTER_MODS) loop($(MINI_BLOCK_LOOP_ORDER)) { \
-				$(MINI_BLOCK_LOOP_INNER_MODS) \
-				call(CALC_SUB_BLOCK); }
+MINI_BLOCK_LOOP_CODE	?=	$(MINI_BLOCK_LOOP_OUTER_MODS) omp loop($(MINI_BLOCK_LOOP_ORDER)) { \
+				 $(MINI_BLOCK_LOOP_INNER_MODS) call(CALC_SUB_BLOCK); }
 
 # Sub-block loops break up a sub-block into clusters or vectors.  These
 # loops are run by a single OMP thread.  The N-1 (inner) loop is generated
 # by the stencil compiler, so these loops stop at N-2.  The indexes in this
 # loop are 'normalized', i.e., vector units and rank-relative.
 SUB_BLOCK_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar norm_sub_block_idxs
-SUB_BLOCK_LOOP_OUTER_MODS ?=
 SUB_BLOCK_LOOP_ORDER	?=	1 .. N-2
 SUB_BLOCK_LOOP_CODE	?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop($(SUB_BLOCK_LOOP_ORDER)) { \
-				$(SUB_BLOCK_LOOP_INNER_MODS) \
-				call(CALC_INNER_LOOP); }
+				 $(SUB_BLOCK_LOOP_INNER_MODS) call(CALC_INNER_LOOP); }
 
 # General-purpose parallel loop.
 MISC_LOOP_OPTS		?=	-ndims $(NSDIMS) -inVar misc_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_misc_schedule)) proc_bind(spread)'
-MISC_LOOP_OUTER_MODS	?=	omp
 MISC_LOOP_ORDER		?=	1 .. N-1
-MISC_LOOP_CODE		?=	$(MISC_LOOP_OUTER_MODS) loop($(MISC_LOOP_ORDER)) \
-				$(MISC_LOOP_INNER_MODS) { call(MISC_FN); }
+MISC_LOOP_CODE		?=	$(MISC_LOOP_OUTER_MODS) omp loop($(MISC_LOOP_ORDER)) { \
+				$(MISC_LOOP_INNER_MODS) call(MISC_FN); }
 
 # Compile rules.
 

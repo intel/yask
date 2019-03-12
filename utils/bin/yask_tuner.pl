@@ -1009,7 +1009,7 @@ sub makeLoopVars($$$$$) {
   my $h = shift;
   my $makePrefix = shift;       # e.g., 'BLOCK'.
   my $tunerPrefix = shift;      # e.g., 'block'.
-  my $reqdMods = shift;         # e.g., 'omp'.
+  my $reqdMods = shift;         # e.g., ''.
   my $lastDim = shift;          # e.g., 2 or 3.
 
   my $order = readHash($h, $tunerPrefix."Order", 1);
@@ -1296,8 +1296,8 @@ sub fitness {
   $mvars .= " fold=x=$fs[0],y=$fs[1],z=$fs[2]";
 
   # gen-loops vars.
-  $mvars .= makeLoopVars($h, 'REGION', 'region', 'omp', 3);
-  $mvars .= makeLoopVars($h, 'BLOCK', 'block', 'omp', 3);
+  $mvars .= makeLoopVars($h, 'REGION', 'region', '', 3);
+  $mvars .= makeLoopVars($h, 'BLOCK', 'block', '', 3);
   $mvars .= makeLoopVars($h, 'MINI_BLOCK', 'miniBlock', '', 3);
   $mvars .= makeLoopVars($h, 'SUB_BLOCK', 'subBlock', '', 2);
 
