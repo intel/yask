@@ -92,15 +92,13 @@ namespace yask {
 #ifdef MODEL_CACHE
         os << "*** WARNING: YASK compiled with MODEL_CACHE; ignore performance results.\n";
 #endif
-#ifdef TRACE
-        os << "*** WARNING: YASK compiled with TRACE; ignore performance results.\n";
-#endif
 #ifdef TRACE_MEM
         os << "*** WARNING: YASK compiled with TRACE_MEM; ignore performance results.\n";
 #endif
 #ifdef TRACE_INTRINSICS
         os << "*** WARNING: YASK compiled with TRACE_INTRINSICS; ignore performance results.\n";
 #endif
+        TRACE_MSG(" WARNING: YASK run with -trace; ignore performance results");
 
         // reset time keepers.
         clear_timers();

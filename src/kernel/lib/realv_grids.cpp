@@ -492,17 +492,16 @@ namespace yask {
     void YkGridBase::printElem(const std::string& msg,
                                const Indices& idxs,
                                real_t eval,
-                               int line,
-                               bool newline) const {
-        ostream& os = _ggb->get_ostr();
+                               int line) const {
+        STATE_VARS_CONST(this);
+        string str;
         if (msg.length())
-            os << msg << ": ";
-        os << get_name() << "[" <<
-            makeIndexString(idxs) << "] = " << eval;
+            str = msg + ": ";
+        str += get_name() + "[" +
+            makeIndexString(idxs) + "] = " + to_string(eval);
         if (line)
-            os << " at line " << line;
-        if (newline)
-            os << std::endl << std::flush;
+            str += " at line " + to_string(line);
+        TRACE_MEM_MSG(str);
     }
 
     // Print one vector.
@@ -510,9 +509,8 @@ namespace yask {
     void YkGridBase::printVecNorm(const std::string& msg,
                                           const Indices& idxs,
                                           const real_vec_t& val,
-                                          int line,
-                                          bool newline) const {
-        STATE_VARS(this);
+                                          int line) const {
+        STATE_VARS_CONST(this);
 
         // Convert to elem indices.
         Indices eidxs = idxs.mulElements(_vec_lens);
@@ -535,7 +533,7 @@ namespace yask {
                 IdxTuple pt2 = idxs2.addElements(fofs, false);
                 Indices pt3(pt2);
 
-                printElem(msg, pt3, ev, line, newline);
+                printElem(msg, pt3, ev, line);
                 return true; // keep visiting.
             });
     }
