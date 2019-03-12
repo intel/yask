@@ -416,14 +416,12 @@ ifneq ($(filter -O0,$(YK_CXXOPT)),)
 endif
 
 # Turn on debug macros.
-ifeq ($(check),1)
- MACROS		+=	CHECK
-endif
-ifeq ($(trace),1)
- MACROS		+=	TRACE
-endif
 ifeq ($(trace_mem),1)
- MACROS		+=	TRACE_MEM
+ MACROS		+=	CHECK TRACE TRACE_MEM
+else ifeq ($(trace),1)
+ MACROS		+=	CHECK TRACE
+else ifeq ($(check),1)
+ MACROS		+=	CHECK
 endif
 
 # Set MACROS based on individual makefile vars.
@@ -1018,10 +1016,10 @@ help:
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd yk-api"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=awp yk-api"; \
 	echo " "; \
-	echo "Example debug builds of kernel cmd-line tool ('trace=1' enables tracing; run with '-trace' to get trace):"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' check=1 trace=1 # No OpenMP or MPI, internal checking."; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=test_2d mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' check=1 trace=1"; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' check=1 trace_mem=1"; \
+	echo "Example debug builds of kernel cmd-line tool:"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' check=1 # No optimization, OpenMP or MPI; internal checking."; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=test_2d mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' trace=1 # Enable tracing; run with '-trace' to get trace."; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' trace_mem=1 # Trace all mem accesses with '-trace'."; \
 	echo " "; \
 	echo "Example builds with test runs:"; \
 	echo " $(MAKE) -j all # Normal full API and stencil tests"; \
