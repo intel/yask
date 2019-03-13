@@ -65,7 +65,7 @@ my $makeTimeout = 60 * 10;     # max secs for make to run.
 my $runArgs = '';              # extra run arguments.
 my $maxGB = 32;                # max mem usage.
 my $minGB = 0;                 # min mem usage.
-my $nranks = 1;                # num ranks.
+my $nranks;                    # num ranks.
 my $debugCheck = 0;            # print each initial check result.
 my $doBuild = 1;               # do compiles.
 my $doVal = 0;                 # do validation runs.
@@ -99,7 +99,7 @@ sub usage {
       " -makeArgs=<ARGS>   Pass additional <ARGS> to make command.*\n".
       " -makeTimeout=<N>   Max secs to allow make to run (default is $makeTimeout).\n".
       " -runArgs=<ARGS>    Pass additional <ARGS> to bin/yask.sh command.\n".
-      " -ranks=<N>         Number of ranks to use on host (x-dimension only).\n".
+      " -ranks=<N>         Number of ranks to use on host (default uses setting in 'yask.sh').\n".
       "\nstencil options:\n".
       " -stencil=<NAME>    Specify stencil: iso3dfd, awp, etc. (required).\n".
       " -dp|-sp            Specify FP precision (default is SP).*\n".
@@ -136,9 +136,9 @@ sub usage {
       "* indicates options that are invalid if -noBuild is used.\n".
       "\n".
       "examples:\n".
-      " $0 -stencil=iso3dfd -arch=skx -l=768 -r=0 -noPrefetch\n".
-      " $0 -stencil=awp -arch=knl -lx=512 -ly=512 -lz=256 -b=4-512:4\n".
-      " $0 -stencil=3axis -arch=snb -mem=8-10 -noBuild\n";
+      " $0 -stencil=iso3dfd -l=768 -r=0 -noPrefetch\n".
+      " $0 -stencil=awp -lx=512 -ly=512 -lz=256 -b=4-512:4\n".
+      " $0 -stencil=3axis -mem=8-10 -noBuild\n";
 
   exit(defined $msg ? 1 : 0);
 }
@@ -762,7 +762,7 @@ sub getRunCmd($) {
     $runCmd .= " -host $host" if defined $host;
   }
   $runCmd .= " -exe_prefix '$exePrefix' -stencil $tag -arch $arch -no-pre_auto_tune -no-print_suffixes";
-  $runCmd .= " -ranks $nranks" if $nranks > 1;
+  $runCmd .= " -ranks $nranks" if defined $nranks;
   return $runCmd;
 }
 
@@ -1312,7 +1312,6 @@ sub fitness {
 
   # other vars.
   $mvars .= " omp_region_schedule=$regionScheduleStr omp_block_schedule=$blockScheduleStr";
-  $mvars .= " mpi=1" if $nranks > 1;
 
   # how to make.
   my ( $makeCmd, $tag ) = getMakeCmd($macros, $mvars);
