@@ -240,7 +240,7 @@ void CppIntrinPrintHelper::tryPerm1(ostream& os,
             // We don't need to use the mask if no elements are already done.
             bool needMask = doneElems.size() > 0;
 
-            string ctrlStr = "{ .ci = { " + ctrlS + " } }"; // assignment to 'i' array.
+            ctrlS = "{ .ci = { " + ctrlS + " } }"; // assignment to 'i' array.
 
             // Create NA var if needed (this is just for clarity).
             if (needNA)
