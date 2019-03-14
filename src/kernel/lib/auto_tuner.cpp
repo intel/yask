@@ -262,9 +262,15 @@ namespace yask {
                 "block sizes...\n";
             in_warmup = false;
 
-            // Include only the current results in the 1st measurement.
-            csteps = steps;
-            ctime = etime;
+            // Restart for first measurement.
+            csteps = 0;
+            ctime = 0;
+
+            // Fix settings for next step.
+            apply();
+            TRACE_MSG(_name << ": first size "  <<
+                      target_sizes().makeDimValStr(" * "));
+            return;
         }
 
         // Need more steps to get a good measurement?
@@ -428,8 +434,6 @@ namespace yask {
         } // search for new setting to try.
 
         // Fix settings for next step.
-        // Assumption is that sizes in one pack doesn't affect
-        // perf in another pack.
         apply();
         TRACE_MSG(_name << ": next size "  <<
                   target_sizes().makeDimValStr(" * "));
