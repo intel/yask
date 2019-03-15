@@ -80,7 +80,6 @@ else ifneq ($(findstring iso3dfd,$(YC_STENCIL)),)
   pfd_l1			:=	1
   pfd_l2			:=	0
  else ifneq ($(filter $(arch),hsw bdw),)
-  fold_4byte			:=	x=8
   def_thread_divisor		:=	2
   def_block_threads		:=	1
   def_block_args		:=	-bx 296 -by 5 -bz 290
@@ -88,7 +87,6 @@ else ifneq ($(findstring iso3dfd,$(YC_STENCIL)),)
   pfd_l1			:=	0
   pfd_l2			:=	0
  else ifneq ($(filter $(arch),skx skl clx),)
-  fold_4byte			:=	x=4,y=4
   def_thread_divisor		:=	1
   def_block_threads		:=	2
   def_block_args		:=	-bx 108	 -by 28 -bz 132
@@ -102,30 +100,25 @@ else ifneq ($(findstring awp,$(YC_STENCIL)),)
  YC_FLAGS			+=	-min-es 1
  def_pad_args			:=	-ep 1
  ifeq ($(arch),knl)
-  fold_4byte			:=	x=4,y=4
   def_thread_divisor		:=	2
   def_block_threads		:=	4
   def_block_args		:=	-b 48 -bx 112
   pfd_l1			:=	1
   pfd_l2			:=	0
  else ifneq ($(filter $(arch),hsw bdw),)
-  omp_block_schedule		:=	dynamic,1
-  fold_4byte			:=	x=8
   cluster			:=	y=2
   def_block_args		:=	-bx 128 -by 16 -bz 32 
   more_def_args			+=	-sbx 32 -sby 2 -sbz 32
   pfd_l1			:=	1
   pfd_l2			:=	2
  else ifneq ($(filter $(arch),skx skl clx),)
-  fold_4byte			:=	x=2,y=8
-  def_block_args		:=	-b 32 -bx 96
+  def_block_args		:=	-bx 44 -by 8 -bz 108
   pfd_l1			:=	1
   pfd_l2			:=	0
  endif
 
 else ifneq ($(findstring ssg,$(YC_STENCIL)),)
  ifneq ($(filter $(arch),skx skl clx),)
-  fold_4byte		:=	x=4,y=4
   def_block_args	:=	-bx 96 -by 16 -bz 80
   def_block_threads	:=	2
  endif
@@ -139,7 +132,6 @@ else ifneq ($(findstring fsg,$(YC_STENCIL)),)
   pfd_l1		:=	0
   pfd_l2		:=	2
  else ifneq ($(filter $(arch),skx skl clx),)
-  fold_4byte		:=	x=4,y=4
   def_block_args	:=	-bx 188 -by 12 -bz 24
   def_block_threads	:=	1
  endif
@@ -147,7 +139,6 @@ else ifneq ($(findstring fsg,$(YC_STENCIL)),)
 else ifeq ($(YC_STENCIL),tti)
  MACROS			+=	MAX_EXCH_DIST=3
  ifneq ($(filter $(arch),skx skl clx),)
-  fold_4byte		:=	x=4,y=4
   def_block_args	:=	-bx 80 -by 16 -bz 40
   def_block_threads	:=	1
  endif
@@ -248,7 +239,7 @@ ifneq ($(findstring INTRIN512,$(MACROS)),)  # 512 bits.
  fold_4byte	?=	x=4,y=4
 
  # 8 DP floats.
- fold_8byte	?=	x=4,y=2
+ fold_8byte	?=	x=2,y=4
 
 else ifneq ($(findstring INTRIN256,$(MACROS)),)	 # 256 bits.
 
