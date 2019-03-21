@@ -221,9 +221,9 @@ namespace yask {
         _mpiInfo->visitNeighbors
             ([&](const IdxTuple& neigh_offsets, int neigh_rank, int i) {
 
-                if (neigh_rank != MPI_PROC_NULL)
-                    visitor(neigh_offsets, neigh_rank, i, bufs[i]);
-            });
+                 if (neigh_rank != MPI_PROC_NULL)
+                     visitor(neigh_offsets, neigh_rank, i, bufs[i]);
+             });
     }
 
     // Access a buffer by direction and neighbor offsets.
@@ -436,14 +436,20 @@ namespace yask {
                            "Apply the auto-tuner to mini-block sizes instead of block sizes. "
                            "Particularly useful when using temporal block tiling.",
                            _tune_mini_blks));
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("auto_tune_each_pass",
+                           "Apply the auto-tuner separately to each stencil pack when "
+                           "those packs are applied in separate passes across the entire grid, "
+                           "i.e., when no temporal tiling is used.",
+                           _allow_pack_tuners));
     }
 
     // Print usage message.
     void KernelSettings::print_usage(ostream& os,
-                                      CommandLineParser& parser,
-                                      const string& pgmName,
-                                      const string& appNotes,
-                                      const vector<string>& appExamples) const
+                                     CommandLineParser& parser,
+                                     const string& pgmName,
+                                     const string& appNotes,
+                                     const vector<string>& appExamples) const
     {
         os << "Usage: " << pgmName << " [options]\n"
             "Options:\n";
@@ -670,8 +676,8 @@ namespace yask {
         // Also fix up mini-block sizes as needed.
         os << "\nMini-blocks:" << endl;
         auto nmb = findNumSubsets(os, _mini_block_sizes, "mini-block",
-                                 _block_sizes, "block",
-                                 cluster_pts, step_dim);
+                                  _block_sizes, "block",
+                                  cluster_pts, step_dim);
         os << " num-mini-blocks-per-block-per-step: " << nmb << endl;
         os << " num-mini-blocks-per-region-per-step: " << (nmb * nb) << endl;
         os << " num-mini-blocks-per-local-domain-per-step: " << (nmb * nb * nr) << endl;
@@ -731,7 +737,7 @@ namespace yask {
         os << "\nSub-blocks:" << endl;
         auto nsb = findNumSubsets(os, _sub_block_sizes, "sub-block",
                                   _mini_block_sizes, "mini-block",
-                                 cluster_pts, step_dim);
+                                  cluster_pts, step_dim);
         os << " num-sub-blocks-per-mini-block-per-step: " << nsb << endl;
         os << " num-sub-blocks-per-block-per-step: " << (nsb * nmb) << endl;
         os << " num-sub-blocks-per-region-per-step: " << (nsb * nmb * nb) << endl;
@@ -811,8 +817,8 @@ namespace yask {
                                    _sub_block_sizes, step_dim);
         os << " num-sub-block-groups-per-mini-block-per-step: " << nsbg << endl;
         auto nsb_g = findNumSubsets(os, _sub_block_sizes, "sub-block",
-                                   _sub_block_group_sizes, "sub-block-group",
-                                   _dims->_cluster_pts, step_dim);
+                                    _sub_block_group_sizes, "sub-block-group",
+                                    _dims->_cluster_pts, step_dim);
         os << " num-sub-blocks-per-sub-block-group-per-step: " << nsb_g << endl;
 #endif
     }
@@ -850,6 +856,100 @@ namespace yask {
         assert(outer_posn == state->_outer_posn);
     }
 
+    // Set number of threads w/o using thread-divisor.
+    // Return number of threads.
+    // Do nothing and return 0 if not properly initialized.
+    int KernelStateBase::set_max_threads() {
+        STATE_VARS(this);
+
+        // Get max number of threads.
+        int mt = max(opts->max_threads, 1);
+
+        // Reset number of OMP threads to max allowed and disable nesting.
+        omp_set_num_threads(mt);
+        omp_set_nested(0);
+        omp_set_max_active_levels(1);
+        return mt;
+    }
+
+    // Get total number of computation threads to use.
+    int KernelStateBase::get_num_comp_threads(int& region_threads, int& blk_threads) const {
+        STATE_VARS(this);
+
+        // Max threads / divisor.
+        int mt = max(opts->max_threads, 1);
+        int td = max(opts->thread_divisor, 1);
+        int at = mt / td;
+        at = max(at, 1);
+
+        // Blk threads per region thread.
+        int bt = max(opts->num_block_threads, 1);
+        bt = min(bt, at); // Cannot be > 'at'.
+        blk_threads = bt;
+        assert(bt >= 1);
+
+        // Region threads.
+        int rt = at / bt;
+        rt = max(rt, 1);
+        region_threads = rt;
+        assert(rt >= 1);
+
+        // Total number of block threads.
+        // Might be less than max threads due to truncation.
+        int ct = bt * rt;
+        assert(ct <= mt);
+        return ct;
+    }
+        
+    // Set number of threads to use for a region.
+    // Enable nested OMP if there are >1 block threads,
+    // disable otherwise.
+    // Return number of threads.
+    // Do nothing and return 0 if not properly initialized.
+    int KernelStateBase::set_region_threads() {
+        int rt=0, bt=0;
+        int at = get_num_comp_threads(rt, bt);
+
+        // Limit outer nesting to allow num_block_threads per nested
+        // block loop.
+        yask_num_threads[0] = rt;
+
+        if (bt > 1) {
+            omp_set_nested(1);
+            omp_set_max_active_levels(2);
+            int mal = omp_get_max_active_levels();
+            assert (mal == 2);
+            yask_num_threads[1] = bt;
+        }
+        else {
+            assert(bt == 1);
+            omp_set_nested(0);
+            omp_set_max_active_levels(1);
+            int mal = omp_get_max_active_levels();
+            assert (mal == 1);
+            yask_num_threads[1] = 0;
+        }
+
+        omp_set_num_threads(rt);
+        return rt;
+    }
+
+    // Set number of threads for a block.
+    // Return number of threads.
+    // Do nothing and return 0 if not properly initialized.
+    int KernelStateBase::set_block_threads() {
+        int rt=0, bt=0;
+        int at = get_num_comp_threads(rt, bt);
+
+        if (bt > 1) {
+            int mal = omp_get_max_active_levels();
+            assert (mal == 2);
+            omp_set_num_threads(bt);
+        }
+        return bt;
+    }
+
+    
     // ContextLinker ctor.
     ContextLinker::ContextLinker(StencilContext* context) :
         KernelStateBase(context->get_state()),

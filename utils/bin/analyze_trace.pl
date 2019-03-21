@@ -64,8 +64,8 @@ while (<>) {
   }
 
   # writeElem: pressure[t=0, x=0, y=0, z=0] = 5.7 at line 287
-  elsif (/^writeElem:\s*(\w+)\[(.*)\]\s*=\s*(\S+)/) {
-    my ($grid, $indices, $val) = ($1, $2, $3);
+  elsif (/^(YASK: )?writeElem:\s*(\w+)\[(.*)\]\s*=\s*(\S+)/) {
+    my ($grid, $indices, $val) = ($2, $3, $4);
     if (defined $key) {
       $indices =~ s/\b\d\b/0$&/g; # make indices 2 digits.
 

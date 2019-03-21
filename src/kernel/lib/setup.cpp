@@ -578,7 +578,7 @@ namespace yask {
         assert(num_wf_shifts >= 0);
 
         // Determine whether separate tuners can be used.
-        state->_use_pack_tuners = (tb_steps == 0) && (stPacks.size() > 1);
+        state->_use_pack_tuners = opts->_allow_pack_tuners && (tb_steps == 0) && (stPacks.size() > 1);
 
         // Calculate angles and related settings.
         for (auto& dim : domain_dims.getDims()) {

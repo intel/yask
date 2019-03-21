@@ -157,6 +157,13 @@ typedef std::uint64_t uidx_t;
 // macro for debug message when 'os' is defined.
 #define TRACE_MSG(msg) TRACE_MSG0(os, msg)
 
+// macro for mem-trace.
+#ifdef TRACE_MEM
+#define TRACE_MEM_MSG(msg) TRACE_MSG0(os, msg)
+#else
+#define TRACE_MEM_MSG(msg) ((void)0)
+#endif
+
 // breakpoint.
 #define INT3 asm volatile("int $3")
 

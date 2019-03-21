@@ -339,12 +339,15 @@ namespace yask {
         // Print lots of stats.
         virtual void prepare_solution();
 
+        // Init perf stats.
+        virtual void init_stats();
+
         // Reset any locks, etc.
         virtual void reset_locks();
 
         // Print info about the soln.
-        virtual void print_info();
-        virtual void print_temporal_tiling_info();
+        virtual void print_temporal_tiling_info() const;
+        virtual void print_warnings() const;
 
         /// Get statistics associated with preceding calls to run_solution().
         virtual yk_stats_ptr get_stats();

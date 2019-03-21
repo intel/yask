@@ -51,6 +51,7 @@ our @log_keys =
    'best throughput (est-FLOPS)',
    'best elapsed time (sec)',
    'best num-steps-done',
+   'mid throughput (num-points/sec)',
    'version',
    'stencil name',
    'stencil description',

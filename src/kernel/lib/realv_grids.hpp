@@ -362,16 +362,14 @@ namespace yask {
         virtual void printElem(const std::string& msg,
                                const Indices& idxs,
                                real_t e,
-                               int line,
-                               bool newline = true) const;
+                               int line) const;
 
         // Print one vector.
         // Indices must be normalized and rank-relative.
         virtual void printVecNorm(const std::string& msg,
                                   const Indices& idxs,
                                   const real_vec_t& val,
-                                  int line,
-                                  bool newline = true) const;
+                                  int line) const;
 
         // APIs not defined above.
         // See yask_kernel_api.hpp.
@@ -644,11 +642,9 @@ namespace yask {
         virtual const real_t* getElemPtr(const Indices& idxs,
                                          idx_t alloc_step_idx,
                                          bool checkBounds=true) const final {
-
-#ifdef TRACE_MEM
-            _data.get_ostr() << get_name() << "." << "YkElemGrid::getElemPtr(" <<
-                idxs.makeValStr(get_num_dims()) << ")";
-#endif
+            STATE_VARS_CONST(this);
+            TRACE_MEM_MSG(get_name() << "." << "YkElemGrid::getElemPtr(" <<
+                          idxs.makeValStr(get_num_dims()) << ")");
             const auto n = _data.get_num_dims();
             Indices adj_idxs(n);
 
@@ -675,8 +671,7 @@ namespace yask {
 
 #ifdef TRACE_MEM
             if (checkBounds)
-                _data.get_ostr() << " => " << _data.get_index(adj_idxs);
-            _data.get_ostr() << std::endl << std::flush;
+                TRACE_MEM_MSG(" => " << _data.get_index(adj_idxs));
 #endif
 
             // Get pointer via layout in _data.
@@ -804,11 +799,9 @@ namespace yask {
                                          idx_t alloc_step_idx,
                                          bool checkBounds=true) const final {
             STATE_VARS_CONST(this);
+            TRACE_MEM_MSG(get_name() << "." << "YkVecGrid::getElemPtr(" <<
+                          idxs.makeValStr(get_num_dims()) << ")");
 
-#ifdef TRACE_MEM
-            ostr << get_name() << "." << "YkVecGrid::getElemPtr(" <<
-                idxs.makeValStr(get_num_dims()) << ")";
-#endif
             // Use template vec lengths instead of run-time values for
             // efficiency.
             static constexpr int nvls = sizeof...(_templ_vec_lens);
@@ -874,12 +867,9 @@ namespace yask {
             assert(i == i2);
 #endif
 
-#ifdef TRACE_MEM
             if (checkBounds)
-                _data.get_ostr() << " => " << _data.get_index(vec_idxs) <<
-                    "[" << i << "]";
-            _data.get_ostr() << std::endl << std::flush;
-#endif
+                TRACE_MEM_MSG(" => " << _data.get_index(vec_idxs) <<
+                              "[" << i << "]");
 
             // Get pointer to vector.
             const real_vec_t* vp = _data.getPtr(vec_idxs, checkBounds);
@@ -920,11 +910,9 @@ namespace yask {
         inline const real_vec_t* getVecPtrNorm(const Indices& vec_idxs,
                                                idx_t alloc_step_idx,
                                                bool checkBounds=true) const {
-
-#ifdef TRACE_MEM
-            _data.get_ostr() << get_name() << "." << "YkVecGrid::getVecPtrNorm(" <<
-                vec_idxs.makeValStr(get_num_dims()) << ")";
-#endif
+            STATE_VARS_CONST(this);
+            TRACE_MEM_MSG(get_name() << "." << "YkVecGrid::getVecPtrNorm(" <<
+                          vec_idxs.makeValStr(get_num_dims()) << ")");
 
             static constexpr int nvls = sizeof...(_templ_vec_lens);
 #ifdef DEBUG_LAYOUT
@@ -952,11 +940,7 @@ namespace yask {
                     adj_idxs[i] = vec_idxs[i] + _vec_left_pads[i] - _vec_local_offsets[i];
                 }
             }
-
-#ifdef TRACE_MEM
-            _data.get_ostr() << " => " << _data.get_index(adj_idxs, checkBounds) <<
-                std::endl << std::flush;
-#endif
+            TRACE_MEM_MSG(" => " << _data.get_index(adj_idxs, checkBounds));
 
             // Get ptr via layout in _data.
             return _data.getPtr(adj_idxs, checkBounds);
@@ -1009,11 +993,10 @@ namespace yask {
         void prefetchVecNorm(const Indices& vec_idxs,
                              idx_t alloc_step_idx,
                              int line) const {
-#ifdef TRACE_MEM
-            std::cout << "prefetchVecNorm<" << level << ">(" <<
-                makeIndexString(vec_idxs.multElements(_vec_lens)) <<
-                ")" << std::endl;
-#endif
+            STATE_VARS_CONST(this);
+            TRACE_MEM_MSG("prefetchVecNorm<" << level << ">(" <<
+                          makeIndexString(vec_idxs.multElements(_vec_lens)) << ")");
+
             auto p = getVecPtrNorm(vec_idxs, alloc_step_idx, false);
             prefetch<level>(p);
 #ifdef MODEL_CACHE

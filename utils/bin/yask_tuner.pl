@@ -65,7 +65,7 @@ my $makeTimeout = 60 * 10;     # max secs for make to run.
 my $runArgs = '';              # extra run arguments.
 my $maxGB = 32;                # max mem usage.
 my $minGB = 0;                 # min mem usage.
-my $nranks = 1;                # num ranks.
+my $nranks;                    # num ranks.
 my $debugCheck = 0;            # print each initial check result.
 my $doBuild = 1;               # do compiles.
 my $doVal = 0;                 # do validation runs.
@@ -99,7 +99,7 @@ sub usage {
       " -makeArgs=<ARGS>   Pass additional <ARGS> to make command.*\n".
       " -makeTimeout=<N>   Max secs to allow make to run (default is $makeTimeout).\n".
       " -runArgs=<ARGS>    Pass additional <ARGS> to bin/yask.sh command.\n".
-      " -ranks=<N>         Number of ranks to use on host (x-dimension only).\n".
+      " -ranks=<N>         Number of ranks to use on host (default uses setting in 'yask.sh').\n".
       "\nstencil options:\n".
       " -stencil=<NAME>    Specify stencil: iso3dfd, awp, etc. (required).\n".
       " -dp|-sp            Specify FP precision (default is SP).*\n".
@@ -136,9 +136,9 @@ sub usage {
       "* indicates options that are invalid if -noBuild is used.\n".
       "\n".
       "examples:\n".
-      " $0 -stencil=iso3dfd -arch=skl -l=768 -r=0 -noPrefetch\n".
-      " $0 -stencil=awp -arch=knl -lx=512 -ly=512 -lz=256 -b=4-512:4\n".
-      " $0 -stencil=3axis -arch=snb -mem=8-10 -noBuild\n";
+      " $0 -stencil=iso3dfd -l=768 -r=0 -noPrefetch\n".
+      " $0 -stencil=awp -lx=512 -ly=512 -lz=256 -b=4-512:4\n".
+      " $0 -stencil=3axis -mem=8-10 -noBuild\n";
 
   exit(defined $msg ? 1 : 0);
 }
@@ -158,7 +158,8 @@ my $showGroups = 0;
 $| = 1;
 
 # process args.
-print "Invocation: $0 @ARGV\n";
+my $invo = join(' ', map { s/\"/\\\"/g; '"'.$_.'"' } $0, @ARGV);
+print "Invocation: $invo\n";
 for my $origOpt (@ARGV) {
   my $opt = lc $origOpt;
   my ($lhs, $rhs) = split /=/, $origOpt, 2;
@@ -313,6 +314,14 @@ print "Output will be saved in '$outDir'.\n";
 
 # open output.
 mkpath($outDir,1);
+if (!$checking) {
+  my $outTxtFile = "$outDir/$baseName.txt";
+  my $outTFH = new FileHandle;
+  $outTFH->open(">$outTxtFile") or die "error: cannot write to '$outTxtFile'\n";
+  print $outTFH "$invo\n";
+  $outTFH->close();
+}
+
 my $outFile = "$outDir/$baseName.csv";
 my $outFH = new FileHandle;
 $outFH->open(">$outFile") or die "error: cannot write to '$outFile'\n"
@@ -363,7 +372,8 @@ my @loopOrders =
 
 # Possible space-filling curve modifiers.
 my @pathNames =
-  ('', 'serpentine', 'square_wave serpentine', 'grouped');
+  ('', 'square_wave', 'grouped');
+##  ('', 'serpentine', 'square_wave serpentine', 'grouped');
 
 # List of folds.
 if ( !@folds ) {
@@ -729,7 +739,7 @@ sub getMakeCmd($$) {
     }
     else {
       $makeCmd =
-        "$makePrefix make -j EXTRA_MACROS='$macros' YK_TAG=$tag.$arch ".
+        "$makePrefix make -j EXTRA_MACROS='$macros' YK_STENCIL=$tag ".
         "stencil=$stencil arch=$arch real_bytes=$realBytes radius=$radius $margs $makeArgs";
       $makeCmd = "$makeCmd default; $makeCmd clean";
     }
@@ -753,7 +763,7 @@ sub getRunCmd($) {
     $runCmd .= " -host $host" if defined $host;
   }
   $runCmd .= " -exe_prefix '$exePrefix' -stencil $tag -arch $arch -no-pre_auto_tune -no-print_suffixes";
-  $runCmd .= " -ranks $nranks" if $nranks > 1;
+  $runCmd .= " -ranks $nranks" if defined $nranks;
   return $runCmd;
 }
 
@@ -1009,7 +1019,7 @@ sub makeLoopVars($$$$$) {
   my $h = shift;
   my $makePrefix = shift;       # e.g., 'BLOCK'.
   my $tunerPrefix = shift;      # e.g., 'block'.
-  my $reqdMods = shift;         # e.g., 'omp'.
+  my $reqdMods = shift;         # e.g., ''.
   my $lastDim = shift;          # e.g., 2 or 3.
 
   my $order = readHash($h, $tunerPrefix."Order", 1);
@@ -1296,14 +1306,13 @@ sub fitness {
   $mvars .= " fold=x=$fs[0],y=$fs[1],z=$fs[2]";
 
   # gen-loops vars.
-  $mvars .= makeLoopVars($h, 'REGION', 'region', 'omp', 3);
-  $mvars .= makeLoopVars($h, 'BLOCK', 'block', 'omp', 3);
+  $mvars .= makeLoopVars($h, 'REGION', 'region', '', 3);
+  $mvars .= makeLoopVars($h, 'BLOCK', 'block', '', 3);
   $mvars .= makeLoopVars($h, 'MINI_BLOCK', 'miniBlock', '', 3);
   $mvars .= makeLoopVars($h, 'SUB_BLOCK', 'subBlock', '', 2);
 
   # other vars.
   $mvars .= " omp_region_schedule=$regionScheduleStr omp_block_schedule=$blockScheduleStr";
-  $mvars .= " mpi=1" if $nranks > 1;
 
   # how to make.
   my ( $makeCmd, $tag ) = getMakeCmd($macros, $mvars);

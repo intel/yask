@@ -57,12 +57,12 @@ namespace yask {
         string gridPtr = getLocalVar(os, gp.getGridPtr(), _grid_ptr_type);
         string stepArgVar = getLocalVar(os, gp.makeStepArgStr(gridPtr, _dims), _step_val_type);
 
-        ostringstream oss;
-        oss << gridPtr << "->" << fname << "(";
-        if (optArg.length()) oss << optArg << ", ";
+        string res = gridPtr + "->" + fname + "(";
+        if (optArg.length())
+            res += optArg + ", ";
         string args = gp.makeArgStr();
-        oss << "{" << args << "}, " << stepArgVar << ", __LINE__)";
-        return oss.str();
+        res += "{" + args + "}, " + stepArgVar + ", __LINE__)";
+        return res;
     }
 
     // Return a grid-point reference.
@@ -131,9 +131,7 @@ namespace yask {
                     if (dofs == 0)
                         vMap[dname] = ename;
                     else {
-                        ostringstream oss;
-                        oss << "(" << ename << "+" << dofs << ")";
-                        vMap[dname] = oss.str();
+                        vMap[dname] = "(" + ename + "+" + to_string(dofs) + ")";
                     }
                 }
 
@@ -175,16 +173,15 @@ namespace yask {
         string stepArgVar = getLocalVar(os, gp.makeStepArgStr(gridPtr, _dims),
                                         CppPrintHelper::_step_val_type);
 
-        ostringstream oss;
-        oss << gridPtr << "->" << funcName << "(";
+        string res = gridPtr + "->" + funcName + "(";
         if (firstArg.length())
-            oss << firstArg << ", ";
+            res += firstArg + ", ";
         string args = isNorm ? gp.makeNormArgStr(_dims) : gp.makeArgStr();
-        oss << "{" << args << "} ," << stepArgVar;
+        res += "{" + args + "} ," + stepArgVar;
         if (lastArg.length())
-            oss << ", " << lastArg;
-        oss << ")";
-        return oss.str();
+            res += ", " + lastArg;
+        res += ")";
+        return res;
     }
 
     // Print code to set pointers of aligned reads.

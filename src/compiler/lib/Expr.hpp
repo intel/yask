@@ -125,9 +125,7 @@ namespace yask {
         virtual string makeStr(const VarMap* varMap = 0) const;
         virtual string makeQuotedStr(string quote = "'",
                                      const VarMap* varMap = 0) const {
-            ostringstream oss;
-            oss << quote << makeStr(varMap) << quote;
-            return oss.str();
+            return quote + makeStr(varMap) + quote;
         }
         virtual string getDescr() const {
             return makeQuotedStr();
@@ -141,14 +139,10 @@ namespace yask {
             return size_t(this);
         }
         virtual string getIdStr() const {
-            ostringstream oss;
-            oss << this;
-            return oss.str();
+            return to_string(idx_t(this));
         }
         virtual string getQuotedId() const {
-            ostringstream oss;
-            oss << "\"" << this << "\"";
-            return oss.str();
+            return "\"" + to_string(idx_t(this)) + "\"";
         }
 
         // APIs.
@@ -845,9 +839,11 @@ namespace yask {
         Grid* _grid = 0;        // the grid this point is from.
 
         // Index exprs for each dim, e.g.,
-        // "3, x-5, y*2, z+4" for dims "w, x, y, z".
+        // "3, x-5, y*2, z+4" for dims "n, x, y, z".
         NumExprPtrVec _args;
 
+        // Vars below are calculated from above.
+        
         // Simple offset for each expr that is dim +/- offset, e.g.,
         // "x=-5, z=4" from above example.
         // Set in ctor and modified via setArgOffset/Const().
@@ -860,6 +856,11 @@ namespace yask {
 
         VecType _vecType = VEC_UNSET; // allowed vectorization.
         LoopType _loopType = LOOP_UNSET; // analysis for looping.
+
+        string _defStr;
+        void _updateStr() {
+            _defStr = makeStr();
+        }
 
     public:
 
@@ -912,8 +913,12 @@ namespace yask {
         virtual void setArgConst(const IntScalar& val);
 
         // Some comparisons.
-        bool operator==(const GridPoint& rhs) const;
-        bool operator<(const GridPoint& rhs) const;
+        bool operator==(const GridPoint& rhs) const {
+            return _defStr == rhs._defStr;
+        }
+        bool operator<(const GridPoint& rhs) const {
+            return _defStr < rhs._defStr;
+        }
 
         // Take ev to each value.
         virtual string accept(ExprVisitor* ev);

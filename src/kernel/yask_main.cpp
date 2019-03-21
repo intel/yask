@@ -359,7 +359,8 @@ int main(int argc, char** argv)
                 auto rt = opts->_region_sizes[step_dim];
                 auto bt = opts->_block_sizes[step_dim];
                 auto tt = max(rt, bt);
-                if (tt > 1 && tt < 2 * tsteps)
+                const idx_t max_mult = 5;
+                if (tt > 1 && tt < max_mult * tsteps)
                     tsteps = ROUND_UP(tsteps, tt);
                 
                 opts->trial_steps = tsteps;
@@ -376,8 +377,8 @@ int main(int argc, char** argv)
         if (opts->trial_steps <= 0)
             THROW_YASK_EXCEPTION("Exiting because zero steps per trial are specified");
 
-        // Track best trial.
-        shared_ptr<Stats> best_trial;
+        // Track results.
+        vector<shared_ptr<Stats>> trial_stats;
 
         // First & last steps.
         idx_t first_t = 0;
@@ -426,15 +427,27 @@ int main(int argc, char** argv)
             VTUNE_PAUSE;
 
             // Calc and report perf.
-            auto trial_stats = context->get_stats();
-            auto stats = dynamic_pointer_cast<Stats>(trial_stats);
+            auto tstats = context->get_stats();
+            auto stats = dynamic_pointer_cast<Stats>(tstats);
 
-            // Remember best.
-            if (best_trial == nullptr || stats->run_time < best_trial->run_time)
-                best_trial = stats;
+            // Remember stats.
+            trial_stats.push_back(stats);
         }
 
-        if (best_trial != nullptr) {
+        // Report stats.
+        if (trial_stats.size()) {
+
+            // Sort based on time.
+            sort(trial_stats.begin(), trial_stats.end(),
+                 [](const shared_ptr<Stats>& lhs, const shared_ptr<Stats>& rhs) {
+                     return lhs->run_time < rhs->run_time; });
+
+            // Pick best and 50%-percentile.
+            // See https://en.wikipedia.org/wiki/Percentile.
+            auto& best_trial = trial_stats.front();
+            auto r50 = trial_stats.size() / 2;
+            auto& mid_trial = trial_stats.at(r50);
+            
             os << divLine <<
                 "Performance stats of best trial:\n"
                 " best-num-steps-done:              " << best_trial->nsteps << endl <<
@@ -444,13 +457,25 @@ int main(int argc, char** argv)
                 " best-throughput (est-FLOPS):      " << makeNumStr(best_trial->flops) << endl <<
                 " best-throughput (num-points/sec): " << makeNumStr(best_trial->pts_ps) << endl <<
                 divLine <<
+                "Performance stats of 50th-percentile trial:\n"
+                " mid-num-steps-done:               " << mid_trial->nsteps << endl <<
+                " mid-elapsed-time (sec):           " << makeNumStr(mid_trial->run_time) << endl <<
+                " mid-throughput (num-reads/sec):   " << makeNumStr(mid_trial->reads_ps) << endl <<
+                " mid-throughput (num-writes/sec):  " << makeNumStr(mid_trial->writes_ps) << endl <<
+                " mid-throughput (est-FLOPS):       " << makeNumStr(mid_trial->flops) << endl <<
+                " mid-throughput (num-points/sec):  " << makeNumStr(mid_trial->pts_ps) << endl <<
+                divLine <<
                 "Notes:\n"
                 " Num-reads/sec, num-writes/sec, and FLOPS are metrics based on\n"
                 "  stencil specifications and can vary due to differences in\n"
                 "  implementations and optimizations.\n"
                 " Num-points/sec is based on overall problem size and is\n"
                 "  a more reliable performance metric, esp. when comparing\n"
-                "  across implementations.\n";
+                "  across implementations.\n"
+                " The 50th-percentile trial is the same as the median trial\n"
+                "  when there is an odd number of trials. When there is an even\n"
+                "  number of trials, the nearest-rank method is used.\n";
+            context->print_warnings();
         }
 
         /////// Validation run.

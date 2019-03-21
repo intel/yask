@@ -307,7 +307,7 @@ namespace yask {
         // Return true if successful.
         virtual bool setRadius(int radius) override {
             _radius = radius;
-            _long_name = _name + " with radius " + to_string(radius);
+            _long_name = _name + " radius " + to_string(radius);
             return radius >= 0;  // support only non-neg. radius.
         }
 
