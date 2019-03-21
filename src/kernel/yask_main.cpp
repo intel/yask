@@ -359,7 +359,8 @@ int main(int argc, char** argv)
                 auto rt = opts->_region_sizes[step_dim];
                 auto bt = opts->_block_sizes[step_dim];
                 auto tt = max(rt, bt);
-                if (tt > 1 && tt < 2 * tsteps)
+                const idx_t max_mult = 5;
+                if (tt > 1 && tt < max_mult * tsteps)
                     tsteps = ROUND_UP(tsteps, tt);
                 
                 opts->trial_steps = tsteps;
