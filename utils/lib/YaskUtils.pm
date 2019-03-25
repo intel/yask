@@ -217,20 +217,20 @@ sub getResultsFromLine($$) {
     $results->{$nodes_key} .= $nname;
   }
 
-  # If auto-tuner is run on one pack, capture updated values.
+  # If auto-tuner is run globally, capture updated values.
   # Invalidate settings overridden by auto-tuner on multiple packs.
   elsif ($line =~ /^auto-tuner(.).*size:/) {
     my $c = $1;
 
-    # If colon found above, only one pack tuned.
+    # If colon found above, tuner is global.
     my $onep = ($c eq ':');
     
     for my $k ('block size',
                'mini-block size',
                'sub-block size',) {
       $line =~ s/-size/ size/;
-      if ($line =~ /$k:\s*(t=.*)/i) {
-        my $val = $onep ? $1 : 'auto-tuned';
+      if ($line =~ / (best-)?$k:\s*(t=.*)/i) {
+        my $val = $onep ? $2 : 'auto-tuned';
         $results->{$k} = $val;
       }
     }
