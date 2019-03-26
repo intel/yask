@@ -198,7 +198,7 @@ void CppIntrinPrintHelper::tryPerm1(ostream& os,
         string mvName = _vecVars[mv];
 
         // Create the permute control and mask vars.
-        ostringstream nameSS, ctrlSS;
+        string nameS, ctrlS;
         unsigned mask = 0;
         bool needNA = false;
         set<size_t> foundElems;
@@ -211,8 +211,8 @@ void CppIntrinPrintHelper::tryPerm1(ostream& os,
 
             // String separators.
             if (i > 0) {
-                nameSS << "_";
-                ctrlSS << ", ";
+                nameS += "_";
+                ctrlS += ", ";
             }
 
             // Is i needed (not done) AND does i come from this mem vec?
@@ -220,16 +220,16 @@ void CppIntrinPrintHelper::tryPerm1(ostream& os,
             if (doneElems.count(i) == 0 && ve._vec == mv) {
                 int alignedElem = ve._offset; // get this element.
 
-                nameSS << alignedElem;
-                ctrlSS << alignedElem;
+                nameS += to_string(alignedElem);
+                ctrlS += to_string(alignedElem);
                 mask |= (1 << i); // set proper bit.
                 foundElems.insert(i); // remember element index.
             }
 
             // Not from this mem vec.
             else {
-                nameSS << "NA";
-                ctrlSS << "NA";
+                nameS += "NA";
+                ctrlS += "NA";
                 needNA = true;
             }
         }
@@ -240,27 +240,26 @@ void CppIntrinPrintHelper::tryPerm1(ostream& os,
             // We don't need to use the mask if no elements are already done.
             bool needMask = doneElems.size() > 0;
 
-            string nameStr = nameSS.str();
-            string ctrlStr = "{ .ci = { " + ctrlSS.str() + " } }"; // assignment to 'i' array.
+            ctrlS = "{ .ci = { " + ctrlS + " } }"; // assignment to 'i' array.
 
             // Create NA var if needed (this is just for clarity).
             if (needNA)
                 makeNA(os);
 
             // Create control if needed.
-            if (definedCtrls.count(nameStr) == 0) {
-                definedCtrls.insert(nameStr);
+            if (definedCtrls.count(nameS) == 0) {
+                definedCtrls.insert(nameS);
                 os << _linePrefix << "const " << getVarType() <<
-                    "_data ctrl_data_" << nameStr << " = " << ctrlStr << _lineSuffix;
+                    "_data ctrl_data_" << nameS << " = " << ctrlS << _lineSuffix;
                 os << _linePrefix << "const " << getVarType() <<
-                    " ctrl_" << nameStr << "(ctrl_data_" << nameStr << ")" << _lineSuffix;
+                    " ctrl_" << nameS << "(ctrl_data_" << nameS << ")" << _lineSuffix;
             }
 
             // Permute command.
             os << _linePrefix << "real_vec_permute";
             if (needMask)
                 os << "_masked";
-            os << "(" << pvName << ", ctrl_" << nameStr << ", " << mvName;
+            os << "(" << pvName << ", ctrl_" << nameS << ", " << mvName;
             if (needMask)
                 printMask(os, mask);
             os << ")" << _lineSuffix;
@@ -307,8 +306,8 @@ void CppIntrinPrintHelper::tryPerm2(ostream& os,
             string mv2Name = _vecVars[mv2];
 
             // Create the permute control vars: one for 1,2 order, and one for 2,1.
-            ostringstream nameSS12, ctrlSS12;
-            ostringstream nameSS21, ctrlSS21;
+            string nameS12, ctrlS12;
+            string nameS21, ctrlS21;
             bool needNA = false;
             set<size_t> foundElems;
 
@@ -320,10 +319,10 @@ void CppIntrinPrintHelper::tryPerm2(ostream& os,
 
                 // String separators.
                 if (i > 0) {
-                    nameSS12 << "_";
-                    ctrlSS12 << ", ";
-                    nameSS21 << "_";
-                    ctrlSS21 << ", ";
+                    nameS12 += "_";
+                    ctrlS12 += ", ";
+                    nameS21 += "_";
+                    ctrlS21 += ", ";
                 }
 
                 // Is i needed (not done) AND does i come from one of the mem vecs?
@@ -335,23 +334,23 @@ void CppIntrinPrintHelper::tryPerm2(ostream& os,
                     char alignedVec21 = !useA ? 'A' : 'B';
                     int alignedElem = ve._offset; // get this element.
 
-                    nameSS12 << alignedVec12 << alignedElem;
-                    nameSS21 << alignedVec21 << alignedElem;
+                    nameS12 += alignedVec12 + to_string(alignedElem);
+                    nameS21 += alignedVec21 + to_string(alignedElem);
                     if (!useA)
-                        ctrlSS12 << "ctrl_sel_bit |"; // set selector bit for vec B.
+                        ctrlS12 += "ctrl_sel_bit |"; // set selector bit for vec B.
                     else
-                        ctrlSS21 << "ctrl_sel_bit |"; // set selector bit for vec B.
-                    ctrlSS12 << alignedElem;
-                    ctrlSS21 << alignedElem;
+                        ctrlS21 += "ctrl_sel_bit |"; // set selector bit for vec B.
+                    ctrlS12 += to_string(alignedElem);
+                    ctrlS21 += to_string(alignedElem);
                     foundElems.insert(i); // remember element index.
                 }
 
                 // Not from either mem vec.
                 else {
-                    nameSS12 << "NA";
-                    ctrlSS12 << "NA";
-                    nameSS21 << "NA";
-                    ctrlSS21 << "NA";
+                    nameS12 += "NA";
+                    ctrlS12 += "NA";
+                    nameS21 += "NA";
+                    ctrlS21 += "NA";
                     needNA = true;
                 }
             }
@@ -365,27 +364,25 @@ void CppIntrinPrintHelper::tryPerm2(ostream& os,
                     makeNA(os);
 
                 // Var names.
-                string nameStr12 = nameSS12.str();
-                string ctrlStr12 = "{ .ci = { " + ctrlSS12.str() + " } }";
-                string nameStr21 = nameSS21.str();
-                string ctrlStr21 = "{ .ci = { " + ctrlSS21.str() + " } }";
+                ctrlS12 = "{ .ci = { " + ctrlS12 + " } }";
+                ctrlS21 = "{ .ci = { " + ctrlS21 + " } }";
 
                 // Select 1,2 or 2,1 depending on whether ctrl var already exists.
-                bool use12 = definedCtrls.count(nameStr21) == 0;
-                string nameStr = use12 ? nameStr12 : nameStr21;
-                string ctrlStr = use12 ? ctrlStr12 : ctrlStr21;
+                bool use12 = definedCtrls.count(nameS21) == 0;
+                string nameS = use12 ? nameS12 : nameS21;
+                string ctrlS = use12 ? ctrlS12 : ctrlS21;
 
                 // Create control if needed.
-                if (definedCtrls.count(nameStr) == 0) {
-                    definedCtrls.insert(nameStr);
+                if (definedCtrls.count(nameS) == 0) {
+                    definedCtrls.insert(nameS);
                     os << _linePrefix << "const " << getVarType() <<
-                        "_data ctrl_data_" << nameStr << " = " << ctrlStr << _lineSuffix;
+                        "_data ctrl_data_" << nameS << " = " << ctrlS << _lineSuffix;
                     os << _linePrefix << "const " << getVarType() <<
-                        " ctrl_" << nameStr << "(ctrl_data_" << nameStr << ")" << _lineSuffix;
+                        " ctrl_" << nameS << "(ctrl_data_" << nameS << ")" << _lineSuffix;
                 }
 
                 // Permute command.
-                os << _linePrefix << "real_vec_permute2(" << pvName << ", ctrl_" << nameStr << ", ";
+                os << _linePrefix << "real_vec_permute2(" << pvName << ", ctrl_" << nameS << ", ";
                 if (use12)
                     os << mv1Name << ", " << mv2Name;
                 else

@@ -133,14 +133,13 @@ namespace yask {
 
         // Layout for folding.
         // This contains only the vectorized (len > 1) dims.
-        ostringstream oss;
+        string layout;
         if (_dims._foldGT1.isFirstInner())
             for (int i = nvec; i > 0; i--)
-                oss << i;       // e.g., 321
+                layout += to_string(i);       // e.g., 321
         else
             for (int i = 1; i <= nvec; i++)
-                oss << i;       // e.g., 123
-        string layout = oss.str();
+                layout += to_string(i);       // e.g., 123
         os << "#define VEC_FOLD_LAYOUT_CLASS Layout_";
         if (nvec)
             os << layout << endl;
@@ -226,16 +225,12 @@ namespace yask {
                 os << ".\n";
             }
 
-            // Type name for grid.
-            string typeName;
-
             // Use vector-folded layout if possible.
             bool folded = gp->isFoldable();
             string gtype = folded ? "YkVecGrid" : "YkElemGrid";
 
             // Type-name in kernel is 'GRID_TYPE<LAYOUT, WRAP_1ST_IDX, VEC_LENGTHS...>'.
-            ostringstream oss;
-            oss << gtype << "<Layout_";
+            string typeName = gtype + "<Layout_";
             int step_posn = 0;
             int inner_posn = 0;
             vector<int> vlens;
@@ -286,7 +281,7 @@ namespace yask {
                     // Add index position to layout.
                     if (!defer) {
                         int other_posn = dn + 1;
-                        oss << other_posn;
+                        typeName += to_string(other_posn);
                     }
 
                     // Add vector len to list.
@@ -299,31 +294,30 @@ namespace yask {
 
                 // Add deferred posns at end.
                 if (step_posn)
-                    oss << step_posn;
+                    typeName += to_string(step_posn);
                 if (inner_posn)
-                    oss << inner_posn;
+                    typeName += to_string(inner_posn);
                 for (auto mp : misc_posns)
-                    oss << mp;
+                    typeName += to_string(mp);
             }
 
             // Scalar.
             else
-                oss << "0d"; // Trivial scalar layout.
+                typeName += "0d"; // Trivial scalar layout.
 
             // Add step-dim flag.
             if (step_posn)
-                oss << ", true";
+                typeName += ", true";
             else
-                oss << ", false";
+                typeName += ", false";
 
             // Add vec lens.
             if (folded) {
                 for (auto i : vlens)
-                    oss << ", " << i;
+                    typeName += ", " + to_string(i);
             }
 
-            oss << ">";
-            typeName = oss.str();
+            typeName += ">";
 
             // Typedef.
             string typeDef = grid + "_type";
@@ -458,7 +452,8 @@ namespace yask {
             os << "\n // Constructor.\n" <<
                 " " << _context_base << "(KernelEnvPtr env, KernelSettingsPtr settings) :"
                 " StencilContext(env, settings)" << ctorList <<
-                " {\n  name = \"" << _stencil.getName() << "\";\n";
+                " {\n  name = \"" << _stencil.getName() << "\";\n"
+                " long_name = \"" << _stencil.getLongName() << "\";\n";
 
             os << "\n // Create grids (but do not allocate data in them).\n" <<
                 ctorCode <<
@@ -677,8 +672,11 @@ namespace yask {
                 vceq->visitEqs(&vv);
 
                 // Reorder some equations based on vector info.
-                ExprReorderVisitor erv(vv);
-                vceq->visitEqs(&erv);
+                // TODO: make a knob to control this.
+                if (false) {
+                    ExprReorderVisitor erv(vv);
+                    vceq->visitEqs(&erv);
+                }
 
                 // Collect stats.
                 CounterVisitor cv;

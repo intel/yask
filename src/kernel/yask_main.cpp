@@ -53,13 +53,15 @@ struct AppSettings : public KernelSettings {
     // A custom option-handler for '-v'.
     class ValOption : public CommandLineParser::OptionBase {
         AppSettings& _as;
+        static constexpr idx_t _lsz=63, _bsz=24;
 
     public:
 
         ValOption(AppSettings& as) :
                 OptionBase("v",
                            "Minimal validation: shortcut for '-validate -no-pre-auto_tune -no-auto_tune"
-                           " -no-warmup -t 1 -trial_steps 1 -d 63 -b 24'."),
+                           " -no-warmup -t 1 -trial_steps 1 -l " + to_string(_lsz) +
+                           " -b " + to_string(_bsz) + "'."),
                 _as(as) { }
 
         // Set multiple vars.
@@ -73,8 +75,8 @@ struct AppSettings : public KernelSettings {
                 _as.trial_steps = 1;
                 for (auto dim : _as._dims->_domain_dims.getDims()) {
                     auto& dname = dim.getName();
-                    _as._rank_sizes[dname] = 63;
-                    _as._block_sizes[dname] = 24;
+                    _as._rank_sizes[dname] = _lsz;
+                    _as._block_sizes[dname] = _bsz;
                 }
                 return true;
             }
@@ -116,8 +118,12 @@ struct AppSettings : public KernelSettings {
                            "overriding default value from YASK compiler.",
                            step_alloc));
         parser.add_option(new CommandLineParser::IntOption
-                          ("t",
+                          ("num_trials",
                            "Number of performance trials.",
+                           num_trials));
+        parser.add_option(new CommandLineParser::IntOption
+                          ("t",
+                           "Alias for '-num_trials'; for backward-compatibility.",
                            num_trials));
         parser.add_option(new CommandLineParser::IntOption
                           ("trial_steps",
@@ -126,7 +132,7 @@ struct AppSettings : public KernelSettings {
                            trial_steps));
         parser.add_option(new CommandLineParser::IntOption
                           ("dt",
-                           "Same as 'trial_steps'; for backward-compatibility.",
+                           "Alias for '-trial_steps'; for backward-compatibility.",
                            trial_steps));
         parser.add_option(new CommandLineParser::IntOption
                           ("trial_time",
@@ -159,12 +165,12 @@ struct AppSettings : public KernelSettings {
 
         if (help) {
             string appNotes =
-                "Validation is very slow and uses 2x memory,\n"
+                "\nValidation is very slow and uses 2x memory,\n"
                 " so run with very small sizes and number of time-steps.\n"
                 " If validation fails, it may be due to rounding error;\n"
                 "  try building with 8-byte reals.\n";
             vector<string> appExamples;
-            appExamples.push_back("-t 2");
+            appExamples.push_back("-g 768 -t 2");
             appExamples.push_back("-v");
             print_usage(cout, parser, argv[0], appNotes, appExamples);
             exit_yask(1);
@@ -353,7 +359,8 @@ int main(int argc, char** argv)
                 auto rt = opts->_region_sizes[step_dim];
                 auto bt = opts->_block_sizes[step_dim];
                 auto tt = max(rt, bt);
-                if (tt > 1 && tt < 2 * tsteps)
+                const idx_t max_mult = 5;
+                if (tt > 1 && tt < max_mult * tsteps)
                     tsteps = ROUND_UP(tsteps, tt);
                 
                 opts->trial_steps = tsteps;
@@ -370,8 +377,8 @@ int main(int argc, char** argv)
         if (opts->trial_steps <= 0)
             THROW_YASK_EXCEPTION("Exiting because zero steps per trial are specified");
 
-        // Track best trial.
-        shared_ptr<Stats> best_trial;
+        // Track results.
+        vector<shared_ptr<Stats>> trial_stats;
 
         // First & last steps.
         idx_t first_t = 0;
@@ -420,31 +427,55 @@ int main(int argc, char** argv)
             VTUNE_PAUSE;
 
             // Calc and report perf.
-            auto trial_stats = context->get_stats();
-            auto stats = dynamic_pointer_cast<Stats>(trial_stats);
+            auto tstats = context->get_stats();
+            auto stats = dynamic_pointer_cast<Stats>(tstats);
 
-            // Remember best.
-            if (best_trial == nullptr || stats->run_time < best_trial->run_time)
-                best_trial = stats;
+            // Remember stats.
+            trial_stats.push_back(stats);
         }
 
-        if (best_trial != nullptr) {
+        // Report stats.
+        if (trial_stats.size()) {
+
+            // Sort based on time.
+            sort(trial_stats.begin(), trial_stats.end(),
+                 [](const shared_ptr<Stats>& lhs, const shared_ptr<Stats>& rhs) {
+                     return lhs->run_time < rhs->run_time; });
+
+            // Pick best and 50%-percentile.
+            // See https://en.wikipedia.org/wiki/Percentile.
+            auto& best_trial = trial_stats.front();
+            auto r50 = trial_stats.size() / 2;
+            auto& mid_trial = trial_stats.at(r50);
+            
             os << divLine <<
                 "Performance stats of best trial:\n"
-                " best-num-steps-done:              " << makeNumStr(best_trial->nsteps) << endl <<
+                " best-num-steps-done:              " << best_trial->nsteps << endl <<
                 " best-elapsed-time (sec):          " << makeNumStr(best_trial->run_time) << endl <<
                 " best-throughput (num-reads/sec):  " << makeNumStr(best_trial->reads_ps) << endl <<
                 " best-throughput (num-writes/sec): " << makeNumStr(best_trial->writes_ps) << endl <<
                 " best-throughput (est-FLOPS):      " << makeNumStr(best_trial->flops) << endl <<
                 " best-throughput (num-points/sec): " << makeNumStr(best_trial->pts_ps) << endl <<
                 divLine <<
+                "Performance stats of 50th-percentile trial:\n"
+                " mid-num-steps-done:               " << mid_trial->nsteps << endl <<
+                " mid-elapsed-time (sec):           " << makeNumStr(mid_trial->run_time) << endl <<
+                " mid-throughput (num-reads/sec):   " << makeNumStr(mid_trial->reads_ps) << endl <<
+                " mid-throughput (num-writes/sec):  " << makeNumStr(mid_trial->writes_ps) << endl <<
+                " mid-throughput (est-FLOPS):       " << makeNumStr(mid_trial->flops) << endl <<
+                " mid-throughput (num-points/sec):  " << makeNumStr(mid_trial->pts_ps) << endl <<
+                divLine <<
                 "Notes:\n"
-                " Num-reads and writes/sec and FLOPS are metrics based on\n"
+                " Num-reads/sec, num-writes/sec, and FLOPS are metrics based on\n"
                 "  stencil specifications and can vary due to differences in\n"
                 "  implementations and optimizations.\n"
                 " Num-points/sec is based on overall problem size and is\n"
                 "  a more reliable performance metric, esp. when comparing\n"
-                "  across implementations.\n";
+                "  across implementations.\n"
+                " The 50th-percentile trial is the same as the median trial\n"
+                "  when there is an odd number of trials. When there is an even\n"
+                "  number of trials, the nearest-rank method is used.\n";
+            context->print_warnings();
         }
 
         /////// Validation run.
@@ -506,19 +537,33 @@ int main(int argc, char** argv)
             ref_context->set_debug_output(yof.new_null_output());
             auto rstats = ref_context->get_stats();
             ref_context->set_debug_output(dbg_out);
-            os << "  Done in " << makeNumStr(rstats->get_elapsed_secs()) << " secs.\n";
+            os << "  Done in " << makeNumStr(rstats->get_elapsed_secs()) << " secs.\n" << flush;
 #endif
             // check for equality.
-            os << "\nChecking results..." << endl;
+            os << "\nChecking results...\n";
             idx_t errs = context->compareData(*ref_context);
             auto ri = kenv->get_rank_index();
-            if( errs == 0 ) {
-                os << "TEST PASSED on rank " << ri << ".\n" << flush;
-            } else {
-                cerr << "TEST FAILED on rank " << ri << ": >= " << errs << " mismatch(es).\n" << flush;
-                if (REAL_BYTES < 8)
-                    cerr << "Small differences are not uncommon for low-precision FP; try with 8-byte reals." << endl;
-                ok = false;
+
+            // Trick to emulate MPI critical section.
+            // This cannot be in a conditional block--otherwise
+            // it will deadlock if some ranks pass and some fail.
+            for (int r = 0; r < kenv->get_num_ranks(); r++) {
+                kenv->global_barrier();
+                if (r == ri) {
+                    if( errs == 0 )
+                        os << "TEST PASSED on rank " << ri << ".\n" << flush;
+                    else {
+
+                        // Use 'cerr' to print on all ranks in case rank printing to 'os'
+                        // passed and other(s) failed.
+                        cerr << "TEST FAILED on rank " << ri << ": " << errs << " mismatch(es).\n";
+                        if (REAL_BYTES < 8)
+                            cerr << " Small differences are not uncommon for low-precision FP; "
+                                "try with 8-byte reals.\n";
+                        cerr << flush;
+                        ok = false;
+                    }
+                }
             }
             ref_soln->end_solution();
         }

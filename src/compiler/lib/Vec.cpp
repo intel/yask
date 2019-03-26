@@ -224,6 +224,8 @@ namespace yask {
         // Simple, greedy algorithm:
         // Select first element that needs the fewest new aligned vecs.
         // Repeat until done.
+        // TODO: make more efficient--this is O(n^2), so it blows up
+        // when there are long exprs with many reads.
         // TODO: sort based on all reused exprs, not just grid reads.
 
         GridPointSet alignedVecs; // aligned vecs needed so far.

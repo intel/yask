@@ -213,6 +213,8 @@ namespace yask {
                        int block_thread_idx,
                        KernelSettings& settings,
                        const ScanIndices& mini_block_idxs) {
+            if (block_thread_idx < 0)
+                block_thread_idx = omp_get_thread_num();
             if (settings.force_scalar)
                 calc_sub_block_scalar(region_thread_idx, block_thread_idx,
                                       settings, mini_block_idxs);

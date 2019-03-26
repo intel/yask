@@ -40,7 +40,7 @@ CompilerSettings settings;
 int vlenForStats = 0;
 StencilBase* stencilSoln = NULL;
 string solutionName;
-int radius = 1;
+int radius = -1;
 
 void usage(const string& cmd) {
 
@@ -68,7 +68,7 @@ void usage(const string& cmd) {
     }
     cout <<
         " -radius <radius>\n"
-        "     Set radius for stencils marked with '*' above (default=" << radius << ").\n"
+        "     Set radius for stencils marked with '*' above (default is stencil-specific).\n"
         "\n"
         " -elem-bytes <n>"
         "    Set number of bytes in each FP element (default=" << settings._elem_bytes << ").\n"
@@ -321,13 +321,15 @@ void parseOpts(int argc, const char* argv[])
 
     cout << "Stencil-solution name: " << solutionName << endl;
     if (stencilSoln->usesRadius()) {
-        bool rOk = stencilSoln->setRadius(radius);
-        if (!rOk) {
-            cerr << "Error: invalid radius=" << radius << " for stencil type '" <<
-                solutionName << "'." << endl;
-            usage(argv[0]);
+        if (radius >= 0) {
+            bool rOk = stencilSoln->setRadius(radius);
+            if (!rOk) {
+                cerr << "Error: invalid radius=" << radius << " for stencil type '" <<
+                    solutionName << "'." << endl;
+                usage(argv[0]);
+            }
         }
-        cout << "Stencil radius: " << radius << endl;
+        cout << "Stencil radius: " << stencilSoln->getRadius() << endl;
     }
 
     // Copy cmd-line settings into solution.

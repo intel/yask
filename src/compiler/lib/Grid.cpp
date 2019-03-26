@@ -200,13 +200,10 @@ namespace yask {
 
         // Can fold if ALL fold dims >1 are used in this grid.
 
-#if 1
-        // NB: this will always be true if there is no vectorization.
-        // We do this because the compiler expects stencils to be vectorizable.
-        _isFoldable = _numFoldableDims == dims._foldGT1.size();
-#else
-        _isFoldable = (_numFoldableDims > 0 ) && (_numFoldableDims == dims._foldGT1.size());
-#endif
+        // NB: this will always be true if there is no vectorization, i.e.,
+        // both are zero.  We do this because the compiler expects stencils
+        // to be vectorizable.
+        _isFoldable = _numFoldableDims == int(dims._foldGT1.size());
     }
     
     // Determine whether halo sizes are equal.
@@ -649,32 +646,32 @@ namespace yask {
     // Make string like "+(4/VLEN_X)" or "-(2/VLEN_Y)" or "" if ofs==zero.
     // given signed offset and direction.
     string Dimensions::makeNormStr(int ofs, string dname) const {
-        ostringstream oss;
 
         if (ofs == 0)
             return "";
 
+        string res;
         if (_fold.lookup(dname)) {
 
             // Positive offset, e.g., '+(4 / VLEN_X)'.
             if (ofs > 0)
-                oss << "+(" << ofs;
+                res += "+(" + to_string(ofs);
 
             // Neg offset, e.g., '-(4 / VLEN_X)'.
             // Put '-' sign outside division to fix truncated division problem.
             else
-                oss << "-(" << (-ofs);
+                res += "-(" + to_string(-ofs);
 
             // add divisor.
             string cap_dname = PrinterBase::allCaps(dname);
-            oss << " / VLEN_" << cap_dname << ")";
+            res += " / VLEN_" + cap_dname + ")";
         }
 
         // No fold const avail.
         else
-            oss << ofs;
+            res += to_string(ofs);
 
-        return oss.str();
+        return res;
     }
 
     // Make string like "t+1" or "t-1".

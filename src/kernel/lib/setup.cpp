@@ -70,8 +70,7 @@ namespace yask {
 
         // Init various tuples to make sure they have the correct dims.
         rank_domain_offsets = domain_dims;
-        rank_domain_offsets.setValsSame(-1); // indicates prepare_solution() not called.
-        overall_domain_sizes = domain_dims;
+        rank_domain_offsets.setValsSame(-1); // indicates prepare_solution() not called. TODO: add flag.
         max_halos = domain_dims;
         wf_angles = domain_dims;
         wf_shift_pts = domain_dims;
@@ -86,230 +85,426 @@ namespace yask {
     // Init MPI-related vars and other vars related to my rank's place in
     // the global problem: rank index, offset, etc.  Need to call this even
     // if not using MPI to properly init these vars.  Called from
-    // prepare_solution(), so it doesn't normally need to be called from user code.
+    // prepare_solution().
     void StencilContext::setupRank() {
         STATE_VARS(this);
-
+        TRACE_MSG("setupRank()...");
         auto me = env->my_rank;
-        int num_neighbors = 0;
+        auto nr = env->num_ranks;
+
+        // All ranks should have the same settings for certain options.
+        assertEqualityOverRanks(nr, env->comm, "total number of MPI ranks");
+        assertEqualityOverRanks(idx_t(opts->use_shm), env->comm, "use_shm setting");
+        assertEqualityOverRanks(idx_t(opts->find_loc), env->comm, "defined rank indices");
+        DOMAIN_VAR_LOOP(i, j) {
+            auto& dname = domain_dims.getDimName(j);
+            assertEqualityOverRanks(opts->_global_sizes[i], env->comm,
+                                    "global-domain size in '" + dname + "' dimension");
+            assertEqualityOverRanks(opts->_num_ranks[j], env->comm,
+                                    "number of ranks in '" + dname + "' dimension");
+
+            // Check that either local or global size is set.
+            if (!opts->_global_sizes[i] && !opts->_rank_sizes[i])
+                THROW_YASK_EXCEPTION("Error: both local-domain size and "
+                                     "global-domain size are zero in '" +
+                                     dname + "' dimension on rank " +
+                                     to_string(me) + "; specify one, "
+                                     "and the other will be calculated");
+        }
+
+#ifndef USE_MPI
+
+        // Simple settings.
+        opts->_num_ranks.setValsSame(0);
+        opts->_rank_indices.setValsSame(0);
+        rank_domain_offsets.setValsSame(0);
+        
+        // Init vars w/o MPI.
+        DOMAIN_VAR_LOOP(i, j) {
+
+            // Need to set local size.
+            if (!opts->_rank_sizes[i])
+                opts->_rank_sizes[i] = opts->_global_sizes[i];
+
+            // Need to set global size.
+            else if (!opts->_global_sizes[i])
+                opts->_global_sizes[i] = opts->_rank_sizes[i];
+
+            // Check that settings are equal.
+            else if (opts->_global_sizes[i] != opts->_rank_sizes[i]) {
+                auto& dname = domain_dims.getDimName(j);
+                FORMAT_AND_THROW_YASK_EXCEPTION("Error: specified local-domain size of " <<
+                                                opts->_rank_sizes[i] <<
+                                                " does not equal specified global-domain size of " <<
+                                                opts->_global_sizes[i] << " in '" << dname <<
+                                                "' dimension");
+            }
+        }        
+        
+#else
+        // Set number of ranks in each dim if any is unset (zero).
+        if (!opts->_num_ranks.product()) {
+
+            // Make list of factors of number of ranks.
+            vector<idx_t> facts;
+            for (idx_t n = 1; n <= nr; n++)
+                if (nr % n == 0)
+                    facts.push_back(n);
+
+            // Keep track of "best" result, where the best is most compact.
+            IdxTuple best;
+
+            // Try every combo of N-1 factors, where N is the number of dims.
+            // TODO: make more efficient--need algorithm to directly get
+            // set of N factors that are valid.
+            IdxTuple combos;
+            DOMAIN_VAR_LOOP(i, j) {
+                auto& dname = domain_dims.getDimName(j);
+
+                // Number of factors.
+                auto sz = facts.size();
+
+                // Set first number of options 1 because it will be
+                // calculated based on the other values, i.e., we don't need
+                // to search over first dim.  Also don't need to search any
+                // specified value.
+                if (j == 0 || opts->_num_ranks[j])
+                    sz = 1;
+                
+                combos.addDimBack(dname, sz);
+            }
+            TRACE_MSG("setupRank(): checking " << combos.product() << " rank layouts");
+            combos.visitAllPoints
+                ([&](const IdxTuple& combo, size_t idx)->bool {
+
+                     // Make tuple w/factors at given indices.
+                     auto num_ranks = combo.mapElements([&](idx_t in) {
+                                                            return facts.at(in);
+                                                        });
+
+                     // Override with specified values.
+                     DOMAIN_VAR_LOOP(i, j) {
+                         if (opts->_num_ranks[j])
+                             num_ranks[j] = opts->_num_ranks[j];
+                         else if (j == 0)
+                             num_ranks[j] = -1; // -1 => needs to be calculated.
+                     }
+
+                     // Replace first factor with computed value if not set.
+                     if (num_ranks[0] == -1) {
+                         num_ranks[0] = 1;
+                         num_ranks[0] = nr / num_ranks.product();
+                     }
+
+                     // Valid?
+                     if (num_ranks.product() == nr) {
+                         TRACE_MSG("  valid layout " << num_ranks.makeDimValStr(" * ") <<
+                                   " has max size " << num_ranks.max());
+
+                         // Best so far?
+                         // Layout is better if max size is smaller.
+                         if (best.size() == 0 ||
+                             num_ranks.max() < best.max())
+                             best = num_ranks;
+                     }
+                     
+                     return true; // keep looking.
+                 });
+            assert(best.size());
+            assert(best.product());
+            TRACE_MSG("  layout " << best.makeDimValStr(" * ") << " selected");
+            opts->_num_ranks = best;
+        }
 
         // Check ranks.
         idx_t req_ranks = opts->_num_ranks.product();
-        if (req_ranks != env->num_ranks) {
+        if (req_ranks != nr)
             FORMAT_AND_THROW_YASK_EXCEPTION("error: " << req_ranks << " rank(s) requested (" +
                                             opts->_num_ranks.makeDimValStr(" * ") + "), but " <<
-                                            env->num_ranks << " rank(s) are active");
-        }
-
-        // All ranks should have the same settings for using shm.
-        assertEqualityOverRanks(idx_t(opts->use_shm), env->comm, "use_shm");
+                                            nr << " rank(s) are active");
 
         // Determine my coordinates if not provided already.
         // TODO: do this more intelligently based on proximity.
         if (opts->find_loc)
             opts->_rank_indices = opts->_num_ranks.unlayout(me);
 
-        // A table of rank-coordinates for everyone.
-        idx_t coords[env->num_ranks][nddims];
-
-        // Init offsets and total sizes.
-        rank_domain_offsets.setValsSame(0);
-        overall_domain_sizes.setValsSame(0);
-
-        // Init coords for this rank.
-        for (int i = 0; i < nddims; i++)
-            coords[me][i] = opts->_rank_indices[i];
-
-        // A table of rank-domain sizes for everyone.
-        idx_t rsizes[env->num_ranks][nddims];
-
-        // Init sizes for this rank.
+        // Check rank indices.
         DOMAIN_VAR_LOOP(i, j) {
-            auto rsz = opts->_rank_sizes[i];
-            rsizes[me][j] = rsz;
-            overall_domain_sizes[j] = rsz;
+            auto& dname = domain_dims.getDimName(j);
+            if (opts->_rank_indices[j] < 0 ||
+                opts->_rank_indices[j] >= opts->_num_ranks[j])
+                THROW_YASK_EXCEPTION("Error: rank index of " +
+                                     to_string(opts->_rank_indices[j]) +
+                                     " is not within allowed range [0 ... " +
+                                     to_string(opts->_num_ranks[j] - 1) +
+                                     "] in '" + dname + "' dimension on rank " +
+                                     to_string(me));
         }
+        
+        // Init starting indices for this rank.
+        rank_domain_offsets.setValsSame(0);
 
-#ifdef USE_MPI
-        // Exchange coord and size info between all ranks.
-        for (int rn = 0; rn < env->num_ranks; rn++) {
-            MPI_Bcast(&coords[rn][0], nddims, MPI_INTEGER8,
-                      rn, env->comm);
-            MPI_Bcast(&rsizes[rn][0], nddims, MPI_INTEGER8,
-                      rn, env->comm);
-        }
-        // Now, the tables are filled in for all ranks.
+        // Tables to share data across ranks.
+        idx_t coords[nr][nddims]; // rank indices.
+        idx_t rsizes[nr][nddims]; // rank sizes.
 
-        // Loop over all ranks, including myself.
-        for (int rn = 0; rn < env->num_ranks; rn++) {
+        // Two passes over ranks:
+        // 0: sum all specified local sizes.
+        // 1: set final sums and offsets.
+        for (int pass : { 0, 1 }) {
 
-            // Coord offset of rn from me: prev => negative, self => 0, next => positive.
-            IdxTuple rcoords(domain_dims);
-            IdxTuple rdeltas(domain_dims);
-            for (int di = 0; di < nddims; di++) {
-                rcoords[di] = coords[rn][di];
-                rdeltas[di] = coords[rn][di] - opts->_rank_indices[di];
+            // Init rank-size sums.
+            IdxTuple rank_domain_sums(domain_dims);
+            rank_domain_sums.setValsSame(0);
+
+            // Init tables for this rank.
+            DOMAIN_VAR_LOOP(i, j) {
+                coords[me][j] = opts->_rank_indices[j];
+                rsizes[me][j] = opts->_rank_sizes[i];
             }
 
-            // Manhattan distance from rn (sum of abs deltas in all dims).
-            // Max distance in any dim.
-            int mandist = 0;
-            int maxdist = 0;
-            for (int di = 0; di < nddims; di++) {
-                mandist += abs(rdeltas[di]);
-                maxdist = max(maxdist, abs(int(rdeltas[di])));
+            // Exchange coord and size info between all ranks.
+            for (int rn = 0; rn < nr; rn++) {
+                MPI_Bcast(&coords[rn][0], nddims, MPI_INTEGER8,
+                          rn, env->comm);
+                MPI_Bcast(&rsizes[rn][0], nddims, MPI_INTEGER8,
+                          rn, env->comm);
             }
+            // Now, the tables are filled in for all ranks.
+            // Some rank sizes may be zero on the 1st pass,
+            // but they should all be non-zero on 2nd pass.
+            
+            // Loop over all ranks, including myself.
+            int num_neighbors = 0;
+            for (int rn = 0; rn < nr; rn++) {
 
-            // Myself.
-            if (rn == me) {
-                if (mandist != 0)
-                    FORMAT_AND_THROW_YASK_EXCEPTION
-                        ("Internal error: distance to own rank == " << mandist);
-            }
-
-            // Someone else.
-            else {
-                if (mandist == 0)
-                    FORMAT_AND_THROW_YASK_EXCEPTION
-                        ("Error: ranks " << me <<
-                         " and " << rn << " at same coordinates");
-            }
-
-            // Loop through domain dims.
-            for (int di = 0; di < nddims; di++) {
-                auto& dname = opts->_rank_indices.getDimName(di);
-
-                // Is rank 'rn' in-line with my rank in 'dname' dim?
-                // True when deltas in other dims are zero.
-                bool is_inline = true;
-                for (int dj = 0; dj < nddims; dj++) {
-                    if (di != dj && rdeltas[dj] != 0) {
-                        is_inline = false;
-                        break;
-                    }
+                // Coord offset of rn from me: prev => negative, self => 0, next => positive.
+                IdxTuple rcoords(domain_dims);
+                IdxTuple rdeltas(domain_dims);
+                DOMAIN_VAR_LOOP(i, di) {
+                    rcoords[di] = coords[rn][di];
+                    rdeltas[di] = coords[rn][di] - coords[me][di];
                 }
 
-                // Process ranks that are in-line in 'dname', including self.
-                if (is_inline) {
+                // Manhattan distance from rn (sum of abs deltas in all dims).
+                // Max distance in any dim.
+                int mandist = 0;
+                int maxdist = 0;
+                DOMAIN_VAR_LOOP(i, di) {
+                    mandist += abs(rdeltas[di]);
+                    maxdist = max(maxdist, abs(int(rdeltas[di])));
+                }
 
-                    // Accumulate total problem size in each dim for ranks that
-                    // intersect with this rank, not including myself.
-                    if (rn != me)
-                        overall_domain_sizes[dname] += rsizes[rn][di];
-
-                    // Adjust my offset in the global problem by adding all domain
-                    // sizes from prev ranks only.
-                    if (rdeltas[di] < 0)
-                        rank_domain_offsets[dname] += rsizes[rn][di];
-
-                    // Make sure all the other dims are the same size.
-                    // This ensures that all the ranks' domains line up
-                    // properly along their edges and at their corners.
-                    for (int dj = 0; dj < nddims; dj++) {
-                        if (di != dj) {
-                            auto mysz = rsizes[me][dj];
-                            auto rnsz = rsizes[rn][dj];
-                            if (mysz != rnsz) {
-                                auto& dnamej = opts->_rank_indices.getDimName(dj);
-                                FORMAT_AND_THROW_YASK_EXCEPTION
-                                    ("Error: rank " << rn << " and " << me <<
-                                     " are both at rank-index " << coords[me][di] <<
-                                     " in the '" << dname <<
-                                     "' dimension , but their rank-domain sizes are " <<
-                                     rnsz << " and " << mysz <<
-                                     " (resp.) in the '" << dj <<
-                                     "' dimension, making them unaligned");
-                            }
-                        }
-                    }
-                } // is inline w/me.
-            } // dims.
-
-            // Rank rn is myself or my immediate neighbor if its distance <= 1 in
-            // every dim.  Assume we do not need to exchange halos except
-            // with immediate neighbor. We enforce this assumption below by
-            // making sure that the rank domain size is at least as big as the
-            // largest halo.
-            if (maxdist <= 1) {
-
-                // At this point, rdeltas contains only -1..+1 for each domain dim.
-                // Add one to -1..+1 to get 0..2 range for my_neighbors offsets.
-                IdxTuple roffsets = rdeltas.addElements(1);
-                assert(rdeltas.min() >= -1);
-                assert(rdeltas.max() <= 1);
-                assert(roffsets.min() >= 0);
-                assert(roffsets.max() <= 2);
-
-                // Convert the offsets into a 1D index.
-                auto rn_ofs = mpiInfo->getNeighborIndex(roffsets);
-                TRACE_MSG("neighborhood size = " << mpiInfo->neighborhood_sizes.makeDimValStr() <<
-                          " & roffsets of rank " << rn << " = " << roffsets.makeDimValStr() <<
-                          " => " << rn_ofs);
-                assert(idx_t(rn_ofs) < mpiInfo->neighborhood_size);
-
-                // Save rank of this neighbor into the MPI info object.
-                mpiInfo->my_neighbors.at(rn_ofs) = rn;
+                // Myself.
                 if (rn == me) {
-                    assert(mpiInfo->my_neighbor_index == rn_ofs);
-                    mpiInfo->shm_ranks.at(rn_ofs) = env->my_shm_rank;
+                    if (mandist != 0)
+                        FORMAT_AND_THROW_YASK_EXCEPTION
+                            ("Internal error: distance to own rank == " << mandist);
                 }
+
+                // Someone else.
                 else {
-                    num_neighbors++;
-                    os << "Neighbor #" << num_neighbors << " is MPI rank " << rn <<
-                        " at absolute rank indices " << rcoords.makeDimValStr() <<
-                        " (" << rdeltas.makeDimValOffsetStr() << " relative to rank " <<
-                        me << ")";
-
-                    // Determine whether neighbor is in my shm group.
-                    // If so, record rank number in shmcomm.
-                    if (opts->use_shm && env->shm_comm != MPI_COMM_NULL) {
-                        int g_rank = rn;
-                        int s_rank = MPI_PROC_NULL;
-                        MPI_Group_translate_ranks(env->group, 1, &g_rank,
-                                                  env->shm_group, &s_rank);
-                        if (s_rank != MPI_UNDEFINED) {
-                            mpiInfo->shm_ranks.at(rn_ofs) = s_rank;
-                            os << " and is MPI shared-memory rank " << s_rank;
-                        } else {
-                            os << " and will not use shared-memory";
-                        }
-                    }
-                    os << ".\n";
+                    if (mandist == 0)
+                        FORMAT_AND_THROW_YASK_EXCEPTION
+                            ("Error: ranks " << me <<
+                             " and " << rn << " at same coordinates");
                 }
-
-                // Save manhattan dist.
-                mpiInfo->man_dists.at(rn_ofs) = mandist;
 
                 // Loop through domain dims.
-                bool vlen_mults = true;
-                DOMAIN_VAR_LOOP(i, j) {
+                DOMAIN_VAR_LOOP(i, di) {
+                    auto& dname = domain_dims.getDimName(di);
 
-                    // Does rn have all VLEN-multiple sizes?
-                    auto rnsz = rsizes[rn][j];
-                    auto vlen = fold_pts[j];
-                    if (rnsz % vlen != 0) {
-                        auto& dname = opts->_rank_indices.getDimName(j);
-                        TRACE_MSG("cannot use vector halo exchange with rank " << rn <<
-                                  " because its size in '" << dname << "' is " << rnsz);
-                        vlen_mults = false;
+                    // Is rank 'rn' in-line with my rank in 'dname' dim?
+                    // True when deltas in all other dims are zero.
+                    bool is_inline = true;
+                    DOMAIN_VAR_LOOP(j, dj) {
+                        if (di != dj && rdeltas[dj] != 0) {
+                            is_inline = false;
+                            break;
+                        }
+                    }
+
+                    // Process this rank if it is in-line with me in 'dname', including myself.
+                    if (is_inline) {
+
+                        // Sum rank sizes in this dim.
+                        rank_domain_sums[di] += rsizes[rn][di];
+
+                        if (pass == 1) {
+
+                            // Make sure all the other dims are the same size.
+                            // This ensures that all the ranks' domains line up
+                            // properly along their edges and at their corners.
+                            DOMAIN_VAR_LOOP(j, dj) {
+                                if (di != dj) {
+                                    auto& dnamej = domain_dims.getDimName(dj);
+                                    auto mysz = rsizes[me][dj];
+                                    auto rnsz = rsizes[rn][dj];
+                                    if (mysz != rnsz) {
+                                        FORMAT_AND_THROW_YASK_EXCEPTION
+                                            ("Error: rank " << rn << " and " << me <<
+                                             " are both at rank-index " << coords[me][di] <<
+                                             " in the '" << dname <<
+                                             "' dimension, but their local-domain sizes are " <<
+                                             rnsz << " and " << mysz <<
+                                             " (resp.) in the '" << dnamej <<
+                                             "' dimension, making them unaligned");
+                                    }
+                                }
+                            }
+
+                            // Adjust my offset in the global problem by adding all domain
+                            // sizes from prev ranks only.
+                            if (rdeltas[di] < 0)
+                                rank_domain_offsets[dname] += rsizes[rn][di];
+
+                        } // 2nd pass.
+                    } // is inline w/me.
+                } // dims.
+
+                // Rank rn is myself or my immediate neighbor if its distance <= 1 in
+                // every dim.  Assume we do not need to exchange halos except
+                // with immediate neighbor. We enforce this assumption below by
+                // making sure that the rank domain size is at least as big as the
+                // largest halo.
+                if (pass == 1 && maxdist <= 1) {
+
+                    // At this point, rdeltas contains only -1..+1 for each domain dim.
+                    // Add one to -1..+1 to get 0..2 range for my_neighbors offsets.
+                    IdxTuple roffsets = rdeltas.addElements(1);
+                    assert(rdeltas.min() >= -1);
+                    assert(rdeltas.max() <= 1);
+                    assert(roffsets.min() >= 0);
+                    assert(roffsets.max() <= 2);
+
+                    // Convert the offsets into a 1D index.
+                    auto rn_ofs = mpiInfo->getNeighborIndex(roffsets);
+                    TRACE_MSG("neighborhood size = " << mpiInfo->neighborhood_sizes.makeDimValStr() <<
+                              " & roffsets of rank " << rn << " = " << roffsets.makeDimValStr() <<
+                              " => " << rn_ofs);
+                    assert(idx_t(rn_ofs) < mpiInfo->neighborhood_size);
+
+                    // Save rank of this neighbor into the MPI info object.
+                    mpiInfo->my_neighbors.at(rn_ofs) = rn;
+                    if (rn == me) {
+                        assert(mpiInfo->my_neighbor_index == rn_ofs);
+                        mpiInfo->shm_ranks.at(rn_ofs) = env->my_shm_rank;
+                    }
+                    else {
+                        num_neighbors++;
+                        os << "Neighbor #" << num_neighbors << " is MPI rank " << rn <<
+                            " at absolute rank indices " << rcoords.makeDimValStr() <<
+                            " (" << rdeltas.makeDimValOffsetStr() << " relative to rank " <<
+                            me << ")";
+
+                        // Determine whether neighbor is in my shm group.
+                        // If so, record rank number in shmcomm.
+                        if (opts->use_shm && env->shm_comm != MPI_COMM_NULL) {
+                            int g_rank = rn;
+                            int s_rank = MPI_PROC_NULL;
+                            MPI_Group_translate_ranks(env->group, 1, &g_rank,
+                                                      env->shm_group, &s_rank);
+                            if (s_rank != MPI_UNDEFINED) {
+                                mpiInfo->shm_ranks.at(rn_ofs) = s_rank;
+                                os << " and is MPI shared-memory rank " << s_rank;
+                            } else {
+                                os << " and will not use shared-memory";
+                            }
+                        }
+                        os << ".\n";
+                    }
+
+                    // Save manhattan dist.
+                    mpiInfo->man_dists.at(rn_ofs) = mandist;
+
+                    // Loop through domain dims.
+                    bool vlen_mults = true;
+                    DOMAIN_VAR_LOOP(i, j) {
+                        auto& dname = domain_dims.getDimName(j);
+                        auto nranks = opts->_num_ranks[j];
+                        bool is_last = (opts->_rank_indices[j] == nranks - 1);
+
+                        // Does rn have all VLEN-multiple sizes?
+                        // TODO: allow last rank in each dim to be non-conformant.
+                        auto rnsz = rsizes[rn][j];
+                        auto vlen = fold_pts[j];
+                        if (rnsz % vlen != 0) {
+                            TRACE_MSG("cannot use vector halo exchange with rank " << rn <<
+                                      " because its size in '" << dname << "' is " << rnsz);
+                            vlen_mults = false;
+                        }
+                    }
+
+                    // Save vec-mult flag.
+                    mpiInfo->has_all_vlen_mults.at(rn_ofs) = vlen_mults;
+
+                } // self or immediate neighbor in any direction.
+            } // ranks.
+
+            // At end of 1st pass, known ranks sizes have
+            // been summed in each dim. Determine global size
+            // or other rank sizes for each dim.
+            if (pass == 0) {
+                DOMAIN_VAR_LOOP(i, j) {
+                    auto& dname = domain_dims.getDimName(j);
+                    auto nranks = opts->_num_ranks[j];
+                    auto gsz = opts->_global_sizes[i];
+                    bool is_last = (opts->_rank_indices[j] == nranks - 1);
+
+                    // Need to determine my rank size.
+                    if (!opts->_rank_sizes[i]) {
+                        if (rank_domain_sums[j] != 0)
+                            FORMAT_AND_THROW_YASK_EXCEPTION
+                                ("Error: local-domain size is not specified in the '" <<
+                                 dname << "' dimension on rank " << me <<
+                                 ", but it is specified on another rank; "
+                                 "it must be specified or unspecified consistently across all ranks");
+
+                        // Divide sum by num of ranks in this dim.
+                        auto rsz = CEIL_DIV(gsz, nranks);
+                        
+                        // Round up to whole vector-clusters.
+                        rsz = ROUND_UP(rsz, dims->_cluster_pts[j]);
+
+                        // Remainder for last rank.
+                        auto rem = gsz - (rsz * (nranks - 1));
+                        if (rem <= 0)
+                            FORMAT_AND_THROW_YASK_EXCEPTION
+                                ("Error: global-domain size of " << gsz <<
+                                 " is not large enough to split across " << nranks <<
+                                 " ranks in the '" << dname << "' dimension");
+                        if (is_last)
+                            rsz = rem;
+
+                        // Set rank size depending on whether it is last one.
+                        opts->_rank_sizes[i] = rsz;
+                        TRACE_MSG("local-domain-size[" << dname << "] = " << rem);
+                    }
+
+                    // Need to determine global size.
+                    // Set it to sum of rank sizes.
+                    else if (!opts->_global_sizes[i])
+                        opts->_global_sizes[i] = rank_domain_sums[j];
+                }
+            }
+
+            // After 2nd pass, check for consistency.
+            else {
+                DOMAIN_VAR_LOOP(i, j) {
+                    auto& dname = domain_dims.getDimName(j);
+                    if (opts->_global_sizes[i] != rank_domain_sums[j]) {
+                        FORMAT_AND_THROW_YASK_EXCEPTION("Error: sum of local-domain sizes across " <<
+                                                        nr << " ranks is " <<
+                                                        rank_domain_sums[j] <<
+                                                        ", which does not equal global-domain size of " <<
+                                                        opts->_global_sizes[i] << " in '" << dname <<
+                                                        "' dimension");
                     }
                 }
+            }
 
-                // Save vec-mult flag.
-                mpiInfo->has_all_vlen_mults.at(rn_ofs) = vlen_mults;
-
-            } // self or immediate neighbor in any direction.
-
-        } // ranks.
+        } // passes.
 #endif
-
-        // Set offsets in grids and find WF extensions
-        // based on the grids' halos.
-        update_grid_info();
-
-        // Determine bounding-boxes for all bundles.
-        // This must be done after finding WF extensions.
-        find_bounding_boxes();
 
     } // setupRank().
 
@@ -318,6 +513,7 @@ namespace yask {
     // This should be called anytime a setting or rank offset is changed.
     void StencilContext::update_grid_info() {
         STATE_VARS(this);
+        TRACE_MSG("update_grid_info()...");
 
         // If we haven't finished constructing the context, it's too early
         // to do this.
@@ -382,7 +578,7 @@ namespace yask {
         assert(num_wf_shifts >= 0);
 
         // Determine whether separate tuners can be used.
-        state->_use_pack_tuners = (tb_steps == 0) && (stPacks.size() > 1);
+        state->_use_pack_tuners = opts->_allow_pack_tuners && (tb_steps == 0) && (stPacks.size() > 1);
 
         // Calculate angles and related settings.
         for (auto& dim : domain_dims.getDims()) {
@@ -392,7 +588,6 @@ namespace yask {
             auto nranks = opts->_num_ranks[dname];
 
             // Req'd shift in this dim based on max halos.
-            // TODO: use different angle for L & R side of each pack.
             idx_t angle = ROUND_UP(max_halos[dname], dims->_fold_pts[dname]);
             
             // Determine the spatial skewing angles for WF tiling.  We
@@ -415,9 +610,10 @@ namespace yask {
             // when there are multiple ranks?
             auto min_size = max_halos[dname] + shifts;
             if (opts->_num_ranks[dname] > 1 && rksize < min_size) {
-                FORMAT_AND_THROW_YASK_EXCEPTION("Error: rank-domain size of " << rksize << " in '" <<
-                                                dname << "' dim is less than minimum size of " << min_size <<
-                                                ", which is based on stencil halos and temporal wave-front sizes");
+                FORMAT_AND_THROW_YASK_EXCEPTION
+                    ("Error: local-domain size of " << rksize << " in '" <<
+                     dname << "' dim is less than minimum size of " << min_size <<
+                     ", which is based on stencil halos and temporal wave-front sizes");
             }
 
             // If there is another rank to the left, set wave-front
@@ -465,6 +661,7 @@ namespace yask {
     // all packs always done.
     void StencilContext::update_tb_info() {
         STATE_VARS(this);
+        TRACE_MSG("update_tb_info()...");
 
         // Get requested size.
         tb_steps = opts->_block_sizes[step_dim];

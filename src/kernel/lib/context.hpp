@@ -170,7 +170,7 @@ namespace yask {
     public:
 
         // Name.
-        std::string name;
+        std::string name, long_name;
 
         // BB without any extensions for wave-fronts.
         // This is the BB for the domain in this rank only.
@@ -231,7 +231,6 @@ namespace yask {
 
         // Some calculated sizes for this rank and overall.
         IdxTuple rank_domain_offsets;       // Domain index offsets for this rank.
-        IdxTuple overall_domain_sizes;       // Total of rank domains over all ranks.
         idx_t rank_nbytes=0, tot_nbytes=0;
         idx_t rank_domain_pts=0, tot_domain_pts=0;
 
@@ -340,12 +339,15 @@ namespace yask {
         // Print lots of stats.
         virtual void prepare_solution();
 
+        // Init perf stats.
+        virtual void init_stats();
+
         // Reset any locks, etc.
         virtual void reset_locks();
 
         // Print info about the soln.
-        virtual void print_info();
-        virtual void print_temporal_tiling_info();
+        virtual void print_temporal_tiling_info() const;
+        virtual void print_warnings() const;
 
         /// Get statistics associated with preceding calls to run_solution().
         virtual yk_stats_ptr get_stats();
@@ -491,6 +493,9 @@ namespace yask {
         virtual const std::string& get_name() const {
             return name;
         }
+        virtual const std::string& get_description() const {
+            return long_name;
+        }
         virtual void set_debug_output(yask_output_ptr debug) {
             KernelStateBase::set_debug_output(debug);
         }
@@ -565,7 +570,6 @@ namespace yask {
 
         virtual idx_t get_first_rank_domain_index(const std::string& dim) const;
         virtual idx_t get_last_rank_domain_index(const std::string& dim) const;
-        virtual idx_t get_overall_domain_size(const std::string& dim) const;
 
         virtual void run_solution(idx_t first_step_index,
                                   idx_t last_step_index);
@@ -575,12 +579,14 @@ namespace yask {
         virtual void share_grid_storage(yk_solution_ptr source);
 
         // APIs that access settings.
+        virtual void set_overall_domain_size(const std::string& dim, idx_t size);
         virtual void set_rank_domain_size(const std::string& dim, idx_t size);
         virtual void set_min_pad_size(const std::string& dim, idx_t size);
         virtual void set_block_size(const std::string& dim, idx_t size);
         virtual void set_region_size(const std::string& dim, idx_t size);
         virtual void set_num_ranks(const std::string& dim, idx_t size);
         virtual void set_rank_index(const std::string& dim, idx_t size);
+        virtual idx_t get_overall_domain_size(const std::string& dim) const;
         virtual idx_t get_rank_domain_size(const std::string& dim) const;
         virtual idx_t get_min_pad_size(const std::string& dim) const;
         virtual idx_t get_block_size(const std::string& dim) const;

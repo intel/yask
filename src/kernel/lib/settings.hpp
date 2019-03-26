@@ -449,10 +449,10 @@ namespace yask {
     protected:
 
         // Default sizes.
-        idx_t def_rank = 128;
-        idx_t def_block = 32;
+        idx_t def_block = 32;   // TODO: calculate this.
 
         // Make a null output stream.
+        // TODO: put this somewhere else.
         yask_output_factory yof;
         yask_output_ptr nullop = yof.new_null_output();
 
@@ -462,6 +462,7 @@ namespace yask {
         DimsPtr _dims;
 
         // Sizes in elements (points).
+        IdxTuple _global_sizes;     // Overall problem domain sizes.
         IdxTuple _rank_sizes;     // This rank's domain sizes.
         IdxTuple _region_sizes;   // region size (used for wave-front tiling).
         IdxTuple _block_group_sizes; // block-group size (only used for 'grouped' region loops).
@@ -470,8 +471,8 @@ namespace yask {
         IdxTuple _mini_block_sizes;       // mini-block size (used for wave-fronts in blocks).
         IdxTuple _sub_block_group_sizes; // sub-block-group size (only used for 'grouped' mini-block loops).
         IdxTuple _sub_block_sizes;       // sub-block size (used for each nested thread).
-        IdxTuple _min_pad_sizes;         // minimum spatial padding.
-        IdxTuple _extra_pad_sizes;       // extra spatial padding.
+        IdxTuple _min_pad_sizes;         // minimum spatial padding (including halos).
+        IdxTuple _extra_pad_sizes;       // extra spatial padding (outside of halos).
 
         // MPI settings.
         IdxTuple _num_ranks;       // number of ranks in each dim.
@@ -494,9 +495,11 @@ namespace yask {
         // Tuning.
         bool _do_auto_tune = false;    // whether to do auto-tuning.
         bool _tune_mini_blks = false; // auto-tune mini-blks instead of blks.
+        bool _allow_pack_tuners = false; // allow per-pack tuners when possible.
         
         // Debug.
         bool force_scalar = false; // Do only scalar ops.
+        bool _trace = false;       // Print verbose tracing.
 
         // Prefetch distances.
         // Prefetching must be enabled via YASK_PREFETCH_L[12] macros.
@@ -670,90 +673,22 @@ namespace yask {
         // Set number of threads w/o using thread-divisor.
         // Return number of threads.
         // Do nothing and return 0 if not properly initialized.
-        int set_max_threads() {
-            STATE_VARS(this);
-
-            // Get max number of threads.
-            int mt = std::max(opts->max_threads, 1);
-
-            // Reset number of OMP threads to max allowed.
-            omp_set_num_threads(mt);
-            return mt;
-        }
+        int set_max_threads();
 
         // Get total number of computation threads to use.
-        int get_num_comp_threads(int& region_threads, int& blk_threads) const {
-            STATE_VARS(this);
-
-            // Max threads / divisor.
-            int mt = std::max(opts->max_threads, 1);
-            int td = std::max(opts->thread_divisor, 1);
-            int at = mt / td;
-            at = std::max(at, 1);
-
-            // Blk threads per region thread.
-            int bt = std::max(opts->num_block_threads, 1);
-            bt = std::min(bt, at); // Cannot be > 'at'.
-            blk_threads = bt;
-
-            // Region threads.
-            int rt = at / bt;
-            rt = std::max(rt, 1);
-            region_threads = rt;
-
-            // Total number of block threads.
-            return bt * rt;
-        }
+        int get_num_comp_threads(int& region_threads, int& blk_threads) const;
         
-        // Set number of threads to use for something other than a region.
-        // Return number of threads.
-        // Do nothing and return 0 if not properly initialized.
-        int set_all_threads() {
-            int rt, bt;
-            int at = get_num_comp_threads(rt, bt);
-            omp_set_num_threads(at);
-            return at;
-        }
-
         // Set number of threads to use for a region.
         // Enable nested OMP if there are >1 block threads,
         // disable otherwise.
         // Return number of threads.
         // Do nothing and return 0 if not properly initialized.
-        int set_region_threads() {
-            int rt, bt;
-            int at = get_num_comp_threads(rt, bt);
-
-            // Limit outer nesting to allow num_block_threads per nested
-            // block loop.
-            yask_num_threads[0] = rt;
-
-            if (bt > 1) {
-                omp_set_nested(1);
-                omp_set_max_active_levels(2);
-                yask_num_threads[1] = bt;
-            }
-            else {
-                omp_set_nested(0);
-                omp_set_max_active_levels(1);
-                yask_num_threads[1] = 0;
-            }
-
-            omp_set_num_threads(rt);
-            return rt;
-        }
+        int set_region_threads();
 
         // Set number of threads for a block.
         // Return number of threads.
         // Do nothing and return 0 if not properly initialized.
-        int set_block_threads() {
-            int rt, bt;
-            int at = get_num_comp_threads(rt, bt);
-
-            if (omp_get_max_active_levels() > 1)
-                omp_set_num_threads(bt);
-            return bt;
-        }
+        int set_block_threads();
 
     };
 

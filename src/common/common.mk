@@ -70,6 +70,9 @@ PERL		:=	perl
 MKDIR		:=	mkdir -p -v
 BASH		:=	bash
 
+# Options to avoid warnings when compiling SWIG-generated code.
+SWIG_CXXFLAGS	:=	-Wno-class-memaccess -Wno-stringop-overflow -Wno-stringop-truncation
+
 # Find include path needed for python interface.
 # NB: constructing string inside print() to work for python 2 or 3.
 PYINC		:= 	$(addprefix -I,$(shell $(PYTHON) -c 'import distutils.sysconfig; print(distutils.sysconfig.get_python_inc() + " " + distutils.sysconfig.get_python_inc(plat_specific=1))'))

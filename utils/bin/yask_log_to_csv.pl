@@ -36,7 +36,8 @@ use POSIX;
 
 if (!@ARGV) {
   die "Usage: $0 <log file(s) from yask.sh>\n".
-    "CSV output is written to STDOUT.\n";
+    "CSV output is written to STDOUT.\n".
+    "Follow command with '| sort -t, -g' to sort output by performance.\n";
 }
 
 my $outFH = new FileHandle;

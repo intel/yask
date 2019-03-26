@@ -221,9 +221,9 @@ namespace yask {
         _mpiInfo->visitNeighbors
             ([&](const IdxTuple& neigh_offsets, int neigh_rank, int i) {
 
-                if (neigh_rank != MPI_PROC_NULL)
-                    visitor(neigh_offsets, neigh_rank, i, bufs[i]);
-            });
+                 if (neigh_rank != MPI_PROC_NULL)
+                     visitor(neigh_offsets, neigh_rank, i, bufs[i]);
+             });
     }
 
     // Access a buffer by direction and neighbor offsets.
@@ -240,31 +240,33 @@ namespace yask {
         auto& step_dim = dims->_step_dim;
 
         // Use both step and domain dims for all size tuples.
+        _global_sizes = dims->_stencil_dims;
+        _global_sizes.setValsSame(0); // 0 => calc from rank.
+
         _rank_sizes = dims->_stencil_dims;
-        _rank_sizes.setValsSame(def_rank);             // size of rank.
-        _rank_sizes.setVal(step_dim, 0);        // not used.
+        _rank_sizes.setValsSame(0); // 0 => calc from global.
 
         _region_sizes = dims->_stencil_dims;
-        _region_sizes.setValsSame(0);          // 0 => default settings.
+        _region_sizes.setValsSame(0);   // 0 => rank size.
 
         _block_group_sizes = dims->_stencil_dims;
         _block_group_sizes.setValsSame(0); // 0 => min size.
 
         _block_sizes = dims->_stencil_dims;
-        _block_sizes.setValsSame(def_block); // size of block.
+        _block_sizes.setValsSame(def_block); // size of block. TODO: calculate good value.
         _block_sizes.setVal(step_dim, 0); // 0 => default.
 
         _mini_block_group_sizes = dims->_stencil_dims;
         _mini_block_group_sizes.setValsSame(0); // 0 => min size.
 
         _mini_block_sizes = dims->_stencil_dims;
-        _mini_block_sizes.setValsSame(0);            // 0 => default settings.
+        _mini_block_sizes.setValsSame(0);            // 0 => calc from block.
 
         _sub_block_group_sizes = dims->_stencil_dims;
         _sub_block_group_sizes.setValsSame(0); // 0 => min size.
 
         _sub_block_sizes = dims->_stencil_dims;
-        _sub_block_sizes.setValsSame(0);            // 0 => default settings.
+        _sub_block_sizes.setValsSame(0);            // 0 => calc from mini-block.
 
         _min_pad_sizes = dims->_stencil_dims;
         _min_pad_sizes.setValsSame(0);
@@ -274,7 +276,7 @@ namespace yask {
 
         // Use only domain dims for MPI tuples.
         _num_ranks = dims->_domain_dims;
-        _num_ranks.setValsSame(1);
+        _num_ranks.setValsSame(0); // 0 => set using heuristic.
 
         _rank_indices = dims->_domain_dims;
         _rank_indices.setValsSame(0);
@@ -310,16 +312,29 @@ namespace yask {
         }
 
         // Option for setting all domain dims.
+        auto shortcut = prefix;
+        if (shortcut.back() == '_')
+            shortcut.pop_back();
         parser.add_option(new CommandLineParser::MultiIdxOption
-                          (prefix,
-                           "Shorthand for" + multi_help,
+                          (shortcut,
+                           "Shortcut for" + multi_help,
                            multi_vars));
     }
 
     // Add these settigns to a cmd-line parser.
     void KernelSettings::add_options(CommandLineParser& parser)
     {
-        _add_domain_option(parser, "d", "Rank-domain size", _rank_sizes);
+        // Following options are in the 'yask' namespace, i.e., no object.
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("print_suffixes",
+                           "Format output with suffixes for human readibility, e.g., 6.15K, 12.3GiB, 7.45m."
+                           " If disabled, prints without suffixes for computer parsing, e.g., 6150, 1.23e+10, 7.45e-3.",
+                           yask::is_suffix_print_enabled));
+
+        // Following options are in 'this' object.
+        _add_domain_option(parser, "g", "Global-domain (overall-problem) size", _global_sizes);
+        _add_domain_option(parser, "l", "Local-domain (rank) size", _rank_sizes);
+        _add_domain_option(parser, "d", "Alias for local-domain size (deprecated)", _rank_sizes);
         _add_domain_option(parser, "r", "Region size", _region_sizes, true);
         _add_domain_option(parser, "b", "Block size", _block_sizes, true);
         _add_domain_option(parser, "mb", "Mini-block size", _mini_block_sizes);
@@ -350,6 +365,12 @@ namespace yask {
                           ("min_exterior",
                            "Minimum width of MPI exterior section to compute before starting MPI communication.",
                            _min_exterior));
+#endif
+#ifdef TRACE
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("trace",
+                           "Print internal debug messages.",
+                           _trace));
 #endif
         parser.add_option(new CommandLineParser::BoolOption
                           ("force_scalar",
@@ -415,14 +436,20 @@ namespace yask {
                            "Apply the auto-tuner to mini-block sizes instead of block sizes. "
                            "Particularly useful when using temporal block tiling.",
                            _tune_mini_blks));
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("auto_tune_each_pass",
+                           "Apply the auto-tuner separately to each stencil pack when "
+                           "those packs are applied in separate passes across the entire grid, "
+                           "i.e., when no temporal tiling is used.",
+                           _allow_pack_tuners));
     }
 
     // Print usage message.
     void KernelSettings::print_usage(ostream& os,
-                                      CommandLineParser& parser,
-                                      const string& pgmName,
-                                      const string& appNotes,
-                                      const vector<string>& appExamples) const
+                                     CommandLineParser& parser,
+                                     const string& pgmName,
+                                     const string& appNotes,
+                                     const vector<string>& appExamples) const
     {
         os << "Usage: " << pgmName << " [options]\n"
             "Options:\n";
@@ -455,14 +482,14 @@ namespace yask {
             "   then this is the unit of work for each wave-front rank tile;\n"
             "   else, there is typically only one region the size of the rank-domain.\n"
             "  Regions are evaluated sequentially within ranks.\n"
-            " A 'rank-domain' is composed of regions.\n"
+            " A 'local-domain' or 'rank-domain' is composed of regions.\n"
             "  This is the unit of work for one MPI rank.\n"
             "  Ranks are evaluated in parallel in separate MPI processes.\n"
-            " The 'overall-problem' is composed of rank-domains.\n"
+            " The 'global-domain' or 'overall-problem' is composed of local-domains.\n"
             "  This is the unit of work across all MPI ranks.\n" <<
 #ifndef USE_MPI
             "   This binary has NOT been compiled with MPI support,\n"
-            "   so the overall-problem is equivalent to the single rank-domain.\n" <<
+            "   so the global-domain is equivalent to the single local-domain.\n" <<
 #endif
             "\nGuidelines for setting tiling sizes:\n"
             " The vector and vector-cluster sizes are set at compile-time, so\n"
@@ -501,9 +528,13 @@ namespace yask {
             "  The region size in the step dimension affects how often MPI halo-exchanges occur:\n"
             "   A region size of 0 in the step dimension => exchange after every pack.\n"
             "   A region size >0 in the step dimension => exchange after that many steps.\n"
-            " Set rank-domain sizes to specify the work done on this rank.\n"
-            "  Set the domain sizes to specify the problem size for this rank.\n"
+            " Set local-domain sizes to specify the work done on this MPI rank.\n"
+            "  A local-domain size of 0 in a given domain dimension =>\n"
+            "   local-domain size is determined by the global-domain size in that dimension.\n"
             "  This and the number of grids affect the amount of memory used.\n"
+            " Set global-domain sizes to specify the work done across all MPI ranks.\n"
+            "  A global-domain size of 0 in a given domain dimension =>\n"
+            "   global-domain size is the sum of local-domain sizes in that dimension.\n"
 #ifdef SHOW_GROUPS
             " Setting 'group' sizes controls only the order of tiles.\n"
             "  These are advanced settings that are not commonly used.\n"
@@ -521,17 +552,26 @@ namespace yask {
             "  Num threads used for halo exchange is same as num per region.\n" <<
 #ifdef USE_MPI
             "\nControlling MPI scaling:\n"
-            "  To 'weak-scale' to a larger overall-problem size, use multiple MPI ranks\n"
-            "   and keep the rank-domain sizes constant.\n"
             "  To 'strong-scale' a given overall-problem size, use multiple MPI ranks\n"
-            "   and reduce the size of each rank-domain appropriately.\n" <<
+            "   and keep the global-domain sizes constant.\n"
+            "  To 'weak-scale' to a larger overall-problem size, use multiple MPI ranks\n"
+            "   and keep the local-domain sizes constant.\n" <<
 #endif
-            appNotes <<
-            "Examples for a 3D (x, y, z) over time (t) problem:\n"
-            " " << pgmName << " -d 768\n"
-            " " << pgmName << " -dx 512 -dy 256 -dz 128\n"
-            " " << pgmName << " -d 2048 -r 512 -rt 10  # temporal rank tiling.\n"
-            " " << pgmName << " -d 512 -nrx 2 -nry 1 -nrz 2   # multi-rank.\n";
+            appNotes;
+
+        // Make example knobs.
+        string ex1, ex2;
+        DOMAIN_VAR_LOOP(i, j) {
+            auto& dname = _dims->_domain_dims.getDimName(j);
+            ex1 += " -g" + dname + " " + to_string(i * 128);
+            ex2 += " -nr" + dname + " " + to_string(i + 1);
+        }
+        os <<
+            "\nExamples:\n"
+            " " << pgmName << " -g 768  # global-domain size in all dims.\n"
+            " " << pgmName << ex1 << "  # global-domain size in each dim.\n"
+            " " << pgmName << " -l 2048 -r 512 -rt 10  # local-domain size and temporal rank tiling.\n"
+            " " << pgmName << " -g 512" << ex2 << "  # number of ranks in each dim.\n";
         for (auto ae : appExamples)
             os << " " << pgmName << " " << ae << endl;
         os << flush;
@@ -610,9 +650,9 @@ namespace yask {
         // Default region size (if 0) will be size of rank-domain.
         os << "\nRegions:" << endl;
         auto nr = findNumSubsets(os, _region_sizes, "region",
-                                 _rank_sizes, "rank-domain",
+                                 _rank_sizes, "local-domain",
                                  cluster_pts, step_dim);
-        os << " num-regions-per-rank-domain-per-step: " << nr << endl;
+        os << " num-regions-per-local-domain-per-step: " << nr << endl;
         os << " Since the region size in the '" << step_dim <<
             "' dim is " << rt << ", temporal wave-front rank tiling is ";
         if (!rt) os << "NOT ";
@@ -626,7 +666,7 @@ namespace yask {
                                  _region_sizes, "region",
                                  cluster_pts, step_dim);
         os << " num-blocks-per-region-per-step: " << nb << endl;
-        os << " num-blocks-per-rank-domain-per-step: " << (nb * nr) << endl;
+        os << " num-blocks-per-local-domain-per-step: " << (nb * nr) << endl;
         os << " Since the block size in the '" << step_dim <<
             "' dim is " << bt << ", temporal blocking is ";
         if (!bt) os << "NOT ";
@@ -636,11 +676,11 @@ namespace yask {
         // Also fix up mini-block sizes as needed.
         os << "\nMini-blocks:" << endl;
         auto nmb = findNumSubsets(os, _mini_block_sizes, "mini-block",
-                                 _block_sizes, "block",
-                                 cluster_pts, step_dim);
+                                  _block_sizes, "block",
+                                  cluster_pts, step_dim);
         os << " num-mini-blocks-per-block-per-step: " << nmb << endl;
         os << " num-mini-blocks-per-region-per-step: " << (nmb * nb) << endl;
-        os << " num-mini-blocks-per-rank-domain-per-step: " << (nmb * nb * nr) << endl;
+        os << " num-mini-blocks-per-local-domain-per-step: " << (nmb * nb * nr) << endl;
         os << " Since the mini-block size in the '" << step_dim <<
             "' dim is " << mbt << ", temporal wave-front block tiling is ";
         if (!mbt) os << "NOT ";
@@ -652,8 +692,11 @@ namespace yask {
         // to entire block.
         if (num_block_threads > 1 && _sub_block_sizes.sum() == 0) {
 
-            // Look for best dim to split.
+            // Default dim is outer one.
             _bind_posn = 1;
+
+            // Look for best dim to split and bind threads to
+            // if binding is enabled.
             DOMAIN_VAR_LOOP(i, j) {
 
                 // Don't pick inner dim.
@@ -694,7 +737,7 @@ namespace yask {
         os << "\nSub-blocks:" << endl;
         auto nsb = findNumSubsets(os, _sub_block_sizes, "sub-block",
                                   _mini_block_sizes, "mini-block",
-                                 cluster_pts, step_dim);
+                                  cluster_pts, step_dim);
         os << " num-sub-blocks-per-mini-block-per-step: " << nsb << endl;
         os << " num-sub-blocks-per-block-per-step: " << (nsb * nmb) << endl;
         os << " num-sub-blocks-per-region-per-step: " << (nsb * nmb * nb) << endl;
@@ -774,8 +817,8 @@ namespace yask {
                                    _sub_block_sizes, step_dim);
         os << " num-sub-block-groups-per-mini-block-per-step: " << nsbg << endl;
         auto nsb_g = findNumSubsets(os, _sub_block_sizes, "sub-block",
-                                   _sub_block_group_sizes, "sub-block-group",
-                                   _dims->_cluster_pts, step_dim);
+                                    _sub_block_group_sizes, "sub-block-group",
+                                    _dims->_cluster_pts, step_dim);
         os << " num-sub-blocks-per-sub-block-group-per-step: " << nsb_g << endl;
 #endif
     }
@@ -813,6 +856,100 @@ namespace yask {
         assert(outer_posn == state->_outer_posn);
     }
 
+    // Set number of threads w/o using thread-divisor.
+    // Return number of threads.
+    // Do nothing and return 0 if not properly initialized.
+    int KernelStateBase::set_max_threads() {
+        STATE_VARS(this);
+
+        // Get max number of threads.
+        int mt = max(opts->max_threads, 1);
+
+        // Reset number of OMP threads to max allowed and disable nesting.
+        omp_set_num_threads(mt);
+        omp_set_nested(0);
+        omp_set_max_active_levels(1);
+        return mt;
+    }
+
+    // Get total number of computation threads to use.
+    int KernelStateBase::get_num_comp_threads(int& region_threads, int& blk_threads) const {
+        STATE_VARS(this);
+
+        // Max threads / divisor.
+        int mt = max(opts->max_threads, 1);
+        int td = max(opts->thread_divisor, 1);
+        int at = mt / td;
+        at = max(at, 1);
+
+        // Blk threads per region thread.
+        int bt = max(opts->num_block_threads, 1);
+        bt = min(bt, at); // Cannot be > 'at'.
+        blk_threads = bt;
+        assert(bt >= 1);
+
+        // Region threads.
+        int rt = at / bt;
+        rt = max(rt, 1);
+        region_threads = rt;
+        assert(rt >= 1);
+
+        // Total number of block threads.
+        // Might be less than max threads due to truncation.
+        int ct = bt * rt;
+        assert(ct <= mt);
+        return ct;
+    }
+        
+    // Set number of threads to use for a region.
+    // Enable nested OMP if there are >1 block threads,
+    // disable otherwise.
+    // Return number of threads.
+    // Do nothing and return 0 if not properly initialized.
+    int KernelStateBase::set_region_threads() {
+        int rt=0, bt=0;
+        int at = get_num_comp_threads(rt, bt);
+
+        // Limit outer nesting to allow num_block_threads per nested
+        // block loop.
+        yask_num_threads[0] = rt;
+
+        if (bt > 1) {
+            omp_set_nested(1);
+            omp_set_max_active_levels(2);
+            int mal = omp_get_max_active_levels();
+            assert (mal == 2);
+            yask_num_threads[1] = bt;
+        }
+        else {
+            assert(bt == 1);
+            omp_set_nested(0);
+            omp_set_max_active_levels(1);
+            int mal = omp_get_max_active_levels();
+            assert (mal == 1);
+            yask_num_threads[1] = 0;
+        }
+
+        omp_set_num_threads(rt);
+        return rt;
+    }
+
+    // Set number of threads for a block.
+    // Return number of threads.
+    // Do nothing and return 0 if not properly initialized.
+    int KernelStateBase::set_block_threads() {
+        int rt=0, bt=0;
+        int at = get_num_comp_threads(rt, bt);
+
+        if (bt > 1) {
+            int mal = omp_get_max_active_levels();
+            assert (mal == 2);
+            omp_set_num_threads(bt);
+        }
+        return bt;
+    }
+
+    
     // ContextLinker ctor.
     ContextLinker::ContextLinker(StencilContext* context) :
         KernelStateBase(context->get_state()),

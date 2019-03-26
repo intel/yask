@@ -25,7 +25,7 @@
 # Type 'make help' for usage.
 
 # See top-level YASK Makefile for explanation of vars commonly set via the
-#   command-line that control kernel configuration and performance.
+# command-line that control kernel configuration and performance.
 
 # Initial defaults.
 stencil			?=	iso3dfd
@@ -33,37 +33,45 @@ mpi			?=	1
 numa			?=	1
 pmem			?=	0
 real_bytes		?=	4
-radius			?=	2
 allow_new_grid_types	?=	1
+trace			?=	0
+trace_mem		?=	0
+check			?=	0
+# NB: setting the "trace" var just includes the tracing code.
+# To actually output the trace, you must also use the "-trace"
+# run-time option. Enabling tracing is off by default because
+# it adds a few MiB to the binary and can impact perfomance
+# even if not used, but only around 1%.
 
 # Determine default architecture by running kernel script w/special knob.
 # Do not assume it has been installed in $(BIN_OUT_DIR) yet.
 arch			?=	$(shell $(BASH) ./yask.sh -show_arch)
 
+# Specify YK_STENCIL and/or YK_ARCH to name binaries differently.
+YK_STENCIL	:=	$(stencil)
+YK_ARCH		:=	$(arch)
+
+# Specify YC_STENCIL to pass different stencil name to YASK compiler.
+YC_STENCIL	:=	$(stencil)
+
 # Defaults based on stencil type (and arch for some stencils).
-ifeq ($(stencil),)
+ifeq ($(YC_STENCIL),)
  $(error Stencil not specified)
 
-else ifeq ($(stencil),3axis)
+else ifeq ($(YC_STENCIL),3axis)
  MACROS		+=	MAX_EXCH_DIST=1
- radius		:=	4
 
-else ifeq ($(stencil),9axis)
+else ifeq ($(YC_STENCIL),3axis_with_diags)
  MACROS		+=	MAX_EXCH_DIST=2
- radius		:=	4
 
-else ifeq ($(stencil),3plane)
+else ifeq ($(YC_STENCIL),3plane)
  MACROS		+=	MAX_EXCH_DIST=2
- radius		:=	3
 
-else ifeq ($(stencil),cube)
+else ifeq ($(YC_STENCIL),cube)
  MACROS		+=	MAX_EXCH_DIST=3
- radius		:=	2
 
-else ifneq ($(findstring iso3dfd,$(stencil)),)
+else ifneq ($(findstring iso3dfd,$(YC_STENCIL)),)
  MACROS				+=	MAX_EXCH_DIST=1
- radius				:=	8
- def_rank_args			:=	-d 1024
  def_pad_args			:=	-ep 1
  ifeq ($(arch),knl)
   fold_4byte			:=	x=2,y=8
@@ -72,7 +80,6 @@ else ifneq ($(findstring iso3dfd,$(stencil)),)
   pfd_l1			:=	1
   pfd_l2			:=	0
  else ifneq ($(filter $(arch),hsw bdw),)
-  fold_4byte			:=	x=8
   def_thread_divisor		:=	2
   def_block_threads		:=	1
   def_block_args		:=	-bx 296 -by 5 -bz 290
@@ -80,7 +87,6 @@ else ifneq ($(findstring iso3dfd,$(stencil)),)
   pfd_l1			:=	0
   pfd_l2			:=	0
  else ifneq ($(filter $(arch),skx skl clx),)
-  fold_4byte			:=	x=4,y=4
   def_thread_divisor		:=	1
   def_block_threads		:=	2
   def_block_args		:=	-bx 108	 -by 28 -bz 132
@@ -89,44 +95,35 @@ else ifneq ($(findstring iso3dfd,$(stencil)),)
   pfd_l2			:=	2
  endif
 
-else ifneq ($(findstring awp,$(stencil)),)
+else ifneq ($(findstring awp,$(YC_STENCIL)),)
  def_block_args			:=	-b 32
  YC_FLAGS			+=	-min-es 1
- def_rank_args			:=	-d 1024 -dz 128
  def_pad_args			:=	-ep 1
  ifeq ($(arch),knl)
-  fold_4byte			:=	x=4,y=4
   def_thread_divisor		:=	2
   def_block_threads		:=	4
   def_block_args		:=	-b 48 -bx 112
   pfd_l1			:=	1
   pfd_l2			:=	0
  else ifneq ($(filter $(arch),hsw bdw),)
-  omp_block_schedule		:=	dynamic,1
-  fold_4byte			:=	x=8
   cluster			:=	y=2
   def_block_args		:=	-bx 128 -by 16 -bz 32 
   more_def_args			+=	-sbx 32 -sby 2 -sbz 32
   pfd_l1			:=	1
   pfd_l2			:=	2
  else ifneq ($(filter $(arch),skx skl clx),)
-  fold_4byte			:=	x=2,y=8
-  def_block_args		:=	-b 32 -bx 96
+  def_block_args		:=	-bx 44 -by 8 -bz 108
   pfd_l1			:=	1
   pfd_l2			:=	0
  endif
 
-else ifneq ($(findstring ssg,$(stencil)),)
- def_rank_args		:=	-d 512
+else ifneq ($(findstring ssg,$(YC_STENCIL)),)
  ifneq ($(filter $(arch),skx skl clx),)
-  def_rank_args		:=	-d 640 -dx 320
-  fold_4byte		:=	x=4,y=4
   def_block_args	:=	-bx 96 -by 16 -bz 80
   def_block_threads	:=	2
  endif
 
-else ifneq ($(findstring fsg,$(stencil)),)
- def_rank_args		:=	-d 256
+else ifneq ($(findstring fsg,$(YC_STENCIL)),)
  ifeq ($(arch),knl)
   omp_region_schedule	:=	guided
   def_block_args	:=	-b 16
@@ -135,24 +132,19 @@ else ifneq ($(findstring fsg,$(stencil)),)
   pfd_l1		:=	0
   pfd_l2		:=	2
  else ifneq ($(filter $(arch),skx skl clx),)
-  fold_4byte		:=	x=4,y=4
   def_block_args	:=	-bx 188 -by 12 -bz 24
   def_block_threads	:=	1
  endif
 
-else ifeq ($(stencil),tti)
+else ifeq ($(YC_STENCIL),tti)
  MACROS			+=	MAX_EXCH_DIST=3
- radius			:=	2
- def_rank_args		:=	-d 512
  ifneq ($(filter $(arch),skx skl clx),)
-  fold_4byte		:=	x=4,y=4
   def_block_args	:=	-bx 80 -by 16 -bz 40
   def_block_threads	:=	1
  endif
 
-else ifeq ($(stencil),stream)
+else ifeq ($(YC_STENCIL),stream)
  MACROS		+=	MAX_EXCH_DIST=0
- radius		:=	2
  cluster	:=	x=2
 
 endif # stencil-specific.
@@ -170,6 +162,10 @@ ifeq ($(arch),knc)
 
 else ifeq ($(arch),knl)
 
+ # NUMA_PREF=1 causes YASK to use MCDRAM on a node in "flat" memory mode. It
+ # will fall-back to NUMA node 0 in "cache" memory mode. It will *NOT* do
+ # the right thing by default in SNC-2 or SNC-4 clustering modes (using
+ # either flat or cache memory modes, but these configurations are uncommon.
  ISA		?=	-xMIC-AVX512
  GCXX_ISA	?=	-march=knl
  MACROS		+=	USE_INTRIN512 USE_RCP28 NUMA_PREF=1
@@ -231,7 +227,6 @@ omp_block_schedule	?=	static,1
 omp_misc_schedule	?=	guided
 def_thread_divisor	?=	1
 def_block_threads	?=	2
-def_rank_args		?=	-d 128
 def_block_args		?=	-b 64
 cluster			?=	x=1
 pfd_l1			?=	0
@@ -244,7 +239,7 @@ ifneq ($(findstring INTRIN512,$(MACROS)),)  # 512 bits.
  fold_4byte	?=	x=4,y=4
 
  # 8 DP floats.
- fold_8byte	?=	x=4,y=2
+ fold_8byte	?=	x=2,y=4
 
 else ifneq ($(findstring INTRIN256,$(MACROS)),)	 # 256 bits.
 
@@ -275,7 +270,6 @@ include $(YASK_BASE)/src/common/common.mk
 # Vars starting with 'YK_' apply to the stencil kernel.
 
 # Flags passed to stencil compiler.
-YC_STENCIL	?=	$(stencil)
 YC_FLAGS	+=	-stencil $(YC_STENCIL) -elem-bytes $(real_bytes) -cluster $(cluster) -fold $(fold)
 ifneq ($(eqs),)
  YC_FLAGS	+=	-eq-bundles $(eqs)
@@ -308,7 +302,7 @@ YK_ARCH_DIR	:=	$(YK_OUT_DIR)/$(arch)
 YK_OBJ_DIR	:=	$(YK_ARCH_DIR)/obj
 
 # Dirs for stencil-specific output files.
-YK_TAG		:=	$(stencil).$(arch)
+YK_TAG		:=	$(YK_STENCIL).$(YK_ARCH)
 YK_EXT_BASE	:=	$(YK_BASE).$(YK_TAG)
 YK_EXT_OUT_DIR	:=	$(YK_OUT_DIR)/$(YK_EXT_BASE)
 YK_SWIG_OUT_DIR	:=	$(YK_EXT_OUT_DIR)/swig
@@ -413,14 +407,12 @@ ifneq ($(filter -O0,$(YK_CXXOPT)),)
 endif
 
 # Turn on debug macros.
-ifeq ($(check),1)
- MACROS		+=	CHECK
-endif
-ifeq ($(trace),1)
- MACROS		+=	TRACE
-endif
 ifeq ($(trace_mem),1)
- MACROS		+=	TRACE_MEM
+ MACROS		+=	CHECK TRACE TRACE_MEM
+else ifeq ($(trace),1)
+ MACROS		+=	CHECK TRACE
+else ifeq ($(check),1)
+ MACROS		+=	CHECK
 endif
 
 # Set MACROS based on individual makefile vars.
@@ -433,7 +425,7 @@ MACROS		+=	ALLOW_NEW_GRIDS=$(allow_new_grid_types)
 # Default cmd-line args.
 DEF_ARGS	+=	-thread_divisor $(def_thread_divisor)
 DEF_ARGS	+=	-block_threads $(def_block_threads)
-DEF_ARGS	+=	$(def_rank_args) $(def_block_args) $(def_pad_args) $(more_def_args) 
+DEF_ARGS	+=	$(def_block_args) $(def_pad_args) $(more_def_args) 
 YK_CXXFLAGS	+=	-DDEF_ARGS='"$(DEF_ARGS) $(EXTRA_DEF_ARGS)"'
 
 # arch.
@@ -524,65 +516,57 @@ NGDIMS		:=	`awk '/NUM_GRID_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
 # wavefronts. The time loop may be found in
 # StencilEquations::run_solution().
 RANK_LOOP_OPTS		?=	-ndims $(NSDIMS) -inVar rank_idxs
-RANK_LOOP_OUTER_MODS	?=	grouped
 RANK_LOOP_ORDER		?=	1 .. N-1
-RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_ORDER)) \
-				{ $(RANK_LOOP_INNER_MODS) call(calc_region(bp)); }
+RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_ORDER)) { \
+				 $(RANK_LOOP_INNER_MODS) call(calc_region(bp)); }
 
 # Region loops break up a region using OpenMP threading into blocks.  The
 # 'omp' modifier creates an outer OpenMP loop so that each block is assigned
 # to a top-level OpenMP thread.
 REGION_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar region_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_region_schedule)) proc_bind(spread)'
-REGION_LOOP_OUTER_MODS	?=	grouped omp
 REGION_LOOP_ORDER	?=	1 .. N-1
-REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) loop($(REGION_LOOP_ORDER)) { \
-				$(REGION_LOOP_INNER_MODS) \
-				  call(calc_block(bp, region_shift_num, \
-					nphases, phase, rank_idxs)); }
+REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) omp loop($(REGION_LOOP_ORDER)) { \
+				 $(REGION_LOOP_INNER_MODS) \
+				  call(calc_block(bp, region_shift_num, nphases, phase, rank_idxs)); }
 
 # Block loops break up a block into mini-blocks.
 # These are executed sequentially, so no OpenMP.
 # Like with rank loops, in order for temporal wavefronts to operate properly,
 # the scanning paths must have strictly incrementing indices. 
 BLOCK_LOOP_OPTS		?=	-ndims $(NSDIMS) -inVar adj_block_idxs
-BLOCK_LOOP_OUTER_MODS	?=	grouped
 BLOCK_LOOP_ORDER	?=	1 .. N-1
 BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_ORDER)) { \
-				$(BLOCK_LOOP_INNER_MODS) \
+				 $(BLOCK_LOOP_INNER_MODS) \
 				  call(calc_mini_block(region_thread_idx, bp, region_shift_num, \
 					nphases, phase, nshapes, shape, \
 					bridge_mask, rank_idxs, region_idxs, block_idxs)); }
 
-# Mini-Block loops break up a mini-block into sub-blocks. The 'omp' modifier creates
-# a *nested* OpenMP loop so that each sub-block is assigned to a nested OpenMP
-# thread.
+# Mini-Block loops break up a mini-block into sub-blocks. The 'omp' modifier
+# creates a *nested* OpenMP loop (but not a parallem region) so that each
+# sub-block is assigned to a nested OpenMP thread. The OpenMP construct is
+# not used when running with '-bind_block_threads'.
 MINI_BLOCK_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar adj_mb_idxs \
 				-ompConstruct '$(omp_for) schedule($(omp_block_schedule)) nowait'
-MINI_BLOCK_LOOP_OUTER_MODS ?=	omp
 MINI_BLOCK_LOOP_ORDER	?=	1 .. N-1
-MINI_BLOCK_LOOP_CODE	?=	$(MINI_BLOCK_LOOP_OUTER_MODS) loop($(MINI_BLOCK_LOOP_ORDER)) { \
-				$(MINI_BLOCK_LOOP_INNER_MODS) \
-				call(CALC_SUB_BLOCK); }
+MINI_BLOCK_LOOP_CODE	?=	$(MINI_BLOCK_LOOP_OUTER_MODS) omp loop($(MINI_BLOCK_LOOP_ORDER)) { \
+				 $(MINI_BLOCK_LOOP_INNER_MODS) call(CALC_SUB_BLOCK); }
 
 # Sub-block loops break up a sub-block into clusters or vectors.  These
 # loops are run by a single OMP thread.  The N-1 (inner) loop is generated
 # by the stencil compiler, so these loops stop at N-2.  The indexes in this
 # loop are 'normalized', i.e., vector units and rank-relative.
 SUB_BLOCK_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar norm_sub_block_idxs
-SUB_BLOCK_LOOP_OUTER_MODS ?=
 SUB_BLOCK_LOOP_ORDER	?=	1 .. N-2
 SUB_BLOCK_LOOP_CODE	?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop($(SUB_BLOCK_LOOP_ORDER)) { \
-				$(SUB_BLOCK_LOOP_INNER_MODS) \
-				call(CALC_INNER_LOOP); }
+				 $(SUB_BLOCK_LOOP_INNER_MODS) call(CALC_INNER_LOOP); }
 
 # General-purpose parallel loop.
 MISC_LOOP_OPTS		?=	-ndims $(NSDIMS) -inVar misc_idxs \
 				-ompConstruct '$(omp_par_for) schedule($(omp_misc_schedule)) proc_bind(spread)'
-MISC_LOOP_OUTER_MODS	?=	omp
 MISC_LOOP_ORDER		?=	1 .. N-1
-MISC_LOOP_CODE		?=	$(MISC_LOOP_OUTER_MODS) loop($(MISC_LOOP_ORDER)) \
-				$(MISC_LOOP_INNER_MODS) { call(MISC_FN); }
+MISC_LOOP_CODE		?=	$(MISC_LOOP_OUTER_MODS) omp loop($(MISC_LOOP_ORDER)) { \
+				$(MISC_LOOP_INNER_MODS) call(MISC_FN); }
 
 # Compile rules.
 
@@ -610,7 +594,7 @@ default: kernel
 kernel: $(YK_EXEC) $(YK_SCRIPT) $(MAKE_REPORT_FILE)
 	@echo "*** Binary" $(YK_EXEC) "has been built."; \
 	echo "*** See" $(MAKE_REPORT_FILE) "for build information."; \
-	echo "*** Run command:" $(YK_SCRIPT) "-stencil" $(stencil) "-arch" $(arch) "[options]"
+	echo "*** Run command:" $(YK_SCRIPT) "-stencil" $(YK_STENCIL) "-arch" $(YK_ARCH) "[options]"
 
 $(YK_LIB): $(YK_OBJS) $(YK_EXT_OBJS)
 	- rm -f $(MAKE_REPORT_FILE)
@@ -710,7 +694,7 @@ $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i $(INC_DIR)/*
 
 $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.cpp
 	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -x c++ $(SWIG_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
 	@ls -l $@
 
 $(YK_PY_LIB): $(YK_OBJS)  $(YK_EXT_OBJS) $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.o
@@ -803,16 +787,16 @@ py-api-no-yc:
 	$(MAKE) $(NO_YC_MAKE_FLAGS) py-api
 
 # Validation runs for each binary.
-DEF_TEST_ARGS := -stencil $(stencil) -arch $(arch) -v \
+DEF_TEST_ARGS := -stencil $(YK_STENCIL) -arch $(YK_ARCH) -v \
 	-trial_steps 2 -max_threads 6 -block_threads 2 -no-use_shm -overlap_comms
 
-val0	:=	$(DEF_TEST_ARGS) -d 48 -r 32 -b 24 -rt 0 $(EXTRA_TEST_ARGS)
-val1	:=	$(DEF_TEST_ARGS) -d 48 -r 32 -b 24 -mb 16 -rt 1 $(EXTRA_TEST_ARGS)
-val2	:=	$(DEF_TEST_ARGS) -d 63 -r 32 -b 24 -mb 16 -rt 2 $(EXTRA_TEST_ARGS)
-val3	:=	$(DEF_TEST_ARGS) -d 63 -r 48 -b 24 -mb 16 -bt 2 $(EXTRA_TEST_ARGS)
-val4a	:=	$(DEF_TEST_ARGS) -d 48 -b 24 -mb 16 -bt 2 -bind_block_threads $(EXTRA_TEST_ARGS)
-val4b	:=	$(DEF_TEST_ARGS) -d 48 -b 24 -mb 16 -bt 2 -use_shm -overlap_comms $(EXTRA_TEST_ARGS)
-val4c	:=	$(DEF_TEST_ARGS) -d 48 -b 24 -mb 16 -bt 2 -use_shm -no-overlap_comms $(EXTRA_TEST_ARGS)
+val0	:=	$(DEF_TEST_ARGS) -l 48 -r 32 -b 24 -rt 0 $(EXTRA_TEST_ARGS)
+val1	:=	$(DEF_TEST_ARGS) -l 48 -r 32 -b 24 -mb 16 -rt 1 $(EXTRA_TEST_ARGS)
+val2	:=	$(DEF_TEST_ARGS) -l 63 -r 32 -b 24 -mb 16 -rt 2 $(EXTRA_TEST_ARGS)
+val3	:=	$(DEF_TEST_ARGS) -l 63 -r 48 -b 24 -mb 16 -bt 2 $(EXTRA_TEST_ARGS)
+val4a	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -bind_block_threads $(EXTRA_TEST_ARGS)
+val4b	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -use_shm -overlap_comms $(EXTRA_TEST_ARGS)
+val4c	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -use_shm -no-overlap_comms $(EXTRA_TEST_ARGS)
 ranks	:=	2
 
 # Run the kernel binary using several combos of sizes and ranks.
@@ -861,6 +845,7 @@ stencil-tests:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_3d fold=x=2,z=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_func_1d fold=x=4
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_dep_1d fold=x=4
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_dep_2d fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_misc_2d fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_misc_2d fold=x=2,y=2 EXTRA_YC_FLAGS=-interleave-misc
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_step_cond_1d fold=x=4
@@ -871,9 +856,9 @@ stencil-tests:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_scratch_subdomain_1d fold=x=4
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=iso3dfd radius=3 fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=iso3dfd_sponge radius=3 fold=x=2,z=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=9axis fold=x=2,z=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=3axis fold=x=2,y=2 cluster=x=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=3axis fold=x=2,y=2 cluster=z=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=3axis_with_diags fold=x=2,z=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=3plane fold=y=2,z=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=cube fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=ssg fold=x=2,y=2
@@ -964,12 +949,16 @@ echo-settings:
 	echo SUB_BLOCK_LOOP_OUTER_VARS="\"$(SUB_BLOCK_LOOP_OUTER_VARS)\""; \
 	echo YASK_OUTPUT_DIR=$(YASK_OUTPUT_DIR); \
 	echo YC_FLAGS="\"$(YC_FLAGS)\""; \
-	echo YC_TARGET="\"$(YC_TARGET)\""; \
+	echo YC_STENCIL=$(YC_STENCIL); \
+	echo YC_TARGET=$(YC_TARGET); \
+	echo YK_ARCH=$(YK_ARCH); \
 	echo YK_BASE=$(YK_BASE); \
 	echo YK_CXX=$(YK_CXX); \
 	echo YK_CXXFLAGS="\"$(YK_CXXFLAGS)\""; \
 	echo YK_CXXOPT=$(YK_CXXOPT); \
 	echo YK_EXT_TAG=$(YK_EXT_TAG); \
+	echo YK_STENCIL=$(YK_STENCIL); \
+	echo YK_TAG=$(YK_TAG); \
 	echo arch=$(arch); \
 	echo cluster=$(cluster); \
 	echo def_block_args=$(def_block_args); \
@@ -999,21 +988,23 @@ code-stats:
 # Print some usage info.
 help:
 	@echo "Example performance builds of kernel cmd-line tool:"; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=iso3dfd"; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=awp EXTRA_YK_CXXFLAGS=-qopt-report"; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=skl stencil=3axis fold='x=1,y=2,z=4' cluster='x=2'"; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=hsw stencil=3axis radius=4 real_bytes=8 # DP FP"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd arch=knl # Explicit arch target."; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd radius=4 YK_STENCIL=iso3dfd_rt # Specify binary stencil name."; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=awp EXTRA_YK_CXXFLAGS=-qopt-report"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis fold='x=1,y=2,z=4' cluster='x=2'"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis radius=4 real_bytes=8 # DP FP."; \
 	echo " "; \
 	echo "Example performance builds of kernel API for C++ and Python apps:"; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=knl stencil=iso3dfd yk-api"; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=skl stencil=awp yk-api"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd yk-api"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=awp yk-api"; \
 	echo " "; \
 	echo "Example debug builds of kernel cmd-line tool:"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' check=1 # No OpenMP or MPI, internal checking"; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=test_2d mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' check=1 trace=1 # trace is a useful debug setting!"; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' check=1 trace=1 trace_mem=1"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' check=1 # No optimization, OpenMP or MPI; internal checking."; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=test_2d mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' trace=1 # Enable tracing; run with '-trace' to get trace."; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' trace_mem=1 # Trace all mem accesses with '-trace'."; \
 	echo " "; \
 	echo "Example builds with test runs:"; \
 	echo " $(MAKE) -j all # Normal full API and stencil tests"; \
-	echo " $(MAKE) -j all YK_CXXOPT=-O2 YK_CXX=g++ mpi=0 ranks=1 # g++ w/o MPI"; \
-	echo " $(MAKE) -j all YK_CXXOPT=-O1 ranks=3 check=1 # Run 3 ranks w/checking"
+	echo " $(MAKE) -j all YK_CXXOPT=-O2 YK_CXX=g++ mpi=0 ranks=1 # g++ w/o MPI."; \
+	echo " $(MAKE) -j all YK_CXXOPT=-O1 ranks=4 check=1 # Run 4 ranks w/checking."

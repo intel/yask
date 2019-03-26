@@ -57,7 +57,7 @@ protected:
     virtual void addPoints(GridValue& v) =0;
 
 public:
-    ExampleStencil(const string& name, StencilList& stencils, int radius=2) :
+    ExampleStencil(const string& name, StencilList& stencils, int radius) :
         StencilRadiusBase(name, stencils, radius) { }
 
     // Define equation at t+1 based on values at t.
@@ -104,9 +104,9 @@ protected:
     }
 
 public:
-    AxisStencil(StencilList& stencils, int radius=2) :
+    AxisStencil(StencilList& stencils, int radius=4) :
         ExampleStencil("3axis", stencils, radius) { }
-    AxisStencil(const string& name, StencilList& stencils, int radius=2) :
+    AxisStencil(const string& name, StencilList& stencils, int radius=4) :
         ExampleStencil(name, stencils, radius) { }
 };
 
@@ -146,9 +146,9 @@ protected:
     }
 
 public:
-    DiagStencil(StencilList& stencils, int radius=2) :
-        AxisStencil("9axis", stencils, radius) { }
-    DiagStencil(const string& name, StencilList& stencils, int radius=2) :
+    DiagStencil(StencilList& stencils, int radius=4) :
+        AxisStencil("3axis_with_diags", stencils, radius) { }
+    DiagStencil(const string& name, StencilList& stencils, int radius=4) :
         AxisStencil(name, stencils, radius) { }
 };
 
@@ -202,9 +202,9 @@ protected:
     }
 
 public:
-    PlaneStencil(StencilList& stencils, int radius=2) :
+    PlaneStencil(StencilList& stencils, int radius=3) :
         DiagStencil("3plane", stencils, radius) { }
-    PlaneStencil(const string& name, StencilList& stencils, int radius=2) :
+    PlaneStencil(const string& name, StencilList& stencils, int radius=3) :
         DiagStencil(name, stencils, radius) { }
 };
 
@@ -238,9 +238,9 @@ protected:
     }
 
 public:
-    CubeStencil(StencilList& stencils, int radius=1) :
+    CubeStencil(StencilList& stencils, int radius=2) :
         PlaneStencil("cube", stencils, radius) { }
-    CubeStencil(const string& name, StencilList& stencils, int radius=1) :
+    CubeStencil(const string& name, StencilList& stencils, int radius=2) :
         PlaneStencil(name, stencils, radius) { }
 };
 

@@ -51,8 +51,10 @@ our @log_keys =
    'best throughput (est-FLOPS)',
    'best elapsed time (sec)',
    'best num-steps-done',
+   'mid throughput (num-points/sec)',
    'version',
    'stencil name',
+   'stencil description',
    'invocation',
    'binary invocation',
    'num MPI ranks',
@@ -61,15 +63,15 @@ our @log_keys =
    'num threads per region',
    'num threads per block',
    'total overall allocation',
-   'overall problem size',
-   'rank-domain size',
+   'global-domain size',
+   'local-domain size',
    'region size',
    'block size',
    'mini-block size',
    'sub-block size',
    'cluster size',
    'vector size',
-   'num regions per rank-domain per step',
+   'num regions per local-domain per step',
    'num blocks per region per step',
    'num mini-blocks per block per step',
    'num sub-blocks per mini-block per step',
@@ -171,7 +173,7 @@ sub getResultsFromLine($$) {
 
   chomp($line);
 
-  # pre-process keys.
+  # pre-process keys one time.
   if (scalar keys %proc_keys == 0) {
     undef %proc_keys;
     for my $m (@log_keys) {
@@ -193,6 +195,10 @@ sub getResultsFromLine($$) {
       $proc_keys{$sk}{$pm} = $m;
     }
   }
+
+  # Substitutions to handle old formats.
+  $line =~ s/overall.problem/global-domain/g;
+  $line =~ s/rank.domain/local-domain/g;
   
   # special cases for manual parsing...
   # TODO: catch output of auto-tuner and update relevant results.
@@ -211,29 +217,32 @@ sub getResultsFromLine($$) {
     $results->{$nodes_key} .= $nname;
   }
 
-  # Invalidate settings overridden by auto-tuner.
-  # TODO: save new values, but need to handle multiple packs.
-  elsif (/best-block-size:/i) {
+  # If auto-tuner is run globally, capture updated values.
+  # Invalidate settings overridden by auto-tuner on multiple packs.
+  elsif ($line =~ /^auto-tuner(.).*size:/) {
+    my $c = $1;
+
+    # If colon found above, tuner is global.
+    my $onep = ($c eq ':');
+    
     for my $k ('block size',
                'mini-block size',
                'sub-block size',) {
-      $results->{$k} = 'auto-tuned';
+      $line =~ s/-size/ size/;
+      if ($line =~ / (best-)?$k:\s*(t=.*)/i) {
+        my $val = $onep ? $2 : 'auto-tuned';
+        $results->{$k} = $val;
+      }
     }
   }
-  elsif (/best-mini-block-size:/i) {
-    for my $k ('mini-block size',
-               'sub-block size',) {
-      $results->{$k} = 'auto-tuned';
-    }
-  }
-  
+
   # look for matches to all other keys.
   else {
     my ($key, $val) = split /:/,$line,2;
     if (defined $val) {
       $key = lc $key;
       $key =~ s/^\s+//;
-      $key =~ s/[- ]+/-/g; # relax hyphen and space match.
+      $key =~ s/[- ]+/-/g;      # relax hyphen and space match.
 
       # short key.
       my $sk = substr $key,0,$klen;

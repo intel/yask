@@ -738,7 +738,7 @@ sub processCode($) {
         }
         
         # use serpentine path in next loop if possible.
-        elsif (lc $tok eq 'serpentine') {
+        elsif (lc $tok eq 'broken_serpentine') {
             $features |= $bSerp;
         }
         
@@ -976,7 +976,7 @@ sub main() {
             "Optional loop modifiers:\n",
             "  omp:             generate an OpenMP for loop (distribute work across SW threads).\n",
             "  grouped:         generate grouped scan within a collapsed loop.\n",
-            "  serpentine:      generate reverse scan when enclosing loop dimension is odd.\n",
+            ## broken: "  serpentine:      generate reverse scan when enclosing loop dimension is odd.\n",
             "  square_wave:     generate 2D square-wave scan for two innermost dimensions of a collapsed loop.\n",
             "A 'ScanIndices' var must be defined in C++ code prior to including the generated code.\n",
             "  This struct contains the following 'Indices' elements:\n",
@@ -1001,8 +1001,8 @@ sub main() {
             "  $script -ndims 3 'omp loop(0,1) { loop(2) { call(f); } }'\n",
             "  $script -ndims 3 'omp loop(0) { loop(1,2) { call(f); } }'\n",
             "  $script -ndims 3 'grouped omp loop(0..N-1) { call(f); }'\n",
-            "  $script -ndims 3 'omp loop(0) { serpentine loop(1..N-1) { call(f); } }'\n",
-            "  $script -ndims 4 'omp loop(0..N+1) { serpentine loop(N+2,N-1) { call(f); } }'\n";
+            "  $script -ndims 3 'omp loop(0) { square loop(1..N-1) { call(f); } }'\n",
+            "  $script -ndims 4 'omp loop(0..N+1) { loop(N+2,N-1) { call(f); } }'\n";
         exit 1;
     }
 

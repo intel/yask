@@ -48,6 +48,7 @@ namespace yask {
     void StencilContext::eval_auto_tuner(idx_t num_steps) {
         STATE_VARS(this);
         _at.steps_done += num_steps;
+        _at.timer.stop();
 
         if (state->_use_pack_tuners) {
             for (auto& sp : stPacks)
@@ -132,7 +133,7 @@ namespace yask {
         // Report results.
         at_timer.stop();
         os << "Auto-tuner done after " << steps_done << " step(s) in " <<
-            at_timer.get_elapsed_secs() << " secs.\n";
+            makeNumStr(at_timer.get_elapsed_secs()) << " secs.\n";
         if (state->_use_pack_tuners) {
             for (auto& sp : stPacks)
                 sp->getAT().print_settings(os);
@@ -199,7 +200,9 @@ namespace yask {
         steps_done = 0;
 
         // Set min blocks to number of region threads.
-        min_blks = set_region_threads();
+        int rt=0, bt=0;
+        get_num_comp_threads(rt, bt);
+        min_blks = rt;
 
         // Adjust starting block if needed.
         for (auto dim : center_sizes.getDims()) {
@@ -252,14 +255,22 @@ namespace yask {
                 return;
 
             // Done.
-            os << _name << ": finished warmup for " << ctime << " secs\n" <<
+            os << _name << ": finished warmup for " <<
+                csteps << " steps(s) in " <<
+                makeNumStr(ctime) << " secs\n" <<
                 _name << ": tuning " << (tune_mini_blks() ? "mini-" : "") <<
                 "block sizes...\n";
             in_warmup = false;
 
-            // Measure this step only.
-            csteps = steps;
-            ctime = etime;
+            // Restart for first measurement.
+            csteps = 0;
+            ctime = 0;
+
+            // Fix settings for next step.
+            apply();
+            TRACE_MSG(_name << ": first size "  <<
+                      target_sizes().makeDimValStr(" * "));
+            return;
         }
 
         // Need more steps to get a good measurement?
@@ -267,11 +278,11 @@ namespace yask {
             return;
 
         // Calc perf and reset vars for next time.
-        double rate = (ctime > 0.) ? double(csteps) / ctime : 0.;
-        os << _name << ": radius=" << radius << ": " <<
-            csteps << " steps(s) in " << ctime <<
-            " secs (" << rate <<
-            " steps/sec) with size " <<
+        double rate = (ctime > 0.) ? (double(csteps) / ctime) : 0.;
+        os << _name << ": search-dist=" << radius << ": " <<
+            csteps << " steps(s) in " <<
+            makeNumStr(ctime) << " secs (" <<
+            makeNumStr(rate) << " steps/sec) with size " <<
             target_sizes().makeDimValStr(" * ") << endl;
         csteps = 0;
         ctime = 0.;
@@ -423,8 +434,6 @@ namespace yask {
         } // search for new setting to try.
 
         // Fix settings for next step.
-        // Assumption is that sizes in one pack doesn't affect
-        // perf in another pack.
         apply();
         TRACE_MSG(_name << ": next size "  <<
                   target_sizes().makeDimValStr(" * "));

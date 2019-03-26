@@ -796,9 +796,7 @@ namespace yask {
     string EqLot::getName() const {
 
         // Add index to base name.
-        ostringstream oss;
-        oss << baseName << "_" << index;
-        return oss.str();
+        return baseName + "_" + to_string(index);
     }
 
     // Make a human-readable description of this eq bundle.

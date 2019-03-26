@@ -84,6 +84,21 @@ namespace yask {
         return tmp.makeDimValStr(separator, infix, prefix, suffix);
     }
 
+    // Does this var cover the N-D domain?
+    bool YkGridBase::is_domain_var() const {
+
+        // Problem dims.
+        auto* dims = get_dims().get();
+        const auto& domain_dims = dims->_domain_dims;
+
+        for (auto& d : domain_dims.getDims()) {
+            auto& dname = d.getName();
+            if (!is_dim_used(dname))
+                return false;
+        }
+        return true;
+    }
+    
     // Halo-exchange flag accessors.
     bool YkGridBase::is_dirty(idx_t step_idx) const {
         if (_dirty_steps.size() == 0)
@@ -331,7 +346,7 @@ namespace yask {
         // This will loop over the entire allocation.
         // We use this as a handy way to get offsets,
         // but not all will be used.
-        allocs.visitAllPoints
+        allocs.visitAllPointsInParallel
             ([&](const IdxTuple& pt, size_t idx) {
 
                 // Adjust alloc indices to overall indices.
@@ -347,7 +362,7 @@ namespace yask {
                         opt[i] += _rank_offsets[i] + _local_offsets[i];
 
                     // Don't compare points outside the domain.
-                    // TODO: check points in halo.
+                    // TODO: check points in outermost halo.
                     auto& dname = pt.getDimName(i);
                     if (domain_dims.lookup(dname)) {
                         auto first_ok = get_first_rank_domain_index(dname);
@@ -363,17 +378,18 @@ namespace yask {
                 auto te = readElem(opt, asi, __LINE__);
                 auto re = ref->readElem(opt, asi, __LINE__);
                 if (!within_tolerance(te, re, epsilon)) {
-                    errs++;
-                    if (errs < maxPrint) {
-                        os << "** mismatch at " << get_name() <<
-                            "(" << opt.makeDimValStr() << "): " <<
-                            te << " != " << re << std::endl;
-                    }
-                    else if (errs == maxPrint)
-                        os << "** Additional errors not printed." << std::endl;
-                    else {
-                        // errs > maxPrint.
-                        return false; // stop visits.
+#pragma omp critical
+                    {
+                        errs++;
+                        if (errs <= maxPrint) {
+                            if (errs < maxPrint)
+                                os << "** mismatch at " << get_name() <<
+                                    "(" << opt.makeDimValStr() << "): " <<
+                                    te << " != " << re << endl;
+                            else
+                                os << "** Additional errors not printed for grid '" <<
+                                    get_name() << "'.\n";
+                        }
                     }
                 }
                 return true;    // keep visiting.
@@ -475,18 +491,17 @@ namespace yask {
     // "message: mygrid[x=4, y=7] = 3.14 at line 35".
     void YkGridBase::printElem(const std::string& msg,
                                const Indices& idxs,
-                               real_t e,
-                               int line,
-                               bool newline) const {
-        ostream& os = _ggb->get_ostr();
+                               real_t eval,
+                               int line) const {
+        STATE_VARS_CONST(this);
+        string str;
         if (msg.length())
-            os << msg << ": ";
-        os << get_name() << "[" <<
-            makeIndexString(idxs) << "] = " << e;
+            str = msg + ": ";
+        str += get_name() + "[" +
+            makeIndexString(idxs) + "] = " + to_string(eval);
         if (line)
-            os << " at line " << line;
-        if (newline)
-            os << std::endl << std::flush;
+            str += " at line " + to_string(line);
+        TRACE_MEM_MSG(str);
     }
 
     // Print one vector.
@@ -494,9 +509,8 @@ namespace yask {
     void YkGridBase::printVecNorm(const std::string& msg,
                                           const Indices& idxs,
                                           const real_vec_t& val,
-                                          int line,
-                                          bool newline) const {
-        STATE_VARS(this);
+                                          int line) const {
+        STATE_VARS_CONST(this);
 
         // Convert to elem indices.
         Indices eidxs = idxs.mulElements(_vec_lens);
@@ -519,7 +533,7 @@ namespace yask {
                 IdxTuple pt2 = idxs2.addElements(fofs, false);
                 Indices pt3(pt2);
 
-                printElem(msg, pt3, ev, line, newline);
+                printElem(msg, pt3, ev, line);
                 return true; // keep visiting.
             });
     }

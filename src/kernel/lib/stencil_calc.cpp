@@ -131,7 +131,12 @@ namespace yask {
                 int nbt = _context->set_block_threads();
                 bool bind_threads = nbt > 1 && settings.bind_block_threads;
                 _Pragma("omp parallel proc_bind(spread)") {
-                    int block_thread_idx = (nbt <= 1) ? 0 : omp_get_thread_num();
+                    int block_thread_idx = 0;
+                    if (nbt > 1) {
+                        assert(omp_get_level() == 2);
+                        assert(omp_get_num_threads() == nbt);
+                        block_thread_idx = omp_get_thread_num();
+                    }
                     
                     // Indices needed for the generated loops.  Will normally be a
                     // copy of 'mb_idxs' except when updating scratch-grids.
@@ -172,6 +177,8 @@ namespace yask {
                     // index in the binding dim.
                     if (bind_threads) {
                         const idx_t idx_ofs = 0x1000; // to help keep pattern when idx is neg.
+
+                        // Disable the OpenMP construct in the mini-block loop.
 #define OMP_PRAGMA
 #define CALC_SUB_BLOCK(mb_idxs)                                        \
                         auto bind_elem_idx = mb_idxs.start[bind_posn];  \
@@ -184,7 +191,7 @@ namespace yask {
 #undef OMP_PRAGMA
                     }
 
-                    // If not binding therads to data, call calc_sub_block()
+                    // If not binding threads to data, call calc_sub_block()
                     // with a different thread for each sub-block using
                     // standard OpenMP scheduling.
                     else {
@@ -593,8 +600,6 @@ namespace yask {
                         ok = true; break; }                             \
                 }                                                       \
                 if (ok) {                                               \
-                    TRACE_MSG("calc_sub_block_vec:   at pt " <<            \
-                               pt_idxs.start.makeValStr(nsdims));       \
                     calc_scalar(region_thread_idx, pt_idxs.start);      \
                 }                                                       \
             } while(0)
@@ -751,26 +756,40 @@ namespace yask {
     } // adjust_span().
 
     // Timer methods.
-    // Start and stop timers for final stats and auto-tuners.
+    // Start and stop pack timers for final stats and auto-tuners.
     void BundlePack::start_timers() {
         auto ts = YaskTimer::get_timespec();
         timer.start(&ts);
         getAT().timer.start(&ts);
-        _context->getAT().timer.start(&ts);
     }
     void BundlePack::stop_timers() {
         auto ts = YaskTimer::get_timespec();
         timer.stop(&ts);
         getAT().timer.stop(&ts);
-        _context->getAT().timer.stop(&ts);
     }
     void BundlePack::add_steps(idx_t num_steps) {
         steps_done += num_steps;
         getAT().steps_done += num_steps;
-
-        // Don't add to context steps to avoid over-counting.
     }
 
+    static void print_grid_list(ostream& os, const GridPtrs& gps, const string& type) {
+        os << "  num " << type << " vars:";
+        for (size_t i = 0; i < max(21ULL - type.length(), 1ULL); i++)
+            os << ' ';
+        os << gps.size() << endl;
+        if (gps.size()) {
+            os << "  " << type << " vars:";
+            for (size_t i = 0; i < max(25ULL - type.length(), 1ULL); i++)
+                os << ' ';
+            int i = 0;
+            for (auto gp : gps) {
+                if (i++) os << ", ";
+                os << gp->get_name();
+            }
+            os << endl;
+        }
+    }
+    
     // Calc the work stats.
     // Requires MPI barriers!
     void BundlePack::init_work_stats() {
@@ -857,20 +876,42 @@ namespace yask {
                 "  est FP-ops per point:       " << fpops1 << endl <<
                 "  est FP-ops in rank:         " << makeNumStr(fpops_bb) << endl;
 
-            os << "  input-grids:                ";
-            int i = 0;
+            // Classify vars.
+            GridPtrs idvars, imvars, odvars, omvars, iodvars, iomvars; // i[nput], o[utput], d[omain], m[isc].
             for (auto gp : sg->inputGridPtrs) {
-                if (i++) os << ", ";
-                os << gp->get_name();
+                bool isdom = gp->is_domain_var();
+                auto& ogps = sg->outputGridPtrs;
+                bool isout = find(ogps.begin(), ogps.end(), gp) != ogps.end();
+                if (isout) {
+                    if (isdom)
+                        iodvars.push_back(gp);
+                    else
+                        iomvars.push_back(gp);
+                } else {
+                    if (isdom)
+                        idvars.push_back(gp);
+                    else
+                        imvars.push_back(gp);
+                }
             }
-            os << "\n  output-grids:               ";
-            i = 0;
             for (auto gp : sg->outputGridPtrs) {
-                if (i++) os << ", ";
-                os << gp->get_name();
+                bool isdom = gp->is_domain_var();
+                auto& igps = sg->inputGridPtrs;
+                bool isin = find(igps.begin(), igps.end(), gp) != igps.end();
+                if (!isin) {
+                    if (isdom)
+                        odvars.push_back(gp);
+                    else
+                        omvars.push_back(gp);
+                }
             }
-            os << endl;
-
+            print_grid_list(os, idvars, "input-only domain");
+            print_grid_list(os, odvars, "output-only domain");
+            print_grid_list(os, iodvars, "input-output domain");
+            print_grid_list(os, imvars, "input-only other");
+            print_grid_list(os, omvars, "output-only other");
+            print_grid_list(os, iomvars, "input-output other");
+            
         } // bundles.
 
         // Sum across ranks.

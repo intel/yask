@@ -25,7 +25,7 @@
 
 # Purpose: Process the output of a log from a binary and compare every grid write.
 # Build with the following options: real_bytes=8 check=1 trace=1 trace_mem=1
-# Run kernel with '-v -force_scalar -max_threads 1' and pipe output to this script.
+# Run kernel with '-v -force_scalar -trace' and pipe output to this script.
 
 use strict;
 use File::Basename;
@@ -64,8 +64,8 @@ while (<>) {
   }
 
   # writeElem: pressure[t=0, x=0, y=0, z=0] = 5.7 at line 287
-  elsif (/^writeElem:\s*(\w+)\[(.*)\]\s*=\s*(\S+)/) {
-    my ($grid, $indices, $val) = ($1, $2, $3);
+  elsif (/^(YASK: )?writeElem:\s*(\w+)\[(.*)\]\s*=\s*(\S+)/) {
+    my ($grid, $indices, $val) = ($2, $3, $4);
     if (defined $key) {
       $indices =~ s/\b\d\b/0$&/g; # make indices 2 digits.
 
@@ -143,6 +143,6 @@ for my $key (sort keys %writes) {
   print " ".(scalar @{$writes{$key}})." $key write(s) checked.\n";
 }
 print " $nissues issue(s) flagged.\n";
-print " (Ignore issues outside of rank domain when using temporal tiling and MPI.)\n"
+print " (Ignore issues outside of local domain when using temporal tiling and MPI.)\n"
   if $nissues;
 exit $nissues;
