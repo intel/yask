@@ -244,10 +244,6 @@ int main(int argc, char** argv)
     divLine += "\n";
 
     try {
-        // Stop collecting VTune data.
-        // Even better to use -start-paused option.
-        VTUNE_PAUSE;
-
         // Bootstrap factories from kernel API.
         yk_factory kfac;
         yask_output_factory yof;
@@ -415,16 +411,10 @@ int main(int argc, char** argv)
             }
             kenv->global_barrier();
 
-            // Start vtune collection.
-            VTUNE_RESUME;
-
             // Actual work.
             context->clear_timers();
             ksoln->run_solution(first_t, last_t);
             kenv->global_barrier();
-
-            // Stop vtune collection.
-            VTUNE_PAUSE;
 
             // Calc and report perf.
             auto tstats = context->get_stats();

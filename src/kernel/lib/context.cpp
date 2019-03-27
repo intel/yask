@@ -192,6 +192,9 @@ namespace yask {
         STATE_VARS(this);
         run_time.start();
 
+        // Start vtune collection.
+        VTUNE_RESUME;
+
         // Determine step dir from order of first/last.
         idx_t step_dir = (last_step_index >= first_step_index) ? 1 : -1;
         
@@ -553,7 +556,12 @@ namespace yask {
             cache_model.disable();
         }
 #endif
+
+        // Stop vtune collection.
+        VTUNE_PAUSE;
+
         run_time.stop();
+
     } // run_solution().
 
     // Calculate results within a region.  Each region is typically computed
