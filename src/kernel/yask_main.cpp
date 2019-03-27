@@ -191,12 +191,13 @@ struct AppSettings : public KernelSettings {
     // Exit with help message if requested.
     void splash(ostream& os, int argc, char** argv)
     {
+        // See https://en.wikipedia.org/wiki/Box-drawing_character.
         os <<
-            "┌────────────────────────────────────────────┐\n"
-            "│   Y.A.S.K. ── Yet Another Stencil Kernel   │\n"
-            "│       https://github.com/intel/yask        │\n"
-            "│ Copyright (c) 2014-2019, Intel Corporation │\n"
-            "└────────────────────────────────────────────┘\n"
+            " \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n"
+            " \u2502   Y.A.S.K. \u2500\u2500 Yet Another Stencil Kernel   \u2502\n"
+            " \u2502       https://github.com/intel/yask        \u2502\n"
+            " \u2502 Copyright (c) 2014-2019, Intel Corporation \u2502\n"
+            " \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n"
             "\n"
             "Version: " << yask_get_version_string() << endl <<
             "Stencil name: " YASK_STENCIL_NAME << endl;
@@ -240,7 +241,7 @@ int main(int argc, char** argv)
     // just a line.
     string divLine;
     for (int i = 0; i < 70; i++)
-        divLine += "─";
+        divLine += "\u2500";
     divLine += "\n";
 
     try {
