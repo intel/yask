@@ -145,11 +145,11 @@ typedef std::uint64_t uidx_t;
 
 // macro for debug message.
 #ifdef TRACE
-#define TRACE_MSG0(os, msg) if (opts->_trace) {             \
+#define TRACE_MSG0(os, msg) do { if (opts->_trace) {        \
         KernelEnv::set_debug_lock();                        \
         (os) << "YASK: " << msg << std::endl << std::flush; \
         KernelEnv::unset_debug_lock();                      \
-    } else (void)0
+        } } while(0)
 #else
 #define TRACE_MSG0(os, msg) ((void)0)
 #endif

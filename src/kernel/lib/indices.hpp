@@ -99,9 +99,9 @@ namespace yask {
         // Write to an IdxTuple.
         // The 'tgt' must have the same number of dims.
         void setTupleVals(IdxTuple& tgt) const {
-            assert(tgt.size() == _ndims);
+            assert(tgt.size() == size_t(_ndims));
             for (int i = 0; i < _ndims; i++)
-                if (i < tgt.size())
+                if (size_t(i) < tgt.size())
                     tgt.setVal(i, _idxs[i]);
         }
 
