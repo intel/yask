@@ -49,6 +49,7 @@ inline void omp_set_num_threads(int n) { }
 inline void omp_set_nested(int n) { }
 inline int omp_get_max_active_levels() { return 1; }
 inline void omp_set_max_active_levels(int n) { }
+inline int omp_get_level() { return 1; }
 inline void omp_init_lock(omp_lock_t* p) { }
 inline bool omp_set_lock(omp_lock_t* p) { return true; }
 inline void omp_unset_lock(omp_lock_t* p) { }

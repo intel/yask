@@ -71,56 +71,48 @@ else ifeq ($(YC_STENCIL),cube)
  MACROS		+=	MAX_EXCH_DIST=3
 
 else ifneq ($(findstring iso3dfd,$(YC_STENCIL)),)
- MACROS				+=	MAX_EXCH_DIST=1
- def_pad_args			:=	-ep 1
+ MACROS			+=	MAX_EXCH_DIST=1
+ def_pad_args		:=	-ep 1
  ifeq ($(arch),knl)
-  fold_4byte			:=	x=2,y=8
-  cluster			:=	x=2
-  def_block_args		:=	-bx 160 -by 256 -bz 96
-  pfd_l1			:=	1
-  pfd_l2			:=	0
+  fold_4byte		:=	x=2,y=8
+  cluster		:=	x=2
+  def_block_args	:=	-bx 160 -by 256 -bz 96
+  pfd_l1		:=	1
+  pfd_l2		:=	0
  else ifneq ($(filter $(arch),hsw bdw),)
-  def_thread_divisor		:=	2
-  def_block_threads		:=	1
-  def_block_args		:=	-bx 296 -by 5 -bz 290
-  cluster			:=	z=2
-  pfd_l1			:=	0
-  pfd_l2			:=	0
+  def_block_args	:=	-bx 48 -by 60 -bz 112
+  pfd_l1		:=	0
+  pfd_l2		:=	0
  else ifneq ($(filter $(arch),skx skl clx),)
-  def_thread_divisor		:=	1
-  def_block_threads		:=	2
-  def_block_args		:=	-bx 108	 -by 28 -bz 132
-  cluster			:=	x=1
-  pfd_l1			:=	0
-  pfd_l2			:=	2
+  def_block_args	:=	-bx 108	 -by 28 -bz 132
+  pfd_l1		:=	0
+  pfd_l2		:=	2
  endif
 
 else ifneq ($(findstring awp,$(YC_STENCIL)),)
- def_block_args			:=	-b 32
- YC_FLAGS			+=	-min-es 1
- def_pad_args			:=	-ep 1
+ YC_FLAGS		+=	-min-es 1
+ def_pad_args		:=	-ep 1
  ifeq ($(arch),knl)
-  def_thread_divisor		:=	2
-  def_block_threads		:=	4
-  def_block_args		:=	-b 48 -bx 112
-  pfd_l1			:=	1
-  pfd_l2			:=	0
+  def_thread_divisor	:=	2
+  def_block_threads	:=	4
+  def_block_args	:=	-bx 48 -by 48 -bx 112
+  pfd_l1		:=	1
+  pfd_l2		:=	0
  else ifneq ($(filter $(arch),hsw bdw),)
-  cluster			:=	y=2
-  def_block_args		:=	-bx 128 -by 16 -bz 32 
-  more_def_args			+=	-sbx 32 -sby 2 -sbz 32
-  pfd_l1			:=	1
-  pfd_l2			:=	2
+  def_block_args	:=	-bx 64 -by 8 -bz 64
+  pfd_l1		:=	1
+  pfd_l2		:=	2
  else ifneq ($(filter $(arch),skx skl clx),)
-  def_block_args		:=	-bx 44 -by 8 -bz 108
-  pfd_l1			:=	1
-  pfd_l2			:=	0
+  def_block_args	:=	-bx 64 -by 8 -bz 108
+  pfd_l1		:=	1
+  pfd_l2		:=	0
  endif
 
 else ifneq ($(findstring ssg,$(YC_STENCIL)),)
- ifneq ($(filter $(arch),skx skl clx),)
+ ifneq ($(filter $(arch),hsw bdw),)
+  def_block_args	:=	-bx 64 -by 16 -bz 96
+ else ifneq ($(filter $(arch),skx skl clx),)
   def_block_args	:=	-bx 96 -by 16 -bz 80
-  def_block_threads	:=	2
  endif
 
 else ifneq ($(findstring fsg,$(YC_STENCIL)),)
@@ -131,16 +123,16 @@ else ifneq ($(findstring fsg,$(YC_STENCIL)),)
   def_block_threads	:=	2
   pfd_l1		:=	0
   pfd_l2		:=	2
+ else ifneq ($(filter $(arch),hsw bdw),)
+  def_block_args	:=	-bx 48 -by 4 -bz 128
  else ifneq ($(filter $(arch),skx skl clx),)
   def_block_args	:=	-bx 188 -by 12 -bz 24
-  def_block_threads	:=	1
  endif
 
 else ifeq ($(YC_STENCIL),tti)
  MACROS			+=	MAX_EXCH_DIST=3
  ifneq ($(filter $(arch),skx skl clx),)
   def_block_args	:=	-bx 80 -by 16 -bz 40
-  def_block_threads	:=	1
  endif
 
 else ifeq ($(YC_STENCIL),stream)
@@ -170,7 +162,7 @@ else ifeq ($(arch),knl)
  GCXX_ISA	?=	-march=knl
  MACROS		+=	USE_INTRIN512 USE_RCP28 NUMA_PREF=1
  YC_TARGET	?=	avx512
- def_block_args ?=	-b 96
+ def_block_args ?=	-b 64
  def_block_threads ?=	8
  pfd_l1		?=	1
  pfd_l2		?=	0
@@ -227,7 +219,7 @@ omp_block_schedule	?=	static,1
 omp_misc_schedule	?=	guided
 def_thread_divisor	?=	1
 def_block_threads	?=	2
-def_block_args		?=	-b 64
+def_block_args		?=	-b 32
 cluster			?=	x=1
 pfd_l1			?=	0
 pfd_l2			?=	2
@@ -391,7 +383,7 @@ endif
 # Add options for PMEM.
 ifeq ($(pmem),1)
  YK_CXXFLAGS	+=	-I/opt/intel/memkind/include
- YK_LIBS		+=	-L/opt/intel/memkind/lib -lmemkind
+ YK_LIBS	+=	-L/opt/intel/memkind/lib -lmemkind
  MACROS		+=	USE_PMEM
 endif
 
@@ -440,10 +432,12 @@ endif
 # VTUNE settings.
 ifeq ($(vtune),1)
  MACROS		+=	USE_VTUNE
-ifneq ($(VTUNE_AMPLIFIER_2019_DIR),)
- VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_2019_DIR)
+ifneq ($(VTUNE_AMPLIFIER_2020_DIR),)
+ VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_2020_DIR)
 else ifneq ($(VTUNE_AMPLIFIER_2019_DIR),)
  VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_2019_DIR)
+else ifneq ($(VTUNE_AMPLIFIER_2018_DIR),)
+ VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_2018_DIR)
 else ifneq ($(VTUNE_AMPLIFIER_XE_2017_DIR),)
  VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_XE_2017_DIR)
 else ifneq ($(VTUNE_AMPLIFIER_XE_2016_DIR),)
@@ -850,6 +844,7 @@ stencil-tests:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_misc_2d fold=x=2,y=2 EXTRA_YC_FLAGS=-interleave-misc
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_step_cond_1d fold=x=4
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_subdomain_1d fold=x=4
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_subdomain_2d fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_subdomain_3d fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_scratch_1d fold=x=4
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_scratch_3d fold=x=2,z=2

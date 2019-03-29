@@ -158,7 +158,7 @@ namespace yask {
             return _layout_base->get_sizes();
         }
         void set_dim_sizes(const Indices& sizes) {
-            for (int i = 0; i < _grid_dims.size(); i++)
+            for (int i = 0; size_t(i) < _grid_dims.size(); i++)
                 _grid_dims.setVal(i, sizes[i]);
             _sync_layout_with_dims();
         }
@@ -305,7 +305,7 @@ namespace yask {
         virtual idx_t get_index(const Indices& idxs, bool check=true) const final {
 #ifdef CHECK
             if (check) {
-                for (int i = 0; i < this->_grid_dims.size(); i++) {
+                for (int i = 0; size_t(i) < this->_grid_dims.size(); i++) {
                     idx_t j = idxs[i];
                     assert(j >= 0);
                     assert(j < this->_grid_dims.getVal(i));
