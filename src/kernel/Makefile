@@ -383,7 +383,7 @@ endif
 # Add options for PMEM.
 ifeq ($(pmem),1)
  YK_CXXFLAGS	+=	-I/opt/intel/memkind/include
- YK_LIBS		+=	-L/opt/intel/memkind/lib -lmemkind
+ YK_LIBS	+=	-L/opt/intel/memkind/lib -lmemkind
  MACROS		+=	USE_PMEM
 endif
 
@@ -844,6 +844,7 @@ stencil-tests:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_misc_2d fold=x=2,y=2 EXTRA_YC_FLAGS=-interleave-misc
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_step_cond_1d fold=x=4
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_subdomain_1d fold=x=4
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_subdomain_2d fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_subdomain_3d fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_scratch_1d fold=x=4
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_scratch_3d fold=x=2,z=2
