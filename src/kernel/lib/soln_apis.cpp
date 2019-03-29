@@ -257,8 +257,8 @@ namespace yask {
 #endif
         os <<
             " vector-len:            " << VLEN << endl <<
-            " extra-padding:         " << opts->_extra_pad_sizes.makeDimValStr() << endl <<
-            " minimum-padding:       " << opts->_min_pad_sizes.makeDimValStr() << endl <<
+            " extra-padding:         " << opts->_extra_pad_sizes.removeDim(step_posn).makeDimValStr() << endl <<
+            " minimum-padding:       " << opts->_min_pad_sizes.removeDim(step_posn).makeDimValStr() << endl <<
             " L1-prefetch-distance:  " << PFD_L1 << endl <<
             " L2-prefetch-distance:  " << PFD_L2 << endl <<
             " max-halos:             " << max_halos.makeDimValStr() << endl;
