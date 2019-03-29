@@ -457,15 +457,16 @@ int main(int argc, char** argv)
                 " mid-throughput (num-points/sec):  " << makeNumStr(mid_trial->pts_ps) << endl <<
                 divLine <<
                 "Notes:\n"
+                " The 50th-percentile trial is the same as the median trial\n"
+                "  when there is an odd number of trials. When there is an even\n"
+                "  number of trials, the nearest-rank method is used. An odd\n"
+                "  number of trials is recommended.\n"
                 " Num-reads/sec, num-writes/sec, and FLOPS are metrics based on\n"
                 "  stencil specifications and can vary due to differences in\n"
                 "  implementations and optimizations.\n"
                 " Num-points/sec is based on overall problem size and is\n"
                 "  a more reliable performance metric, esp. when comparing\n"
-                "  across implementations.\n"
-                " The 50th-percentile trial is the same as the median trial\n"
-                "  when there is an odd number of trials. When there is an even\n"
-                "  number of trials, the nearest-rank method is used.\n";
+                "  across implementations.\n";
             context->print_warnings();
         }
 
