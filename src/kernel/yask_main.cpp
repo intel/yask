@@ -191,12 +191,13 @@ struct AppSettings : public KernelSettings {
     // Exit with help message if requested.
     void splash(ostream& os, int argc, char** argv)
     {
+        // See https://en.wikipedia.org/wiki/Box-drawing_character.
         os <<
-            "┌────────────────────────────────────────────┐\n"
-            "│   Y.A.S.K. ── Yet Another Stencil Kernel   │\n"
-            "│       https://github.com/intel/yask        │\n"
-            "│ Copyright (c) 2014-2019, Intel Corporation │\n"
-            "└────────────────────────────────────────────┘\n"
+            " \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n"
+            " \u2502   Y.A.S.K. \u2500\u2500 Yet Another Stencil Kernel   \u2502\n"
+            " \u2502       https://github.com/intel/yask        \u2502\n"
+            " \u2502 Copyright (c) 2014-2019, Intel Corporation \u2502\n"
+            " \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n"
             "\n"
             "Version: " << yask_get_version_string() << endl <<
             "Stencil name: " YASK_STENCIL_NAME << endl;
@@ -240,14 +241,10 @@ int main(int argc, char** argv)
     // just a line.
     string divLine;
     for (int i = 0; i < 70; i++)
-        divLine += "─";
+        divLine += "\u2500";
     divLine += "\n";
 
     try {
-        // Stop collecting VTune data.
-        // Even better to use -start-paused option.
-        VTUNE_PAUSE;
-
         // Bootstrap factories from kernel API.
         yk_factory kfac;
         yask_output_factory yof;
@@ -415,16 +412,10 @@ int main(int argc, char** argv)
             }
             kenv->global_barrier();
 
-            // Start vtune collection.
-            VTUNE_RESUME;
-
             // Actual work.
             context->clear_timers();
             ksoln->run_solution(first_t, last_t);
             kenv->global_barrier();
-
-            // Stop vtune collection.
-            VTUNE_PAUSE;
 
             // Calc and report perf.
             auto tstats = context->get_stats();
@@ -466,15 +457,16 @@ int main(int argc, char** argv)
                 " mid-throughput (num-points/sec):  " << makeNumStr(mid_trial->pts_ps) << endl <<
                 divLine <<
                 "Notes:\n"
+                " The 50th-percentile trial is the same as the median trial\n"
+                "  when there is an odd number of trials. When there is an even\n"
+                "  number of trials, the nearest-rank method is used. An odd\n"
+                "  number of trials is recommended.\n"
                 " Num-reads/sec, num-writes/sec, and FLOPS are metrics based on\n"
                 "  stencil specifications and can vary due to differences in\n"
                 "  implementations and optimizations.\n"
                 " Num-points/sec is based on overall problem size and is\n"
                 "  a more reliable performance metric, esp. when comparing\n"
-                "  across implementations.\n"
-                " The 50th-percentile trial is the same as the median trial\n"
-                "  when there is an odd number of trials. When there is an even\n"
-                "  number of trials, the nearest-rank method is used.\n";
+                "  across implementations.\n";
             context->print_warnings();
         }
 

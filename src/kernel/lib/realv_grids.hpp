@@ -995,7 +995,7 @@ namespace yask {
                              int line) const {
             STATE_VARS_CONST(this);
             TRACE_MEM_MSG("prefetchVecNorm<" << level << ">(" <<
-                          makeIndexString(vec_idxs.multElements(_vec_lens)) << ")");
+                          makeIndexString(vec_idxs.mulElements(_vec_lens)) << ")");
 
             auto p = getVecPtrNorm(vec_idxs, alloc_step_idx, false);
             prefetch<level>(p);

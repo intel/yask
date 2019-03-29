@@ -82,6 +82,7 @@ namespace yask {
     /// Bootstrap factory to create a stencil solution.
     class yk_factory {
     public:
+        yk_factory();
         virtual ~yk_factory() {}
 
         /// Version information.
@@ -89,7 +90,7 @@ namespace yask {
            @returns String describing the current version.
         */
         virtual std::string
-		get_version_string();
+        get_version_string();
 
         /// Create an object to hold environment information.
         /**

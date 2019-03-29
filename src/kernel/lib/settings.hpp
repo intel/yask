@@ -462,6 +462,8 @@ namespace yask {
         DimsPtr _dims;
 
         // Sizes in elements (points).
+        // All these tuples contain stencil dims, even the ones that
+        // don't strictly need them.
         IdxTuple _global_sizes;     // Overall problem domain sizes.
         IdxTuple _rank_sizes;     // This rank's domain sizes.
         IdxTuple _region_sizes;   // region size (used for wave-front tiling).

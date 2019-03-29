@@ -499,6 +499,34 @@ public:
 
 REGISTER_STENCIL(TestSubdomainStencil1);
 
+class TestSubdomainStencil2 : public TestBase {
+
+protected:
+
+    // Vars.
+    MAKE_GRID(A, t, x, y); // time-varying grid.
+
+public:
+
+    TestSubdomainStencil2(StencilList& stencils, int radius=2) :
+        TestBase("test_subdomain_2d", stencils, radius) { }
+
+    // Define equation to apply to all points in 'A' grid.
+    virtual void define() {
+
+        // Sub-domain is rectangle interior.
+        Condition sd0 =
+            (x >= first_index(x) + 5) && (x <= last_index(x) - 3) &&
+            (y >= first_index(y) + 4) && (y <= last_index(y) - 6);
+        
+        // Set A w/different stencils depending on condition.
+        A(t+1, x, y) EQUALS def_2d(A, t, x, 0, 2, y, 1, 0) IF sd0;
+        A(t+1, x, y) EQUALS def_2d(A, t, x, 1, 0, y, 0, 2) IF !sd0;
+    }
+};
+
+REGISTER_STENCIL(TestSubdomainStencil2);
+
 class TestSubdomainStencil3 : public TestBase {
 
 protected:

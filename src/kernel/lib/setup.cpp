@@ -31,6 +31,12 @@ using namespace std;
 
 namespace yask {
 
+    // Stop collecting VTune data when a factory is defined.
+    // Even better to use -start-paused option.
+    yk_factory::yk_factory() {
+        VTUNE_PAUSE;
+    }
+    
     // ScanIndices ctor.
     ScanIndices::ScanIndices(const Dims& dims, bool use_vec_align, IdxTuple* ofs) :
         ndims(NUM_STENCIL_DIMS),
