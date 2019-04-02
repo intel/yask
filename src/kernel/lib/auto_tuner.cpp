@@ -107,13 +107,13 @@ namespace yask {
         // Determine number of steps to run.
         // If wave-fronts are enabled, run a max number of these steps.
         idx_t step_dir = dims->_step_dir; // +/- 1.
-        idx_t step_t = min(max(wf_steps, idx_t(1)), +AutoTuner::max_step_t) * step_dir;
+        idx_t stride_t = min(max(wf_steps, idx_t(1)), +AutoTuner::max_stride_t) * step_dir;
 
         // Run time-steps until AT converges.
-        for (idx_t t = 0; ; t += step_t) {
+        for (idx_t t = 0; ; t += stride_t) {
 
-            // Run step_t time-step(s).
-            run_solution(t, t + step_t - step_dir);
+            // Run stride_t time-step(s).
+            run_solution(t, t + stride_t - step_dir);
 
             // AT done on this rank?
             if (!is_auto_tuner_enabled())
@@ -325,7 +325,7 @@ namespace yask {
                     auto dmax = outer_sizes()[dname];
 
                     // Determine distance of GD neighbors.
-                    auto dist = dmin; // step by cluster size.
+                    auto dist = dmin; // stride by cluster size.
                     dist = max(dist, min_dist);
                     dist *= radius;
 

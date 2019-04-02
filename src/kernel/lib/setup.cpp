@@ -42,7 +42,7 @@ namespace yask {
         ndims(NUM_STENCIL_DIMS),
         begin(idx_t(0), ndims),
         end(idx_t(0), ndims),
-        step(idx_t(1), ndims),
+        stride(idx_t(1), ndims),
         align(idx_t(1), ndims),
         align_ofs(idx_t(0), ndims),
         group_size(idx_t(1), ndims),

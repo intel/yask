@@ -346,13 +346,18 @@ namespace yask {
 
         // Input values; not modified.
         Indices begin, end;     // first and end (beyond last) range of each index.
-        Indices step;           // step value within range.
-        Indices align;          // alignment of steps after first one.
+        Indices stride;         // distance between indices within [begin .. end).
+        Indices align;          // alignment of indices after first one.
         Indices align_ofs;      // adjustment for alignment (see below).
         Indices group_size;     // proximity grouping within range.
 
-        // Alignment: when possible, start positions after the first
-        // in each dim will be aligned such that ((start - align_ofs) % align) == 0.
+        // Alignment:
+        // First 'start' index is always at 'begin'.
+        // Subsequent indices are at 'begin' + 'stride', 'begin' + 2*'stride', etc. if 'align'==1.
+        // If 'align'>1, subsequent indices will be aligned such that
+        // (('start' - 'align_ofs') % 'align') == 0.
+        // Last 'start' index is always < 'end'.
+        // Last 'stop' index always == 'end'.
 
         // Output values; set once for entire range.
         Indices num_indices;    // number of indices in each dim.

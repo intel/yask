@@ -42,16 +42,16 @@ namespace yask {
         // Determine step dir from order of first/last.
         idx_t step_dir = (last_step_index >= first_step_index) ? 1 : -1;
         
-        // Find begin, step and end in step-dim.
+        // Find begin, stride and end in step-dim.
         idx_t begin_t = first_step_index;
-        idx_t step_t = step_dir; // always +/- 1 for ref run.
-        assert(step_t);
+        idx_t stride_t = step_dir; // always +/- 1 for ref run.
+        assert(stride_t);
         idx_t end_t = last_step_index + step_dir; // end is beyond last.
 
         // backward?
-        if (step_t < 0) {
-            begin_t = end_t + step_t;
-            end_t = step_t;
+        if (stride_t < 0) {
+            begin_t = end_t + stride_t;
+            end_t = stride_t;
         }
 
         // Begin & end tuples.
@@ -101,22 +101,22 @@ namespace yask {
         exchange_halos();
 
         // Number of iterations to get from begin_t, stopping before end_t,
-        // stepping by step_t.
+        // jumping by stride_t.
         const idx_t num_t = abs(end_t - begin_t);
         for (idx_t index_t = 0; index_t < num_t; index_t++)
         {
             // This value of index_t steps from start_t to stop_t-1.
-            const idx_t start_t = begin_t + (index_t * step_t);
-            const idx_t stop_t = (step_t > 0) ?
-                min(start_t + step_t, end_t) :
-                max(start_t + step_t, end_t);
+            const idx_t start_t = begin_t + (index_t * stride_t);
+            const idx_t stop_t = (stride_t > 0) ?
+                min(start_t + stride_t, end_t) :
+                max(start_t + stride_t, end_t);
 
             // Set indices that will pass through generated code
             // because the step loop is coded here.
             rank_idxs.index[step_posn] = index_t;
             rank_idxs.start[step_posn] = start_t;
             rank_idxs.stop[step_posn] = stop_t;
-            rank_idxs.step[step_posn] = step_t;
+            rank_idxs.stride[step_posn] = stride_t;
 
             // Loop thru bundles. We ignore bundle packs here
             // because packing bundles is an optional optimizations.
@@ -146,9 +146,9 @@ namespace yask {
                     // Indices needed for the generated misc loops.  Will normally be a
                     // copy of rank_idxs except when updating scratch-grids.
                     ScanIndices misc_idxs = sg->adjust_span(scratch_grid_idx, rank_idxs);
-                    misc_idxs.step.setFromConst(1); // ensure unit step.
+                    misc_idxs.stride.setFromConst(1); // ensure unit stride.
 
-                    // Define misc-loop function.  Since step is always 1, we
+                    // Define misc-loop function.  Since stride is always 1, we
                     // ignore misc_stop.  If point is in sub-domain for this
                     // bundle, then evaluate the reference scalar code.
                     // TODO: fix domain of scratch grids.
@@ -198,16 +198,16 @@ namespace yask {
         // Determine step dir from order of first/last.
         idx_t step_dir = (last_step_index >= first_step_index) ? 1 : -1;
         
-        // Find begin, step and end in step-dim.
+        // Find begin, stride and end in step-dim.
         idx_t begin_t = first_step_index;
 
-        // Step-size in step-dim is number of region steps.
+        // Stride-size in step-dim is number of region steps.
         // Then, it is multipled by +/-1 to get proper direction.
-        idx_t step_t = max(wf_steps, idx_t(1)) * step_dir;
-        assert(step_t);
+        idx_t stride_t = max(wf_steps, idx_t(1)) * step_dir;
+        assert(stride_t);
         idx_t end_t = last_step_index + step_dir; // end is beyond last.
 
-        // Begin, end, step tuples.
+        // Begin, end, stride tuples.
         // Based on overall bounding box, which includes
         // any needed extensions for wave-fronts.
         IdxTuple begin(stencil_dims);
@@ -216,14 +216,14 @@ namespace yask {
         IdxTuple end(stencil_dims);
         end.setVals(ext_bb.bb_end, false);
         end[step_posn] = end_t;
-        IdxTuple step(stencil_dims);
-        step.setVals(opts->_region_sizes, false); // step by region sizes.
-        step[step_posn] = step_t;
+        IdxTuple stride(stencil_dims);
+        stride.setVals(opts->_region_sizes, false); // stride by region sizes.
+        stride[step_posn] = stride_t;
 
         TRACE_MSG("run_solution: [" <<
                   begin.makeDimValStr() << " ... " <<
                   end.makeDimValStr() << ") by " <<
-                  step.makeDimValStr());
+                  stride.makeDimValStr());
         if (!rank_bb.bb_valid)
             THROW_YASK_EXCEPTION("Error: run_solution() called without calling prepare_solution() first");
         if (ext_bb.bb_size < 1) {
@@ -274,16 +274,16 @@ namespace yask {
         }
 
         // If original region covered entire rank in a dim, set
-        // step size to ensure only one step is taken.
+        // stride size to ensure only one stride is taken.
         DOMAIN_VAR_LOOP(i, j) {
             if (opts->_region_sizes[i] >= opts->_rank_sizes[i])
-                step[i] = end[i] - begin[i];
+                stride[i] = end[i] - begin[i];
         }
         TRACE_MSG("run_solution: after adjustment for " << num_wf_shifts <<
                   " wave-front shift(s): [" <<
                   begin.makeDimValStr() << " ... " <<
                   end.makeDimValStr() << ") by " <<
-                  step.makeDimValStr());
+                  stride.makeDimValStr());
 
         // At this point, 'begin' and 'end' should describe the *max* range
         // needed in the domain for this rank for the first time step.  At
@@ -296,7 +296,7 @@ namespace yask {
         ScanIndices rank_idxs(*dims, true, &rank_domain_offsets);
         rank_idxs.begin = begin;
         rank_idxs.end = end;
-        rank_idxs.step = step;
+        rank_idxs.stride = stride;
 
         // Make sure threads are set properly for a region.
         set_region_threads();
@@ -305,22 +305,22 @@ namespace yask {
         exchange_halos();
 
         // Number of iterations to get from begin_t to end_t-1,
-        // stepping by step_t.
-        const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(step_t));
+        // jumping by stride_t.
+        const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(stride_t));
         for (idx_t index_t = 0; index_t < num_t; index_t++)
         {
             // This value of index_t steps from start_t to stop_t-1.
-            const idx_t start_t = begin_t + (index_t * step_t);
-            const idx_t stop_t = (step_t > 0) ?
-                min(start_t + step_t, end_t) :
-                max(start_t + step_t, end_t);
+            const idx_t start_t = begin_t + (index_t * stride_t);
+            const idx_t stop_t = (stride_t > 0) ?
+                min(start_t + stride_t, end_t) :
+                max(start_t + stride_t, end_t);
             idx_t this_num_t = abs(stop_t - start_t);
 
             // Set indices that will pass through generated code.
             rank_idxs.index[step_posn] = index_t;
             rank_idxs.start[step_posn] = start_t;
             rank_idxs.stop[step_posn] = stop_t;
-            rank_idxs.step[step_posn] = step_t;
+            rank_idxs.stride[step_posn] = stride_t;
 
             // Start timer for auto-tuner.
             _at.timer.start();
@@ -589,25 +589,25 @@ namespace yask {
         region_idxs.initFromOuter(rank_idxs);
 
         // Time range.
-        // When doing WF rank tiling, this loop will step through
+        // When doing WF rank tiling, this loop will stride through
         // several time-steps in each region.
-        // When also doing TB, it will step by the block steps.
+        // When also doing TB, it will stride by the block strides.
         idx_t begin_t = region_idxs.begin[step_posn];
         idx_t end_t = region_idxs.end[step_posn];
         idx_t step_dir = (end_t >= begin_t) ? 1 : -1;
-        idx_t step_t = max(tb_steps, idx_t(1)) * step_dir;
-        assert(step_t);
-        const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(step_t));
+        idx_t stride_t = max(tb_steps, idx_t(1)) * step_dir;
+        assert(stride_t);
+        const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(stride_t));
 
         // Time loop.
         idx_t region_shift_num = 0;
         for (idx_t index_t = 0; index_t < num_t; index_t++) {
 
             // This value of index_t steps from start_t to stop_t-1.
-            const idx_t start_t = begin_t + (index_t * step_t);
-            const idx_t stop_t = (step_t > 0) ?
-                min(start_t + step_t, end_t) :
-                max(start_t + step_t, end_t);
+            const idx_t start_t = begin_t + (index_t * stride_t);
+            const idx_t stop_t = (stride_t > 0) ?
+                min(start_t + stride_t, end_t) :
+                max(start_t + stride_t, end_t);
 
             // Set step indices that will pass through generated code.
             region_idxs.index[step_posn] = index_t;
@@ -638,10 +638,10 @@ namespace yask {
                         continue;
                     }
 
-                    // Steps within a region are based on pack block sizes.
+                    // Strides within a region are based on pack block sizes.
                     auto& settings = bp->getActiveSettings();
-                    region_idxs.step = settings._block_sizes;
-                    region_idxs.step[step_posn] = step_t;
+                    region_idxs.stride = settings._block_sizes;
+                    region_idxs.stride[step_posn] = stride_t;
 
                     // Groups in region loops are based on block-group sizes.
                     region_idxs.group_size = settings._block_group_sizes;
@@ -659,7 +659,7 @@ namespace yask {
                         // If there is only one blk in a region, make sure
                         // this blk fills this whole region.
                         if (settings._block_sizes[i] >= settings._region_sizes[i])
-                            region_idxs.step[i] = region_idxs.end[i] - region_idxs.begin[i];
+                            region_idxs.stride[i] = region_idxs.end[i] - region_idxs.begin[i];
                     }
                 
                     // Only need to loop through the span of the region if it is
@@ -695,10 +695,10 @@ namespace yask {
                 // calc_block() is called.
                 BundlePackPtr bp;
 
-                // Steps within a region are based on rank block sizes.
+                // Strides within a region are based on rank block sizes.
                 auto& settings = *opts;
-                region_idxs.step = settings._block_sizes;
-                region_idxs.step[step_posn] = step_t;
+                region_idxs.stride = settings._block_sizes;
+                region_idxs.stride[step_posn] = stride_t;
 
                 // Groups in region loops are based on block-group sizes.
                 region_idxs.group_size = settings._block_group_sizes;
@@ -717,9 +717,9 @@ namespace yask {
 
                 DOMAIN_VAR_LOOP(i, j) {
 
-                    // If original blk covered entire region, reset step.
+                    // If original blk covered entire region, reset stride.
                     if (settings._block_sizes[i] >= settings._region_sizes[i])
-                        region_idxs.step[i] = region_idxs.end[i] - region_idxs.begin[i];
+                        region_idxs.stride[i] = region_idxs.end[i] - region_idxs.begin[i];
                 }
                 
                 // To tesselate n-D domain space, we use n+1 distinct
@@ -839,9 +839,9 @@ namespace yask {
         idx_t begin_t = block_idxs.begin[step_posn];
         idx_t end_t = block_idxs.end[step_posn];
         idx_t step_dir = (end_t >= begin_t) ? 1 : -1;
-        idx_t step_t = max(tb_steps, idx_t(1)) * step_dir;
-        assert(step_t);
-        const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(step_t));
+        idx_t stride_t = max(tb_steps, idx_t(1)) * step_dir;
+        assert(stride_t);
+        const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(stride_t));
 
         // If TB is not being used, just process the given pack.
         // No need for a time loop.
@@ -849,7 +849,7 @@ namespace yask {
         // calc_region() when not using TB.
         if (tb_steps == 0) {
             assert(bp);
-            assert(abs(step_t) == 1);
+            assert(abs(stride_t) == 1);
             assert(abs(end_t - begin_t) == 1);
             assert(num_t == 1);
         
@@ -858,10 +858,10 @@ namespace yask {
             block_idxs.start[step_posn] = begin_t;
             block_idxs.stop[step_posn] = end_t;
 
-            // Steps within a block are based on pack mini-block sizes.
+            // Strides within a block are based on pack mini-block sizes.
             auto& settings = bp->getActiveSettings();
-            block_idxs.step = settings._mini_block_sizes;
-            block_idxs.step[step_posn] = step_t;
+            block_idxs.stride = settings._mini_block_sizes;
+            block_idxs.stride[step_posn] = stride_t;
         
             // Groups in block loops are based on mini-block-group sizes.
             block_idxs.group_size = settings._mini_block_group_sizes;
@@ -898,10 +898,10 @@ namespace yask {
             block_idxs.start[step_posn] = begin_t;
             block_idxs.stop[step_posn] = end_t;
 
-            // Steps within a block are based on rank mini-block sizes.
+            // Strides within a block are based on rank mini-block sizes.
             auto& settings = *opts;
-            block_idxs.step = settings._mini_block_sizes;
-            block_idxs.step[step_posn] = step_dir;
+            block_idxs.stride = settings._mini_block_sizes;
+            block_idxs.stride[step_posn] = step_dir;
 
             // Groups in block loops are based on mini-block-group sizes.
             block_idxs.group_size = settings._mini_block_group_sizes;
@@ -923,16 +923,16 @@ namespace yask {
                 auto width = region_idxs.stop[i] - region_idxs.start[i];
                 adj_block_idxs.end[i] += width;
 
-                // If original MB covers a whole block, reset step.
+                // If original MB covers a whole block, reset stride.
                 if (settings._mini_block_sizes[i] >= settings._block_sizes[i])
-                    adj_block_idxs.step[i] = adj_block_idxs.end[i] - adj_block_idxs.begin[i];
+                    adj_block_idxs.stride[i] = adj_block_idxs.end[i] - adj_block_idxs.begin[i];
             }
             TRACE_MSG("calc_block: phase " << phase <<
                       ", adjusted block [" <<
                       adj_block_idxs.begin.makeValStr(nsdims) << " ... " <<
                       adj_block_idxs.end.makeValStr(nsdims) << 
                       ") with mini-block stride " <<
-                      adj_block_idxs.step.makeValStr(nsdims));
+                      adj_block_idxs.stride.makeValStr(nsdims));
                     
             // Loop thru shapes.
             for (idx_t shape = 0; shape < nshapes; shape++) {
@@ -1005,24 +1005,24 @@ namespace yask {
         mini_block_idxs.initFromOuter(adj_block_idxs);
 
         // Time range.
-        // No more temporal blocks below mini-blocks, so we always step
+        // No more temporal blocks below mini-blocks, so we always stride
         // by +/- 1.
         idx_t begin_t = mini_block_idxs.begin[step_posn];
         idx_t end_t = mini_block_idxs.end[step_posn];
         idx_t step_dir = (end_t >= begin_t) ? 1 : -1;
-        idx_t step_t = 1 * step_dir;        // +/- 1.
-        assert(step_t);
-        const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(step_t));
+        idx_t stride_t = 1 * step_dir;        // +/- 1.
+        assert(stride_t);
+        const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(stride_t));
 
         // Time loop.
         idx_t shift_num = 0;
         for (idx_t index_t = 0; index_t < num_t; index_t++) {
 
             // This value of index_t steps from start_t to stop_t-1.
-            const idx_t start_t = begin_t + (index_t * step_t);
-            const idx_t stop_t = (step_t > 0) ?
-                min(start_t + step_t, end_t) :
-                max(start_t + step_t, end_t);
+            const idx_t start_t = begin_t + (index_t * stride_t);
+            const idx_t stop_t = (stride_t > 0) ?
+                min(start_t + stride_t, end_t) :
+                max(start_t + stride_t, end_t);
             TRACE_MSG("calc_mini_block: phase " << phase <<
                       ", shape " << shape <<
                       ", in step " << start_t);
@@ -1060,11 +1060,11 @@ namespace yask {
                 if (region_thread_idx == 0)
                     bp->start_timers();
                 
-                // Steps within a mini-blk are based on sub-blk sizes.
+                // Strides within a mini-blk are based on sub-blk sizes.
                 // This will get overridden later if thread binding is enabled.
                 auto& settings = bp->getActiveSettings();
-                mini_block_idxs.step = settings._sub_block_sizes;
-                mini_block_idxs.step[step_posn] = step_t;
+                mini_block_idxs.stride = settings._sub_block_sizes;
+                mini_block_idxs.stride[step_posn] = stride_t;
 
                 // Groups in mini-blk loops are based on sub-block-group sizes.
                 mini_block_idxs.group_size = settings._sub_block_group_sizes;
@@ -1925,7 +1925,7 @@ namespace yask {
     void StencilContext::mark_grids_dirty(const BundlePackPtr& sel_bp,
                                           idx_t start, idx_t stop) {
         STATE_VARS(this);
-        idx_t step = (start > stop) ? -1 : 1;
+        idx_t stride = (start > stop) ? -1 : 1;
         map<YkGridPtr, set<idx_t>> grids_done;
 
         // Stencil bundle packs.
@@ -1936,14 +1936,14 @@ namespace yask {
                 continue;
 
             // Each input step.
-            for (idx_t t = start; t != stop; t += step) {
+            for (idx_t t = start; t != stop; t += stride) {
 
                 // Each bundle in this pack.
                 for (auto* sb : *bp) {
 
                     // Get output step for this bundle, if any.
                     // For many stencils, this will be t+1 or
-                    // t-1 if stepping backward.
+                    // t-1 if striding backward.
                     idx_t t_out = 0;
                     if (!sb->get_output_step_index(t, t_out))
                         continue;

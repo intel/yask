@@ -1,7 +1,7 @@
 # YASK--Yet Another Stencil Kernel
 
 * New YASK users may want to start with the [YASK tutorial](docs/YASK-tutorial.pdf).
-* Existing YASK users may want to jump to the [backward-compatibility notices](#backward-compatibility-notices).
+* Users with existing YASK-based code may want to jump to the [backward-compatibility notices](#backward-compatibility-notices).
 
 ## Overview
 YASK is a framework to rapidly create high-performance stencil code including optimizations and features such as
@@ -9,7 +9,7 @@ YASK is a framework to rapidly create high-performance stencil code including op
 * Multi-level OpenMP parallelism to exploit multiple cores and threads,
 * Scaling to multiple sockets and nodes via MPI with overlapped communication and compute, and
 * Spatial tiling with automatically-tuned block sizes,
-* Temporal tiling to further increase cache locality,
+* Temporal tiling in multiple dimensions to further increase cache locality,
 * APIs for C++ and Python: [API documentation](https://rawgit.com/intel/yask/api-docs/html/index.html).
 
 YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-optimized code for Intel(R) Xeon Phi(TM) and Intel(R) Xeon(R) processors.
@@ -68,9 +68,9 @@ This changed the old behavior of `make` defaulting to `snb` architecture and `bi
 Those options are still available to override the host-based default.
 * Version 2.16.03 moved the position of the log-file name to the last column in the CSV output of `utils/bin/yask_log_to_csv.pl`.
 * Version 2.15.04 required a call to `yc_grid::set_dynamic_step_alloc(true)` to allow changing the
-allocation in the step (time) dimension for grid variables created at YASK compile-time.
+allocation in the step (time) dimension at run-time for grid variables created at YASK compile-time.
 * Version 2.15.02 required all "misc" indices to be yask-compiler-time constants.
-* Version 2.14.05 changed the meaning of temporal sizes so that 0 means never do temporal blocking and 1 allows blocking within a single time-step for multi-pack solutions. The behavior of the default settings have not changed.
+* Version 2.14.05 changed the meaning of temporal sizes so that 0 means never do temporal blocking and 1 allows blocking within a single time-step for multi-pack solutions. The default setting is 0, which keeps the old behavior.
 * Version 2.13.06 changed the default behavior of the performance-test utility (`yask.sh`) to run trials for a given amount of time instead of a given number of steps. As of version 2.13.08, use the `-trial_time` option to specify the number of seconds to run. To force a specific number of trials as in previous versions, use the `-trial_steps` option.
 * Version 2.13.02 required some changes in perf statistics due to step (temporal) conditions. Both text output and `yk_stats` APIs affected.
 * Version 2.12.00 removed the long-deprecated `==` operator for asserting equality between a grid point and an equation. Use `EQUALS` instead.
