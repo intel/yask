@@ -172,7 +172,7 @@ namespace yask {
                 // rank. This is needed because neighbors will not know what
                 // grids are actually dirty, and all ranks must have the same
                 // information about which grids are possibly dirty.
-                mark_grids_dirty(nullptr, start_t, stop_t);
+                update_grids(nullptr, start_t, stop_t, true);
 
             } // all bundles.
 
@@ -183,7 +183,7 @@ namespace yask {
         exchange_halos();
 
         run_time.stop();
-    }
+    } // run_ref.
 
     // Eval stencil bundle pack(s) over grid(s) using optimized code.
     void StencilContext::run_solution(idx_t first_step_index,
@@ -405,7 +405,7 @@ namespace yask {
                         // same information about which grids are possibly
                         // dirty.  TODO: make this smarter to save unneeded
                         // MPI exchanges.
-                        mark_grids_dirty(bp, start_t, stop_t);
+                        update_grids(bp, start_t, stop_t, true);
                         
                         // Do the appropriate steps for halo exchange of exterior.
                         // TODO: exchange halo for each dim as soon as it's done.
@@ -426,8 +426,8 @@ namespace yask {
 #include "yask_rank_loops.hpp"
 
                     // Mark as dirty only if we did exterior.
-                    if (do_mpi_left || do_mpi_right)
-                        mark_grids_dirty(bp, start_t, stop_t);
+                    bool mark_dirty = do_mpi_left || do_mpi_right;
+                    update_grids(bp, start_t, stop_t, mark_dirty);
 
                     // Do the appropriate steps for halo exchange depending
                     // on 'do_mpi_*' flags.
@@ -483,7 +483,7 @@ namespace yask {
                     } // domain dims.
 
                     // Mark grids dirty for all packs.
-                    mark_grids_dirty(bp, start_t, stop_t);
+                    update_grids(bp, start_t, stop_t, true);
                     
                     // Do the appropriate steps for halo exchange of exterior.
                     // TODO: exchange halo for each dim as soon as it's done.
@@ -504,8 +504,8 @@ namespace yask {
 #include "yask_rank_loops.hpp"
 
                 // Mark as dirty only if we did exterior.
-                if (do_mpi_left || do_mpi_right)
-                    mark_grids_dirty(bp, start_t, stop_t);
+                bool mark_dirty = do_mpi_left || do_mpi_right;
+                update_grids(bp, start_t, stop_t, mark_dirty);
 
                 // Do the appropriate steps for halo exchange depending
                 // on 'do_mpi_*' flags.
@@ -1639,10 +1639,13 @@ namespace yask {
                 continue;
 
             // Check all allocated step indices.
-            idx_t stop_t = 1;
-            if (gp->is_dim_used(step_dim))
-                stop_t = gp->get_alloc_size(step_dim);
-            for (idx_t t = 0; t < stop_t; t++) {
+            // Use '0' for grids that don't use the step dim.
+            idx_t start_t = 0, stop_t = 1;
+            if (gp->is_dim_used(step_dim)) {
+                start_t = gp->get_first_valid_step_index();
+                stop_t = gp->get_last_valid_step_index() + 1;
+            }
+            for (idx_t t = start_t; t < stop_t; t++) {
                             
                 // Only need to swap grids whose halos are not up-to-date
                 // for this step.
@@ -1652,12 +1655,13 @@ namespace yask {
                 // Swap this grid.
                 gridsToSwap[gname] = gp;
 
-                // Update last step.
-                lastStepsToSwap[gp] = t;
-
-                // First?
-                if (firstStepsToSwap.count(gp) == 0)
+                // Update first step.
+                if (firstStepsToSwap.count(gp) == 0 || t < firstStepsToSwap[gp])
                     firstStepsToSwap[gp] = t;
+
+                // Update last step.
+                if (lastStepsToSwap.count(gp) == 0 || t > lastStepsToSwap[gp])
+                    lastStepsToSwap[gp] = t;
 
             } // steps.
         } // grids.
@@ -1781,9 +1785,7 @@ namespace yask {
                                           (send_vec_ok ? "with" : "without") <<
                                           " vector copy into " << buf);
                                 if (send_vec_ok)
-                                    nelems = gp->get_vecs_in_slice(buf,
-                                                                   first, firstStepsToSwap[gp],
-                                                                   last, lastStepsToSwap[gp]);
+                                    nelems = gp->get_vecs_in_slice(buf, first, last);
                                 else
                                     nelems = gp->get_elements_in_slice(buf, first, last);
                                 idx_t nbytes = nelems * get_element_bytes();
@@ -1853,9 +1855,7 @@ namespace yask {
                                           (recv_vec_ok ? "with" : "without") <<
                                           " vector copy from " << buf);
                                 if (recv_vec_ok)
-                                    nelems = gp->set_vecs_in_slice(buf,
-                                                                   first, firstStepsToSwap[gp],
-                                                                   last, lastStepsToSwap[gp]);
+                                    nelems = gp->set_vecs_in_slice(buf, first, last);
                                 else
                                     nelems = gp->set_elements_in_slice(buf, first, last);
                                 assert(nelems <= recvBuf.get_size());
@@ -1918,12 +1918,10 @@ namespace yask {
 #endif
     }
 
-    // Mark grids that have been written to by bundle pack 'sel_bp'.
-    // TODO: only mark grids that are written to in their halo-read area.
-    // TODO: add index for misc dim(s).
-    // TODO: track sub-domain of grid that is dirty.
-    void StencilContext::mark_grids_dirty(const BundlePackPtr& sel_bp,
-                                          idx_t start, idx_t stop) {
+    // Update data in grids that have been written to by bundle pack 'sel_bp'.
+    void StencilContext::update_grids(const BundlePackPtr& sel_bp,
+                                      idx_t start, idx_t stop,
+                                      bool mark_dirty) {
         STATE_VARS(this);
         idx_t stride = (start > stop) ? -1 : 1;
         map<YkGridPtr, set<idx_t>> grids_done;
@@ -1952,18 +1950,20 @@ namespace yask {
                     // scratch grids as dirty because they are never exchanged.
                     for (auto gp : sb->outputGridPtrs) {
 
-                        // Mark output step as dirty if not already done.
+                        // Update if not already done.
                         if (grids_done[gp].count(t_out) == 0) {
-                            gp->set_dirty(true, t_out);
+                            gp->update_valid_step(t_out);
+                            if (mark_dirty)
+                                gp->set_dirty(true, t_out);
                             TRACE_MSG("grid '" << gp->get_name() <<
-                                      "' marked as dirty at step " << t_out);
+                                      "' updated at step " << t_out);
                             grids_done[gp].insert(t_out);
                         }
                     }
                 } // bundles.
             } // steps.
         } // packs.
-    } // mark_grids_dirty().
+    } // update_grids().
 
     // Reset any locks, etc.
     void StencilContext::reset_locks() {

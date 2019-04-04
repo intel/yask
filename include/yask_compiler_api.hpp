@@ -182,7 +182,7 @@ namespace yask {
         /**
            C++ initializer-list version with same semantics as
            new_grid(const std::string& name, const std::vector<yc_index_node_ptr>& dims).
-           @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
+           @note This version is not available (or needed) in the Python API.
            @returns Pointer to the new \ref yc_grid object.
         */
         virtual yc_grid_ptr
@@ -223,7 +223,7 @@ namespace yask {
         /**
            C++ initializer-list version with same semantics as
            new_scratch_grid(const std::string& name, const std::vector<yc_index_node_ptr>& dims).
-           @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
+           @note This version is not available (or needed) in the Python API.
            @returns Pointer to the new \ref yc_grid object.
         */
         virtual yc_grid_ptr
@@ -492,7 +492,7 @@ namespace yask {
         /**
            C++ initializer-list version with same semantics as
            new_grid_point(std::vector<yc_index_node_ptr> index_exprs).
-           @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
+           @note This version is not available (or needed) in the Python API.
            @returns Pointer to AST node used to read or write from point in grid. */
         virtual yc_grid_point_node_ptr
         new_grid_point(const std::initializer_list<yc_number_node_ptr>& index_exprs) = 0;
@@ -523,7 +523,7 @@ namespace yask {
         /**
            C++ initializer-list version with same semantics as
            new_relative_grid_point(std::vector<int> dim_offsets).
-           @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
+           @note This version is not available (or needed) in the Python API.
            @returns Pointer to AST node used to read or write from point in grid. */
         virtual yc_grid_point_node_ptr
         new_relative_grid_point(const std::initializer_list<int>& dim_offsets) = 0;

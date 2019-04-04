@@ -34,7 +34,8 @@ namespace yask {
     cerr << "\n*** WARNING: call to deprecated YASK API '"              \
     #api_name "' that will be removed in a future release ***\n"
 
-    // APIs to get info from vars.
+    // APIs to get info from vars: one with name of dim with a lot
+    // of checking, and one with index of dim with no checking.
 #define GET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
     idx_t YkGridBase::api_name(const string& dim) const {               \
         STATE_VARS(this);                                               \
@@ -53,13 +54,15 @@ namespace yask {
         auto rtn = expr;                                                \
         return rtn;                                                     \
     }
+    GET_GRID_API(get_first_valid_index, _rank_offsets[posn] + _local_offsets[posn] - _actl_left_pads[posn], true, true, true, true)
+    GET_GRID_API(get_last_valid_index, _rank_offsets[posn] + _local_offsets[posn] + _domains[posn] + _actl_right_pads[posn] - 1, true, true, true, true)
+    GET_GRID_API(get_first_misc_index, _local_offsets[posn], false, false, true, false)
+    GET_GRID_API(get_last_misc_index, _local_offsets[posn] + _domains[posn] - 1, false, false, true, false)
     GET_GRID_API(get_rank_domain_size, _domains[posn], false, true, false, false)
     GET_GRID_API(get_left_pad_size, _actl_left_pads[posn], false, true, false, false)
     GET_GRID_API(get_right_pad_size, _actl_right_pads[posn], false, true, false, false)
     GET_GRID_API(get_left_halo_size, _left_halos[posn], false, true, false, false)
     GET_GRID_API(get_right_halo_size, _right_halos[posn], false, true, false, false)
-    GET_GRID_API(get_first_misc_index, _local_offsets[posn], false, false, true, false)
-    GET_GRID_API(get_last_misc_index, _local_offsets[posn] + _domains[posn] - 1, false, false, true, false)
     GET_GRID_API(get_left_extra_pad_size, _actl_left_pads[posn] - _left_halos[posn], false, true, false, false)
     GET_GRID_API(get_right_extra_pad_size, _actl_right_pads[posn] - _right_halos[posn], false, true, false, false)
     GET_GRID_API(get_alloc_size, _allocs[posn], true, true, true, false)
@@ -74,8 +77,6 @@ namespace yask {
     GET_GRID_API(_get_vec_len, _vec_lens[posn], true, true, true, true)
     GET_GRID_API(_get_rank_offset, _rank_offsets[posn], true, true, true, true)
     GET_GRID_API(_get_local_offset, _local_offsets[posn], true, true, true, false)
-    GET_GRID_API(_get_first_alloc_index, _rank_offsets[posn] + _local_offsets[posn] - _actl_left_pads[posn], true, true, true, true)
-    GET_GRID_API(_get_last_alloc_index, _rank_offsets[posn] + _local_offsets[posn] + _domains[posn] + _actl_right_pads[posn] - 1, true, true, true, true)
 
     GET_GRID_API(get_pad_size, _actl_left_pads[posn]; DEPRECATED(get_pad_size), false, true, false, false)
     GET_GRID_API(get_halo_size, _left_halos[posn]; DEPRECATED(get_halo_size), false, true, false, false)
@@ -260,27 +261,34 @@ namespace yask {
     }
 
     // API get, set, etc.
-    bool YkGridBase::is_element_allocated(const Indices& indices) const {
+    bool YkGridBase::are_indices_valid(const Indices& indices) const {
         if (!is_storage_allocated())
             return false;
-        return checkIndices(indices, "is_element_allocated", false, false);
+        return checkIndices(indices, "are_indices_valid", false, true, false);
     }
     double YkGridBase::get_element(const Indices& indices) const {
+        STATE_VARS(this);
         if (!is_storage_allocated()) {
             THROW_YASK_EXCEPTION("Error: call to 'get_element' with no data allocated for grid '" +
                                  get_name() + "'");
         }
-        checkIndices(indices, "get_element", true, false);
+        checkIndices(indices, "get_element", true, true, false);
         idx_t asi = get_alloc_step_index(indices);
         real_t val = readElem(indices, asi, __LINE__);
+        TRACE_MSG("get_element({" << makeIndexString(indices) << "}) on '" <<
+                  get_name() + "' returns " << val);
         return double(val);
     }
     idx_t YkGridBase::set_element(double val,
                                   const Indices& indices,
                                   bool strict_indices) {
+        STATE_VARS(this);
         idx_t nup = 0;
         if (get_raw_storage_buffer() &&
-            checkIndices(indices, "set_element", strict_indices, false)) {
+
+            // Don't check step index because this is a write-only API
+            // that updates the step index.
+            checkIndices(indices, "set_element", strict_indices, false, false)) {
             idx_t asi = get_alloc_step_index(indices);
             writeElem(real_t(val), indices, asi, __LINE__);
             nup++;
@@ -288,14 +296,21 @@ namespace yask {
             // Set appropriate dirty flag.
             set_dirty_using_alloc_index(true, asi);
         }
+        TRACE_MSG("set_element(" << val << ", {" <<
+                  makeIndexString(indices) << "}, " <<
+                  strict_indices << ") on '" <<
+                  get_name() + "' returns " << nup);
         return nup;
     }
     idx_t YkGridBase::add_to_element(double val,
                                      const Indices& indices,
                                      bool strict_indices) {
+        STATE_VARS(this);
         idx_t nup = 0;
         if (get_raw_storage_buffer() &&
-            checkIndices(indices, "add_to_element", strict_indices, false)) {
+
+            // Check step index because this API must read before writing.
+            checkIndices(indices, "add_to_element", strict_indices, true, false)) {
             idx_t asi = get_alloc_step_index(indices);
             addToElem(real_t(val), indices, asi, __LINE__);
             nup++;
@@ -303,18 +318,23 @@ namespace yask {
             // Set appropriate dirty flag.
             set_dirty_using_alloc_index(true, asi);
         }
+        TRACE_MSG("add_to_element(" << val << ", {" <<
+                  makeIndexString(indices) <<  "}, " <<
+                  strict_indices << ") on '" <<
+                  get_name() + "' returns " << nup);
         return nup;
     }
 
     idx_t YkGridBase::get_elements_in_slice(void* buffer_ptr,
                                             const Indices& first_indices,
                                             const Indices& last_indices) const {
+        STATE_VARS(this);
         if (!is_storage_allocated()) {
             THROW_YASK_EXCEPTION("Error: call to 'get_elements_in_slice' with no data allocated for grid '" +
                                  get_name() + "'");
         }
-        checkIndices(first_indices, "get_elements_in_slice", true, false);
-        checkIndices(last_indices, "get_elements_in_slice", true, false);
+        checkIndices(first_indices, "get_elements_in_slice", true, true, false);
+        checkIndices(last_indices, "get_elements_in_slice", true, true, false);
 
         // Find range.
         IdxTuple numElemsTuple = get_slice_range(first_indices, last_indices);
@@ -331,21 +351,27 @@ namespace yask {
                 ((real_t*)buffer_ptr)[idx] = val;
                 return true;    // keep going.
             });
-        return numElemsTuple.product();
+        auto nup = numElemsTuple.product();
+        TRACE_MSG("get_elements_in_slice(" << buffer_ptr << ", {" <<
+                  makeIndexString(first_indices) << "}, {" <<
+                  makeIndexString(last_indices) << "}) on '" <<
+                  get_name() + "' returns " << nup);
+        return nup;
     }
     idx_t YkGridBase::set_elements_in_slice_same(double val,
                                                  const Indices& first_indices,
                                                  const Indices& last_indices,
                                                  bool strict_indices) {
+        STATE_VARS(this);
         if (!is_storage_allocated())
             return 0;
 
         // 'Fixed' copy of indices.
         Indices first, last;
         checkIndices(first_indices, "set_elements_in_slice_same",
-                     strict_indices, false, &first);
+                     strict_indices, false, false, &first);
         checkIndices(last_indices, "set_elements_in_slice_same",
-                     strict_indices, false, &last);
+                     strict_indices, false, false, &last);
 
         // Find range.
         IdxTuple numElemsTuple = get_slice_range(first, last);
@@ -366,15 +392,22 @@ namespace yask {
         // Set appropriate dirty flag(s).
         set_dirty_in_slice(first, last);
 
-        return numElemsTuple.product();
+        auto nup = numElemsTuple.product();
+        TRACE_MSG("set_elements_in_slice_same(" << val << ", {" <<
+                  makeIndexString(first_indices) << "}, {" <<
+                  makeIndexString(last_indices) <<  "}, " <<
+                  strict_indices << ") on '" <<
+                  get_name() + "' returns " << nup);
+        return nup;
     }
     idx_t YkGridBase::set_elements_in_slice(const void* buffer_ptr,
                                             const Indices& first_indices,
                                             const Indices& last_indices) {
+        STATE_VARS(this);
         if (!is_storage_allocated())
             return 0;
-        checkIndices(first_indices, "set_elements_in_slice", true, false);
-        checkIndices(last_indices, "set_elements_in_slice", true, false);
+        checkIndices(first_indices, "set_elements_in_slice", true, false, false);
+        checkIndices(last_indices, "set_elements_in_slice", true, false, false);
 
         // Find range.
         IdxTuple numElemsTuple = get_slice_range(first_indices, last_indices);
@@ -396,7 +429,12 @@ namespace yask {
         // Set appropriate dirty flag(s).
         set_dirty_in_slice(first_indices, last_indices);
 
-        return numElemsTuple.product();
+        auto nup = numElemsTuple.product();
+        TRACE_MSG("set_elements_in_slice(" << buffer_ptr << ", {" <<
+                  makeIndexString(first_indices) << "}, {" <<
+                  makeIndexString(last_indices) <<  "}) on '" <<
+                  get_name() + "' returns " << nup);
+        return nup;
     }
 
 } // namespace.

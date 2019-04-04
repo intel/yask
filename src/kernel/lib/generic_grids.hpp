@@ -51,7 +51,7 @@ namespace yask {
         const static int _numa_unset = -999;
         int _numa_pref = _numa_unset; // use default from _opts.
 
-        // Note that both _dims and *_layout_base hold dimensions unless this
+        // Note that both _dims and *_layout_base hold sizes unless this
         // is a scalar. For a scalar, _dims is empty and _layout_base = 0.
         IdxTuple _grid_dims;         // names and lengths of grid dimensions.
         Layout* _layout_base = 0; // memory layout.

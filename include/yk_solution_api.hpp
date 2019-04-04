@@ -709,7 +709,7 @@ namespace yask {
         /**
            See documentation for the version of new_grid() with a vector of dimension names
            as a parameter.
-           @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
+           @note This version is not available (or needed) in the Python API.
            @returns Pointer to the new grid.
         */
         virtual yk_grid_ptr
@@ -786,7 +786,7 @@ namespace yask {
         /**
            See documentation for the version of new_fixed_size_grid() with a vector of dimension names
            as a parameter.
-           @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
+           @note This version is not available (or needed) in the Python API.
            @returns Pointer to the new grid.
         */
         virtual yk_grid_ptr

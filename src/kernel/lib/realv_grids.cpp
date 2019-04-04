@@ -31,7 +31,7 @@ using namespace std;
 namespace yask {
 
     // Ctor.
-    // Important: '*ggb' is NOT yet constructed.
+    // Important: '*ggb' exists but is NOT yet constructed.
     YkGridBase::YkGridBase(KernelStateBase& stateb,
                            GenericGridBase* ggb,
                            const GridDimNames& dimNames) :
@@ -112,8 +112,15 @@ namespace yask {
     void YkGridBase::set_dirty(bool dirty, idx_t step_idx) {
         if (_dirty_steps.size() == 0)
             resize();
-        if (_has_step_dim)
+        if (_has_step_dim) {
+
+            // Also update valid step.
+            if (dirty)
+                update_valid_step(step_idx);
+
+            // Wrap index.
             step_idx = _wrap_step(step_idx);
+        }
         else
             step_idx = 0;
         set_dirty_using_alloc_index(dirty, step_idx);
@@ -280,8 +287,14 @@ namespace yask {
 
         // Resize dirty flags, too.
         size_t old_dirty = _dirty_steps.size();
-        if (old_dirty != new_dirty)
-            _dirty_steps.assign(new_dirty, true); // set all as dirty.
+        if (old_dirty != new_dirty) {
+
+            // Resize & set all as dirty.
+            _dirty_steps.assign(new_dirty, true);
+
+            // Init range.
+            init_valid_steps();
+        }
 
         // Report changes in TRACE mode.
         if (old_allocs != new_allocs || old_dirty != new_dirty) {
@@ -399,10 +412,13 @@ namespace yask {
     }
 
     // Make sure indices are in range.
-    // Side-effect: If clipped_indices is not NULL, set them to in-range if out-of-range.
+    // Side-effect: If clipped_indices is not NULL,
+    // 1) set them to in-range if out-of-range, and
+    // 2) normalize them if 'normalize' is 'true'.
     bool YkGridBase::checkIndices(const Indices& indices,
-                                  const string& fn,
+                                  const string& fn,    // name for error msg.
                                   bool strict_indices, // die if out-of-range.
+                                  bool check_step,     // check step index.
                                   bool normalize,      // div by vec lens.
                                   Indices* clipped_indices) const {
         bool all_ok = true;
@@ -416,31 +432,34 @@ namespace yask {
             *clipped_indices = indices;
         for (int i = 0; i < n; i++) {
             idx_t mbit = 1LL << i;
+            bool is_step_dim = _step_dim_mask & mbit;
             idx_t idx = indices[i];
             bool ok = false;
             auto& dname = get_dim_name(i);
 
-            // Any step index is ok because it wraps around.
-            // TODO: check that it's < magic added value in wrap_index().
-            if (_step_dim_mask & mbit)
+            // If this is the step dim and we're not checking
+            // it, then anything is ok.
+            if (is_step_dim && !check_step)
                 ok = true;
 
-            // Within first..last indices?
+            // Otherwise, check range.
             else {
-                auto first_ok = _get_first_alloc_index(i);
-                auto last_ok = _get_last_alloc_index(i);
+
+                // First..last indices.
+                auto first_ok = get_first_valid_index(i);
+                auto last_ok = get_last_valid_index(i);
                 if (idx >= first_ok && idx <= last_ok)
                     ok = true;
 
                 // Handle outliers.
                 if (!ok) {
                     if (strict_indices) {
-                        FORMAT_AND_THROW_YASK_EXCEPTION("Error: " + fn + ": index in dim '" + dname +
-                                                        "' is " << idx << ", which is not in allocated range [" <<
-                                                        first_ok << "..." << last_ok << "] of grid '" +
-                                                        get_name() + "'");
+                        THROW_YASK_EXCEPTION("Error: " + fn + ": index in dim '" + dname +
+                                             "' is " + to_string(idx) + ", which is not in allowed range [" +
+                                             to_string(first_ok) + "..." + to_string(last_ok) +
+                                             "] of grid '" + get_name() + "'");
                     }
-
+                    
                     // Update the output indices.
                     if (clipped_indices) {
                         if (idx < first_ok)
@@ -448,10 +467,9 @@ namespace yask {
                         if (idx > last_ok)
                             (*clipped_indices)[i] = last_ok;
                     }
+                    all_ok = false;
                 }
-            }
-            if (!ok)
-                all_ok = false;
+            } // need to check.
 
             // Normalize?
             if (clipped_indices && normalize) {
@@ -464,6 +482,26 @@ namespace yask {
         return all_ok;
     }
 
+    // Update what steps are valid.
+    void YkGridBase::update_valid_step(idx_t t) {
+        STATE_VARS(this);
+        if (_has_step_dim) {
+
+            // If 't' is before first step, pull offset back.
+            if (t < get_first_valid_step_index())
+                _local_offsets[+Indices::step_posn] = t;
+
+            // If 't' is after last step, push offset out.
+            else if (t > get_last_valid_step_index())
+                _local_offsets[+Indices::step_posn] = t - _domains[+Indices::step_posn] + 1;
+
+            TRACE_MSG("update_valid_step(" << t << "): valid step(s) in '" <<
+                      get_name() << "' are now [" << get_first_valid_step_index() <<
+                      " ... " << get_last_valid_step_index() << "]");
+        }
+    }
+    
+    
     // Set dirty flags between indices.
     void YkGridBase::set_dirty_in_slice(const Indices& first_indices,
                                         const Indices& last_indices) {

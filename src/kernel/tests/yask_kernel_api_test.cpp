@@ -131,6 +131,9 @@ int main() {
 
                 // Step dim?
                 else if (dname == soln->get_step_dim_name()) {
+                    os << "        currently-valid step index range: " <<
+                        grid->get_first_valid_step_index() << " ... " <<
+                        grid->get_last_valid_step_index() << endl;
                 }
 
                 // Misc dim?
@@ -167,9 +170,10 @@ int main() {
                 // Step dim?
                 else if (dname == soln->get_step_dim_name()) {
 
-                    // Set indices for one time-step.
-                    first_idx = 0;
-                    last_idx = 0;
+                    // Set indices for valid time-steps.
+                    first_idx = grid->get_first_valid_step_index();
+                    last_idx = grid->get_last_valid_step_index();
+                    assert(last_idx - first_idx + 1 == grid->get_alloc_size(dname));
                 }
 
                 // Misc dim?
@@ -245,7 +249,7 @@ int main() {
         os << "End of YASK kernel API test.\n";
         return 0;
     }
-    catch (yask_exception& e) {
+    catch (yask_exception e) {
         cerr << "YASK kernel API test: " << e.get_message() <<
             " on rank " << env->get_rank_index() << ".\n";
         return 1;

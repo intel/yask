@@ -445,10 +445,12 @@ namespace yask {
         // Call MPI_Test() on all unfinished requests to promote MPI progress.
         void poke_halo_exchange();
 
-        // Mark grids that have been written to by bundle pack 'sel_bp'.
+        // Update valid steps in grids that have been written to by bundle pack 'sel_bp'.
         // If sel_bp==null, use all bundles.
-        void mark_grids_dirty(const BundlePackPtr& sel_bp,
-                              idx_t start, idx_t stop);
+        // If 'mark_dirty', also mark as needing halo exchange.
+        void update_grids(const BundlePackPtr& sel_bp,
+                          idx_t start, idx_t stop,
+                          bool mark_dirty);
 
         // Set various limits in 'idxs' based on current step in region.
         bool shift_region(const Indices& base_start, const Indices& base_stop,
