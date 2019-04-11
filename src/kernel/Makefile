@@ -591,13 +591,11 @@ kernel: $(YK_EXEC) $(YK_SCRIPT) $(MAKE_REPORT_FILE)
 	echo "*** Run command:" $(YK_SCRIPT) "-stencil" $(YK_STENCIL) "-arch" $(YK_ARCH) "[options]"
 
 $(YK_LIB): $(YK_OBJS) $(YK_EXT_OBJS)
-	- rm -f $(MAKE_REPORT_FILE)
 	$(MKDIR) $(dir $@)
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^ $(YK_LIBS)
 	@ls -l $@
 
 $(YK_EXEC): yask_main.cpp $(YK_LIB)
-	- rm -f $(MAKE_REPORT_FILE)
 	$(MKDIR) $(dir $@)
 	$(CXX_PREFIX) $(YK_LD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
 	@ls -l $@

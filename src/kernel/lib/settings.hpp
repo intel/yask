@@ -30,9 +30,10 @@ namespace yask {
     // Forward defns.
     class StencilContext;
     class YkGridBase;
+    class YkGridImpl;
 
     // Some derivations from grid types.
-    typedef std::shared_ptr<YkGridBase> YkGridPtr;
+    typedef std::shared_ptr<YkGridImpl> YkGridPtr;
     typedef std::set<YkGridPtr> GridPtrSet;
     typedef std::vector<YkGridPtr> GridPtrs;
     typedef std::map<std::string, YkGridPtr> GridPtrMap;
@@ -172,6 +173,132 @@ namespace yask {
         }
     };
     typedef std::shared_ptr<Dims> DimsPtr;
+
+    // Utility to determine number of points in a "sizes" var.
+    inline idx_t get_num_domain_points(const IdxTuple& sizes) {
+        assert(sizes.getNumDims() == NUM_STENCIL_DIMS);
+        idx_t pts = 1;
+        DOMAIN_VAR_LOOP(i, j)
+            pts *= sizes[i];
+        return pts;
+    }
+
+    // Application settings to control size and perf of stencil code.  Most
+    // of these vars can be set via cmd-line options and/or APIs.
+    class KernelSettings {
+
+    protected:
+
+        // Default sizes.
+        idx_t def_block = 32;   // TODO: calculate this.
+
+        // Make a null output stream.
+        // TODO: put this somewhere else.
+        yask_output_factory yof;
+        yask_output_ptr nullop = yof.new_null_output();
+
+    public:
+
+        // Ptr to problem dimensions (NOT sizes), folding, etc.
+        // This is solution info from the YASK compiler.
+        DimsPtr _dims;
+
+        // Sizes in elements (points).
+        // All these tuples contain stencil dims, even the ones that
+        // don't strictly need them.
+        IdxTuple _global_sizes;     // Overall problem domain sizes.
+        IdxTuple _rank_sizes;     // This rank's domain sizes.
+        IdxTuple _region_sizes;   // region size (used for wave-front tiling).
+        IdxTuple _block_group_sizes; // block-group size (only used for 'grouped' region loops).
+        IdxTuple _block_sizes;       // block size (used for each outer thread).
+        IdxTuple _mini_block_group_sizes; // mini-block-group size (only used for 'grouped' block loops).
+        IdxTuple _mini_block_sizes;       // mini-block size (used for wave-fronts in blocks).
+        IdxTuple _sub_block_group_sizes; // sub-block-group size (only used for 'grouped' mini-block loops).
+        IdxTuple _sub_block_sizes;       // sub-block size (used for each nested thread).
+        IdxTuple _min_pad_sizes;         // minimum spatial padding (including halos).
+        IdxTuple _extra_pad_sizes;       // extra spatial padding (outside of halos).
+
+        // MPI settings.
+        IdxTuple _num_ranks;       // number of ranks in each dim.
+        IdxTuple _rank_indices;    // my rank index in each dim.
+        bool find_loc = true;      // whether my rank index needs to be calculated.
+        int msg_rank = 0;          // rank that prints informational messages.
+        bool overlap_comms = true; // overlap comms with computation.
+        bool use_shm = false;      // use shared memory if possible.
+        idx_t _min_exterior = 0;   // minimum size of MPI exterior to calculate.
+
+        // OpenMP settings.
+        int max_threads = 0;      // Initial number of threads to use overall; 0=>OMP default.
+        int thread_divisor = 1;   // Reduce number of threads by this amount.
+        int num_block_threads = 1; // Number of threads to use for a block.
+        bool bind_block_threads = false; // Bind block threads to indices.
+
+        // Grid behavior.
+        bool _step_wrap = false; // Allow invalid step indices to alias to valid ones.
+        
+        // Stencil-dim posn in which to apply block-thread binding.
+        // TODO: make this a cmd-line parameter.
+        int _bind_posn = 1;
+
+        // Tuning.
+        bool _do_auto_tune = false;    // whether to do auto-tuning.
+        bool _tune_mini_blks = false; // auto-tune mini-blks instead of blks.
+        bool _allow_pack_tuners = false; // allow per-pack tuners when possible.
+        
+        // Debug.
+        bool force_scalar = false; // Do only scalar ops.
+        bool _trace = false;       // Print verbose tracing.
+
+        // NUMA settings.
+        int _numa_pref = NUMA_PREF;
+        int _numa_pref_max = 128; // GiB to alloc before using PMEM.
+
+        // Ctor/dtor.
+        KernelSettings(DimsPtr dims, KernelEnvPtr env);
+        virtual ~KernelSettings() { }
+
+    protected:
+        // Add options to set one domain var to a cmd-line parser.
+        virtual void _add_domain_option(CommandLineParser& parser,
+                                        const std::string& prefix,
+                                        const std::string& descrip,
+                                        IdxTuple& var,
+                                        bool allow_step = false);
+
+        idx_t findNumSubsets(std::ostream& os,
+                             IdxTuple& inner_sizes, const std::string& inner_name,
+                             const IdxTuple& outer_sizes, const std::string& outer_name,
+                             const IdxTuple& mults, const std::string& step_dim);
+
+    public:
+        // Add options to a cmd-line parser to set the settings.
+        virtual void add_options(CommandLineParser& parser);
+
+        // Print usage message.
+        void print_usage(std::ostream& os,
+                         CommandLineParser& parser,
+                         const std::string& pgmName,
+                         const std::string& appNotes,
+                         const std::vector<std::string>& appExamples) const;
+
+        // Make sure all user-provided settings are valid by rounding-up
+        // values as needed.
+        // Called from prepare_solution(), so it doesn't normally need to be called from user code.
+        // Prints informational info to 'os'.
+        virtual void adjustSettings(std::ostream& os);
+        virtual void adjustSettings() {
+            adjustSettings(nullop->get_ostream());
+        }
+
+        // Determine if this is the first or last rank in given dim.
+        virtual bool is_first_rank(const std::string dim) {
+            return _rank_indices[dim] == 0;
+        }
+        virtual bool is_last_rank(const std::string dim) {
+            return _rank_indices[dim] == _num_ranks[dim] - 1;
+        }
+    };
+    typedef std::shared_ptr<KernelSettings> KernelSettingsPtr;
 
     // MPI neighbor info.
     class MPIInfo {
@@ -434,131 +561,6 @@ namespace yask {
         virtual MPIBuf& getBuf(MPIBufs::BufDir bd, const IdxTuple& neighbor_offsets);
     };
 
-    // Utility to determine number of points in a "sizes" var.
-    inline idx_t get_num_domain_points(const IdxTuple& sizes) {
-        assert(sizes.getNumDims() == NUM_STENCIL_DIMS);
-        idx_t pts = 1;
-        DOMAIN_VAR_LOOP(i, j)
-            pts *= sizes[i];
-        return pts;
-    }
-
-    // Application settings to control size and perf of stencil code.
-    class KernelSettings {
-
-    protected:
-
-        // Default sizes.
-        idx_t def_block = 32;   // TODO: calculate this.
-
-        // Make a null output stream.
-        // TODO: put this somewhere else.
-        yask_output_factory yof;
-        yask_output_ptr nullop = yof.new_null_output();
-
-    public:
-
-        // Copy of problem dimensions (NOT sizes).
-        DimsPtr _dims;
-
-        // Sizes in elements (points).
-        // All these tuples contain stencil dims, even the ones that
-        // don't strictly need them.
-        IdxTuple _global_sizes;     // Overall problem domain sizes.
-        IdxTuple _rank_sizes;     // This rank's domain sizes.
-        IdxTuple _region_sizes;   // region size (used for wave-front tiling).
-        IdxTuple _block_group_sizes; // block-group size (only used for 'grouped' region loops).
-        IdxTuple _block_sizes;       // block size (used for each outer thread).
-        IdxTuple _mini_block_group_sizes; // mini-block-group size (only used for 'grouped' block loops).
-        IdxTuple _mini_block_sizes;       // mini-block size (used for wave-fronts in blocks).
-        IdxTuple _sub_block_group_sizes; // sub-block-group size (only used for 'grouped' mini-block loops).
-        IdxTuple _sub_block_sizes;       // sub-block size (used for each nested thread).
-        IdxTuple _min_pad_sizes;         // minimum spatial padding (including halos).
-        IdxTuple _extra_pad_sizes;       // extra spatial padding (outside of halos).
-
-        // MPI settings.
-        IdxTuple _num_ranks;       // number of ranks in each dim.
-        IdxTuple _rank_indices;    // my rank index in each dim.
-        bool find_loc = true;      // whether my rank index needs to be calculated.
-        int msg_rank = 0;          // rank that prints informational messages.
-        bool overlap_comms = true; // overlap comms with computation.
-        bool use_shm = false;      // use shared memory if possible.
-        idx_t _min_exterior = 0;   // minimum size of MPI exterior to calculate.
-
-        // OpenMP settings.
-        int max_threads = 0;      // Initial number of threads to use overall; 0=>OMP default.
-        int thread_divisor = 1;   // Reduce number of threads by this amount.
-        int num_block_threads = 1; // Number of threads to use for a block.
-        bool bind_block_threads = false; // Bind block threads to indices.
-
-        // Stencil-dim posn in which to apply block-thread binding.
-        int _bind_posn = 1;
-
-        // Tuning.
-        bool _do_auto_tune = false;    // whether to do auto-tuning.
-        bool _tune_mini_blks = false; // auto-tune mini-blks instead of blks.
-        bool _allow_pack_tuners = false; // allow per-pack tuners when possible.
-        
-        // Debug.
-        bool force_scalar = false; // Do only scalar ops.
-        bool _trace = false;       // Print verbose tracing.
-
-        // Prefetch distances.
-        // Prefetching must be enabled via YASK_PREFETCH_L[12] macros.
-        int _prefetch_L1_dist = 1;
-        int _prefetch_L2_dist = 2;
-
-        // NUMA settings.
-        int _numa_pref = NUMA_PREF;
-        int _numa_pref_max = 128; // GiB to alloc before using PMEM.
-
-        // Ctor/dtor.
-        KernelSettings(DimsPtr dims, KernelEnvPtr env);
-        virtual ~KernelSettings() { }
-
-    protected:
-        // Add options to set one domain var to a cmd-line parser.
-        virtual void _add_domain_option(CommandLineParser& parser,
-                                        const std::string& prefix,
-                                        const std::string& descrip,
-                                        IdxTuple& var,
-                                        bool allow_step = false);
-
-        idx_t findNumSubsets(std::ostream& os,
-                             IdxTuple& inner_sizes, const std::string& inner_name,
-                             const IdxTuple& outer_sizes, const std::string& outer_name,
-                             const IdxTuple& mults, const std::string& step_dim);
-
-    public:
-        // Add options to a cmd-line parser to set the settings.
-        virtual void add_options(CommandLineParser& parser);
-
-        // Print usage message.
-        void print_usage(std::ostream& os,
-                         CommandLineParser& parser,
-                         const std::string& pgmName,
-                         const std::string& appNotes,
-                         const std::vector<std::string>& appExamples) const;
-
-        // Make sure all user-provided settings are valid by rounding-up
-        // values as needed.
-        // Called from prepare_solution(), so it doesn't normally need to be called from user code.
-        // Prints informational info to 'os'.
-        virtual void adjustSettings(std::ostream& os);
-        virtual void adjustSettings() {
-            adjustSettings(nullop->get_ostream());
-        }
-
-        // Determine if this is the first or last rank in given dim.
-        virtual bool is_first_rank(const std::string dim) {
-            return _rank_indices[dim] == 0;
-        }
-        virtual bool is_last_rank(const std::string dim) {
-            return _rank_indices[dim] == _num_ranks[dim] - 1;
-        }
-    };
-    typedef std::shared_ptr<KernelSettings> KernelSettingsPtr;
-
     // A collection of solution meta-data whose ownership is shared between
     // various objects.
     struct KernelState {
@@ -567,10 +569,10 @@ namespace yask {
         // Output stream for messages.
         yask_output_ptr _debug;
 
-        // Env.
+        // Environment (mostly MPI).
         KernelEnvPtr _env;
 
-        // Command-line and env parameters.
+        // User settings.
         KernelSettingsPtr _opts;
         bool _use_pack_tuners = false;
 
@@ -587,18 +589,18 @@ namespace yask {
         // TODO: move to Dims.
         int _outer_posn = -1;   // -1 => not set.
 
-        // MPI info.
+        // MPI neighbor info.
         MPIInfoPtr _mpiInfo;
     };
     typedef std::shared_ptr<KernelState> KernelStatePtr;
 
     // Macro to define and set commonly-needed state vars efficiently.
-    // 'parent_p' is pointer to object containing 'KernelStatePtr _state'.
+    // '_ksbp' is pointer to a 'KernelStateBase' object.
     // '*_posn' vars are positions in stencil_dims.
-#define STATE_VARS0(parent_p, pfx)                                      \
-    pfx auto* pp = parent_p;                                            \
-    assert(pp);                                                         \
-    pfx auto* state = pp->_state.get();                                 \
+#define STATE_VARS0(_ksbp, pfx)                                         \
+    pfx auto* ksbp = _ksbp;                                             \
+    assert(ksbp);                                                       \
+    pfx auto* state = ksbp->_state.get();                               \
     assert(state);                                                      \
     assert(state->_debug.get());                                        \
     auto& os = state->_debug.get()->get_ostream();                      \
@@ -623,8 +625,8 @@ namespace yask {
     assert(step_posn == +Indices::step_posn);                           \
     constexpr int outer_posn = 1;                                       \
     const int inner_posn = state->_inner_posn
-#define STATE_VARS(parent_p) STATE_VARS0(parent_p,)
-#define STATE_VARS_CONST(parent_p) STATE_VARS0(parent_p, const)
+#define STATE_VARS(_ksbp) STATE_VARS0(_ksbp,)
+#define STATE_VARS_CONST(_ksbp) STATE_VARS0(_ksbp, const)
 
     // A base class containing a shared pointer to a kernel state.
     // Used to ensure that the shared state object stays allocated when
@@ -667,10 +669,6 @@ namespace yask {
         // Set debug output to cout if my_rank == msg_rank
         // or a null stream otherwise.
         std::ostream& set_ostr();
-        std::ostream& get_ostr() const {
-            STATE_VARS(this);
-            return os;
-        }
 
         // Set number of threads w/o using thread-divisor.
         // Return number of threads.

@@ -192,18 +192,19 @@ int main() {
 
             // Init the values using the indices created above.
             double val = 2.0;
-            idx_t nset = grid->set_elements_in_slice_same(val, first_indices, last_indices);
+            bool strict_indices = false; // because first/last_indices are global.
+            idx_t nset = grid->set_elements_in_slice_same(val, first_indices, last_indices, strict_indices);
             os << "      " << nset << " element(s) set in sub-range from " <<
                 grid->format_indices(first_indices) << " to " <<
                 grid->format_indices(last_indices) << ".\n";
-            if (grid->is_element_allocated(first_indices)) {
+            if (grid->are_indices_local(first_indices)) {
                 auto val2 = grid->get_element(first_indices);
                 os << "      first element == " << val2 << ".\n";
                 assert(val2 == val);
             }
             else
                 os << "      first element NOT in rank.\n";
-            if (grid->is_element_allocated(last_indices)) {
+            if (grid->are_indices_local(last_indices)) {
                 auto val2 = grid->get_element(last_indices);
                 os << "      last element == " << val2 << ".\n";
                 assert(val2 == val);
@@ -215,12 +216,12 @@ int main() {
             nset = grid->add_to_element(1.0, first_indices);
             nset += grid->add_to_element(3.0, last_indices);
             os << "      " << nset << " element(s) updated.\n";
-            if (grid->is_element_allocated(first_indices)) {
+            if (grid->are_indices_local(first_indices)) {
                 auto val2 = grid->get_element(first_indices);
                 os << "      first element == " << val2 << ".\n";
                 assert(val2 == val + 1.0);
             }
-            if (grid->is_element_allocated(last_indices)) {
+            if (grid->are_indices_local(last_indices)) {
                 auto val2 = grid->get_element(last_indices);
                 os << "      last element == " << val2 << ".\n";
                 assert(val2 == val + 3.0);

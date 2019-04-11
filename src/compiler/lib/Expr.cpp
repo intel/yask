@@ -750,10 +750,12 @@ namespace yask {
     }
     string GridPoint::getGridPtr() const {
         string gname = _grid->getName();
-        string expr = "static_cast<_context_type::" + gname + "_type*>(_context_data->" + gname;
+        string expr = "(static_cast<_context_type::" + gname + "_type*>(_context_data->";
         if (_grid->isScratch())
-            expr += "_list[region_thread_idx].get()";
-        expr += ")";
+            expr += gname + "_list[region_thread_idx]";
+        else
+            expr += gname + "_ptr";
+        expr += ".get()->gbp()))";
         return expr;
     }
     bool GridPoint::isGridFoldable() const {

@@ -1484,9 +1484,10 @@ namespace yask {
             assert(sv);
 
             // Get ptr to the scratch grid for this thread.
-            auto gp = sv->at(thread_idx);
+            auto& gp = sv->at(thread_idx);
             assert(gp);
-            assert(gp->is_scratch());
+            auto& gb = gp->gb();
+            assert(gb.is_scratch());
 
             // i: index for stencil dims, j: index for domain dims.
             DOMAIN_VAR_LOOP(i, j) {
@@ -1495,7 +1496,7 @@ namespace yask {
                 auto& dname = dim.getName();
 
                 // Is this dim used in this grid?
-                int posn = gp->get_dim_posn(dname);
+                int posn = gb.get_dim_posn(dname);
                 if (posn >= 0) {
 
                     // Set rank offset of grid based on starting point of rank.
@@ -1533,7 +1534,9 @@ namespace yask {
         idx_t errs = 0;
         for (size_t gi = 0; gi < gridPtrs.size(); gi++) {
             TRACE_MSG("Grid '" << ref.gridPtrs[gi]->get_name() << "'...");
-            errs += gridPtrs[gi]->compare(ref.gridPtrs[gi].get());
+            auto& gb = gridPtrs[gi]->gb();
+            auto* rgbp = ref.gridPtrs[gi]->gbp();
+            errs += gb.compare(rgbp);
         }
 
         return errs;
@@ -1628,9 +1631,10 @@ namespace yask {
 
         // Loop thru all grids.
         for (auto& gp : gridPtrs) {
+            auto& gb = gp->gb();
 
             // Don't swap scratch grids.
-            if (gp->is_scratch())
+            if (gb.is_scratch())
                 continue;
 
             // Only need to swap grids that have any MPI buffers.
@@ -1649,7 +1653,7 @@ namespace yask {
                             
                 // Only need to swap grids whose halos are not up-to-date
                 // for this step.
-                if (!gp->is_dirty(t))
+                if (!gb.is_dirty(t))
                     continue;
 
                 // Swap this grid.
@@ -1708,7 +1712,8 @@ namespace yask {
             for (auto gtsi : gridsToSwap) {
                 gi++;
                 auto& gname = gtsi.first;
-                auto gp = gtsi.second;
+                auto& gp = gtsi.second;
+                auto& gb = gp->gb();
                 auto& grid_mpi_data = mpiData.at(gname);
                 MPI_Request* grid_recv_reqs = grid_mpi_data.recv_reqs.data();
                 MPI_Request* grid_send_reqs = grid_mpi_data.send_reqs.data();
@@ -1895,8 +1900,8 @@ namespace yask {
 
                             // Mark grids as up-to-date when done.
                             for (idx_t si = firstStepsToSwap[gp]; si <= lastStepsToSwap[gp]; si++) {
-                                if (gp->is_dirty(si)) {
-                                    gp->set_dirty(false, si);
+                                if (gb.is_dirty(si)) {
+                                    gb.set_dirty(false, si);
                                     TRACE_MSG("exchange_halos: grid '" << gname <<
                                               "' marked as clean at step-index " << si);
                                 }
@@ -1949,12 +1954,13 @@ namespace yask {
                     // Output grids for this bundle.  NB: don't need to mark
                     // scratch grids as dirty because they are never exchanged.
                     for (auto gp : sb->outputGridPtrs) {
+                        auto& gb = gp->gb();
 
                         // Update if not already done.
                         if (grids_done[gp].count(t_out) == 0) {
-                            gp->update_valid_step(t_out);
+                            gb.update_valid_step(t_out);
                             if (mark_dirty)
-                                gp->set_dirty(true, t_out);
+                                gb.set_dirty(true, t_out);
                             TRACE_MSG("grid '" << gp->get_name() <<
                                       "' updated at step " << t_out);
                             grids_done[gp].insert(t_out);

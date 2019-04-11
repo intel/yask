@@ -296,7 +296,7 @@ if __name__ == "__main__":
         print("Set " + repr(nset) + " element(s) in rank " + repr(env.get_rank_index()))
 
         # Init the values within the small cube.
-        nset = grid.set_elements_in_slice_same(0.5, first_indices, last_indices)
+        nset = grid.set_elements_in_slice_same(0.5, first_indices, last_indices, False)
         print("Set " + repr(nset) + " element(s) in rank " + repr(env.get_rank_index()))
 
         # Print the initial contents of the grid.

@@ -170,6 +170,7 @@ namespace yask {
                 if (!gp)
                     continue;
                 auto& gname = gp->get_name();
+                auto& gb = gp->gb();
 
                 // Grid data.
                 // Don't alloc if already done.
@@ -181,7 +182,7 @@ namespace yask {
                         auto p = _grid_data_buf[numa_pref];
                         assert(p);
                         gp->set_storage(p, npbytes[numa_pref]);
-                        os << gp->make_info_string() << endl;
+                        os << gb.make_info_string() << endl;
                     }
 
                     // Determine padded size (also offset to next location).
@@ -212,7 +213,7 @@ namespace yask {
 
                 // Otherwise, just print existing grid info.
                 else if (pass == 1)
-                    os << gp->make_info_string() << endl;
+                    os << gb.make_info_string() << endl;
             }
 
             // Reset the counters
@@ -294,9 +295,8 @@ namespace yask {
                 // by considering my rank's right side data and vice-versa.
                 // Thus, all ranks must have consistent data that contribute
                 // to these calculations.
-                for (auto gp : gridPtrs) {
-                    if (!gp || gp->is_scratch() || gp->is_fixed_size())
-                        continue;
+                for (auto& gp : origGridPtrs) {
+                    auto& gb = gp->gb();
                     auto& gname = gp->get_name();
                     bool grid_vec_ok = vec_ok;
 
@@ -444,8 +444,8 @@ namespace yask {
                         // Begin/end vars to indicate what part
                         // of main grid to read from or write to based on
                         // the current neighbor being processed.
-                        IdxTuple copy_begin = gp->get_allocs();
-                        IdxTuple copy_end = gp->get_allocs(); // one past last!
+                        IdxTuple copy_begin = gb.get_allocs();
+                        IdxTuple copy_end = gb.get_allocs(); // one past last!
 
                         // Adjust along domain dims in this grid.
                         for (auto& dim : domain_dims.getDims()) {
@@ -532,7 +532,7 @@ namespace yask {
 
                         // Sizes of buffer in all dims of this grid.
                         // Also, set begin/end value for non-domain dims.
-                        IdxTuple buf_sizes = gp->get_allocs();
+                        IdxTuple buf_sizes = gb.get_allocs();
                         bool buf_vec_ok = grid_vec_ok;
                         for (auto& dname : gp->get_dim_names()) {
                             idx_t dsize = 1;
@@ -851,6 +851,7 @@ namespace yask {
                     assert(gp);
                     auto& gname = gp->get_name();
                     int numa_pref = gp->get_numa_preferred();
+                    auto& gb = gp->gb();
 
                     // Loop through each domain dim.
                     for (auto& dim : domain_dims.getDims()) {
@@ -878,7 +879,7 @@ namespace yask {
                         auto p = _scratch_data_buf[numa_pref];
                         assert(p);
                         gp->set_storage(p, npbytes[numa_pref]);
-                        TRACE_MSG(gp->make_info_string());
+                        TRACE_MSG(gb.make_info_string());
                     }
 
                     // Determine size used (also offset to next location).

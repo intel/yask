@@ -329,9 +329,12 @@ namespace yask {
             ctorCode += "\n // Grid '" + grid + "'.\n";
             ctorCode += " " + grid + "_dim_names = {" +
                 gdims.makeDimStr(", ", "\"", "\"") + "};\n";
-            string initCode = " " + grid + "_ptr = std::make_shared<" + typeDef +
+            string gbp = grid + "_base_ptr";
+            string initCode = " " + grid + "_ptr_type " + gbp + " = std::make_shared<" + typeDef +
                 ">(*this, \"" + grid + "\", " + grid + "_dim_names);\n"
-                " assert(" + grid + "_ptr);\n";
+                " assert(" + gbp + ");\n"
+                " " + grid + "_ptr = std::make_shared<YkGridImpl>(" + gbp + ");\n"
+                " assert(" + grid + "_ptr->gbp());\n";
 
             // Grid vars.
             if (gp->isScratch()) {
@@ -342,9 +345,9 @@ namespace yask {
             }
             else {
 
-                // Actual grid ptr declaration.
-                os << " " << ptrTypeDef << " " << grid << "_ptr;\n" <<
-                    " " << typeDef << "* " << grid << ";\n";
+                // Grid ptr declaration.
+                // Default ctor gives null ptr.
+                os << " YkGridPtr " << grid << "_ptr;\n";
             }
 
             // Alloc-setting code.
@@ -376,7 +379,7 @@ namespace yask {
                     int oval = 0;
                     if (dtype == STEP_INDEX) {
                         aval = gp->getStepDimSize();
-                        initCode += " " + grid + "_ptr->_set_dynamic_step_alloc(" +
+                        initCode += " " + grid + "_base_ptr->_set_dynamic_step_alloc(" +
                             (gp->is_dynamic_step_alloc() ? "true" : "false") +
                             ");\n";
                     } else {
@@ -401,7 +404,7 @@ namespace yask {
             } // dims.
 
             // Allow dynamic misc alloc setting if not interleaved.
-            initCode += " " + grid + "_ptr->_set_dynamic_misc_alloc(" +
+            initCode += " " + grid + "_base_ptr->_set_dynamic_misc_alloc(" +
                 (_settings._innerMisc ? "false" : "true") +
                 ");\n";
 
@@ -410,8 +413,7 @@ namespace yask {
 
                 // Grid init.
                 ctorCode += initCode;
-                ctorCode += " " + grid + " = " + grid + "_ptr.get();\n";
-                ctorCode += " addGrid(" + grid + "_ptr, ";
+                ctorCode += " addGrid(" + grid + "_ptr, true, ";
                 if (_eqBundles.getOutputGrids().count(gp))
                     ctorCode += "true /* is an output grid */";
                 else
@@ -423,9 +425,9 @@ namespace yask {
             else {
                 scratchCode += " " + grid + "_list.clear();\n"
                     " for (int i = 0; i < num_threads; i++) {\n"
-                    " " + ptrTypeDef + " " + grid + "_ptr;\n" +
+                    " YkGridPtr " + grid + "_ptr;\n" +
                     initCode +
-                    " " + grid + "_ptr->set_scratch(true);\n" +
+                    " " + grid + "_base_ptr->set_scratch(true);\n" +
                     " " + grid + "_list.push_back(" + grid + "_ptr);\n"
                     " }\n";
             }
@@ -441,8 +443,8 @@ namespace yask {
                     newGridCode += "\n // Scalar grids.\n";
                 if (!firstGrid)
                     newGridCode += " else";
-                newGridCode += " if (dims == " + grid + "_dim_names) gp = std::make_shared<" +
-                    typeDef + ">(*this, name, dims);\n";
+                newGridCode += " if (dims == " + grid + "_dim_names)\n"
+                    " gp = std::make_shared<" + typeDef + ">(*this, name, dims);\n";
             }
 
         } // grids.
@@ -467,9 +469,9 @@ namespace yask {
         // New-grid method.
         os << "\n // Make a new grid iff its dims match any in the stencil.\n"
             " // Returns pointer to the new grid or nullptr if no match.\n"
-            " virtual YkGridPtr newStencilGrid(const std::string& name,"
+            " virtual GridBasePtr newStencilGrid(const std::string& name,"
             " const GridDimNames& dims) {\n"
-            " YkGridPtr gp;\n" <<
+            " GridBasePtr gp;\n" <<
             newGridCode <<
             " return gp;\n"
             " } // newStencilGrid\n";

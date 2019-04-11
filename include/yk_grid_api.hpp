@@ -43,15 +43,18 @@ namespace yask {
 
     /// A run-time data container.
     /**
-       A run-time "grid variable" (often referred to simply as a "grid", which is a bit of a misnomer)
-       is a generic term for any n-dimensional array.  A 0-dim grid
-       is a scalar, a 1-dim grid is an array, etc.  A run-time grid contains
-       data, unlike yc_grid, a compile-time grid variable.
+       A run-time YASK variable (usually referred to simply as a "grid",
+       which is a bit of a misnomer) is a generic term for any n-dimensional
+       array.  A 0-dim grid is a scalar, a 1-dim grid is an array, etc.  A
+       run-time variable actually contains data, unlike yc_grid, a
+       compile-time variable.
 
        Typically, access to each grid is obtained via yk_solution::get_grid().
        You may also use yk_solution::new_grid() or yk_solution::new_fixed_size_grid()
        if you need a grid that is not part of the pre-defined solution.
 
+       Grid Dimensions
+       ===============
        Each dimension of a grid is one of the following:
        - The *step* dimension, typically time ("t"),
        as returned from yk_solution::get_step_dim_name().
@@ -61,11 +64,17 @@ namespace yask {
        These may be returned via yk_solution::get_misc_dim_names() if they were defined
        in the YASK compiler, or they may be any other name that is not a step or domain dimension.
 
+       Step Dimensions
+       --------------
+       The step dimension, as defined during YASK compilation,
+       is the dimension in which the simulation proceeds.
        In the step dimension, there is no fixed first or last index.
        However, there is a finite allocation size, which is the number of
        values in the step dimension that are stored in memory.  The valid
        indices in the step dimension are always consecutive and change based
-       on what was last written to the grid.  For example: If a grid `A` has
+       on what was last written to the grid.  
+
+       For example: If a grid `A` has
        an allocation size of two (2) in the `t` step dimension, its initial
        valid `t` indices are 0 and 1.  Calling `A->get_element({0, x})` or
        `A->get_element({1, x})` would return a value from `A` assuming `x`
@@ -77,12 +86,26 @@ namespace yask {
        valid `t` indices in `A` would be 1 and 2, and `A(0, x)` is no longer
        stored in memory because the allocation size is only 2.  Then,
        calling `A->get_element({1, x})` or `A->get_element({2, x})` would
-       succeed and `A->get_element({0, x})` would fail.  Calling APIs that
-       set values in a grid such as set_element() will also update the valid
-       step index range.  The current valid indices in the step dimension
-       can be retrieved via yk_grid::get_first_valid_step_index() and
+       succeed and `A->get_element({0, x})` would fail.  
+
+       Calling APIs that set values in a grid such as set_element() will
+       also update the valid step index range.  The current valid indices in
+       the step dimension can be retrieved via
+       yk_grid::get_first_valid_step_index() and
        yk_grid::get_last_valid_step_index().
 
+       If yk_solution::set_step_wrap(true) is called, any invalid value of a
+       step index provided to an API will silently "wrap-around" to a valid
+       value by effectively adding or subtracing multiples of the allocation
+       size as needed. For example, if the valid step indices are 7 and 8
+       for a given grid, the indices 0 and 1 will wrap-around to 8 and 7,
+       respectively.  This is not recommended for general use because it can
+       hide off-by-one-type errors. However, it may be useful for
+       applications that need to access a grid using absolute rather than
+       logical step indices.
+
+       Domain Dimensions
+       --------------
        In each domain dimension,
        grid sizes include the following components:
        - The *domain* is the elements to which the stencils are applied.
@@ -123,17 +146,25 @@ namespace yask {
        Data in these overlapped areas are exchanged as needed during stencil application
        to maintain a consistent values as if there was only one rank.
 
+       Miscellaneous Dimensions
+       --------------
        In each miscellaneous dimension, there is no padding or halos.
        There is a fixed allocation size, and 
        each index must be between its first and last valid value.
        The valid miscellaneous indices may be retrieved via
        yk_grid::get_first_misc_index() and yk_grid::get_last_misc_index().
 
+       Other Details
+       ===========
+       Elements
+       -----------
        All sizes are expressed in numbers of elements.
        Each element may be a 4-byte (single precision)
        or 8-byte (double precision) floating-point value as returned by
        yk_solution::get_element_bytes().
 
+       Data Storage
+       -----------
        Initially, a grid is not assigned any allocated storage.
        This is done to allow modification of domain, padding, and other allocation sizes
        before allocation.
@@ -144,8 +175,8 @@ namespace yask {
        yk_solution::prepare_solution() is called.
        - Storage for a specific grid may be allocated before calling yk_solution::prepare_solution()
        via yk_grid::alloc_storage().
-       - **[Advanced]** Storage for a specific grid may be shared with another grid with
-       existing storage via yk_grid::share_storage().
+       - **[Advanced]** A grid may be merged with another grid with existing storage
+       via yk_grid::fuse_grids().
     */
     class yk_grid {
     public:
@@ -156,13 +187,6 @@ namespace yask {
            @returns String containing name provided via yc_solution::new_grid().
         */
         virtual const std::string& get_name() const =0;
-
-        /// Determine whether this grid is automatically resized based on the solution.
-        /**
-           @returns `true` if this grid was created via yk_solution::new_fixed_size_grid()
-           or `false` otherwise.
-        */
-        virtual bool is_fixed_size() const =0;
 
         /// Get the number of dimensions used in this grid.
         /**
@@ -188,6 +212,13 @@ namespace yask {
         virtual bool
         is_dim_used(const std::string& dim) const =0;
 
+        /// Determine whether this grid is *not* automatically resized based on the solution.
+        /**
+           @returns `true` if this grid was created via yk_solution::new_fixed_size_grid()
+           or `false` otherwise.
+        */
+        virtual bool is_fixed_size() const =0;
+
         /// Get the first valid index in this rank in the specified dimension.
         /**
            This is a convenience function that provides the first possible
@@ -202,7 +233,7 @@ namespace yask {
            @returns the first valid index.
         */
         virtual idx_t
-        get_first_valid_index(const std::string& dim
+        get_first_local_index(const std::string& dim
                                 /**< [in] Name of dimension to get.  Must be one of
                                    the names from get_dim_names(). */ ) const =0;
 
@@ -220,7 +251,7 @@ namespace yask {
            @returns the last valid index.
         */
         virtual idx_t
-        get_last_valid_index(const std::string& dim
+        get_last_local_index(const std::string& dim
                                /**< [in] Name of dimension to get.  Must be one of
                                   the names from get_dim_names(). */ ) const =0;
 
@@ -229,7 +260,7 @@ namespace yask {
            For the domain dimensions, this includes the rank-domain and padding sizes.
            See the "Detailed Description" for \ref yk_grid for information on grid sizes.
            For any dimension `dim`, `get_alloc_size(dim) ==
-           get_last_valid_index(dim) - get_first_valid_index(dim) + 1`;
+           get_last_local_index(dim) - get_first_local_index(dim) + 1`;
            @returns allocation in number of elements (not bytes).
         */
         virtual idx_t
@@ -241,7 +272,7 @@ namespace yask {
         /**
            The valid step indices in a grid are updated by calling yk_solution::run_solution()
            or one of the element-setting API functions.
-           Equivalient to get_first_valid_index(dim), where `dim` is the step dimension.
+           Equivalient to get_first_local_index(dim), where `dim` is the step dimension.
            @returns the first index in the step dimension that can be used in one of the
            element-getting API functions.
            This grid must use the step index.
@@ -253,7 +284,7 @@ namespace yask {
         /**
            The valid step indices in a grid are updated by calling yk_solution::run_solution()
            or one of the element-setting API functions.
-           Equivalient to get_last_valid_index(dim), where `dim` is the step dimension.
+           Equivalient to get_last_local_index(dim), where `dim` is the step dimension.
            @returns the last index in the step dimension that can be used in one of the
            element-getting API functions.
            This grid must use the step index.
@@ -401,7 +432,7 @@ namespace yask {
 
         /// Get the first index of a specified miscellaneous dimension.
         /**
-           Equivalent to get_first_valid_index(dim), where `dim` is a misc dimension.
+           Equivalent to get_first_local_index(dim), where `dim` is a misc dimension.
            @returns the first valid index in a non-step and non-domain dimension.
         */
         virtual idx_t
@@ -411,7 +442,7 @@ namespace yask {
 
         /// Get the last index of a specified miscellaneous dimension.
         /**
-           Equivalent to get_last_valid_index(dim), where `dim` is a misc dimension.
+           Equivalent to get_last_local_index(dim), where `dim` is a misc dimension.
            @returns the last valid index in a non-step and non-domain dimension.
         */
         virtual idx_t
@@ -421,14 +452,14 @@ namespace yask {
 
         /// Determine whether the given indices refer to an accessible element in this rank.
         /**
-           Provide indices in a list in the same order returned by get_dim_names().
-           Domain indices are relative to the *overall* problem domain.
+           Provide indices in a list in the same order returned by get_dim_names() for this grid.
+           Domain index values are relative to the *overall* problem domain.
            @returns `true` if index values fall within the range returned by
-           get_first_valid_index(dim) and get_last_valid_index(dim) for each dimension
+           get_first_local_index(dim) and get_last_local_index(dim) for each dimension
            `dim` in the grid; `false` otherwise.
         */
         virtual bool
-        are_indices_valid(const std::vector<idx_t>& indices
+        are_indices_local(const std::vector<idx_t>& indices
                           /**< [in] List of indices, one for each grid dimension. */ ) const =0;
 
 #ifndef SWIG
@@ -437,7 +468,7 @@ namespace yask {
            See get_last_misc_index().
         */
         virtual bool
-        are_indices_valid(const std::initializer_list<idx_t>& indices
+        are_indices_local(const std::initializer_list<idx_t>& indices
                           /**< [in] List of indices, one for each grid dimension. */ ) const =0;
 #endif
 
@@ -446,7 +477,7 @@ namespace yask {
            Provide indices in a list in the same order returned by get_dim_names().
            Indices are relative to the *overall* problem domain.
            Index values must fall between the values returned by
-           get_first_valid_index() and get_last_valid_index(), inclusive,
+           get_first_local_index() and get_last_local_index(), inclusive,
            for each dimension in the grid.
            @returns value in grid at given indices.
         */
@@ -472,14 +503,16 @@ namespace yask {
            If the grid uses the step dimension, the value of the step index
            will be used to update the current valid step indices in the grid.
            If `strict_indices` is `false` and any non-step index values
-           are invalid as defined by are_indices_valid(),
+           are invalid as defined by are_indices_local(),
            the API will have no effect and return zero (0).
            If `strict_indices` is `true` and any non-step index values
            are invalid, the API will throw an exception.
+           If storage has not been allocated for this grid, this will have no effect
+           and return zero (0) if `strict_indices` is `false`,
+           or it will throw an exception if `strict_indices` is `true`.
            @note The parameter value is a double-precision floating-point value, but
            it will be converted to single-precision if
            yk_solution::get_element_bytes() returns 4.
-           If storage has not been allocated for this grid, this will have no effect.
            @returns Number of elements set, which will be one (1) if the indices
            are valid and zero (0) if they are not.
         */
@@ -487,7 +520,7 @@ namespace yask {
         set_element(double val /**< [in] Element in grid will be set to this. */,
                     const std::vector<idx_t>& indices
                     /**< [in] List of indices, one for each grid dimension. */,
-                    bool strict_indices = false
+                    bool strict_indices = true
                     /**< [in] If true, indices must be within domain or padding.
                        If false, indices outside of domain and padding result
                        in no change to grid. */ ) =0;
@@ -502,7 +535,7 @@ namespace yask {
         set_element(double val /**< [in] Element in grid will be set to this. */,
                     const std::initializer_list<idx_t>& indices
                     /**< [in] List of indices, one for each grid dimension. */,
-                    bool strict_indices = false
+                    bool strict_indices = true
                     /**< [in] If true, indices must be within domain or padding.
                        If false, indices outside of domain and padding result
                        in no change to grid. */ ) =0;
@@ -523,7 +556,7 @@ namespace yask {
            Provide indices in two lists in the same order returned by get_dim_names().
            Indices are relative to the *overall* problem domain.
            Index values must fall between the values returned by
-           get_first_valid_index() and get_last_valid_index(), inclusive.
+           get_first_local_index() and get_last_local_index(), inclusive.
            @returns Number of elements read.
         */
         virtual idx_t
@@ -539,20 +572,22 @@ namespace yask {
            Provide indices in a list in the same order returned by get_dim_names().
            Indices are relative to the *overall* problem domain.
            Index values must fall between the values returned by
-           get_first_valid_index() and get_last_valid_index(), inclusive.
+           get_first_local_index() and get_last_local_index(), inclusive.
            Updates are OpenMP atomic, meaning that this function can be called by
            several OpenMP threads without causing a race condition.
+           If storage has not been allocated for this grid, this will have no effect
+           and return zero (0) if `strict_indices` is `false`,
+           or it will throw an exception if `strict_indices` is `true`.
            @note The parameter value is a double-precision floating-point value, but
            it will be converted to single-precision if
            yk_solution::get_element_bytes() returns 4.
-           If storage has not been allocated for this grid, this will have no effect.
            @returns Number of elements updated.
         */
         virtual idx_t
         add_to_element(double val /**< [in] This value will be added to element in grid. */,
                        const std::vector<idx_t>& indices
                        /**< [in] List of indices, one for each grid dimension. */,
-                       bool strict_indices = false
+                       bool strict_indices = true
                        /**< [in] If true, indices must be within domain or padding.
                           If false, indices outside of domain and padding result
                           in no change to grid. */ ) =0;
@@ -567,7 +602,7 @@ namespace yask {
         add_to_element(double val /**< [in] This value will be added to element in grid. */,
                        const std::initializer_list<idx_t>& indices
                        /**< [in] List of indices, one for each grid dimension. */,
-                       bool strict_indices = false
+                       bool strict_indices = true
                        /**< [in] If true, indices must be within domain or padding.
                           If false, indices outside of domain and padding result
                           in no change to grid. */ ) =0;
@@ -577,11 +612,10 @@ namespace yask {
         /**
            Sets all allocated elements, including those in the domain and padding
            area to the same specified value.
+           If storage has not been allocated, this will have no effect.
            @note The parameter is a double-precision floating-point value, but
            it will be converted to single-precision if
            yk_solution::get_element_bytes() returns 4.
-           @note If storage has not been allocated via yk_solution::prepare_solution(),
-           this will have no effect.
         */
         virtual void
         set_all_elements_same(double val /**< [in] All elements will be set to this. */ ) =0;
@@ -593,9 +627,11 @@ namespace yask {
            Provide indices in two lists in the same order returned by get_dim_names().
            Indices are relative to the *overall* problem domain.
            Index values must fall between the values returned by
-           get_first_valid_index() and get_last_valid_index(), inclusive,
+           get_first_local_index() and get_last_local_index(), inclusive,
            if `strict_indices` is `true`.
-           If storage has not been allocated for this grid, this will have no effect.
+           If storage has not been allocated for this grid, this will have no effect
+           and return zero (0) if `strict_indices` is `false`,
+           or it will throw an exception if `strict_indices` is `true`.
            @returns Number of elements set.
         */
         virtual idx_t
@@ -604,7 +640,7 @@ namespace yask {
                                    /**< [in] List of initial indices, one for each grid dimension. */,
                                    const std::vector<idx_t>& last_indices
                                    /**< [in] List of final indices, one for each grid dimension. */,
-                                   bool strict_indices = false
+                                   bool strict_indices = true
                                    /**< [in] If true, indices must be within domain or padding.
                                       If false, only elements within the allocation of this grid
                                       will be set, and elements outside will be ignored. */ ) =0;
@@ -624,8 +660,9 @@ namespace yask {
            Provide indices in two lists in the same order returned by get_dim_names().
            Indices are relative to the *overall* problem domain.
            Index values must fall between the values returned by
-           get_first_valid_index() and get_last_valid_index(), inclusive.
-           If storage has not been allocated for this grid, this will have no effect.
+           get_first_local_index() and get_last_local_index(), inclusive.
+           If storage has not been allocated for this grid, this will
+           throw an exception.
            @returns Number of elements written.
         */
         virtual idx_t
@@ -647,7 +684,7 @@ namespace yask {
            Provide indices in the same order returned by get_dim_names().
            Indices are relative to the *overall* problem domain.
            Index values must fall between the values returned by
-           get_first_valid_index() and get_last_valid_index(), inclusive, for
+           get_first_local_index() and get_last_local_index(), inclusive, for
            each dimension in both grids.
            @returns Number of elements copied.
         */
@@ -865,7 +902,7 @@ namespace yask {
 
         /// **[Advanced]** Get the first accessible index in this grid in this rank in the specified domain dimension.
         /**
-           Equivalent to get_first_valid_index(dim), where `dim` is a domain dimension.
+           Equivalent to get_first_local_index(dim), where `dim` is a domain dimension.
            @returns First valid index in this grid.
         */
         virtual idx_t
@@ -876,7 +913,7 @@ namespace yask {
 
         /// **[Advanced]** Get the last accessible index in this grid in this rank in the specified domain dimension.
         /**
-           Equivalent to get_last_valid_index(dim), where `dim` is a domain dimension.
+           Equivalent to get_last_local_index(dim), where `dim` is a domain dimension.
            @returns Last valid index in this grid.
         */
         virtual idx_t
@@ -922,8 +959,6 @@ namespace yask {
         /**
            This will release storage allocated via any of the options
            described in the "Detailed Description" for \ref yk_grid.
-           If the data was shared between two or more grids, the data will
-           be retained by the remaining grids.
         */
         virtual void
         release_storage() =0;
@@ -934,8 +969,9 @@ namespace yask {
            must be the same:
            - Number of dimensions.
            - Name of each dimension, in the same order.
+           - Vector folding in each dimension.
            - Allocation size in each dimension.
-           - Rank domain size in each domain dimension.
+           - Rank (local) domain size in each domain dimension.
            - Padding size in each domain dimension.
 
            The following do not have to be identical:
@@ -947,34 +983,70 @@ namespace yask {
         virtual bool
         is_storage_layout_identical(const yk_grid_ptr other) const =0;
 
-        /// **[Advanced]** Use existing data-storage from specified grid.
+        /// **[Advanced]** Merge this grid with another grid.
         /**
-           This is an alternative to allocating data storage via
-           yk_solution::prepare_solution() or alloc_storage().
-           In this case, data from a grid in this or another solution will be shared with
-           this grid.
-           In order to successfully share storage, the following conditions must hold:
-           - The source grid must already have storage allocated.
-           - The two grids must have the same dimensions in the same order.
-           - The two grids must have the same domain sizes in all domain dimensions.
-           - The two grids must have the same allocation sizes in non-domain dimensions.
-           - The required padding size of this grid must be less than or
-           equal to the actual padding size of the source grid in all domain
-           dimensions. The required padding size of this grid will be equal to
-           or greater than its halo size. It is not strictly necessary that the
-           two grids have the same halo sizes, but that is a sufficient condition.
+           After calling this API, both this grid and the `other`
+           grid will effectively become a reference to the same shared grid.
+           Any subsequent API applied to this grid or the
+           `other` grid will access the same data and/or
+           effect the same changes.
+           There are two categories of data associated with
+           a grid, and the source of each is specified independently:
+           - The _meta-data_ includes the name, dimensions, sizes, etc., 
+           i.e., everything about the grid apart from the storage.
+           If `use_meta_data_from_other` is `true`, the resulting shared
+           grid will use the meta-data from the `other` grid;
+           if `use_meta_data_from_other` is `false`, the resulting shared grid
+           will use the meta-data from this grid.
+           - The _storage_ holds the actual values of the data elements
+           if storage has been allocated.
+           If `use_storage_from_other` is `true`, the resulting shared
+           grid will use the storage from the `other` grid;
+           if `use_storage_from_other` is `false`, the resulting shared grid
+           will use the storage from this grid.
 
-           Any pre-existing storage will be released before allocation as via release_storage().
-           The padding size(s) of this grid will be set to that of the source grid.
-           After calling share_storage(), changes in one grid via set_all_elements()
-           or set_element() will be visible in the other grid.
+           Implications:
+           - If `use_meta_data_from_other` and `use_storage_from_other`
+           are both `false`, this grid remains unaltered, and the
+           `other` grid becomes a reference to this grid.
+           - If `use_meta_data_from_other` and `use_storage_from_other`
+           are both `true`, the `other` grid remains unaltered, and this
+           grid becomes a reference to the `other` grid.
+           - If `use_meta_data_from_other` and `use_storage_from_other`
+           are different, and if
+           and the source storage is already allocated, the size of the
+           source storage must match that required by the source
+           meta-data. In other words, the value of
+           yk_grid::get_num_storage_bytes() must return the same value from
+           both grids prior to fusing.
+           - The storage of the resulting shared grid will be
+           allocated or unallocated depending on that of the source grid.
+           Any pre-existing storage in the non-source grid will be released.
+           - After fusing, any API applied to the shared grid via this
+           grid or the `other` grid will be visible to both, including
+           release_storage().
+
+           To ensure that the kernels created by the YASK compiler work
+           properly, if either this grid and/or the `other` grid is used in
+           a kernel and its meta-data is being replaced, the dimensions and
+           fold-lengths must remain unchanged or an exception will the
+           thrown.  It is the responsibility of the API programmer to ensure
+           that the storage, local domain sizes, halos, etc.  of the grid
+           are set to be compatible with the solution before calling
+           yk_solution::run_solution().
 
            See allocation options and more information about grid sizes
            in the "Detailed Description" for \ref yk_grid.
         */
         virtual void
-        share_storage(yk_grid_ptr source
-                      /**< [in] Grid from which storage will be shared. */) =0;
+        fuse_grids(yk_grid_ptr other
+                   /**< [in] Grid to be merged with this grid. */,
+                   bool use_meta_data_from_other
+                   /**< [in] If `true`, use meta-data from `other` grid;
+                    if `false`, use meta-data from this grid. */,
+                   bool use_storage_from_other
+                   /**< [in] If `true`, use element storage from `other` grid;
+                    if `false`, use storage from this grid. */) =0;
 
         /// **[Advanced]** Get pointer to raw data storage buffer.
         /**
@@ -1052,21 +1124,27 @@ namespace yask {
                               Must be one of
                               the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
-        /// **[Deprecated]** Use are_indices_valid() instead.
+        /// **[Deprecated]** Use are_indices_local() instead.
         virtual bool
         is_element_allocated(const std::vector<idx_t>& indices
                              /**< [in] List of indices, one for each grid dimension. */ ) const {
-            return are_indices_valid(indices);
+            return are_indices_local(indices);
         }
 
 #ifndef SWIG
-        /// **[Deprecated]** Use are_indices_valid() instead.
+        /// **[Deprecated]** Use are_indices_local() instead.
         virtual bool
         is_element_allocated(const std::initializer_list<idx_t>& indices
                              /**< [in] List of indices, one for each grid dimension. */ ) const {
-            return are_indices_valid(indices);
+            return are_indices_local(indices);
         }
 #endif
+
+        /// **[Deprecated]** Use fuse_grids() instead.
+        virtual void
+        share_storage(yk_grid_ptr other) {
+            fuse_grids(other, false, true);
+        }
 
     };
 

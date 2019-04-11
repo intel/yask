@@ -701,9 +701,10 @@ namespace yask {
             assert(sv);
 
             // Get the one for this thread.
-            auto gp = sv->at(region_thread_idx);
+            auto& gp = sv->at(region_thread_idx);
             assert(gp);
-            assert(gp->is_scratch());
+            auto& gb = gp->gb();
+            assert(gb.is_scratch());
 
             // i: index for stencil dims, j: index for domain dims.
             DOMAIN_VAR_LOOP(i, j) {
@@ -711,7 +712,7 @@ namespace yask {
                 auto& dname = dim.getName();
 
                 // Is this dim used in this grid?
-                int posn = gp->get_dim_posn(dname);
+                int posn = gb.get_dim_posn(dname);
                 if (posn >= 0) {
 
                     // Get halos, which need to be written to for
@@ -729,13 +730,13 @@ namespace yask {
 
                     // Make sure grid covers index bounds.
                     TRACE_MSG("adjust_span: mini-blk [" << 
-                               idxs.begin[i] << "..." <<
-                               idxs.end[i] << ") adjusted to [" << 
-                               adj_idxs.begin[i] << "..." <<
-                               adj_idxs.end[i] << ") within scratch-grid '" << 
-                               gp->get_name() << "' allocated [" <<
-                               gp->get_first_rank_alloc_index(posn) << "..." <<
-                               gp->get_last_rank_alloc_index(posn) << "] in dim '" << dname << "'");
+                              idxs.begin[i] << "..." <<
+                              idxs.end[i] << ") adjusted to [" << 
+                              adj_idxs.begin[i] << "..." <<
+                              adj_idxs.end[i] << ") within scratch-grid '" << 
+                              gp->get_name() << "' allocated [" <<
+                              gp->get_first_rank_alloc_index(posn) << "..." <<
+                              gp->get_last_rank_alloc_index(posn) << "] in dim '" << dname << "'");
                     assert(adj_idxs.begin[i] >= gp->get_first_rank_alloc_index(posn));
                     assert(adj_idxs.end[i] <= gp->get_last_rank_alloc_index(posn) + 1);
 
@@ -793,8 +794,7 @@ namespace yask {
     // Calc the work stats.
     // Requires MPI barriers!
     void BundlePack::init_work_stats() {
-        ostream& os = _context->get_ostr();
-        auto& env = _context->get_env();
+        STATE_VARS(this);
 
         num_reads_per_step = 0;
         num_writes_per_step = 0;
@@ -879,7 +879,8 @@ namespace yask {
             // Classify vars.
             GridPtrs idvars, imvars, odvars, omvars, iodvars, iomvars; // i[nput], o[utput], d[omain], m[isc].
             for (auto gp : sg->inputGridPtrs) {
-                bool isdom = gp->is_domain_var();
+                auto& gb = gp->gb();
+                bool isdom = gb.is_domain_var();
                 auto& ogps = sg->outputGridPtrs;
                 bool isout = find(ogps.begin(), ogps.end(), gp) != ogps.end();
                 if (isout) {
@@ -895,7 +896,8 @@ namespace yask {
                 }
             }
             for (auto gp : sg->outputGridPtrs) {
-                bool isdom = gp->is_domain_var();
+                auto& gb = gp->gb();
+                bool isdom = gb.is_domain_var();
                 auto& igps = sg->inputGridPtrs;
                 bool isin = find(igps.begin(), igps.end(), gp) != igps.end();
                 if (!isin) {

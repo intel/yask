@@ -46,7 +46,7 @@ namespace yask {
 
         // First, try to make a grid that matches the layout in
         // the stencil.
-        YkGridPtr gp = newStencilGrid(name, gdims);
+        GridBasePtr gp = newStencilGrid(name, gdims);
 
         // No match.
         if (!gp) {
@@ -121,8 +121,14 @@ namespace yask {
         // Mark as non-resizable if sizes provided.
         gp->set_fixed_size(got_sizes);
 
+        // Mark as created via API.
+        gp->set_user_grid(true);
+
+        // Wrap with a Yk grid.
+        YkGridPtr ygp = make_shared<YkGridImpl>(gp);
+        
         // Add to context.
-        addGrid(gp, false);     // mark as non-output grid.
+        addGrid(ygp, false, false);     // mark as non-orig, non-output grid.
 
         // Set sizes as provided.
         if (got_sizes) {
@@ -131,18 +137,18 @@ namespace yask {
                 auto& gdim = gdims[i];
 
                 // Domain size.
-                gp->_set_domain_size(i, sizes->at(i));
+                ygp->_set_domain_size(i, sizes->at(i));
 
                 // Pads.
                 // Set via both 'extra' and 'min'; larger result will be used.
                 if (domain_dims.lookup(gdim)) {
-                    gp->set_extra_pad_size(i, opts->_extra_pad_sizes[gdim]);
-                    gp->set_min_pad_size(i, opts->_min_pad_sizes[gdim]);
+                    ygp->set_extra_pad_size(i, opts->_extra_pad_sizes[gdim]);
+                    ygp->set_min_pad_size(i, opts->_min_pad_sizes[gdim]);
                 }
 
                 // Offsets.
-                gp->_set_rank_offset(i, 0);
-                gp->_set_local_offset(i, 0);
+                ygp->_set_rank_offset(i, 0);
+                ygp->_set_local_offset(i, 0);
             }
         }
 
@@ -150,8 +156,6 @@ namespace yask {
         else
             update_grid_info();
 
-        // Mark as created via API.
-        gp->set_new_grid(true);
-        return gp;
+        return ygp;
     }
 } // namespace yask.

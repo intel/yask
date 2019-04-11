@@ -74,16 +74,16 @@ namespace yask {
     // Make some descriptive info.
     string GenericGridBase::make_info_string(const string& elem_name) const {
         stringstream oss;
+        oss << "'" << _name << "' ";
         if (_grid_dims.getNumDims() == 0)
             oss << "scalar";
         else
-            oss << _grid_dims.getNumDims() << "-D grid (" <<
+            oss << _grid_dims.getNumDims() << "-D var (" <<
                 _grid_dims.makeDimValStr(" * ") << ")";
-        oss << " '" << _name << "'";
         if (_elems)
-            oss << " with data at " << _elems << " containing ";
+            oss << " with storage at " << _elems << " containing ";
         else
-            oss << " with data not yet allocated for ";
+            oss << " with storage not yet allocated for ";
         oss << makeByteStr(get_num_bytes()) <<
             " (" << makeNumStr(get_num_elems()) << " " <<
             elem_name << " element(s) of " <<
