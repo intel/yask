@@ -154,7 +154,7 @@ namespace yask {
 
         // Set sizes based on solution settings.
         else
-            update_grid_info();
+            update_grid_info(false);
 
         return ygp;
     }

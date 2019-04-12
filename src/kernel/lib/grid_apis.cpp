@@ -176,64 +176,42 @@ namespace yask {
         return true;
     }
 
-    void YkGridImpl::fuse_grids(yk_grid_ptr other,
-                                bool use_meta_data_from_other,
-                                bool use_storage_from_other) {
+    void YkGridImpl::fuse_grids(yk_grid_ptr src) {
         STATE_VARS(gbp());
-        auto op = dynamic_pointer_cast<YkGridImpl>(other);
-        TRACE_MSG("fuse_grids(" << other.get() << ", " << use_meta_data_from_other <<
-                  ", " << use_storage_from_other << "): this=" << gb().make_info_string() <<
-                  "; other=" << op->gb().make_info_string());
-        
+        auto op = dynamic_pointer_cast<YkGridImpl>(src);
+        TRACE_MSG("fuse_grids(" << src.get() << "): this=" << gb().make_info_string() <<
+                  "; source=" << op->gb().make_info_string());
         assert(op);
-        YkGridImpl* md_src = use_meta_data_from_other ? op.get() : this;
-        YkGridImpl* st_src = use_storage_from_other ? op.get() : this;
-
-        // Make sure size is compatible when replacing storage.
-        if (md_src != st_src && st_src->get_raw_storage_buffer()
-            && md_src->get_num_storage_bytes() != st_src->get_num_storage_bytes())
-            THROW_YASK_EXCEPTION("Error: fuse_grids(): attempt to use allocated"
-                                 " storage of " + makeByteStr(st_src->get_num_storage_bytes()) +
-                                 " from grid '" + st_src->get_name() + "' in grid '" +
-                                 md_src->get_name() + "' that needs " +
-                                 makeByteStr(md_src->get_num_storage_bytes()));
+        auto* sp = op.get();
+        assert(!_gbp->is_scratch());
 
         // Check conditions for fusing into a non-user grid.
         bool force_native = false;
-        for (YkGridImpl* tgt : { this, op.get() }) {
-            if (!tgt->gb().is_user_grid()) {
-                force_native = true;
-                if (!tgt->is_storage_layout_identical(md_src, false))
-                    THROW_YASK_EXCEPTION("Error: fuse_grids(): attempt to replace meta-data"
-                                         " of " + tgt->gb().make_info_string() +
-                                         " used in solution with incompatible " +
-                                         md_src->gb().make_info_string());
-            }
+        if (gb().is_user_grid()) {
+            force_native = true;
+            if (!is_storage_layout_identical(sp, false))
+                THROW_YASK_EXCEPTION("Error: fuse_grids(): attempt to replace meta-data"
+                                     " of " + gb().make_info_string() +
+                                     " used in solution with incompatible " +
+                                     sp->gb().make_info_string());
         }
 
         // Save ptr to source-storage grid before fusing meta-data.
-        GridBasePtr st_gbp = st_src->_gbp; // Shared-ptr to keep source active to end of method.
+        GridBasePtr st_gbp = sp->_gbp; // Shared-ptr to keep source active to end of method.
         GenericGridBase* st_ggb = st_gbp->_ggb;
 
         // Fuse meta-data.
-        if (use_meta_data_from_other)
-            _gbp = md_src->_gbp;
-        else
-            op->_gbp = md_src->_gbp;
-        assert(_gbp == op->_gbp);
+        _gbp = sp->_gbp;
 
-        // Make this grid look like a compiler-generated one if either
-        // of the original ones was.
+        // Tag grid as a non-user grid if the original one was.
         if (force_native)
             _gbp->set_user_grid(false);
-        assert(!_gbp->is_scratch());
 
         // Fuse storage.
         gg().share_storage(st_ggb);
 
-        TRACE_MSG("after fuse_grids(" << other.get() << ", " << use_meta_data_from_other <<
-                  ", " << use_storage_from_other << "): this=" << gb().make_info_string() <<
-                  "; other=" << op->gb().make_info_string());
+        TRACE_MSG("after fuse_grids: this=" << gb().make_info_string() <<
+                  "; source=" << op->gb().make_info_string());
     }
 
     // API get, set, etc.

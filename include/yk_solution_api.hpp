@@ -858,11 +858,7 @@ namespace yask {
         */
         virtual void
         fuse_grids(yk_solution_ptr source
-                   /**< [in] Solution from which grids will be merged. */,
-                   bool use_meta_data_from_other
-                   /**< [in] Whether to keep meta-data from `other` solution's grids. */,
-                   bool use_storage_from_other
-                   /**< [in] Whether to keep element storage from `other` solution's grids. */) =0;
+                   /**< [in] Solution from which grids will be merged. */) =0;
 
         /// **[Advanced]** Set whether invalid step indices alias to valid ones.
         virtual void

@@ -62,7 +62,7 @@ namespace yask {
                    #api_name "('" << dim << "', " << n << ")");         \
         dims->checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok); \
         expr;                                                           \
-        update_grid_info();                                             \
+        update_grid_info(false);                                        \
         if (reset_prep) rank_bb.bb_valid = ext_bb.bb_valid = false;     \
     }
     SET_SOLN_API(set_rank_index, opts->_rank_indices[dim] = n;
@@ -132,8 +132,9 @@ namespace yask {
         opts->adjustSettings(os);
 
         // Set offsets in grids and find WF extensions
-        // based on the grids' halos.
-        update_grid_info();
+        // based on the grids' halos. Force setting
+        // the size of all solution grids.
+        update_grid_info(true);
 
         // Determine bounding-boxes for all bundles.
         // This must be done after finding WF extensions.
@@ -301,9 +302,7 @@ namespace yask {
 	set_max_threads();
     }
 
-    void StencilContext::fuse_grids(yk_solution_ptr source,
-                                    bool use_meta_data_from_other,
-                                    bool use_storage_from_other) {
+    void StencilContext::fuse_grids(yk_solution_ptr source) {
         auto sp = dynamic_pointer_cast<StencilContext>(source);
         assert(sp);
 
@@ -312,7 +311,7 @@ namespace yask {
             auto si = sp->gridMap.find(gname);
             if (si != sp->gridMap.end()) {
                 auto sgp = si->second;
-                gp->fuse_grids(sgp, use_meta_data_from_other, use_storage_from_other);
+                gp->fuse_grids(sgp);
             }
         }
     }

@@ -985,68 +985,33 @@ namespace yask {
 
         /// **[Advanced]** Merge this grid with another grid.
         /**
-           After calling this API, both this grid and the `other`
-           grid will effectively become a reference to the same shared grid.
+           After calling this API, this grid 
+           grid will effectively become another reference to the `source` grid.
            Any subsequent API applied to this grid or the
-           `other` grid will access the same data and/or
+           `source` grid will access the same data and/or
            effect the same changes.
-           There are two categories of data associated with
-           a grid, and the source of each is specified independently:
-           - The _meta-data_ includes the name, dimensions, sizes, etc., 
-           i.e., everything about the grid apart from the storage.
-           If `use_meta_data_from_other` is `true`, the resulting shared
-           grid will use the meta-data from the `other` grid;
-           if `use_meta_data_from_other` is `false`, the resulting shared grid
-           will use the meta-data from this grid.
-           - The _storage_ holds the actual values of the data elements
-           if storage has been allocated.
-           If `use_storage_from_other` is `true`, the resulting shared
-           grid will use the storage from the `other` grid;
-           if `use_storage_from_other` is `false`, the resulting shared grid
-           will use the storage from this grid.
 
-           Implications:
-           - If `use_meta_data_from_other` and `use_storage_from_other`
-           are both `false`, this grid remains unaltered, and the
-           `other` grid becomes a reference to this grid.
-           - If `use_meta_data_from_other` and `use_storage_from_other`
-           are both `true`, the `other` grid remains unaltered, and this
-           grid becomes a reference to the `other` grid.
-           - If `use_meta_data_from_other` and `use_storage_from_other`
-           are different, and if
-           and the source storage is already allocated, the size of the
-           source storage must match that required by the source
-           meta-data. In other words, the value of
-           yk_grid::get_num_storage_bytes() must return the same value from
-           both grids prior to fusing.
-           - The storage of the resulting shared grid will be
+           Storage implications:
+           - The storage of the this grid will become
            allocated or unallocated depending on that of the source grid.
-           Any pre-existing storage in the non-source grid will be released.
-           - After fusing, any API applied to the shared grid via this
-           grid or the `other` grid will be visible to both, including
-           release_storage().
+           Any pre-existing storage in this grid will be released.
+           - After fusing, calling release_storage() on this grid
+           or the `source` grid will apply to both.
 
            To ensure that the kernels created by the YASK compiler work
-           properly, if either this grid and/or the `other` grid is used in
-           a kernel and its meta-data is being replaced, the dimensions and
-           fold-lengths must remain unchanged or an exception will the
-           thrown.  It is the responsibility of the API programmer to ensure
-           that the storage, local domain sizes, halos, etc.  of the grid
-           are set to be compatible with the solution before calling
-           yk_solution::run_solution().
+           properly, if this grid is used in a kernel, the dimensions and
+           fold-lengths of the `source` grid must be identical or an
+           exception will the thrown.  If the `source` grid is a fixed-size
+           grid, the storage, local domain sizes, halos, etc.  of the grid
+           are set to be compatible with the solution. Otherwise,
+           yk_solution::prepare_solution() will throw an exception.
 
            See allocation options and more information about grid sizes
            in the "Detailed Description" for \ref yk_grid.
         */
         virtual void
-        fuse_grids(yk_grid_ptr other
-                   /**< [in] Grid to be merged with this grid. */,
-                   bool use_meta_data_from_other
-                   /**< [in] If `true`, use meta-data from `other` grid;
-                    if `false`, use meta-data from this grid. */,
-                   bool use_storage_from_other
-                   /**< [in] If `true`, use element storage from `other` grid;
-                    if `false`, use storage from this grid. */) =0;
+        fuse_grids(yk_grid_ptr source
+                   /**< [in] Grid to be merged with this grid. */) =0;
 
         /// **[Advanced]** Get pointer to raw data storage buffer.
         /**
@@ -1139,12 +1104,6 @@ namespace yask {
             return are_indices_local(indices);
         }
 #endif
-
-        /// **[Deprecated]** Use fuse_grids() instead.
-        virtual void
-        share_storage(yk_grid_ptr other) {
-            fuse_grids(other, false, true);
-        }
 
     };
 

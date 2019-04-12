@@ -74,7 +74,7 @@ namespace yask {
         opts->_mini_block_sizes.setValsSame(0);
         opts->_sub_block_sizes.setValsSame(0);
         opts->adjustSettings();
-        update_grid_info();
+        update_grid_info(true);
 
         // Copy these settings to packs and realloc scratch grids.
         for (auto& sp : stPacks)

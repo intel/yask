@@ -60,10 +60,11 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
 ### Backward-compatibility notices, including changes in default behavior:
 * Version 2.20.00 added checking of the step-dimension index value in the `yk_grid::get_element()` and similar APIs.
 Previously, invalid values silently "wrapped" around to valid values.
-Now, the step index must be valid when reading, and the valid step indices are updated when writing.
+Now, by default, the step index must be valid when reading, and the valid step indices are updated when writing.
+The old behavior of silent index wrapping may be restored via `set_step_wrap(true)`.
 The default for all `strict_indices` API parameters is now `true` to catch more programming errors and
 increase consistency of behavior between "set" and "get" APIs.
-The `share_storage()` APIs have been replaced with `fuse_grids()`.
+Also, the advanced `share_storage()` APIs have been replaced with `fuse_grids()`.
 * Version 2.19.01 turned off multi-pass tuning by default. Enable with `-auto_tune_each_pass`.
 * Version 2.18.03 allowed the default radius to be stencil-specific and changed the names of example stencil "9axis" to "3axis_with_diags".
 * Version 2.18.00 added the ability to specify the global-domain size, and it will calculate the local-domain sizes from it.

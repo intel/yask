@@ -675,9 +675,7 @@ namespace yask {
             assert(op);
             return is_storage_layout_identical(op.get(), true);
         }
-        virtual void fuse_grids(yk_grid_ptr other,
-                                bool use_meta_data_from_other,
-                                bool use_storage_from_other);
+        virtual void fuse_grids(yk_grid_ptr other);
         virtual void* get_raw_storage_buffer() {
             return gg().get_storage();
         }

@@ -517,9 +517,9 @@ namespace yask {
     // Set non-scratch grid sizes and offsets based on settings.
     // Set wave-front settings.
     // This should be called anytime a setting or rank offset is changed.
-    void StencilContext::update_grid_info() {
+    void StencilContext::update_grid_info(bool force) {
         STATE_VARS(this);
-        TRACE_MSG("update_grid_info()...");
+        TRACE_MSG("update_grid_info(" << force << ")...");
 
         // If we haven't finished constructing the context, it's too early
         // to do this.
@@ -538,9 +538,12 @@ namespace yask {
                 assert(gp);
                 if (!gp->is_dim_used(dname))
                     continue;
+                auto& gb = gp->gb();
 
-                // Don't resize manually-sized grid.
-                if (!gp->is_fixed_size()) {
+                // Don't resize manually-sized grid
+                // unless it is a solution grid and 'force' is 'true'.
+                if (!gp->is_fixed_size() ||
+                    (!gb.is_user_grid() && force)) {
 
                     // Rank domains.
                     gp->_set_domain_size(dname, opts->_rank_sizes[dname]);
@@ -554,17 +557,12 @@ namespace yask {
                     gp->_set_rank_offset(dname, rank_domain_offsets[dname]);
                     gp->_set_local_offset(dname, 0);
                 }
-            }
-
-            // Each grid used in the solution.
-            for (auto gp : origGridPtrs) {
-                assert(gp);
-                if (!gp->is_dim_used(dname))
-                    continue;
 
                 // Update max halo across grids, used for temporal angles.
-                max_halos[dname] = max(max_halos[dname], gp->get_left_halo_size(dname));
-                max_halos[dname] = max(max_halos[dname], gp->get_right_halo_size(dname));
+                if (!gb.is_user_grid()) {
+                    max_halos[dname] = max(max_halos[dname], gp->get_left_halo_size(dname));
+                    max_halos[dname] = max(max_halos[dname], gp->get_right_halo_size(dname));
+                }
             }
         }
 

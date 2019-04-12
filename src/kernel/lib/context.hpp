@@ -361,7 +361,7 @@ namespace yask {
 
         // Set grid sizes and offsets.
         // This should be called anytime a setting or offset is changed.
-        virtual void update_grid_info();
+        virtual void update_grid_info(bool force);
 
         // Set temporal blocking data.
         // This should be called anytime a block size is changed.
@@ -582,9 +582,7 @@ namespace yask {
         virtual void run_solution(idx_t step_index) {
             run_solution(step_index, step_index);
         }
-        virtual void fuse_grids(yk_solution_ptr other,
-                                bool use_meta_data_from_other,
-                                bool use_storage_from_other);
+        virtual void fuse_grids(yk_solution_ptr other);
 
         // APIs that access settings.
         virtual void set_overall_domain_size(const std::string& dim, idx_t size);
