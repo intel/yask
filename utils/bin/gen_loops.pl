@@ -86,8 +86,8 @@ sub beginVar {
 sub endVar {
     return inVar("end", @_);
 }
-sub stepVar {
-    return inVar("step", @_);
+sub strideVar {
+    return inVar("stride", @_);
 }
 sub alignVar {
     return inVar("align", @_);
@@ -206,7 +206,7 @@ sub addIndexVars1($$$) {
             if ($pass == 0) {
                 my $bvar = beginVar($dim);
                 my $evar = endVar($dim);
-                my $svar = stepVar($dim);
+                my $svar = strideVar($dim);
                 my $avar = alignVar($dim);
                 my $aovar = alignOfsVar($dim);
                 my $aavar = adjAlignVar($dim);
@@ -226,12 +226,12 @@ sub addIndexVars1($$$) {
                 # abvar = round_down_flr(20 - 15, 4) + 15 = 4 + 15 = 19.
 
                 push @$code,
-                    " // Alignment must be less than or equal to step size.",
+                    " // Alignment must be less than or equal to stride size.",
                     " const $itype $aavar = std::min($avar, $svar);",
                     " // Aligned beginning point such that ($bvar - $svar) < $abvar <= $bvar.",
                     " const $itype $abvar = yask::round_down_flr($bvar - $aovar, $aavar) + $aovar;",
-                    " // Number of iterations to get from $abvar to (but not including) $evar, stepping by $svar.".
-                    " This value is rounded up because the last iteration may cover fewer than $svar steps.",
+                    " // Number of iterations to get from $abvar to (but not including) $evar, striding by $svar.".
+                    " This value is rounded up because the last iteration may cover fewer than $svar strides.",
                     " const $itype $nvar = yask::ceil_idiv_flr($evar - $abvar, $svar);";
 
                 # For grouped loops.
@@ -482,7 +482,7 @@ sub addIndexVars2($$$$) {
         }
     }
 
-    # start and stop vars based on individual begin, end, step, and index vars.
+    # start and stop vars based on individual begin, end, stride, and index vars.
     for my $dim (@$loopDims) {
         my $divar = indexVar($dim);
         my $stvar = startVar($dim);
@@ -490,7 +490,7 @@ sub addIndexVars2($$$$) {
         my $bvar = beginVar($dim);
         my $abvar = alignBeginVar($dim);
         my $evar = endVar($dim);
-        my $svar = stepVar($dim);
+        my $svar = strideVar($dim);
         push @$code,
             " // This value of $divar covers ".dimStr($dim)." from $stvar to (but not including) $spvar.",
             " idx_t $stvar = std::max($abvar + ($divar * $svar), $bvar);",
@@ -982,8 +982,8 @@ sub main() {
             "  This struct contains the following 'Indices' elements:\n",
             "  'begin':       [in] first index to scan in each dim.\n",
             "  'end':         [in] value beyond last index to scan in each dim.\n",
-            "  'step':        [in] space between each scan point in each dim.\n",
-            "  'align':       [in] alignment of steps after first one.\n",
+            "  'stride':      [in] distance between each scan point in each dim.\n",
+            "  'align':       [in] alignment of strides after first one.\n",
             "  'align_ofs':   [in] value to subtract from 'start' before applying alignment.\n",
             "  'group_size':  [in] min size of each group of points visisted first in a multi-dim loop.\n",
             "  'start':       [out] set to first scan point in called function(s) in inner loop(s).\n",

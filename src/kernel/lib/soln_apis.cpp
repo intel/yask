@@ -54,13 +54,15 @@ namespace yask {
     GET_SOLN_API(get_rank_index, opts->_rank_indices[dim], false, true, false, true)
 #undef GET_SOLN_API
 
-    // The grid sizes updated any time these settings are changed.
+    // The grid sizes are updated any time these settings are changed.
 #define SET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok, reset_prep) \
     void StencilContext::api_name(const string& dim, idx_t n) {         \
         STATE_VARS(this);                                               \
+        TRACE_MSG("solution '" << get_name() << "'."                    \
+                   #api_name "('" << dim << "', " << n << ")");         \
         dims->checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok); \
         expr;                                                           \
-        update_grid_info();                                             \
+        update_grid_info(false);                                        \
         if (reset_prep) rank_bb.bb_valid = ext_bb.bb_valid = false;     \
     }
     SET_SOLN_API(set_rank_index, opts->_rank_indices[dim] = n;
@@ -130,8 +132,9 @@ namespace yask {
         opts->adjustSettings(os);
 
         // Set offsets in grids and find WF extensions
-        // based on the grids' halos.
-        update_grid_info();
+        // based on the grids' halos. Force setting
+        // the size of all solution grids.
+        update_grid_info(true);
 
         // Determine bounding-boxes for all bundles.
         // This must be done after finding WF extensions.
@@ -279,6 +282,7 @@ namespace yask {
     // Dealloc grids, etc.
     void StencilContext::end_solution() {
         STATE_VARS(this);
+        TRACE_MSG("end_solution()...");
 
         // Final halo exchange (usually not needed).
         exchange_halos();
@@ -298,7 +302,7 @@ namespace yask {
 	set_max_threads();
     }
 
-    void StencilContext::share_grid_storage(yk_solution_ptr source) {
+    void StencilContext::fuse_grids(yk_solution_ptr source) {
         auto sp = dynamic_pointer_cast<StencilContext>(source);
         assert(sp);
 
@@ -307,7 +311,7 @@ namespace yask {
             auto si = sp->gridMap.find(gname);
             if (si != sp->gridMap.end()) {
                 auto sgp = si->second;
-                gp->share_storage(sgp);
+                gp->fuse_grids(sgp);
             }
         }
     }
@@ -337,7 +341,7 @@ namespace yask {
     }
 
     // Add a new grid to the containers.
-    void StencilContext::addGrid(YkGridPtr gp, bool is_output) {
+    void StencilContext::addGrid(YkGridPtr gp, bool is_orig, bool is_output) {
         STATE_VARS(this);
         assert(gp);
         auto& gname = gp->get_name();
@@ -347,6 +351,12 @@ namespace yask {
         // Add to list and map.
         gridPtrs.push_back(gp);
         gridMap[gname] = gp;
+
+        // Add to orig list and map if 'is_orig'.
+        if (is_orig) {
+            origGridPtrs.push_back(gp);
+            origGridMap[gname] = gp;
+        }
 
         // Add to output list and map if 'is_output'.
         if (is_output) {

@@ -51,7 +51,7 @@ namespace yask {
         const static int _numa_unset = -999;
         int _numa_pref = _numa_unset; // use default from _opts.
 
-        // Note that both _dims and *_layout_base hold dimensions unless this
+        // Note that both _dims and *_layout_base hold sizes unless this
         // is a scalar. For a scalar, _dims is empty and _layout_base = 0.
         IdxTuple _grid_dims;         // names and lengths of grid dimensions.
         Layout* _layout_base = 0; // memory layout.
@@ -74,20 +74,6 @@ namespace yask {
                         const GridDimNames& dimNames);
 
         virtual ~GenericGridBase() { }
-
-        // Get state info.
-        KernelStatePtr& get_state() {
-            assert(_state);
-            return _state;
-        }
-        const KernelStatePtr& get_state() const {
-            assert(_state);
-            return _state;
-        }
-        std::ostream& get_ostr() const {
-            STATE_VARS(this);
-            return os;
-        }
 
         // Perform default allocation.
         // For other options,
@@ -115,8 +101,10 @@ namespace yask {
 #endif
         }
 
-        // Access dims of this grid.
-        const IdxTuple& get_dims() const { return _grid_dims; }
+        // Access dims of this grid (not necessarily same as solution dims).
+        const IdxTuple& get_dims() const {
+            return _grid_dims;
+        }
 
         // Get number of elements.
         virtual idx_t get_num_elems() const {
@@ -198,6 +186,12 @@ namespace yask {
         // Free old storage.
         // 'base' should provide get_num_bytes() bytes at offset bytes.
         virtual void set_storage(std::shared_ptr<char>& base, size_t offset);
+
+        // Share storage from another grid.
+        virtual void share_storage(const GenericGridBase* src) {
+            _base = src->_base;
+            _elems = src->_elems;
+        }
 
         // Check for equality, assuming same layout.
         // Return number of mismatches greater than epsilon.

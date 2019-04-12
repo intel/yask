@@ -31,7 +31,7 @@ using namespace std;
 namespace yask {
 
     // Ctor.
-    // Important: '*ggb' is NOT yet constructed.
+    // Important: '*ggb' exists but is NOT yet constructed.
     YkGridBase::YkGridBase(KernelStateBase& stateb,
                            GenericGridBase* ggb,
                            const GridDimNames& dimNames) :
@@ -93,7 +93,7 @@ namespace yask {
 
         for (auto& d : domain_dims.getDims()) {
             auto& dname = d.getName();
-            if (!is_dim_used(dname))
+            if (!_ggb->is_dim_used(dname))
                 return false;
         }
         return true;
@@ -112,8 +112,15 @@ namespace yask {
     void YkGridBase::set_dirty(bool dirty, idx_t step_idx) {
         if (_dirty_steps.size() == 0)
             resize();
-        if (_has_step_dim)
+        if (_has_step_dim) {
+
+            // Also update valid step.
+            if (dirty)
+                update_valid_step(step_idx);
+
+            // Wrap index.
             step_idx = _wrap_step(step_idx);
+        }
         else
             step_idx = 0;
         set_dirty_using_alloc_index(dirty, step_idx);
@@ -158,9 +165,9 @@ namespace yask {
         // element of a vector. In addition, this vec-len should be the
         // global one, not the one for this grid to handle the case where
         // this grid is not vectorized.
-        for (int i = 0; i < get_num_dims(); i++) {
+        for (int i = 0; i < _ggb->get_num_dims(); i++) {
             if (mp[i] >= 1) {
-                auto& dname = get_dim_name(i);
+                auto& dname = _ggb->get_dim_name(i);
                 auto* p = dims->_fold_pts.lookup(dname);
                 if (p) {
                     assert (*p >= 1);
@@ -178,30 +185,30 @@ namespace yask {
         STATE_VARS(this);
 
         // Original size.
-        auto p = get_raw_storage_buffer();
+        auto p = _ggb->get_storage();
         IdxTuple old_allocs = get_allocs();
 
         // Check settings.
-        for (int i = 0; i < get_num_dims(); i++) {
+        for (int i = 0; i < _ggb->get_num_dims(); i++) {
             if (_left_halos[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative left halo in grid '" + get_name() + "'");
+                THROW_YASK_EXCEPTION("Error: negative left halo in grid '" + _ggb->get_name() + "'");
             if (_right_halos[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative right halo in grid '" + get_name() + "'");
+                THROW_YASK_EXCEPTION("Error: negative right halo in grid '" + _ggb->get_name() + "'");
             if (_left_wf_exts[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative left wave-front ext in grid '" + get_name() + "'");
+                THROW_YASK_EXCEPTION("Error: negative left wave-front ext in grid '" + _ggb->get_name() + "'");
             if (_right_wf_exts[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative right wave-front ext in grid '" + get_name() + "'");
+                THROW_YASK_EXCEPTION("Error: negative right wave-front ext in grid '" + _ggb->get_name() + "'");
             if (_req_left_pads[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative left padding in grid '" + get_name() + "'");
+                THROW_YASK_EXCEPTION("Error: negative left padding in grid '" + _ggb->get_name() + "'");
             if (_req_right_pads[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative right padding in grid '" + get_name() + "'");
+                THROW_YASK_EXCEPTION("Error: negative right padding in grid '" + _ggb->get_name() + "'");
         }
 
         // Increase padding as needed and calculate new allocs.
         Indices new_left_pads = getReqdPad(_left_halos, _left_wf_exts);
         Indices new_right_pads = getReqdPad(_right_halos, _right_wf_exts);
         IdxTuple new_allocs(old_allocs);
-        for (int i = 0; i < get_num_dims(); i++) {
+        for (int i = 0; i < _ggb->get_num_dims(); i++) {
             idx_t mbit = 1LL << i;
 
             // New allocation in each dim.
@@ -234,7 +241,7 @@ namespace yask {
 
                 // Make inner dim an odd number of vecs.
                 // This reportedly helps avoid some uarch aliasing.
-                if (!p && get_dim_name(i) == inner_dim &&
+                if (!p && _ggb->get_dim_name(i) == inner_dim &&
                     (new_allocs[i] / _vec_lens[i]) % 2 == 0) {
                     new_right_pads[i] += _vec_lens[i];
                     new_allocs[i] += _vec_lens[i];
@@ -252,7 +259,7 @@ namespace yask {
         // resize() on failure.
         if (p && old_allocs != new_allocs) {
             THROW_YASK_EXCEPTION("Error: attempt to change allocation size of grid '" +
-                get_name() + "' from " +
+                _ggb->get_name() + "' from " +
                 makeIndexString(old_allocs, " * ") + " to " +
                 makeIndexString(new_allocs, " * ") +
                 " after storage has been allocated");
@@ -263,7 +270,7 @@ namespace yask {
         _actl_left_pads = new_left_pads;
         _actl_right_pads = new_right_pads;
         size_t new_dirty = 1;      // default if no step dim.
-        for (int i = 0; i < get_num_dims(); i++) {
+        for (int i = 0; i < _ggb->get_num_dims(); i++) {
             idx_t mbit = 1LL << i;
 
             // Calc vec-len values.
@@ -280,14 +287,20 @@ namespace yask {
 
         // Resize dirty flags, too.
         size_t old_dirty = _dirty_steps.size();
-        if (old_dirty != new_dirty)
-            _dirty_steps.assign(new_dirty, true); // set all as dirty.
+        if (old_dirty != new_dirty) {
+
+            // Resize & set all as dirty.
+            _dirty_steps.assign(new_dirty, true);
+
+            // Init range.
+            init_valid_steps();
+        }
 
         // Report changes in TRACE mode.
         if (old_allocs != new_allocs || old_dirty != new_dirty) {
             Indices first_allocs = _rank_offsets.subElements(_actl_left_pads);
             Indices end_allocs = first_allocs.addElements(_allocs);
-            TRACE_MSG("grid '" << get_name() << "' resized from " <<
+            TRACE_MSG("grid '" << _ggb->get_name() << "' resized from " <<
                        makeIndexString(old_allocs, " * ") << " to " <<
                        makeIndexString(new_allocs, " * ") << " at [" <<
                        makeIndexString(first_allocs) << " ... " << 
@@ -307,7 +320,7 @@ namespace yask {
                                   bool domain_ok,
                                   bool misc_ok) const {
         STATE_VARS(this);
-        if (!is_dim_used(dim))
+        if (!_ggb->is_dim_used(dim))
             THROW_YASK_EXCEPTION("Error in " + fn_name + "(): dimension '" +
                                  dim + "' not found in " + make_info_string());
         dims->checkDimType(dim, fn_name, step_ok, domain_ok, misc_ok);
@@ -321,14 +334,14 @@ namespace yask {
         STATE_VARS(this);
         if (!ref) {
             os << "** mismatch: no reference grid.\n";
-            return get_num_storage_elements();
+            return _allocs.product(); // total number of elements.
         }
 
         // Dims & sizes same?
         if (!_ggb->are_dims_and_sizes_same(*ref->_ggb)) {
             os << "** mismatch due to incompatible grids: " <<
                 make_info_string() << " and " << ref->make_info_string() << ".\n";
-            return get_num_storage_elements();
+            return _allocs.product(); // total number of elements.
         }
 
         // Quick check for errors, assuming same layout and
@@ -365,8 +378,8 @@ namespace yask {
                     // TODO: check points in outermost halo.
                     auto& dname = pt.getDimName(i);
                     if (domain_dims.lookup(dname)) {
-                        auto first_ok = get_first_rank_domain_index(dname);
-                        auto last_ok = get_last_rank_domain_index(dname);
+                        auto first_ok = _rank_offsets[i];
+                        auto last_ok = first_ok + _domains[i] - 1;
                         if (opt[i] < first_ok || opt[i] > last_ok)
                             ok = false;
                     }
@@ -383,12 +396,12 @@ namespace yask {
                         errs++;
                         if (errs <= maxPrint) {
                             if (errs < maxPrint)
-                                os << "** mismatch at " << get_name() <<
+                                os << "** mismatch at " << _ggb->get_name() <<
                                     "(" << opt.makeDimValStr() << "): " <<
                                     te << " != " << re << endl;
                             else
                                 os << "** Additional errors not printed for grid '" <<
-                                    get_name() << "'.\n";
+                                    _ggb->get_name() << "'.\n";
                         }
                     }
                 }
@@ -399,14 +412,18 @@ namespace yask {
     }
 
     // Make sure indices are in range.
-    // Side-effect: If clipped_indices is not NULL, set them to in-range if out-of-range.
+    // Side-effect: If clipped_indices is not NULL,
+    // 1) set them to in-range if out-of-range, and
+    // 2) normalize them if 'normalize' is 'true'.
     bool YkGridBase::checkIndices(const Indices& indices,
-                                  const string& fn,
+                                  const string& fn,    // name for error msg.
                                   bool strict_indices, // die if out-of-range.
+                                  bool check_step,     // check step index.
                                   bool normalize,      // div by vec lens.
                                   Indices* clipped_indices) const {
+        STATE_VARS(this);
         bool all_ok = true;
-        auto n = get_num_dims();
+        auto n = _ggb->get_num_dims();
         if (indices.getNumDims() != n) {
             FORMAT_AND_THROW_YASK_EXCEPTION("Error: '" << fn << "' called with " <<
                                             indices.getNumDims() <<
@@ -416,31 +433,34 @@ namespace yask {
             *clipped_indices = indices;
         for (int i = 0; i < n; i++) {
             idx_t mbit = 1LL << i;
+            bool is_step_dim = _step_dim_mask & mbit;
             idx_t idx = indices[i];
             bool ok = false;
-            auto& dname = get_dim_name(i);
+            auto& dname = _ggb->get_dim_name(i);
 
-            // Any step index is ok because it wraps around.
-            // TODO: check that it's < magic added value in wrap_index().
-            if (_step_dim_mask & mbit)
+            // If this is the step dim and we're not checking
+            // it, then anything is ok.
+            if (is_step_dim && (!check_step || opts->_step_wrap))
                 ok = true;
 
-            // Within first..last indices?
+            // Otherwise, check range.
             else {
-                auto first_ok = _get_first_alloc_index(i);
-                auto last_ok = _get_last_alloc_index(i);
+
+                // First..last indices.
+                auto first_ok = get_first_local_index(i);
+                auto last_ok = get_last_local_index(i);
                 if (idx >= first_ok && idx <= last_ok)
                     ok = true;
 
                 // Handle outliers.
                 if (!ok) {
                     if (strict_indices) {
-                        FORMAT_AND_THROW_YASK_EXCEPTION("Error: " + fn + ": index in dim '" + dname +
-                                                        "' is " << idx << ", which is not in allocated range [" <<
-                                                        first_ok << "..." << last_ok << "] of grid '" +
-                                                        get_name() + "'");
+                        THROW_YASK_EXCEPTION("Error: " + fn + ": index in dim '" + dname +
+                                             "' is " + to_string(idx) + ", which is not in allowed range [" +
+                                             to_string(first_ok) + "..." + to_string(last_ok) +
+                                             "] of grid '" + _ggb->get_name() + "'");
                     }
-
+                    
                     // Update the output indices.
                     if (clipped_indices) {
                         if (idx < first_ok)
@@ -448,10 +468,9 @@ namespace yask {
                         if (idx > last_ok)
                             (*clipped_indices)[i] = last_ok;
                     }
+                    all_ok = false;
                 }
-            }
-            if (!ok)
-                all_ok = false;
+            } // need to check.
 
             // Normalize?
             if (clipped_indices && normalize) {
@@ -464,6 +483,26 @@ namespace yask {
         return all_ok;
     }
 
+    // Update what steps are valid.
+    void YkGridBase::update_valid_step(idx_t t) {
+        STATE_VARS(this);
+        if (_has_step_dim) {
+
+            // If 't' is before first step, pull offset back.
+            if (t < get_first_local_index(step_posn))
+                _local_offsets[step_posn] = t;
+
+            // If 't' is after last step, push offset out.
+            else if (t > get_last_local_index(step_posn))
+                _local_offsets[step_posn] = t - _domains[step_posn] + 1;
+
+            TRACE_MSG("update_valid_step(" << t << "): valid step(s) in '" <<
+                      _ggb->get_name() << "' are now [" << get_first_local_index(step_posn) <<
+                      " ... " << get_last_local_index(step_posn) << "]");
+        }
+    }
+    
+    
     // Set dirty flags between indices.
     void YkGridBase::set_dirty_in_slice(const Indices& first_indices,
                                         const Indices& last_indices) {
@@ -497,7 +536,7 @@ namespace yask {
         string str;
         if (msg.length())
             str = msg + ": ";
-        str += get_name() + "[" +
+        str += _ggb->get_name() + "[" +
             makeIndexString(idxs) + "] = " + to_string(eval);
         if (line)
             str += " at line " + to_string(line);

@@ -34,68 +34,76 @@ namespace yask {
     cerr << "\n*** WARNING: call to deprecated YASK API '"              \
     #api_name "' that will be removed in a future release ***\n"
 
-    // APIs to get info from vars.
+    // APIs to get info from vars: one with name of dim with a lot
+    // of checking, and one with index of dim with no checking.
 #define GET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
-    idx_t YkGridBase::api_name(const string& dim) const {               \
-        STATE_VARS(this);                                               \
+    idx_t YkGridImpl::api_name(const string& dim) const {               \
+        STATE_VARS(gbp());                                              \
         dims->checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok); \
-        int posn = get_dim_posn(dim, true, #api_name);                  \
+        int posn = gb().get_dim_posn(dim, true, #api_name);             \
         idx_t mbit = 1LL << posn;                                       \
-        if (prep_req && _rank_offsets[posn] < 0)                        \
+        if (prep_req && gb()._rank_offsets[posn] < 0)                   \
             THROW_YASK_EXCEPTION("Error: '" #api_name "()' called on grid '" + \
                                  get_name() + "' before calling 'prepare_solution()'"); \
         auto rtn = expr;                                                \
         return rtn;                                                     \
     }                                                                   \
-    idx_t YkGridBase::api_name(int posn) const {                        \
-        STATE_VARS(this);                                               \
+    idx_t YkGridImpl::api_name(int posn) const {                        \
+        STATE_VARS(gbp());                                              \
         idx_t mbit = 1LL << posn;                                       \
         auto rtn = expr;                                                \
         return rtn;                                                     \
     }
-    GET_GRID_API(get_rank_domain_size, _domains[posn], false, true, false, false)
-    GET_GRID_API(get_left_pad_size, _actl_left_pads[posn], false, true, false, false)
-    GET_GRID_API(get_right_pad_size, _actl_right_pads[posn], false, true, false, false)
-    GET_GRID_API(get_left_halo_size, _left_halos[posn], false, true, false, false)
-    GET_GRID_API(get_right_halo_size, _right_halos[posn], false, true, false, false)
-    GET_GRID_API(get_first_misc_index, _local_offsets[posn], false, false, true, false)
-    GET_GRID_API(get_last_misc_index, _local_offsets[posn] + _domains[posn] - 1, false, false, true, false)
-    GET_GRID_API(get_left_extra_pad_size, _actl_left_pads[posn] - _left_halos[posn], false, true, false, false)
-    GET_GRID_API(get_right_extra_pad_size, _actl_right_pads[posn] - _right_halos[posn], false, true, false, false)
-    GET_GRID_API(get_alloc_size, _allocs[posn], true, true, true, false)
-    GET_GRID_API(get_first_rank_domain_index, _rank_offsets[posn], false, true, false, true)
-    GET_GRID_API(get_last_rank_domain_index, _rank_offsets[posn] + _domains[posn] - 1, false, true, false, true)
-    GET_GRID_API(get_first_rank_halo_index, _rank_offsets[posn] - _left_halos[posn], false, true, false, true)
-    GET_GRID_API(get_last_rank_halo_index, _rank_offsets[posn] + _domains[posn] + _right_halos[posn] - 1, false, true, false, true)
-    GET_GRID_API(get_first_rank_alloc_index, _rank_offsets[posn] + _local_offsets[posn] - _actl_left_pads[posn], false, true, false, true)
-    GET_GRID_API(get_last_rank_alloc_index, _rank_offsets[posn] + _local_offsets[posn] + _domains[posn] + _actl_right_pads[posn] - 1, false, true, false, true)
-    GET_GRID_API(_get_left_wf_ext, _left_wf_exts[posn], true, true, true, false)
-    GET_GRID_API(_get_right_wf_ext, _right_wf_exts[posn], true, true, true, false)
-    GET_GRID_API(_get_vec_len, _vec_lens[posn], true, true, true, true)
-    GET_GRID_API(_get_rank_offset, _rank_offsets[posn], true, true, true, true)
-    GET_GRID_API(_get_local_offset, _local_offsets[posn], true, true, true, false)
-    GET_GRID_API(_get_first_alloc_index, _rank_offsets[posn] + _local_offsets[posn] - _actl_left_pads[posn], true, true, true, true)
-    GET_GRID_API(_get_last_alloc_index, _rank_offsets[posn] + _local_offsets[posn] + _domains[posn] + _actl_right_pads[posn] - 1, true, true, true, true)
 
-    GET_GRID_API(get_pad_size, _actl_left_pads[posn]; DEPRECATED(get_pad_size), false, true, false, false)
-    GET_GRID_API(get_halo_size, _left_halos[posn]; DEPRECATED(get_halo_size), false, true, false, false)
-    GET_GRID_API(get_extra_pad_size, _actl_left_pads[posn] - _left_halos[posn]; DEPRECATED(get_extra_pad_size), false, true, false, false)
+    // Internal APIs.
+    GET_GRID_API(_get_left_wf_ext, gb()._left_wf_exts[posn], true, true, true, false)
+    GET_GRID_API(_get_right_wf_ext, gb()._right_wf_exts[posn], true, true, true, false)
+    GET_GRID_API(_get_vec_len, gb()._vec_lens[posn], true, true, true, true)
+    GET_GRID_API(_get_rank_offset, gb()._rank_offsets[posn], true, true, true, true)
+    GET_GRID_API(_get_local_offset, gb()._local_offsets[posn], true, true, true, false)
+
+    // Exposed APIs.
+    GET_GRID_API(get_first_local_index, gb().get_first_local_index(posn), true, true, true, true)
+    GET_GRID_API(get_last_local_index, gb().get_last_local_index(posn), true, true, true, true)
+    GET_GRID_API(get_first_misc_index, gb()._local_offsets[posn], false, false, true, false)
+    GET_GRID_API(get_last_misc_index, gb()._local_offsets[posn] + gb()._domains[posn] - 1, false, false, true, false)
+    GET_GRID_API(get_rank_domain_size, gb()._domains[posn], false, true, false, false)
+    GET_GRID_API(get_left_pad_size, gb()._actl_left_pads[posn], false, true, false, false)
+    GET_GRID_API(get_right_pad_size, gb()._actl_right_pads[posn], false, true, false, false)
+    GET_GRID_API(get_left_halo_size, gb()._left_halos[posn], false, true, false, false)
+    GET_GRID_API(get_right_halo_size, gb()._right_halos[posn], false, true, false, false)
+    GET_GRID_API(get_left_extra_pad_size, gb()._actl_left_pads[posn] - gb()._left_halos[posn], false, true, false, false)
+    GET_GRID_API(get_right_extra_pad_size, gb()._actl_right_pads[posn] - gb()._right_halos[posn], false, true, false, false)
+    GET_GRID_API(get_alloc_size, gb()._allocs[posn], true, true, true, false)
+    GET_GRID_API(get_first_rank_domain_index, gb()._rank_offsets[posn], false, true, false, true)
+    GET_GRID_API(get_last_rank_domain_index, gb()._rank_offsets[posn] + gb()._domains[posn] - 1, false, true, false, true)
+    GET_GRID_API(get_first_rank_halo_index, gb()._rank_offsets[posn] - gb()._left_halos[posn], false, true, false, true)
+    GET_GRID_API(get_last_rank_halo_index, gb()._rank_offsets[posn] + gb()._domains[posn] +
+                 gb()._right_halos[posn] - 1, false, true, false, true)
+    GET_GRID_API(get_first_rank_alloc_index, gb().get_first_local_index(posn), false, true, false, true)
+    GET_GRID_API(get_last_rank_alloc_index, gb().get_last_local_index(posn), false, true, false, true)
+
+    // Deprecated APIs.
+    GET_GRID_API(get_pad_size, gb()._actl_left_pads[posn]; DEPRECATED(get_pad_size), false, true, false, false)
+    GET_GRID_API(get_halo_size, gb()._left_halos[posn]; DEPRECATED(get_halo_size), false, true, false, false)
+    GET_GRID_API(get_extra_pad_size, gb()._actl_left_pads[posn] - gb()._left_halos[posn];
+                 DEPRECATED(get_extra_pad_size), false, true, false, false)
 #undef GET_GRID_API
 
     // APIs to set vars.
 #define COMMA ,
 #define SET_GRID_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
-    void YkGridBase::api_name(const string& dim, idx_t n) {             \
-        STATE_VARS(this);                                               \
+    void YkGridImpl::api_name(const string& dim, idx_t n) {             \
+        STATE_VARS(gbp());                                              \
         TRACE_MSG("grid '" << get_name() << "'."                        \
                    #api_name "('" << dim << "', " << n << ")");         \
         dims->checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok); \
-        int posn = get_dim_posn(dim, true, #api_name);                  \
+        int posn = gb().get_dim_posn(dim, true, #api_name);              \
         idx_t mbit = 1LL << posn;                                       \
         expr;                                                           \
     }                                                                   \
-    void YkGridBase::api_name(int posn, idx_t n) {                      \
-        STATE_VARS(this);                                               \
+    void YkGridImpl::api_name(int posn, idx_t n) {                      \
+        STATE_VARS(gbp());                                              \
         idx_t mbit = 1LL << posn;                                       \
         int dim = posn;                                                 \
         expr;                                                           \
@@ -103,46 +111,45 @@ namespace yask {
 
     // These are the internal, unchecked access functions that allow
     // changes prohibited thru the APIs.
-    SET_GRID_API(_set_rank_offset, _rank_offsets[posn] = n, true, true, true)
-    SET_GRID_API(_set_local_offset, _local_offsets[posn] = n;
-                 assert(imod_flr(n, _vec_lens[posn]) == 0);
-                 _vec_local_offsets[posn] = n / _vec_lens[posn], true, true, true)
-    SET_GRID_API(_set_domain_size, _domains[posn] = n; resize(), true, true, true)
-    SET_GRID_API(_set_left_pad_size, _actl_left_pads[posn] = n; resize(), true, true, true)
-    SET_GRID_API(_set_right_pad_size, _actl_right_pads[posn] = n; resize(), true, true, true)
-    SET_GRID_API(_set_left_wf_ext, _left_wf_exts[posn] = n; resize(), true, true, true)
-    SET_GRID_API(_set_right_wf_ext, _right_wf_exts[posn] = n; resize(), true, true, true)
-    SET_GRID_API(_set_alloc_size, _domains[posn] = n; resize(), true, true, true)
+    SET_GRID_API(_set_rank_offset, gb()._rank_offsets[posn] = n, true, true, true)
+    SET_GRID_API(_set_local_offset, gb()._local_offsets[posn] = n;
+                 assert(imod_flr(n, gb()._vec_lens[posn]) == 0);
+                 gb()._vec_local_offsets[posn] = n / gb()._vec_lens[posn], true, true, true)
+    SET_GRID_API(_set_domain_size, gb()._domains[posn] = n; resize(), true, true, true)
+    SET_GRID_API(_set_left_pad_size, gb()._actl_left_pads[posn] = n; resize(), true, true, true)
+    SET_GRID_API(_set_right_pad_size, gb()._actl_right_pads[posn] = n; resize(), true, true, true)
+    SET_GRID_API(_set_left_wf_ext, gb()._left_wf_exts[posn] = n; resize(), true, true, true)
+    SET_GRID_API(_set_right_wf_ext, gb()._right_wf_exts[posn] = n; resize(), true, true, true)
+    SET_GRID_API(_set_alloc_size, gb()._domains[posn] = n; resize(), true, true, true)
 
     // These are the safer ones used in the APIs.
-    SET_GRID_API(set_left_halo_size, _left_halos[posn] = n; resize(), false, true, false)
-    SET_GRID_API(set_right_halo_size, _right_halos[posn] = n; resize(), false, true, false)
-    SET_GRID_API(set_halo_size, _left_halos[posn] = _right_halos[posn] = n; resize(), false, true, false)
-    SET_GRID_API(set_alloc_size, _domains[posn] = n; resize(),
-                 _is_dynamic_step_alloc, _fixed_size, _is_dynamic_misc_alloc)
-    SET_GRID_API(set_left_min_pad_size, _req_left_pads[posn] = n; resize(), false, true, false)
-    SET_GRID_API(set_right_min_pad_size, _req_right_pads[posn] = n; resize(), false, true, false)
-    SET_GRID_API(set_min_pad_size, _req_left_pads[posn] = _req_right_pads[posn] = n; resize(),
+    SET_GRID_API(set_left_halo_size, gb()._left_halos[posn] = n; resize(), false, true, false)
+    SET_GRID_API(set_right_halo_size, gb()._right_halos[posn] = n; resize(), false, true, false)
+    SET_GRID_API(set_halo_size, gb()._left_halos[posn] = gb()._right_halos[posn] = n; resize(), false, true, false)
+    SET_GRID_API(set_alloc_size, gb()._domains[posn] = n; resize(),
+                 gb()._is_dynamic_step_alloc, gb()._fixed_size, gb()._is_dynamic_misc_alloc)
+    SET_GRID_API(set_left_min_pad_size, gb()._req_left_pads[posn] = n; resize(), false, true, false)
+    SET_GRID_API(set_right_min_pad_size, gb()._req_right_pads[posn] = n; resize(), false, true, false)
+    SET_GRID_API(set_min_pad_size, gb()._req_left_pads[posn] = gb()._req_right_pads[posn] = n; resize(),
                  false, true, false)
     SET_GRID_API(set_left_extra_pad_size,
-                 set_left_min_pad_size(posn, _left_halos[posn] + n), false, true, false)
+                 set_left_min_pad_size(posn, gb()._left_halos[posn] + n), false, true, false)
     SET_GRID_API(set_right_extra_pad_size,
-                 set_right_min_pad_size(posn, _right_halos[posn] + n), false, true, false)
+                 set_right_min_pad_size(posn, gb()._right_halos[posn] + n), false, true, false)
     SET_GRID_API(set_extra_pad_size, set_left_extra_pad_size(posn, n);
                  set_right_extra_pad_size(posn, n), false, true, false)
-    SET_GRID_API(set_first_misc_index, _local_offsets[posn] = n, false, false, _is_new_grid)
+    SET_GRID_API(set_first_misc_index, gb()._local_offsets[posn] = n, false, false, gb()._is_user_grid)
 #undef COMMA
 #undef SET_GRID_API
 
-    bool YkGridBase::is_storage_layout_identical(const yk_grid_ptr other) const {
-        auto op = dynamic_pointer_cast<YkGridBase>(other);
-        assert(op);
+    bool YkGridImpl::is_storage_layout_identical(const YkGridImpl* op,
+                                                 bool check_sizes) const {
 
         // Same size?
-        if (get_num_storage_bytes() != op->get_num_storage_bytes())
+        if (check_sizes && get_num_storage_bytes() != op->get_num_storage_bytes())
             return false;
 
-        // Same dims?
+        // Same num dims?
         if (get_num_dims() != op->get_num_dims())
             return false;
         for (int i = 0; i < get_num_dims(); i++) {
@@ -152,169 +159,154 @@ namespace yask {
             if (dname != op->get_dim_name(i))
                 return false;
 
+            // Same folding?
+            if (gb()._vec_lens[i] != op->gb()._vec_lens[i])
+                return false;
+
             // Same dim sizes?
-            if (_domains[i] != op->_domains[i])
-                return false;
-            if (_actl_left_pads[i] != op->_actl_left_pads[i])
-                return false;
-            if (_actl_right_pads[i] != op->_actl_right_pads[i])
-                return false;
+            if (check_sizes) {
+                if (gb()._domains[i] != op->gb()._domains[i])
+                    return false;
+                if (gb()._actl_left_pads[i] != op->gb()._actl_left_pads[i])
+                    return false;
+                if (gb()._actl_right_pads[i] != op->gb()._actl_right_pads[i])
+                    return false;
+            }
         }
         return true;
     }
 
-    void YkGridBase::share_storage(yk_grid_ptr source) {
-        STATE_VARS(this);
-        auto sp = dynamic_pointer_cast<YkGridBase>(source);
-        assert(sp);
+    void YkGridImpl::fuse_grids(yk_grid_ptr src) {
+        STATE_VARS(gbp());
+        auto op = dynamic_pointer_cast<YkGridImpl>(src);
+        TRACE_MSG("fuse_grids(" << src.get() << "): this=" << gb().make_info_string() <<
+                  "; source=" << op->gb().make_info_string());
+        assert(op);
+        auto* sp = op.get();
+        assert(!_gbp->is_scratch());
 
-        if (!sp->get_raw_storage_buffer()) {
-            THROW_YASK_EXCEPTION("Error: share_storage() called without source storage allocated");
+        // Check conditions for fusing into a non-user grid.
+        bool force_native = false;
+        if (gb().is_user_grid()) {
+            force_native = true;
+            if (!is_storage_layout_identical(sp, false))
+                THROW_YASK_EXCEPTION("Error: fuse_grids(): attempt to replace meta-data"
+                                     " of " + gb().make_info_string() +
+                                     " used in solution with incompatible " +
+                                     sp->gb().make_info_string());
         }
 
-        // Determine required padding from halos.
-        Indices left_pads2 = getReqdPad(_left_halos, _left_wf_exts);
-        Indices right_pads2 = getReqdPad(_right_halos, _right_wf_exts);
+        // Save ptr to source-storage grid before fusing meta-data.
+        GridBasePtr st_gbp = sp->_gbp; // Shared-ptr to keep source active to end of method.
+        GenericGridBase* st_ggb = st_gbp->_ggb;
 
-        // NB: requirements to successful share_storage() is not as strict as
-        // is_storage_layout_identical(). See note on pad & halo below and API docs.
-        for (int i = 0; i < get_num_dims(); i++) {
-            auto dname = get_dim_name(i);
+        // Fuse meta-data.
+        _gbp = sp->_gbp;
 
-            // Same dims?
-            if (sp->get_num_dims() != get_num_dims() ||
-                sp->get_dim_name(i) != dname)
-                THROW_YASK_EXCEPTION("Error: share_storage() called with incompatible grids: " +
-                                     make_info_string() + " and " + sp->make_info_string());
+        // Tag grid as a non-user grid if the original one was.
+        if (force_native)
+            _gbp->set_user_grid(false);
 
+        // Fuse storage.
+        gg().share_storage(st_ggb);
 
-            // Check folding.
-            if (_vec_lens[i] != sp->_vec_lens[i]) {
-                FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" <<
-                                                sp->get_name() << "' of fold-length " <<
-                                                sp->_vec_lens[i] << " with grid '" << get_name() <<
-                                                "' of fold-length " << _vec_lens[i] <<
-                                                " in '" << dname << "' dim");
-            }
-
-            // Not a domain dim?
-            bool is_domain = domain_dims.lookup(dname) != 0;
-            if (!is_domain) {
-                auto tas = get_alloc_size(dname);
-                auto sas = sp->get_alloc_size(dname);
-                if (tas != sas) {
-                    FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" <<
-                                                    sp->get_name() << "' of alloc-size " << sas <<
-                                                    " with grid '" << get_name() << "' of alloc-size " <<
-                                                    tas << " in '" << dname << "' dim");
-                }
-            }
-
-            // Domain dim.
-            else {
-                auto tdom = get_rank_domain_size(i);
-                auto sdom = sp->get_rank_domain_size(i);
-                if (tdom != sdom) {
-                    FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" <<
-                                                    sp->get_name() << "' of domain-size " << sdom <<
-                                                    " with grid '" << get_name() <<
-                                                    "' of domain-size " << tdom << " in '" << dname << "' dim");
-                }
-
-                // Halo and pad sizes don't have to be the same.
-                // Requirement is that halo (reqd pad) of target fits inside of pad of source.
-                auto spad = sp->get_left_pad_size(i);
-                if (left_pads2[i] > spad) {
-                    FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" <<
-                                                    sp->get_name() << "' of left padding-size " << spad <<
-                                                    ", which is insufficient for grid '" << get_name() <<
-                                                    "' requiring " << left_pads2[i] << " in '" << dname << "' dim");
-                }
-                spad = sp->get_right_pad_size(i);
-                if (right_pads2[i] > spad) {
-                    FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to share storage from grid '" <<
-                                                    sp->get_name() <<
-                                                    "' of right padding-size " << spad <<
-                                                    ", which is insufficient for grid '" << get_name() <<
-                                                    "' requiring " << right_pads2[i] << " in '" << dname << "' dim");
-                }
-            }
-        }
-
-        // Copy pad sizes.
-        for (int i = 0; i < get_num_dims(); i++) {
-            auto dname = get_dim_name(i);
-            bool is_domain = domain_dims.lookup(dname) != 0;
-            if (is_domain) {
-                _actl_left_pads[i] = sp->_actl_left_pads[i];
-                _actl_right_pads[i] = sp->_actl_right_pads[i];
-            }
-        }
-
-        // Copy data.
-        release_storage();
-        resize();
-        if (!share_data(sp.get(), true)) {
-            THROW_YASK_EXCEPTION("Error: unexpected failure in data sharing");
-        }
+        TRACE_MSG("after fuse_grids: this=" << gb().make_info_string() <<
+                  "; source=" << op->gb().make_info_string());
     }
 
     // API get, set, etc.
-    bool YkGridBase::is_element_allocated(const Indices& indices) const {
+    bool YkGridImpl::are_indices_local(const Indices& indices) const {
         if (!is_storage_allocated())
             return false;
-        return checkIndices(indices, "is_element_allocated", false, false);
+        return gb().checkIndices(indices, "are_indices_local", false, true, false);
     }
-    double YkGridBase::get_element(const Indices& indices) const {
-        if (!is_storage_allocated()) {
-            THROW_YASK_EXCEPTION("Error: call to 'get_element' with no data allocated for grid '" +
+    double YkGridImpl::get_element(const Indices& indices) const {
+        STATE_VARS(gbp());
+        TRACE_MSG("get_element({" << gb().makeIndexString(indices) << "}) on " <<
+                  gb().make_info_string());
+        if (!is_storage_allocated())
+            THROW_YASK_EXCEPTION("Error: call to 'get_element' with no storage allocated for grid '" +
                                  get_name() + "'");
-        }
-        checkIndices(indices, "get_element", true, false);
-        idx_t asi = get_alloc_step_index(indices);
-        real_t val = readElem(indices, asi, __LINE__);
+        gb().checkIndices(indices, "get_element", true, true, false);
+        idx_t asi = gb().get_alloc_step_index(indices);
+        real_t val = gb().readElem(indices, asi, __LINE__);
+        TRACE_MSG("get_element({" << gb().makeIndexString(indices) << "}) on '" <<
+                  get_name() + "' returns " << val);
         return double(val);
     }
-    idx_t YkGridBase::set_element(double val,
+    idx_t YkGridImpl::set_element(double val,
                                   const Indices& indices,
                                   bool strict_indices) {
+        STATE_VARS(gbp());
+        TRACE_MSG("set_element(" << val << ", {" <<
+                  gb().makeIndexString(indices) << "}, " <<
+                  strict_indices << ") on " <<
+                  gb().make_info_string());
         idx_t nup = 0;
+        if (!get_raw_storage_buffer() && strict_indices)
+            THROW_YASK_EXCEPTION("Error: call to 'set_element' with no storage allocated for grid '" +
+                                 get_name() + "'");
         if (get_raw_storage_buffer() &&
-            checkIndices(indices, "set_element", strict_indices, false)) {
-            idx_t asi = get_alloc_step_index(indices);
-            writeElem(real_t(val), indices, asi, __LINE__);
+
+            // Don't check step index because this is a write-only API
+            // that updates the step index.
+            gb().checkIndices(indices, "set_element", strict_indices, false, false)) {
+            idx_t asi = gb().get_alloc_step_index(indices);
+            gb().writeElem(real_t(val), indices, asi, __LINE__);
             nup++;
 
             // Set appropriate dirty flag.
-            set_dirty_using_alloc_index(true, asi);
+            gb().set_dirty_using_alloc_index(true, asi);
         }
+        TRACE_MSG("set_element(" << val << ", {" <<
+                  gb().makeIndexString(indices) << "}, " <<
+                  strict_indices << ") on '" <<
+                  get_name() + "' returns " << nup);
         return nup;
     }
-    idx_t YkGridBase::add_to_element(double val,
+    idx_t YkGridImpl::add_to_element(double val,
                                      const Indices& indices,
                                      bool strict_indices) {
+        STATE_VARS(gbp());
+        TRACE_MSG("add_to_element(" << val << ", {" <<
+                  gb().makeIndexString(indices) <<  "}, " <<
+                  strict_indices << ") on " <<
+                  gb().make_info_string());
         idx_t nup = 0;
+        if (!get_raw_storage_buffer() && strict_indices)
+            THROW_YASK_EXCEPTION("Error: call to 'add_to_element' with no storage allocated for grid '" +
+                                 get_name() + "'");
         if (get_raw_storage_buffer() &&
-            checkIndices(indices, "add_to_element", strict_indices, false)) {
-            idx_t asi = get_alloc_step_index(indices);
-            addToElem(real_t(val), indices, asi, __LINE__);
+
+            // Check step index because this API must read before writing.
+            gb().checkIndices(indices, "add_to_element", strict_indices, true, false)) {
+            idx_t asi = gb().get_alloc_step_index(indices);
+            gb().addToElem(real_t(val), indices, asi, __LINE__);
             nup++;
 
             // Set appropriate dirty flag.
-            set_dirty_using_alloc_index(true, asi);
+            gb().set_dirty_using_alloc_index(true, asi);
         }
+        TRACE_MSG("add_to_element(" << val << ", {" <<
+                  gb().makeIndexString(indices) <<  "}, " <<
+                  strict_indices << ") on '" <<
+                  get_name() + "' returns " << nup);
         return nup;
     }
 
     idx_t YkGridBase::get_elements_in_slice(void* buffer_ptr,
                                             const Indices& first_indices,
                                             const Indices& last_indices) const {
-        if (!is_storage_allocated()) {
-            THROW_YASK_EXCEPTION("Error: call to 'get_elements_in_slice' with no data allocated for grid '" +
-                                 get_name() + "'");
-        }
-        checkIndices(first_indices, "get_elements_in_slice", true, false);
-        checkIndices(last_indices, "get_elements_in_slice", true, false);
+        STATE_VARS(this);
+        TRACE_MSG("get_elements_in_slice(" << buffer_ptr << ", {" <<
+                  makeIndexString(first_indices) << "}, {" <<
+                  makeIndexString(last_indices) << "}) on " <<
+                  make_info_string());
+        if (_ggb->get_storage() == 0)
+            THROW_YASK_EXCEPTION("Error: call to 'get_elements_in_slice' with no storage allocated for grid '" +
+                                 _ggb->get_name() + "'");
+        checkIndices(first_indices, "get_elements_in_slice", true, true, false);
+        checkIndices(last_indices, "get_elements_in_slice", true, true, false);
 
         // Find range.
         IdxTuple numElemsTuple = get_slice_range(first_indices, last_indices);
@@ -331,21 +323,36 @@ namespace yask {
                 ((real_t*)buffer_ptr)[idx] = val;
                 return true;    // keep going.
             });
-        return numElemsTuple.product();
+        auto nup = numElemsTuple.product();
+        TRACE_MSG("get_elements_in_slice(" << buffer_ptr << ", {" <<
+                  makeIndexString(first_indices) << "}, {" <<
+                  makeIndexString(last_indices) << "}) on '" <<
+                  _ggb->get_name() + "' returns " << nup);
+        return nup;
     }
     idx_t YkGridBase::set_elements_in_slice_same(double val,
                                                  const Indices& first_indices,
                                                  const Indices& last_indices,
                                                  bool strict_indices) {
-        if (!is_storage_allocated())
+        STATE_VARS(this);
+        TRACE_MSG("set_elements_in_slice_same(" << val << ", {" <<
+                  makeIndexString(first_indices) << "}, {" <<
+                  makeIndexString(last_indices) <<  "}, " <<
+                  strict_indices << ") on " <<
+                  make_info_string());
+        if (_ggb->get_storage() == 0) {
+            if (strict_indices)
+                THROW_YASK_EXCEPTION("Error: call to 'set_elements_in_slice_same' with no storage allocated for grid '" +
+                                     _ggb->get_name() + "'");
             return 0;
+        }
 
         // 'Fixed' copy of indices.
         Indices first, last;
         checkIndices(first_indices, "set_elements_in_slice_same",
-                     strict_indices, false, &first);
+                     strict_indices, false, false, &first);
         checkIndices(last_indices, "set_elements_in_slice_same",
-                     strict_indices, false, &last);
+                     strict_indices, false, false, &last);
 
         // Find range.
         IdxTuple numElemsTuple = get_slice_range(first, last);
@@ -366,15 +373,27 @@ namespace yask {
         // Set appropriate dirty flag(s).
         set_dirty_in_slice(first, last);
 
-        return numElemsTuple.product();
+        auto nup = numElemsTuple.product();
+        TRACE_MSG("set_elements_in_slice_same(" << val << ", {" <<
+                  makeIndexString(first_indices) << "}, {" <<
+                  makeIndexString(last_indices) <<  "}, " <<
+                  strict_indices << ") on '" <<
+                  _ggb->get_name() + "' returns " << nup);
+        return nup;
     }
     idx_t YkGridBase::set_elements_in_slice(const void* buffer_ptr,
                                             const Indices& first_indices,
                                             const Indices& last_indices) {
-        if (!is_storage_allocated())
-            return 0;
-        checkIndices(first_indices, "set_elements_in_slice", true, false);
-        checkIndices(last_indices, "set_elements_in_slice", true, false);
+        STATE_VARS(this);
+        TRACE_MSG("set_elements_in_slice(" << buffer_ptr << ", {" <<
+                  makeIndexString(first_indices) << "}, {" <<
+                  makeIndexString(last_indices) <<  "}) on " <<
+                  make_info_string());
+        if (_ggb->get_storage() == 0)
+            THROW_YASK_EXCEPTION("Error: call to 'set_elements_in_slice' with no storage allocated for grid '" +
+                                 _ggb->get_name() + "'");
+        checkIndices(first_indices, "set_elements_in_slice", true, false, false);
+        checkIndices(last_indices, "set_elements_in_slice", true, false, false);
 
         // Find range.
         IdxTuple numElemsTuple = get_slice_range(first_indices, last_indices);
@@ -396,7 +415,12 @@ namespace yask {
         // Set appropriate dirty flag(s).
         set_dirty_in_slice(first_indices, last_indices);
 
-        return numElemsTuple.product();
+        auto nup = numElemsTuple.product();
+        TRACE_MSG("set_elements_in_slice(" << buffer_ptr << ", {" <<
+                  makeIndexString(first_indices) << "}, {" <<
+                  makeIndexString(last_indices) <<  "}) on '" <<
+                  _ggb->get_name() + "' returns " << nup);
+        return nup;
     }
 
 } // namespace.

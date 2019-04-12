@@ -44,7 +44,7 @@ namespace yask {
         TRACE_MSG("calc_mini_block('" << get_name() << "'): [" <<
                    mini_block_idxs.begin.makeValStr(nsdims) << " ... " <<
                    mini_block_idxs.end.makeValStr(nsdims) << ") by " <<
-                   mini_block_idxs.step.makeValStr(nsdims) <<
+                   mini_block_idxs.stride.makeValStr(nsdims) <<
                    " by region thread " << region_thread_idx);
         assert(!is_scratch());
 
@@ -146,28 +146,28 @@ namespace yask {
                     DOMAIN_VAR_LOOP(i, j) {
 
                         // If binding threads to sub-blocks and this is the
-                        // binding dim, set step size and alignment
+                        // binding dim, set stride size and alignment
                         // granularity to the slab width. Setting the
                         // alignment keeps slabs aligned between packs.
                         if (bind_threads && i == bind_posn) {
-                            adj_mb_idxs.step[i] = bind_slab_pts;
+                            adj_mb_idxs.stride[i] = bind_slab_pts;
                             adj_mb_idxs.align[i] = bind_slab_pts;
                         }
 
                         // If original [or auto-tuned] sub-block covers
-                        // entire mini-block, set step size to full width.
+                        // entire mini-block, set stride size to full width.
                         // Also do this when binding and this is not the
                         // binding dim.
                         else if ((settings._sub_block_sizes[i] >= settings._mini_block_sizes[i]) ||
                                  bind_threads)
-                            adj_mb_idxs.step[i] = adj_mb_idxs.end[i] - adj_mb_idxs.begin[i];
+                            adj_mb_idxs.stride[i] = adj_mb_idxs.end[i] - adj_mb_idxs.begin[i];
                     }
 
                     TRACE_MSG("calc_mini_block('" << get_name() << "'): " <<
                                " for reqd bundle '" << sg->get_name() << "': [" <<
                                adj_mb_idxs.begin.makeValStr(nsdims) << " ... " <<
                                adj_mb_idxs.end.makeValStr(nsdims) << ") by " <<
-                               adj_mb_idxs.step.makeValStr(nsdims) <<
+                               adj_mb_idxs.stride.makeValStr(nsdims) <<
                                " by region thread " << region_thread_idx <<
                                " and block thread " << block_thread_idx);
 
@@ -225,12 +225,12 @@ namespace yask {
         ScanIndices misc_idxs(*dims, true, 0);
         misc_idxs.initFromOuter(mini_block_idxs);
         
-        // Step sizes and alignment are one element.
-        misc_idxs.step.setFromConst(1);
+        // Stride sizes and alignment are one element.
+        misc_idxs.stride.setFromConst(1);
         misc_idxs.align.setFromConst(1);
 
         // Define misc-loop function.
-        // Since step is always 1, we ignore misc_idxs.stop.
+        // Since stride is always 1, we ignore misc_idxs.stop.
 #define MISC_FN(pt_idxs)  do {                                          \
             calc_scalar(region_thread_idx, pt_idxs.start);              \
         } while(0)
@@ -472,10 +472,10 @@ namespace yask {
                        ") by region thread " << region_thread_idx <<
                        " and block thread " << block_thread_idx);
 
-            // Step sizes are based on cluster lengths (in vector units).
-            // The step in the inner loop is hard-coded in the generated code.
+            // Stride sizes are based on cluster lengths (in vector units).
+            // The stride in the inner loop is hard-coded in the generated code.
             DOMAIN_VAR_LOOP(i, j) {
-                norm_sub_block_idxs.step[i] = dims->_cluster_mults[j]; // N vecs.
+                norm_sub_block_idxs.stride[i] = dims->_cluster_mults[j]; // N vecs.
             }
 
             // Define the function called from the generated loops to simply
@@ -520,9 +520,9 @@ namespace yask {
             normalize_indices(sub_block_vidxs.end, norm_sub_block_idxs.end);
             norm_sub_block_idxs.stop = norm_sub_block_idxs.end;
 
-            // Step sizes are one vector.
-            // The step in the inner loop is hard-coded in the generated code.
-            norm_sub_block_idxs.step.setFromConst(1);
+            // Stride sizes are one vector.
+            // The stride in the inner loop is hard-coded in the generated code.
+            norm_sub_block_idxs.stride.setFromConst(1);
 
             // Also normalize the *full* vector indices to determine if
             // we need a mask at each vector index.
@@ -539,7 +539,7 @@ namespace yask {
             // should be used only around the outside of the inner block of
             // clusters. Then, call the loop-of-vectors function
             // w/appropriate mask.  See the mask diagrams above that show
-            // how the masks are ANDed together.  Since step is always 1, we
+            // how the masks are ANDed together.  Since stride is always 1, we
             // ignore loop_idxs.stop.
 #define CALC_INNER_LOOP(loop_idxs) \
             bool ok = false;                                            \
@@ -573,8 +573,8 @@ namespace yask {
             // global rather than normalized as in the cluster and vector loops.
             ScanIndices misc_idxs(sub_block_idxs);
             
-            // Step sizes and alignment are one element.
-            misc_idxs.step.setFromConst(1);
+            // Stride sizes and alignment are one element.
+            misc_idxs.stride.setFromConst(1);
             misc_idxs.align.setFromConst(1);
 
             TRACE_MSG("calc_sub_block_vec:  using scalar code for [" <<
@@ -587,7 +587,7 @@ namespace yask {
                        " and block thread " << block_thread_idx);
 
             // Define misc-loop function.  This is called at each point in
-            // the sub-block.  Since step is always 1, we ignore
+            // the sub-block.  Since stride is always 1, we ignore
             // misc_idxs.stop.  TODO: handle more efficiently: do one slab
             // for inner-peel and one for outer-peel, calculate masks, and
             // call vector code.
@@ -682,7 +682,7 @@ namespace yask {
 
     // If this bundle is updating scratch grid(s),
     // expand begin & end of 'idxs' by sizes of halos.
-    // Step indices may also change.
+    // Stride indices may also change.
     // NB: it is not necessary that the domain of each grid
     // is the same as the span of 'idxs'. However, it should be
     // at least that large to ensure that grid is able to hold
@@ -701,9 +701,10 @@ namespace yask {
             assert(sv);
 
             // Get the one for this thread.
-            auto gp = sv->at(region_thread_idx);
+            auto& gp = sv->at(region_thread_idx);
             assert(gp);
-            assert(gp->is_scratch());
+            auto& gb = gp->gb();
+            assert(gb.is_scratch());
 
             // i: index for stencil dims, j: index for domain dims.
             DOMAIN_VAR_LOOP(i, j) {
@@ -711,7 +712,7 @@ namespace yask {
                 auto& dname = dim.getName();
 
                 // Is this dim used in this grid?
-                int posn = gp->get_dim_posn(dname);
+                int posn = gb.get_dim_posn(dname);
                 if (posn >= 0) {
 
                     // Get halos, which need to be written to for
@@ -729,21 +730,21 @@ namespace yask {
 
                     // Make sure grid covers index bounds.
                     TRACE_MSG("adjust_span: mini-blk [" << 
-                               idxs.begin[i] << "..." <<
-                               idxs.end[i] << ") adjusted to [" << 
-                               adj_idxs.begin[i] << "..." <<
-                               adj_idxs.end[i] << ") within scratch-grid '" << 
-                               gp->get_name() << "' allocated [" <<
-                               gp->get_first_rank_alloc_index(posn) << "..." <<
-                               gp->get_last_rank_alloc_index(posn) << "] in dim '" << dname << "'");
+                              idxs.begin[i] << "..." <<
+                              idxs.end[i] << ") adjusted to [" << 
+                              adj_idxs.begin[i] << "..." <<
+                              adj_idxs.end[i] << ") within scratch-grid '" << 
+                              gp->get_name() << "' allocated [" <<
+                              gp->get_first_rank_alloc_index(posn) << "..." <<
+                              gp->get_last_rank_alloc_index(posn) << "] in dim '" << dname << "'");
                     assert(adj_idxs.begin[i] >= gp->get_first_rank_alloc_index(posn));
                     assert(adj_idxs.end[i] <= gp->get_last_rank_alloc_index(posn) + 1);
 
-                    // If existing step is >= whole tile, adjust it also.
+                    // If existing stride is >= whole tile, adjust it also.
                     idx_t width = idxs.end[i] - idxs.begin[i];
-                    if (idxs.step[i] >= width) {
+                    if (idxs.stride[i] >= width) {
                         idx_t adj_width = adj_idxs.end[i] - adj_idxs.begin[i];
-                        adj_idxs.step[i] = adj_width;
+                        adj_idxs.stride[i] = adj_width;
                     }
                 }
             }
@@ -793,8 +794,7 @@ namespace yask {
     // Calc the work stats.
     // Requires MPI barriers!
     void BundlePack::init_work_stats() {
-        ostream& os = _context->get_ostr();
-        auto& env = _context->get_env();
+        STATE_VARS(this);
 
         num_reads_per_step = 0;
         num_writes_per_step = 0;
@@ -879,7 +879,8 @@ namespace yask {
             // Classify vars.
             GridPtrs idvars, imvars, odvars, omvars, iodvars, iomvars; // i[nput], o[utput], d[omain], m[isc].
             for (auto gp : sg->inputGridPtrs) {
-                bool isdom = gp->is_domain_var();
+                auto& gb = gp->gb();
+                bool isdom = gb.is_domain_var();
                 auto& ogps = sg->outputGridPtrs;
                 bool isout = find(ogps.begin(), ogps.end(), gp) != ogps.end();
                 if (isout) {
@@ -895,7 +896,8 @@ namespace yask {
                 }
             }
             for (auto gp : sg->outputGridPtrs) {
-                bool isdom = gp->is_domain_var();
+                auto& gb = gp->gb();
+                bool isdom = gb.is_domain_var();
                 auto& igps = sg->inputGridPtrs;
                 bool isin = find(igps.begin(), igps.end(), gp) != igps.end();
                 if (!isin) {

@@ -42,7 +42,7 @@ namespace yask {
         ndims(NUM_STENCIL_DIMS),
         begin(idx_t(0), ndims),
         end(idx_t(0), ndims),
-        step(idx_t(1), ndims),
+        stride(idx_t(1), ndims),
         align(idx_t(1), ndims),
         align_ofs(idx_t(0), ndims),
         group_size(idx_t(1), ndims),
@@ -517,9 +517,9 @@ namespace yask {
     // Set non-scratch grid sizes and offsets based on settings.
     // Set wave-front settings.
     // This should be called anytime a setting or rank offset is changed.
-    void StencilContext::update_grid_info() {
+    void StencilContext::update_grid_info(bool force) {
         STATE_VARS(this);
-        TRACE_MSG("update_grid_info()...");
+        TRACE_MSG("update_grid_info(" << force << ")...");
 
         // If we haven't finished constructing the context, it's too early
         // to do this.
@@ -529,38 +529,42 @@ namespace yask {
         // Reset max halos to zero.
         max_halos = dims->_domain_dims;
 
-        // Loop through each non-scratch grid.
-        for (auto gp : gridPtrs) {
-            assert(gp);
+        // Loop through each domain dim.
+        for (auto& dim : domain_dims.getDims()) {
+            auto& dname = dim.getName();
+            
+            // Each non-scratch grid.
+            for (auto gp : gridPtrs) {
+                assert(gp);
+                if (!gp->is_dim_used(dname))
+                    continue;
+                auto& gb = gp->gb();
 
-            // Ignore manually-sized grid.
-            if (gp->is_fixed_size())
-                continue;
-
-            // Loop through each domain dim.
-            for (auto& dim : domain_dims.getDims()) {
-                auto& dname = dim.getName();
-
-                if (gp->is_dim_used(dname)) {
+                // Don't resize manually-sized grid
+                // unless it is a solution grid and 'force' is 'true'.
+                if (!gp->is_fixed_size() ||
+                    (!gb.is_user_grid() && force)) {
 
                     // Rank domains.
                     gp->_set_domain_size(dname, opts->_rank_sizes[dname]);
-
+                    
                     // Pads.
                     // Set via both 'extra' and 'min'; larger result will be used.
                     gp->set_extra_pad_size(dname, opts->_extra_pad_sizes[dname]);
                     gp->set_min_pad_size(dname, opts->_min_pad_sizes[dname]);
-
+                        
                     // Offsets.
                     gp->_set_rank_offset(dname, rank_domain_offsets[dname]);
                     gp->_set_local_offset(dname, 0);
+                }
 
-                    // Update max halo across grids, used for temporal angles.
+                // Update max halo across grids, used for temporal angles.
+                if (!gb.is_user_grid()) {
                     max_halos[dname] = max(max_halos[dname], gp->get_left_halo_size(dname));
                     max_halos[dname] = max(max_halos[dname], gp->get_right_halo_size(dname));
                 }
             }
-        } // grids.
+        }
 
         // Calculate wave-front shifts.
         // See the wavefront diagram in run_solution() for description
@@ -635,18 +639,13 @@ namespace yask {
         // back to the grids. It's useful to store this redundant info
         // in the grids, because there it's indexed by grid dims instead
         // of domain dims. This makes it faster to do grid indexing.
-        for (auto gp : gridPtrs) {
+        for (auto gp : origGridPtrs) {
             assert(gp);
-
-            // Ignore manually-sized grid.
-            if (gp->is_fixed_size())
-                continue;
 
             // Loop through each domain dim.
             for (auto& dim : domain_dims.getDims()) {
                 auto& dname = dim.getName();
                 if (gp->is_dim_used(dname)) {
-
                     // Set extensions to be the same as the global ones.
                     gp->_set_left_wf_ext(dname, left_wf_exts[dname]);
                     gp->_set_right_wf_ext(dname, right_wf_exts[dname]);

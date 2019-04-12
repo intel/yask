@@ -79,7 +79,7 @@ namespace yask {
         bool in_warmup = true;
 
     public:
-        static constexpr idx_t max_step_t = 4;
+        static constexpr idx_t max_stride_t = 4;
 
         AutoTuner(StencilContext* context,
                   KernelSettings* settings,
