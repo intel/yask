@@ -25,11 +25,20 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
   for multi-socket and multi-node operation or
   Intel(R) Parallel Studio XE Composer Edition for C++ Linux
   for single-socket only
-  (2018 or later; 2019 or later recommended and required when using g++ 8 or later).
-  Building a YASK kernel with the Gnu compiler is possible, but only useful
-  for functional testing. The performance
-  of the kernel built from the Gnu compiler has been observed to be up to 7x lower
-  than the same kernel built using the Intel compiler. 
+  (2018 or later; 2019.3 or later recommended).
+     * There was an issue in Intel(R) MPI versions 2019.1 and 2019.2 that
+       caused the application to crash when allocating very
+       large shared-memory (shm) regions, so those
+       versions are not recommended when using the `-use_shm` feature.
+       This issue was resolved in MPI version 2019.3.
+     * If you are using g++ version 8.x or later, Intel(R) C++ version 2019.x or later
+       is required.
+     * Building a YASK kernel with the Gnu C++ compiler is possible.
+       Limited testing with g++ 8.2.0 shows the "iso3dfd" kernel
+       runs about 30% slower compared to the same kernel built with
+       the Intel C++ compiler.
+       Older Gnu C++ compilers can produce kernels that run
+       many times slower.
 * Gnu C++ compiler, g++ (4.9.0 or later; 8.2.0 or later recommended).
 * Linux libraries `librt` and `libnuma`.
 * Perl (5.010 or later).
