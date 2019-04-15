@@ -765,40 +765,40 @@ namespace yask {
     /// Operator version of yc_node_factory::new_negation_node().
     yc_number_node_ptr operator-(yc_number_node_ptr rhs);
 
-    //@{
+    ///@{
     /// Operator version of yc_node_factory::new_addition_node().
     yc_number_node_ptr operator+(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
     yc_number_node_ptr operator+(double lhs, yc_number_node_ptr rhs);
     yc_number_node_ptr operator+(yc_number_node_ptr lhs, double rhs);
-    //@}
+    ///@}
 
-    //@{
+    ///@{
     /// Operator version of yc_node_factory::new_division_node().
     yc_number_node_ptr operator/(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
     yc_number_node_ptr operator/(double lhs, yc_number_node_ptr rhs);
     yc_number_node_ptr operator/(yc_number_node_ptr lhs, double rhs);
-    //@}
+    ///@}
 
-    //@{
+    ///@{
     /// Operator version of yc_node_factory::new_mod_node().
     yc_number_node_ptr operator%(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
     yc_number_node_ptr operator%(double lhs, yc_number_node_ptr rhs);
     yc_number_node_ptr operator%(yc_number_node_ptr lhs, double rhs);
-    //@}
+    ///@}
 
-    //@{
+    ///@{
     /// Operator version of yc_node_factory::new_multiplication_node().
     yc_number_node_ptr operator*(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
     yc_number_node_ptr operator*(double lhs, yc_number_node_ptr rhs);
     yc_number_node_ptr operator*(yc_number_node_ptr lhs, double rhs);
-    //@}
+    ///@}
 
-    //@{
+    ///@{
     /// Operator version of yc_node_factory::new_subtraction_node().
     yc_number_node_ptr operator-(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
     yc_number_node_ptr operator-(double lhs, yc_number_node_ptr rhs);
     yc_number_node_ptr operator-(yc_number_node_ptr lhs, double rhs);
-    //@}
+    ///@}
 
     /// Operator version of yc_node_factory::new_not_node().
     /** For Python, use `rhs.yc_not()` */
@@ -817,53 +817,53 @@ namespace yask {
     // pointer comparisons, which would result in bools rather than YASK
     // nodes in expressions like 'x >= fac.new_first_domain_index(x) + 5'.
 
-    //@{
+    ///@{
     /// Operator version of yc_node_factory::new_equals_node().
     yc_bool_node_ptr operator==(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
     yc_bool_node_ptr operator==(yc_index_node_ptr lhs, yc_number_node_ptr rhs);
     yc_bool_node_ptr operator==(yc_number_node_ptr lhs, yc_index_node_ptr rhs);
     yc_bool_node_ptr operator==(yc_index_node_ptr lhs, yc_index_node_ptr rhs);
-    //@}
+    ///@}
 
-    //@{
+    ///@{
     /// Operator version of yc_node_factory::new_greater_than_node().
     yc_bool_node_ptr operator>(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
     yc_bool_node_ptr operator>(yc_index_node_ptr lhs, yc_number_node_ptr rhs);
     yc_bool_node_ptr operator>(yc_number_node_ptr lhs, yc_index_node_ptr rhs);
     yc_bool_node_ptr operator>(yc_index_node_ptr lhs, yc_index_node_ptr rhs);
-    //@}
+    ///@}
 
-    //@{
+    ///@{
     /// Operator version of yc_node_factory::new_less_than_node().
     yc_bool_node_ptr operator<(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
     yc_bool_node_ptr operator<(yc_index_node_ptr lhs, yc_number_node_ptr rhs);
     yc_bool_node_ptr operator<(yc_number_node_ptr lhs, yc_index_node_ptr rhs);
     yc_bool_node_ptr operator<(yc_index_node_ptr lhs, yc_index_node_ptr rhs);
-    //@}
+    ///@}
 
-    //@{
+    ///@{
     /// Operator version of yc_node_factory::new_not_equals_node().
     yc_bool_node_ptr operator!=(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
     yc_bool_node_ptr operator!=(yc_index_node_ptr lhs, yc_number_node_ptr rhs);
     yc_bool_node_ptr operator!=(yc_number_node_ptr lhs, yc_index_node_ptr rhs);
     yc_bool_node_ptr operator!=(yc_index_node_ptr lhs, yc_index_node_ptr rhs);
-    //@}
+    ///@}
 
-    //@{
+    ///@{
     /// Operator version of yc_node_factory::new_not_greater_than_node().
     yc_bool_node_ptr operator<=(yc_number_node_ptr lhs, yc_number_node_ptr rhs);
     yc_bool_node_ptr operator<=(yc_index_node_ptr lhs, yc_number_node_ptr rhs);
     yc_bool_node_ptr operator<=(yc_number_node_ptr lhs, yc_index_node_ptr rhs);
     yc_bool_node_ptr operator<=(yc_index_node_ptr lhs, yc_index_node_ptr rhs);
-    //@}
+    ///@}
 
-    //@{
+    ///@{
     /// Operator version of yc_node_factory::new_not_less_than_node().
     yc_bool_node_ptr operator>=(const yc_number_node_ptr lhs, const yc_number_node_ptr rhs);
     yc_bool_node_ptr operator>=(yc_index_node_ptr lhs, yc_number_node_ptr rhs);
     yc_bool_node_ptr operator>=(yc_number_node_ptr lhs, yc_index_node_ptr rhs);
     yc_bool_node_ptr operator>=(yc_index_node_ptr lhs, yc_index_node_ptr rhs);
-    //@}
+    ///@}
 
 #endif
 
