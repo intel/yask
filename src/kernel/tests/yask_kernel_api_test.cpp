@@ -131,6 +131,9 @@ int main() {
 
                 // Step dim?
                 else if (dname == soln->get_step_dim_name()) {
+                    os << "        currently-valid step index range: " <<
+                        grid->get_first_valid_step_index() << " ... " <<
+                        grid->get_last_valid_step_index() << endl;
                 }
 
                 // Misc dim?
@@ -167,9 +170,10 @@ int main() {
                 // Step dim?
                 else if (dname == soln->get_step_dim_name()) {
 
-                    // Set indices for one time-step.
-                    first_idx = 0;
-                    last_idx = 0;
+                    // Set indices for valid time-steps.
+                    first_idx = grid->get_first_valid_step_index();
+                    last_idx = grid->get_last_valid_step_index();
+                    assert(last_idx - first_idx + 1 == grid->get_alloc_size(dname));
                 }
 
                 // Misc dim?
@@ -188,18 +192,19 @@ int main() {
 
             // Init the values using the indices created above.
             double val = 2.0;
-            idx_t nset = grid->set_elements_in_slice_same(val, first_indices, last_indices);
+            bool strict_indices = false; // because first/last_indices are global.
+            idx_t nset = grid->set_elements_in_slice_same(val, first_indices, last_indices, strict_indices);
             os << "      " << nset << " element(s) set in sub-range from " <<
                 grid->format_indices(first_indices) << " to " <<
                 grid->format_indices(last_indices) << ".\n";
-            if (grid->is_element_allocated(first_indices)) {
+            if (grid->are_indices_local(first_indices)) {
                 auto val2 = grid->get_element(first_indices);
                 os << "      first element == " << val2 << ".\n";
                 assert(val2 == val);
             }
             else
                 os << "      first element NOT in rank.\n";
-            if (grid->is_element_allocated(last_indices)) {
+            if (grid->are_indices_local(last_indices)) {
                 auto val2 = grid->get_element(last_indices);
                 os << "      last element == " << val2 << ".\n";
                 assert(val2 == val);
@@ -211,12 +216,12 @@ int main() {
             nset = grid->add_to_element(1.0, first_indices);
             nset += grid->add_to_element(3.0, last_indices);
             os << "      " << nset << " element(s) updated.\n";
-            if (grid->is_element_allocated(first_indices)) {
+            if (grid->are_indices_local(first_indices)) {
                 auto val2 = grid->get_element(first_indices);
                 os << "      first element == " << val2 << ".\n";
                 assert(val2 == val + 1.0);
             }
-            if (grid->is_element_allocated(last_indices)) {
+            if (grid->are_indices_local(last_indices)) {
                 auto val2 = grid->get_element(last_indices);
                 os << "      last element == " << val2 << ".\n";
                 assert(val2 == val + 3.0);
@@ -245,7 +250,7 @@ int main() {
         os << "End of YASK kernel API test.\n";
         return 0;
     }
-    catch (yask_exception& e) {
+    catch (yask_exception e) {
         cerr << "YASK kernel API test: " << e.get_message() <<
             " on rank " << env->get_rank_index() << ".\n";
         return 1;

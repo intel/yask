@@ -639,9 +639,9 @@ namespace yask {
         bt = max(bt, idx_t(0));
         mbt = max(mbt, idx_t(0));
         if (!rt)
-            rt = bt;       // Default region steps to block steps.
+            rt = bt;       // Default region steps == block steps.
         if (!mbt)
-            mbt = bt;       // Default mini-blk steps to block steps.
+            mbt = bt;       // Default mini-blk steps == block steps.
 
         // Determine num regions.
         // Also fix up region sizes as needed.

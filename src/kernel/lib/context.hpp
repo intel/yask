@@ -217,11 +217,15 @@ namespace yask {
         // which they should be evaluated within a step.
         BundlePackList stPacks;
 
-        // All non-scratch grids.
+        // All non-scratch grids, including those created by APIs.
         GridPtrs gridPtrs;
         GridPtrMap gridMap;
 
-        // Only grids that are updated by the stencils.
+        // Only grids defined by the YASK compiler.
+        GridPtrs origGridPtrs;
+        GridPtrMap origGridMap;
+
+        // Only grids defined by the YASK compiler that are updated by the stencils.
         GridPtrs outputGridPtrs;
         GridPtrMap outputGridMap;
 
@@ -306,7 +310,7 @@ namespace yask {
         AutoTuner& getAT() { return _at; }
 
         // Add a new grid to the containers.
-        virtual void addGrid(YkGridPtr gp, bool is_output);
+        virtual void addGrid(YkGridPtr gp, bool is_orig, bool is_output);
         virtual void addScratch(GridPtrs& scratch_vec) {
             scratchVecs.push_back(&scratch_vec);
         }
@@ -357,7 +361,7 @@ namespace yask {
 
         // Set grid sizes and offsets.
         // This should be called anytime a setting or offset is changed.
-        virtual void update_grid_info();
+        virtual void update_grid_info(bool force);
 
         // Set temporal blocking data.
         // This should be called anytime a block size is changed.
@@ -445,10 +449,12 @@ namespace yask {
         // Call MPI_Test() on all unfinished requests to promote MPI progress.
         void poke_halo_exchange();
 
-        // Mark grids that have been written to by bundle pack 'sel_bp'.
+        // Update valid steps in grids that have been written to by bundle pack 'sel_bp'.
         // If sel_bp==null, use all bundles.
-        void mark_grids_dirty(const BundlePackPtr& sel_bp,
-                              idx_t start, idx_t stop);
+        // If 'mark_dirty', also mark as needing halo exchange.
+        void update_grids(const BundlePackPtr& sel_bp,
+                          idx_t start, idx_t stop,
+                          bool mark_dirty);
 
         // Set various limits in 'idxs' based on current step in region.
         bool shift_region(const Indices& base_start, const Indices& base_stop,
@@ -479,8 +485,8 @@ namespace yask {
 
         // Make a new grid iff its dims match any in the stencil.
         // Returns pointer to the new grid or nullptr if no match.
-        virtual YkGridPtr newStencilGrid (const std::string & name,
-                                          const GridDimNames & dims) =0;
+        virtual GridBasePtr newStencilGrid (const std::string & name,
+                                            const GridDimNames & dims) =0;
 
         // Make a new grid with 'name' and 'dims'.
         // Set sizes if 'sizes' is non-null.
@@ -576,7 +582,7 @@ namespace yask {
         virtual void run_solution(idx_t step_index) {
             run_solution(step_index, step_index);
         }
-        virtual void share_grid_storage(yk_solution_ptr source);
+        virtual void fuse_grids(yk_solution_ptr other);
 
         // APIs that access settings.
         virtual void set_overall_domain_size(const std::string& dim, idx_t size);
@@ -594,6 +600,14 @@ namespace yask {
         virtual idx_t get_num_ranks(const std::string& dim) const;
         virtual idx_t get_rank_index(const std::string& dim) const;
         virtual std::string apply_command_line_options(const std::string& args);
+        virtual bool get_step_wrap() const {
+            STATE_VARS(this);
+            return opts->_step_wrap;
+        }
+        virtual void set_step_wrap(bool do_wrap) {
+            STATE_VARS(this);
+            opts->_step_wrap = do_wrap;
+        }
         virtual bool set_default_numa_preferred(int numa_node) {
             STATE_VARS(this);
 #ifdef USE_NUMA

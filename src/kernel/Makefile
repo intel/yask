@@ -591,13 +591,11 @@ kernel: $(YK_EXEC) $(YK_SCRIPT) $(MAKE_REPORT_FILE)
 	echo "*** Run command:" $(YK_SCRIPT) "-stencil" $(YK_STENCIL) "-arch" $(YK_ARCH) "[options]"
 
 $(YK_LIB): $(YK_OBJS) $(YK_EXT_OBJS)
-	- rm -f $(MAKE_REPORT_FILE)
 	$(MKDIR) $(dir $@)
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^ $(YK_LIBS)
 	@ls -l $@
 
 $(YK_EXEC): yask_main.cpp $(YK_LIB)
-	- rm -f $(MAKE_REPORT_FILE)
 	$(MKDIR) $(dir $@)
 	$(CXX_PREFIX) $(YK_LD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
 	@ls -l $@
@@ -781,7 +779,7 @@ py-api-no-yc:
 	$(MAKE) $(NO_YC_MAKE_FLAGS) py-api
 
 # Validation runs for each binary.
-DEF_TEST_ARGS := -stencil $(YK_STENCIL) -arch $(YK_ARCH) -v \
+DEF_TEST_ARGS := -ranks $(ranks) -stencil $(YK_STENCIL) -arch $(YK_ARCH) -v \
 	-trial_steps 2 -max_threads 6 -block_threads 2 -no-use_shm -overlap_comms
 
 val0	:=	$(DEF_TEST_ARGS) -l 48 -r 32 -b 24 -rt 0 $(EXTRA_TEST_ARGS)
@@ -800,24 +798,18 @@ yk-tests:
 	$(YK_SCRIPT) $(val2)
 	$(YK_SCRIPT) $(val3)
 	$(YK_SCRIPT) $(val4a)
-
-yk-mp-tests:
-	$(YK_SCRIPT) -ranks $(ranks) $(val0)
-	$(YK_SCRIPT) -ranks $(ranks) $(val1)
-	$(YK_SCRIPT) -ranks $(ranks) $(val2)
-	$(YK_SCRIPT) -ranks $(ranks) $(val3)
-	$(YK_SCRIPT) -ranks $(ranks) $(val4b)
-	$(YK_SCRIPT) -ranks $(ranks) $(val4c)
+	$(YK_SCRIPT) $(val4b)
+	$(YK_SCRIPT) $(val4c)
 
 # Run the default YASK compiler and kernel.
 yc-and-yk-test: $(YK_EXEC) $(YK_SCRIPT)
-	$(MAKE) yk-tests
-	if (( $(ranks) > 1 )); then $(MAKE) yk-mp-tests; fi
+	$(MAKE) ranks=1 yk-tests
+	if (( $(ranks) > 1 )); then $(MAKE) yk-tests; fi
 
 # Run the YASK kernel test without implicity using the YASK compiler.
 yk-test-no-yc: kernel-no-yc $(YK_SCRIPT)
-	$(MAKE) yk-tests
-	if (( $(ranks) > 1 )); then $(MAKE) yk-mp-tests; fi
+	$(MAKE) ranks=1 yk-tests
+	if (( $(ranks) > 1 )); then $(MAKE) yk-tests; fi
 
 # Run the kernel API tests for C++ and Python with and w/o expected exceptions.
 api-tests:

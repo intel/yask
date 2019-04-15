@@ -683,8 +683,8 @@ namespace yask {
            whether or not it was defined via yc_node_factory::new_misc_index().
            - Grids created via new_grid() cannot be direct inputs or outputs of
            stencil equations. However, data in a grid created via new_grid()
-           can be shared with a pre-defined grid via yk_grid::share_storage()
-           if and only if the sizes of all dimensions are compatible.
+           can be merged with a pre-defined grid via yk_grid::fuse_grids()
+           if the grids are compatible.
 
            If you want a grid that is not automatically resized based on the
            solution settings, use new_fixed_size_grid() instead.
@@ -709,7 +709,7 @@ namespace yask {
         /**
            See documentation for the version of new_grid() with a vector of dimension names
            as a parameter.
-           @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
+           @note This version is not available (or needed) in the Python API.
            @returns Pointer to the new grid.
         */
         virtual yk_grid_ptr
@@ -733,12 +733,13 @@ namespace yask {
            The following behaviors are different from both pre-defined grids
            and those created via new_grid():
            - Calls to set_rank_domain_size() will *not* automatically resize
-           the corresponding domain size in this grid--this is where the term "fixed" originates.
+           the corresponding local-domain size in this grid--this is where the term "fixed" applies.
            - In contrast, for each domain dimension of the grid,
-           the new grid's domain size can be changed independently of the domain
-           size of the application.
+           the new grid's local-domain size can be changed independently of the domain
+           size of the solution.
            - This grid's first domain index in this rank will be fixed at zero (0)
-           regardless of this rank's position.
+           in each domain dimension regardless of this rank's position.
+           In other words, this grid does not participate in "domain decomposition".
            - This grid's padding size will be affected only by calls to
            yk_grid::set_min_pad_size(), etc., i.e., *not* via
            yk_solution::set_min_pad_size().
@@ -760,8 +761,8 @@ namespace yask {
            whether or not it was defined via yc_node_factory::new_misc_index().
            - Grids created via new_fixed_size_grid() cannot be direct inputs or outputs of
            stencil equations. However, data in a grid created via new_fixed_size_grid()
-           can be shared with a pre-defined grid via yk_grid::share_storage()
-           if and only if the sizes of all dimensions are compatible.
+           can be shared with a pre-defined grid via yk_grid::fuse_grids()
+           if the grids are compatible.
 
            @note A new grid contains only the meta-data for the grid; data storage
            is not yet allocated.
@@ -786,7 +787,7 @@ namespace yask {
         /**
            See documentation for the version of new_fixed_size_grid() with a vector of dimension names
            as a parameter.
-           @note This version is not available (or needed) in SWIG-based APIs, e.g., Python.
+           @note This version is not available (or needed) in the Python API.
            @returns Pointer to the new grid.
         */
         virtual yk_grid_ptr
@@ -849,15 +850,27 @@ namespace yask {
         apply_command_line_options(const std::string& args
                                    /**< [in] String of arguments to parse. */ ) =0;
 
-        /// **[Advanced]** Use data-storage from existing grids in specified solution.
+        /// **[Advanced]** Merge grid variables with another solution.
         /**
-           Calls yk_grid::share_storage() for each pair of grids that have the same name
+           Calls yk_grid::fuse_grids() for each pair of grids that have the same name
            in this solution and the source solution.
-           All conditions listed in yk_grid::share_storage() must hold for each pair.
+           All conditions listed in yk_grid::fuse_grids() must hold for each pair.
         */
         virtual void
-        share_grid_storage(yk_solution_ptr source
-                           /**< [in] Solution from which grid storage will be shared. */) =0;
+        fuse_grids(yk_solution_ptr source
+                   /**< [in] Solution from which grids will be merged. */) =0;
+
+        /// **[Advanced]** Set whether invalid step indices alias to valid ones.
+        virtual void
+        set_step_wrap(bool do_wrap
+                      /**< [in] Whether to allow any step index. */) =0;
+
+        /// **[Advanced]** Get whether invalid step indices alias to valid ones.
+        /**
+           @returns Whether any step index is allowed.
+        */
+        virtual bool
+        get_step_wrap() const =0;
     };
 
     /// Statistics from calls to run_solution().

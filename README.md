@@ -1,7 +1,7 @@
 # YASK--Yet Another Stencil Kernel
 
 * New YASK users may want to start with the [YASK tutorial](docs/YASK-tutorial.pdf).
-* Existing YASK users may want to jump to the [backward-compatibility notices](#backward-compatibility-notices).
+* Users with existing YASK-based code may want to jump to the [backward-compatibility notices](#backward-compatibility-notices).
 
 ## Overview
 YASK is a framework to rapidly create high-performance stencil code including optimizations and features such as
@@ -9,7 +9,7 @@ YASK is a framework to rapidly create high-performance stencil code including op
 * Multi-level OpenMP parallelism to exploit multiple cores and threads,
 * Scaling to multiple sockets and nodes via MPI with overlapped communication and compute, and
 * Spatial tiling with automatically-tuned block sizes,
-* Temporal tiling to further increase cache locality,
+* Temporal tiling in multiple dimensions to further increase cache locality,
 * APIs for C++ and Python: [API documentation](https://rawgit.com/intel/yask/api-docs/html/index.html).
 
 YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-optimized code for Intel(R) Xeon Phi(TM) and Intel(R) Xeon(R) processors.
@@ -25,11 +25,20 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
   for multi-socket and multi-node operation or
   Intel(R) Parallel Studio XE Composer Edition for C++ Linux
   for single-socket only
-  (2018 or later; 2019 or later recommended and required when using g++ 8 or later).
-  Building a YASK kernel with the Gnu compiler is possible, but only useful
-  for functional testing. The performance
-  of the kernel built from the Gnu compiler has been observed to be up to 7x lower
-  than the same kernel built using the Intel compiler. 
+  (2018 or later; 2019.3 or later recommended).
+     * There was an issue in Intel(R) MPI versions 2019.1 and 2019.2 that
+       caused the application to crash when allocating very
+       large shared-memory (shm) regions, so those
+       versions are not recommended when using the `-use_shm` feature.
+       This issue was resolved in MPI version 2019.3.
+     * If you are using g++ version 8.x or later, Intel(R) C++ version 2019.x or later
+       is required.
+     * Building a YASK kernel with the Gnu C++ compiler is possible.
+       Limited testing with g++ 8.2.0 shows the "iso3dfd" kernel
+       runs about 30% slower compared to the same kernel built with
+       the Intel C++ compiler.
+       Older Gnu C++ compilers can produce kernels that run
+       many times slower.
 * Gnu C++ compiler, g++ (4.9.0 or later; 8.2.0 or later recommended).
 * Linux libraries `librt` and `libnuma`.
 * Perl (5.010 or later).
@@ -58,6 +67,13 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
       for functional testing if you don't have native support for any given instruction set.
 
 ### Backward-compatibility notices, including changes in default behavior:
+* Version 2.20.00 added checking of the step-dimension index value in the `yk_grid::get_element()` and similar APIs.
+Previously, invalid values silently "wrapped" around to valid values.
+Now, by default, the step index must be valid when reading, and the valid step indices are updated when writing.
+The old behavior of silent index wrapping may be restored via `set_step_wrap(true)`.
+The default for all `strict_indices` API parameters is now `true` to catch more programming errors and
+increase consistency of behavior between "set" and "get" APIs.
+Also, the advanced `share_storage()` APIs have been replaced with `fuse_grids()`.
 * Version 2.19.01 turned off multi-pass tuning by default. Enable with `-auto_tune_each_pass`.
 * Version 2.18.03 allowed the default radius to be stencil-specific and changed the names of example stencil "9axis" to "3axis_with_diags".
 * Version 2.18.00 added the ability to specify the global-domain size, and it will calculate the local-domain sizes from it.
@@ -68,9 +84,9 @@ This changed the old behavior of `make` defaulting to `snb` architecture and `bi
 Those options are still available to override the host-based default.
 * Version 2.16.03 moved the position of the log-file name to the last column in the CSV output of `utils/bin/yask_log_to_csv.pl`.
 * Version 2.15.04 required a call to `yc_grid::set_dynamic_step_alloc(true)` to allow changing the
-allocation in the step (time) dimension for grid variables created at YASK compile-time.
+allocation in the step (time) dimension at run-time for grid variables created at YASK compile-time.
 * Version 2.15.02 required all "misc" indices to be yask-compiler-time constants.
-* Version 2.14.05 changed the meaning of temporal sizes so that 0 means never do temporal blocking and 1 allows blocking within a single time-step for multi-pack solutions. The behavior of the default settings have not changed.
+* Version 2.14.05 changed the meaning of temporal sizes so that 0 means never do temporal blocking and 1 allows blocking within a single time-step for multi-pack solutions. The default setting is 0, which keeps the old behavior.
 * Version 2.13.06 changed the default behavior of the performance-test utility (`yask.sh`) to run trials for a given amount of time instead of a given number of steps. As of version 2.13.08, use the `-trial_time` option to specify the number of seconds to run. To force a specific number of trials as in previous versions, use the `-trial_steps` option.
 * Version 2.13.02 required some changes in perf statistics due to step (temporal) conditions. Both text output and `yk_stats` APIs affected.
 * Version 2.12.00 removed the long-deprecated `==` operator for asserting equality between a grid point and an equation. Use `EQUALS` instead.

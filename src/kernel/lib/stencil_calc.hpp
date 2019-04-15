@@ -225,7 +225,7 @@ namespace yask {
 
         // Calculate a series of cluster results within an inner loop.
         // All indices start at 'start_idxs'. Inner loop iterates to
-        // 'stop_inner' by 'step_inner'.
+        // 'stop_inner' by 'stride_inner'.
         // Indices must be rank-relative.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         virtual void
@@ -245,7 +245,7 @@ namespace yask {
 
         // Calculate a series of vector results within an inner loop.
         // All indices start at 'start_idxs'. Inner loop iterates to
-        // 'stop_inner' by 'step_inner'.
+        // 'stop_inner' by 'stride_inner'.
         // Indices must be rank-relative.
         // Indices must be normalized, i.e., already divided by VLEN_*.
         // Each vector write is masked by 'write_mask'.

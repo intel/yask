@@ -70,12 +70,14 @@ int main(int argc, char** argv) {
         os << "0-D test...\n";
         GridDimNames gdims;
         string name = "test grid";
-        YkGridPtr g0 = make_shared<YkElemGrid<Layout_0d, false>>(*context, name, gdims);
+        auto gb0 = make_shared<YkElemGrid<Layout_0d, false>>(*context, name, gdims);
+        YkGridPtr g0 = make_shared<YkGridImpl>(gb0);
         g0->alloc_storage();
-        os << g0->make_info_string() << endl;
-        YkGridPtr g1 = make_shared<YkElemGrid<Layout_0d, false>>(*context, name, gdims);
+        os << gb0->make_info_string() << endl;
+        auto gb1 = make_shared<YkElemGrid<Layout_0d, false>>(*context, name, gdims);
+        YkGridPtr g1 = make_shared<YkGridImpl>(gb1);
         g1->alloc_storage();
-        os << g1->make_info_string() << endl;
+        os << gb1->make_info_string() << endl;
 
         double val = 3.14;
         os << "Testing with " << val << endl;
@@ -91,8 +93,10 @@ int main(int argc, char** argv) {
         os << "3-D test...\n";
         GridDimNames gdims = {"x", "y", "z"};
         string name = "test grid";
-        YkGridPtr g3 = make_shared<YkElemGrid<Layout_321, false>>(*context, name, gdims);
-        YkGridPtr g3f = make_shared<YkVecGrid<Layout_123, false, VLEN_X, VLEN_Y, VLEN_Z>>(*context, name, gdims);
+        auto gb3 = make_shared<YkElemGrid<Layout_321, false>>(*context, name, gdims);
+        YkGridPtr g3 = make_shared<YkGridImpl>(gb3);
+        auto gb3f = make_shared<YkVecGrid<Layout_123, false, VLEN_X, VLEN_Y, VLEN_Z>>(*context, name, gdims);
+        YkGridPtr g3f = make_shared<YkGridImpl>(gb3f);
         int i = 0;
         int min_pad = 3;
         for (auto dname : gdims) {
@@ -103,21 +107,21 @@ int main(int argc, char** argv) {
             i++;
         }
         g3->alloc_storage();
-        os << g3->make_info_string() << endl;
+        os << gb3->make_info_string() << endl;
         g3f->alloc_storage();
-        os << g3f->make_info_string() << endl;
+        os << gb3f->make_info_string() << endl;
 
         os << "Copying seq of vals\n";
-        g3->set_all_elements_in_seq(1.0);
-        auto sizes = g3->get_allocs();
+        gb3->set_all_elements_in_seq(1.0);
+        auto sizes = gb3->get_allocs();
         sizes.visitAllPointsInParallel([&](const IdxTuple& pt,
                                            size_t idx) {
                 IdxTuple pt2 = pt;
                 for (auto dname : gdims)
                     pt2[dname] += g3->get_first_rank_alloc_index(dname);
                 Indices ipt(pt2);
-                auto val = g3->readElem(ipt, 0, __LINE__);
-                g3f->writeElem(val, ipt, 0, __LINE__);
+                auto val = gb3->readElem(ipt, 0, __LINE__);
+                gb3f->writeElem(val, ipt, 0, __LINE__);
                 return true;
             });
         os << "Checking seq of vals\n";
@@ -128,8 +132,8 @@ int main(int argc, char** argv) {
                     pt2[dname] += g3->get_first_rank_alloc_index(dname);
                 Indices ipt(pt2);
                 ipt.addConst(-min_pad);
-                auto val = g3->readElem(ipt, 0, __LINE__);
-                auto valf = g3f->readElem(ipt, 0, __LINE__);
+                auto val = gb3->readElem(ipt, 0, __LINE__);
+                auto valf = gb3f->readElem(ipt, 0, __LINE__);
                 assert(val == valf);
                 return true;
             });

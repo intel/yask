@@ -215,11 +215,15 @@ if __name__ == "__main__":
         print("    " + grid.get_name() + repr(grid.get_dim_names()))
         for dname in grid.get_dim_names() :
             if dname in soln.get_domain_dim_names() :
-                print("      '" + dname + "' allowed index range in this rank: " +
+                print("      '" + dname + "' allowed domain index range in this rank: " +
                       repr(grid.get_first_rank_alloc_index(dname)) + " ... " +
                       repr(grid.get_last_rank_alloc_index(dname)))
-            elif dname in soln.get_misc_dim_names() :
-                print("      '" + dname + "' allowed index range: " +
+            elif dname == soln.get_step_dim_name() :
+                print("      '" + dname + "' allowed step index range: " +
+                      repr(grid.get_first_valid_step_index()) + " ... " +
+                      repr(grid.get_last_valid_step_index()))
+            else :
+                print("      '" + dname + "' allowed misc index range: " +
                       repr(grid.get_first_misc_index(dname)) + " ... " +
                       repr(grid.get_last_misc_index(dname)))
 
@@ -292,7 +296,7 @@ if __name__ == "__main__":
         print("Set " + repr(nset) + " element(s) in rank " + repr(env.get_rank_index()))
 
         # Init the values within the small cube.
-        nset = grid.set_elements_in_slice_same(0.5, first_indices, last_indices)
+        nset = grid.set_elements_in_slice_same(0.5, first_indices, last_indices, False)
         print("Set " + repr(nset) + " element(s) in rank " + repr(env.get_rank_index()))
 
         # Print the initial contents of the grid.
