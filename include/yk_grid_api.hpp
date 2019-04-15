@@ -53,21 +53,21 @@ namespace yask {
        You may also use yk_solution::new_grid() or yk_solution::new_fixed_size_grid()
        if you need a grid that is not part of the pre-defined solution.
 
-       Grid Dimensions
-       ===============
+       # Grid Dimensions #
+
        Each dimension of a grid is one of the following:
-       - The *step* dimension, typically time ("t"),
+       - The *step* dimension, typically time (`t`),
        as returned from yk_solution::get_step_dim_name().
-       - A *domain* dimension, typically a spatial dimension such as "x" or "y",
+       - A *domain* dimension, typically a spatial dimension such as `x` or `y`,
        as returned from yk_solution::get_domain_dim_names().
        - A *miscellaneous* dimension, which is any dimension that is not a step or domain dimension.
        These may be returned via yk_solution::get_misc_dim_names() if they were defined
        in the YASK compiler, or they may be any other name that is not a step or domain dimension.
 
-       Step Dimensions
-       --------------
+       ## Step Dimensions #
+
        The step dimension, as defined during YASK compilation,
-       is the dimension in which the simulation proceeds.
+       is the dimension in which the simulation proceeds, often "t" for time.
        In the step dimension, there is no fixed first or last index.
        However, there is a finite allocation size, which is the number of
        values in the step dimension that are stored in memory.  The valid
@@ -104,13 +104,17 @@ namespace yask {
        applications that need to access a grid using absolute rather than
        logical step indices.
 
-       Domain Dimensions
-       --------------
+       ## Domain Dimensions #
+
+       A domain dimension typically corresponds to a physical spatial dimension,
+       but it can be any dimension that is used for "domain decomposition" in
+       the solution.
+
        In each domain dimension,
        grid sizes include the following components:
        - The *domain* is the elements to which the stencils are applied.
-       - The *left padding* is all the elements before the domain and includes the left halo.
-       - The *right padding* is all the elements before the domain and includes the right halo.
+       - The *left padding* is all the accessible elements before the domain and includes the left halo.
+       - The *right padding* is all the accessible elements after the domain and includes the right halo.
        - The *left halo* is the elements just before the domain which must be
        copied between preceding ranks during halo exchanges. The left halo is contained within the left padding.
        - The *right halo* is the elements just after the domain which must be
@@ -146,25 +150,25 @@ namespace yask {
        Data in these overlapped areas are exchanged as needed during stencil application
        to maintain a consistent values as if there was only one rank.
 
-       Miscellaneous Dimensions
-       --------------
+       ## Miscellaneous Dimensions #
+
        In each miscellaneous dimension, there is no padding or halos.
        There is a fixed allocation size, and 
        each index must be between its first and last valid value.
        The valid miscellaneous indices may be retrieved via
        yk_grid::get_first_misc_index() and yk_grid::get_last_misc_index().
 
-       Other Details
-       ===========
-       Elements
-       -----------
+       # Other Details #
+
+       ## Elements #
+
        All sizes are expressed in numbers of elements.
        Each element may be a 4-byte (single precision)
        or 8-byte (double precision) floating-point value as returned by
        yk_solution::get_element_bytes().
 
-       Data Storage
-       -----------
+       ## Data Storage #
+
        Initially, a grid is not assigned any allocated storage.
        This is done to allow modification of domain, padding, and other allocation sizes
        before allocation.
@@ -992,9 +996,9 @@ namespace yask {
            effect the same changes.
 
            Storage implications:
+           - Any pre-existing storage in this grid will be released.
            - The storage of the this grid will become
            allocated or unallocated depending on that of the source grid.
-           Any pre-existing storage in this grid will be released.
            - After fusing, calling release_storage() on this grid
            or the `source` grid will apply to both.
 
@@ -1002,8 +1006,9 @@ namespace yask {
            properly, if this grid is used in a kernel, the dimensions and
            fold-lengths of the `source` grid must be identical or an
            exception will the thrown.  If the `source` grid is a fixed-size
-           grid, the storage, local domain sizes, halos, etc.  of the grid
-           are set to be compatible with the solution. Otherwise,
+           grid, the storage, local domain sizes, halos, etc. of the grid
+           must be set to be compatible with the solution before 
+           calling yk_solution::prepare_solution(). Otherwise,
            yk_solution::prepare_solution() will throw an exception.
 
            See allocation options and more information about grid sizes
