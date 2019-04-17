@@ -41,7 +41,6 @@ namespace yask {
     const ctrl_t ctrl_idx_mask = 0xf;
     const ctrl_t ctrl_sel_bit = 0x10;
 #ifdef USE_INTRIN256
-    const idx_t vec_elems = 8;
     typedef __m256 simd_t;
     typedef __m256i isimd_t;
     typedef float imem_t;
@@ -49,7 +48,6 @@ namespace yask {
 #define INAME(op) _mm256_ ## op ## _ps
 #define INAMEI(op) _mm256_ ## op ## _epi32
 #elif defined(USE_INTRIN512)
-    const idx_t vec_elems = 16;
     typedef __m512 simd_t;
     typedef __m512i isimd_t;
     typedef void imem_t;
@@ -66,7 +64,6 @@ namespace yask {
     const ctrl_t ctrl_idx_mask = 0x7;
     const ctrl_t ctrl_sel_bit = 0x8;
 #ifdef USE_INTRIN256
-    const idx_t vec_elems = 4;
     typedef __m256d simd_t;
     typedef __m256i isimd_t;
     typedef double imem_t;
@@ -74,7 +71,6 @@ namespace yask {
 #define INAME(op) _mm256_ ## op ## _pd
 #define INAMEI(op) _mm256_ ## op ## _epi64
 #elif defined(USE_INTRIN512)
-    const idx_t vec_elems = 8;
     typedef __m512d simd_t;
     typedef __m512i isimd_t;
     typedef void imem_t;
@@ -592,7 +588,7 @@ namespace yask {
     SVML_1ARG(yask_sin, sin, sin, sinf) // sine.
     SVML_1ARG(yask_cos, cos, cos, cosf) // cosine.
     SVML_1ARG(yask_atan, atan, atan, atanf) // inv (arc) tangent.
-    SVML_2ARG(yask_pow, pow, pow, powf) // inv (arc) tangent.
+    SVML_2ARG(yask_pow, pow, pow, powf) // power.
 #undef SVML_1ARG_SCALAR
 #undef SVML_1ARG
 #undef SVML_2ARG_SCALAR
@@ -637,34 +633,69 @@ namespace yask {
         std::cout << " b: ";
         b.print_reals(std::cout);
 #endif
-
+        assert(count >= 0);
+        assert(count <= VLEN);
+        if (count == 0)
+            res.u = b.u;
+        else if (count == VLEN)
+            res.u = a.u;
+        else {
+        
 #if defined(NO_INTRINSICS)
-        // must make temp copies in case &res == &a or &b.
-        real_vec_t tmpa = a, tmpb = b;
-        for (int i = 0; i < VLEN-count; i++)
-            res.u.r[i] = tmpb.u.r[i + count];
-        for (int i = VLEN-count; i < VLEN; i++)
-            res.u.r[i] = tmpa.u.r[i + count - VLEN];
+            // must make temp copies in case &res == &a or &b.
+            real_vec_t tmpa = a, tmpb = b;
+            for (int i = 0; i < VLEN-count; i++)
+                res.u.r[i] = tmpb.u.r[i + count];
+            for (int i = VLEN-count; i < VLEN; i++)
+                res.u.r[i] = tmpa.u.r[i + count - VLEN];
 
-#elif defined(USE_INTRIN256)
-        // Not really an intrinsic, but not element-wise, either.
-        // Put the 2 parts in a local array, then extract the desired part
-        // using an unaligned load.
-        typedef real_t R2[VLEN * 2] CACHE_ALIGNED;
-        R2 r2;
-        *((real_vec_t*)(&r2[0])) = b;
-        *((real_vec_t*)(&r2[VLEN])) = a;
-        real_vec_t* p = (real_vec_t*)(&r2[count]); // not usually aligned.
-        res.u.mr = INAME(loadu)((imem_t const*)p);
-
-#elif REAL_BYTES == 8 && defined(ARCH_KNC) && defined(USE_INTRIN512)
-        // For KNC, for 64-bit align, use the 32-bit op w/2x count.
-        res.u.mi = _mm512_alignr_epi32(a.u.mi, b.u.mi, count*2);
-
-#else
-        res.u.mi = INAMEI(alignr)(a.u.mi, b.u.mi, count);
+            // For AVX2, use 8-bit op per 128-bit lane w/count*REAL_BYTES.
+#elif defined(USE_AVX2)
+            // See https://software.intel.com/en-us/blogs/2015/01/13/programming-using-avx2-permutations.
+            // Each nybble of ctrl is
+            // 0: lo part of A.
+            // 1: hi part of A.
+            // 2: lo part of B.
+            // 3: hi part of B.
+            auto tmp = _mm256_permute2x128_si256(b.u.mi, a.u.mi, 0x21);
+#ifdef TRACE_INTRINSICS
+            std::cout << " tmp: ";
+            real_vec_t tmpa;
+            tmpa.u.mi = tmp;
+            tmpa.print_reals(std::cout);
 #endif
+            // count must be 1..VLEN-1.
+            if (count == VLEN/2)
+                res.u.mi = tmp;
+            else if (count < VLEN/2)
+                res.u.mi = _mm256_alignr_epi8(tmp, b.u.mi, count*REAL_BYTES);
+            else
+                res.u.mi = _mm256_alignr_epi8(a.u.mi, tmp, (count-(VLEN/2))*REAL_BYTES);
 
+            // For AVX but not AVX2.
+#elif defined(USE_INTRIN256)
+            // Not really an intrinsic, but not element-wise, either.
+            // Put the 2 parts in a local array, then extract the desired part
+            // using an unaligned load.
+            // The Intel compiler converts this into an efficient sequence
+            // using vmovup*, vshufp*, vinsertf128, and/or vunpcklp* instrs.
+            typedef real_t R2[VLEN * 2] CACHE_ALIGNED;
+            R2 r2;
+            *((real_vec_t*)(&r2[0])) = b;
+            *((real_vec_t*)(&r2[VLEN])) = a;
+            real_vec_t* p = (real_vec_t*)(&r2[count]); // not usually aligned.
+            res.u.mr = INAME(loadu)((imem_t const*)p);
+
+            // For DP on KNC, use 32-bit op w/2x count.
+#elif REAL_BYTES == 8 && defined(ARCH_KNC) && defined(USE_INTRIN512)
+            res.u.mi = _mm512_alignr_epi32(a.u.mi, b.u.mi, count*2);
+
+            // Everything else.
+#else
+            res.u.mi = INAMEI(alignr)(a.u.mi, b.u.mi, count);
+#endif
+        }
+        
 #ifdef TRACE_INTRINSICS
         std::cout << " res: ";
         res.print_reals(std::cout);

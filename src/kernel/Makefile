@@ -180,7 +180,7 @@ else ifneq ($(filter $(arch),hsw bdw),)
 
  ISA		?=	-xCORE-AVX2
  GCXX_ISA	?=	-march=haswell
- MACROS		+=	USE_INTRIN256
+ MACROS		+=	USE_INTRIN256 USE_AVX2
  YC_TARGET	?=	avx2
 
 else ifeq ($(arch),ivb)
