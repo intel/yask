@@ -27,6 +27,8 @@
 # report some stats on them.
 
 use strict;
+use File::Basename;
+
 my $minInstrs = 2;
 my $printAsm = 0;
 my $targetLabel = "";
@@ -65,6 +67,8 @@ for my $arg (@ARGV) {
 
   my $fname = $arg;
   my %files;                    # map from file index to source file-name.
+  my %dirs;                     # map from file index to source dir-name.
+  my %dirIndices;               # map from dir-name to dir index.
   my %loopLabels;
   my %astats;                   # arg stats.
   my %istats;                   # instr stats.
@@ -79,8 +83,21 @@ for my $arg (@ARGV) {
     my ($locInfo, $srcFile, $curFn); # strings describing current location.
     my @lines;                  # lines to print.
 
+    # Header.
+    if (!$pass) {
+      print "\n'$fname'...\n";
+    } else {
+      my %id;
+      for my $dir (keys %dirIndices) {
+        $id{$dirIndices{$dir}} = $dir;
+      }
+      print "\nDirectory key:\n";
+      for my $di (sort { $a <=> $b } keys %id) {
+        print "  <dir$di> = $id{$di}\n";
+      }
+    }
+
     open F, "<$fname" or usage("error: cannot open '$fname'");
-    print "\n'$fname'...\n" if !$pass;
     while (<F>) {
       chomp;
 
@@ -88,7 +105,12 @@ for my $arg (@ARGV) {
       #  .file   40 "src/stencil_block_loops.hpp"
       if (/^\s*\.file\s+(\d+)\s+"(.*)"/) {
         my ($fi, $fn) = ($1, $2);
-        $files{$fi} = $fn;
+        $files{$fi} = basename($fn);
+        my $dir = dirname($fn);
+        $dirs{$fi} = dirname($fn);
+        if ($dir && !exists($dirIndices{$dir})) {
+          $dirIndices{$dir} = scalar keys %dirIndices;
+        }
       }
 
       # location, e.g.,
@@ -98,6 +120,10 @@ for my $arg (@ARGV) {
         if (exists $files{$fi}) {
           $srcFile = $files{$fi};
           $locInfo = "$srcFile:$info";
+          my $srcDir = $dirs{$fi};
+          if ($srcDir && exists($dirIndices{$srcDir})) {
+            $locInfo = "<dir$dirIndices{$srcDir}>/$locInfo";
+          }
         } else {
           $srcFile = "";
           $locInfo = "";
