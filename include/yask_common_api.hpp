@@ -33,6 +33,7 @@ IN THE SOFTWARE.
 #define YASK_COMMON_API
 
 #include <string>
+#include <vector>
 #include <iostream>
 #include <ostream>
 #include <memory>
@@ -204,6 +205,55 @@ namespace yask {
         virtual ~yask_null_output() {}
     };
 
+    /// Create finite-difference (FD) coefficients for the standard center form.
+    /**
+       Find FD coefficients with `radius` sample points to both the left and right
+       of the center sample and evaluation point on a uniformly-spaced grid. 
+       The FD has `radius * 2`-order accuracy.
+       @returns `radius * 2 + 1` FD coefficients.
+    */
+    std::vector<double>
+    get_center_fd_coefficients(int derivative_order
+                               /**< [in] `1` for 1st derivative, `2` for 2nd, etc. */,
+                               int radius
+                               /**< [in] Number of points to either side of the center point. */ );
+
+    /// Create finite-difference (FD) coefficients for the standard forward form.
+    /**
+       Find FD coefficients with `accuracy_order` sample points to the right
+       of the center sample and evaluation point on a uniformly-spaced grid. 
+       @returns `accuracy_order + 1` FD coefficients.
+    */
+    std::vector<double>
+    get_forward_fd_coefficients(int derivative_order
+                                /**< [in] `1` for 1st derivative, `2` for 2nd, etc. */,
+                                int accuracy_order
+                                /**< [in] Number of points to the right of the center point. */ );
+    
+    /// Create finite-difference (FD) coefficients for the standard backward form.
+    /**
+       Find FD coefficients with `accuracy_order` sample points to the left
+       of the center sample and evaluation point on a uniformly-spaced grid. 
+       @returns `accuracy_order + 1` FD coefficients.
+    */
+    std::vector<double>
+    get_backward_fd_coefficients(int derivative_order
+                                 /**< [in] `1` for 1st derivative, `2` for 2nd, etc. */,
+                                 int accuracy_order
+                                 /**< [in] Number of points to the left of the center point. */ );
+    
+    /// Create finite-difference (FD) coefficients at arbitrary evaluation and sample points.
+    /**
+       @returns `sample_points` FD coefficients.
+    */
+    std::vector<double>
+    get_arbitrary_fd_coefficients(int derivative_order
+                                  /**< [in] `1` for 1st derivative, `2` for 2nd, etc. */,
+                                  double eval_point
+                                  /**< [in] Location of evaluation point. */,
+                                  const std::vector<double> sample_points
+                                  /**< [in] Locations of sampled points. Must have at least 2. */ );
+    
     /** @}*/
 
 } // namespace yask.

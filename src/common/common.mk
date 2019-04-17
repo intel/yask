@@ -55,7 +55,8 @@ endif
 
 # Common source.
 COMM_DIR	:=	$(SRC_DIR)/common
-COMM_SRC_NAMES	:=	output common_utils tuple combo
+COMM_SRC_NAMES	:=	output common_utils tuple combo fd_coeff fd_coeff2
+COEFF_DIR	:=	$(SRC_DIR)/contrib/coefficients
 
 # YASK stencil compiler.
 # This is here because both the compiler and kernel

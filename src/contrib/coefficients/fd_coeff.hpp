@@ -26,7 +26,9 @@ IN THE SOFTWARE.
 // Finite-differences coefficients code.
 // Contributed by Jeremy Tillay.
 
-#ifndef HEADER_COEFF
-#define HEADER_COEFF
-void fd_coeff(float *coeff, const float eval_point, const int order, float *points, const int num_points);
-#endif
+#pragma once
+
+namespace yask {
+    void fd_coeff(double *coeff, const double eval_point, const int order, const double *points, const int num_points);
+}
+

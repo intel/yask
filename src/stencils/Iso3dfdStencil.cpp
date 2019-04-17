@@ -38,20 +38,16 @@ protected:
     MAKE_DOMAIN_INDEX(x);         // spatial dim.
     MAKE_DOMAIN_INDEX(y);         // spatial dim.
     MAKE_DOMAIN_INDEX(z);         // spatial dim.
-    MAKE_MISC_INDEX(r);           // to index the coefficients.
 
     // Grids.
     MAKE_GRID(pressure, t, x, y, z); // time-varying 3D pressure grid.
     MAKE_GRID(vel, x, y, z);         // constant 3D vel grid (c(x,y,z)^2 * delta_t^2).
-    MAKE_ARRAY(coeff, r);            // FD coefficients.
 
 public:
 
     // For this stencil, the 'radius' is the number of FD coefficients on
     // either side of center in each spatial dimension.  For example,
-    // radius=8 implements a 16th-order accurate FD stencil.  To obtain the
-    // correct result, the 'coeff' array should be initialized with the
-    // corresponding central FD coefficients, adjusted for grid spacing.
+    // radius=8 implements a 16th-order accurate FD stencil.  
     // The accuracy in time is fixed at 2nd order.
     Iso3dfdStencil(StencilList& stencils, string suffix="", int radius=8) :
         StencilRadiusBase("iso3dfd" + suffix, stencils, radius) { }
@@ -60,15 +56,36 @@ public:
     // Define RHS expression for pressure at t+1 based on values from vel and pressure at t.
     virtual GridValue get_next_p() {
 
+        // Grid spacing.
+        // In this implementation, it's a constant.
+        // Could make this a YASK variable to allow setting at run-time.
+        double delta_xyz = 50.0;
+        double d2 = delta_xyz * delta_xyz;
+        
+        // Spatial FD coefficients for 2nd derivative.
+        auto coeff = get_center_fd_coefficients(2, _radius);
+        size_t c0i = _radius;      // index of center sample.
+
+        for (size_t i = 0; i < coeff.size(); i++) {
+
+            // Need 3 copies of center sample for x, y, and z FDs.
+            if (i == c0i)
+                coeff[i] *= 3.0;
+
+            // Divide each by delta_xyz^2.
+            coeff[i] /= d2;
+        }
+
+        // Calculate FDx + FDy + FDz.
         // Start with center value multiplied by coeff 0.
-        GridValue next_p = pressure(t, x, y, z) * coeff(0);
+        GridValue fd_sum = pressure(t, x, y, z) * coeff[c0i];
 
         // Add values from x, y, and z axes multiplied by the
         // coeff for the given radius.
         for (int r = 1; r <= _radius; r++) {
 
             // Add values from axes at radius r.
-            next_p += (
+            fd_sum += (
                        // x-axis.
                        pressure(t, x-r, y, z) +
                        pressure(t, x+r, y, z) +
@@ -81,13 +98,32 @@ public:
                        pressure(t, x, y, z-r) +
                        pressure(t, x, y, z+r)
 
-                       ) * coeff(r);
+                       ) * coeff[c0i + r]; // R & L coeffs are identical.
         }
 
-        // Finish equation, including t-1 and velocity components.
-        next_p = (2.0 * pressure(t, x, y, z))
-            - pressure(t-1, x, y, z) // subtract pressure from t-1.
-            + (next_p * vel(x, y, z));       // add next_p * velocity.
+        // Temporal FD coefficients.
+        // For this implementation, just check the known values to
+        // simplify the solution.
+        // But we could parameterize by accuracy-order in time as well.
+        int torder = 2;
+        auto tcoeff = get_forward_fd_coefficients(2, torder);
+        assert(tcoeff[0] == 1.0);  // pressure(t+1).
+        assert(tcoeff[1] == -2.0); // -2 * pressure(t+1).
+        assert(tcoeff[2] == 1.0);  // pressure(t-1).
+
+        // Wave equation is:
+        // 2nd time derivative(p) = c^2 * laplacian(p).
+        // See https://en.wikipedia.org/wiki/Wave_equation.
+        
+        // So, wave equation with FD approximations is:
+        // (p(t+1) - 2 * p(t) + p(t-1)) / delta_t^2 = c^2 * fd_sum.
+
+        // Solve wave equation for p(t+1):
+        // p(t+1) = 2 * p(t) - p(t-1) + c^2 * fd_sum * delta_t^2.
+
+        // Let vel = c^2 * delta_t^2 for each grid point.
+        GridValue next_p = (2.0 * pressure(t, x, y, z)) -
+            pressure(t-1, x, y, z) + (fd_sum * vel(x, y, z));
 
         return next_p;
     }
