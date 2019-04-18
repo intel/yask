@@ -499,7 +499,7 @@ if ($doBuild) {
 
      # other build options.
      [ 0, $#schedules, 1, 'ompRegionSchedule' ], # OMP schedule for region loop.
-     [ 0, $#schedules, 1, 'ompBlockSchedule' ], # OMP schedule for block loop.
+     [ 0, $#schedules, 1, 'ompBlockSchedule' ], # OMP schedule for mini-block loop.
 
     );
 }
