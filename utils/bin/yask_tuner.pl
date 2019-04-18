@@ -371,8 +371,10 @@ my @loopOrders =
   ('123', '132', '213', '231', '312', '321');
 
 # Possible space-filling curve modifiers.
+my @pathNamesIncreasing =
+  ('', 'square_wave', 'grouped');
 my @pathNames =
-  ('', 'serpentine', 'square_wave serpentine', 'grouped');
+  (@pathNamesIncreasing, 'serpentine', 'square_wave serpentine');
 
 # List of folds.
 if ( !@folds ) {
@@ -470,16 +472,17 @@ if ($doBuild) {
 
      # Loops, from the list above.
      # Each loop consists of index order and path mods.
-     # There is no var for rank or block path because they
-     # must strictly increase.
+     # Block and rank paths require increasing indices.
      [ 0, $#loopOrders, 1, 'subBlockOrder' ],
      [ 0, $#pathNames, 1, 'subBlockPath' ],
      [ 0, $#loopOrders, 1, 'miniBlockOrder' ],
      [ 0, $#pathNames, 1, 'miniBlockPath' ],
      [ 0, $#loopOrders, 1, 'blockOrder' ],
+     [ 0, $#pathNamesIncreasing, 1, 'blockPath' ],
      [ 0, $#loopOrders, 1, 'regionOrder' ],
      [ 0, $#pathNames, 1, 'regionPath' ],
      [ 0, $#loopOrders, 1, 'rankOrder' ],
+     [ 0, $#pathNamesIncreasing, 1, 'rankPath' ],
 
      # how to shape vectors, from the list above.
      [ 0, $#folds, 1, 'fold' ],
@@ -1018,11 +1021,10 @@ sub evalIndiv($$$$$$) {
 }
 
 # return loop-ctrl vars.
-sub makeLoopVars($$$$$) {
+sub makeLoopVars($$$$) {
   my $h = shift;
   my $makePrefix = shift;       # e.g., 'BLOCK'.
   my $tunerPrefix = shift;      # e.g., 'block'.
-  my $reqdMods = shift;         # e.g., ''.
   my $lastDim = shift;          # e.g., 2 or 3.
 
   my $order = readHash($h, $tunerPrefix."Order", 1);
@@ -1315,11 +1317,11 @@ sub fitness {
   $mvars .= " fold=x=$fs[0],y=$fs[1],z=$fs[2]";
 
   # gen-loops vars.
-  $mvars .= makeLoopVars($h, 'RANK', 'rank', '', 3);
-  $mvars .= makeLoopVars($h, 'REGION', 'region', '', 3);
-  $mvars .= makeLoopVars($h, 'BLOCK', 'block', '', 3);
-  $mvars .= makeLoopVars($h, 'MINI_BLOCK', 'miniBlock', '', 3);
-  $mvars .= makeLoopVars($h, 'SUB_BLOCK', 'subBlock', '', 2);
+  $mvars .= makeLoopVars($h, 'RANK', 'rank', 3);
+  $mvars .= makeLoopVars($h, 'REGION', 'region', 3);
+  $mvars .= makeLoopVars($h, 'BLOCK', 'block', 3);
+  $mvars .= makeLoopVars($h, 'MINI_BLOCK', 'miniBlock', 3);
+  $mvars .= makeLoopVars($h, 'SUB_BLOCK', 'subBlock', 2);
 
   # other vars.
   $mvars .= " omp_region_schedule=$regionScheduleStr omp_block_schedule=$blockScheduleStr";
