@@ -239,7 +239,7 @@ namespace yask {
 #ifdef SHOW_GROUPS
         os << 
             " sub-block-group-size:  " << opts->_sub_block_group_sizes.makeDimValStr(" * ") << endl <<
-            " block-group-size:      " << opts->_block_group_sizes.makeDimValStr(" * ") << endl <<
+            " block-group-size:      " << opts->_block_group_sizes.makeDimValStr(" * ") << endl;
 #endif
         os << "\nOther settings:\n"
             " yask-version:          " << yask_get_version_string() << endl <<

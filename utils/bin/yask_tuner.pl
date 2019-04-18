@@ -372,9 +372,9 @@ my @loopOrders =
 
 # Possible space-filling curve modifiers.
 my @pathNamesIncreasing =
-  ('', 'square_wave', 'grouped');
+  ('', 'grouped');
 my @pathNames =
-  (@pathNamesIncreasing, 'serpentine', 'square_wave serpentine');
+  (@pathNamesIncreasing, 'serpentine', 'square_wave serpentine', 'square_wave');
 
 # List of folds.
 if ( !@folds ) {
