@@ -53,10 +53,10 @@ namespace yask {
         idx_t min_steps = 100;
         double min_secs = 0.25; // eval when either min_steps OR min_secs is reached.
         double cutoff = 0.8;   // can stop eval if current rate < best rate * cutoff;
+        idx_t max_radius = 8;   // starting search radius.
         idx_t min_dist = 4;     // min distance to move in any direction per eval.
-        idx_t max_radius = 8;
-        idx_t min_pts = 512; // 8^3.
-        idx_t min_blks = 4;
+        idx_t min_pts = 512; // 8^3; min points in a block.
+        idx_t min_blks = 4;  // num number of blocks; gets set to number of region threads.
 
         // Results.
         std::unordered_map<IdxTuple, double> results; // block-size -> perf.
@@ -78,6 +78,8 @@ namespace yask {
         double ctime = 0.;
         idx_t csteps = 0;
         bool in_warmup = true;
+
+        bool checkSizes(const IdxTuple& sizes);
 
     public:
         static constexpr idx_t max_stride_t = 4;

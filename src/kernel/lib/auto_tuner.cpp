@@ -186,9 +186,7 @@ namespace yask {
         // Reset all vars.
         results.clear();
         n2big = n2small = n2far = 0;
-        best_sizes = target_sizes();
         best_rate = 0.;
-        center_sizes = best_sizes;
         radius = max_radius;
         done = mark_done;
         neigh_idx = 0;
@@ -198,33 +196,39 @@ namespace yask {
         in_warmup = true;
         timer.clear();
         steps_done = 0;
+        target_steps = target_sizes()[step_dim];
+        center_sizes = target_sizes();
+        best_sizes = target_sizes();
 
         // Set min blocks to number of region threads.
         int rt=0, bt=0;
         get_num_comp_threads(rt, bt);
         min_blks = rt;
 
-        // Adjust starting block if needed.
-        for (auto dim : center_sizes.getDims()) {
-            auto& dname = dim.getName();
-            auto& dval = dim.getVal();
-
-            if (dname == step_dim) {
-                target_steps = target_sizes()[dname]; // save value.
-                center_sizes[dname] = target_steps;
-            } else {
-                auto dmax = max(idx_t(1), outer_sizes()[dname] / 2);
-                if (dval > dmax || dval < 1)
-                    center_sizes[dname] = dmax;
-            }
-        }
-        if (!done) {
-            TRACE_MSG(_name << ": starting size: "  <<
-                      center_sizes.makeDimValStr(" * "));
-            TRACE_MSG(_name << ": starting search radius: " << radius);
-        }
     } // clear.
 
+    // Check whether sizes within search limits.
+    bool AutoTuner::checkSizes(const IdxTuple& bsize) {
+        bool ok = true;
+        
+        // Too small?
+        if (ok && get_num_domain_points(bsize) < min_pts) {
+            n2small++;
+            ok = false;
+        }
+
+        // Too few?
+        else if (ok) {
+            idx_t nblks = get_num_domain_points(outer_sizes()) /
+                get_num_domain_points(bsize);
+            if (nblks < min_blks) {
+                ok = false;
+                n2big++;
+            }
+        }
+        return ok;
+    }
+    
     // Evaluate the previous run and take next auto-tuner step.
     void AutoTuner::eval() {
         STATE_VARS(this);
@@ -266,10 +270,27 @@ namespace yask {
             csteps = 0;
             ctime = 0;
 
-            // Fix settings for next step.
+            // Set center point for search.
+            center_sizes = target_sizes();
+
+            // Pick better starting point if needed.
+            if (!checkSizes(center_sizes)) {
+                for (auto dim : center_sizes.getDims()) {
+                    auto& dname = dim.getName();
+                    auto& dval = dim.getVal();
+                    if (dname != step_dim) {
+                        auto dmax = max(idx_t(1), outer_sizes()[dname] / 2);
+                        center_sizes[dname] = dmax;
+                    }
+                }
+            }
+
+            // Set vars to starting point.
+            best_sizes = center_sizes;
+            target_sizes() = center_sizes;
             apply();
-            TRACE_MSG(_name << ": first size "  <<
-                      target_sizes().makeDimValStr(" * "));
+            TRACE_MSG(_name << ": starting size: "  << center_sizes.makeDimValStr(" * "));
+            TRACE_MSG(_name << ": starting search radius: " << radius);
             return;
         }
 
@@ -385,24 +406,13 @@ namespace yask {
                 TRACE_MSG(_name << ": checking size "  <<
                           bsize.makeDimValStr(" * "));
 
-                // Too small?
-                if (ok && get_num_domain_points(bsize) < min_pts) {
-                    n2small++;
+                // Check sizes.
+                if (ok && !checkSizes(bsize))
                     ok = false;
-                }
-
-                // Too few?
-                else if (ok) {
-                    idx_t nblks = get_num_domain_points(outer_sizes()) /
-                        get_num_domain_points(bsize);
-                    if (nblks < min_blks) {
-                        ok = false;
-                        n2big++;
-                    }
-                }
+                
 
                 // Valid size and not already checked?
-                if (ok && !results.count(bsize)) {
+                if (ok && results.count(bsize) == 0) {
 
                     // Run next step with this size.
                     target_sizes() = bsize;
@@ -454,7 +464,7 @@ namespace yask {
                   target_sizes().makeDimValStr(" * "));
     } // eval.
 
-    // Apply auto-tuner settings to prepare for a run.
+    // Adjust related kernel settings to prepare for a run.
     // Does *not* set the settings being tuned.
     void AutoTuner::apply() {
         STATE_VARS(this);
