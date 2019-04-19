@@ -262,7 +262,7 @@ namespace yask {
                 "block sizes...\n";
             in_warmup = false;
 
-            // Restart for first measurement.
+            // Restart for first real measurement.
             csteps = 0;
             ctime = 0;
 
@@ -273,17 +273,32 @@ namespace yask {
             return;
         }
 
-        // Need more steps to get a good measurement?
-        if (ctime < min_secs && csteps < min_steps)
+        // Calc perf.
+        double rate = (ctime > 0.) ? (double(csteps) / ctime) : 0.;
+        TRACE_MSG(_name << ": " <<
+                  makeNumStr(rate) << " steps/sec (" <<
+                  csteps << " steps(s) in " << makeNumStr(ctime) <<
+                  " secs)");
+        bool rate_ok = false;
+
+        // If the current rate is much less than the best,
+        // we don't need a better measurement.
+        if (rate > 0. && best_rate > 0. && rate < best_rate * cutoff)
+            rate_ok = true;
+
+        // Enough time or steps to get a good measurement?
+        else if (ctime >= min_secs || csteps >= min_steps)
+            rate_ok = true;
+
+        // Return from eval if we need to do more work.
+        if (!rate_ok)
             return;
 
-        // Calc perf and reset vars for next time.
-        double rate = (ctime > 0.) ? (double(csteps) / ctime) : 0.;
+        // Print progress and reset vars for next time.
         os << _name << ": search-dist=" << radius << ": " <<
-            csteps << " steps(s) in " <<
-            makeNumStr(ctime) << " secs (" <<
-            makeNumStr(rate) << " steps/sec) with size " <<
-            target_sizes().makeDimValStr(" * ") << endl;
+            makeNumStr(rate) << " steps/sec (" <<
+            csteps << " steps(s) in " << makeNumStr(ctime) <<
+            " secs) with size " << target_sizes().makeDimValStr(" * ") << endl;
         csteps = 0;
         ctime = 0.;
 
