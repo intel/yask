@@ -50,7 +50,7 @@ YC_SRC_NAMES	:=	Expr ExprUtils Grid Eqs Print Vec Cpp CppIntrin YaskKernel Soln
 YC_STENCIL_NAMES:=	$(notdir $(patsubst %.cpp,%,$(wildcard $(YC_STENCIL_DIR)/*.cpp)))
 YC_OBJS		:=	$(addprefix $(YC_OBJ_DIR)/,$(addsuffix .o,$(YC_SRC_NAMES) $(COMM_SRC_NAMES)))
 YC_STENCIL_OBJS	:=	$(addprefix $(YC_OBJ_DIR)/,$(addsuffix .o,$(YC_STENCIL_NAMES)))
-YC_INC_DIRS	:=	$(INC_DIR) $(YC_LIB_SRC_DIR) $(COMM_DIR)
+YC_INC_DIRS	:=	$(INC_DIR) $(YC_LIB_SRC_DIR) $(COMM_DIR) $(COEFF_DIR)
 YC_INC_GLOB	:=	$(wildcard $(addsuffix /*.hpp,$(YC_INC_DIRS)))
 YC_STENCIL_INC_GLOB :=	$(wildcard $(YC_STENCIL_DIR)/*.hpp $(YC_STENCIL_DIR)/*/*.hpp)
 
@@ -83,6 +83,11 @@ $(YC_OBJ_DIR)/%.o: $(YC_LIB_SRC_DIR)/%.cpp $(YC_INC_GLOB)
 	@ls -l $@
 
 $(YC_OBJ_DIR)/%.o: $(COMM_DIR)/%.cpp $(YC_INC_GLOB)
+	$(MKDIR) $(YC_OBJ_DIR)
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
+	@ls -l $@
+
+$(YC_OBJ_DIR)/%.o: $(COEFF_DIR)/%.cpp $(YC_INC_GLOB)
 	$(MKDIR) $(YC_OBJ_DIR)
 	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
@@ -120,7 +125,7 @@ $(YC_SWIG_OUT_DIR)/yask_compiler_api_wrap.cpp: $(YC_SWIG_DIR)/yask*.i $(INC_DIR)
 	$(SWIG) -version
 	$(MKDIR) $(YC_SWIG_OUT_DIR) $(PY_OUT_DIR)
 	$(SWIG) -v -DYC_MODULE=$(YC_MODULE) -cppext cpp \
-	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig \
+	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig -I$(COEFF_DIR) \
 	  -c++ -python -o $@ -outdir $(PY_OUT_DIR) -builtin $<
 
 # Turn off asserts to work around known SWIG issue:

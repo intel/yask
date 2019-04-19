@@ -371,9 +371,10 @@ my @loopOrders =
   ('123', '132', '213', '231', '312', '321');
 
 # Possible space-filling curve modifiers.
+my @pathNamesIncreasing =
+  ('', 'grouped');
 my @pathNames =
-  ('', 'square_wave', 'grouped');
-##  ('', 'serpentine', 'square_wave serpentine', 'grouped');
+  (@pathNamesIncreasing, 'serpentine', 'square_wave serpentine', 'square_wave');
 
 # List of folds.
 if ( !@folds ) {
@@ -471,14 +472,17 @@ if ($doBuild) {
 
      # Loops, from the list above.
      # Each loop consists of index order and path mods.
+     # Block and rank paths require increasing indices.
      [ 0, $#loopOrders, 1, 'subBlockOrder' ],
      [ 0, $#pathNames, 1, 'subBlockPath' ],
      [ 0, $#loopOrders, 1, 'miniBlockOrder' ],
      [ 0, $#pathNames, 1, 'miniBlockPath' ],
      [ 0, $#loopOrders, 1, 'blockOrder' ],
-     [ 0, $#pathNames, 1, 'blockPath' ],
+     [ 0, $#pathNamesIncreasing, 1, 'blockPath' ],
      [ 0, $#loopOrders, 1, 'regionOrder' ],
      [ 0, $#pathNames, 1, 'regionPath' ],
+     [ 0, $#loopOrders, 1, 'rankOrder' ],
+     [ 0, $#pathNamesIncreasing, 1, 'rankPath' ],
 
      # how to shape vectors, from the list above.
      [ 0, $#folds, 1, 'fold' ],
@@ -495,7 +499,7 @@ if ($doBuild) {
 
      # other build options.
      [ 0, $#schedules, 1, 'ompRegionSchedule' ], # OMP schedule for region loop.
-     [ 0, $#schedules, 1, 'ompBlockSchedule' ], # OMP schedule for block loop.
+     [ 0, $#schedules, 1, 'ompBlockSchedule' ], # OMP schedule for mini-block loop.
 
     );
 }
@@ -660,7 +664,7 @@ sub readHash($$$) {
   $val = $fixedVals{$key};
   return $val if defined $val;
 
-  # return default value for build var if disabled.
+  # return dummy value for build var if disabled.
   return 1 if (!$doBuild && $isBuildVar);
 
   die "internal error: value for gene '$key' not provided.\n";
@@ -731,11 +735,16 @@ sub getMakeCmd($$) {
   my $makeCmd = "echo 'build disabled'";
 
   if ($doBuild) {
-    $tag .= "_".md5_hex($macros, $margs, $makeArgs, $realBytes, $radius);
+    my $tagPrefix = $tag."_p".$$."_";
+    $tag = $tagPrefix.md5_hex($macros, $margs, $makeArgs, $realBytes, $radius);
+
+    # Remove binaries that haven't been used in a while.
+    system "find bin lib -name '*$tagPrefix*' -amin +15 | xargs --no-run-if-empty rm";
 
     # Already exists?
-    if (-x "bin/yask_kernel.$tag.$arch.exe") {
-      $makeCmd = "echo 'binary exists'";
+    if (-x "bin/yask_kernel.$tag.$arch.exe" &&
+        -x "lib/libyask_kernel.$tag.$arch.so") {
+      $makeCmd = "echo 'binary & library exist'";
     }
     else {
       $makeCmd =
@@ -797,16 +806,13 @@ sub calcSize($$$) {
         push @cmdOut, $line;
 
         # E.g.,
-        # 5-D grid (t=2 * tidx=2 * x=12 * y=12 * z=42) 't_grids' with data at 0x7fa476600000 containing 1.47656MiB (24.192K SIMD FP element(s) of 64 byte(s) each)
-        # 4-D grid (t=2 * x=5 * y=19 * z=19) 'pressure' with data at 0x65cbc0 containing 112.812KiB (3.61K SIMD FP element(s) of 32 byte(s) each)
-        # 3-D grid (x=3 * y=3 * z=3) 'vel' with data at 0x6790c0 containing 864B (27 SIMD FP element(s) of 32 byte(s) each)
-        # 1-D grid (r=9) 'coeff' with data at 0x679600 containing 36B (9 FP element(s) of 4 byte(s) each)
+        # 'A' 4-D var (t=2 * x=8 * y=48 * z=49) with storage at 0x2aba63016000 ...
         my $ngrids = 1;
-        if (/^\d-?D grid.*x=.*y=.*z=/) {
+        if (/\d-?D .*x=.*y=.*z=/) {
           for my $w (split ' ',$line) {
             if ($w =~ /(\w+)=(\d+)/) {
               my ($dim, $sz) = ($1, $2);
-              if ($dim !~ /^[xyz]/) {
+              if ($dim eq 't') {
                 $ngrids *= $sz;
               }
             }
@@ -1015,17 +1021,14 @@ sub evalIndiv($$$$$$) {
 }
 
 # return loop-ctrl vars.
-sub makeLoopVars($$$$$) {
+sub makeLoopVars($$$$) {
   my $h = shift;
   my $makePrefix = shift;       # e.g., 'BLOCK'.
   my $tunerPrefix = shift;      # e.g., 'block'.
-  my $reqdMods = shift;         # e.g., ''.
   my $lastDim = shift;          # e.g., 2 or 3.
 
   my $order = readHash($h, $tunerPrefix."Order", 1);
   my $orderStr = $loopOrders[$order];           # e.g., '231'.
-  my $path = readHash($h, $tunerPrefix."Path", 1);
-  my $pathStr = @pathNames[$path];                # e.g., 'grouped'.
 
   # dimension vars.
   my @dims = split '',$orderStr;      # e.g., ('2', '3', '1).
@@ -1033,9 +1036,17 @@ sub makeLoopVars($$$$$) {
 
   # vars to create.
   my $order = join(',', @dims);  # e.g., '2, 1'.
-  my $outerMods = "$pathStr $reqdMods";
+  my $outerMods = $reqdMods;
   my $innerMods = '';
 
+  # path gene?
+  my $pathKey = $tunerPrefix."Path";
+  if (exists $h->{$pathKey}) {
+    my $path = readHash($h, $pathKey, 1);
+    my $pathStr = @pathNames[$path];                # e.g., 'grouped'.
+    $outerMods = "$pathStr $outerMods";
+  }
+  
   my $loopVars = " ".$makePrefix."_LOOP_ORDER='$order'";
   $loopVars .= " ".$makePrefix."_LOOP_OUTER_MODS='$outerMods'";
   $loopVars .= " ".$makePrefix."_LOOP_INNER_MODS='$innerMods'";
@@ -1306,10 +1317,11 @@ sub fitness {
   $mvars .= " fold=x=$fs[0],y=$fs[1],z=$fs[2]";
 
   # gen-loops vars.
-  $mvars .= makeLoopVars($h, 'REGION', 'region', '', 3);
-  $mvars .= makeLoopVars($h, 'BLOCK', 'block', '', 3);
-  $mvars .= makeLoopVars($h, 'MINI_BLOCK', 'miniBlock', '', 3);
-  $mvars .= makeLoopVars($h, 'SUB_BLOCK', 'subBlock', '', 2);
+  $mvars .= makeLoopVars($h, 'RANK', 'rank', 3);
+  $mvars .= makeLoopVars($h, 'REGION', 'region', 3);
+  $mvars .= makeLoopVars($h, 'BLOCK', 'block', 3);
+  $mvars .= makeLoopVars($h, 'MINI_BLOCK', 'miniBlock', 3);
+  $mvars .= makeLoopVars($h, 'SUB_BLOCK', 'subBlock', 2);
 
   # other vars.
   $mvars .= " omp_region_schedule=$regionScheduleStr omp_block_schedule=$blockScheduleStr";

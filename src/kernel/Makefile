@@ -180,7 +180,7 @@ else ifneq ($(filter $(arch),hsw bdw),)
 
  ISA		?=	-xCORE-AVX2
  GCXX_ISA	?=	-march=haswell
- MACROS		+=	USE_INTRIN256
+ MACROS		+=	USE_INTRIN256 USE_AVX2
  YC_TARGET	?=	avx2
 
 else ifeq ($(arch),ivb)
@@ -324,7 +324,7 @@ YK_GEN_HEADERS	:=	$(addprefix $(YK_GEN_DIR)/, \
 				yask_layouts.hpp \
 				yask_grid_code.hpp) \
 				$(YK_CODE_FILE)
-YK_INC_DIRS	:=	$(INC_DIR) $(YK_LIB_SRC_DIR) $(COMM_DIR)
+YK_INC_DIRS	:=	$(INC_DIR) $(YK_LIB_SRC_DIR) $(COMM_DIR) $(COEFF_DIR)
 YK_INC_GLOB	:=	$(addsuffix /*.hpp,$(YK_INC_DIRS))
 YK_API_TEST_EXEC :=	$(BIN_OUT_DIR)/$(YK_BASE)_api_test.exe
 YK_GRID_TEST_EXEC :=	$(BIN_OUT_DIR)/$(YK_BASE)_grid_test.exe
@@ -569,6 +569,11 @@ $(YK_OBJ_DIR)/%.o: $(COMM_DIR)/%.cpp $(YK_INC_GLOB)
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
+$(YK_OBJ_DIR)/%.o: $(COEFF_DIR)/%.cpp $(YK_INC_GLOB)
+	$(MKDIR) $(dir $@)
+	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
+	@ls -l $@
+
 $(YK_OBJ_DIR)/%.o: $(YK_LIB_SRC_DIR)/%.cpp $(YK_INC_GLOB)
 	$(MKDIR) $(dir $@)
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
@@ -681,7 +686,7 @@ $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i $(INC_DIR)/*
 	$(MKDIR) $(YK_SWIG_OUT_DIR) $(PY_OUT_DIR)
 	$(SWIG) -v -DYK_MODULE=$(YK_PY_MOD_BASE) -cppext cpp \
 	  -DUSE_MPI -DMPI_VERSION=3 -DMPI_Comm=int \
-	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig \
+	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig -I$(COEFF_DIR) \
 	  -c++ -python -o $@ -outdir $(PY_OUT_DIR) -builtin $<
 
 $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.cpp
@@ -873,8 +878,8 @@ all:
 clean:
 	rm -fr $(YK_OUT_DIR)
 	rm -fv *.s
-	- find . $(COMM_DIR) -name '*.*.o' -print -delete
-	- find . $(COMM_DIR) -name '*.optrpt' -print -delete
+	- find . $(COMM_DIR) $(COEFF_DIR) -name '*.*.o' -print -delete
+	- find . $(COMM_DIR) $(COEFF_DIR) -name '*.optrpt' -print -delete
 
 # Remove executables, libs, etc.
 # Also remove logs from kernel dir, which are most likely from testing.
