@@ -489,6 +489,7 @@ endif
 
 # Add in final flags and user-added flags.
 YK_CXXFLAGS	+=	$(YK_CXXOPT) $(OMPFLAGS) $(addprefix -D,$(MACROS) $(EXTRA_MACROS)) $(EXTRA_YK_CXXFLAGS)
+YK_LIBS		+=	$(EXTRA_YK_LIBS)
 
 # Number of stencil/grid dims extracted from YASK compiler output.
 NSDIMS		:=	`awk '/NUM_STENCIL_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
