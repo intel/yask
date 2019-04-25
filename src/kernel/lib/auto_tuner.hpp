@@ -59,7 +59,7 @@ namespace yask {
         idx_t min_blks = 4;  // num number of blocks; gets set to number of region threads.
 
         // Results.
-        std::unordered_map<IdxTuple, double> results; // block-size -> perf.
+        std::unordered_map<IdxTuple, double> results; // block-size -> perf cache.
         int n2big = 0, n2small = 0, n2far = 0;
 
         // Best so far.

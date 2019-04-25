@@ -88,6 +88,13 @@ typedef int MPI_Request;
 #include <sys/syscall.h>
 #endif
 
+// Conditional inlining
+#ifdef CHECK
+#define ALWAYS_INLINE inline
+#else
+#define ALWAYS_INLINE __attribute__((always_inline)) inline
+#endif
+
 // Additional type for unsigned indices.
 typedef std::uint64_t uidx_t;
 
