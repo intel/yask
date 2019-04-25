@@ -754,8 +754,11 @@ namespace yask {
                 vp->printBasePtrs(os);
 
                 // Actual computation loop.
-                os << "\n // Inner loop.\n"
-                    " for (idx_t " << idim << " = " << istart << "; " <<
+                os << "\n // Inner loop.\n";
+                if (_dims._fold.product() == 1)
+                    os << " // Specifying SIMD here because there is no explicit vectorization.\n"
+                        "#pragma omp simd\n";
+                os << " for (idx_t " << idim << " = " << istart << "; " <<
                     idim << " < " << istop << "; " <<
                     idim << " += " << istep << ", " <<
                     vp->getElemIndex(idim) << " += " << iestep << ") {\n";
