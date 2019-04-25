@@ -24,11 +24,13 @@ IN THE SOFTWARE.
 *****************************************************************************/
 
 // Implement various example symmetric 3D stencil shapes that read and
-// write from only one 3D grid.
+// write from only one 3D grid variable.
+// All these stencils compute the average of the points read a la the
+// heat-dissipation kernels in the miniGhost benchmark.
 
 #include "Soln.hpp"
 
-class ExampleStencil : public StencilRadiusBase {
+class AvePtsStencil : public StencilRadiusBase {
 
 protected:
 
@@ -41,73 +43,64 @@ protected:
     // Vars.
     MAKE_GRID(A, t, x, y, z); // time-varying 3D grid.
 
-    // Return a coefficient.  Note: This returns completely fabricated
-    // values only for illustrative purposes; they have no mathematical
-    // significance.
-    virtual double coeff(int di, int dj, int dk) const {
-        int sumAbs = abs(di) + abs(dj) + abs(dk);
-        if (sumAbs == 0)
-            return 0.9;
-        double sumSq = double(di*di) + double(dj*dj) + double(dk*dk);
-        double num = (sumAbs % 2 == 0) ? -0.8 : 0.8;
-        return num / sumSq;
-    }
-
     // Add additional points to expression v.
-    virtual void addPoints(GridValue& v) =0;
+    // Returns number of points added.
+    virtual int addPoints(GridValue& v) =0;
 
 public:
-    ExampleStencil(const string& name, StencilList& stencils, int radius) :
+    AvePtsStencil(const string& name, StencilList& stencils, int radius) :
         StencilRadiusBase(name, stencils, radius) { }
 
     // Define equation at t+1 based on values at t.
     virtual void define() {
 
         // start with center point.
-        GridValue v = coeff(0, 0, 0) * A(t, x, y, z);
+        GridValue v = A(t, x, y, z);
 
         // Add additional points from derived class.
-        addPoints(v);
+        int pts = 1 + addPoints(v);
 
-        // define the value at t+1 to be equivalent to v.
+        // Average.
+        if (pts > 1)
+            v *= 1.0 / pts;
+        
+        // Define the value at t+1 to be equivalent to v.
         A(t+1, x, y, z) EQUALS v;
     }
 };
 
 // Add points from x, y, and z axes.
-class AxisStencil : public ExampleStencil {
+class AxisStencil : public AvePtsStencil {
 protected:
 
-    // Add additional points to v.
-    virtual void addPoints(GridValue& v)
+    // Add additional points to expression v.
+    virtual int addPoints(GridValue& v)
     {
+        int pts = 0;
         for (int r = 1; r <= _radius; r++) {
 
-            // On the axes, assume values are isotropic, i.e., the same
-            // for all points the same distance from the origin.
-            double c = coeff(r, 0, 0);
-            v += c *
-                (
-                 // x-axis.
-                 A(t, x-r, y, z) +
-                 A(t, x+r, y, z) +
+            v +=
+                // x-axis.
+                A(t, x-r, y, z) +
+                A(t, x+r, y, z) +
 
-                 // y-axis.
-                 A(t, x, y-r, z) +
-                 A(t, x, y+r, z) +
+                // y-axis.
+                A(t, x, y-r, z) +
+                A(t, x, y+r, z) +
 
-                 // z-axis.
-                 A(t, x, y, z-r) +
-                 A(t, x, y, z+r)
-                 );
+                // z-axis.
+                A(t, x, y, z-r) +
+                A(t, x, y, z+r);
+            pts += 3 * 2;
         }
+        return pts;
     }
 
 public:
     AxisStencil(StencilList& stencils, int radius=4) :
-        ExampleStencil("3axis", stencils, radius) { }
+        AvePtsStencil("3axis", stencils, radius) { }
     AxisStencil(const string& name, StencilList& stencils, int radius=4) :
-        ExampleStencil(name, stencils, radius) { }
+        AvePtsStencil(name, stencils, radius) { }
 };
 
 REGISTER_STENCIL(AxisStencil);
@@ -117,32 +110,35 @@ class DiagStencil : public AxisStencil {
 protected:
 
     // Add additional points to v.
-    virtual void addPoints(GridValue& v)
+    virtual int addPoints(GridValue& v)
     {
         // Get points from axes.
-        AxisStencil::addPoints(v);
+        int pts = AxisStencil::addPoints(v);
 
         // Add points from diagonals.
         for (int r = 1; r <= _radius; r++) {
 
-            // x-y diagonal.
-            v += coeff(-r, -r, 0) * A(t, x-r, y-r, z);
-            v += coeff(+r, -r, 0) * A(t, x+r, y-r, z);
-            v -= coeff(-r, +r, 0) * A(t, x-r, y+r, z);
-            v -= coeff(+r, +r, 0) * A(t, x+r, y+r, z);
+            v += 
+                // x-y diagonal.
+                A(t, x-r, y-r, z) + 
+                A(t, x+r, y-r, z) +
+                A(t, x-r, y+r, z) +
+                A(t, x+r, y+r, z) +
 
-            // x-z diagonal.
-            v += coeff(-r, 0, -r) * A(t, x-r, y, z-r);
-            v += coeff(+r, 0, +r) * A(t, x+r, y, z+r);
-            v -= coeff(-r, 0, +r) * A(t, x-r, y, z+r);
-            v -= coeff(+r, 0, -r) * A(t, x+r, y, z-r);
+                // x-z diagonal.
+                A(t, x-r, y, z-r) +
+                A(t, x+r, y, z+r) +
+                A(t, x-r, y, z+r) +
+                A(t, x+r, y, z-r) +
 
-            // y-z diagonal.
-            v += coeff(0, -r, -r) * A(t, x, y-r, z-r);
-            v += coeff(0, +r, +r) * A(t, x, y+r, z+r);
-            v -= coeff(0, -r, +r) * A(t, x, y-r, z+r);
-            v -= coeff(0, +r, -r) * A(t, x, y+r, z-r);
+                // y-z diagonal.
+                A(t, x, y-r, z-r) +
+                A(t, x, y+r, z+r) +
+                A(t, x, y-r, z+r) +
+                A(t, x, y+r, z-r);
+            pts += 3 * 4;
         }
+        return pts;
     }
 
 public:
@@ -159,46 +155,49 @@ class PlaneStencil : public DiagStencil {
 protected:
 
     // Add additional points to v.
-    virtual void addPoints(GridValue& v)
+    virtual int addPoints(GridValue& v)
     {
         // Get points from axes and diagonals.
-        DiagStencil::addPoints(v);
+        int pts = DiagStencil::addPoints(v);
 
         // Add remaining points on planes.
         for (int r = 1; r <= _radius; r++) {
             for (int m = r+1; m <= _radius; m++) {
 
-                // x-y plane.
-                v += coeff(-r, -m, 0) * A(t, x-r, y-m, z);
-                v += coeff(-m, -r, 0) * A(t, x-m, y-r, z);
-                v += coeff(+r, +m, 0) * A(t, x+r, y+m, z);
-                v += coeff(+m, +r, 0) * A(t, x+m, y+r, z);
-                v -= coeff(-r, +m, 0) * A(t, x-r, y+m, z);
-                v -= coeff(-m, +r, 0) * A(t, x-m, y+r, z);
-                v -= coeff(+r, -m, 0) * A(t, x+r, y-m, z);
-                v -= coeff(+m, -r, 0) * A(t, x+m, y-r, z);
+                v += 
+                    // x-y plane.
+                    A(t, x-r, y-m, z) +
+                    A(t, x-m, y-r, z) +
+                    A(t, x+r, y+m, z) +
+                    A(t, x+m, y+r, z) +
+                    A(t, x-r, y+m, z) +
+                    A(t, x-m, y+r, z) +
+                    A(t, x+r, y-m, z) +
+                    A(t, x+m, y-r, z) +
 
-                // x-z plane.
-                v += coeff(-r, 0, -m) * A(t, x-r, y, z-m);
-                v += coeff(-m, 0, -r) * A(t, x-m, y, z-r);
-                v += coeff(+r, 0, +m) * A(t, x+r, y, z+m);
-                v += coeff(+m, 0, +r) * A(t, x+m, y, z+r);
-                v -= coeff(-r, 0, +m) * A(t, x-r, y, z+m);
-                v -= coeff(-m, 0, +r) * A(t, x-m, y, z+r);
-                v -= coeff(+r, 0, -m) * A(t, x+r, y, z-m);
-                v -= coeff(+m, 0, -r) * A(t, x+m, y, z-r);
+                    // x-z plane.
+                    A(t, x-r, y, z-m) +
+                    A(t, x-m, y, z-r) +
+                    A(t, x+r, y, z+m) +
+                    A(t, x+m, y, z+r) +
+                    A(t, x-r, y, z+m) +
+                    A(t, x-m, y, z+r) +
+                    A(t, x+r, y, z-m) +
+                    A(t, x+m, y, z-r) +
 
-                // y-z plane.
-                v += coeff(0, -r, -m) * A(t, x, y-r, z-m);
-                v += coeff(0, -m, -r) * A(t, x, y-m, z-r);
-                v += coeff(0, +r, +m) * A(t, x, y+r, z+m);
-                v += coeff(0, +m, +r) * A(t, x, y+m, z+r);
-                v -= coeff(0, -r, +m) * A(t, x, y-r, z+m);
-                v -= coeff(0, -m, +r) * A(t, x, y-m, z+r);
-                v -= coeff(0, +r, -m) * A(t, x, y+r, z-m);
-                v -= coeff(0, +m, -r) * A(t, x, y+m, z-r);
+                    // y-z plane.
+                    A(t, x, y-r, z-m) +
+                    A(t, x, y-m, z-r) +
+                    A(t, x, y+r, z+m) +
+                    A(t, x, y+m, z+r) +
+                    A(t, x, y-r, z+m) +
+                    A(t, x, y-m, z+r) +
+                    A(t, x, y+r, z-m) +
+                    A(t, x, y+m, z-r);
+                pts += 3 * 8;
             }
         }
+        return pts;
     }
 
 public:
@@ -215,26 +214,29 @@ class CubeStencil : public PlaneStencil {
 protected:
 
     // Add additional points to v.
-    virtual void addPoints(GridValue& v)
+    virtual int addPoints(GridValue& v)
     {
         // Get points from planes.
-        PlaneStencil::addPoints(v);
+        int pts = PlaneStencil::addPoints(v);
 
         // Add points from rest of cube.
         for (int rx = 1; rx <= _radius; rx++)
             for (int ry = 1; ry <= _radius; ry++)
                 for (int rz = 1; rz <= _radius; rz++) {
 
-                    // Each quadrant.
-                    v += coeff(rx, ry, rz) * A(t, x+rx, y+ry, z+rz);
-                    v += coeff(rx, -ry, -rz) * A(t, x+rx, y-ry, z-rz);
-                    v -= coeff(rx, ry, -rz) * A(t, x+rx, y+ry, z-rz);
-                    v -= coeff(rx, -ry, rz) * A(t, x+rx, y-ry, z+rz);
-                    v += coeff(-rx, ry, rz) * A(t, x-rx, y+ry, z+rz);
-                    v += coeff(-rx, -ry, -rz) * A(t, x-rx, y-ry, z-rz);
-                    v -= coeff(-rx, ry, -rz) * A(t, x-rx, y+ry, z-rz);
-                    v -= coeff(-rx, -ry, rz) * A(t, x-rx, y-ry, z+rz);
+                    v +=
+                        // Each quadrant.
+                        A(t, x+rx, y+ry, z+rz) +
+                        A(t, x+rx, y-ry, z-rz) +
+                        A(t, x+rx, y+ry, z-rz) +
+                        A(t, x+rx, y-ry, z+rz) +
+                        A(t, x-rx, y+ry, z+rz) +
+                        A(t, x-rx, y-ry, z-rz) +
+                        A(t, x-rx, y+ry, z-rz) +
+                        A(t, x-rx, y-ry, z+rz);
+                    pts += 8;
                 }
+        return pts;
     }
 
 public:

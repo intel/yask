@@ -489,6 +489,7 @@ endif
 
 # Add in final flags and user-added flags.
 YK_CXXFLAGS	+=	$(YK_CXXOPT) $(OMPFLAGS) $(addprefix -D,$(MACROS) $(EXTRA_MACROS)) $(EXTRA_YK_CXXFLAGS)
+YK_LIBS		+=	$(EXTRA_YK_LIBS)
 
 # Number of stencil/grid dims extracted from YASK compiler output.
 NSDIMS		:=	`awk '/NUM_STENCIL_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
@@ -973,6 +974,8 @@ echo-settings:
 
 # Print stats on inner SIMD loops from asm file.
 # Compile with 'EXTRA_YK_CXXFLAGS=-Fa CXX_PREFIX=' to make asm file.
+# (The 'CXX_PREFIX=' part just turns off 'ccmake' because it
+# won't rebuild if only '-Fa' is added.)
 code-stats:
 	@echo "Code stats for stencil computation:"
 	$(PERL) $(GET_LOOP_STATS) -p -f=calc_loop_of_clusters factory.s

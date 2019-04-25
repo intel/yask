@@ -118,18 +118,11 @@ namespace yask {
 #endif
 
     // fence needed before loads after streaming stores.
-    inline void make_stores_visible() {
+    ALWAYS_INLINE void make_stores_visible() {
 #if defined(USE_STREAMING_STORE)
         _mm_mfence();
 #endif
     }
-
-    // conditional inlining
-#ifdef CHECK
-#define ALWAYS_INLINE inline
-#else
-#define ALWAYS_INLINE __attribute__((always_inline)) inline
-#endif
 
     // The following union is used to overlay C arrays with vector types.
     // It must be an aggregate type to allow aggregate initialization,
@@ -191,7 +184,7 @@ namespace yask {
         }
 
         // get length.
-        inline int get_num_elems() const {
+        ALWAYS_INLINE int get_num_elems() const {
             return VLEN;
         }
 
