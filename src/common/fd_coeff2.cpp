@@ -52,7 +52,7 @@ namespace yask {
         vector<double> pts;
         for (int i = -radius; i <= radius; i++)
             pts.push_back(i);
-        assert(sizeof(pts) == size_t(radius * 2 + 1));
+        assert(pts.size() == size_t(radius * 2 + 1));
         return get_arbitrary_fd_coefficients(derivative_order, 0, pts);
     }
     vector<double> get_forward_fd_coefficients(int derivative_order, int accuracy_order) {
