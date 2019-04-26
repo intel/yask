@@ -320,6 +320,7 @@ namespace yask {
             dot     | DOT-language description.
             dot-lite| DOT-language description of grid accesses only.
             pseudo  | Human-readable pseudo-code (for debug).
+            pseudo-long  | Human-readable pseudo-code with intermediate variables.
 
             Progress text will be written to the output stream set via set_debug_output().
 
