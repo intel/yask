@@ -52,6 +52,10 @@ int main() {
     auto y = fac.new_domain_index("y");
     auto z = fac.new_domain_index("z");
 
+    // Explicitly set the stencil dims in the solution.
+    soln->set_step_dim(t);
+    soln->set_domain_dims({x, z, y});
+    
     // Create a grid var.
     auto g1 = soln->new_grid("test_grid", {t, x, y, z});
 

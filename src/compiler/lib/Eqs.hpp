@@ -25,11 +25,10 @@ IN THE SOFTWARE.
 
 ///////// Classes for equations, equation bundles, and bundle packs. ////////////
 
-#ifndef EQS_HPP
-#define EQS_HPP
+#pragma once
 
 #include "Expr.hpp"
-#include "Grid.hpp"
+#include "Settings.hpp"
 
 using namespace std;
 
@@ -700,4 +699,3 @@ namespace yask {
 
 } // namespace yask.
 
-#endif

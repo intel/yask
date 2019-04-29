@@ -155,24 +155,22 @@ namespace yask {
         // Start with halos plus WF exts.
         Indices mp = halos.addElements(wf_exts);
 
-        // For scratch grids, halo area must be written to.  Halo is sum
-        // of dependent's write halo and depender's read halo, but these
-        // two components are not stored individually.  Write halo will
-        // be expanded to full vec len during computation, requiring
+        // For any grid, reads will be expanded to full vec-len during
+        // computation.  For scratch grids, halo area must be written to.
+        // Halo is sum of dependent's write halo and depender's read halo,
+        // but these two components are not stored individually.  Write halo
+        // will be expanded to full vec len during computation, requiring
         // load from read halo beyond full vec len.  Worst case is when
-        // write halo is one and rest is read halo.  So if there is a
-        // halo and/or wf-ext, padding should be that plus all but one
-        // element of a vector. In addition, this vec-len should be the
-        // global one, not the one for this grid to handle the case where
-        // this grid is not vectorized.
+        // write halo is one and rest is read halo.  So, min padding should
+        // be halos + wave-front exts + vec-len - 1. This vec-len should be
+        // the solution one, not the one for this grid to handle the case
+        // where this grid is not vectorized.
         for (int i = 0; i < _ggb->get_num_dims(); i++) {
-            if (mp[i] >= 1) {
-                auto& dname = _ggb->get_dim_name(i);
-                auto* p = dims->_fold_pts.lookup(dname);
-                if (p) {
-                    assert (*p >= 1);
-                    mp[i] += *p - 1;
-                }
+            auto& dname = _ggb->get_dim_name(i);
+            auto* p = dims->_fold_pts.lookup(dname); // solution vec-len.
+            if (p) {
+                assert (*p >= 1);
+                mp[i] += *p - 1;
             }
         }
         return mp;

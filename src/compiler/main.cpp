@@ -73,9 +73,21 @@ void usage(const string& cmd) {
         " -elem-bytes <n>"
         "    Set number of bytes in each FP element (default=" << settings._elem_bytes << ").\n"
         "      Currently, only 4 (single-precision) and 8 (double) are allowed.\n"
+        " -domain-dims <dim>,<dim>,...\n"
+        "    Explicitly name the domain dimensions and set their order.\n"
+        "    In addition, domain dimensions are added when grid variables are encountered\n"
+        "      in the stencil DSL code.\n"
+        "    Either way, the last unique domain dimension specified will become the 'inner' or\n"
+        "      'unit-stride' dimension in memory layouts. Thus, this option can be used to override\n"
+        "      the default layout order.\n"
+        "    The domain-dimension order also affects loop nesting and default rank layout.\n"
+        " -step-dim <dim>\n"
+        "    Explicitly set the step dimension.\n"
+        "    By default, the step dimension is defined when grid variables are encountered\n"
+        "      in the stencil DSL code.\n"
         " -fold <dim>=<size>,...\n"
         "    Set number of elements in each given dimension in a vector block.\n"
-        "    Default depends on -elem-bytes setting and print format (below).\n"
+        "    Default depends on -elem-bytes setting, domain-dimension order, and print format (below).\n"
         "    If product of fold lengths does not equal SIMD vector length for print\n"
         "      formats with explicit lengths, lengths will adjusted as needed.\n"
         " -cluster <dim>=<size>,...\n"
@@ -237,20 +249,34 @@ void parseOpts(int argc, const char* argv[])
                     settings._gridRegex = argop;
                 else if (opt == "-eq-bundles")
                     settings._eqBundleTargets = argop;
+                else if (opt == "-step-dim")
+                    settings._stepDim = argop;
+                else if (opt == "-domain-dims") {
+                    settings._domainDims.clear();
+                    
+                    // example: y,z
+                    ArgParser ap;
+                    ap.parseList
+                        (argop,
+                         [&](const string& dname) {
+                             settings._domainDims.push_back(dname);
+                         });
+                }
                 else if (opt == "-fold" || opt == "-cluster") {
 
                     // example: x=4,y=2
                     ArgParser ap;
                     ap.parseKeyValuePairs
-                        (argop, [&](const string& key, const string& value) {
-                            int size = atoi(value.c_str());
+                        (argop,
+                         [&](const string& key, const string& value) {
+                             int size = atoi(value.c_str());
 
-                            // set dim in tuple.
-                            if (opt == "-fold")
-                                settings._foldOptions.addDimBack(key, size);
-                            else
-                                settings._clusterOptions.addDimBack(key, size);
-                        });
+                             // set dim in tuple.
+                             if (opt == "-fold")
+                                 settings._foldOptions.addDimBack(key, size);
+                             else
+                                 settings._clusterOptions.addDimBack(key, size);
+                         });
                 }
 
                 // Print options w/format & filename args.

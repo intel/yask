@@ -154,7 +154,8 @@ typedef std::uint64_t uidx_t;
 #ifdef TRACE
 #define TRACE_MSG0(os, msg) do { if (opts->_trace) {        \
         KernelEnv::set_debug_lock();                        \
-        (os) << "YASK: " << msg << std::endl << std::flush; \
+        (os) << "YASK: " << std::boolalpha << std::dec <<   \
+            msg << std::endl << std::flush;                 \
         KernelEnv::unset_debug_lock();                      \
         } } while(0)
 #else

@@ -97,8 +97,6 @@ namespace yask {
             auto& dname = dim.getName();
             os << "#define DOMAIN_DIM_IDX_" << dname << " (" << (i++) << ")\n";
         }
-        os << "\n// Number of stencil dimensions (step and domain):\n"
-            "#define NUM_STENCIL_DIMS " << _dims._stencilDims.size() << "\n";
         i = 0;
         for (auto& dim : _dims._stencilDims.getDims()) {
             auto& dname = dim.getName();
@@ -109,8 +107,13 @@ namespace yask {
             int ndims = gp->get_num_dims();
             gdims = max(gdims, ndims);
         }
+        auto nsdims = _dims._stencilDims.size();
+        os << "\n// Number of stencil dimensions (step and domain):\n"
+            "#define NUM_STENCIL_DIMS " << nsdims << endl;
         os << "\n// Max number of grid dimensions:\n"
             "#define NUM_GRID_DIMS " << gdims << endl;
+        os << "\n// Max of stencil and grid dims:\n"
+            "#define NUM_STENCIL_AND_GRID_DIMS " << max<int>(gdims, nsdims) << endl;
 
         os << "\n// Number of stencil equations:\n"
             "#define NUM_STENCIL_EQS " << _stencil.get_num_equations() << endl;

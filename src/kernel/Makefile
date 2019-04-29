@@ -74,7 +74,7 @@ else ifneq ($(findstring iso3dfd,$(YC_STENCIL)),)
  MACROS			+=	MAX_EXCH_DIST=1
  def_pad_args		:=	-ep 1
  ifeq ($(arch),knl)
-  fold_4byte		:=	x=2,y=8
+  fold			:=	x=2,y=8
   cluster		:=	x=2
   def_block_args	:=	-bx 160 -by 256 -bz 96
   pfd_l1		:=	1
@@ -220,36 +220,8 @@ omp_misc_schedule	?=	guided
 def_thread_divisor	?=	1
 def_block_threads	?=	2
 def_block_args		?=	-b 32
-cluster			?=	x=1
 pfd_l1			?=	0
 pfd_l2			?=	2
-
-# default folding depends on HW vector size.
-ifneq ($(findstring INTRIN512,$(MACROS)),)  # 512 bits.
-
- # 16 SP floats.
- fold_4byte	?=	x=4,y=4
-
- # 8 DP floats.
- fold_8byte	?=	x=2,y=4
-
-else ifneq ($(findstring INTRIN256,$(MACROS)),)	 # 256 bits.
-
- # 8 SP floats.
- fold_4byte	?=	x=8
-
- # 4 DP floats.
- fold_8byte	?=	x=4
-
-else
-
- fold_4byte	?=	x=1
- fold_8byte	?=	x=1
-
-endif # not 512 bits.
-
-# Select fold based on size of reals.
-fold	:=	$(fold_$(real_bytes)byte) # e.g., fold_4byte
 
 ######## End of vars that control the function and performance of the kernel.
 
@@ -262,7 +234,13 @@ include $(YASK_BASE)/src/common/common.mk
 # Vars starting with 'YK_' apply to the stencil kernel.
 
 # Flags passed to stencil compiler.
-YC_FLAGS	+=	-stencil $(YC_STENCIL) -elem-bytes $(real_bytes) -cluster $(cluster) -fold $(fold)
+YC_FLAGS	+=	-stencil $(YC_STENCIL) -elem-bytes $(real_bytes)
+ifneq ($(fold),)
+ YC_FLAGS	+=	-fold $(fold)
+endif
+ifneq ($(cluster),)
+ YC_FLAGS	+=	-cluster $(cluster)
+endif
 ifneq ($(eqs),)
  YC_FLAGS	+=	-eq-bundles $(eqs)
 endif
@@ -274,6 +252,12 @@ ifneq ($(halo),)
 endif
 ifneq ($(step_alloc),)
  YC_FLAGS	+=	-step-alloc $(step_alloc)
+endif
+ifneq ($(domain_dims),)
+ YC_FLAGS	+=	-domain-dims $(domain_dims)
+endif
+ifneq ($(step_dim),)
+ YC_FLAGS	+=	-step-dim $(step_dim)
 endif
 
 # Kernel base names.
@@ -493,7 +477,7 @@ YK_LIBS		+=	$(EXTRA_YK_LIBS)
 
 # Number of stencil/grid dims extracted from YASK compiler output.
 NSDIMS		:=	`awk '/NUM_STENCIL_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
-NGDIMS		:=	`awk '/NUM_GRID_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
+NGDIMS		:=	`awk '/NUM_STENCIL_AND_GRID_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
 
 ######## Loop-compiler configuration:
 # The loop indices range from 0..N-1.
@@ -832,9 +816,15 @@ api-tests:
 # run the tests from the top-level Makefile.
 STENCIL_TEST_ARGS := yc-and-yk-test real_bytes=8 allow_new_grid_types=0
 stencil-tests:
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_empty step_dim=t domain_dims=d1,d2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_empty_2d
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_1d fold=x=4
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_2d fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_3d fold=x=2,z=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_2d arch=intel64 fold=x=3,y=2 domain_dims=y,x
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_3d fold=x=2,z=2 domain_dims=z,y,x
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_partial_3d fold=x=2,z=2 domain_dims=x,z,y
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_stream_3d radius=5
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_reverse_2d radius=1
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_func_1d fold=x=4
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_dep_1d fold=x=4
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_dep_2d fold=x=2,y=2
@@ -847,7 +837,7 @@ stencil-tests:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_scratch_1d fold=x=4
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_scratch_3d fold=x=2,z=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_scratch_subdomain_1d fold=x=4
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=iso3dfd radius=3 fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=iso3dfd radius=3 fold=x=2,y=2 domain_dims=z,x,y
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=iso3dfd_sponge radius=3 fold=x=2,z=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=3axis fold=x=2,y=2 cluster=x=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=3axis fold=x=2,y=2 cluster=z=2,y=2

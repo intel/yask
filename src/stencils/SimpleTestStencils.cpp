@@ -35,12 +35,16 @@ class TestBase : public StencilRadiusBase {
 protected:
 
     // Indices & dimensions.
+    // Not all these will be used in all tests.
     MAKE_STEP_INDEX(t);           // step in time dim.
     MAKE_DOMAIN_INDEX(w);         // spatial dim.
     MAKE_DOMAIN_INDEX(x);         // spatial dim.
     MAKE_DOMAIN_INDEX(y);         // spatial dim.
     MAKE_DOMAIN_INDEX(z);         // spatial dim.
 
+    // Define some stencils in different dimensions.
+    // These will be asymmetrical if any of the '*_ext' params are not 0;
+    
     // Define simple stencil from var 'V' at 't0' centered around 'x0'.
     // Extend given radius left and/or right w/'*_ext'.
     virtual GridValue def_1d(Grid& V, const GridIndex& t0, const GridIndex& x0,
@@ -52,9 +56,9 @@ protected:
         return v / n;
     }
 
-    // Define simple stencil from scratch var 'V' centered around 'x0'.
-    // Similar to 'def_1d()', but doesn't use time var.
-    virtual GridValue def_scratch_1d(Grid& V, const GridIndex& x0,
+    // Define simple stencil from scratch or read-only var 'V' centered
+    // around 'x0'.  Similar to 'def_1d()', but doesn't use step var.
+    virtual GridValue def_no_t_1d(Grid& V, const GridIndex& x0,
                                      int left_ext, int right_ext) {
         GridValue v;
         int n = 1;
@@ -80,6 +84,23 @@ protected:
         return v / n;
     }    
 
+    // Define simple stencil from scratch or read-only var 'V' at 't0'
+    // centered around 'x0', 'y0'.  Extend given radius left and/or right
+    // w/'*_ext'.
+    virtual GridValue def_no_t_2d(Grid& V,
+                                     const GridIndex& x0,
+                                     int x_left_ext, int x_right_ext,
+                                     const GridIndex& y0,
+                                     int y_left_ext, int y_right_ext) {
+        GridValue v;
+        int n = 0;
+        for (int i = -_radius - x_left_ext; i <= _radius + x_right_ext; i++)
+            for (int j = -_radius - y_left_ext; j <= _radius + y_right_ext; j++, n++)
+                if (i * j == 0 || i == j)
+                    v += V(x0+i, y0+j);
+        return v / n;
+    }    
+
     // Define simple stencil from var 'V' at 't0' centered around 'x0', 'y0', 'z0'.
     // Extend given radius left and/or right w/'*_ext'.
     // Use some points from the entire rectangular polytope, not just on the axes.
@@ -100,10 +121,10 @@ protected:
         return v / n;
     }
 
-    // Define simple stencil from scratch var 'V' centered around 'x0', 'y0', 'z0'.
-    // Extend given radius left and/or right w/'*_ext'.
-    // Use some points from the entire rectangular polytope, not just on the axes.
-    virtual GridValue def_scratch_3d(Grid& V,
+    // Define simple stencil from scratch or read-only var 'V' centered
+    // around 'x0', 'y0', 'z0'.  Extend given radius left and/or right
+    // w/'*_ext'.
+    virtual GridValue def_no_t_3d(Grid& V,
                                      const GridIndex& x0,
                                      int x_left_ext, int x_right_ext,
                                      const GridIndex& y0,
@@ -151,6 +172,7 @@ public:
         StencilRadiusBase(name, stencils, radius) { }
 };
 
+// Simple 1D test.
 class Test1dStencil : public TestBase {
 
 protected:
@@ -173,6 +195,7 @@ public:
 
 REGISTER_STENCIL(Test1dStencil);
 
+// Simple 2D test.
 class Test2dStencil : public TestBase {
 
 protected:
@@ -195,6 +218,7 @@ public:
 
 REGISTER_STENCIL(Test2dStencil);
 
+// Simple 3D test.
 class Test3dStencil : public TestBase {
 
 protected:
@@ -217,6 +241,7 @@ public:
 
 REGISTER_STENCIL(Test3dStencil);
 
+// Simple 4D test.
 class Test4dStencil : public TestBase {
 
 protected:
@@ -238,6 +263,44 @@ public:
 };
 
 REGISTER_STENCIL(Test4dStencil);
+
+// Test vars that don't cover all domain dims.
+class TestPartialStencil3 : public TestBase {
+
+protected:
+
+    // Vars.
+    MAKE_GRID(A, t, x, y, z); // time-varying grid.
+    MAKE_GRID(B, x);
+    MAKE_GRID(C, y);
+    MAKE_GRID(D, z);
+    MAKE_GRID(E, x, y);
+    MAKE_GRID(F, y, z);
+    MAKE_GRID(G, z, y);
+    MAKE_GRID(H, y, z, x);      // different order.
+
+public:
+
+    TestPartialStencil3(StencilList& stencils, int radius=2) :
+        TestBase("test_partial_3d", stencils, radius) { }
+
+    // Define equation to apply to all points in 'A' grid.
+    virtual void define() {
+
+        // define the value at t+1 using asymmetric stencil.
+        A(t+1, x, y, z) EQUALS
+            def_3d(A, t, x, 0, 2, y, 4, 3, z, 2, 1) +
+            def_no_t_1d(B, x, 0, 1) +
+            def_no_t_1d(C, y, 1, 0) +
+            def_no_t_1d(D, z, 0, 0) +
+            def_no_t_2d(E, x, 0, 0, y, 1, 0) +
+            def_no_t_2d(F, y, 0, 1, z, 0, 0) +
+            def_no_t_2d(G, z, 1, 0, y, 0, 1) +
+            def_no_t_3d(H, y, 1, 0, z, 0, 1, x, 1, 0);
+    }
+};
+
+REGISTER_STENCIL(TestPartialStencil3);
 
 // Test misc indices.
 class TestMisc2dStencil : public StencilRadiusBase {
@@ -304,7 +367,7 @@ protected:
 public:
 
     StreamStencil(StencilList& stencils, int radius=2) :
-        StencilRadiusBase("test_stream", stencils, radius) { }
+        StencilRadiusBase("test_stream_3d", stencils, radius) { }
     virtual ~StreamStencil() { }
 
     // Define equation to read '_radius' values and write one.
@@ -312,7 +375,7 @@ public:
 
         GridValue v = constNum(1.0);
 
-        // Add '_radius' values from past time-steps to ensure no spatial locality.
+        // Add '_radius' values from past time-steps.
         for (int r = 0; r < _radius; r++)
             v += A(t-r, x, y, z);
 
@@ -336,7 +399,7 @@ protected:
 public:
 
     TestReverseStencil(StencilList& stencils, int radius=2) :
-        TestBase("test_reverse", stencils, radius) { }
+        TestBase("test_reverse_2d", stencils, radius) { }
 
     // Define equation to do simple test.
     virtual void define() {
@@ -427,7 +490,7 @@ public:
         B(x) EQUALS def_1d(A, t, x, 1, 0);
 
         // Set 'A' from scratch var values.
-        A(t+1, x) EQUALS def_scratch_1d(B, x-4, 2, 3) + def_scratch_1d(B, x+6, 0, 1);
+        A(t+1, x) EQUALS def_no_t_1d(B, x-4, 2, 3) + def_no_t_1d(B, x+6, 0, 1);
     }
 };
 
@@ -462,8 +525,8 @@ public:
 
         // Update A from scratch vars.
         A(t+1, x, y, z) EQUALS A(t, x, y, z) +
-            def_scratch_3d(t1, x, 2, 0, y, 0, 1, z, 1, 0) +
-            def_scratch_3d(t3, x, 1, 0, y, 0, 1, z, 0, 2);
+            def_no_t_3d(t1, x, 2, 0, y, 0, 1, z, 1, 0) +
+            def_no_t_3d(t3, x, 1, 0, y, 0, 1, z, 0, 2);
     }
 };
 
@@ -626,7 +689,7 @@ public:
         Condition sd0 = (x >= first_index(x) + 5) && (x <= last_index(x) - 3);
         
         // Define next values for 'A' from scratch var values.
-        auto v = def_scratch_1d(B, x-6, 2, 3) - def_scratch_1d(B, x+7, 0, 2);
+        auto v = def_no_t_1d(B, x-6, 2, 3) - def_no_t_1d(B, x+7, 0, 2);
         A(t+1, x) EQUALS v IF sd0;
         A(t+1, x) EQUALS -v IF !sd0;
     }
@@ -658,24 +721,36 @@ public:
 
 REGISTER_STENCIL(TestFuncStencil1);
 
-// A stencil that has grids, but no stencil equation.
-class TestEmptyStencil1 : public StencilBase {
+// A stencil that has grids but no stencil equation.
+class TestEmptyStencil2 : public TestBase {
 
 protected:
 
-    // Indices & dimensions.
-    MAKE_STEP_INDEX(t);           // step in time dim.
-    MAKE_DOMAIN_INDEX(x);         // spatial dim.
-
     // Vars.
-    MAKE_GRID(A, t, x); // time-varying grid.
+    MAKE_GRID(A, t, x, y); // time-varying grid.
 
 public:
 
-    TestEmptyStencil1(StencilList& stencils) :
-        StencilBase("test_empty1", stencils) { }
+    TestEmptyStencil2(StencilList& stencils, int radius=1) :
+        TestBase("test_empty_2d", stencils, radius) { }
 
     virtual void define() { }
 };
 
-REGISTER_STENCIL(TestEmptyStencil1);
+REGISTER_STENCIL(TestEmptyStencil2);
+
+// A stencil that no grids and no stencil equation.
+// Kernel must be built with domain_dims and step_dim options.
+class TestEmptyStencil0: public TestBase {
+
+protected:
+
+public:
+
+    TestEmptyStencil0(StencilList& stencils, int radius=1) :
+        TestBase("test_empty", stencils, radius) { }
+
+    virtual void define() { }
+};
+
+REGISTER_STENCIL(TestEmptyStencil0);

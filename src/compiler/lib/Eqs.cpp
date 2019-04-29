@@ -202,11 +202,33 @@ namespace yask {
 
             // Scratch grid must not have a condition.
             if (cond1 && og1->isScratch())
-                THROW_YASK_EXCEPTION("Error: scratch-grid equation '" + eq1->makeQuotedStr() +
-                                     "' cannot have a domain condition");
+                THROW_YASK_EXCEPTION("Error: scratch-grid equation " + eq1->makeQuotedStr() +
+                                     " cannot have a domain condition");
             if (stcond1 && og1->isScratch())
-                THROW_YASK_EXCEPTION("Error: scratch-grid equation '" + eq1->makeQuotedStr() +
-                                     "' cannot have a step condition");
+                THROW_YASK_EXCEPTION("Error: scratch-grid equation " + eq1->makeQuotedStr() +
+                                     " cannot have a step condition");
+
+            // LHS must have all domain dims.
+            for (auto& dd : dims._domainDims.getDims()) {
+                auto& dname = dd.getName();
+                NumExprPtr dexpr = op1->getArg(dname);
+                if (!dexpr)
+                    THROW_YASK_EXCEPTION("Error: grid equation " + eq1->makeQuotedStr() +
+                                         " does not use domain-dimension '" + dname +
+                                         "' on LHS");
+            }
+
+            // LHS of non-scratch must have step dim and vice-versa.
+            if (!og1->isScratch()) {
+                if (!step_expr1)
+                    THROW_YASK_EXCEPTION("Error: non-scratch grid equation " + eq1->makeQuotedStr() +
+                                         " does not use step-dimension '" + stepDim +
+                                         "' on LHS");
+            } else {
+                if (step_expr1)
+                    THROW_YASK_EXCEPTION("Error: scratch-grid equation " + eq1->makeQuotedStr() +
+                                         " cannot use step-dimension '" + stepDim + "'");
+            }
 
             // Check LHS grid dimensions and associated args.
             for (int di = 0; di < og1->get_num_dims(); di++) {
@@ -215,13 +237,6 @@ namespace yask {
 
                 // Check based on dim type.
                 if (dn == stepDim) {
-
-                    // Scratch grid must not use step dim.
-                    if (og1->isScratch())
-                        THROW_YASK_EXCEPTION("Error: scratch-grid '" + og1->getName() +
-                                             "' cannot use '" + dn + "' dim");
-
-                    // Validity of step-dim expression in non-scratch grids is checked later.
                 }
 
                 // LHS must have simple indices in domain dims.
