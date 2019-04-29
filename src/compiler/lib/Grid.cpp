@@ -354,15 +354,16 @@ namespace yask {
 #endif
             auto& h2 = hi.second;
 
-            // First and last step-dim.
-            int first_ofs = -1, last_ofs = -1;
+            // First and last step-dim found.
+            const int unset = -9999;
+            int first_ofs = unset, last_ofs = unset;
 
             // left and right.
             for (auto& i : h2) {
                 //auto left = i.first;
                 auto& h3 = i.second; // map of step-dims to halos.
 
-                // Step-dim ofs.
+                // Step-dim offsets.
                 for (auto& j : h3) {
                     auto ofs = j.first;
                     auto& halo = j.second; // halo tuple at step-val 'ofs'.
@@ -375,7 +376,7 @@ namespace yask {
 #endif
 
                         // Update vars.
-                        if (first_ofs < 0)
+                        if (first_ofs == unset)
                             first_ofs = last_ofs = ofs;
                         else {
                             first_ofs = min(first_ofs, ofs);
@@ -390,9 +391,11 @@ namespace yask {
 #endif
 
             // Only need to process if >1 offset.
-            if (last_ofs >= 0 && first_ofs >= 0 && last_ofs > first_ofs) {
+            if (last_ofs != unset && first_ofs != unset && last_ofs != first_ofs) {
 
                 // Default step-dim size is range of step offsets.
+                // For example, if equation touches 't' through 't+2',
+                // 'sz' is 3.
                 int sz = last_ofs - first_ofs + 1;
 
                 // First and last largest halos.
