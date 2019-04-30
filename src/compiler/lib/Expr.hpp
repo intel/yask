@@ -58,10 +58,6 @@ using namespace std;
 
 namespace yask {
 
-    // Collections of integers, used for dimensions, indices, etc.
-    typedef Scalar<int> IntScalar;
-    typedef Tuple<int> IntTuple;
-
     // Forward-decls of expressions.
     class Expr;
     typedef shared_ptr<Expr> ExprPtr;

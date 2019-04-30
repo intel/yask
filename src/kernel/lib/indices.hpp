@@ -27,7 +27,6 @@ IN THE SOFTWARE.
 
 namespace yask {
 
-    typedef Tuple<idx_t> IdxTuple;
     typedef std::vector<idx_t> GridIndices;
     typedef std::vector<idx_t> GridDimSizes;
     typedef std::vector<std::string> GridDimNames;

@@ -159,4 +159,5 @@ namespace yask {
     const char* yask_exception::get_message() const {
         return _msg.c_str();
     }
+
 }

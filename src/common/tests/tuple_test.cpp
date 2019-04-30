@@ -32,9 +32,6 @@ IN THE SOFTWARE.
 using namespace std;
 using namespace yask;
 
-typedef Tuple<int> IntTuple;
-
-
 void ttest(bool firstInner) {
 
     ostream& os = cout;

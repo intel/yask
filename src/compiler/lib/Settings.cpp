@@ -116,31 +116,28 @@ namespace yask {
             THROW_YASK_EXCEPTION("Error: no domain dimension(s) defined");
         }
 
-        // Use last domain dim as inner one.
+        // Set specific positional dims.
+        _outerDim = _domainDims.getDimName(0);
         _innerDim = _domainDims.getDimName(_domainDims.getNumDims() - 1);
-
-        // Layout of fold.
-        _fold.setFirstInner(settings._firstInner);
-        _foldGT1.setFirstInner(settings._firstInner);
+        string _nearInnerDim = _domainDims.getNumDims() >= 2 ?
+            _domainDims.getDimName(_domainDims.getNumDims() - 2) : _outerDim;
 
         os << "Step dimension: " << _stepDim << endl;
         os << "Domain dimension(s): " << _domainDims.makeDimStr() << endl;
 
-        // Extract certain fold lengths based on cmd-line options.
+        // Extract domain fold lengths based on cmd-line options.
         IntTuple foldOpts;
-        for (auto& dim : _fold.getDims()) {
+        for (auto& dim : _domainDims.getDims()) {
             auto& dname = dim.getName();
 
-            // Was folding specified?
+            // Was folding specified for this dim?
             auto* p = settings._foldOptions.lookup(dname);
             if (!p)
                 continue;
-
-            // Nothing to do for fold < 2.
             int sz = *p;
-            if (sz <= 1)
+            if (sz < 1)
                 continue;
-
+            
             // Set size.
             _fold.setVal(dname, sz);
             foldOpts.addDimBack(dname, sz);
@@ -149,50 +146,83 @@ namespace yask {
         if (foldOpts.getNumDims())
             os << " Requested vector-fold dimension(s) and point-size(s): " <<
                 _fold.makeDimValStr(" * ") << endl;
+        else
+            os << " No explicitly-requested vector-folding.\n";
 
-        // Make sure folding exactly covers vlen (unless vlen is 1).
+        // If needed, adjust folding to exactly cover vlen unless vlen is 1.
         // If vlen is 1, we will allow any folding.
         if (vlen > 1 && _fold.product() != vlen) {
-            if (_fold.product() > 1)
+            if (foldOpts.getNumDims())
                 os << "Notice: adjusting requested fold to achieve SIMD length of " <<
                     vlen << ".\n";
 
-            // Heuristics to determine which dims to modify.
-            IntTuple targets = foldOpts; // start with specified ones >1.
-            const int nTargets = is_folding_efficient ? 2 : 1; // desired num targets.
-            int fdims = _fold.getNumDims();
-            if (targets.getNumDims() < nTargets && fdims > 1)
-                targets.addDimBack(_fold.getDim(fdims - 2)); // 2nd from last.
-            if (targets.getNumDims() < nTargets && fdims > 2)
-                targets.addDimBack(_fold.getDim(fdims - 3)); // 3rd from last.
-            if (targets.getNumDims() < nTargets)
-                targets = _fold; // all.
-            assert(targets.getNumDims() > 0);
+            // If 1D, there is only one option.
+            if (_domainDims.getNumDims() == 1)
+                _fold[_innerDim] = vlen;
 
-            // Heuristic: incrementally increase targets by powers of 2.
-            _fold.setValsSame(1);
-            for (int n = 1; _fold.product() < vlen; n++) {
-                for (auto i : targets.getDims()) {
-                    auto& dname = i.getName();
-                    if (_fold.product() < vlen)
-                        _fold.setVal(dname, 1 << n);
+            // If 2D+, adjust folding.
+            else {
+
+                // Determine inner-dim size separately because
+                // vector-folding works best when folding is
+                // applied in non-inner dims.
+                int inner_sz = 1;
+
+                // If specified dims are within vlen, try to use
+                // specified inner-dim.
+                if (foldOpts.product() < vlen) {
+
+                    // Inner-dim fold-size requested and a factor of vlen?
+                    auto* p = foldOpts.lookup(_innerDim);
+                    if (p && (vlen % *p == 0))
+                        inner_sz = *p;
                 }
-            }
 
-            // Still wrong?
-            if (_fold.product() != vlen) {
-                _fold.setValsSame(1);
+                // Remaining vlen to be split over non-inner dims.
+                int upper_sz = vlen / inner_sz;
 
-                // Heuristic: set first target to vlen.
-                if (targets.getNumDims()) {
-                    auto& dname = targets.getDim(0).getName();
-                    _fold.setVal(dname, vlen);
+                // Tuple for non-inner dims.
+                IntTuple innerFolds;
+                
+                // If we only want 1D folding, just set one to
+                // needed value.
+                if (!is_folding_efficient)
+                    innerFolds.addDimBack(_nearInnerDim, upper_sz);
+
+                // Else, make a tuple of hints to use for setting non-inner
+                // sizes.
+                else {
+                    IntTuple innerOpts;
+                    for (auto& dim : _domainDims.getDims()) {
+                        auto& dname = dim.getName();
+                        if (dname == _innerDim)
+                            continue;
+                        auto* p = foldOpts.lookup(dname);
+                        int sz = p ? *p : 0; // 0 => not specified.
+                        innerOpts.addDimFront(dname, sz); // favor more inner ones.
+                    }
+                    assert(innerOpts.getNumDims() == _domainDims.getNumDims() - 1);
+
+                    // Get final size of non-inner dims.
+                    innerFolds = innerOpts.get_compact_factors(upper_sz);
                 }
-            }
 
-            // Still wrong?
+                // Put them into the fold.
+                for (auto& dim : _domainDims.getDims()) {
+                    auto& dname = dim.getName();
+                    if (dname == _innerDim)
+                        _fold[dname] = inner_sz;
+                    else if (innerFolds.lookup(dname))
+                        _fold[dname] = innerFolds[dname];
+                    else
+                        _fold[dname] = 1;
+                }
+                assert(_fold.getNumDims() == _domainDims.getNumDims());
+            }            
+
+            // Check it.
             if (_fold.product() != vlen)
-                THROW_YASK_EXCEPTION("Internal error: cannot set folding for VLEN " +
+                THROW_YASK_EXCEPTION("Internal error: failed to set folding for VLEN " +
                                      to_string(vlen));
         }
 
@@ -205,6 +235,10 @@ namespace yask {
         }
         os << " Vector-fold dimension(s) and point-size(s): " <<
             _fold.makeDimValStr(" * ") << endl;
+
+        // Layout used inside each folded vector.
+        _fold.setFirstInner(settings._firstInner);
+        _foldGT1.setFirstInner(settings._firstInner);
 
         // Checks for unaligned loads.
         if (settings._allowUnalignedLoads) {

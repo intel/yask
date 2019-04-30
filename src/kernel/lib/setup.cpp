@@ -149,78 +149,9 @@ namespace yask {
         
 #else
         // Set number of ranks in each dim if any is unset (zero).
-        if (!opts->_num_ranks.product()) {
-
-            // Make list of factors of number of ranks.
-            vector<idx_t> facts;
-            for (idx_t n = 1; n <= nr; n++)
-                if (nr % n == 0)
-                    facts.push_back(n);
-
-            // Keep track of "best" result, where the best is most compact.
-            IdxTuple best;
-
-            // Try every combo of N-1 factors, where N is the number of dims.
-            // TODO: make more efficient--need algorithm to directly get
-            // set of N factors that are valid.
-            IdxTuple combos;
-            DOMAIN_VAR_LOOP(i, j) {
-                auto& dname = domain_dims.getDimName(j);
-
-                // Number of factors.
-                auto sz = facts.size();
-
-                // Set first number of options 1 because it will be
-                // calculated based on the other values, i.e., we don't need
-                // to search over first dim.  Also don't need to search any
-                // specified value.
-                if (j == 0 || opts->_num_ranks[j])
-                    sz = 1;
-                
-                combos.addDimBack(dname, sz);
-            }
-            TRACE_MSG("setupRank(): checking " << combos.product() << " rank layouts");
-            combos.visitAllPoints
-                ([&](const IdxTuple& combo, size_t idx)->bool {
-
-                     // Make tuple w/factors at given indices.
-                     auto num_ranks = combo.mapElements([&](idx_t in) {
-                                                            return facts.at(in);
-                                                        });
-
-                     // Override with specified values.
-                     DOMAIN_VAR_LOOP(i, j) {
-                         if (opts->_num_ranks[j])
-                             num_ranks[j] = opts->_num_ranks[j];
-                         else if (j == 0)
-                             num_ranks[j] = -1; // -1 => needs to be calculated.
-                     }
-
-                     // Replace first factor with computed value if not set.
-                     if (num_ranks[0] == -1) {
-                         num_ranks[0] = 1;
-                         num_ranks[0] = nr / num_ranks.product();
-                     }
-
-                     // Valid?
-                     if (num_ranks.product() == nr) {
-                         TRACE_MSG("  valid layout " << num_ranks.makeDimValStr(" * ") <<
-                                   " has max size " << num_ranks.max());
-
-                         // Best so far?
-                         // Layout is better if max size is smaller.
-                         if (best.size() == 0 ||
-                             num_ranks.max() < best.max())
-                             best = num_ranks;
-                     }
-                     
-                     return true; // keep looking.
-                 });
-            assert(best.size());
-            assert(best.product());
-            TRACE_MSG("  layout " << best.makeDimValStr(" * ") << " selected");
-            opts->_num_ranks = best;
-        }
+        TRACE_MSG("rank layout " << opts->_num_ranks.makeDimValStr(" * ") << " requested");
+        opts->_num_ranks = opts->_num_ranks.get_compact_factors(nr);
+        TRACE_MSG("rank layout " << opts->_num_ranks.makeDimValStr(" * ") << " selected");
 
         // Check ranks.
         idx_t req_ranks = opts->_num_ranks.product();

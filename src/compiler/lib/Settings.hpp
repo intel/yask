@@ -67,6 +67,7 @@ namespace yask {
         IntTuple _domainDims;    // domain dims, usually spatial (with zero value).
         IntTuple _stencilDims;   // both step and domain dims.
         string _innerDim;        // domain dim that will be used in the inner loop.
+        string _outerDim;        // domain dim that will be used in the outer loop.
         IntTuple _miscDims;      // misc dims that are not the step or domain.
 
         // Following contain only domain dims.
