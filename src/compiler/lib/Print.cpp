@@ -166,6 +166,12 @@ namespace yask {
             // pseudo-code format.
             _os << " IF (" << cond << ")";
         }
+        if (ee->getStepCond()) {
+            string cond = ee->getStepCond()->accept(this);
+
+            // pseudo-code format.
+            _os << " IF_STEP (" << cond << ")";
+        }
         _os << _ph.getLineSuffix();
 
         // note: no need to update num-common.
@@ -650,19 +656,22 @@ namespace yask {
 
             if (eq->cond.get()) {
                 string condStr = eq->cond->makeStr();
-                os << endl << " // Valid under the following condition:" << endl <<
+                os << endl << " // Valid under the following domain condition:" << endl <<
                     ph.getLinePrefix() << "IF " << condStr << ph.getLineSuffix();
             }
-            else
-                os << endl << " // Valid under the default condition." << endl;
+            if (eq->step_cond.get()) {
+                string condStr = eq->step_cond->makeStr();
+                os << endl << " // Valid under the following step condition:" << endl <<
+                    ph.getLinePrefix() << "IF_STEP " << condStr << ph.getLineSuffix();
+            }
 
-            os << endl << " // Top-down stencil calculation:" << endl;
-            PrintVisitorTopDown pv1(os, ph);
-            eq->visitEqs(&pv1);
-
-            os << endl << " // Bottom-up stencil calculation:" << endl;
-            PrintVisitorBottomUp pv2(os, ph);
-            eq->visitEqs(&pv2);
+            if (!_long) {
+                PrintVisitorTopDown pv1(os, ph);
+                eq->visitEqs(&pv1);
+            } else {
+                PrintVisitorBottomUp pv2(os, ph);
+                eq->visitEqs(&pv2);
+            }
         }
     }
 

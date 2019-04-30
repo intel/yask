@@ -24,7 +24,7 @@
 ##############################################################################
 
 # Purpose: Process the output of a log from a binary and compare every grid write.
-# Build with the following options: real_bytes=8 check=1 trace=1 trace_mem=1
+# Build with the following options: real_bytes=8 trace_mem=1
 # Run kernel with '-v -force_scalar -trace' and pipe output to this script.
 
 use strict;

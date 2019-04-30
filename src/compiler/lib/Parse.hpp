@@ -47,11 +47,10 @@ namespace yask {
     public:
     	virtual ~ArgParser() {}
 
-        // For strings like x=4,y=2, call the lambda function for
-        // each key, value pair.
-        virtual void parseKeyValuePairs(const string& argStr,
-                                        function<void (const string& key,
-                                                       const string& value)> handle)
+        // For strings like "x,y", call the lambda function for
+        // each element.
+        virtual void parseList(const string& argStr,
+                               function<void (const string& key)> handle)
         {
             if (argStr.length() == 0)
                 return;
@@ -68,20 +67,35 @@ namespace yask {
             }
             args.push_back(arg);
 
-            // process each k=v pair.
+            // process each element.
             for (auto pStr : args) {
 
-                // split by equal sign.
-                size_t ep = pStr.find("=");
-                if (ep == string::npos) {
-                    THROW_YASK_EXCEPTION("Error: no equal sign in '" + pStr + "'");
-                }
-                string key = pStr.substr(0, ep);
-                string value = pStr.substr(ep+1);
-
                 // call handler.
-                handle(key, value);
+                handle(pStr);
             }
+        }
+
+        // For strings like "x=4,y=2", call the lambda function for
+        // each key, value pair.
+        virtual void parseKeyValuePairs(const string& argStr,
+                                        function<void (const string& key,
+                                                       const string& value)> handle)
+        {
+            parseList
+                (argStr,
+                 [&](const string& pStr) { 
+            
+                     // split by equal sign.
+                     size_t ep = pStr.find("=");
+                     if (ep == string::npos) {
+                         THROW_YASK_EXCEPTION("Error: no equal sign in '" + pStr + "'");
+                     }
+                     string key = pStr.substr(0, ep);
+                     string value = pStr.substr(ep+1);
+
+                     // call handler.
+                     handle(key, value);
+                 } );
         }
     };
 

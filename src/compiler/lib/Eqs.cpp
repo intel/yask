@@ -202,11 +202,33 @@ namespace yask {
 
             // Scratch grid must not have a condition.
             if (cond1 && og1->isScratch())
-                THROW_YASK_EXCEPTION("Error: scratch-grid equation '" + eq1->makeQuotedStr() +
-                                     "' cannot have a domain condition");
+                THROW_YASK_EXCEPTION("Error: scratch-grid equation " + eq1->makeQuotedStr() +
+                                     " cannot have a domain condition");
             if (stcond1 && og1->isScratch())
-                THROW_YASK_EXCEPTION("Error: scratch-grid equation '" + eq1->makeQuotedStr() +
-                                     "' cannot have a step condition");
+                THROW_YASK_EXCEPTION("Error: scratch-grid equation " + eq1->makeQuotedStr() +
+                                     " cannot have a step condition");
+
+            // LHS must have all domain dims.
+            for (auto& dd : dims._domainDims.getDims()) {
+                auto& dname = dd.getName();
+                NumExprPtr dexpr = op1->getArg(dname);
+                if (!dexpr)
+                    THROW_YASK_EXCEPTION("Error: grid equation " + eq1->makeQuotedStr() +
+                                         " does not use domain-dimension '" + dname +
+                                         "' on LHS");
+            }
+
+            // LHS of non-scratch must have step dim and vice-versa.
+            if (!og1->isScratch()) {
+                if (!step_expr1)
+                    THROW_YASK_EXCEPTION("Error: non-scratch grid equation " + eq1->makeQuotedStr() +
+                                         " does not use step-dimension '" + stepDim +
+                                         "' on LHS");
+            } else {
+                if (step_expr1)
+                    THROW_YASK_EXCEPTION("Error: scratch-grid equation " + eq1->makeQuotedStr() +
+                                         " cannot use step-dimension '" + stepDim + "'");
+            }
 
             // Check LHS grid dimensions and associated args.
             for (int di = 0; di < og1->get_num_dims(); di++) {
@@ -215,13 +237,6 @@ namespace yask {
 
                 // Check based on dim type.
                 if (dn == stepDim) {
-
-                    // Scratch grid must not use step dim.
-                    if (og1->isScratch())
-                        THROW_YASK_EXCEPTION("Error: scratch-grid '" + og1->getName() +
-                                             "' cannot use '" + dn + "' dim");
-
-                    // Validity of step-dim expression in non-scratch grids is checked later.
                 }
 
                 // LHS must have simple indices in domain dims.
@@ -239,28 +254,25 @@ namespace yask {
                                              " is expected");
                 }
 
-                // Misc dim must be a const.
+                // Misc dim must be a const.  TODO: allow non-const misc
+                // dims and treat const and non-const ones separately, e.g.,
+                // for interleaving.
                 else {
 
                     if (!argn->isConstVal())
                         THROW_YASK_EXCEPTION("Error: LHS of equation " + eq1->makeQuotedStr() +
                                              " contains expression " + argn->makeQuotedStr() +
                                              " for misc dimension '" + dn +
-                                             "' where constant integer is expected");
+                                             "' where kernel-run-time constant integer is expected");
                     argn->getIntVal(); // throws exception if not an integer.
                 }
             }
         
-            // Checks for a non-scratch eq.
+            // Heuristics to set the default step direction.
+            // The accuracy isn't critical, because the default is only be
+            // used in the standalone test utility and the auto-tuner.
             if (!og1->isScratch()) {
 
-                if (!step_expr1)
-                    THROW_YASK_EXCEPTION("Error: non-scratch-grid '" + og1->getName() +
-                                         "' does not use '" + stepDim + "' dim");
-
-                // Heuristics to set the default step direction.
-                // The accuracy isn't critical, because the default should only be
-                // used in the standalone test utility and the auto-tuner.
                 // First, see if LHS step arg is a simple offset, e.g., 'u(t+1, ...)'.
                 // This is the most common case.
                 auto& lofss = op1->getArgOffsets();
@@ -283,7 +295,7 @@ namespace yask {
                                 dims._stepDir = 1;
                                 break;
                             }
-                            else if (lofs > rofs) {
+                            else if (lofs < rofs) {
                                 dims._stepDir = -1;
                                 break;
                             }
@@ -1095,8 +1107,8 @@ namespace yask {
         // eq1: u(t,x+1) on rhs and new halo of scr1 on lhs.
 
         // Example:
-        // eq1: scr1(x) EQUALS u(t,x+1); <-|
-        // eq2: scr2(x) EQUALS u(t,x+2); <-- orig halo of u = max(1,2) = 2.
+        // eq1: scr1(x) EQUALS u(t,x+1); <--|
+        // eq2: scr2(x) EQUALS u(t,x+2); <--| orig halo of u = max(1,2) = 2.
         // eq3: u(t+1,x) EQUALS scr1(x+3) + scr2(x+4);
         // eq1 and eq2 are bundled => scr1 and scr2 halos are max(3,4) = 4.
         // Direct deps: eq3 -> eq1(s), eq3 -> eq2(s).

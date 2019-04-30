@@ -67,6 +67,8 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
       for functional testing if you don't have native support for any given instruction set.
 
 ### Backward-compatibility notices, including changes in default behavior:
+* Version 2.22.00 changed the heuristic to determine vector-folding sizes when some
+sizes are specified. This did not affect the default folding sizes.
 * Version 2.21.02 simplified the example 3-D stencils (`3axis`, `3plane`, etc.)
 to calculate simple averages like those in the MiniGhost benchmark.
 This reduced the number of floating-point operations but not the number of points read for each stencil.

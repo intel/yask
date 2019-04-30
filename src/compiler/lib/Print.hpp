@@ -133,7 +133,15 @@ namespace yask {
             // Int representation equivalent?
             if (double(int(v)) == v)
                 return to_string(int(v));
-        
+
+            // Need scientific repr?
+            if (v < 1e-4 || v >= 1e5) {
+                ostringstream oss;
+                oss << scientific << v;
+                return oss.str();
+            }
+
+            // Default fixed-point.
             return to_string(v);
         }
 
@@ -457,11 +465,14 @@ namespace yask {
 
     // Print out a stencil in human-readable form, for debug or documentation.
     class PseudoPrinter : public PrinterBase {
+    protected:
+        bool _long = false;
 
     public:
         PseudoPrinter(StencilSolution& stencil,
-                      EqBundles& eqBundles) :
-            PrinterBase(stencil, eqBundles) { }
+                      EqBundles& eqBundles,
+                      bool is_long) :
+            PrinterBase(stencil, eqBundles), _long(is_long) { }
         virtual ~PseudoPrinter() { }
 
         virtual void print(ostream& os);

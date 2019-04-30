@@ -141,7 +141,9 @@ namespace yask {
         else if (format_type == "dot-lite")
             printer = new DOTPrinter(*this, _clusterEqBundles, true);
         else if (format_type == "pseudo")
-            printer = new PseudoPrinter(*this, _clusterEqBundles);
+            printer = new PseudoPrinter(*this, _clusterEqBundles, false);
+        else if (format_type == "pseudo-long")
+            printer = new PseudoPrinter(*this, _clusterEqBundles, true);
         else if (format_type == "pov-ray") // undocumented.
             printer = new POVRayPrinter(*this, _clusterEqBundles);
         else {

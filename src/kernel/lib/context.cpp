@@ -48,12 +48,6 @@ namespace yask {
         assert(stride_t);
         idx_t end_t = last_step_index + step_dir; // end is beyond last.
 
-        // backward?
-        if (stride_t < 0) {
-            begin_t = end_t + stride_t;
-            end_t = stride_t;
-        }
-
         // Begin & end tuples.
         // Based on rank bounding box, not extended
         // BB because we don't use wave-fronts in the ref code.

@@ -25,12 +25,11 @@ IN THE SOFTWARE.
 
 // Base class for defining stencil equations.
 
-#ifndef SOLN_HPP
-#define SOLN_HPP
+#pragma once
 
 // Generation code.
 #include "ExprUtils.hpp"
-#include "Grid.hpp"
+#include "Settings.hpp"
 #include "Eqs.hpp"
 
 using namespace std;
@@ -229,6 +228,35 @@ namespace yask {
 
         virtual void format(const std::string& format_type,
                             yask_output_ptr output);
+        virtual void
+        set_domain_dims(const std::vector<yc_index_node_ptr>& dims) {
+            _settings._domainDims.clear();
+            for (auto& d : dims) {
+                auto dp = dynamic_pointer_cast<IndexExpr>(d);
+                assert(dp);
+                auto& dname = d->get_name();
+                if (dp->getType() != DOMAIN_INDEX)
+                    THROW_YASK_EXCEPTION("Error: set_domain_dims() called with non-domain index '" +
+                                         dname + "'");
+                _settings._domainDims.push_back(dname);
+            }
+        }
+        virtual void
+        set_domain_dims(const std::initializer_list<yc_index_node_ptr>& dims) {
+            vector<yc_index_node_ptr> vdims(dims);
+            set_domain_dims(vdims);
+        }
+        virtual void
+        set_step_dim(const yc_index_node_ptr dim) {
+            auto dp = dynamic_pointer_cast<IndexExpr>(dim);
+            assert(dp);
+            auto& dname = dim->get_name();
+            if (dp->getType() != STEP_INDEX)
+                    THROW_YASK_EXCEPTION("Error: set_step_dim() called with non-step index '" +
+                                         dname + "'");
+            _settings._stepDim = dname;
+        }
+        
     };
 
     // A stencil solution that does not define any grids.
@@ -340,4 +368,3 @@ namespace yask {
 #define MAKE_SCALAR(gvar) MAKE_GRID(gvar)
 #define MAKE_ARRAY(gvar, d1) MAKE_GRID(gvar, d1)
 
-#endif

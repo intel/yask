@@ -317,6 +317,98 @@ namespace yask {
         return oss.str();
     }
 
+    // Return a "compact" set of K factors of N.
+    template <typename T>
+    Tuple<T> Tuple<T>::get_compact_factors(idx_t N) const {
+        int K = getNumDims();
+        
+        // Keep track of "best" result, where the best is most compact.
+        Tuple best;
+
+        // Trivial cases.
+        if (K == 0)
+            return best;        // empty tuple.
+        if (N == 0) {
+            best = *this;
+            best.setValsSame(0); // tuple of all 0s.
+            return best;
+        }
+        if (product() == N)
+            return *this;       // already done.
+
+        // Make list of factors of N.
+        vector<idx_t> facts;
+        for (idx_t n = 1; n <= N; n++)
+            if (N % n == 0)
+                facts.push_back(n);
+
+        // Try once with keeping pre-set values and then without.
+        for (bool keep : { true, false }) {
+        
+            // Try every combo of K-1 factors.
+            // TODO: make more efficient--need algorithm to directly get
+            // set of K factors that are valid.
+            Tuple combos;
+            for (int j = 0; j < K; j++) {
+                auto& dname = getDimName(j);
+                auto dval = getVal(j);
+
+                // Number of factors.
+                auto sz = facts.size();
+
+                // Set first number of options 1 because it will be calculated
+                // based on the other values, i.e., we don't need to search over
+                // first dim.  Also don't need to search any specified value.
+                if (j == 0 || (keep && dval > 0))
+                    sz = 1;
+                
+                combos.addDimBack(dname, sz);
+            }
+            combos.visitAllPoints
+                ([&](const Tuple& combo, size_t idx)->bool {
+
+                     // Make candidate tuple w/factors at given indices.
+                     auto can = combo.mapElements([&](T in) {
+                                                      return facts.at(in);
+                                                  });
+
+                     // Override with specified values.
+                     for (int j = 0; j < K; j++) {
+                         auto dval = getVal(j);
+                         if (keep && dval > 0)
+                             can[j] = dval;
+                         else if (j == 0)
+                             can[j] = -1; // -1 => needs to be calculated.
+                     }
+
+                     // Replace first factor with computed value if not set.
+                     if (can[0] == -1) {
+                         can[0] = 1; // to calculate product of remaining ones.
+                         can[0] = N / can.product();
+                     }
+
+                     // Valid?
+                     if (can.product() == N) {
+
+                         // Best so far?
+                         // Layout is better if max size is smaller.
+                         if (best.size() == 0 ||
+                             can.max() < best.max())
+                             best = can;
+                     }
+                     
+                     return true; // keep looking.
+                 });
+
+            if (best.product() == N)
+                break;          // done.
+
+        } // keep or not.
+        assert(best.size() == K);
+        assert(best.product() == N);
+        return best;
+    }
+    
     // Explicitly allowed instantiations.
     template class Tuple<int>;
     template class Tuple<idx_t>;

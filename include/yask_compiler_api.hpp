@@ -181,7 +181,7 @@ namespace yask {
         /// Create an n-dimensional grid variable in the solution.
         /**
            C++ initializer-list version with same semantics as
-           new_grid(const std::string& name, const std::vector<yc_index_node_ptr>& dims).
+           the vector version of new_grid().
            @note This version is not available (or needed) in the Python API.
            @returns Pointer to the new \ref yc_grid object.
         */
@@ -222,7 +222,7 @@ namespace yask {
         /// Create an n-dimensional scratch-grid variable in the solution.
         /**
            C++ initializer-list version with same semantics as
-           new_scratch_grid(const std::string& name, const std::vector<yc_index_node_ptr>& dims).
+           the vector version of new_scratch_grid().
            @note This version is not available (or needed) in the Python API.
            @returns Pointer to the new \ref yc_grid object.
         */
@@ -320,6 +320,7 @@ namespace yask {
             dot     | DOT-language description.
             dot-lite| DOT-language description of grid accesses only.
             pseudo  | Human-readable pseudo-code (for debug).
+            pseudo-long  | Human-readable pseudo-code with intermediate variables.
 
             Progress text will be written to the output stream set via set_debug_output().
 
@@ -334,6 +335,45 @@ namespace yask {
                yask_output_ptr output
                /**< [out] Pointer to object to receive formatted output.
                   See \ref yask_output_factory. */) =0;
+
+        /// **[Advanced]** Explicitly list the domain dimensions in the solution.
+        /**
+           In addition, domain dimension(s) are added when new_grid() or
+           new_scratch_grid() is called with one or more domain dimensions.
+           Either way, the last unique domain dimension specified will become the 'inner' or
+           'unit-stride' dimension in memory layouts.
+           Thus, this option can be used to override the default layout order.
+           It also allows specification of the domain dimensions in the 
+           unusual case where a solution is defined without any
+           grids containing all of the domain dimensions.
+         */
+        virtual void
+        set_domain_dims(const std::vector<yc_index_node_ptr>& dims
+                        /**< [in] Domain dimensions of the solution. */ ) =0;
+
+#ifndef SWIG
+        /// **[Advanced]** Explicitly list the domain dimensions in the solution.
+        /**
+           C++ initializer-list version with same semantics as
+           the vector version of new_grid().
+           @note This version is not available (or needed) in the Python API.
+        */
+        virtual void
+        set_domain_dims(const std::initializer_list<yc_index_node_ptr>& dims
+                        /**< [in] Domain dimensions of the solution. */ ) =0;
+#endif
+        
+        /// **[Advanced]** Explicitly identify the step dimension in the solution.
+        /** 
+            By default, the step dimension is defined when new_grid() or
+            new_scratch_grid() is called with the step dimension.
+            This allows specification of the step dimension in the 
+            unusual case where a solution is defined without any
+            grids containing the step dimension.
+         */
+        virtual void
+        set_step_dim(const yc_index_node_ptr dim
+                     /**< [in] Step dimension. */) =0;
 
         /// **[Advanced]** Enable or disable automatic dependency checker.
         /**
@@ -491,7 +531,7 @@ namespace yask {
         /// Create a reference to a point in this grid.
         /**
            C++ initializer-list version with same semantics as
-           new_grid_point(std::vector<yc_index_node_ptr> index_exprs).
+           the vector version of new_grid_point().
            @note This version is not available (or needed) in the Python API.
            @returns Pointer to AST node used to read or write from point in grid. */
         virtual yc_grid_point_node_ptr
@@ -522,7 +562,7 @@ namespace yask {
         /// Create a reference to a point in this grid using relative offsets.
         /**
            C++ initializer-list version with same semantics as
-           new_relative_grid_point(std::vector<int> dim_offsets).
+           the vector version of new_relative_grid_point().
            @note This version is not available (or needed) in the Python API.
            @returns Pointer to AST node used to read or write from point in grid. */
         virtual yc_grid_point_node_ptr
