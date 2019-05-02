@@ -2492,9 +2492,10 @@ TTIStencil (StencilList & stencils, int radius = 2):
       case 4:
 	define_so8 ();
 	break;
-      default:
-	THROW_YASK_EXCEPTION
-	  ("Error: only radius values of 2 and 4 are currently supported (radius is half the spatial accuracy-order)");
+      default: {
+          yask_exception e("Error: only radius values of 2 and 4 are currently supported for the TTI stencil example");
+          throw e;
+      }
       }
   }
 };

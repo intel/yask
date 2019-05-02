@@ -30,7 +30,7 @@ IN THE SOFTWARE.
 
 #include "ExprUtils.hpp"
 #include "Eqs.hpp"
-#include "Soln.hpp"
+#include "Solution.hpp"
 
 namespace yask {
 

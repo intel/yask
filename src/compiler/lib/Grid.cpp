@@ -37,7 +37,7 @@ namespace yask {
 
     // grid APIs.
     yc_grid_point_node_ptr
-    Grid::new_grid_point(const std::vector<yc_number_node_ptr>& index_exprs) {
+    GridVar::new_grid_point(const std::vector<yc_number_node_ptr>& index_exprs) {
 
         // Check for correct number of indices.
         if (_dims.size() != index_exprs.size()) {
@@ -60,7 +60,7 @@ namespace yask {
     }
 
     yc_grid_point_node_ptr
-    Grid::new_relative_grid_point(const std::vector<int>& dim_offsets) {
+    GridVar::new_relative_grid_point(const std::vector<int>& dim_offsets) {
 
         // Check for correct number of indices.
         if (_dims.size() != dim_offsets.size()) {
@@ -97,72 +97,40 @@ namespace yask {
         return gpp;
     }
 
-    vector<string> Grid::get_dim_names() const {
+    vector<string> GridVar::get_dim_names() const {
         vector<string> ret;
         for (auto dn : getDims())
             ret.push_back(dn->getName());
         return ret;
     }
 
-    // Create an expression to a specific point in this grid.
-    // Note that this doesn't actually 'read' or 'write' a value;
-    // it's just a node in an expression.
-    GridPointPtr Grid::makePoint(const NumExprPtrVec& args) {
-        auto gpp = make_shared<GridPoint>(this, args);
-        return gpp;
-    }
-
-    // Ctor for Grid.
-    Grid::Grid(string name,
-               bool isScratch,
-               StencilSolution* soln,
-               IndexExprPtr dim1,
-               IndexExprPtr dim2,
-               IndexExprPtr dim3,
-               IndexExprPtr dim4,
-               IndexExprPtr dim5,
-               IndexExprPtr dim6) :
-            _name(name),       // TODO: validate that name is legal C++ var.
-            _isScratch(isScratch),
-            _soln(soln)
+    // Ctor for GridVar.
+    GridVar::GridVar(string name,
+                     bool isScratch,
+                     StencilSolution* soln,
+                     const IndexExprPtrVec& dims) :
+        _name(name),       // TODO: validate that name is legal C++ var.
+        _isScratch(isScratch),
+        _soln(soln)
     {
         assert(soln);
 
         // Name already used?
         auto& grids = soln->getGrids();
         for (auto gp : grids) {
-            if (gp->getName() == _name)
-                THROW_YASK_EXCEPTION("Error: grid name '" + _name + "' already used");
+            if (gp->getName() == name)
+                THROW_YASK_EXCEPTION("Error: grid name '" + name + "' already used");
         }
 
         // Register in soln.
-        if (soln)
-            grids.insert(this);
+        grids.insert(this);
 
-        // Add dims that are not null.
-        if (dim1)
-            _dims.push_back(dim1);
-        if (dim2)
-            _dims.push_back(dim2);
-        if (dim3)
-            _dims.push_back(dim3);
-        if (dim4)
-            _dims.push_back(dim4);
-        if (dim5)
-            _dims.push_back(dim5);
-        if (dim6)
-            _dims.push_back(dim6);
-    }
-    Grid::Grid(string name,
-               bool isScratch,
-               StencilSolution* soln,
-               const IndexExprPtrVec& dims) :
-        Grid(name, isScratch, soln) {
+        // Define dims.
         _dims = dims;
     }
 
     // Determine whether grid can be folded.
-    void Grid::setFolding(const Dimensions& dims) {
+    void GridVar::setFolding(const Dimensions& dims) {
 
         _numFoldableDims = 0;
 
@@ -198,7 +166,7 @@ namespace yask {
     }
     
     // Determine whether halo sizes are equal.
-    bool Grid::isHaloSame(const Grid& other) const {
+    bool GridVar::isHaloSame(const GridVar& other) const {
 
         // Same dims?
         if (!areDimsSame(other))
@@ -222,7 +190,7 @@ namespace yask {
 
     // Update halos based on halo in 'other' grid.
     // This grid's halos can only be increased.
-    void Grid::updateHalo(const Grid& other) {
+    void GridVar::updateHalo(const GridVar& other) {
         assert(areDimsSame(other));
 
         // Loop thru other grid's halo values.
@@ -261,7 +229,7 @@ namespace yask {
     // Update halos based on each value in 'offsets' in some
     // read or write to this grid.
     // This grid's halos can only be increased.
-    void Grid::updateHalo(const string& packName, const IntTuple& offsets) {
+    void GridVar::updateHalo(const string& packName, const IntTuple& offsets) {
 
         // Find step value or use 0 if none.
         int stepVal = 0;
@@ -302,7 +270,7 @@ namespace yask {
     }
 
     // Update const indices based on 'indices'.
-    void Grid::updateConstIndices(const IntTuple& indices) {
+    void GridVar::updateConstIndices(const IntTuple& indices) {
 
         for (auto& dim : indices.getDims()) {
             auto& dname = dim.getName();
@@ -325,7 +293,7 @@ namespace yask {
     }
 
     // Determine how many values in step-dim are needed.
-    int Grid::getStepDimSize() const
+    int GridVar::getStepDimSize() const
     {
         // Specified by API.
         if (_stepAlloc > 0)
@@ -425,7 +393,7 @@ namespace yask {
     }
 
     // Description of this grid.
-    string Grid::getDescr() const {
+    string GridVar::getDescr() const {
         string d = _name + "(";
         int i = 0;
         for (auto dn : getDims()) {

@@ -29,12 +29,11 @@ IN THE SOFTWARE.
 
 #include "ElasticStencil.hpp"
 
-// This class implements StencilPart but is not the main solution.
+// This class implements StencilBase but is not the main solution.
 // The main solution is provided during construction.
-class Elastic2BoundaryCondition : public StencilPart
+class Elastic2BoundaryCondition : public StencilBase
 {
 protected:
-    StencilSolution& _sol;
 
     // Indices & dimensions.
     MAKE_STEP_INDEX(t);           // step in time dim.
@@ -49,18 +48,13 @@ protected:
     MAKE_MISC_INDEX(spidx);
 
     public:
-    Elastic2BoundaryCondition(StencilSolution& solution) :
-        _sol(solution) {}
+    Elastic2BoundaryCondition(StencilBase& base) :
+        StencilBase(base) { }
     virtual ~Elastic2BoundaryCondition() {}
 
     // Determine whether current indices are at boundary.
     virtual Condition is_at_boundary() =0;
     virtual Condition is_not_at_boundary() =0;
-
-    // Return a reference to the main stencil-solution object provided during construction.
-    virtual StencilSolution& get_stencil_solution() {
-        return _sol;
-    }
 };
 
 class Elastic2StencilBase : public StencilBase {
@@ -102,18 +96,7 @@ public:
     Elastic2StencilBase(const string& name, StencilList& stencils,
                        Elastic2BoundaryCondition *_bc = NULL) :
         StencilBase(name, stencils), bc(_bc)
-    {
-        init();
-    }
-
-    void init() {
-        // StencilContex specific code
-        REGISTER_STENCIL_CONTEXT_EXTENSION(
-           virtual void initData() {
-               initDiff();
-           }
-                                           );
-    }
+    { }
 
     bool hasBoundaryCondition()
     {

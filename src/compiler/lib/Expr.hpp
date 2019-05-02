@@ -76,7 +76,7 @@ namespace yask {
 
     // More forward-decls.
     class ExprVisitor;
-    class Grid;
+    class GridVar;
     class StencilSolution;
     struct Dimensions;
 
@@ -218,7 +218,7 @@ namespace yask {
         }
     };
 
-    // Grid index types.
+    // GridVar index types.
     enum IndexType {
         STEP_INDEX,             // the step dim.
         DOMAIN_INDEX,           // a domain dim.
@@ -275,29 +275,6 @@ namespace yask {
         }
     };
 
-    // A free function to create a constant expression.
-    // Usually not needed due to operator overloading.
-    NumExprPtr constNum(double val);
-
-    // Free functions to create boundary indices, e.g., 'first_index(x)'.
-    NumExprPtr first_index(IndexExprPtr dim);
-    NumExprPtr last_index(IndexExprPtr dim);
-
-    // A simple wrapper to provide automatic construction
-    // of a NumExpr ptr from other types.
-    class NumExprArg : public NumExprPtr {
-
-    public:
-        NumExprArg(NumExprPtr p) :
-            NumExprPtr(p) { }
-        NumExprArg(IndexExprPtr p) :
-            NumExprPtr(p) { }
-        NumExprArg(int i) :
-            NumExprPtr(constNum(i)) { }
-        NumExprArg(double f) :
-            NumExprPtr(constNum(f)) { }
-    };
-
     // Boolean value.
     class BoolExpr : public Expr,
                      public virtual yc_bool_node  {
@@ -333,6 +310,7 @@ namespace yask {
                 FORMAT_AND_THROW_YASK_EXCEPTION("Error: integer value " << i <<
                                      " cannot be stored accurately as a double");
         }
+        ConstExpr(int i) : ConstExpr(idx_t(i)) { }
         ConstExpr(const ConstExpr& src) : _f(src._f) { }
         virtual ~ConstExpr() { }
 
@@ -653,7 +631,10 @@ namespace yask {
 
         // If op is another CommutativeExpr with the
         // same operator, add its operands to this.
-        // Otherwise, just clone and add the whole op.
+        // Otherwise, just add the whole node.
+        // Example: if 'this' is 'A+B', 'mergeExpr(C+D)'
+        // returns 'A+B+C+D', and 'mergeExpr(E*F)'
+        // returns 'A+B+(E*F)'.
         virtual void mergeExpr(NumExprPtr op) {
             auto opp = dynamic_pointer_cast<CommutativeExpr>(op);
             if (opp && opp->getOpStr() == _opStr) {
@@ -790,24 +771,6 @@ namespace yask {
         }
     };
 
-#define FUNC_EXPR(fn_name) NumExprPtr fn_name(const NumExprPtr rhs)
-    FUNC_EXPR(sqrt);
-    FUNC_EXPR(cbrt);
-    FUNC_EXPR(fabs);
-    FUNC_EXPR(erf);
-    FUNC_EXPR(exp);
-    FUNC_EXPR(log);
-    FUNC_EXPR(sin);
-    FUNC_EXPR(cos);
-    FUNC_EXPR(atan);
-#undef FUNC_EXPR
-#define FUNC_EXPR(fn_name) \
-    NumExprPtr fn_name(const NumExprPtr arg1, const NumExprPtr arg2); \
-    NumExprPtr fn_name(double arg1, const NumExprPtr arg2); \
-    NumExprPtr fn_name(const NumExprPtr arg1, double arg2)
-    FUNC_EXPR(pow);
-#undef FUNC_EXPR
-
     // One specific point in a grid.
     // This is an expression leaf-node.
     class GridPoint : public NumExpr,
@@ -832,7 +795,7 @@ namespace yask {
         };
 
     protected:
-        Grid* _grid = 0;        // the grid this point is from.
+        GridVar* _grid = 0;        // the grid this point is from.
 
         // Index exprs for each dim, e.g.,
         // "3, x-5, y*2, z+4" for dims "n, x, y, z".
@@ -861,14 +824,14 @@ namespace yask {
     public:
 
         // Construct a point given a grid and an arg for each dim.
-        GridPoint(Grid* grid, const NumExprPtrVec& args);
+        GridPoint(GridVar* grid, const NumExprPtrVec& args);
 
         // Dtor.
         virtual ~GridPoint() {}
 
         // Get parent grid info.
-        const Grid* getGrid() const { return _grid; }
-        Grid* getGrid() { return _grid; }
+        const GridVar* getGrid() const { return _grid; }
+        GridVar* getGrid() { return _grid; }
         virtual const string& getGridName() const;
         virtual string getGridPtr() const;
         virtual bool isGridFoldable() const;
@@ -1031,7 +994,7 @@ namespace yask {
         static string stepCondOpStr() { return "IF_STEP"; }
 
         // Get pointer to grid on LHS or NULL if not set.
-        virtual Grid* getGrid() {
+        virtual GridVar* getGrid() {
             if (_lhs.get())
                 return _lhs->getGrid();
             return NULL;
@@ -1072,125 +1035,9 @@ namespace yask {
         }
     };
 
-    ///// The following are operators and functions used in stencil expressions.
-
-    // Various unary operators.
-    NumExprPtr operator-(const NumExprPtr rhs);
-
-    // Various binary operators.
-    NumExprPtr operator+(const NumExprPtr lhs, const NumExprPtr rhs);
-    NumExprPtr operator+(double lhs, const NumExprPtr rhs);
-    NumExprPtr operator+(const NumExprPtr lhs, double rhs);
-    void operator+=(NumExprPtr& lhs, const NumExprPtr rhs);
-    void operator+=(NumExprPtr& lhs, double rhs);
-
-    NumExprPtr operator-(const NumExprPtr lhs, const NumExprPtr rhs);
-    NumExprPtr operator-(double lhs, const NumExprPtr rhs);
-    NumExprPtr operator-(const NumExprPtr lhs, double rhs);
-    void operator-=(NumExprPtr& lhs, const NumExprPtr rhs);
-    void operator-=(NumExprPtr& lhs, double rhs);
-
-    NumExprPtr operator*(const NumExprPtr lhs, const NumExprPtr rhs);
-    NumExprPtr operator*(double lhs, const NumExprPtr rhs);
-    NumExprPtr operator*(const NumExprPtr lhs, double rhs);
-    void operator*=(NumExprPtr& lhs, const NumExprPtr rhs);
-    void operator*=(NumExprPtr& lhs, double rhs);
-
-    NumExprPtr operator/(const NumExprPtr lhs, const NumExprPtr rhs);
-    NumExprPtr operator/(double lhs, const NumExprPtr rhs);
-    NumExprPtr operator/(const NumExprPtr lhs, double rhs);
-    void operator/=(NumExprPtr& lhs, const NumExprPtr rhs);
-    void operator/=(NumExprPtr& lhs, double rhs);
-
-    NumExprPtr operator%(const NumExprPtr lhs, const NumExprPtr rhs);
-    NumExprPtr operator%(double lhs, const NumExprPtr rhs);
-    NumExprPtr operator%(const NumExprPtr lhs, double rhs);
-
-    // A conditional evaluation.
-    // We use an otherwise unneeded binary operator that has a low priority.
-    // See http://en.cppreference.com/w/cpp/language/operator_precedence.
-#define IF_OPER ^=
-    EqualsExprPtr operator IF_OPER(EqualsExprPtr expr, const BoolExprPtr cond);
-#define IF IF_OPER
-#define IF_STEP_OPER |=
-    EqualsExprPtr operator IF_STEP_OPER(EqualsExprPtr expr, const BoolExprPtr step_cond);
-#define IF_STEP IF_STEP_OPER
-
-    // The operator used for defining a grid value.
-    // We use an otherwise unneeded binary operator that has a lower priority
-    // than the math ops and a higher priority than the IF_OPER.
-    // See http://en.cppreference.com/w/cpp/language/operator_precedence.
-    // This should not be an operator that is defined for shared pointers.
-    // See https://en.cppreference.com/w/cpp/memory/shared_ptr.
-#define EQUALS_OPER <<
-    EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, const NumExprPtr rhs);
-    EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, const GridPointPtr rhs);
-    EqualsExprPtr operator EQUALS_OPER(GridPointPtr gpp, double rhs);
-#define EQUALS EQUALS_OPER
-#define IS_EQUIV_TO EQUALS_OPER
-#define IS_EQUIVALENT_TO EQUALS_OPER
-
-    // Binary numerical-to-boolean operators.  Must provide more explicit
-    // ptr-type operands than used with math operators to keep compiler from
-    // using built-in pointer comparison. This means we need all
-    // permutations of {NumExpr,IndexExpr,GridPoint}Ptr.  Const values must
-    // be on RHS of operator, e.g., 'x > 5' is ok, but '5 < x' is not.
-#define BOOL_OPER(oper, type, implType)                                          \
-    inline BoolExprPtr operator oper(const NumExprPtr lhs, const NumExprPtr rhs) { \
-        return make_shared<type>(lhs, rhs); } \
-    inline BoolExprPtr operator oper(const NumExprPtr lhs, const IndexExprPtr rhs) { \
-        return make_shared<type>(lhs, rhs); } \
-    inline BoolExprPtr operator oper(const NumExprPtr lhs, const GridPointPtr rhs) { \
-        return make_shared<type>(lhs, rhs); } \
-    inline BoolExprPtr operator oper(const IndexExprPtr lhs, const NumExprPtr rhs) { \
-        return make_shared<type>(lhs, rhs); } \
-    inline BoolExprPtr operator oper(const IndexExprPtr lhs, const IndexExprPtr rhs) { \
-        return make_shared<type>(lhs, rhs); } \
-    inline BoolExprPtr operator oper(const IndexExprPtr lhs, const GridPointPtr rhs) { \
-        return make_shared<type>(lhs, rhs); } \
-    inline BoolExprPtr operator oper(const GridPointPtr lhs, const NumExprPtr rhs) { \
-        return make_shared<type>(lhs, rhs); } \
-    inline BoolExprPtr operator oper(const GridPointPtr lhs, const IndexExprPtr rhs) { \
-        return make_shared<type>(lhs, rhs); } \
-    inline BoolExprPtr operator oper(const GridPointPtr lhs, const GridPointPtr rhs) { \
-        return make_shared<type>(lhs, rhs); } \
-    inline BoolExprPtr operator oper(const NumExprPtr lhs, double rhs) { \
-        return make_shared<type>(lhs, constNum(rhs)); }                 \
-    inline BoolExprPtr operator oper(const IndexExprPtr lhs, double rhs) { \
-        return make_shared<type>(lhs, constNum(rhs)); }                 \
-    inline BoolExprPtr operator oper(const GridPointPtr lhs, double rhs) { \
-        return make_shared<type>(lhs, constNum(rhs)); }
-
-    BOOL_OPER(==, IsEqualExpr, yc_equals_node)
-    BOOL_OPER(!=, NotEqualExpr, yc_not_equals_node)
-    BOOL_OPER(<, IsLessExpr, yc_less_than_node)
-    BOOL_OPER(>, IsGreaterExpr, yc_greater_than_node)
-    BOOL_OPER(<=, NotGreaterExpr, yc_not_greater_than_node)
-    BOOL_OPER(>=, NotLessExpr, yc_not_less_than_node)
-
-    // Logical operators.
-    inline BoolExprPtr operator&&(const BoolExprPtr lhs, const BoolExprPtr rhs) {
-        return make_shared<AndExpr>(lhs, rhs);
-    }
-    inline BoolExprPtr operator||(const BoolExprPtr lhs, const BoolExprPtr rhs) {
-        return make_shared<OrExpr>(lhs, rhs);
-    }
-    inline BoolExprPtr operator!(const BoolExprPtr rhs) {
-        return make_shared<NotExpr>(rhs);
-    }
-
     typedef set<GridPoint> GridPointSet;
     typedef set<GridPointPtr> GridPointPtrSet;
     typedef vector<GridPoint> GridPointVec;
-
-    // A 'GridIndex' is simply a pointer to a numerical expression.
-    typedef NumExprPtr GridIndex;
-
-    // A 'Condition' is simply a pointer to a binary expression.
-    typedef BoolExprPtr Condition;
-
-    // A 'GridValue' is simply a pointer to an expression.
-    typedef NumExprPtr GridValue;
 
     // Use SET_VALUE_FROM_EXPR for creating a string to insert any C++ code
     // that evaluates to a real_t.

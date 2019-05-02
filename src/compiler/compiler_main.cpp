@@ -25,22 +25,53 @@ IN THE SOFTWARE.
 
 /////////////// Main vector-folding code-generation code. /////////////
 
-// YASK compiler-solution code.
+// YASK compiler APIs.
+#include "yask_compiler_api.hpp"
+
+// API for using this utility.
 #include "Soln.hpp"
+
+// YASK compiler-solution code.
+// TODO: remove all non-API includes.
 #include "CppIntrin.hpp"
 #include "Parse.hpp"
 
 using namespace yask;
 
-// output streams.
-map<string, string> outfiles;
+// Declarations to live in the 'yask' namespace.
+namespace yask {
 
-// other vars set via cmd-line options.
-CompilerSettings settings;
-int vlenForStats = 0;
-StencilBase* stencilSoln = NULL;
-string solutionName;
-int radius = -1;
+    // Compiler API factory.
+    yc_factory factory;
+
+    // output streams.
+    map<string, string> outfiles;
+    
+    // other vars set via cmd-line options.
+    CompilerSettings settings;
+    int vlenForStats = 0;
+    StencilBase* stencilSoln = NULL;
+    string solutionName;
+    int radius = -1;
+    
+    // Collection of known stencils.
+    typedef map<string, StencilBase*> StencilMap;
+    StencilMap stencils;
+    
+    // Dummy object for backward-compatibility with old stencil DSL.
+    StencilList stub_stencils;
+
+    // Create new solution and register it.
+    yc_solution_ptr yc_new_solution(const std::string& name,
+                                    StencilBase* base_ptr) {
+        if (stencils.count(name))
+            THROW_YASK_EXCEPTION("Error: stencil '" + name +
+                                 "' already defined");
+        auto soln = factory.new_solution(name);
+        stencils[name] = base_ptr;
+        return soln;
+    }
+} // yask namespace.
 
 void usage(const string& cmd) {
 
@@ -60,7 +91,7 @@ void usage(const string& cmd) {
             if ((name.rfind("test_", 0) == 0) == show_test) {
                 auto sp = si.second;
                 cout << "           " << name;
-                if (sp->usesRadius())
+                if (sp->uses_radius())
                     cout << " *";
                 cout << endl;
             }
@@ -345,22 +376,32 @@ void parseOpts(int argc, const char* argv[])
     }
     stencilSoln = stencilIter->second;
     assert(stencilSoln);
+    auto soln = stencilSoln->get_solution();
 
-    cout << "Stencil-solution name: " << solutionName << endl;
-    if (stencilSoln->usesRadius()) {
+    cout << "Stencil-solution name: " << soln->get_name() << endl;
+    if (stencilSoln->uses_radius()) {
         if (radius >= 0) {
-            bool rOk = stencilSoln->setRadius(radius);
+            bool rOk = stencilSoln->set_radius(radius);
             if (!rOk) {
                 cerr << "Error: invalid radius=" << radius << " for stencil type '" <<
                     solutionName << "'." << endl;
                 usage(argv[0]);
             }
         }
-        cout << "Stencil radius: " << stencilSoln->getRadius() << endl;
+        cout << "Stencil radius: " << stencilSoln->get_radius() << endl;
     }
+    cout << "Stencil-solution description: " << soln->get_description() << endl;
 
     // Copy cmd-line settings into solution.
-    stencilSoln->setSettings(settings);
+    // TODO: remove this reliance on internal (non-API) functionality.
+    auto sp = dynamic_pointer_cast<StencilSolution>(soln);
+    assert(sp);
+    sp->setSettings(settings);
+
+    // Create equations from the overloaded 'define()' methods.
+    stencilSoln->define();
+    cout << "Num grids defined: " << soln->get_num_grids() << endl;
+    cout << "Num equations defined: " << soln->get_num_equations() << endl;
 }
 
 // Main program.
@@ -375,7 +416,10 @@ int main(int argc, const char* argv[]) {
         // Parse options and create the stencil-solution object.
         parseOpts(argc, argv);
 
-        // Create the requested output...
+        if (outfiles.size() == 0)
+            cout << "Use the '-p' option to generate output from this stencil.\n";
+        
+        // Create the requested output.
         for (auto i : outfiles) {
             auto& type = i.first;
             auto& fname = i.second;
@@ -386,7 +430,7 @@ int main(int argc, const char* argv[]) {
                 os = ofac.new_stdout_output();
             else
                 os = ofac.new_file_output(fname);
-            stencilSoln->format(type, os);
+            stencilSoln->get_solution()->format(type, os);
         }
     } catch (yask_exception& e) {
         cerr << "YASK Stencil Compiler: " << e.get_message() << ".\n";

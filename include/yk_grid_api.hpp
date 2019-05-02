@@ -29,8 +29,7 @@ IN THE SOFTWARE.
 // See http://www.stack.nl/~dimitri/doxygen.
 /** @file yk_grid_api.hpp */
 
-#ifndef YK_GRID_API
-#define YK_GRID_API
+#pragma once
 
 #include "yask_kernel_api.hpp"
 
@@ -1114,5 +1113,3 @@ namespace yask {
 
     /** @}*/
 } // namespace yask.
-
-#endif

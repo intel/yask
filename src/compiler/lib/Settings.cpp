@@ -40,7 +40,7 @@ namespace yask {
     	return yask_get_version_string();
     }
     yc_solution_ptr yc_factory::new_solution(const std::string& name) const {
-        return make_shared<EmptyStencil>(name);
+        return make_shared<StencilSolution>(name);
     }
 
     // Find the dimensions to be used based on the grids in
@@ -73,7 +73,7 @@ namespace yask {
         // Get dims from grids.
         for (auto& gp : grids) {
             auto& gname = gp->getName();
-            os << "Grid: " << gp->getDescr() << endl;
+            os << "GridVar: " << gp->getDescr() << endl;
 
             // Dimensions in this grid.
             for (auto dim : gp->getDims()) {

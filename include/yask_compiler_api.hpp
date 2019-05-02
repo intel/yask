@@ -29,8 +29,7 @@ IN THE SOFTWARE.
 // See http://www.stack.nl/~dimitri/doxygen.
 /** @file yask_compiler_api.hpp */
 
-#ifndef YASK_COMPILER_API
-#define YASK_COMPILER_API
+#pragma once
 
 #include "yask_common_api.hpp"
 #include <vector>
@@ -131,9 +130,10 @@ namespace yask {
 
         /// Get the name of the solution.
         /**
-           @returns String containing the solution name provided via new_solution().
+           @returns String containing the solution name provided via new_solution()
+           or set_name().
         */
-        virtual const std::string&
+        virtual std::string
         get_name() const =0;
 
         /// Set the name of the solution.
@@ -143,6 +143,24 @@ namespace yask {
         virtual void
         set_name(std::string name
                  /**< [in] Name; must be a valid C++ identifier. */ ) =0;
+
+        /// Get the description of the solution.
+        /**
+           See set_description().
+           @returns String containing the solution description.
+        */
+        virtual std::string
+        get_description() const =0;
+
+        /// Set the description of the solution.
+        /**
+           By default, the solution description is the same as that
+           provided via new_solution() or set_name().
+           This allows setting the description to any string.
+        */
+        virtual void
+        set_description(std::string description
+                        /**< [in] Any descriptive phrase. */ ) =0;
 
         /// Get current floating-point precision setting.
         /** @returns Number of bytes in a FP number. */
@@ -608,4 +626,3 @@ namespace yask {
 
 } // namespace yask.
 
-#endif

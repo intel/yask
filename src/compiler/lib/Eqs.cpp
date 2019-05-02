@@ -40,8 +40,8 @@ namespace yask {
     class PointVisitor : public ExprVisitor {
 
         // A type to hold a mapping of equations to a set of grids in each.
-        typedef unordered_set<Grid*> GridSet;
-        typedef unordered_map<EqualsExpr*, Grid*> GridMap;
+        typedef unordered_set<GridVar*> GridSet;
+        typedef unordered_map<EqualsExpr*, GridVar*> GridMap;
         typedef unordered_map<EqualsExpr*, GridSet> GridSetMap;
 
         GridMap _lhs_grids; // outputs of eqs.
@@ -768,7 +768,7 @@ namespace yask {
                     // Find scratch-grid eqs in this dep path that are
                     // needed for 'eq1'. Walk dep path from 'eq1' to 'b'
                     // until a non-scratch grid is found.
-                    unordered_set<Grid*> scratches_seen;
+                    unordered_set<GridVar*> scratches_seen;
                     for (auto eq2 : path) {
 
                         // Don't process 'eq1', the initial non-scratch eq.
@@ -1122,7 +1122,7 @@ namespace yask {
         // halos.
         // At the end, the real grids will be updated
         // from the shadows.
-        vector< map<Grid*, Grid*>> shadows;
+        vector< map<GridVar*, GridVar*>> shadows;
 
         // Packs.
         for (auto& bp : getAll()) {
@@ -1181,14 +1181,14 @@ namespace yask {
                                 // Output grid.
                                 auto* og = pv.getOutputGrids().at(eq.get());
                                 if (shadow_map.count(og) == 0)
-                                    shadow_map[og] = new Grid(*og);
+                                    shadow_map[og] = new GridVar(*og);
 
                                 // Input grids.
                                 auto& inPts = pv.getInputPts().at(eq.get());
                                 for (auto* ip : inPts) {
                                     auto* ig = ip->getGrid();
                                     if (shadow_map.count(ig) == 0)
-                                        shadow_map[ig] = new Grid(*ig);
+                                        shadow_map[ig] = new GridVar(*ig);
                                 }
                             }
                         

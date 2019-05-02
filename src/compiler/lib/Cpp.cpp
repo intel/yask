@@ -399,9 +399,9 @@ namespace yask {
         auto vp = printVecPointCall(os, gp, "getVecPtrNorm", "", "false", true);
 
         // Ptr will be unique if:
-        // - Grid doesn't have step dim, or
-        // - Grid doesn't allow dynamic step allocs and the alloc size is one (TODO), or
-        // - Grid doesn't allow dynamic step allocs and all accesses are via
+        // - GridVar doesn't have step dim, or
+        // - GridVar doesn't allow dynamic step allocs and the alloc size is one (TODO), or
+        // - GridVar doesn't allow dynamic step allocs and all accesses are via
         //   offsets from the step dim w/compatible offsets (TODO).
         // TODO: must also share pointers during code gen in last 2 cases.
         auto* grid = gp.getGrid();

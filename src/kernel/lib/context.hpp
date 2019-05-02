@@ -408,7 +408,7 @@ namespace yask {
         // Init all grids & params.
         // By default it uses the initSame initialization routine.
         virtual void initData() {
-            initSame();
+            initDiff();         // Safer than initSame() to avoid NaNs due to div-by-zero.
         }
 
         // Compare grids in contexts for validation.

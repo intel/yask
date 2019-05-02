@@ -36,16 +36,14 @@ using namespace std;
 
 namespace yask {
 
+    // TODO: add API to add to this.
     typedef enum { STENCIL_CONTEXT } YASKSection;
     typedef vector<string> CodeList;
     typedef map<YASKSection, CodeList > ExtensionsList;
 
-    class StencilSolution;
-    class StencilBase;
-    typedef map<string, StencilBase*> StencilList;
-
-    // Global list for registering stencils.
-    extern StencilList stencils;
+// Convenience macros for adding 'extension' code to a stencil.
+#define _REGISTER_CODE_EXTENSION(section, code) _extensions[section].push_back(code);
+#define _REGISTER_STENCIL_CONTEXT_EXTENSION(...) REGISTER_CODE_EXTENSION(STENCIL_CONTEXT, #__VA_ARGS__)
 
     // A base class for whole stencil solutions.  This is used by solutions
     // defined in C++ that are inherited from StencilBase as well as those
@@ -129,10 +127,6 @@ namespace yask {
             return *_dos;
         }
 
-        // Define grid values relative to current domain indices in each dimension.
-        // This must be implemented by each concrete stencil solution.
-        virtual void define() = 0;
-
         // Make a new grid.
         virtual yc_grid_ptr newGrid(const std::string& name,
                                     bool isScratch,
@@ -153,10 +147,10 @@ namespace yask {
         virtual void set_description(std::string str) {
             _long_name = str;
         }
-        virtual const std::string& get_name() const {
+        virtual std::string get_name() const {
             return _name;
         }
-        virtual const std::string get_description() const {
+        virtual std::string get_description() const {
             return getLongName();
         }
 
@@ -259,112 +253,4 @@ namespace yask {
         
     };
 
-    // A stencil solution that does not define any grids.
-    // This is used by a program via the compiler API to add grids
-    // programmatically.
-    class EmptyStencil : public StencilSolution {
-
-        // Do not define any dims.
-        // Do not define any grids.
-
-    public:
-        EmptyStencil(std::string name) :
-            StencilSolution(name) { }
-
-        // Do not define any equations.
-        virtual void define() { }
-    };
-
-    // An interface for all objects that participate in stencil definitions.
-    // This allows a programmer to use object composition in addition to
-    // inheritance from StencilBase to define stencils.
-    class StencilPart {
-
-    public:
-        StencilPart() {}
-        virtual ~StencilPart() {}
-
-        // Return a reference to the main stencil object.
-        virtual StencilSolution& get_stencil_solution() =0;
-    };
-
-    // The class all C++ stencil solutions must implement.
-    class StencilBase : public StencilSolution,
-                        public StencilPart {
-
-    public:
-        // Initialize name and register this new object in a list.
-        StencilBase(const string name, StencilList& stencils) :
-            StencilSolution(name)
-        {
-            if (stencils.count(name))
-                THROW_YASK_EXCEPTION("Error: stencil '" + name +
-                                     "' already defined");
-            stencils[name] = this;
-        }
-        virtual ~StencilBase() { }
-
-        // Return a reference to the main stencil-solution object.
-        // For StencilBase, simply this object.
-        virtual StencilSolution& get_stencil_solution() {
-            return *this;
-        }
-
-        // Radius stub methods.
-        virtual bool usesRadius() const { return false; }
-        virtual bool setRadius(int radius) { return false; }
-        virtual int getRadius() const { return 0; }
-
-    };
-
-    // A base class for stencils that have a 'radius'.
-    class StencilRadiusBase : public StencilBase {
-    protected:
-        int _radius;         // stencil radius.
-
-    public:
-        StencilRadiusBase(const string name, StencilList& stencils, int radius) :
-            StencilBase(name, stencils) {
-            setRadius(radius);
-        }
-
-        // Does use radius.
-        virtual bool usesRadius() const override { return true; }
-
-        // Set radius.
-        // Return true if successful.
-        virtual bool setRadius(int radius) override {
-            _radius = radius;
-            _long_name = _name + " radius " + to_string(radius);
-            return radius >= 0;  // support only non-neg. radius.
-        }
-
-        // Get radius.
-        virtual int getRadius() const override { return _radius; }
-    };
-
 } // namespace yask.
-
-// Convenience macro for declaring an instance of a stencil and registering
-// it in the list used by the default YASK compiler.
-#define REGISTER_STENCIL(Class) static Class registered_ ## Class(stencils)
-
-// Convenience macros for adding 'extension' code to a stencil.
-#define REGISTER_CODE_EXTENSION(section, code) _extensions[section].push_back(code);
-#define REGISTER_STENCIL_CONTEXT_EXTENSION(...) REGISTER_CODE_EXTENSION(STENCIL_CONTEXT, #__VA_ARGS__)
-
-// Convenience macro for declaring dims.
-#define MAKE_STEP_INDEX(d) IndexExprPtr d = make_shared<IndexExpr>(#d, STEP_INDEX);
-#define MAKE_DOMAIN_INDEX(d) IndexExprPtr d = make_shared<IndexExpr>(#d, DOMAIN_INDEX);
-#define MAKE_MISC_INDEX(d) IndexExprPtr d = make_shared<IndexExpr>(#d, MISC_INDEX);
-
-// Convenience macros for creating grids in a class implementing StencilPart.
-// The 'gvar' arg is the var name and the grid name.
-// The remaining args are the dimension names.
-#define MAKE_GRID(gvar, ...)                                            \
-    Grid gvar = Grid(#gvar, false, &get_stencil_solution(), ##__VA_ARGS__)
-#define MAKE_SCRATCH_GRID(gvar, ...)                                    \
-    Grid gvar = Grid(#gvar, true, &get_stencil_solution(), ##__VA_ARGS__)
-#define MAKE_SCALAR(gvar) MAKE_GRID(gvar)
-#define MAKE_ARRAY(gvar, d1) MAKE_GRID(gvar, d1)
-

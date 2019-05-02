@@ -32,9 +32,6 @@ using namespace std;
 
 namespace yask {
 
-    // A global register of stencils.
-    StencilList stencils;
-
     // Stencil-solution APIs.
     yc_grid_ptr StencilSolution::newGrid(const std::string& name,
                                          bool isScratch,
@@ -51,7 +48,7 @@ namespace yask {
             dims2.push_back(d2);
         }
 
-        auto* gp = new Grid(name, isScratch, this, dims2);
+        auto* gp = new GridVar(name, isScratch, this, dims2);
         assert(gp);
         return gp;
     }
@@ -71,10 +68,6 @@ namespace yask {
     // Create the intermediate data for printing.
     void StencilSolution::analyze_solution(int vlen,
                                            bool is_folding_efficient) {
-
-        // Call the stencil 'define' method to create ASTs.
-        // ASTs and grids can also be created via the APIs.
-        define();
 
         // Find all the stencil dimensions from the grids.
         // Create the final folds and clusters from the cmd-line options.

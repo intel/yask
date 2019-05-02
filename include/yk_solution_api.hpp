@@ -29,8 +29,7 @@ IN THE SOFTWARE.
 // See http://www.stack.nl/~dimitri/doxygen.
 /** @file yk_solution_api.hpp */
 
-#ifndef YK_SOLN_API
-#define YK_SOLN_API
+#pragma once
 
 #include "yask_kernel_api.hpp"
 
@@ -930,5 +929,3 @@ namespace yask {
 
     /** @}*/
 } // namespace yask.
-
-#endif

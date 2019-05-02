@@ -399,7 +399,7 @@ int main(int argc, char** argv)
 
             // init data before each trial for comparison if validating.
             if (opts->validate)
-                context->initDiff();
+                context->initData();
 
             // Warn if tuning.
             if (ksoln->is_auto_tuner_enabled())
@@ -508,14 +508,14 @@ int main(int argc, char** argv)
             ref_soln->prepare_solution();
 
             // init to same value used in context.
-            ref_context->initDiff();
+            ref_context->initData();
 
 #ifdef CHECK_INIT
 
             // Debug code to determine if data compares immediately after init matches.
             os << endl << divLine <<
                 "Reinitializing data for minimal validation...\n" << flush;
-            context->initDiff();
+            context->initData();
 #else
 
             // Ref trial.

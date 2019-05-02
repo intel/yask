@@ -36,11 +36,11 @@ namespace yask {
     // Fwd decl.
     struct Dimensions;
 
-    // A class for a Grid.
+    // A class for a GridVar.
     // This is a generic container for all variables to be accessed
     // from the kernel. A 0-D grid is a scalar, a 1-D grid is an array, etc.
     // Dims can be the step dim, a domain dim, or anything else.
-    class Grid : public virtual yc_grid {
+    class GridVar : public virtual yc_grid {
 
     protected:
         string _name;           // name of this grid.
@@ -74,22 +74,13 @@ namespace yask {
 
     public:
         // Ctors.
-        Grid(string name,
+        GridVar(string name,
              bool isScratch,
              StencilSolution* soln,
              const IndexExprPtrVec& dims);
-        Grid(string name,
-             bool isScratch,
-             StencilSolution* soln,
-             IndexExprPtr dim1 = nullptr,
-             IndexExprPtr dim2 = nullptr,
-             IndexExprPtr dim3 = nullptr,
-             IndexExprPtr dim4 = nullptr,
-             IndexExprPtr dim5 = nullptr,
-             IndexExprPtr dim6 = nullptr);
 
         // Dtor.
-        virtual ~Grid() { }
+        virtual ~GridVar() { }
 
         // Name accessors.
         const string& getName() const { return _name; }
@@ -160,7 +151,7 @@ namespace yask {
         }
 
         // Determine whether dims are same.
-        virtual bool areDimsSame(const Grid& other) const {
+        virtual bool areDimsSame(const GridVar& other) const {
             if (_dims.size() != other._dims.size())
                 return false;
             size_t i = 0;
@@ -180,94 +171,16 @@ namespace yask {
         virtual void setFolding(const Dimensions& dims);
 
         // Determine whether halo sizes are equal.
-        virtual bool isHaloSame(const Grid& other) const;
+        virtual bool isHaloSame(const GridVar& other) const;
 
         // Update halos based on halo in 'other' grid.
-        virtual void updateHalo(const Grid& other);
+        virtual void updateHalo(const GridVar& other);
 
         // Update halos based on each value in 'offsets'.
         virtual void updateHalo(const string& packName, const IntTuple& offsets);
 
         // Update const indices based on 'indices'.
         virtual void updateConstIndices(const IntTuple& indices);
-
-        // Create an expression to a specific point in this grid.
-        // Note that this doesn't actually 'read' or 'write' a value;
-        // it's just a node in an expression.
-        virtual GridPointPtr makePoint(const NumExprPtrVec& args);
-        virtual GridPointPtr makePoint() {
-            NumExprPtrVec args;
-            return makePoint(args);
-        }
-
-        // Convenience functions for zero dimensions (scalar).
-        virtual operator NumExprPtr() { // implicit conversion.
-            return makePoint();
-        }
-        virtual operator GridPointPtr() { // implicit conversion.
-            return makePoint();
-        }
-        virtual GridPointPtr operator()() {
-            return makePoint();
-        }
-
-        // Convenience functions for one dimension (array).
-        virtual GridPointPtr operator[](const NumExprArg i1) {
-            NumExprPtrVec args;
-            args.push_back(i1);
-            return makePoint(args);
-        }
-        virtual GridPointPtr operator()(const NumExprArg i1) {
-            return operator[](i1);
-        }
-
-        // Convenience functions for more dimensions.
-        virtual GridPointPtr operator()(const NumExprArg i1, const NumExprArg i2) {
-            NumExprPtrVec args;
-            args.push_back(i1);
-            args.push_back(i2);
-            return makePoint(args);
-        }
-        virtual GridPointPtr operator()(const NumExprArg i1, const NumExprArg i2,
-                                        const NumExprArg i3) {
-            NumExprPtrVec args;
-            args.push_back(i1);
-            args.push_back(i2);
-            args.push_back(i3);
-            return makePoint(args);
-        }
-        virtual GridPointPtr operator()(const NumExprArg i1, const NumExprArg i2,
-                                        const NumExprArg i3, const NumExprArg i4) {
-            NumExprPtrVec args;
-            args.push_back(i1);
-            args.push_back(i2);
-            args.push_back(i3);
-            args.push_back(i4);
-            return makePoint(args);
-        }
-        virtual GridPointPtr operator()(const NumExprArg i1, const NumExprArg i2,
-                                        const NumExprArg i3, const NumExprArg i4,
-                                        const NumExprArg i5) {
-            NumExprPtrVec args;
-            args.push_back(i1);
-            args.push_back(i2);
-            args.push_back(i3);
-            args.push_back(i4);
-            args.push_back(i5);
-            return makePoint(args);
-        }
-        virtual GridPointPtr operator()(const NumExprArg i1, const NumExprArg i2,
-                                        const NumExprArg i3, const NumExprArg i4,
-                                        const NumExprArg i5, const NumExprArg i6) {
-            NumExprPtrVec args;
-            args.push_back(i1);
-            args.push_back(i2);
-            args.push_back(i3);
-            args.push_back(i4);
-            args.push_back(i5);
-            args.push_back(i6);
-            return makePoint(args);
-        }
 
         // APIs.
         virtual const string& get_name() const {
@@ -318,7 +231,7 @@ namespace yask {
 
     // A list of grids.  This holds pointers to grids defined by the stencil
     // class in the order in which they are added via the INIT_GRID_* macros.
-    class Grids : public vector_set<Grid*> {
+    class Grids : public vector_set<GridVar*> {
     public:
 
         Grids() {}
@@ -326,7 +239,7 @@ namespace yask {
 
         // Copy ctor.
         // Copies list of grid pointers, but not grids (shallow copy).
-        Grids(const Grids& src) : vector_set<Grid*>(src) {}
+        Grids(const Grids& src) : vector_set<GridVar*>(src) {}
 
         // Determine whether each grid can be folded.
         virtual void setFolding(const Dimensions& dims) {

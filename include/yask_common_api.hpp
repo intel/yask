@@ -29,8 +29,7 @@ IN THE SOFTWARE.
 // See http://www.stack.nl/~dimitri/doxygen.
 /** @file yask_common_api.hpp */
 
-#ifndef YASK_COMMON_API
-#define YASK_COMMON_API
+#pragma once
 
 #include <string>
 #include <vector>
@@ -258,4 +257,3 @@ namespace yask {
 
 } // namespace yask.
 
-#endif

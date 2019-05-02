@@ -192,7 +192,7 @@ namespace yask {
         set<string> newGridDims;
 
         // Grids.
-        os << "\n ///// Grid(s)." << endl;
+        os << "\n ///// GridVar(s)." << endl;
         for (auto gp : _grids) {
             string grid = gp->getName();
             int ndims = gp->get_num_dims();
@@ -329,7 +329,7 @@ namespace yask {
                 " typedef std::shared_ptr<" << typeDef << "> " << ptrTypeDef << ";\n"
                 " GridDimNames " + grid + "_dim_names;\n";
 
-            ctorCode += "\n // Grid '" + grid + "'.\n";
+            ctorCode += "\n // GridVar '" + grid + "'.\n";
             ctorCode += " " + grid + "_dim_names = {" +
                 gdims.makeDimStr(", ", "\"", "\"") + "};\n";
             string gbp = grid + "_base_ptr";
@@ -339,7 +339,7 @@ namespace yask {
                 " " + grid + "_ptr = std::make_shared<YkGridImpl>(" + gbp + ");\n"
                 " assert(" + grid + "_ptr->gbp());\n";
 
-            // Grid vars.
+            // GridVar vars.
             if (gp->isScratch()) {
 
                 // Collection of scratch grids.
@@ -348,7 +348,7 @@ namespace yask {
             }
             else {
 
-                // Grid ptr declaration.
+                // GridVar ptr declaration.
                 // Default ctor gives null ptr.
                 os << " YkGridPtr " << grid << "_ptr;\n";
             }
@@ -414,7 +414,7 @@ namespace yask {
             // If not scratch, init grids in ctor.
             if (!gp->isScratch()) {
 
-                // Grid init.
+                // GridVar init.
                 ctorCode += initCode;
                 ctorCode += " addGrid(" + grid + "_ptr, true, ";
                 if (_eqBundles.getOutputGrids().count(gp))

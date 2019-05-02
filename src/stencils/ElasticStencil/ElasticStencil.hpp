@@ -44,12 +44,11 @@ struct X: public StencilDimension{};
 struct Y: public StencilDimension{};
 struct Z: public StencilDimension{};
 
-// This class implements StencilPart but is not the main solution.
+// This class implements StencilBase but is not the main solution.
 // The main solution is provided during construction.
-class ElasticBoundaryCondition : public StencilPart
+class ElasticBoundaryCondition : public StencilBase
 {
 protected:
-    StencilSolution& _sol;
 
     // Indices & dimensions.
     MAKE_STEP_INDEX(t);           // step in time dim.
@@ -58,18 +57,13 @@ protected:
     MAKE_DOMAIN_INDEX(z);         // spatial dim.
 
     public:
-    ElasticBoundaryCondition(StencilSolution& solution) :
-        _sol(solution) {}
+    ElasticBoundaryCondition(StencilBase& base) :
+        StencilBase(base) { }
     virtual ~ElasticBoundaryCondition() {}
 
     // Determine whether current indices are at boundary.
     virtual Condition is_at_boundary() =0;
     virtual Condition is_not_at_boundary() =0;
-
-    // Return a reference to the main stencil-solution object provided during construction.
-    virtual StencilSolution& get_stencil_solution() {
-        return _sol;
-    }
 };
 
 class ElasticStencilBase : public StencilBase {
@@ -105,18 +99,7 @@ public:
     ElasticStencilBase(const string& name, StencilList& stencils,
                        ElasticBoundaryCondition *_bc = NULL) :
         StencilBase(name, stencils), bc(_bc)
-    {
-        init();
-    }
-
-    void init() {
-        // StencilContex specific code
-        REGISTER_STENCIL_CONTEXT_EXTENSION(
-           virtual void initData() {
-               initDiff();
-           }
-        );
-    }
+    { }
 
     bool hasBoundaryCondition()
     {
