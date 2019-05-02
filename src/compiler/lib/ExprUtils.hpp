@@ -77,12 +77,12 @@ namespace yask {
     // example: a+b+c * b+d+a => c+(a+b) * d+(a+b) w/expr a+b combined.
     class CseVisitor : public OptVisitor {
     protected:
-        set<NumExprPtr> _seen;
+        set<numExprPtr> _seen;
 
         // If 'ep' has already been seen, just return true.
         // Else if 'ep' has a match, change pointer to that match, return true.
         // Else, return false.
-        virtual bool findMatchTo(NumExprPtr& ep);
+        virtual bool findMatchTo(numExprPtr& ep);
 
     public:
         CseVisitor()  :

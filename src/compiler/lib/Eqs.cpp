@@ -105,7 +105,7 @@ namespace yask {
             lhs->accept(this);
             
             // visit RHS.
-            NumExprPtr rhs = ee->getRhs();
+            numExprPtr rhs = ee->getRhs();
             _state = _in_rhs;
             rhs->accept(this);
 
@@ -193,7 +193,7 @@ namespace yask {
             auto& ip1 = inPts.at(eq1p);
             auto cond1 = eq1p->getCond();
             auto stcond1 = eq1p->getStepCond();
-            NumExprPtr step_expr1 = op1->getArg(stepDim); // may be null.
+            numExprPtr step_expr1 = op1->getArg(stepDim); // may be null.
 
 #ifdef DEBUG_DEP
             cout << " Checking internal consistency of equation " <<
@@ -211,7 +211,7 @@ namespace yask {
             // LHS must have all domain dims.
             for (auto& dd : dims._domainDims.getDims()) {
                 auto& dname = dd.getName();
-                NumExprPtr dexpr = op1->getArg(dname);
+                numExprPtr dexpr = op1->getArg(dname);
                 if (!dexpr)
                     THROW_YASK_EXCEPTION("Error: grid equation " + eq1->makeQuotedStr() +
                                          " does not use domain-dimension '" + dname +
@@ -372,7 +372,7 @@ namespace yask {
             //auto& ip1 = inPts.at(eq1p);
             auto cond1 = eq1p->getCond();
             auto stcond1 = eq1p->getStepCond();
-            NumExprPtr step_expr1 = op1->getArg(stepDim);
+            numExprPtr step_expr1 = op1->getArg(stepDim);
 
             // Check each 'eq2' to see if it depends on 'eq1'.
             for (auto eq2 : getAll()) {
@@ -480,7 +480,7 @@ namespace yask {
 
                         // Both points at same step?
                         bool same_step = false;
-                        NumExprPtr step_expr2 = i2->getArg(stepDim);
+                        numExprPtr step_expr2 = i2->getArg(stepDim);
                         if (step_expr1 && step_expr2 &&
                             areExprsSame(step_expr1, step_expr2))
                             same_step = true;
@@ -762,7 +762,7 @@ namespace yask {
                 // For each 'b', 'eq1' is 'b' or depends on 'b',
                 // immediately or indirectly; 'path' leads from
                 // 'eq1' to 'b'.
-                (eq1, [&](EqualsExprPtr b, EqList& path) {
+                (eq1, [&](equalsExprPtr b, EqList& path) {
                     //auto* ogb = pv.getOutputGrids().at(b.get());
 
                     // Find scratch-grid eqs in this dep path that are
@@ -833,7 +833,7 @@ namespace yask {
     }
 
     // Add an equation to an EqBundle.
-    void EqBundle::addEq(EqualsExprPtr ee)
+    void EqBundle::addEq(equalsExprPtr ee)
     {
 #ifdef DEBUG_EQ_BUNDLE
         cout << "EqBundle: adding " << ee->makeQuotedStr() << endl;
@@ -942,7 +942,7 @@ namespace yask {
     // be incremented if a new bundle is created.  Returns whether a new
     // bundle was created.
     bool EqBundles::addEqToBundle(Eqs& allEqs,
-                                  EqualsExprPtr eq,
+                                  equalsExprPtr eq,
                                   const string& baseName,
                                   const CompilerSettings& settings) {
         assert(_dims);

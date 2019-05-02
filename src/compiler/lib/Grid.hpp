@@ -44,7 +44,7 @@ namespace yask {
 
     protected:
         string _name;           // name of this grid.
-        IndexExprPtrVec _dims;  // dimensions of this grid.
+        indexExprPtrVec _dims;  // dimensions of this grid.
         bool _isScratch = false; // true if a temp grid.
 
         // Step-dim info.
@@ -77,7 +77,7 @@ namespace yask {
         GridVar(string name,
              bool isScratch,
              StencilSolution* soln,
-             const IndexExprPtrVec& dims);
+             const indexExprPtrVec& dims);
 
         // Dtor.
         virtual ~GridVar() { }
@@ -88,10 +88,10 @@ namespace yask {
         string getDescr() const;
 
         // Access dims.
-        virtual const IndexExprPtrVec& getDims() const { return _dims; }
+        virtual const indexExprPtrVec& getDims() const { return _dims; }
 
         // Step dim or null if none.
-        virtual const IndexExprPtr getStepDim() const {
+        virtual const indexExprPtr getStepDim() const {
             for (auto d : _dims)
                 if (d->getType() == STEP_INDEX)
                     return d;

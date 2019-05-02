@@ -60,19 +60,19 @@ namespace yask {
 
     // Forward-decls of expressions.
     class Expr;
-    typedef shared_ptr<Expr> ExprPtr;
+    typedef shared_ptr<Expr> exprPtr;
     class NumExpr;
-    typedef shared_ptr<NumExpr> NumExprPtr;
-    typedef vector<NumExprPtr> NumExprPtrVec;
+    typedef shared_ptr<NumExpr> numExprPtr;
+    typedef vector<numExprPtr> numExprPtrVec;
     class GridPoint;
-    typedef shared_ptr<GridPoint> GridPointPtr;
+    typedef shared_ptr<GridPoint> gridPointPtr;
     class IndexExpr;
-    typedef shared_ptr<IndexExpr> IndexExprPtr;
-    typedef vector<IndexExprPtr> IndexExprPtrVec;
+    typedef shared_ptr<IndexExpr> indexExprPtr;
+    typedef vector<indexExprPtr> indexExprPtrVec;
     class BoolExpr;
-    typedef shared_ptr<BoolExpr> BoolExprPtr;
+    typedef shared_ptr<BoolExpr> boolExprPtr;
     class EqualsExpr;
-    typedef shared_ptr<EqualsExpr> EqualsExprPtr;
+    typedef shared_ptr<EqualsExpr> equalsExprPtr;
 
     // More forward-decls.
     class ExprVisitor;
@@ -104,7 +104,7 @@ namespace yask {
         // Does *not* check value equivalency except for
         // constants.
         virtual bool isSame(const Expr* other) const =0;
-        virtual bool isSame(const ExprPtr& other) const {
+        virtual bool isSame(const exprPtr& other) const {
             return isSame(other.get());
         }
 
@@ -113,7 +113,7 @@ namespace yask {
         virtual bool makePair(Expr* other) {
             return false;
         }
-        virtual bool makePair(ExprPtr other) {
+        virtual bool makePair(exprPtr other) {
             return makePair(other.get());
         }
 
@@ -151,7 +151,7 @@ namespace yask {
     };
 
     // Convert pointer to the given ptr type or die trying.
-    template<typename T> shared_ptr<T> castExpr(ExprPtr ep, const string& descrip) {
+    template<typename T> shared_ptr<T> castExpr(exprPtr ep, const string& descrip) {
         auto tp = dynamic_pointer_cast<T>(ep);
         if (!tp) {
             THROW_YASK_EXCEPTION("Error: expression '" + ep->makeStr() +
@@ -163,13 +163,13 @@ namespace yask {
     // Compare 2 expr pointers and return whether the expressions are
     // equivalent.
     bool areExprsSame(const Expr* e1, const Expr* e2);
-    inline bool areExprsSame(const ExprPtr e1, const Expr* e2) {
+    inline bool areExprsSame(const exprPtr e1, const Expr* e2) {
         return areExprsSame(e1.get(), e2);
     }
-    inline bool areExprsSame(const Expr* e1, const ExprPtr e2) {
+    inline bool areExprsSame(const Expr* e1, const exprPtr e2) {
         return areExprsSame(e1, e2.get());
     }
-    inline bool areExprsSame(const ExprPtr e1, const ExprPtr e2) {
+    inline bool areExprsSame(const exprPtr e1, const exprPtr e2) {
         return areExprsSame(e1.get(), e2.get());
     }
 
@@ -212,7 +212,7 @@ namespace yask {
         // Create a deep copy of this expression.
         // For this to work properly, each derived type
         // should also implement a deep-copy copy ctor.
-        virtual NumExprPtr clone() const =0;
+        virtual numExprPtr clone() const =0;
         virtual yc_number_node_ptr clone_ast() const {
             return clone();
         }
@@ -267,7 +267,7 @@ namespace yask {
         }
 
         // Create a deep copy of this expression.
-        virtual NumExprPtr clone() const { return make_shared<IndexExpr>(*this); }
+        virtual numExprPtr clone() const { return make_shared<IndexExpr>(*this); }
 
         // APIs.
         virtual const string& get_name() const {
@@ -290,7 +290,7 @@ namespace yask {
         // Create a deep copy of this expression.
         // For this to work properly, each derived type
         // should also implement a copy ctor.
-        virtual BoolExprPtr clone() const =0;
+        virtual boolExprPtr clone() const =0;
         virtual yc_bool_node_ptr clone_ast() const {
             return clone();
         }
@@ -326,7 +326,7 @@ namespace yask {
         }
 
         // Create a deep copy of this expression.
-        virtual NumExprPtr clone() const { return make_shared<ConstExpr>(*this); }
+        virtual numExprPtr clone() const { return make_shared<ConstExpr>(*this); }
 
         // APIs.
         virtual void set_value(double val) { _f = val; }
@@ -359,7 +359,7 @@ namespace yask {
         }
 
         // Create a deep copy of this expression.
-        virtual NumExprPtr clone() const { return make_shared<CodeExpr>(*this); }
+        virtual numExprPtr clone() const { return make_shared<CodeExpr>(*this); }
     };
 
     // Base class for any generic unary operator.
@@ -395,15 +395,15 @@ namespace yask {
     };
 
     // Various types of unary operators depending on input and output types.
-    typedef UnaryExpr<NumExpr, NumExprPtr, yc_number_node_ptr> UnaryNumExpr;
-    typedef UnaryExpr<BoolExpr, NumExprPtr, yc_number_node_ptr> UnaryNum2BoolExpr;
-    typedef UnaryExpr<BoolExpr, BoolExprPtr, yc_bool_node_ptr> UnaryBoolExpr;
+    typedef UnaryExpr<NumExpr, numExprPtr, yc_number_node_ptr> UnaryNumExpr;
+    typedef UnaryExpr<BoolExpr, numExprPtr, yc_number_node_ptr> UnaryNum2BoolExpr;
+    typedef UnaryExpr<BoolExpr, boolExprPtr, yc_bool_node_ptr> UnaryBoolExpr;
 
     // Negate operator.
     class NegExpr : public UnaryNumExpr,
                     public virtual yc_negate_node {
     public:
-        NegExpr(NumExprPtr rhs) :
+        NegExpr(numExprPtr rhs) :
             UnaryNumExpr(opStr(), rhs) { }
         NegExpr(const NegExpr& src) :
             UnaryExpr(src) { }
@@ -416,7 +416,7 @@ namespace yask {
             double rhs = _rhs->getNumVal();
             return -rhs;
         }
-        virtual NumExprPtr clone() const {
+        virtual numExprPtr clone() const {
             return make_shared<NegExpr>(*this);
         }
 
@@ -430,7 +430,7 @@ namespace yask {
     class NotExpr : public UnaryBoolExpr,
                     public virtual yc_not_node {
     public:
-        NotExpr(BoolExprPtr rhs) :
+        NotExpr(boolExprPtr rhs) :
             UnaryBoolExpr(opStr(), rhs) { }
         NotExpr(const NotExpr& src) :
             UnaryBoolExpr(src) { }
@@ -440,7 +440,7 @@ namespace yask {
             bool rhs = _rhs->getBoolVal();
             return !rhs;
         }
-        virtual BoolExprPtr clone() const {
+        virtual boolExprPtr clone() const {
             return make_shared<NotExpr>(*this);
         }
         virtual yc_bool_node_ptr get_rhs() {
@@ -489,11 +489,11 @@ namespace yask {
 
     // Various types of binary operators depending on input and output types.
     typedef BinaryExpr<UnaryNumExpr, yc_binary_number_node,
-                       NumExprPtr, yc_number_node_ptr> BinaryNumExpr; // fn(num, num) -> num.
+                       numExprPtr, yc_number_node_ptr> BinaryNumExpr; // fn(num, num) -> num.
     typedef BinaryExpr<UnaryBoolExpr, yc_binary_bool_node,
-                       BoolExprPtr, yc_bool_node_ptr> BinaryBoolExpr; // fn(bool, bool) -> bool.
+                       boolExprPtr, yc_bool_node_ptr> BinaryBoolExpr; // fn(bool, bool) -> bool.
     typedef BinaryExpr<UnaryNum2BoolExpr, yc_binary_comparison_node,
-                       NumExprPtr, yc_number_node_ptr> BinaryNum2BoolExpr; // fn(num, num) -> bool.
+                       numExprPtr, yc_number_node_ptr> BinaryNum2BoolExpr; // fn(num, num) -> bool.
 
     // Numerical binary operators.
     // TODO: redo this with a template.
@@ -501,7 +501,7 @@ namespace yask {
     class type : public BinaryNumExpr,                  \
                  public virtual implType {              \
     public:                                             \
-        type(NumExprPtr lhs, NumExprPtr rhs) :          \
+        type(numExprPtr lhs, numExprPtr rhs) :          \
             BinaryNumExpr(lhs, opStr(), rhs) { }        \
         type(const type& src) :                         \
             BinaryNumExpr(src) { }                      \
@@ -516,7 +516,7 @@ namespace yask {
             double rhs = _rhs->getNumVal();             \
             return oper;                                \
         }                                               \
-        virtual NumExprPtr clone() const {              \
+        virtual numExprPtr clone() const {              \
             return make_shared<type>(*this);            \
         }                                               \
     }
@@ -536,7 +536,7 @@ namespace yask {
     class type : public BinaryNum2BoolExpr,             \
                  public virtual implType {              \
     public:                                             \
-    type(NumExprPtr lhs, NumExprPtr rhs) :              \
+    type(numExprPtr lhs, numExprPtr rhs) :              \
         BinaryNum2BoolExpr(lhs, opStr(), rhs) { }       \
     type(const type& src) :                             \
         BinaryNum2BoolExpr(src) { }                     \
@@ -546,7 +546,7 @@ namespace yask {
         double rhs = _rhs->getNumVal();                 \
         return oper;                                    \
     }                                                   \
-    virtual BoolExprPtr clone() const {                 \
+    virtual boolExprPtr clone() const {                 \
         return make_shared<type>(*this);                \
     }                                                   \
     virtual yc_number_node_ptr get_lhs() {              \
@@ -570,7 +570,7 @@ namespace yask {
     class type : public BinaryBoolExpr, \
                  public virtual implType {              \
     public:                                             \
-    type(BoolExprPtr lhs, BoolExprPtr rhs) :            \
+    type(boolExprPtr lhs, boolExprPtr rhs) :            \
         BinaryBoolExpr(lhs, opStr(), rhs) { }           \
     type(const type& src) :                             \
         BinaryBoolExpr(src) { }                         \
@@ -580,7 +580,7 @@ namespace yask {
         bool rhs = _rhs->getBoolVal();                  \
         return oper;                                    \
     }                                                   \
-    virtual BoolExprPtr clone() const {                 \
+    virtual boolExprPtr clone() const {                 \
         return make_shared<type>(*this);                \
     }                                                   \
     virtual yc_bool_node_ptr get_lhs() {                \
@@ -600,14 +600,14 @@ namespace yask {
     class CommutativeExpr : public NumExpr,
                             public virtual yc_commutative_number_node {
     protected:
-        NumExprPtrVec _ops;
+        numExprPtrVec _ops;
         string _opStr;
 
     public:
         CommutativeExpr(const string& opStr) :
             _opStr(opStr) {
         }
-        CommutativeExpr(NumExprPtr lhs, const string& opStr, NumExprPtr rhs) :
+        CommutativeExpr(numExprPtr lhs, const string& opStr, numExprPtr rhs) :
             _opStr(opStr) {
             _ops.push_back(lhs->clone());
             _ops.push_back(rhs->clone());
@@ -620,12 +620,12 @@ namespace yask {
         virtual ~CommutativeExpr() { }
 
         // Accessors.
-        NumExprPtrVec& getOps() { return _ops; }
-        const NumExprPtrVec& getOps() const { return _ops; }
+        numExprPtrVec& getOps() { return _ops; }
+        const numExprPtrVec& getOps() const { return _ops; }
         const string& getOpStr() const { return _opStr; }
 
         // Clone and add an operand.
-        virtual void appendOp(NumExprPtr op) {
+        virtual void appendOp(numExprPtr op) {
             _ops.push_back(op->clone());
         }
 
@@ -635,7 +635,7 @@ namespace yask {
         // Example: if 'this' is 'A+B', 'mergeExpr(C+D)'
         // returns 'A+B+C+D', and 'mergeExpr(E*F)'
         // returns 'A+B+(E*F)'.
-        virtual void mergeExpr(NumExprPtr op) {
+        virtual void mergeExpr(numExprPtr op) {
             auto opp = dynamic_pointer_cast<CommutativeExpr>(op);
             if (opp && opp->getOpStr() == _opStr) {
                 for(auto op2 : opp->_ops)
@@ -688,7 +688,7 @@ namespace yask {
     public:                                                             \
     type()  :                                                           \
         CommutativeExpr(opStr()) { }                                    \
-    type(NumExprPtr lhs, NumExprPtr rhs) :                              \
+    type(numExprPtr lhs, numExprPtr rhs) :                              \
         CommutativeExpr(lhs, opStr(), rhs) { }                          \
     type(const type& src) :                                             \
         CommutativeExpr(src) { }                                        \
@@ -704,7 +704,7 @@ namespace yask {
         }                                                               \
         return val;                                                     \
     }                                                                   \
-    virtual NumExprPtr clone() const { return make_shared<type>(*this); } \
+    virtual numExprPtr clone() const { return make_shared<type>(*this); } \
     };
     COMM_EXPR(MultExpr, yc_multiply_node, "*", 1.0, lhs * rhs)
     COMM_EXPR(AddExpr, yc_add_node, "+", 0.0, lhs + rhs)
@@ -716,13 +716,13 @@ namespace yask {
     class FuncExpr : public NumExpr {
     protected:
         string _opStr;          // name of function.
-        NumExprPtrVec _ops;     // args to function.
+        numExprPtrVec _ops;     // args to function.
 
         // Special handler for pairable functions like sincos().
         FuncExpr* _paired = nullptr;     // ptr to counterpart.
 
     public:
-        FuncExpr(const string& opStr, const std::initializer_list< const NumExprPtr > & ops) :
+        FuncExpr(const string& opStr, const std::initializer_list< const numExprPtr > & ops) :
             _opStr(opStr) {
             for (auto& op : ops)
                 _ops.push_back(op->clone());
@@ -736,8 +736,8 @@ namespace yask {
         }
 
         // Accessors.
-        NumExprPtrVec& getOps() { return _ops; }
-        const NumExprPtrVec& getOps() const { return _ops; }
+        numExprPtrVec& getOps() { return _ops; }
+        const numExprPtrVec& getOps() const { return _ops; }
         const string& getOpStr() const { return _opStr; }
 
         virtual string accept(ExprVisitor* ev);
@@ -755,7 +755,7 @@ namespace yask {
             }
             return true;
         }
-        virtual NumExprPtr clone() const {
+        virtual numExprPtr clone() const {
             return make_shared<FuncExpr>(*this);
         }
 
@@ -799,7 +799,7 @@ namespace yask {
 
         // Index exprs for each dim, e.g.,
         // "3, x-5, y*2, z+4" for dims "n, x, y, z".
-        NumExprPtrVec _args;
+        numExprPtrVec _args;
 
         // Vars below are calculated from above.
         
@@ -824,7 +824,7 @@ namespace yask {
     public:
 
         // Construct a point given a grid and an arg for each dim.
-        GridPoint(GridVar* grid, const NumExprPtrVec& args);
+        GridPoint(GridVar* grid, const numExprPtrVec& args);
 
         // Dtor.
         virtual ~GridPoint() {}
@@ -835,10 +835,10 @@ namespace yask {
         virtual const string& getGridName() const;
         virtual string getGridPtr() const;
         virtual bool isGridFoldable() const;
-        virtual const IndexExprPtrVec& getDims() const;
+        virtual const indexExprPtrVec& getDims() const;
 
         // Accessors.
-        virtual const NumExprPtrVec& getArgs() const { return _args; }
+        virtual const numExprPtrVec& getArgs() const { return _args; }
         virtual const IntTuple& getArgOffsets() const { return _offsets; }
         virtual const IntTuple& getArgConsts() const { return _consts; }
         virtual VecType getVecType() const {
@@ -857,7 +857,7 @@ namespace yask {
         }
 
         // Get arg for 'dim' or return null if none.
-        virtual const NumExprPtr getArg(const string& dim) const;
+        virtual const numExprPtr getArg(const string& dim) const;
         
         // Set given arg to given offset; ignore if not in step or domain grid dims.
         virtual void setArgOffset(const IntScalar& offset);
@@ -926,8 +926,8 @@ namespace yask {
 
         // Create a deep copy of this expression,
         // except pointed-to grid is not copied.
-        virtual NumExprPtr clone() const { return make_shared<GridPoint>(*this); }
-        virtual GridPointPtr cloneGridPoint() const { return make_shared<GridPoint>(*this); }
+        virtual numExprPtr clone() const { return make_shared<GridPoint>(*this); }
+        virtual gridPointPtr cloneGridPoint() const { return make_shared<GridPoint>(*this); }
 
         // APIs.
         virtual yc_grid* get_grid();
@@ -955,15 +955,15 @@ namespace yask {
     class EqualsExpr : public Expr,
                        public virtual yc_equation_node {
     protected:
-        GridPointPtr _lhs;
-        NumExprPtr _rhs;
-        BoolExprPtr _cond;
-        BoolExprPtr _step_cond;
+        gridPointPtr _lhs;
+        numExprPtr _rhs;
+        boolExprPtr _cond;
+        boolExprPtr _step_cond;
 
     public:
-        EqualsExpr(GridPointPtr lhs, NumExprPtr rhs,
-                   BoolExprPtr cond = nullptr,
-                   BoolExprPtr step_cond = nullptr) :
+        EqualsExpr(gridPointPtr lhs, numExprPtr rhs,
+                   boolExprPtr cond = nullptr,
+                   boolExprPtr step_cond = nullptr) :
             _lhs(lhs), _rhs(rhs), _cond(cond), _step_cond(step_cond) { }
         EqualsExpr(const EqualsExpr& src) :
             _lhs(src._lhs->cloneGridPoint()),
@@ -978,16 +978,16 @@ namespace yask {
                 _step_cond = nullptr;
         }
 
-        GridPointPtr& getLhs() { return _lhs; }
-        const GridPointPtr& getLhs() const { return _lhs; }
-        NumExprPtr& getRhs() { return _rhs; }
-        const NumExprPtr& getRhs() const { return _rhs; }
-        BoolExprPtr& getCond() { return _cond; }
-        const BoolExprPtr& getCond() const { return _cond; }
-        void setCond(BoolExprPtr cond) { _cond = cond; }
-        BoolExprPtr& getStepCond() { return _step_cond; }
-        const BoolExprPtr& getStepCond() const { return _step_cond; }
-        void setStepCond(BoolExprPtr step_cond) { _step_cond = step_cond; }
+        gridPointPtr& getLhs() { return _lhs; }
+        const gridPointPtr& getLhs() const { return _lhs; }
+        numExprPtr& getRhs() { return _rhs; }
+        const numExprPtr& getRhs() const { return _rhs; }
+        boolExprPtr& getCond() { return _cond; }
+        const boolExprPtr& getCond() const { return _cond; }
+        void setCond(boolExprPtr cond) { _cond = cond; }
+        boolExprPtr& getStepCond() { return _step_cond; }
+        const boolExprPtr& getStepCond() const { return _step_cond; }
+        void setStepCond(boolExprPtr step_cond) { _step_cond = step_cond; }
         virtual string accept(ExprVisitor* ev);
         static string exprOpStr() { return "EQUALS"; }
         static string condOpStr() { return "IF"; }
@@ -1007,7 +1007,7 @@ namespace yask {
         virtual bool isSame(const Expr* other) const;
 
         // Create a deep copy of this expression.
-        virtual EqualsExprPtr clone() const { return make_shared<EqualsExpr>(*this); }
+        virtual equalsExprPtr clone() const { return make_shared<EqualsExpr>(*this); }
         virtual yc_equation_node_ptr clone_ast() const {
             return clone();
         }
@@ -1036,7 +1036,7 @@ namespace yask {
     };
 
     typedef set<GridPoint> GridPointSet;
-    typedef set<GridPointPtr> GridPointPtrSet;
+    typedef set<gridPointPtr> gridPointPtrSet;
     typedef vector<GridPoint> GridPointVec;
 
     // Use SET_VALUE_FROM_EXPR for creating a string to insert any C++ code

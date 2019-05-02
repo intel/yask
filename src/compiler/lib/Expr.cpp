@@ -385,7 +385,7 @@ namespace yask {
     yc_number_node_ptr fn(const yc_number_node_ptr rhs) {               \
         auto rp = dynamic_pointer_cast<NumExpr>(rhs);                   \
         assert(rp);                                                     \
-        return make_shared<FuncExpr>(#fn, std::initializer_list< const NumExprPtr >{ rp });   \
+        return make_shared<FuncExpr>(#fn, std::initializer_list< const numExprPtr >{ rp });   \
     }
     FUNC_EXPR(sqrt)
     FUNC_EXPR(cbrt)
@@ -403,7 +403,7 @@ namespace yask {
         assert(p1);                                                     \
         auto p2 = dynamic_pointer_cast<NumExpr>(arg2);                  \
         assert(p2);                                                     \
-        return make_shared<FuncExpr>(#fn, std::initializer_list< const NumExprPtr >{ p1, p2 });         \
+        return make_shared<FuncExpr>(#fn, std::initializer_list< const numExprPtr >{ p1, p2 });         \
     } \
     yc_number_node_ptr fn(const yc_number_node_ptr arg1, double arg2) {   \
         yc_node_factory nfac;                                           \
@@ -481,7 +481,7 @@ namespace yask {
         yc_node_factory nfac;
         return gpp EQUALS_OPER nfac.new_const_number_node(rhs);
     }
-    yc_equation_node_ptr operator EQUALS_OPER(yc_grid_point_node_ptr gpp, GridPointPtr rhs) {
+    yc_equation_node_ptr operator EQUALS_OPER(yc_grid_point_node_ptr gpp, gridPointPtr rhs) {
         auto p = dynamic_pointer_cast<NumExpr>(rhs);
         assert(p);
         return gpp EQUALS_OPER p;
@@ -622,7 +622,7 @@ namespace yask {
     }
 
     // GridPoint methods.
-    GridPoint::GridPoint(GridVar* grid, const NumExprPtrVec& args) :
+    GridPoint::GridPoint(GridVar* grid, const numExprPtrVec& args) :
         _grid(grid), _args(args) {
 
         // Check for correct number of args.
@@ -667,7 +667,7 @@ namespace yask {
         }
         _updateStr();
     }
-    const NumExprPtr GridPoint::getArg(const string& dim) const {
+    const numExprPtr GridPoint::getArg(const string& dim) const {
         for (int di = 0; di < _grid->get_num_dims(); di++) {
             auto& dn = _grid->get_dim_name(di);  // name of this dim.
             if (dim == dn)
@@ -711,7 +711,7 @@ namespace yask {
             str += "(" + _consts.makeDimValStr() + ")";
         return str;
     }
-    const IndexExprPtrVec& GridPoint::getDims() const {
+    const indexExprPtrVec& GridPoint::getDims() const {
         return _grid->getDims();
     }
 
@@ -803,7 +803,7 @@ namespace yask {
                 // Make offset equation.
                 int ofs = offset.getVal();
                 auto ie = gdim->clone();
-                NumExprPtr nep;
+                numExprPtr nep;
                 if (ofs > 0) {
                     auto op = make_shared<ConstExpr>(ofs);
                     nep = make_shared<AddExpr>(ie, op);

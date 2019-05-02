@@ -364,8 +364,8 @@ namespace yask {
     }
 
     // Make base point (misc & inner-dim indices = 0).
-    GridPointPtr CppVecPrintHelper::makeBasePoint(const GridPoint& gp) {
-        GridPointPtr bgp = gp.cloneGridPoint();
+    gridPointPtr CppVecPrintHelper::makeBasePoint(const GridPoint& gp) {
+        gridPointPtr bgp = gp.cloneGridPoint();
         for (auto& dim : gp.getDims()) {
             auto& dname = dim->getName();
             auto type = dim->getType();

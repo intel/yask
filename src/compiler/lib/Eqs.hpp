@@ -351,7 +351,7 @@ namespace yask {
     };
 
     // A list of unique equation ptrs.
-    typedef vector_set<EqualsExprPtr> EqList;
+    typedef vector_set<equalsExprPtr> EqList;
 
     // A set of equations and related dependency data.
     class Eqs : public DepGroup<EqualsExpr> {
@@ -450,11 +450,11 @@ namespace yask {
         // TODO: move these into protected section and make accessors.
 
         // Common conditions.
-        BoolExprPtr cond;
-        BoolExprPtr step_cond;
+        boolExprPtr cond;
+        boolExprPtr step_cond;
 
         // Common step expr.
-        NumExprPtr step_expr;
+        numExprPtr step_expr;
 
         // Create a copy containing clones of the equations.
         virtual shared_ptr<EqBundle> clone() const {
@@ -481,7 +481,7 @@ namespace yask {
                                 string quote = "'") const;
 
         // Add an equation to this bundle.
-        virtual void addEq(EqualsExprPtr ee);
+        virtual void addEq(equalsExprPtr ee);
 
         // Get the list of all equations.
         virtual const EqList& getItems() const {
@@ -528,14 +528,14 @@ namespace yask {
         map<string, int> _indices;
 
         // Track equations that have been added already.
-        set<EqualsExprPtr> _eqs_in_bundles;
+        set<equalsExprPtr> _eqs_in_bundles;
 
         // Add 'eq' from 'eqs' to eq-bundle with 'baseName'
         // unless already added or illegal.  The corresponding index in
         // '_indices' will be incremented if a new bundle is created.
         // Returns whether a new bundle was created.
         virtual bool addEqToBundle(Eqs& eqs,
-                                   EqualsExprPtr eq,
+                                   equalsExprPtr eq,
                                    const string& baseName,
                                    const CompilerSettings& settings);
 
@@ -608,7 +608,7 @@ namespace yask {
     public:
 
         // Common condition.
-        BoolExprPtr step_cond;
+        boolExprPtr step_cond;
 
         // Ctor.
         EqBundlePack(bool is_scratch) :

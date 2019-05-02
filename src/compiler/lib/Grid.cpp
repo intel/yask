@@ -47,7 +47,7 @@ namespace yask {
         }
 
         // Make args.
-        NumExprPtrVec args;
+        numExprPtrVec args;
         for (size_t i = 0; i < _dims.size(); i++) {
             auto p = dynamic_pointer_cast<NumExpr>(index_exprs.at(i));
             assert(p);
@@ -55,7 +55,7 @@ namespace yask {
         }
 
         // Create a point from the args.
-        GridPointPtr gpp = make_shared<GridPoint>(this, args);
+        gridPointPtr gpp = make_shared<GridPoint>(this, args);
         return gpp;
     }
 
@@ -71,7 +71,7 @@ namespace yask {
 
         // Check dim types.
         // Make default args w/just index.
-        NumExprPtrVec args;
+        numExprPtrVec args;
         for (size_t i = 0; i < _dims.size(); i++) {
             auto dim = _dims.at(i);
             if (dim->getType() == MISC_INDEX) {
@@ -85,7 +85,7 @@ namespace yask {
         }
 
         // Create a point from the args.
-        GridPointPtr gpp = make_shared<GridPoint>(this, args);
+        gridPointPtr gpp = make_shared<GridPoint>(this, args);
 
         // Set the offsets, which creates a new
         // expression for each index.
@@ -108,7 +108,7 @@ namespace yask {
     GridVar::GridVar(string name,
                      bool isScratch,
                      StencilSolution* soln,
-                     const IndexExprPtrVec& dims) :
+                     const indexExprPtrVec& dims) :
         _name(name),       // TODO: validate that name is legal C++ var.
         _isScratch(isScratch),
         _soln(soln)

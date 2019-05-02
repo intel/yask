@@ -156,7 +156,7 @@ namespace yask {
         string rhs = ee->getRhs()->accept(this);
 
         // Write statement with embedded rhs.
-        GridPointPtr gpp = ee->getLhs();
+        gridPointPtr gpp = ee->getLhs();
         _os << _ph.getLinePrefix() << _ph.writeToPoint(_os, *gpp, rhs);
 
         // Null ptr => no condition.
@@ -441,7 +441,7 @@ namespace yask {
         makeNextTempVar(tmp, rp) << rhs << _ph.getLineSuffix(); // sets _exprStr.
 
         // Comment about update.
-        GridPointPtr gpp = ee->getLhs();
+        gridPointPtr gpp = ee->getLhs();
         _os << "\n // Update value at " << gpp->makeStr();
 
         // Comment about condition.

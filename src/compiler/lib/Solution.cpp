@@ -41,7 +41,7 @@ namespace yask {
         // TODO: fix this mem leak--make smart ptr.
 
         // Copy pointers to concrete type.
-        IndexExprPtrVec dims2;
+        indexExprPtrVec dims2;
         for (auto d : dims) {
             auto d2 = dynamic_pointer_cast<IndexExpr>(d);
             assert(d2);

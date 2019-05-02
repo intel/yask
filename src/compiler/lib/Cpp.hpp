@@ -182,7 +182,7 @@ namespace yask {
         virtual void printBasePtrs(ostream& os);
 
         // Make base point (misc & inner-dim indices = 0).
-        virtual GridPointPtr makeBasePoint(const GridPoint& gp);
+        virtual gridPointPtr makeBasePoint(const GridPoint& gp);
 
         // Print prefetches for each base pointer.
         // Print only 'ptrVar' if provided.

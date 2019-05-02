@@ -350,7 +350,7 @@ namespace yask {
             }
             return key;
         }
-        virtual string getLabel(ExprPtr ep, bool once = true) {
+        virtual string getLabel(exprPtr ep, bool once = true) {
             return getLabel(ep.get(), once);
         }
 

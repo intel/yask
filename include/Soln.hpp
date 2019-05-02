@@ -315,6 +315,10 @@ namespace yask {
     typedef yc_number_node_ptr GridValue;
     typedef yc_bool_node_ptr Condition;
     typedef yc_grid_point_node_ptr GridPointPtr;
+    typedef yc_expr_node_ptr ExprPtr;
+    typedef yc_number_node_ptr NumExprPtr;
+    typedef yc_index_node_ptr IndexExprPtr;
+    typedef yc_bool_node_ptr BoolExprPtr;
 
 } // namespace yask.
 

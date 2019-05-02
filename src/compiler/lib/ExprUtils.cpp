@@ -73,7 +73,7 @@ namespace yask {
     // If 'ep' has already been seen, just return true.
     // Else if 'ep' has a match, change pointer to that match, return true.
     // Else, return false.
-    bool CseVisitor::findMatchTo(NumExprPtr& ep) {
+    bool CseVisitor::findMatchTo(numExprPtr& ep) {
 #if DEBUG_CSE >= 1
         cout << " //** checking '" << ep->makeStr() << "'@" << ep << endl;
 #endif

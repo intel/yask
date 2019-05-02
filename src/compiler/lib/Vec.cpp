@@ -219,7 +219,7 @@ namespace yask {
     string ExprReorderVisitor::visit(CommutativeExpr* ce) {
 
         auto& oev = ce->getOps(); // old exprs.
-        NumExprPtrVec nev; // new exprs.
+        numExprPtrVec nev; // new exprs.
 
         // Simple, greedy algorithm:
         // Select first element that needs the fewest new aligned vecs.
