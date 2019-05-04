@@ -40,47 +40,68 @@ namespace yask {
 
     //node_factory API methods.
     yc_index_node_ptr
-    yc_node_factory::new_step_index(const std::string& name) {
+    yc_node_factory::new_step_index(const std::string& name) const {
         return make_shared<IndexExpr>(name, STEP_INDEX);
     }
     yc_index_node_ptr
-    yc_node_factory::new_domain_index(const std::string& name) {
+    yc_node_factory::new_domain_index(const std::string& name) const {
         return make_shared<IndexExpr>(name, DOMAIN_INDEX);
     }
     yc_index_node_ptr
-    yc_node_factory::new_misc_index(const std::string& name) {
+    yc_node_factory::new_misc_index(const std::string& name) const {
         return make_shared<IndexExpr>(name, MISC_INDEX);
     }
 
     yc_equation_node_ptr
     yc_node_factory::new_equation_node(yc_grid_point_node_ptr lhs,
-                                       yc_number_node_ptr rhs,
-                                       yc_bool_node_ptr cond) {
-        auto lp = dynamic_pointer_cast<GridPoint>(lhs);
-        assert(lp);
-        auto rp = dynamic_pointer_cast<NumExpr>(rhs);
-        assert(rp);
-        auto ep = operator EQUALS_OPER(lp, rp);
-        ep->set_cond(cond);
-        return ep;
+                                       yc_number_arg_any rexpr,
+                                       yc_bool_node_ptr cond) const {
+        if (!lhs)
+            THROW_YASK_EXCEPTION("Error: empty LHS of equation");
+        auto gpp = dynamic_pointer_cast<GridPoint>(lhs);
+        assert(gpp);
+        if (!rexpr)
+            THROW_YASK_EXCEPTION("Error: empty RHS of " +
+                                 gpp->makeQuotedStr() + " equation");
+        auto rhs = dynamic_pointer_cast<NumExpr>(rexpr);
+        assert(rhs);
+
+        // Get to list of equations in soln indirectly thru grid.
+        GridVar* gp = gpp->getGrid();
+        assert(gp);
+        auto* soln = gp->getSoln();
+        assert(soln);
+        auto& eqs = soln->getEqs();
+        auto& settings = soln->getSettings();
+
+        // Make expression node.
+        auto expr = make_shared<EqualsExpr>(gpp, rhs);
+        expr->set_cond(cond);
+        if (settings._printEqs)
+            soln->get_ostr() << "Equation defined: " << expr->getDescr() << endl;
+
+        // Save the expression in list of equations.
+        eqs.addItem(expr);
+
+        return expr;
     }
     yc_number_node_ptr
-    yc_node_factory::new_const_number_node(double val) {
+    yc_node_factory::new_const_number_node(double val) const {
         return make_shared<ConstExpr>(val);
     }
     yc_number_node_ptr
-    yc_node_factory::new_const_number_node(idx_t val) {
+    yc_node_factory::new_const_number_node(idx_t val) const {
         return make_shared<ConstExpr>(val);
     }
     yc_number_node_ptr
-    yc_node_factory::new_negate_node(yc_number_node_ptr rhs) {
+    yc_node_factory::new_negate_node(yc_number_arg_any rhs) const {
         auto p = dynamic_pointer_cast<NumExpr>(rhs);
         assert(p);
         return make_shared<NegExpr>(p);
     }
     yc_number_node_ptr
-    yc_node_factory::new_add_node(yc_number_node_ptr lhs,
-                                  yc_number_node_ptr rhs) {
+    yc_node_factory::new_add_node(yc_number_arg_any lhs,
+                                  yc_number_arg_any rhs) const {
         if (!lhs)
             return rhs;
         if (!rhs)
@@ -97,8 +118,8 @@ namespace yask {
         return ex;
     }
     yc_number_node_ptr
-    yc_node_factory::new_multiply_node(yc_number_node_ptr lhs,
-                                       yc_number_node_ptr rhs) {
+    yc_node_factory::new_multiply_node(yc_number_arg_any lhs,
+                                       yc_number_arg_any rhs) const {
         if (!lhs)
             return rhs;
         if (!rhs)
@@ -115,8 +136,8 @@ namespace yask {
         return ex;
     }
     yc_number_node_ptr
-    yc_node_factory::new_subtract_node(yc_number_node_ptr lhs,
-                                       yc_number_node_ptr rhs) {
+    yc_node_factory::new_subtract_node(yc_number_arg_any lhs,
+                                       yc_number_arg_any rhs) const {
         yc_node_factory nfac;
         if (!lhs)
             return nfac.new_negate_node(rhs);
@@ -129,8 +150,8 @@ namespace yask {
         return make_shared<SubExpr>(lp, rp);
     }
     yc_number_node_ptr
-    yc_node_factory::new_divide_node(yc_number_node_ptr lhs,
-                                     yc_number_node_ptr rhs) {
+    yc_node_factory::new_divide_node(yc_number_arg_any lhs,
+                                     yc_number_arg_any rhs) const {
         yc_node_factory nfac;
         if (!lhs)
             return nfac.new_divide_node(nfac.new_const_number_node(1.0), rhs);
@@ -143,8 +164,8 @@ namespace yask {
         return make_shared<DivExpr>(lp, rp);
     }
     yc_number_node_ptr
-    yc_node_factory::new_mod_node(yc_number_node_ptr lhs,
-                                  yc_number_node_ptr rhs) {
+    yc_node_factory::new_mod_node(yc_number_arg_any lhs,
+                                  yc_number_arg_any rhs) const {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
         assert(lp);
         auto rp = dynamic_pointer_cast<NumExpr>(rhs);
@@ -152,14 +173,14 @@ namespace yask {
         return make_shared<ModExpr>(lp, rp);
     }
     yc_bool_node_ptr
-    yc_node_factory::new_not_node(yc_bool_node_ptr rhs) {
+    yc_node_factory::new_not_node(yc_bool_node_ptr rhs) const {
         auto p = dynamic_pointer_cast<BoolExpr>(rhs);
         assert(p);
         return make_shared<NotExpr>(p);
     }
     yc_bool_node_ptr
     yc_node_factory::new_and_node(yc_bool_node_ptr lhs,
-                                      yc_bool_node_ptr rhs) {
+                                      yc_bool_node_ptr rhs) const {
         auto lp = dynamic_pointer_cast<BoolExpr>(lhs);
         assert(lp);
         auto rp = dynamic_pointer_cast<BoolExpr>(rhs);
@@ -168,7 +189,7 @@ namespace yask {
     }
     yc_bool_node_ptr
     yc_node_factory::new_or_node(yc_bool_node_ptr lhs,
-                                      yc_bool_node_ptr rhs) {
+                                 yc_bool_node_ptr rhs) const {
         auto lp = dynamic_pointer_cast<BoolExpr>(lhs);
         assert(lp);
         auto rp = dynamic_pointer_cast<BoolExpr>(rhs);
@@ -176,8 +197,8 @@ namespace yask {
         return make_shared<OrExpr>(lp, rp);
     }
     yc_bool_node_ptr
-    yc_node_factory::new_equals_node(yc_number_node_ptr lhs,
-                                      yc_number_node_ptr rhs) {
+    yc_node_factory::new_equals_node(yc_number_arg_any lhs,
+                                      yc_number_arg_any rhs) const {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
         assert(lp);
         auto rp = dynamic_pointer_cast<NumExpr>(rhs);
@@ -185,8 +206,8 @@ namespace yask {
         return make_shared<IsEqualExpr>(lp, rp);
     }
     yc_bool_node_ptr
-    yc_node_factory::new_not_equals_node(yc_number_node_ptr lhs,
-                                      yc_number_node_ptr rhs) {
+    yc_node_factory::new_not_equals_node(yc_number_arg_any lhs,
+                                      yc_number_arg_any rhs) const {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
         assert(lp);
         auto rp = dynamic_pointer_cast<NumExpr>(rhs);
@@ -194,8 +215,8 @@ namespace yask {
         return make_shared<NotEqualExpr>(lp, rp);
     }
     yc_bool_node_ptr
-    yc_node_factory::new_less_than_node(yc_number_node_ptr lhs,
-                                      yc_number_node_ptr rhs) {
+    yc_node_factory::new_less_than_node(yc_number_arg_any lhs,
+                                      yc_number_arg_any rhs) const {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
         assert(lp);
         auto rp = dynamic_pointer_cast<NumExpr>(rhs);
@@ -203,8 +224,8 @@ namespace yask {
         return make_shared<IsLessExpr>(lp, rp);
     }
     yc_bool_node_ptr
-    yc_node_factory::new_greater_than_node(yc_number_node_ptr lhs,
-                                      yc_number_node_ptr rhs) {
+    yc_node_factory::new_greater_than_node(yc_number_arg_any lhs,
+                                      yc_number_arg_any rhs) const {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
         assert(lp);
         auto rp = dynamic_pointer_cast<NumExpr>(rhs);
@@ -212,8 +233,8 @@ namespace yask {
         return make_shared<IsGreaterExpr>(lp, rp);
     }
     yc_bool_node_ptr
-    yc_node_factory::new_not_less_than_node(yc_number_node_ptr lhs,
-                                      yc_number_node_ptr rhs) {
+    yc_node_factory::new_not_less_than_node(yc_number_arg_any lhs,
+                                      yc_number_arg_any rhs) const {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
         assert(lp);
         auto rp = dynamic_pointer_cast<NumExpr>(rhs);
@@ -221,8 +242,8 @@ namespace yask {
         return make_shared<NotLessExpr>(lp, rp);
     }
     yc_bool_node_ptr
-    yc_node_factory::new_not_greater_than_node(yc_number_node_ptr lhs,
-                                               yc_number_node_ptr rhs) {
+    yc_node_factory::new_not_greater_than_node(yc_number_arg_any lhs,
+                                               yc_number_arg_any rhs) const {
         auto lp = dynamic_pointer_cast<NumExpr>(lhs);
         assert(lp);
         auto rp = dynamic_pointer_cast<NumExpr>(rhs);
@@ -230,7 +251,7 @@ namespace yask {
         return make_shared<NotGreaterExpr>(lp, rp);
     }
     yc_number_node_ptr
-    yc_node_factory::new_first_domain_index(yc_index_node_ptr idx) {
+    yc_node_factory::new_first_domain_index(yc_index_node_ptr idx) const {
         auto p = dynamic_pointer_cast<IndexExpr>(idx);
         if (!p)
             THROW_YASK_EXCEPTION("Error: new_first_domain_index() called without index-node argument");
@@ -239,7 +260,7 @@ namespace yask {
         return make_shared<IndexExpr>(p->getName(), FIRST_INDEX);
     }
     yc_number_node_ptr
-    yc_node_factory::new_last_domain_index(yc_index_node_ptr idx) {
+    yc_node_factory::new_last_domain_index(yc_index_node_ptr idx) const {
         auto p = dynamic_pointer_cast<IndexExpr>(idx);
         if (!p)
             THROW_YASK_EXCEPTION("Error: new_last_domain_index() called without index-node argument");
@@ -248,121 +269,123 @@ namespace yask {
         return make_shared<IndexExpr>(p->getName(), LAST_INDEX);
     }
 
+    yc_number_node_ptr yc_number_arg_const::_convert_const(double val) const {
+        yc_node_factory nfac;
+        return nfac.new_const_number_node(val);
+    }
+    yc_number_node_ptr yc_number_arg_any::_convert_const(double val) const {
+        yc_node_factory nfac;
+        return nfac.new_const_number_node(val);
+    }
+    
     // Unary.
-    yc_number_node_ptr operator-(yc_number_node_ptr rhs) {
+    yc_number_node_ptr operator-(yc_number_arg_ptr rhs) {
         yc_node_factory nfac;
         return nfac.new_negate_node(rhs);
     }
 
     // Binary.
-    yc_number_node_ptr operator+(yc_number_node_ptr lhs, yc_number_node_ptr rhs) {
+    yc_number_node_ptr operator+(yc_number_arg_ptr lhs, yc_number_arg_ptr rhs) {
         yc_node_factory nfac;
         return nfac.new_add_node(lhs, rhs);
     }
-    yc_number_node_ptr operator+(double lhs, yc_number_node_ptr rhs) {
+    yc_number_node_ptr operator+(yc_number_arg_const lhs, yc_number_arg_ptr rhs) {
         yc_node_factory nfac;
-        return operator+(nfac.new_const_number_node(lhs), rhs);
+        return nfac.new_add_node(lhs, rhs);
     }
-    yc_number_node_ptr operator+(yc_number_node_ptr lhs, double rhs) {
+    yc_number_node_ptr operator+(yc_number_arg_ptr lhs, yc_number_arg_const rhs) {
         yc_node_factory nfac;
-        return operator+(lhs, nfac.new_const_number_node(rhs));
+        return nfac.new_add_node(lhs, rhs);
     }
-    yc_number_node_ptr operator/(yc_number_node_ptr lhs, yc_number_node_ptr rhs) {
+    yc_number_node_ptr operator/(yc_number_arg_ptr lhs, yc_number_arg_ptr rhs) {
         yc_node_factory nfac;
         return nfac.new_divide_node(lhs, rhs);
     }
-    yc_number_node_ptr operator/(double lhs, yc_number_node_ptr rhs) {
+    yc_number_node_ptr operator/(yc_number_arg_const lhs, yc_number_arg_ptr rhs) {
         yc_node_factory nfac;
-        return operator/(nfac.new_const_number_node(lhs), rhs);
+        return nfac.new_divide_node(lhs, rhs);
     }
-    yc_number_node_ptr operator/(yc_number_node_ptr lhs, double rhs) {
+    yc_number_node_ptr operator/(yc_number_arg_ptr lhs, yc_number_arg_const rhs) {
         yc_node_factory nfac;
-        return operator/(lhs, nfac.new_const_number_node(rhs));
+        return nfac.new_divide_node(lhs, rhs);
     }
-    yc_number_node_ptr operator%(yc_number_node_ptr lhs, yc_number_node_ptr rhs) {
+    yc_number_node_ptr operator%(yc_number_arg_ptr lhs, yc_number_arg_ptr rhs) {
         yc_node_factory nfac;
         return nfac.new_mod_node(lhs, rhs);
     }
-    yc_number_node_ptr operator%(double lhs, yc_number_node_ptr rhs) {
+    yc_number_node_ptr operator%(yc_number_arg_const lhs, yc_number_arg_ptr rhs) {
         yc_node_factory nfac;
-        return operator%(nfac.new_const_number_node(lhs), rhs);
+        return nfac.new_mod_node(lhs, rhs);
     }
-    yc_number_node_ptr operator%(yc_number_node_ptr lhs, double rhs) {
+    yc_number_node_ptr operator%(yc_number_arg_ptr lhs, yc_number_arg_const rhs) {
         yc_node_factory nfac;
-        return operator%(lhs, nfac.new_const_number_node(rhs));
+        return nfac.new_mod_node(lhs, rhs);
     }
-    yc_number_node_ptr operator*(yc_number_node_ptr lhs, yc_number_node_ptr rhs) {
+    yc_number_node_ptr operator*(yc_number_arg_ptr lhs, yc_number_arg_ptr rhs) {
         yc_node_factory nfac;
         return nfac.new_multiply_node(lhs, rhs);
     }
-    yc_number_node_ptr operator*(double lhs, yc_number_node_ptr rhs) {
+    yc_number_node_ptr operator*(yc_number_arg_const lhs, yc_number_arg_ptr rhs) {
         yc_node_factory nfac;
-        return operator*(nfac.new_const_number_node(lhs), rhs);
+        return nfac.new_multiply_node(lhs, rhs);
     }
-    yc_number_node_ptr operator*(yc_number_node_ptr lhs, double rhs) {
+    yc_number_node_ptr operator*(yc_number_arg_ptr lhs, yc_number_arg_const rhs) {
         yc_node_factory nfac;
-        return operator*(lhs, nfac.new_const_number_node(rhs));
+        return nfac.new_multiply_node(lhs, rhs);
     }
-    yc_number_node_ptr operator-(yc_number_node_ptr lhs, yc_number_node_ptr rhs) {
+    yc_number_node_ptr operator-(yc_number_arg_ptr lhs, yc_number_arg_ptr rhs) {
         yc_node_factory nfac;
         return nfac.new_subtract_node(lhs, rhs);
     }
-    yc_number_node_ptr operator-(double lhs, yc_number_node_ptr rhs) {
+    yc_number_node_ptr operator-(yc_number_arg_const lhs, yc_number_arg_ptr rhs) {
         yc_node_factory nfac;
-        return operator-(nfac.new_const_number_node(lhs), rhs);
+        return nfac.new_subtract_node(lhs, rhs);
     }
-    yc_number_node_ptr operator-(yc_number_node_ptr lhs, double rhs) {
+    yc_number_node_ptr operator-(yc_number_arg_ptr lhs, yc_number_arg_const rhs) {
         yc_node_factory nfac;
-        return operator-(lhs, nfac.new_const_number_node(rhs));
+        return nfac.new_subtract_node(lhs, rhs);
     }
 
     // Modifiers.
     void operator+=(yc_number_node_ptr& lhs, yc_number_node_ptr rhs) {
         lhs = lhs + rhs;
     }
-    void operator+=(yc_number_node_ptr& lhs, double rhs) {
+    void operator+=(yc_number_node_ptr& lhs, yc_number_arg_const rhs) {
         lhs = lhs + rhs;
     }
     void operator-=(yc_number_node_ptr& lhs, yc_number_node_ptr rhs) {
         lhs = lhs - rhs;
     }
-    void operator-=(yc_number_node_ptr& lhs, double rhs) {
+    void operator-=(yc_number_node_ptr& lhs, yc_number_arg_const rhs) {
         lhs = lhs - rhs;
     }
     void operator*=(yc_number_node_ptr& lhs, yc_number_node_ptr rhs) {
         lhs = lhs * rhs;
     }
-    void operator*=(yc_number_node_ptr& lhs, double rhs) {
+    void operator*=(yc_number_node_ptr& lhs, yc_number_arg_const rhs) {
         lhs = lhs * rhs;
     }
     void operator/=(yc_number_node_ptr& lhs, yc_number_node_ptr rhs) {
         lhs = lhs / rhs;
     }
-    void operator/=(yc_number_node_ptr& lhs, double rhs) {
+    void operator/=(yc_number_node_ptr& lhs, yc_number_arg_const rhs) {
         lhs = lhs / rhs;
     }
 
     // Boolean unary.
     yc_bool_node_ptr operator!(yc_bool_node_ptr rhs) {
-        auto p = dynamic_pointer_cast<BoolExpr>(rhs);
-        assert(p);
-        return make_shared<NotExpr>(p);
+        yc_node_factory nfac;
+        return nfac.new_not_node(rhs);
     }
 
     // Boolean binary.
     yc_bool_node_ptr operator||(yc_bool_node_ptr lhs, yc_bool_node_ptr rhs) {
-        auto lp = dynamic_pointer_cast<BoolExpr>(lhs);
-        assert(lp);
-        auto rp = dynamic_pointer_cast<BoolExpr>(rhs);
-        assert(rp);
-        return make_shared<OrExpr>(lp, rp);
+        yc_node_factory nfac;
+        return nfac.new_or_node(lhs, rhs);
     }
     yc_bool_node_ptr operator&&(yc_bool_node_ptr lhs, yc_bool_node_ptr rhs) {
-        auto lp = dynamic_pointer_cast<BoolExpr>(lhs);
-        assert(lp);
-        auto rp = dynamic_pointer_cast<BoolExpr>(rhs);
-        assert(rp);
-        return make_shared<AndExpr>(lp, rp);
+        yc_node_factory nfac;
+        return nfac.new_and_node(lhs, rhs);
     }
 
     // Compare 2 expr pointers and return whether the expressions are
@@ -405,15 +428,11 @@ namespace yask {
         assert(p2);                                                     \
         return make_shared<FuncExpr>(#fn, std::initializer_list< const numExprPtr >{ p1, p2 });         \
     } \
-    yc_number_node_ptr fn(const yc_number_node_ptr arg1, double arg2) {   \
-        yc_node_factory nfac;                                           \
-        auto p2 = nfac.new_const_number_node(arg2);                     \
-        return fn(arg1, p2); \
+    yc_number_node_ptr fn(const yc_number_node_ptr arg1, yc_number_arg_const arg2) {   \
+        return fn(arg1, arg2); \
     } \
-    yc_number_node_ptr fn(double arg1, const yc_number_node_ptr arg2) {   \
-        yc_node_factory nfac;                                           \
-        auto p1 = nfac.new_const_number_node(arg1);                     \
-        return fn(p1, arg2);                                            \
+    yc_number_node_ptr fn(yc_number_arg_const arg1, const yc_number_node_ptr arg2) {   \
+        return fn(arg1, arg2);                                            \
     }
     FUNC_EXPR(pow)
 #undef FUNC_EXPR
@@ -445,46 +464,9 @@ namespace yask {
     // Define the value of a grid point.
     // Add this equation to the list of eqs for this stencil.
     yc_equation_node_ptr operator EQUALS_OPER(yc_grid_point_node_ptr lhs,
-                                              const yc_number_node_ptr rexpr) {
-
-        if (!lhs)
-            THROW_YASK_EXCEPTION("Error: empty LHS of equation");
-        auto gpp = dynamic_pointer_cast<GridPoint>(lhs);
-        assert(gpp);
-        if (!rexpr)
-            THROW_YASK_EXCEPTION("Error: empty RHS of " +
-                                 gpp->makeQuotedStr() + " equation");
-        auto rhs = dynamic_pointer_cast<NumExpr>(rexpr);
-        assert(rhs);
-
-        // Get to list of equations in soln indirectly thru grid.
-        GridVar* gp = gpp->getGrid();
-        assert(gp);
-        auto* soln = gp->getSoln();
-        assert(soln);
-        auto& eqs = soln->getEqs();
-        auto& settings = soln->getSettings();
-
-        // Make expression node.
-        // Conditions may be added later if/when the IF or IF_STEP
-        // operators are processed.
-        auto expr = make_shared<EqualsExpr>(gpp, rhs);
-        if (settings._printEqs)
-            soln->get_ostr() << "Equation defined: " << expr->getDescr() << endl;
-
-        // Save the expression in list of equations.
-        eqs.addItem(expr);
-
-        return expr;
-    }
-    yc_equation_node_ptr operator EQUALS_OPER(yc_grid_point_node_ptr gpp, double rhs) {
+                                              const yc_number_arg_any rhs) {
         yc_node_factory nfac;
-        return gpp EQUALS_OPER nfac.new_const_number_node(rhs);
-    }
-    yc_equation_node_ptr operator EQUALS_OPER(yc_grid_point_node_ptr gpp, gridPointPtr rhs) {
-        auto p = dynamic_pointer_cast<NumExpr>(rhs);
-        assert(p);
-        return gpp EQUALS_OPER p;
+        return nfac.new_equation_node(lhs, rhs);
     }
 
     // Visitor acceptors.

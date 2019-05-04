@@ -189,7 +189,7 @@ namespace yask {
         */
         virtual yc_grid_ptr
         new_grid(const std::string& name
-                 /**< [in] Unique name of the grid; must be a valid C++
+                 /**< [in] Name of the new grid; must be a valid C++
                     identifier and unique across grids. */,
                  const std::vector<yc_index_node_ptr>& dims
                  /**< [in] Dimensions of the grid.
@@ -204,7 +204,7 @@ namespace yask {
            @returns Pointer to the new \ref yc_grid object.
         */
         virtual yc_grid_ptr
-        new_grid(const std::string& name /**< [in] Unique name of the grid; must be
+        new_grid(const std::string& name /**< [in] Name of the new grid; must be
                                             a valid C++ identifier and unique
                                             across grids. */,
                  const std::initializer_list<yc_index_node_ptr>& dims
@@ -230,7 +230,7 @@ namespace yask {
         */
         virtual yc_grid_ptr
         new_scratch_grid(const std::string& name
-                         /**< [in] Unique name of the grid; must be a valid C++
+                         /**< [in] Name of the new grid; must be a valid C++
                             identifier and unique across grids. */,
                          const std::vector<yc_index_node_ptr>& dims
                          /**< [in] Dimensions of the grid.
@@ -246,7 +246,7 @@ namespace yask {
         */
         virtual yc_grid_ptr
         new_scratch_grid(const std::string& name
-                         /**< [in] Unique name of the grid; must be
+                         /**< [in] Name of the new grid; must be
                             a valid C++ identifier and unique
                             across grids. */,
                          const std::initializer_list<yc_index_node_ptr>& dims
@@ -622,6 +622,127 @@ namespace yask {
                             /**< [in] Number of elements to allocate in the step dimension. */) =0;
     };
 
+    /// A wrapper class around a 'yc_grid_ptr', providing
+    /// convenience functions for declaring grid vars and
+    /// creating expression nodes with references to points
+    /// in grid vars.
+    class yc_grid_var {
+    private:
+        yc_grid_ptr _grid;
+        
+    public:
+
+        /// Contructor taking a vector of index vars.
+        yc_grid_var(const std::string& name
+                    /**< [in] Name of the new grid; must be a valid C++
+                       identifier and unique across grids. */,
+                    yc_solution_ptr soln
+                    /**< [in] Pointer to solution that will own the grid. */,
+                    const std::vector< yc_index_node_ptr > &dims
+                    /**< [in] Dimensions of the grid.
+                       Each dimension is identified by an associated index. */,
+                    bool is_scratch = false
+                    /**< [in] Whether to make a scratch grid. */) {
+            if (is_scratch)
+                _grid = soln->new_scratch_grid(name, dims);
+            else
+                _grid = soln->new_grid(name, dims);
+        }
+
+        // Contructor taking an initializer_list of index vars.
+        yc_grid_var(const std::string& name
+                    /**< [in] Name of the new grid; must be a valid C++
+                       identifier and unique across grids. */,
+                    yc_solution_ptr soln
+                    /**< [in] Pointer to solution that will own the grid. */,
+                    const std::initializer_list< yc_index_node_ptr > &dims
+                    /**< [in] Dimensions of the grid.
+                       Each dimension is identified by an associated index. */,
+                    bool is_scratch = false
+                    /**< [in] Whether to make a scratch grid. */) {
+            if (is_scratch)
+                _grid = soln->new_scratch_grid(name, dims);
+            else
+                _grid = soln->new_grid(name, dims);
+        }
+
+        /// Get the underlying \ref yc_grid_ptr.
+        virtual yc_grid_ptr get_grid() {
+            return _grid;
+        }
+
+        /// Get the underlying \ref yc_grid_ptr.
+        virtual const yc_grid_ptr get_grid() const {
+            return _grid;
+        }
+
+        /// Create an expression for a point in a zero-dim (scalar) grid
+        /// using implicit conversion.
+        /**
+           Example w/0D grid var `B`: `A(t+1, x) EQUALS A(t, x) + B`.
+        */
+        virtual operator yc_number_arg_ptr() {
+            return _grid->new_grid_point({});
+        }
+
+        /// Create an expression for a point in a one-dim (array) grid.
+        /**
+           Example w/1D grid var `B`: `A(t+1, x) EQUALS A(t, x) + B[x]`.
+        */
+        virtual yc_grid_point_node_ptr operator[](const yc_number_arg_any i1) {
+            return _grid->new_grid_point({i1});
+        }
+
+        /// Create an expression for a point in a 1-6 dim grid.
+        /// The number of arguments must match the dimensionality of the grid.
+        /**
+           Example w/2D grid var `B`: `A(t+1, x) EQUALS A(t, x) + B(x, 3)`.
+        */
+        virtual yc_grid_point_node_ptr operator()(const yc_number_arg_any i1 = nullptr,
+                                                  const yc_number_arg_any i2 = nullptr,
+                                                  const yc_number_arg_any i3 = nullptr,
+                                                  const yc_number_arg_any i4 = nullptr,
+                                                  const yc_number_arg_any i5 = nullptr,
+                                                  const yc_number_arg_any i6 = nullptr) {
+            std::vector<yc_number_node_ptr> args;
+            if (i1)
+                args.push_back(i1);
+            if (i2)
+                args.push_back(i2);
+            if (i3)
+                args.push_back(i3);
+            if (i4)
+                args.push_back(i4);
+            if (i5)
+                args.push_back(i5);
+            if (i6)
+                args.push_back(i6);
+            return _grid->new_grid_point(args);
+        }
+
+        /// Create an expression for a point in any grid.
+        /// The number of arguments must match the dimensionality of the grid.
+        /// Create an expression for a point in a 1-6 dim grid.
+        /// The number of arguments must match the dimensionality of the grid.
+        /**
+           Example w/2D grid var `B`: `A(t+1, x) EQUALS A(t, x) + B(vec)`,
+           where `vec` is a 2-element vector of \ref yc_number_node_ptr.
+        */
+        virtual yc_grid_point_node_ptr
+        operator()(const std::vector<yc_number_node_ptr>& index_exprs) {
+            return _grid->new_grid_point(index_exprs);
+        }
+
+        /// Create an expression for a point in a grid.
+        /// The number of arguments must match the dimensionality of the grid.
+        /**
+           Example w/2D grid var `B`: `A(t+1, x) EQUALS A(t, x) + B({x, 3})`.
+        */
+        virtual yc_grid_point_node_ptr
+        operator()(const std::initializer_list<yc_number_node_ptr>& index_exprs) {
+            return _grid->new_grid_point(index_exprs);
+        }
+    };
     /** @}*/
 
 } // namespace yask.

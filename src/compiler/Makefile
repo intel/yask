@@ -58,7 +58,8 @@ YC_STENCIL_INC_GLOB :=	$(wildcard $(YC_STENCIL_DIR)/*.hpp $(YC_STENCIL_DIR)/*/*.
 YC_CXX    	?=	g++  # usually faster than icpc for building the compiler.
 YC_CXXOPT	:= 	-O2
 YC_CXXFLAGS 	:=	-g -std=c++11 -Wall $(YC_CXXOPT)
-YC_CXXFLAGS	+=	$(addprefix -I,$(YC_INC_DIRS) $(YC_STENCIL_DIR))
+YC_CXXFLAGS	+=	$(INC_CXXFLAGS)
+YC_INC_CXXFLAGS :=	$(addprefix -I,$(YC_INC_DIRS))
 
 # Add user-defined flags.
 YC_CXXFLAGS	+=	$(EXTRA_YC_CXXFLAGS)
@@ -72,24 +73,24 @@ YC_LFLAGS	:=	-lrt -Wl,-rpath=$(LIB_OUT_DIR) -L$(LIB_OUT_DIR) -l$(YC_BASE)
 # - Build at O0 to avoid C++ compiler wasting time optimizing them.
 # - Set macro to use internal DSL instead of conflicting API operators.
 
-$(YC_OBJ_DIR)/%.o: $(YC_STENCIL_DIR)/%.cpp $(YC_INC_GLOB) $(YC_STENCIL_INC_GLOB)
+$(YC_OBJ_DIR)/%.o: $(YC_STENCIL_DIR)/%.cpp $(INC_GLOB) $(YC_STENCIL_INC_GLOB)
 	$(MKDIR) $(YC_OBJ_DIR)
 	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -x c++ -DUSE_INTERNAL_DSL -O0 -c -o $@ $<
 	@ls -l $@
 
-$(YC_OBJ_DIR)/%.o: $(YC_LIB_SRC_DIR)/%.cpp $(YC_INC_GLOB)
-	$(MKDIR) $(YC_OBJ_DIR)
-	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
-	@ls -l $@
-
 $(YC_OBJ_DIR)/%.o: $(COMM_DIR)/%.cpp $(YC_INC_GLOB)
 	$(MKDIR) $(YC_OBJ_DIR)
-	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) $(YC_INC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
 $(YC_OBJ_DIR)/%.o: $(COEFF_DIR)/%.cpp $(YC_INC_GLOB)
 	$(MKDIR) $(YC_OBJ_DIR)
-	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) $(YC_INC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
+	@ls -l $@
+
+$(YC_OBJ_DIR)/%.o: $(YC_LIB_SRC_DIR)/%.cpp $(YC_INC_GLOB)
+	$(MKDIR) $(YC_OBJ_DIR)
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) $(YC_INC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
 ######## Primary targets.
@@ -108,7 +109,7 @@ $(YC_LIB): $(YC_OBJS)
 
 $(YC_EXEC): compiler_main.cpp $(YC_STENCIL_OBJS) $(YC_LIB)
 	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(YC_LD) $(YC_CXXFLAGS) $^ $(YC_LFLAGS) -o $@
+	$(CXX_PREFIX) $(YC_LD) $(YC_CXXFLAGS) $(YC_INC_CXXFLAGS) $^ $(YC_LFLAGS) -o $@
 	@ls -l $@
 	$(MAKE) echo-settings
 

@@ -29,11 +29,14 @@ IN THE SOFTWARE.
 #include "yask_compiler_api.hpp"
 
 // API for using this utility.
+#include "yask_compiler_utility_api.hpp"
+
+// Backward-compatible API.
 #include "Soln.hpp"
 
 // YASK compiler-solution code.
-// TODO: remove all non-API includes.
-#include "CppIntrin.hpp"
+// TODO: remove these non-API includes.
+#include "Solution.hpp"
 #include "Parse.hpp"
 
 using namespace yask;
@@ -50,12 +53,12 @@ namespace yask {
     // other vars set via cmd-line options.
     CompilerSettings settings;
     int vlenForStats = 0;
-    StencilBase* stencilSoln = NULL;
+    yc_solution_base* stencilSoln = NULL;
     string solutionName;
     int radius = -1;
     
     // Collection of known stencils.
-    typedef map<string, StencilBase*> StencilMap;
+    typedef map<string, yc_solution_base*> StencilMap;
     StencilMap stencils;
     
     // Dummy object for backward-compatibility with old stencil DSL.
@@ -63,7 +66,7 @@ namespace yask {
 
     // Create new solution and register it.
     yc_solution_ptr yc_new_solution(const std::string& name,
-                                    StencilBase* base_ptr) {
+                                    yc_solution_base* base_ptr) {
         if (stencils.count(name))
             THROW_YASK_EXCEPTION("Error: stencil '" + name +
                                  "' already defined");
