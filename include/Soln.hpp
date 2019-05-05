@@ -26,7 +26,7 @@ IN THE SOFTWARE.
 // This file contains convenience functions and macros for defining
 // stencils to be included in the YASK compiler binary utility.
 // It is to be used only for backward compatibility for old-style
-// stencil DSL code before YASK version 2.23.00.
+// stencil DSL code prior to YASK version 2.23.00.
 
 #pragma once
 
@@ -43,6 +43,9 @@ namespace yask {
 
     /// **[Deprecated]** The class all old-style C++ stencil solutions
     /// written for the YASK compiler binary must implement.
+    /**
+       New DSL code should use yc_solution_base directly.
+    */
     class StencilBase : public yc_solution_base {
         
     public:
@@ -52,7 +55,11 @@ namespace yask {
             yc_solution_base(name) { }
 
         /// Create a constant expression.
-        /** Usually not needed due to operator overloading. */
+        /**
+           Usually not needed due to operator overloading. 
+           New DSL code should use new_const_number_node() or
+           simply new_number_node().
+        */
         virtual yc_number_node_ptr constNum(double val) {
             return _node_factory.new_const_number_node(val);
         }

@@ -474,9 +474,12 @@ namespace yask {
     class yc_not_greater_than_node : public virtual yc_binary_comparison_node { };
 
 #ifndef SWIG
-    /// A simple wrapper class to provide automatic
-    /// construction of a 'yc_number_node_ptr' from
-    /// other YASK pointer types.
+    /// A simple wrapper class to provide automatic construction of a
+    /// 'yc_number_node_ptr' from other YASK pointer types.
+    /**
+       Used only to provide conversions in function arguments.
+       @note Not used in Python API.
+    */
     class yc_number_ptr_arg : public virtual yc_number_node_ptr {
 
     public:
@@ -494,9 +497,12 @@ namespace yask {
             yc_number_node_ptr(p) { }
     };
 
-    /// A simple wrapper class to provide automatic
-    /// construction of a 'yc_number_node_ptr' from
-    /// non-YASK fundamental numeric types.
+    /// A simple wrapper class to provide automatic construction of a
+    /// 'yc_number_node_ptr' from non-YASK fundamental numeric types.
+    /**
+       Used only to provide conversions in function arguments.
+       @note Not used in Python API.
+    */
     class yc_number_const_arg : public virtual yc_number_node_ptr {
 
     protected:
@@ -523,9 +529,13 @@ namespace yask {
             yc_number_node_ptr(_convert_const(f)) { }
     };
 
-    /// A simple wrapper class to provide automatic
-    /// construction of a 'yc_number_node_ptr' from
-    /// a YASK pointer or non-YASK fundamental numeric types.
+    /// A simple wrapper class to provide automatic construction of a
+    /// 'yc_number_node_ptr' from a YASK pointer or non-YASK fundamental
+    /// numeric types.
+    /**
+       Used only to provide conversions in function arguments.
+       @note Not used in Python API.
+    */
     class yc_number_any_arg : public virtual yc_number_node_ptr {
 
     protected:
@@ -868,7 +878,8 @@ namespace yask {
     };
 
     /// Unary math functions.
-#define FUNC_EXPR(fn_name) yc_number_node_ptr fn_name(const yc_number_node_ptr rhs)
+#define FUNC_EXPR(fn_name) \
+    yc_number_node_ptr fn_name(const yc_number_node_ptr rhs)
     FUNC_EXPR(sqrt);
     FUNC_EXPR(cbrt);
     FUNC_EXPR(fabs);
@@ -1016,7 +1027,8 @@ namespace yask {
 #define EQUALS EQUALS_OPER
 #define IS_EQUIV_TO EQUALS_OPER
 #define IS_EQUIVALENT_TO EQUALS_OPER
-    /// The operator used for defining a grid value.
+    /// The operator version of yc_node_factory::new_equation_node() used
+    /// for defining a grid value.
     /**
        Use an otherwise unneeded binary operator that has a lower priority
        than the math ops and a higher priority than the IF_OPER.
@@ -1028,7 +1040,7 @@ namespace yask {
 
 #define IF_OPER ^=
 #define IF IF_OPER
-    /// A operator to add a domain condition.
+    /// The operator version of  to add a domain condition.
     /**
        Use an otherwise unneeded binary operator that has a low priority.
        See http://en.cppreference.com/w/cpp/language/operator_precedence.
