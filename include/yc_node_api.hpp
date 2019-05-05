@@ -867,6 +867,27 @@ namespace yask {
 
     };
 
+    /// Unary math functions.
+#define FUNC_EXPR(fn_name) yc_number_node_ptr fn_name(const yc_number_node_ptr rhs)
+    FUNC_EXPR(sqrt);
+    FUNC_EXPR(cbrt);
+    FUNC_EXPR(fabs);
+    FUNC_EXPR(erf);
+    FUNC_EXPR(exp);
+    FUNC_EXPR(log);
+    FUNC_EXPR(sin);
+    FUNC_EXPR(cos);
+    FUNC_EXPR(atan);
+#undef FUNC_EXPR
+
+    /// Binary math functions.
+#define FUNC_EXPR(fn_name) \
+    yc_number_node_ptr fn_name(const yc_number_node_ptr arg1, const yc_number_node_ptr arg2);   \
+    yc_number_node_ptr fn_name(double arg1, const yc_number_node_ptr arg2); \
+    yc_number_node_ptr fn_name(const yc_number_node_ptr arg1, double arg2)
+    FUNC_EXPR(pow);
+#undef FUNC_EXPR
+
 #if !defined SWIG
 
     // Non-class operators.
@@ -990,27 +1011,6 @@ namespace yask {
     BOOL_OPER(<=, new_not_greater_than_node)
     BOOL_OPER(>=, new_not_less_than_node)
 #undef BOOL_OPER
-
-    /// Unary math functions.
-#define FUNC_EXPR(fn_name) yc_number_node_ptr fn_name(const yc_number_node_ptr rhs)
-    FUNC_EXPR(sqrt);
-    FUNC_EXPR(cbrt);
-    FUNC_EXPR(fabs);
-    FUNC_EXPR(erf);
-    FUNC_EXPR(exp);
-    FUNC_EXPR(log);
-    FUNC_EXPR(sin);
-    FUNC_EXPR(cos);
-    FUNC_EXPR(atan);
-#undef FUNC_EXPR
-
-    /// Binary math functions.
-#define FUNC_EXPR(fn_name) \
-    yc_number_node_ptr fn_name(const yc_number_node_ptr arg1, const yc_number_node_ptr arg2);   \
-    yc_number_node_ptr fn_name(yc_number_const_arg arg1, const yc_number_node_ptr arg2); \
-    yc_number_node_ptr fn_name(const yc_number_node_ptr arg1, yc_number_const_arg arg2)
-    FUNC_EXPR(pow);
-#undef FUNC_EXPR
 
 #define EQUALS_OPER <<
 #define EQUALS EQUALS_OPER

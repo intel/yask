@@ -426,13 +426,15 @@ namespace yask {
         assert(p1);                                                     \
         auto p2 = dynamic_pointer_cast<NumExpr>(arg2);                  \
         assert(p2);                                                     \
-        return make_shared<FuncExpr>(#fn, std::initializer_list< const numExprPtr >{ p1, p2 });         \
-    } \
-    yc_number_node_ptr fn(const yc_number_node_ptr arg1, yc_number_const_arg arg2) {   \
-        return fn(arg1, arg2); \
-    } \
-    yc_number_node_ptr fn(yc_number_const_arg arg1, const yc_number_node_ptr arg2) {   \
-        return fn(arg1, arg2);                                            \
+        return make_shared<FuncExpr>(#fn, std::initializer_list< const numExprPtr >{ p1, p2 }); \
+    }                                                                   \
+    yc_number_node_ptr fn(const yc_number_node_ptr arg1, double arg2) { \
+        yc_node_factory nfac;                                           \
+        return fn(arg1, nfac.new_const_number_node(arg2));              \
+    }                                                                   \
+    yc_number_node_ptr fn(double arg1, const yc_number_node_ptr arg2) { \
+        yc_node_factory nfac;                                           \
+        return fn(nfac.new_const_number_node(arg1), arg2);              \
     }
     FUNC_EXPR(pow)
 #undef FUNC_EXPR
