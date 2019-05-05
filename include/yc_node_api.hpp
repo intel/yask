@@ -473,30 +473,31 @@ namespace yask {
     */
     class yc_not_greater_than_node : public virtual yc_binary_comparison_node { };
 
+#ifndef SWIG
     /// A simple wrapper class to provide automatic
     /// construction of a 'yc_number_node_ptr' from
     /// other YASK pointer types.
-    class yc_number_arg_ptr : public virtual yc_number_node_ptr {
+    class yc_number_ptr_arg : public virtual yc_number_node_ptr {
 
     public:
 
         /// Arg can be a number-node pointer.
-        yc_number_arg_ptr(yc_number_node_ptr p) :
+        yc_number_ptr_arg(yc_number_node_ptr p) :
             yc_number_node_ptr(p) { }
 
         /// Arg can be an index-node pointer.
-        yc_number_arg_ptr(yc_index_node_ptr p) :
+        yc_number_ptr_arg(yc_index_node_ptr p) :
             yc_number_node_ptr(p) { }
 
         /// Arg can be a grid-point-node pointer.
-        yc_number_arg_ptr(yc_grid_point_node_ptr p) :
+        yc_number_ptr_arg(yc_grid_point_node_ptr p) :
             yc_number_node_ptr(p) { }
     };
 
     /// A simple wrapper class to provide automatic
     /// construction of a 'yc_number_node_ptr' from
     /// non-YASK fundamental numeric types.
-    class yc_number_arg_const : public virtual yc_number_node_ptr {
+    class yc_number_const_arg : public virtual yc_number_node_ptr {
 
     protected:
         
@@ -506,26 +507,26 @@ namespace yask {
     public:
 
         /// Arg can be an index type.
-        yc_number_arg_const(idx_t i) :
+        yc_number_const_arg(idx_t i) :
             yc_number_node_ptr(_convert_const(i)) { }
 
         /// Arg can be an int.
-        yc_number_arg_const(int i) :
+        yc_number_const_arg(int i) :
             yc_number_node_ptr(_convert_const(i)) { }
 
         /// Arg can be a double.
-        yc_number_arg_const(double f) :
+        yc_number_const_arg(double f) :
             yc_number_node_ptr(_convert_const(f)) { }
 
         /// Arg can be a float.
-        yc_number_arg_const(float f) :
+        yc_number_const_arg(float f) :
             yc_number_node_ptr(_convert_const(f)) { }
     };
 
     /// A simple wrapper class to provide automatic
     /// construction of a 'yc_number_node_ptr' from
     /// a YASK pointer or non-YASK fundamental numeric types.
-    class yc_number_arg_any : public virtual yc_number_node_ptr {
+    class yc_number_any_arg : public virtual yc_number_node_ptr {
 
     protected:
         
@@ -535,38 +536,39 @@ namespace yask {
     public:
 
         /// Arg can be a number-node pointer.
-        yc_number_arg_any(yc_number_node_ptr p) :
+        yc_number_any_arg(yc_number_node_ptr p) :
             yc_number_node_ptr(p) { }
 
         /// Arg can be an index-node pointer.
-        yc_number_arg_any(yc_index_node_ptr p) :
+        yc_number_any_arg(yc_index_node_ptr p) :
             yc_number_node_ptr(p) { }
 
         /// Arg can be a grid-point-node pointer.
-        yc_number_arg_any(yc_grid_point_node_ptr p) :
+        yc_number_any_arg(yc_grid_point_node_ptr p) :
             yc_number_node_ptr(p) { }
 
         /// Arg can be an index type.
-        yc_number_arg_any(idx_t i) :
+        yc_number_any_arg(idx_t i) :
             yc_number_node_ptr(_convert_const(i)) { }
 
         /// Arg can be an int.
-        yc_number_arg_any(int i) :
+        yc_number_any_arg(int i) :
             yc_number_node_ptr(_convert_const(i)) { }
 
         /// Arg can be a double.
-        yc_number_arg_any(double f) :
+        yc_number_any_arg(double f) :
             yc_number_node_ptr(_convert_const(f)) { }
 
         /// Arg can be a float.
-        yc_number_arg_any(float f) :
+        yc_number_any_arg(float f) :
             yc_number_node_ptr(_convert_const(f)) { }
 
         /// Arg can be a null pointer.
-        yc_number_arg_any(std::nullptr_t p) :
+        yc_number_any_arg(std::nullptr_t p) :
             yc_number_node_ptr(p) { }
     };
-
+#endif
+    
     /// Factory to create AST nodes.
     /** @note Grid-point reference nodes are created from a \ref yc_grid object
         instead of from a \ref yc_node_factory. */
@@ -645,22 +647,25 @@ namespace yask {
         virtual yc_equation_node_ptr
         new_equation_node(yc_grid_point_node_ptr lhs
                           /**< [in] Grid-point before EQUALS operator. */,
-                          yc_number_arg_any rhs
+                          yc_number_node_ptr rhs
                           /**< [in] Expression after EQUALS operator. */,
                           yc_bool_node_ptr sub_domain_cond = nullptr
                           /**< [in] Optional expression defining sub-domain
                              where `lhs EQUALS rhs` is valid. */ ) const;
 
+#ifndef SWIG
         /// Create a numerical-value expression node.
         /**
            A generic method to create a pointer to a numerical expression
-           from any type supported by \ref yc_number_arg_any constructors.
+           from any type supported by \ref yc_number_any_arg constructors.
+           @node Not available in Python API. Use a more explicit method.
         */
         virtual yc_number_node_ptr
-        new_number_node(yc_number_arg_any arg
+        new_number_node(yc_number_any_arg arg
                         /**< [in] Argument to convert to a numerical expression. */) const {
             return arg;
         }
+#endif
         
         /// Create a constant numerical-value node.
         /**
@@ -690,7 +695,7 @@ namespace yask {
             @returns Pointer to new \ref yc_negate_node object.
         */
         virtual yc_number_node_ptr
-        new_negate_node(yc_number_arg_any rhs
+        new_negate_node(yc_number_node_ptr rhs
                         /**< [in] Expression after `-` sign. */ ) const;
 
         /// Create an addition node.
@@ -700,8 +705,8 @@ namespace yask {
            Returns `rhs` if `lhs` is a null node pointer and vice-versa.
         */
         virtual yc_number_node_ptr
-        new_add_node(yc_number_arg_any lhs /**< [in] Expression before `+` sign. */,
-                     yc_number_arg_any rhs /**< [in] Expression after `+` sign. */ ) const;
+        new_add_node(yc_number_node_ptr lhs /**< [in] Expression before `+` sign. */,
+                     yc_number_node_ptr rhs /**< [in] Expression after `+` sign. */ ) const;
 
         /// Create a multiplication node.
         /**
@@ -710,8 +715,8 @@ namespace yask {
            Returns `rhs` if `lhs` is a null node pointer and vice-versa.
         */
         virtual yc_number_node_ptr
-        new_multiply_node(yc_number_arg_any lhs /**< [in] Expression before `*` sign. */,
-                          yc_number_arg_any rhs /**< [in] Expression after `*` sign. */ ) const;
+        new_multiply_node(yc_number_node_ptr lhs /**< [in] Expression before `*` sign. */,
+                          yc_number_node_ptr rhs /**< [in] Expression after `*` sign. */ ) const;
 
         /// Create a subtraction node.
         /**
@@ -724,8 +729,8 @@ namespace yask {
            `lhs` if `rhs` is null.
         */
         virtual yc_number_node_ptr
-        new_subtract_node(yc_number_arg_any lhs /**< [in] Expression before `-` sign. */,
-                          yc_number_arg_any rhs /**< [in] Expression after `-` sign. */ ) const;
+        new_subtract_node(yc_number_node_ptr lhs /**< [in] Expression before `-` sign. */,
+                          yc_number_node_ptr rhs /**< [in] Expression after `-` sign. */ ) const;
 
         /// Create a division node.
         /**
@@ -735,8 +740,8 @@ namespace yask {
            `lhs` if `rhs` is null.
         */
         virtual yc_number_node_ptr
-        new_divide_node(yc_number_arg_any lhs /**< [in] Expression before `/` sign. */,
-                        yc_number_arg_any rhs /**< [in] Expression after `/` sign. */ ) const;
+        new_divide_node(yc_number_node_ptr lhs /**< [in] Expression before `/` sign. */,
+                        yc_number_node_ptr rhs /**< [in] Expression after `/` sign. */ ) const;
 
         /// Create a modulo node.
         /**
@@ -746,8 +751,8 @@ namespace yask {
            @returns Pointer to new \ref yc_mod_node object.
         */
         virtual yc_number_node_ptr
-        new_mod_node(yc_number_arg_any lhs /**< [in] Expression before `%` sign. */,
-                     yc_number_arg_any rhs /**< [in] Expression after `%` sign. */ ) const;
+        new_mod_node(yc_number_node_ptr lhs /**< [in] Expression before `%` sign. */,
+                     yc_number_node_ptr rhs /**< [in] Expression after `%` sign. */ ) const;
 
         /// Create a symbol for the first index value in a given dimension.
         /**
@@ -812,8 +817,8 @@ namespace yask {
            @returns Pointer to new \ref yc_equals_node object.
         */
         virtual yc_bool_node_ptr
-        new_equals_node(yc_number_arg_any lhs /**< [in] Expression before `==` sign. */,
-                        yc_number_arg_any rhs /**< [in] Expression after `==` sign. */ ) const;
+        new_equals_node(yc_number_node_ptr lhs /**< [in] Expression before `==` sign. */,
+                        yc_number_node_ptr rhs /**< [in] Expression after `==` sign. */ ) const;
 
         /// Create a numerical-comparison 'not-equals' node.
         /**
@@ -821,8 +826,8 @@ namespace yask {
            @returns Pointer to new \ref yc_not_equals_node object.
         */
         virtual yc_bool_node_ptr
-        new_not_equals_node(yc_number_arg_any lhs /**< [in] Expression before `!=` sign. */,
-                            yc_number_arg_any rhs /**< [in] Expression after `!=` sign. */ ) const;
+        new_not_equals_node(yc_number_node_ptr lhs /**< [in] Expression before `!=` sign. */,
+                            yc_number_node_ptr rhs /**< [in] Expression after `!=` sign. */ ) const;
 
         /// Create a numerical-comparison 'less-than' node.
         /**
@@ -830,8 +835,8 @@ namespace yask {
            @returns Pointer to new \ref yc_less_than_node object.
         */
         virtual yc_bool_node_ptr
-        new_less_than_node(yc_number_arg_any lhs /**< [in] Expression before `<` sign. */,
-                           yc_number_arg_any rhs /**< [in] Expression after `<` sign. */ ) const;
+        new_less_than_node(yc_number_node_ptr lhs /**< [in] Expression before `<` sign. */,
+                           yc_number_node_ptr rhs /**< [in] Expression after `<` sign. */ ) const;
 
         /// Create a numerical-comparison 'greater-than' node.
         /**
@@ -839,8 +844,8 @@ namespace yask {
            @returns Pointer to new \ref yc_greater_than_node object.
         */
         virtual yc_bool_node_ptr
-        new_greater_than_node(yc_number_arg_any lhs /**< [in] Expression before `>` sign. */,
-                              yc_number_arg_any rhs /**< [in] Expression after `>` sign. */ ) const;
+        new_greater_than_node(yc_number_node_ptr lhs /**< [in] Expression before `>` sign. */,
+                              yc_number_node_ptr rhs /**< [in] Expression after `>` sign. */ ) const;
 
         /// Create a numerical-comparison 'greater-than or equals' node.
         /**
@@ -848,8 +853,8 @@ namespace yask {
            @returns Pointer to new \ref yc_not_less_than_node object.
         */
         virtual yc_bool_node_ptr
-        new_not_less_than_node(yc_number_arg_any lhs /**< [in] Expression before `>=` sign. */,
-                               yc_number_arg_any rhs /**< [in] Expression after `>=` sign. */ ) const;
+        new_not_less_than_node(yc_number_node_ptr lhs /**< [in] Expression before `>=` sign. */,
+                               yc_number_node_ptr rhs /**< [in] Expression after `>=` sign. */ ) const;
 
         /// Create a numerical-comparison 'less-than or equals' node.
         /**
@@ -857,8 +862,8 @@ namespace yask {
            @returns Pointer to new \ref yc_not_greater_than_node object.
         */
         virtual yc_bool_node_ptr
-        new_not_greater_than_node(yc_number_arg_any lhs /**< [in] Expression before `<=` sign. */,
-                                  yc_number_arg_any rhs /**< [in] Expression after `<=` sign. */ ) const;
+        new_not_greater_than_node(yc_number_node_ptr lhs /**< [in] Expression before `<=` sign. */,
+                                  yc_number_node_ptr rhs /**< [in] Expression after `<=` sign. */ ) const;
 
     };
 
@@ -872,65 +877,65 @@ namespace yask {
     // operators on fundamental C++ types, e.g., '5+8'.
 
     /// Operator version of yc_node_factory::new_negation_node().
-    yc_number_node_ptr operator-(yc_number_arg_ptr rhs);
+    yc_number_node_ptr operator-(yc_number_ptr_arg rhs);
 
     ///@{
     /// Operator version of yc_node_factory::new_addition_node().
-    yc_number_node_ptr operator+(yc_number_arg_ptr lhs, yc_number_arg_ptr rhs);
-    yc_number_node_ptr operator+(yc_number_arg_const lhs, yc_number_arg_ptr rhs);
-    yc_number_node_ptr operator+(yc_number_arg_ptr lhs, yc_number_arg_const rhs);
+    yc_number_node_ptr operator+(yc_number_ptr_arg lhs, yc_number_ptr_arg rhs);
+    yc_number_node_ptr operator+(yc_number_const_arg lhs, yc_number_ptr_arg rhs);
+    yc_number_node_ptr operator+(yc_number_ptr_arg lhs, yc_number_const_arg rhs);
     ///@}
 
     ///@{
     /// Operator version of yc_node_factory::new_division_node().
-    yc_number_node_ptr operator/(yc_number_arg_ptr lhs, yc_number_arg_ptr rhs);
-    yc_number_node_ptr operator/(yc_number_arg_const lhs, yc_number_arg_ptr rhs);
-    yc_number_node_ptr operator/(yc_number_arg_ptr lhs, yc_number_arg_const rhs);
+    yc_number_node_ptr operator/(yc_number_ptr_arg lhs, yc_number_ptr_arg rhs);
+    yc_number_node_ptr operator/(yc_number_const_arg lhs, yc_number_ptr_arg rhs);
+    yc_number_node_ptr operator/(yc_number_ptr_arg lhs, yc_number_const_arg rhs);
     ///@}
 
     ///@{
     /// Operator version of yc_node_factory::new_mod_node().
-    yc_number_node_ptr operator%(yc_number_arg_ptr lhs, yc_number_arg_ptr rhs);
-    yc_number_node_ptr operator%(yc_number_arg_const lhs, yc_number_arg_ptr rhs);
-    yc_number_node_ptr operator%(yc_number_arg_ptr lhs, yc_number_arg_const rhs);
+    yc_number_node_ptr operator%(yc_number_ptr_arg lhs, yc_number_ptr_arg rhs);
+    yc_number_node_ptr operator%(yc_number_const_arg lhs, yc_number_ptr_arg rhs);
+    yc_number_node_ptr operator%(yc_number_ptr_arg lhs, yc_number_const_arg rhs);
     ///@}
 
     ///@{
     /// Operator version of yc_node_factory::new_multiplication_node().
-    yc_number_node_ptr operator*(yc_number_arg_ptr lhs, yc_number_arg_ptr rhs);
-    yc_number_node_ptr operator*(yc_number_arg_const lhs, yc_number_arg_ptr rhs);
-    yc_number_node_ptr operator*(yc_number_arg_ptr lhs, yc_number_arg_const rhs);
+    yc_number_node_ptr operator*(yc_number_ptr_arg lhs, yc_number_ptr_arg rhs);
+    yc_number_node_ptr operator*(yc_number_const_arg lhs, yc_number_ptr_arg rhs);
+    yc_number_node_ptr operator*(yc_number_ptr_arg lhs, yc_number_const_arg rhs);
     ///@}
 
     ///@{
     /// Operator version of yc_node_factory::new_subtraction_node().
-    yc_number_node_ptr operator-(yc_number_arg_ptr lhs, yc_number_arg_ptr rhs);
-    yc_number_node_ptr operator-(yc_number_arg_const lhs, yc_number_arg_ptr rhs);
-    yc_number_node_ptr operator-(yc_number_arg_ptr lhs, yc_number_arg_const rhs);
+    yc_number_node_ptr operator-(yc_number_ptr_arg lhs, yc_number_ptr_arg rhs);
+    yc_number_node_ptr operator-(yc_number_const_arg lhs, yc_number_ptr_arg rhs);
+    yc_number_node_ptr operator-(yc_number_ptr_arg lhs, yc_number_const_arg rhs);
     ///@}
 
     ///@{
     /// Shortcut for creating expression A = A + B.
     void operator+=(yc_number_node_ptr& lhs, yc_number_node_ptr rhs);
-    void operator+=(yc_number_node_ptr& lhs, yc_number_arg_const rhs);
+    void operator+=(yc_number_node_ptr& lhs, yc_number_const_arg rhs);
     ///@}
 
     ///@{
     /// Shortcut for creating expression A = A - B.
     void operator-=(yc_number_node_ptr& lhs, yc_number_node_ptr rhs);
-    void operator-=(yc_number_node_ptr& lhs, yc_number_arg_const rhs);
+    void operator-=(yc_number_node_ptr& lhs, yc_number_const_arg rhs);
     ///@}
 
     ///@{
     /// Shortcut for creating expression A = A * B.
     void operator*=(yc_number_node_ptr& lhs, yc_number_node_ptr rhs);
-    void operator*=(yc_number_node_ptr& lhs, yc_number_arg_const rhs);
+    void operator*=(yc_number_node_ptr& lhs, yc_number_const_arg rhs);
     ///@}
 
     ///@{
     /// Shortcut for creating expression A = A / B.
     void operator/=(yc_number_node_ptr& lhs, yc_number_node_ptr rhs);
-    void operator/=(yc_number_node_ptr& lhs, yc_number_arg_const rhs);
+    void operator/=(yc_number_node_ptr& lhs, yc_number_const_arg rhs);
     ///@}
 
     /// Operator version of yc_node_factory::new_not_node().
@@ -1002,8 +1007,8 @@ namespace yask {
     /// Binary math functions.
 #define FUNC_EXPR(fn_name) \
     yc_number_node_ptr fn_name(const yc_number_node_ptr arg1, const yc_number_node_ptr arg2);   \
-    yc_number_node_ptr fn_name(yc_number_arg_const arg1, const yc_number_node_ptr arg2); \
-    yc_number_node_ptr fn_name(const yc_number_node_ptr arg1, yc_number_arg_const arg2)
+    yc_number_node_ptr fn_name(yc_number_const_arg arg1, const yc_number_node_ptr arg2); \
+    yc_number_node_ptr fn_name(const yc_number_node_ptr arg1, yc_number_const_arg arg2)
     FUNC_EXPR(pow);
 #undef FUNC_EXPR
 
@@ -1019,7 +1024,7 @@ namespace yask {
        This should not be an operator that is defined for shared pointers.
        See https://en.cppreference.com/w/cpp/memory/shared_ptr.
     */
-    yc_equation_node_ptr operator EQUALS_OPER(yc_grid_point_node_ptr gpp, const yc_number_arg_any rhs);
+    yc_equation_node_ptr operator EQUALS_OPER(yc_grid_point_node_ptr gpp, const yc_number_any_arg rhs);
 
 #define IF_OPER ^=
 #define IF IF_OPER

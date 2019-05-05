@@ -29,7 +29,7 @@ IN THE SOFTWARE.
 
 %module YC_MODULE
 
-// See http://www.swig.org/Doc3.0/Library.html
+// See http://www.swig.org/Doc4.0/Library.html
 %include <std_string.i>
 %include <std_shared_ptr.i>
 %include <std_vector.i>
@@ -66,6 +66,9 @@ IN THE SOFTWARE.
 %shared_ptr(yask::yc_not_greater_than_node)
 %shared_ptr(yask::yc_and_node)
 %shared_ptr(yask::yc_or_node)
+%shared_ptr(yask::yc_number_ptr_arg)
+%shared_ptr(yask::yc_number_const_arg)
+%shared_ptr(yask::yc_number_any_arg)
 
 %{
 #define SWIG_FILE_WITH_INIT
@@ -73,12 +76,12 @@ IN THE SOFTWARE.
 %}
 
 // All vector types used in API.
-%template(vector_int) std::vector<int>;
-%template(vector_str) std::vector<std::string>;
-%template(vector_index) std::vector<std::shared_ptr<yask::yc_index_node>>;
-%template(vector_num) std::vector<std::shared_ptr<yask::yc_number_node>>;
-%template(vector_eq) std::vector<std::shared_ptr<yask::yc_equation_node>>;
-%template(vector_grid) std::vector<yask::yc_grid*>;
+%template(yc_vector_int) std::vector<int>;
+%template(yc_vector_str) std::vector<std::string>;
+%template(yc_vector_index) std::vector<std::shared_ptr<yask::yc_index_node>>;
+%template(yc_vector_num) std::vector<std::shared_ptr<yask::yc_number_node>>;
+%template(yc_vector_eq) std::vector<std::shared_ptr<yask::yc_equation_node>>;
+%template(yc_vector_grid) std::vector<yask::yc_grid*>;
 
  // Tell SWIG how to catch a YASK exception and rethrow it in Python.
 %exception {
