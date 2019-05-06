@@ -278,6 +278,7 @@ protected:
     MAKE_GRID(F, y, z);
     MAKE_GRID(G, z, y);
     MAKE_GRID(H, y, z, x);      // different order.
+    MAKE_SCALAR(I);
 
 public:
 
@@ -296,7 +297,7 @@ public:
             def_no_t_2d(E, x, 0, 0, y, 1, 0) +
             def_no_t_2d(F, y, 0, 1, z, 0, 0) +
             def_no_t_2d(G, z, 1, 0, y, 0, 1) +
-            def_no_t_3d(H, y, 1, 0, z, 0, 1, x, 1, 0);
+            def_no_t_3d(H, y, 1, 0, z, 0, 1, x, 1, 0) + I;
     }
 };
 
