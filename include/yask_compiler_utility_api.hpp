@@ -185,10 +185,3 @@ namespace yask {
     /** @}*/
 
 } // namespace yask.
-
-/// Convenience macro for declaring a static object of a type derived from
-/// \ref yask::yc_solution_base and registering it in the list used by the
-/// provided YASK compiler utility.
-/** The derived class must implement a default constructor. */
-#define YASK_REGISTER_SOLUTION(class_name) \
-    static class_name registered_ ## class_name()

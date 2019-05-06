@@ -104,30 +104,34 @@ namespace yask {
 /** The derived class must implement a constructor that takes only a \ref StencilList
     reference. */
 #define REGISTER_STENCIL(class_name) \
-    static class_name registered_ ## class_name(stub_stencils)
+    static class_name class_name ## _instance(stub_stencils)
 
 // Convenience macros for declaring dims in a class derived from \ref StencilBase.
 // The 'd' arg is the new var name and the dim name.
-#define MAKE_STEP_INDEX(d)   yc_index_node_ptr d = _node_factory.new_step_index(#d);
-#define MAKE_DOMAIN_INDEX(d) yc_index_node_ptr d = _node_factory.new_domain_index(#d);
-#define MAKE_MISC_INDEX(d)   yc_index_node_ptr d = _node_factory.new_misc_index(#d);
+#define MAKE_STEP_INDEX(d)   yc_index_node_ptr d = _node_factory.new_step_index(#d)
+#define MAKE_DOMAIN_INDEX(d) yc_index_node_ptr d = _node_factory.new_domain_index(#d)
+#define MAKE_MISC_INDEX(d)   yc_index_node_ptr d = _node_factory.new_misc_index(#d)
 
 // Convenience macros for creating grids in a class implementing get_solution().
 // The 'gvar' arg is the var name and the grid name.
 // The remaining args are the dimension names.
 #define MAKE_GRID(gvar, ...)                                            \
-    Grid gvar = Grid(#gvar, get_solution(), { __VA_ARGS__ }, false)
+    yc_grid_var gvar = yc_grid_var(#gvar, get_solution(), { __VA_ARGS__ }, false)
 #define MAKE_SCALAR(gvar)    MAKE_GRID(gvar)
 #define MAKE_ARRAY(gvar, d1) MAKE_GRID(gvar, d1)
 #define MAKE_SCRATCH_GRID(gvar, ...)                                    \
-    Grid gvar = Grid(#gvar, get_solution(), { __VA_ARGS__ }, true)
+    yc_grid_var gvar = yc_grid_var(#gvar, get_solution(), { __VA_ARGS__ }, true)
 #define MAKE_SCRATCH_SCALAR(gvar)    MAKE_SCRATCH_GRID(gvar)
 #define MAKE_SCRATCH_ARRAY(gvar, d1) MAKE_SCRATCH_GRID(gvar, d1)
 
-// Old aliases for EQUALS.
-#define IS_EQUIV_TO EQUALS_OPER
-#define IS_EQUIVALENT_TO EQUALS_OPER
-    
+// Old aliases for operators.
+#define EQUALS_OPER EQUALS
+#define IS_EQUIV_TO EQUALS
+#define IS_EQUIVALENT_TO EQUALS
+#define IF IF_DOMAIN
+#define IF_OPER IF_DOMAIN
+#define IF_STEP_OPER IF_STEP
+
 // Namespaces for stencil code.
 #ifndef NO_NAMESPACES
 using namespace yask;

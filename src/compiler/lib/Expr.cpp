@@ -440,8 +440,8 @@ namespace yask {
 #undef FUNC_EXPR
 
     // Define a conditional.
-    yc_equation_node_ptr operator IF_OPER(yc_equation_node_ptr expr,
-                                          const yc_bool_node_ptr cond) {
+    yc_equation_node_ptr operator IF_DOMAIN(yc_equation_node_ptr expr,
+                                            const yc_bool_node_ptr cond) {
         auto ep = dynamic_pointer_cast<EqualsExpr>(expr);
         assert(ep);
         auto cp = dynamic_pointer_cast<BoolExpr>(cond);
@@ -451,7 +451,7 @@ namespace yask {
         ep->setCond(cp);
         return ep;
     }
-    yc_equation_node_ptr operator IF_STEP_OPER(yc_equation_node_ptr expr,
+    yc_equation_node_ptr operator IF_STEP(yc_equation_node_ptr expr,
                                                const yc_bool_node_ptr cond) {
         auto ep = dynamic_pointer_cast<EqualsExpr>(expr);
         assert(ep);
@@ -465,8 +465,8 @@ namespace yask {
 
     // Define the value of a grid point.
     // Add this equation to the list of eqs for this stencil.
-    yc_equation_node_ptr operator EQUALS_OPER(yc_grid_point_node_ptr lhs,
-                                              const yc_number_any_arg rhs) {
+    yc_equation_node_ptr operator EQUALS(yc_grid_point_node_ptr lhs,
+                                         const yc_number_any_arg rhs) {
         yc_node_factory nfac;
         return nfac.new_equation_node(lhs, rhs);
     }

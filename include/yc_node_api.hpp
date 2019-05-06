@@ -474,9 +474,11 @@ namespace yask {
     class yc_not_greater_than_node : public virtual yc_binary_comparison_node { };
 
 #ifndef SWIG
-    /// A simple wrapper class to provide automatic construction of a
-    // 'yc_number_node_ptr' from other YASK pointer types.
+    /// Arguments that may be YASK numeric pointer types.
     /**
+       A simple wrapper class to provide automatic construction of a
+       'yc_number_node_ptr' from other YASK pointer types.
+
        Used only to provide conversions in function arguments.
        @note Not used in Python API.
     */
@@ -497,9 +499,11 @@ namespace yask {
             yc_number_node_ptr(p) { }
     };
 
-    /// A simple wrapper class to provide automatic construction of a
-    // 'yc_number_node_ptr' from non-YASK fundamental numeric types.
+    /// Arguments that may be non-YASK numeric types.
     /**
+       A simple wrapper class to provide automatic construction of a
+       'yc_number_node_ptr' from non-YASK fundamental numeric types.
+
        Used only to provide conversions in function arguments.
        @note Not used in Python API.
     */
@@ -529,10 +533,12 @@ namespace yask {
             yc_number_node_ptr(_convert_const(f)) { }
     };
 
-    /// A simple wrapper class to provide automatic construction of a
-    // 'yc_number_node_ptr' from a YASK pointer or non-YASK fundamental
-    // numeric types.
+    /// Arguments that may be YASK or non-YASK numeric types.
     /**
+       A simple wrapper class to provide automatic construction of a
+       'yc_number_node_ptr' from a YASK pointer or non-YASK fundamental
+       numeric types.
+
        Used only to provide conversions in function arguments.
        @note Not used in Python API.
     */
@@ -701,8 +707,9 @@ namespace yask {
 
         /// Create a numerical negation operator node.
         /**
-            New negation nodes can also be created via the overloaded unary `-` operator.
-            @returns Pointer to new \ref yc_negate_node object.
+           This is the explicit form, which is usually not needed because
+           new negation nodes can also be created via the overloaded unary `-` operator.
+           @returns Pointer to new \ref yc_negate_node object.
         */
         virtual yc_number_node_ptr
         new_negate_node(yc_number_node_ptr rhs
@@ -710,7 +717,8 @@ namespace yask {
 
         /// Create an addition node.
         /**
-           New addition nodes can also be created via the overloaded `+` operator.
+           This is the explicit form, which is usually not needed because
+           new addition nodes can also be created via the overloaded `+` operator.
            @returns Pointer to new \ref yc_add_node object. 
            Returns `rhs` if `lhs` is a null node pointer and vice-versa.
         */
@@ -720,7 +728,8 @@ namespace yask {
 
         /// Create a multiplication node.
         /**
-           New multiplication nodes can also be created via the overloaded `*` operator.
+           This is the explicit form, which is usually not needed because
+           new multiplication nodes can also be created via the overloaded `*` operator.
            @returns Pointer to new \ref yc_multiply_node object.
            Returns `rhs` if `lhs` is a null node pointer and vice-versa.
         */
@@ -731,9 +740,10 @@ namespace yask {
         /// Create a subtraction node.
         /**
            This is binary subtraction.
-           Use new_negation_node() for unary `-`.
+           Use new_negate_node() for unary `-`.
 
-           New subtraction nodes can also be created via the overloaded `-` operator.
+           This is the explicit form, which is usually not needed because
+           new subtraction nodes can also be created via the overloaded `-` operator.
            @returns Pointer to new \ref yc_subtract_node object.
            Returns `- rhs` if `lhs` is a null node pointer and
            `lhs` if `rhs` is null.
@@ -744,7 +754,8 @@ namespace yask {
 
         /// Create a division node.
         /**
-           New division nodes can also be created via the overloaded `/` operator.
+           This is the explicit form, which is usually not needed because
+           new division nodes can also be created via the overloaded `/` operator.
            @returns Pointer to new \ref yc_divide_node object.
            Returns `1.0 / rhs` if `lhs` is a null node pointer and
            `lhs` if `rhs` is null.
@@ -755,7 +766,8 @@ namespace yask {
 
         /// Create a modulo node.
         /**
-           New modulo nodes can also be created via the overloaded `%` operator.
+           This is the explicit form, which is usually not needed because
+           new modulo nodes can also be created via the overloaded `%` operator.
            The modulo operator converts both operands to integers before performing
            the operation.
            @returns Pointer to new \ref yc_mod_node object.
@@ -794,7 +806,8 @@ namespace yask {
 
         /// Create a binary inverse operator node.
         /**
-           New "not" nodes can also be created via the overloaded `!` operator
+           This is the explicit form, which is usually not needed because
+           new "not" nodes can also be created via the overloaded `!` operator
            or the `yc_not` function in Python.
            @returns Pointer to new \ref yc_not_node object.
         */
@@ -803,7 +816,8 @@ namespace yask {
 
         /// Create a boolean 'and' node.
         /**
-           New "and" nodes can also be created via the overloaded `&&` operator
+           This is the explicit form, which is usually not needed because
+           new "and" nodes can also be created via the overloaded `&&` operator
            or the `yc_and` function in Python.
            @returns Pointer to new \ref yc_and_node object.
         */
@@ -813,7 +827,8 @@ namespace yask {
 
         /// Create a boolean 'or' node.
         /**
-           New "or" nodes can also be created via the overloaded `||` operator
+           This is the explicit form, which is usually not needed because
+           new "or" nodes can also be created via the overloaded `||` operator
            or the `yc_or` function in Python.
            @returns Pointer to new \ref yc_or_node object.
         */
@@ -823,7 +838,8 @@ namespace yask {
 
         /// Create a numerical-comparison 'equals' node.
         /**
-           New "equals" nodes can also be created via the overloaded `==` operator.
+           This is the explicit form, which is usually not needed because
+           new "equals" nodes can also be created via the overloaded `==` operator.
            @returns Pointer to new \ref yc_equals_node object.
         */
         virtual yc_bool_node_ptr
@@ -832,7 +848,8 @@ namespace yask {
 
         /// Create a numerical-comparison 'not-equals' node.
         /**
-           New "not-equals" nodes can also be created via the overloaded `!=` operator.
+           This is the explicit form, which is usually not needed because
+           new "not-equals" nodes can also be created via the overloaded `!=` operator.
            @returns Pointer to new \ref yc_not_equals_node object.
         */
         virtual yc_bool_node_ptr
@@ -841,7 +858,8 @@ namespace yask {
 
         /// Create a numerical-comparison 'less-than' node.
         /**
-           New "less-than" nodes can also be created via the overloaded `<` operator.
+           This is the explicit form, which is usually not needed because
+           new "less-than" nodes can also be created via the overloaded `<` operator.
            @returns Pointer to new \ref yc_less_than_node object.
         */
         virtual yc_bool_node_ptr
@@ -850,7 +868,8 @@ namespace yask {
 
         /// Create a numerical-comparison 'greater-than' node.
         /**
-           New "greater-than" nodes can also be created via the overloaded `>` operator.
+           This is the explicit form, which is usually not needed because
+           new "greater-than" nodes can also be created via the overloaded `>` operator.
            @returns Pointer to new \ref yc_greater_than_node object.
         */
         virtual yc_bool_node_ptr
@@ -859,7 +878,8 @@ namespace yask {
 
         /// Create a numerical-comparison 'greater-than or equals' node.
         /**
-           New "greater-than or equals" nodes can also be created via the overloaded `>=` operator.
+           This is the explicit form, which is usually not needed because
+           new "greater-than or equals" nodes can also be created via the overloaded `>=` operator.
            @returns Pointer to new \ref yc_not_less_than_node object.
         */
         virtual yc_bool_node_ptr
@@ -868,7 +888,8 @@ namespace yask {
 
         /// Create a numerical-comparison 'less-than or equals' node.
         /**
-           New "less-than or equals" nodes can also be created via the overloaded `<=` operator.
+           This is the explicit form, which is usually not needed because
+           new "less-than or equals" nodes can also be created via the overloaded `<=` operator.
            @returns Pointer to new \ref yc_not_greater_than_node object.
         */
         virtual yc_bool_node_ptr
@@ -880,14 +901,24 @@ namespace yask {
     /// Unary math functions. Used internally to define sqrt(), sin(), etc.
 #define UNARY_MATH_EXPR(fn_name) \
     yc_number_node_ptr fn_name(const yc_number_node_ptr rhs)
+
+    /// Create an expression node to calculate the square-root of the argument node.
     UNARY_MATH_EXPR(sqrt);
+    /// Create an expression node to calculate the cube-root of the argument node.
     UNARY_MATH_EXPR(cbrt);
+    /// Create an expression node to calculate the absolute-value of the argument node.
     UNARY_MATH_EXPR(fabs);
+    /// Create an expression node to calculate the error function of the argument node.
     UNARY_MATH_EXPR(erf);
+    /// Create an expression node to calculate the natural exponent of the argument node.
     UNARY_MATH_EXPR(exp);
+    /// Create an expression node to calculate the natural log of the argument node.
     UNARY_MATH_EXPR(log);
+    /// Create an expression node to calculate the sine of the argument node.
     UNARY_MATH_EXPR(sin);
+    /// Create an expression node to calculate the cosine of the argument node.
     UNARY_MATH_EXPR(cos);
+    /// Create an expression node to calculate the arc-tangent of the argument node.
     UNARY_MATH_EXPR(atan);
 #undef UNARY_MATH_EXPR
 
@@ -896,6 +927,12 @@ namespace yask {
     yc_number_node_ptr fn_name(const yc_number_node_ptr arg1, const yc_number_node_ptr arg2);   \
     yc_number_node_ptr fn_name(double arg1, const yc_number_node_ptr arg2); \
     yc_number_node_ptr fn_name(const yc_number_node_ptr arg1, double arg2)
+
+    /// Power function.
+    /**
+       Create an expression node to calculate the first argument node raised to
+       the power of the second argument node.
+    */
     BINARY_MATH_EXPR(pow);
 #undef BINARY_MATH_EXPR
 
@@ -908,67 +945,63 @@ namespace yask {
     // avoid the const-const combinations, which conflict with built-in
     // operators on fundamental C++ types, e.g., '5+8'.
 
-    /// Operator version of yc_node_factory::new_negation_node().
+    /// Operator version of yc_node_factory::new_negate_node().
     yc_number_node_ptr operator-(yc_number_ptr_arg rhs);
 
-    ///@{
-    /// Operator version of yc_node_factory::new_addition_node().
+    /// Operator version of yc_node_factory::new_add_node().
     yc_number_node_ptr operator+(yc_number_ptr_arg lhs, yc_number_ptr_arg rhs);
+    /// Operator version of yc_node_factory::new_add_node().
     yc_number_node_ptr operator+(yc_number_const_arg lhs, yc_number_ptr_arg rhs);
+    /// Operator version of yc_node_factory::new_add_node().
     yc_number_node_ptr operator+(yc_number_ptr_arg lhs, yc_number_const_arg rhs);
-    ///@}
 
-    ///@{
-    /// Operator version of yc_node_factory::new_division_node().
+    /// Operator version of yc_node_factory::new_divide_node().
     yc_number_node_ptr operator/(yc_number_ptr_arg lhs, yc_number_ptr_arg rhs);
+    /// Operator version of yc_node_factory::new_divide_node().
     yc_number_node_ptr operator/(yc_number_const_arg lhs, yc_number_ptr_arg rhs);
+    /// Operator version of yc_node_factory::new_divide_node().
     yc_number_node_ptr operator/(yc_number_ptr_arg lhs, yc_number_const_arg rhs);
-    ///@}
 
-    ///@{
     /// Operator version of yc_node_factory::new_mod_node().
     yc_number_node_ptr operator%(yc_number_ptr_arg lhs, yc_number_ptr_arg rhs);
+    /// Operator version of yc_node_factory::new_mod_node().
     yc_number_node_ptr operator%(yc_number_const_arg lhs, yc_number_ptr_arg rhs);
+    /// Operator version of yc_node_factory::new_mod_node().
     yc_number_node_ptr operator%(yc_number_ptr_arg lhs, yc_number_const_arg rhs);
-    ///@}
 
-    ///@{
-    /// Operator version of yc_node_factory::new_multiplication_node().
+    /// Operator version of yc_node_factory::new_multiply_node().
     yc_number_node_ptr operator*(yc_number_ptr_arg lhs, yc_number_ptr_arg rhs);
+    /// Operator version of yc_node_factory::new_multiply_node().
     yc_number_node_ptr operator*(yc_number_const_arg lhs, yc_number_ptr_arg rhs);
+    /// Operator version of yc_node_factory::new_multiply_node().
     yc_number_node_ptr operator*(yc_number_ptr_arg lhs, yc_number_const_arg rhs);
-    ///@}
 
-    ///@{
-    /// Operator version of yc_node_factory::new_subtraction_node().
+    /// Operator version of yc_node_factory::new_subtract_node().
     yc_number_node_ptr operator-(yc_number_ptr_arg lhs, yc_number_ptr_arg rhs);
+    /// Operator version of yc_node_factory::new_subtract_node().
     yc_number_node_ptr operator-(yc_number_const_arg lhs, yc_number_ptr_arg rhs);
+    /// Operator version of yc_node_factory::new_subtract_node().
     yc_number_node_ptr operator-(yc_number_ptr_arg lhs, yc_number_const_arg rhs);
-    ///@}
 
-    ///@{
     /// Shortcut for creating expression A = A + B.
     void operator+=(yc_number_node_ptr& lhs, yc_number_node_ptr rhs);
+    /// Shortcut for creating expression A = A + B.
     void operator+=(yc_number_node_ptr& lhs, yc_number_const_arg rhs);
-    ///@}
 
-    ///@{
     /// Shortcut for creating expression A = A - B.
     void operator-=(yc_number_node_ptr& lhs, yc_number_node_ptr rhs);
+    /// Shortcut for creating expression A = A - B.
     void operator-=(yc_number_node_ptr& lhs, yc_number_const_arg rhs);
-    ///@}
 
-    ///@{
     /// Shortcut for creating expression A = A * B.
     void operator*=(yc_number_node_ptr& lhs, yc_number_node_ptr rhs);
+    /// Shortcut for creating expression A = A * B.
     void operator*=(yc_number_node_ptr& lhs, yc_number_const_arg rhs);
-    ///@}
 
-    ///@{
     /// Shortcut for creating expression A = A / B.
     void operator/=(yc_number_node_ptr& lhs, yc_number_node_ptr rhs);
+    /// Shortcut for creating expression A = A / B.
     void operator/=(yc_number_node_ptr& lhs, yc_number_const_arg rhs);
-    ///@}
 
     /// Operator version of yc_node_factory::new_not_node().
     /** For Python, use `rhs.yc_not()` */
@@ -1014,7 +1047,7 @@ namespace yask {
         yc_node_factory nfac; return nfac.fn(lhs, nfac.new_number_node(rhs)); } \
     inline yc_bool_node_ptr operator oper(const yc_grid_point_node_ptr lhs, double rhs) { \
         yc_node_factory nfac; return nfac.fn(lhs, nfac.new_number_node(rhs)); }
-    
+
     BOOL_OPER(==, new_equals_node)
     BOOL_OPER(!=, new_not_equals_node)
     BOOL_OPER(<, new_less_than_node)
@@ -1023,37 +1056,41 @@ namespace yask {
     BOOL_OPER(>=, new_not_less_than_node)
 #undef BOOL_OPER
 
-#define EQUALS_OPER <<
-#define EQUALS EQUALS_OPER
-    /// The operator version of yc_node_factory::new_equation_node() used
-    /// for defining a grid value.
+    /// Recommended macro to make the "equality" operator readable and self-explanatory.
     /**
-       Use an otherwise unneeded binary operator that has a lower priority
-       than the math ops and a higher priority than the IF_OPER.
+       Uses an otherwise unneeded binary operator that has a lower priority
+       than the math ops and a higher priority than the `IF_*` operators.
        See http://en.cppreference.com/w/cpp/language/operator_precedence.
-       This should not be an operator that is defined for shared pointers.
-       See https://en.cppreference.com/w/cpp/memory/shared_ptr.
+       It is also required that this not be an operator that is defined for
+       shared pointers.  See
+       https://en.cppreference.com/w/cpp/memory/shared_ptr.
     */
-    yc_equation_node_ptr operator EQUALS_OPER(yc_grid_point_node_ptr gpp, const yc_number_any_arg rhs);
+#define EQUALS <<
 
-#define IF_OPER ^=
-#define IF IF_OPER
+    /// The operator version of yc_node_factory::new_equation_node() used for defining a grid value.
+    yc_equation_node_ptr operator EQUALS(yc_grid_point_node_ptr gpp, const yc_number_any_arg rhs);
+
+    /// Recommended macro to make the domain-condition operator readable and self-explanatory.
+    /**
+       Uses an otherwise unneeded binary operator that has a low priority.
+       See http://en.cppreference.com/w/cpp/language/operator_precedence.
+    */
+#define IF_DOMAIN ^=
+
     /// The operator version of yc_equation_node::set_cond() to add a domain condition.
+    yc_equation_node_ptr operator IF_DOMAIN(yc_equation_node_ptr expr,
+                                            const yc_bool_node_ptr cond);
+
+    /// Recommended macro to make the step-condition operator readable and self-explanatory.
     /**
-       Use an otherwise unneeded binary operator that has a low priority.
+       Uses an otherwise unneeded binary operator that has a low priority.
        See http://en.cppreference.com/w/cpp/language/operator_precedence.
     */
-    yc_equation_node_ptr operator IF_OPER(yc_equation_node_ptr expr,
+#define IF_STEP |=
+
+    /// The operator version of yc_equation_node::set_step_cond() to add a domain condition.
+    yc_equation_node_ptr operator IF_STEP(yc_equation_node_ptr expr,
                                           const yc_bool_node_ptr cond);
-#define IF_STEP_OPER |=
-#define IF_STEP IF_STEP_OPER
-    /// A operator to add a step condition.
-    /**
-       Use an otherwise unneeded binary operator that has a low priority.
-       See http://en.cppreference.com/w/cpp/language/operator_precedence.
-    */
-    yc_equation_node_ptr operator IF_STEP_OPER(yc_equation_node_ptr expr,
-                                               const yc_bool_node_ptr cond);
 
 #endif  // !SWIG.
 
