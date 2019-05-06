@@ -56,10 +56,10 @@ namespace yask {
     class yc_solution_base {
     protected:
 
-        // Pointer to the YASK stencil solution.
+        /// Pointer to the YASK stencil solution.
         yc_solution_ptr _soln;
 
-        // Factory to create new nodes.
+        /// Factory to create new nodes.
         yc_node_factory _node_factory;
         
     public:
@@ -141,12 +141,14 @@ namespace yask {
     class yc_solution_with_radius_base : public yc_solution_base {
     protected:
 
-        // A variable that controls the size the stencil, i.e., the number of
-        // points that are read to calculate a new value.  In many cases,
-        // this is the number of points in the spatial dimension(s) from the
-        // center point of a finite-difference approximation, but it does
-        // not have to be. For example, it could be the minimum or maximum
-        // radius for an asymmetical stencil.
+        /// A variable that controls the size the stencil, i.e., the number of
+        // points that are read to calculate a new value.
+        /** In many cases,
+	    this is the number of points in the spatial dimension(s) from the
+	    center point of a finite-difference approximation, but it does
+	    not have to be. For example, it could be the minimum or maximum
+	    radius for an asymmetical stencil.
+	*/
         int _radius;
 
     public:
