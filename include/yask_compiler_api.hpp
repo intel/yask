@@ -622,14 +622,14 @@ namespace yask {
                             /**< [in] Number of elements to allocate in the step dimension. */) =0;
     };
 
-    /// A wrapper class around a \ref yc_grid_ptr, providing convenience
+    /// A wrapper class around a \ref yc_grid pointer, providing convenience
     /// functions for declaring grid vars and creating expression nodes with
     /// references to points in grid vars.
     /**
        Using this class provides a syntactic alternative to calling yc_solution::new_grid()
        and/or yc_solution::new_scratch_grid() followed by yc_grid::new_grid_point().
        
-       *Scoping and lifetime:* Since the \ref yc_grid_ptr in a \ref
+       *Scoping and lifetime:* Since the \ref yc_grid pointer in a \ref
        yc_grid_var object is a shared pointer also owned by the \ref
        yc_solution object used to construct the \ref yc_grid_var object, the
        underlying grid will not be destroyed until both the \ref yc_grid_var
@@ -698,12 +698,12 @@ namespace yask {
         /// Provide a virtual destructor.
         virtual ~yc_grid_var() { }
 
-        /// Get the underlying \ref yc_grid_ptr.
+        /// Get the underlying \ref yc_grid pointer.
         virtual yc_grid_ptr get_grid() {
             return _grid;
         }
 
-        /// Get the underlying \ref yc_grid_ptr.
+        /// Get the underlying \ref yc_grid pointer.
         virtual const yc_grid_ptr get_grid() const {
             return _grid;
         }
@@ -716,7 +716,7 @@ namespace yask {
            A wrapper around yc_grid::new_grid_point().
 
            Example w/2D grid var `B`: `A(t+1, x) EQUALS A(t, x) + B(vec)`,
-           where `vec` is a 2-element vector of \ref yc_number_node_ptr.
+           where `vec` is a 2-element vector of \ref yc_number_node pointers.
         */
         virtual yc_grid_point_node_ptr
         operator()(const std::vector<yc_number_node_ptr>& index_exprs) {

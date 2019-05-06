@@ -668,7 +668,7 @@ namespace yask {
         /**
            A generic method to create a pointer to a numerical expression
            from any type supported by \ref yc_number_any_arg constructors.
-           @node Not available in Python API. Use a more explicit method.
+           @note Not available in Python API. Use a more explicit method.
         */
         virtual yc_number_node_ptr
         new_number_node(yc_number_any_arg arg

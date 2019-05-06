@@ -74,6 +74,12 @@ namespace yask {
         stencils[name] = base_ptr;
         return soln;
     }
+
+    // Constructor from the DSL API.
+    yc_solution_base::yc_solution_base(const std::string& name) {
+        _soln = yc_new_solution(name, this);
+    }
+    
 } // yask namespace.
 
 void usage(const string& cmd) {

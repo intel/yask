@@ -42,21 +42,16 @@ namespace yask {
      * @{
      */
 
-    // Forward defn.
-    class yc_solution_base;
-    
-    /// Function provided by the YASK compiler binary utility
-    /// to create a new solution and register 'base_ptr'
-    /// as a known \ref yc_solution_base object.
-    yc_solution_ptr yc_new_solution(const std::string& name,
-                                    yc_solution_base* base_ptr);
-    
     /// The class all C++ stencil solutions written for the YASK compiler
-    /// binary must implement.
+    /// utility `yask_compiler.exe` must implement.
     /**
-       Mostly, this is a wrapper around a \ref yc_solution_ptr.
+       Mostly, this is a wrapper around a \ref yc_solution pointer.
        The `define()` method must be overloaded by
        the YASK DSL programmer to add stencil equations.
+
+       Not to be used by DSL code that is not a part of the YASK compiler
+       utility `yask_compiler.exe`. For DSL code not using this utility,
+       call yc_factory::new_solution directly.
     */
     class yc_solution_base {
     protected:
@@ -73,22 +68,20 @@ namespace yask {
         /**
            Creates a new yc_solution object and
            registers this object in the list for the YASK compiler.
-           The `define()` method will be called from the YASK
+           The define() method will be called from the YASK
            compiler for the selected solution.
         */
-        yc_solution_base(const std::string& name) {
-            _soln = yc_new_solution(name, this);
-        }
+        yc_solution_base(const std::string& name);
 
-        /// Constructor that uses an existing yc_solution_base to share underlying
-        /// solutions.
+        /// **[Advanced]** Constructor that uses an existing
+        /// yc_solution_base to share underlying solutions.
         /** 
             This constructor allows the use of object-oriented composition
             instead of inheritance when creating classes that participate
             in solution definition.
-            When using this version, the `define()` method will
+            When using this version, the define() method will
             _not_ be called directly from the YASK compiler, but it (or any
-            other method) may be called by the parent 'base' object
+            other method) may be called by the parent `base` object
             explicitly.
         */
         yc_solution_base(yc_solution_base& base) {
@@ -98,18 +91,31 @@ namespace yask {
         /// Destructor.
         virtual ~yc_solution_base() { }
 
-        // Define grid values relative to current domain indices in each dimension.
-        // This must be implemented by each concrete stencil solution.
+        /// Define all functionality of this solution.
+        /**
+           When a stencil solution is selected by naming it via `stencil=name`
+           when invoking `make` or via `-stencil name` on the YASK compiler
+           command-line, this function in the named solution will be called.
+
+           This function must be implemented by each concrete stencil solution to
+           add grids and grid-value equations as needed to define the stencil.
+           In general, any YASK compiler API functions may be called from this
+           function.
+
+           For DSL code not using the YASK compiler
+           utility `yask_compiler.exe`, the code that would be in define() 
+           could be called from `main()` or any other called function.
+         */
         virtual void define() {
             std::cout << "Warning: no stencil equations are defined in solution '" <<
-                _soln->get_name() << "'\n";
+                _soln->get_name() << "'. Implement the 'define()' method in the class "
+                "derived from 'yc_solution_base'.\n";
         }
 
         /// Access the underlying solution.
         virtual yc_solution_ptr get_solution() {
             return _soln;
         }
-
 
         /// Create boundary index expression, e.g., 'first_index(x)'.
         virtual yc_number_node_ptr first_index(yc_index_node_ptr dim) {
@@ -144,10 +150,20 @@ namespace yask {
         int _radius;
 
     public:
-        // Constructor.
+        /// Constructor.
         yc_solution_with_radius_base(const std::string& name, int radius) :
             yc_solution_base(name) {
             set_radius(radius);
+        }
+
+        /// Define all functionality of this solution.
+        /**
+           See yc_solution_base::define().
+        */
+        virtual void define() override {
+            std::cout << "Warning: no stencil equations are defined in solution '" <<
+                _soln->get_name() << "'. Implement the 'define()' method in the class "
+                "derived from 'yc_solution_with_radius_base'.\n";
         }
 
         /// This object does use radius.
@@ -170,7 +186,7 @@ namespace yask {
 } // namespace yask.
 
 /// Convenience macro for declaring a static object of a type derived from
-/// \ref yc_solution_base and registering it in the list used by the
+/// \ref yask::yc_solution_base and registering it in the list used by the
 /// provided YASK compiler utility.
 /** The derived class must implement a default constructor. */
 #define YASK_REGISTER_SOLUTION(class_name) \
