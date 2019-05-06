@@ -27,21 +27,26 @@ IN THE SOFTWARE.
 // space (where n = 2 * radius) and 2nd-order accurate in time.
 // See https://software.intel.com/en-us/articles/eight-optimizations-for-3-dimensional-finite-difference-3dfd-code-with-an-isotropic-iso.
 
-#include "Soln.hpp"
+// YASK stencil solution(s) in this file will be integrated into the YASK compiler utility.
+#include "yask_compiler_utility_api.hpp"
+using namespace std;
+using namespace yask;
 
-class Iso3dfdStencil : public StencilRadiusBase {
+class Iso3dfdStencil : public yc_solution_with_radius_base {
 
 protected:
 
     // Indices & dimensions.
-    MAKE_STEP_INDEX(t);           // step in time dim.
-    MAKE_DOMAIN_INDEX(x);         // spatial dim.
-    MAKE_DOMAIN_INDEX(y);         // spatial dim.
-    MAKE_DOMAIN_INDEX(z);         // spatial dim.
+    yc_index_node_ptr t = _node_factory.new_step_index("t");           // step in time dim.
+    yc_index_node_ptr x = _node_factory.new_domain_index("x");         // spatial dim.
+    yc_index_node_ptr y = _node_factory.new_domain_index("y");         // spatial dim.
+    yc_index_node_ptr z = _node_factory.new_domain_index("z");         // spatial dim.
 
-    // Grids.
-    MAKE_GRID(pressure, t, x, y, z); // time-varying 3D pressure grid.
-    MAKE_GRID(vel, x, y, z);         // constant 3D vel grid (c(x,y,z)^2 * delta_t^2).
+    // Grid vars.
+    yc_grid_var pressure =
+        yc_grid_var("pressure", get_solution(), { t, x, y, z }); // time-varying 3D pressure grid.
+    yc_grid_var vel =
+        yc_grid_var("vel", get_solution(), { x, y, z }); // constant 3D vel grid (c(x,y,z)^2 * delta_t^2).
 
 public:
 
@@ -49,14 +54,14 @@ public:
     // either side of center in each spatial dimension.  For example,
     // radius=8 implements a 16th-order accurate FD stencil.  
     // The accuracy in time is fixed at 2nd order.
-    Iso3dfdStencil(StencilList& stencils, string suffix="", int radius=8) :
-        StencilRadiusBase("iso3dfd" + suffix, stencils, radius) { }
+    Iso3dfdStencil(string suffix="", int radius=8) :
+        yc_solution_with_radius_base("iso3dfd" + suffix, radius) { }
     virtual ~Iso3dfdStencil() { }
 
     // Define RHS expression for pressure at t+1 based on values from vel and pressure at t.
-    virtual GridValue get_next_p() {
+    virtual yc_number_node_ptr get_next_p() {
 
-        // Grid spacing.
+        // yc_grid_var spacing.
         // In this implementation, it's a constant.
         // Could make this a YASK variable to allow setting at run-time.
         double delta_xyz = 50.0;
@@ -78,7 +83,7 @@ public:
 
         // Calculate FDx + FDy + FDz.
         // Start with center value multiplied by coeff 0.
-        GridValue fd_sum = pressure(t, x, y, z) * coeff[c0i];
+        yc_number_node_ptr fd_sum = pressure(t, x, y, z) * coeff[c0i];
 
         // Add values from x, y, and z axes multiplied by the
         // coeff for the given radius.
@@ -122,7 +127,7 @@ public:
         // p(t+1) = 2 * p(t) - p(t-1) + c^2 * fd_sum * delta_t^2.
 
         // Let vel = c^2 * delta_t^2 for each grid point.
-        GridValue next_p = (2.0 * pressure(t, x, y, z)) -
+        yc_number_node_ptr next_p = (2.0 * pressure(t, x, y, z)) -
             pressure(t-1, x, y, z) + (fd_sum * vel(x, y, z));
 
         return next_p;
@@ -132,7 +137,7 @@ public:
     virtual void define() {
 
         // Get equation for RHS.
-        GridValue next_p = get_next_p();
+        yc_number_node_ptr next_p = get_next_p();
 
         // Define the value at t+1 to be equal to next_p.
         // Since this implements the finite-difference method, this
@@ -141,7 +146,10 @@ public:
     }
 };
 
-REGISTER_STENCIL(Iso3dfdStencil);
+// Create an object of type 'Iso3dfdStencil',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static Iso3dfdStencil Iso3dfdStencil_instance;
 
 // Add a sponge absorption factor.
 class Iso3dfdSpongeStencil : public Iso3dfdStencil {
@@ -151,20 +159,20 @@ protected:
     // In practice, the interior values would be set to 1.0,
     // and values nearer the boundary would be set to values
     // increasingly approaching 0.0.
-    MAKE_ARRAY(cr_x, x);
-    MAKE_ARRAY(cr_y, y);
-    MAKE_ARRAY(cr_z, z);
+    yc_grid_var cr_x = yc_grid_var("cr_x", get_solution(), { x });
+    yc_grid_var cr_y = yc_grid_var("cr_y", get_solution(), { y });
+    yc_grid_var cr_z = yc_grid_var("cr_z", get_solution(), { z });
 
 public:
-    Iso3dfdSpongeStencil(StencilList& stencils, int radius=8) :
-        Iso3dfdStencil(stencils, "_sponge", radius) { }
+    Iso3dfdSpongeStencil(int radius=8) :
+        Iso3dfdStencil("_sponge", radius) { }
     virtual ~Iso3dfdSpongeStencil() { }
 
     // Define equation for pressure at t+1 based on values from vel and pressure at t.
     virtual void define() {
 
         // Get equation for RHS.
-        GridValue next_p = get_next_p();
+        yc_number_node_ptr next_p = get_next_p();
 
         // Apply sponge absorption.
         next_p *= cr_x(x) * cr_y(y) * cr_z(z);
@@ -174,4 +182,7 @@ public:
     }
 };
 
-REGISTER_STENCIL(Iso3dfdSpongeStencil);
+// Create an object of type 'Iso3dfdSpongeStencil',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static Iso3dfdSpongeStencil Iso3dfdSpongeStencil_instance;

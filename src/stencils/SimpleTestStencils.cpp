@@ -23,33 +23,34 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// Some very simple tests.
+// Tests for various YASK DSL features.
 
-#include "Soln.hpp"
-
-// Simple tests for various YASK DSL features.
+// YASK stencil solution(s) in this file will be integrated into the YASK compiler utility.
+#include "yask_compiler_utility_api.hpp"
+using namespace std;
+using namespace yask;
 
 // A base class for stencil tests.
-class TestBase : public StencilRadiusBase {
+class TestBase : public yc_solution_with_radius_base {
     
 protected:
 
     // Indices & dimensions.
     // Not all these will be used in all tests.
-    MAKE_STEP_INDEX(t);           // step in time dim.
-    MAKE_DOMAIN_INDEX(w);         // spatial dim.
-    MAKE_DOMAIN_INDEX(x);         // spatial dim.
-    MAKE_DOMAIN_INDEX(y);         // spatial dim.
-    MAKE_DOMAIN_INDEX(z);         // spatial dim.
+    yc_index_node_ptr t = _node_factory.new_step_index("t");           // step in time dim.
+    yc_index_node_ptr w = _node_factory.new_domain_index("w");         // spatial dim.
+    yc_index_node_ptr x = _node_factory.new_domain_index("x");         // spatial dim.
+    yc_index_node_ptr y = _node_factory.new_domain_index("y");         // spatial dim.
+    yc_index_node_ptr z = _node_factory.new_domain_index("z");         // spatial dim.
 
     // Define some stencils in different dimensions.
     // These will be asymmetrical if any of the '*_ext' params are not 0;
     
     // Define simple stencil from var 'V' at 't0' centered around 'x0'.
     // Extend given radius left and/or right w/'*_ext'.
-    virtual GridValue def_1d(Grid& V, const GridIndex& t0, const GridIndex& x0,
+    virtual yc_number_node_ptr def_1d(yc_grid_var& V, const yc_number_node_ptr& t0, const yc_number_node_ptr& x0,
                              int left_ext, int right_ext) {
-        GridValue v;
+        yc_number_node_ptr v;
         int n = 1;
         for (int i = -_radius - left_ext; i <= _radius + right_ext; i++, n++)
             v += V(t0, x0+i);
@@ -58,9 +59,9 @@ protected:
 
     // Define simple stencil from scratch or read-only var 'V' centered
     // around 'x0'.  Similar to 'def_1d()', but doesn't use step var.
-    virtual GridValue def_no_t_1d(Grid& V, const GridIndex& x0,
+    virtual yc_number_node_ptr def_no_t_1d(yc_grid_var& V, const yc_number_node_ptr& x0,
                                      int left_ext, int right_ext) {
-        GridValue v;
+        yc_number_node_ptr v;
         int n = 1;
         for (int i = -_radius - left_ext; i <= _radius + right_ext; i++, n++)
             v += V(x0+i);
@@ -70,12 +71,12 @@ protected:
     // Define simple stencil from var 'V' at 't0' centered around 'x0', 'y0'.
     // Extend given radius left and/or right w/'*_ext'.
     // Use some points from the entire rectangle, not just on the axes.
-    virtual GridValue def_2d(Grid& V, const GridIndex& t0,
-                             const GridIndex& x0,
+    virtual yc_number_node_ptr def_2d(yc_grid_var& V, const yc_number_node_ptr& t0,
+                             const yc_number_node_ptr& x0,
                              int x_left_ext, int x_right_ext,
-                             const GridIndex& y0,
+                             const yc_number_node_ptr& y0,
                              int y_left_ext, int y_right_ext) {
-        GridValue v;
+        yc_number_node_ptr v;
         int n = 0;
         for (int i = -_radius - x_left_ext; i <= _radius + x_right_ext; i++)
             for (int j = -_radius - y_left_ext; j <= _radius + y_right_ext; j++, n++)
@@ -87,12 +88,12 @@ protected:
     // Define simple stencil from scratch or read-only var 'V' at 't0'
     // centered around 'x0', 'y0'.  Extend given radius left and/or right
     // w/'*_ext'.
-    virtual GridValue def_no_t_2d(Grid& V,
-                                     const GridIndex& x0,
+    virtual yc_number_node_ptr def_no_t_2d(yc_grid_var& V,
+                                     const yc_number_node_ptr& x0,
                                      int x_left_ext, int x_right_ext,
-                                     const GridIndex& y0,
+                                     const yc_number_node_ptr& y0,
                                      int y_left_ext, int y_right_ext) {
-        GridValue v;
+        yc_number_node_ptr v;
         int n = 0;
         for (int i = -_radius - x_left_ext; i <= _radius + x_right_ext; i++)
             for (int j = -_radius - y_left_ext; j <= _radius + y_right_ext; j++, n++)
@@ -104,14 +105,14 @@ protected:
     // Define simple stencil from var 'V' at 't0' centered around 'x0', 'y0', 'z0'.
     // Extend given radius left and/or right w/'*_ext'.
     // Use some points from the entire rectangular polytope, not just on the axes.
-    virtual GridValue def_3d(Grid& V, const GridIndex& t0,
-                             const GridIndex& x0,
+    virtual yc_number_node_ptr def_3d(yc_grid_var& V, const yc_number_node_ptr& t0,
+                             const yc_number_node_ptr& x0,
                              int x_left_ext, int x_right_ext,
-                             const GridIndex& y0,
+                             const yc_number_node_ptr& y0,
                              int y_left_ext, int y_right_ext,
-                             const GridIndex& z0,
+                             const yc_number_node_ptr& z0,
                              int z_left_ext, int z_right_ext) {
-        GridValue v;
+        yc_number_node_ptr v;
         int n = 0;
         for (int i = -_radius - x_left_ext; i <= _radius + x_right_ext; i++)
             for (int j = -_radius - y_left_ext; j <= _radius + y_right_ext; j++)
@@ -124,14 +125,14 @@ protected:
     // Define simple stencil from scratch or read-only var 'V' centered
     // around 'x0', 'y0', 'z0'.  Extend given radius left and/or right
     // w/'*_ext'.
-    virtual GridValue def_no_t_3d(Grid& V,
-                                     const GridIndex& x0,
+    virtual yc_number_node_ptr def_no_t_3d(yc_grid_var& V,
+                                     const yc_number_node_ptr& x0,
                                      int x_left_ext, int x_right_ext,
-                                     const GridIndex& y0,
+                                     const yc_number_node_ptr& y0,
                                      int y_left_ext, int y_right_ext,
-                                     const GridIndex& z0,
+                                     const yc_number_node_ptr& z0,
                                      int z_left_ext, int z_right_ext) {
-        GridValue v;
+        yc_number_node_ptr v;
         int n = 0;
         for (int i = -_radius - x_left_ext; i <= _radius + x_right_ext; i++)
             for (int j = -_radius - y_left_ext; j <= _radius + y_right_ext; j++)
@@ -144,16 +145,16 @@ protected:
     // Define simple stencil from var 'V' at 't0' centered around 'w0', 'x0', 'y0', 'z0'.
     // Extend given radius left and/or right w/'*_ext'.
     // Use some points from the entire rectangular polytope, not just on the axes.
-    virtual GridValue def_4d(Grid& V, const GridIndex& t0,
-                             const GridIndex& w0,
+    virtual yc_number_node_ptr def_4d(yc_grid_var& V, const yc_number_node_ptr& t0,
+                             const yc_number_node_ptr& w0,
                              int w_left_ext, int w_right_ext,
-                             const GridIndex& x0,
+                             const yc_number_node_ptr& x0,
                              int x_left_ext, int x_right_ext,
-                             const GridIndex& y0,
+                             const yc_number_node_ptr& y0,
                              int y_left_ext, int y_right_ext,
-                             const GridIndex& z0,
+                             const yc_number_node_ptr& z0,
                              int z_left_ext, int z_right_ext) {
-        GridValue v;
+        yc_number_node_ptr v;
         int n = 0;
         for (int h : { -_radius - w_left_ext, 0, _radius + w_right_ext })
             for (int i : { -_radius - x_left_ext, 0, _radius + x_right_ext })
@@ -168,8 +169,8 @@ protected:
 
 public:
 
-    TestBase(const string& name, StencilList& stencils, int radius) :
-        StencilRadiusBase(name, stencils, radius) { }
+    TestBase(const string& name, int radius) :
+        yc_solution_with_radius_base(name, radius) { }
 };
 
 // Simple 1D test.
@@ -178,12 +179,12 @@ class Test1dStencil : public TestBase {
 protected:
 
     // Vars.
-    MAKE_GRID(A, t, x); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x }); // time-varying grid.
 
 public:
 
-    Test1dStencil(StencilList& stencils, int radius=2) :
-        TestBase("test_1d", stencils, radius) { }
+    Test1dStencil(int radius=2) :
+        TestBase("test_1d", radius) { }
 
     // Define equation to apply to all points in 'A' grid.
     virtual void define() {
@@ -193,7 +194,10 @@ public:
     }
 };
 
-REGISTER_STENCIL(Test1dStencil);
+// Create an object of type 'Test1dStencil',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static Test1dStencil Test1dStencil_instance;
 
 // Simple 2D test.
 class Test2dStencil : public TestBase {
@@ -201,12 +205,12 @@ class Test2dStencil : public TestBase {
 protected:
 
     // Vars.
-    MAKE_GRID(A, t, x, y); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, y }); // time-varying grid.
 
 public:
 
-    Test2dStencil(StencilList& stencils, int radius=2) :
-        TestBase("test_2d", stencils, radius) { }
+    Test2dStencil(int radius=2) :
+        TestBase("test_2d", radius) { }
 
     // Define equation to apply to all points in 'A' grid.
     virtual void define() {
@@ -216,7 +220,10 @@ public:
     }
 };
 
-REGISTER_STENCIL(Test2dStencil);
+// Create an object of type 'Test2dStencil',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static Test2dStencil Test2dStencil_instance;
 
 // Simple 3D test.
 class Test3dStencil : public TestBase {
@@ -224,12 +231,12 @@ class Test3dStencil : public TestBase {
 protected:
 
     // Vars.
-    MAKE_GRID(A, t, x, y, z); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, y, z }); // time-varying grid.
 
 public:
 
-    Test3dStencil(StencilList& stencils, int radius=2) :
-        TestBase("test_3d", stencils, radius) { }
+    Test3dStencil(int radius=2) :
+        TestBase("test_3d", radius) { }
 
     // Define equation to apply to all points in 'A' grid.
     virtual void define() {
@@ -239,7 +246,10 @@ public:
     }
 };
 
-REGISTER_STENCIL(Test3dStencil);
+// Create an object of type 'Test3dStencil',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static Test3dStencil Test3dStencil_instance;
 
 // Simple 4D test.
 class Test4dStencil : public TestBase {
@@ -247,12 +257,12 @@ class Test4dStencil : public TestBase {
 protected:
 
     // Vars.
-    MAKE_GRID(A, t, w, x, y, z); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_solution(), { t, w, x, y, z }); // time-varying grid.
 
 public:
 
-    Test4dStencil(StencilList& stencils, int radius=1) :
-        TestBase("test_4d", stencils, radius) { }
+    Test4dStencil(int radius=1) :
+        TestBase("test_4d", radius) { }
 
     // Define equation to apply to all points in 'A' grid.
     virtual void define() {
@@ -262,7 +272,10 @@ public:
     }
 };
 
-REGISTER_STENCIL(Test4dStencil);
+// Create an object of type 'Test4dStencil',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static Test4dStencil Test4dStencil_instance;
 
 // Test vars that don't cover all domain dims.
 class TestPartialStencil3 : public TestBase {
@@ -270,20 +283,20 @@ class TestPartialStencil3 : public TestBase {
 protected:
 
     // Vars.
-    MAKE_GRID(A, t, x, y, z); // time-varying grid.
-    MAKE_GRID(B, x);
-    MAKE_GRID(C, y);
-    MAKE_GRID(D, z);
-    MAKE_GRID(E, x, y);
-    MAKE_GRID(F, y, z);
-    MAKE_GRID(G, z, y);
-    MAKE_GRID(H, y, z, x);      // different order.
-    MAKE_SCALAR(I);
+    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, y, z }); // time-varying grid.
+    yc_grid_var B = yc_grid_var("B", get_solution(), { x });
+    yc_grid_var C = yc_grid_var("C", get_solution(), { y });
+    yc_grid_var D = yc_grid_var("D", get_solution(), { z });
+    yc_grid_var E = yc_grid_var("E", get_solution(), { x, y });
+    yc_grid_var F = yc_grid_var("F", get_solution(), { y, z });
+    yc_grid_var G = yc_grid_var("G", get_solution(), { z, y });
+    yc_grid_var H = yc_grid_var("H", get_solution(), { y, z, x });      // different order.
+    yc_grid_var I = yc_grid_var("I", get_solution(), { });
 
 public:
 
-    TestPartialStencil3(StencilList& stencils, int radius=2) :
-        TestBase("test_partial_3d", stencils, radius) { }
+    TestPartialStencil3(int radius=2) :
+        TestBase("test_partial_3d", radius) { }
 
     // Define equation to apply to all points in 'A' grid.
     virtual void define() {
@@ -301,36 +314,39 @@ public:
     }
 };
 
-REGISTER_STENCIL(TestPartialStencil3);
+// Create an object of type 'TestPartialStencil3',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static TestPartialStencil3 TestPartialStencil3_instance;
 
 // Test misc indices.
-class TestMisc2dStencil : public StencilRadiusBase {
+class TestMisc2dStencil : public yc_solution_with_radius_base {
 
 protected:
 
     // Indices & dimensions.
-    MAKE_STEP_INDEX(t);           // step in time dim.
-    MAKE_DOMAIN_INDEX(x);         // spatial dim.
-    MAKE_DOMAIN_INDEX(y);         // spatial dim.
-    MAKE_MISC_INDEX(a);
-    MAKE_MISC_INDEX(b);
-    MAKE_MISC_INDEX(c);
+    yc_index_node_ptr t = _node_factory.new_step_index("t");           // step in time dim.
+    yc_index_node_ptr x = _node_factory.new_domain_index("x");         // spatial dim.
+    yc_index_node_ptr y = _node_factory.new_domain_index("y");         // spatial dim.
+    yc_index_node_ptr a = _node_factory.new_misc_index("a");
+    yc_index_node_ptr b = _node_factory.new_misc_index("b");
+    yc_index_node_ptr c = _node_factory.new_misc_index("c");
     
     // Time-varying grid. Intermix last domain dim with misc dims to make
     // sure compiler creates correct layout.
-    MAKE_GRID(A, t, x, a, y, b, c); 
+    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, a, y, b, c }); 
 
 public:
 
-    TestMisc2dStencil(StencilList& stencils, int radius=2) :
-        StencilRadiusBase("test_misc_2d", stencils, radius) { }
+    TestMisc2dStencil(int radius=2) :
+        yc_solution_with_radius_base("test_misc_2d", radius) { }
 
     // Define equation to apply to all points in 'A' grid.
     virtual void define() {
 
         // Define the value at t+1 using asymmetric stencil
         // with various pos & neg indices in misc dims.
-        GridValue v = A(t, x, 0, y, -1, 2) + 1.0;
+        yc_number_node_ptr v = A(t, x, 0, y, -1, 2) + 1.0;
         for (int r = 1; r <= _radius; r++)
             v += A(t, x + r, 3, y, 0, 1);
         for (int r = 1; r <= _radius + 1; r++)
@@ -343,7 +359,10 @@ public:
     }
 };
 
-REGISTER_STENCIL(TestMisc2dStencil);
+// Create an object of type 'TestMisc2dStencil',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static TestMisc2dStencil TestMisc2dStencil_instance;
 
 
 // A "stream-like" stencil that just reads and writes
@@ -352,29 +371,29 @@ REGISTER_STENCIL(TestMisc2dStencil);
 // Running with radius=2 should give performance comparable to
 // (but not identical to) the stream 'triad' benchmark.
 
-class StreamStencil : public StencilRadiusBase {
+class StreamStencil : public yc_solution_with_radius_base {
 
 protected:
 
     // Indices & dimensions.
-    MAKE_STEP_INDEX(t);           // step in time dim.
-    MAKE_DOMAIN_INDEX(x);         // spatial dim.
-    MAKE_DOMAIN_INDEX(y);         // spatial dim.
-    MAKE_DOMAIN_INDEX(z);         // spatial dim.
+    yc_index_node_ptr t = _node_factory.new_step_index("t");           // step in time dim.
+    yc_index_node_ptr x = _node_factory.new_domain_index("x");         // spatial dim.
+    yc_index_node_ptr y = _node_factory.new_domain_index("y");         // spatial dim.
+    yc_index_node_ptr z = _node_factory.new_domain_index("z");         // spatial dim.
 
     // Vars.
-    MAKE_GRID(A, t, x, y, z); // time-varying 3D grid.
+    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, y, z }); // time-varying 3D grid.
 
 public:
 
-    StreamStencil(StencilList& stencils, int radius=2) :
-        StencilRadiusBase("test_stream_3d", stencils, radius) { }
+    StreamStencil(int radius=2) :
+        yc_solution_with_radius_base("test_stream_3d", radius) { }
     virtual ~StreamStencil() { }
 
     // Define equation to read '_radius' values and write one.
     virtual void define() {
 
-        GridValue v = constNum(1.0);
+        yc_number_node_ptr v = _node_factory.new_number_node(1.0);
 
         // Add '_radius' values from past time-steps.
         for (int r = 0; r < _radius; r++)
@@ -385,7 +404,10 @@ public:
     }
 };
 
-REGISTER_STENCIL(StreamStencil);
+// Create an object of type 'StreamStencil',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static StreamStencil StreamStencil_instance;
 
 // Reverse-time stencil.
 // In this test, A(t-1) depends on A(t).
@@ -395,12 +417,12 @@ class TestReverseStencil : public TestBase {
 protected:
 
     // Vars.
-    MAKE_GRID(A, t, x, y);
+    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, y });
 
 public:
 
-    TestReverseStencil(StencilList& stencils, int radius=2) :
-        TestBase("test_reverse_2d", stencils, radius) { }
+    TestReverseStencil(int radius=2) :
+        TestBase("test_reverse_2d", radius) { }
 
     // Define equation to do simple test.
     virtual void define() {
@@ -410,7 +432,10 @@ public:
     }
 };
 
-REGISTER_STENCIL(TestReverseStencil);
+// Create an object of type 'TestReverseStencil',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static TestReverseStencil TestReverseStencil_instance;
 
 // Test dependent equations.
 // These will create 2 stencil packs that will be applied in sequence
@@ -420,13 +445,13 @@ class TestDepStencil1 : public TestBase {
 protected:
 
     // Vars.
-    MAKE_GRID(A, t, x); // time-varying grid.
-    MAKE_GRID(B, t, x); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x }); // time-varying grid.
+    yc_grid_var B = yc_grid_var("B", get_solution(), { t, x }); // time-varying grid.
 
 public:
 
-    TestDepStencil1(StencilList& stencils, int radius=2) :
-        TestBase("test_dep_1d", stencils, radius) { }
+    TestDepStencil1(int radius=2) :
+        TestBase("test_dep_1d", radius) { }
 
     // Define equation to apply to all points in 'A' and 'B' grids.
     virtual void define() {
@@ -439,20 +464,23 @@ public:
     }
 };
 
-REGISTER_STENCIL(TestDepStencil1);
+// Create an object of type 'TestDepStencil1',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static TestDepStencil1 TestDepStencil1_instance;
 
 class TestDepStencil2 : public TestBase {
 
 protected:
 
     // Vars.
-    MAKE_GRID(A, t, x, y); // time-varying grid.
-    MAKE_GRID(B, t, x, y); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, y }); // time-varying grid.
+    yc_grid_var B = yc_grid_var("B", get_solution(), { t, x, y }); // time-varying grid.
 
 public:
 
-    TestDepStencil2(StencilList& stencils, int radius=2) :
-        TestBase("test_dep_2d", stencils, radius) { }
+    TestDepStencil2(int radius=2) :
+        TestBase("test_dep_2d", radius) { }
 
     // Define equation to apply to all points in 'A' and 'B' grids.
     virtual void define() {
@@ -465,20 +493,23 @@ public:
     }
 };
 
-REGISTER_STENCIL(TestDepStencil2);
+// Create an object of type 'TestDepStencil2',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static TestDepStencil2 TestDepStencil2_instance;
 
 class TestDepStencil3 : public TestBase {
 
 protected:
 
     // Vars.
-    MAKE_GRID(A, t, x, y, z); // time-varying grid.
-    MAKE_GRID(B, t, x, y, z); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, y, z }); // time-varying grid.
+    yc_grid_var B = yc_grid_var("B", get_solution(), { t, x, y, z }); // time-varying grid.
 
 public:
 
-    TestDepStencil3(StencilList& stencils, int radius=2) :
-        TestBase("test_dep_3d", stencils, radius) { }
+    TestDepStencil3(int radius=2) :
+        TestBase("test_dep_3d", radius) { }
 
     // Define equation to apply to all points in 'A' and 'B' grids.
     virtual void define() {
@@ -493,7 +524,10 @@ public:
     }
 };
 
-REGISTER_STENCIL(TestDepStencil3);
+// Create an object of type 'TestDepStencil3',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static TestDepStencil3 TestDepStencil3_instance;
 
 // Test the use of scratch-pad grids.
 
@@ -502,15 +536,15 @@ class TestScratchStencil1 : public TestBase {
 protected:
 
     // Vars.
-    MAKE_GRID(A, t, x); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x }); // time-varying grid.
 
     // Temporary storage.
-    MAKE_SCRATCH_GRID(B, x);
+    yc_grid_var B = yc_grid_var("B", get_solution(), { x }, true);
 
 public:
 
-    TestScratchStencil1(StencilList& stencils, int radius=2) :
-        TestBase("test_scratch_1d", stencils, radius) { }
+    TestScratchStencil1(int radius=2) :
+        TestBase("test_scratch_1d", radius) { }
 
     // Define equation to apply to all points in 'A' grid.
     virtual void define() {
@@ -523,24 +557,27 @@ public:
     }
 };
 
-REGISTER_STENCIL(TestScratchStencil1);
+// Create an object of type 'TestScratchStencil1',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static TestScratchStencil1 TestScratchStencil1_instance;
 
 class TestScratchStencil3 : public TestBase {
 
 protected:
 
     // Vars.
-    MAKE_GRID(A, t, x, y, z); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, y, z }); // time-varying grid.
 
     // Temporary storage.
-    MAKE_SCRATCH_GRID(t1, x, y, z);
-    MAKE_SCRATCH_GRID(t2, x, y, z);
-    MAKE_SCRATCH_GRID(t3, x, y, z);
+    yc_grid_var t1 = yc_grid_var("t1", get_solution(), { x, y, z }, true);
+    yc_grid_var t2 = yc_grid_var("t2", get_solution(), { x, y, z }, true);
+    yc_grid_var t3 = yc_grid_var("t3", get_solution(), { x, y, z }, true);
 
 public:
 
-    TestScratchStencil3(StencilList& stencils, int radius=2) :
-        TestBase("test_scratch_3d", stencils, radius) { }
+    TestScratchStencil3(int radius=2) :
+        TestBase("test_scratch_3d", radius) { }
 
     // Define equation to apply to all points in 'A' grid.
     virtual void define() {
@@ -559,7 +596,10 @@ public:
     }
 };
 
-REGISTER_STENCIL(TestScratchStencil3);
+// Create an object of type 'TestScratchStencil3',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static TestScratchStencil3 TestScratchStencil3_instance;
 
 // Test the use of boundary code in sub-domains.
 class TestBoundaryStencil1 : public TestBase {
@@ -567,86 +607,95 @@ class TestBoundaryStencil1 : public TestBase {
 protected:
 
     // Vars.
-    MAKE_GRID(A, t, x); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x }); // time-varying grid.
 
 public:
 
-    TestBoundaryStencil1(StencilList& stencils, int radius=2) :
-        TestBase("test_boundary_1d", stencils, radius) { }
+    TestBoundaryStencil1(int radius=2) :
+        TestBase("test_boundary_1d", radius) { }
 
     // Define equation to apply to all points in 'A' grid.
     virtual void define() {
 
         // Define interior sub-domain.
-        Condition sd0 = (x >= first_index(x) + 5) && (x <= last_index(x) - 3);
+        yc_bool_node_ptr sd0 = (x >= first_index(x) + 5) && (x <= last_index(x) - 3);
         
         // Define interior points.
-        GridValue u = def_1d(A, t, x, 0, 1);
-        A(t+1, x) EQUALS u IF sd0;
+        yc_number_node_ptr u = def_1d(A, t, x, 0, 1);
+        A(t+1, x) EQUALS u IF_DOMAIN sd0;
 
         // Define exterior points.
-        A(t+1, x) EQUALS -u IF !sd0;
+        A(t+1, x) EQUALS -u IF_DOMAIN !sd0;
     }
 };
 
-REGISTER_STENCIL(TestBoundaryStencil1);
+// Create an object of type 'TestBoundaryStencil1',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static TestBoundaryStencil1 TestBoundaryStencil1_instance;
 
 class TestBoundaryStencil2 : public TestBase {
 
 protected:
 
     // Vars.
-    MAKE_GRID(A, t, x, y); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, y }); // time-varying grid.
 
 public:
 
-    TestBoundaryStencil2(StencilList& stencils, int radius=2) :
-        TestBase("test_boundary_2d", stencils, radius) { }
+    TestBoundaryStencil2(int radius=2) :
+        TestBase("test_boundary_2d", radius) { }
 
     // Define equation to apply to all points in 'A' grid.
     virtual void define() {
 
         // Sub-domain is rectangle interior.
-        Condition sd0 =
+        yc_bool_node_ptr sd0 =
             (x >= first_index(x) + 5) && (x <= last_index(x) - 3) &&
             (y >= first_index(y) + 4) && (y <= last_index(y) - 6);
         
         // Set A w/different stencils depending on condition.
-        A(t+1, x, y) EQUALS def_2d(A, t, x, 0, 2, y, 1, 0) IF sd0;
-        A(t+1, x, y) EQUALS def_2d(A, t, x, 1, 0, y, 0, 2) IF !sd0;
+        A(t+1, x, y) EQUALS def_2d(A, t, x, 0, 2, y, 1, 0) IF_DOMAIN sd0;
+        A(t+1, x, y) EQUALS def_2d(A, t, x, 1, 0, y, 0, 2) IF_DOMAIN !sd0;
     }
 };
 
-REGISTER_STENCIL(TestBoundaryStencil2);
+// Create an object of type 'TestBoundaryStencil2',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static TestBoundaryStencil2 TestBoundaryStencil2_instance;
 
 class TestBoundaryStencil3 : public TestBase {
 
 protected:
 
     // Vars.
-    MAKE_GRID(A, t, x, y, z); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, y, z }); // time-varying grid.
 
 public:
 
-    TestBoundaryStencil3(StencilList& stencils, int radius=2) :
-        TestBase("test_boundary_3d", stencils, radius) { }
+    TestBoundaryStencil3(int radius=2) :
+        TestBase("test_boundary_3d", radius) { }
 
     // Define equation to apply to all points in 'A' grid.
     virtual void define() {
 
         // Sub-domain is rectangle interior.
-        Condition sd0 =
+        yc_bool_node_ptr sd0 =
             (x >= first_index(x) + 5) && (x <= last_index(x) - 3) &&
             (y >= first_index(y) + 4) && (y <= last_index(y) - 6) &&
             (z >= first_index(z) + 6) && (z <= last_index(z) - 4);
         
         // Set A w/different stencils depending on condition.
-        A(t+1, x, y, z) EQUALS def_3d(A, t, x, 0, 2, y, 1, 0, z, 0, 1) IF sd0;
-        A(t+1, x, y, z) EQUALS def_3d(A, t, x, 1, 0, y, 0, 2, z, 1, 0) IF !sd0;
+        A(t+1, x, y, z) EQUALS def_3d(A, t, x, 0, 2, y, 1, 0, z, 0, 1) IF_DOMAIN sd0;
+        A(t+1, x, y, z) EQUALS def_3d(A, t, x, 1, 0, y, 0, 2, z, 1, 0) IF_DOMAIN !sd0;
     }
 };
 
-REGISTER_STENCIL(TestBoundaryStencil3);
+// Create an object of type 'TestBoundaryStencil3',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static TestBoundaryStencil3 TestBoundaryStencil3_instance;
 
 // Test step condition.
 class TestStepCondStencil1 : public TestBase {
@@ -654,25 +703,25 @@ class TestStepCondStencil1 : public TestBase {
 protected:
 
     // Indices.
-    MAKE_MISC_INDEX(b);
+    yc_index_node_ptr b = _node_factory.new_misc_index("b");
 
     // Vars.
-    MAKE_GRID(A, t, x); // time-varying grid.
-    MAKE_ARRAY(B, b);
+    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x }); // time-varying grid.
+    yc_grid_var B = yc_grid_var("B", get_solution(), { b });
 
 public:
 
-    TestStepCondStencil1(StencilList& stencils, int radius=2) :
-        TestBase("test_step_cond_1d", stencils, radius) { }
+    TestStepCondStencil1(int radius=2) :
+        TestBase("test_step_cond_1d", radius) { }
 
     // Define equation to apply to all points in 'A' grid.
     virtual void define() {
 
         // Time condition.
-        Condition tc0 = (t % 2 == 0);
+        yc_bool_node_ptr tc0 = (t % 2 == 0);
 
         // Var condition.
-        Condition vc0 = (B(0) > B(1));
+        yc_bool_node_ptr vc0 = (B(0) > B(1));
         
         // Set A w/different stencils depending on the conditions.  It is
         // the programmer's responsibility to ensure that the conditions are
@@ -690,7 +739,10 @@ public:
     }
 };
 
-REGISTER_STENCIL(TestStepCondStencil1);
+// Create an object of type 'TestStepCondStencil1',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static TestStepCondStencil1 TestStepCondStencil1_instance;
 
 // Test the use of conditional updates with scratch-pad grids.
 class TestScratchBoundaryStencil1 : public TestBase {
@@ -698,15 +750,15 @@ class TestScratchBoundaryStencil1 : public TestBase {
 protected:
 
     // Vars.
-    MAKE_GRID(A, t, x); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x }); // time-varying grid.
 
     // Temporary storage.
-    MAKE_SCRATCH_GRID(B, x);
+    yc_grid_var B = yc_grid_var("B", get_solution(), { x }, true);
 
 public:
 
-    TestScratchBoundaryStencil1(StencilList& stencils, int radius=2) :
-        TestBase("test_scratch_boundary_1d", stencils, radius) { }
+    TestScratchBoundaryStencil1(int radius=2) :
+        TestBase("test_scratch_boundary_1d", radius) { }
 
     // Define equation to apply to all points in 'A' grid.
     virtual void define() {
@@ -715,16 +767,19 @@ public:
         B(x) EQUALS def_1d(A, t, x, 1, 0);
 
         // Define sub-domain.
-        Condition sd0 = (x >= first_index(x) + 5) && (x <= last_index(x) - 3);
+        yc_bool_node_ptr sd0 = (x >= first_index(x) + 5) && (x <= last_index(x) - 3);
         
         // Define next values for 'A' from scratch var values.
         auto v = def_no_t_1d(B, x-6, 2, 3) - def_no_t_1d(B, x+7, 0, 2);
-        A(t+1, x) EQUALS v IF sd0;
-        A(t+1, x) EQUALS -v IF !sd0;
+        A(t+1, x) EQUALS v IF_DOMAIN sd0;
+        A(t+1, x) EQUALS -v IF_DOMAIN !sd0;
     }
 };
 
-REGISTER_STENCIL(TestScratchBoundaryStencil1);
+// Create an object of type 'TestScratchBoundaryStencil1',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static TestScratchBoundaryStencil1 TestScratchBoundaryStencil1_instance;
 
 // A stencil that uses svml math functions.
 class TestFuncStencil1 : public TestBase {
@@ -732,14 +787,14 @@ class TestFuncStencil1 : public TestBase {
 protected:
 
     // Vars.
-    MAKE_GRID(A, t, x);
-    MAKE_GRID(B, t, x);
-    MAKE_GRID(C, t, x);
+    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x });
+    yc_grid_var B = yc_grid_var("B", get_solution(), { t, x });
+    yc_grid_var C = yc_grid_var("C", get_solution(), { t, x });
 
 public:
 
-    TestFuncStencil1(StencilList& stencils, int radius=1) :
-        TestBase("test_func_1d", stencils, radius) { }
+    TestFuncStencil1(int radius=1) :
+        TestBase("test_func_1d", radius) { }
 
     virtual void define() {
         A(t+1, x) EQUALS cos(A(t, x)) - 2 * sin(A(t, x));
@@ -748,7 +803,10 @@ public:
     }
 };
 
-REGISTER_STENCIL(TestFuncStencil1);
+// Create an object of type 'TestFuncStencil1',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static TestFuncStencil1 TestFuncStencil1_instance;
 
 // A stencil that has grids but no stencil equation.
 class TestEmptyStencil2 : public TestBase {
@@ -756,17 +814,20 @@ class TestEmptyStencil2 : public TestBase {
 protected:
 
     // Vars.
-    MAKE_GRID(A, t, x, y); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, y }); // time-varying grid.
 
 public:
 
-    TestEmptyStencil2(StencilList& stencils, int radius=1) :
-        TestBase("test_empty_2d", stencils, radius) { }
+    TestEmptyStencil2(int radius=1) :
+        TestBase("test_empty_2d", radius) { }
 
     virtual void define() { }
 };
 
-REGISTER_STENCIL(TestEmptyStencil2);
+// Create an object of type 'TestEmptyStencil2',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static TestEmptyStencil2 TestEmptyStencil2_instance;
 
 // A stencil that no grids and no stencil equation.
 // Kernel must be built with domain_dims and step_dim options.
@@ -776,10 +837,13 @@ protected:
 
 public:
 
-    TestEmptyStencil0(StencilList& stencils, int radius=1) :
-        TestBase("test_empty", stencils, radius) { }
+    TestEmptyStencil0(int radius=1) :
+        TestBase("test_empty", radius) { }
 
     virtual void define() { }
 };
 
-REGISTER_STENCIL(TestEmptyStencil0);
+// Create an object of type 'TestEmptyStencil0',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static TestEmptyStencil0 TestEmptyStencil0_instance;

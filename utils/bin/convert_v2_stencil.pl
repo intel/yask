@@ -61,15 +61,17 @@ sub convert($) {
     # Capture class name.
     if (/class\s+([_\w]+)/) {
       $class_name = $1;
+      warn "  class $class_name...\n" if $OPT{verbose};
     }
 
     # Capture stencilList parameter name.
     if (/StencilList\s*&\s*([_\w]+)/) {
       $list_var = $1;
+      warn "    StencilList $list_var...\n" if $OPT{verbose};
     }
 
     # Register solution.
-    if (/REGISTER_STENCIL[(](.*)[)]/) {
+    if (/REGISTER_STENCIL\s*[(](.*)[)]/) {
       my $cname = $1;
 
       $result .=
@@ -82,30 +84,35 @@ sub convert($) {
     # Include file.
     elsif (/[#]include.*Soln[.]hpp/) {
       $result .= "// YASK stencil solution(s) in this file will be integrated into the YASK compiler utility.\n".
-        "#include \"yask_compiler_utility_api.hpp\"\n";
+        "#include \"yask_compiler_utility_api.hpp\"\n".
+        "using namespace std;\n".
+        "using namespace yask;\n";
     }
 
     # For other code, make substitutions and append changes.
     else {
 
       # Ctor: remove StencilList parameter.
-      s/$class_name\s*[(]\s*StencilList\s*&\s*$list_var\s*,\s*/$class_name(/
-        if defined $class_name;
-      s/$list_var\s*,\s*//g
-        if defined $list_var;
+      if (defined $class_name && defined $list_var) {
+        s/\bStencilList\s*&\s*//g;
+        s/([(,]\s*)$list_var\s*,\s*/$1/g; # '(a,list,b)' -> '(a,b)'
+        s/([,]\s*)$list_var\s*([)])/$2/g; # '(a,list)' -> '(a)'
+        s/([(]\s*)$list_var\s*([)])/$1$2/g; # '(list)' -> '()'
+      }
     
-      # Index creation.
-      s/MAKE_STEP_INDEX[(]([^)]+)[)]/yc_index_node_ptr $1 = _node_factory.new_step_index("$1")/g;
-      s/MAKE_DOMAIN_INDEX[(]([^)]+)[)]/yc_index_node_ptr $1 = _node_factory.new_domain_index("$1")/g;
-      s/MAKE_MISC_INDEX[(]([^)]+)[)]/yc_index_node_ptr $1 = _node_factory.new_misc_index("$1")/g;
+      # Node creation.
+      s/MAKE_STEP_INDEX\s*[(]([^)]+)[)]/yc_index_node_ptr $1 = _node_factory.new_step_index("$1")/g;
+      s/MAKE_DOMAIN_INDEX\s*[(]([^)]+)[)]/yc_index_node_ptr $1 = _node_factory.new_domain_index("$1")/g;
+      s/MAKE_MISC_INDEX\s*[(]([^)]+)[)]/yc_index_node_ptr $1 = _node_factory.new_misc_index("$1")/g;
+      s/constNum\s*[(]([^,]+)[)]/_node_factory.new_number_node($1)/g;
 
       # Grid creation.
-      s/MAKE_GRID[(]([^,]+),\s*([^)]+)[)]/auto $1 = yc_grid_var("$1", get_solution(), { $2 })/g;
-      s/MAKE_ARRAY[(]([^,]+),\s*([^)]+)[)]/auto $1 = yc_grid_var("$1", get_solution(), { $2 })/g;
-      s/MAKE_SCALAR[(]([^,]+)[)]/auto $1 = yc_grid_var("$1", get_solution(), { })/g;
-      s/MAKE_SCRATCH_GRID[(]([^,]+),\s*([^)]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_solution(), { $2 }, true)/g;
-      s/MAKE_SCRATCH_ARRAY[(]([^,]+),\s*([^)]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_solution(), { $2 }, true)/g;
-      s/MAKE_SCRATCH_SCALAR[(]([^,]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_solution(), { }, true)/g;
+      s/MAKE_GRID\s*[(]([^,]+),\s*([^)]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_solution(), { $2 })/g;
+      s/MAKE_ARRAY\s*[(]([^,]+),\s*([^)]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_solution(), { $2 })/g;
+      s/MAKE_SCALAR\s*[(]([^,]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_solution(), { })/g;
+      s/MAKE_SCRATCH_GRID\s*[(]([^,]+),\s*([^)]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_solution(), { $2 }, true)/g;
+      s/MAKE_SCRATCH_ARRAY\s*[(]([^,]+),\s*([^)]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_solution(), { $2 }, true)/g;
+      s/MAKE_SCRATCH_SCALAR\s*[(]([^,]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_solution(), { }, true)/g;
 
       # Typenames.
       s/\bStencilBase\b/yc_solution_base/g;
@@ -138,12 +145,14 @@ sub convert($) {
   close INF;
 
   if ($OPT{in_place}) {
-    open OUTF, ">$fname" or die("error: cannot write back to '$fname'\n");
 
+    # Backup original.
     my $fbak = $fname."~";
     rename "$fname", $fbak or die("error: cannot rename original file to '$fbak'\n");
     warn "  Original code saved in '$fbak'.\n";
 
+    # Write new code to original filename.
+    open OUTF, ">$fname" or die("error: cannot write back to '$fname'\n");
     print OUTF $result;
     close OUTF;
     warn "  Converted code written back to '$fname'.\n".

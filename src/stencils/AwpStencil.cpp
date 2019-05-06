@@ -30,61 +30,64 @@ IN THE SOFTWARE.
 // Set the following macro to use a sponge grid instead of 3 sponge arrays.
 //#define FULL_SPONGE_GRID
 
-#include "Soln.hpp"
+// YASK stencil solution(s) in this file will be integrated into the YASK compiler utility.
+#include "yask_compiler_utility_api.hpp"
+using namespace std;
+using namespace yask;
 
-class AwpStencil : public StencilBase {
+class AwpStencil : public yc_solution_base {
 
 protected:
 
     // Indices & dimensions.
-    MAKE_STEP_INDEX(t);           // step in time dim.
-    MAKE_DOMAIN_INDEX(x);         // spatial dim.
-    MAKE_DOMAIN_INDEX(y);         // spatial dim.
-    MAKE_DOMAIN_INDEX(z);         // spatial dim.
+    yc_index_node_ptr t = _node_factory.new_step_index("t");           // step in time dim.
+    yc_index_node_ptr x = _node_factory.new_domain_index("x");         // spatial dim.
+    yc_index_node_ptr y = _node_factory.new_domain_index("y");         // spatial dim.
+    yc_index_node_ptr z = _node_factory.new_domain_index("z");         // spatial dim.
 
     // Time-varying 3D-spatial velocity grids.
-    MAKE_GRID(vel_x, t, x, y, z);
-    MAKE_GRID(vel_y, t, x, y, z);
-    MAKE_GRID(vel_z, t, x, y, z);
+    yc_grid_var vel_x = yc_grid_var("vel_x", get_solution(), { t, x, y, z });
+    yc_grid_var vel_y = yc_grid_var("vel_y", get_solution(), { t, x, y, z });
+    yc_grid_var vel_z = yc_grid_var("vel_z", get_solution(), { t, x, y, z });
 
     // Time-varying 3D-spatial Stress grids.
-    MAKE_GRID(stress_xx, t, x, y, z);
-    MAKE_GRID(stress_yy, t, x, y, z);
-    MAKE_GRID(stress_zz, t, x, y, z);
-    MAKE_GRID(stress_xy, t, x, y, z);
-    MAKE_GRID(stress_xz, t, x, y, z);
-    MAKE_GRID(stress_yz, t, x, y, z);
+    yc_grid_var stress_xx = yc_grid_var("stress_xx", get_solution(), { t, x, y, z });
+    yc_grid_var stress_yy = yc_grid_var("stress_yy", get_solution(), { t, x, y, z });
+    yc_grid_var stress_zz = yc_grid_var("stress_zz", get_solution(), { t, x, y, z });
+    yc_grid_var stress_xy = yc_grid_var("stress_xy", get_solution(), { t, x, y, z });
+    yc_grid_var stress_xz = yc_grid_var("stress_xz", get_solution(), { t, x, y, z });
+    yc_grid_var stress_yz = yc_grid_var("stress_yz", get_solution(), { t, x, y, z });
 
     // Time-varying attenuation memory grids.
-    MAKE_GRID(stress_mem_xx, t, x, y, z);
-    MAKE_GRID(stress_mem_yy, t, x, y, z);
-    MAKE_GRID(stress_mem_zz, t, x, y, z);
-    MAKE_GRID(stress_mem_xy, t, x, y, z);
-    MAKE_GRID(stress_mem_xz, t, x, y, z);
-    MAKE_GRID(stress_mem_yz, t, x, y, z);
+    yc_grid_var stress_mem_xx = yc_grid_var("stress_mem_xx", get_solution(), { t, x, y, z });
+    yc_grid_var stress_mem_yy = yc_grid_var("stress_mem_yy", get_solution(), { t, x, y, z });
+    yc_grid_var stress_mem_zz = yc_grid_var("stress_mem_zz", get_solution(), { t, x, y, z });
+    yc_grid_var stress_mem_xy = yc_grid_var("stress_mem_xy", get_solution(), { t, x, y, z });
+    yc_grid_var stress_mem_xz = yc_grid_var("stress_mem_xz", get_solution(), { t, x, y, z });
+    yc_grid_var stress_mem_yz = yc_grid_var("stress_mem_yz", get_solution(), { t, x, y, z });
 
     // 3D grids used for anelastic attenuation
-    MAKE_GRID(weight, x, y, z);
-    MAKE_GRID(tau2, x, y, z);
-    MAKE_GRID(anelastic_ap, x, y, z);
-    MAKE_GRID(anelastic_as_diag, x, y, z);
-    MAKE_GRID(anelastic_xy, x, y, z);
-    MAKE_GRID(anelastic_xz, x, y, z);
-    MAKE_GRID(anelastic_yz, x, y, z);
+    yc_grid_var weight = yc_grid_var("weight", get_solution(), { x, y, z });
+    yc_grid_var tau2 = yc_grid_var("tau2", get_solution(), { x, y, z });
+    yc_grid_var anelastic_ap = yc_grid_var("anelastic_ap", get_solution(), { x, y, z });
+    yc_grid_var anelastic_as_diag = yc_grid_var("anelastic_as_diag", get_solution(), { x, y, z });
+    yc_grid_var anelastic_xy = yc_grid_var("anelastic_xy", get_solution(), { x, y, z });
+    yc_grid_var anelastic_xz = yc_grid_var("anelastic_xz", get_solution(), { x, y, z });
+    yc_grid_var anelastic_yz = yc_grid_var("anelastic_yz", get_solution(), { x, y, z });
 
     // 3D-spatial Lame' coefficients.
-    MAKE_GRID(lambda, x, y, z);
-    MAKE_GRID(rho, x, y, z);
-    MAKE_GRID(mu, x, y, z);
+    yc_grid_var lambda = yc_grid_var("lambda", get_solution(), { x, y, z });
+    yc_grid_var rho = yc_grid_var("rho", get_solution(), { x, y, z });
+    yc_grid_var mu = yc_grid_var("mu", get_solution(), { x, y, z });
 
     // Sponge coefficients.
     // (Most of these will be 1.0.)
 #ifdef FULL_SPONGE_GRID
-    MAKE_GRID(sponge, x, y, z);
+    yc_grid_var sponge = yc_grid_var("sponge", get_solution(), { x, y, z });
 #else
-    MAKE_ARRAY(cr_x, x);
-    MAKE_ARRAY(cr_y, y);
-    MAKE_ARRAY(cr_z, z);
+    yc_grid_var cr_x = yc_grid_var("cr_x", get_solution(), { x });
+    yc_grid_var cr_y = yc_grid_var("cr_y", get_solution(), { y });
+    yc_grid_var cr_z = yc_grid_var("cr_z", get_solution(), { z });
 #endif
 
     // Spatial FD coefficients.
@@ -92,16 +95,16 @@ protected:
     const double c2 = -1.0/24.0;
 
     // Physical dimensions in time and space.
-    MAKE_SCALAR(delta_t);
-    MAKE_SCALAR(h);
+    yc_grid_var delta_t = yc_grid_var("delta_t", get_solution(), { });
+    yc_grid_var h = yc_grid_var("h", get_solution(), { });
 
 public:
 
-    AwpStencil(StencilList& stencils) :
-        StencilBase("awp", stencils) { }
+    AwpStencil() :
+        yc_solution_base("awp") { }
 
     // Adjustment for sponge layer.
-    void adjust_for_sponge(GridValue& val) {
+    void adjust_for_sponge(yc_number_node_ptr& val) {
 
 #ifdef FULL_SPONGE_GRID
         val *= sponge(x, y, z);
@@ -117,54 +120,54 @@ public:
     // appropriately.
 
     void define_vel_x() {
-        GridValue rho_val = (rho(x, y,   z  ) +
+        yc_number_node_ptr rho_val = (rho(x, y,   z  ) +
                              rho(x, y-1, z  ) +
                              rho(x, y,   z-1) +
                              rho(x, y-1, z-1)) * (1.0 / 4.0);
-        GridValue d_val =
+        yc_number_node_ptr d_val =
             c1 * (stress_xx(t, x,   y,   z  ) - stress_xx(t, x-1, y,   z  )) +
             c2 * (stress_xx(t, x+1, y,   z  ) - stress_xx(t, x-2, y,   z  )) +
             c1 * (stress_xy(t, x,   y,   z  ) - stress_xy(t, x,   y-1, z  )) +
             c2 * (stress_xy(t, x,   y+1, z  ) - stress_xy(t, x,   y-2, z  )) +
             c1 * (stress_xz(t, x,   y,   z  ) - stress_xz(t, x,   y,   z-1)) +
             c2 * (stress_xz(t, x,   y,   z+1) - stress_xz(t, x,   y,   z-2));
-        GridValue next_vel_x = vel_x(t, x, y, z) + (delta_t / (h * rho_val)) * d_val;
+        yc_number_node_ptr next_vel_x = vel_x(t, x, y, z) + (delta_t / (h * rho_val)) * d_val;
         adjust_for_sponge(next_vel_x);
 
         // define the value at t+1.
         vel_x(t+1, x, y, z) EQUALS next_vel_x;
     }
     void define_vel_y() {
-        GridValue rho_val = (rho(x,   y, z  ) +
+        yc_number_node_ptr rho_val = (rho(x,   y, z  ) +
                              rho(x+1, y, z  ) +
                              rho(x,   y, z-1) +
                              rho(x+1, y, z-1)) * (1.0 / 4.0);
-        GridValue d_val =
+        yc_number_node_ptr d_val =
             c1 * (stress_xy(t, x+1, y,   z  ) - stress_xy(t, x,   y,   z  )) +
             c2 * (stress_xy(t, x+2, y,   z  ) - stress_xy(t, x-1, y,   z  )) +
             c1 * (stress_yy(t, x,   y+1, z  ) - stress_yy(t, x,   y,   z  )) +
             c2 * (stress_yy(t, x,   y+2, z  ) - stress_yy(t, x,   y-1, z  )) +
             c1 * (stress_yz(t, x,   y,   z  ) - stress_yz(t, x,   y,   z-1)) +
             c2 * (stress_yz(t, x,   y,   z+1) - stress_yz(t, x,   y,   z-2));
-        GridValue next_vel_y = vel_y(t, x, y, z) + (delta_t / (h * rho_val)) * d_val;
+        yc_number_node_ptr next_vel_y = vel_y(t, x, y, z) + (delta_t / (h * rho_val)) * d_val;
         adjust_for_sponge(next_vel_y);
 
         // define the value at t+1.
         vel_y(t+1, x, y, z) EQUALS next_vel_y;
     }
     void define_vel_z() {
-        GridValue rho_val = (rho(x,   y,   z) +
+        yc_number_node_ptr rho_val = (rho(x,   y,   z) +
                              rho(x+1, y,   z) +
                              rho(x,   y-1, z) +
                              rho(x+1, y-1, z)) * (1.0 / 4.0);
-        GridValue d_val =
+        yc_number_node_ptr d_val =
             c1 * (stress_xz(t, x+1, y,   z  ) - stress_xz(t, x,   y,   z  )) +
             c2 * (stress_xz(t, x+2, y,   z  ) - stress_xz(t, x-1, y,   z  )) +
             c1 * (stress_yz(t, x,   y,   z  ) - stress_yz(t, x,   y-1, z  )) +
             c2 * (stress_yz(t, x,   y+1, z  ) - stress_yz(t, x,   y-2, z  )) +
             c1 * (stress_zz(t, x,   y,   z+1) - stress_zz(t, x,   y,   z  )) +
             c2 * (stress_zz(t, x,   y,   z+2) - stress_zz(t, x,   y,   z-1));
-        GridValue next_vel_z = vel_z(t, x, y, z) + (delta_t / (h * rho_val)) * d_val;
+        yc_number_node_ptr next_vel_z = vel_z(t, x, y, z) + (delta_t / (h * rho_val)) * d_val;
         adjust_for_sponge(next_vel_z);
 
         // define the value at t+1.
@@ -179,18 +182,18 @@ public:
     // space, so half-steps due to staggered grids are adjusted
     // appropriately.
 
-    void define_stress_xx(GridValue lambda_val, GridValue mu_val,
-                          GridValue d_x_val, GridValue d_y_val, GridValue d_z_val,
-                          GridValue tau1) {
+    void define_stress_xx(yc_number_node_ptr lambda_val, yc_number_node_ptr mu_val,
+                          yc_number_node_ptr d_x_val, yc_number_node_ptr d_y_val, yc_number_node_ptr d_z_val,
+                          yc_number_node_ptr tau1) {
 
-        GridValue stress_mem_xx_old = stress_mem_xx(t, x, y, z);
+        yc_number_node_ptr stress_mem_xx_old = stress_mem_xx(t, x, y, z);
 
-        GridValue next_stress_mem_xx = tau2(x, y, z) * stress_mem_xx_old +
+        yc_number_node_ptr next_stress_mem_xx = tau2(x, y, z) * stress_mem_xx_old +
             (1.0 / h) * tau1 * weight(x, y, z) *
             (mu_val * anelastic_as_diag(x, y, z) * (d_y_val + d_z_val) -
              (mu_val + 0.5 * lambda_val) * anelastic_ap(x, y, z) * (d_x_val + d_y_val + d_z_val));
 
-        GridValue next_stress_xx = stress_xx(t, x, y, z) +
+        yc_number_node_ptr next_stress_xx = stress_xx(t, x, y, z) +
             ((delta_t / h) * ((2. * mu_val * d_x_val) +
                               (lambda_val * (d_x_val + d_y_val + d_z_val)))) +
             delta_t * (next_stress_mem_xx + stress_mem_xx_old);
@@ -201,18 +204,18 @@ public:
         stress_mem_xx(t+1, x, y, z) EQUALS next_stress_mem_xx;
         stress_xx(t+1, x, y, z) EQUALS next_stress_xx;
     }
-    void define_stress_yy(GridValue lambda_val, GridValue mu_val,
-                          GridValue d_x_val, GridValue d_y_val, GridValue d_z_val,
-                          GridValue tau1) {
+    void define_stress_yy(yc_number_node_ptr lambda_val, yc_number_node_ptr mu_val,
+                          yc_number_node_ptr d_x_val, yc_number_node_ptr d_y_val, yc_number_node_ptr d_z_val,
+                          yc_number_node_ptr tau1) {
 
-        GridValue stress_mem_yy_old = stress_mem_yy(t, x, y, z);
+        yc_number_node_ptr stress_mem_yy_old = stress_mem_yy(t, x, y, z);
 
-        GridValue next_stress_mem_yy = tau2(x, y, z) * stress_mem_yy_old +
+        yc_number_node_ptr next_stress_mem_yy = tau2(x, y, z) * stress_mem_yy_old +
             (1 / h) * tau1 * weight(x, y, z) *
             (mu_val * anelastic_as_diag(x, y, z) * (d_x_val + d_z_val) -
              (mu_val + 0.5 * lambda_val) * anelastic_ap(x, y, z) * (d_x_val + d_y_val + d_z_val));
 
-        GridValue next_stress_yy = stress_yy(t, x, y, z) +
+        yc_number_node_ptr next_stress_yy = stress_yy(t, x, y, z) +
             ((delta_t / h) * ((2. * mu_val * d_y_val) +
                               (lambda_val * (d_x_val + d_y_val + d_z_val)))) +
             delta_t * (next_stress_mem_yy + stress_mem_yy_old);
@@ -223,18 +226,18 @@ public:
         stress_mem_yy(t+1, x, y, z) EQUALS next_stress_mem_yy;
         stress_yy(t+1, x, y, z) EQUALS next_stress_yy;
     }
-    void define_stress_zz(GridValue lambda_val, GridValue mu_val,
-                          GridValue d_x_val, GridValue d_y_val, GridValue d_z_val,
-                          GridValue tau1) {
+    void define_stress_zz(yc_number_node_ptr lambda_val, yc_number_node_ptr mu_val,
+                          yc_number_node_ptr d_x_val, yc_number_node_ptr d_y_val, yc_number_node_ptr d_z_val,
+                          yc_number_node_ptr tau1) {
 
-        GridValue stress_mem_zz_old = stress_mem_zz(t, x, y, z);
+        yc_number_node_ptr stress_mem_zz_old = stress_mem_zz(t, x, y, z);
 
-        GridValue next_stress_mem_zz = tau2(x, y, z) * stress_mem_zz_old +
+        yc_number_node_ptr next_stress_mem_zz = tau2(x, y, z) * stress_mem_zz_old +
             (1 / h) * tau1 * weight(x, y, z) *
             (mu_val * anelastic_as_diag(x, y, z) * (d_x_val + d_y_val) -
              (mu_val + 0.5 * lambda_val) * anelastic_ap(x, y, z) * (d_x_val + d_y_val + d_z_val));
 
-        GridValue next_stress_zz = stress_zz(t, x, y, z) +
+        yc_number_node_ptr next_stress_zz = stress_zz(t, x, y, z) +
             ((delta_t / h) * ((2. * mu_val * d_z_val) +
                               (lambda_val * (d_x_val + d_y_val + d_z_val)))) +
             delta_t * (next_stress_mem_zz + stress_mem_zz_old);
@@ -245,26 +248,26 @@ public:
         stress_mem_zz(t+1, x, y, z) EQUALS next_stress_mem_zz;
         stress_zz(t+1, x, y, z) EQUALS next_stress_zz;
     }
-    void define_stress_xy(GridValue tau1) {
+    void define_stress_xy(yc_number_node_ptr tau1) {
 
-        GridValue mu_val = 2.0 /
+        yc_number_node_ptr mu_val = 2.0 /
             (mu(x,   y,   z  ) + mu(x,   y,   z-1));
 
         // Note that we are using the velocity values at t+1.
-        GridValue d_xy_val =
+        yc_number_node_ptr d_xy_val =
             c1 * (vel_x(t+1, x,   y+1, z  ) - vel_x(t+1, x,   y,   z  )) +
             c2 * (vel_x(t+1, x,   y+2, z  ) - vel_x(t+1, x,   y-1, z  ));
-        GridValue d_yx_val =
+        yc_number_node_ptr d_yx_val =
             c1 * (vel_y(t+1, x,   y,   z  ) - vel_y(t+1, x-1, y,   z  )) +
             c2 * (vel_y(t+1, x+1, y,   z  ) - vel_y(t+1, x-2, y,   z  ));
 
-        GridValue stress_mem_xy_old = stress_mem_xy(t, x, y, z);
+        yc_number_node_ptr stress_mem_xy_old = stress_mem_xy(t, x, y, z);
 
-        GridValue next_stress_mem_xy = tau2(x, y, z) * stress_mem_xy_old -
+        yc_number_node_ptr next_stress_mem_xy = tau2(x, y, z) * stress_mem_xy_old -
             (0.5 / h) * tau1 * weight(x, y, z) *
             (mu_val * anelastic_xy(x, y, z) * (d_xy_val + d_yx_val));
 
-        GridValue next_stress_xy = stress_xy(t, x, y, z) +
+        yc_number_node_ptr next_stress_xy = stress_xy(t, x, y, z) +
             ((mu_val * delta_t / h) * (d_xy_val + d_yx_val)) +
             delta_t * (next_stress_mem_xy + stress_mem_xy_old);
 
@@ -274,26 +277,26 @@ public:
         stress_mem_xy(t+1, x, y, z) EQUALS next_stress_mem_xy;
         stress_xy(t+1, x, y, z) EQUALS next_stress_xy;
     }
-    void define_stress_xz(GridValue tau1) {
+    void define_stress_xz(yc_number_node_ptr tau1) {
 
-        GridValue mu_val = 2.0 /
+        yc_number_node_ptr mu_val = 2.0 /
             (mu(x,   y,   z  ) + mu(x,   y-1, z  ));
 
         // Note that we are using the velocity values at t+1.
-        GridValue d_xz_val =
+        yc_number_node_ptr d_xz_val =
             c1 * (vel_x(t+1, x,   y,   z+1) - vel_x(t+1, x,   y,   z  )) +
             c2 * (vel_x(t+1, x,   y,   z+2) - vel_x(t+1, x,   y,   z-1));
-        GridValue d_zx_val =
+        yc_number_node_ptr d_zx_val =
             c1 * (vel_z(t+1, x,   y,   z  ) - vel_z(t+1, x-1, y,   z  )) +
             c2 * (vel_z(t+1, x+1, y,   z  ) - vel_z(t+1, x-2, y,   z  ));
 
-        GridValue stress_mem_xz_old = stress_mem_xz(t, x, y, z);
+        yc_number_node_ptr stress_mem_xz_old = stress_mem_xz(t, x, y, z);
 
-        GridValue next_stress_mem_xz = tau2(x, y, z) * stress_mem_xz_old -
+        yc_number_node_ptr next_stress_mem_xz = tau2(x, y, z) * stress_mem_xz_old -
             (0.5 / h) * tau1 * weight(x, y, z) *
             (mu_val * anelastic_xz(x, y, z) * (d_xz_val + d_zx_val));
 
-        GridValue next_stress_xz = stress_xz(t, x, y, z) +
+        yc_number_node_ptr next_stress_xz = stress_xz(t, x, y, z) +
             ((mu_val * delta_t / h) * (d_xz_val + d_zx_val)) +
             delta_t * (next_stress_mem_xz + stress_mem_xz_old);
 
@@ -303,26 +306,26 @@ public:
         stress_mem_xz(t+1, x, y, z) EQUALS next_stress_mem_xz;
         stress_xz(t+1, x, y, z) EQUALS next_stress_xz;
     }
-    void define_stress_yz(GridValue tau1) {
+    void define_stress_yz(yc_number_node_ptr tau1) {
 
-        GridValue mu_val = 2.0 /
+        yc_number_node_ptr mu_val = 2.0 /
             (mu(x,   y,   z  ) + mu(x+1, y,   z  ));
 
         // Note that we are using the velocity values at t+1.
-        GridValue d_yz_val =
+        yc_number_node_ptr d_yz_val =
             c1 * (vel_y(t+1, x,   y,   z+1) - vel_y(t+1, x,   y,   z  )) +
             c2 * (vel_y(t+1, x,   y,   z+2) - vel_y(t+1, x,   y,   z-1));
-        GridValue d_zy_val =
+        yc_number_node_ptr d_zy_val =
             c1 * (vel_z(t+1, x,   y+1, z  ) - vel_z(t+1, x,   y,   z  )) +
             c2 * (vel_z(t+1, x,   y+2, z  ) - vel_z(t+1, x,   y-1, z  ));
 
-        GridValue stress_mem_yz_old = stress_mem_yz(t, x, y, z);
+        yc_number_node_ptr stress_mem_yz_old = stress_mem_yz(t, x, y, z);
 
-        GridValue next_stress_mem_yz = tau2(x, y, z) * stress_mem_yz_old -
+        yc_number_node_ptr next_stress_mem_yz = tau2(x, y, z) * stress_mem_yz_old -
             (0.5 / h) * tau1 * weight(x, y, z) *
             (mu_val * anelastic_yz(x, y, z) * (d_yz_val + d_zy_val));
 
-        GridValue next_stress_yz = stress_yz(t, x, y, z) +
+        yc_number_node_ptr next_stress_yz = stress_yz(t, x, y, z) +
             ((mu_val * delta_t / h) * (d_yz_val + d_zy_val)) +
             delta_t * (next_stress_mem_yz + stress_mem_yz_old);
 
@@ -342,29 +345,29 @@ public:
         define_vel_z();
 
         // Define some values common to the diagonal stress equations.
-        GridValue lambda_val = 8.0 /
+        yc_number_node_ptr lambda_val = 8.0 /
             (lambda(x,   y,   z  ) + lambda(x+1, y,   z  ) +
              lambda(x,   y-1, z  ) + lambda(x+1, y-1, z  ) +
              lambda(x,   y,   z-1) + lambda(x+1, y,   z-1) +
              lambda(x,   y-1, z-1) + lambda(x+1, y-1, z-1));
-        GridValue mu_val = 8.0 /
+        yc_number_node_ptr mu_val = 8.0 /
             (mu(x,   y,   z  ) + mu(x+1, y,   z  ) +
              mu(x,   y-1, z  ) + mu(x+1, y-1, z  ) +
              mu(x,   y,   z-1) + mu(x+1, y,   z-1) +
              mu(x,   y-1, z-1) + mu(x+1, y-1, z-1));
 
         // Note that we are using the velocity values at t+1.
-        GridValue d_x_val =
+        yc_number_node_ptr d_x_val =
             c1 * (vel_x(t+1, x+1, y,   z  ) - vel_x(t+1, x,   y,   z  )) +
             c2 * (vel_x(t+1, x+2, y,   z  ) - vel_x(t+1, x-1, y,   z  ));
-        GridValue d_y_val =
+        yc_number_node_ptr d_y_val =
             c1 * (vel_y(t+1, x,   y,   z  ) - vel_y(t+1, x,   y-1, z  )) +
             c2 * (vel_y(t+1, x,   y+1, z  ) - vel_y(t+1, x,   y-2, z  ));
-        GridValue d_z_val =
+        yc_number_node_ptr d_z_val =
             c1 * (vel_z(t+1, x,   y,   z  ) - vel_z(t+1, x,   y,   z-1)) +
             c2 * (vel_z(t+1, x,   y,   z+1) - vel_z(t+1, x,   y,   z-2));
 
-        GridValue tau1 = 1.0 - tau2(x, y, z);
+        yc_number_node_ptr tau1 = 1.0 - tau2(x, y, z);
 
         // Define stress components.
         define_stress_xx(lambda_val, mu_val, d_x_val, d_y_val, d_z_val, tau1);
@@ -376,4 +379,7 @@ public:
     }
 };
 
-REGISTER_STENCIL(AwpStencil);
+// Create an object of type 'AwpStencil',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static AwpStencil AwpStencil_instance;

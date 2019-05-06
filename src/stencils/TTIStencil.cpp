@@ -26,41 +26,44 @@ IN THE SOFTWARE.
 // Implement TTI stencil using formulation from Devito project.
 // TODO: provide a more readable TTI formulation.
 
-#include "Soln.hpp"
+// YASK stencil solution(s) in this file will be integrated into the YASK compiler utility.
+#include "yask_compiler_utility_api.hpp"
+using namespace std;
+using namespace yask;
 
-class TTIStencil:public StencilRadiusBase
+class TTIStencil:public yc_solution_with_radius_base
 {
 
 protected:
 
   // Indices & dimensions.
-  MAKE_STEP_INDEX (t);		// step in time dim.
-  MAKE_DOMAIN_INDEX (x);	// spatial dim.
-  MAKE_DOMAIN_INDEX (y);	// spatial dim.
-  MAKE_DOMAIN_INDEX (z);	// spatial dim.
+  yc_index_node_ptr t = _node_factory.new_step_index("t"); // step in time dim.
+  yc_index_node_ptr x = _node_factory.new_domain_index("x"); // spatial dim.
+  yc_index_node_ptr y = _node_factory.new_domain_index("y"); // spatial dim.
+  yc_index_node_ptr z = _node_factory.new_domain_index("z"); // spatial dim.
 
-  // Grids.
-  MAKE_GRID (u, t, x, y, z);	// Time-varying 3D wavefield grid.
-  MAKE_GRID (v, t, x, y, z);	// Time-varying 3D wavefield grid.
-  MAKE_GRID (m, x, y, z);	// Square slowness of the model.
-  MAKE_GRID (damp, x, y, z);	// Boundary damping.
-  MAKE_GRID (phi, x, y, z);
-  MAKE_GRID (theta, x, y, z);
-  MAKE_GRID (delta, x, y, z);
-  MAKE_GRID (epsilon, x, y, z);
+  // Grid vars.
+  yc_grid_var u = yc_grid_var("u", get_solution(), { t, x, y, z });	// Time-varying 3D wavefield grid.
+  yc_grid_var v = yc_grid_var("v", get_solution(), { t, x, y, z });	// Time-varying 3D wavefield grid.
+  yc_grid_var m = yc_grid_var("m", get_solution(), { x, y, z });	// Square slowness of the model.
+  yc_grid_var damp = yc_grid_var("damp", get_solution(), { x, y, z });	// Boundary damping.
+  yc_grid_var phi = yc_grid_var("phi", get_solution(), { x, y, z });
+  yc_grid_var theta = yc_grid_var("theta", get_solution(), { x, y, z });
+  yc_grid_var delta = yc_grid_var("delta", get_solution(), { x, y, z });
+  yc_grid_var epsilon = yc_grid_var("epsilon", get_solution(), { x, y, z });
 
   // Hoisted misc time-invariant data.
-  MAKE_GRID (ti0, x, y, z);
-  MAKE_GRID (ti1, x, y, z);
-  MAKE_GRID (ti2, x, y, z);
-  MAKE_GRID (ti3, x, y, z);
+  yc_grid_var ti0 = yc_grid_var("ti0", get_solution(), { x, y, z });
+  yc_grid_var ti1 = yc_grid_var("ti1", get_solution(), { x, y, z });
+  yc_grid_var ti2 = yc_grid_var("ti2", get_solution(), { x, y, z });
+  yc_grid_var ti3 = yc_grid_var("ti3", get_solution(), { x, y, z });
 
 public:
 
   // For this stencil, the 'radius' is the number of FD coefficients on
   // either side of center in each spatial dimension.
-TTIStencil (StencilList & stencils, int radius = 2):
-  StencilRadiusBase ("tti", stencils, radius)
+TTIStencil (int radius = 2):
+  yc_solution_with_radius_base ("tti", radius)
   {
   }
 
@@ -71,25 +74,25 @@ TTIStencil (StencilList & stencils, int radius = 2):
   virtual void define_so4 ()
   {
 
-    GridValue temp161 = 2.5e-2 * (-u (t, x - 1, y, z) + u (t, x + 1, y, z));
-    GridValue temp163 = -7.5e-2 * u (t, x, y, z) + 1.0e-1 * u (t, x, y + 1,
+    yc_number_node_ptr temp161 = 2.5e-2 * (-u (t, x - 1, y, z) + u (t, x + 1, y, z));
+    yc_number_node_ptr temp163 = -7.5e-2 * u (t, x, y, z) + 1.0e-1 * u (t, x, y + 1,
 								 z) -
       2.5e-2 * u (t, x, y + 2,
 		   z);
-    GridValue temp192 = 1.0e-1 * u (t, x, y, z) - 7.5e-2 * u (t, x, y - 1,
+    yc_number_node_ptr temp192 = 1.0e-1 * u (t, x, y, z) - 7.5e-2 * u (t, x, y - 1,
 								z) -
       2.5e-2 * u (t, x, y + 1,
 		   z);
-    GridValue temp183 = -2.5e-2 * u (t, x, y, z) - 7.5e-2 * u (t, x - 2, y,
+    yc_number_node_ptr temp183 = -2.5e-2 * u (t, x, y, z) - 7.5e-2 * u (t, x - 2, y,
 								 z) +
       1.0e-1 * u (t, x - 1, y,
 		   z);
-    GridValue temp168 =
+    yc_number_node_ptr temp168 =
       -7.5e-2 * u (t, x, y + 1, z) + 1.0e-1 * u (t, x + 1, y + 1,
 						   z) - 2.5e-2 * u (t, x + 2,
 								     y + 1,
 								     z);
-    GridValue temp197 =
+    yc_number_node_ptr temp197 =
       3.75e-2 * (temp161 * ti1 (x, y, z) * ti2 (x, y, z) +
 		  temp163 * ti2 (x, y, z) * ti3 (x, y,
 						 z) - (-7.5e-2 * u (t, x, y,
@@ -100,45 +103,45 @@ TTIStencil (StencilList & stencils, int radius = 2):
 								    z +
 								    2)) *
 		  ti0 (x, y, z));
-    GridValue temp171 =
+    yc_number_node_ptr temp171 =
       -7.5e-2 * u (t, x + 1, y, z) + 1.0e-1 * u (t, x + 1, y + 1,
 						   z) - 2.5e-2 * u (t, x + 1,
 								     y + 2,
 								     z);
-    GridValue temp178 = 2.5e-2 * (u (t, x, y, z) - u (t, x - 2, y, z));
-    GridValue temp182 =
+    yc_number_node_ptr temp178 = 2.5e-2 * (u (t, x, y, z) - u (t, x - 2, y, z));
+    yc_number_node_ptr temp182 =
       2.5e-2 * (-u (t, x - 2, y - 1, z) + u (t, x - 2, y + 1, z));
-    GridValue temp190 = 1.0e-1 * u (t, x, y, z) - 7.5e-2 * u (t, x - 1, y,
+    yc_number_node_ptr temp190 = 1.0e-1 * u (t, x, y, z) - 7.5e-2 * u (t, x - 1, y,
 								z) -
       2.5e-2 * u (t, x + 1, y,
 		   z);
-    GridValue temp173 = 2.5e-2 * (u (t, x, y, z) - u (t, x, y - 2, z));
-    GridValue temp188 =
+    yc_number_node_ptr temp173 = 2.5e-2 * (u (t, x, y, z) - u (t, x, y - 2, z));
+    yc_number_node_ptr temp188 =
       2.5e-2 * (-u (t, x - 1, y - 1, z) + u (t, x - 1, y + 1, z));
-    GridValue temp154 = 2.5e-2 * (-u (t, x, y - 1, z) + u (t, x, y + 1, z));
-    GridValue temp186 = -2.5e-2 * u (t, x, y, z) - 7.5e-2 * u (t, x, y - 2,
+    yc_number_node_ptr temp154 = 2.5e-2 * (-u (t, x, y - 1, z) + u (t, x, y + 1, z));
+    yc_number_node_ptr temp186 = -2.5e-2 * u (t, x, y, z) - 7.5e-2 * u (t, x, y - 2,
 								 z) +
       1.0e-1 * u (t, x, y - 1,
 		   z);
-    GridValue temp158 = -7.5e-2 * u (t, x, y, z) + 1.0e-1 * u (t, x + 1, y,
+    yc_number_node_ptr temp158 = -7.5e-2 * u (t, x, y, z) + 1.0e-1 * u (t, x + 1, y,
 								 z) -
       2.5e-2 * u (t, x + 2, y,
 		   z);
-    GridValue temp191 =
+    yc_number_node_ptr temp191 =
       2.5e-2 * (-u (t, x - 1, y - 1, z) + u (t, x + 1, y - 1, z));
-    GridValue temp184 =
+    yc_number_node_ptr temp184 =
       2.5e-2 * (-u (t, x - 1, y - 2, z) + u (t, x + 1, y - 2, z));
-    GridValue temp181 =
+    yc_number_node_ptr temp181 =
       -7.5e-2 * u (t, x - 1, y, z) + 1.0e-1 * u (t, x - 1, y + 1,
 						   z) - 2.5e-2 * u (t, x - 1,
 								     y + 2,
 								     z);
-    GridValue temp176 =
+    yc_number_node_ptr temp176 =
       -7.5e-2 * u (t, x, y - 1, z) + 1.0e-1 * u (t, x + 1, y - 1,
 						   z) - 2.5e-2 * u (t, x + 2,
 								     y - 1,
 								     z);
-    GridValue temp123 =
+    yc_number_node_ptr temp123 =
       (2.5e-2 *
        ((v (t, x, y, z) - v (t, x, y - 2, z)) * ti0 (x, y - 1, z) * ti3 (x,
 									 y - 1,
@@ -149,7 +152,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 	2.5e-2 * v (t, x + 2, y - 1, z)) * ti0 (x, y - 1, z) * ti1 (x, y - 1,
 								     z)) *
       ti0 (x, y - 1, z) * ti3 (x, y - 1, z);
-    GridValue temp102 =
+    yc_number_node_ptr temp102 =
       (2.5e-2 *
        ((-v (t, x - 1, y, z - 1) + v (t, x - 1, y, z + 1)) * ti2 (x - 1, y,
 								  z) + (-v (t,
@@ -174,7 +177,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 									  z) *
        ti1 (x - 1, y, z)) * ti0 (x - 1, y,
 				 z) * ti1 (x - 1, y, z);
-    GridValue temp131 =
+    yc_number_node_ptr temp131 =
       (2.5e-2 * (-v (t, x - 1, y, z - 2) + v (t, x + 1, y, z - 2)) *
        ti0 (x, y, z - 2) * ti1 (x, y,
 				z - 2) + (-2.5e-2 * v (t, x, y,
@@ -191,7 +194,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 								     z -
 								     2)) *
       ti2 (x, y, z - 2);
-    GridValue temp87 =
+    yc_number_node_ptr temp87 =
       (2.5e-2 *
        ((-v (t, x - 2, y, z - 1) + v (t, x - 2, y, z + 1)) * ti2 (x - 2, y,
 								  z) + (-v (t,
@@ -216,7 +219,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 									  z) *
        ti1 (x - 2, y, z)) * ti0 (x - 2, y,
 				 z) * ti1 (x - 2, y, z);
-    GridValue temp47 =
+    yc_number_node_ptr temp47 =
       2.5e-2 * (-v (t, x - 1, y, z) + v (t, x + 1, y, z)) * ti0 (x, y,
 								  z) * ti1 (x,
 									    y,
@@ -232,7 +235,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 								       y + 2,
 								       z)) *
       ti0 (x, y, z) * ti3 (x, y, z);
-    GridValue temp110 =
+    yc_number_node_ptr temp110 =
       (2.5e-2 *
        ((-v (t, x, y, z) + v (t, x, y + 2, z)) * ti0 (x, y + 1, z) * ti3 (x,
 									  y + 1,
@@ -243,7 +246,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 	2.5e-2 * v (t, x + 2, y + 1, z)) * ti0 (x, y + 1, z) * ti1 (x, y + 1,
 								     z)) *
       ti0 (x, y + 1, z) * ti3 (x, y + 1, z);
-    GridValue temp140 =
+    yc_number_node_ptr temp140 =
       (2.5e-2 * (-v (t, x, y, z) + v (t, x + 2, y, z)) * ti0 (x + 1, y, z) *
        ti1 (x + 1, y,
 	    z) + (-7.5e-2 * v (t, x + 1, y, z) + 1.0e-1 * v (t, x + 1, y,
@@ -257,7 +260,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
       ti0 (x + 1, y,
 	   z) * ti1 (x + 1, y,
 		     z);
-    GridValue temp149 =
+    yc_number_node_ptr temp149 =
       (2.5e-2 * (-v (t, x - 1, y - 2, z) + v (t, x + 1, y - 2, z)) *
        ti0 (x, y - 2, z) * ti1 (x, y - 2,
 				z) + (-2.5e-2 * v (t, x, y,
@@ -276,7 +279,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 								      y - 2,
 								      z) *
       ti3 (x, y - 2, z);
-    GridValue temp39 =
+    yc_number_node_ptr temp39 =
       (2.5e-2 * ((-v (t, x, y, z - 1) + v (t, x, y, z + 1)) * ti2 (x, y,
 								    z) +
 		  (-v (t, x,
@@ -296,7 +299,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 								     z)) *
        ti0 (x, y,
 	    z) * ti1 (x, y, z)) * ti0 (x, y, z) * ti1 (x, y, z);
-    GridValue temp132 =
+    yc_number_node_ptr temp132 =
       (2.5e-2 * (-v (t, x - 1, y, z - 1) + v (t, x + 1, y, z - 1)) *
        ti0 (x, y, z - 1) * ti1 (x, y,
 				z - 1) + (1.0e-1 * v (t, x, y,
@@ -312,9 +315,9 @@ TTIStencil (StencilList & stencils, int radius = 2):
 								     z -
 								     1)) *
       ti2 (x, y, z - 1);
-    GridValue temp6 =
+    yc_number_node_ptr temp6 =
       1.0 / (8.85879567828298e-1 * damp (x, y, z) + 2.0 * m (x, y, z));
-    GridValue temp141 =
+    yc_number_node_ptr temp141 =
       (2.5e-2 * (v (t, x, y, z) - v (t, x - 2, y, z)) * ti0 (x - 1, y, z) *
        ti1 (x - 1, y,
 	    z) + (-7.5e-2 * v (t, x - 1, y, z) + 1.0e-1 * v (t, x - 1, y,
@@ -328,9 +331,9 @@ TTIStencil (StencilList & stencils, int radius = 2):
       ti0 (x - 1, y,
 	   z) * ti1 (x - 1, y,
 		     z);
-    GridValue temp10 =
+    yc_number_node_ptr temp10 =
       8.85879567828298e-1 * damp (x, y, z) - 2.0 * m (x, y, z);
-    GridValue temp215 =
+    yc_number_node_ptr temp215 =
       3.75e-2 * (-temp154 * ti1 (x, y, z) + temp158 * ti3 (x, y, z)) * ti3 (x,
 									     y,
 									     z)
@@ -692,7 +695,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 								    z -
 								    2)) *
 						   ti0 (x, y, z - 2));
-    GridValue temp77 =
+    yc_number_node_ptr temp77 =
       (2.5e-2 * ((v (t, x, y, z) - v (t, x, y, z - 2)) * ti2 (x, y,
 							       z - 1) + (-v (t,
 									     x,
@@ -726,7 +729,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
        ti0 (x,
 	    y,
 	    z - 1) * ti1 (x, y, z - 1)) * ti2 (x, y, z - 1);
-    GridValue temp61 =
+    yc_number_node_ptr temp61 =
       (2.5e-2 * ((-v (t, x, y, z) + v (t, x, y, z + 2)) * ti2 (x, y,
 								z + 1) + (-v (t,
 									      x,
@@ -761,7 +764,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
        ti0 (x,
 	    y,
 	    z + 1) * ti1 (x, y, z + 1)) * ti2 (x, y, z + 1);
-    GridValue temp150 =
+    yc_number_node_ptr temp150 =
       (2.5e-2 * (-v (t, x - 1, y - 1, z) + v (t, x + 1, y - 1, z)) *
        ti0 (x, y - 1, z) * ti1 (x, y - 1,
 				z) + (1.0e-1 * v (t, x, y,
@@ -827,19 +830,19 @@ TTIStencil (StencilList & stencils, int radius = 2):
   virtual void define_so8 ()
   {
 
-    GridValue temp330 =
+    yc_number_node_ptr temp330 =
       4.16666666666667e-3 * (u (t, x - 2, y, z) - u (t, x + 2, y, z)) +
       3.33333333333333e-2 * (-u (t, x - 1, y, z) + u (t, x + 1, y, z));
-    GridValue temp333 =
+    yc_number_node_ptr temp333 =
       -4.16666666666667e-2 * u (t, x, y, z) - 1.25e-2 * u (t, x, y - 1,
 							     z) +
       7.5e-2 * u (t, x, y + 1, z) - 2.5e-2 * u (t, x, y + 2,
 						  z) +
       4.16666666666667e-3 * u (t, x, y + 3, z);
-    GridValue temp336 =
+    yc_number_node_ptr temp336 =
       3.33333333333333e-2 * (-u (t, x, y, z) + u (t, x, y + 2, z)) +
       4.16666666666667e-3 * (u (t, x, y - 1, z) - u (t, x, y + 3, z));
-    GridValue temp395 =
+    yc_number_node_ptr temp395 =
       4.16666666666667e-3 * (u (t, x - 2, y - 2, z) - u (t, x + 2, y - 2,
 							  z)) +
       3.33333333333333e-2 * (-u (t, x - 1,
@@ -848,26 +851,26 @@ TTIStencil (StencilList & stencils, int radius = 2):
 					  x + 1,
 					  y - 2,
 					  z));
-    GridValue temp365 =
+    yc_number_node_ptr temp365 =
       -4.16666666666667e-2 * u (t, x - 2, y, z) - 1.25e-2 * u (t, x - 2,
 								 y - 1,
 								 z) +
       7.5e-2 * u (t, x - 2, y + 1, z) - 2.5e-2 * u (t, x - 2, y + 2,
 						      z) +
       4.16666666666667e-3 * u (t, x - 2, y + 3, z);
-    GridValue temp375 =
+    yc_number_node_ptr temp375 =
       -4.16666666666667e-2 * u (t, x + 2, y, z) - 1.25e-2 * u (t, x + 2,
 								 y - 1,
 								 z) +
       7.5e-2 * u (t, x + 2, y + 1, z) - 2.5e-2 * u (t, x + 2, y + 2,
 						      z) +
       4.16666666666667e-3 * u (t, x + 2, y + 3, z);
-    GridValue temp394 = -2.5e-2 * u (t, x, y, z) - 1.25e-2 * u (t, x - 3, y,
+    yc_number_node_ptr temp394 = -2.5e-2 * u (t, x, y, z) - 1.25e-2 * u (t, x - 3, y,
 								  z) -
       4.16666666666667e-2 * u (t, x - 2, y, z) + 7.5e-2 * u (t, x - 1, y,
 							       z) +
       4.16666666666667e-3 * u (t, x + 1, y, z);
-    GridValue temp407 =
+    yc_number_node_ptr temp407 =
       4.16666666666667e-3 * (u (t, x - 1, y - 2, z) - u (t, x - 1, y + 2,
 							  z)) +
       3.33333333333333e-2 * (-u (t, x - 1,
@@ -876,17 +879,17 @@ TTIStencil (StencilList & stencils, int radius = 2):
 					  x - 1,
 					  y + 1,
 					  z));
-    GridValue temp352 =
+    yc_number_node_ptr temp352 =
       4.16666666666667e-3 * (-u (t, x, y, z) + u (t, x, y - 4, z)) +
       3.33333333333333e-2 * (-u (t, x, y - 3, z) + u (t, x, y - 1, z));
-    GridValue temp347 =
+    yc_number_node_ptr temp347 =
       -4.16666666666667e-2 * u (t, x + 1, y, z) - 1.25e-2 * u (t, x + 1,
 								 y - 1,
 								 z) +
       7.5e-2 * u (t, x + 1, y + 1, z) - 2.5e-2 * u (t, x + 1, y + 2,
 						      z) +
       4.16666666666667e-3 * u (t, x + 1, y + 3, z);
-    GridValue temp409 =
+    yc_number_node_ptr temp409 =
       4.16666666666667e-3 * (u (t, x + 1, y - 2, z) - u (t, x + 1, y + 2,
 							  z)) +
       3.33333333333333e-2 * (-u (t, x + 1,
@@ -895,58 +898,58 @@ TTIStencil (StencilList & stencils, int radius = 2):
 					  x + 1,
 					  y + 1,
 					  z));
-    GridValue temp318 =
+    yc_number_node_ptr temp318 =
       4.16666666666667e-3 * (u (t, x, y - 2, z) - u (t, x, y + 2, z)) +
       3.33333333333333e-2 * (-u (t, x, y - 1, z) + u (t, x, y + 1, z));
-    GridValue temp381 =
+    yc_number_node_ptr temp381 =
       -4.16666666666667e-2 * u (t, x, y - 1, z) - 1.25e-2 * u (t, x - 1,
 								 y - 1,
 								 z) +
       7.5e-2 * u (t, x + 1, y - 1, z) - 2.5e-2 * u (t, x + 2, y - 1,
 						      z) +
       4.16666666666667e-3 * u (t, x + 3, y - 1, z);
-    GridValue temp408 = 7.5e-2 * u (t, x, y, z) - 1.25e-2 * u (t, x - 2, y,
+    yc_number_node_ptr temp408 = 7.5e-2 * u (t, x, y, z) - 1.25e-2 * u (t, x - 2, y,
 								 z) -
       4.16666666666667e-2 * u (t, x - 1, y, z) - 2.5e-2 * u (t, x + 1, y,
 							       z) +
       4.16666666666667e-3 * u (t, x + 2, y, z);
-    GridValue temp390 =
+    yc_number_node_ptr temp390 =
       4.16666666666667e-3 * u (t, x, y, z) - 1.25e-2 * u (t, x, y - 4,
 							    z) -
       4.16666666666667e-2 * u (t, x, y - 3, z) + 7.5e-2 * u (t, x, y - 2,
 							       z) -
       2.5e-2 * u (t, x, y - 1, z);
-    GridValue temp360 =
+    yc_number_node_ptr temp360 =
       4.16666666666667e-3 * (-u (t, x, y, z) + u (t, x - 4, y, z)) +
       3.33333333333333e-2 * (-u (t, x - 3, y, z) + u (t, x - 1, y, z));
-    GridValue temp370 =
+    yc_number_node_ptr temp370 =
       -4.16666666666667e-2 * u (t, x, y + 2, z) - 1.25e-2 * u (t, x - 1,
 								 y + 2,
 								 z) +
       7.5e-2 * u (t, x + 1, y + 2, z) - 2.5e-2 * u (t, x + 2, y + 2,
 						      z) +
       4.16666666666667e-3 * u (t, x + 3, y + 2, z);
-    GridValue temp357 =
+    yc_number_node_ptr temp357 =
       -4.16666666666667e-2 * u (t, x, y - 2, z) - 1.25e-2 * u (t, x - 1,
 								 y - 2,
 								 z) +
       7.5e-2 * u (t, x + 1, y - 2, z) - 2.5e-2 * u (t, x + 2, y - 2,
 						      z) +
       4.16666666666667e-3 * u (t, x + 3, y - 2, z);
-    GridValue temp385 =
+    yc_number_node_ptr temp385 =
       -4.16666666666667e-2 * u (t, x - 1, y, z) - 1.25e-2 * u (t, x - 1,
 								 y - 1,
 								 z) +
       7.5e-2 * u (t, x - 1, y + 1, z) - 2.5e-2 * u (t, x - 1, y + 2,
 						      z) +
       4.16666666666667e-3 * u (t, x - 1, y + 3, z);
-    GridValue temp377 =
+    yc_number_node_ptr temp377 =
       3.33333333333333e-2 * (u (t, x, y, z) - u (t, x, y - 2, z)) +
       4.16666666666667e-3 * (u (t, x, y - 3, z) - u (t, x, y + 1, z));
-    GridValue temp343 =
+    yc_number_node_ptr temp343 =
       3.33333333333333e-2 * (-u (t, x, y, z) + u (t, x + 2, y, z)) +
       4.16666666666667e-3 * (u (t, x - 1, y, z) - u (t, x + 3, y, z));
-    GridValue temp388 =
+    yc_number_node_ptr temp388 =
       4.16666666666667e-3 * (u (t, x - 2, y - 3, z) - u (t, x + 2, y - 3,
 							  z)) +
       3.33333333333333e-2 * (-u (t, x - 1,
@@ -955,13 +958,13 @@ TTIStencil (StencilList & stencils, int radius = 2):
 					  x + 1,
 					  y - 3,
 					  z));
-    GridValue temp406 =
+    yc_number_node_ptr temp406 =
       -1.25e-2 * u (t, x, y, z) - 4.16666666666667e-2 * u (t, x, y + 1,
 							     z) +
       7.5e-2 * u (t, x, y + 2, z) - 2.5e-2 * u (t, x, y + 3,
 						  z) +
       4.16666666666667e-3 * u (t, x, y + 4, z);
-    GridValue temp404 =
+    yc_number_node_ptr temp404 =
       4.16666666666667e-3 * (u (t, x - 2, y + 1, z) - u (t, x + 2, y + 1,
 							  z)) +
       3.33333333333333e-2 * (-u (t, x - 1,
@@ -970,23 +973,23 @@ TTIStencil (StencilList & stencils, int radius = 2):
 					  x + 1,
 					  y + 1,
 					  z));
-    GridValue temp342 =
+    yc_number_node_ptr temp342 =
       -4.16666666666667e-2 * u (t, x, y + 1, z) - 1.25e-2 * u (t, x - 1,
 								 y + 1,
 								 z) +
       7.5e-2 * u (t, x + 1, y + 1, z) - 2.5e-2 * u (t, x + 2, y + 1,
 						      z) +
       4.16666666666667e-3 * u (t, x + 3, y + 1, z);
-    GridValue temp410 =
+    yc_number_node_ptr temp410 =
       -1.25e-2 * u (t, x, y, z) - 4.16666666666667e-2 * u (t, x + 1, y,
 							     z) +
       7.5e-2 * u (t, x + 2, y, z) - 2.5e-2 * u (t, x + 3, y,
 						  z) +
       4.16666666666667e-3 * u (t, x + 4, y, z);
-    GridValue temp367 =
+    yc_number_node_ptr temp367 =
       4.16666666666667e-3 * (u (t, x, y, z) - u (t, x, y + 4, z)) +
       3.33333333333333e-2 * (-u (t, x, y + 1, z) + u (t, x, y + 3, z));
-    GridValue temp399 =
+    yc_number_node_ptr temp399 =
       4.16666666666667e-3 * (u (t, x - 2, y - 1, z) - u (t, x + 2, y - 1,
 							  z)) +
       3.33333333333333e-2 * (-u (t, x - 1,
@@ -995,13 +998,13 @@ TTIStencil (StencilList & stencils, int radius = 2):
 					  x + 1,
 					  y - 1,
 					  z));
-    GridValue temp325 =
+    yc_number_node_ptr temp325 =
       -4.16666666666667e-2 * u (t, x, y, z) - 1.25e-2 * u (t, x - 1, y,
 							     z) +
       7.5e-2 * u (t, x + 1, y, z) - 2.5e-2 * u (t, x + 2, y,
 						  z) +
       4.16666666666667e-3 * u (t, x + 3, y, z);
-    GridValue temp386 =
+    yc_number_node_ptr temp386 =
       4.16666666666667e-3 * (u (t, x - 3, y - 2, z) - u (t, x - 3, y + 2,
 							  z)) +
       3.33333333333333e-2 * (-u (t, x - 3,
@@ -1010,20 +1013,20 @@ TTIStencil (StencilList & stencils, int radius = 2):
 					  x - 3,
 					  y + 1,
 					  z));
-    GridValue temp396 = -2.5e-2 * u (t, x, y, z) - 1.25e-2 * u (t, x, y - 3,
+    yc_number_node_ptr temp396 = -2.5e-2 * u (t, x, y, z) - 1.25e-2 * u (t, x, y - 3,
 								  z) -
       4.16666666666667e-2 * u (t, x, y - 2, z) + 7.5e-2 * u (t, x, y - 1,
 							       z) +
       4.16666666666667e-3 * u (t, x, y + 1, z);
-    GridValue temp401 = 7.5e-2 * u (t, x, y, z) - 1.25e-2 * u (t, x, y - 2,
+    yc_number_node_ptr temp401 = 7.5e-2 * u (t, x, y, z) - 1.25e-2 * u (t, x, y - 2,
 								 z) -
       4.16666666666667e-2 * u (t, x, y - 1, z) - 2.5e-2 * u (t, x, y + 1,
 							       z) +
       4.16666666666667e-3 * u (t, x, y + 2, z);
-    GridValue temp372 =
+    yc_number_node_ptr temp372 =
       4.16666666666667e-3 * (u (t, x, y, z) - u (t, x + 4, y, z)) +
       3.33333333333333e-2 * (-u (t, x + 1, y, z) + u (t, x + 3, y, z));
-    GridValue temp420 =
+    yc_number_node_ptr temp420 =
       2.08333333333333e-2 *
       ((temp330 * ti1 (x, y, z) + temp333 * ti3 (x, y, z)) * ti2 (x, y,
 								  z) -
@@ -1035,16 +1038,16 @@ TTIStencil (StencilList & stencils, int radius = 2):
 					   z +
 					   2)
 	+ 4.16666666666667e-3 * u (t, x, y, z + 3)) * ti0 (x, y, z));
-    GridValue temp387 =
+    yc_number_node_ptr temp387 =
       4.16666666666667e-3 * u (t, x, y, z) - 1.25e-2 * u (t, x - 4, y,
 							    z) -
       4.16666666666667e-2 * u (t, x - 3, y, z) + 7.5e-2 * u (t, x - 2, y,
 							       z) -
       2.5e-2 * u (t, x - 1, y, z);
-    GridValue temp383 =
+    yc_number_node_ptr temp383 =
       3.33333333333333e-2 * (u (t, x, y, z) - u (t, x - 2, y, z)) +
       4.16666666666667e-3 * (u (t, x - 3, y, z) - u (t, x + 1, y, z));
-    GridValue temp392 =
+    yc_number_node_ptr temp392 =
       4.16666666666667e-3 * (u (t, x - 2, y - 2, z) - u (t, x - 2, y + 2,
 							  z)) +
       3.33333333333333e-2 * (-u (t, x - 2,
@@ -1053,7 +1056,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 					  x - 2,
 					  y + 1,
 					  z));
-    GridValue temp284 =
+    yc_number_node_ptr temp284 =
       (((4.16666666666667e-3 *
 	 (v (t, x - 2, y, z - 2) - v (t, x + 2, y, z - 2)) +
 	 3.33333333333333e-2 * (-v (t, x - 1, y, z - 2) +
@@ -1085,7 +1088,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 									    +
 									    1))
        * ti2 (x, y, z - 2)) * ti2 (x, y, z - 2);
-    GridValue temp308 =
+    yc_number_node_ptr temp308 =
       (((4.16666666666667e-3 *
 	 (v (t, x - 2, y - 2, z) - v (t, x + 2, y - 2, z)) +
 	 3.33333333333333e-2 * (-v (t, x - 1, y - 2, z) +
@@ -1106,7 +1109,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 								     z +
 								     3)) *
        ti2 (x, y - 2, z)) * ti0 (x, y - 2, z) * ti3 (x, y - 2, z);
-    GridValue temp92 =
+    yc_number_node_ptr temp92 =
       (((4.16666666666667e-3 *
 	 (v (t, x, y - 2, z + 1) - v (t, x, y + 2, z + 1)) +
 	 3.33333333333333e-2 * (-v (t, x, y - 1, z + 1) +
@@ -1129,7 +1132,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 									   y,
 									   z +
 									   1);
-    GridValue temp185 =
+    yc_number_node_ptr temp185 =
       (((4.16666666666667e-3 *
 	 (v (t, x - 2, y - 2, z) - v (t, x - 2, y + 2, z)) +
 	 3.33333333333333e-2 * (-v (t, x - 2, y - 1, z) +
@@ -1151,7 +1154,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 									   y,
 									   z)
       * ti1 (x - 2, y, z);
-    GridValue temp283 =
+    yc_number_node_ptr temp283 =
       (((4.16666666666667e-3 *
 	 (v (t, x - 2, y, z - 3) - v (t, x + 2, y, z - 3)) +
 	 3.33333333333333e-2 * (-v (t, x - 1, y, z - 3) +
@@ -1184,7 +1187,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 									      -
 									      3))
       * ti2 (x, y, z - 3);
-    GridValue temp309 =
+    yc_number_node_ptr temp309 =
       (((4.16666666666667e-3 *
 	 (v (t, x - 2, y - 1, z) - v (t, x + 2, y - 1, z)) +
 	 3.33333333333333e-2 * (-v (t, x - 1, y - 1, z) +
@@ -1205,7 +1208,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 								     z +
 								     3)) *
        ti2 (x, y - 1, z)) * ti0 (x, y - 1, z) * ti3 (x, y - 1, z);
-    GridValue temp310 =
+    yc_number_node_ptr temp310 =
       (((4.16666666666667e-3 *
 	 (v (t, x - 2, y + 1, z) - v (t, x + 2, y + 1, z)) +
 	 3.33333333333333e-2 * (-v (t, x - 1, y + 1, z) +
@@ -1235,7 +1238,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 									y + 1,
 									z) *
       ti3 (x, y + 1, z);
-    GridValue temp307 =
+    yc_number_node_ptr temp307 =
       (((4.16666666666667e-3 *
 	 (v (t, x - 2, y - 3, z) - v (t, x + 2, y - 3, z)) +
 	 3.33333333333333e-2 * (-v (t, x - 1, y - 3, z) +
@@ -1259,7 +1262,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 								     z +
 								     3)) *
        ti2 (x, y - 3, z)) * ti0 (x, y - 3, z) * ti3 (x, y - 3, z);
-    GridValue temp298 =
+    yc_number_node_ptr temp298 =
       (((4.16666666666667e-3 * (v (t, x, y, z) - v (t, x + 4, y, z)) +
 	 3.33333333333333e-2 * (-v (t, x + 1, y, z) +
 				 v (t, x + 3, y, z))) * ti1 (x + 2, y,
@@ -1287,7 +1290,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 									 y,
 									 z) *
       ti1 (x + 2, y, z);
-    GridValue temp165 =
+    yc_number_node_ptr temp165 =
       (((4.16666666666667e-3 *
 	 (v (t, x - 3, y - 2, z) - v (t, x - 3, y + 2, z)) +
 	 3.33333333333333e-2 * (-v (t, x - 3, y - 1, z) +
@@ -1313,7 +1316,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 									   y,
 									   z)
       * ti1 (x - 3, y, z);
-    GridValue temp154 =
+    yc_number_node_ptr temp154 =
       (((4.16666666666667e-3 *
 	 (v (t, x, y - 2, z - 1) - v (t, x, y + 2, z - 1)) +
 	 3.33333333333333e-2 * (-v (t, x, y - 1, z - 1) +
@@ -1336,7 +1339,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 									   y,
 									   z -
 									   1);
-    GridValue temp299 =
+    yc_number_node_ptr temp299 =
       (((3.33333333333333e-2 * (v (t, x, y, z) - v (t, x - 2, y, z)) +
 	 4.16666666666667e-3 * (v (t, x - 3, y, z) -
 				 v (t, x + 1, y, z))) * ti1 (x - 1, y,
@@ -1364,7 +1367,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 									 y,
 									 z) *
       ti1 (x - 1, y, z);
-    GridValue temp289 =
+    yc_number_node_ptr temp289 =
       (((3.33333333333333e-2 * (-v (t, x, y, z) + v (t, x + 2, y, z)) +
 	 4.16666666666667e-3 * (v (t, x - 1, y, z) -
 				 v (t, x + 3, y, z))) * ti1 (x + 1, y,
@@ -1392,7 +1395,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 									 y,
 									 z) *
       ti1 (x + 1, y, z);
-    GridValue temp116 =
+    yc_number_node_ptr temp116 =
       (((4.16666666666667e-3 *
 	 (v (t, x, y - 2, z - 2) - v (t, x, y + 2, z - 2)) +
 	 3.33333333333333e-2 * (-v (t, x, y - 1, z - 2) +
@@ -1415,7 +1418,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 									   y,
 									   z -
 									   2);
-    GridValue temp56 =
+    yc_number_node_ptr temp56 =
       (((4.16666666666667e-3 * (v (t, x, y - 2, z) - v (t, x, y + 2, z)) +
 	 3.33333333333333e-2 * (-v (t, x, y - 1, z) +
 				 v (t, x, y + 1, z))) * ti3 (x, y,
@@ -1435,7 +1438,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 							      z)) * ti0 (x, y,
 									 z) *
       ti1 (x, y, z);
-    GridValue temp204 =
+    yc_number_node_ptr temp204 =
       (((4.16666666666667e-3 *
 	 (v (t, x - 1, y - 2, z) - v (t, x - 1, y + 2, z)) +
 	 3.33333333333333e-2 * (-v (t, x - 1, y - 1, z) +
@@ -1457,7 +1460,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 									   y,
 									   z)
       * ti1 (x - 1, y, z);
-    GridValue temp288 =
+    yc_number_node_ptr temp288 =
       (((4.16666666666667e-3 *
 	 (v (t, x - 2, y, z + 1) - v (t, x + 2, y, z + 1)) +
 	 3.33333333333333e-2 * (-v (t, x - 1, y, z + 1) +
@@ -1489,9 +1492,9 @@ TTIStencil (StencilList & stencils, int radius = 2):
 									    +
 									    4))
        * ti2 (x, y, z + 1)) * ti2 (x, y, z + 1);
-    GridValue temp10 =
+    yc_number_node_ptr temp10 =
       8.85879567828298e-1 * damp (x, y, z) - 2.0 * m (x, y, z);
-    GridValue temp133 =
+    yc_number_node_ptr temp133 =
       (((4.16666666666667e-3 *
 	 (v (t, x, y - 2, z + 2) - v (t, x, y + 2, z + 2)) +
 	 3.33333333333333e-2 * (-v (t, x, y - 1, z + 2) +
@@ -1514,7 +1517,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 									   y,
 									   z +
 									   2);
-    GridValue temp286 =
+    yc_number_node_ptr temp286 =
       (((4.16666666666667e-3 *
 	 (v (t, x - 2, y, z - 1) - v (t, x + 2, y, z - 1)) +
 	 3.33333333333333e-2 * (-v (t, x - 1, y, z - 1) +
@@ -1546,7 +1549,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 									    +
 									    2))
        * ti2 (x, y, z - 1)) * ti2 (x, y, z - 1);
-    GridValue temp252 =
+    yc_number_node_ptr temp252 =
       (((4.16666666666667e-3 * (-v (t, x, y, z) + v (t, x, y - 4, z)) +
 	 3.33333333333333e-2 * (-v (t, x, y - 3, z) +
 				 v (t, x, y - 1, z))) * ti3 (x, y - 2,
@@ -1573,7 +1576,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 									   2,
 									   z) *
       ti3 (x, y - 2, z);
-    GridValue temp487 = temp420 * ti2 (x, y, z) * ti3 (x, y,
+    yc_number_node_ptr temp487 = temp420 * ti2 (x, y, z) * ti3 (x, y,
 						       z) +
       2.08333333333333e-2 *
       ((-temp318 * ti1 (x, y, z) + temp325 * ti3 (x, y, z)) * ti3 (x, y,
@@ -2271,7 +2274,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 									    z +
 									    1))
 			       * ti0 (x, y, z + 1));
-    GridValue temp290 =
+    yc_number_node_ptr temp290 =
       (((4.16666666666667e-3 * (-v (t, x, y, z) + v (t, x - 4, y, z)) +
 	 3.33333333333333e-2 * (-v (t, x - 3, y, z) +
 				 v (t, x - 1, y, z))) * ti1 (x - 2, y,
@@ -2299,7 +2302,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 									 y,
 									 z) *
       ti1 (x - 2, y, z);
-    GridValue temp275 =
+    yc_number_node_ptr temp275 =
       (((3.33333333333333e-2 * (v (t, x, y, z) - v (t, x, y - 2, z)) +
 	 4.16666666666667e-3 * (v (t, x, y - 3, z) -
 				 v (t, x, y + 1, z))) * ti3 (x, y - 1,
@@ -2326,7 +2329,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 									   1,
 									   z) *
       ti3 (x, y - 1, z);
-    GridValue temp237 =
+    yc_number_node_ptr temp237 =
       (((3.33333333333333e-2 * (-v (t, x, y, z) + v (t, x, y + 2, z)) +
 	 4.16666666666667e-3 * (v (t, x, y - 1, z) -
 				 v (t, x, y + 3, z))) * ti3 (x, y + 1,
@@ -2353,7 +2356,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 									   1,
 									   z) *
       ti3 (x, y + 1, z);
-    GridValue temp262 =
+    yc_number_node_ptr temp262 =
       (((4.16666666666667e-3 * (v (t, x, y, z) - v (t, x, y + 4, z)) +
 	 3.33333333333333e-2 * (-v (t, x, y + 1, z) +
 				 v (t, x, y + 3, z))) * ti3 (x, y + 2,
@@ -2380,7 +2383,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
 									   2,
 									   z) *
       ti3 (x, y + 2, z);
-    GridValue temp68 =
+    yc_number_node_ptr temp68 =
       ((4.16666666666667e-3 * (v (t, x - 2, y, z) - v (t, x + 2, y, z)) +
 	3.33333333333333e-2 * (-v (t, x - 1, y, z) +
 				v (t, x + 1, y, z))) * ti1 (x, y,
@@ -2402,9 +2405,9 @@ TTIStencil (StencilList & stencils, int radius = 2):
 									    +
 									    2)
 	 + 4.16666666666667e-3 * v (t, x, y, z + 3)) * ti2 (x, y, z);
-    GridValue temp6 =
+    yc_number_node_ptr temp6 =
       1.0 / (8.85879567828298e-1 * damp (x, y, z) + 2.0 * m (x, y, z));
-    GridValue temp225 =
+    yc_number_node_ptr temp225 =
       (((4.16666666666667e-3 *
 	 (v (t, x + 1, y - 2, z) - v (t, x + 1, y + 2, z)) +
 	 3.33333333333333e-2 * (-v (t, x + 1, y - 1, z) +
@@ -2500,4 +2503,7 @@ TTIStencil (StencilList & stencils, int radius = 2):
   }
 };
 
-REGISTER_STENCIL (TTIStencil);
+// Create an object of type 'TTIStencil',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static TTIStencil TTIStencil_instance;

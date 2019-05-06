@@ -35,21 +35,21 @@ class SSGElastic2Stencil : public Elastic2StencilBase {
 protected:
 
     // Time-varying 3D-spatial velocity grids.
-    MAKE_GRID(v, t, x, y, z, vidx);
+    yc_grid_var v = yc_grid_var("v", get_solution(), { t, x, y, z, vidx });
     enum VIDX { V_BL_W, V_TL_V, V_TR_U };
 
     // Time-varying 3D-spatial Stress grids.
-    MAKE_GRID(s, t, x, y, z, sidx);
+    yc_grid_var s = yc_grid_var("s", get_solution(), { t, x, y, z, sidx });
     enum SIDX { S_BL_YZ, S_BR_XZ, S_TL_XX, S_TL_YY, S_TL_ZZ, S_TR_XY };
 
 public:
 
-    SSGElastic2Stencil( StencilList& stencils) :
-        Elastic2StencilBase("ssg2", stencils)
+    SSGElastic2Stencil( ) :
+        Elastic2StencilBase("ssg2")
     {
     }
 
-    GridValue interp_mu( GridIndex x, GridIndex y, GridIndex z, const BR)
+    yc_number_node_ptr interp_mu( yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, const BR)
     {
         return ( 2.0/ (coef(x  , y  , z  , C_MU) +
                        coef(x  , y+1, z  , C_MU) +
@@ -57,7 +57,7 @@ public:
                        coef(x  , y+1, z+1, C_MU)) );
     }
 
-    GridValue interp_mu( GridIndex x, GridIndex y, GridIndex z, const BL)
+    yc_number_node_ptr interp_mu( yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, const BL)
     {
         return ( 2.0/ (coef(x  , y  , z  , C_MU) +
                        coef(x+1, y  , z  , C_MU) +
@@ -65,7 +65,7 @@ public:
                        coef(x+1, y  , z+1, C_MU)) );
     }
 
-    GridValue interp_mu( GridIndex x, GridIndex y, GridIndex z, const TR)
+    yc_number_node_ptr interp_mu( yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, const TR)
     {
         return ( 2.0/ (coef(x  , y  , z  , C_MU) +
                        coef(x+1, y  , z  , C_MU) +
@@ -74,7 +74,7 @@ public:
     }
 
     template<typename N>
-    GridValue interp_mu( GridIndex x, GridIndex y, GridIndex z)
+    yc_number_node_ptr interp_mu( yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z)
     {
         return interp_mu( x, y, z, N() );
     }
@@ -89,43 +89,43 @@ public:
     // appropriately.
 
     template<typename N, typename DA, typename SA, typename DB, typename SB>
-    void define_str(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                    GridIndex sidx, GridIndex va_idx, GridIndex vb_idx) {
+    void define_str(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                    yc_number_node_ptr sidx, yc_number_node_ptr va_idx, yc_number_node_ptr vb_idx) {
 
-        GridValue lcoeff = interp_mu<N>( x, y, z );
+        yc_number_node_ptr lcoeff = interp_mu<N>( x, y, z );
 
-        GridValue vta    = stencil_O8<DA,SA>( t+1, x, y, z, v, va_idx );
-        GridValue vtb    = stencil_O8<DB,SB>( t+1, x, y, z, v, vb_idx );
+        yc_number_node_ptr vta    = stencil_O8<DA,SA>( t+1, x, y, z, v, va_idx );
+        yc_number_node_ptr vtb    = stencil_O8<DB,SB>( t+1, x, y, z, v, vb_idx );
 
-        GridValue next_s = s(t, x, y, z, sidx) + ((vta + vtb) * lcoeff) * delta_t;
+        yc_number_node_ptr next_s = s(t, x, y, z, sidx) + ((vta + vtb) * lcoeff) * delta_t;
 
         // define the value at t+1.
         s(t+1, x, y, z, sidx) EQUALS next_s;
     }
     template<typename N, typename DA, typename SA, typename DB, typename SB>
-    void define_str(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
+    void define_str(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
                     int sidx, int va_idx, int vb_idx) {
         define_str<N, DA, SA, DB, SB>(t, x, y, z,
-                                      constNum(sidx), constNum(va_idx), constNum(vb_idx));
+                                      _node_factory.new_number_node(sidx), _node_factory.new_number_node(va_idx), _node_factory.new_number_node(vb_idx));
     }
 
-    void define_str_TL(GridIndex t, GridIndex x, GridIndex y, GridIndex z )
+    void define_str_TL(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z )
     {
 
-        GridValue ilambdamu2 = 1.0 / coef(x,y,z, C_LAMBDA_MU2);
-        GridValue ilambda    = 1.0 / coef(x,y,z, C_LAMBDA);
+        yc_number_node_ptr ilambdamu2 = 1.0 / coef(x,y,z, C_LAMBDA_MU2);
+        yc_number_node_ptr ilambda    = 1.0 / coef(x,y,z, C_LAMBDA);
 
-        GridValue vtx    = stencil_O8<X,F>( t+1, x, y, z, v, constNum(V_TR_U) );
-        GridValue vty    = stencil_O8<Y,B>( t+1, x, y, z, v, constNum(V_TL_V) );
-        GridValue vtz    = stencil_O8<Z,B>( t+1, x, y, z, v, constNum(V_BL_W) );
+        yc_number_node_ptr vtx    = stencil_O8<X,F>( t+1, x, y, z, v, _node_factory.new_number_node(V_TR_U) );
+        yc_number_node_ptr vty    = stencil_O8<Y,B>( t+1, x, y, z, v, _node_factory.new_number_node(V_TL_V) );
+        yc_number_node_ptr vtz    = stencil_O8<Z,B>( t+1, x, y, z, v, _node_factory.new_number_node(V_BL_W) );
 
-        GridValue next_xx = s(t, x, y, z, S_TL_XX) + ilambdamu2 * vtx * delta_t
+        yc_number_node_ptr next_xx = s(t, x, y, z, S_TL_XX) + ilambdamu2 * vtx * delta_t
             + ilambda    * vty * delta_t
             + ilambda    * vtz * delta_t;
-        GridValue next_yy = s(t, x, y, z, S_TL_YY) + ilambda    * vtx * delta_t
+        yc_number_node_ptr next_yy = s(t, x, y, z, S_TL_YY) + ilambda    * vtx * delta_t
             + ilambdamu2 * vty * delta_t
             + ilambda    * vtz * delta_t;
-        GridValue next_zz = s(t, x, y, z, S_TL_ZZ) + ilambda    * vtx * delta_t
+        yc_number_node_ptr next_zz = s(t, x, y, z, S_TL_ZZ) + ilambda    * vtx * delta_t
             + ilambda    * vty * delta_t
             + ilambdamu2 * vtz * delta_t;
 
@@ -152,4 +152,7 @@ public:
     }
 };
 
-REGISTER_STENCIL(SSGElastic2Stencil);
+// Create an object of type 'SSGElastic2Stencil',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static SSGElastic2Stencil SSGElastic2Stencil_instance;

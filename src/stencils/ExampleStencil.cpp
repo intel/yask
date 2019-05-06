@@ -28,34 +28,37 @@ IN THE SOFTWARE.
 // All these stencils compute the average of the points read a la the
 // heat-dissipation kernels in the miniGhost benchmark.
 
-#include "Soln.hpp"
+// YASK stencil solution(s) in this file will be integrated into the YASK compiler utility.
+#include "yask_compiler_utility_api.hpp"
+using namespace std;
+using namespace yask;
 
-class AvePtsStencil : public StencilRadiusBase {
+class AvePtsStencil : public yc_solution_with_radius_base {
 
 protected:
 
     // Indices & dimensions.
-    MAKE_STEP_INDEX(t);           // step in time dim.
-    MAKE_DOMAIN_INDEX(x);         // spatial dim.
-    MAKE_DOMAIN_INDEX(y);         // spatial dim.
-    MAKE_DOMAIN_INDEX(z);         // spatial dim.
+    yc_index_node_ptr t = _node_factory.new_step_index("t");           // step in time dim.
+    yc_index_node_ptr x = _node_factory.new_domain_index("x");         // spatial dim.
+    yc_index_node_ptr y = _node_factory.new_domain_index("y");         // spatial dim.
+    yc_index_node_ptr z = _node_factory.new_domain_index("z");         // spatial dim.
 
     // Vars.
-    MAKE_GRID(A, t, x, y, z); // time-varying 3D grid.
+    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, y, z }); // time-varying 3D grid.
 
     // Add additional points to expression v.
     // Returns number of points added.
-    virtual int addPoints(GridValue& v) =0;
+    virtual int addPoints(yc_number_node_ptr& v) =0;
 
 public:
-    AvePtsStencil(const string& name, StencilList& stencils, int radius) :
-        StencilRadiusBase(name, stencils, radius) { }
+    AvePtsStencil(const string& name, int radius) :
+        yc_solution_with_radius_base(name, radius) { }
 
     // Define equation at t+1 based on values at t.
     virtual void define() {
 
         // start with center point.
-        GridValue v = A(t, x, y, z);
+        yc_number_node_ptr v = A(t, x, y, z);
 
         // Add additional points from derived class.
         int pts = 1 + addPoints(v);
@@ -74,7 +77,7 @@ class AxisStencil : public AvePtsStencil {
 protected:
 
     // Add additional points to expression v.
-    virtual int addPoints(GridValue& v)
+    virtual int addPoints(yc_number_node_ptr& v)
     {
         int pts = 0;
         for (int r = 1; r <= _radius; r++) {
@@ -97,20 +100,23 @@ protected:
     }
 
 public:
-    AxisStencil(StencilList& stencils, int radius=4) :
-        AvePtsStencil("3axis", stencils, radius) { }
-    AxisStencil(const string& name, StencilList& stencils, int radius=4) :
-        AvePtsStencil(name, stencils, radius) { }
+    AxisStencil(int radius=4) :
+        AvePtsStencil("3axis", radius) { }
+    AxisStencil(const string& name, int radius=4) :
+        AvePtsStencil(name, radius) { }
 };
 
-REGISTER_STENCIL(AxisStencil);
+// Create an object of type 'AxisStencil',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static AxisStencil AxisStencil_instance;
 
 // Add points from x-y, x-z, and y-z diagonals.
 class DiagStencil : public AxisStencil {
 protected:
 
     // Add additional points to v.
-    virtual int addPoints(GridValue& v)
+    virtual int addPoints(yc_number_node_ptr& v)
     {
         // Get points from axes.
         int pts = AxisStencil::addPoints(v);
@@ -142,20 +148,23 @@ protected:
     }
 
 public:
-    DiagStencil(StencilList& stencils, int radius=4) :
-        AxisStencil("3axis_with_diags", stencils, radius) { }
-    DiagStencil(const string& name, StencilList& stencils, int radius=4) :
-        AxisStencil(name, stencils, radius) { }
+    DiagStencil(int radius=4) :
+        AxisStencil("3axis_with_diags", radius) { }
+    DiagStencil(const string& name, int radius=4) :
+        AxisStencil(name, radius) { }
 };
 
-REGISTER_STENCIL(DiagStencil);
+// Create an object of type 'DiagStencil',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static DiagStencil DiagStencil_instance;
 
 // Add points from x-y, x-z, and y-z planes not covered by axes or diagonals.
 class PlaneStencil : public DiagStencil {
 protected:
 
     // Add additional points to v.
-    virtual int addPoints(GridValue& v)
+    virtual int addPoints(yc_number_node_ptr& v)
     {
         // Get points from axes and diagonals.
         int pts = DiagStencil::addPoints(v);
@@ -201,20 +210,23 @@ protected:
     }
 
 public:
-    PlaneStencil(StencilList& stencils, int radius=3) :
-        DiagStencil("3plane", stencils, radius) { }
-    PlaneStencil(const string& name, StencilList& stencils, int radius=3) :
-        DiagStencil(name, stencils, radius) { }
+    PlaneStencil(int radius=3) :
+        DiagStencil("3plane", radius) { }
+    PlaneStencil(const string& name, int radius=3) :
+        DiagStencil(name, radius) { }
 };
 
-REGISTER_STENCIL(PlaneStencil);
+// Create an object of type 'PlaneStencil',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static PlaneStencil PlaneStencil_instance;
 
 // Add points from rest of cube.
 class CubeStencil : public PlaneStencil {
 protected:
 
     // Add additional points to v.
-    virtual int addPoints(GridValue& v)
+    virtual int addPoints(yc_number_node_ptr& v)
     {
         // Get points from planes.
         int pts = PlaneStencil::addPoints(v);
@@ -240,10 +252,13 @@ protected:
     }
 
 public:
-    CubeStencil(StencilList& stencils, int radius=2) :
-        PlaneStencil("cube", stencils, radius) { }
-    CubeStencil(const string& name, StencilList& stencils, int radius=2) :
-        PlaneStencil(name, stencils, radius) { }
+    CubeStencil(int radius=2) :
+        PlaneStencil("cube", radius) { }
+    CubeStencil(const string& name, int radius=2) :
+        PlaneStencil(name, radius) { }
 };
 
-REGISTER_STENCIL(CubeStencil);
+// Create an object of type 'CubeStencil',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static CubeStencil CubeStencil_instance;

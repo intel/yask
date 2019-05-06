@@ -26,7 +26,10 @@ IN THE SOFTWARE.
 // Stencil equations for FSG elastic numerics.
 // Contributed by Albert Farres from the Barcelona Supercomputing Center.
 
-#include "Soln.hpp"
+// YASK stencil solution(s) in this file will be integrated into the YASK compiler utility.
+#include "yask_compiler_utility_api.hpp"
+using namespace std;
+using namespace yask;
 #include "ElasticStencil/ElasticStencil.hpp"
 
 namespace fsg {
@@ -36,10 +39,10 @@ namespace fsg {
     class FSGBoundaryCondition : public ElasticBoundaryCondition
     {
     public:
-        FSGBoundaryCondition(StencilBase& base) :
+        FSGBoundaryCondition(yc_solution_base& base) :
             ElasticBoundaryCondition(base) {}
-        virtual void velocity (GridIndex t, GridIndex x, GridIndex y, GridIndex z ) {}
-        virtual void stress (GridIndex t, GridIndex x, GridIndex y, GridIndex z ) {}
+        virtual void velocity (yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z ) {}
+        virtual void stress (yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z ) {}
     };
 
     class FSGElasticStencilBase : public ElasticStencilBase {
@@ -47,142 +50,142 @@ namespace fsg {
 
     protected:
 
-        MAKE_GRID(v_bl_u, t, x, y, z);
-        MAKE_GRID(v_bl_v, t, x, y, z);
-        MAKE_GRID(v_bl_w, t, x, y, z);
-        MAKE_GRID(v_br_u, t, x, y, z);
-        MAKE_GRID(v_br_v, t, x, y, z);
-        MAKE_GRID(v_br_w, t, x, y, z);
-        MAKE_GRID(v_tl_u, t, x, y, z);
-        MAKE_GRID(v_tl_v, t, x, y, z);
-        MAKE_GRID(v_tl_w, t, x, y, z);
-        MAKE_GRID(v_tr_u, t, x, y, z);
-        MAKE_GRID(v_tr_v, t, x, y, z);
-        MAKE_GRID(v_tr_w, t, x, y, z);
+        yc_grid_var v_bl_u = yc_grid_var("v_bl_u", get_solution(), { t, x, y, z });
+        yc_grid_var v_bl_v = yc_grid_var("v_bl_v", get_solution(), { t, x, y, z });
+        yc_grid_var v_bl_w = yc_grid_var("v_bl_w", get_solution(), { t, x, y, z });
+        yc_grid_var v_br_u = yc_grid_var("v_br_u", get_solution(), { t, x, y, z });
+        yc_grid_var v_br_v = yc_grid_var("v_br_v", get_solution(), { t, x, y, z });
+        yc_grid_var v_br_w = yc_grid_var("v_br_w", get_solution(), { t, x, y, z });
+        yc_grid_var v_tl_u = yc_grid_var("v_tl_u", get_solution(), { t, x, y, z });
+        yc_grid_var v_tl_v = yc_grid_var("v_tl_v", get_solution(), { t, x, y, z });
+        yc_grid_var v_tl_w = yc_grid_var("v_tl_w", get_solution(), { t, x, y, z });
+        yc_grid_var v_tr_u = yc_grid_var("v_tr_u", get_solution(), { t, x, y, z });
+        yc_grid_var v_tr_v = yc_grid_var("v_tr_v", get_solution(), { t, x, y, z });
+        yc_grid_var v_tr_w = yc_grid_var("v_tr_w", get_solution(), { t, x, y, z });
 
-        MAKE_GRID(s_bl_xx, t, x, y, z);
-        MAKE_GRID(s_bl_yy, t, x, y, z);
-        MAKE_GRID(s_bl_zz, t, x, y, z);
-        MAKE_GRID(s_bl_yz, t, x, y, z);
-        MAKE_GRID(s_bl_xz, t, x, y, z);
-        MAKE_GRID(s_bl_xy, t, x, y, z);
-        MAKE_GRID(s_br_xx, t, x, y, z);
-        MAKE_GRID(s_br_yy, t, x, y, z);
-        MAKE_GRID(s_br_zz, t, x, y, z);
-        MAKE_GRID(s_br_yz, t, x, y, z);
-        MAKE_GRID(s_br_xz, t, x, y, z);
-        MAKE_GRID(s_br_xy, t, x, y, z);
-        MAKE_GRID(s_tl_xx, t, x, y, z);
-        MAKE_GRID(s_tl_yy, t, x, y, z);
-        MAKE_GRID(s_tl_zz, t, x, y, z);
-        MAKE_GRID(s_tl_yz, t, x, y, z);
-        MAKE_GRID(s_tl_xz, t, x, y, z);
-        MAKE_GRID(s_tl_xy, t, x, y, z);
-        MAKE_GRID(s_tr_xx, t, x, y, z);
-        MAKE_GRID(s_tr_yy, t, x, y, z);
-        MAKE_GRID(s_tr_zz, t, x, y, z);
-        MAKE_GRID(s_tr_yz, t, x, y, z);
-        MAKE_GRID(s_tr_xz, t, x, y, z);
-        MAKE_GRID(s_tr_xy, t, x, y, z);
+        yc_grid_var s_bl_xx = yc_grid_var("s_bl_xx", get_solution(), { t, x, y, z });
+        yc_grid_var s_bl_yy = yc_grid_var("s_bl_yy", get_solution(), { t, x, y, z });
+        yc_grid_var s_bl_zz = yc_grid_var("s_bl_zz", get_solution(), { t, x, y, z });
+        yc_grid_var s_bl_yz = yc_grid_var("s_bl_yz", get_solution(), { t, x, y, z });
+        yc_grid_var s_bl_xz = yc_grid_var("s_bl_xz", get_solution(), { t, x, y, z });
+        yc_grid_var s_bl_xy = yc_grid_var("s_bl_xy", get_solution(), { t, x, y, z });
+        yc_grid_var s_br_xx = yc_grid_var("s_br_xx", get_solution(), { t, x, y, z });
+        yc_grid_var s_br_yy = yc_grid_var("s_br_yy", get_solution(), { t, x, y, z });
+        yc_grid_var s_br_zz = yc_grid_var("s_br_zz", get_solution(), { t, x, y, z });
+        yc_grid_var s_br_yz = yc_grid_var("s_br_yz", get_solution(), { t, x, y, z });
+        yc_grid_var s_br_xz = yc_grid_var("s_br_xz", get_solution(), { t, x, y, z });
+        yc_grid_var s_br_xy = yc_grid_var("s_br_xy", get_solution(), { t, x, y, z });
+        yc_grid_var s_tl_xx = yc_grid_var("s_tl_xx", get_solution(), { t, x, y, z });
+        yc_grid_var s_tl_yy = yc_grid_var("s_tl_yy", get_solution(), { t, x, y, z });
+        yc_grid_var s_tl_zz = yc_grid_var("s_tl_zz", get_solution(), { t, x, y, z });
+        yc_grid_var s_tl_yz = yc_grid_var("s_tl_yz", get_solution(), { t, x, y, z });
+        yc_grid_var s_tl_xz = yc_grid_var("s_tl_xz", get_solution(), { t, x, y, z });
+        yc_grid_var s_tl_xy = yc_grid_var("s_tl_xy", get_solution(), { t, x, y, z });
+        yc_grid_var s_tr_xx = yc_grid_var("s_tr_xx", get_solution(), { t, x, y, z });
+        yc_grid_var s_tr_yy = yc_grid_var("s_tr_yy", get_solution(), { t, x, y, z });
+        yc_grid_var s_tr_zz = yc_grid_var("s_tr_zz", get_solution(), { t, x, y, z });
+        yc_grid_var s_tr_yz = yc_grid_var("s_tr_yz", get_solution(), { t, x, y, z });
+        yc_grid_var s_tr_xz = yc_grid_var("s_tr_xz", get_solution(), { t, x, y, z });
+        yc_grid_var s_tr_xy = yc_grid_var("s_tr_xy", get_solution(), { t, x, y, z });
 
         // 3D-spatial coefficients.
-        MAKE_GRID(c11, x, y, z);
-        MAKE_GRID(c12, x, y, z);
-        MAKE_GRID(c13, x, y, z);
-        MAKE_GRID(c14, x, y, z);
-        MAKE_GRID(c15, x, y, z);
-        MAKE_GRID(c16, x, y, z);
-        MAKE_GRID(c22, x, y, z);
-        MAKE_GRID(c23, x, y, z);
-        MAKE_GRID(c24, x, y, z);
-        MAKE_GRID(c25, x, y, z);
-        MAKE_GRID(c26, x, y, z);
-        MAKE_GRID(c33, x, y, z);
-        MAKE_GRID(c34, x, y, z);
-        MAKE_GRID(c35, x, y, z);
-        MAKE_GRID(c36, x, y, z);
-        MAKE_GRID(c44, x, y, z);
-        MAKE_GRID(c45, x, y, z);
-        MAKE_GRID(c46, x, y, z);
-        MAKE_GRID(c55, x, y, z);
-        MAKE_GRID(c56, x, y, z);
-        MAKE_GRID(c66, x, y, z);
+        yc_grid_var c11 = yc_grid_var("c11", get_solution(), { x, y, z });
+        yc_grid_var c12 = yc_grid_var("c12", get_solution(), { x, y, z });
+        yc_grid_var c13 = yc_grid_var("c13", get_solution(), { x, y, z });
+        yc_grid_var c14 = yc_grid_var("c14", get_solution(), { x, y, z });
+        yc_grid_var c15 = yc_grid_var("c15", get_solution(), { x, y, z });
+        yc_grid_var c16 = yc_grid_var("c16", get_solution(), { x, y, z });
+        yc_grid_var c22 = yc_grid_var("c22", get_solution(), { x, y, z });
+        yc_grid_var c23 = yc_grid_var("c23", get_solution(), { x, y, z });
+        yc_grid_var c24 = yc_grid_var("c24", get_solution(), { x, y, z });
+        yc_grid_var c25 = yc_grid_var("c25", get_solution(), { x, y, z });
+        yc_grid_var c26 = yc_grid_var("c26", get_solution(), { x, y, z });
+        yc_grid_var c33 = yc_grid_var("c33", get_solution(), { x, y, z });
+        yc_grid_var c34 = yc_grid_var("c34", get_solution(), { x, y, z });
+        yc_grid_var c35 = yc_grid_var("c35", get_solution(), { x, y, z });
+        yc_grid_var c36 = yc_grid_var("c36", get_solution(), { x, y, z });
+        yc_grid_var c44 = yc_grid_var("c44", get_solution(), { x, y, z });
+        yc_grid_var c45 = yc_grid_var("c45", get_solution(), { x, y, z });
+        yc_grid_var c46 = yc_grid_var("c46", get_solution(), { x, y, z });
+        yc_grid_var c55 = yc_grid_var("c55", get_solution(), { x, y, z });
+        yc_grid_var c56 = yc_grid_var("c56", get_solution(), { x, y, z });
+        yc_grid_var c66 = yc_grid_var("c66", get_solution(), { x, y, z });
 
     public:
 
-        FSGElasticStencilBase( const string &name, StencilList& stencils,
+        FSGElasticStencilBase( const string &name, 
                                FSGBoundaryCondition *bc = NULL ) :
-            ElasticStencilBase ( name, stencils, bc )
+            ElasticStencilBase ( name, bc )
         {
         }
 
-        GridValue cell_coeff( const GridIndex x, const GridIndex y, const GridIndex z, Grid &c, const BR )
+        yc_number_node_ptr cell_coeff( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_grid_var &c, const BR )
         {
             return  1.0 / (0.25*(c(x  , y  , z  ) +
                                  c(x  , y+1, z  ) +
                                  c(x  , y  , z+1) +
                                  c(x  , y+1, z+1)));
         }
-        GridValue cell_coeff( const GridIndex x, const GridIndex y, const GridIndex z, Grid &c, const BL )
+        yc_number_node_ptr cell_coeff( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_grid_var &c, const BL )
         {
             return  1.0 / (0.25*(c(x  , y  , z  ) +
                                  c(x+1, y  , z  ) +
                                  c(x  , y  , z+1) +
                                  c(x+1, y  , z+1)));
         }
-        GridValue cell_coeff( const GridIndex x, const GridIndex y, const GridIndex z, Grid &c, const TR )
+        yc_number_node_ptr cell_coeff( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_grid_var &c, const TR )
         {
             return  1.0 / (0.25*(c(x  , y  , z  ) +
                                  c(x  , y+1, z  ) +
                                  c(x+1, y  , z  ) +
                                  c(x+1, y+1, z  )));
         }
-        GridValue cell_coeff( const GridIndex x, const GridIndex y, const GridIndex z, Grid &c, const TL )
+        yc_number_node_ptr cell_coeff( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_grid_var &c, const TL )
         {
             return  1.0 /        c(x  , y  , z  );
         }
         template<typename N>
-        GridValue cell_coeff( const GridIndex x, const GridIndex y, const GridIndex z, Grid &c )
+        yc_number_node_ptr cell_coeff( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_grid_var &c )
         {
             return cell_coeff( x, y, z, c, N() );
         }
 
-        GridValue cell_coeff_artm( const GridIndex x, const GridIndex y, const GridIndex z, Grid &c, const BR )
+        yc_number_node_ptr cell_coeff_artm( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_grid_var &c, const BR )
         {
             return 0.25 *( 1.0 / c(x  , y  , z  ) +
                            1.0 / c(x  , y+1, z  ) +
                            1.0 / c(x  , y  , z+1) +
                            1.0 / c(x  , y+1, z+1) );
         }
-        GridValue cell_coeff_artm( const GridIndex x, const GridIndex y, const GridIndex z, Grid &c, const BL )
+        yc_number_node_ptr cell_coeff_artm( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_grid_var &c, const BL )
         {
             return 0.25 *( 1.0 / c(x  , y  , z  ) +
                            1.0 / c(x+1, y  , z  ) +
                            1.0 / c(x  , y  , z+1) +
                            1.0 / c(x+1, y  , z+1) );
         }
-        GridValue cell_coeff_artm( const GridIndex x, const GridIndex y, const GridIndex z, Grid &c, const TR )
+        yc_number_node_ptr cell_coeff_artm( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_grid_var &c, const TR )
         {
             return 0.25 *( 1.0 / c(x  , y  , z  ) +
                            1.0 / c(x  , y+1, z  ) +
                            1.0 / c(x+1, y  , z  ) +
                            1.0 / c(x+1, y+1, z  ) );
         }
-        GridValue cell_coeff_artm( const GridIndex x, const GridIndex y, const GridIndex z, Grid &c, const TL )
+        yc_number_node_ptr cell_coeff_artm( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_grid_var &c, const TL )
         {
             return  1.0 /        c(x  , y  , z  );
         }
         template<typename N>
-        GridValue cell_coeff_artm( const GridIndex x, const GridIndex y, const GridIndex z, Grid &c )
+        yc_number_node_ptr cell_coeff_artm( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_grid_var &c )
         {
             return cell_coeff_artm( x, y, z, c, N() );
         }
 
-        GridValue stress_update( GridValue c1, GridValue c2, GridValue c3,
-                                 GridValue c4, GridValue c5, GridValue c6,
-                                 GridValue u_z, GridValue u_y, GridValue u_x,
-                                 GridValue v_z, GridValue v_y, GridValue v_x,
-                                 GridValue w_z, GridValue w_y, GridValue w_x )
+        yc_number_node_ptr stress_update( yc_number_node_ptr c1, yc_number_node_ptr c2, yc_number_node_ptr c3,
+                                 yc_number_node_ptr c4, yc_number_node_ptr c5, yc_number_node_ptr c6,
+                                 yc_number_node_ptr u_z, yc_number_node_ptr u_y, yc_number_node_ptr u_x,
+                                 yc_number_node_ptr v_z, yc_number_node_ptr v_y, yc_number_node_ptr v_x,
+                                 yc_number_node_ptr w_z, yc_number_node_ptr w_y, yc_number_node_ptr w_x )
         {
             return delta_t * c1 * u_x
                 + delta_t * c2 * v_y
@@ -202,69 +205,69 @@ namespace fsg {
         // appropriately.
 
         template<typename N, typename SZ, typename SX, typename SY>
-        void define_str(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                        Grid &sxx, Grid &syy, Grid &szz, Grid &sxy, Grid &sxz, Grid &syz,
-                        Grid &vxu, Grid &vxv, Grid &vxw, Grid &vyu, Grid &vyv, Grid &vyw, Grid &vzu, Grid &vzv, Grid &vzw ) {
+        void define_str(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                        yc_grid_var &sxx, yc_grid_var &syy, yc_grid_var &szz, yc_grid_var &sxy, yc_grid_var &sxz, yc_grid_var &syz,
+                        yc_grid_var &vxu, yc_grid_var &vxv, yc_grid_var &vxw, yc_grid_var &vyu, yc_grid_var &vyv, yc_grid_var &vyw, yc_grid_var &vzu, yc_grid_var &vzv, yc_grid_var &vzw ) {
 
             // Interpolate coeffs.
-            GridValue ic11 = cell_coeff     <N>(x, y, z, c11);
-            GridValue ic12 = cell_coeff     <N>(x, y, z, c12);
-            GridValue ic13 = cell_coeff     <N>(x, y, z, c13);
-            GridValue ic14 = cell_coeff_artm<N>(x, y, z, c14);
-            GridValue ic15 = cell_coeff_artm<N>(x, y, z, c15);
-            GridValue ic16 = cell_coeff_artm<N>(x, y, z, c16);
-            GridValue ic22 = cell_coeff     <N>(x, y, z, c22);
-            GridValue ic23 = cell_coeff     <N>(x, y, z, c23);
-            GridValue ic24 = cell_coeff_artm<N>(x, y, z, c24);
-            GridValue ic25 = cell_coeff_artm<N>(x, y, z, c25);
-            GridValue ic26 = cell_coeff_artm<N>(x, y, z, c26);
-            GridValue ic33 = cell_coeff     <N>(x, y, z, c33);
-            GridValue ic34 = cell_coeff_artm<N>(x, y, z, c34);
-            GridValue ic35 = cell_coeff_artm<N>(x, y, z, c35);
-            GridValue ic36 = cell_coeff_artm<N>(x, y, z, c36);
-            GridValue ic44 = cell_coeff     <N>(x, y, z, c44);
-            GridValue ic45 = cell_coeff_artm<N>(x, y, z, c45);
-            GridValue ic46 = cell_coeff_artm<N>(x, y, z, c46);
-            GridValue ic55 = cell_coeff     <N>(x, y, z, c55);
-            GridValue ic56 = cell_coeff_artm<N>(x, y, z, c56);
-            GridValue ic66 = cell_coeff     <N>(x, y, z, c66);
+            yc_number_node_ptr ic11 = cell_coeff     <N>(x, y, z, c11);
+            yc_number_node_ptr ic12 = cell_coeff     <N>(x, y, z, c12);
+            yc_number_node_ptr ic13 = cell_coeff     <N>(x, y, z, c13);
+            yc_number_node_ptr ic14 = cell_coeff_artm<N>(x, y, z, c14);
+            yc_number_node_ptr ic15 = cell_coeff_artm<N>(x, y, z, c15);
+            yc_number_node_ptr ic16 = cell_coeff_artm<N>(x, y, z, c16);
+            yc_number_node_ptr ic22 = cell_coeff     <N>(x, y, z, c22);
+            yc_number_node_ptr ic23 = cell_coeff     <N>(x, y, z, c23);
+            yc_number_node_ptr ic24 = cell_coeff_artm<N>(x, y, z, c24);
+            yc_number_node_ptr ic25 = cell_coeff_artm<N>(x, y, z, c25);
+            yc_number_node_ptr ic26 = cell_coeff_artm<N>(x, y, z, c26);
+            yc_number_node_ptr ic33 = cell_coeff     <N>(x, y, z, c33);
+            yc_number_node_ptr ic34 = cell_coeff_artm<N>(x, y, z, c34);
+            yc_number_node_ptr ic35 = cell_coeff_artm<N>(x, y, z, c35);
+            yc_number_node_ptr ic36 = cell_coeff_artm<N>(x, y, z, c36);
+            yc_number_node_ptr ic44 = cell_coeff     <N>(x, y, z, c44);
+            yc_number_node_ptr ic45 = cell_coeff_artm<N>(x, y, z, c45);
+            yc_number_node_ptr ic46 = cell_coeff_artm<N>(x, y, z, c46);
+            yc_number_node_ptr ic55 = cell_coeff     <N>(x, y, z, c55);
+            yc_number_node_ptr ic56 = cell_coeff_artm<N>(x, y, z, c56);
+            yc_number_node_ptr ic66 = cell_coeff     <N>(x, y, z, c66);
 
             // Compute stencils. Note that we are using the velocity values at t+1.
-            GridValue u_z = stencil_O8<Z,SZ>( t+1, x, y, z, vzu );
-            GridValue v_z = stencil_O8<Z,SZ>( t+1, x, y, z, vzv );
-            GridValue w_z = stencil_O8<Z,SZ>( t+1, x, y, z, vzw );
+            yc_number_node_ptr u_z = stencil_O8<Z,SZ>( t+1, x, y, z, vzu );
+            yc_number_node_ptr v_z = stencil_O8<Z,SZ>( t+1, x, y, z, vzv );
+            yc_number_node_ptr w_z = stencil_O8<Z,SZ>( t+1, x, y, z, vzw );
 
-            GridValue u_x = stencil_O8<X,SX>( t+1, x, y, z, vxu );
-            GridValue v_x = stencil_O8<X,SX>( t+1, x, y, z, vxv );
-            GridValue w_x = stencil_O8<X,SX>( t+1, x, y, z, vxw );
+            yc_number_node_ptr u_x = stencil_O8<X,SX>( t+1, x, y, z, vxu );
+            yc_number_node_ptr v_x = stencil_O8<X,SX>( t+1, x, y, z, vxv );
+            yc_number_node_ptr w_x = stencil_O8<X,SX>( t+1, x, y, z, vxw );
 
-            GridValue u_y = stencil_O8<Y,SY>( t+1, x, y, z, vyu );
-            GridValue v_y = stencil_O8<Y,SY>( t+1, x, y, z, vyv );
-            GridValue w_y = stencil_O8<Y,SY>( t+1, x, y, z, vyw );
+            yc_number_node_ptr u_y = stencil_O8<Y,SY>( t+1, x, y, z, vyu );
+            yc_number_node_ptr v_y = stencil_O8<Y,SY>( t+1, x, y, z, vyv );
+            yc_number_node_ptr w_y = stencil_O8<Y,SY>( t+1, x, y, z, vyw );
 
             // Compute next stress value
-            GridValue next_sxx = sxx(t, x, y, z) +
+            yc_number_node_ptr next_sxx = sxx(t, x, y, z) +
                 stress_update(ic11,ic12,ic13,ic14,ic15,ic16,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
-            GridValue next_syy = syy(t, x, y, z) +
+            yc_number_node_ptr next_syy = syy(t, x, y, z) +
                 stress_update(ic12,ic22,ic23,ic24,ic25,ic26,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
-            GridValue next_szz = szz(t, x, y, z) +
+            yc_number_node_ptr next_szz = szz(t, x, y, z) +
                 stress_update(ic13,ic23,ic33,ic34,ic35,ic36,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
-            GridValue next_syz = syz(t, x, y, z) +
+            yc_number_node_ptr next_syz = syz(t, x, y, z) +
                 stress_update(ic14,ic24,ic34,ic44,ic45,ic46,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
-            GridValue next_sxz = sxz(t, x, y, z) +
+            yc_number_node_ptr next_sxz = sxz(t, x, y, z) +
                 stress_update(ic15,ic25,ic35,ic45,ic55,ic56,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
-            GridValue next_sxy = sxy(t, x, y, z) +
+            yc_number_node_ptr next_sxy = sxy(t, x, y, z) +
                 stress_update(ic16,ic26,ic36,ic46,ic56,ic66,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
 
             // define the value at t+1.
             if ( hasBoundaryCondition() ) {
-                Condition not_at_bc = bc->is_not_at_boundary();
-                sxx(t+1, x, y, z) EQUALS next_sxx IF not_at_bc;
-                syy(t+1, x, y, z) EQUALS next_syy IF not_at_bc;
-                szz(t+1, x, y, z) EQUALS next_szz IF not_at_bc;
-                syz(t+1, x, y, z) EQUALS next_syz IF not_at_bc;
-                sxz(t+1, x, y, z) EQUALS next_sxz IF not_at_bc;
-                sxy(t+1, x, y, z) EQUALS next_sxy IF not_at_bc;
+                yc_bool_node_ptr not_at_bc = bc->is_not_at_boundary();
+                sxx(t+1, x, y, z) EQUALS next_sxx IF_DOMAIN not_at_bc;
+                syy(t+1, x, y, z) EQUALS next_syy IF_DOMAIN not_at_bc;
+                szz(t+1, x, y, z) EQUALS next_szz IF_DOMAIN not_at_bc;
+                syz(t+1, x, y, z) EQUALS next_syz IF_DOMAIN not_at_bc;
+                sxz(t+1, x, y, z) EQUALS next_sxz IF_DOMAIN not_at_bc;
+                sxy(t+1, x, y, z) EQUALS next_sxy IF_DOMAIN not_at_bc;
             } else {
                 sxx(t+1, x, y, z) EQUALS next_sxx;
                 syy(t+1, x, y, z) EQUALS next_syy;
@@ -318,18 +321,18 @@ namespace fsg {
         const int abc_width = 20;
 
         // Sponge coefficients.
-        MAKE_GRID(sponge_lx, x, y, z);
-        MAKE_GRID(sponge_rx, x, y, z);
-        MAKE_GRID(sponge_bz, x, y, z);
-        MAKE_GRID(sponge_tz, x, y, z);
-        MAKE_GRID(sponge_fy, x, y, z);
-        MAKE_GRID(sponge_by, x, y, z);
-        MAKE_GRID(sponge_sq_lx, x, y, z);
-        MAKE_GRID(sponge_sq_rx, x, y, z);
-        MAKE_GRID(sponge_sq_bz, x, y, z);
-        MAKE_GRID(sponge_sq_tz, x, y, z);
-        MAKE_GRID(sponge_sq_fy, x, y, z);
-        MAKE_GRID(sponge_sq_by, x, y, z);
+        yc_grid_var sponge_lx = yc_grid_var("sponge_lx", get_solution(), { x, y, z });
+        yc_grid_var sponge_rx = yc_grid_var("sponge_rx", get_solution(), { x, y, z });
+        yc_grid_var sponge_bz = yc_grid_var("sponge_bz", get_solution(), { x, y, z });
+        yc_grid_var sponge_tz = yc_grid_var("sponge_tz", get_solution(), { x, y, z });
+        yc_grid_var sponge_fy = yc_grid_var("sponge_fy", get_solution(), { x, y, z });
+        yc_grid_var sponge_by = yc_grid_var("sponge_by", get_solution(), { x, y, z });
+        yc_grid_var sponge_sq_lx = yc_grid_var("sponge_sq_lx", get_solution(), { x, y, z });
+        yc_grid_var sponge_sq_rx = yc_grid_var("sponge_sq_rx", get_solution(), { x, y, z });
+        yc_grid_var sponge_sq_bz = yc_grid_var("sponge_sq_bz", get_solution(), { x, y, z });
+        yc_grid_var sponge_sq_tz = yc_grid_var("sponge_sq_tz", get_solution(), { x, y, z });
+        yc_grid_var sponge_sq_fy = yc_grid_var("sponge_sq_fy", get_solution(), { x, y, z });
+        yc_grid_var sponge_sq_by = yc_grid_var("sponge_sq_by", get_solution(), { x, y, z });
 
         FSGElasticStencilBase &fsg;
 
@@ -340,42 +343,42 @@ namespace fsg {
         {
         }
 
-        Condition is_at_boundary()
+        yc_bool_node_ptr is_at_boundary()
         {
-            Condition bc =
+            yc_bool_node_ptr bc =
                 ( z < first_index(z)+abc_width || z > last_index(z)-abc_width ) ||
                 ( y < first_index(y)+abc_width || y > last_index(y)-abc_width ) ||
                 ( x < first_index(x)+abc_width || x > last_index(x)-abc_width );
             return bc;
         }
-        Condition is_not_at_boundary()
+        yc_bool_node_ptr is_not_at_boundary()
         {
             return !is_at_boundary();
         }
 
         template<typename N, typename SZ, typename SX, typename SY>
-        void define_vel_abc(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                            Grid &v, Grid &sx, Grid &sy, Grid &sz,
-                            Grid &abc_x, Grid &abc_y, Grid &abc_z, Grid &abc_sq_x, Grid &abc_sq_y, Grid &abc_sq_z) {
+        void define_vel_abc(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                            yc_grid_var &v, yc_grid_var &sx, yc_grid_var &sy, yc_grid_var &sz,
+                            yc_grid_var &abc_x, yc_grid_var &abc_y, yc_grid_var &abc_z, yc_grid_var &abc_sq_x, yc_grid_var &abc_sq_y, yc_grid_var &abc_sq_z) {
 
-            Condition at_abc = is_at_boundary();
+            yc_bool_node_ptr at_abc = is_at_boundary();
 
-            GridValue next_v = v(t, x, y, z) * abc_x(x,y,z) * abc_y(x,y,z) * abc_z(x,y,z);
+            yc_number_node_ptr next_v = v(t, x, y, z) * abc_x(x,y,z) * abc_y(x,y,z) * abc_z(x,y,z);
 
-            GridValue lrho   = fsg.interp_rho<N>( x, y, z );
+            yc_number_node_ptr lrho   = fsg.interp_rho<N>( x, y, z );
 
-            GridValue stx    = fsg.stencil_O2_X<SX>( t, x, y, z, sx );
-            GridValue sty    = fsg.stencil_O2_Y<SY>( t, x, y, z, sy );
-            GridValue stz    = fsg.stencil_O2_Z<SZ>( t, x, y, z, sz );
+            yc_number_node_ptr stx    = fsg.stencil_O2_X<SX>( t, x, y, z, sx );
+            yc_number_node_ptr sty    = fsg.stencil_O2_Y<SY>( t, x, y, z, sy );
+            yc_number_node_ptr stz    = fsg.stencil_O2_Z<SZ>( t, x, y, z, sz );
 
             next_v += ((stx + sty + stz) * fsg.delta_t * lrho);
             next_v *= abc_sq_x(x,y,z) * abc_sq_y(x,y,z) * abc_sq_z(x,y,z);
 
             // define the value at t+1.
-            v(t+1, x, y, z) EQUALS next_v IF at_abc;
+            v(t+1, x, y, z) EQUALS next_v IF_DOMAIN at_abc;
         }
 
-        void velocity (GridIndex t, GridIndex x, GridIndex y, GridIndex z )
+        void velocity (yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z )
         {
             define_vel_abc<TL, B, F, B>(t, x, y, z, fsg.v_tl_w, fsg.s_tl_yz, fsg.s_tr_xz, fsg.s_bl_zz,
                                         sponge_lx, sponge_by, sponge_tz, sponge_sq_lx, sponge_sq_by, sponge_sq_tz);
@@ -404,57 +407,57 @@ namespace fsg {
         }
 
         template<typename N, typename SZ, typename SX, typename SY>
-        void define_str_abc(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                            Grid &sxx, Grid &syy, Grid &szz, Grid &sxy, Grid &sxz, Grid &syz,
-                            Grid &vxu, Grid &vxv, Grid &vxw, Grid &vyu, Grid &vyv, Grid &vyw, Grid &vzu, Grid &vzv, Grid &vzw,
-                            Grid &abc_x, Grid &abc_y, Grid &abc_z, Grid &abc_sq_x, Grid &abc_sq_y, Grid &abc_sq_z) {
+        void define_str_abc(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                            yc_grid_var &sxx, yc_grid_var &syy, yc_grid_var &szz, yc_grid_var &sxy, yc_grid_var &sxz, yc_grid_var &syz,
+                            yc_grid_var &vxu, yc_grid_var &vxv, yc_grid_var &vxw, yc_grid_var &vyu, yc_grid_var &vyv, yc_grid_var &vyw, yc_grid_var &vzu, yc_grid_var &vzv, yc_grid_var &vzw,
+                            yc_grid_var &abc_x, yc_grid_var &abc_y, yc_grid_var &abc_z, yc_grid_var &abc_sq_x, yc_grid_var &abc_sq_y, yc_grid_var &abc_sq_z) {
 
-            GridValue abc = abc_x(x,y,z) * abc_y(x,y,z) * abc_z(x,y,z);
-            GridValue next_sxx = sxx(t, x, y, z) * abc;
-            GridValue next_syy = syy(t, x, y, z) * abc;
-            GridValue next_szz = szz(t, x, y, z) * abc;
-            GridValue next_syz = syz(t, x, y, z) * abc;
-            GridValue next_sxz = sxz(t, x, y, z) * abc;
-            GridValue next_sxy = sxy(t, x, y, z) * abc;
+            yc_number_node_ptr abc = abc_x(x,y,z) * abc_y(x,y,z) * abc_z(x,y,z);
+            yc_number_node_ptr next_sxx = sxx(t, x, y, z) * abc;
+            yc_number_node_ptr next_syy = syy(t, x, y, z) * abc;
+            yc_number_node_ptr next_szz = szz(t, x, y, z) * abc;
+            yc_number_node_ptr next_syz = syz(t, x, y, z) * abc;
+            yc_number_node_ptr next_sxz = sxz(t, x, y, z) * abc;
+            yc_number_node_ptr next_sxy = sxy(t, x, y, z) * abc;
 
             // Interpolate coeffs.
-            GridValue ic11 = fsg.cell_coeff     <N>(x, y, z, fsg.c11);
-            GridValue ic12 = fsg.cell_coeff     <N>(x, y, z, fsg.c12);
-            GridValue ic13 = fsg.cell_coeff     <N>(x, y, z, fsg.c13);
-            GridValue ic14 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c14);
-            GridValue ic15 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c15);
-            GridValue ic16 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c16);
-            GridValue ic22 = fsg.cell_coeff     <N>(x, y, z, fsg.c22);
-            GridValue ic23 = fsg.cell_coeff     <N>(x, y, z, fsg.c23);
-            GridValue ic24 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c24);
-            GridValue ic25 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c25);
-            GridValue ic26 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c26);
-            GridValue ic33 = fsg.cell_coeff     <N>(x, y, z, fsg.c33);
-            GridValue ic34 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c34);
-            GridValue ic35 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c35);
-            GridValue ic36 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c36);
-            GridValue ic44 = fsg.cell_coeff     <N>(x, y, z, fsg.c44);
-            GridValue ic45 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c45);
-            GridValue ic46 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c46);
-            GridValue ic55 = fsg.cell_coeff     <N>(x, y, z, fsg.c55);
-            GridValue ic56 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c56);
-            GridValue ic66 = fsg.cell_coeff     <N>(x, y, z, fsg.c66);
+            yc_number_node_ptr ic11 = fsg.cell_coeff     <N>(x, y, z, fsg.c11);
+            yc_number_node_ptr ic12 = fsg.cell_coeff     <N>(x, y, z, fsg.c12);
+            yc_number_node_ptr ic13 = fsg.cell_coeff     <N>(x, y, z, fsg.c13);
+            yc_number_node_ptr ic14 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c14);
+            yc_number_node_ptr ic15 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c15);
+            yc_number_node_ptr ic16 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c16);
+            yc_number_node_ptr ic22 = fsg.cell_coeff     <N>(x, y, z, fsg.c22);
+            yc_number_node_ptr ic23 = fsg.cell_coeff     <N>(x, y, z, fsg.c23);
+            yc_number_node_ptr ic24 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c24);
+            yc_number_node_ptr ic25 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c25);
+            yc_number_node_ptr ic26 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c26);
+            yc_number_node_ptr ic33 = fsg.cell_coeff     <N>(x, y, z, fsg.c33);
+            yc_number_node_ptr ic34 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c34);
+            yc_number_node_ptr ic35 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c35);
+            yc_number_node_ptr ic36 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c36);
+            yc_number_node_ptr ic44 = fsg.cell_coeff     <N>(x, y, z, fsg.c44);
+            yc_number_node_ptr ic45 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c45);
+            yc_number_node_ptr ic46 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c46);
+            yc_number_node_ptr ic55 = fsg.cell_coeff     <N>(x, y, z, fsg.c55);
+            yc_number_node_ptr ic56 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c56);
+            yc_number_node_ptr ic66 = fsg.cell_coeff     <N>(x, y, z, fsg.c66);
 
             // Compute stencils. Note that we are using the velocity values at t+1.
-            GridValue u_z = fsg.stencil_O2_Z<SZ>( t+1, x, y, z, vzu );
-            GridValue v_z = fsg.stencil_O2_Z<SZ>( t+1, x, y, z, vzv );
-            GridValue w_z = fsg.stencil_O2_Z<SZ>( t+1, x, y, z, vzw );
+            yc_number_node_ptr u_z = fsg.stencil_O2_Z<SZ>( t+1, x, y, z, vzu );
+            yc_number_node_ptr v_z = fsg.stencil_O2_Z<SZ>( t+1, x, y, z, vzv );
+            yc_number_node_ptr w_z = fsg.stencil_O2_Z<SZ>( t+1, x, y, z, vzw );
 
-            GridValue u_x = fsg.stencil_O2_X<SX>( t+1, x, y, z, vxu );
-            GridValue v_x = fsg.stencil_O2_X<SX>( t+1, x, y, z, vxv );
-            GridValue w_x = fsg.stencil_O2_X<SX>( t+1, x, y, z, vxw );
+            yc_number_node_ptr u_x = fsg.stencil_O2_X<SX>( t+1, x, y, z, vxu );
+            yc_number_node_ptr v_x = fsg.stencil_O2_X<SX>( t+1, x, y, z, vxv );
+            yc_number_node_ptr w_x = fsg.stencil_O2_X<SX>( t+1, x, y, z, vxw );
 
-            GridValue u_y = fsg.stencil_O2_Y<SY>( t+1, x, y, z, vyu );
-            GridValue v_y = fsg.stencil_O2_Y<SY>( t+1, x, y, z, vyv );
-            GridValue w_y = fsg.stencil_O2_Y<SY>( t+1, x, y, z, vyw );
+            yc_number_node_ptr u_y = fsg.stencil_O2_Y<SY>( t+1, x, y, z, vyu );
+            yc_number_node_ptr v_y = fsg.stencil_O2_Y<SY>( t+1, x, y, z, vyv );
+            yc_number_node_ptr w_y = fsg.stencil_O2_Y<SY>( t+1, x, y, z, vyw );
 
             // Compute next stress value
-            GridValue abc_sq = abc_sq_x(x,y,z) * abc_sq_y(x,y,z) * abc_sq_z(x,y,z);
+            yc_number_node_ptr abc_sq = abc_sq_x(x,y,z) * abc_sq_y(x,y,z) * abc_sq_z(x,y,z);
             next_sxx += fsg.stress_update(ic11,ic12,ic13,ic14,ic15,ic16,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y) * abc_sq;
             next_syy += fsg.stress_update(ic12,ic22,ic23,ic24,ic25,ic26,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y) * abc_sq;
             next_szz += fsg.stress_update(ic13,ic23,ic33,ic34,ic35,ic36,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y) * abc_sq;
@@ -463,16 +466,16 @@ namespace fsg {
             next_sxy += fsg.stress_update(ic16,ic26,ic36,ic46,ic56,ic66,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y) * abc_sq;
 
             // define the value at t+1.
-            Condition at_abc = is_at_boundary();
-            sxx(t+1, x, y, z) EQUALS next_sxx IF at_abc;
-            syy(t+1, x, y, z) EQUALS next_syy IF at_abc;
-            szz(t+1, x, y, z) EQUALS next_szz IF at_abc;
-            syz(t+1, x, y, z) EQUALS next_syz IF at_abc;
-            sxz(t+1, x, y, z) EQUALS next_sxz IF at_abc;
-            sxy(t+1, x, y, z) EQUALS next_sxy IF at_abc;
+            yc_bool_node_ptr at_abc = is_at_boundary();
+            sxx(t+1, x, y, z) EQUALS next_sxx IF_DOMAIN at_abc;
+            syy(t+1, x, y, z) EQUALS next_syy IF_DOMAIN at_abc;
+            szz(t+1, x, y, z) EQUALS next_szz IF_DOMAIN at_abc;
+            syz(t+1, x, y, z) EQUALS next_syz IF_DOMAIN at_abc;
+            sxz(t+1, x, y, z) EQUALS next_sxz IF_DOMAIN at_abc;
+            sxy(t+1, x, y, z) EQUALS next_sxy IF_DOMAIN at_abc;
         }
 
-        void stress (GridIndex t, GridIndex x, GridIndex y, GridIndex z )
+        void stress (yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z )
         {
             define_str_abc<BR, F, B, F>(t, x, y, z, fsg.s_br_xx, fsg.s_br_yy, fsg.s_br_zz, fsg.s_br_xy, fsg.s_br_xz,
                                         fsg.s_br_yz, fsg.v_br_u,  fsg.v_br_v,  fsg.v_br_w,  fsg.v_bl_u,
@@ -495,19 +498,25 @@ namespace fsg {
     };
 
     struct FSGElasticStencil : public FSGElasticStencilBase {
-        FSGElasticStencil(StencilList& stencils) :
-            FSGElasticStencilBase("fsg", stencils) { }
+        FSGElasticStencil() :
+            FSGElasticStencilBase("fsg") { }
     };
 
     struct FSGABCElasticStencil : public FSGElasticStencilBase {
-        FSG_ABC abc; // Absorbing Boundary Condition
+        FSG_ABC abc; // Absorbing Boundary yc_bool_node_ptr
 
-        FSGABCElasticStencil(StencilList& stencils) :
-            FSGElasticStencilBase("fsg_abc", stencils, &abc),
+        FSGABCElasticStencil() :
+            FSGElasticStencilBase("fsg_abc", &abc),
             abc(*this) { }
     };
 
-    REGISTER_STENCIL(FSGElasticStencil);
-    REGISTER_STENCIL(FSGABCElasticStencil);
+// Create an object of type 'FSGElasticStencil',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static FSGElasticStencil FSGElasticStencil_instance;
+// Create an object of type 'FSGABCElasticStencil',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static FSGABCElasticStencil FSGABCElasticStencil_instance;
 
 }
