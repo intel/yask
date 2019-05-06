@@ -52,7 +52,7 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
       You'll get a warning when running `make` if one of these doesn't exist.
       Everything will still work, but the generated code will be difficult to read.
       Reading the generated code is only necessary for debug or curiosity.
-    * SWIG (3.0.12 or later),
+    * SWIG (3.0.12 or later; 4.0.0 or later recommended),
       http://www.swig.org, for creating the Python interface.
     * Python 2 (2.7.5 or later) or 3 (3.6.1 or later),
       https://www.python.org/downloads, for creating and using the Python interface.
@@ -66,7 +66,13 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
       https://software.intel.com/en-us/articles/intel-software-development-emulator,
       for functional testing if you don't have native support for any given instruction set.
 
-### Backward-compatibility notices, including changes in default behavior:
+## Backward-compatibility notices, including changes in default behavior
+### Version 3
+* Version 3.00.00 implemented a unification of the old (v2) internal DSL with the YASK compiler API.
+Most v2 DSL code should still work using the "Soln.hpp" backward-compatibility header file.
+To convert v2 DSL code to v3 format, use the `./utils/bin/convert_v2_stencil.pl` utility.
+
+### Version 2
 * Version 2.22.00 changed the heuristic to determine vector-folding sizes when some
 sizes are specified. This did not affect the default folding sizes.
 * Version 2.21.02 simplified the example 3-D stencils (`3axis`, `3plane`, etc.)
