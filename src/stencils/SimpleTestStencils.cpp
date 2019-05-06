@@ -466,6 +466,34 @@ public:
 
 REGISTER_STENCIL(TestDepStencil2);
 
+class TestDepStencil3 : public TestBase {
+
+protected:
+
+    // Vars.
+    MAKE_GRID(A, t, x, y, z); // time-varying grid.
+    MAKE_GRID(B, t, x, y, z); // time-varying grid.
+
+public:
+
+    TestDepStencil3(StencilList& stencils, int radius=2) :
+        TestBase("test_dep_3d", stencils, radius) { }
+
+    // Define equation to apply to all points in 'A' and 'B' grids.
+    virtual void define() {
+
+        // Define A(t+1) from A(t) & stencil at B(t).
+        A(t+1, x, y, z) EQUALS A(t, x, y, z) -
+            def_3d(B, t, x, 0, 1, y, 2, 1, z, 1, 0);
+
+        // Define B(t+1) from B(t) & stencil at A(t+1).
+        B(t+1, x, y, z) EQUALS B(t, x, y, z) -
+            def_3d(A, t+1, x, 1, 0, y, 0, 1, z, 2, 1);
+    }
+};
+
+REGISTER_STENCIL(TestDepStencil3);
+
 // Test the use of scratch-pad grids.
 
 class TestScratchStencil1 : public TestBase {
@@ -532,8 +560,8 @@ public:
 
 REGISTER_STENCIL(TestScratchStencil3);
 
-// Test the use of sub-domains.
-class TestSubdomainStencil1 : public TestBase {
+// Test the use of boundary code in sub-domains.
+class TestBoundaryStencil1 : public TestBase {
 
 protected:
 
@@ -542,8 +570,8 @@ protected:
 
 public:
 
-    TestSubdomainStencil1(StencilList& stencils, int radius=2) :
-        TestBase("test_subdomain_1d", stencils, radius) { }
+    TestBoundaryStencil1(StencilList& stencils, int radius=2) :
+        TestBase("test_boundary_1d", stencils, radius) { }
 
     // Define equation to apply to all points in 'A' grid.
     virtual void define() {
@@ -560,9 +588,9 @@ public:
     }
 };
 
-REGISTER_STENCIL(TestSubdomainStencil1);
+REGISTER_STENCIL(TestBoundaryStencil1);
 
-class TestSubdomainStencil2 : public TestBase {
+class TestBoundaryStencil2 : public TestBase {
 
 protected:
 
@@ -571,8 +599,8 @@ protected:
 
 public:
 
-    TestSubdomainStencil2(StencilList& stencils, int radius=2) :
-        TestBase("test_subdomain_2d", stencils, radius) { }
+    TestBoundaryStencil2(StencilList& stencils, int radius=2) :
+        TestBase("test_boundary_2d", stencils, radius) { }
 
     // Define equation to apply to all points in 'A' grid.
     virtual void define() {
@@ -588,9 +616,9 @@ public:
     }
 };
 
-REGISTER_STENCIL(TestSubdomainStencil2);
+REGISTER_STENCIL(TestBoundaryStencil2);
 
-class TestSubdomainStencil3 : public TestBase {
+class TestBoundaryStencil3 : public TestBase {
 
 protected:
 
@@ -599,8 +627,8 @@ protected:
 
 public:
 
-    TestSubdomainStencil3(StencilList& stencils, int radius=2) :
-        TestBase("test_subdomain_3d", stencils, radius) { }
+    TestBoundaryStencil3(StencilList& stencils, int radius=2) :
+        TestBase("test_boundary_3d", stencils, radius) { }
 
     // Define equation to apply to all points in 'A' grid.
     virtual void define() {
@@ -617,7 +645,7 @@ public:
     }
 };
 
-REGISTER_STENCIL(TestSubdomainStencil3);
+REGISTER_STENCIL(TestBoundaryStencil3);
 
 // Test step condition.
 class TestStepCondStencil1 : public TestBase {
@@ -664,7 +692,7 @@ public:
 REGISTER_STENCIL(TestStepCondStencil1);
 
 // Test the use of conditional updates with scratch-pad grids.
-class TestScratchSubdomainStencil1 : public TestBase {
+class TestScratchBoundaryStencil1 : public TestBase {
 
 protected:
 
@@ -676,8 +704,8 @@ protected:
 
 public:
 
-    TestScratchSubdomainStencil1(StencilList& stencils, int radius=2) :
-        TestBase("test_scratch_subdomain_1d", stencils, radius) { }
+    TestScratchBoundaryStencil1(StencilList& stencils, int radius=2) :
+        TestBase("test_scratch_boundary_1d", stencils, radius) { }
 
     // Define equation to apply to all points in 'A' grid.
     virtual void define() {
@@ -695,7 +723,7 @@ public:
     }
 };
 
-REGISTER_STENCIL(TestScratchSubdomainStencil1);
+REGISTER_STENCIL(TestScratchBoundaryStencil1);
 
 // A stencil that uses svml math functions.
 class TestFuncStencil1 : public TestBase {
