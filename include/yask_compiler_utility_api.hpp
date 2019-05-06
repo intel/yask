@@ -38,12 +38,12 @@ IN THE SOFTWARE.
 namespace yask {
 
     /**
-     * \addtogroup yc
+     * \defgroup ycu YASK Compiler Utility
+     * Types, clases, and functions used in the provided `yask_compiler.exe` binary utility.
      * @{
      */
 
-    /// The class all C++ stencil solutions written for the YASK compiler
-    /// utility `yask_compiler.exe` must implement.
+    /// The class all C++ stencil solutions written for the YASK compiler utility `yask_compiler.exe` must implement.
     /**
        Mostly, this is a wrapper around a \ref yc_solution pointer.
        The `define()` method must be overloaded by
@@ -73,8 +73,7 @@ namespace yask {
         */
         yc_solution_base(const std::string& name);
 
-        /// **[Advanced]** Constructor that uses an existing
-        /// yc_solution_base to share underlying solutions.
+        /// **[Advanced]** Constructor that uses an existing yc_solution_base to share underlying solutions.
         /** 
             This constructor allows the use of object-oriented composition
             instead of inheritance when creating classes that participate
@@ -141,13 +140,13 @@ namespace yask {
     class yc_solution_with_radius_base : public yc_solution_base {
     protected:
 
-        /// A variable that controls the size the stencil, i.e., the number of
-        // points that are read to calculate a new value.
-        /** In many cases,
-	    this is the number of points in the spatial dimension(s) from the
-	    center point of a finite-difference approximation, but it does
-	    not have to be. For example, it could be the minimum or maximum
-	    radius for an asymmetical stencil.
+        /// A variable that controls the size the stencil.
+        /**
+           For a symmetric finite-difference stencil, this is often the
+           number of points in the spatial dimension(s) from the center
+           point of a finite-difference approximation. However, any meaning
+           may be given to this variable. For example, it could be the
+           minimum or maximum radius for an asymmetical stencil.
 	*/
         int _radius;
 

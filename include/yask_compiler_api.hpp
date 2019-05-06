@@ -622,9 +622,7 @@ namespace yask {
                             /**< [in] Number of elements to allocate in the step dimension. */) =0;
     };
 
-    /// A wrapper class around a \ref yc_grid pointer, providing convenience
-    /// functions for declaring grid vars and creating expression nodes with
-    /// references to points in grid vars.
+    /// A wrapper class around a \ref yc_grid pointer.
     /**
        Using this class provides a syntactic alternative to calling yc_solution::new_grid()
        and/or yc_solution::new_scratch_grid() followed by yc_grid::new_grid_point().
@@ -665,7 +663,7 @@ namespace yask {
         }
 
 #ifndef SWIG
-        // Contructor taking an initializer_list of index vars.
+        /// Contructor taking an initializer_list of index vars.
         /**
            A wrapper around yc_solution::new_grid() and
            yc_solution::new_scratch_grid().
@@ -709,11 +707,9 @@ namespace yask {
         }
 
         /// Create an expression for a point in a grid.
-        /// The number of arguments must match the dimensionality of the grid.
-        /// Create an expression for a point in a 1-6 dim grid.
-        /// The number of arguments must match the dimensionality of the grid.
         /**
            A wrapper around yc_grid::new_grid_point().
+           The number of arguments must match the dimensionality of the grid.
 
            Example w/2D grid var `B`: `A(t+1, x) EQUALS A(t, x) + B(vec)`,
            where `vec` is a 2-element vector of \ref yc_number_node pointers.
@@ -725,9 +721,9 @@ namespace yask {
 
 #ifndef SWIG
         /// Create an expression for a point in a grid.
-        /// The number of arguments must match the dimensionality of the grid.
         /**
            A wrapper around yc_grid::new_grid_point().
+           The number of arguments must match the dimensionality of the grid.
 
            Example w/2D grid var `B`: `A(t+1, x) EQUALS A(t, x) + B({x, 3})`.
            @note Not available in Python API. Use vector version.
@@ -737,8 +733,7 @@ namespace yask {
             return _grid->new_grid_point(index_exprs);
         }
 
-        /// Create an expression for a point in a zero-dim (scalar) grid
-        /// using implicit conversion.
+        /// Create an expression for a point in a zero-dim (scalar) grid using implicit conversion.
         /**
            A wrapper around yc_grid::new_grid_point().
 
@@ -762,13 +757,15 @@ namespace yask {
             return _grid->new_grid_point({i1});
         }
         
-        /// Create an expression for a point in a 1-6 dim grid.
-        /// The number of arguments must match the dimensionality of the grid.
+        /// **[Deprecated]** Create an expression for a point in a 1-6 dim grid.
         /**
            A wrapper around yc_grid::new_grid_point().
+           The number of arguments must match the dimensionality of the grid.
 
            Example w/2D grid var `B`: `A(t+1, x) EQUALS A(t, x) + B(x, 3)`.
            @note Not available in Python API. Use vector version.
+
+           Deprecated: The vector or initializer-list version is recommended instead.
         */
         virtual yc_grid_point_node_ptr operator()(const yc_number_any_arg i1 = nullptr,
                                                   const yc_number_any_arg i2 = nullptr,

@@ -26,7 +26,9 @@ IN THE SOFTWARE.
 // This file contains convenience functions and macros for defining
 // stencils to be included in the YASK compiler binary utility.
 // It is to be used only for backward compatibility for old-style
-// stencil DSL code prior to YASK version 2.23.00.
+// stencil DSL code in YASK version 2.
+// Newer DSL code using the provided YASK compiler utility should include
+// "yask_compiler_utility_api.hpp" and use only published APIs.
 
 #pragma once
 
@@ -94,25 +96,25 @@ namespace yask {
 
 } // namespace yask.
 
-/// Macro for backward compatibility.
+// Macro for backward compatibility.
 #define REGISTER_STENCIL_CONTEXT_EXTENSION(...)
 
-/// Convenience macro for declaring an object of a type derived from \ref StencilBase
-/// and registering it in the list used by the default provided YASK compiler binary.
+// Convenience macro for declaring an object of a type derived from \ref StencilBase
+// and registering it in the list used by the default provided YASK compiler binary.
 /** The derived class must implement a constructor that takes only a \ref StencilList
     reference. */
 #define REGISTER_STENCIL(class_name) \
     static class_name registered_ ## class_name(stub_stencils)
 
-/// Convenience macros for declaring dims in a class derived from \ref StencilBase.
-/// The 'd' arg is the new var name and the dim name.
+// Convenience macros for declaring dims in a class derived from \ref StencilBase.
+// The 'd' arg is the new var name and the dim name.
 #define MAKE_STEP_INDEX(d)   yc_index_node_ptr d = _node_factory.new_step_index(#d);
 #define MAKE_DOMAIN_INDEX(d) yc_index_node_ptr d = _node_factory.new_domain_index(#d);
 #define MAKE_MISC_INDEX(d)   yc_index_node_ptr d = _node_factory.new_misc_index(#d);
 
-/// Convenience macros for creating grids in a class implementing get_solution().
-/// The 'gvar' arg is the var name and the grid name.
-/// The remaining args are the dimension names.
+// Convenience macros for creating grids in a class implementing get_solution().
+// The 'gvar' arg is the var name and the grid name.
+// The remaining args are the dimension names.
 #define MAKE_GRID(gvar, ...)                                            \
     Grid gvar = Grid(#gvar, get_solution(), { __VA_ARGS__ }, false)
 #define MAKE_SCALAR(gvar)    MAKE_GRID(gvar)
@@ -122,6 +124,10 @@ namespace yask {
 #define MAKE_SCRATCH_SCALAR(gvar)    MAKE_SCRATCH_GRID(gvar)
 #define MAKE_SCRATCH_ARRAY(gvar, d1) MAKE_SCRATCH_GRID(gvar, d1)
 
+// Old aliases for EQUALS.
+#define IS_EQUIV_TO EQUALS_OPER
+#define IS_EQUIVALENT_TO EQUALS_OPER
+    
 // Namespaces for stencil code.
 #ifndef NO_NAMESPACES
 using namespace yask;

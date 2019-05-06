@@ -475,7 +475,7 @@ namespace yask {
 
 #ifndef SWIG
     /// A simple wrapper class to provide automatic construction of a
-    /// 'yc_number_node_ptr' from other YASK pointer types.
+    // 'yc_number_node_ptr' from other YASK pointer types.
     /**
        Used only to provide conversions in function arguments.
        @note Not used in Python API.
@@ -498,7 +498,7 @@ namespace yask {
     };
 
     /// A simple wrapper class to provide automatic construction of a
-    /// 'yc_number_node_ptr' from non-YASK fundamental numeric types.
+    // 'yc_number_node_ptr' from non-YASK fundamental numeric types.
     /**
        Used only to provide conversions in function arguments.
        @note Not used in Python API.
@@ -530,8 +530,8 @@ namespace yask {
     };
 
     /// A simple wrapper class to provide automatic construction of a
-    /// 'yc_number_node_ptr' from a YASK pointer or non-YASK fundamental
-    /// numeric types.
+    // 'yc_number_node_ptr' from a YASK pointer or non-YASK fundamental
+    // numeric types.
     /**
        Used only to provide conversions in function arguments.
        @note Not used in Python API.
@@ -877,27 +877,27 @@ namespace yask {
 
     };
 
-    /// Unary math functions.
-#define FUNC_EXPR(fn_name) \
+    /// Unary math functions. Used internally to define sqrt(), sin(), etc.
+#define UNARY_MATH_EXPR(fn_name) \
     yc_number_node_ptr fn_name(const yc_number_node_ptr rhs)
-    FUNC_EXPR(sqrt);
-    FUNC_EXPR(cbrt);
-    FUNC_EXPR(fabs);
-    FUNC_EXPR(erf);
-    FUNC_EXPR(exp);
-    FUNC_EXPR(log);
-    FUNC_EXPR(sin);
-    FUNC_EXPR(cos);
-    FUNC_EXPR(atan);
-#undef FUNC_EXPR
+    UNARY_MATH_EXPR(sqrt);
+    UNARY_MATH_EXPR(cbrt);
+    UNARY_MATH_EXPR(fabs);
+    UNARY_MATH_EXPR(erf);
+    UNARY_MATH_EXPR(exp);
+    UNARY_MATH_EXPR(log);
+    UNARY_MATH_EXPR(sin);
+    UNARY_MATH_EXPR(cos);
+    UNARY_MATH_EXPR(atan);
+#undef UNARY_MATH_EXPR
 
-    /// Binary math functions.
-#define FUNC_EXPR(fn_name) \
+    /// Binary math functions. Used internally to define pow().
+#define BINARY_MATH_EXPR(fn_name) \
     yc_number_node_ptr fn_name(const yc_number_node_ptr arg1, const yc_number_node_ptr arg2);   \
     yc_number_node_ptr fn_name(double arg1, const yc_number_node_ptr arg2); \
     yc_number_node_ptr fn_name(const yc_number_node_ptr arg1, double arg2)
-    FUNC_EXPR(pow);
-#undef FUNC_EXPR
+    BINARY_MATH_EXPR(pow);
+#undef BINARY_MATH_EXPR
 
 #if !defined SWIG
 
@@ -982,7 +982,7 @@ namespace yask {
     /** For Python, use `lhs.yc_and(rhs)` */
     yc_bool_node_ptr operator&&(yc_bool_node_ptr lhs, yc_bool_node_ptr rhs);
 
-    /// Binary numerical-to-boolean operators.
+    /// Binary numerical-to-boolean operators. Used internally to define `==`, `<`, etc.
     /**
        Must provide more explicit ptr-type operands than used with math
        operators to keep compiler from using built-in pointer comparison.
@@ -1025,8 +1025,6 @@ namespace yask {
 
 #define EQUALS_OPER <<
 #define EQUALS EQUALS_OPER
-#define IS_EQUIV_TO EQUALS_OPER
-#define IS_EQUIVALENT_TO EQUALS_OPER
     /// The operator version of yc_node_factory::new_equation_node() used
     /// for defining a grid value.
     /**
@@ -1040,7 +1038,7 @@ namespace yask {
 
 #define IF_OPER ^=
 #define IF IF_OPER
-    /// The operator version of  to add a domain condition.
+    /// The operator version of yc_equation_node::set_cond() to add a domain condition.
     /**
        Use an otherwise unneeded binary operator that has a low priority.
        See http://en.cppreference.com/w/cpp/language/operator_precedence.
