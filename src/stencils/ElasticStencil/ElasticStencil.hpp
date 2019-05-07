@@ -80,7 +80,7 @@ protected:
     yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
 
     // 3D-spatial coefficients.
-    yc_grid_var rho = yc_grid_var("rho", get_solution(), { x, y, z });
+    yc_grid_var rho = yc_grid_var("rho", get_soln(), { x, y, z });
 
     // Spatial FD coefficients.
     const double c0_8 = 1.2;
@@ -230,13 +230,13 @@ public:
     void define_vel(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
             yc_grid_var &v, yc_grid_var &sx, yc_grid_var &sy, yc_grid_var &sz) {
 
-        yc_number_node_ptr lrho   = interp_rho<N>( x, y, z );
+        auto lrho   = interp_rho<N>( x, y, z );
 
-        yc_number_node_ptr stx    = stencil_O8<X,SX>( t, x, y, z, sx );
-        yc_number_node_ptr sty    = stencil_O8<Y,SY>( t, x, y, z, sy );
-        yc_number_node_ptr stz    = stencil_O8<Z,SZ>( t, x, y, z, sz );
+        auto stx    = stencil_O8<X,SX>( t, x, y, z, sx );
+        auto sty    = stencil_O8<Y,SY>( t, x, y, z, sy );
+        auto stz    = stencil_O8<Z,SZ>( t, x, y, z, sz );
 
-        yc_number_node_ptr next_v = v(t, x, y, z) + ((stx + sty + stz) * delta_t * lrho);
+        auto next_v = v(t, x, y, z) + ((stx + sty + stz) * delta_t * lrho);
 
         // define the value at t+1.
         if ( hasBoundaryCondition() ) {

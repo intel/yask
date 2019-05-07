@@ -44,7 +44,7 @@ protected:
     yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, y, z }); // time-varying 3D grid.
+    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, y, z }); // time-varying 3D grid.
 
     // Add additional points to expression v.
     // Returns number of points added.

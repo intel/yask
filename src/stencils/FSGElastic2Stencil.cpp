@@ -53,20 +53,20 @@ namespace fsg {
     protected:
 
         // Velocity and stress grids.
-        yc_grid_var v = yc_grid_var("v", get_solution(), { t, x, y, z, vidx });
+        yc_grid_var v = yc_grid_var("v", get_soln(), { t, x, y, z, vidx });
         enum VIDX { V_BL_U, V_BL_V, V_BL_W,
                     V_BR_U, V_BR_V, V_BR_W,
                     V_TL_U, V_TL_V, V_TL_W,
                     V_TR_U, V_TR_V, V_TR_W };
 
-        yc_grid_var s = yc_grid_var("s", get_solution(), { t, x, y, z, sidx });
+        yc_grid_var s = yc_grid_var("s", get_soln(), { t, x, y, z, sidx });
         enum SIDX { S_BL_XX, S_BL_YY, S_BL_ZZ, S_BL_YZ, S_BL_XZ, S_BL_XY,
                     S_BR_XX, S_BR_YY, S_BR_ZZ, S_BR_YZ, S_BR_XZ, S_BR_XY,
                     S_TL_XX, S_TL_YY, S_TL_ZZ, S_TL_YZ, S_TL_XZ, S_TL_XY,
                     S_TR_XX, S_TR_YY, S_TR_ZZ, S_TR_YZ, S_TR_XZ, S_TR_XY };
 
         // 3D-spatial coefficients.
-        yc_grid_var c = yc_grid_var("c", get_solution(), { x, y, z, cidx });
+        yc_grid_var c = yc_grid_var("c", get_soln(), { x, y, z, cidx });
         enum CIDX { C11, C12, C13, C14, C15, C16,
                     C22, C23, C24, C25, C26,
                     C33, C34, C35, C36,
@@ -198,53 +198,53 @@ namespace fsg {
                         yc_number_node_ptr vzu_idx, yc_number_node_ptr vzv_idx, yc_number_node_ptr vzw_idx) {
 
             // Interpolate coeffs.
-            yc_number_node_ptr ic11 = cell_coeff     <N>(x, y, z, c, C11);
-            yc_number_node_ptr ic12 = cell_coeff     <N>(x, y, z, c, C12);
-            yc_number_node_ptr ic13 = cell_coeff     <N>(x, y, z, c, C13);
-            yc_number_node_ptr ic14 = cell_coeff_artm<N>(x, y, z, c, C14);
-            yc_number_node_ptr ic15 = cell_coeff_artm<N>(x, y, z, c, C15);
-            yc_number_node_ptr ic16 = cell_coeff_artm<N>(x, y, z, c, C16);
-            yc_number_node_ptr ic22 = cell_coeff     <N>(x, y, z, c, C22);
-            yc_number_node_ptr ic23 = cell_coeff     <N>(x, y, z, c, C23);
-            yc_number_node_ptr ic24 = cell_coeff_artm<N>(x, y, z, c, C24);
-            yc_number_node_ptr ic25 = cell_coeff_artm<N>(x, y, z, c, C25);
-            yc_number_node_ptr ic26 = cell_coeff_artm<N>(x, y, z, c, C26);
-            yc_number_node_ptr ic33 = cell_coeff     <N>(x, y, z, c, C33);
-            yc_number_node_ptr ic34 = cell_coeff_artm<N>(x, y, z, c, C34);
-            yc_number_node_ptr ic35 = cell_coeff_artm<N>(x, y, z, c, C35);
-            yc_number_node_ptr ic36 = cell_coeff_artm<N>(x, y, z, c, C36);
-            yc_number_node_ptr ic44 = cell_coeff     <N>(x, y, z, c, C44);
-            yc_number_node_ptr ic45 = cell_coeff_artm<N>(x, y, z, c, C45);
-            yc_number_node_ptr ic46 = cell_coeff_artm<N>(x, y, z, c, C46);
-            yc_number_node_ptr ic55 = cell_coeff     <N>(x, y, z, c, C55);
-            yc_number_node_ptr ic56 = cell_coeff_artm<N>(x, y, z, c, C56);
-            yc_number_node_ptr ic66 = cell_coeff     <N>(x, y, z, c, C66);
+            auto ic11 = cell_coeff     <N>(x, y, z, c, C11);
+            auto ic12 = cell_coeff     <N>(x, y, z, c, C12);
+            auto ic13 = cell_coeff     <N>(x, y, z, c, C13);
+            auto ic14 = cell_coeff_artm<N>(x, y, z, c, C14);
+            auto ic15 = cell_coeff_artm<N>(x, y, z, c, C15);
+            auto ic16 = cell_coeff_artm<N>(x, y, z, c, C16);
+            auto ic22 = cell_coeff     <N>(x, y, z, c, C22);
+            auto ic23 = cell_coeff     <N>(x, y, z, c, C23);
+            auto ic24 = cell_coeff_artm<N>(x, y, z, c, C24);
+            auto ic25 = cell_coeff_artm<N>(x, y, z, c, C25);
+            auto ic26 = cell_coeff_artm<N>(x, y, z, c, C26);
+            auto ic33 = cell_coeff     <N>(x, y, z, c, C33);
+            auto ic34 = cell_coeff_artm<N>(x, y, z, c, C34);
+            auto ic35 = cell_coeff_artm<N>(x, y, z, c, C35);
+            auto ic36 = cell_coeff_artm<N>(x, y, z, c, C36);
+            auto ic44 = cell_coeff     <N>(x, y, z, c, C44);
+            auto ic45 = cell_coeff_artm<N>(x, y, z, c, C45);
+            auto ic46 = cell_coeff_artm<N>(x, y, z, c, C46);
+            auto ic55 = cell_coeff     <N>(x, y, z, c, C55);
+            auto ic56 = cell_coeff_artm<N>(x, y, z, c, C56);
+            auto ic66 = cell_coeff     <N>(x, y, z, c, C66);
 
             // Compute stencils. Note that we are using the velocity values at t+1.
-            yc_number_node_ptr u_z = stencil_O8<Z,SZ>( t+1, x, y, z, v, vzu_idx);
-            yc_number_node_ptr v_z = stencil_O8<Z,SZ>( t+1, x, y, z, v, vzv_idx);
-            yc_number_node_ptr w_z = stencil_O8<Z,SZ>( t+1, x, y, z, v, vzw_idx);
+            auto u_z = stencil_O8<Z,SZ>( t+1, x, y, z, v, vzu_idx);
+            auto v_z = stencil_O8<Z,SZ>( t+1, x, y, z, v, vzv_idx);
+            auto w_z = stencil_O8<Z,SZ>( t+1, x, y, z, v, vzw_idx);
 
-            yc_number_node_ptr u_x = stencil_O8<X,SX>( t+1, x, y, z, v, vxu_idx);
-            yc_number_node_ptr v_x = stencil_O8<X,SX>( t+1, x, y, z, v, vxv_idx);
-            yc_number_node_ptr w_x = stencil_O8<X,SX>( t+1, x, y, z, v, vxw_idx);
+            auto u_x = stencil_O8<X,SX>( t+1, x, y, z, v, vxu_idx);
+            auto v_x = stencil_O8<X,SX>( t+1, x, y, z, v, vxv_idx);
+            auto w_x = stencil_O8<X,SX>( t+1, x, y, z, v, vxw_idx);
 
-            yc_number_node_ptr u_y = stencil_O8<Y,SY>( t+1, x, y, z, v, vyu_idx);
-            yc_number_node_ptr v_y = stencil_O8<Y,SY>( t+1, x, y, z, v, vyv_idx);
-            yc_number_node_ptr w_y = stencil_O8<Y,SY>( t+1, x, y, z, v, vyw_idx);
+            auto u_y = stencil_O8<Y,SY>( t+1, x, y, z, v, vyu_idx);
+            auto v_y = stencil_O8<Y,SY>( t+1, x, y, z, v, vyv_idx);
+            auto w_y = stencil_O8<Y,SY>( t+1, x, y, z, v, vyw_idx);
 
             // Compute next stress value
-            yc_number_node_ptr next_sxx = s(t, x, y, z, sxx_idx) +
+            auto next_sxx = s(t, x, y, z, sxx_idx) +
                 stress_update(ic11,ic12,ic13,ic14,ic15,ic16,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
-            yc_number_node_ptr next_syy = s(t, x, y, z, syy_idx) +
+            auto next_syy = s(t, x, y, z, syy_idx) +
                 stress_update(ic12,ic22,ic23,ic24,ic25,ic26,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
-            yc_number_node_ptr next_szz = s(t, x, y, z, szz_idx) +
+            auto next_szz = s(t, x, y, z, szz_idx) +
                 stress_update(ic13,ic23,ic33,ic34,ic35,ic36,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
-            yc_number_node_ptr next_syz = s(t, x, y, z, syz_idx) +
+            auto next_syz = s(t, x, y, z, syz_idx) +
                 stress_update(ic14,ic24,ic34,ic44,ic45,ic46,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
-            yc_number_node_ptr next_sxz = s(t, x, y, z, sxz_idx) +
+            auto next_sxz = s(t, x, y, z, sxz_idx) +
                 stress_update(ic15,ic25,ic35,ic45,ic55,ic56,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
-            yc_number_node_ptr next_sxy = s(t, x, y, z, sxy_idx) +
+            auto next_sxy = s(t, x, y, z, sxy_idx) +
                 stress_update(ic16,ic26,ic36,ic46,ic56,ic66,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
 
             // define the value at t+1.
@@ -323,7 +323,7 @@ namespace fsg {
         const int abc_width = 20;
 
         // Sponge coefficients.
-        yc_grid_var sponge = yc_grid_var("sponge", get_solution(), { x, y, z, spidx });
+        yc_grid_var sponge = yc_grid_var("sponge", get_soln(), { x, y, z, spidx });
         enum SPONGE_IDX { SPONGE_LX, SPONGE_RX, SPONGE_BZ,
                           SPONGE_TZ, SPONGE_FY, SPONGE_BY,
                           SPONGE_SQ_LX, SPONGE_SQ_RX, SPONGE_SQ_BZ,
@@ -357,17 +357,16 @@ namespace fsg {
                             yc_number_node_ptr sx_idx, yc_number_node_ptr sy_idx, yc_number_node_ptr sz_idx,
                             yc_number_node_ptr abc_x_idx, yc_number_node_ptr abc_y_idx, yc_number_node_ptr abc_z_idx,
                             yc_number_node_ptr abc_sq_x_idx, yc_number_node_ptr abc_sq_y_idx, yc_number_node_ptr abc_sq_z_idx) {
+            auto at_abc = is_at_boundary();
 
-            yc_bool_node_ptr at_abc = is_at_boundary();
-
-            yc_number_node_ptr next_v = fsg.v(t, x, y, z, vidx) * sponge(x,y,z, abc_x_idx) *
+            auto next_v = fsg.v(t, x, y, z, vidx) * sponge(x,y,z, abc_x_idx) *
                 sponge(x,y,z, abc_y_idx) * sponge(x,y,z, abc_z_idx);
 
-            yc_number_node_ptr lrho   = fsg.interp_rho<N>( x, y, z);
+            auto lrho   = fsg.interp_rho<N>( x, y, z);
 
-            yc_number_node_ptr stx    = fsg.stencil_O2_X<SX>( t, x, y, z, fsg.s, sx_idx);
-            yc_number_node_ptr sty    = fsg.stencil_O2_Y<SY>( t, x, y, z, fsg.s, sy_idx);
-            yc_number_node_ptr stz    = fsg.stencil_O2_Z<SZ>( t, x, y, z, fsg.s, sz_idx);
+            auto stx    = fsg.stencil_O2_X<SX>( t, x, y, z, fsg.s, sx_idx);
+            auto sty    = fsg.stencil_O2_Y<SY>( t, x, y, z, fsg.s, sy_idx);
+            auto stz    = fsg.stencil_O2_Z<SZ>( t, x, y, z, fsg.s, sz_idx);
 
             next_v += ((stx + sty + stz) * fsg.delta_t * lrho);
             next_v *= sponge(x,y,z, abc_sq_x_idx) * sponge(x,y,z, abc_sq_y_idx) *
@@ -427,52 +426,52 @@ namespace fsg {
                             yc_number_node_ptr abc_x_idx, yc_number_node_ptr abc_y_idx, yc_number_node_ptr abc_z_idx,
                             yc_number_node_ptr abc_sq_x_idx, yc_number_node_ptr abc_sq_y_idx, yc_number_node_ptr abc_sq_z_idx) {
 
-            yc_number_node_ptr abc = sponge(x,y,z, abc_x_idx) * sponge(x,y,z, abc_y_idx) * sponge(x,y,z, abc_z_idx);
-            yc_number_node_ptr next_sxx = fsg.s(t, x, y, z, sxx_idx) * abc;
-            yc_number_node_ptr next_syy = fsg.s(t, x, y, z, syy_idx) * abc;
-            yc_number_node_ptr next_szz = fsg.s(t, x, y, z, szz_idx) * abc;
-            yc_number_node_ptr next_syz = fsg.s(t, x, y, z, syz_idx) * abc;
-            yc_number_node_ptr next_sxz = fsg.s(t, x, y, z, sxz_idx) * abc;
-            yc_number_node_ptr next_sxy = fsg.s(t, x, y, z, sxy_idx) * abc;
+            auto abc = sponge(x,y,z, abc_x_idx) * sponge(x,y,z, abc_y_idx) * sponge(x,y,z, abc_z_idx);
+            auto next_sxx = fsg.s(t, x, y, z, sxx_idx) * abc;
+            auto next_syy = fsg.s(t, x, y, z, syy_idx) * abc;
+            auto next_szz = fsg.s(t, x, y, z, szz_idx) * abc;
+            auto next_syz = fsg.s(t, x, y, z, syz_idx) * abc;
+            auto next_sxz = fsg.s(t, x, y, z, sxz_idx) * abc;
+            auto next_sxy = fsg.s(t, x, y, z, sxy_idx) * abc;
 
             // Interpolate coeffs.
-            yc_number_node_ptr ic11 = fsg.cell_coeff     <N>(x, y, z, fsg.c, fsg.C11);
-            yc_number_node_ptr ic12 = fsg.cell_coeff     <N>(x, y, z, fsg.c, fsg.C12);
-            yc_number_node_ptr ic13 = fsg.cell_coeff     <N>(x, y, z, fsg.c, fsg.C13);
-            yc_number_node_ptr ic14 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c, fsg.C14);
-            yc_number_node_ptr ic15 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c, fsg.C15);
-            yc_number_node_ptr ic16 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c, fsg.C16);
-            yc_number_node_ptr ic22 = fsg.cell_coeff     <N>(x, y, z, fsg.c, fsg.C22);
-            yc_number_node_ptr ic23 = fsg.cell_coeff     <N>(x, y, z, fsg.c, fsg.C23);
-            yc_number_node_ptr ic24 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c, fsg.C24);
-            yc_number_node_ptr ic25 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c, fsg.C25);
-            yc_number_node_ptr ic26 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c, fsg.C26);
-            yc_number_node_ptr ic33 = fsg.cell_coeff     <N>(x, y, z, fsg.c, fsg.C33);
-            yc_number_node_ptr ic34 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c, fsg.C34);
-            yc_number_node_ptr ic35 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c, fsg.C35);
-            yc_number_node_ptr ic36 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c, fsg.C36);
-            yc_number_node_ptr ic44 = fsg.cell_coeff     <N>(x, y, z, fsg.c, fsg.C44);
-            yc_number_node_ptr ic45 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c, fsg.C45);
-            yc_number_node_ptr ic46 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c, fsg.C46);
-            yc_number_node_ptr ic55 = fsg.cell_coeff     <N>(x, y, z, fsg.c, fsg.C55);
-            yc_number_node_ptr ic56 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c, fsg.C56);
-            yc_number_node_ptr ic66 = fsg.cell_coeff     <N>(x, y, z, fsg.c, fsg.C66);
+            auto ic11 = fsg.cell_coeff     <N>(x, y, z, fsg.c, fsg.C11);
+            auto ic12 = fsg.cell_coeff     <N>(x, y, z, fsg.c, fsg.C12);
+            auto ic13 = fsg.cell_coeff     <N>(x, y, z, fsg.c, fsg.C13);
+            auto ic14 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c, fsg.C14);
+            auto ic15 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c, fsg.C15);
+            auto ic16 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c, fsg.C16);
+            auto ic22 = fsg.cell_coeff     <N>(x, y, z, fsg.c, fsg.C22);
+            auto ic23 = fsg.cell_coeff     <N>(x, y, z, fsg.c, fsg.C23);
+            auto ic24 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c, fsg.C24);
+            auto ic25 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c, fsg.C25);
+            auto ic26 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c, fsg.C26);
+            auto ic33 = fsg.cell_coeff     <N>(x, y, z, fsg.c, fsg.C33);
+            auto ic34 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c, fsg.C34);
+            auto ic35 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c, fsg.C35);
+            auto ic36 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c, fsg.C36);
+            auto ic44 = fsg.cell_coeff     <N>(x, y, z, fsg.c, fsg.C44);
+            auto ic45 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c, fsg.C45);
+            auto ic46 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c, fsg.C46);
+            auto ic55 = fsg.cell_coeff     <N>(x, y, z, fsg.c, fsg.C55);
+            auto ic56 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c, fsg.C56);
+            auto ic66 = fsg.cell_coeff     <N>(x, y, z, fsg.c, fsg.C66);
 
             // Compute stencils. Note that we are using the velocity values at t+1.
-            yc_number_node_ptr u_z = fsg.stencil_O2_Z<SZ>( t+1, x, y, z, fsg.v, vzu_idx);
-            yc_number_node_ptr v_z = fsg.stencil_O2_Z<SZ>( t+1, x, y, z, fsg.v, vzv_idx);
-            yc_number_node_ptr w_z = fsg.stencil_O2_Z<SZ>( t+1, x, y, z, fsg.v, vzw_idx);
+            auto u_z = fsg.stencil_O2_Z<SZ>( t+1, x, y, z, fsg.v, vzu_idx);
+            auto v_z = fsg.stencil_O2_Z<SZ>( t+1, x, y, z, fsg.v, vzv_idx);
+            auto w_z = fsg.stencil_O2_Z<SZ>( t+1, x, y, z, fsg.v, vzw_idx);
 
-            yc_number_node_ptr u_x = fsg.stencil_O2_X<SX>( t+1, x, y, z, fsg.v, vxu_idx);
-            yc_number_node_ptr v_x = fsg.stencil_O2_X<SX>( t+1, x, y, z, fsg.v, vxv_idx);
-            yc_number_node_ptr w_x = fsg.stencil_O2_X<SX>( t+1, x, y, z, fsg.v, vxw_idx);
+            auto u_x = fsg.stencil_O2_X<SX>( t+1, x, y, z, fsg.v, vxu_idx);
+            auto v_x = fsg.stencil_O2_X<SX>( t+1, x, y, z, fsg.v, vxv_idx);
+            auto w_x = fsg.stencil_O2_X<SX>( t+1, x, y, z, fsg.v, vxw_idx);
 
-            yc_number_node_ptr u_y = fsg.stencil_O2_Y<SY>( t+1, x, y, z, fsg.v, vyu_idx);
-            yc_number_node_ptr v_y = fsg.stencil_O2_Y<SY>( t+1, x, y, z, fsg.v, vyv_idx);
-            yc_number_node_ptr w_y = fsg.stencil_O2_Y<SY>( t+1, x, y, z, fsg.v, vyw_idx);
+            auto u_y = fsg.stencil_O2_Y<SY>( t+1, x, y, z, fsg.v, vyu_idx);
+            auto v_y = fsg.stencil_O2_Y<SY>( t+1, x, y, z, fsg.v, vyv_idx);
+            auto w_y = fsg.stencil_O2_Y<SY>( t+1, x, y, z, fsg.v, vyw_idx);
 
             // Compute next stress value
-            yc_number_node_ptr abc_sq = sponge(x,y,z, abc_sq_x_idx) *
+            auto abc_sq = sponge(x,y,z, abc_sq_x_idx) *
                 sponge(x,y,z, abc_sq_y_idx) * sponge(x,y,z, abc_sq_z_idx);
             next_sxx += fsg.stress_update(ic11,ic12,ic13,ic14,ic15,ic16,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y) * abc_sq;
             next_syy += fsg.stress_update(ic12,ic22,ic23,ic24,ic25,ic26,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y) * abc_sq;

@@ -43,20 +43,20 @@ protected:
   yc_index_node_ptr z = new_domain_index("z"); // spatial dim.
 
   // Grid vars.
-  yc_grid_var u = yc_grid_var("u", get_solution(), { t, x, y, z });	// Time-varying 3D wavefield grid.
-  yc_grid_var v = yc_grid_var("v", get_solution(), { t, x, y, z });	// Time-varying 3D wavefield grid.
-  yc_grid_var m = yc_grid_var("m", get_solution(), { x, y, z });	// Square slowness of the model.
-  yc_grid_var damp = yc_grid_var("damp", get_solution(), { x, y, z });	// Boundary damping.
-  yc_grid_var phi = yc_grid_var("phi", get_solution(), { x, y, z });
-  yc_grid_var theta = yc_grid_var("theta", get_solution(), { x, y, z });
-  yc_grid_var delta = yc_grid_var("delta", get_solution(), { x, y, z });
-  yc_grid_var epsilon = yc_grid_var("epsilon", get_solution(), { x, y, z });
+  yc_grid_var u = yc_grid_var("u", get_soln(), { t, x, y, z });	// Time-varying 3D wavefield grid.
+  yc_grid_var v = yc_grid_var("v", get_soln(), { t, x, y, z });	// Time-varying 3D wavefield grid.
+  yc_grid_var m = yc_grid_var("m", get_soln(), { x, y, z });	// Square slowness of the model.
+  yc_grid_var damp = yc_grid_var("damp", get_soln(), { x, y, z });	// Boundary damping.
+  yc_grid_var phi = yc_grid_var("phi", get_soln(), { x, y, z });
+  yc_grid_var theta = yc_grid_var("theta", get_soln(), { x, y, z });
+  yc_grid_var delta = yc_grid_var("delta", get_soln(), { x, y, z });
+  yc_grid_var epsilon = yc_grid_var("epsilon", get_soln(), { x, y, z });
 
   // Hoisted misc time-invariant data.
-  yc_grid_var ti0 = yc_grid_var("ti0", get_solution(), { x, y, z });
-  yc_grid_var ti1 = yc_grid_var("ti1", get_solution(), { x, y, z });
-  yc_grid_var ti2 = yc_grid_var("ti2", get_solution(), { x, y, z });
-  yc_grid_var ti3 = yc_grid_var("ti3", get_solution(), { x, y, z });
+  yc_grid_var ti0 = yc_grid_var("ti0", get_soln(), { x, y, z });
+  yc_grid_var ti1 = yc_grid_var("ti1", get_soln(), { x, y, z });
+  yc_grid_var ti2 = yc_grid_var("ti2", get_soln(), { x, y, z });
+  yc_grid_var ti3 = yc_grid_var("ti3", get_soln(), { x, y, z });
 
 public:
 
@@ -74,25 +74,25 @@ TTIStencil (int radius = 2):
   virtual void define_so4 ()
   {
 
-    yc_number_node_ptr temp161 = 2.5e-2 * (-u (t, x - 1, y, z) + u (t, x + 1, y, z));
-    yc_number_node_ptr temp163 = -7.5e-2 * u (t, x, y, z) + 1.0e-1 * u (t, x, y + 1,
+    auto temp161 = 2.5e-2 * (-u (t, x - 1, y, z) + u (t, x + 1, y, z));
+    auto temp163 = -7.5e-2 * u (t, x, y, z) + 1.0e-1 * u (t, x, y + 1,
 								 z) -
       2.5e-2 * u (t, x, y + 2,
 		   z);
-    yc_number_node_ptr temp192 = 1.0e-1 * u (t, x, y, z) - 7.5e-2 * u (t, x, y - 1,
+    auto temp192 = 1.0e-1 * u (t, x, y, z) - 7.5e-2 * u (t, x, y - 1,
 								z) -
       2.5e-2 * u (t, x, y + 1,
 		   z);
-    yc_number_node_ptr temp183 = -2.5e-2 * u (t, x, y, z) - 7.5e-2 * u (t, x - 2, y,
+    auto temp183 = -2.5e-2 * u (t, x, y, z) - 7.5e-2 * u (t, x - 2, y,
 								 z) +
       1.0e-1 * u (t, x - 1, y,
 		   z);
-    yc_number_node_ptr temp168 =
+    auto temp168 =
       -7.5e-2 * u (t, x, y + 1, z) + 1.0e-1 * u (t, x + 1, y + 1,
 						   z) - 2.5e-2 * u (t, x + 2,
 								     y + 1,
 								     z);
-    yc_number_node_ptr temp197 =
+    auto temp197 =
       3.75e-2 * (temp161 * ti1 (x, y, z) * ti2 (x, y, z) +
 		  temp163 * ti2 (x, y, z) * ti3 (x, y,
 						 z) - (-7.5e-2 * u (t, x, y,
@@ -103,45 +103,45 @@ TTIStencil (int radius = 2):
 								    z +
 								    2)) *
 		  ti0 (x, y, z));
-    yc_number_node_ptr temp171 =
+    auto temp171 =
       -7.5e-2 * u (t, x + 1, y, z) + 1.0e-1 * u (t, x + 1, y + 1,
 						   z) - 2.5e-2 * u (t, x + 1,
 								     y + 2,
 								     z);
-    yc_number_node_ptr temp178 = 2.5e-2 * (u (t, x, y, z) - u (t, x - 2, y, z));
-    yc_number_node_ptr temp182 =
+    auto temp178 = 2.5e-2 * (u (t, x, y, z) - u (t, x - 2, y, z));
+    auto temp182 =
       2.5e-2 * (-u (t, x - 2, y - 1, z) + u (t, x - 2, y + 1, z));
-    yc_number_node_ptr temp190 = 1.0e-1 * u (t, x, y, z) - 7.5e-2 * u (t, x - 1, y,
+    auto temp190 = 1.0e-1 * u (t, x, y, z) - 7.5e-2 * u (t, x - 1, y,
 								z) -
       2.5e-2 * u (t, x + 1, y,
 		   z);
-    yc_number_node_ptr temp173 = 2.5e-2 * (u (t, x, y, z) - u (t, x, y - 2, z));
-    yc_number_node_ptr temp188 =
+    auto temp173 = 2.5e-2 * (u (t, x, y, z) - u (t, x, y - 2, z));
+    auto temp188 =
       2.5e-2 * (-u (t, x - 1, y - 1, z) + u (t, x - 1, y + 1, z));
-    yc_number_node_ptr temp154 = 2.5e-2 * (-u (t, x, y - 1, z) + u (t, x, y + 1, z));
-    yc_number_node_ptr temp186 = -2.5e-2 * u (t, x, y, z) - 7.5e-2 * u (t, x, y - 2,
+    auto temp154 = 2.5e-2 * (-u (t, x, y - 1, z) + u (t, x, y + 1, z));
+    auto temp186 = -2.5e-2 * u (t, x, y, z) - 7.5e-2 * u (t, x, y - 2,
 								 z) +
       1.0e-1 * u (t, x, y - 1,
 		   z);
-    yc_number_node_ptr temp158 = -7.5e-2 * u (t, x, y, z) + 1.0e-1 * u (t, x + 1, y,
+    auto temp158 = -7.5e-2 * u (t, x, y, z) + 1.0e-1 * u (t, x + 1, y,
 								 z) -
       2.5e-2 * u (t, x + 2, y,
 		   z);
-    yc_number_node_ptr temp191 =
+    auto temp191 =
       2.5e-2 * (-u (t, x - 1, y - 1, z) + u (t, x + 1, y - 1, z));
-    yc_number_node_ptr temp184 =
+    auto temp184 =
       2.5e-2 * (-u (t, x - 1, y - 2, z) + u (t, x + 1, y - 2, z));
-    yc_number_node_ptr temp181 =
+    auto temp181 =
       -7.5e-2 * u (t, x - 1, y, z) + 1.0e-1 * u (t, x - 1, y + 1,
 						   z) - 2.5e-2 * u (t, x - 1,
 								     y + 2,
 								     z);
-    yc_number_node_ptr temp176 =
+    auto temp176 =
       -7.5e-2 * u (t, x, y - 1, z) + 1.0e-1 * u (t, x + 1, y - 1,
 						   z) - 2.5e-2 * u (t, x + 2,
 								     y - 1,
 								     z);
-    yc_number_node_ptr temp123 =
+    auto temp123 =
       (2.5e-2 *
        ((v (t, x, y, z) - v (t, x, y - 2, z)) * ti0 (x, y - 1, z) * ti3 (x,
 									 y - 1,
@@ -152,7 +152,7 @@ TTIStencil (int radius = 2):
 	2.5e-2 * v (t, x + 2, y - 1, z)) * ti0 (x, y - 1, z) * ti1 (x, y - 1,
 								     z)) *
       ti0 (x, y - 1, z) * ti3 (x, y - 1, z);
-    yc_number_node_ptr temp102 =
+    auto temp102 =
       (2.5e-2 *
        ((-v (t, x - 1, y, z - 1) + v (t, x - 1, y, z + 1)) * ti2 (x - 1, y,
 								  z) + (-v (t,
@@ -177,7 +177,7 @@ TTIStencil (int radius = 2):
 									  z) *
        ti1 (x - 1, y, z)) * ti0 (x - 1, y,
 				 z) * ti1 (x - 1, y, z);
-    yc_number_node_ptr temp131 =
+    auto temp131 =
       (2.5e-2 * (-v (t, x - 1, y, z - 2) + v (t, x + 1, y, z - 2)) *
        ti0 (x, y, z - 2) * ti1 (x, y,
 				z - 2) + (-2.5e-2 * v (t, x, y,
@@ -194,7 +194,7 @@ TTIStencil (int radius = 2):
 								     z -
 								     2)) *
       ti2 (x, y, z - 2);
-    yc_number_node_ptr temp87 =
+    auto temp87 =
       (2.5e-2 *
        ((-v (t, x - 2, y, z - 1) + v (t, x - 2, y, z + 1)) * ti2 (x - 2, y,
 								  z) + (-v (t,
@@ -219,7 +219,7 @@ TTIStencil (int radius = 2):
 									  z) *
        ti1 (x - 2, y, z)) * ti0 (x - 2, y,
 				 z) * ti1 (x - 2, y, z);
-    yc_number_node_ptr temp47 =
+    auto temp47 =
       2.5e-2 * (-v (t, x - 1, y, z) + v (t, x + 1, y, z)) * ti0 (x, y,
 								  z) * ti1 (x,
 									    y,
@@ -235,7 +235,7 @@ TTIStencil (int radius = 2):
 								       y + 2,
 								       z)) *
       ti0 (x, y, z) * ti3 (x, y, z);
-    yc_number_node_ptr temp110 =
+    auto temp110 =
       (2.5e-2 *
        ((-v (t, x, y, z) + v (t, x, y + 2, z)) * ti0 (x, y + 1, z) * ti3 (x,
 									  y + 1,
@@ -246,7 +246,7 @@ TTIStencil (int radius = 2):
 	2.5e-2 * v (t, x + 2, y + 1, z)) * ti0 (x, y + 1, z) * ti1 (x, y + 1,
 								     z)) *
       ti0 (x, y + 1, z) * ti3 (x, y + 1, z);
-    yc_number_node_ptr temp140 =
+    auto temp140 =
       (2.5e-2 * (-v (t, x, y, z) + v (t, x + 2, y, z)) * ti0 (x + 1, y, z) *
        ti1 (x + 1, y,
 	    z) + (-7.5e-2 * v (t, x + 1, y, z) + 1.0e-1 * v (t, x + 1, y,
@@ -260,7 +260,7 @@ TTIStencil (int radius = 2):
       ti0 (x + 1, y,
 	   z) * ti1 (x + 1, y,
 		     z);
-    yc_number_node_ptr temp149 =
+    auto temp149 =
       (2.5e-2 * (-v (t, x - 1, y - 2, z) + v (t, x + 1, y - 2, z)) *
        ti0 (x, y - 2, z) * ti1 (x, y - 2,
 				z) + (-2.5e-2 * v (t, x, y,
@@ -279,7 +279,7 @@ TTIStencil (int radius = 2):
 								      y - 2,
 								      z) *
       ti3 (x, y - 2, z);
-    yc_number_node_ptr temp39 =
+    auto temp39 =
       (2.5e-2 * ((-v (t, x, y, z - 1) + v (t, x, y, z + 1)) * ti2 (x, y,
 								    z) +
 		  (-v (t, x,
@@ -299,7 +299,7 @@ TTIStencil (int radius = 2):
 								     z)) *
        ti0 (x, y,
 	    z) * ti1 (x, y, z)) * ti0 (x, y, z) * ti1 (x, y, z);
-    yc_number_node_ptr temp132 =
+    auto temp132 =
       (2.5e-2 * (-v (t, x - 1, y, z - 1) + v (t, x + 1, y, z - 1)) *
        ti0 (x, y, z - 1) * ti1 (x, y,
 				z - 1) + (1.0e-1 * v (t, x, y,
@@ -315,9 +315,9 @@ TTIStencil (int radius = 2):
 								     z -
 								     1)) *
       ti2 (x, y, z - 1);
-    yc_number_node_ptr temp6 =
+    auto temp6 =
       1.0 / (8.85879567828298e-1 * damp (x, y, z) + 2.0 * m (x, y, z));
-    yc_number_node_ptr temp141 =
+    auto temp141 =
       (2.5e-2 * (v (t, x, y, z) - v (t, x - 2, y, z)) * ti0 (x - 1, y, z) *
        ti1 (x - 1, y,
 	    z) + (-7.5e-2 * v (t, x - 1, y, z) + 1.0e-1 * v (t, x - 1, y,
@@ -331,9 +331,9 @@ TTIStencil (int radius = 2):
       ti0 (x - 1, y,
 	   z) * ti1 (x - 1, y,
 		     z);
-    yc_number_node_ptr temp10 =
+    auto temp10 =
       8.85879567828298e-1 * damp (x, y, z) - 2.0 * m (x, y, z);
-    yc_number_node_ptr temp215 =
+    auto temp215 =
       3.75e-2 * (-temp154 * ti1 (x, y, z) + temp158 * ti3 (x, y, z)) * ti3 (x,
 									     y,
 									     z)
@@ -695,7 +695,7 @@ TTIStencil (int radius = 2):
 								    z -
 								    2)) *
 						   ti0 (x, y, z - 2));
-    yc_number_node_ptr temp77 =
+    auto temp77 =
       (2.5e-2 * ((v (t, x, y, z) - v (t, x, y, z - 2)) * ti2 (x, y,
 							       z - 1) + (-v (t,
 									     x,
@@ -729,7 +729,7 @@ TTIStencil (int radius = 2):
        ti0 (x,
 	    y,
 	    z - 1) * ti1 (x, y, z - 1)) * ti2 (x, y, z - 1);
-    yc_number_node_ptr temp61 =
+    auto temp61 =
       (2.5e-2 * ((-v (t, x, y, z) + v (t, x, y, z + 2)) * ti2 (x, y,
 								z + 1) + (-v (t,
 									      x,
@@ -764,7 +764,7 @@ TTIStencil (int radius = 2):
        ti0 (x,
 	    y,
 	    z + 1) * ti1 (x, y, z + 1)) * ti2 (x, y, z + 1);
-    yc_number_node_ptr temp150 =
+    auto temp150 =
       (2.5e-2 * (-v (t, x - 1, y - 1, z) + v (t, x + 1, y - 1, z)) *
        ti0 (x, y - 1, z) * ti1 (x, y - 1,
 				z) + (1.0e-1 * v (t, x, y,
@@ -830,19 +830,19 @@ TTIStencil (int radius = 2):
   virtual void define_so8 ()
   {
 
-    yc_number_node_ptr temp330 =
+    auto temp330 =
       4.16666666666667e-3 * (u (t, x - 2, y, z) - u (t, x + 2, y, z)) +
       3.33333333333333e-2 * (-u (t, x - 1, y, z) + u (t, x + 1, y, z));
-    yc_number_node_ptr temp333 =
+    auto temp333 =
       -4.16666666666667e-2 * u (t, x, y, z) - 1.25e-2 * u (t, x, y - 1,
 							     z) +
       7.5e-2 * u (t, x, y + 1, z) - 2.5e-2 * u (t, x, y + 2,
 						  z) +
       4.16666666666667e-3 * u (t, x, y + 3, z);
-    yc_number_node_ptr temp336 =
+    auto temp336 =
       3.33333333333333e-2 * (-u (t, x, y, z) + u (t, x, y + 2, z)) +
       4.16666666666667e-3 * (u (t, x, y - 1, z) - u (t, x, y + 3, z));
-    yc_number_node_ptr temp395 =
+    auto temp395 =
       4.16666666666667e-3 * (u (t, x - 2, y - 2, z) - u (t, x + 2, y - 2,
 							  z)) +
       3.33333333333333e-2 * (-u (t, x - 1,
@@ -851,26 +851,26 @@ TTIStencil (int radius = 2):
 					  x + 1,
 					  y - 2,
 					  z));
-    yc_number_node_ptr temp365 =
+    auto temp365 =
       -4.16666666666667e-2 * u (t, x - 2, y, z) - 1.25e-2 * u (t, x - 2,
 								 y - 1,
 								 z) +
       7.5e-2 * u (t, x - 2, y + 1, z) - 2.5e-2 * u (t, x - 2, y + 2,
 						      z) +
       4.16666666666667e-3 * u (t, x - 2, y + 3, z);
-    yc_number_node_ptr temp375 =
+    auto temp375 =
       -4.16666666666667e-2 * u (t, x + 2, y, z) - 1.25e-2 * u (t, x + 2,
 								 y - 1,
 								 z) +
       7.5e-2 * u (t, x + 2, y + 1, z) - 2.5e-2 * u (t, x + 2, y + 2,
 						      z) +
       4.16666666666667e-3 * u (t, x + 2, y + 3, z);
-    yc_number_node_ptr temp394 = -2.5e-2 * u (t, x, y, z) - 1.25e-2 * u (t, x - 3, y,
+    auto temp394 = -2.5e-2 * u (t, x, y, z) - 1.25e-2 * u (t, x - 3, y,
 								  z) -
       4.16666666666667e-2 * u (t, x - 2, y, z) + 7.5e-2 * u (t, x - 1, y,
 							       z) +
       4.16666666666667e-3 * u (t, x + 1, y, z);
-    yc_number_node_ptr temp407 =
+    auto temp407 =
       4.16666666666667e-3 * (u (t, x - 1, y - 2, z) - u (t, x - 1, y + 2,
 							  z)) +
       3.33333333333333e-2 * (-u (t, x - 1,
@@ -879,17 +879,17 @@ TTIStencil (int radius = 2):
 					  x - 1,
 					  y + 1,
 					  z));
-    yc_number_node_ptr temp352 =
+    auto temp352 =
       4.16666666666667e-3 * (-u (t, x, y, z) + u (t, x, y - 4, z)) +
       3.33333333333333e-2 * (-u (t, x, y - 3, z) + u (t, x, y - 1, z));
-    yc_number_node_ptr temp347 =
+    auto temp347 =
       -4.16666666666667e-2 * u (t, x + 1, y, z) - 1.25e-2 * u (t, x + 1,
 								 y - 1,
 								 z) +
       7.5e-2 * u (t, x + 1, y + 1, z) - 2.5e-2 * u (t, x + 1, y + 2,
 						      z) +
       4.16666666666667e-3 * u (t, x + 1, y + 3, z);
-    yc_number_node_ptr temp409 =
+    auto temp409 =
       4.16666666666667e-3 * (u (t, x + 1, y - 2, z) - u (t, x + 1, y + 2,
 							  z)) +
       3.33333333333333e-2 * (-u (t, x + 1,
@@ -898,58 +898,58 @@ TTIStencil (int radius = 2):
 					  x + 1,
 					  y + 1,
 					  z));
-    yc_number_node_ptr temp318 =
+    auto temp318 =
       4.16666666666667e-3 * (u (t, x, y - 2, z) - u (t, x, y + 2, z)) +
       3.33333333333333e-2 * (-u (t, x, y - 1, z) + u (t, x, y + 1, z));
-    yc_number_node_ptr temp381 =
+    auto temp381 =
       -4.16666666666667e-2 * u (t, x, y - 1, z) - 1.25e-2 * u (t, x - 1,
 								 y - 1,
 								 z) +
       7.5e-2 * u (t, x + 1, y - 1, z) - 2.5e-2 * u (t, x + 2, y - 1,
 						      z) +
       4.16666666666667e-3 * u (t, x + 3, y - 1, z);
-    yc_number_node_ptr temp408 = 7.5e-2 * u (t, x, y, z) - 1.25e-2 * u (t, x - 2, y,
+    auto temp408 = 7.5e-2 * u (t, x, y, z) - 1.25e-2 * u (t, x - 2, y,
 								 z) -
       4.16666666666667e-2 * u (t, x - 1, y, z) - 2.5e-2 * u (t, x + 1, y,
 							       z) +
       4.16666666666667e-3 * u (t, x + 2, y, z);
-    yc_number_node_ptr temp390 =
+    auto temp390 =
       4.16666666666667e-3 * u (t, x, y, z) - 1.25e-2 * u (t, x, y - 4,
 							    z) -
       4.16666666666667e-2 * u (t, x, y - 3, z) + 7.5e-2 * u (t, x, y - 2,
 							       z) -
       2.5e-2 * u (t, x, y - 1, z);
-    yc_number_node_ptr temp360 =
+    auto temp360 =
       4.16666666666667e-3 * (-u (t, x, y, z) + u (t, x - 4, y, z)) +
       3.33333333333333e-2 * (-u (t, x - 3, y, z) + u (t, x - 1, y, z));
-    yc_number_node_ptr temp370 =
+    auto temp370 =
       -4.16666666666667e-2 * u (t, x, y + 2, z) - 1.25e-2 * u (t, x - 1,
 								 y + 2,
 								 z) +
       7.5e-2 * u (t, x + 1, y + 2, z) - 2.5e-2 * u (t, x + 2, y + 2,
 						      z) +
       4.16666666666667e-3 * u (t, x + 3, y + 2, z);
-    yc_number_node_ptr temp357 =
+    auto temp357 =
       -4.16666666666667e-2 * u (t, x, y - 2, z) - 1.25e-2 * u (t, x - 1,
 								 y - 2,
 								 z) +
       7.5e-2 * u (t, x + 1, y - 2, z) - 2.5e-2 * u (t, x + 2, y - 2,
 						      z) +
       4.16666666666667e-3 * u (t, x + 3, y - 2, z);
-    yc_number_node_ptr temp385 =
+    auto temp385 =
       -4.16666666666667e-2 * u (t, x - 1, y, z) - 1.25e-2 * u (t, x - 1,
 								 y - 1,
 								 z) +
       7.5e-2 * u (t, x - 1, y + 1, z) - 2.5e-2 * u (t, x - 1, y + 2,
 						      z) +
       4.16666666666667e-3 * u (t, x - 1, y + 3, z);
-    yc_number_node_ptr temp377 =
+    auto temp377 =
       3.33333333333333e-2 * (u (t, x, y, z) - u (t, x, y - 2, z)) +
       4.16666666666667e-3 * (u (t, x, y - 3, z) - u (t, x, y + 1, z));
-    yc_number_node_ptr temp343 =
+    auto temp343 =
       3.33333333333333e-2 * (-u (t, x, y, z) + u (t, x + 2, y, z)) +
       4.16666666666667e-3 * (u (t, x - 1, y, z) - u (t, x + 3, y, z));
-    yc_number_node_ptr temp388 =
+    auto temp388 =
       4.16666666666667e-3 * (u (t, x - 2, y - 3, z) - u (t, x + 2, y - 3,
 							  z)) +
       3.33333333333333e-2 * (-u (t, x - 1,
@@ -958,13 +958,13 @@ TTIStencil (int radius = 2):
 					  x + 1,
 					  y - 3,
 					  z));
-    yc_number_node_ptr temp406 =
+    auto temp406 =
       -1.25e-2 * u (t, x, y, z) - 4.16666666666667e-2 * u (t, x, y + 1,
 							     z) +
       7.5e-2 * u (t, x, y + 2, z) - 2.5e-2 * u (t, x, y + 3,
 						  z) +
       4.16666666666667e-3 * u (t, x, y + 4, z);
-    yc_number_node_ptr temp404 =
+    auto temp404 =
       4.16666666666667e-3 * (u (t, x - 2, y + 1, z) - u (t, x + 2, y + 1,
 							  z)) +
       3.33333333333333e-2 * (-u (t, x - 1,
@@ -973,23 +973,23 @@ TTIStencil (int radius = 2):
 					  x + 1,
 					  y + 1,
 					  z));
-    yc_number_node_ptr temp342 =
+    auto temp342 =
       -4.16666666666667e-2 * u (t, x, y + 1, z) - 1.25e-2 * u (t, x - 1,
 								 y + 1,
 								 z) +
       7.5e-2 * u (t, x + 1, y + 1, z) - 2.5e-2 * u (t, x + 2, y + 1,
 						      z) +
       4.16666666666667e-3 * u (t, x + 3, y + 1, z);
-    yc_number_node_ptr temp410 =
+    auto temp410 =
       -1.25e-2 * u (t, x, y, z) - 4.16666666666667e-2 * u (t, x + 1, y,
 							     z) +
       7.5e-2 * u (t, x + 2, y, z) - 2.5e-2 * u (t, x + 3, y,
 						  z) +
       4.16666666666667e-3 * u (t, x + 4, y, z);
-    yc_number_node_ptr temp367 =
+    auto temp367 =
       4.16666666666667e-3 * (u (t, x, y, z) - u (t, x, y + 4, z)) +
       3.33333333333333e-2 * (-u (t, x, y + 1, z) + u (t, x, y + 3, z));
-    yc_number_node_ptr temp399 =
+    auto temp399 =
       4.16666666666667e-3 * (u (t, x - 2, y - 1, z) - u (t, x + 2, y - 1,
 							  z)) +
       3.33333333333333e-2 * (-u (t, x - 1,
@@ -998,13 +998,13 @@ TTIStencil (int radius = 2):
 					  x + 1,
 					  y - 1,
 					  z));
-    yc_number_node_ptr temp325 =
+    auto temp325 =
       -4.16666666666667e-2 * u (t, x, y, z) - 1.25e-2 * u (t, x - 1, y,
 							     z) +
       7.5e-2 * u (t, x + 1, y, z) - 2.5e-2 * u (t, x + 2, y,
 						  z) +
       4.16666666666667e-3 * u (t, x + 3, y, z);
-    yc_number_node_ptr temp386 =
+    auto temp386 =
       4.16666666666667e-3 * (u (t, x - 3, y - 2, z) - u (t, x - 3, y + 2,
 							  z)) +
       3.33333333333333e-2 * (-u (t, x - 3,
@@ -1013,20 +1013,20 @@ TTIStencil (int radius = 2):
 					  x - 3,
 					  y + 1,
 					  z));
-    yc_number_node_ptr temp396 = -2.5e-2 * u (t, x, y, z) - 1.25e-2 * u (t, x, y - 3,
+    auto temp396 = -2.5e-2 * u (t, x, y, z) - 1.25e-2 * u (t, x, y - 3,
 								  z) -
       4.16666666666667e-2 * u (t, x, y - 2, z) + 7.5e-2 * u (t, x, y - 1,
 							       z) +
       4.16666666666667e-3 * u (t, x, y + 1, z);
-    yc_number_node_ptr temp401 = 7.5e-2 * u (t, x, y, z) - 1.25e-2 * u (t, x, y - 2,
+    auto temp401 = 7.5e-2 * u (t, x, y, z) - 1.25e-2 * u (t, x, y - 2,
 								 z) -
       4.16666666666667e-2 * u (t, x, y - 1, z) - 2.5e-2 * u (t, x, y + 1,
 							       z) +
       4.16666666666667e-3 * u (t, x, y + 2, z);
-    yc_number_node_ptr temp372 =
+    auto temp372 =
       4.16666666666667e-3 * (u (t, x, y, z) - u (t, x + 4, y, z)) +
       3.33333333333333e-2 * (-u (t, x + 1, y, z) + u (t, x + 3, y, z));
-    yc_number_node_ptr temp420 =
+    auto temp420 =
       2.08333333333333e-2 *
       ((temp330 * ti1 (x, y, z) + temp333 * ti3 (x, y, z)) * ti2 (x, y,
 								  z) -
@@ -1038,16 +1038,16 @@ TTIStencil (int radius = 2):
 					   z +
 					   2)
 	+ 4.16666666666667e-3 * u (t, x, y, z + 3)) * ti0 (x, y, z));
-    yc_number_node_ptr temp387 =
+    auto temp387 =
       4.16666666666667e-3 * u (t, x, y, z) - 1.25e-2 * u (t, x - 4, y,
 							    z) -
       4.16666666666667e-2 * u (t, x - 3, y, z) + 7.5e-2 * u (t, x - 2, y,
 							       z) -
       2.5e-2 * u (t, x - 1, y, z);
-    yc_number_node_ptr temp383 =
+    auto temp383 =
       3.33333333333333e-2 * (u (t, x, y, z) - u (t, x - 2, y, z)) +
       4.16666666666667e-3 * (u (t, x - 3, y, z) - u (t, x + 1, y, z));
-    yc_number_node_ptr temp392 =
+    auto temp392 =
       4.16666666666667e-3 * (u (t, x - 2, y - 2, z) - u (t, x - 2, y + 2,
 							  z)) +
       3.33333333333333e-2 * (-u (t, x - 2,
@@ -1056,7 +1056,7 @@ TTIStencil (int radius = 2):
 					  x - 2,
 					  y + 1,
 					  z));
-    yc_number_node_ptr temp284 =
+    auto temp284 =
       (((4.16666666666667e-3 *
 	 (v (t, x - 2, y, z - 2) - v (t, x + 2, y, z - 2)) +
 	 3.33333333333333e-2 * (-v (t, x - 1, y, z - 2) +
@@ -1088,7 +1088,7 @@ TTIStencil (int radius = 2):
 									    +
 									    1))
        * ti2 (x, y, z - 2)) * ti2 (x, y, z - 2);
-    yc_number_node_ptr temp308 =
+    auto temp308 =
       (((4.16666666666667e-3 *
 	 (v (t, x - 2, y - 2, z) - v (t, x + 2, y - 2, z)) +
 	 3.33333333333333e-2 * (-v (t, x - 1, y - 2, z) +
@@ -1109,7 +1109,7 @@ TTIStencil (int radius = 2):
 								     z +
 								     3)) *
        ti2 (x, y - 2, z)) * ti0 (x, y - 2, z) * ti3 (x, y - 2, z);
-    yc_number_node_ptr temp92 =
+    auto temp92 =
       (((4.16666666666667e-3 *
 	 (v (t, x, y - 2, z + 1) - v (t, x, y + 2, z + 1)) +
 	 3.33333333333333e-2 * (-v (t, x, y - 1, z + 1) +
@@ -1132,7 +1132,7 @@ TTIStencil (int radius = 2):
 									   y,
 									   z +
 									   1);
-    yc_number_node_ptr temp185 =
+    auto temp185 =
       (((4.16666666666667e-3 *
 	 (v (t, x - 2, y - 2, z) - v (t, x - 2, y + 2, z)) +
 	 3.33333333333333e-2 * (-v (t, x - 2, y - 1, z) +
@@ -1154,7 +1154,7 @@ TTIStencil (int radius = 2):
 									   y,
 									   z)
       * ti1 (x - 2, y, z);
-    yc_number_node_ptr temp283 =
+    auto temp283 =
       (((4.16666666666667e-3 *
 	 (v (t, x - 2, y, z - 3) - v (t, x + 2, y, z - 3)) +
 	 3.33333333333333e-2 * (-v (t, x - 1, y, z - 3) +
@@ -1187,7 +1187,7 @@ TTIStencil (int radius = 2):
 									      -
 									      3))
       * ti2 (x, y, z - 3);
-    yc_number_node_ptr temp309 =
+    auto temp309 =
       (((4.16666666666667e-3 *
 	 (v (t, x - 2, y - 1, z) - v (t, x + 2, y - 1, z)) +
 	 3.33333333333333e-2 * (-v (t, x - 1, y - 1, z) +
@@ -1208,7 +1208,7 @@ TTIStencil (int radius = 2):
 								     z +
 								     3)) *
        ti2 (x, y - 1, z)) * ti0 (x, y - 1, z) * ti3 (x, y - 1, z);
-    yc_number_node_ptr temp310 =
+    auto temp310 =
       (((4.16666666666667e-3 *
 	 (v (t, x - 2, y + 1, z) - v (t, x + 2, y + 1, z)) +
 	 3.33333333333333e-2 * (-v (t, x - 1, y + 1, z) +
@@ -1238,7 +1238,7 @@ TTIStencil (int radius = 2):
 									y + 1,
 									z) *
       ti3 (x, y + 1, z);
-    yc_number_node_ptr temp307 =
+    auto temp307 =
       (((4.16666666666667e-3 *
 	 (v (t, x - 2, y - 3, z) - v (t, x + 2, y - 3, z)) +
 	 3.33333333333333e-2 * (-v (t, x - 1, y - 3, z) +
@@ -1262,7 +1262,7 @@ TTIStencil (int radius = 2):
 								     z +
 								     3)) *
        ti2 (x, y - 3, z)) * ti0 (x, y - 3, z) * ti3 (x, y - 3, z);
-    yc_number_node_ptr temp298 =
+    auto temp298 =
       (((4.16666666666667e-3 * (v (t, x, y, z) - v (t, x + 4, y, z)) +
 	 3.33333333333333e-2 * (-v (t, x + 1, y, z) +
 				 v (t, x + 3, y, z))) * ti1 (x + 2, y,
@@ -1290,7 +1290,7 @@ TTIStencil (int radius = 2):
 									 y,
 									 z) *
       ti1 (x + 2, y, z);
-    yc_number_node_ptr temp165 =
+    auto temp165 =
       (((4.16666666666667e-3 *
 	 (v (t, x - 3, y - 2, z) - v (t, x - 3, y + 2, z)) +
 	 3.33333333333333e-2 * (-v (t, x - 3, y - 1, z) +
@@ -1316,7 +1316,7 @@ TTIStencil (int radius = 2):
 									   y,
 									   z)
       * ti1 (x - 3, y, z);
-    yc_number_node_ptr temp154 =
+    auto temp154 =
       (((4.16666666666667e-3 *
 	 (v (t, x, y - 2, z - 1) - v (t, x, y + 2, z - 1)) +
 	 3.33333333333333e-2 * (-v (t, x, y - 1, z - 1) +
@@ -1339,7 +1339,7 @@ TTIStencil (int radius = 2):
 									   y,
 									   z -
 									   1);
-    yc_number_node_ptr temp299 =
+    auto temp299 =
       (((3.33333333333333e-2 * (v (t, x, y, z) - v (t, x - 2, y, z)) +
 	 4.16666666666667e-3 * (v (t, x - 3, y, z) -
 				 v (t, x + 1, y, z))) * ti1 (x - 1, y,
@@ -1367,7 +1367,7 @@ TTIStencil (int radius = 2):
 									 y,
 									 z) *
       ti1 (x - 1, y, z);
-    yc_number_node_ptr temp289 =
+    auto temp289 =
       (((3.33333333333333e-2 * (-v (t, x, y, z) + v (t, x + 2, y, z)) +
 	 4.16666666666667e-3 * (v (t, x - 1, y, z) -
 				 v (t, x + 3, y, z))) * ti1 (x + 1, y,
@@ -1395,7 +1395,7 @@ TTIStencil (int radius = 2):
 									 y,
 									 z) *
       ti1 (x + 1, y, z);
-    yc_number_node_ptr temp116 =
+    auto temp116 =
       (((4.16666666666667e-3 *
 	 (v (t, x, y - 2, z - 2) - v (t, x, y + 2, z - 2)) +
 	 3.33333333333333e-2 * (-v (t, x, y - 1, z - 2) +
@@ -1418,7 +1418,7 @@ TTIStencil (int radius = 2):
 									   y,
 									   z -
 									   2);
-    yc_number_node_ptr temp56 =
+    auto temp56 =
       (((4.16666666666667e-3 * (v (t, x, y - 2, z) - v (t, x, y + 2, z)) +
 	 3.33333333333333e-2 * (-v (t, x, y - 1, z) +
 				 v (t, x, y + 1, z))) * ti3 (x, y,
@@ -1438,7 +1438,7 @@ TTIStencil (int radius = 2):
 							      z)) * ti0 (x, y,
 									 z) *
       ti1 (x, y, z);
-    yc_number_node_ptr temp204 =
+    auto temp204 =
       (((4.16666666666667e-3 *
 	 (v (t, x - 1, y - 2, z) - v (t, x - 1, y + 2, z)) +
 	 3.33333333333333e-2 * (-v (t, x - 1, y - 1, z) +
@@ -1460,7 +1460,7 @@ TTIStencil (int radius = 2):
 									   y,
 									   z)
       * ti1 (x - 1, y, z);
-    yc_number_node_ptr temp288 =
+    auto temp288 =
       (((4.16666666666667e-3 *
 	 (v (t, x - 2, y, z + 1) - v (t, x + 2, y, z + 1)) +
 	 3.33333333333333e-2 * (-v (t, x - 1, y, z + 1) +
@@ -1492,9 +1492,9 @@ TTIStencil (int radius = 2):
 									    +
 									    4))
        * ti2 (x, y, z + 1)) * ti2 (x, y, z + 1);
-    yc_number_node_ptr temp10 =
+    auto temp10 =
       8.85879567828298e-1 * damp (x, y, z) - 2.0 * m (x, y, z);
-    yc_number_node_ptr temp133 =
+    auto temp133 =
       (((4.16666666666667e-3 *
 	 (v (t, x, y - 2, z + 2) - v (t, x, y + 2, z + 2)) +
 	 3.33333333333333e-2 * (-v (t, x, y - 1, z + 2) +
@@ -1517,7 +1517,7 @@ TTIStencil (int radius = 2):
 									   y,
 									   z +
 									   2);
-    yc_number_node_ptr temp286 =
+    auto temp286 =
       (((4.16666666666667e-3 *
 	 (v (t, x - 2, y, z - 1) - v (t, x + 2, y, z - 1)) +
 	 3.33333333333333e-2 * (-v (t, x - 1, y, z - 1) +
@@ -1549,7 +1549,7 @@ TTIStencil (int radius = 2):
 									    +
 									    2))
        * ti2 (x, y, z - 1)) * ti2 (x, y, z - 1);
-    yc_number_node_ptr temp252 =
+    auto temp252 =
       (((4.16666666666667e-3 * (-v (t, x, y, z) + v (t, x, y - 4, z)) +
 	 3.33333333333333e-2 * (-v (t, x, y - 3, z) +
 				 v (t, x, y - 1, z))) * ti3 (x, y - 2,
@@ -1576,7 +1576,7 @@ TTIStencil (int radius = 2):
 									   2,
 									   z) *
       ti3 (x, y - 2, z);
-    yc_number_node_ptr temp487 = temp420 * ti2 (x, y, z) * ti3 (x, y,
+    auto temp487 = temp420 * ti2 (x, y, z) * ti3 (x, y,
 						       z) +
       2.08333333333333e-2 *
       ((-temp318 * ti1 (x, y, z) + temp325 * ti3 (x, y, z)) * ti3 (x, y,
@@ -2274,7 +2274,7 @@ TTIStencil (int radius = 2):
 									    z +
 									    1))
 			       * ti0 (x, y, z + 1));
-    yc_number_node_ptr temp290 =
+    auto temp290 =
       (((4.16666666666667e-3 * (-v (t, x, y, z) + v (t, x - 4, y, z)) +
 	 3.33333333333333e-2 * (-v (t, x - 3, y, z) +
 				 v (t, x - 1, y, z))) * ti1 (x - 2, y,
@@ -2302,7 +2302,7 @@ TTIStencil (int radius = 2):
 									 y,
 									 z) *
       ti1 (x - 2, y, z);
-    yc_number_node_ptr temp275 =
+    auto temp275 =
       (((3.33333333333333e-2 * (v (t, x, y, z) - v (t, x, y - 2, z)) +
 	 4.16666666666667e-3 * (v (t, x, y - 3, z) -
 				 v (t, x, y + 1, z))) * ti3 (x, y - 1,
@@ -2329,7 +2329,7 @@ TTIStencil (int radius = 2):
 									   1,
 									   z) *
       ti3 (x, y - 1, z);
-    yc_number_node_ptr temp237 =
+    auto temp237 =
       (((3.33333333333333e-2 * (-v (t, x, y, z) + v (t, x, y + 2, z)) +
 	 4.16666666666667e-3 * (v (t, x, y - 1, z) -
 				 v (t, x, y + 3, z))) * ti3 (x, y + 1,
@@ -2356,7 +2356,7 @@ TTIStencil (int radius = 2):
 									   1,
 									   z) *
       ti3 (x, y + 1, z);
-    yc_number_node_ptr temp262 =
+    auto temp262 =
       (((4.16666666666667e-3 * (v (t, x, y, z) - v (t, x, y + 4, z)) +
 	 3.33333333333333e-2 * (-v (t, x, y + 1, z) +
 				 v (t, x, y + 3, z))) * ti3 (x, y + 2,
@@ -2383,7 +2383,7 @@ TTIStencil (int radius = 2):
 									   2,
 									   z) *
       ti3 (x, y + 2, z);
-    yc_number_node_ptr temp68 =
+    auto temp68 =
       ((4.16666666666667e-3 * (v (t, x - 2, y, z) - v (t, x + 2, y, z)) +
 	3.33333333333333e-2 * (-v (t, x - 1, y, z) +
 				v (t, x + 1, y, z))) * ti1 (x, y,
@@ -2405,9 +2405,9 @@ TTIStencil (int radius = 2):
 									    +
 									    2)
 	 + 4.16666666666667e-3 * v (t, x, y, z + 3)) * ti2 (x, y, z);
-    yc_number_node_ptr temp6 =
+    auto temp6 =
       1.0 / (8.85879567828298e-1 * damp (x, y, z) + 2.0 * m (x, y, z));
-    yc_number_node_ptr temp225 =
+    auto temp225 =
       (((4.16666666666667e-3 *
 	 (v (t, x + 1, y - 2, z) - v (t, x + 1, y + 2, z)) +
 	 3.33333333333333e-2 * (-v (t, x + 1, y - 1, z) +

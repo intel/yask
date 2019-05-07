@@ -109,12 +109,12 @@ sub convert($) {
       s/\blast_index\b/last_domain_index/g;
 
       # Grid creation.
-      s/MAKE_GRID\s*[(]([^,]+),\s*([^)]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_solution(), { $2 })/g;
-      s/MAKE_ARRAY\s*[(]([^,]+),\s*([^)]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_solution(), { $2 })/g;
-      s/MAKE_SCALAR\s*[(]([^,]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_solution(), { })/g;
-      s/MAKE_SCRATCH_GRID\s*[(]([^,]+),\s*([^)]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_solution(), { $2 }, true)/g;
-      s/MAKE_SCRATCH_ARRAY\s*[(]([^,]+),\s*([^)]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_solution(), { $2 }, true)/g;
-      s/MAKE_SCRATCH_SCALAR\s*[(]([^,]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_solution(), { }, true)/g;
+      s/MAKE_GRID\s*[(]([^,]+),\s*([^)]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_soln(), { $2 })/g;
+      s/MAKE_ARRAY\s*[(]([^,]+),\s*([^)]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_soln(), { $2 })/g;
+      s/MAKE_SCALAR\s*[(]([^,]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_soln(), { })/g;
+      s/MAKE_SCRATCH_GRID\s*[(]([^,]+),\s*([^)]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_soln(), { $2 }, true)/g;
+      s/MAKE_SCRATCH_ARRAY\s*[(]([^,]+),\s*([^)]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_soln(), { $2 }, true)/g;
+      s/MAKE_SCRATCH_SCALAR\s*[(]([^,]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_soln(), { }, true)/g;
 
       # Typenames.
       s/\bStencilBase\b/yc_solution_base/g;

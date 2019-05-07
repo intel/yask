@@ -96,15 +96,15 @@ namespace yask {
 #define MAKE_DOMAIN_INDEX(d) yc_index_node_ptr d = new_domain_index(#d)
 #define MAKE_MISC_INDEX(d)   yc_index_node_ptr d = new_misc_index(#d)
 
-// Convenience macros for creating grids in a class implementing get_solution().
+// Convenience macros for creating grids in a class implementing get_soln().
 // The 'gvar' arg is the var name and the grid name.
 // The remaining args are the dimension names.
 #define MAKE_GRID(gvar, ...)                                            \
-    yc_grid_var gvar = yc_grid_var(#gvar, get_solution(), { __VA_ARGS__ }, false)
+    yc_grid_var gvar = yc_grid_var(#gvar, get_soln(), { __VA_ARGS__ }, false)
 #define MAKE_SCALAR(gvar)    MAKE_GRID(gvar)
 #define MAKE_ARRAY(gvar, d1) MAKE_GRID(gvar, d1)
 #define MAKE_SCRATCH_GRID(gvar, ...)                                    \
-    yc_grid_var gvar = yc_grid_var(#gvar, get_solution(), { __VA_ARGS__ }, true)
+    yc_grid_var gvar = yc_grid_var(#gvar, get_soln(), { __VA_ARGS__ }, true)
 #define MAKE_SCRATCH_SCALAR(gvar)    MAKE_SCRATCH_GRID(gvar)
 #define MAKE_SCRATCH_ARRAY(gvar, d1) MAKE_SCRATCH_GRID(gvar, d1)
 

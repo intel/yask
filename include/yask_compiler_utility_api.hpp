@@ -84,7 +84,7 @@ namespace yask {
             explicitly.
         */
         yc_solution_base(yc_solution_base& base) {
-            _soln = base.get_solution();
+            _soln = base.get_soln();
         }
 
         /// Destructor.
@@ -107,7 +107,7 @@ namespace yask {
          */
         virtual void define() {
             yask_exception e("Error: no stencil equations are defined in solution '" +
-                             get_solution()->get_name() +
+                             get_soln()->get_name() +
                              "'. Implement the 'define()' method in the class "
                              "derived from 'yc_solution_base'");
             throw e;
@@ -115,7 +115,7 @@ namespace yask {
 
         /// Access the underlying solution.
         virtual yc_solution_ptr
-        get_solution() {
+        get_soln() {
             return _soln;
         }
 
@@ -154,21 +154,9 @@ namespace yask {
         last_domain_index(yc_index_node_ptr dim) {
             return _node_factory.new_last_domain_index(dim);
         }
-
-        /// This solution does _not_ use the "radius" sizing feature.
-        virtual bool
-        uses_radius() const { return false; }
-
-        /// Dummy function for setting radius.
-        virtual bool
-        set_radius(int radius) { return false; }
-
-        /// Dummy function for accessing radius.
-        virtual int
-        get_radius() const { return 0; }
     };
 
-    /// A base class for stencils that have a 'radius'.
+    /// A base class for stencils that have a 'radius' size parameter.
     class yc_solution_with_radius_base : public yc_solution_base {
     protected:
 
@@ -196,29 +184,25 @@ namespace yask {
         virtual void
         define() override {
             yask_exception e("Error: no stencil equations are defined in solution '" +
-                             get_solution()->get_name() +
+                             get_soln()->get_name() +
                              "'. Implement the 'define()' method in the class "
                              "derived from 'yc_solution_with_radius_base'");
             throw e;
         }
 
-        /// This object does use radius.
-        virtual bool
-        uses_radius() const override { return true; }
-
         /// Set radius.
         /** @returns `true` if successful. */
         virtual bool
-        set_radius(int radius) override {
+        set_radius(int radius) {
             _radius = radius;
-            auto soln = get_solution();
+            auto soln = get_soln();
             soln->set_description(soln->get_name() + " radius " + std::to_string(radius));
             return radius >= 0;  // support only non-neg. radius.
         }
 
         /// Get radius.
         virtual int
-        get_radius() const override { return _radius; }
+        get_radius() const { return _radius; }
     };
 
     /** @}*/

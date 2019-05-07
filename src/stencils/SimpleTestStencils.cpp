@@ -179,7 +179,7 @@ class Test1dStencil : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x }); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x }); // time-varying grid.
 
 public:
 
@@ -205,7 +205,7 @@ class Test2dStencil : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, y }); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, y }); // time-varying grid.
 
 public:
 
@@ -231,7 +231,7 @@ class Test3dStencil : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, y, z }); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, y, z }); // time-varying grid.
 
 public:
 
@@ -257,7 +257,7 @@ class Test4dStencil : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_solution(), { t, w, x, y, z }); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_soln(), { t, w, x, y, z }); // time-varying grid.
 
 public:
 
@@ -283,15 +283,15 @@ class TestPartialStencil3 : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, y, z }); // time-varying grid.
-    yc_grid_var B = yc_grid_var("B", get_solution(), { x });
-    yc_grid_var C = yc_grid_var("C", get_solution(), { y });
-    yc_grid_var D = yc_grid_var("D", get_solution(), { z });
-    yc_grid_var E = yc_grid_var("E", get_solution(), { x, y });
-    yc_grid_var F = yc_grid_var("F", get_solution(), { y, z });
-    yc_grid_var G = yc_grid_var("G", get_solution(), { z, y });
-    yc_grid_var H = yc_grid_var("H", get_solution(), { y, z, x });      // different order.
-    yc_grid_var I = yc_grid_var("I", get_solution(), { });
+    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, y, z }); // time-varying grid.
+    yc_grid_var B = yc_grid_var("B", get_soln(), { x });
+    yc_grid_var C = yc_grid_var("C", get_soln(), { y });
+    yc_grid_var D = yc_grid_var("D", get_soln(), { z });
+    yc_grid_var E = yc_grid_var("E", get_soln(), { x, y });
+    yc_grid_var F = yc_grid_var("F", get_soln(), { y, z });
+    yc_grid_var G = yc_grid_var("G", get_soln(), { z, y });
+    yc_grid_var H = yc_grid_var("H", get_soln(), { y, z, x });      // different order.
+    yc_grid_var I = yc_grid_var("I", get_soln(), { });
 
 public:
 
@@ -334,7 +334,7 @@ protected:
     
     // Time-varying grid. Intermix last domain dim with misc dims to make
     // sure compiler creates correct layout.
-    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, a, y, b, c }); 
+    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, a, y, b, c }); 
 
 public:
 
@@ -382,7 +382,7 @@ protected:
     yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, y, z }); // time-varying 3D grid.
+    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, y, z }); // time-varying 3D grid.
 
 public:
 
@@ -417,7 +417,7 @@ class TestReverseStencil : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, y });
+    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, y });
 
 public:
 
@@ -445,8 +445,8 @@ class TestDepStencil1 : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x }); // time-varying grid.
-    yc_grid_var B = yc_grid_var("B", get_solution(), { t, x }); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x }); // time-varying grid.
+    yc_grid_var B = yc_grid_var("B", get_soln(), { t, x }); // time-varying grid.
 
 public:
 
@@ -474,8 +474,8 @@ class TestDepStencil2 : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, y }); // time-varying grid.
-    yc_grid_var B = yc_grid_var("B", get_solution(), { t, x, y }); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, y }); // time-varying grid.
+    yc_grid_var B = yc_grid_var("B", get_soln(), { t, x, y }); // time-varying grid.
 
 public:
 
@@ -503,8 +503,8 @@ class TestDepStencil3 : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, y, z }); // time-varying grid.
-    yc_grid_var B = yc_grid_var("B", get_solution(), { t, x, y, z }); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, y, z }); // time-varying grid.
+    yc_grid_var B = yc_grid_var("B", get_soln(), { t, x, y, z }); // time-varying grid.
 
 public:
 
@@ -536,10 +536,10 @@ class TestScratchStencil1 : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x }); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x }); // time-varying grid.
 
     // Temporary storage.
-    yc_grid_var B = yc_grid_var("B", get_solution(), { x }, true);
+    yc_grid_var B = yc_grid_var("B", get_soln(), { x }, true);
 
 public:
 
@@ -567,12 +567,12 @@ class TestScratchStencil3 : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, y, z }); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, y, z }); // time-varying grid.
 
     // Temporary storage.
-    yc_grid_var t1 = yc_grid_var("t1", get_solution(), { x, y, z }, true);
-    yc_grid_var t2 = yc_grid_var("t2", get_solution(), { x, y, z }, true);
-    yc_grid_var t3 = yc_grid_var("t3", get_solution(), { x, y, z }, true);
+    yc_grid_var t1 = yc_grid_var("t1", get_soln(), { x, y, z }, true);
+    yc_grid_var t2 = yc_grid_var("t2", get_soln(), { x, y, z }, true);
+    yc_grid_var t3 = yc_grid_var("t3", get_soln(), { x, y, z }, true);
 
 public:
 
@@ -607,7 +607,7 @@ class TestBoundaryStencil1 : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x }); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x }); // time-varying grid.
 
 public:
 
@@ -618,10 +618,10 @@ public:
     virtual void define() {
 
         // Define interior sub-domain.
-        yc_bool_node_ptr sd0 = (x >= first_domain_index(x) + 5) && (x <= last_domain_index(x) - 3);
+        auto sd0 = (x >= first_domain_index(x) + 5) && (x <= last_domain_index(x) - 3);
         
         // Define interior points.
-        yc_number_node_ptr u = def_1d(A, t, x, 0, 1);
+        auto u = def_1d(A, t, x, 0, 1);
         A(t+1, x) EQUALS u IF_DOMAIN sd0;
 
         // Define exterior points.
@@ -639,7 +639,7 @@ class TestBoundaryStencil2 : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, y }); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, y }); // time-varying grid.
 
 public:
 
@@ -650,7 +650,7 @@ public:
     virtual void define() {
 
         // Sub-domain is rectangle interior.
-        yc_bool_node_ptr sd0 =
+        auto sd0 =
             (x >= first_domain_index(x) + 5) && (x <= last_domain_index(x) - 3) &&
             (y >= first_domain_index(y) + 4) && (y <= last_domain_index(y) - 6);
         
@@ -670,7 +670,7 @@ class TestBoundaryStencil3 : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, y, z }); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, y, z }); // time-varying grid.
 
 public:
 
@@ -681,7 +681,7 @@ public:
     virtual void define() {
 
         // Sub-domain is rectangle interior.
-        yc_bool_node_ptr sd0 =
+        auto sd0 =
             (x >= first_domain_index(x) + 5) && (x <= last_domain_index(x) - 3) &&
             (y >= first_domain_index(y) + 4) && (y <= last_domain_index(y) - 6) &&
             (z >= first_domain_index(z) + 6) && (z <= last_domain_index(z) - 4);
@@ -706,8 +706,8 @@ protected:
     yc_index_node_ptr b = new_misc_index("b");
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x }); // time-varying grid.
-    yc_grid_var B = yc_grid_var("B", get_solution(), { b });
+    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x }); // time-varying grid.
+    yc_grid_var B = yc_grid_var("B", get_soln(), { b });
 
 public:
 
@@ -718,10 +718,10 @@ public:
     virtual void define() {
 
         // Time condition.
-        yc_bool_node_ptr tc0 = (t % 2 == 0);
+        auto tc0 = (t % 2 == 0);
 
         // Var condition.
-        yc_bool_node_ptr vc0 = (B(0) > B(1));
+        auto vc0 = (B(0) > B(1));
         
         // Set A w/different stencils depending on the conditions.  It is
         // the programmer's responsibility to ensure that the conditions are
@@ -750,10 +750,10 @@ class TestScratchBoundaryStencil1 : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x }); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x }); // time-varying grid.
 
     // Temporary storage.
-    yc_grid_var B = yc_grid_var("B", get_solution(), { x }, true);
+    yc_grid_var B = yc_grid_var("B", get_soln(), { x }, true);
 
 public:
 
@@ -767,7 +767,7 @@ public:
         B(x) EQUALS def_1d(A, t, x, 1, 0);
 
         // Define sub-domain.
-        yc_bool_node_ptr sd0 = (x >= first_domain_index(x) + 5) && (x <= last_domain_index(x) - 3);
+        auto sd0 = (x >= first_domain_index(x) + 5) && (x <= last_domain_index(x) - 3);
         
         // Define next values for 'A' from scratch var values.
         auto v = def_no_t_1d(B, x-6, 2, 3) - def_no_t_1d(B, x+7, 0, 2);
@@ -787,9 +787,9 @@ class TestFuncStencil1 : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x });
-    yc_grid_var B = yc_grid_var("B", get_solution(), { t, x });
-    yc_grid_var C = yc_grid_var("C", get_solution(), { t, x });
+    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x });
+    yc_grid_var B = yc_grid_var("B", get_soln(), { t, x });
+    yc_grid_var C = yc_grid_var("C", get_soln(), { t, x });
 
 public:
 
@@ -814,7 +814,7 @@ class TestEmptyStencil2 : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, y }); // time-varying grid.
+    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, y }); // time-varying grid.
 
 public:
 

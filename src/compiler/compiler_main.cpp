@@ -98,9 +98,12 @@ void usage(const string& cmd) {
         for (auto si : stencils) {
             auto name = si.first;
             if ((name.rfind("test_", 0) == 0) == show_test) {
-                auto sp = si.second;
+                auto* sp = si.second;
                 cout << "           " << name;
-                if (sp->uses_radius())
+
+                // Add asterisk for solns with a radius.
+                auto* srp = dynamic_cast<yc_solution_with_radius_base*>(sp);
+                if (srp)
                     cout << " *";
                 cout << endl;
             }
@@ -385,19 +388,22 @@ void parseOpts(int argc, const char* argv[])
     }
     stencilSoln = stencilIter->second;
     assert(stencilSoln);
-    auto soln = stencilSoln->get_solution();
+    auto soln = stencilSoln->get_soln();
 
     cout << "Stencil-solution name: " << soln->get_name() << endl;
-    if (stencilSoln->uses_radius()) {
+
+    // Set radius if applicable.
+    auto* srp = dynamic_cast<yc_solution_with_radius_base*>(stencilSoln);
+    if (srp) {
         if (radius >= 0) {
-            bool rOk = stencilSoln->set_radius(radius);
+            bool rOk = srp->set_radius(radius);
             if (!rOk) {
                 cerr << "Error: invalid radius=" << radius << " for stencil type '" <<
                     solutionName << "'." << endl;
                 usage(argv[0]);
             }
         }
-        cout << "Stencil radius: " << stencilSoln->get_radius() << endl;
+        cout << "Stencil radius: " << srp->get_radius() << endl;
     }
     cout << "Stencil-solution description: " << soln->get_description() << endl;
 
@@ -439,7 +445,7 @@ int main(int argc, const char* argv[]) {
                 os = ofac.new_stdout_output();
             else
                 os = ofac.new_file_output(fname);
-            stencilSoln->get_solution()->format(type, os);
+            stencilSoln->get_soln()->format(type, os);
         }
     } catch (yask_exception& e) {
         cerr << "YASK Stencil Compiler: " << e.get_message() << ".\n";

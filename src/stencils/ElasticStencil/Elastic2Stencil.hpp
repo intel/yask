@@ -73,7 +73,7 @@ protected:
     yc_index_node_ptr cidx = new_misc_index("cidx");
 
     // 3D-spatial coefficients.
-    yc_grid_var coef = yc_grid_var("coef", get_solution(), { x, y, z, cidx });
+    yc_grid_var coef = yc_grid_var("coef", get_soln(), { x, y, z, cidx });
     enum CIDX { C_MU, C_LAMBDA, C_LAMBDA_MU2, C_RHO };
 
     // Spatial FD coefficients.

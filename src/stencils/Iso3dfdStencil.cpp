@@ -44,9 +44,9 @@ protected:
 
     // Grid vars.
     yc_grid_var pressure =
-        yc_grid_var("pressure", get_solution(), { t, x, y, z }); // time-varying 3D pressure grid.
+        yc_grid_var("pressure", get_soln(), { t, x, y, z }); // time-varying 3D pressure grid.
     yc_grid_var vel =
-        yc_grid_var("vel", get_solution(), { x, y, z }); // constant 3D vel grid (c(x,y,z)^2 * delta_t^2).
+        yc_grid_var("vel", get_soln(), { x, y, z }); // constant 3D vel grid (c(x,y,z)^2 * delta_t^2).
 
 public:
 
@@ -83,7 +83,7 @@ public:
 
         // Calculate FDx + FDy + FDz.
         // Start with center value multiplied by coeff 0.
-        yc_number_node_ptr fd_sum = pressure(t, x, y, z) * coeff[c0i];
+        auto fd_sum = pressure(t, x, y, z) * coeff[c0i];
 
         // Add values from x, y, and z axes multiplied by the
         // coeff for the given radius.
@@ -127,7 +127,7 @@ public:
         // p(t+1) = 2 * p(t) - p(t-1) + c^2 * fd_sum * delta_t^2.
 
         // Let vel = c^2 * delta_t^2 for each grid point.
-        yc_number_node_ptr next_p = (2.0 * pressure(t, x, y, z)) -
+        auto next_p = (2.0 * pressure(t, x, y, z)) -
             pressure(t-1, x, y, z) + (fd_sum * vel(x, y, z));
 
         return next_p;
@@ -137,7 +137,7 @@ public:
     virtual void define() {
 
         // Get equation for RHS.
-        yc_number_node_ptr next_p = get_next_p();
+        auto next_p = get_next_p();
 
         // Define the value at t+1 to be equal to next_p.
         // Since this implements the finite-difference method, this
@@ -159,9 +159,9 @@ protected:
     // In practice, the interior values would be set to 1.0,
     // and values nearer the boundary would be set to values
     // increasingly approaching 0.0.
-    yc_grid_var cr_x = yc_grid_var("cr_x", get_solution(), { x });
-    yc_grid_var cr_y = yc_grid_var("cr_y", get_solution(), { y });
-    yc_grid_var cr_z = yc_grid_var("cr_z", get_solution(), { z });
+    yc_grid_var cr_x = yc_grid_var("cr_x", get_soln(), { x });
+    yc_grid_var cr_y = yc_grid_var("cr_y", get_soln(), { y });
+    yc_grid_var cr_z = yc_grid_var("cr_z", get_soln(), { z });
 
 public:
     Iso3dfdSpongeStencil(int radius=8) :
@@ -172,7 +172,7 @@ public:
     virtual void define() {
 
         // Get equation for RHS.
-        yc_number_node_ptr next_p = get_next_p();
+        auto next_p = get_next_p();
 
         // Apply sponge absorption.
         next_p *= cr_x(x) * cr_y(y) * cr_z(z);

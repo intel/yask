@@ -50,66 +50,66 @@ namespace fsg {
 
     protected:
 
-        yc_grid_var v_bl_u = yc_grid_var("v_bl_u", get_solution(), { t, x, y, z });
-        yc_grid_var v_bl_v = yc_grid_var("v_bl_v", get_solution(), { t, x, y, z });
-        yc_grid_var v_bl_w = yc_grid_var("v_bl_w", get_solution(), { t, x, y, z });
-        yc_grid_var v_br_u = yc_grid_var("v_br_u", get_solution(), { t, x, y, z });
-        yc_grid_var v_br_v = yc_grid_var("v_br_v", get_solution(), { t, x, y, z });
-        yc_grid_var v_br_w = yc_grid_var("v_br_w", get_solution(), { t, x, y, z });
-        yc_grid_var v_tl_u = yc_grid_var("v_tl_u", get_solution(), { t, x, y, z });
-        yc_grid_var v_tl_v = yc_grid_var("v_tl_v", get_solution(), { t, x, y, z });
-        yc_grid_var v_tl_w = yc_grid_var("v_tl_w", get_solution(), { t, x, y, z });
-        yc_grid_var v_tr_u = yc_grid_var("v_tr_u", get_solution(), { t, x, y, z });
-        yc_grid_var v_tr_v = yc_grid_var("v_tr_v", get_solution(), { t, x, y, z });
-        yc_grid_var v_tr_w = yc_grid_var("v_tr_w", get_solution(), { t, x, y, z });
+        yc_grid_var v_bl_u = yc_grid_var("v_bl_u", get_soln(), { t, x, y, z });
+        yc_grid_var v_bl_v = yc_grid_var("v_bl_v", get_soln(), { t, x, y, z });
+        yc_grid_var v_bl_w = yc_grid_var("v_bl_w", get_soln(), { t, x, y, z });
+        yc_grid_var v_br_u = yc_grid_var("v_br_u", get_soln(), { t, x, y, z });
+        yc_grid_var v_br_v = yc_grid_var("v_br_v", get_soln(), { t, x, y, z });
+        yc_grid_var v_br_w = yc_grid_var("v_br_w", get_soln(), { t, x, y, z });
+        yc_grid_var v_tl_u = yc_grid_var("v_tl_u", get_soln(), { t, x, y, z });
+        yc_grid_var v_tl_v = yc_grid_var("v_tl_v", get_soln(), { t, x, y, z });
+        yc_grid_var v_tl_w = yc_grid_var("v_tl_w", get_soln(), { t, x, y, z });
+        yc_grid_var v_tr_u = yc_grid_var("v_tr_u", get_soln(), { t, x, y, z });
+        yc_grid_var v_tr_v = yc_grid_var("v_tr_v", get_soln(), { t, x, y, z });
+        yc_grid_var v_tr_w = yc_grid_var("v_tr_w", get_soln(), { t, x, y, z });
 
-        yc_grid_var s_bl_xx = yc_grid_var("s_bl_xx", get_solution(), { t, x, y, z });
-        yc_grid_var s_bl_yy = yc_grid_var("s_bl_yy", get_solution(), { t, x, y, z });
-        yc_grid_var s_bl_zz = yc_grid_var("s_bl_zz", get_solution(), { t, x, y, z });
-        yc_grid_var s_bl_yz = yc_grid_var("s_bl_yz", get_solution(), { t, x, y, z });
-        yc_grid_var s_bl_xz = yc_grid_var("s_bl_xz", get_solution(), { t, x, y, z });
-        yc_grid_var s_bl_xy = yc_grid_var("s_bl_xy", get_solution(), { t, x, y, z });
-        yc_grid_var s_br_xx = yc_grid_var("s_br_xx", get_solution(), { t, x, y, z });
-        yc_grid_var s_br_yy = yc_grid_var("s_br_yy", get_solution(), { t, x, y, z });
-        yc_grid_var s_br_zz = yc_grid_var("s_br_zz", get_solution(), { t, x, y, z });
-        yc_grid_var s_br_yz = yc_grid_var("s_br_yz", get_solution(), { t, x, y, z });
-        yc_grid_var s_br_xz = yc_grid_var("s_br_xz", get_solution(), { t, x, y, z });
-        yc_grid_var s_br_xy = yc_grid_var("s_br_xy", get_solution(), { t, x, y, z });
-        yc_grid_var s_tl_xx = yc_grid_var("s_tl_xx", get_solution(), { t, x, y, z });
-        yc_grid_var s_tl_yy = yc_grid_var("s_tl_yy", get_solution(), { t, x, y, z });
-        yc_grid_var s_tl_zz = yc_grid_var("s_tl_zz", get_solution(), { t, x, y, z });
-        yc_grid_var s_tl_yz = yc_grid_var("s_tl_yz", get_solution(), { t, x, y, z });
-        yc_grid_var s_tl_xz = yc_grid_var("s_tl_xz", get_solution(), { t, x, y, z });
-        yc_grid_var s_tl_xy = yc_grid_var("s_tl_xy", get_solution(), { t, x, y, z });
-        yc_grid_var s_tr_xx = yc_grid_var("s_tr_xx", get_solution(), { t, x, y, z });
-        yc_grid_var s_tr_yy = yc_grid_var("s_tr_yy", get_solution(), { t, x, y, z });
-        yc_grid_var s_tr_zz = yc_grid_var("s_tr_zz", get_solution(), { t, x, y, z });
-        yc_grid_var s_tr_yz = yc_grid_var("s_tr_yz", get_solution(), { t, x, y, z });
-        yc_grid_var s_tr_xz = yc_grid_var("s_tr_xz", get_solution(), { t, x, y, z });
-        yc_grid_var s_tr_xy = yc_grid_var("s_tr_xy", get_solution(), { t, x, y, z });
+        yc_grid_var s_bl_xx = yc_grid_var("s_bl_xx", get_soln(), { t, x, y, z });
+        yc_grid_var s_bl_yy = yc_grid_var("s_bl_yy", get_soln(), { t, x, y, z });
+        yc_grid_var s_bl_zz = yc_grid_var("s_bl_zz", get_soln(), { t, x, y, z });
+        yc_grid_var s_bl_yz = yc_grid_var("s_bl_yz", get_soln(), { t, x, y, z });
+        yc_grid_var s_bl_xz = yc_grid_var("s_bl_xz", get_soln(), { t, x, y, z });
+        yc_grid_var s_bl_xy = yc_grid_var("s_bl_xy", get_soln(), { t, x, y, z });
+        yc_grid_var s_br_xx = yc_grid_var("s_br_xx", get_soln(), { t, x, y, z });
+        yc_grid_var s_br_yy = yc_grid_var("s_br_yy", get_soln(), { t, x, y, z });
+        yc_grid_var s_br_zz = yc_grid_var("s_br_zz", get_soln(), { t, x, y, z });
+        yc_grid_var s_br_yz = yc_grid_var("s_br_yz", get_soln(), { t, x, y, z });
+        yc_grid_var s_br_xz = yc_grid_var("s_br_xz", get_soln(), { t, x, y, z });
+        yc_grid_var s_br_xy = yc_grid_var("s_br_xy", get_soln(), { t, x, y, z });
+        yc_grid_var s_tl_xx = yc_grid_var("s_tl_xx", get_soln(), { t, x, y, z });
+        yc_grid_var s_tl_yy = yc_grid_var("s_tl_yy", get_soln(), { t, x, y, z });
+        yc_grid_var s_tl_zz = yc_grid_var("s_tl_zz", get_soln(), { t, x, y, z });
+        yc_grid_var s_tl_yz = yc_grid_var("s_tl_yz", get_soln(), { t, x, y, z });
+        yc_grid_var s_tl_xz = yc_grid_var("s_tl_xz", get_soln(), { t, x, y, z });
+        yc_grid_var s_tl_xy = yc_grid_var("s_tl_xy", get_soln(), { t, x, y, z });
+        yc_grid_var s_tr_xx = yc_grid_var("s_tr_xx", get_soln(), { t, x, y, z });
+        yc_grid_var s_tr_yy = yc_grid_var("s_tr_yy", get_soln(), { t, x, y, z });
+        yc_grid_var s_tr_zz = yc_grid_var("s_tr_zz", get_soln(), { t, x, y, z });
+        yc_grid_var s_tr_yz = yc_grid_var("s_tr_yz", get_soln(), { t, x, y, z });
+        yc_grid_var s_tr_xz = yc_grid_var("s_tr_xz", get_soln(), { t, x, y, z });
+        yc_grid_var s_tr_xy = yc_grid_var("s_tr_xy", get_soln(), { t, x, y, z });
 
         // 3D-spatial coefficients.
-        yc_grid_var c11 = yc_grid_var("c11", get_solution(), { x, y, z });
-        yc_grid_var c12 = yc_grid_var("c12", get_solution(), { x, y, z });
-        yc_grid_var c13 = yc_grid_var("c13", get_solution(), { x, y, z });
-        yc_grid_var c14 = yc_grid_var("c14", get_solution(), { x, y, z });
-        yc_grid_var c15 = yc_grid_var("c15", get_solution(), { x, y, z });
-        yc_grid_var c16 = yc_grid_var("c16", get_solution(), { x, y, z });
-        yc_grid_var c22 = yc_grid_var("c22", get_solution(), { x, y, z });
-        yc_grid_var c23 = yc_grid_var("c23", get_solution(), { x, y, z });
-        yc_grid_var c24 = yc_grid_var("c24", get_solution(), { x, y, z });
-        yc_grid_var c25 = yc_grid_var("c25", get_solution(), { x, y, z });
-        yc_grid_var c26 = yc_grid_var("c26", get_solution(), { x, y, z });
-        yc_grid_var c33 = yc_grid_var("c33", get_solution(), { x, y, z });
-        yc_grid_var c34 = yc_grid_var("c34", get_solution(), { x, y, z });
-        yc_grid_var c35 = yc_grid_var("c35", get_solution(), { x, y, z });
-        yc_grid_var c36 = yc_grid_var("c36", get_solution(), { x, y, z });
-        yc_grid_var c44 = yc_grid_var("c44", get_solution(), { x, y, z });
-        yc_grid_var c45 = yc_grid_var("c45", get_solution(), { x, y, z });
-        yc_grid_var c46 = yc_grid_var("c46", get_solution(), { x, y, z });
-        yc_grid_var c55 = yc_grid_var("c55", get_solution(), { x, y, z });
-        yc_grid_var c56 = yc_grid_var("c56", get_solution(), { x, y, z });
-        yc_grid_var c66 = yc_grid_var("c66", get_solution(), { x, y, z });
+        yc_grid_var c11 = yc_grid_var("c11", get_soln(), { x, y, z });
+        yc_grid_var c12 = yc_grid_var("c12", get_soln(), { x, y, z });
+        yc_grid_var c13 = yc_grid_var("c13", get_soln(), { x, y, z });
+        yc_grid_var c14 = yc_grid_var("c14", get_soln(), { x, y, z });
+        yc_grid_var c15 = yc_grid_var("c15", get_soln(), { x, y, z });
+        yc_grid_var c16 = yc_grid_var("c16", get_soln(), { x, y, z });
+        yc_grid_var c22 = yc_grid_var("c22", get_soln(), { x, y, z });
+        yc_grid_var c23 = yc_grid_var("c23", get_soln(), { x, y, z });
+        yc_grid_var c24 = yc_grid_var("c24", get_soln(), { x, y, z });
+        yc_grid_var c25 = yc_grid_var("c25", get_soln(), { x, y, z });
+        yc_grid_var c26 = yc_grid_var("c26", get_soln(), { x, y, z });
+        yc_grid_var c33 = yc_grid_var("c33", get_soln(), { x, y, z });
+        yc_grid_var c34 = yc_grid_var("c34", get_soln(), { x, y, z });
+        yc_grid_var c35 = yc_grid_var("c35", get_soln(), { x, y, z });
+        yc_grid_var c36 = yc_grid_var("c36", get_soln(), { x, y, z });
+        yc_grid_var c44 = yc_grid_var("c44", get_soln(), { x, y, z });
+        yc_grid_var c45 = yc_grid_var("c45", get_soln(), { x, y, z });
+        yc_grid_var c46 = yc_grid_var("c46", get_soln(), { x, y, z });
+        yc_grid_var c55 = yc_grid_var("c55", get_soln(), { x, y, z });
+        yc_grid_var c56 = yc_grid_var("c56", get_soln(), { x, y, z });
+        yc_grid_var c66 = yc_grid_var("c66", get_soln(), { x, y, z });
 
     public:
 
@@ -210,53 +210,53 @@ namespace fsg {
                         yc_grid_var &vxu, yc_grid_var &vxv, yc_grid_var &vxw, yc_grid_var &vyu, yc_grid_var &vyv, yc_grid_var &vyw, yc_grid_var &vzu, yc_grid_var &vzv, yc_grid_var &vzw ) {
 
             // Interpolate coeffs.
-            yc_number_node_ptr ic11 = cell_coeff     <N>(x, y, z, c11);
-            yc_number_node_ptr ic12 = cell_coeff     <N>(x, y, z, c12);
-            yc_number_node_ptr ic13 = cell_coeff     <N>(x, y, z, c13);
-            yc_number_node_ptr ic14 = cell_coeff_artm<N>(x, y, z, c14);
-            yc_number_node_ptr ic15 = cell_coeff_artm<N>(x, y, z, c15);
-            yc_number_node_ptr ic16 = cell_coeff_artm<N>(x, y, z, c16);
-            yc_number_node_ptr ic22 = cell_coeff     <N>(x, y, z, c22);
-            yc_number_node_ptr ic23 = cell_coeff     <N>(x, y, z, c23);
-            yc_number_node_ptr ic24 = cell_coeff_artm<N>(x, y, z, c24);
-            yc_number_node_ptr ic25 = cell_coeff_artm<N>(x, y, z, c25);
-            yc_number_node_ptr ic26 = cell_coeff_artm<N>(x, y, z, c26);
-            yc_number_node_ptr ic33 = cell_coeff     <N>(x, y, z, c33);
-            yc_number_node_ptr ic34 = cell_coeff_artm<N>(x, y, z, c34);
-            yc_number_node_ptr ic35 = cell_coeff_artm<N>(x, y, z, c35);
-            yc_number_node_ptr ic36 = cell_coeff_artm<N>(x, y, z, c36);
-            yc_number_node_ptr ic44 = cell_coeff     <N>(x, y, z, c44);
-            yc_number_node_ptr ic45 = cell_coeff_artm<N>(x, y, z, c45);
-            yc_number_node_ptr ic46 = cell_coeff_artm<N>(x, y, z, c46);
-            yc_number_node_ptr ic55 = cell_coeff     <N>(x, y, z, c55);
-            yc_number_node_ptr ic56 = cell_coeff_artm<N>(x, y, z, c56);
-            yc_number_node_ptr ic66 = cell_coeff     <N>(x, y, z, c66);
+            auto ic11 = cell_coeff     <N>(x, y, z, c11);
+            auto ic12 = cell_coeff     <N>(x, y, z, c12);
+            auto ic13 = cell_coeff     <N>(x, y, z, c13);
+            auto ic14 = cell_coeff_artm<N>(x, y, z, c14);
+            auto ic15 = cell_coeff_artm<N>(x, y, z, c15);
+            auto ic16 = cell_coeff_artm<N>(x, y, z, c16);
+            auto ic22 = cell_coeff     <N>(x, y, z, c22);
+            auto ic23 = cell_coeff     <N>(x, y, z, c23);
+            auto ic24 = cell_coeff_artm<N>(x, y, z, c24);
+            auto ic25 = cell_coeff_artm<N>(x, y, z, c25);
+            auto ic26 = cell_coeff_artm<N>(x, y, z, c26);
+            auto ic33 = cell_coeff     <N>(x, y, z, c33);
+            auto ic34 = cell_coeff_artm<N>(x, y, z, c34);
+            auto ic35 = cell_coeff_artm<N>(x, y, z, c35);
+            auto ic36 = cell_coeff_artm<N>(x, y, z, c36);
+            auto ic44 = cell_coeff     <N>(x, y, z, c44);
+            auto ic45 = cell_coeff_artm<N>(x, y, z, c45);
+            auto ic46 = cell_coeff_artm<N>(x, y, z, c46);
+            auto ic55 = cell_coeff     <N>(x, y, z, c55);
+            auto ic56 = cell_coeff_artm<N>(x, y, z, c56);
+            auto ic66 = cell_coeff     <N>(x, y, z, c66);
 
             // Compute stencils. Note that we are using the velocity values at t+1.
-            yc_number_node_ptr u_z = stencil_O8<Z,SZ>( t+1, x, y, z, vzu );
-            yc_number_node_ptr v_z = stencil_O8<Z,SZ>( t+1, x, y, z, vzv );
-            yc_number_node_ptr w_z = stencil_O8<Z,SZ>( t+1, x, y, z, vzw );
+            auto u_z = stencil_O8<Z,SZ>( t+1, x, y, z, vzu );
+            auto v_z = stencil_O8<Z,SZ>( t+1, x, y, z, vzv );
+            auto w_z = stencil_O8<Z,SZ>( t+1, x, y, z, vzw );
 
-            yc_number_node_ptr u_x = stencil_O8<X,SX>( t+1, x, y, z, vxu );
-            yc_number_node_ptr v_x = stencil_O8<X,SX>( t+1, x, y, z, vxv );
-            yc_number_node_ptr w_x = stencil_O8<X,SX>( t+1, x, y, z, vxw );
+            auto u_x = stencil_O8<X,SX>( t+1, x, y, z, vxu );
+            auto v_x = stencil_O8<X,SX>( t+1, x, y, z, vxv );
+            auto w_x = stencil_O8<X,SX>( t+1, x, y, z, vxw );
 
-            yc_number_node_ptr u_y = stencil_O8<Y,SY>( t+1, x, y, z, vyu );
-            yc_number_node_ptr v_y = stencil_O8<Y,SY>( t+1, x, y, z, vyv );
-            yc_number_node_ptr w_y = stencil_O8<Y,SY>( t+1, x, y, z, vyw );
+            auto u_y = stencil_O8<Y,SY>( t+1, x, y, z, vyu );
+            auto v_y = stencil_O8<Y,SY>( t+1, x, y, z, vyv );
+            auto w_y = stencil_O8<Y,SY>( t+1, x, y, z, vyw );
 
             // Compute next stress value
-            yc_number_node_ptr next_sxx = sxx(t, x, y, z) +
+            auto next_sxx = sxx(t, x, y, z) +
                 stress_update(ic11,ic12,ic13,ic14,ic15,ic16,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
-            yc_number_node_ptr next_syy = syy(t, x, y, z) +
+            auto next_syy = syy(t, x, y, z) +
                 stress_update(ic12,ic22,ic23,ic24,ic25,ic26,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
-            yc_number_node_ptr next_szz = szz(t, x, y, z) +
+            auto next_szz = szz(t, x, y, z) +
                 stress_update(ic13,ic23,ic33,ic34,ic35,ic36,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
-            yc_number_node_ptr next_syz = syz(t, x, y, z) +
+            auto next_syz = syz(t, x, y, z) +
                 stress_update(ic14,ic24,ic34,ic44,ic45,ic46,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
-            yc_number_node_ptr next_sxz = sxz(t, x, y, z) +
+            auto next_sxz = sxz(t, x, y, z) +
                 stress_update(ic15,ic25,ic35,ic45,ic55,ic56,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
-            yc_number_node_ptr next_sxy = sxy(t, x, y, z) +
+            auto next_sxy = sxy(t, x, y, z) +
                 stress_update(ic16,ic26,ic36,ic46,ic56,ic66,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
 
             // define the value at t+1.
@@ -321,18 +321,18 @@ namespace fsg {
         const int abc_width = 20;
 
         // Sponge coefficients.
-        yc_grid_var sponge_lx = yc_grid_var("sponge_lx", get_solution(), { x, y, z });
-        yc_grid_var sponge_rx = yc_grid_var("sponge_rx", get_solution(), { x, y, z });
-        yc_grid_var sponge_bz = yc_grid_var("sponge_bz", get_solution(), { x, y, z });
-        yc_grid_var sponge_tz = yc_grid_var("sponge_tz", get_solution(), { x, y, z });
-        yc_grid_var sponge_fy = yc_grid_var("sponge_fy", get_solution(), { x, y, z });
-        yc_grid_var sponge_by = yc_grid_var("sponge_by", get_solution(), { x, y, z });
-        yc_grid_var sponge_sq_lx = yc_grid_var("sponge_sq_lx", get_solution(), { x, y, z });
-        yc_grid_var sponge_sq_rx = yc_grid_var("sponge_sq_rx", get_solution(), { x, y, z });
-        yc_grid_var sponge_sq_bz = yc_grid_var("sponge_sq_bz", get_solution(), { x, y, z });
-        yc_grid_var sponge_sq_tz = yc_grid_var("sponge_sq_tz", get_solution(), { x, y, z });
-        yc_grid_var sponge_sq_fy = yc_grid_var("sponge_sq_fy", get_solution(), { x, y, z });
-        yc_grid_var sponge_sq_by = yc_grid_var("sponge_sq_by", get_solution(), { x, y, z });
+        yc_grid_var sponge_lx = yc_grid_var("sponge_lx", get_soln(), { x, y, z });
+        yc_grid_var sponge_rx = yc_grid_var("sponge_rx", get_soln(), { x, y, z });
+        yc_grid_var sponge_bz = yc_grid_var("sponge_bz", get_soln(), { x, y, z });
+        yc_grid_var sponge_tz = yc_grid_var("sponge_tz", get_soln(), { x, y, z });
+        yc_grid_var sponge_fy = yc_grid_var("sponge_fy", get_soln(), { x, y, z });
+        yc_grid_var sponge_by = yc_grid_var("sponge_by", get_soln(), { x, y, z });
+        yc_grid_var sponge_sq_lx = yc_grid_var("sponge_sq_lx", get_soln(), { x, y, z });
+        yc_grid_var sponge_sq_rx = yc_grid_var("sponge_sq_rx", get_soln(), { x, y, z });
+        yc_grid_var sponge_sq_bz = yc_grid_var("sponge_sq_bz", get_soln(), { x, y, z });
+        yc_grid_var sponge_sq_tz = yc_grid_var("sponge_sq_tz", get_soln(), { x, y, z });
+        yc_grid_var sponge_sq_fy = yc_grid_var("sponge_sq_fy", get_soln(), { x, y, z });
+        yc_grid_var sponge_sq_by = yc_grid_var("sponge_sq_by", get_soln(), { x, y, z });
 
         FSGElasticStencilBase &fsg;
 
@@ -363,13 +363,13 @@ namespace fsg {
 
             yc_bool_node_ptr at_abc = is_at_boundary();
 
-            yc_number_node_ptr next_v = v(t, x, y, z) * abc_x(x,y,z) * abc_y(x,y,z) * abc_z(x,y,z);
+            auto next_v = v(t, x, y, z) * abc_x(x,y,z) * abc_y(x,y,z) * abc_z(x,y,z);
 
-            yc_number_node_ptr lrho   = fsg.interp_rho<N>( x, y, z );
+            auto lrho   = fsg.interp_rho<N>( x, y, z );
 
-            yc_number_node_ptr stx    = fsg.stencil_O2_X<SX>( t, x, y, z, sx );
-            yc_number_node_ptr sty    = fsg.stencil_O2_Y<SY>( t, x, y, z, sy );
-            yc_number_node_ptr stz    = fsg.stencil_O2_Z<SZ>( t, x, y, z, sz );
+            auto stx    = fsg.stencil_O2_X<SX>( t, x, y, z, sx );
+            auto sty    = fsg.stencil_O2_Y<SY>( t, x, y, z, sy );
+            auto stz    = fsg.stencil_O2_Z<SZ>( t, x, y, z, sz );
 
             next_v += ((stx + sty + stz) * fsg.delta_t * lrho);
             next_v *= abc_sq_x(x,y,z) * abc_sq_y(x,y,z) * abc_sq_z(x,y,z);
@@ -412,52 +412,52 @@ namespace fsg {
                             yc_grid_var &vxu, yc_grid_var &vxv, yc_grid_var &vxw, yc_grid_var &vyu, yc_grid_var &vyv, yc_grid_var &vyw, yc_grid_var &vzu, yc_grid_var &vzv, yc_grid_var &vzw,
                             yc_grid_var &abc_x, yc_grid_var &abc_y, yc_grid_var &abc_z, yc_grid_var &abc_sq_x, yc_grid_var &abc_sq_y, yc_grid_var &abc_sq_z) {
 
-            yc_number_node_ptr abc = abc_x(x,y,z) * abc_y(x,y,z) * abc_z(x,y,z);
-            yc_number_node_ptr next_sxx = sxx(t, x, y, z) * abc;
-            yc_number_node_ptr next_syy = syy(t, x, y, z) * abc;
-            yc_number_node_ptr next_szz = szz(t, x, y, z) * abc;
-            yc_number_node_ptr next_syz = syz(t, x, y, z) * abc;
-            yc_number_node_ptr next_sxz = sxz(t, x, y, z) * abc;
-            yc_number_node_ptr next_sxy = sxy(t, x, y, z) * abc;
+            auto abc = abc_x(x,y,z) * abc_y(x,y,z) * abc_z(x,y,z);
+            auto next_sxx = sxx(t, x, y, z) * abc;
+            auto next_syy = syy(t, x, y, z) * abc;
+            auto next_szz = szz(t, x, y, z) * abc;
+            auto next_syz = syz(t, x, y, z) * abc;
+            auto next_sxz = sxz(t, x, y, z) * abc;
+            auto next_sxy = sxy(t, x, y, z) * abc;
 
             // Interpolate coeffs.
-            yc_number_node_ptr ic11 = fsg.cell_coeff     <N>(x, y, z, fsg.c11);
-            yc_number_node_ptr ic12 = fsg.cell_coeff     <N>(x, y, z, fsg.c12);
-            yc_number_node_ptr ic13 = fsg.cell_coeff     <N>(x, y, z, fsg.c13);
-            yc_number_node_ptr ic14 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c14);
-            yc_number_node_ptr ic15 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c15);
-            yc_number_node_ptr ic16 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c16);
-            yc_number_node_ptr ic22 = fsg.cell_coeff     <N>(x, y, z, fsg.c22);
-            yc_number_node_ptr ic23 = fsg.cell_coeff     <N>(x, y, z, fsg.c23);
-            yc_number_node_ptr ic24 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c24);
-            yc_number_node_ptr ic25 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c25);
-            yc_number_node_ptr ic26 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c26);
-            yc_number_node_ptr ic33 = fsg.cell_coeff     <N>(x, y, z, fsg.c33);
-            yc_number_node_ptr ic34 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c34);
-            yc_number_node_ptr ic35 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c35);
-            yc_number_node_ptr ic36 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c36);
-            yc_number_node_ptr ic44 = fsg.cell_coeff     <N>(x, y, z, fsg.c44);
-            yc_number_node_ptr ic45 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c45);
-            yc_number_node_ptr ic46 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c46);
-            yc_number_node_ptr ic55 = fsg.cell_coeff     <N>(x, y, z, fsg.c55);
-            yc_number_node_ptr ic56 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c56);
-            yc_number_node_ptr ic66 = fsg.cell_coeff     <N>(x, y, z, fsg.c66);
+            auto ic11 = fsg.cell_coeff     <N>(x, y, z, fsg.c11);
+            auto ic12 = fsg.cell_coeff     <N>(x, y, z, fsg.c12);
+            auto ic13 = fsg.cell_coeff     <N>(x, y, z, fsg.c13);
+            auto ic14 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c14);
+            auto ic15 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c15);
+            auto ic16 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c16);
+            auto ic22 = fsg.cell_coeff     <N>(x, y, z, fsg.c22);
+            auto ic23 = fsg.cell_coeff     <N>(x, y, z, fsg.c23);
+            auto ic24 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c24);
+            auto ic25 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c25);
+            auto ic26 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c26);
+            auto ic33 = fsg.cell_coeff     <N>(x, y, z, fsg.c33);
+            auto ic34 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c34);
+            auto ic35 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c35);
+            auto ic36 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c36);
+            auto ic44 = fsg.cell_coeff     <N>(x, y, z, fsg.c44);
+            auto ic45 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c45);
+            auto ic46 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c46);
+            auto ic55 = fsg.cell_coeff     <N>(x, y, z, fsg.c55);
+            auto ic56 = fsg.cell_coeff_artm<N>(x, y, z, fsg.c56);
+            auto ic66 = fsg.cell_coeff     <N>(x, y, z, fsg.c66);
 
             // Compute stencils. Note that we are using the velocity values at t+1.
-            yc_number_node_ptr u_z = fsg.stencil_O2_Z<SZ>( t+1, x, y, z, vzu );
-            yc_number_node_ptr v_z = fsg.stencil_O2_Z<SZ>( t+1, x, y, z, vzv );
-            yc_number_node_ptr w_z = fsg.stencil_O2_Z<SZ>( t+1, x, y, z, vzw );
+            auto u_z = fsg.stencil_O2_Z<SZ>( t+1, x, y, z, vzu );
+            auto v_z = fsg.stencil_O2_Z<SZ>( t+1, x, y, z, vzv );
+            auto w_z = fsg.stencil_O2_Z<SZ>( t+1, x, y, z, vzw );
 
-            yc_number_node_ptr u_x = fsg.stencil_O2_X<SX>( t+1, x, y, z, vxu );
-            yc_number_node_ptr v_x = fsg.stencil_O2_X<SX>( t+1, x, y, z, vxv );
-            yc_number_node_ptr w_x = fsg.stencil_O2_X<SX>( t+1, x, y, z, vxw );
+            auto u_x = fsg.stencil_O2_X<SX>( t+1, x, y, z, vxu );
+            auto v_x = fsg.stencil_O2_X<SX>( t+1, x, y, z, vxv );
+            auto w_x = fsg.stencil_O2_X<SX>( t+1, x, y, z, vxw );
 
-            yc_number_node_ptr u_y = fsg.stencil_O2_Y<SY>( t+1, x, y, z, vyu );
-            yc_number_node_ptr v_y = fsg.stencil_O2_Y<SY>( t+1, x, y, z, vyv );
-            yc_number_node_ptr w_y = fsg.stencil_O2_Y<SY>( t+1, x, y, z, vyw );
+            auto u_y = fsg.stencil_O2_Y<SY>( t+1, x, y, z, vyu );
+            auto v_y = fsg.stencil_O2_Y<SY>( t+1, x, y, z, vyv );
+            auto w_y = fsg.stencil_O2_Y<SY>( t+1, x, y, z, vyw );
 
             // Compute next stress value
-            yc_number_node_ptr abc_sq = abc_sq_x(x,y,z) * abc_sq_y(x,y,z) * abc_sq_z(x,y,z);
+            auto abc_sq = abc_sq_x(x,y,z) * abc_sq_y(x,y,z) * abc_sq_z(x,y,z);
             next_sxx += fsg.stress_update(ic11,ic12,ic13,ic14,ic15,ic16,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y) * abc_sq;
             next_syy += fsg.stress_update(ic12,ic22,ic23,ic24,ic25,ic26,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y) * abc_sq;
             next_szz += fsg.stress_update(ic13,ic23,ic33,ic34,ic35,ic36,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y) * abc_sq;

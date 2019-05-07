@@ -33,22 +33,22 @@ class SSGElasticStencil : public ElasticStencilBase {
 protected:
 
     // Time-varying 3D-spatial velocity grids.
-    yc_grid_var v_bl_w = yc_grid_var("v_bl_w", get_solution(), { t, x, y, z });
-    yc_grid_var v_tl_v = yc_grid_var("v_tl_v", get_solution(), { t, x, y, z });
-    yc_grid_var v_tr_u = yc_grid_var("v_tr_u", get_solution(), { t, x, y, z });
+    yc_grid_var v_bl_w = yc_grid_var("v_bl_w", get_soln(), { t, x, y, z });
+    yc_grid_var v_tl_v = yc_grid_var("v_tl_v", get_soln(), { t, x, y, z });
+    yc_grid_var v_tr_u = yc_grid_var("v_tr_u", get_soln(), { t, x, y, z });
 
     // Time-varying 3D-spatial Stress grids.
-    yc_grid_var s_bl_yz = yc_grid_var("s_bl_yz", get_solution(), { t, x, y, z });
-    yc_grid_var s_br_xz = yc_grid_var("s_br_xz", get_solution(), { t, x, y, z });
-    yc_grid_var s_tl_xx = yc_grid_var("s_tl_xx", get_solution(), { t, x, y, z });
-    yc_grid_var s_tl_yy = yc_grid_var("s_tl_yy", get_solution(), { t, x, y, z });
-    yc_grid_var s_tl_zz = yc_grid_var("s_tl_zz", get_solution(), { t, x, y, z });
-    yc_grid_var s_tr_xy = yc_grid_var("s_tr_xy", get_solution(), { t, x, y, z });
+    yc_grid_var s_bl_yz = yc_grid_var("s_bl_yz", get_soln(), { t, x, y, z });
+    yc_grid_var s_br_xz = yc_grid_var("s_br_xz", get_soln(), { t, x, y, z });
+    yc_grid_var s_tl_xx = yc_grid_var("s_tl_xx", get_soln(), { t, x, y, z });
+    yc_grid_var s_tl_yy = yc_grid_var("s_tl_yy", get_soln(), { t, x, y, z });
+    yc_grid_var s_tl_zz = yc_grid_var("s_tl_zz", get_soln(), { t, x, y, z });
+    yc_grid_var s_tr_xy = yc_grid_var("s_tr_xy", get_soln(), { t, x, y, z });
 
     // 3D-spatial coefficients.
-    yc_grid_var mu = yc_grid_var("mu", get_solution(), { x, y, z });
-    yc_grid_var lambda = yc_grid_var("lambda", get_solution(), { x, y, z });
-    yc_grid_var lambdamu2 = yc_grid_var("lambdamu2", get_solution(), { x, y, z });
+    yc_grid_var mu = yc_grid_var("mu", get_soln(), { x, y, z });
+    yc_grid_var lambda = yc_grid_var("lambda", get_soln(), { x, y, z });
+    yc_grid_var lambdamu2 = yc_grid_var("lambdamu2", get_soln(), { x, y, z });
 
 public:
 
@@ -100,12 +100,12 @@ public:
     void define_str(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
                     yc_grid_var &s, yc_grid_var &va, yc_grid_var &vb) {
 
-        yc_number_node_ptr lcoeff = interp_mu<N>( x, y, z );
+        auto lcoeff = interp_mu<N>( x, y, z );
 
-        yc_number_node_ptr vta    = stencil_O8<DA,SA>( t+1, x, y, z, va );
-        yc_number_node_ptr vtb    = stencil_O8<DB,SB>( t+1, x, y, z, vb );
+        auto vta    = stencil_O8<DA,SA>( t+1, x, y, z, va );
+        auto vtb    = stencil_O8<DB,SB>( t+1, x, y, z, vb );
 
-        yc_number_node_ptr next_s = s(t, x, y, z) + ((vta + vtb) * lcoeff) * delta_t;
+        auto next_s = s(t, x, y, z) + ((vta + vtb) * lcoeff) * delta_t;
 
         // define the value at t+1.
         s(t+1, x, y, z) EQUALS next_s;
@@ -114,20 +114,20 @@ public:
     void define_str_TL(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z )
     {
 
-        yc_number_node_ptr ilambdamu2 = 1.0 / lambdamu2(x,y,z);
-        yc_number_node_ptr ilambda    = 1.0 / lambda   (x,y,z);
+        auto ilambdamu2 = 1.0 / lambdamu2(x,y,z);
+        auto ilambda    = 1.0 / lambda   (x,y,z);
 
-        yc_number_node_ptr vtx    = stencil_O8<X,F>( t+1, x, y, z, v_tr_u );
-        yc_number_node_ptr vty    = stencil_O8<Y,B>( t+1, x, y, z, v_tl_v );
-        yc_number_node_ptr vtz    = stencil_O8<Z,B>( t+1, x, y, z, v_bl_w );
+        auto vtx    = stencil_O8<X,F>( t+1, x, y, z, v_tr_u );
+        auto vty    = stencil_O8<Y,B>( t+1, x, y, z, v_tl_v );
+        auto vtz    = stencil_O8<Z,B>( t+1, x, y, z, v_bl_w );
 
-        yc_number_node_ptr next_xx = s_tl_xx(t, x, y, z) + ilambdamu2 * vtx * delta_t
+        auto next_xx = s_tl_xx(t, x, y, z) + ilambdamu2 * vtx * delta_t
             + ilambda    * vty * delta_t
             + ilambda    * vtz * delta_t;
-        yc_number_node_ptr next_yy = s_tl_yy(t, x, y, z) + ilambda    * vtx * delta_t
+        auto next_yy = s_tl_yy(t, x, y, z) + ilambda    * vtx * delta_t
             + ilambdamu2 * vty * delta_t
             + ilambda    * vtz * delta_t;
-        yc_number_node_ptr next_zz = s_tl_zz(t, x, y, z) + ilambda    * vtx * delta_t
+        auto next_zz = s_tl_zz(t, x, y, z) + ilambda    * vtx * delta_t
             + ilambda    * vty * delta_t
             + ilambdamu2 * vtz * delta_t;
 

@@ -60,31 +60,31 @@ protected:
     yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
 
     // Time-varying 3D-spatial velocity grids.
-    yc_grid_var vel_x = yc_grid_var("vel_x", get_solution(), { t, x, y, z });
-    yc_grid_var vel_y = yc_grid_var("vel_y", get_solution(), { t, x, y, z });
-    yc_grid_var vel_z = yc_grid_var("vel_z", get_solution(), { t, x, y, z });
+    yc_grid_var vel_x = yc_grid_var("vel_x", get_soln(), { t, x, y, z });
+    yc_grid_var vel_y = yc_grid_var("vel_y", get_soln(), { t, x, y, z });
+    yc_grid_var vel_z = yc_grid_var("vel_z", get_soln(), { t, x, y, z });
 
     // Time-varying 3D-spatial Stress grids.
-    yc_grid_var stress_xx = yc_grid_var("stress_xx", get_solution(), { t, x, y, z });
-    yc_grid_var stress_yy = yc_grid_var("stress_yy", get_solution(), { t, x, y, z });
-    yc_grid_var stress_zz = yc_grid_var("stress_zz", get_solution(), { t, x, y, z });
-    yc_grid_var stress_xy = yc_grid_var("stress_xy", get_solution(), { t, x, y, z });
-    yc_grid_var stress_xz = yc_grid_var("stress_xz", get_solution(), { t, x, y, z });
-    yc_grid_var stress_yz = yc_grid_var("stress_yz", get_solution(), { t, x, y, z });
+    yc_grid_var stress_xx = yc_grid_var("stress_xx", get_soln(), { t, x, y, z });
+    yc_grid_var stress_yy = yc_grid_var("stress_yy", get_soln(), { t, x, y, z });
+    yc_grid_var stress_zz = yc_grid_var("stress_zz", get_soln(), { t, x, y, z });
+    yc_grid_var stress_xy = yc_grid_var("stress_xy", get_soln(), { t, x, y, z });
+    yc_grid_var stress_xz = yc_grid_var("stress_xz", get_soln(), { t, x, y, z });
+    yc_grid_var stress_yz = yc_grid_var("stress_yz", get_soln(), { t, x, y, z });
 
     // 3D-spatial Lame' coefficients.
-    yc_grid_var lambda = yc_grid_var("lambda", get_solution(), { x, y, z });
-    yc_grid_var rho = yc_grid_var("rho", get_solution(), { x, y, z });
-    yc_grid_var mu = yc_grid_var("mu", get_solution(), { x, y, z });
+    yc_grid_var lambda = yc_grid_var("lambda", get_soln(), { x, y, z });
+    yc_grid_var rho = yc_grid_var("rho", get_soln(), { x, y, z });
+    yc_grid_var mu = yc_grid_var("mu", get_soln(), { x, y, z });
 
     // Sponge coefficients.
     // (Most of these will be 1.0.)
 #ifdef FULL_SPONGE_GRID
-    yc_grid_var sponge = yc_grid_var("sponge", get_solution(), { x, y, z });
+    yc_grid_var sponge = yc_grid_var("sponge", get_soln(), { x, y, z });
 #else
-    yc_grid_var cr_x = yc_grid_var("cr_x", get_solution(), { x });
-    yc_grid_var cr_y = yc_grid_var("cr_y", get_solution(), { y });
-    yc_grid_var cr_z = yc_grid_var("cr_z", get_solution(), { z });
+    yc_grid_var cr_x = yc_grid_var("cr_x", get_soln(), { x });
+    yc_grid_var cr_y = yc_grid_var("cr_y", get_soln(), { y });
+    yc_grid_var cr_z = yc_grid_var("cr_z", get_soln(), { z });
 #endif
 
     // Spatial FD coefficients.
@@ -92,8 +92,8 @@ protected:
     const double c2 = -1.0/24.0;
 
     // Physical dimensions in time and space.
-    yc_grid_var delta_t = yc_grid_var("delta_t", get_solution(), { });
-    yc_grid_var h = yc_grid_var("h", get_solution(), { });
+    yc_grid_var delta_t = yc_grid_var("delta_t", get_soln(), { });
+    yc_grid_var h = yc_grid_var("h", get_soln(), { });
 
     // For the surface stress conditions, we need to write into 2 points
     // above the surface.  Since we can only write into the "domain", we
@@ -109,9 +109,9 @@ protected:
 #define IF_TWO_ABOVE_SURFACE IF_DOMAIN (z == SURFACE_IDX + 2)
 
 #ifdef USE_SCRATCH_GRIDS
-        yc_grid_var tmp_vel_x = yc_grid_var("tmp_vel_x", get_solution(), { x, y, z }, true);
-        yc_grid_var tmp_vel_y = yc_grid_var("tmp_vel_y", get_solution(), { x, y, z }, true);
-        yc_grid_var tmp_vel_z = yc_grid_var("tmp_vel_z", get_solution(), { x, y, z }, true);
+        yc_grid_var tmp_vel_x = yc_grid_var("tmp_vel_x", get_soln(), { x, y, z }, true);
+        yc_grid_var tmp_vel_y = yc_grid_var("tmp_vel_y", get_soln(), { x, y, z }, true);
+        yc_grid_var tmp_vel_z = yc_grid_var("tmp_vel_z", get_soln(), { x, y, z }, true);
 #endif
 
 public:
@@ -136,54 +136,54 @@ public:
     // appropriately.
 
     yc_number_node_ptr get_next_vel_x(yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z) {
-        yc_number_node_ptr rho_val = (rho(x, y,   z  ) +
+        auto rho_val = (rho(x, y,   z  ) +
                              rho(x, y-1, z  ) +
                              rho(x, y,   z-1) +
                              rho(x, y-1, z-1)) * (1.0 / 4.0);
-        yc_number_node_ptr d_val =
+        auto d_val =
             c1 * (stress_xx(t, x,   y,   z  ) - stress_xx(t, x-1, y,   z  )) +
             c2 * (stress_xx(t, x+1, y,   z  ) - stress_xx(t, x-2, y,   z  )) +
             c1 * (stress_xy(t, x,   y,   z  ) - stress_xy(t, x,   y-1, z  )) +
             c2 * (stress_xy(t, x,   y+1, z  ) - stress_xy(t, x,   y-2, z  )) +
             c1 * (stress_xz(t, x,   y,   z  ) - stress_xz(t, x,   y,   z-1)) +
             c2 * (stress_xz(t, x,   y,   z+1) - stress_xz(t, x,   y,   z-2));
-        yc_number_node_ptr next_vel_x = vel_x(t, x, y, z) + (delta_t / (h * rho_val)) * d_val;
+        auto next_vel_x = vel_x(t, x, y, z) + (delta_t / (h * rho_val)) * d_val;
         adjust_for_sponge(next_vel_x);
 
         // Return the value at t+1.
         return next_vel_x;
     }
     yc_number_node_ptr get_next_vel_y(yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z) {
-        yc_number_node_ptr rho_val = (rho(x,   y, z  ) +
+        auto rho_val = (rho(x,   y, z  ) +
                              rho(x+1, y, z  ) +
                              rho(x,   y, z-1) +
                              rho(x+1, y, z-1)) * (1.0 / 4.0);
-        yc_number_node_ptr d_val =
+        auto d_val =
             c1 * (stress_xy(t, x+1, y,   z  ) - stress_xy(t, x,   y,   z  )) +
             c2 * (stress_xy(t, x+2, y,   z  ) - stress_xy(t, x-1, y,   z  )) +
             c1 * (stress_yy(t, x,   y+1, z  ) - stress_yy(t, x,   y,   z  )) +
             c2 * (stress_yy(t, x,   y+2, z  ) - stress_yy(t, x,   y-1, z  )) +
             c1 * (stress_yz(t, x,   y,   z  ) - stress_yz(t, x,   y,   z-1)) +
             c2 * (stress_yz(t, x,   y,   z+1) - stress_yz(t, x,   y,   z-2));
-        yc_number_node_ptr next_vel_y = vel_y(t, x, y, z) + (delta_t / (h * rho_val)) * d_val;
+        auto next_vel_y = vel_y(t, x, y, z) + (delta_t / (h * rho_val)) * d_val;
         adjust_for_sponge(next_vel_y);
 
         // Return the value at t+1.
         return next_vel_y;
     }
     yc_number_node_ptr get_next_vel_z(yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z) {
-        yc_number_node_ptr rho_val = (rho(x,   y,   z) +
+        auto rho_val = (rho(x,   y,   z) +
                              rho(x+1, y,   z) +
                              rho(x,   y-1, z) +
                              rho(x+1, y-1, z)) * (1.0 / 4.0);
-        yc_number_node_ptr d_val =
+        auto d_val =
             c1 * (stress_xz(t, x+1, y,   z  ) - stress_xz(t, x,   y,   z  )) +
             c2 * (stress_xz(t, x+2, y,   z  ) - stress_xz(t, x-1, y,   z  )) +
             c1 * (stress_yz(t, x,   y,   z  ) - stress_yz(t, x,   y-1, z  )) +
             c2 * (stress_yz(t, x,   y+1, z  ) - stress_yz(t, x,   y-2, z  )) +
             c1 * (stress_zz(t, x,   y,   z+1) - stress_zz(t, x,   y,   z  )) +
             c2 * (stress_zz(t, x,   y,   z+2) - stress_zz(t, x,   y,   z-1));
-        yc_number_node_ptr next_vel_z = vel_z(t, x, y, z) + (delta_t / (h * rho_val)) * d_val;
+        auto next_vel_z = vel_z(t, x, y, z) + (delta_t / (h * rho_val)) * d_val;
         adjust_for_sponge(next_vel_z);
 
         // Return the value at t+1.
@@ -195,7 +195,7 @@ public:
 
         // Since we're defining points when z == surface + 1,
         // the surface itself will be at z - 1;
-        yc_number_node_ptr surf = z - 1;
+        auto surf = z - 1;
 
 #ifdef USE_SCRATCH_GRIDS
 
@@ -222,17 +222,17 @@ public:
 #endif
 
         // A couple of intermediate values.
-        yc_number_node_ptr d_x_val = VEL_X(x+1, y, surf) -
+        auto d_x_val = VEL_X(x+1, y, surf) -
             (VEL_Z(x+1, y, surf) - VEL_Z(x, y, surf));
-        yc_number_node_ptr d_y_val = VEL_Y(x, y-1, surf) -
+        auto d_y_val = VEL_Y(x, y-1, surf) -
             (VEL_Z(x, y, surf) - VEL_Z(x, y-1, surf));
 
         // Following values are valid one layer above the free surface.
-        yc_number_node_ptr plus1_vel_x = VEL_X(x, y, surf) -
+        auto plus1_vel_x = VEL_X(x, y, surf) -
             (VEL_Z(x, y, surf) - VEL_Z(x-1, y, surf));
-        yc_number_node_ptr plus1_vel_y = VEL_Y(x, y, surf) -
+        auto plus1_vel_y = VEL_Y(x, y, surf) -
             (VEL_Z(x, y+1, surf) - VEL_Z(x, y, surf));
-        yc_number_node_ptr plus1_vel_z = VEL_Z(x, y, surf) -
+        auto plus1_vel_z = VEL_Z(x, y, surf) -
             ((d_x_val - plus1_vel_x) +
              (VEL_X(x+1, y, surf) - VEL_X(x, y, surf)) +
              (plus1_vel_y - d_y_val) +
@@ -294,7 +294,7 @@ public:
 
     yc_number_node_ptr get_next_stress_xx(yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z) {
 
-        yc_number_node_ptr next_stress_xx = stress_xx(t, x, y, z) +
+        auto next_stress_xx = stress_xx(t, x, y, z) +
             ((delta_t / h) * ((2 * ave8(mu, x, y, z) * d_x_val(x, y, z)) +
                               (ave8(lambda, x, y, z) *
                                (d_x_val(x, y, z) + d_y_val(x, y, z) + d_z_val(x, y, z)))));
@@ -305,7 +305,7 @@ public:
     }
     yc_number_node_ptr get_next_stress_yy(yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z) {
 
-        yc_number_node_ptr next_stress_yy = stress_yy(t, x, y, z) +
+        auto next_stress_yy = stress_yy(t, x, y, z) +
             ((delta_t / h) * ((2 * ave8(mu, x, y, z) * d_y_val(x, y, z)) +
                               (ave8(lambda, x, y, z) *
                                (d_x_val(x, y, z) + d_y_val(x, y, z) + d_z_val(x, y, z)))));
@@ -316,7 +316,7 @@ public:
     }
     yc_number_node_ptr get_next_stress_zz(yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z) {
 
-        yc_number_node_ptr next_stress_zz = stress_zz(t, x, y, z) +
+        auto next_stress_zz = stress_zz(t, x, y, z) +
             ((delta_t / h) * ((2 * ave8(mu, x, y, z) * d_z_val(x, y, z)) +
                               (ave8(lambda, x, y, z) *
                                (d_x_val(x, y, z) + d_y_val(x, y, z) + d_z_val(x, y, z)))));
@@ -328,18 +328,18 @@ public:
     yc_number_node_ptr get_next_stress_xy(yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z) {
 
         // Compute average of 2 neighbors.
-        yc_number_node_ptr mu2 = 2.0 /
+        auto mu2 = 2.0 /
             (mu(x,   y,   z  ) + mu(x,   y,   z-1));
 
         // Note that we are using the velocity values at t+1.
-        yc_number_node_ptr d_xy_val =
+        auto d_xy_val =
             c1 * (vel_x(t+1, x,   y+1, z  ) - vel_x(t+1, x,   y,   z  )) +
             c2 * (vel_x(t+1, x,   y+2, z  ) - vel_x(t+1, x,   y-1, z  ));
-        yc_number_node_ptr d_yx_val =
+        auto d_yx_val =
             c1 * (vel_y(t+1, x,   y,   z  ) - vel_y(t+1, x-1, y,   z  )) +
             c2 * (vel_y(t+1, x+1, y,   z  ) - vel_y(t+1, x-2, y,   z  ));
 
-        yc_number_node_ptr next_stress_xy = stress_xy(t, x, y, z) +
+        auto next_stress_xy = stress_xy(t, x, y, z) +
             ((mu2 * delta_t / h) * (d_xy_val + d_yx_val));
         adjust_for_sponge(next_stress_xy);
 
@@ -349,18 +349,18 @@ public:
     yc_number_node_ptr get_next_stress_xz(yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z) {
 
         // Compute average of 2 neighbors.
-        yc_number_node_ptr mu2 = 2.0 /
+        auto mu2 = 2.0 /
             (mu(x,   y,   z  ) + mu(x,   y-1, z  ));
 
         // Note that we are using the velocity values at t+1.
-        yc_number_node_ptr d_xz_val =
+        auto d_xz_val =
             c1 * (vel_x(t+1, x,   y,   z+1) - vel_x(t+1, x,   y,   z  )) +
             c2 * (vel_x(t+1, x,   y,   z+2) - vel_x(t+1, x,   y,   z-1));
-        yc_number_node_ptr d_zx_val =
+        auto d_zx_val =
             c1 * (vel_z(t+1, x,   y,   z  ) - vel_z(t+1, x-1, y,   z  )) +
             c2 * (vel_z(t+1, x+1, y,   z  ) - vel_z(t+1, x-2, y,   z  ));
 
-        yc_number_node_ptr next_stress_xz = stress_xz(t, x, y, z) +
+        auto next_stress_xz = stress_xz(t, x, y, z) +
             ((mu2 * delta_t / h) * (d_xz_val + d_zx_val));
         adjust_for_sponge(next_stress_xz);
 
@@ -370,18 +370,18 @@ public:
     yc_number_node_ptr get_next_stress_yz(yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z) {
 
         // Compute average of 2 neighbors.
-        yc_number_node_ptr mu2 = 2.0 /
+        auto mu2 = 2.0 /
             (mu(x,   y,   z  ) + mu(x+1, y,   z  ));
 
         // Note that we are using the velocity values at t+1.
-        yc_number_node_ptr d_yz_val =
+        auto d_yz_val =
             c1 * (vel_y(t+1, x,   y,   z+1) - vel_y(t+1, x,   y,   z  )) +
             c2 * (vel_y(t+1, x,   y,   z+2) - vel_y(t+1, x,   y,   z-1));
-        yc_number_node_ptr d_zy_val =
+        auto d_zy_val =
             c1 * (vel_z(t+1, x,   y+1, z  ) - vel_z(t+1, x,   y,   z  )) +
             c2 * (vel_z(t+1, x,   y+2, z  ) - vel_z(t+1, x,   y-1, z  ));
 
-        yc_number_node_ptr next_stress_yz = stress_yz(t, x, y, z) +
+        auto next_stress_yz = stress_yz(t, x, y, z) +
             ((mu2 * delta_t / h) * (d_yz_val + d_zy_val));
         adjust_for_sponge(next_stress_yz);
 
@@ -393,7 +393,7 @@ public:
     void define_free_surface_stress() {
 
         // When z == surface + 1, the surface will be at z - 1;
-        yc_number_node_ptr surf = z - 1;
+        auto surf = z - 1;
 
         stress_zz(t+1, x, y, z) EQUALS -get_next_stress_zz(x, y, surf) IF_ONE_ABOVE_SURFACE;
         stress_xz(t+1, x, y, z) EQUALS -get_next_stress_xz(x, y, surf-1) IF_ONE_ABOVE_SURFACE;
