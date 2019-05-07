@@ -346,9 +346,9 @@ namespace fsg {
         yc_bool_node_ptr is_at_boundary()
         {
             yc_bool_node_ptr bc =
-                ( z < first_index(z)+abc_width || z > last_index(z)-abc_width ) ||
-                ( y < first_index(y)+abc_width || y > last_index(y)-abc_width ) ||
-                ( x < first_index(x)+abc_width || x > last_index(x)-abc_width );
+                ( z < first_domain_index(z)+abc_width || z > last_domain_index(z)-abc_width ) ||
+                ( y < first_domain_index(y)+abc_width || y > last_domain_index(y)-abc_width ) ||
+                ( x < first_domain_index(x)+abc_width || x > last_domain_index(x)-abc_width );
             return bc;
         }
         yc_bool_node_ptr is_not_at_boundary()

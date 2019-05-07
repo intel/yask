@@ -55,16 +55,6 @@ namespace yask {
         /// Backward-compatibility contructor.
         StencilBase(const std::string& name, StencilList& stencils) :
             yc_solution_base(name) { }
-
-        /// Create a constant expression.
-        /**
-           Usually not needed due to operator overloading. 
-           New DSL code should use new_const_number_node() or
-           simply new_number_node().
-        */
-        virtual yc_number_node_ptr constNum(double val) {
-            return _node_factory.new_const_number_node(val);
-        }
     };
 
     /// **[Deprecated]** A base class for stencils that have a 'radius'.
@@ -75,12 +65,6 @@ namespace yask {
         /// Backward-compatibility constructor.
         StencilRadiusBase(const std::string& name, StencilList& stencils, int radius) :
             yc_solution_with_radius_base(name, radius) { }
-
-        /// Create a constant expression.
-        /** Usually not needed due to operator overloading. */
-        virtual yc_number_node_ptr constNum(double val) {
-            return _node_factory.new_const_number_node(val);
-        }
     };
 
     // Aliases for backward-compatibility.
@@ -108,9 +92,9 @@ namespace yask {
 
 // Convenience macros for declaring dims in a class derived from \ref StencilBase.
 // The 'd' arg is the new var name and the dim name.
-#define MAKE_STEP_INDEX(d)   yc_index_node_ptr d = _node_factory.new_step_index(#d)
-#define MAKE_DOMAIN_INDEX(d) yc_index_node_ptr d = _node_factory.new_domain_index(#d)
-#define MAKE_MISC_INDEX(d)   yc_index_node_ptr d = _node_factory.new_misc_index(#d)
+#define MAKE_STEP_INDEX(d)   yc_index_node_ptr d = new_step_index(#d)
+#define MAKE_DOMAIN_INDEX(d) yc_index_node_ptr d = new_domain_index(#d)
+#define MAKE_MISC_INDEX(d)   yc_index_node_ptr d = new_misc_index(#d)
 
 // Convenience macros for creating grids in a class implementing get_solution().
 // The 'gvar' arg is the var name and the grid name.
@@ -123,6 +107,11 @@ namespace yask {
     yc_grid_var gvar = yc_grid_var(#gvar, get_solution(), { __VA_ARGS__ }, true)
 #define MAKE_SCRATCH_SCALAR(gvar)    MAKE_SCRATCH_GRID(gvar)
 #define MAKE_SCRATCH_ARRAY(gvar, d1) MAKE_SCRATCH_GRID(gvar, d1)
+
+// Old namespace-level functions that are now part of yc_solution_base.
+#define constNum(n) new_number_node(n)
+#define first_index(d) first_domain_index(d)
+#define last_index(d) last_domain_index(d)
 
 // Old aliases for operators.
 #define EQUALS_OPER EQUALS

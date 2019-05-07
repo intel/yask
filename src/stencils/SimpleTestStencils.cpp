@@ -37,11 +37,11 @@ protected:
 
     // Indices & dimensions.
     // Not all these will be used in all tests.
-    yc_index_node_ptr t = _node_factory.new_step_index("t");           // step in time dim.
-    yc_index_node_ptr w = _node_factory.new_domain_index("w");         // spatial dim.
-    yc_index_node_ptr x = _node_factory.new_domain_index("x");         // spatial dim.
-    yc_index_node_ptr y = _node_factory.new_domain_index("y");         // spatial dim.
-    yc_index_node_ptr z = _node_factory.new_domain_index("z");         // spatial dim.
+    yc_index_node_ptr t = new_step_index("t");           // step in time dim.
+    yc_index_node_ptr w = new_domain_index("w");         // spatial dim.
+    yc_index_node_ptr x = new_domain_index("x");         // spatial dim.
+    yc_index_node_ptr y = new_domain_index("y");         // spatial dim.
+    yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
 
     // Define some stencils in different dimensions.
     // These will be asymmetrical if any of the '*_ext' params are not 0;
@@ -325,12 +325,12 @@ class TestMisc2dStencil : public yc_solution_with_radius_base {
 protected:
 
     // Indices & dimensions.
-    yc_index_node_ptr t = _node_factory.new_step_index("t");           // step in time dim.
-    yc_index_node_ptr x = _node_factory.new_domain_index("x");         // spatial dim.
-    yc_index_node_ptr y = _node_factory.new_domain_index("y");         // spatial dim.
-    yc_index_node_ptr a = _node_factory.new_misc_index("a");
-    yc_index_node_ptr b = _node_factory.new_misc_index("b");
-    yc_index_node_ptr c = _node_factory.new_misc_index("c");
+    yc_index_node_ptr t = new_step_index("t");           // step in time dim.
+    yc_index_node_ptr x = new_domain_index("x");         // spatial dim.
+    yc_index_node_ptr y = new_domain_index("y");         // spatial dim.
+    yc_index_node_ptr a = new_misc_index("a");
+    yc_index_node_ptr b = new_misc_index("b");
+    yc_index_node_ptr c = new_misc_index("c");
     
     // Time-varying grid. Intermix last domain dim with misc dims to make
     // sure compiler creates correct layout.
@@ -376,10 +376,10 @@ class StreamStencil : public yc_solution_with_radius_base {
 protected:
 
     // Indices & dimensions.
-    yc_index_node_ptr t = _node_factory.new_step_index("t");           // step in time dim.
-    yc_index_node_ptr x = _node_factory.new_domain_index("x");         // spatial dim.
-    yc_index_node_ptr y = _node_factory.new_domain_index("y");         // spatial dim.
-    yc_index_node_ptr z = _node_factory.new_domain_index("z");         // spatial dim.
+    yc_index_node_ptr t = new_step_index("t");           // step in time dim.
+    yc_index_node_ptr x = new_domain_index("x");         // spatial dim.
+    yc_index_node_ptr y = new_domain_index("y");         // spatial dim.
+    yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
 
     // Vars.
     yc_grid_var A = yc_grid_var("A", get_solution(), { t, x, y, z }); // time-varying 3D grid.
@@ -393,7 +393,7 @@ public:
     // Define equation to read '_radius' values and write one.
     virtual void define() {
 
-        yc_number_node_ptr v = _node_factory.new_number_node(1.0);
+        yc_number_node_ptr v = new_number_node(1.0);
 
         // Add '_radius' values from past time-steps.
         for (int r = 0; r < _radius; r++)
@@ -618,7 +618,7 @@ public:
     virtual void define() {
 
         // Define interior sub-domain.
-        yc_bool_node_ptr sd0 = (x >= first_index(x) + 5) && (x <= last_index(x) - 3);
+        yc_bool_node_ptr sd0 = (x >= first_domain_index(x) + 5) && (x <= last_domain_index(x) - 3);
         
         // Define interior points.
         yc_number_node_ptr u = def_1d(A, t, x, 0, 1);
@@ -651,8 +651,8 @@ public:
 
         // Sub-domain is rectangle interior.
         yc_bool_node_ptr sd0 =
-            (x >= first_index(x) + 5) && (x <= last_index(x) - 3) &&
-            (y >= first_index(y) + 4) && (y <= last_index(y) - 6);
+            (x >= first_domain_index(x) + 5) && (x <= last_domain_index(x) - 3) &&
+            (y >= first_domain_index(y) + 4) && (y <= last_domain_index(y) - 6);
         
         // Set A w/different stencils depending on condition.
         A(t+1, x, y) EQUALS def_2d(A, t, x, 0, 2, y, 1, 0) IF_DOMAIN sd0;
@@ -682,9 +682,9 @@ public:
 
         // Sub-domain is rectangle interior.
         yc_bool_node_ptr sd0 =
-            (x >= first_index(x) + 5) && (x <= last_index(x) - 3) &&
-            (y >= first_index(y) + 4) && (y <= last_index(y) - 6) &&
-            (z >= first_index(z) + 6) && (z <= last_index(z) - 4);
+            (x >= first_domain_index(x) + 5) && (x <= last_domain_index(x) - 3) &&
+            (y >= first_domain_index(y) + 4) && (y <= last_domain_index(y) - 6) &&
+            (z >= first_domain_index(z) + 6) && (z <= last_domain_index(z) - 4);
         
         // Set A w/different stencils depending on condition.
         A(t+1, x, y, z) EQUALS def_3d(A, t, x, 0, 2, y, 1, 0, z, 0, 1) IF_DOMAIN sd0;
@@ -703,7 +703,7 @@ class TestStepCondStencil1 : public TestBase {
 protected:
 
     // Indices.
-    yc_index_node_ptr b = _node_factory.new_misc_index("b");
+    yc_index_node_ptr b = new_misc_index("b");
 
     // Vars.
     yc_grid_var A = yc_grid_var("A", get_solution(), { t, x }); // time-varying grid.
@@ -767,7 +767,7 @@ public:
         B(x) EQUALS def_1d(A, t, x, 1, 0);
 
         // Define sub-domain.
-        yc_bool_node_ptr sd0 = (x >= first_index(x) + 5) && (x <= last_index(x) - 3);
+        yc_bool_node_ptr sd0 = (x >= first_domain_index(x) + 5) && (x <= last_domain_index(x) - 3);
         
         // Define next values for 'A' from scratch var values.
         auto v = def_no_t_1d(B, x-6, 2, 3) - def_no_t_1d(B, x+7, 0, 2);

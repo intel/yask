@@ -106,7 +106,7 @@ public:
     void define_str(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
                     int sidx, int va_idx, int vb_idx) {
         define_str<N, DA, SA, DB, SB>(t, x, y, z,
-                                      _node_factory.new_number_node(sidx), _node_factory.new_number_node(va_idx), _node_factory.new_number_node(vb_idx));
+                                      new_number_node(sidx), new_number_node(va_idx), new_number_node(vb_idx));
     }
 
     void define_str_TL(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z )
@@ -115,9 +115,9 @@ public:
         yc_number_node_ptr ilambdamu2 = 1.0 / coef(x,y,z, C_LAMBDA_MU2);
         yc_number_node_ptr ilambda    = 1.0 / coef(x,y,z, C_LAMBDA);
 
-        yc_number_node_ptr vtx    = stencil_O8<X,F>( t+1, x, y, z, v, _node_factory.new_number_node(V_TR_U) );
-        yc_number_node_ptr vty    = stencil_O8<Y,B>( t+1, x, y, z, v, _node_factory.new_number_node(V_TL_V) );
-        yc_number_node_ptr vtz    = stencil_O8<Z,B>( t+1, x, y, z, v, _node_factory.new_number_node(V_BL_W) );
+        yc_number_node_ptr vtx    = stencil_O8<X,F>( t+1, x, y, z, v, new_number_node(V_TR_U) );
+        yc_number_node_ptr vty    = stencil_O8<Y,B>( t+1, x, y, z, v, new_number_node(V_TL_V) );
+        yc_number_node_ptr vtz    = stencil_O8<Z,B>( t+1, x, y, z, v, new_number_node(V_BL_W) );
 
         yc_number_node_ptr next_xx = s(t, x, y, z, S_TL_XX) + ilambdamu2 * vtx * delta_t
             + ilambda    * vty * delta_t

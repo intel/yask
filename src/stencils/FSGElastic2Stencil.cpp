@@ -121,7 +121,7 @@ namespace fsg {
         template<typename N>
         yc_number_node_ptr cell_coeff( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z,
                               yc_grid_var &c, int cidx) {
-            return cell_coeff<N>(x, y, z, c, _node_factory.new_number_node(cidx));
+            return cell_coeff<N>(x, y, z, c, new_number_node(cidx));
         }
 
         yc_number_node_ptr cell_coeff_artm( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z,
@@ -163,7 +163,7 @@ namespace fsg {
         yc_number_node_ptr cell_coeff_artm( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z,
                                    yc_grid_var &c, int cidx)
         {
-            return cell_coeff_artm<N>( x, y, z, c, _node_factory.new_number_node(cidx));
+            return cell_coeff_artm<N>( x, y, z, c, new_number_node(cidx));
         }
 
         yc_number_node_ptr stress_update( yc_number_node_ptr c1, yc_number_node_ptr c2, yc_number_node_ptr c3,
@@ -273,11 +273,11 @@ namespace fsg {
                         int vyu_idx, int vyv_idx, int vyw_idx,
                         int vzu_idx, int vzv_idx, int vzw_idx) {
             define_str<N, SZ, SX, SY>(t, x, y, z,
-                       _node_factory.new_number_node(sxx_idx), _node_factory.new_number_node(syy_idx), _node_factory.new_number_node(szz_idx),
-                       _node_factory.new_number_node(sxy_idx), _node_factory.new_number_node(sxz_idx), _node_factory.new_number_node(syz_idx),
-                       _node_factory.new_number_node(vxu_idx), _node_factory.new_number_node(vxv_idx), _node_factory.new_number_node(vxw_idx),
-                       _node_factory.new_number_node(vyu_idx), _node_factory.new_number_node(vyv_idx), _node_factory.new_number_node(vyw_idx),
-                       _node_factory.new_number_node(vzu_idx), _node_factory.new_number_node(vzv_idx), _node_factory.new_number_node(vzw_idx));
+                       new_number_node(sxx_idx), new_number_node(syy_idx), new_number_node(szz_idx),
+                       new_number_node(sxy_idx), new_number_node(sxz_idx), new_number_node(syz_idx),
+                       new_number_node(vxu_idx), new_number_node(vxv_idx), new_number_node(vxw_idx),
+                       new_number_node(vyu_idx), new_number_node(vyv_idx), new_number_node(vyw_idx),
+                       new_number_node(vzu_idx), new_number_node(vzv_idx), new_number_node(vzw_idx));
         }
 
         // Call all the define_* functions.
@@ -341,9 +341,9 @@ namespace fsg {
         yc_bool_node_ptr is_at_boundary()
         {
             yc_bool_node_ptr bc =
-                (z < first_index(z)+abc_width || z > last_index(z)-abc_width) ||
-                (y < first_index(y)+abc_width || y > last_index(y)-abc_width) ||
-                (x < first_index(x)+abc_width || x > last_index(x)-abc_width);
+                (z < first_domain_index(z)+abc_width || z > last_domain_index(z)-abc_width) ||
+                (y < first_domain_index(y)+abc_width || y > last_domain_index(y)-abc_width) ||
+                (x < first_domain_index(x)+abc_width || x > last_domain_index(x)-abc_width);
             return bc;
         }
         yc_bool_node_ptr is_not_at_boundary()
@@ -383,10 +383,10 @@ namespace fsg {
                             int abc_x_idx, int abc_y_idx, int abc_z_idx,
                             int abc_sq_x_idx, int abc_sq_y_idx, int abc_sq_z_idx) {
             define_vel_abc<N, SZ, SZ, SY>(t, x, y, z,
-                                          _node_factory.new_number_node(vidx),
-                                          _node_factory.new_number_node(sx_idx), _node_factory.new_number_node(sy_idx), _node_factory.new_number_node(sz_idx),
-                                          _node_factory.new_number_node(abc_x_idx), _node_factory.new_number_node(abc_y_idx), _node_factory.new_number_node(abc_z_idx),
-                                          _node_factory.new_number_node(abc_sq_x_idx), _node_factory.new_number_node(abc_sq_y_idx), _node_factory.new_number_node(abc_sq_z_idx));
+                                          new_number_node(vidx),
+                                          new_number_node(sx_idx), new_number_node(sy_idx), new_number_node(sz_idx),
+                                          new_number_node(abc_x_idx), new_number_node(abc_y_idx), new_number_node(abc_z_idx),
+                                          new_number_node(abc_sq_x_idx), new_number_node(abc_sq_y_idx), new_number_node(abc_sq_z_idx));
         }
 
         void velocity (yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z)
@@ -500,13 +500,13 @@ namespace fsg {
                             int abc_x_idx, int abc_y_idx, int abc_z_idx,
                             int abc_sq_x_idx, int abc_sq_y_idx, int abc_sq_z_idx) {
             define_str_abc<N, SZ, SX, SY>(t, x, y, z,
-                                          _node_factory.new_number_node(sxx_idx), _node_factory.new_number_node(syy_idx), _node_factory.new_number_node(szz_idx),
-                                          _node_factory.new_number_node(sxy_idx), _node_factory.new_number_node(sxz_idx), _node_factory.new_number_node(syz_idx),
-                                          _node_factory.new_number_node(vxu_idx), _node_factory.new_number_node(vxv_idx), _node_factory.new_number_node(vxw_idx),
-                                          _node_factory.new_number_node(vyu_idx), _node_factory.new_number_node(vyv_idx), _node_factory.new_number_node(vyw_idx),
-                                          _node_factory.new_number_node(vzu_idx), _node_factory.new_number_node(vzv_idx), _node_factory.new_number_node(vzw_idx),
-                                          _node_factory.new_number_node(abc_x_idx), _node_factory.new_number_node(abc_y_idx), _node_factory.new_number_node(abc_z_idx),
-                                          _node_factory.new_number_node(abc_sq_x_idx), _node_factory.new_number_node(abc_sq_y_idx), _node_factory.new_number_node(abc_sq_z_idx));
+                                          new_number_node(sxx_idx), new_number_node(syy_idx), new_number_node(szz_idx),
+                                          new_number_node(sxy_idx), new_number_node(sxz_idx), new_number_node(syz_idx),
+                                          new_number_node(vxu_idx), new_number_node(vxv_idx), new_number_node(vxw_idx),
+                                          new_number_node(vyu_idx), new_number_node(vyv_idx), new_number_node(vyw_idx),
+                                          new_number_node(vzu_idx), new_number_node(vzv_idx), new_number_node(vzw_idx),
+                                          new_number_node(abc_x_idx), new_number_node(abc_y_idx), new_number_node(abc_z_idx),
+                                          new_number_node(abc_sq_x_idx), new_number_node(abc_sq_y_idx), new_number_node(abc_sq_z_idx));
         }
 
         void stress (yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z)

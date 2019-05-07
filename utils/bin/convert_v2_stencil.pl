@@ -101,10 +101,12 @@ sub convert($) {
       }
     
       # Node creation.
-      s/MAKE_STEP_INDEX\s*[(]([^)]+)[)]/yc_index_node_ptr $1 = _node_factory.new_step_index("$1")/g;
-      s/MAKE_DOMAIN_INDEX\s*[(]([^)]+)[)]/yc_index_node_ptr $1 = _node_factory.new_domain_index("$1")/g;
-      s/MAKE_MISC_INDEX\s*[(]([^)]+)[)]/yc_index_node_ptr $1 = _node_factory.new_misc_index("$1")/g;
-      s/constNum\s*[(]([^,]+)[)]/_node_factory.new_number_node($1)/g;
+      s/MAKE_STEP_INDEX\s*[(]([^)]+)[)]/yc_index_node_ptr $1 = new_step_index("$1")/g;
+      s/MAKE_DOMAIN_INDEX\s*[(]([^)]+)[)]/yc_index_node_ptr $1 = new_domain_index("$1")/g;
+      s/MAKE_MISC_INDEX\s*[(]([^)]+)[)]/yc_index_node_ptr $1 = new_misc_index("$1")/g;
+      s/\bconstNum\b/new_number_node/g;
+      s/\bfirst_index\b/first_domain_index/g;
+      s/\blast_index\b/last_domain_index/g;
 
       # Grid creation.
       s/MAKE_GRID\s*[(]([^,]+),\s*([^)]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_solution(), { $2 })/g;

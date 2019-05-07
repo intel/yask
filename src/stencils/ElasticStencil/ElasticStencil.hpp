@@ -54,10 +54,10 @@ class ElasticBoundaryCondition : public yc_solution_base
 protected:
 
     // Indices & dimensions.
-    yc_index_node_ptr t = _node_factory.new_step_index("t");           // step in time dim.
-    yc_index_node_ptr x = _node_factory.new_domain_index("x");         // spatial dim.
-    yc_index_node_ptr y = _node_factory.new_domain_index("y");         // spatial dim.
-    yc_index_node_ptr z = _node_factory.new_domain_index("z");         // spatial dim.
+    yc_index_node_ptr t = new_step_index("t");           // step in time dim.
+    yc_index_node_ptr x = new_domain_index("x");         // spatial dim.
+    yc_index_node_ptr y = new_domain_index("y");         // spatial dim.
+    yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
 
     public:
     ElasticBoundaryCondition(yc_solution_base& base) :
@@ -74,10 +74,10 @@ class ElasticStencilBase : public yc_solution_base {
 protected:
 
     // Dimensions.
-    yc_index_node_ptr t = _node_factory.new_step_index("t");           // step in time dim.
-    yc_index_node_ptr x = _node_factory.new_domain_index("x");         // spatial dim.
-    yc_index_node_ptr y = _node_factory.new_domain_index("y");         // spatial dim.
-    yc_index_node_ptr z = _node_factory.new_domain_index("z");         // spatial dim.
+    yc_index_node_ptr t = new_step_index("t");           // step in time dim.
+    yc_index_node_ptr x = new_domain_index("x");         // spatial dim.
+    yc_index_node_ptr y = new_domain_index("y");         // spatial dim.
+    yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
 
     // 3D-spatial coefficients.
     yc_grid_var rho = yc_grid_var("rho", get_solution(), { x, y, z });

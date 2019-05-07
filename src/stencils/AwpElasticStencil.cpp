@@ -54,10 +54,10 @@ class AwpElasticStencil : public yc_solution_base {
 protected:
 
     // Indices & dimensions.
-    yc_index_node_ptr t = _node_factory.new_step_index("t");           // step in time dim.
-    yc_index_node_ptr x = _node_factory.new_domain_index("x");         // spatial dim.
-    yc_index_node_ptr y = _node_factory.new_domain_index("y");         // spatial dim.
-    yc_index_node_ptr z = _node_factory.new_domain_index("z");         // spatial dim.
+    yc_index_node_ptr t = new_step_index("t");           // step in time dim.
+    yc_index_node_ptr x = new_domain_index("x");         // spatial dim.
+    yc_index_node_ptr y = new_domain_index("y");         // spatial dim.
+    yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
 
     // Time-varying 3D-spatial velocity grids.
     yc_grid_var vel_x = yc_grid_var("vel_x", get_solution(), { t, x, y, z });
@@ -99,7 +99,7 @@ protected:
     // above the surface.  Since we can only write into the "domain", we
     // will define the surface index to be 2 points before the last domain
     // index. Thus, there will be two layers in the domain above the surface.
-#define SURFACE_IDX (last_index(z) - 2)
+#define SURFACE_IDX (last_domain_index(z) - 2)
 
     // Define some sub-domains related to the surface.
 #define IF_BELOW_SURFACE IF_DOMAIN (z < SURFACE_IDX)

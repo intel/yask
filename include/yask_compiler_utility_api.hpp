@@ -54,7 +54,7 @@ namespace yask {
        call yc_factory::new_solution directly.
     */
     class yc_solution_base {
-    protected:
+    private:
 
         /// Pointer to the YASK stencil solution.
         yc_solution_ptr _soln;
@@ -106,34 +106,66 @@ namespace yask {
            could be called from `main()` or any other called function.
          */
         virtual void define() {
-            std::cout << "Warning: no stencil equations are defined in solution '" <<
-                _soln->get_name() << "'. Implement the 'define()' method in the class "
-                "derived from 'yc_solution_base'.\n";
+            yask_exception e("Error: no stencil equations are defined in solution '" +
+                             get_solution()->get_name() +
+                             "'. Implement the 'define()' method in the class "
+                             "derived from 'yc_solution_base'");
+            throw e;
         }
 
         /// Access the underlying solution.
-        virtual yc_solution_ptr get_solution() {
+        virtual yc_solution_ptr
+        get_solution() {
             return _soln;
         }
 
-        /// Create boundary index expression, e.g., 'first_index(x)'.
-        virtual yc_number_node_ptr first_index(yc_index_node_ptr dim) {
+        /// A simple wrapper for yc_node_factory::new_step_index().
+        virtual yc_index_node_ptr
+        new_step_index(const std::string& name) {
+            return _node_factory.new_step_index(name);
+        }
+
+        /// A simple wrapper for yc_node_factory::new_domain_index().
+        virtual yc_index_node_ptr
+        new_domain_index(const std::string& name) {
+            return _node_factory.new_domain_index(name);
+        }
+
+        /// A simple wrapper for yc_node_factory::new_misc_index().
+        virtual yc_index_node_ptr
+        new_misc_index(const std::string& name) {
+            return _node_factory.new_misc_index(name);
+        }
+
+        /// A simple wrapper for yc_node_factory::new_number_node().
+        virtual yc_number_node_ptr
+        new_number_node(yc_number_any_arg arg) {
+            return _node_factory.new_number_node(arg);
+        }
+
+        /// A simple wrapper for yc_node_factory::new_first_domain_index().
+        virtual yc_number_node_ptr
+        first_domain_index(yc_index_node_ptr dim) {
             return _node_factory.new_first_domain_index(dim);
         }
 
-        /// Create boundary index expression, e.g., 'last_index(x)'.
-        virtual yc_number_node_ptr last_index(yc_index_node_ptr dim) {
+        /// A simple wrapper for yc_node_factory::new_last_domain_index().
+        virtual yc_number_node_ptr
+        last_domain_index(yc_index_node_ptr dim) {
             return _node_factory.new_last_domain_index(dim);
         }
 
         /// This solution does _not_ use the "radius" sizing feature.
-        virtual bool uses_radius() const { return false; }
+        virtual bool
+        uses_radius() const { return false; }
 
         /// Dummy function for setting radius.
-        virtual bool set_radius(int radius) { return false; }
+        virtual bool
+        set_radius(int radius) { return false; }
 
         /// Dummy function for accessing radius.
-        virtual int get_radius() const { return 0; }
+        virtual int
+        get_radius() const { return 0; }
     };
 
     /// A base class for stencils that have a 'radius'.
@@ -161,25 +193,32 @@ namespace yask {
         /**
            See yc_solution_base::define().
         */
-        virtual void define() override {
-            std::cout << "Warning: no stencil equations are defined in solution '" <<
-                _soln->get_name() << "'. Implement the 'define()' method in the class "
-                "derived from 'yc_solution_with_radius_base'.\n";
+        virtual void
+        define() override {
+            yask_exception e("Error: no stencil equations are defined in solution '" +
+                             get_solution()->get_name() +
+                             "'. Implement the 'define()' method in the class "
+                             "derived from 'yc_solution_with_radius_base'");
+            throw e;
         }
 
         /// This object does use radius.
-        virtual bool uses_radius() const override { return true; }
+        virtual bool
+        uses_radius() const override { return true; }
 
         /// Set radius.
         /** @returns `true` if successful. */
-        virtual bool set_radius(int radius) override {
+        virtual bool
+        set_radius(int radius) override {
             _radius = radius;
-            _soln->set_description(_soln->get_name() + " radius " + std::to_string(radius));
+            auto soln = get_solution();
+            soln->set_description(soln->get_name() + " radius " + std::to_string(radius));
             return radius >= 0;  // support only non-neg. radius.
         }
 
         /// Get radius.
-        virtual int get_radius() const override { return _radius; }
+        virtual int
+        get_radius() const override { return _radius; }
     };
 
     /** @}*/

@@ -36,16 +36,16 @@ class Elastic2BoundaryCondition : public yc_solution_base
 protected:
 
     // Indices & dimensions.
-    yc_index_node_ptr t = _node_factory.new_step_index("t");           // step in time dim.
-    yc_index_node_ptr x = _node_factory.new_domain_index("x");         // spatial dim.
-    yc_index_node_ptr y = _node_factory.new_domain_index("y");         // spatial dim.
-    yc_index_node_ptr z = _node_factory.new_domain_index("z");         // spatial dim.
+    yc_index_node_ptr t = new_step_index("t");           // step in time dim.
+    yc_index_node_ptr x = new_domain_index("x");         // spatial dim.
+    yc_index_node_ptr y = new_domain_index("y");         // spatial dim.
+    yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
 
     // yc_grid_var selectors.
-    yc_index_node_ptr vidx = _node_factory.new_misc_index("vidx");
-    yc_index_node_ptr sidx = _node_factory.new_misc_index("sidx");
-    yc_index_node_ptr cidx = _node_factory.new_misc_index("cidx");
-    yc_index_node_ptr spidx = _node_factory.new_misc_index("spidx");
+    yc_index_node_ptr vidx = new_misc_index("vidx");
+    yc_index_node_ptr sidx = new_misc_index("sidx");
+    yc_index_node_ptr cidx = new_misc_index("cidx");
+    yc_index_node_ptr spidx = new_misc_index("spidx");
 
     public:
     Elastic2BoundaryCondition(yc_solution_base& base) :
@@ -62,15 +62,15 @@ class Elastic2StencilBase : public yc_solution_base {
 protected:
 
     // Dimensions.
-    yc_index_node_ptr t = _node_factory.new_step_index("t");           // step in time dim.
-    yc_index_node_ptr x = _node_factory.new_domain_index("x");         // spatial dim.
-    yc_index_node_ptr y = _node_factory.new_domain_index("y");         // spatial dim.
-    yc_index_node_ptr z = _node_factory.new_domain_index("z");         // spatial dim.
+    yc_index_node_ptr t = new_step_index("t");           // step in time dim.
+    yc_index_node_ptr x = new_domain_index("x");         // spatial dim.
+    yc_index_node_ptr y = new_domain_index("y");         // spatial dim.
+    yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
 
     // yc_grid_var selectors.
-    yc_index_node_ptr vidx = _node_factory.new_misc_index("vidx");
-    yc_index_node_ptr sidx = _node_factory.new_misc_index("sidx");
-    yc_index_node_ptr cidx = _node_factory.new_misc_index("cidx");
+    yc_index_node_ptr vidx = new_misc_index("vidx");
+    yc_index_node_ptr sidx = new_misc_index("sidx");
+    yc_index_node_ptr cidx = new_misc_index("cidx");
 
     // 3D-spatial coefficients.
     yc_grid_var coef = yc_grid_var("coef", get_solution(), { x, y, z, cidx });
@@ -255,8 +255,8 @@ public:
                     yc_grid_var& v, int vidx,
                     yc_grid_var& s, int sx_idx, int sy_idx, int sz_idx) {
         define_vel<N, SZ, SX, SY>(t, x, y, z,
-                                  v, _node_factory.new_number_node(vidx),
-                                  s, _node_factory.new_number_node(sx_idx), _node_factory.new_number_node(sy_idx), _node_factory.new_number_node(sz_idx));
+                                  v, new_number_node(vidx),
+                                  s, new_number_node(sx_idx), new_number_node(sy_idx), new_number_node(sz_idx));
     }
 
     yc_number_node_ptr stencil_O2_Z(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
