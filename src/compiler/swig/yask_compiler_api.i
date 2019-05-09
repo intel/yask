@@ -201,4 +201,4 @@ BOOL_OP(__le__, <=);
 
 %include "yask_common_api.hpp"
 %include "yask_compiler_api.hpp"
-%include "yc_node_api.hpp"
+%include "aux/yc_node_api.hpp"

@@ -130,7 +130,7 @@ api:
 	$(YK_MAKE) $@
 
 # Format API documents.
-docs/api/html/index.html: include/*.hpp docs/api/*.*
+docs/api/html/index.html: include/*.hpp include/*/*.hpp docs/api/*.*
 	doxygen -v
 	cd docs/api; doxygen doxygen_config.txt
 

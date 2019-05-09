@@ -82,7 +82,7 @@ namespace yask {
     /** @}*/
 }
 
-#include "yc_node_api.hpp"
+#include "aux/yc_node_api.hpp"
 
 namespace yask {
 

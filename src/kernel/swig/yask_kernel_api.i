@@ -69,5 +69,5 @@ IN THE SOFTWARE.
 
 %include "yask_common_api.hpp"
 %include "yask_kernel_api.hpp"
-%include "yk_solution_api.hpp"
-%include "yk_grid_api.hpp"
+%include "aux/yk_solution_api.hpp"
+%include "aux/yk_grid_api.hpp"

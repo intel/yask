@@ -68,8 +68,8 @@ namespace yask {
     /** @}*/
 } // namespace yask.
 
-#include "yk_solution_api.hpp"
-#include "yk_grid_api.hpp"
+#include "aux/yk_solution_api.hpp"
+#include "aux/yk_grid_api.hpp"
 
 namespace yask {
 
