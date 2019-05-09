@@ -60,7 +60,7 @@ COEFF_DIR	:=	$(SRC_DIR)/contrib/coefficients
 
 # Globs and flags.
 INC_GLOB	:=	$(wildcard $(addsuffix /*.hpp,$(INC_DIR)))
-INC_CXXFLAGS	:=	$(addprefix -I,$(INC_DIR))
+INC_CXXFLAGS	:=	$(addprefix -I,$(INC_DIR) $(INC_DIR)/aux)
 
 # YASK stencil compiler.
 # This is here because both the compiler and kernel

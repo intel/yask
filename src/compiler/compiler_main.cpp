@@ -32,7 +32,7 @@ IN THE SOFTWARE.
 #include "yask_compiler_utility_api.hpp"
 
 // Backward-compatible API.
-#include "Soln.hpp"
+#include "aux/Soln.hpp"
 
 // YASK compiler-solution code.
 // TODO: remove these non-API includes.
