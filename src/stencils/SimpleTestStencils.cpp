@@ -393,14 +393,14 @@ public:
     // Define equation to read '_radius' values and write one.
     virtual void define() {
 
-        yc_number_node_ptr v = new_number_node(1.0);
+        yc_number_node_ptr v;
 
         // Add '_radius' values from past time-steps.
         for (int r = 0; r < _radius; r++)
             v += A(t-r, x, y, z);
 
-        // define the value at t+1 to be equivalent to v.
-        A(t+1, x, y, z) EQUALS v;
+        // define the value at t+1 to be equivalent to v + 1.
+        A(t+1, x, y, z) EQUALS v + 1;
     }
 };
 

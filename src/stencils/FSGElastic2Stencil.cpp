@@ -38,11 +38,13 @@ namespace fsg {
 
     class FSG2_ABC;
 
-    class FSG2BoundaryCondition : public Elastic2BoundaryCondition
+    class FSG2BoundaryCondition : public ElasticBoundaryCondition
     {
+    protected:
+
     public:
         FSG2BoundaryCondition(yc_solution_base& base) :
-            Elastic2BoundaryCondition(base) {}
+            ElasticBoundaryCondition(base) {}
         virtual void velocity (yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z) {}
         virtual void stress (yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z) {}
     };
@@ -114,14 +116,9 @@ namespace fsg {
         }
         template<typename N>
         yc_number_node_ptr cell_coeff( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z,
-                              yc_grid_var &c, yc_number_node_ptr cidx)
+                                       yc_grid_var &c, yc_number_any_arg cidx)
         {
             return cell_coeff( x, y, z, c, cidx, N());
-        }
-        template<typename N>
-        yc_number_node_ptr cell_coeff( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z,
-                              yc_grid_var &c, int cidx) {
-            return cell_coeff<N>(x, y, z, c, new_number_node(cidx));
         }
 
         yc_number_node_ptr cell_coeff_artm( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z,
@@ -155,15 +152,9 @@ namespace fsg {
         }
         template<typename N>
         yc_number_node_ptr cell_coeff_artm( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z,
-                                   yc_grid_var &c, yc_number_node_ptr cidx)
+                                   yc_grid_var &c, yc_number_any_arg cidx)
         {
             return cell_coeff_artm( x, y, z, c, cidx, N());
-        }
-        template<typename N>
-        yc_number_node_ptr cell_coeff_artm( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z,
-                                   yc_grid_var &c, int cidx)
-        {
-            return cell_coeff_artm<N>( x, y, z, c, new_number_node(cidx));
         }
 
         yc_number_node_ptr stress_update( yc_number_node_ptr c1, yc_number_node_ptr c2, yc_number_node_ptr c3,
@@ -191,11 +182,11 @@ namespace fsg {
 
         template<typename N, typename SZ, typename SX, typename SY>
         void define_str(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
-                        yc_number_node_ptr sxx_idx, yc_number_node_ptr syy_idx, yc_number_node_ptr szz_idx,
-                        yc_number_node_ptr sxy_idx, yc_number_node_ptr sxz_idx, yc_number_node_ptr syz_idx,
-                        yc_number_node_ptr vxu_idx, yc_number_node_ptr vxv_idx, yc_number_node_ptr vxw_idx,
-                        yc_number_node_ptr vyu_idx, yc_number_node_ptr vyv_idx, yc_number_node_ptr vyw_idx,
-                        yc_number_node_ptr vzu_idx, yc_number_node_ptr vzv_idx, yc_number_node_ptr vzw_idx) {
+                        yc_number_any_arg sxx_idx, yc_number_any_arg syy_idx, yc_number_any_arg szz_idx,
+                        yc_number_any_arg sxy_idx, yc_number_any_arg sxz_idx, yc_number_any_arg syz_idx,
+                        yc_number_any_arg vxu_idx, yc_number_any_arg vxv_idx, yc_number_any_arg vxw_idx,
+                        yc_number_any_arg vyu_idx, yc_number_any_arg vyv_idx, yc_number_any_arg vyw_idx,
+                        yc_number_any_arg vzu_idx, yc_number_any_arg vzv_idx, yc_number_any_arg vzw_idx) {
 
             // Interpolate coeffs.
             auto ic11 = cell_coeff     <N>(x, y, z, c, C11);
@@ -249,7 +240,7 @@ namespace fsg {
 
             // define the value at t+1.
             if(hasBoundaryCondition()) {
-                yc_bool_node_ptr not_at_bc = bc->is_not_at_boundary();
+                auto not_at_bc = bc->is_not_at_boundary();
                 s(t+1, x, y, z, sxx_idx) EQUALS next_sxx IF_DOMAIN not_at_bc;
                 s(t+1, x, y, z, syy_idx) EQUALS next_syy IF_DOMAIN not_at_bc;
                 s(t+1, x, y, z, szz_idx) EQUALS next_szz IF_DOMAIN not_at_bc;
@@ -264,20 +255,6 @@ namespace fsg {
                 s(t+1, x, y, z, sxz_idx) EQUALS next_sxz;
                 s(t+1, x, y, z, sxy_idx) EQUALS next_sxy;
             }
-        }
-        template<typename N, typename SZ, typename SX, typename SY>
-        void define_str(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
-                        int sxx_idx, int syy_idx, int szz_idx,
-                        int sxy_idx, int sxz_idx, int syz_idx,
-                        int vxu_idx, int vxv_idx, int vxw_idx,
-                        int vyu_idx, int vyv_idx, int vyw_idx,
-                        int vzu_idx, int vzv_idx, int vzw_idx) {
-            define_str<N, SZ, SX, SY>(t, x, y, z,
-                       new_number_node(sxx_idx), new_number_node(syy_idx), new_number_node(szz_idx),
-                       new_number_node(sxy_idx), new_number_node(sxz_idx), new_number_node(syz_idx),
-                       new_number_node(vxu_idx), new_number_node(vxv_idx), new_number_node(vxw_idx),
-                       new_number_node(vyu_idx), new_number_node(vyv_idx), new_number_node(vyw_idx),
-                       new_number_node(vzu_idx), new_number_node(vzv_idx), new_number_node(vzw_idx));
         }
 
         // Call all the define_* functions.
@@ -323,6 +300,7 @@ namespace fsg {
         const int abc_width = 20;
 
         // Sponge coefficients.
+        yc_index_node_ptr spidx = new_misc_index("spidx");
         yc_grid_var sponge = yc_grid_var("sponge", get_soln(), { x, y, z, spidx });
         enum SPONGE_IDX { SPONGE_LX, SPONGE_RX, SPONGE_BZ,
                           SPONGE_TZ, SPONGE_FY, SPONGE_BY,
@@ -353,10 +331,10 @@ namespace fsg {
 
         template<typename N, typename SZ, typename SX, typename SY>
         void define_vel_abc(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
-                            yc_number_node_ptr vidx,
-                            yc_number_node_ptr sx_idx, yc_number_node_ptr sy_idx, yc_number_node_ptr sz_idx,
-                            yc_number_node_ptr abc_x_idx, yc_number_node_ptr abc_y_idx, yc_number_node_ptr abc_z_idx,
-                            yc_number_node_ptr abc_sq_x_idx, yc_number_node_ptr abc_sq_y_idx, yc_number_node_ptr abc_sq_z_idx) {
+                            yc_number_any_arg vidx,
+                            yc_number_any_arg sx_idx, yc_number_any_arg sy_idx, yc_number_any_arg sz_idx,
+                            yc_number_any_arg abc_x_idx, yc_number_any_arg abc_y_idx, yc_number_any_arg abc_z_idx,
+                            yc_number_any_arg abc_sq_x_idx, yc_number_any_arg abc_sq_y_idx, yc_number_any_arg abc_sq_z_idx) {
             auto at_abc = is_at_boundary();
 
             auto next_v = fsg.v(t, x, y, z, vidx) * sponge(x,y,z, abc_x_idx) *
@@ -374,18 +352,6 @@ namespace fsg {
 
             // define the value at t+1.
             fsg.v(t+1, x, y, z, vidx) EQUALS next_v IF_DOMAIN at_abc;
-        }
-        template<typename N, typename SZ, typename SX, typename SY>
-        void define_vel_abc(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
-                            int vidx,
-                            int sx_idx, int sy_idx, int sz_idx,
-                            int abc_x_idx, int abc_y_idx, int abc_z_idx,
-                            int abc_sq_x_idx, int abc_sq_y_idx, int abc_sq_z_idx) {
-            define_vel_abc<N, SZ, SZ, SY>(t, x, y, z,
-                                          new_number_node(vidx),
-                                          new_number_node(sx_idx), new_number_node(sy_idx), new_number_node(sz_idx),
-                                          new_number_node(abc_x_idx), new_number_node(abc_y_idx), new_number_node(abc_z_idx),
-                                          new_number_node(abc_sq_x_idx), new_number_node(abc_sq_y_idx), new_number_node(abc_sq_z_idx));
         }
 
         void velocity (yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z)
@@ -418,13 +384,13 @@ namespace fsg {
 
         template<typename N, typename SZ, typename SX, typename SY>
         void define_str_abc(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
-                            yc_number_node_ptr sxx_idx, yc_number_node_ptr syy_idx, yc_number_node_ptr szz_idx,
-                            yc_number_node_ptr sxy_idx, yc_number_node_ptr sxz_idx, yc_number_node_ptr syz_idx,
-                            yc_number_node_ptr vxu_idx, yc_number_node_ptr vxv_idx, yc_number_node_ptr vxw_idx,
-                            yc_number_node_ptr vyu_idx, yc_number_node_ptr vyv_idx, yc_number_node_ptr vyw_idx,
-                            yc_number_node_ptr vzu_idx, yc_number_node_ptr vzv_idx, yc_number_node_ptr vzw_idx,
-                            yc_number_node_ptr abc_x_idx, yc_number_node_ptr abc_y_idx, yc_number_node_ptr abc_z_idx,
-                            yc_number_node_ptr abc_sq_x_idx, yc_number_node_ptr abc_sq_y_idx, yc_number_node_ptr abc_sq_z_idx) {
+                            yc_number_any_arg sxx_idx, yc_number_any_arg syy_idx, yc_number_any_arg szz_idx,
+                            yc_number_any_arg sxy_idx, yc_number_any_arg sxz_idx, yc_number_any_arg syz_idx,
+                            yc_number_any_arg vxu_idx, yc_number_any_arg vxv_idx, yc_number_any_arg vxw_idx,
+                            yc_number_any_arg vyu_idx, yc_number_any_arg vyv_idx, yc_number_any_arg vyw_idx,
+                            yc_number_any_arg vzu_idx, yc_number_any_arg vzv_idx, yc_number_any_arg vzw_idx,
+                            yc_number_any_arg abc_x_idx, yc_number_any_arg abc_y_idx, yc_number_any_arg abc_z_idx,
+                            yc_number_any_arg abc_sq_x_idx, yc_number_any_arg abc_sq_y_idx, yc_number_any_arg abc_sq_z_idx) {
 
             auto abc = sponge(x,y,z, abc_x_idx) * sponge(x,y,z, abc_y_idx) * sponge(x,y,z, abc_z_idx);
             auto next_sxx = fsg.s(t, x, y, z, sxx_idx) * abc;
@@ -481,31 +447,13 @@ namespace fsg {
             next_sxy += fsg.stress_update(ic16,ic26,ic36,ic46,ic56,ic66,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y) * abc_sq;
 
             // define the value at t+1.
-            yc_bool_node_ptr at_abc = is_at_boundary();
+            auto at_abc = is_at_boundary();
             fsg.s(t+1, x, y, z, sxx_idx) EQUALS next_sxx IF_DOMAIN at_abc;
             fsg.s(t+1, x, y, z, syy_idx) EQUALS next_syy IF_DOMAIN at_abc;
             fsg.s(t+1, x, y, z, szz_idx) EQUALS next_szz IF_DOMAIN at_abc;
             fsg.s(t+1, x, y, z, syz_idx) EQUALS next_syz IF_DOMAIN at_abc;
             fsg.s(t+1, x, y, z, sxz_idx) EQUALS next_sxz IF_DOMAIN at_abc;
             fsg.s(t+1, x, y, z, sxy_idx) EQUALS next_sxy IF_DOMAIN at_abc;
-        }
-        template<typename N, typename SZ, typename SX, typename SY>
-        void define_str_abc(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
-                            int sxx_idx, int syy_idx, int szz_idx,
-                            int sxy_idx, int sxz_idx, int syz_idx,
-                            int vxu_idx, int vxv_idx, int vxw_idx,
-                            int vyu_idx, int vyv_idx, int vyw_idx,
-                            int vzu_idx, int vzv_idx, int vzw_idx,
-                            int abc_x_idx, int abc_y_idx, int abc_z_idx,
-                            int abc_sq_x_idx, int abc_sq_y_idx, int abc_sq_z_idx) {
-            define_str_abc<N, SZ, SX, SY>(t, x, y, z,
-                                          new_number_node(sxx_idx), new_number_node(syy_idx), new_number_node(szz_idx),
-                                          new_number_node(sxy_idx), new_number_node(sxz_idx), new_number_node(syz_idx),
-                                          new_number_node(vxu_idx), new_number_node(vxv_idx), new_number_node(vxw_idx),
-                                          new_number_node(vyu_idx), new_number_node(vyv_idx), new_number_node(vyw_idx),
-                                          new_number_node(vzu_idx), new_number_node(vzv_idx), new_number_node(vzw_idx),
-                                          new_number_node(abc_x_idx), new_number_node(abc_y_idx), new_number_node(abc_z_idx),
-                                          new_number_node(abc_sq_x_idx), new_number_node(abc_sq_y_idx), new_number_node(abc_sq_z_idx));
         }
 
         void stress (yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z)
@@ -533,24 +481,25 @@ namespace fsg {
 
     struct FSGElastic2Stencil : public FSGElastic2StencilBase {
         FSGElastic2Stencil() :
-            FSGElastic2StencilBase("fsg2") { }
+            FSGElastic2StencilBase("fsg_merged") { }
     };
 
     struct FSG2ABCElasticStencil : public FSGElastic2StencilBase {
-        FSG2_ABC abc; // Absorbing Boundary yc_bool_node_ptr
+        FSG2_ABC abc; // Absorbing Boundary Condition.
 
         FSG2ABCElasticStencil() :
-            FSGElastic2StencilBase("fsg2_abc", &abc),
+            FSGElastic2StencilBase("fsg_merged_abc", &abc),
             abc(*this) { }
     };
 
-// Create an object of type 'FSGElastic2Stencil',
-// making it available in the YASK compiler utility via the
-// '-stencil' commmand-line option or the 'stencil=' build option.
-static FSGElastic2Stencil FSGElastic2Stencil_instance;
-// Create an object of type 'FSG2ABCElasticStencil',
-// making it available in the YASK compiler utility via the
-// '-stencil' commmand-line option or the 'stencil=' build option.
-static FSG2ABCElasticStencil FSG2ABCElasticStencil_instance;
+    // Create an object of type 'FSGElastic2Stencil',
+    // making it available in the YASK compiler utility via the
+    // '-stencil' commmand-line option or the 'stencil=' build option.
+    static FSGElastic2Stencil FSGElastic2Stencil_instance;
+    
+    // Create an object of type 'FSG2ABCElasticStencil',
+    // making it available in the YASK compiler utility via the
+    // '-stencil' commmand-line option or the 'stencil=' build option.
+    static FSG2ABCElasticStencil FSG2ABCElasticStencil_instance;
 
 }

@@ -155,14 +155,6 @@ static Iso3dfdStencil Iso3dfdStencil_instance;
 class Iso3dfdSpongeStencil : public Iso3dfdStencil {
 protected:
 
-    // Sponge coefficients.
-    // In practice, the interior values would be set to 1.0,
-    // and values nearer the boundary would be set to values
-    // increasingly approaching 0.0.
-    yc_grid_var cr_x = yc_grid_var("cr_x", get_soln(), { x });
-    yc_grid_var cr_y = yc_grid_var("cr_y", get_soln(), { y });
-    yc_grid_var cr_z = yc_grid_var("cr_z", get_soln(), { z });
-
 public:
     Iso3dfdSpongeStencil(int radius=8) :
         Iso3dfdStencil("_sponge", radius) { }
@@ -171,6 +163,14 @@ public:
     // Define equation for pressure at t+1 based on values from vel and pressure at t.
     virtual void define() {
 
+        // Sponge coefficients.
+        // In practice, the interior values would be set to 1.0,
+        // and values nearer the boundary would be set to values
+        // increasingly approaching 0.0.
+        yc_grid_var cr_x("cr_x", get_soln(), { x });
+        yc_grid_var cr_y("cr_y", get_soln(), { y });
+        yc_grid_var cr_z("cr_z", get_soln(), { z });
+        
         // Get equation for RHS.
         auto next_p = get_next_p();
 

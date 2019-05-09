@@ -5,14 +5,15 @@
 
 ## Overview
 YASK is a framework to rapidly create high-performance stencil code including optimizations and features such as
-* Vector-folding to increase data reuse via non-traditional data layout,
-* Multi-level OpenMP parallelism to exploit multiple cores and threads,
-* Scaling to multiple sockets and nodes via MPI with overlapped communication and compute, and
-* Spatial tiling with automatically-tuned block sizes,
-* Temporal tiling in multiple dimensions to further increase cache locality,
+* Support for boundary layers and staggered-grid stencils.
+* Vector-folding to increase data reuse via non-traditional data layout.
+* Multi-level OpenMP parallelism to exploit multiple cores and threads.
+* Scaling to multiple sockets and nodes via MPI with overlapped communication and compute.
+* Spatial tiling with automatically-tuned block sizes.
+* Temporal tiling in multiple dimensions to further increase cache locality.
 * APIs for C++ and Python: [API documentation](https://rawgit.com/intel/yask/api-docs/html/index.html).
 
-YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-optimized code for Intel(R) Xeon Phi(TM) and Intel(R) Xeon(R) processors.
+YASK contains a domain-specific compiler to convert stencil-equation specifications to SIMD-optimized code for Intel(R) Xeon Phi(TM) and Intel(R) Xeon(R) processors.
 
 ### Supported Platforms and Processors:
 * 64-bit Linux.
@@ -40,6 +41,7 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
        Older Gnu C++ compilers can produce kernels that run
        many times slower.
 * Gnu C++ compiler, g++ (4.9.0 or later; 8.2.0 or later recommended).
+  Even when using Intel compilers, they rely on functionality provided by a g++ installation.
 * Linux libraries `librt` and `libnuma`.
 * Perl (5.010 or later).
 * Awk.

@@ -64,20 +64,17 @@ namespace yask {
     // Dummy object for backward-compatibility with old stencil DSL.
     StencilList stub_stencils;
 
+    // Constructor from the DSL API.
     // Create new solution and register it.
-    yc_solution_ptr yc_new_solution(const std::string& name,
-                                    yc_solution_base* base_ptr) {
+    yc_solution_base::yc_solution_base(const std::string& name) {
         if (stencils.count(name))
             THROW_YASK_EXCEPTION("Error: stencil '" + name +
                                  "' already defined");
-        auto soln = factory.new_solution(name);
-        stencils[name] = base_ptr;
-        return soln;
-    }
+        _soln = factory.new_solution(name);
+        assert(_soln.get());
 
-    // Constructor from the DSL API.
-    yc_solution_base::yc_solution_base(const std::string& name) {
-        _soln = yc_new_solution(name, this);
+        // Add this new 'yc_solution_base' to the map.
+        stencils[name] = this;
     }
     
 } // yask namespace.
@@ -423,7 +420,7 @@ void parseOpts(int argc, const char* argv[])
 int main(int argc, const char* argv[]) {
 
     cout << "YASK -- Yet Another Stencil Kernel\n"
-        "YASK Stencil Compiler\n"
+        "YASK Stencil Compiler Utility\n"
         "Copyright (c) 2014-2019, Intel Corporation.\n"
         "Version: " << yask_get_version_string() << endl;
 

@@ -39,7 +39,11 @@ namespace yask {
 
     /**
      * \defgroup ycu YASK Compiler Utility
-     * Types, clases, and functions used in the provided `yask_compiler.exe` binary utility.
+     * Wrappers around \ref yc_solution pointers used to create solutions that will
+     * be integrated into the provided `yask_compiler.exe` binary utility.
+     * Not to be used by YASK stencil code that is _not_ to be used with the compiler
+     * utility. In other words, if you write your own binary to generate optimized 
+     * YASK stencil code, use the APIs in \ref sec_yc only.
      * @{
      */
 
@@ -85,6 +89,7 @@ namespace yask {
         */
         yc_solution_base(yc_solution_base& base) {
             _soln = base.get_soln();
+            assert(_soln.get());
         }
 
         /// Destructor.

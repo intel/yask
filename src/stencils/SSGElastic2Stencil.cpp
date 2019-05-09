@@ -42,10 +42,14 @@ protected:
     yc_grid_var s = yc_grid_var("s", get_soln(), { t, x, y, z, sidx });
     enum SIDX { S_BL_YZ, S_BR_XZ, S_TL_XX, S_TL_YY, S_TL_ZZ, S_TR_XY };
 
+    // Merged.
+    yc_grid_var coef = yc_grid_var("c", get_soln(), { t, x, y, z, cidx });
+    enum CIDX { C_MU, C_LAMBDA, C_LAMBDA_MU2 };
+
 public:
 
     SSGElastic2Stencil( ) :
-        Elastic2StencilBase("ssg2")
+        Elastic2StencilBase("ssg_merged")
     {
     }
 
@@ -90,7 +94,7 @@ public:
 
     template<typename N, typename DA, typename SA, typename DB, typename SB>
     void define_str(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
-                    yc_number_node_ptr sidx, yc_number_node_ptr va_idx, yc_number_node_ptr vb_idx) {
+                    yc_number_any_arg sidx, yc_number_any_arg va_idx, yc_number_any_arg vb_idx) {
 
         auto lcoeff = interp_mu<N>( x, y, z );
 
@@ -102,12 +106,6 @@ public:
         // define the value at t+1.
         s(t+1, x, y, z, sidx) EQUALS next_s;
     }
-    template<typename N, typename DA, typename SA, typename DB, typename SB>
-    void define_str(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
-                    int sidx, int va_idx, int vb_idx) {
-        define_str<N, DA, SA, DB, SB>(t, x, y, z,
-                                      new_number_node(sidx), new_number_node(va_idx), new_number_node(vb_idx));
-    }
 
     void define_str_TL(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z )
     {
@@ -115,9 +113,9 @@ public:
         auto ilambdamu2 = 1.0 / coef(x,y,z, C_LAMBDA_MU2);
         auto ilambda    = 1.0 / coef(x,y,z, C_LAMBDA);
 
-        auto vtx    = stencil_O8<X,F>( t+1, x, y, z, v, new_number_node(V_TR_U) );
-        auto vty    = stencil_O8<Y,B>( t+1, x, y, z, v, new_number_node(V_TL_V) );
-        auto vtz    = stencil_O8<Z,B>( t+1, x, y, z, v, new_number_node(V_BL_W) );
+        auto vtx    = stencil_O8<X,F>( t+1, x, y, z, v, V_TR_U );
+        auto vty    = stencil_O8<Y,B>( t+1, x, y, z, v, V_TL_V );
+        auto vtz    = stencil_O8<Z,B>( t+1, x, y, z, v, V_BL_W );
 
         auto next_xx = s(t, x, y, z, S_TL_XX) + ilambdamu2 * vtx * delta_t
             + ilambda    * vty * delta_t

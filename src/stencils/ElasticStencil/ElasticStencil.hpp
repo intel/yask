@@ -53,13 +53,13 @@ class ElasticBoundaryCondition : public yc_solution_base
 {
 protected:
 
-    // Indices & dimensions.
+    // Dimensions.
     yc_index_node_ptr t = new_step_index("t");           // step in time dim.
     yc_index_node_ptr x = new_domain_index("x");         // spatial dim.
     yc_index_node_ptr y = new_domain_index("y");         // spatial dim.
     yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
 
-    public:
+public:
     ElasticBoundaryCondition(yc_solution_base& base) :
         yc_solution_base(base) { }
     virtual ~ElasticBoundaryCondition() {}
@@ -69,6 +69,8 @@ protected:
     virtual yc_bool_node_ptr is_not_at_boundary() =0;
 };
 
+// This class implements yc_solution_base but is not the main solution.
+// The main solution is provided during construction.
 class ElasticStencilBase : public yc_solution_base {
 
 protected:
@@ -109,25 +111,37 @@ public:
         return bc != NULL;
     }
 
-    yc_number_node_ptr interp_rho( yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, const TL )
+    yc_number_node_ptr interp_rho( yc_number_node_ptr x,
+                                   yc_number_node_ptr y,
+                                   yc_number_node_ptr z,
+                                   const TL )
     {
         return ( 2.0/ (rho(x  , y  , z  ) +
                        rho(x+1, y  , z  )) );
     }
 
-    yc_number_node_ptr interp_rho( yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, const TR )
+    yc_number_node_ptr interp_rho( yc_number_node_ptr x,
+                                   yc_number_node_ptr y,
+                                   yc_number_node_ptr z,
+                                   const TR )
     {
         return ( 2.0/ (rho(x  , y  , z  ) +
                        rho(x  , y+1, z  )) );
     }
 
-    yc_number_node_ptr interp_rho( yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, const BL )
+    yc_number_node_ptr interp_rho( yc_number_node_ptr x,
+                                   yc_number_node_ptr y,
+                                   yc_number_node_ptr z,
+                                   const BL )
     {
         return ( 2.0/ (rho(x  , y  , z  ) +
                        rho(x  , y  , z+1)) );
     }
 
-    yc_number_node_ptr interp_rho( yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, const BR )
+    yc_number_node_ptr interp_rho( yc_number_node_ptr x,
+                                   yc_number_node_ptr y,
+                                   yc_number_node_ptr z,
+                                   const BR )
     {
         return ( 8.0/ (rho(x  , y  , z  ) +
                        rho(x  , y  , z+1) +
@@ -139,13 +153,21 @@ public:
                        rho(x+1, y+1, z+1)) );
     }
 
+    // Call the interp_rho() function above depending on N.
     template<typename N>
-    yc_number_node_ptr interp_rho( yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z )
+    yc_number_node_ptr interp_rho( yc_number_node_ptr x,
+                                   yc_number_node_ptr y,
+                                   yc_number_node_ptr z )
     {
         return interp_rho( x, y, z, N() );
     }
 
-    yc_number_node_ptr stencil_O8_Z( yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, yc_grid_var &g, const int offset )
+    yc_number_node_ptr stencil_O8_Z( yc_number_node_ptr t,
+                                     yc_number_node_ptr x,
+                                     yc_number_node_ptr y,
+                                     yc_number_node_ptr z,
+                                     yc_grid_var &g,
+                                     const int offset )
     {
         return
             (c0_8 * (g(t,x,y,z  +offset)  -
@@ -158,17 +180,32 @@ public:
                      g(t,x,y,z-4+offset)))*dzi;
     }
 
-    yc_number_node_ptr stencil_O8( yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, yc_grid_var &g, const Z, const B )
+    yc_number_node_ptr stencil_O8( yc_number_node_ptr t,
+                                   yc_number_node_ptr x,
+                                   yc_number_node_ptr y,
+                                   yc_number_node_ptr z,
+                                   yc_grid_var &g,
+                                   const Z, const B )
     {
         return stencil_O8_Z( t, x, y, z, g, 0 );
     }
 
-    yc_number_node_ptr stencil_O8( yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, yc_grid_var &g, const Z, const F )
+    yc_number_node_ptr stencil_O8( yc_number_node_ptr t,
+                                   yc_number_node_ptr x,
+                                   yc_number_node_ptr y,
+                                   yc_number_node_ptr z,
+                                   yc_grid_var &g,
+                                   const Z, const F )
     {
         return stencil_O8_Z( t, x, y, z, g, 1 );
     }
 
-    yc_number_node_ptr stencil_O8_Y( yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, yc_grid_var &g, const int offset )
+    yc_number_node_ptr stencil_O8_Y( yc_number_node_ptr t,
+                                     yc_number_node_ptr x,
+                                     yc_number_node_ptr y,
+                                     yc_number_node_ptr z,
+                                     yc_grid_var &g,
+                                     const int offset )
     {
         return
             (c0_8 * (g(t,x,y  +offset,z)  -
@@ -181,17 +218,32 @@ public:
                      g(t,x,y-4+offset,z)))*dyi;
     }
 
-    yc_number_node_ptr stencil_O8( yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, yc_grid_var &g, const Y, const B )
+    yc_number_node_ptr stencil_O8( yc_number_node_ptr t,
+                                   yc_number_node_ptr x,
+                                   yc_number_node_ptr y,
+                                   yc_number_node_ptr z,
+                                   yc_grid_var &g,
+                                   const Y, const B )
     {
         return stencil_O8_Y( t, x, y, z, g, 0 );
     }
 
-    yc_number_node_ptr stencil_O8( yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, yc_grid_var &g, const Y, const F )
+    yc_number_node_ptr stencil_O8( yc_number_node_ptr t,
+                                   yc_number_node_ptr x,
+                                   yc_number_node_ptr y,
+                                   yc_number_node_ptr z,
+                                   yc_grid_var &g,
+                                   const Y, const F )
     {
         return stencil_O8_Y( t, x, y, z, g, 1 );
     }
 
-    yc_number_node_ptr stencil_O8_X( yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, yc_grid_var &g, const int offset )
+    yc_number_node_ptr stencil_O8_X( yc_number_node_ptr t,
+                                     yc_number_node_ptr x,
+                                     yc_number_node_ptr y,
+                                     yc_number_node_ptr z,
+                                     yc_grid_var &g,
+                                     const int offset )
     {
         return
             (c0_8 * (g(t,x  +offset,y,z)  -
@@ -204,18 +256,33 @@ public:
                      g(t,x-4+offset,y,z)))*dxi;
     }
 
-    yc_number_node_ptr stencil_O8( yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, yc_grid_var &g, const X, const B )
+    yc_number_node_ptr stencil_O8( yc_number_node_ptr t,
+                                   yc_number_node_ptr x,
+                                   yc_number_node_ptr y,
+                                   yc_number_node_ptr z,
+                                   yc_grid_var &g,
+                                   const X, const B )
     {
         return stencil_O8_X( t, x, y, z, g, 0 );
     }
 
-    yc_number_node_ptr stencil_O8( yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, yc_grid_var &g, const X, const F )
+    yc_number_node_ptr stencil_O8( yc_number_node_ptr t,
+                                   yc_number_node_ptr x,
+                                   yc_number_node_ptr y,
+                                   yc_number_node_ptr z,
+                                   yc_grid_var &g,
+                                   const X, const F )
     {
         return stencil_O8_X( t, x, y, z, g, 1 );
     }
 
+    // Call the stencil_O8() function above depending on Dim & Dir.
     template<typename Dim, typename Dir>
-    yc_number_node_ptr stencil_O8( yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, yc_grid_var &g )
+    yc_number_node_ptr stencil_O8( yc_number_node_ptr t,
+                                   yc_number_node_ptr x,
+                                   yc_number_node_ptr y,
+                                   yc_number_node_ptr z,
+                                   yc_grid_var &g )
     {
         return stencil_O8( t, x, y, z, g, Dim(), Dir() );
     }
@@ -227,8 +294,14 @@ public:
     // appropriately.
 
     template<typename N, typename SZ, typename SX, typename SY>
-    void define_vel(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
-            yc_grid_var &v, yc_grid_var &sx, yc_grid_var &sy, yc_grid_var &sz) {
+    void define_vel(yc_number_node_ptr t,
+                    yc_number_node_ptr x,
+                    yc_number_node_ptr y,
+                    yc_number_node_ptr z,
+                    yc_grid_var &v,
+                    yc_grid_var &sx,
+                    yc_grid_var &sy,
+                    yc_grid_var &sz) {
 
         auto lrho   = interp_rho<N>( x, y, z );
 
@@ -246,71 +319,129 @@ public:
             v(t+1, x, y, z) EQUALS next_v;
     }
 
-    yc_number_node_ptr stencil_O2_Z( yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, yc_grid_var &g, const int offset )
+    yc_number_node_ptr stencil_O2_Z( yc_number_node_ptr t,
+                                     yc_number_node_ptr x,
+                                     yc_number_node_ptr y,
+                                     yc_number_node_ptr z,
+                                     yc_grid_var &g,
+                                     const int offset )
     {
         return
             (g(t,x,y,z       )  -
              g(t,x,y,z+offset))*dzi;
     }
 
-    yc_number_node_ptr stencil_O2_Z( yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, yc_grid_var &g, const B )
+    yc_number_node_ptr stencil_O2_Z( yc_number_node_ptr t,
+                                     yc_number_node_ptr x,
+                                     yc_number_node_ptr y,
+                                     yc_number_node_ptr z,
+                                     yc_grid_var &g,
+                                     const B )
     {
         return stencil_O2_Z( t, x, y, z, g,-1 );
     }
 
-    yc_number_node_ptr stencil_O2_Z( yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, yc_grid_var &g, const F )
+    yc_number_node_ptr stencil_O2_Z( yc_number_node_ptr t,
+                                     yc_number_node_ptr x,
+                                     yc_number_node_ptr y,
+                                     yc_number_node_ptr z,
+                                     yc_grid_var &g,
+                                     const F )
     {
         return stencil_O2_Z( t, x, y, z, g, 1 );
     }
 
     template<typename D>
-    yc_number_node_ptr stencil_O2_Z( yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, yc_grid_var &g )
+    yc_number_node_ptr stencil_O2_Z( yc_number_node_ptr t,
+                                     yc_number_node_ptr x,
+                                     yc_number_node_ptr y,
+                                     yc_number_node_ptr z,
+                                     yc_grid_var &g )
     {
         return stencil_O2_Z( t, x, y, z, g, D() );
     }
 
-    yc_number_node_ptr stencil_O2_Y( yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, yc_grid_var &g, const int offset )
+    yc_number_node_ptr stencil_O2_Y( yc_number_node_ptr t,
+                                     yc_number_node_ptr x,
+                                     yc_number_node_ptr y,
+                                     yc_number_node_ptr z,
+                                     yc_grid_var &g,
+                                     const int offset )
     {
         return
             (g(t,x,y       ,z)  -
              g(t,x,y+offset,z))*dyi;
     }
 
-    yc_number_node_ptr stencil_O2_Y( yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, yc_grid_var &g, const B )
+    yc_number_node_ptr stencil_O2_Y( yc_number_node_ptr t,
+                                     yc_number_node_ptr x,
+                                     yc_number_node_ptr y,
+                                     yc_number_node_ptr z,
+                                     yc_grid_var &g,
+                                     const B )
     {
         return stencil_O2_Y( t, x, y, z, g,-1 );
     }
 
-    yc_number_node_ptr stencil_O2_Y( yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, yc_grid_var &g, const F )
+    yc_number_node_ptr stencil_O2_Y( yc_number_node_ptr t,
+                                     yc_number_node_ptr x,
+                                     yc_number_node_ptr y,
+                                     yc_number_node_ptr z,
+                                     yc_grid_var &g,
+                                     const F )
     {
         return stencil_O2_Y( t, x, y, z, g, 1 );
     }
 
     template<typename D>
-    yc_number_node_ptr stencil_O2_Y( yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, yc_grid_var &g )
+    yc_number_node_ptr stencil_O2_Y( yc_number_node_ptr t,
+                                     yc_number_node_ptr x,
+                                     yc_number_node_ptr y,
+                                     yc_number_node_ptr z,
+                                     yc_grid_var &g )
     {
         return stencil_O2_Y( t, x, y, z, g, D() );
     }
 
-    yc_number_node_ptr stencil_O2_X( yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, yc_grid_var &g, const int offset )
+    yc_number_node_ptr stencil_O2_X( yc_number_node_ptr t,
+                                     yc_number_node_ptr x,
+                                     yc_number_node_ptr y,
+                                     yc_number_node_ptr z,
+                                     yc_grid_var &g,
+                                     const int offset )
     {
         return
             (g(t,x       ,y,z)  -
              g(t,x+offset,y,z))*dxi;
     }
 
-    yc_number_node_ptr stencil_O2_X( yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, yc_grid_var &g, const B )
+    yc_number_node_ptr stencil_O2_X( yc_number_node_ptr t,
+                                     yc_number_node_ptr x,
+                                     yc_number_node_ptr y,
+                                     yc_number_node_ptr z,
+                                     yc_grid_var &g,
+                                     const B )
     {
         return stencil_O2_X( t, x, y, z, g,-1 );
     }
 
-    yc_number_node_ptr stencil_O2_X( yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, yc_grid_var &g, const F )
+    yc_number_node_ptr stencil_O2_X( yc_number_node_ptr t,
+                                     yc_number_node_ptr x,
+                                     yc_number_node_ptr y,
+                                     yc_number_node_ptr z,
+                                     yc_grid_var &g,
+                                     const F )
     {
         return stencil_O2_X( t, x, y, z, g, 1 );
     }
 
+    // Call the stencil_O2() function above depending on D.
     template<typename D>
-    yc_number_node_ptr stencil_O2_X( yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, yc_grid_var &g )
+    yc_number_node_ptr stencil_O2_X( yc_number_node_ptr t,
+                                     yc_number_node_ptr x,
+                                     yc_number_node_ptr y,
+                                     yc_number_node_ptr z,
+                                     yc_grid_var &g )
     {
         return stencil_O2_X( t, x, y, z, g, D() );
     }

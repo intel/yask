@@ -130,7 +130,7 @@ namespace yask {
            MPI must be enabled and initialized before calling this function
            following the usage notes for new_env().
 
-           @note `#include "mpi.h"` should precede `#include "yask_kernel_api.hpp"`
+           @note #`include "mpi.h"` should precede #`include "yask_kernel_api.hpp"`
            to ensure proper MPI type definitions.
         */
         virtual yk_env_ptr

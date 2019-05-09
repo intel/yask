@@ -117,6 +117,7 @@ namespace yask {
     /**
        Objects of this type contain all the grids and equations
        that comprise a solution.
+       Must be created via yc_factory::new_solution().
     */
     class yc_solution {
     public:
@@ -184,6 +185,20 @@ namespace yask {
            must have the same name across all such grids.
 
            At least one grid must be defined with at least one domain-index node.
+
+           Example code to create a solution with a grid equation:
+           ~~~{.cpp}
+           yc_factory ycfac;
+           yc_node_factory nfac;
+           auto my_soln = ycfac.new_solution("my_stencil");
+           auto t = nfac.new_step_index("t");
+           auto x = nfac.new_domain_index("x");
+           auto y = nfac.new_domain_index("y");
+           auto a = ycfac.new_grid("A", { t, x, y }); 
+           a->new_grid_point({t+1, x, y}) EQUALS (a->new_grid_point({t, x, y}) +
+                                                  a->new_grid_point({t, x+1, y}) + 
+                                                  a->new_grid_point({t, x, y+1})) * (1.0/3.0);
+           ~~~
 
            @returns Pointer to the new \ref yc_grid object.
         */
@@ -504,7 +519,9 @@ namespace yask {
         A compile-time grid is a variable used for constructing equations.
         It does not contain any data.
         Data is only stored during run-time, using a \ref yk_grid.
-        Created via yc_solution::new_grid(). */
+
+        Created via yc_solution::new_grid() or implicitly via the \ref yc_grid_var constructor.
+    */
     class yc_grid {
     public:
         virtual ~yc_grid() {}
@@ -531,13 +548,6 @@ namespace yask {
            Each expression in `index_exprs` describes how to access
            an element in the corresponding dimension of the grid.
 
-           Example: if a grid was created via
-           `g = new_grid("A", {t, x, y, n})` with step-dimension `t`,
-           domain-dimensions `x` and `y`, and misc-dimension `n`,
-           `g->new_grid_point({t + 1, x - 1, y + 1, 2})` refers to the specified
-           element for the values of `t`, `x`, and `y` set dynamically
-           during stencil evaluation and the constant value `2` for `n`.
-
            @returns Pointer to AST node used to read from or write to point in grid. */
         virtual yc_grid_point_node_ptr
         new_grid_point(const std::vector<yc_number_node_ptr>& index_exprs
@@ -550,8 +560,12 @@ namespace yask {
         /**
            C++ initializer-list version with same semantics as
            the vector version of new_grid_point().
+
+           See example code shown in yc_solution::new_grid().
+
            @note This version is not available (or needed) in the Python API.
-           @returns Pointer to AST node used to read or write from point in grid. */
+           @returns Pointer to AST node used to read or write from point in grid.
+        */
         virtual yc_grid_point_node_ptr
         new_grid_point(const std::initializer_list<yc_number_node_ptr>& index_exprs) = 0;
 #endif
@@ -625,7 +639,27 @@ namespace yask {
     /// A wrapper class around a \ref yc_grid pointer.
     /**
        Using this class provides a syntactic alternative to calling yc_solution::new_grid()
-       and/or yc_solution::new_scratch_grid() followed by yc_grid::new_grid_point().
+       (or yc_solution::new_scratch_grid()) followed by yc_grid::new_grid_point().
+
+       To use this wrapper class, construct an object of type \ref yc_grid_var by
+       passing a \ref yc_solution pointer to it.
+       Then, expressions for points in the grid can be created with a more
+       intuitive syntax.
+
+       Example code to create a solution with a grid equation:
+       ~~~{.cpp}
+       yc_factory ycfac;
+       yc_node_factory nfac;
+       auto my_soln = ycfac.new_solution("my_stencil");
+       auto t = nfac.new_step_index("t");
+       auto x = nfac.new_domain_index("x");
+       auto y = nfac.new_domain_index("y");
+       yc_grid_var a("A", my_soln, { t, x, y });
+       a({t+1, x, y}) EQUALS (a({t, x, y}) + 
+                              a({t, x+1, y}) + 
+                              a({t, x, y+1})) * (1.0/3.0);
+       ~~~
+       Compare to the example shown in yc_solution::new_grid().
        
        *Scoping and lifetime:* Since the \ref yc_grid pointer in a \ref
        yc_grid_var object is a shared pointer also owned by the \ref
@@ -686,6 +720,18 @@ namespace yask {
         }
 #endif
         
+        /// Contructor for a simple scalar value.
+        /**
+           A wrapper around yc_solution::new_grid().
+        */
+        yc_grid_var(const std::string& name
+                    /**< [in] Name of the new grid; must be a valid C++
+                       identifier and unique across grids. */,
+                    yc_solution_ptr soln
+                    /**< [in] Pointer to solution that will own the grid. */) {
+            _grid = soln->new_grid(name, { });
+        }
+
         /// Contructor taking an existing grid.
         /**
            Creates a new \ref yc_grid_var wrapper around an
@@ -712,7 +758,6 @@ namespace yask {
            The number of arguments must match the dimensionality of the grid.
 
            Example w/2D grid var `B`: `A(t+1, x) EQUALS A(t, x) + B(vec)`,
-           where `vec` is a 2-element vector of \ref yc_number_node pointers.
         */
         virtual yc_grid_point_node_ptr
         operator()(const std::vector<yc_number_node_ptr>& index_exprs) {
@@ -757,15 +802,13 @@ namespace yask {
             return _grid->new_grid_point({i1});
         }
         
-        /// **[Deprecated]** Create an expression for a point in a 1-6 dim grid.
+        /// Create an expression for a point in a 1-6 dim grid.
         /**
            A wrapper around yc_grid::new_grid_point().
-           The number of arguments must match the dimensionality of the grid.
+           The number of non-null arguments must match the dimensionality of the grid.
 
            Example w/2D grid var `B`: `A(t+1, x) EQUALS A(t, x) + B(x, 3)`.
            @note Not available in Python API. Use vector version.
-
-           Deprecated: The vector or initializer-list version is recommended instead.
         */
         virtual yc_grid_point_node_ptr operator()(const yc_number_any_arg i1 = nullptr,
                                                   const yc_number_any_arg i2 = nullptr,
