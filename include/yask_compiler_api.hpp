@@ -693,7 +693,7 @@ namespace yask {
                             /**< [in] Number of elements to allocate in the step dimension. */) =0;
     };
 
-    /// A wrapper class around a \ref yc_var pointer.
+    /// A wrapper or "proxy" class around a \ref yc_var pointer.
     /**
        Using this class provides a syntactic alternative to calling yc_solution::new_var()
        (or yc_solution::new_scratch_var()) followed by yc_var::new_var_point().

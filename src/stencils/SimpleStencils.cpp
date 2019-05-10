@@ -25,7 +25,7 @@ IN THE SOFTWARE.
 
 // Implement various example symmetric 3D stencil shapes that read and
 // write from only one 3D variable.
-// All these stencils compute the average of the points read a la the
+// All these stencils compute the average of the points read similar to the
 // heat-dissipation kernels in the miniGhost benchmark.
 
 // YASK stencil solution(s) in this file will be integrated into the YASK compiler utility.
