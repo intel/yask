@@ -42,29 +42,35 @@ consisting of other points, constants, mathematical operators, etc.
 - Example equation: `u(t+1, x, y) EQUALS (u(t, x, y) + u(t, x+1, y) + u(t, x, y+1)) / 3`.
 
 A new stencil solution may be defined in one of the following ways:
--# Write a stencil in C++ that will be compiled into the standard YASK stencil compiler, `bin/yask_compiler.exe`.
+-# Write a stencil in C++ that will be compiled into the standard YASK stencil compiler
+utility, `bin/yask_compiler.exe`.
   - This approach is typically taken when the programmer or scientist wants to express
-    the equations of the stencil directly.
-  - In this case, the equations can be typed exactly as shown in the above example
-    (C++ operator overloading is used automatically to construct an internal representation of each equation).
+    the equations of the stencil directly, e.g., in a text editor or IDE.
+  - In this case, you must extend the provided base class \ref yc_solution_base
+    (or \ref yc_solution_with_radius_base). Equations can be typed exactly as shown in the above example
+    (C++ operator overloading is used automatically to construct an internal representation of each equation),
+    and they must be part of the code accessed via the overloaded method yc_solution_base::define().
+    All classes and methods used to create expressions in the YASK compiler API may be used.
   - To generate the kernel code for the defined stencil, [re]compile and run the YASK stencil compiler.
     This is done automatically when building a YASK kernel using the YASK `Makefile`, or
     you can build it explicity via `make compiler` and run it from your shell command-prompt.
-  - See example stencils in `src/stencils`.
-    These stencils are written as classes inherited from the `StencilBase` class.
--# Use the YASK compiler API to create another application that defines stencils.
+  - When you run `make` to build the kernel library, the generated output from the compiler utility
+    is automatically written to `src/kernel/gen/yask_stencil_code.hpp`
+    and compiled into the optimized kernel library.
+  - See example stencils of this type in `src/stencils`.
+-# Create a custom application that defines stencils.
   - This approach is typically taken when a 3rd-party front-end tool will be creating stencils
-    from another, possibly higher-level, description,
-    e.g., applying finite-difference methods to differential equations.
-  - In this case, the equations are built up programmatically into an abstract syntax tree (AST).
-  - The mechanism to generate the kernel code in this approach depends on the application
-    created from the APIs. The application might be run from a command-prompt, or the user
-    might control it interactively.
-  - See `src/compiler/tests/yask_compiler_api_test.cpp` for an example stencil definition in C++.
-  - See `bin/yask_compiler_api_test.py` for an example stencil definition in Python.
-  - See \ref sec_yc for documentation on the compiler API.
+    automatically from some other existing format or description.
+  - In this case, you don't use the provided \ref yc_solution_base class or overload yc_solution_base::define(),
+    but equations may be expressed in the same way, because both techniques use the YASK compiler API.
+  - The output from the custom application may be written to `src/kernel/gen/yask_stencil_code.hpp`
+    and compiled into the optimized kernel library. Or, it can write the output to any file
+    that is then specified via `YK_CODE_FILE=`<em>filename</em> when running `make` to build the kernel library.
+  - See `src/compiler/tests/yask_compiler_api_test.cpp` for an example stencil definition in C++ or
+    `bin/yask_compiler_api_test.py` for an example stencil definition in Python.
 
-In either case, the resulting generated code should written to the C++ stencil-code file,
+In either case, the resulting generated code should written to the C++ stencil-code file
+to be compiled into the kernel library.
 `src/kernel/gen/yask_stencil_code.hpp`.
 
 @subsection yk_intro Create a Stencil Kernel Library and Stencil-based Application
@@ -73,9 +79,10 @@ Once the stencil-code file is created, it must be compiled into a YASK kernel li
 - There will be a separate library created for each stencil solution and target architecture combination.
 - This is done automatically when building a YASK kernel using the YASK `Makefile`, e.g., via
   `make -j stencil=iso3dfd arch=knl`, which builds the "iso3dfd" stencil for the Intel Xeon Phi processor.
-- If you generated the stencil-code file via another means (e.g., by running the compiler manually
-  or using a program using the compiler API), you may still create a kernel library using
-  the `Makefile`; you'll just need to use the special target `kernel-only` to avoid running the compiler.
+- If you generated the stencil-code file via a custom application,
+  you may still create a kernel library using
+  the `Makefile`; you'll just need to specify the filename via `YK_CODE_FILE=`<em>filename</em>
+  as described above.
   You'll also still need to specify the target architecture and give a descriptive name to the stencil.
   Example: `make stencil=my-stencil arch=hsw kernel-only`.
 
@@ -92,8 +99,8 @@ This may be done in one of the following ways:
   - This approach would be taken to integrate the kernel into a larger application that
     would inject real-world initial-state data into the YASK variables and extract the
     final-state data for analysis or further processing.
-  - See `src/kernel/tests/yask_kernel_api_test.cpp` for an example kernel usage in C++.
-  - See `bin/yask_kernel_api_test.py` for an example kernel usage in Python.
+  - See `src/kernel/tests/yask_kernel_api_test.cpp` for an example kernel usage in C++ or
+    `bin/yask_kernel_api_test.py` for an example kernel usage in Python.
   - See \ref sec_yk for documentation on the kernel API.
 
 @note Anytime you want to change the name or any compile-time properties of the kernel, be sure to run
@@ -114,32 +121,55 @@ The types, classes, and functions are listed in \ref yc.
 @subsection yc_usage Typical Program Flow using the Compiler API
 - Create a yc_factory. This is the "bootstrap" object that will be used to create others.
 - Create a yc_solution object via yc_factory::new_solution().
+  Alternatively, if using the provided YASK compiler utility, derive a new class from
+  \ref yc_solution_base.
+- Create index variable for solution domain dimensions via yc_node_factory::new_domain_index() and
+  via yc_node_factory::new_step_index() for the step dimension (often "t" for time).
 - Create one or more \ref yc_var objects via yc_solution::new_var() as needed by
   the stencil(s) being implemented.
   Calls to yc_solution::new_var() specify the name and dimensions of each var.
   Vars may be read-only (constants) or read-write.
   Each var will be a part of the solution from which it was created.
+  (Or, you may construct a \ref yc_var_proxy object, which is a wrapper around
+  a \ref yc_var pointer providing some syntactic alternatives that you may prefer.)
 - Create an equation for each read-write var.
-  - Create expressions "bottom-up" by creating the leaf nodes first.
+  - Think of expressions as abstract syntax trees (ASTs) that describe the
+    mathematical formula that defines each point to be calculated at each new time-step.
   - Leaf nodes may be floating-point (FP) constants or references to var points.
-  - Constants are created via yc_node_factory::new_number_node().
+  - Constants may created via yc_node_factory::new_number_node(), but this is seldom
+    needed explicitly thanks to operator overloading.
   - References to points are created via yc_var::new_var_point(), which
     specifies the indices relative to the point being evaluated within the problem domain.
+    (If you created \ref yc_var_proxy objects, see the alternative syntax shown
+    in the documentation for that class.)
   - Create operator nodes via normal math operators (`+`, `*`, etc.), to build up
-    larger expressions.
+    larger expressions. Some math functions like square-root and cosine are also available.
   - To complete each equation, use the special `EQUALS` operator to specify an expression
     on the right-hand side (RHS) and the point in a variable that is defined to be equal
     to it on the left-hand side (LHS).
-  - Specify the solution domain dimension via yc_node_factory::new_domain_index().
-  - Specify the solution step dimension via yc_node_factory::new_step_index().
-    (This is usually "t" for time.)
+  - Boolean expressions may be added to equations to specify sub-domains in which they
+    are applied. In this way, boundary layers and conditions may be implemented.
+    It is also possible to add boolean expressions to specify certain time-steps
+    in which equations are valid.
+  - Many examples of using the YASK compiler API to create stencil equations are provided
+    in the `src/stencils` directory.
 - Specify the number of bytes in a floating-point element via yc_solution::set_element_bytes().
   This should be 4 or 8.
+  If you are using the provided YASK compiler utility, this controlled via the
+  `real_bytes=`<em>4|8</em> `make` parameter.
 - Optionally specify the vector-folding and/or vector-clustering via 
   yc_solution::set_fold_len() and/or yc_solution::set_cluster_mult().
+  If you are using the provided YASK compiler utility, these are controlled via the
+  `fold=`<em>fold-spec</em> and `cluster=`<em>cluster-spec</em> `make` parameters.
 - Format the equations for additional processing via yc_solution::format().
+  If you are using the provided YASK compiler utility, this call will be done for you
+  with the proper parameters based on the target architecture.
 
 @section sec_yk YASK Stencil Kernel API
+
+As discussed earlier, the kernel API is only needed for integrating a YASK kernel into
+your final application. For evaluating performance, use the provided `bin/yask.sh` utility,
+which makes the needed calls to the kernel API for you.
 
 @subsection yk_oview Kernel Overview
 This section provides usage information for the YASK stencil kernel
@@ -151,6 +181,7 @@ this distinguishes them from the 'yc_'-prefixed types used in the "YASK compiler
 The types, classes, and functions are listed in \ref yk.
 
 @subsection yk_usage Typical Program Flow using the Kernel API
+
 - Create a \ref yk_factory. This is the "bootstrap" object that will be used to create others.
 - Create a \ref yk_env object via yk_factory::new_env(). This initializes MPI if you have enabled it.
 - Create a \ref yk_solution object via yk_factory::new_solution().
@@ -172,7 +203,8 @@ The types, classes, and functions are listed in \ref yk.
 
 @section sec_tests Example Tests
 
-The following examples illustrate possible combinations of compilers and kernels.
+The following examples illustrate possible combinations of compilers and kernels and show
+how to invoke a set of tests for each combination.
 - You can add `stencil=`_stencil-name_ to use a specific stencil for testing.
 - You can add `arch=`_arch-name_ to target one of the architectures listed in the `Makefile` if desired.
 - Run `make clean` before all of the example commands to ensure consistent builds.

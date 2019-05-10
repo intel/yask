@@ -42,7 +42,7 @@ protected:
     yc_var_proxy s = yc_var_proxy("s", get_soln(), { t, x, y, z, sidx });
     enum SIDX { S_BL_YZ, S_BR_XZ, S_TL_XX, S_TL_YY, S_TL_ZZ, S_TR_XY };
 
-    // Merged.
+    // 3D-spatial coefficients.
     yc_var_proxy coef = yc_var_proxy("c", get_soln(), { x, y, z, cidx });
     enum CIDX { C_MU, C_LAMBDA, C_LAMBDA_MU2 };
 
