@@ -79,7 +79,7 @@ namespace yask {
     }
     
     // Apply auto-tuning immediately, i.e., not as part of normal processing.
-    // Will alter data in grids.
+    // Will alter data in vars.
     void StencilContext::run_auto_tuner_now(bool verbose) {
         STATE_VARS(this);
         if (!rank_bb.bb_valid)

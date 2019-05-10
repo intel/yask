@@ -27,7 +27,7 @@ IN THE SOFTWARE.
 
 #pragma once
 
-#include "Grid.hpp"
+#include "Var.hpp"
 
 using namespace std;
 
@@ -56,7 +56,7 @@ namespace yask {
         bool _doPairs = true;   // find equation pairs.
         bool _doOptCluster = true; // apply optimizations also to cluster.
         string _eqBundleTargets;  // how to bundle equations.
-        string _gridRegex;       // grids to update.
+        string _varRegex;       // vars to update.
         bool _findDeps = true;
         bool _printEqs = false;
     };
@@ -100,7 +100,7 @@ namespace yask {
         }
         
         // Find the dimensions to be used.
-        void setDims(Grids& grids,
+        void setDims(Vars& vars,
                      CompilerSettings& settings,
                      int vlen,
                      bool is_folding_efficient,

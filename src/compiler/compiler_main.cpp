@@ -115,7 +115,7 @@ void usage(const string& cmd) {
         "      Currently, only 4 (single-precision) and 8 (double) are allowed.\n"
         " -domain-dims <dim>,<dim>,...\n"
         "    Explicitly name the domain dimensions and set their order.\n"
-        "    In addition, domain dimensions are added when grid variables are encountered\n"
+        "    In addition, domain dimensions are added when YASK variables are encountered\n"
         "      in the stencil DSL code.\n"
         "    Either way, the last unique domain dimension specified will become the 'inner' or\n"
         "      'unit-stride' dimension in memory layouts. Thus, this option can be used to override\n"
@@ -123,7 +123,7 @@ void usage(const string& cmd) {
         "    The domain-dimension order also affects loop nesting and default rank layout.\n"
         " -step-dim <dim>\n"
         "    Explicitly set the step dimension.\n"
-        "    By default, the step dimension is defined when grid variables are encountered\n"
+        "    By default, the step dimension is defined when YASK variables are encountered\n"
         "      in the stencil DSL code.\n"
         " -fold <dim>=<size>,...\n"
         "    Set number of elements in each given dimension in a vector block.\n"
@@ -132,11 +132,11 @@ void usage(const string& cmd) {
         "      formats with explicit lengths, lengths will adjusted as needed.\n"
         " -cluster <dim>=<size>,...\n"
         "    Set number of vectors to evaluate in each dimension.\n"
-        " -grids <regex>\n"
-        "    Only process updates to grids whose names match <regex>.\n"
+        " -vars <regex>\n"
+        "    Only process updates to vars whose names match <regex>.\n"
         "      This can be used to generate code for a subset of the stencil equations.\n"
         " -eq-bundles <name>=<regex>,...\n"
-        "    Put updates to grids matching <regex> in equation-bundle with base-name <name>.\n"
+        "    Put updates to vars matching <regex> in equation-bundle with base-name <name>.\n"
         "      By default, eq-bundles are created as needed based on dependencies between equations:\n"
         "        equations that do not depend on each other are bundled together into bundles with the\n"
         "        base-name '" << settings._eq_bundle_basename_default << "'.\n"
@@ -145,23 +145,23 @@ void usage(const string& cmd) {
         settings._eq_bundle_basename_default << "_1', etc.\n"
         "      This option allows more control over this bundling.\n"
         "      Example: \"-eq-bundles a=foo,b=b[aeiou]r\" creates one or more eq-bundles named 'a_0', 'a_1', etc.\n"
-        "        containing updates to each grid whose name contains 'foo' and one or more eq-bundles\n"
-        "        named 'b_0', 'b_1', etc. containing updates to each grid whose name matches 'b[aeiou]r'.\n"
+        "        containing updates to each var whose name contains 'foo' and one or more eq-bundles\n"
+        "        named 'b_0', 'b_1', etc. containing updates to each var whose name matches 'b[aeiou]r'.\n"
         "      Standard regex-format tokens in <name> will be replaced based on matches to <regex>.\n"
-        "      Example: \"-eq-bundles 'g_$&=b[aeiou]r'\" with grids 'bar_x', 'bar_y', 'ber_x', and 'ber_y'\n"
-        "        would create eq-bundle 'g_bar_0' for grids 'bar_x' and 'bar_y' and eq-bundle 'g_ber_0' for\n"
-        "        grids 'ber_x' and 'ber_y' because '$&' is substituted by the string that matches the regex.\n"
+        "      Example: \"-eq-bundles 'g_$&=b[aeiou]r'\" with vars 'bar_x', 'bar_y', 'ber_x', and 'ber_y'\n"
+        "        would create eq-bundle 'g_bar_0' for vars 'bar_x' and 'bar_y' and eq-bundle 'g_ber_0' for\n"
+        "        vars 'ber_x' and 'ber_y' because '$&' is substituted by the string that matches the regex.\n"
         " [-no]-bundle-scratch\n"
-        "    Bundle scratch equations even if the sizes of their scratch grids must be increased\n"
+        "    Bundle scratch equations even if the sizes of their scratch vars must be increased\n"
         "      to do so (default=" << settings._bundleScratch << ").\n"
         " -halo <size>\n"
-        "    Specify the size of the halos on all grids.\n"
-        "      By default, halos are calculated automatically for each grid.\n"
+        "    Specify the size of the halos on all vars.\n"
+        "      By default, halos are calculated automatically for each var.\n"
         " -step-alloc <size>\n"
-        "    Specify the size of the step-dimension memory allocation on all grids.\n"
-        "      By default, allocations are calculated automatically for each grid.\n"
+        "    Specify the size of the step-dimension memory allocation on all vars.\n"
+        "      By default, allocations are calculated automatically for each var.\n"
         " [-no]-interleave-misc\n"
-        "    Allocate grid vars with the 'misc' dims as the inner-most dims (default=" << settings._innerMisc << ").\n"
+        "    Allocate YASK vars with the 'misc' dims as the inner-most dims (default=" << settings._innerMisc << ").\n"
         "      This disallows dynamcally changing the 'misc' dim sizes during run-time.\n"
         " -fus\n"
         "    Make first dimension of fold unit stride (default=" << settings._firstInner << ").\n"
@@ -202,7 +202,7 @@ void usage(const string& cmd) {
         "      pseudo      Human-readable scalar pseudo-code.\n"
         "      pseudo-long Human-readable scalar pseudo-code with intermediate variables.\n"
         "      dot         DOT-language description.\n"
-        "      dot-lite    DOT-language description of grid accesses only.\n"
+        "      dot-lite    DOT-language description of var accesses only.\n"
         //"      pov-ray    POV-Ray code.\n"
         //" -ps <vec-len>         Print stats for all folding options for given vector length.\n"
         "\n"
@@ -285,8 +285,8 @@ void parseOpts(int argc, const char* argv[])
                 // options w/a string value.
                 if (opt == "-stencil")
                     solutionName = argop;
-                else if (opt == "-grids")
-                    settings._gridRegex = argop;
+                else if (opt == "-vars")
+                    settings._varRegex = argop;
                 else if (opt == "-eq-bundles")
                     settings._eqBundleTargets = argop;
                 else if (opt == "-step-dim")
@@ -412,7 +412,7 @@ void parseOpts(int argc, const char* argv[])
 
     // Create equations from the overloaded 'define()' methods.
     stencilSoln->define();
-    cout << "Num grids defined: " << soln->get_num_grids() << endl;
+    cout << "Num vars defined: " << soln->get_num_vars() << endl;
     cout << "Num equations defined: " << soln->get_num_equations() << endl;
 }
 

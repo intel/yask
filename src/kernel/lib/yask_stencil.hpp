@@ -53,8 +53,8 @@ IN THE SOFTWARE.
 // TODO: make Indices a templated class based on
 // number of dims.
 #ifndef MAX_DIMS
-#if NUM_GRID_DIMS >= NUM_STENCIL_DIMS
-#define MAX_DIMS NUM_GRID_DIMS
+#if NUM_VAR_DIMS >= NUM_STENCIL_DIMS
+#define MAX_DIMS NUM_VAR_DIMS
 #else
 #define MAX_DIMS NUM_STENCIL_DIMS
 #endif
@@ -74,8 +74,8 @@ IN THE SOFTWARE.
 // Base types for stencil context, etc.
 #include "indices.hpp"
 #include "settings.hpp"
-#include "generic_grids.hpp"
-#include "realv_grids.hpp"
+#include "generic_var.hpp"
+#include "yk_var.hpp"
 #include "auto_tuner.hpp"
 #include "context.hpp"
 #include "stencil_calc.hpp"

@@ -33,9 +33,9 @@ IN THE SOFTWARE.
 
 namespace yask {
 
-    // grid_point APIs.
-    yc_grid* GridPoint::get_grid() {
-        return _grid;
+    // var_point APIs.
+    yc_var* VarPoint::get_var() {
+        return _var;
     }
 
     //node_factory API methods.
@@ -53,12 +53,12 @@ namespace yask {
     }
 
     yc_equation_node_ptr
-    yc_node_factory::new_equation_node(yc_grid_point_node_ptr lhs,
+    yc_node_factory::new_equation_node(yc_var_point_node_ptr lhs,
                                        yc_number_node_ptr rexpr,
                                        yc_bool_node_ptr cond) const {
         if (!lhs)
             THROW_YASK_EXCEPTION("Error: empty LHS of equation");
-        auto gpp = dynamic_pointer_cast<GridPoint>(lhs);
+        auto gpp = dynamic_pointer_cast<VarPoint>(lhs);
         assert(gpp);
         if (!rexpr)
             THROW_YASK_EXCEPTION("Error: empty RHS of " +
@@ -66,8 +66,8 @@ namespace yask {
         auto rhs = dynamic_pointer_cast<NumExpr>(rexpr);
         assert(rhs);
 
-        // Get to list of equations in soln indirectly thru grid.
-        GridVar* gp = gpp->getGrid();
+        // Get to list of equations in soln indirectly thru var.
+        Var* gp = gpp->getVar();
         assert(gp);
         auto* soln = gp->getSoln();
         assert(soln);
@@ -463,9 +463,9 @@ namespace yask {
         return ep;
     }
 
-    // Define the value of a grid point.
+    // Define the value of a var point.
     // Add this equation to the list of eqs for this stencil.
-    yc_equation_node_ptr operator EQUALS(yc_grid_point_node_ptr lhs,
+    yc_equation_node_ptr operator EQUALS(yc_var_point_node_ptr lhs,
                                          const yc_number_any_arg rhs) {
         yc_node_factory nfac;
         return nfac.new_equation_node(lhs, rhs);
@@ -508,7 +508,7 @@ namespace yask {
     string FuncExpr::accept(ExprVisitor* ev) {
         return ev->visit(this);
     }
-    string GridPoint::accept(ExprVisitor* ev) {
+    string VarPoint::accept(ExprVisitor* ev) {
         return ev->visit(this);
     }
     string EqualsExpr::accept(ExprVisitor* ev) {
@@ -520,7 +520,7 @@ namespace yask {
 
     // EqualsExpr methods.
     bool EqualsExpr::isScratch() {
-        GridVar* gp = getGrid();
+        Var* gp = getVar();
         return gp && gp->isScratch();
     }
     bool EqualsExpr::isSame(const Expr* other) const {
@@ -605,23 +605,23 @@ namespace yask {
         return false;
     }
 
-    // GridPoint methods.
-    GridPoint::GridPoint(GridVar* grid, const numExprPtrVec& args) :
-        _grid(grid), _args(args) {
+    // VarPoint methods.
+    VarPoint::VarPoint(Var* var, const numExprPtrVec& args) :
+        _var(var), _args(args) {
 
         // Check for correct number of args.
-        size_t nd = grid->getDims().size();
+        size_t nd = var->getDims().size();
         if (nd != args.size()) {
-            FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to create a grid point in " <<
-                nd << "-D grid '" << getGridName() << "' with " <<
+            FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to create a var point in " <<
+                nd << "-D var '" << getVarName() << "' with " <<
                 args.size() << " indices");
         }
 
         // Eval each arg.
 #ifdef DEBUG_GP
-        cout << "Creating grid point " << makeQuotedStr() << "...\n";
+        cout << "Creating var point " << makeQuotedStr() << "...\n";
 #endif
-        auto dims = grid->getDims();
+        auto dims = var->getDims();
         for (size_t i = 0; i < nd; i++) {
             auto dim = dims.at(i);
             auto dname = dim->getName();
@@ -651,31 +651,31 @@ namespace yask {
         }
         _updateStr();
     }
-    const numExprPtr GridPoint::getArg(const string& dim) const {
-        for (int di = 0; di < _grid->get_num_dims(); di++) {
-            auto& dn = _grid->get_dim_name(di);  // name of this dim.
+    const numExprPtr VarPoint::getArg(const string& dim) const {
+        for (int di = 0; di < _var->get_num_dims(); di++) {
+            auto& dn = _var->get_dim_name(di);  // name of this dim.
             if (dim == dn)
                 return _args.at(di);
         }
         return nullptr;
     }
-    const string& GridPoint::getGridName() const {
-        return _grid->getName();
+    const string& VarPoint::getVarName() const {
+        return _var->getName();
     }
-    string GridPoint::getGridPtr() const {
-        string gname = _grid->getName();
+    string VarPoint::getVarPtr() const {
+        string gname = _var->getName();
         string expr = "(static_cast<_context_type::" + gname + "_type*>(_context_data->";
-        if (_grid->isScratch())
+        if (_var->isScratch())
             expr += gname + "_list[region_thread_idx]";
         else
             expr += gname + "_ptr";
         expr += ".get()->gbp()))";
         return expr;
     }
-    bool GridPoint::isGridFoldable() const {
-        return _grid->isFoldable();
+    bool VarPoint::isVarFoldable() const {
+        return _var->isFoldable();
     }
-    string GridPoint::makeArgStr(const VarMap* varMap) const {
+    string VarPoint::makeArgStr(const VarMap* varMap) const {
         string str;
         int i = 0;
         for (auto arg : _args) {
@@ -684,26 +684,26 @@ namespace yask {
         }
         return str;
     }
-    string GridPoint::makeStr(const VarMap* varMap) const {
-        string str = _grid->getName() + "(" +
+    string VarPoint::makeStr(const VarMap* varMap) const {
+        string str = _var->getName() + "(" +
                              makeArgStr(varMap) + ")";
         return str;
     }
-    string GridPoint::makeLogicalGridStr(const VarMap* varMap) const {
-        string str = _grid->getName();
+    string VarPoint::makeLogicalVarStr(const VarMap* varMap) const {
+        string str = _var->getName();
         if (_consts.size())
             str += "(" + _consts.makeDimValStr() + ")";
         return str;
     }
-    const indexExprPtrVec& GridPoint::getDims() const {
-        return _grid->getDims();
+    const indexExprPtrVec& VarPoint::getDims() const {
+        return _var->getDims();
     }
 
     // Make string like "x+(4/VLEN_X)" from
     // original arg "x+4" in 'dname' dim.
     // This object has numerators; 'fold' object has denominators.
     // Args w/o simple offset are not modified.
-    string GridPoint::makeNormArgStr(const string& dname,
+    string VarPoint::makeNormArgStr(const string& dname,
                                      const Dimensions& dims,
                                      const VarMap* varMap) const {
         string res;
@@ -715,7 +715,7 @@ namespace yask {
 
         // Otherwise, just find and format arg as-is.
         else {
-            auto& gdims = _grid->getDims();
+            auto& gdims = _var->getDims();
             for (size_t i = 0; i < gdims.size(); i++) {
                 auto gdname = gdims[i]->getName();
                 if (gdname == dname)
@@ -730,11 +730,11 @@ namespace yask {
     // original args "x+4, y, z-2".
     // This object has numerators; norm object has denominators.
     // Args w/o simple offset are not modified.
-    string GridPoint::makeNormArgStr(const Dimensions& dims,
+    string VarPoint::makeNormArgStr(const Dimensions& dims,
                                      const VarMap* varMap) const {
 
         string res;
-        auto& gd = _grid->getDims();
+        auto& gd = _var->getDims();
         for (size_t i = 0; i < gd.size(); i++) {
             if (i)
                 res += ", ";
@@ -745,19 +745,19 @@ namespace yask {
     }
 
     // Make string like "g->_wrap_step(t+1)" from original arg "t+1"
-    // if grid uses step dim, "0" otherwise.
-    // If grid doesn't allow dynamic alloc, set to fixed value.
-    string GridPoint::makeStepArgStr(const string& gridPtr, const Dimensions& dims) const {
+    // if var uses step dim, "0" otherwise.
+    // If var doesn't allow dynamic alloc, set to fixed value.
+    string VarPoint::makeStepArgStr(const string& varPtr, const Dimensions& dims) const {
 
-        auto& gd = _grid->getDims();
+        auto& gd = _var->getDims();
         for (size_t i = 0; i < gd.size(); i++) {
             auto dname = gd[i]->getName();
             auto& arg = _args.at(i);
             if (dname == dims._stepDim) {
-                if (_grid->is_dynamic_step_alloc())
-                    return gridPtr + "->_wrap_step(" + arg->makeStr() + ")";
+                if (_var->is_dynamic_step_alloc())
+                    return varPtr + "->_wrap_step(" + arg->makeStr() + ")";
                 else {
-                    auto step_alloc = _grid->get_step_alloc_size();
+                    auto step_alloc = _var->get_step_alloc_size();
                     if (step_alloc == 1)
                         return "0"; // 1 alloc => always index 0.
                     else 
@@ -769,11 +769,11 @@ namespace yask {
         return "0";
     }
 
-    // Set given arg to given offset; ignore if not in step or domain grid dims.
-    void GridPoint::setArgOffset(const IntScalar& offset) {
+    // Set given arg to given offset; ignore if not in step or domain var dims.
+    void VarPoint::setArgOffset(const IntScalar& offset) {
 
-        // Find dim in grid.
-        auto gdims = _grid->getDims();
+        // Find dim in var.
+        auto gdims = _var->getDims();
         for (size_t i = 0; i < gdims.size(); i++) {
             auto gdim = gdims[i];
 
@@ -815,10 +815,10 @@ namespace yask {
     }
 
     // Set given arg to given const;
-    void GridPoint::setArgConst(const IntScalar& val) {
+    void VarPoint::setArgConst(const IntScalar& val) {
 
-        // Find dim in grid.
-        auto gdims = _grid->getDims();
+        // Find dim in var.
+        auto gdims = _var->getDims();
         for (size_t i = 0; i < gdims.size(); i++) {
             auto gdim = gdims[i];
 

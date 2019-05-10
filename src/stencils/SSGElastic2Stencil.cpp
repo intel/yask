@@ -25,8 +25,8 @@ IN THE SOFTWARE.
 
 // Stencil equations for SSG elastic numerics.
 // Contributed by Albert Farres from the Barcelona Supercomputing Center.
-// This version varies from the original by grouping related grids into
-// larger grids with an added dimension.
+// This version varies from the original by grouping related vars into
+// larger vars with an added dimension.
 
 #include "ElasticStencil/Elastic2Stencil.hpp"
 
@@ -34,16 +34,16 @@ class SSGElastic2Stencil : public Elastic2StencilBase {
 
 protected:
 
-    // Time-varying 3D-spatial velocity grids.
-    yc_grid_var v = yc_grid_var("v", get_soln(), { t, x, y, z, vidx });
+    // Time-varying 3D-spatial velocity vars.
+    yc_var_proxy v = yc_var_proxy("v", get_soln(), { t, x, y, z, vidx });
     enum VIDX { V_BL_W, V_TL_V, V_TR_U };
 
-    // Time-varying 3D-spatial Stress grids.
-    yc_grid_var s = yc_grid_var("s", get_soln(), { t, x, y, z, sidx });
+    // Time-varying 3D-spatial Stress vars.
+    yc_var_proxy s = yc_var_proxy("s", get_soln(), { t, x, y, z, sidx });
     enum SIDX { S_BL_YZ, S_BR_XZ, S_TL_XX, S_TL_YY, S_TL_ZZ, S_TR_XY };
 
     // Merged.
-    yc_grid_var coef = yc_grid_var("c", get_soln(), { t, x, y, z, cidx });
+    yc_var_proxy coef = yc_var_proxy("c", get_soln(), { t, x, y, z, cidx });
     enum CIDX { C_MU, C_LAMBDA, C_LAMBDA_MU2 };
 
 public:
@@ -84,12 +84,12 @@ public:
     }
 
 
-    // Stress-grid define functions.  For each D in xx, yy, zz, xy, xz, yz,
-    // define stress_D at t+1 based on stress_D at t and vel grids at t+1.
-    // This implies that the velocity-grid define functions must be called
+    // Stress-var define functions.  For each D in xx, yy, zz, xy, xz, yz,
+    // define stress_D at t+1 based on stress_D at t and vel vars at t+1.
+    // This implies that the velocity-var define functions must be called
     // before these for a given value of t.  Note that the t, x, y, z
-    // parameters are integer grid indices, not actual offsets in time or
-    // space, so half-steps due to staggered grids are adjusted
+    // parameters are integer var indices, not actual offsets in time or
+    // space, so half-steps due to staggered vars are adjusted
     // appropriately.
 
     template<typename N, typename DA, typename SA, typename DB, typename SB>

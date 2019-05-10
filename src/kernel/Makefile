@@ -33,7 +33,7 @@ mpi			?=	1
 numa			?=	1
 pmem			?=	0
 real_bytes		?=	4
-allow_new_grid_types	?=	1
+allow_new_var_types	?=	1
 trace			?=	0
 trace_mem		?=	0
 check			?=	0
@@ -292,8 +292,8 @@ YK_LIB		:=	$(LIB_OUT_DIR)/lib$(YK_EXT_BASE)$(SO_SUFFIX)
 YK_PY_LIB	:=	$(PY_OUT_DIR)/_$(YK_PY_MOD_BASE)$(SO_SUFFIX)
 YK_PY_MOD	:=	$(PY_OUT_DIR)/$(YK_PY_MOD_BASE).py
 YK_SRC_NAMES	:=	utils
-YK_EXT_SRC_NAMES :=	factory grid_apis soln_apis context stencil_calc setup alloc \
-			realv_grids new_grid settings generic_grids auto_tuner
+YK_EXT_SRC_NAMES :=	factory soln_apis context stencil_calc setup alloc \
+			generic_var yk_var yk_var_apis new_var settings auto_tuner
 YK_OBJS		:=	$(addprefix $(YK_OBJ_DIR)/,$(addsuffix .o,$(YK_SRC_NAMES) $(COMM_SRC_NAMES)))
 YK_EXT_OBJS	:=	$(addprefix $(YK_EXT_OBJ_DIR)/,$(addsuffix .o,$(YK_EXT_SRC_NAMES)))
 YK_CODE_FILE	:=	$(YK_GEN_DIR)/yask_stencil_code.hpp
@@ -306,12 +306,12 @@ YK_GEN_HEADERS	:=	$(addprefix $(YK_GEN_DIR)/, \
 				yask_misc_loops.hpp \
 				yask_layout_macros.hpp \
 				yask_layouts.hpp \
-				yask_grid_code.hpp) \
+				yask_var_code.hpp) \
 				$(YK_CODE_FILE)
 YK_INC_DIRS	:=	$(INC_DIR) $(YK_LIB_SRC_DIR) $(COMM_DIR) $(COEFF_DIR)
 YK_INC_GLOB	:=	$(addsuffix /*.hpp,$(YK_INC_DIRS))
 YK_API_TEST_EXEC :=	$(BIN_OUT_DIR)/$(YK_BASE)_api_test.exe
-YK_GRID_TEST_EXEC :=	$(BIN_OUT_DIR)/$(YK_BASE)_grid_test.exe
+YK_VAR_TEST_EXEC :=	$(BIN_OUT_DIR)/$(YK_BASE)_var_test.exe
 YK_API_TEST_EXEC_WITH_EXCEPTION :=	$(BIN_OUT_DIR)/$(YK_BASE)_api_exception_test.exe
 MAKE_REPORT_FILE :=	$(BUILD_OUT_DIR)/$(YK_EXT_BASE).make-report.txt
 YC_REPORT_FILE :=	$(BUILD_OUT_DIR)/$(YK_EXT_BASE).yask_compiler-report.txt
@@ -396,7 +396,7 @@ MACROS		+=	PFD_L1=$(pfd_l1) PFD_L2=$(pfd_l2)
 ifeq ($(streaming_stores),1)
  MACROS		+=	USE_STREAMING_STORE
 endif
-MACROS		+=	ALLOW_NEW_GRIDS=$(allow_new_grid_types)
+MACROS		+=	ALLOW_NEW_VARS=$(allow_new_var_types)
 
 # Default cmd-line args.
 DEF_ARGS	+=	-thread_divisor $(def_thread_divisor)
@@ -475,9 +475,9 @@ endif
 YK_CXXFLAGS	+=	$(YK_CXXOPT) $(OMPFLAGS) $(addprefix -D,$(MACROS) $(EXTRA_MACROS)) $(EXTRA_YK_CXXFLAGS)
 YK_LIBS		+=	$(EXTRA_YK_LIBS)
 
-# Number of stencil/grid dims extracted from YASK compiler output.
+# Number of stencil/var dims extracted from YASK compiler output.
 NSDIMS		:=	`awk '/NUM_STENCIL_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
-NGDIMS		:=	`awk '/NUM_STENCIL_AND_GRID_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
+NVDIMS		:=	`awk '/NUM_STENCIL_AND_VAR_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
 
 ######## Loop-compiler configuration:
 # The loop indices range from 0..N-1.
@@ -486,7 +486,7 @@ NGDIMS		:=	`awk '/NUM_STENCIL_AND_GRID_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
 # so the following loop codes do not scan over dim 0.
 # Dims 1..N-1 are the domain dims, usually spatial.
 # Thus, N-1 is the inner-most dim.
-# For best perf, this should be the unit-stride dim in the grids.
+# For best perf, this should be the unit-stride dim in the vars.
 
 # Rank loops break up the whole rank into smaller regions.  In order for
 # temporal wavefronts to operate properly, the scanning paths must have
@@ -628,21 +628,21 @@ $(YK_GEN_DIR)/yask_misc_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 
 $(YK_GEN_DIR)/yask_layout_macros.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
-	$(PERL) $< -m $(NGDIMS) > $@
+	$(PERL) $< -m $(NVDIMS) > $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because indent program failed or was not found."
 
 $(YK_GEN_DIR)/yask_layouts.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
-	$(PERL) $< -d $(NGDIMS) > $@
+	$(PERL) $< -d $(NVDIMS) > $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because indent program failed or was not found."
 
-$(YK_GEN_DIR)/yask_grid_code.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
+$(YK_GEN_DIR)/yask_var_code.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
-	$(PERL) $< -g $(NGDIMS) > $@
+	$(PERL) $< -v $(NVDIMS) > $@
 
 $(YK_CODE_FILE): $(YC_EXEC)
 	$(MKDIR) $(dir $@)
@@ -686,7 +686,7 @@ $(YK_PY_LIB): $(YK_OBJS)  $(YK_EXT_OBJS) $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap
 
 # Simple tests.
 
-$(YK_GRID_TEST_EXEC): $(YK_TEST_SRC_DIR)/grid_test.cpp $(YK_LIB)
+$(YK_VAR_TEST_EXEC): $(YK_TEST_SRC_DIR)/var_test.cpp $(YK_LIB)
 	$(MKDIR) $(dir $@)
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
 	@ls -l $@
@@ -700,8 +700,8 @@ $(YK_API_TEST_EXEC): $(YK_TEST_SRC_DIR)/yask_kernel_api_test.cpp $(YK_LIB)
 	@ls -l $@
 
 # Run C++ tests.
-cxx-yk-grid-test: $(YK_GRID_TEST_EXEC)
-	@echo '*** Running the C++ YASK grid test...'
+cxx-yk-var-test: $(YK_VAR_TEST_EXEC)
+	@echo '*** Running the C++ YASK var test...'
 	$(RUN_PREFIX) $<
 
 cxx-yk-api-test: $(YK_API_TEST_EXEC)
@@ -814,7 +814,7 @@ api-tests:
 # These tests are focused on the kernel and not the compiler.
 # For testing both the kernel and compiler in various combinations,
 # run the tests from the top-level Makefile.
-STENCIL_TEST_ARGS := yc-and-yk-test real_bytes=8 allow_new_grid_types=0
+STENCIL_TEST_ARGS := yc-and-yk-test real_bytes=8 allow_new_var_types=0
 stencil-tests:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_empty step_dim=t domain_dims=d1,d2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_empty_2d
@@ -855,7 +855,7 @@ stencil-tests:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_4d fold=w=2,x=2
 
 all-tests:
-	$(MAKE) clean; $(MAKE) cxx-yk-grid-test stencil=test_3d fold=x=4,y=2
+	$(MAKE) clean; $(MAKE) cxx-yk-var-test stencil=test_3d fold=x=4,y=2
 	$(MAKE) stencil-tests
 	$(MAKE) api-tests
 

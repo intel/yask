@@ -32,23 +32,23 @@ class SSGElasticStencil : public ElasticStencilBase {
 
 protected:
 
-    // Time-varying 3D-spatial velocity grids.
-    yc_grid_var v_bl_w = yc_grid_var("v_bl_w", get_soln(), { t, x, y, z });
-    yc_grid_var v_tl_v = yc_grid_var("v_tl_v", get_soln(), { t, x, y, z });
-    yc_grid_var v_tr_u = yc_grid_var("v_tr_u", get_soln(), { t, x, y, z });
+    // Time-varying 3D-spatial velocity vars.
+    yc_var_proxy v_bl_w = yc_var_proxy("v_bl_w", get_soln(), { t, x, y, z });
+    yc_var_proxy v_tl_v = yc_var_proxy("v_tl_v", get_soln(), { t, x, y, z });
+    yc_var_proxy v_tr_u = yc_var_proxy("v_tr_u", get_soln(), { t, x, y, z });
 
-    // Time-varying 3D-spatial Stress grids.
-    yc_grid_var s_bl_yz = yc_grid_var("s_bl_yz", get_soln(), { t, x, y, z });
-    yc_grid_var s_br_xz = yc_grid_var("s_br_xz", get_soln(), { t, x, y, z });
-    yc_grid_var s_tl_xx = yc_grid_var("s_tl_xx", get_soln(), { t, x, y, z });
-    yc_grid_var s_tl_yy = yc_grid_var("s_tl_yy", get_soln(), { t, x, y, z });
-    yc_grid_var s_tl_zz = yc_grid_var("s_tl_zz", get_soln(), { t, x, y, z });
-    yc_grid_var s_tr_xy = yc_grid_var("s_tr_xy", get_soln(), { t, x, y, z });
+    // Time-varying 3D-spatial Stress vars.
+    yc_var_proxy s_bl_yz = yc_var_proxy("s_bl_yz", get_soln(), { t, x, y, z });
+    yc_var_proxy s_br_xz = yc_var_proxy("s_br_xz", get_soln(), { t, x, y, z });
+    yc_var_proxy s_tl_xx = yc_var_proxy("s_tl_xx", get_soln(), { t, x, y, z });
+    yc_var_proxy s_tl_yy = yc_var_proxy("s_tl_yy", get_soln(), { t, x, y, z });
+    yc_var_proxy s_tl_zz = yc_var_proxy("s_tl_zz", get_soln(), { t, x, y, z });
+    yc_var_proxy s_tr_xy = yc_var_proxy("s_tr_xy", get_soln(), { t, x, y, z });
 
     // 3D-spatial coefficients.
-    yc_grid_var mu = yc_grid_var("mu", get_soln(), { x, y, z });
-    yc_grid_var lambda = yc_grid_var("lambda", get_soln(), { x, y, z });
-    yc_grid_var lambdamu2 = yc_grid_var("lambdamu2", get_soln(), { x, y, z });
+    yc_var_proxy mu = yc_var_proxy("mu", get_soln(), { x, y, z });
+    yc_var_proxy lambda = yc_var_proxy("lambda", get_soln(), { x, y, z });
+    yc_var_proxy lambdamu2 = yc_var_proxy("lambdamu2", get_soln(), { x, y, z });
 
 public:
 
@@ -88,17 +88,17 @@ public:
     }
 
 
-    // Stress-grid define functions.  For each D in xx, yy, zz, xy, xz, yz,
-    // define stress_D at t+1 based on stress_D at t and vel grids at t+1.
-    // This implies that the velocity-grid define functions must be called
+    // Stress-var define functions.  For each D in xx, yy, zz, xy, xz, yz,
+    // define stress_D at t+1 based on stress_D at t and vel vars at t+1.
+    // This implies that the velocity-var define functions must be called
     // before these for a given value of t.  Note that the t, x, y, z
-    // parameters are integer grid indices, not actual offsets in time or
-    // space, so half-steps due to staggered grids are adjusted
+    // parameters are integer var indices, not actual offsets in time or
+    // space, so half-steps due to staggered vars are adjusted
     // appropriately.
 
     template<typename N, typename DA, typename SA, typename DB, typename SB>
     void define_str(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
-                    yc_grid_var &s, yc_grid_var &va, yc_grid_var &vb) {
+                    yc_var_proxy &s, yc_var_proxy &va, yc_var_proxy &vb) {
 
         auto lcoeff = interp_mu<N>( x, y, z );
 

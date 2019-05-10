@@ -37,11 +37,11 @@ namespace yask {
     // One element in a vector.
     class VecElem {
     public:
-        GridPoint _vec;      // starting index of vector containing this element.
+        VarPoint _vec;      // starting index of vector containing this element.
         size_t _offset;      // 1-D offset in _vec.
         IntTuple _offsets;   // n-D offsets.
 
-        VecElem(const GridPoint& vec, int offset, const IntTuple& offsets) :
+        VecElem(const VarPoint& vec, int offset, const IntTuple& offsets) :
             _vec(vec), _offset(offset), _offsets(offsets) { }
 
         virtual bool operator==(const VecElem& rhs) const {
@@ -59,10 +59,10 @@ namespace yask {
     typedef vector<VecElem> VecElemList;
 
     // Map of each vector block to aligned block(s) that contain its points.
-    typedef map<GridPoint, GridPointSet> Point2Vecs;
+    typedef map<VarPoint, VarPointSet> Point2Vecs;
 
     // Map of each vector block to its elements.
-    typedef map<GridPoint, VecElemList> Point2VecElemLists;
+    typedef map<VarPoint, VecElemList> Point2VecElemLists;
 
     // This visitor determines the vector blocks needed to calculate the stencil.
     // It doesn't actually generate code; it just collects info from the AST.
@@ -77,21 +77,21 @@ namespace yask {
     public:
 
         // Data on vectorizable points.
-        GridPointSet _alignedVecs; // set of aligned vectors, i.e., ones that need to be read from memory.
+        VarPointSet _alignedVecs; // set of aligned vectors, i.e., ones that need to be read from memory.
         Point2Vecs _vblk2avblks; // each vec block -> its constituent aligned vec blocks.
         Point2VecElemLists _vblk2elemLists; // each vec block -> in-order list of its aligned vec blocks' elements.
-        GridPointSet _vecPoints;            // set of all vectorizable points read from, aligned and unaligned.
-        GridPointSet _vecWrites;            // set of vectors written to.
+        VarPointSet _vecPoints;            // set of all vectorizable points read from, aligned and unaligned.
+        VarPointSet _vecWrites;            // set of vectors written to.
 
         // NB: the above hold much of the same info, but arranged differently:
         // _alignedVecs contains only a set of aligned blocks.
         // _vblk2avblks is used to quickly determine which aligned blocks contribute to a given block.
         // _vblk2elemLists is used to find exactly where each element comes from.
-        // The keys are the same for both maps: the vectorizable grid points.
+        // The keys are the same for both maps: the vectorizable var points.
 
         // Data on non-vectorizable points.
-        GridPointSet _scalarPoints; // set of points that should be read as scalars and broadcast to vectors.
-        GridPointSet _nonVecPoints; // set of points that are not scalars or vectorizable.
+        VarPointSet _scalarPoints; // set of points that should be read as scalars and broadcast to vectors.
+        VarPointSet _nonVecPoints; // set of points that are not scalars or vectorizable.
 
         VecInfoVisitor(const Dimensions& dims) :
             _dims(dims) {
@@ -130,7 +130,7 @@ namespace yask {
 #if 0
         // Print stats header.
         virtual void printStatsHeader(ostream& os, string separator) const {
-            os << "destination grid" <<
+            os << "destination var" <<
                 separator << "num vector elems" <<
                 separator << "fold" <<
                 separator << "num points in stencil" <<
@@ -142,14 +142,14 @@ namespace yask {
 
         // Print some stats for the current values.
         // Pre-requisite: visitor has been accepted.
-        virtual void printStats(ostream& os, const string& destGrid, const string& separator) const {
+        virtual void printStats(ostream& os, const string& destVar, const string& separator) const {
 
             // calc num blends needed.
             int numBlends = 0;
             for (auto i = _vblk2elemLists.begin(); i != _vblk2elemLists.end(); i++) {
                 //auto pt = i->first;
                 auto vev = i->second;
-                GridPointSet mems; // inputs for this point.
+                VarPointSet mems; // inputs for this point.
                 for (size_t j = 0; j < vev.size(); j++)
                     mems.insert(vev[j]._vec);
                 if (mems.size() > 1) // only need to blend if >1 inputs.
@@ -170,7 +170,7 @@ namespace yask {
                 footprints[dname] = footprint.size();
             }
 
-            os << destGrid <<
+            os << destVar <<
                 separator << _vlen <<
                 separator << _dims._fold.makeValStr("*") <<
                 separator << getNumPoints() <<
@@ -194,8 +194,8 @@ namespace yask {
             return "";
         }
 
-        // Called when a grid point is read in a stencil function.
-        virtual string visit(GridPoint* gp);
+        // Called when a var point is read in a stencil function.
+        virtual string visit(VarPoint* gp);
     };
 
     // Define methods for printing a vectorized version of the stencil.
@@ -204,39 +204,39 @@ namespace yask {
         VecInfoVisitor& _vv;
         bool _reuseVars; // if true, load to a local var; else, reload on every access.
         bool _definedNA;           // NA var defined.
-        map<GridPoint, string> _vecVars; // vecs that are already constructed.
+        map<VarPoint, string> _vecVars; // vecs that are already constructed.
         map<string, string> _elemVars; // elems that are already read (key is read stmt).
 
         // Print access to an aligned vector block.
         // Return var name.
-        virtual string printAlignedVecRead(ostream& os, const GridPoint& gp) =0;
+        virtual string printAlignedVecRead(ostream& os, const VarPoint& gp) =0;
 
         // Print unaligned vector memory read.
         // Assumes this results in same values as printUnalignedVec().
         // Return var name.
-        virtual string printUnalignedVecRead(ostream& os, const GridPoint& gp) =0;
+        virtual string printUnalignedVecRead(ostream& os, const VarPoint& gp) =0;
 
         // Print write to an aligned vector block.
         // Return expression written.
-        virtual string printAlignedVecWrite(ostream& os, const GridPoint& gp,
+        virtual string printAlignedVecWrite(ostream& os, const VarPoint& gp,
                                             const string& val) =0;
 
         // Print conversion from existing vars to make an unaligned vector block.
         // Return var name.
-        virtual string printUnalignedVec(ostream& os, const GridPoint& gp) =0;
+        virtual string printUnalignedVec(ostream& os, const VarPoint& gp) =0;
 
         // Print construction for one point var pvName from elems.
-        virtual void printUnalignedVecCtor(ostream& os, const GridPoint& gp,
+        virtual void printUnalignedVecCtor(ostream& os, const VarPoint& gp,
                                            const string& pvName) =0;
 
         // Read from a single point.
         // Return code for read.
-        virtual string readFromScalarPoint(ostream& os, const GridPoint& gp,
+        virtual string readFromScalarPoint(ostream& os, const VarPoint& gp,
                                            const VarMap* vMap=0) =0;
 
         // Read from multiple points that are not vectorizable.
         // Return var name.
-        virtual string printNonVecRead(ostream& os, const GridPoint& gp) =0;
+        virtual string printNonVecRead(ostream& os, const VarPoint& gp) =0;
 
     public:
         VecPrintHelper(VecInfoVisitor& vv,
@@ -266,28 +266,28 @@ namespace yask {
         }
 
         // Return point info.
-        virtual bool isAligned(const GridPoint& gp) {
+        virtual bool isAligned(const VarPoint& gp) {
             return _vv._alignedVecs.count(gp) > 0;
         }
 
         // Access cached values.
-        virtual void savePointVar(const GridPoint& gp, string var) {
+        virtual void savePointVar(const VarPoint& gp, string var) {
             _vecVars[gp] = var;
         }
-        virtual string* lookupPointVar(const GridPoint& gp) {
+        virtual string* lookupPointVar(const VarPoint& gp) {
             if (_vecVars.count(gp))
                 return &_vecVars.at(gp);
             return 0;
         }
 
         // Print any needed memory reads and/or constructions to 'os'.
-        // Return code containing a vector of grid points.
-        virtual string readFromPoint(ostream& os, const GridPoint& gp);
+        // Return code containing a vector of var points.
+        virtual string readFromPoint(ostream& os, const VarPoint& gp);
 
         // Print any immediate memory writes to 'os'.
-        // Return code to update a vector of grid points or null string
+        // Return code to update a vector of var points or null string
         // if all writes were printed.
-        virtual string writeToPoint(ostream& os, const GridPoint& gp, const string& val);
+        virtual string writeToPoint(ostream& os, const VarPoint& gp, const string& val);
     };
 
     // A visitor that reorders exprs based on vector info.

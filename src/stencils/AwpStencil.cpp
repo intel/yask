@@ -27,8 +27,8 @@ IN THE SOFTWARE.
 // http://hpgeoc.sdsc.edu/AWPODC
 // http://www.sdsc.edu/News%20Items/PR20160209_earthquake_center.html
 
-// Set the following macro to use a sponge grid instead of 3 sponge arrays.
-//#define FULL_SPONGE_GRID
+// Set the following macro to use a sponge var instead of 3 sponge arrays.
+//#define FULL_SPONGE_VAR
 
 // YASK stencil solution(s) in this file will be integrated into the YASK compiler utility.
 #include "yask_compiler_utility_api.hpp"
@@ -45,49 +45,49 @@ protected:
     yc_index_node_ptr y = new_domain_index("y");         // spatial dim.
     yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
 
-    // Time-varying 3D-spatial velocity grids.
-    yc_grid_var vel_x = yc_grid_var("vel_x", get_soln(), { t, x, y, z });
-    yc_grid_var vel_y = yc_grid_var("vel_y", get_soln(), { t, x, y, z });
-    yc_grid_var vel_z = yc_grid_var("vel_z", get_soln(), { t, x, y, z });
+    // Time-varying 3D-spatial velocity vars.
+    yc_var_proxy vel_x = yc_var_proxy("vel_x", get_soln(), { t, x, y, z });
+    yc_var_proxy vel_y = yc_var_proxy("vel_y", get_soln(), { t, x, y, z });
+    yc_var_proxy vel_z = yc_var_proxy("vel_z", get_soln(), { t, x, y, z });
 
-    // Time-varying 3D-spatial Stress grids.
-    yc_grid_var stress_xx = yc_grid_var("stress_xx", get_soln(), { t, x, y, z });
-    yc_grid_var stress_yy = yc_grid_var("stress_yy", get_soln(), { t, x, y, z });
-    yc_grid_var stress_zz = yc_grid_var("stress_zz", get_soln(), { t, x, y, z });
-    yc_grid_var stress_xy = yc_grid_var("stress_xy", get_soln(), { t, x, y, z });
-    yc_grid_var stress_xz = yc_grid_var("stress_xz", get_soln(), { t, x, y, z });
-    yc_grid_var stress_yz = yc_grid_var("stress_yz", get_soln(), { t, x, y, z });
+    // Time-varying 3D-spatial Stress vars.
+    yc_var_proxy stress_xx = yc_var_proxy("stress_xx", get_soln(), { t, x, y, z });
+    yc_var_proxy stress_yy = yc_var_proxy("stress_yy", get_soln(), { t, x, y, z });
+    yc_var_proxy stress_zz = yc_var_proxy("stress_zz", get_soln(), { t, x, y, z });
+    yc_var_proxy stress_xy = yc_var_proxy("stress_xy", get_soln(), { t, x, y, z });
+    yc_var_proxy stress_xz = yc_var_proxy("stress_xz", get_soln(), { t, x, y, z });
+    yc_var_proxy stress_yz = yc_var_proxy("stress_yz", get_soln(), { t, x, y, z });
 
-    // Time-varying attenuation memory grids.
-    yc_grid_var stress_mem_xx = yc_grid_var("stress_mem_xx", get_soln(), { t, x, y, z });
-    yc_grid_var stress_mem_yy = yc_grid_var("stress_mem_yy", get_soln(), { t, x, y, z });
-    yc_grid_var stress_mem_zz = yc_grid_var("stress_mem_zz", get_soln(), { t, x, y, z });
-    yc_grid_var stress_mem_xy = yc_grid_var("stress_mem_xy", get_soln(), { t, x, y, z });
-    yc_grid_var stress_mem_xz = yc_grid_var("stress_mem_xz", get_soln(), { t, x, y, z });
-    yc_grid_var stress_mem_yz = yc_grid_var("stress_mem_yz", get_soln(), { t, x, y, z });
+    // Time-varying attenuation memory vars.
+    yc_var_proxy stress_mem_xx = yc_var_proxy("stress_mem_xx", get_soln(), { t, x, y, z });
+    yc_var_proxy stress_mem_yy = yc_var_proxy("stress_mem_yy", get_soln(), { t, x, y, z });
+    yc_var_proxy stress_mem_zz = yc_var_proxy("stress_mem_zz", get_soln(), { t, x, y, z });
+    yc_var_proxy stress_mem_xy = yc_var_proxy("stress_mem_xy", get_soln(), { t, x, y, z });
+    yc_var_proxy stress_mem_xz = yc_var_proxy("stress_mem_xz", get_soln(), { t, x, y, z });
+    yc_var_proxy stress_mem_yz = yc_var_proxy("stress_mem_yz", get_soln(), { t, x, y, z });
 
-    // 3D grids used for anelastic attenuation
-    yc_grid_var weight = yc_grid_var("weight", get_soln(), { x, y, z });
-    yc_grid_var tau2 = yc_grid_var("tau2", get_soln(), { x, y, z });
-    yc_grid_var anelastic_ap = yc_grid_var("anelastic_ap", get_soln(), { x, y, z });
-    yc_grid_var anelastic_as_diag = yc_grid_var("anelastic_as_diag", get_soln(), { x, y, z });
-    yc_grid_var anelastic_xy = yc_grid_var("anelastic_xy", get_soln(), { x, y, z });
-    yc_grid_var anelastic_xz = yc_grid_var("anelastic_xz", get_soln(), { x, y, z });
-    yc_grid_var anelastic_yz = yc_grid_var("anelastic_yz", get_soln(), { x, y, z });
+    // 3D vars used for anelastic attenuation
+    yc_var_proxy weight = yc_var_proxy("weight", get_soln(), { x, y, z });
+    yc_var_proxy tau2 = yc_var_proxy("tau2", get_soln(), { x, y, z });
+    yc_var_proxy anelastic_ap = yc_var_proxy("anelastic_ap", get_soln(), { x, y, z });
+    yc_var_proxy anelastic_as_diag = yc_var_proxy("anelastic_as_diag", get_soln(), { x, y, z });
+    yc_var_proxy anelastic_xy = yc_var_proxy("anelastic_xy", get_soln(), { x, y, z });
+    yc_var_proxy anelastic_xz = yc_var_proxy("anelastic_xz", get_soln(), { x, y, z });
+    yc_var_proxy anelastic_yz = yc_var_proxy("anelastic_yz", get_soln(), { x, y, z });
 
     // 3D-spatial Lame' coefficients.
-    yc_grid_var lambda = yc_grid_var("lambda", get_soln(), { x, y, z });
-    yc_grid_var rho = yc_grid_var("rho", get_soln(), { x, y, z });
-    yc_grid_var mu = yc_grid_var("mu", get_soln(), { x, y, z });
+    yc_var_proxy lambda = yc_var_proxy("lambda", get_soln(), { x, y, z });
+    yc_var_proxy rho = yc_var_proxy("rho", get_soln(), { x, y, z });
+    yc_var_proxy mu = yc_var_proxy("mu", get_soln(), { x, y, z });
 
     // Sponge coefficients.
     // (Most of these will be 1.0.)
-#ifdef FULL_SPONGE_GRID
-    yc_grid_var sponge = yc_grid_var("sponge", get_soln(), { x, y, z });
+#ifdef FULL_SPONGE_VAR
+    yc_var_proxy sponge = yc_var_proxy("sponge", get_soln(), { x, y, z });
 #else
-    yc_grid_var cr_x = yc_grid_var("cr_x", get_soln(), { x });
-    yc_grid_var cr_y = yc_grid_var("cr_y", get_soln(), { y });
-    yc_grid_var cr_z = yc_grid_var("cr_z", get_soln(), { z });
+    yc_var_proxy cr_x = yc_var_proxy("cr_x", get_soln(), { x });
+    yc_var_proxy cr_y = yc_var_proxy("cr_y", get_soln(), { y });
+    yc_var_proxy cr_z = yc_var_proxy("cr_z", get_soln(), { z });
 #endif
 
     // Spatial FD coefficients.
@@ -95,8 +95,8 @@ protected:
     const double c2 = -1.0/24.0;
 
     // Physical dimensions in time and space.
-    yc_grid_var delta_t = yc_grid_var("delta_t", get_soln(), { });
-    yc_grid_var h = yc_grid_var("h", get_soln(), { });
+    yc_var_proxy delta_t = yc_var_proxy("delta_t", get_soln(), { });
+    yc_var_proxy h = yc_var_proxy("h", get_soln(), { });
 
 public:
 
@@ -106,17 +106,17 @@ public:
     // Adjustment for sponge layer.
     void adjust_for_sponge(yc_number_node_ptr& val) {
 
-#ifdef FULL_SPONGE_GRID
+#ifdef FULL_SPONGE_VAR
         val *= sponge(x, y, z);
 #else
         val *= cr_x(x) * cr_y(y) * cr_z(z);
 #endif
     }
 
-    // Velocity-grid define functions.  For each D in x, y, z, define vel_D
-    // at t+1 based on vel_x at t and stress grids at t.  Note that the t,
-    // x, y, z parameters are integer grid indices, not actual offsets in
-    // time or space, so half-steps due to staggered grids are adjusted
+    // Velocity-var define functions.  For each D in x, y, z, define vel_D
+    // at t+1 based on vel_x at t and stress vars at t.  Note that the t,
+    // x, y, z parameters are integer var indices, not actual offsets in
+    // time or space, so half-steps due to staggered vars are adjusted
     // appropriately.
 
     void define_vel_x() {
@@ -174,12 +174,12 @@ public:
         vel_z(t+1, x, y, z) EQUALS next_vel_z;
     }
 
-    // Stress-grid define functions.  For each D in xx, yy, zz, xy, xz, yz,
-    // define stress_D at t+1 based on stress_D at t and vel grids at t+1.
-    // This implies that the velocity-grid define functions must be called
+    // Stress-var define functions.  For each D in xx, yy, zz, xy, xz, yz,
+    // define stress_D at t+1 based on stress_D at t and vel vars at t+1.
+    // This implies that the velocity-var define functions must be called
     // before these for a given value of t.  Note that the t, x, y, z
-    // parameters are integer grid indices, not actual offsets in time or
-    // space, so half-steps due to staggered grids are adjusted
+    // parameters are integer var indices, not actual offsets in time or
+    // space, so half-steps due to staggered vars are adjusted
     // appropriately.
 
     void define_stress_xx(yc_number_node_ptr lambda_val, yc_number_node_ptr mu_val,

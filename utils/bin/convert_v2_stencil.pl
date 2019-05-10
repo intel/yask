@@ -108,22 +108,22 @@ sub convert($) {
       s/\bfirst_index\b/first_domain_index/g;
       s/\blast_index\b/last_domain_index/g;
 
-      # Grid creation.
-      s/MAKE_GRID\s*[(]([^,]+),\s*([^)]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_soln(), { $2 })/g;
-      s/MAKE_ARRAY\s*[(]([^,]+),\s*([^)]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_soln(), { $2 })/g;
-      s/MAKE_SCALAR\s*[(]([^,]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_soln(), { })/g;
-      s/MAKE_SCRATCH_GRID\s*[(]([^,]+),\s*([^)]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_soln(), { $2 }, true)/g;
-      s/MAKE_SCRATCH_ARRAY\s*[(]([^,]+),\s*([^)]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_soln(), { $2 }, true)/g;
-      s/MAKE_SCRATCH_SCALAR\s*[(]([^,]+)[)]/yc_grid_var $1 = yc_grid_var("$1", get_soln(), { }, true)/g;
+      # Var creation.
+      s/MAKE_GRID\s*[(]([^,]+),\s*([^)]+)[)]/yc_var_proxy $1 = yc_var_proxy("$1", get_soln(), { $2 })/g;
+      s/MAKE_ARRAY\s*[(]([^,]+),\s*([^)]+)[)]/yc_var_proxy $1 = yc_var_proxy("$1", get_soln(), { $2 })/g;
+      s/MAKE_SCALAR\s*[(]([^,]+)[)]/yc_var_proxy $1 = yc_var_proxy("$1", get_soln(), { })/g;
+      s/MAKE_SCRATCH_GRID\s*[(]([^,]+),\s*([^)]+)[)]/yc_var_proxy $1 = yc_var_proxy("$1", get_soln(), { $2 }, true)/g;
+      s/MAKE_SCRATCH_ARRAY\s*[(]([^,]+),\s*([^)]+)[)]/yc_var_proxy $1 = yc_var_proxy("$1", get_soln(), { $2 }, true)/g;
+      s/MAKE_SCRATCH_SCALAR\s*[(]([^,]+)[)]/yc_var_proxy $1 = yc_var_proxy("$1", get_soln(), { }, true)/g;
 
       # Typenames.
       s/\bStencilBase\b/yc_solution_base/g;
       s/\bStencilRadiusBase\b/yc_solution_with_radius_base/g;
-      s/\bGrid\b/yc_grid_var/g;
+      s/\bGrid\b/yc_var_proxy/g;
       s/\bGridIndex\b/yc_number_node_ptr/g;
       s/\bGridValue\b/yc_number_node_ptr/g;
       s/\bCondition\b/yc_bool_node_ptr/g;
-      s/\bGridPointPtr\b/yc_grid_point_node_ptr/g;
+      s/\bGridPointPtr\b/yc_var_point_node_ptr/g;
       s/\bExprPtr\b/yc_expr_node_ptr/g;
       s/\bNumExprPtr\b/yc_number_node_ptr/g;
       s/\bIndexExprPtr\b/yc_index_node_ptr/g;

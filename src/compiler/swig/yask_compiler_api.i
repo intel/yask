@@ -39,12 +39,12 @@ IN THE SOFTWARE.
 
 // Must declare shared_ptrs for the entire expr_node hierarchy!
 %shared_ptr(yask::yc_solution)
- //%shared_ptr(yask::yc_grid)
+ //%shared_ptr(yask::yc_var)
 %shared_ptr(yask::yc_expr_node)
 %shared_ptr(yask::yc_index_node)
 %shared_ptr(yask::yc_equation_node)
 %shared_ptr(yask::yc_number_node)
-%shared_ptr(yask::yc_grid_point_node)
+%shared_ptr(yask::yc_var_point_node)
 %shared_ptr(yask::yc_const_number_node)
 %shared_ptr(yask::yc_negate_node)
 %shared_ptr(yask::yc_commutative_number_node)
@@ -81,7 +81,7 @@ IN THE SOFTWARE.
 %template(yc_vector_index) std::vector<std::shared_ptr<yask::yc_index_node>>;
 %template(yc_vector_num) std::vector<std::shared_ptr<yask::yc_number_node>>;
 %template(yc_vector_eq) std::vector<std::shared_ptr<yask::yc_equation_node>>;
-%template(yc_vector_grid) std::vector<yask::yc_grid*>;
+%template(yc_vector_var) std::vector<yask::yc_var*>;
 
  // Tell SWIG how to catch a YASK exception and rethrow it in Python.
 %exception {

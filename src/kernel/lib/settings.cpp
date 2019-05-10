@@ -344,8 +344,8 @@ namespace yask {
         _add_domain_option(parser, "mbg", "Mini-block-group size", _mini_block_group_sizes);
         _add_domain_option(parser, "sbg", "Sub-block-group size", _sub_block_group_sizes);
 #endif
-        _add_domain_option(parser, "mp", "Minimum grid-padding size (including halo)", _min_pad_sizes);
-        _add_domain_option(parser, "ep", "Extra grid-padding size (beyond halo)", _extra_pad_sizes);
+        _add_domain_option(parser, "mp", "Minimum var-padding size (including halo)", _min_pad_sizes);
+        _add_domain_option(parser, "ep", "Extra var-padding size (beyond halo)", _extra_pad_sizes);
 #ifdef USE_MPI
         _add_domain_option(parser, "nr", "Num ranks", _num_ranks);
         _add_domain_option(parser, "ri", "This rank's logical index (0-based)", _rank_indices);
@@ -374,7 +374,7 @@ namespace yask {
 #endif
         parser.add_option(new CommandLineParser::BoolOption
                           ("force_scalar",
-                           "Evaluate every grid point with scalar stencil operations (for debug).",
+                           "Evaluate every var point with scalar stencil operations (for debug).",
                            force_scalar));
         parser.add_option(new CommandLineParser::IntOption
                           ("max_threads",
@@ -405,14 +405,14 @@ namespace yask {
                            "(usually the outer-domain dimension), ignoring other sub-block sizes. "
                            "Assign each slab to a block thread based on its global index in that dimension. "
                            "This setting may increase cache locality when using multiple "
-                           "block-threads when scrach-grid vars are used and/or "
+                           "block-threads when scratch vars are used and/or "
                            "when temporal blocking is active. "
                            "This option is ignored if there are fewer than two block threads.",
                            bind_block_threads));
 #ifdef USE_NUMA
         stringstream msg;
         msg << "Preferred NUMA node on which to allocate data for "
-            "grids and MPI buffers. Alternatively, use special values " <<
+            "vars and MPI buffers. Alternatively, use special values " <<
             yask_numa_local << " for explicit local-node allocation, " <<
             yask_numa_interleave << " for interleaving pages across all nodes, or " <<
             yask_numa_none << " for no NUMA policy.";
@@ -439,7 +439,7 @@ namespace yask {
         parser.add_option(new CommandLineParser::BoolOption
                           ("auto_tune_each_pass",
                            "Apply the auto-tuner separately to each stencil pack when "
-                           "those packs are applied in separate passes across the entire grid, "
+                           "those packs are applied in separate passes across the entire var, "
                            "i.e., when no temporal tiling is used.",
                            _allow_pack_tuners));
     }
@@ -531,7 +531,7 @@ namespace yask {
             " Set local-domain sizes to specify the work done on this MPI rank.\n"
             "  A local-domain size of 0 in a given domain dimension =>\n"
             "   local-domain size is determined by the global-domain size in that dimension.\n"
-            "  This and the number of grids affect the amount of memory used.\n"
+            "  This and the number of vars affect the amount of memory used.\n"
             " Set global-domain sizes to specify the work done across all MPI ranks.\n"
             "  A global-domain size of 0 in a given domain dimension =>\n"
             "   global-domain size is the sum of local-domain sizes in that dimension.\n"

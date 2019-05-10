@@ -445,12 +445,12 @@ namespace yask {
 
     } // setupRank().
 
-    // Set non-scratch grid sizes and offsets based on settings.
+    // Set non-scratch var sizes and offsets based on settings.
     // Set wave-front settings.
     // This should be called anytime a setting or rank offset is changed.
-    void StencilContext::update_grid_info(bool force) {
+    void StencilContext::update_var_info(bool force) {
         STATE_VARS(this);
-        TRACE_MSG("update_grid_info(" << force << ")...");
+        TRACE_MSG("update_var_info(" << force << ")...");
 
         // If we haven't finished constructing the context, it's too early
         // to do this.
@@ -464,17 +464,17 @@ namespace yask {
         for (auto& dim : domain_dims.getDims()) {
             auto& dname = dim.getName();
             
-            // Each non-scratch grid.
-            for (auto gp : gridPtrs) {
+            // Each non-scratch var.
+            for (auto gp : varPtrs) {
                 assert(gp);
                 if (!gp->is_dim_used(dname))
                     continue;
                 auto& gb = gp->gb();
 
-                // Don't resize manually-sized grid
-                // unless it is a solution grid and 'force' is 'true'.
+                // Don't resize manually-sized var
+                // unless it is a solution var and 'force' is 'true'.
                 if (!gp->is_fixed_size() ||
-                    (!gb.is_user_grid() && force)) {
+                    (!gb.is_user_var() && force)) {
 
                     // Rank domains.
                     gp->_set_domain_size(dname, opts->_rank_sizes[dname]);
@@ -489,8 +489,8 @@ namespace yask {
                     gp->_set_local_offset(dname, 0);
                 }
 
-                // Update max halo across grids, used for temporal angles.
-                if (!gb.is_user_grid()) {
+                // Update max halo across vars, used for temporal angles.
+                if (!gb.is_user_var()) {
                     max_halos[dname] = max(max_halos[dname], gp->get_left_halo_size(dname));
                     max_halos[dname] = max(max_halos[dname], gp->get_right_halo_size(dname));
                 }
@@ -567,10 +567,10 @@ namespace yask {
         }
 
         // Now that wave-front settings are known, we can push this info
-        // back to the grids. It's useful to store this redundant info
-        // in the grids, because there it's indexed by grid dims instead
-        // of domain dims. This makes it faster to do grid indexing.
-        for (auto gp : origGridPtrs) {
+        // back to the vars. It's useful to store this redundant info
+        // in the vars, because there it's indexed by var dims instead
+        // of domain dims. This makes it faster to do var indexing.
+        for (auto gp : origVarPtrs) {
             assert(gp);
 
             // Loop through each domain dim.
@@ -582,16 +582,16 @@ namespace yask {
                     gp->_set_right_wf_ext(dname, right_wf_exts[dname]);
                 }
             }
-        } // grids.
+        } // vars.
 
         // Calculate temporal-block shifts.
         // NB: this will change if/when block sizes change.
         update_tb_info();
         
-    } // update_grid_info().
+    } // update_var_info().
 
     // Set temporal blocking data.  This should be called anytime a block
-    // size is changed.  Must be called after update_grid_info() to ensure
+    // size is changed.  Must be called after update_var_info() to ensure
     // angles are properly set.  TODO: calculate 'tb_steps' dynamically
     // considering temporal conditions; this assumes worst-case, which is
     // all packs always done.
@@ -634,7 +634,7 @@ namespace yask {
                 auto mblksize = opts->_mini_block_sizes[i];
 
                 // Req'd shift in this dim based on max halos.
-                // Can't use separate L & R shift because of possible data reuse in grids.
+                // Can't use separate L & R shift because of possible data reuse in vars.
                 // Can't use separate shifts for each pack for same reason.
                 // TODO: make round-up optional.
                 auto fpts = dims->_fold_pts[j];
@@ -754,21 +754,21 @@ namespace yask {
                   ", tops = " << tb_tops.makeDimValStr());
     } // update_tb_info().
 
-    // Init all grids & params by calling initFn.
-    void StencilContext::initValues(function<void (YkGridPtr gp,
+    // Init all vars & params by calling initFn.
+    void StencilContext::initValues(function<void (YkVarPtr gp,
                                                    real_t seed)> realInitFn) {
         STATE_VARS(this);
 
         real_t seed = 0.1;
-        os << "Initializing grids...\n" << flush;
+        os << "Initializing vars...\n" << flush;
         YaskTimer itimer;
         itimer.start();
-        for (auto gp : gridPtrs) {
+        for (auto gp : varPtrs) {
             realInitFn(gp, seed);
             seed += 0.01;
         }
         itimer.stop();
-        os << "Grid initialization done in " <<
+        os << "Var initialization done in " <<
             makeNumStr(itimer.get_elapsed_secs()) << " secs.\n" << flush;
     }
 

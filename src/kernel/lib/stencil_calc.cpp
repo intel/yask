@@ -33,7 +33,7 @@ namespace yask {
 
     // Calculate results within a mini-block defined by 'mini_block_idxs'.
     // This is called by StencilContext::calc_mini_block() for each bundle.
-    // It is here that any required scratch-grid stencils are evaluated
+    // It is here that any required scratch-var stencils are evaluated
     // first and then the non-scratch stencils in the stencil bundle.
     // It is also here that the boundaries of the bounding-box(es) of the bundle
     // are respected. There must not be any temporal blocking at this point.
@@ -117,7 +117,7 @@ namespace yask {
                        " ... " << mb_idxs.end.makeValStr(nsdims) << ")");
 
             // Get the bundles that need to be processed in
-            // this block. This will be any prerequisite scratch-grid
+            // this block. This will be any prerequisite scratch-var
             // bundles plus this non-scratch bundle.
             auto sg_list = get_reqd_bundles();
 
@@ -139,7 +139,7 @@ namespace yask {
                     }
                     
                     // Indices needed for the generated loops.  Will normally be a
-                    // copy of 'mb_idxs' except when updating scratch-grids.
+                    // copy of 'mb_idxs' except when updating scratch-vars.
                     ScanIndices adj_mb_idxs = sg->adjust_span(region_thread_idx, mb_idxs);
 
                     // Tweak settings for adjusted indices.
@@ -680,14 +680,14 @@ namespace yask {
         calc_loop_of_vectors(region_thread_idx, block_thread_idx, start_idxs, stop_inner, write_mask);
     }
 
-    // If this bundle is updating scratch grid(s),
+    // If this bundle is updating scratch var(s),
     // expand begin & end of 'idxs' by sizes of halos.
     // Stride indices may also change.
-    // NB: it is not necessary that the domain of each grid
+    // NB: it is not necessary that the domain of each var
     // is the same as the span of 'idxs'. However, it should be
-    // at least that large to ensure that grid is able to hold
+    // at least that large to ensure that var is able to hold
     // calculated results. This is checked when 'CHECK' is defined.
-    // In other words, grid can be larger than span of 'idxs', but
+    // In other words, var can be larger than span of 'idxs', but
     // its halo sizes are still used to specify how much to
     // add to 'idxs'.
     // Returns adjusted indices.
@@ -696,7 +696,7 @@ namespace yask {
         STATE_VARS(this);
         ScanIndices adj_idxs(idxs);
 
-        // Loop thru vecs of scratch grids for this bundle.
+        // Loop thru vecs of scratch vars for this bundle.
         for (auto* sv : outputScratchVecs) {
             assert(sv);
 
@@ -711,7 +711,7 @@ namespace yask {
                 auto& dim = dims->_stencil_dims.getDim(i);
                 auto& dname = dim.getName();
 
-                // Is this dim used in this grid?
+                // Is this dim used in this var?
                 int posn = gb.get_dim_posn(dname);
                 if (posn >= 0) {
 
@@ -728,12 +728,12 @@ namespace yask {
                     adj_idxs.begin[i] = idxs.begin[i] - lh;
                     adj_idxs.end[i] = idxs.end[i] + rh;
 
-                    // Make sure grid covers index bounds.
+                    // Make sure var covers index bounds.
                     TRACE_MSG("adjust_span: mini-blk [" << 
                               idxs.begin[i] << "..." <<
                               idxs.end[i] << ") adjusted to [" << 
                               adj_idxs.begin[i] << "..." <<
-                              adj_idxs.end[i] << ") within scratch-grid '" << 
+                              adj_idxs.end[i] << ") within scratch-var '" << 
                               gp->get_name() << "' allocated [" <<
                               gp->get_first_rank_alloc_index(posn) << "..." <<
                               gp->get_last_rank_alloc_index(posn) << "] in dim '" << dname << "'");
@@ -749,8 +749,8 @@ namespace yask {
                 }
             }
 
-            // Only need to get info from one grid.
-            // TODO: check that grids are consistent.
+            // Only need to get info from one var.
+            // TODO: check that vars are consistent.
             break;
         }
         return adj_idxs;
@@ -773,7 +773,7 @@ namespace yask {
         getAT().steps_done += num_steps;
     }
 
-    static void print_grid_list(ostream& os, const GridPtrs& gps, const string& type) {
+    static void print_var_list(ostream& os, const VarPtrs& gps, const string& type) {
         os << "  num " << type << " vars:";
         for (size_t i = 0; i < max(21ULL - type.length(), 1ULL); i++)
             os << ' ';
@@ -869,19 +869,19 @@ namespace yask {
                 }
             }
             os <<
-                "  grid-reads per point:       " << reads1 << endl <<
-                "  grid-reads in rank:         " << makeNumStr(reads_bb) << endl <<
-                "  grid-writes per point:      " << writes1 << endl <<
-                "  grid-writes in rank:        " << makeNumStr(writes_bb) << endl <<
+                "  var-reads per point:       " << reads1 << endl <<
+                "  var-reads in rank:         " << makeNumStr(reads_bb) << endl <<
+                "  var-writes per point:      " << writes1 << endl <<
+                "  var-writes in rank:        " << makeNumStr(writes_bb) << endl <<
                 "  est FP-ops per point:       " << fpops1 << endl <<
                 "  est FP-ops in rank:         " << makeNumStr(fpops_bb) << endl;
 
             // Classify vars.
-            GridPtrs idvars, imvars, odvars, omvars, iodvars, iomvars; // i[nput], o[utput], d[omain], m[isc].
-            for (auto gp : sg->inputGridPtrs) {
+            VarPtrs idvars, imvars, odvars, omvars, iodvars, iomvars; // i[nput], o[utput], d[omain], m[isc].
+            for (auto gp : sg->inputVarPtrs) {
                 auto& gb = gp->gb();
                 bool isdom = gb.is_domain_var();
-                auto& ogps = sg->outputGridPtrs;
+                auto& ogps = sg->outputVarPtrs;
                 bool isout = find(ogps.begin(), ogps.end(), gp) != ogps.end();
                 if (isout) {
                     if (isdom)
@@ -895,10 +895,10 @@ namespace yask {
                         imvars.push_back(gp);
                 }
             }
-            for (auto gp : sg->outputGridPtrs) {
+            for (auto gp : sg->outputVarPtrs) {
                 auto& gb = gp->gb();
                 bool isdom = gb.is_domain_var();
-                auto& igps = sg->inputGridPtrs;
+                auto& igps = sg->inputVarPtrs;
                 bool isin = find(igps.begin(), igps.end(), gp) != igps.end();
                 if (!isin) {
                     if (isdom)
@@ -907,12 +907,12 @@ namespace yask {
                         omvars.push_back(gp);
                 }
             }
-            print_grid_list(os, idvars, "input-only domain");
-            print_grid_list(os, odvars, "output-only domain");
-            print_grid_list(os, iodvars, "input-output domain");
-            print_grid_list(os, imvars, "input-only other");
-            print_grid_list(os, omvars, "output-only other");
-            print_grid_list(os, iomvars, "input-output other");
+            print_var_list(os, idvars, "input-only domain");
+            print_var_list(os, odvars, "output-only domain");
+            print_var_list(os, iodvars, "input-output domain");
+            print_var_list(os, imvars, "input-only other");
+            print_var_list(os, omvars, "output-only other");
+            print_var_list(os, iomvars, "input-output other");
             
         } // bundles.
 

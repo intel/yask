@@ -27,9 +27,9 @@ IN THE SOFTWARE.
 
 namespace yask {
 
-    typedef std::vector<idx_t> GridIndices;
-    typedef std::vector<idx_t> GridDimSizes;
-    typedef std::vector<std::string> GridDimNames;
+    typedef std::vector<idx_t> VarIndices;
+    typedef std::vector<idx_t> VarDimSizes;
+    typedef std::vector<std::string> VarDimNames;
 
     // A class to hold up to a given number of sizes or indices efficiently.
     // Similar to a Tuple, but less overhead and doesn't keep names.
@@ -60,7 +60,7 @@ namespace yask {
         Indices(const IdxTuple& src) {
             setFromTuple(src);
         }
-        Indices(const GridIndices& src) {
+        Indices(const VarIndices& src) {
             setFromVec(src);
         }
         Indices(const std::initializer_list<idx_t>& src) {
@@ -114,7 +114,7 @@ namespace yask {
         }
 
         // Other inits.
-        void setFromVec(const GridIndices& src) {
+        void setFromVec(const VarIndices& src) {
             assert(src.size() <= +max_idxs);
             int n = int(src.size());
             for (int i = 0; i < n; i++)
@@ -293,7 +293,7 @@ namespace yask {
         }
 
         // Make string like "x=4, y=8".
-        std::string makeDimValStr(const GridDimNames& names,
+        std::string makeDimValStr(const VarDimNames& names,
                                   std::string separator=", ",
                                   std::string infix="=",
                                   std::string prefix="",

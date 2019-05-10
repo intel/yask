@@ -34,7 +34,7 @@ void CppIntrinPrintHelper::tryAlign(ostream& os,
                                     size_t nelemsTarget,
                                     const VecElemList& elems,
                                     set<size_t>& doneElems,
-                                    const GridPointSet& alignedVecs,
+                                    const VarPointSet& alignedVecs,
                                     bool maskAllowed) {
     size_t nelems = elems.size();
 
@@ -186,7 +186,7 @@ void CppIntrinPrintHelper::tryPerm1(ostream& os,
                                     size_t nelemsTarget,
                                     const VecElemList& elems,
                                     set<size_t>& doneElems,
-                                    const GridPointSet& alignedVecs) {
+                                    const VarPointSet& alignedVecs) {
     size_t nelems = elems.size();
 
     // Try a permute of each aligned vector.
@@ -280,7 +280,7 @@ void CppIntrinPrintHelper::tryPerm2(ostream& os,
                                     size_t nelemsTarget,
                                     const VecElemList& elems,
                                     set<size_t>& doneElems,
-                                    const GridPointSet& alignedVecs) {
+                                    const VarPointSet& alignedVecs) {
     size_t nelems = elems.size();
 
     // There is no source-preserving mask version of permutex2var, so
@@ -407,7 +407,7 @@ void CppIntrinPrintHelper::tryPerm2(ostream& os,
 
 // Print construction for one unaligned vector pvName at gp.
 void CppIntrinPrintHelper::printUnalignedVecCtor(ostream& os,
-                                                 const GridPoint& gp,
+                                                 const VarPoint& gp,
                                                  const string& pvName) {
 
     // Create an explanatory comment by printing the straightforward

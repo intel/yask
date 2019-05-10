@@ -64,8 +64,8 @@ namespace yask {
     class NumExpr;
     typedef shared_ptr<NumExpr> numExprPtr;
     typedef vector<numExprPtr> numExprPtrVec;
-    class GridPoint;
-    typedef shared_ptr<GridPoint> gridPointPtr;
+    class VarPoint;
+    typedef shared_ptr<VarPoint> varPointPtr;
     class IndexExpr;
     typedef shared_ptr<IndexExpr> indexExprPtr;
     typedef vector<indexExprPtr> indexExprPtrVec;
@@ -76,7 +76,7 @@ namespace yask {
 
     // More forward-decls.
     class ExprVisitor;
-    class GridVar;
+    class Var;
     class StencilSolution;
     struct Dimensions;
 
@@ -218,7 +218,7 @@ namespace yask {
         }
     };
 
-    // GridVar index types.
+    // Var index types.
     enum IndexType {
         STEP_INDEX,             // the step dim.
         DOMAIN_INDEX,           // a domain dim.
@@ -333,7 +333,7 @@ namespace yask {
         virtual double get_value() const { return _f; }
     };
 
-    // Any expression that returns a real (not from a grid).
+    // Any expression that returns a real (not from a var).
     // This is an expression leaf-node.
     class CodeExpr : public NumExpr {
     protected:
@@ -771,10 +771,10 @@ namespace yask {
         }
     };
 
-    // One specific point in a grid.
+    // One specific point in a var.
     // This is an expression leaf-node.
-    class GridPoint : public NumExpr,
-                      public virtual yc_grid_point_node {
+    class VarPoint : public NumExpr,
+                      public virtual yc_var_point_node {
 
     public:
 
@@ -795,7 +795,7 @@ namespace yask {
         };
 
     protected:
-        GridVar* _grid = 0;        // the grid this point is from.
+        Var* _var = 0;        // the var this point is from.
 
         // Index exprs for each dim, e.g.,
         // "3, x-5, y*2, z+4" for dims "n, x, y, z".
@@ -823,18 +823,18 @@ namespace yask {
 
     public:
 
-        // Construct a point given a grid and an arg for each dim.
-        GridPoint(GridVar* grid, const numExprPtrVec& args);
+        // Construct a point given a var and an arg for each dim.
+        VarPoint(Var* var, const numExprPtrVec& args);
 
         // Dtor.
-        virtual ~GridPoint() {}
+        virtual ~VarPoint() {}
 
-        // Get parent grid info.
-        const GridVar* getGrid() const { return _grid; }
-        GridVar* getGrid() { return _grid; }
-        virtual const string& getGridName() const;
-        virtual string getGridPtr() const;
-        virtual bool isGridFoldable() const;
+        // Get parent var info.
+        const Var* getVar() const { return _var; }
+        Var* getVar() { return _var; }
+        virtual const string& getVarName() const;
+        virtual string getVarPtr() const;
+        virtual bool isVarFoldable() const;
         virtual const indexExprPtrVec& getDims() const;
 
         // Accessors.
@@ -859,7 +859,7 @@ namespace yask {
         // Get arg for 'dim' or return null if none.
         virtual const numExprPtr getArg(const string& dim) const;
         
-        // Set given arg to given offset; ignore if not in step or domain grid dims.
+        // Set given arg to given offset; ignore if not in step or domain var dims.
         virtual void setArgOffset(const IntScalar& offset);
 
         // Set given args to be given offsets.
@@ -872,10 +872,10 @@ namespace yask {
         virtual void setArgConst(const IntScalar& val);
 
         // Some comparisons.
-        bool operator==(const GridPoint& rhs) const {
+        bool operator==(const VarPoint& rhs) const {
             return _defStr == rhs._defStr;
         }
-        bool operator<(const GridPoint& rhs) const {
+        bool operator<(const VarPoint& rhs) const {
             return _defStr < rhs._defStr;
         }
 
@@ -884,15 +884,15 @@ namespace yask {
 
         // Check for equivalency.
         virtual bool isSame(const Expr* other) const {
-            auto p = dynamic_cast<const GridPoint*>(other);
+            auto p = dynamic_cast<const VarPoint*>(other);
             return p && *this == *p;
         }
 
-        // Check for same logical grid.
-        // A logical grid is defined by the grid itself
+        // Check for same logical var.
+        // A logical var is defined by the var itself
         // and any const indices.
-        virtual bool isSameLogicalGrid(const GridPoint& rhs) const {
-            return _grid == rhs._grid && _consts == rhs._consts;
+        virtual bool isSameLogicalVar(const VarPoint& rhs) const {
+            return _var == rhs._var && _consts == rhs._consts;
         }
 
         // String w/name and parens around args, e.g., 'u(x, y+2)'.
@@ -901,7 +901,7 @@ namespace yask {
 
         // String w/name and parens around const args, e.g., 'u(n=4)'.
         // Apply substitutions to indices using 'varMap' if provided.
-        virtual string makeLogicalGridStr(const VarMap* varMap = 0) const;
+        virtual string makeLogicalVarStr(const VarMap* varMap = 0) const;
 
         // String w/just comma-sep args, e.g., 'x, y+2'.
         // Apply substitutions to indices using 'varMap' if provided.
@@ -921,26 +921,26 @@ namespace yask {
                                       const VarMap* varMap = 0) const;
 
         // Make string like "g->_wrap_step(t+1)" from original arg "t+1"
-        // if grid uses step dim, "0" otherwise.
-        virtual string makeStepArgStr(const string& gridPtr, const Dimensions& dims) const;
+        // if var uses step dim, "0" otherwise.
+        virtual string makeStepArgStr(const string& varPtr, const Dimensions& dims) const;
 
         // Create a deep copy of this expression,
-        // except pointed-to grid is not copied.
-        virtual numExprPtr clone() const { return make_shared<GridPoint>(*this); }
-        virtual gridPointPtr cloneGridPoint() const { return make_shared<GridPoint>(*this); }
+        // except pointed-to var is not copied.
+        virtual numExprPtr clone() const { return make_shared<VarPoint>(*this); }
+        virtual varPointPtr cloneVarPoint() const { return make_shared<VarPoint>(*this); }
 
         // APIs.
-        virtual yc_grid* get_grid();
+        virtual yc_var* get_var();
     };
 } // namespace yask.
 
-// Define hash function for GridPoint for unordered_{set,map}.
+// Define hash function for VarPoint for unordered_{set,map}.
 // TODO: make this more efficient.
 namespace std {
     using namespace yask;
 
-    template <> struct hash<GridPoint> {
-        size_t operator()(const GridPoint& k) const {
+    template <> struct hash<VarPoint> {
+        size_t operator()(const VarPoint& k) const {
             return hash<string>{}(k.makeStr());
         }
     };
@@ -948,25 +948,25 @@ namespace std {
 
 namespace yask {
 
-    // Equality operator for a grid point.
+    // Equality operator for a var point.
     // This defines the LHS as equal to the RHS; it is NOT
     // a comparison operator; it is NOT an assignment operator.
     // It also holds an optional condition.
     class EqualsExpr : public Expr,
                        public virtual yc_equation_node {
     protected:
-        gridPointPtr _lhs;
+        varPointPtr _lhs;
         numExprPtr _rhs;
         boolExprPtr _cond;
         boolExprPtr _step_cond;
 
     public:
-        EqualsExpr(gridPointPtr lhs, numExprPtr rhs,
+        EqualsExpr(varPointPtr lhs, numExprPtr rhs,
                    boolExprPtr cond = nullptr,
                    boolExprPtr step_cond = nullptr) :
             _lhs(lhs), _rhs(rhs), _cond(cond), _step_cond(step_cond) { }
         EqualsExpr(const EqualsExpr& src) :
-            _lhs(src._lhs->cloneGridPoint()),
+            _lhs(src._lhs->cloneVarPoint()),
             _rhs(src._rhs->clone()) {
             if (src._cond)
                 _cond = src._cond->clone();
@@ -978,8 +978,8 @@ namespace yask {
                 _step_cond = nullptr;
         }
 
-        gridPointPtr& getLhs() { return _lhs; }
-        const gridPointPtr& getLhs() const { return _lhs; }
+        varPointPtr& getLhs() { return _lhs; }
+        const varPointPtr& getLhs() const { return _lhs; }
         numExprPtr& getRhs() { return _rhs; }
         const numExprPtr& getRhs() const { return _rhs; }
         boolExprPtr& getCond() { return _cond; }
@@ -993,14 +993,14 @@ namespace yask {
         static string condOpStr() { return "IF"; }
         static string stepCondOpStr() { return "IF_STEP"; }
 
-        // Get pointer to grid on LHS or NULL if not set.
-        virtual GridVar* getGrid() {
+        // Get pointer to var on LHS or NULL if not set.
+        virtual Var* getVar() {
             if (_lhs.get())
-                return _lhs->getGrid();
+                return _lhs->getVar();
             return NULL;
         }
 
-        // LHS is scratch grid.
+        // LHS is scratch var.
         virtual bool isScratch();
 
         // Check for equivalency.
@@ -1013,7 +1013,7 @@ namespace yask {
         }
 
         // APIs.
-        virtual yc_grid_point_node_ptr get_lhs() { return _lhs; }
+        virtual yc_var_point_node_ptr get_lhs() { return _lhs; }
         virtual yc_number_node_ptr get_rhs() { return _rhs; }
         virtual yc_bool_node_ptr get_cond() { return _cond; }
         virtual yc_bool_node_ptr get_step_cond() { return _step_cond; }
@@ -1035,15 +1035,15 @@ namespace yask {
         }
     };
 
-    typedef set<GridPoint> GridPointSet;
-    typedef set<gridPointPtr> gridPointPtrSet;
-    typedef vector<GridPoint> GridPointVec;
+    typedef set<VarPoint> VarPointSet;
+    typedef set<varPointPtr> varPointPtrSet;
+    typedef vector<VarPoint> VarPointVec;
 
     // Use SET_VALUE_FROM_EXPR for creating a string to insert any C++ code
     // that evaluates to a real_t.
     // The 1st arg must be the LHS of an assignment statement.
     // The 2nd arg must evaluate to a real_t (float or double) expression,
-    // but it must NOT include access to a grid.
+    // but it must NOT include access to a var.
     // The code string is constructed as if writing to an ostream,
     // so '<<' operators may be used to evaluate local variables.
     // Floating-point variables will be printed w/o loss of precision.

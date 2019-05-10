@@ -50,9 +50,9 @@ namespace yask {
 
     // Alloc 'nbytes' for each requested mem type.
     // Pointers are returned in 'data_buf'.
-    // 'ngrids' and 'type' are only used for debug msg.
+    // 'nvars' and 'type' are only used for debug msg.
     void StencilContext::_alloc_data(const map <int, size_t>& nbytes,
-                                     const map <int, size_t>& ngrids,
+                                     const map <int, size_t>& nvars,
                                      map <int, shared_ptr<char>>& data_buf,
                                      const std::string& type) {
         STATE_VARS(this);
@@ -61,7 +61,7 @@ namespace yask {
         for (const auto& i : nbytes) {
             int mem_key = i.first;
             size_t nb = i.second;
-            size_t ng = ngrids.at(mem_key);
+            size_t ng = nvars.at(mem_key);
 
             // Alloc data depending on magic key.
             shared_ptr<char> p;
@@ -117,26 +117,26 @@ namespace yask {
         }
     }
 
-    // Allocate memory for grids that do not already have storage.
-    void StencilContext::allocGridData() {
+    // Allocate memory for vars that do not already have storage.
+    void StencilContext::allocVarData() {
         STATE_VARS(this);
 
-        // Allocate I/O grids before read-only grids.
-        GridPtrs sortedGridPtrs;
-        GridPtrSet done;
-        for (auto op : outputGridPtrs) {
-            sortedGridPtrs.push_back(op);
+        // Allocate I/O vars before read-only vars.
+        VarPtrs sortedVarPtrs;
+        VarPtrSet done;
+        for (auto op : outputVarPtrs) {
+            sortedVarPtrs.push_back(op);
             done.insert(op);
         }
-        for (auto gp : gridPtrs) {
+        for (auto gp : varPtrs) {
             if (!done.count(gp))
-                sortedGridPtrs.push_back(gp);
+                sortedVarPtrs.push_back(gp);
         }
 	done.clear();
 
 #ifdef USE_PMEM
-        os << "PMEM grid-allocation priority:" << endl;
-        for (auto sp : sortedGridPtrs) {
+        os << "PMEM var-allocation priority:" << endl;
+        for (auto sp : sortedVarPtrs) {
             os << " '" << sp->get_name() << "'";
             if (done.find(sp)!=done.end())
                 os << " (output)";
@@ -145,11 +145,11 @@ namespace yask {
 #endif
         
         // Base ptrs for all default-alloc'd data.
-        // These pointers will be shared by the ones in the grid
+        // These pointers will be shared by the ones in the var
         // objects, which will take over ownership when these go
         // out of scope.
         // Key is preferred numa node or -1 for local.
-        map <int, shared_ptr<char>> _grid_data_buf;
+        map <int, shared_ptr<char>> _var_data_buf;
 
 #ifdef USE_PMEM
         auto preferredNUMASize = opts->_numa_pref_max * 1024*1024*(size_t)1024;
@@ -159,27 +159,27 @@ namespace yask {
         // Pass 1: count required size for each NUMA node, allocate chunk of memory at end.
         // Pass 2: distribute parts of already-allocated memory chunk.
         for (int pass = 0; pass < 3; pass++) {
-            TRACE_MSG("allocGridData pass " << pass << " for " <<
-                      gridPtrs.size() << " grid(s)");
+            TRACE_MSG("allocVarData pass " << pass << " for " <<
+                      varPtrs.size() << " var(s)");
 
-            // Count bytes needed and number of grids for each NUMA node.
-            map <int, size_t> npbytes, ngrids;
+            // Count bytes needed and number of vars for each NUMA node.
+            map <int, size_t> npbytes, nvars;
 
-            // Grids.
-            for (auto gp : sortedGridPtrs) {
+            // Vars.
+            for (auto gp : sortedVarPtrs) {
                 if (!gp)
                     continue;
                 auto& gname = gp->get_name();
                 auto& gb = gp->gb();
 
-                // Grid data.
+                // Var data.
                 // Don't alloc if already done.
                 if (!gp->is_storage_allocated()) {
                     int numa_pref = gp->get_numa_preferred();
 
                     // Set storage if buffer has been allocated in pass 1.
                     if (pass == 2) {
-                        auto p = _grid_data_buf[numa_pref];
+                        auto p = _var_data_buf[numa_pref];
                         assert(p);
                         gp->set_storage(p, npbytes[numa_pref]);
                         os << gb.make_info_string() << endl;
@@ -189,7 +189,7 @@ namespace yask {
                     size_t nbytes = gp->get_num_storage_bytes();
                     npbytes[numa_pref] += ROUND_UP(nbytes + _data_buf_pad,
                                                    CACHELINE_BYTES);
-                    ngrids[numa_pref]++;
+                    nvars[numa_pref]++;
 
                     if (pass == 0) {
 #ifdef USE_PMEM
@@ -201,17 +201,17 @@ namespace yask {
                             else
 
                                 // TODO: change this behavior so that it doesn't actually
-                                // modify the NUMA pref of the grid.
+                                // modify the NUMA pref of the var.
                                 gp->set_numa_preferred(_pmem_key + getnode());
 #endif
                     }
 
                     if (pass == 1)
-                        TRACE_MSG(" grid '" << gname << "' needs " << makeByteStr(nbytes) <<
+                        TRACE_MSG(" var '" << gname << "' needs " << makeByteStr(nbytes) <<
                                   " on NUMA node " << numa_pref);
                 }
 
-                // Otherwise, just print existing grid info.
+                // Otherwise, just print existing var info.
                 else if (pass == 1)
                     os << gb.make_info_string() << endl;
             }
@@ -219,14 +219,14 @@ namespace yask {
             // Reset the counters
             if (pass == 0) {
                 npbytes.clear();
-                ngrids.clear();
+                nvars.clear();
             }
 
             // Alloc for each node.
             if (pass == 1)
-                _alloc_data(npbytes, ngrids, _grid_data_buf, "grid");
+                _alloc_data(npbytes, nvars, _var_data_buf, "var");
 
-        } // grid passes.
+        } // var passes.
     };
 
     // Determine the size and shape of all MPI buffers.
@@ -257,7 +257,7 @@ namespace yask {
 
                 // Determine max dist needed.  TODO: determine max dist
                 // automatically from stencils; may not be same for all
-                // grids.
+                // vars.
 #ifndef MAX_EXCH_DIST
 #define MAX_EXCH_DIST (NUM_STENCIL_DIMS - 1)
 #endif
@@ -287,7 +287,7 @@ namespace yask {
                     mpiInfo->has_all_vlen_mults[neigh_idx];
 
                 // Determine size of MPI buffers between neigh_rank and my
-                // rank for each grid and create those that are needed.  It
+                // rank for each var and create those that are needed.  It
                 // is critical that the number, size, and shape of my
                 // send/receive buffers match those of the receive/send
                 // buffers of my neighbors.  Important: Current algorithm
@@ -295,13 +295,13 @@ namespace yask {
                 // by considering my rank's right side data and vice-versa.
                 // Thus, all ranks must have consistent data that contribute
                 // to these calculations.
-                for (auto& gp : origGridPtrs) {
+                for (auto& gp : origVarPtrs) {
                     auto& gb = gp->gb();
                     auto& gname = gp->get_name();
-                    bool grid_vec_ok = vec_ok;
+                    bool var_vec_ok = vec_ok;
 
                     // Lookup first & last domain indices and calc exchange sizes
-                    // for this grid.
+                    // for this var.
                     bool found_delta = false;
                     IdxTuple my_halo_sizes, neigh_halo_sizes;
                     IdxTuple first_inner_idx, last_inner_idx;
@@ -309,13 +309,13 @@ namespace yask {
                     for (auto& dim : domain_dims.getDims()) {
                         auto& dname = dim.getName();
 
-                        // Only consider domain dims that are used in this grid.
+                        // Only consider domain dims that are used in this var.
                         if (gp->is_dim_used(dname)) {
                             auto vlen = gp->_get_vec_len(dname);
                             auto lhalo = gp->get_left_halo_size(dname);
                             auto rhalo = gp->get_right_halo_size(dname);
 
-                            // Get domain indices for this grid.  If there
+                            // Get domain indices for this var.  If there
                             // are no more ranks in the given direction,
                             // extend the "outer" index to include the halo
                             // in that direction to make sure all data are
@@ -334,23 +334,23 @@ namespace yask {
                             // Determine if it is possible to round the
                             // outer indices to vec-multiples. This will
                             // be required to allow full vec exchanges for
-                            // this grid. We won't do the actual rounding
+                            // this var. We won't do the actual rounding
                             // yet, because we need to see if it's safe
                             // in all dims.
                             // Need +1 and then -1 trick for last.
                             fidx = round_down_flr(fidx, vlen);
                             lidx = round_up_flr(lidx + 1, vlen) - 1;
                             if (fidx < gp->get_first_rank_alloc_index(dname))
-                                grid_vec_ok = false;
+                                var_vec_ok = false;
                             if (lidx > gp->get_last_rank_alloc_index(dname))
-                                grid_vec_ok = false;
+                                var_vec_ok = false;
 
                             // Determine size of exchange in this dim. This
                             // will be the actual halo size plus any
                             // wave-front shifts. In the current
                             // implementation, we need the wave-front shifts
                             // regardless of whether there is a halo on a
-                            // given grid. This is because each
+                            // given var. This is because each
                             // stencil-bundle gets shifted by the WF angles
                             // at each step in the WF.
 
@@ -367,7 +367,7 @@ namespace yask {
                                 // Assume my right is same as their right.
                                 neigh_halo_sizes.addDimBack(dname, rhalo + ext);
 
-                                // Flag that this grid has a neighbor to left or right.
+                                // Flag that this var has a neighbor to left or right.
                                 found_delta = true;
                             }
 
@@ -384,7 +384,7 @@ namespace yask {
                                 // Assume my left is same as their left.
                                 neigh_halo_sizes.addDimBack(dname, lhalo + ext);
 
-                                // Flag that this grid has a neighbor to left or right.
+                                // Flag that this var has a neighbor to left or right.
                                 found_delta = true;
                             }
 
@@ -394,18 +394,18 @@ namespace yask {
                                 neigh_halo_sizes.addDimBack(dname, 0);
                             }
 
-                        } // domain dims in this grid.
+                        } // domain dims in this var.
                     } // domain dims.
 
                     // Is buffer needed?
-                    // Example: if this grid is 2D in y-z, but only neighbors are in
+                    // Example: if this var is 2D in y-z, but only neighbors are in
                     // x-dim, we don't need any exchange.
                     if (!found_delta) {
-                        TRACE_MSG("no halo exchange needed for grid '" << gname <<
+                        TRACE_MSG("no halo exchange needed for var '" << gname <<
                                   "' with rank " << neigh_rank <<
                                   " because the neighbor is not in a direction"
-                                  " corresponding to a grid dim");
-                        continue; // to next grid.
+                                  " corresponding to a var dim");
+                        continue; // to next var.
                     }
 
                     // Round halo sizes if vectorized exchanges allowed.
@@ -413,7 +413,7 @@ namespace yask {
                     // and outer indices must be vec-mults or extendable
                     // to be so.
                     // TODO: add a heuristic to avoid increasing by a large factor.
-                    if (grid_vec_ok) {
+                    if (var_vec_ok) {
                         for (auto& dim : domain_dims.getDims()) {
                             auto& dname = dim.getName();
                             if (gp->is_dim_used(dname)) {
@@ -434,7 +434,7 @@ namespace yask {
                                 my_halo_sizes.setVal(dname, ROUND_UP(my_halo_sizes[dname], vlen));
                                 neigh_halo_sizes.setVal(dname, ROUND_UP(neigh_halo_sizes[dname], vlen));
 
-                            } // domain dims in this grid.
+                            } // domain dims in this var.
                         } // domain dims.
                     }
 
@@ -442,12 +442,12 @@ namespace yask {
                     for (int bd = 0; bd < MPIBufs::nBufDirs; bd++) {
 
                         // Begin/end vars to indicate what part
-                        // of main grid to read from or write to based on
+                        // of main var to read from or write to based on
                         // the current neighbor being processed.
                         IdxTuple copy_begin = gb.get_allocs();
                         IdxTuple copy_end = gb.get_allocs(); // one past last!
 
-                        // Adjust along domain dims in this grid.
+                        // Adjust along domain dims in this var.
                         for (auto& dim : domain_dims.getDims()) {
                             auto& dname = dim.getName();
                             if (gp->is_dim_used(dname)) {
@@ -527,13 +527,13 @@ namespace yask {
                                     // Else, this neighbor is in same posn as I am in this dim,
                                     // so we leave the default begin/end settings.
                                 }
-                            } // domain dims in this grid.
+                            } // domain dims in this var.
                         } // domain dims.
 
-                        // Sizes of buffer in all dims of this grid.
+                        // Sizes of buffer in all dims of this var.
                         // Also, set begin/end value for non-domain dims.
                         IdxTuple buf_sizes = gb.get_allocs();
-                        bool buf_vec_ok = grid_vec_ok;
+                        bool buf_vec_ok = var_vec_ok;
                         for (auto& dname : gp->get_dim_names()) {
                             idx_t dsize = 1;
 
@@ -564,7 +564,7 @@ namespace yask {
 
                             // misc?
                             // Copy over entire range.
-                            // TODO: make dirty flags for misc dims in grids.
+                            // TODO: make dirty flags for misc dims in vars.
                             else {
                                 dsize = gp->get_alloc_size(dname);
                                 copy_begin[dname] = gp->get_first_misc_index(dname);
@@ -575,9 +575,9 @@ namespace yask {
                             // Save computed size.
                             buf_sizes[dname] = dsize;
 
-                        } // all dims in this grid.
+                        } // all dims in this var.
 
-                        // Unique name for buffer based on grid name, direction, and ranks.
+                        // Unique name for buffer based on var name, direction, and ranks.
                         ostringstream oss;
                         oss << gname;
                         if (bd == MPIBufs::bufSend)
@@ -594,18 +594,18 @@ namespace yask {
                         }
 
                         // At this point, buf_sizes, copy_begin, and copy_end
-                        // should be set for each dim in this grid.
+                        // should be set for each dim in this var.
 
                         // Compute last from end.
                         IdxTuple copy_last = copy_end.subElements(1);
 
-                        // Make MPI data entry for this grid.
+                        // Make MPI data entry for this var.
                         auto gbp = mpiData.emplace(gname, state->_mpiInfo);
                         auto& gbi = gbp.first; // iterator from pair returned by emplace().
                         auto& gbv = gbi->second; // value from iterator.
                         auto& buf = gbv.getBuf(MPIBufs::BufDir(bd), neigh_offsets);
 
-                        // Config buffer for this grid.
+                        // Config buffer for this var.
                         // (But don't allocate storage yet.)
                         buf.begin_pt = copy_begin;
                         buf.last_pt = copy_last;
@@ -625,7 +625,7 @@ namespace yask {
                         num_elems[bd] += buf.get_size();
 
                     } // send, recv.
-                } // grids.
+                } // vars.
             });   // neighbors.
         TRACE_MSG("number of MPI send buffers on this rank: " << num_exchanges[int(MPIBufs::bufSend)]);
         TRACE_MSG("number of elements in send buffers: " << makeNumStr(num_elems[int(MPIBufs::bufSend)]));
@@ -643,13 +643,13 @@ namespace yask {
         // Now we need to allocate space for them.
         
         // Base ptrs for all alloc'd data.
-        // These pointers will be shared by the ones in the grid
+        // These pointers will be shared by the ones in the var
         // objects, which will take over ownership when these go
         // out of scope. Key is memory type.
         map <int, shared_ptr<char>> _mpi_data_buf;
 
-        // A table for send-buffer offsets for all rank pairs for every grid:
-        // [grid-name][sending-rank][receiving-rank]
+        // A table for send-buffer offsets for all rank pairs for every var:
+        // [var-name][sending-rank][receiving-rank]
         map<string, vector<vector<size_t>>> sb_ofs;
         bool do_shm = false;
         auto my_shm_rank = env->my_shm_rank;
@@ -669,15 +669,15 @@ namespace yask {
             // Count bytes needed and number of buffers for each NUMA node.
             map <int, size_t> npbytes, nbufs;
 
-            // Grids. Use the map to ensure same order in all ranks.
-            for (auto gi : gridMap) {
+            // Vars. Use the map to ensure same order in all ranks.
+            for (auto gi : varMap) {
                 auto& gname = gi.first;
                 auto& gp = gi.second;
 
-                // Are there MPI bufs for this grid?
+                // Are there MPI bufs for this var?
                 if (mpiData.count(gname) == 0)
                     continue;
-                auto& grid_mpi_data = mpiData.at(gname);
+                auto& var_mpi_data = mpiData.at(gname);
 
                 // Resize table.
                 if (pass == 0) {
@@ -687,15 +687,15 @@ namespace yask {
                         gtab.resize(env->num_shm_ranks, 0);
                 }
                 
-                // Visit buffers for each neighbor for this grid.
-                grid_mpi_data.visitNeighbors
+                // Visit buffers for each neighbor for this var.
+                var_mpi_data.visitNeighbors
                     ([&](const IdxTuple& roffsets,
                          int nrank,
                          int nidx,
                          MPIBufs& bufs) {
 
                         // Default is global numa pref setting for MPI
-                        // buffer, not possible override for this grid.
+                        // buffer, not possible override for this var.
                         int numa_pref = opts->_numa_pref;
 
                         // If neighbor can use MPI shm, set key, etc.
@@ -708,7 +708,7 @@ namespace yask {
                             
                         // Send and recv.
                         for (int bd = 0; bd < MPIBufs::nBufDirs; bd++) {
-                            auto& buf = grid_mpi_data.getBuf(MPIBufs::BufDir(bd), roffsets);
+                            auto& buf = var_mpi_data.getBuf(MPIBufs::BufDir(bd), roffsets);
                             if (buf.get_size() == 0)
                                 continue;
 
@@ -770,7 +770,7 @@ namespace yask {
 
                     for (int rn = 0; rn < env->num_shm_ranks; rn++) {
                         TRACE_MSG("Sharing MPI shm offsets from shm-rank " << rn <<
-                                  " for grid '" << gname << "'");
+                                  " for var '" << gname << "'");
                         MPI_Bcast(sb_ofs[gname][rn].data(), env->num_shm_ranks, MPI_INTEGER8,
                                   rn, env->shm_comm);
                         for (int rn2 = 0; rn2 < env->num_shm_ranks; rn2++)
@@ -779,7 +779,7 @@ namespace yask {
                     }
                 }
 
-            } // grids.
+            } // vars.
 
             // Alloc for each mem type.
             if (pass == 0)
@@ -791,7 +791,7 @@ namespace yask {
 #endif
     }
 
-    // Allocate memory for scratch grids based on number of threads and
+    // Allocate memory for scratch vars based on number of threads and
     // block sizes.
     void StencilContext::allocScratchData() {
         STATE_VARS(this);
@@ -800,19 +800,19 @@ namespace yask {
         freeScratchData();
 
         // Base ptrs for all alloc'd data.
-        // This pointer will be shared by the ones in the grid
+        // This pointer will be shared by the ones in the var
         // objects, which will take over ownership when it goes
         // out of scope.
         map <int, shared_ptr<char>> _scratch_data_buf;
 
         // Make sure the right number of threads are set so we
-        // have the right number of scratch grids.
+        // have the right number of scratch vars.
         int rthreads = set_region_threads();
 
-        // Delete any existing scratch grids.
-        // Create new scratch grids, but without any
+        // Delete any existing scratch vars.
+        // Create new scratch vars, but without any
         // data allocated.
-        makeScratchGrids(rthreads);
+        makeScratchVars(rthreads);
 
         // Find the max mini-block size across all packs.
         // They can be different across packs when pack-specific
@@ -834,16 +834,16 @@ namespace yask {
         // Pass 1: distribute parts of already-allocated memory chunk.
         for (int pass = 0; pass < 2; pass++) {
             TRACE_MSG("allocScratchData pass " << pass << " for " <<
-                      scratchVecs.size() << " set(s) of scratch grids");
+                      scratchVecs.size() << " set(s) of scratch vars");
 
-            // Count bytes needed and number of grids for each NUMA node.
-            map <int, size_t> npbytes, ngrids;
+            // Count bytes needed and number of vars for each NUMA node.
+            map <int, size_t> npbytes, nvars;
 
-            // Loop through each scratch grid vector.
+            // Loop through each scratch var vector.
             for (auto* sgv : scratchVecs) {
                 assert(sgv);
 
-                // Loop through each scratch grid in this vector.
+                // Loop through each scratch var in this vector.
                 // There will be one for each region thread.
                 assert(int(sgv->size()) == rthreads);
                 int thr_num = 0;
@@ -859,7 +859,7 @@ namespace yask {
 
                         if (gp->is_dim_used(dname)) {
 
-                            // Set domain size of scratch grid to mini-block size.
+                            // Set domain size of scratch var to mini-block size.
                             gp->_set_domain_size(dname, mblksize[dname]);
 
                             // Conservative allowance for WF exts and/or temporal shifts.
@@ -886,20 +886,20 @@ namespace yask {
                     size_t nbytes = gp->get_num_storage_bytes();
                     npbytes[numa_pref] += ROUND_UP(nbytes + _data_buf_pad,
                                                    CACHELINE_BYTES);
-                    ngrids[numa_pref]++;
+                    nvars[numa_pref]++;
                     if (pass == 0)
-                        TRACE_MSG(" scratch grid '" << gname << "' for thread " <<
+                        TRACE_MSG(" scratch var '" << gname << "' for thread " <<
                                   thr_num << " needs " << makeByteStr(nbytes) <<
                                   " on NUMA node " << numa_pref);
                     thr_num++;
-                } // scratch grids.
-            } // scratch-grid vecs.
+                } // scratch vars.
+            } // scratch-var vecs.
 
             // Alloc for each node.
             if (pass == 0)
-                _alloc_data(npbytes, ngrids, _scratch_data_buf, "scratch grid");
+                _alloc_data(npbytes, nvars, _scratch_data_buf, "scratch var");
 
-        } // scratch-grid passes.
+        } // scratch-var passes.
     }
     
 } // namespace yask.

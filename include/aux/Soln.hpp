@@ -68,11 +68,11 @@ namespace yask {
     };
 
     // Aliases for backward-compatibility.
-    typedef yc_grid_var Grid;
+    typedef yc_var_proxy Grid;
     typedef yc_number_node_ptr GridIndex;
     typedef yc_number_node_ptr GridValue;
     typedef yc_bool_node_ptr Condition;
-    typedef yc_grid_point_node_ptr GridPointPtr;
+    typedef yc_var_point_node_ptr GridPointPtr;
     typedef yc_expr_node_ptr ExprPtr;
     typedef yc_number_node_ptr NumExprPtr;
     typedef yc_index_node_ptr IndexExprPtr;
@@ -96,15 +96,15 @@ namespace yask {
 #define MAKE_DOMAIN_INDEX(d) yc_index_node_ptr d = new_domain_index(#d)
 #define MAKE_MISC_INDEX(d)   yc_index_node_ptr d = new_misc_index(#d)
 
-// Convenience macros for creating grids in a class implementing get_soln().
-// The 'gvar' arg is the var name and the grid name.
+// Convenience macros for creating vars in a class implementing get_soln().
+// The 'gvar' arg is the C++ var and YASK var name.
 // The remaining args are the dimension names.
 #define MAKE_GRID(gvar, ...)                                            \
-    yc_grid_var gvar = yc_grid_var(#gvar, get_soln(), { __VA_ARGS__ }, false)
+    yc_var_proxy gvar = yc_var_proxy(#gvar, get_soln(), { __VA_ARGS__ }, false)
 #define MAKE_SCALAR(gvar)    MAKE_GRID(gvar)
 #define MAKE_ARRAY(gvar, d1) MAKE_GRID(gvar, d1)
 #define MAKE_SCRATCH_GRID(gvar, ...)                                    \
-    yc_grid_var gvar = yc_grid_var(#gvar, get_soln(), { __VA_ARGS__ }, true)
+    yc_var_proxy gvar = yc_var_proxy(#gvar, get_soln(), { __VA_ARGS__ }, true)
 #define MAKE_SCRATCH_SCALAR(gvar)    MAKE_SCRATCH_GRID(gvar)
 #define MAKE_SCRATCH_ARRAY(gvar, d1) MAKE_SCRATCH_GRID(gvar, d1)
 
@@ -122,7 +122,7 @@ namespace yask {
 #define IF_STEP_OPER IF_STEP
 
 // Namespaces for stencil code.
-#ifndef NO_NAMESPACES
+#ifndef NO_USING_NAMESPACES
 using namespace yask;
 using namespace std;
 #endif

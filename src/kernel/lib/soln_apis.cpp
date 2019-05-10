@@ -54,7 +54,7 @@ namespace yask {
     GET_SOLN_API(get_rank_index, opts->_rank_indices[dim], false, true, false, true)
 #undef GET_SOLN_API
 
-    // The grid sizes are updated any time these settings are changed.
+    // The var sizes are updated any time these settings are changed.
 #define SET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok, reset_prep) \
     void StencilContext::api_name(const string& dim, idx_t n) {         \
         STATE_VARS(this);                                               \
@@ -62,7 +62,7 @@ namespace yask {
                    #api_name "('" << dim << "', " << n << ")");         \
         dims->checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok); \
         expr;                                                           \
-        update_grid_info(false);                                        \
+        update_var_info(false);                                        \
         if (reset_prep) rank_bb.bb_valid = ext_bb.bb_valid = false;     \
     }
     SET_SOLN_API(set_rank_index, opts->_rank_indices[dim] = n;
@@ -77,7 +77,7 @@ namespace yask {
     SET_SOLN_API(set_min_pad_size, opts->_min_pad_sizes[dim] = n, false, true, false, false)
 #undef SET_SOLN_API
 
-    // Allocate grids and MPI bufs.
+    // Allocate vars and MPI bufs.
     // Initialize some data structures.
     void StencilContext::prepare_solution() {
         STATE_VARS(this);
@@ -117,24 +117,24 @@ namespace yask {
         yask_for(0, rthreads * 100, 1,
                  [&](idx_t start, idx_t stop, idx_t thread_num) { });
 
-        // Some grid stats.
+        // Some var stats.
         os << endl;
-        os << "Num grids: " << gridPtrs.size() << endl;
-        os << "Num grids to be updated: " << outputGridPtrs.size() << endl;
+        os << "Num vars: " << varPtrs.size() << endl;
+        os << "Num vars to be updated: " << outputVarPtrs.size() << endl;
 
         // Set up data based on MPI rank, including local or global sizes,
-        // grid positions.
+        // var positions.
         setupRank();
 
-        // Adjust all settings before setting MPI buffers or sizing grids.
+        // Adjust all settings before setting MPI buffers or sizing vars.
         // Prints adjusted settings.
         // TODO: print settings again after auto-tuning.
         opts->adjustSettings(os);
 
-        // Set offsets in grids and find WF extensions
-        // based on the grids' halos. Force setting
-        // the size of all solution grids.
-        update_grid_info(true);
+        // Set offsets in vars and find WF extensions
+        // based on the vars' halos. Force setting
+        // the size of all solution vars.
+        update_var_info(true);
 
         // Determine bounding-boxes for all bundles.
         // This must be done after finding WF extensions.
@@ -147,15 +147,15 @@ namespace yask {
         for (auto& sp : stPacks)
             sp->getLocalSettings() = *opts;
 
-        // Alloc grids, scratch grids, MPI bufs.
+        // Alloc vars, scratch vars, MPI bufs.
         // This is the order in which preferred NUMA nodes (e.g., HBW mem)
         // will be used.
-        // We free the scratch and MPI data first to give grids preference.
+        // We free the scratch and MPI data first to give vars preference.
         YaskTimer allocTimer;
         allocTimer.start();
         freeScratchData();
         freeMpiData();
-        allocGridData();
+        allocVarData();
         allocScratchData();
         allocMpiData();
         allocTimer.stop();
@@ -279,7 +279,7 @@ namespace yask {
             sp->init_work_stats();
     }
 
-    // Dealloc grids, etc.
+    // Dealloc vars, etc.
     void StencilContext::end_solution() {
         STATE_VARS(this);
         TRACE_MSG("end_solution()...");
@@ -291,8 +291,8 @@ namespace yask {
         env->global_barrier();
         mpiData.clear();
 
-        // Release grid data.
-        for (auto gp : gridPtrs) {
+        // Release var data.
+        for (auto gp : varPtrs) {
             if (!gp)
                 continue;
             gp->release_storage();
@@ -302,16 +302,16 @@ namespace yask {
 	set_max_threads();
     }
 
-    void StencilContext::fuse_grids(yk_solution_ptr source) {
+    void StencilContext::fuse_vars(yk_solution_ptr source) {
         auto sp = dynamic_pointer_cast<StencilContext>(source);
         assert(sp);
 
-        for (auto gp : gridPtrs) {
+        for (auto gp : varPtrs) {
             auto gname = gp->get_name();
-            auto si = sp->gridMap.find(gname);
-            if (si != sp->gridMap.end()) {
+            auto si = sp->varMap.find(gname);
+            if (si != sp->varMap.end()) {
                 auto sgp = si->second;
-                gp->fuse_grids(sgp);
+                gp->fuse_vars(sgp);
             }
         }
     }
@@ -340,28 +340,28 @@ namespace yask {
         return rem;
     }
 
-    // Add a new grid to the containers.
-    void StencilContext::addGrid(YkGridPtr gp, bool is_orig, bool is_output) {
+    // Add a new var to the containers.
+    void StencilContext::addVar(YkVarPtr gp, bool is_orig, bool is_output) {
         STATE_VARS(this);
         assert(gp);
         auto& gname = gp->get_name();
-        if (gridMap.count(gname))
-            THROW_YASK_EXCEPTION("Error: grid '" + gname + "' already exists");
+        if (varMap.count(gname))
+            THROW_YASK_EXCEPTION("Error: var '" + gname + "' already exists");
 
         // Add to list and map.
-        gridPtrs.push_back(gp);
-        gridMap[gname] = gp;
+        varPtrs.push_back(gp);
+        varMap[gname] = gp;
 
         // Add to orig list and map if 'is_orig'.
         if (is_orig) {
-            origGridPtrs.push_back(gp);
-            origGridMap[gname] = gp;
+            origVarPtrs.push_back(gp);
+            origVarMap[gname] = gp;
         }
 
         // Add to output list and map if 'is_output'.
         if (is_output) {
-            outputGridPtrs.push_back(gp);
-            outputGridMap[gname] = gp;
+            outputVarPtrs.push_back(gp);
+            outputVarMap[gname] = gp;
         }
     }
 

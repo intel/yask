@@ -28,7 +28,7 @@ IN THE SOFTWARE.
 #include "Print.hpp"
 #include "ExprUtils.hpp"
 #include "Parse.hpp"
-#include "Grid.hpp"
+#include "Var.hpp"
 #include "Print.hpp"
 #include "CppIntrin.hpp"
 
@@ -43,9 +43,9 @@ namespace yask {
         return make_shared<StencilSolution>(name);
     }
 
-    // Find the dimensions to be used based on the grids in
+    // Find the dimensions to be used based on the vars in
     // the solution and the settings from the cmd-line or API.
-    void Dimensions::setDims(Grids& grids,
+    void Dimensions::setDims(Vars& vars,
                              CompilerSettings& settings,
                              int vlen,                  // SIMD len based on CPU arch.
                              bool is_folding_efficient, // heuristic based on CPU arch.
@@ -70,12 +70,12 @@ namespace yask {
         if (_domainDims.size())
             os << "Explicit domain dimension(s): " << _domainDims.makeDimStr() << endl;
 
-        // Get dims from grids.
-        for (auto& gp : grids) {
+        // Get dims from vars.
+        for (auto& gp : vars) {
             auto& gname = gp->getName();
-            os << "GridVar: " << gp->getDescr() << endl;
+            os << "Var: " << gp->getDescr() << endl;
 
-            // Dimensions in this grid.
+            // Dimensions in this var.
             for (auto dim : gp->getDims()) {
                 auto& dname = dim->getName();
                 auto type = dim->getType();
@@ -89,9 +89,9 @@ namespace yask {
                     }
                     addStepDim(dname);
 
-                    // Scratch grids cannot use step dim.
+                    // Scratch vars cannot use step dim.
                     if (gp->isScratch())
-                        THROW_YASK_EXCEPTION("Error: scratch grid '" + gname +
+                        THROW_YASK_EXCEPTION("Error: scratch var '" + gname +
                                              "' cannot use step dimension '" +
                                              dname + "'.\n");
                     break;

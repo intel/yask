@@ -38,7 +38,7 @@ namespace yask {
     class ExprVisitor {
     protected:
         bool _visitEqualsLhs = false; // whether to visit LHS of EQUALS.
-        bool _visitGridPointArgs = false;   // whether to visit exprs in grid point args.
+        bool _visitVarPointArgs = false;   // whether to visit exprs in var point args.
         bool _visitConds = false;           // whether to visit conditional exprs.
 
     public:
@@ -49,10 +49,10 @@ namespace yask {
         virtual string visit(CodeExpr* ce) { return ""; }
         virtual string visit(IndexExpr* ie) { return ""; }
 
-        // Visit grid-point args only if flag is set.
-        virtual string visit(GridPoint* gp) {
+        // Visit var-point args only if flag is set.
+        virtual string visit(VarPoint* gp) {
             string res;
-            if (_visitGridPointArgs) {
+            if (_visitVarPointArgs) {
                 for (auto& arg : gp->getArgs())
                     res = arg->accept(this);
             }

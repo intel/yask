@@ -25,8 +25,8 @@ IN THE SOFTWARE.
 
 // Stencil equations for FSG elastic numerics.
 // Contributed by Albert Farres from the Barcelona Supercomputing Center.
-// This version varies from the original by grouping related grids into
-// larger grids with an added dimension.
+// This version varies from the original by grouping related vars into
+// larger vars with an added dimension.
 
 // YASK stencil solution(s) in this file will be integrated into the YASK compiler utility.
 #include "yask_compiler_utility_api.hpp"
@@ -54,21 +54,21 @@ namespace fsg {
 
     protected:
 
-        // Velocity and stress grids.
-        yc_grid_var v = yc_grid_var("v", get_soln(), { t, x, y, z, vidx });
+        // Velocity and stress vars.
+        yc_var_proxy v = yc_var_proxy("v", get_soln(), { t, x, y, z, vidx });
         enum VIDX { V_BL_U, V_BL_V, V_BL_W,
                     V_BR_U, V_BR_V, V_BR_W,
                     V_TL_U, V_TL_V, V_TL_W,
                     V_TR_U, V_TR_V, V_TR_W };
 
-        yc_grid_var s = yc_grid_var("s", get_soln(), { t, x, y, z, sidx });
+        yc_var_proxy s = yc_var_proxy("s", get_soln(), { t, x, y, z, sidx });
         enum SIDX { S_BL_XX, S_BL_YY, S_BL_ZZ, S_BL_YZ, S_BL_XZ, S_BL_XY,
                     S_BR_XX, S_BR_YY, S_BR_ZZ, S_BR_YZ, S_BR_XZ, S_BR_XY,
                     S_TL_XX, S_TL_YY, S_TL_ZZ, S_TL_YZ, S_TL_XZ, S_TL_XY,
                     S_TR_XX, S_TR_YY, S_TR_ZZ, S_TR_YZ, S_TR_XZ, S_TR_XY };
 
         // 3D-spatial coefficients.
-        yc_grid_var c = yc_grid_var("c", get_soln(), { x, y, z, cidx });
+        yc_var_proxy c = yc_var_proxy("c", get_soln(), { x, y, z, cidx });
         enum CIDX { C11, C12, C13, C14, C15, C16,
                     C22, C23, C24, C25, C26,
                     C33, C34, C35, C36,
@@ -86,7 +86,7 @@ namespace fsg {
         }
 
         yc_number_node_ptr cell_coeff( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z,
-                              yc_grid_var &c, yc_number_node_ptr cidx, const BR)
+                              yc_var_proxy &c, yc_number_node_ptr cidx, const BR)
         {
             return  1.0 / (0.25*(c(x  , y  , z, cidx) +
                                  c(x  , y+1, z, cidx) +
@@ -94,7 +94,7 @@ namespace fsg {
                                  c(x  , y+1, z+1, cidx)));
         }
         yc_number_node_ptr cell_coeff( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z,
-                              yc_grid_var &c, yc_number_node_ptr cidx, const BL)
+                              yc_var_proxy &c, yc_number_node_ptr cidx, const BL)
         {
             return  1.0 / (0.25*(c(x  , y  , z, cidx) +
                                  c(x+1, y  , z, cidx) +
@@ -102,7 +102,7 @@ namespace fsg {
                                  c(x+1, y  , z+1, cidx)));
         }
         yc_number_node_ptr cell_coeff( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z,
-                              yc_grid_var &c, yc_number_node_ptr cidx, const TR)
+                              yc_var_proxy &c, yc_number_node_ptr cidx, const TR)
         {
             return  1.0 / (0.25*(c(x  , y  , z, cidx) +
                                  c(x  , y+1, z, cidx) +
@@ -110,19 +110,19 @@ namespace fsg {
                                  c(x+1, y+1, z, cidx)));
         }
         yc_number_node_ptr cell_coeff( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z,
-                              yc_grid_var &c, yc_number_node_ptr cidx, const TL)
+                              yc_var_proxy &c, yc_number_node_ptr cidx, const TL)
         {
             return  1.0 / c(x  , y  , z, cidx);
         }
         template<typename N>
         yc_number_node_ptr cell_coeff( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z,
-                                       yc_grid_var &c, yc_number_any_arg cidx)
+                                       yc_var_proxy &c, yc_number_any_arg cidx)
         {
             return cell_coeff( x, y, z, c, cidx, N());
         }
 
         yc_number_node_ptr cell_coeff_artm( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z,
-                                   yc_grid_var &c, yc_number_node_ptr cidx, const BR)
+                                   yc_var_proxy &c, yc_number_node_ptr cidx, const BR)
         {
             return 0.25 *( 1.0 / c(x  , y  , z, cidx) +
                            1.0 / c(x  , y+1, z, cidx) +
@@ -130,7 +130,7 @@ namespace fsg {
                            1.0 / c(x  , y+1, z+1, cidx));
         }
         yc_number_node_ptr cell_coeff_artm( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z,
-                                   yc_grid_var &c, yc_number_node_ptr cidx, const BL)
+                                   yc_var_proxy &c, yc_number_node_ptr cidx, const BL)
         {
             return 0.25 *( 1.0 / c(x  , y  , z, cidx) +
                            1.0 / c(x+1, y  , z, cidx) +
@@ -138,7 +138,7 @@ namespace fsg {
                            1.0 / c(x+1, y  , z+1, cidx));
         }
         yc_number_node_ptr cell_coeff_artm( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z,
-                                   yc_grid_var &c, yc_number_node_ptr cidx, const TR)
+                                   yc_var_proxy &c, yc_number_node_ptr cidx, const TR)
         {
             return 0.25 *( 1.0 / c(x  , y  , z, cidx) +
                            1.0 / c(x  , y+1, z, cidx) +
@@ -146,13 +146,13 @@ namespace fsg {
                            1.0 / c(x+1, y+1, z, cidx));
         }
         yc_number_node_ptr cell_coeff_artm( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z,
-                                   yc_grid_var &c, yc_number_node_ptr cidx, const TL)
+                                   yc_var_proxy &c, yc_number_node_ptr cidx, const TL)
         {
             return  1.0 / c(x  , y  , z, cidx);
         }
         template<typename N>
         yc_number_node_ptr cell_coeff_artm( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z,
-                                   yc_grid_var &c, yc_number_any_arg cidx)
+                                   yc_var_proxy &c, yc_number_any_arg cidx)
         {
             return cell_coeff_artm( x, y, z, c, cidx, N());
         }
@@ -172,12 +172,12 @@ namespace fsg {
         }
 
         //
-        // Stress-grid define functions.  For each D in xx, yy, zz, xy, xz, yz,
-        // define stress_D at t+1 based on stress_D at t and vel grids at t+1.
-        // This implies that the velocity-grid define functions must be called
+        // Stress-var define functions.  For each D in xx, yy, zz, xy, xz, yz,
+        // define stress_D at t+1 based on stress_D at t and vel vars at t+1.
+        // This implies that the velocity-var define functions must be called
         // before these for a given value of t.  Note that the t, x, y, z
-        // parameters are integer grid indices, not actual offsets in time or
-        // space, so half-steps due to staggered grids are adjusted
+        // parameters are integer var indices, not actual offsets in time or
+        // space, so half-steps due to staggered vars are adjusted
         // appropriately.
 
         template<typename N, typename SZ, typename SX, typename SY>
@@ -301,7 +301,7 @@ namespace fsg {
 
         // Sponge coefficients.
         yc_index_node_ptr spidx = new_misc_index("spidx");
-        yc_grid_var sponge = yc_grid_var("sponge", get_soln(), { x, y, z, spidx });
+        yc_var_proxy sponge = yc_var_proxy("sponge", get_soln(), { x, y, z, spidx });
         enum SPONGE_IDX { SPONGE_LX, SPONGE_RX, SPONGE_BZ,
                           SPONGE_TZ, SPONGE_FY, SPONGE_BY,
                           SPONGE_SQ_LX, SPONGE_SQ_RX, SPONGE_SQ_BZ,

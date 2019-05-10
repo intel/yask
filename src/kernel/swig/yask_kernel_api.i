@@ -42,7 +42,7 @@ IN THE SOFTWARE.
 %shared_ptr(yask::yk_env)
 %shared_ptr(yask::yk_settings)
 %shared_ptr(yask::yk_solution)
-%shared_ptr(yask::yk_grid)
+%shared_ptr(yask::yk_var)
 %shared_ptr(yask::yk_stats)
 
 // Mutable buffer to access raw data.
@@ -56,7 +56,7 @@ IN THE SOFTWARE.
 // All vector types used in API.
 %template(vector_idx) std::vector<long int>;
 %template(vector_str) std::vector<std::string>;
-%template(vector_grid_ptr) std::vector<std::shared_ptr<yask::yk_grid>>;
+%template(vector_var_ptr) std::vector<std::shared_ptr<yask::yk_var>>;
 
 %exception {
   try {
@@ -70,4 +70,4 @@ IN THE SOFTWARE.
 %include "yask_common_api.hpp"
 %include "yask_kernel_api.hpp"
 %include "aux/yk_solution_api.hpp"
-%include "aux/yk_grid_api.hpp"
+%include "aux/yk_var_api.hpp"

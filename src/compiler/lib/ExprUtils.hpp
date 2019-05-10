@@ -224,8 +224,8 @@ namespace yask {
             os << ":" << endl <<
                 "  " << getNumNodes() << " node(s)." << endl <<
                 "  " << getNumPairs() << " node pair(s)." << endl <<
-                "  " << getNumReads() << " grid read(s)." << endl <<
-                "  " << getNumWrites() << " grid write(s)." << endl <<
+                "  " << getNumReads() << " var read(s)." << endl <<
+                "  " << getNumWrites() << " var write(s)." << endl <<
                 "  " << getNumOps() << " FP math operation(s)." << endl;
         }
 
@@ -246,7 +246,7 @@ namespace yask {
             _numNodes++;
             return "";
         }
-        virtual string visit(GridPoint* gp) {
+        virtual string visit(VarPoint* gp) {
             if (alreadyVisited(gp)) return "";
             _numNodes++;
             _numReads++;

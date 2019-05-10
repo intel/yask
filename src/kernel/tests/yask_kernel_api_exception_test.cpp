@@ -58,11 +58,11 @@ int main() {
         soln->set_block_size(dim_name, 32);
     }
 
-    // Make a test fixed-size grid.
-    vector<idx_t> fgrid_sizes;
+    // Make a test fixed-size var.
+    vector<idx_t> fvar_sizes;
     for (auto dim_name : soln_dims)
-        fgrid_sizes.push_back(5);
-    auto fgrid = soln->new_fixed_size_grid("fgrid", soln_dims, fgrid_sizes);
+        fvar_sizes.push_back(5);
+    auto fvar = soln->new_fixed_size_var("fvar", soln_dims, fvar_sizes);
 
     // Exception test
     cout << "Exception Test: Call 'run_solution' without calling prepare_solution().\n";
@@ -87,7 +87,7 @@ int main() {
     }
 
 
-    // Allocate memory for any grids that do not have storage set.
+    // Allocate memory for any vars that do not have storage set.
     // Set other data structures needed for stencil application.
     soln->prepare_solution();
 
@@ -103,33 +103,33 @@ int main() {
     }
     cout << endl;
 
-    // Print out some info about the grids and init their data.
-    for (auto grid : soln->get_grids()) {
-        cout << "    " << grid->get_name() << "(";
-        for (auto dname : grid->get_dim_names())
+    // Print out some info about the vars and init their data.
+    for (auto var : soln->get_vars()) {
+        cout << "    " << var->get_name() << "(";
+        for (auto dname : var->get_dim_names())
             cout << " '" << dname << "'";
         cout << " )\n";
-        for (auto dname : grid->get_dim_names()) {
+        for (auto dname : var->get_dim_names()) {
             if (domain_dim_set.count(dname)) {
                 cout << "      '" << dname << "' domain index range on this rank: " <<
-                    grid->get_first_rank_domain_index(dname) << " ... " <<
-                    grid->get_last_rank_domain_index(dname) << endl;
+                    var->get_first_rank_domain_index(dname) << " ... " <<
+                    var->get_last_rank_domain_index(dname) << endl;
                 cout << "      '" << dname << "' allowed index range on this rank: " <<
-                    grid->get_first_rank_alloc_index(dname) << " ... " <<
-                    grid->get_last_rank_alloc_index(dname) << endl;
+                    var->get_first_rank_alloc_index(dname) << " ... " <<
+                    var->get_last_rank_alloc_index(dname) << endl;
             }
         }
 
         // First, just init all the elements to the same value.
-        grid->set_all_elements_same(0.1);
+        var->set_all_elements_same(0.1);
 
-        // Done with fixed-size grids.
-        if (grid->is_fixed_size())
+        // Done with fixed-size vars.
+        if (var->is_fixed_size())
             continue;
 
         // Create indices describing a subset of the overall domain.
         vector<idx_t> first_indices, last_indices;
-        for (auto dname : grid->get_dim_names()) {
+        for (auto dname : var->get_dim_names()) {
 
             // Is this a domain dim?
             if (domain_dim_set.count(dname)) {
@@ -157,19 +157,19 @@ int main() {
 
                 // Add indices to set all allowed values.
                 // (This isn't really meaningful; it's just illustrative.)
-                first_indices.push_back(grid->get_first_misc_index(dname));
-                last_indices.push_back(grid->get_last_misc_index(dname));
+                first_indices.push_back(var->get_first_misc_index(dname));
+                last_indices.push_back(var->get_last_misc_index(dname));
             }
         }
 
         // Init the values using the indices created above.
-        idx_t nset = grid->set_elements_in_slice_same(0.9, first_indices, last_indices);
+        idx_t nset = var->set_elements_in_slice_same(0.9, first_indices, last_indices);
         cout << "      " << nset << " element(s) set.\n";
 
-        // Raw access to this grid.
-        auto raw_p = grid->get_raw_storage_buffer();
-        auto num_elems = grid->get_num_storage_elements();
-        cout << "      " << grid->get_num_storage_bytes() <<
+        // Raw access to this var.
+        auto raw_p = var->get_raw_storage_buffer();
+        auto num_elems = var->get_num_storage_elements();
+        cout << "      " << var->get_num_storage_bytes() <<
             " bytes of raw data at " << raw_p << ": ";
         if (soln->get_element_bytes() == 4)
             cout << ((float*)raw_p)[0] << ", ..., " << ((float*)raw_p)[num_elems-1] << "\n";
@@ -186,19 +186,19 @@ int main() {
 
     // TODO: better to have exception test for the methods below
     // StencilContext::calc_region
-    // StencilContext::addGrid
+    // StencilContext::addVar
     // StencilContext::setupRank
     // StencilContext::prepare_solution
-    // StencilContext::newGrid
-    // YkGridBase::get_dim_posn
-    // YkGridBase::resize
-    // YkGridBase::checkDimType
-    // YkGridBase::share_storage
-    // YkGridBase::checkIndices
-    // YkGridBase::get_element
-    // YkGridBase::get_elements_in_slice
-    // YkGridBase::_share_data
-    // YkGridBase::get_vecs_in_slice
+    // StencilContext::newVar
+    // YkVarBase::get_dim_posn
+    // YkVarBase::resize
+    // YkVarBase::checkDimType
+    // YkVarBase::share_storage
+    // YkVarBase::checkIndices
+    // YkVarBase::get_element
+    // YkVarBase::get_elements_in_slice
+    // YkVarBase::_share_data
+    // YkVarBase::get_vecs_in_slice
     // real_vec_permute2
     // Dims::checkDimType
     // KernelEnv::initEnv

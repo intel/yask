@@ -48,18 +48,18 @@ if __name__ == "__main__":
     y = nfac.new_domain_index("y");
     z = nfac.new_domain_index("z");
 
-    # Create a grid var.
-    g1 = soln.new_grid("test_grid", [t, x, y, z])
+    # Create a var.
+    g1 = soln.new_var("test_var", [t, x, y, z])
 
     # Create an expression for the new value.
     # This will average some of the neighboring points around the
     # current stencil application point in the current timestep.
-    n0 = g1.new_relative_grid_point([0, 0, 0, 0])  # center-point at this timestep.
+    n0 = g1.new_relative_var_point([0, 0, 0, 0])  # center-point at this timestep.
 
     # Exception test
-    print("Exception Test: Call 'new_relative_grid_point' with wrong argument.")
+    print("Exception Test: Call 'new_relative_var_point' with wrong argument.")
     try:
-        n1 = nfac.new_add_node(n0, g1.new_relative_grid_point([0, -1,  0,  0,  1])) # left.
+        n1 = nfac.new_add_node(n0, g1.new_relative_var_point([0, -1,  0,  0,  1])) # left.
     except RuntimeError as e:
         print ("YASK threw an expected exception.")
         print (format(e))
@@ -69,26 +69,26 @@ if __name__ == "__main__":
     # Create an expression using points in g1.
     # This will average some of the neighboring points around the
     # current stencil application point in the current timestep.
-    n1 = (g1.new_grid_point([t, x,   y,   z  ]) + # center.
-          g1.new_grid_point([t, x-1, y,   z  ]) + # left.
-          g1.new_grid_point([t, x+1, y,   z  ]) + # right.
-          g1.new_grid_point([t, x,   y-1, z  ]) + # above.
-          g1.new_grid_point([t, x,   y+1, z  ]) + # below.
-          g1.new_grid_point([t, x,   y,   z-1]) + # in front.
-          g1.new_grid_point([t, x,   y,   z  ])) # behind.
+    n1 = (g1.new_var_point([t, x,   y,   z  ]) + # center.
+          g1.new_var_point([t, x-1, y,   z  ]) + # left.
+          g1.new_var_point([t, x+1, y,   z  ]) + # right.
+          g1.new_var_point([t, x,   y-1, z  ]) + # above.
+          g1.new_var_point([t, x,   y+1, z  ]) + # below.
+          g1.new_var_point([t, x,   y,   z-1]) + # in front.
+          g1.new_var_point([t, x,   y,   z  ])) # behind.
     n2 = n1 / 7  # ave of the 7 points.
 
     # Create an equation to define the value at the next timestep.
-    n3 = g1.new_relative_grid_point([1, 0, 0, 0]) # center-point at next timestep.
+    n3 = g1.new_relative_var_point([1, 0, 0, 0]) # center-point at next timestep.
     n4 = nfac.new_equation_node(n3, n2) # equate to expr n2.
     print("Equation before formatting: " + n4.format_simple())
     print("Solution '" + soln.get_name() + "' contains " +
-          str(soln.get_num_grids()) + " grid(s), and " +
+          str(soln.get_num_vars()) + " var(s), and " +
           str(soln.get_num_equations()) + " equation(s).")
-    for grid in soln.get_grids() :
-        print("Grid " + grid.get_name() +
+    for var in soln.get_vars() :
+        print("Var " + var.get_name() +
               " has the following dim(s): " +
-              repr(grid.get_dim_names()));
+              repr(var.get_dim_names()));
 
     # Number of bytes in each FP value.
     soln.set_element_bytes(4)

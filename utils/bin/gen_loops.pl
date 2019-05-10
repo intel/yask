@@ -923,7 +923,7 @@ sub processCode($) {
 
     # header.
     print OUT "/*\n",
-        " * ".scalar(@dims)."-D grid-scanning code.\n",
+        " * ".scalar(@dims)."-D var-scanning code.\n",
         " * Generated automatically from the following pseudo-code:\n",
         " *\n",
         " * N = ",$#dims,";\n";
@@ -965,7 +965,7 @@ sub main() {
 
     my $script = basename($0);
     if (!$command_line || $OPT{help} || @ARGV < 1) {
-        print "Outputs C++ code to scan N-D grids.\n",
+        print "Outputs C++ code to scan N-D vars.\n",
             "Usage: $script [options] <code-string>\n",
             "The <code-string> contains optionally-nested scans across the given\n",
             "  indices between 0 and N-1 indicated by 'loop(<indices>)'\n",
@@ -1009,7 +1009,7 @@ sub main() {
     }
 
     @dims = 0 .. ($OPT{ndims} - 1);
-    print "info: generating scanning code for ".scalar(@dims)."-D grids...\n";
+    print "info: generating scanning code for ".scalar(@dims)."-D vars...\n";
     $inputVar = $OPT{inVar};
 
     my $codeString = join(' ', @ARGV); # just concat all non-options params together.

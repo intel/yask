@@ -28,25 +28,25 @@ using namespace std;
 
 namespace yask {
 
-    // Make a new grid.
-    YkGridPtr StencilContext::newGrid(const std::string& name,
-                                      const GridDimNames& gdims,
-                                      const GridDimSizes* sizes) {
+    // Make a new var.
+    YkVarPtr StencilContext::newVar(const std::string& name,
+                                      const VarDimNames& gdims,
+                                      const VarDimSizes* sizes) {
         STATE_VARS(this);
 
         // Check parameters.
         bool got_sizes = sizes != NULL;
         if (got_sizes) {
             if (gdims.size() != sizes->size()) {
-                FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to create grid '" << name << "' with " <<
+                FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to create var '" << name << "' with " <<
                                                 gdims.size() << " dimension names but " << sizes->size() <<
                                                 " dimension sizes");
             }
         }
 
-        // First, try to make a grid that matches the layout in
+        // First, try to make a var that matches the layout in
         // the stencil.
-        GridBasePtr gp = newStencilGrid(name, gdims);
+        VarBasePtr gp = newStencilVar(name, gdims);
 
         // No match.
         if (!gp) {
@@ -56,8 +56,8 @@ namespace yask {
             for (auto& d : gdims)
                 dtup.addDimBack(d, 0);
 
-#if ALLOW_NEW_GRIDS
-            // Allow new grid types.
+#if ALLOW_NEW_VARS
+            // Allow new var types.
             
             // Check dims.
             int ndims = gdims.size();
@@ -68,7 +68,7 @@ namespace yask {
 
                 // Already used?
                 if (seenDims.count(gdim)) {
-                    THROW_YASK_EXCEPTION("Error: cannot create grid '" + name +
+                    THROW_YASK_EXCEPTION("Error: cannot create var '" + name +
                                          "' because dimension '" + gdim +
                                          "' is used more than once");
                 }
@@ -77,7 +77,7 @@ namespace yask {
                 if (gdim == step_dim) {
                     step_used = true;
                     if (i != step_posn) {
-                        THROW_YASK_EXCEPTION("Error: cannot create grid '" + name +
+                        THROW_YASK_EXCEPTION("Error: cannot create var '" + name +
                                              "' because step dimension '" + gdim +
                                              "' is not first dimension");
                     }
@@ -99,22 +99,22 @@ namespace yask {
 
             // Scalar?
             if (ndims == 0)
-                gp = make_shared<YkElemGrid<Layout_0d, false>>(*this, name, gdims);
+                gp = make_shared<YkElemVar<Layout_0d, false>>(*this, name, gdims);
 
             // Include auto-gen code for all other cases.
-#include "yask_grid_code.hpp"
+#include "yask_var_code.hpp"
 
             // Failed.
             if (!gp)
-                FORMAT_AND_THROW_YASK_EXCEPTION("Error: cannot create new grid '" << name <<
+                FORMAT_AND_THROW_YASK_EXCEPTION("Error: cannot create new var '" << name <<
                                                 "' with dimensions '" << dtup.makeDimStr() <<
                                                 "'; only up to " << MAX_DIMS <<
                                                 " dimensions supported");
 #else
-            // Don't allow new grid types.
-            FORMAT_AND_THROW_YASK_EXCEPTION("Error: cannot create new grid '" << name <<
+            // Don't allow new var types.
+            FORMAT_AND_THROW_YASK_EXCEPTION("Error: cannot create new var '" << name <<
                                             "' with dimensions '" << dtup.makeDimStr() <<
-                                            "'; this list of dimensions is not in any existing grid");
+                                            "'; this list of dimensions is not in any existing var");
 #endif
         }
 
@@ -122,13 +122,13 @@ namespace yask {
         gp->set_fixed_size(got_sizes);
 
         // Mark as created via API.
-        gp->set_user_grid(true);
+        gp->set_user_var(true);
 
-        // Wrap with a Yk grid.
-        YkGridPtr ygp = make_shared<YkGridImpl>(gp);
+        // Wrap with a Yk var.
+        YkVarPtr ygp = make_shared<YkVarImpl>(gp);
         
         // Add to context.
-        addGrid(ygp, false, false);     // mark as non-orig, non-output grid.
+        addVar(ygp, false, false);     // mark as non-orig, non-output var.
 
         // Set sizes as provided.
         if (got_sizes) {
@@ -154,7 +154,7 @@ namespace yask {
 
         // Set sizes based on solution settings.
         else
-            update_grid_info(false);
+            update_var_info(false);
 
         return ygp;
     }

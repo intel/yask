@@ -48,7 +48,7 @@ protected:
     
     // Define simple stencil from var 'V' at 't0' centered around 'x0'.
     // Extend given radius left and/or right w/'*_ext'.
-    virtual yc_number_node_ptr def_1d(yc_grid_var& V, const yc_number_node_ptr& t0, const yc_number_node_ptr& x0,
+    virtual yc_number_node_ptr def_1d(yc_var_proxy& V, const yc_number_node_ptr& t0, const yc_number_node_ptr& x0,
                              int left_ext, int right_ext) {
         yc_number_node_ptr v;
         int n = 1;
@@ -59,7 +59,7 @@ protected:
 
     // Define simple stencil from scratch or read-only var 'V' centered
     // around 'x0'.  Similar to 'def_1d()', but doesn't use step var.
-    virtual yc_number_node_ptr def_no_t_1d(yc_grid_var& V, const yc_number_node_ptr& x0,
+    virtual yc_number_node_ptr def_no_t_1d(yc_var_proxy& V, const yc_number_node_ptr& x0,
                                      int left_ext, int right_ext) {
         yc_number_node_ptr v;
         int n = 1;
@@ -71,7 +71,7 @@ protected:
     // Define simple stencil from var 'V' at 't0' centered around 'x0', 'y0'.
     // Extend given radius left and/or right w/'*_ext'.
     // Use some points from the entire rectangle, not just on the axes.
-    virtual yc_number_node_ptr def_2d(yc_grid_var& V, const yc_number_node_ptr& t0,
+    virtual yc_number_node_ptr def_2d(yc_var_proxy& V, const yc_number_node_ptr& t0,
                              const yc_number_node_ptr& x0,
                              int x_left_ext, int x_right_ext,
                              const yc_number_node_ptr& y0,
@@ -88,7 +88,7 @@ protected:
     // Define simple stencil from scratch or read-only var 'V' at 't0'
     // centered around 'x0', 'y0'.  Extend given radius left and/or right
     // w/'*_ext'.
-    virtual yc_number_node_ptr def_no_t_2d(yc_grid_var& V,
+    virtual yc_number_node_ptr def_no_t_2d(yc_var_proxy& V,
                                      const yc_number_node_ptr& x0,
                                      int x_left_ext, int x_right_ext,
                                      const yc_number_node_ptr& y0,
@@ -105,7 +105,7 @@ protected:
     // Define simple stencil from var 'V' at 't0' centered around 'x0', 'y0', 'z0'.
     // Extend given radius left and/or right w/'*_ext'.
     // Use some points from the entire rectangular polytope, not just on the axes.
-    virtual yc_number_node_ptr def_3d(yc_grid_var& V, const yc_number_node_ptr& t0,
+    virtual yc_number_node_ptr def_3d(yc_var_proxy& V, const yc_number_node_ptr& t0,
                              const yc_number_node_ptr& x0,
                              int x_left_ext, int x_right_ext,
                              const yc_number_node_ptr& y0,
@@ -125,7 +125,7 @@ protected:
     // Define simple stencil from scratch or read-only var 'V' centered
     // around 'x0', 'y0', 'z0'.  Extend given radius left and/or right
     // w/'*_ext'.
-    virtual yc_number_node_ptr def_no_t_3d(yc_grid_var& V,
+    virtual yc_number_node_ptr def_no_t_3d(yc_var_proxy& V,
                                      const yc_number_node_ptr& x0,
                                      int x_left_ext, int x_right_ext,
                                      const yc_number_node_ptr& y0,
@@ -145,7 +145,7 @@ protected:
     // Define simple stencil from var 'V' at 't0' centered around 'w0', 'x0', 'y0', 'z0'.
     // Extend given radius left and/or right w/'*_ext'.
     // Use some points from the entire rectangular polytope, not just on the axes.
-    virtual yc_number_node_ptr def_4d(yc_grid_var& V, const yc_number_node_ptr& t0,
+    virtual yc_number_node_ptr def_4d(yc_var_proxy& V, const yc_number_node_ptr& t0,
                              const yc_number_node_ptr& w0,
                              int w_left_ext, int w_right_ext,
                              const yc_number_node_ptr& x0,
@@ -179,14 +179,14 @@ class Test1dStencil : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x }); // time-varying grid.
+    yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x }); // time-varying var.
 
 public:
 
     Test1dStencil(int radius=2) :
         TestBase("test_1d", radius) { }
 
-    // Define equation to apply to all points in 'A' grid.
+    // Define equation to apply to all points in 'A' var.
     virtual void define() {
 
         // define the value at t+1 using asymmetric stencil.
@@ -205,14 +205,14 @@ class Test2dStencil : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, y }); // time-varying grid.
+    yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y }); // time-varying var.
 
 public:
 
     Test2dStencil(int radius=2) :
         TestBase("test_2d", radius) { }
 
-    // Define equation to apply to all points in 'A' grid.
+    // Define equation to apply to all points in 'A' var.
     virtual void define() {
 
         // define the value at t+1 using asymmetric stencil.
@@ -231,14 +231,14 @@ class Test3dStencil : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, y, z }); // time-varying grid.
+    yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y, z }); // time-varying var.
 
 public:
 
     Test3dStencil(int radius=2) :
         TestBase("test_3d", radius) { }
 
-    // Define equation to apply to all points in 'A' grid.
+    // Define equation to apply to all points in 'A' var.
     virtual void define() {
 
         // define the value at t+1 using asymmetric stencil.
@@ -257,14 +257,14 @@ class Test4dStencil : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_soln(), { t, w, x, y, z }); // time-varying grid.
+    yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, w, x, y, z }); // time-varying var.
 
 public:
 
     Test4dStencil(int radius=1) :
         TestBase("test_4d", radius) { }
 
-    // Define equation to apply to all points in 'A' grid.
+    // Define equation to apply to all points in 'A' var.
     virtual void define() {
 
         // define the value at t+1 using asymmetric stencil.
@@ -283,22 +283,22 @@ class TestPartialStencil3 : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, y, z }); // time-varying grid.
-    yc_grid_var B = yc_grid_var("B", get_soln(), { x });
-    yc_grid_var C = yc_grid_var("C", get_soln(), { y });
-    yc_grid_var D = yc_grid_var("D", get_soln(), { z });
-    yc_grid_var E = yc_grid_var("E", get_soln(), { x, y });
-    yc_grid_var F = yc_grid_var("F", get_soln(), { y, z });
-    yc_grid_var G = yc_grid_var("G", get_soln(), { z, y });
-    yc_grid_var H = yc_grid_var("H", get_soln(), { y, z, x });      // different order.
-    yc_grid_var I = yc_grid_var("I", get_soln(), { });
+    yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y, z }); // time-varying var.
+    yc_var_proxy B = yc_var_proxy("B", get_soln(), { x });
+    yc_var_proxy C = yc_var_proxy("C", get_soln(), { y });
+    yc_var_proxy D = yc_var_proxy("D", get_soln(), { z });
+    yc_var_proxy E = yc_var_proxy("E", get_soln(), { x, y });
+    yc_var_proxy F = yc_var_proxy("F", get_soln(), { y, z });
+    yc_var_proxy G = yc_var_proxy("G", get_soln(), { z, y });
+    yc_var_proxy H = yc_var_proxy("H", get_soln(), { y, z, x });      // different order.
+    yc_var_proxy I = yc_var_proxy("I", get_soln(), { });
 
 public:
 
     TestPartialStencil3(int radius=2) :
         TestBase("test_partial_3d", radius) { }
 
-    // Define equation to apply to all points in 'A' grid.
+    // Define equation to apply to all points in 'A' var.
     virtual void define() {
 
         // define the value at t+1 using asymmetric stencil.
@@ -332,16 +332,16 @@ protected:
     yc_index_node_ptr b = new_misc_index("b");
     yc_index_node_ptr c = new_misc_index("c");
     
-    // Time-varying grid. Intermix last domain dim with misc dims to make
+    // Time-varying var. Intermix last domain dim with misc dims to make
     // sure compiler creates correct layout.
-    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, a, y, b, c }); 
+    yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, a, y, b, c }); 
 
 public:
 
     TestMisc2dStencil(int radius=2) :
         yc_solution_with_radius_base("test_misc_2d", radius) { }
 
-    // Define equation to apply to all points in 'A' grid.
+    // Define equation to apply to all points in 'A' var.
     virtual void define() {
 
         // Define the value at t+1 using asymmetric stencil
@@ -382,7 +382,7 @@ protected:
     yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, y, z }); // time-varying 3D grid.
+    yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y, z }); // time-varying 3D var.
 
 public:
 
@@ -417,7 +417,7 @@ class TestReverseStencil : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, y });
+    yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y });
 
 public:
 
@@ -445,15 +445,15 @@ class TestDepStencil1 : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x }); // time-varying grid.
-    yc_grid_var B = yc_grid_var("B", get_soln(), { t, x }); // time-varying grid.
+    yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x }); // time-varying var.
+    yc_var_proxy B = yc_var_proxy("B", get_soln(), { t, x }); // time-varying var.
 
 public:
 
     TestDepStencil1(int radius=2) :
         TestBase("test_dep_1d", radius) { }
 
-    // Define equation to apply to all points in 'A' and 'B' grids.
+    // Define equation to apply to all points in 'A' and 'B' vars.
     virtual void define() {
 
         // Define A(t+1) from A(t) & stencil at B(t).
@@ -474,15 +474,15 @@ class TestDepStencil2 : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, y }); // time-varying grid.
-    yc_grid_var B = yc_grid_var("B", get_soln(), { t, x, y }); // time-varying grid.
+    yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y }); // time-varying var.
+    yc_var_proxy B = yc_var_proxy("B", get_soln(), { t, x, y }); // time-varying var.
 
 public:
 
     TestDepStencil2(int radius=2) :
         TestBase("test_dep_2d", radius) { }
 
-    // Define equation to apply to all points in 'A' and 'B' grids.
+    // Define equation to apply to all points in 'A' and 'B' vars.
     virtual void define() {
 
         // Define A(t+1) from A(t) & stencil at B(t).
@@ -503,15 +503,15 @@ class TestDepStencil3 : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, y, z }); // time-varying grid.
-    yc_grid_var B = yc_grid_var("B", get_soln(), { t, x, y, z }); // time-varying grid.
+    yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y, z }); // time-varying var.
+    yc_var_proxy B = yc_var_proxy("B", get_soln(), { t, x, y, z }); // time-varying var.
 
 public:
 
     TestDepStencil3(int radius=2) :
         TestBase("test_dep_3d", radius) { }
 
-    // Define equation to apply to all points in 'A' and 'B' grids.
+    // Define equation to apply to all points in 'A' and 'B' vars.
     virtual void define() {
 
         // Define A(t+1) from A(t) & stencil at B(t).
@@ -529,24 +529,24 @@ public:
 // '-stencil' commmand-line option or the 'stencil=' build option.
 static TestDepStencil3 TestDepStencil3_instance;
 
-// Test the use of scratch-pad grids.
+// Test the use of scratch-pad vars.
 
 class TestScratchStencil1 : public TestBase {
 
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x }); // time-varying grid.
+    yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x }); // time-varying var.
 
     // Temporary storage.
-    yc_grid_var B = yc_grid_var("B", get_soln(), { x }, true);
+    yc_var_proxy B = yc_var_proxy("B", get_soln(), { x }, true);
 
 public:
 
     TestScratchStencil1(int radius=2) :
         TestBase("test_scratch_1d", radius) { }
 
-    // Define equation to apply to all points in 'A' grid.
+    // Define equation to apply to all points in 'A' var.
     virtual void define() {
 
         // Define values in scratch var 'B'.
@@ -567,19 +567,19 @@ class TestScratchStencil3 : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, y, z }); // time-varying grid.
+    yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y, z }); // time-varying var.
 
     // Temporary storage.
-    yc_grid_var t1 = yc_grid_var("t1", get_soln(), { x, y, z }, true);
-    yc_grid_var t2 = yc_grid_var("t2", get_soln(), { x, y, z }, true);
-    yc_grid_var t3 = yc_grid_var("t3", get_soln(), { x, y, z }, true);
+    yc_var_proxy t1 = yc_var_proxy("t1", get_soln(), { x, y, z }, true);
+    yc_var_proxy t2 = yc_var_proxy("t2", get_soln(), { x, y, z }, true);
+    yc_var_proxy t3 = yc_var_proxy("t3", get_soln(), { x, y, z }, true);
 
 public:
 
     TestScratchStencil3(int radius=2) :
         TestBase("test_scratch_3d", radius) { }
 
-    // Define equation to apply to all points in 'A' grid.
+    // Define equation to apply to all points in 'A' var.
     virtual void define() {
 
         // Set scratch vars.
@@ -607,14 +607,14 @@ class TestBoundaryStencil1 : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x }); // time-varying grid.
+    yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x }); // time-varying var.
 
 public:
 
     TestBoundaryStencil1(int radius=2) :
         TestBase("test_boundary_1d", radius) { }
 
-    // Define equation to apply to all points in 'A' grid.
+    // Define equation to apply to all points in 'A' var.
     virtual void define() {
 
         // Define interior sub-domain.
@@ -639,14 +639,14 @@ class TestBoundaryStencil2 : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, y }); // time-varying grid.
+    yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y }); // time-varying var.
 
 public:
 
     TestBoundaryStencil2(int radius=2) :
         TestBase("test_boundary_2d", radius) { }
 
-    // Define equation to apply to all points in 'A' grid.
+    // Define equation to apply to all points in 'A' var.
     virtual void define() {
 
         // Sub-domain is rectangle interior.
@@ -670,14 +670,14 @@ class TestBoundaryStencil3 : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, y, z }); // time-varying grid.
+    yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y, z }); // time-varying var.
 
 public:
 
     TestBoundaryStencil3(int radius=2) :
         TestBase("test_boundary_3d", radius) { }
 
-    // Define equation to apply to all points in 'A' grid.
+    // Define equation to apply to all points in 'A' var.
     virtual void define() {
 
         // Sub-domain is rectangle interior.
@@ -706,15 +706,15 @@ protected:
     yc_index_node_ptr b = new_misc_index("b");
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x }); // time-varying grid.
-    yc_grid_var B = yc_grid_var("B", get_soln(), { b });
+    yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x }); // time-varying var.
+    yc_var_proxy B = yc_var_proxy("B", get_soln(), { b });
 
 public:
 
     TestStepCondStencil1(int radius=2) :
         TestBase("test_step_cond_1d", radius) { }
 
-    // Define equation to apply to all points in 'A' grid.
+    // Define equation to apply to all points in 'A' var.
     virtual void define() {
 
         // Time condition.
@@ -744,23 +744,23 @@ public:
 // '-stencil' commmand-line option or the 'stencil=' build option.
 static TestStepCondStencil1 TestStepCondStencil1_instance;
 
-// Test the use of conditional updates with scratch-pad grids.
+// Test the use of conditional updates with scratch-pad vars.
 class TestScratchBoundaryStencil1 : public TestBase {
 
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x }); // time-varying grid.
+    yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x }); // time-varying var.
 
     // Temporary storage.
-    yc_grid_var B = yc_grid_var("B", get_soln(), { x }, true);
+    yc_var_proxy B = yc_var_proxy("B", get_soln(), { x }, true);
 
 public:
 
     TestScratchBoundaryStencil1(int radius=2) :
         TestBase("test_scratch_boundary_1d", radius) { }
 
-    // Define equation to apply to all points in 'A' grid.
+    // Define equation to apply to all points in 'A' var.
     virtual void define() {
 
         // Define values in scratch var 'B' using current values from 'A'.
@@ -787,9 +787,9 @@ class TestFuncStencil1 : public TestBase {
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x });
-    yc_grid_var B = yc_grid_var("B", get_soln(), { t, x });
-    yc_grid_var C = yc_grid_var("C", get_soln(), { t, x });
+    yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x });
+    yc_var_proxy B = yc_var_proxy("B", get_soln(), { t, x });
+    yc_var_proxy C = yc_var_proxy("C", get_soln(), { t, x });
 
 public:
 
@@ -808,13 +808,13 @@ public:
 // '-stencil' commmand-line option or the 'stencil=' build option.
 static TestFuncStencil1 TestFuncStencil1_instance;
 
-// A stencil that has grids but no stencil equation.
+// A stencil that has vars but no stencil equation.
 class TestEmptyStencil2 : public TestBase {
 
 protected:
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, y }); // time-varying grid.
+    yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y }); // time-varying var.
 
 public:
 
@@ -829,7 +829,7 @@ public:
 // '-stencil' commmand-line option or the 'stencil=' build option.
 static TestEmptyStencil2 TestEmptyStencil2_instance;
 
-// A stencil that no grids and no stencil equation.
+// A stencil that no vars and no stencil equation.
 // Kernel must be built with domain_dims and step_dim options.
 class TestEmptyStencil0: public TestBase {
 

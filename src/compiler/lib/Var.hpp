@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-///////// Classes for Grids ////////////
+///////// Classes for Vars ////////////
 
 #pragma once
 
@@ -36,31 +36,31 @@ namespace yask {
     // Fwd decl.
     struct Dimensions;
 
-    // A class for a GridVar.
+    // A class for a Var.
     // This is a generic container for all variables to be accessed
-    // from the kernel. A 0-D grid is a scalar, a 1-D grid is an array, etc.
+    // from the kernel. A 0-D var is a scalar, a 1-D var is an array, etc.
     // Dims can be the step dim, a domain dim, or anything else.
-    class GridVar : public virtual yc_grid {
+    class Var : public virtual yc_var {
 
     protected:
-        string _name;           // name of this grid.
-        indexExprPtrVec _dims;  // dimensions of this grid.
-        bool _isScratch = false; // true if a temp grid.
+        string _name;           // name of this var.
+        indexExprPtrVec _dims;  // dimensions of this var.
+        bool _isScratch = false; // true if a temp var.
 
         // Step-dim info.
         bool _isStepAllocFixed = true; // step alloc cannot be changed at run-time.
         idx_t _stepAlloc = 0;         // step-alloc override (0 => calculate).
 
-        // Ptr to solution that this grid belongs to (its parent).
+        // Ptr to solution that this var belongs to (its parent).
         StencilSolution* _soln = 0;
 
         // How many dims are foldable.
         int _numFoldableDims = -1; // -1 => unknown.
 
-        // Whether this grid can be vector-folded.
+        // Whether this var can be vector-folded.
         bool _isFoldable = false;
 
-        ///// Values below are computed based on GridPoint accesses in equations.
+        ///// Values below are computed based on VarPoint accesses in equations.
 
         // Min and max const indices that are used to access each dim.
         IntTuple _minIndices, _maxIndices;
@@ -74,13 +74,13 @@ namespace yask {
 
     public:
         // Ctors.
-        GridVar(string name,
+        Var(string name,
              bool isScratch,
              StencilSolution* soln,
              const indexExprPtrVec& dims);
 
         // Dtor.
-        virtual ~GridVar() { }
+        virtual ~Var() { }
 
         // Name accessors.
         const string& getName() const { return _name; }
@@ -98,7 +98,7 @@ namespace yask {
             return nullptr;
         }
 
-        // Temp grid?
+        // Temp var?
         virtual bool isScratch() const { return _isScratch; }
 
         // Access to solution.
@@ -151,7 +151,7 @@ namespace yask {
         }
 
         // Determine whether dims are same.
-        virtual bool areDimsSame(const GridVar& other) const {
+        virtual bool areDimsSame(const Var& other) const {
             if (_dims.size() != other._dims.size())
                 return false;
             size_t i = 0;
@@ -167,14 +167,14 @@ namespace yask {
         // Determine how many values in step-dim are needed.
         virtual int getStepDimSize() const;
 
-        // Determine whether grid can be folded.
+        // Determine whether var can be folded.
         virtual void setFolding(const Dimensions& dims);
 
         // Determine whether halo sizes are equal.
-        virtual bool isHaloSame(const GridVar& other) const;
+        virtual bool isHaloSame(const Var& other) const;
 
-        // Update halos based on halo in 'other' grid.
-        virtual void updateHalo(const GridVar& other);
+        // Update halos based on halo in 'other' var.
+        virtual void updateHalo(const Var& other);
 
         // Update halos based on each value in 'offsets'.
         virtual void updateHalo(const string& packName, const IntTuple& offsets);
@@ -213,35 +213,35 @@ namespace yask {
         set_step_alloc_size(idx_t size) {
             _stepAlloc = size;
         }
-        virtual yc_grid_point_node_ptr
-        new_grid_point(const std::vector<yc_number_node_ptr>& index_exprs);
-        virtual yc_grid_point_node_ptr
-        new_grid_point(const std::initializer_list<yc_number_node_ptr>& index_exprs) {
+        virtual yc_var_point_node_ptr
+        new_var_point(const std::vector<yc_number_node_ptr>& index_exprs);
+        virtual yc_var_point_node_ptr
+        new_var_point(const std::initializer_list<yc_number_node_ptr>& index_exprs) {
             std::vector<yc_number_node_ptr> idx_expr_vec(index_exprs);
-            return new_grid_point(idx_expr_vec);
+            return new_var_point(idx_expr_vec);
         }
-        virtual yc_grid_point_node_ptr
-        new_relative_grid_point(const std::vector<int>& dim_offsets);
-        virtual yc_grid_point_node_ptr
-        new_relative_grid_point(const std::initializer_list<int>& dim_offsets) {
+        virtual yc_var_point_node_ptr
+        new_relative_var_point(const std::vector<int>& dim_offsets);
+        virtual yc_var_point_node_ptr
+        new_relative_var_point(const std::initializer_list<int>& dim_offsets) {
             std::vector<int> dim_ofs_vec(dim_offsets);
-            return new_relative_grid_point(dim_ofs_vec);
+            return new_relative_var_point(dim_ofs_vec);
         }
     };
 
-    // A list of grids.  This holds pointers to grids defined by the stencil
-    // class in the order in which they are added via the INIT_GRID_* macros.
-    class Grids : public vector_set<GridVar*> {
+    // A list of vars.  This holds pointers to vars defined by the stencil
+    // class in the order in which they are added via the INIT_VAR_* macros.
+    class Vars : public vector_set<Var*> {
     public:
 
-        Grids() {}
-        virtual ~Grids() {}
+        Vars() {}
+        virtual ~Vars() {}
 
         // Copy ctor.
-        // Copies list of grid pointers, but not grids (shallow copy).
-        Grids(const Grids& src) : vector_set<GridVar*>(src) {}
+        // Copies list of var pointers, but not vars (shallow copy).
+        Vars(const Vars& src) : vector_set<Var*>(src) {}
 
-        // Determine whether each grid can be folded.
+        // Determine whether each var can be folded.
         virtual void setFolding(const Dimensions& dims) {
             for (auto gp : *this)
                 gp->setFolding(dims);

@@ -114,7 +114,7 @@ struct AppSettings : public KernelSettings {
                            doWarmup));
         parser.add_option(new CommandLineParser::IntOption
                           ("step_alloc",
-                           "Number of steps to allocate in relevant grids, "
+                           "Number of steps to allocate in relevant vars, "
                            "overriding default value from YASK compiler.",
                            step_alloc));
         parser.add_option(new CommandLineParser::IntOption
@@ -224,14 +224,14 @@ void alloc_steps(yk_solution_ptr soln, const AppSettings& opts) {
     if (opts.step_alloc <= 0)
         return;
 
-    // Find grids with steps.
+    // Find vars with steps.
     auto step_dim = soln->get_step_dim_name();
-    auto grids = soln->get_grids();
-    for (auto grid : grids) {
-        if (grid->is_dim_used(step_dim))
+    auto vars = soln->get_vars();
+    for (auto var : vars) {
+        if (var->is_dim_used(step_dim))
 
             // override num steps.
-            grid->set_alloc_size(step_dim, opts.step_alloc);
+            var->set_alloc_size(step_dim, opts.step_alloc);
     }
 }
 
@@ -292,7 +292,7 @@ int main(int argc, char** argv)
         if (context->rank_bb.bb_num_points < 1)
             THROW_YASK_EXCEPTION("Exiting because there are no points in the domain");
 
-        // init data in grids and params.
+        // init data in vars and params.
         if (opts->doWarmup || !opts->validate)
             context->initData();
 
@@ -477,7 +477,7 @@ int main(int argc, char** argv)
             os << endl << divLine <<
                 "Setup for validation...\n";
 
-            // Make a reference context for comparisons w/new grids.
+            // Make a reference context for comparisons w/new vars.
             auto ref_soln = kfac.new_solution(kenv, ksoln);
             auto ref_context = dynamic_pointer_cast<StencilContext>(ref_soln);
             assert(ref_context.get());
@@ -491,7 +491,7 @@ int main(int argc, char** argv)
             ref_opts->_numa_pref = yask_numa_none;
 
             // TODO: re-enable the region and block settings below;
-            // requires allowing consistent init of different-sized grids
+            // requires allowing consistent init of different-sized vars
             // in kernel code.
 #if 0
             auto sdim = ref_soln->get_step_dim_name();

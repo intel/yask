@@ -49,9 +49,9 @@ namespace yask {
     /// Shared pointer to \ref yc_solution
     typedef std::shared_ptr<yc_solution> yc_solution_ptr;
 
-    class yc_grid;
-    /// Pointer to \ref yc_grid
-    typedef yc_grid* yc_grid_ptr;
+    class yc_var;
+    /// Pointer to \ref yc_var
+    typedef yc_var* yc_var_ptr;
 
     // Forward declarations of expression nodes and their pointers.
 
@@ -75,9 +75,9 @@ namespace yask {
     /// Shared pointer to \ref yc_equation_node
     typedef std::shared_ptr<yc_equation_node> yc_equation_node_ptr;
 
-    class yc_grid_point_node;
-    /// Shared pointer to \ref yc_grid_point_node
-    typedef std::shared_ptr<yc_grid_point_node> yc_grid_point_node_ptr;
+    class yc_var_point_node;
+    /// Shared pointer to \ref yc_var_point_node
+    typedef std::shared_ptr<yc_var_point_node> yc_var_point_node_ptr;
 
     /** @}*/
 }
@@ -105,7 +105,7 @@ namespace yask {
 
         /// Create a stencil solution.
         /**
-           A stencil solution contains all the grids and equations.
+           A stencil solution contains all the vars and equations.
            @returns Pointer to new solution object.
         */
         virtual yc_solution_ptr
@@ -115,7 +115,7 @@ namespace yask {
 
     /// Stencil solution.
     /**
-       Objects of this type contain all the grids and equations
+       Objects of this type contain all the vars and equations
        that comprise a solution.
        Must be created via yc_factory::new_solution().
     */
@@ -173,20 +173,22 @@ namespace yask {
         set_element_bytes(int nbytes /**< [in] Number of bytes in a FP number.
                                         Should be 4 or 8. */ ) =0;
 
-        /// Create an n-dimensional grid variable in the solution.
+        /// Create an n-dimensional variable in the solution.
         /**
-           "Grid" is a generic term for any n-dimensional variable.  A 0-dim
-           grid is a scalar, a 1-dim grid is a vector, a 2-dim grid is a
+           "Var" is a generic term for any n-dimensional variable.  A 0-dim
+           var is a scalar, a 1-dim var is a vector, a 2-dim var is a
            matrix, etc.
 
-           At least one grid must be defined with a step-index
-           node, and it must be the first dimension listed.
-           If more than one grid uses a step-index node, the step-indices
-           must have the same name across all such grids.
+           The dimensions of a variable are defined by providing a list
+           of indices created via yc_node_factory::new_step_index(),
+           yc_node_factory::new_domain_index(), and/or 
+           yc_node_factory::new_misc_index().
+           When a step index is used, it must be the first index.
+           If more than one var uses a step-index, the step-indices
+           must have the same name. For example, you cannot have
+           one var with step-index "t" and one with step-index "time".
 
-           At least one grid must be defined with at least one domain-index node.
-
-           Example code to create a solution with a grid equation:
+           Example code to create a solution with an equation for a variable named "A":
            ~~~{.cpp}
            yc_factory ycfac;
            yc_node_factory nfac;
@@ -194,95 +196,97 @@ namespace yask {
            auto t = nfac.new_step_index("t");
            auto x = nfac.new_domain_index("x");
            auto y = nfac.new_domain_index("y");
-           auto a = ycfac.new_grid("A", { t, x, y }); 
-           a->new_grid_point({t+1, x, y}) EQUALS (a->new_grid_point({t, x, y}) +
-                                                  a->new_grid_point({t, x+1, y}) + 
-                                                  a->new_grid_point({t, x, y+1})) * (1.0/3.0);
+           auto a = ycfac.new_var("A", { t, x, y }); 
+           a->new_var_point({t+1, x, y}) EQUALS (a->new_var_point({t, x, y}) +
+                                                  a->new_var_point({t, x+1, y}) + 
+                                                  a->new_var_point({t, x, y+1})) * (1.0/3.0);
            ~~~
 
-           @returns Pointer to the new \ref yc_grid object.
+           @returns Pointer to the new \ref yc_var object.
         */
-        virtual yc_grid_ptr
-        new_grid(const std::string& name
-                 /**< [in] Name of the new grid; must be a valid C++
-                    identifier and unique across grids. */,
+        virtual yc_var_ptr
+        new_var(const std::string& name
+                 /**< [in] Name of the new var; must be a valid C++
+                    identifier and unique across vars. */,
                  const std::vector<yc_index_node_ptr>& dims
-                 /**< [in] Dimensions of the grid.
+                 /**< [in] Dimensions of the var.
                     Each dimension is identified by an associated index. */ ) =0;
 
 #ifndef SWIG
-        /// Create an n-dimensional grid variable in the solution.
+        /// Create an n-dimensional variable in the solution.
         /**
            C++ initializer-list version with same semantics as
-           the vector version of new_grid().
+           the vector version of new_var().
            @note This version is not available (or needed) in the Python API.
-           @returns Pointer to the new \ref yc_grid object.
+           @returns Pointer to the new \ref yc_var object.
         */
-        virtual yc_grid_ptr
-        new_grid(const std::string& name /**< [in] Name of the new grid; must be
+        virtual yc_var_ptr
+        new_var(const std::string& name /**< [in] Name of the new var; must be
                                             a valid C++ identifier and unique
-                                            across grids. */,
+                                            across vars. */,
                  const std::initializer_list<yc_index_node_ptr>& dims
-                 /**< [in] Dimensions of the grid.
+                 /**< [in] Dimensions of the var.
                     Each dimension is identified by an associated index. */ ) =0;
 #endif
 
-        /// Create an n-dimensional scratch-grid variable in the solution.
+        /// Create an n-dimensional scratch variable in the solution.
         /**
-           A scratch grid is a temporary variable used in the
-           definition of a non-scratch grid.
-           - Scratch grids are not accessible via kernel APIs.
+           A scratch variable is a temporary variable used as an 
+           intermediate value in an equation.
+           - Scratch vars are not accessible via kernel APIs.
            Thus, they cannot be programmatically read from or written to.
-           - Scratch grid values must be defined from equations ultimately
-           referencing only non-scratch grid values, optionally referencing
-           other intermediate scratch-grids.
-           - Scratch grids cannot use the step-index as a dimension.
+           - Scratch var values must be defined from equations ultimately
+           referencing only non-scratch var values, optionally referencing
+           other intermediate scratch-vars.
+           - Scratch vars cannot use the step-index as a dimension.
 
            See `TestScratchStencil*` classes in
            `src/stencils/SimpleTestStencils.hpp` for usage examples.
 
-           @returns Pointer to the new \ref yc_grid object.
+           @returns Pointer to the new \ref yc_var object.
         */
-        virtual yc_grid_ptr
-        new_scratch_grid(const std::string& name
-                         /**< [in] Name of the new grid; must be a valid C++
-                            identifier and unique across grids. */,
+        virtual yc_var_ptr
+        new_scratch_var(const std::string& name
+                         /**< [in] Name of the new var; must be a valid C++
+                            identifier and unique across vars. */,
                          const std::vector<yc_index_node_ptr>& dims
-                         /**< [in] Dimensions of the grid.
+                         /**< [in] Dimensions of the var.
                             Each dimension is identified by an associated index. */ ) =0;
 
 #ifndef SWIG
-        /// Create an n-dimensional scratch-grid variable in the solution.
+        /// Create an n-dimensional scratch variable in the solution.
         /**
            C++ initializer-list version with same semantics as
-           the vector version of new_scratch_grid().
+           the vector version of new_scratch_var().
            @note This version is not available (or needed) in the Python API.
-           @returns Pointer to the new \ref yc_grid object.
+           @returns Pointer to the new \ref yc_var object.
         */
-        virtual yc_grid_ptr
-        new_scratch_grid(const std::string& name
-                         /**< [in] Name of the new grid; must be
+        virtual yc_var_ptr
+        new_scratch_var(const std::string& name
+                         /**< [in] Name of the new var; must be
                             a valid C++ identifier and unique
-                            across grids. */,
+                            across vars. */,
                          const std::initializer_list<yc_index_node_ptr>& dims
-                         /**< [in] Dimensions of the grid.
+                         /**< [in] Dimensions of the var.
                             Each dimension is identified by an associated index. */ ) =0;
 #endif
 
-        /// Get the number of grids in the solution.
-        /** @returns Number of grids that have been created via new_grid(). */
+        /// Get the number of vars in the solution.
+        /** 
+            @returns Number of vars that have been created via new_var() or
+            new_scratch_var(). */
         virtual int
-        get_num_grids() const =0;
+        get_num_vars() const =0;
 
-        /// Get all the grids in the solution.
-        /** @returns Vector containing pointer to all grids. */
-        virtual std::vector<yc_grid_ptr>
-        get_grids() =0;
+        /// Get all the vars in the solution.
+        /** @returns Vector containing pointer to all vars. */
+        virtual std::vector<yc_var_ptr>
+        get_vars() =0;
 
-        /// Get the specified grid.
-        /** @returns Pointer to the specified grid or null pointer if it does not exist. */
-        virtual yc_grid_ptr
-        get_grid(const std::string& name /**< [in] Name of the grid. */ ) =0;
+        /// Get the specified var.
+        /** @returns Pointer to the specified var or null pointer if it does not exist. */
+        virtual yc_var_ptr
+        get_var(const std::string& name /**< [in] Name of the var. */ ) =0;
 
         /// Set the vectorization length in given dimension.
         /** For YASK-code generation, the product of the fold lengths should
@@ -351,7 +355,7 @@ namespace yask {
             avx512  | YASK stencil classes for CORE AVX-512 & MIC AVX-512 ISAs.
             knc     | YASK stencil classes for Knights Corner ISA.
             dot     | DOT-language description.
-            dot-lite| DOT-language description of grid accesses only.
+            dot-lite| DOT-language description of var accesses only.
             pseudo  | Human-readable pseudo-code (for debug).
             pseudo-long  | Human-readable pseudo-code with intermediate variables.
 
@@ -371,14 +375,14 @@ namespace yask {
 
         /// **[Advanced]** Explicitly list the domain dimensions in the solution.
         /**
-           In addition, domain dimension(s) are added when new_grid() or
-           new_scratch_grid() is called with one or more domain dimensions.
+           In addition, domain dimension(s) are added when new_var(),
+           new_scratch_var() is called with one or more domain dimensions.
            Either way, the last unique domain dimension specified will become the 'inner' or
            'unit-stride' dimension in memory layouts.
            Thus, this option can be used to override the default layout order.
            It also allows specification of the domain dimensions in the 
            unusual case where a solution is defined without any
-           grids containing all of the domain dimensions.
+           vars containing all of the domain dimensions.
          */
         virtual void
         set_domain_dims(const std::vector<yc_index_node_ptr>& dims
@@ -388,7 +392,7 @@ namespace yask {
         /// **[Advanced]** Explicitly list the domain dimensions in the solution.
         /**
            C++ initializer-list version with same semantics as
-           the vector version of new_grid().
+           the vector version of new_var().
            @note This version is not available (or needed) in the Python API.
         */
         virtual void
@@ -398,11 +402,11 @@ namespace yask {
         
         /// **[Advanced]** Explicitly identify the step dimension in the solution.
         /** 
-            By default, the step dimension is defined when new_grid() or
-            new_scratch_grid() is called with the step dimension.
-            This allows specification of the step dimension in the 
+            By default, the step dimension is defined when new_var()
+            is called with a step index.
+            This API allows specification of the step dimension in the 
             unusual case where a solution is defined without any
-            grids containing the step dimension.
+            vars containing the step dimension.
          */
         virtual void
         set_step_dim(const yc_index_node_ptr dim
@@ -480,10 +484,10 @@ namespace yask {
            about a circular dependency. This exception may not be
            thrown until format() is called.
 
-           - If using scratch grids, dependencies among scratch grids
-           and between scratch-grid equations and non-scratch-grid
-           equations should also be added. Each scratch grid equation
-           should ultimately depend on non-scratch-grid values.
+           - If using scratch vars, dependencies among scratch vars
+           and between scratch equations and non-scratch
+           equations should also be added. Each scratch equation
+           should ultimately depend on non-scratch values.
 
            - This function can be used in cooperation with or instead of
            the built-in automatic dependency checker.
@@ -511,112 +515,165 @@ namespace yask {
          */
         virtual void
         clear_dependencies() =0;
+
+        /// **[Deprecated]** Use new_var().
+        virtual yc_var_ptr
+        new_grid(const std::string& name,
+                 const std::vector<yc_index_node_ptr>& dims) {
+            return new_var(name, dims);
+        }
+
+#ifndef SWIG
+        /// **[Deprecated]** Use new_var().
+        virtual yc_var_ptr
+        new_grid(const std::string& name,
+                 const std::initializer_list<yc_index_node_ptr>& dims) {
+            return new_var(name, dims);
+        }
+#endif
+
+        /// **[Deprecated]** Use new_scratch_var().
+        virtual yc_var_ptr
+        new_scratch_grid(const std::string& name,
+                         const std::vector<yc_index_node_ptr>& dims) {
+            return new_scratch_var(name, dims);
+        }
+
+#ifndef SWIG
+        /// **[Deprecated]** Use new_scratch_var().
+        virtual yc_var_ptr
+        new_scratch_grid(const std::string& name,
+                         const std::initializer_list<yc_index_node_ptr>& dims) {
+            return new_scratch_var(name, dims);
+        }
+#endif
+
+        /// **[Deprecated]** Use get_num_vars().
+        virtual int
+        get_num_grids() const {
+            return get_num_vars();
+        }
+
+        /// **[Deprecated]** Use get_vars().
+        virtual std::vector<yc_var_ptr>
+        get_grids() {
+            return get_vars();
+        }
+
+        /// **[Deprecated]** Use get_var().
+        virtual yc_var_ptr
+        get_grid(const std::string& name) {
+            return get_var(name);
+        }
     };
 
     /// A compile-time data variable.
-    /** "Grid" is a generic term for any n-dimensional array.  A 0-dim grid
-        is a scalar, a 1-dim grid is an array, etc.
-        A compile-time grid is a variable used for constructing equations.
+    /** "Var" is a generic term for any n-dimensional variable.  A 0-dim var
+        is a scalar, a 1-dim var is an array, etc.
+        A compile-time variable is used for constructing stencil equations.
         It does not contain any data.
-        Data is only stored during run-time, using a \ref yk_grid.
+        Data is only stored during run-time, using a \ref yk_var.
 
-        Created via yc_solution::new_grid() or implicitly via the \ref yc_grid_var constructor.
+        Created via yc_solution::new_var() or yc_solution::new_scratch_var()
+        or implicitly via the \ref yc_var_proxy constructor.
     */
-    class yc_grid {
+    class yc_var {
     public:
-        virtual ~yc_grid() {}
+        virtual ~yc_var() {}
 
-        /// Get the name of the grid.
-        /** @returns String containing name provided via new_grid(). */
+        /// Get the name of the var.
+        /** @returns String containing name provided via
+            yc_solution::new_var() or yc_solution::new_scratch_var(). */
         virtual const std::string& get_name() const =0;
 
         /// Get the number of dimensions.
-        /** @returns Number of dimensions created via new_grid(). */
+        /** @returns Number of dimensions created via 
+            yc_solution::new_var() or yc_solution::new_scratch_var(). */
         virtual int get_num_dims() const =0;
 
-        /// Get all the dimensions in this grid.
+        /// Get all the dimensions in this var.
         /**
-           Includes step dimension if it is a dimension of this grid.
-           May be different than values returned from yc_solution::get_domain_dim_names().
-           @returns List of names of all the dimensions.
+           This is not necessarily a list of all the dimensions used
+           in the \ref yc_solution.
+           @returns List of names of all the dimensions used in this var.
         */
         virtual std::vector<std::string>
         get_dim_names() const =0;
 
-        /// Create a reference to a point in this grid.
+        /// Create a reference to a point in this var.
         /**
            Each expression in `index_exprs` describes how to access
-           an element in the corresponding dimension of the grid.
+           an element in the corresponding dimension of the var.
 
-           @returns Pointer to AST node used to read from or write to point in grid. */
-        virtual yc_grid_point_node_ptr
-        new_grid_point(const std::vector<yc_number_node_ptr>& index_exprs
+           @returns Pointer to AST node used to read from or write to point in var. */
+        virtual yc_var_point_node_ptr
+        new_var_point(const std::vector<yc_number_node_ptr>& index_exprs
                        /**< [in] Index expressions.
                           These must appear in the same order as when the
-                          grid was created. */ ) =0;
+                          var was created. */ ) =0;
 
 #ifndef SWIG
-        /// Create a reference to a point in this grid.
+        /// Create a reference to a point in this var.
         /**
            C++ initializer-list version with same semantics as
-           the vector version of new_grid_point().
+           the vector version of new_var_point().
 
-           See example code shown in yc_solution::new_grid().
+           See example code shown in yc_solution::new_var().
 
            @note This version is not available (or needed) in the Python API.
-           @returns Pointer to AST node used to read or write from point in grid.
+           @returns Pointer to AST node used to read or write from point in var.
         */
-        virtual yc_grid_point_node_ptr
-        new_grid_point(const std::initializer_list<yc_number_node_ptr>& index_exprs) = 0;
+        virtual yc_var_point_node_ptr
+        new_var_point(const std::initializer_list<yc_number_node_ptr>& index_exprs) = 0;
 #endif
 
-        /// Create a reference to a point in this grid using relative offsets.
+        /// Create a reference to a point in this var using relative offsets.
         /**
-           A shorthand function for calling new_grid_point() when
+           A shorthand function for calling new_var_point() when
            all index expressions are constant offsets.
            Each offset refers to the dimensions defined when the
-           grid was created via stencil_solution::new_grid().
+           var was created via yc_solution::new_var().
 
-           Example: if `g = new_grid("data", {t, x, y})` with step-dimension `t`
+           Example: if `g = new_var("data", {t, x, y})` with step-dimension `t`
            and domain-dimensions `x` and `y`,
-           `g->new_relative_grid_point({1, -1, 0})` refers to the same point as
-           `g->new_grid_point({t + 1, x - 1, y})`.
+           `g->new_relative_var_point({1, -1, 0})` refers to the same point as
+           `g->new_var_point({t + 1, x - 1, y})`.
 
            @warning This convenience function can only be used when every
-           dimension of the grid is either the step dimension or a domain dimension.
-           If this is not the case, use new_grid_point().
-           @returns Pointer to AST node used to read from or write to point in grid. */
-        virtual yc_grid_point_node_ptr
-        new_relative_grid_point(const std::vector<int>& dim_offsets
+           dimension of the var is either the step dimension or a domain dimension.
+           If this is not the case, use new_var_point().
+           @returns Pointer to AST node used to read from or write to point in var. */
+        virtual yc_var_point_node_ptr
+        new_relative_var_point(const std::vector<int>& dim_offsets
                                 /**< [in] offset from evaluation index in each dim. */ ) =0;
 
 #ifndef SWIG
-        /// Create a reference to a point in this grid using relative offsets.
+        /// Create a reference to a point in this var using relative offsets.
         /**
            C++ initializer-list version with same semantics as
-           the vector version of new_relative_grid_point().
+           the vector version of new_relative_var_point().
            @note This version is not available (or needed) in the Python API.
-           @returns Pointer to AST node used to read or write from point in grid. */
-        virtual yc_grid_point_node_ptr
-        new_relative_grid_point(const std::initializer_list<int>& dim_offsets) = 0;
+           @returns Pointer to AST node used to read or write from point in var. */
+        virtual yc_var_point_node_ptr
+        new_relative_var_point(const std::initializer_list<int>& dim_offsets) = 0;
 #endif
 
-        /// **[Advanced]** Get whether the allocation of the step dimension of this grid can be modified at run-time.
+        /// **[Advanced]** Get whether the allocation of the step dimension of this var can be modified at run-time.
         /**
-           See yk_grid::set_alloc_size().
+           See yk_var::set_alloc_size().
          */
         virtual bool
         is_dynamic_step_alloc() const =0;
 
-        /// **[Advanced]** Set whether the allocation of the step dimension of this grid can be modified at run-time.
+        /// **[Advanced]** Set whether the allocation of the step dimension of this var can be modified at run-time.
         /**
-           See yk_grid::set_alloc_size().
+           See yk_var::set_alloc_size().
          */
         virtual void
         set_dynamic_step_alloc(bool is_dynamic
                                /**< [in] `true` to enable or `false` to disable. */) =0;
 
-        /// **[Advanced]** Get the current allocation in the step dimension of this grid.
+        /// **[Advanced]** Get the current allocation in the step dimension of this var.
         /**
            If set_step_alloc_size() has been called, that setting will be returned.
            If set_step_alloc_size() has not been called, the default setting determined
@@ -626,7 +683,7 @@ namespace yask {
         virtual idx_t
         get_step_alloc_size() const =0;
 
-        /// **[Advanced]** Set the current allocation in the step dimension of this grid.
+        /// **[Advanced]** Set the current allocation in the step dimension of this var.
         /**
            Override the default setting determined
            by the YASK compiler for allocation in the step dimension.
@@ -636,17 +693,17 @@ namespace yask {
                             /**< [in] Number of elements to allocate in the step dimension. */) =0;
     };
 
-    /// A wrapper class around a \ref yc_grid pointer.
+    /// A wrapper class around a \ref yc_var pointer.
     /**
-       Using this class provides a syntactic alternative to calling yc_solution::new_grid()
-       (or yc_solution::new_scratch_grid()) followed by yc_grid::new_grid_point().
+       Using this class provides a syntactic alternative to calling yc_solution::new_var()
+       (or yc_solution::new_scratch_var()) followed by yc_var::new_var_point().
 
-       To use this wrapper class, construct an object of type \ref yc_grid_var by
+       To use this wrapper class, construct an object of type \ref yc_var_proxy by
        passing a \ref yc_solution pointer to it.
-       Then, expressions for points in the grid can be created with a more
+       Then, expressions for points in the var can be created with a more
        intuitive syntax.
 
-       Example code to create a solution with a grid equation:
+       Example code to create a solution with an equation for a variable named "A":
        ~~~{.cpp}
        yc_factory ycfac;
        yc_node_factory nfac;
@@ -654,163 +711,163 @@ namespace yask {
        auto t = nfac.new_step_index("t");
        auto x = nfac.new_domain_index("x");
        auto y = nfac.new_domain_index("y");
-       yc_grid_var a("A", my_soln, { t, x, y });
+       yc_var_proxy a("A", my_soln, { t, x, y });
        a({t+1, x, y}) EQUALS (a({t, x, y}) + 
                               a({t, x+1, y}) + 
                               a({t, x, y+1})) * (1.0/3.0);
        ~~~
-       Compare to the example shown in yc_solution::new_grid().
+       Compare to the example shown in yc_solution::new_var().
        
-       *Scoping and lifetime:* Since the \ref yc_grid pointer in a \ref
-       yc_grid_var object is a shared pointer also owned by the \ref
-       yc_solution object used to construct the \ref yc_grid_var object, the
-       underlying grid will not be destroyed until both the \ref yc_grid_var
+       *Scoping and lifetime:* Since the \ref yc_var pointer in a \ref
+       yc_var_proxy object is a shared pointer also owned by the \ref
+       yc_solution object used to construct the \ref yc_var_proxy object, the
+       underlying var will not be destroyed until both the \ref yc_var_proxy
        object and the \ref yc_solution object are destroyed.
-       A \ref yc_grid_var object created from an existing \ref yc_grid
+       A \ref yc_var_proxy object created from an existing \ref yc_var
        object will have the same properties.
     */
-    class yc_grid_var {
+    class yc_var_proxy {
     private:
-        yc_grid_ptr _grid;
+        yc_var_ptr _var;
         
     public:
 
         /// Contructor taking a vector of index vars.
         /**
-           A wrapper around yc_solution::new_grid() and
-           yc_solution::new_scratch_grid().
+           A wrapper around yc_solution::new_var() and
+           yc_solution::new_scratch_var().
         */
-        yc_grid_var(const std::string& name
-                    /**< [in] Name of the new grid; must be a valid C++
-                       identifier and unique across grids. */,
+        yc_var_proxy(const std::string& name
+                    /**< [in] Name of the new var; must be a valid C++
+                       identifier and unique across vars. */,
                     yc_solution_ptr soln
-                    /**< [in] Pointer to solution that will own the grid. */,
+                    /**< [in] Pointer to solution that will own the var. */,
                     const std::vector< yc_index_node_ptr > &dims
-                    /**< [in] Dimensions of the grid.
+                    /**< [in] Dimensions of the var.
                        Each dimension is identified by an associated index. */,
                     bool is_scratch = false
-                    /**< [in] Whether to make a scratch grid. */) {
+                    /**< [in] Whether to make a scratch var. */) {
             if (is_scratch)
-                _grid = soln->new_scratch_grid(name, dims);
+                _var = soln->new_scratch_var(name, dims);
             else
-                _grid = soln->new_grid(name, dims);
+                _var = soln->new_var(name, dims);
         }
 
 #ifndef SWIG
         /// Contructor taking an initializer_list of index vars.
         /**
-           A wrapper around yc_solution::new_grid() and
-           yc_solution::new_scratch_grid().
+           A wrapper around yc_solution::new_var() and
+           yc_solution::new_scratch_var().
            @note Not available in the Python API. Use the vector version.
         */
-        yc_grid_var(const std::string& name
-                    /**< [in] Name of the new grid; must be a valid C++
-                       identifier and unique across grids. */,
+        yc_var_proxy(const std::string& name
+                    /**< [in] Name of the new var; must be a valid C++
+                       identifier and unique across vars. */,
                     yc_solution_ptr soln
-                    /**< [in] Pointer to solution that will own the grid. */,
+                    /**< [in] Pointer to solution that will own the var. */,
                     const std::initializer_list< yc_index_node_ptr > &dims
-                    /**< [in] Dimensions of the grid.
+                    /**< [in] Dimensions of the var.
                        Each dimension is identified by an associated index. */,
                     bool is_scratch = false
-                    /**< [in] Whether to make a scratch grid. */) {
+                    /**< [in] Whether to make a scratch var. */) {
             if (is_scratch)
-                _grid = soln->new_scratch_grid(name, dims);
+                _var = soln->new_scratch_var(name, dims);
             else
-                _grid = soln->new_grid(name, dims);
+                _var = soln->new_var(name, dims);
         }
 #endif
         
         /// Contructor for a simple scalar value.
         /**
-           A wrapper around yc_solution::new_grid().
+           A wrapper around yc_solution::new_var().
         */
-        yc_grid_var(const std::string& name
-                    /**< [in] Name of the new grid; must be a valid C++
-                       identifier and unique across grids. */,
+        yc_var_proxy(const std::string& name
+                    /**< [in] Name of the new var; must be a valid C++
+                       identifier and unique across vars. */,
                     yc_solution_ptr soln
-                    /**< [in] Pointer to solution that will own the grid. */) {
-            _grid = soln->new_grid(name, { });
+                    /**< [in] Pointer to solution that will own the var. */) {
+            _var = soln->new_var(name, { });
         }
 
-        /// Contructor taking an existing grid.
+        /// Contructor taking an existing var.
         /**
-           Creates a new \ref yc_grid_var wrapper around an
-           existing grid.
+           Creates a new \ref yc_var_proxy wrapper around an
+           existing var.
         */
-        yc_grid_var(yc_grid_ptr& grid) : _grid(grid) { }
+        yc_var_proxy(yc_var_ptr& var) : _var(var) { }
                     
         /// Provide a virtual destructor.
-        virtual ~yc_grid_var() { }
+        virtual ~yc_var_proxy() { }
 
-        /// Get the underlying \ref yc_grid pointer.
-        virtual yc_grid_ptr get_grid() {
-            return _grid;
+        /// Get the underlying \ref yc_var pointer.
+        virtual yc_var_ptr get_var() {
+            return _var;
         }
 
-        /// Get the underlying \ref yc_grid pointer.
-        virtual const yc_grid_ptr get_grid() const {
-            return _grid;
+        /// Get the underlying \ref yc_var pointer.
+        virtual const yc_var_ptr get_var() const {
+            return _var;
         }
 
-        /// Create an expression for a point in a grid.
+        /// Create an expression for a point in a var.
         /**
-           A wrapper around yc_grid::new_grid_point().
-           The number of arguments must match the dimensionality of the grid.
+           A wrapper around yc_var::new_var_point().
+           The number of arguments must match the dimensionality of the var.
 
-           Example w/2D grid var `B`: `A(t+1, x) EQUALS A(t, x) + B(vec)`,
+           Example w/2D var `B`: `A(t+1, x) EQUALS A(t, x) + B(vec)`,
         */
-        virtual yc_grid_point_node_ptr
+        virtual yc_var_point_node_ptr
         operator()(const std::vector<yc_number_node_ptr>& index_exprs) {
-            return _grid->new_grid_point(index_exprs);
+            return _var->new_var_point(index_exprs);
         }
 
 #ifndef SWIG
-        /// Create an expression for a point in a grid.
+        /// Create an expression for a point in a var.
         /**
-           A wrapper around yc_grid::new_grid_point().
-           The number of arguments must match the dimensionality of the grid.
+           A wrapper around yc_var::new_var_point().
+           The number of arguments must match the dimensionality of the var.
 
-           Example w/2D grid var `B`: `A(t+1, x) EQUALS A(t, x) + B({x, 3})`.
+           Example w/2D var `B`: `A(t+1, x) EQUALS A(t, x) + B({x, 3})`.
            @note Not available in Python API. Use vector version.
         */
-        virtual yc_grid_point_node_ptr
+        virtual yc_var_point_node_ptr
         operator()(const std::initializer_list<yc_number_node_ptr>& index_exprs) {
-            return _grid->new_grid_point(index_exprs);
+            return _var->new_var_point(index_exprs);
         }
 
-        /// Create an expression for a point in a zero-dim (scalar) grid using implicit conversion.
+        /// Create an expression for a point in a zero-dim (scalar) var using implicit conversion.
         /**
-           A wrapper around yc_grid::new_grid_point().
+           A wrapper around yc_var::new_var_point().
 
-           Example w/0D grid var `B`: `A(t+1, x) EQUALS A(t, x) + B`.
+           Example w/0D var `B`: `A(t+1, x) EQUALS A(t, x) + B`.
            @note Not available in Python API. 
            Use vector version with empty vector.
         */
         virtual operator yc_number_ptr_arg() {
-            return _grid->new_grid_point({});
+            return _var->new_var_point({});
         }
 
-        /// Create an expression for a point in a one-dim (array) grid.
+        /// Create an expression for a point in a one-dim (array) var.
         /**
-           A wrapper around yc_grid::new_grid_point().
+           A wrapper around yc_var::new_var_point().
 
-           Example w/1D grid var `B`: `A(t+1, x) EQUALS A(t, x) + B[x]`.
+           Example w/1D var `B`: `A(t+1, x) EQUALS A(t, x) + B[x]`.
            @note Not available in Python API. 
            Use vector version with 1-element vector.
         */
-        virtual yc_grid_point_node_ptr operator[](const yc_number_any_arg i1) {
-            return _grid->new_grid_point({i1});
+        virtual yc_var_point_node_ptr operator[](const yc_number_any_arg i1) {
+            return _var->new_var_point({i1});
         }
         
-        /// Create an expression for a point in a 1-6 dim grid.
+        /// Create an expression for a point in a 1-6 dim var.
         /**
-           A wrapper around yc_grid::new_grid_point().
-           The number of non-null arguments must match the dimensionality of the grid.
+           A wrapper around yc_var::new_var_point().
+           The number of non-null arguments must match the dimensionality of the var.
 
-           Example w/2D grid var `B`: `A(t+1, x) EQUALS A(t, x) + B(x, 3)`.
+           Example w/2D var `B`: `A(t+1, x) EQUALS A(t, x) + B(x, 3)`.
            @note Not available in Python API. Use vector version.
         */
-        virtual yc_grid_point_node_ptr operator()(const yc_number_any_arg i1 = nullptr,
+        virtual yc_var_point_node_ptr operator()(const yc_number_any_arg i1 = nullptr,
                                                   const yc_number_any_arg i2 = nullptr,
                                                   const yc_number_any_arg i3 = nullptr,
                                                   const yc_number_any_arg i4 = nullptr,
@@ -829,12 +886,21 @@ namespace yask {
                 args.push_back(i5);
             if (i6)
                 args.push_back(i6);
-            return _grid->new_grid_point(args);
+            return _var->new_var_point(args);
         }
 #endif
-
+        
     };
     /** @}*/
+
+    /// **[Deprecated]** Use yc_var.
+    typedef yc_var yc_grid;
+    /// **[Deprecated]** Use yc_var_ptr.
+    typedef yc_var_ptr yc_grid_ptr;
+    /// **[Deprecated]** Use yc_var_point_node.
+    typedef yc_var_point_node yc_grid_point_node;
+    /// **[Deprecated]** Use yc_var_point_node_ptr.
+    typedef yc_var_point_node_ptr yc_grid_point_node_ptr;
 
 } // namespace yask.
 

@@ -142,7 +142,7 @@ namespace yask {
     };
 
     /// Equation node.
-    /** Indicates grid point on LHS is equivalent to expression
+    /** Indicates var point on LHS is equivalent to expression
         on RHS. This is NOT a test for equality.
         Created via yc_node_factory::new_equation_node().
     */
@@ -150,8 +150,8 @@ namespace yask {
     public:
 
         /// Get the left-hand-side operand.
-        /** @returns Grid-point node appearing before the EQUALS operator. */
-        virtual yc_grid_point_node_ptr get_lhs() =0;
+        /** @returns Var-point node appearing before the EQUALS operator. */
+        virtual yc_var_point_node_ptr get_lhs() =0;
 
         /// Get the right-hand-side operand.
         /** @returns Expression node appearing after the EQUALS operator. */
@@ -227,7 +227,7 @@ namespace yask {
            my_expr.set_step_cond(my_step_cond);
            \endcode
 
-           Step conditions may also refer to elements in grid variables including
+           Step conditions may also refer to elements in variables including
            scalars (1-D) and arrays (2-D). For non-scalar variables, indices
            used in a step condition _cannot_ include domain variables like `x` or `y`, but 
            constants are allowed. In this way, equations can be enabled or
@@ -276,17 +276,23 @@ namespace yask {
         get_name() const =0;
     };
 
-    /// A reference to a point in a grid.
+    /// A reference to a point in a var.
     /**
-       Created via yc_grid::new_relative_grid_point().
+       Created via yc_var::new_var_point() or yc_var::new_relative_var_point().
     */
-    class yc_grid_point_node : public virtual yc_number_node {
+    class yc_var_point_node : public virtual yc_number_node {
     public:
 
-        /// Get the grid this point is in.
-        /** @returns Pointer to a \ref yc_grid object. */
-        virtual yc_grid_ptr
-        get_grid() =0;
+        /// Get the var this point is in.
+        /** @returns Pointer to a \ref yc_var object. */
+        virtual yc_var_ptr
+        get_var() =0;
+
+        /// **[Deprecated]** Use get_var().
+        virtual yc_var_ptr
+        get_grid() {
+            return get_var();
+        }
     };
 
     /// A constant numerical value.
@@ -494,8 +500,8 @@ namespace yask {
         yc_number_ptr_arg(yc_index_node_ptr p) :
             yc_number_node_ptr(p) { }
 
-        /// Arg can be a grid-point-node pointer.
-        yc_number_ptr_arg(yc_grid_point_node_ptr p) :
+        /// Arg can be a var-point-node pointer.
+        yc_number_ptr_arg(yc_var_point_node_ptr p) :
             yc_number_node_ptr(p) { }
     };
 
@@ -559,8 +565,8 @@ namespace yask {
         yc_number_any_arg(yc_index_node_ptr p) :
             yc_number_node_ptr(p) { }
 
-        /// Arg can be a grid-point-node pointer.
-        yc_number_any_arg(yc_grid_point_node_ptr p) :
+        /// Arg can be a var-point-node pointer.
+        yc_number_any_arg(yc_var_point_node_ptr p) :
             yc_number_node_ptr(p) { }
 
         /// Arg can be an index type.
@@ -586,7 +592,7 @@ namespace yask {
 #endif
     
     /// Factory to create AST nodes.
-    /** @note Grid-point reference nodes are created from a \ref yc_grid object
+    /** @note Var-point reference nodes are created from a \ref yc_var object
         instead of from a \ref yc_node_factory. */
     class yc_node_factory {
     public:
@@ -594,7 +600,7 @@ namespace yask {
 
         /// Create a step-index node.
         /**
-           Create a variable to be used to index grids in the
+           Create a variable to be used to index vars in the
            solution-step dimension.
            The name usually describes time, e.g. "t".
            @returns Pointer to new \ref yc_index_node object.
@@ -605,7 +611,7 @@ namespace yask {
 
         /// Create a domain-index node.
         /**
-           Create a variable to be used to index grids in the
+           Create a variable to be used to index vars in the
            solution-domain dimension.
            The name usually describes spatial dimensions, e.g. "x" or "y",
            but it can be any dimension that is specified at run-time,
@@ -622,7 +628,7 @@ namespace yask {
 
         /// Create a new miscellaneous index.
         /**
-           Create an variable to be used to index grids in the
+           Create an variable to be used to index vars in the
            some dimension that is not the step dimension
            or a domain dimension.
            The value of these indices are normally compile-time
@@ -634,10 +640,10 @@ namespace yask {
                        /**< [in] Index name. */ ) const;
 
         /// Create an equation node.
-        /** Indicates grid point on LHS is equivalent to expression on
+        /** Indicates var point on LHS is equivalent to expression on
             RHS. This is NOT a test for equality.  When an equation is
             created, it is automatically added to the list of equations for
-            the yc_solution that contains the grid that is on the
+            the yc_solution that contains the var that is on the
             LHS.
 
             An optional domain condition may be provided to define the sub-domain
@@ -661,8 +667,8 @@ namespace yask {
             @returns Pointer to new \ref yc_equation_node object.
         */
         virtual yc_equation_node_ptr
-        new_equation_node(yc_grid_point_node_ptr lhs
-                          /**< [in] Grid-point before EQUALS operator. */,
+        new_equation_node(yc_var_point_node_ptr lhs
+                          /**< [in] Var-point before EQUALS operator. */,
                           yc_number_node_ptr rhs
                           /**< [in] Expression after EQUALS operator. */,
                           yc_bool_node_ptr sub_domain_cond = nullptr
@@ -1027,25 +1033,25 @@ namespace yask {
         yc_node_factory nfac; return nfac.fn(lhs, rhs); }               \
     inline yc_bool_node_ptr operator oper(const yc_number_node_ptr lhs, const yc_index_node_ptr rhs) { \
         yc_node_factory nfac; return nfac.fn(lhs, rhs); }               \
-    inline yc_bool_node_ptr operator oper(const yc_number_node_ptr lhs, const yc_grid_point_node_ptr rhs) { \
+    inline yc_bool_node_ptr operator oper(const yc_number_node_ptr lhs, const yc_var_point_node_ptr rhs) { \
         yc_node_factory nfac; return nfac.fn(lhs, rhs); }               \
     inline yc_bool_node_ptr operator oper(const yc_index_node_ptr lhs, const yc_number_node_ptr rhs) { \
         yc_node_factory nfac; return nfac.fn(lhs, rhs); }               \
     inline yc_bool_node_ptr operator oper(const yc_index_node_ptr lhs, const yc_index_node_ptr rhs) { \
         yc_node_factory nfac; return nfac.fn(lhs, rhs); }               \
-    inline yc_bool_node_ptr operator oper(const yc_index_node_ptr lhs, const yc_grid_point_node_ptr rhs) { \
+    inline yc_bool_node_ptr operator oper(const yc_index_node_ptr lhs, const yc_var_point_node_ptr rhs) { \
         yc_node_factory nfac; return nfac.fn(lhs, rhs); }               \
-    inline yc_bool_node_ptr operator oper(const yc_grid_point_node_ptr lhs, const yc_number_node_ptr rhs) { \
+    inline yc_bool_node_ptr operator oper(const yc_var_point_node_ptr lhs, const yc_number_node_ptr rhs) { \
         yc_node_factory nfac; return nfac.fn(lhs, rhs); }               \
-    inline yc_bool_node_ptr operator oper(const yc_grid_point_node_ptr lhs, const yc_index_node_ptr rhs) { \
+    inline yc_bool_node_ptr operator oper(const yc_var_point_node_ptr lhs, const yc_index_node_ptr rhs) { \
         yc_node_factory nfac; return nfac.fn(lhs, rhs); }               \
-    inline yc_bool_node_ptr operator oper(const yc_grid_point_node_ptr lhs, const yc_grid_point_node_ptr rhs) { \
+    inline yc_bool_node_ptr operator oper(const yc_var_point_node_ptr lhs, const yc_var_point_node_ptr rhs) { \
         yc_node_factory nfac; return nfac.fn(lhs, rhs); }               \
     inline yc_bool_node_ptr operator oper(const yc_number_node_ptr lhs, double rhs) { \
         yc_node_factory nfac; return nfac.fn(lhs, nfac.new_number_node(rhs)); } \
     inline yc_bool_node_ptr operator oper(const yc_index_node_ptr lhs, double rhs) { \
         yc_node_factory nfac; return nfac.fn(lhs, nfac.new_number_node(rhs)); } \
-    inline yc_bool_node_ptr operator oper(const yc_grid_point_node_ptr lhs, double rhs) { \
+    inline yc_bool_node_ptr operator oper(const yc_var_point_node_ptr lhs, double rhs) { \
         yc_node_factory nfac; return nfac.fn(lhs, nfac.new_number_node(rhs)); }
 
     BOOL_OPER(==, new_equals_node)
@@ -1067,8 +1073,8 @@ namespace yask {
     */
 #define EQUALS <<
 
-    /// The operator version of yc_node_factory::new_equation_node() used for defining a grid value.
-    yc_equation_node_ptr operator EQUALS(yc_grid_point_node_ptr gpp, const yc_number_any_arg rhs);
+    /// The operator version of yc_node_factory::new_equation_node() used for defining a var-point value.
+    yc_equation_node_ptr operator EQUALS(yc_var_point_node_ptr gpp, const yc_number_any_arg rhs);
 
     /// Recommended macro to make the domain-condition operator readable and self-explanatory.
     /**

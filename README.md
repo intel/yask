@@ -73,7 +73,10 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
 * Version 3.00.00 implemented a unification of the old (v2) internal DSL with the YASK compiler API.
 Canonical v2 DSL code should still work using the `Soln.hpp` backward-compatibility header file.
 To convert v2 DSL code to v3 format, use the `./utils/bin/convert_v2_stencil.pl` utility.
-DSL or kernel code that has used any undocumented files, data, or types may have to be updated.
+All references to the term "grid" has been changed to "var"; backward-compatibility APIs should maintain
+functionality of v2 DSL and kernel code.
+DSL and kernel code and any local output-parsing scripts that has used any undocumented files,
+data, or types may have to be updated.
 
 ### Version 2
 * Version 2.22.00 changed the heuristic to determine vector-folding sizes when some

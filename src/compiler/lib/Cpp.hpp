@@ -31,7 +31,7 @@ IN THE SOFTWARE.
 #define CPP_HPP
 
 #include "Vec.hpp"
-#include "Grid.hpp"
+#include "Var.hpp"
 
 namespace yask {
 
@@ -41,7 +41,7 @@ namespace yask {
     class CppPrintHelper : public PrintHelper {
 
     public:
-        static constexpr const char* _grid_ptr_type = "auto*";
+        static constexpr const char* _var_ptr_type = "auto*";
         static constexpr const char* _step_val_type = "const auto";
 
         CppPrintHelper(const CompilerSettings& settings,
@@ -67,15 +67,15 @@ namespace yask {
         // Make call for a point.
         // This is a utility function used for both reads and writes.
         virtual string makePointCall(ostream& os,
-                                     const GridPoint& gp,
+                                     const VarPoint& gp,
                                      const string& fname,
                                      string optArg = "");
 
-        // Return a grid-point reference.
-        virtual string readFromPoint(ostream& os, const GridPoint& gp);
+        // Return a var-point reference.
+        virtual string readFromPoint(ostream& os, const VarPoint& gp);
 
-        // Return code to update a grid point.
-        virtual string writeToPoint(ostream& os, const GridPoint& gp,
+        // Return code to update a var point.
+        virtual string writeToPoint(ostream& os, const VarPoint& gp,
                                     const string& val);
     };
 
@@ -98,8 +98,8 @@ namespace yask {
         
     protected:
 
-        // Vars for tracking pointers to grid values.
-        map<GridPoint, string> _vecPtrs; // pointers to grid vecs. value: ptr-var name.
+        // Vars for tracking pointers to var values.
+        map<VarPoint, string> _vecPtrs; // pointers to var vecs. value: ptr-var name.
         map<string, int> _ptrOfsLo; // lowest read offset from _vecPtrs in inner dim.
         map<string, int> _ptrOfsHi; // highest read offset from _vecPtrs in inner dim.
 
@@ -119,7 +119,7 @@ namespace yask {
 
         // Print a comment about a point.
         // This is a utility function used for both reads and writes.
-        virtual void printPointComment(ostream& os, const GridPoint& gp,
+        virtual void printPointComment(ostream& os, const VarPoint& gp,
                                        const string& verb) const {
 
             os << endl << " // " << verb << " vector starting at " <<
@@ -129,51 +129,51 @@ namespace yask {
         // Return code for a vectorized point.
         // This is a utility function used for both reads and writes.
         virtual string printVecPointCall(ostream& os,
-                                         const GridPoint& gp,
+                                         const VarPoint& gp,
                                          const string& funcName,
                                          const string& firstArg,
                                          const string& lastArg,
                                          bool isNorm);
 
         // Print aligned memory read.
-        virtual string printAlignedVecRead(ostream& os, const GridPoint& gp);
+        virtual string printAlignedVecRead(ostream& os, const VarPoint& gp);
 
         // Print unaliged memory read.
         // Assumes this results in same values as printUnalignedVec().
-        virtual string printUnalignedVecRead(ostream& os, const GridPoint& gp);
+        virtual string printUnalignedVecRead(ostream& os, const VarPoint& gp);
 
         // Print aligned memory write.
-        virtual string printAlignedVecWrite(ostream& os, const GridPoint& gp,
+        virtual string printAlignedVecWrite(ostream& os, const VarPoint& gp,
                                             const string& val);
 
         // Print conversion from memory vars to point var gp if needed.
         // This calls printUnalignedVecCtor(), which can be overloaded
         // by derived classes.
-        virtual string printUnalignedVec(ostream& os, const GridPoint& gp);
+        virtual string printUnalignedVec(ostream& os, const VarPoint& gp);
 
         // Print per-element construction for one point var pvName from elems.
-        virtual void printUnalignedVecSimple(ostream& os, const GridPoint& gp,
+        virtual void printUnalignedVecSimple(ostream& os, const VarPoint& gp,
                                              const string& pvName, string linePrefix,
                                              const set<size_t>* doneElems = 0);
 
         // Read from a single point to be broadcast to a vector.
         // Return code for read.
-        virtual string readFromScalarPoint(ostream& os, const GridPoint& gp,
+        virtual string readFromScalarPoint(ostream& os, const VarPoint& gp,
                                            const VarMap* vMap=0);
 
         // Read from multiple points that are not vectorizable.
         // Return var name.
-        virtual string printNonVecRead(ostream& os, const GridPoint& gp);
+        virtual string printNonVecRead(ostream& os, const VarPoint& gp);
 
         // Print construction for one point var pvName from elems.
         // This version prints inefficient element-by-element assignment.
         // Override this in derived classes for more efficient implementations.
-        virtual void printUnalignedVecCtor(ostream& os, const GridPoint& gp, const string& pvName) {
+        virtual void printUnalignedVecCtor(ostream& os, const VarPoint& gp, const string& pvName) {
             printUnalignedVecSimple(os, gp, pvName, _linePrefix);
         }
 
         // Get offset from base pointer.
-        virtual string getPtrOffset(const GridPoint& gp,
+        virtual string getPtrOffset(const VarPoint& gp,
                                     const string& innerExpr = "");
 
     public:
@@ -182,20 +182,20 @@ namespace yask {
         virtual void printBasePtrs(ostream& os);
 
         // Make base point (misc & inner-dim indices = 0).
-        virtual gridPointPtr makeBasePoint(const GridPoint& gp);
+        virtual varPointPtr makeBasePoint(const VarPoint& gp);
 
         // Print prefetches for each base pointer.
         // Print only 'ptrVar' if provided.
         virtual void printPrefetches(ostream& os, bool ahead, string ptrVar = "");
 
         // Print any needed memory reads and/or constructions to 'os'.
-        // Return code containing a vector of grid points.
-        virtual string readFromPoint(ostream& os, const GridPoint& gp);
+        // Return code containing a vector of var points.
+        virtual string readFromPoint(ostream& os, const VarPoint& gp);
 
         // Print any immediate memory writes to 'os'.
-        // Return code to update a vector of grid points or null string
+        // Return code to update a vector of var points or null string
         // if all writes were printed.
-        virtual string writeToPoint(ostream& os, const GridPoint& gp,
+        virtual string writeToPoint(ostream& os, const VarPoint& gp,
                                     const string& val);
 
         // print init of un-normalized indices.
@@ -207,13 +207,13 @@ namespace yask {
         }
 
         // Print code to set ptrName to gp.
-        virtual void printPointPtr(ostream& os, const string& ptrName, const GridPoint& gp);
+        virtual void printPointPtr(ostream& os, const string& ptrName, const VarPoint& gp);
 
         // Access cached values.
-        virtual void savePointPtr(const GridPoint& gp, string var) {
+        virtual void savePointPtr(const VarPoint& gp, string var) {
             _vecPtrs[gp] = var;
         }
-        virtual string* lookupPointPtr(const GridPoint& gp) {
+        virtual string* lookupPointPtr(const VarPoint& gp) {
             if (_vecPtrs.count(gp))
                 return &_vecPtrs.at(gp);
             return 0;
@@ -232,8 +232,8 @@ namespace yask {
             PrintVisitorBase(os, ph, varMap),
             _cvph(ph) { }
 
-        // A grid access.
-        virtual string visit(GridPoint* gp);
+        // A var access.
+        virtual string visit(VarPoint* gp);
     };
 
     // Outputs the loop-invariant variables for an inner loop.
@@ -248,8 +248,8 @@ namespace yask {
             PrintVisitorBase(os, ph, varMap),
             _cvph(ph) { }
 
-        // A grid access.
-        virtual string visit(GridPoint* gp);
+        // A var access.
+        virtual string visit(VarPoint* gp);
     };
 
     // Print out a stencil in C++ form for YASK.

@@ -47,17 +47,17 @@ int main()
     double coeff[num_points];
 
     //Construct a set of points (-h*radius, -h*(radius-1), .. 0, h,..., h*radius)
-    //Could pass any arbitrary array grid_points = {x_0, x_1, ... x_n}
+    //Could pass any arbitrary array var_points = {x_0, x_1, ... x_n}
 
-    double grid_points[num_points];
-    cout << "Approximating derivative from grid points: " ;
+    double var_points[num_points];
+    cout << "Approximating derivative from var points: " ;
     for(int i=0; i<num_points; i++){
-        grid_points[i] = (-radius + i);
-        cout << grid_points[i]<< ", ";
+        var_points[i] = (-radius + i);
+        cout << var_points[i]<< ", ";
     }
     cout << endl;
 
-    yask::fd_coeff(coeff, eval_point, order, grid_points, num_points);
+    yask::fd_coeff(coeff, eval_point, order, var_points, num_points);
 
     cout << "The coefficients are: ";
     for(int i=0; i<num_points; i++) {
@@ -75,7 +75,7 @@ int main()
     for(int i=0; i<num_points; i++) {
         if (i)
             cout << " + ";
-        cout << coeff[i] << "*f[" << grid_points[i] << "]";
+        cout << coeff[i] << "*f[" << var_points[i] << "]";
     }
     cout << endl;
 

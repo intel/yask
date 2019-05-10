@@ -42,21 +42,21 @@ protected:
   yc_index_node_ptr y = new_domain_index("y"); // spatial dim.
   yc_index_node_ptr z = new_domain_index("z"); // spatial dim.
 
-  // Grid vars.
-  yc_grid_var u = yc_grid_var("u", get_soln(), { t, x, y, z });	// Time-varying 3D wavefield grid.
-  yc_grid_var v = yc_grid_var("v", get_soln(), { t, x, y, z });	// Time-varying 3D wavefield grid.
-  yc_grid_var m = yc_grid_var("m", get_soln(), { x, y, z });	// Square slowness of the model.
-  yc_grid_var damp = yc_grid_var("damp", get_soln(), { x, y, z });	// Boundary damping.
-  yc_grid_var phi = yc_grid_var("phi", get_soln(), { x, y, z });
-  yc_grid_var theta = yc_grid_var("theta", get_soln(), { x, y, z });
-  yc_grid_var delta = yc_grid_var("delta", get_soln(), { x, y, z });
-  yc_grid_var epsilon = yc_grid_var("epsilon", get_soln(), { x, y, z });
+  // Vars.
+  yc_var_proxy u = yc_var_proxy("u", get_soln(), { t, x, y, z });	// Time-varying 3D wavefield var.
+  yc_var_proxy v = yc_var_proxy("v", get_soln(), { t, x, y, z });	// Time-varying 3D wavefield var.
+  yc_var_proxy m = yc_var_proxy("m", get_soln(), { x, y, z });	// Square slowness of the model.
+  yc_var_proxy damp = yc_var_proxy("damp", get_soln(), { x, y, z });	// Boundary damping.
+  yc_var_proxy phi = yc_var_proxy("phi", get_soln(), { x, y, z });
+  yc_var_proxy theta = yc_var_proxy("theta", get_soln(), { x, y, z });
+  yc_var_proxy delta = yc_var_proxy("delta", get_soln(), { x, y, z });
+  yc_var_proxy epsilon = yc_var_proxy("epsilon", get_soln(), { x, y, z });
 
   // Hoisted misc time-invariant data.
-  yc_grid_var ti0 = yc_grid_var("ti0", get_soln(), { x, y, z });
-  yc_grid_var ti1 = yc_grid_var("ti1", get_soln(), { x, y, z });
-  yc_grid_var ti2 = yc_grid_var("ti2", get_soln(), { x, y, z });
-  yc_grid_var ti3 = yc_grid_var("ti3", get_soln(), { x, y, z });
+  yc_var_proxy ti0 = yc_var_proxy("ti0", get_soln(), { x, y, z });
+  yc_var_proxy ti1 = yc_var_proxy("ti1", get_soln(), { x, y, z });
+  yc_var_proxy ti2 = yc_var_proxy("ti2", get_soln(), { x, y, z });
+  yc_var_proxy ti3 = yc_var_proxy("ti3", get_soln(), { x, y, z });
 
 public:
 

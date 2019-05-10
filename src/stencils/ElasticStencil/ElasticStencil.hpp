@@ -82,7 +82,7 @@ protected:
     yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
 
     // 3D-spatial coefficients.
-    yc_grid_var rho = yc_grid_var("rho", get_soln(), { x, y, z });
+    yc_var_proxy rho = yc_var_proxy("rho", get_soln(), { x, y, z });
 
     // Spatial FD coefficients.
     const double c0_8 = 1.2;
@@ -166,7 +166,7 @@ public:
                                      yc_number_node_ptr x,
                                      yc_number_node_ptr y,
                                      yc_number_node_ptr z,
-                                     yc_grid_var &g,
+                                     yc_var_proxy &g,
                                      const int offset )
     {
         return
@@ -184,7 +184,7 @@ public:
                                    yc_number_node_ptr x,
                                    yc_number_node_ptr y,
                                    yc_number_node_ptr z,
-                                   yc_grid_var &g,
+                                   yc_var_proxy &g,
                                    const Z, const B )
     {
         return stencil_O8_Z( t, x, y, z, g, 0 );
@@ -194,7 +194,7 @@ public:
                                    yc_number_node_ptr x,
                                    yc_number_node_ptr y,
                                    yc_number_node_ptr z,
-                                   yc_grid_var &g,
+                                   yc_var_proxy &g,
                                    const Z, const F )
     {
         return stencil_O8_Z( t, x, y, z, g, 1 );
@@ -204,7 +204,7 @@ public:
                                      yc_number_node_ptr x,
                                      yc_number_node_ptr y,
                                      yc_number_node_ptr z,
-                                     yc_grid_var &g,
+                                     yc_var_proxy &g,
                                      const int offset )
     {
         return
@@ -222,7 +222,7 @@ public:
                                    yc_number_node_ptr x,
                                    yc_number_node_ptr y,
                                    yc_number_node_ptr z,
-                                   yc_grid_var &g,
+                                   yc_var_proxy &g,
                                    const Y, const B )
     {
         return stencil_O8_Y( t, x, y, z, g, 0 );
@@ -232,7 +232,7 @@ public:
                                    yc_number_node_ptr x,
                                    yc_number_node_ptr y,
                                    yc_number_node_ptr z,
-                                   yc_grid_var &g,
+                                   yc_var_proxy &g,
                                    const Y, const F )
     {
         return stencil_O8_Y( t, x, y, z, g, 1 );
@@ -242,7 +242,7 @@ public:
                                      yc_number_node_ptr x,
                                      yc_number_node_ptr y,
                                      yc_number_node_ptr z,
-                                     yc_grid_var &g,
+                                     yc_var_proxy &g,
                                      const int offset )
     {
         return
@@ -260,7 +260,7 @@ public:
                                    yc_number_node_ptr x,
                                    yc_number_node_ptr y,
                                    yc_number_node_ptr z,
-                                   yc_grid_var &g,
+                                   yc_var_proxy &g,
                                    const X, const B )
     {
         return stencil_O8_X( t, x, y, z, g, 0 );
@@ -270,7 +270,7 @@ public:
                                    yc_number_node_ptr x,
                                    yc_number_node_ptr y,
                                    yc_number_node_ptr z,
-                                   yc_grid_var &g,
+                                   yc_var_proxy &g,
                                    const X, const F )
     {
         return stencil_O8_X( t, x, y, z, g, 1 );
@@ -282,15 +282,15 @@ public:
                                    yc_number_node_ptr x,
                                    yc_number_node_ptr y,
                                    yc_number_node_ptr z,
-                                   yc_grid_var &g )
+                                   yc_var_proxy &g )
     {
         return stencil_O8( t, x, y, z, g, Dim(), Dir() );
     }
 
-    // Velocity-grid define functions.  For each D in x, y, z, define vel_D
-    // at t+1 based on vel_x at t and stress grids at t.  Note that the t,
-    // x, y, z parameters are integer grid indices, not actual offsets in
-    // time or space, so half-steps due to staggered grids are adjusted
+    // Velocity-var define functions.  For each D in x, y, z, define vel_D
+    // at t+1 based on vel_x at t and stress vars at t.  Note that the t,
+    // x, y, z parameters are integer var indices, not actual offsets in
+    // time or space, so half-steps due to staggered vars are adjusted
     // appropriately.
 
     template<typename N, typename SZ, typename SX, typename SY>
@@ -298,10 +298,10 @@ public:
                     yc_number_node_ptr x,
                     yc_number_node_ptr y,
                     yc_number_node_ptr z,
-                    yc_grid_var &v,
-                    yc_grid_var &sx,
-                    yc_grid_var &sy,
-                    yc_grid_var &sz) {
+                    yc_var_proxy &v,
+                    yc_var_proxy &sx,
+                    yc_var_proxy &sy,
+                    yc_var_proxy &sz) {
 
         auto lrho   = interp_rho<N>( x, y, z );
 
@@ -323,7 +323,7 @@ public:
                                      yc_number_node_ptr x,
                                      yc_number_node_ptr y,
                                      yc_number_node_ptr z,
-                                     yc_grid_var &g,
+                                     yc_var_proxy &g,
                                      const int offset )
     {
         return
@@ -335,7 +335,7 @@ public:
                                      yc_number_node_ptr x,
                                      yc_number_node_ptr y,
                                      yc_number_node_ptr z,
-                                     yc_grid_var &g,
+                                     yc_var_proxy &g,
                                      const B )
     {
         return stencil_O2_Z( t, x, y, z, g,-1 );
@@ -345,7 +345,7 @@ public:
                                      yc_number_node_ptr x,
                                      yc_number_node_ptr y,
                                      yc_number_node_ptr z,
-                                     yc_grid_var &g,
+                                     yc_var_proxy &g,
                                      const F )
     {
         return stencil_O2_Z( t, x, y, z, g, 1 );
@@ -356,7 +356,7 @@ public:
                                      yc_number_node_ptr x,
                                      yc_number_node_ptr y,
                                      yc_number_node_ptr z,
-                                     yc_grid_var &g )
+                                     yc_var_proxy &g )
     {
         return stencil_O2_Z( t, x, y, z, g, D() );
     }
@@ -365,7 +365,7 @@ public:
                                      yc_number_node_ptr x,
                                      yc_number_node_ptr y,
                                      yc_number_node_ptr z,
-                                     yc_grid_var &g,
+                                     yc_var_proxy &g,
                                      const int offset )
     {
         return
@@ -377,7 +377,7 @@ public:
                                      yc_number_node_ptr x,
                                      yc_number_node_ptr y,
                                      yc_number_node_ptr z,
-                                     yc_grid_var &g,
+                                     yc_var_proxy &g,
                                      const B )
     {
         return stencil_O2_Y( t, x, y, z, g,-1 );
@@ -387,7 +387,7 @@ public:
                                      yc_number_node_ptr x,
                                      yc_number_node_ptr y,
                                      yc_number_node_ptr z,
-                                     yc_grid_var &g,
+                                     yc_var_proxy &g,
                                      const F )
     {
         return stencil_O2_Y( t, x, y, z, g, 1 );
@@ -398,7 +398,7 @@ public:
                                      yc_number_node_ptr x,
                                      yc_number_node_ptr y,
                                      yc_number_node_ptr z,
-                                     yc_grid_var &g )
+                                     yc_var_proxy &g )
     {
         return stencil_O2_Y( t, x, y, z, g, D() );
     }
@@ -407,7 +407,7 @@ public:
                                      yc_number_node_ptr x,
                                      yc_number_node_ptr y,
                                      yc_number_node_ptr z,
-                                     yc_grid_var &g,
+                                     yc_var_proxy &g,
                                      const int offset )
     {
         return
@@ -419,7 +419,7 @@ public:
                                      yc_number_node_ptr x,
                                      yc_number_node_ptr y,
                                      yc_number_node_ptr z,
-                                     yc_grid_var &g,
+                                     yc_var_proxy &g,
                                      const B )
     {
         return stencil_O2_X( t, x, y, z, g,-1 );
@@ -429,7 +429,7 @@ public:
                                      yc_number_node_ptr x,
                                      yc_number_node_ptr y,
                                      yc_number_node_ptr z,
-                                     yc_grid_var &g,
+                                     yc_var_proxy &g,
                                      const F )
     {
         return stencil_O2_X( t, x, y, z, g, 1 );
@@ -441,7 +441,7 @@ public:
                                      yc_number_node_ptr x,
                                      yc_number_node_ptr y,
                                      yc_number_node_ptr z,
-                                     yc_grid_var &g )
+                                     yc_var_proxy &g )
     {
         return stencil_O2_X( t, x, y, z, g, D() );
     }

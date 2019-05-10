@@ -24,7 +24,7 @@ IN THE SOFTWARE.
 *****************************************************************************/
 
 // Implement various example symmetric 3D stencil shapes that read and
-// write from only one 3D grid variable.
+// write from only one 3D variable.
 // All these stencils compute the average of the points read a la the
 // heat-dissipation kernels in the miniGhost benchmark.
 
@@ -44,7 +44,7 @@ protected:
     yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
 
     // Vars.
-    yc_grid_var A = yc_grid_var("A", get_soln(), { t, x, y, z }); // time-varying 3D grid.
+    yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y, z }); // time-varying 3D var.
 
     // Add additional points to expression v.
     // Returns number of points added.

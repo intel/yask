@@ -40,18 +40,18 @@ namespace yask {
      * @{
      */
 
-    /// Allocate grids on local NUMA node.
+    /// Allocate vars on local NUMA node.
     /**
        This is used in yk_solution::set_default_numa_preferred
-       and yk_grid::set_numa_preferred.
+       and yk_var::set_numa_preferred.
        In Python, specify as `yask_kernel.cvar.yask_numa_local`.
     */
     const int yask_numa_local = -1;
 
-    /// Allocate grids across all available NUMA nodes.
+    /// Allocate vars across all available NUMA nodes.
     /**
        This is used in yk_solution::set_default_numa_preferred
-       and yk_grid::set_numa_preferred.
+       and yk_var::set_numa_preferred.
        In Python, specify as `yask_kernel.cvar.yask_numa_interleave`.
     */
     const int yask_numa_interleave = -2;
@@ -59,14 +59,14 @@ namespace yask {
     /// Do not specify any NUMA binding.
     /**
        This is used in yk_solution::set_default_numa_preferred
-       and yk_grid::set_numa_preferred.
+       and yk_var::set_numa_preferred.
        In Python, specify as `yask_kernel.cvar.yask_numa_none`.
     */
     const int yask_numa_none = -9;
 
     /// Stencil solution as defined by the generated code from the YASK stencil compiler.
     /**
-       Objects of this type contain all the grids and equations
+       Objects of this type contain all the vars and equations
        that comprise a solution.
     */
     class yk_solution {
@@ -97,7 +97,7 @@ namespace yask {
         /**
            @returns String containing the step-dimension name
            that was defined by yc_node_factory::new_step_index()
-           and used in one or more grids.
+           and used in one or more vars.
         */
         virtual std::string
         get_step_dim_name() const =0;
@@ -116,7 +116,7 @@ namespace yask {
         /**
            @returns List of all domain-dimension names
            that were defined by yc_node_factory::new_domain_index()
-           and used in one or more grids.
+           and used in one or more vars.
         */
         virtual std::vector<std::string>
         get_domain_dim_names() const =0;
@@ -126,9 +126,9 @@ namespace yask {
            @returns List of all dimension names
            that were either
            * Defined by yc_node_factory::new_misc_index()
-           and used in one or more grids, or
+           and used in one or more vars, or
            * Created at run-time by adding a new dimension
-           via yk_solution::new_grid() or yk_solution::new_fixed_size_grid().
+           via yk_solution::new_var() or yk_solution::new_fixed_size_var().
         */
         virtual std::vector<std::string>
         get_misc_dim_names() const =0;
@@ -155,9 +155,7 @@ namespace yask {
            Setting the local-domain size to a non-zero value will clear the
            global-domain size in that dimension until prepare_solution() is called.
 
-           See the "Detailed Description" for \ref yk_grid for more information on grid sizes.
-           There is no domain-size setting allowed in the
-           solution-step dimension (e.g., "t").
+           See the "Detailed Description" for \ref yk_var for more information on var sizes.
         */
         virtual void
         set_rank_domain_size(const std::string& dim
@@ -190,9 +188,7 @@ namespace yask {
            local-domain size in that dimension until prepare_solution() is called.
 
            See documentation for set_rank_domain_size().
-           See the "Detailed Description" for \ref yk_grid for more information on grid sizes.
-           There is no domain-size setting allowed in the
-           solution-step dimension (e.g., "t").
+           See the "Detailed Description" for \ref yk_var for more information on var sizes.
         */
         virtual void
         set_overall_domain_size(const std::string& dim
@@ -340,35 +336,36 @@ namespace yask {
                          the names from get_domain_dim_names(). */ ) const =0;
 
 
-        /// Get the number of grids in the solution.
+        /// Get the number of vars in the solution.
         /**
-           Grids may be pre-defined by the stencil compiler
-           (e.g., via yc_solution::new_grid())
-           or created explicitly via yk_solution::new_grid()
-           or yk_solution::new_fixed_size_grid().
-           @returns Number of grids that have been created.
+           Vars may be pre-defined by the stencil compiler
+           (e.g., via yc_solution::new_var())
+           or created explicitly via yk_solution::new_var()
+           or yk_solution::new_fixed_size_var().
+           @returns Number of YASK vars that have been created.
         */
         virtual int
-        get_num_grids() const =0;
+        get_num_vars() const =0;
 
-        /// Get the specified grid.
+        /// Get the specified var.
         /**
-           This cannot be used to access scratch grids.
-           @returns Pointer to the specified grid or null pointer if it does not exist.
+           This cannot be used to access scratch vars.
+           @returns Pointer to the specified var or null pointer if it does not exist.
         */
-        virtual yk_grid_ptr
-        get_grid(const std::string& name /**< [in] Name of the grid. */ ) =0;
+        virtual yk_var_ptr
+        get_var(const std::string& name
+                /**< [in] Name of the var. */ ) =0;
 
-        /// Get all the grids.
+        /// Get all the vars.
         /**
-           @returns List of all non-scratch grids in the solution.
+           @returns List of all non-scratch vars in the solution.
         */
-        virtual std::vector<yk_grid_ptr>
-        get_grids() =0;
+        virtual std::vector<yk_var_ptr>
+        get_vars() =0;
 
         /// Prepare the solution for stencil application.
         /**
-           Allocates data in grids that do not already have storage allocated.
+           Allocates data in vars that do not already have storage allocated.
            Calculates the position of each rank in the overall problem domain.
            Sets many other data structures needed for proper stencil application.
            Since this function initiates MPI communication, it must be called
@@ -417,7 +414,7 @@ namespace yask {
 
         /// Run the stencil solution for the specified steps.
         /**
-           The stencil(s) in the solution are applied to the grid data, setting the
+           The stencil(s) in the solution are applied to the var data, setting the
            index variables as follows:
            1. If temporal wave-front tiling is *not* used (the default):
             - The step index (e.g., `t` for "time") will be sequentially set to values
@@ -483,7 +480,7 @@ namespace yask {
         /// Finish using a solution.
         /**
            Performs a final MPI halo exchange.
-           Releases shared ownership of memory used by the grids.  This will
+           Releases shared ownership of memory used by the vars.  This will
            result in deallocating each memory block that is not
            referenced by another shared pointer.
         */
@@ -558,9 +555,9 @@ namespace yask {
                            the names from get_step_dim_name() or
                            get_domain_dim_names(). */) const =0;
 
-        /// **[Advanced]** Set the minimum amount of grid padding for all grids.
+        /// **[Advanced]** Set the minimum amount of padding for all vars.
         /**
-           This sets the minimum number of elements in each grid that is
+           This sets the minimum number of elements in each var that is
            reserved outside of the rank domain in the given dimension.
            This padding area can be used for required halo areas.  At
            least the specified number of elements will be added to both
@@ -573,15 +570,15 @@ namespace yask {
            - Value provided by any of the pad-size setting functions.
 
            The padding size cannot be changed after data storage
-           has been allocated for a given grid; attempted changes to the pad size for such
-           grids will be ignored.
-           In addition, once a grid's padding is set, it cannot be reduced, only increased.
+           has been allocated for a given var; attempted changes to the pad size for such
+           vars will be ignored.
+           In addition, once a var's padding is set, it cannot be reduced, only increased.
 
-           Use yk_grid::set_left_min_pad_size and yk_grid::set_right_min_pad_size()
-           for specific setting of each grid.
-           Call yk_grid::get_left_pad_size() and yk_grid::get_right_pad_size()
-           to determine the actual padding sizes for a given grid.
-           See the "Detailed Description" for \ref yk_grid for more information on grid sizes.
+           Use yk_var::set_left_min_pad_size and yk_var::set_right_min_pad_size()
+           for specific setting of each var.
+           Call yk_var::get_left_pad_size() and yk_var::get_right_pad_size()
+           to determine the actual padding sizes for a given var.
+           See the "Detailed Description" for \ref yk_var for more information on var sizes.
            Padding is only allowed in the domain dimensions.
         */
         virtual void
@@ -592,9 +589,9 @@ namespace yask {
                          /**< [in] Elements in this `dim` applied
                             to both sides of the domain. */ ) =0;
 
-        /// **[Advanced]** Get the minimum amount of grid padding for all grids.
+        /// **[Advanced]** Get the minimum amount of padding for all vars.
         /**
-           @returns Current setting of minimum amount of grid padding for all grids.
+           @returns Current setting of minimum amount of padding for all vars.
         */
         virtual idx_t
         get_min_pad_size(const std::string& dim
@@ -634,10 +631,10 @@ namespace yask {
            for a given number of steps after the best settings are found.
            This function should be called only *after* calling prepare_solution().
            This call must be made on each rank.
-           @warning Modifies the contents of the grids by calling run_solution()
+           @warning Modifies the contents of the vars by calling run_solution()
            an arbitrary number of times, but without halo exchange.
            (See run_solution() for other restrictions and warnings.)
-           Thus, grid data should be set *after* calling this function when
+           Thus, var data should be set *after* calling this function when
            used in a production or test setting where correct results are expected.
         */
         virtual void
@@ -645,158 +642,158 @@ namespace yask {
                            /**< [in] If _true_, print progress information to the debug object
                               set via set_debug_output(). */ ) =0;
 
-        /// **[Advanced]** Add a new grid to the solution.
+        /// **[Advanced]** Add a new var to the solution.
         /**
-           This is typically not needed because grids used by the stencils are pre-defined
+           This is typically not needed because vars used by the stencils are pre-defined
            by the solution itself via the stencil compiler.
-           However, a grid may be created explicitly via this function
+           However, a var may be created explicitly via this function
            in order to use it for purposes other than by the
            pre-defined stencils within the current solution.
 
-           Grids created by this function will behave [mostly] like a pre-defined grid.
+           Vars created by this function will behave [mostly] like a pre-defined var.
            For example,
            - Step and domain dimensions must the same as those defined by
            yc_node_factory::new_step_index() and yc_node_factory::new_domain_index(),
            respectively.
-           - For each domain dimension of the grid,
-           the new grid's domain size will be the same as that returned by
+           - For each domain dimension of the var,
+           the new var's domain size will be the same as that returned by
            get_rank_domain_size().
            - Calls to set_rank_domain_size() will automatically resize the corresponding domain
-           size in this grid.
-           - This grid's first domain index in this rank will be determined
+           size in this var.
+           - This var's first domain index in this rank will be determined
            by the position of this rank.
-           - This grid's initial padding size will be the same as that returned by
+           - This var's initial padding size will be the same as that returned by
            get_min_pad_size().
-           - After creating a new grid, you can increase its padding
-           sizes in the domain dimensions via yk_grid::set_min_pad_size(),
+           - After creating a new var, you can increase its padding
+           sizes in the domain dimensions via yk_var::set_min_pad_size(),
            yk_solution::set_min_pad_size(), etc.
            - For step and misc dimensions, you can change the desired size
-           yk_grid::set_alloc_size().
-           - Storage may be allocated via yk_grid::alloc_storage() or
+           yk_var::set_alloc_size().
+           - Storage may be allocated via yk_var::alloc_storage() or
            yk_solution::prepare_solution().
 
-           Some behaviors are different from pre-defined grids. For example,
-           - You can create new "misc" dimensions during grid creation simply
+           Some behaviors are different from pre-defined vars. For example,
+           - You can create new "misc" dimensions during var creation simply
            by naming them in the `dims` argument. Any dimension name that is
            not a step or domain dimension will become a misc dimension,
            whether or not it was defined via yc_node_factory::new_misc_index().
-           - Grids created via new_grid() cannot be direct inputs or outputs of
-           stencil equations. However, data in a grid created via new_grid()
-           can be merged with a pre-defined grid via yk_grid::fuse_grids()
-           if the grids are compatible.
+           - Vars created via new_var() cannot be direct inputs or outputs of
+           stencil equations. However, data in a var created via new_var()
+           can be merged with a pre-defined var via yk_var::fuse_vars()
+           if the vars are compatible.
 
-           If you want a grid that is not automatically resized based on the
-           solution settings, use new_fixed_size_grid() instead.
+           If you want a var that is not automatically resized based on the
+           solution settings, use new_fixed_size_var() instead.
 
-           @note A new grid contains only the meta-data for the grid; data storage
+           @note A new var contains only the meta-data for the var; data storage
            is not yet allocated.
            Storage may be allocated in any of the methods listed
-           in the "Detailed Description" for \ref yk_grid.
-           @returns Pointer to the new grid.
+           in the "Detailed Description" for \ref yk_var.
+           @returns Pointer to the new var.
         */
-        virtual yk_grid_ptr
-        new_grid(const std::string& name
-                 /**< [in] Name of the grid; must be unique
+        virtual yk_var_ptr
+        new_var(const std::string& name
+                 /**< [in] Name of the var; must be unique
                     within the solution. */,
                  const std::vector<std::string>& dims
                  /**< [in] List of names of all dimensions.
                     Names must be valid C++ identifiers and
-                    not repeated within this grid. */ ) =0;
+                    not repeated within this var. */ ) =0;
 
 #ifndef SWIG
-        /// **[Advanced]** Add a new grid to the solution.
+        /// **[Advanced]** Add a new var to the solution.
         /**
-           See documentation for the version of new_grid() with a vector of dimension names
+           See documentation for the version of new_var() with a vector of dimension names
            as a parameter.
            @note This version is not available (or needed) in the Python API.
-           @returns Pointer to the new grid.
+           @returns Pointer to the new var.
         */
-        virtual yk_grid_ptr
-        new_grid(const std::string& name
-                 /**< [in] Name of the grid; must be unique
+        virtual yk_var_ptr
+        new_var(const std::string& name
+                 /**< [in] Name of the var; must be unique
                     within the solution. */,
                  const std::initializer_list<std::string>& dims
                  /**< [in] List of names of all dimensions.
                     Names must be valid C++ identifiers and
-                    not repeated within this grid. */ ) =0;
+                    not repeated within this var. */ ) =0;
 #endif
 
-        /// **[Advanced]** Add a new grid to the solution with a specified size.
+        /// **[Advanced]** Add a new var to the solution with a specified size.
         /**
-           This is typically not needed because grids used by the stencils are pre-defined
+           This is typically not needed because vars used by the stencils are pre-defined
            by the solution itself via the stencil compiler.
-           However, a grid may be created explicitly via this function
+           However, a var may be created explicitly via this function
            in order to use it for purposes other than by the
            pre-defined stencils within the current solution.
 
-           The following behaviors are different from both pre-defined grids
-           and those created via new_grid():
+           The following behaviors are different from both pre-defined vars
+           and those created via new_var():
            - Calls to set_rank_domain_size() will *not* automatically resize
-           the corresponding local-domain size in this grid--this is where the term "fixed" applies.
-           - In contrast, for each domain dimension of the grid,
-           the new grid's local-domain size can be changed independently of the domain
+           the corresponding local-domain size in this var--this is where the term "fixed" applies.
+           - In contrast, for each domain dimension of the var,
+           the new var's local-domain size can be changed independently of the domain
            size of the solution.
-           - This grid's first domain index in this rank will be fixed at zero (0)
+           - This var's first domain index in this rank will be fixed at zero (0)
            in each domain dimension regardless of this rank's position.
-           In other words, this grid does not participate in "domain decomposition".
-           - This grid's padding size will be affected only by calls to
-           yk_grid::set_min_pad_size(), etc., i.e., *not* via
+           In other words, this var does not participate in "domain decomposition".
+           - This var's padding size will be affected only by calls to
+           yk_var::set_min_pad_size(), etc., i.e., *not* via
            yk_solution::set_min_pad_size().
 
-           The following behaviors are the same as those of a pre-defined grid
-           and those created via new_grid():
+           The following behaviors are the same as those of a pre-defined var
+           and those created via new_var():
            - For step and misc dimensions, you can change the desired size
-           yk_grid::set_alloc_size().
-           - Storage may be allocated via yk_grid::alloc_storage() or
+           yk_var::set_alloc_size().
+           - Storage may be allocated via yk_var::alloc_storage() or
            yk_solution::prepare_solution().
 
-           See yk_grid::set_alloc_size().
+           See yk_var::set_alloc_size().
 
-           The following behaviors are different than a pre-defined grid
-           but the same as those created via new_grid():
-           - You can create new "misc" dimensions during grid creation simply
+           The following behaviors are different than a pre-defined var
+           but the same as those created via new_var():
+           - You can create new "misc" dimensions during var creation simply
            by naming them in the `dims` argument. Any dimension name that is
            not a step or domain dimension will become a misc dimension,
            whether or not it was defined via yc_node_factory::new_misc_index().
-           - Grids created via new_fixed_size_grid() cannot be direct inputs or outputs of
-           stencil equations. However, data in a grid created via new_fixed_size_grid()
-           can be shared with a pre-defined grid via yk_grid::fuse_grids()
-           if the grids are compatible.
+           - Vars created via new_fixed_size_var() cannot be direct inputs or outputs of
+           stencil equations. However, data in a var created via new_fixed_size_var()
+           can be shared with a pre-defined var via yk_var::fuse_vars()
+           if the vars are compatible.
 
-           @note A new grid contains only the meta-data for the grid; data storage
+           @note A new var contains only the meta-data for the var; data storage
            is not yet allocated.
            Storage may be allocated in any of the methods listed
-           in the "Detailed Description" for \ref yk_grid.
-           @returns Pointer to the new grid.
+           in the "Detailed Description" for \ref yk_var.
+           @returns Pointer to the new var.
         */
-        virtual yk_grid_ptr
-        new_fixed_size_grid(const std::string& name
-                       /**< [in] Name of the grid; must be unique
+        virtual yk_var_ptr
+        new_fixed_size_var(const std::string& name
+                       /**< [in] Name of the var; must be unique
                           within the solution. */,
                        const std::vector<std::string>& dims
                        /**< [in] List of names of all dimensions.
                           Names must be valid C++ identifiers and
-                          not repeated within this grid. */,
+                          not repeated within this var. */,
                        const std::vector<idx_t>& dim_sizes
                        /**< [in] Initial allocation in each dimension.
                           Must be exatly one size for each dimension. */ ) =0;
 
 #ifndef SWIG
-        /// **[Advanced]** Add a new grid to the solution with a specified size.
+        /// **[Advanced]** Add a new var to the solution with a specified size.
         /**
-           See documentation for the version of new_fixed_size_grid() with a vector of dimension names
+           See documentation for the version of new_fixed_size_var() with a vector of dimension names
            as a parameter.
            @note This version is not available (or needed) in the Python API.
-           @returns Pointer to the new grid.
+           @returns Pointer to the new var.
         */
-        virtual yk_grid_ptr
-        new_fixed_size_grid(const std::string& name
-                       /**< [in] Name of the grid; must be unique
+        virtual yk_var_ptr
+        new_fixed_size_var(const std::string& name
+                       /**< [in] Name of the var; must be unique
                           within the solution. */,
                        const std::initializer_list<std::string>& dims
                        /**< [in] List of names of all dimensions.
                           Names must be valid C++ identifiers and
-                          not repeated within this grid. */,
+                          not repeated within this var. */,
                        const std::initializer_list<idx_t>& dim_sizes
                        /**< [in] Initial allocation in each dimension.
                           Must be exatly one size for each dimension. */ ) =0;
@@ -804,13 +801,13 @@ namespace yask {
 
         /// **[Advanced]** Set the default preferred NUMA node on which to allocate data.
         /**
-           This value is used when allocating grids and MPI buffers.
+           This value is used when allocating vars and MPI buffers.
            The NUMA "preferred node allocation" policy is used, meaning that
            memory will be allocated in an alternative node if the preferred one
            doesn't have enough space available or is otherwise restricted.
            Instead of specifying a NUMA node, a special value may be used
            to specify another policy as listed.
-           This setting may be overridden for any specific grid.
+           This setting may be overridden for any specific var.
            @returns `true` if NUMA preference was set;
            `false` if NUMA preferences are not enabled.
         */
@@ -849,15 +846,15 @@ namespace yask {
         apply_command_line_options(const std::string& args
                                    /**< [in] String of arguments to parse. */ ) =0;
 
-        /// **[Advanced]** Merge grid variables with another solution.
+        /// **[Advanced]** Merge YASK variables with another solution.
         /**
-           Calls yk_grid::fuse_grids() for each pair of grids that have the same name
+           Calls yk_var::fuse_vars() for each pair of vars that have the same name
            in this solution and the source solution.
-           All conditions listed in yk_grid::fuse_grids() must hold for each pair.
+           All conditions listed in yk_var::fuse_vars() must hold for each pair.
         */
         virtual void
-        fuse_grids(yk_solution_ptr source
-                   /**< [in] Solution from which grids will be merged. */) =0;
+        fuse_vars(yk_solution_ptr source
+                   /**< [in] Solution from which vars will be merged. */) =0;
 
         /// **[Advanced]** Set whether invalid step indices alias to valid ones.
         virtual void
@@ -870,6 +867,64 @@ namespace yask {
         */
         virtual bool
         get_step_wrap() const =0;
+
+        /// **[Deprecated]** Use get_num_vars().
+        virtual int
+        get_num_grids() const {
+            return get_num_vars();
+        }
+
+        /// **[Deprecated]** Use get_var().
+        virtual yk_var_ptr
+        get_grid(const std::string& name) {
+            return get_var(name);
+        }
+                
+        /// **[Deprecated]** Use get_vars().
+        virtual std::vector<yk_var_ptr>
+        get_grids() {
+            return get_vars();
+        }
+
+        /// **[Deprecated]** Use new_var().
+        virtual yk_var_ptr
+        new_grid(const std::string& name,
+                 const std::vector<std::string>& dims) {
+            return new_var(name, dims);
+        }
+
+#ifndef SWIG
+        /// **[Deprecated]** Use new_var().
+        virtual yk_var_ptr
+        new_grid(const std::string& name,
+                 const std::initializer_list<std::string>& dims) {
+            return new_var(name, dims);
+        }
+#endif
+
+        /// **[Deprecated]** Use new_fixed_size_var().
+        virtual yk_var_ptr
+        new_fixed_size_grid(const std::string& name,
+                            const std::vector<std::string>& dims,
+                            const std::vector<idx_t>& dim_sizes) {
+            return new_fixed_size_var(name, dims, dim_sizes);
+        }
+
+#ifndef SWIG
+        /// **[Deprecated]** Use new_fixed_size_var().
+        virtual yk_var_ptr
+        new_fixed_size_grid(const std::string& name,
+                            const std::initializer_list<std::string>& dims,
+                            const std::vector<idx_t>& dim_sizes) {
+            return new_fixed_size_var(name, dims, dim_sizes);
+        }
+#endif
+        
+        /// **[Deprecated]** Use fuse_vars().
+        virtual void
+        fuse_grids(yk_solution_ptr source) {
+            fuse_vars(source);
+        }
     };
 
     /// Statistics from calls to run_solution().
@@ -902,7 +957,7 @@ namespace yask {
 
         /// Get the number of elements written across all steps.
         /**
-           @returns Number of elements written, summed over all output grids,
+           @returns Number of elements written, summed over all output vars,
            steps executed, and ranks.
         */
         virtual idx_t

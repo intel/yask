@@ -102,7 +102,7 @@ namespace yask {
            command-line, this function in the named solution will be called.
 
            This function must be implemented by each concrete stencil solution to
-           add grids and grid-value equations as needed to define the stencil.
+           add vars and equations as needed to define the stencil.
            In general, any YASK compiler API functions may be called from this
            function.
 

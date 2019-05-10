@@ -199,6 +199,8 @@ sub getResultsFromLine($$) {
   # Substitutions to handle old formats.
   $line =~ s/overall.problem/global-domain/g;
   $line =~ s/rank.domain/local-domain/g;
+  $line =~ s/grid/var/g;
+  $line =~ s/Grid/Var/g;
   
   # special cases for manual parsing...
   # TODO: catch output of auto-tuner and update relevant results.

@@ -69,7 +69,7 @@ namespace yask {
                                    size_t nelemsTarget,
                                    const VecElemList& elems,
                                    set<size_t>& doneElems,
-                                   const GridPointSet& alignedVecs) =0;
+                                   const VarPointSet& alignedVecs) =0;
 
         // Try to use align instruction(s) to construct nelemsTarget elements
         // per instruction.
@@ -78,7 +78,7 @@ namespace yask {
                               size_t nelemsTarget,
                               const VecElemList& elems,
                               set<size_t>& doneElems,
-                              const GridPointSet& alignedVecs,
+                              const VarPointSet& alignedVecs,
                               bool maskAllowed);
 
         // Try to use 1-var permute instruction(s) to construct nelemsTarget elements
@@ -88,7 +88,7 @@ namespace yask {
                               size_t nelemsTarget,
                               const VecElemList& elems,
                               set<size_t>& doneElems,
-                              const GridPointSet& alignedVecs);
+                              const VarPointSet& alignedVecs);
 
         // Try to use 2-var permute instruction(s) to construct nelemsTarget elements
         // per instruction.
@@ -97,12 +97,12 @@ namespace yask {
                               size_t nelemsTarget,
                               const VecElemList& elems,
                               set<size_t>& doneElems,
-                              const GridPointSet& alignedVecs);
+                              const VarPointSet& alignedVecs);
 
     public:
         // Print construction for one unaligned vector pvName at gp.
         virtual void printUnalignedVecCtor(ostream& os,
-                                           const GridPoint& gp,
+                                           const VarPoint& gp,
                                            const string& pvName);
 
     };
@@ -117,7 +117,7 @@ namespace yask {
                                    size_t nelemsTarget,
                                    const VecElemList& elems,
                                    set<size_t>& doneElems,
-                                   const GridPointSet& alignedVecs) {
+                                   const VarPointSet& alignedVecs) {
             tryAlign(os, pvName, nelemsTarget, elems, doneElems, alignedVecs, true);
             tryPerm1(os, pvName, nelemsTarget, elems, doneElems, alignedVecs);
         }
@@ -145,7 +145,7 @@ namespace yask {
                                    size_t nelemsTarget,
                                    const VecElemList& elems,
                                    set<size_t>& doneElems,
-                                   const GridPointSet& alignedVecs) {
+                                   const VarPointSet& alignedVecs) {
             tryAlign(os, pvName, nelemsTarget, elems, doneElems, alignedVecs, true);
             tryPerm2(os, pvName, nelemsTarget, elems, doneElems, alignedVecs);
             tryPerm1(os, pvName, nelemsTarget, elems, doneElems, alignedVecs);
@@ -174,7 +174,7 @@ namespace yask {
                                    size_t nelemsTarget,
                                    const VecElemList& elems,
                                    set<size_t>& doneElems,
-                                   const GridPointSet& alignedVecs) {
+                                   const VarPointSet& alignedVecs) {
             tryAlign(os, pvName, nelemsTarget, elems, doneElems, alignedVecs, false);
         }
 

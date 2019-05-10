@@ -57,9 +57,9 @@ namespace yask {
     /// Shared pointer to \ref yk_solution.
     typedef std::shared_ptr<yk_solution> yk_solution_ptr;
 
-    class yk_grid;
-    /// Shared pointer to \ref yk_grid.
-    typedef std::shared_ptr<yk_grid> yk_grid_ptr;
+    class yk_var;
+    /// Shared pointer to \ref yk_var.
+    typedef std::shared_ptr<yk_var> yk_var_ptr;
 
     class yk_stats;
     /// Shared pointer to \ref yk_stats.
@@ -69,7 +69,7 @@ namespace yask {
 } // namespace yask.
 
 #include "aux/yk_solution_api.hpp"
-#include "aux/yk_grid_api.hpp"
+#include "aux/yk_var_api.hpp"
 
 namespace yask {
 
@@ -138,7 +138,7 @@ namespace yask {
 
         /// Create a stencil solution.
         /**
-           A stencil solution contains all the grids and equations
+           A stencil solution contains all the vars and equations
            that were created during stencil compilation.
            @returns Pointer to new solution object.
         */
@@ -149,8 +149,8 @@ namespace yask {
         /**
            All the settings that were specified via the `yk_solution::set_*()`
            functions in the source solution will be copied to the new solution.
-           This does *not* copy any grids, grid settings, or grid data;
-           see yk_solution::share_grid_storage().
+           This does *not* copy any vars, var settings, or var data;
+           see yk_solution::fuse_vars().
            @returns Pointer to new solution object.
         */
         virtual yk_solution_ptr
@@ -186,5 +186,11 @@ namespace yask {
         global_barrier() const =0;
     };
 
+    /// **[Deprecated]** Use yk_var.
+    typedef yk_var yk_grid;
+    /// **[Deprecated]** Use yk_var_ptr.
+    typedef yk_var_ptr yk_grid_ptr;
+
     /** @}*/
+
 } // namespace yask.

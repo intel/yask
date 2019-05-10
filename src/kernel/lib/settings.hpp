@@ -29,15 +29,15 @@ namespace yask {
 
     // Forward defns.
     class StencilContext;
-    class YkGridBase;
-    class YkGridImpl;
+    class YkVarBase;
+    class YkVarImpl;
 
-    // Some derivations from grid types.
-    typedef std::shared_ptr<YkGridImpl> YkGridPtr;
-    typedef std::set<YkGridPtr> GridPtrSet;
-    typedef std::vector<YkGridPtr> GridPtrs;
-    typedef std::map<std::string, YkGridPtr> GridPtrMap;
-    typedef std::vector<GridPtrs*> ScratchVecs;
+    // Some derivations from var types.
+    typedef std::shared_ptr<YkVarImpl> YkVarPtr;
+    typedef std::set<YkVarPtr> VarPtrSet;
+    typedef std::vector<YkVarPtr> VarPtrs;
+    typedef std::map<std::string, YkVarPtr> VarPtrMap;
+    typedef std::vector<VarPtrs*> ScratchVecs;
 
     // Environmental settings.
     class KernelEnv :
@@ -233,7 +233,7 @@ namespace yask {
         int num_block_threads = 1; // Number of threads to use for a block.
         bool bind_block_threads = false; // Bind block threads to indices.
 
-        // Grid behavior.
+        // Var behavior.
         bool _step_wrap = false; // Allow invalid step indices to alias to valid ones.
         
         // Stencil-dim posn in which to apply block-thread binding.
@@ -404,7 +404,7 @@ namespace yask {
     };
     typedef std::shared_ptr<MPIInfo> MPIInfoPtr;
 
-    // MPI data for one buffer for one neighbor of one grid.
+    // MPI data for one buffer for one neighbor of one var.
     class MPIBuf {
         
         // Ptr to read/write lock when buffer is in shared mem.
@@ -419,11 +419,11 @@ namespace yask {
         std::shared_ptr<char> _base;
         real_t* _elems = 0;
 
-        // Range to copy to/from grid.
-        // NB: step index not set properly for grids with step dim.
+        // Range to copy to/from var.
+        // NB: step index not set properly for vars with step dim.
         IdxTuple begin_pt, last_pt;
 
-        // Number of points to copy to/from grid in each dim.
+        // Number of points to copy to/from var in each dim.
         IdxTuple num_pts;
 
         // Whether the number of points is a multiple of the
@@ -501,7 +501,7 @@ namespace yask {
         }
     };
 
-    // MPI data for both buffers for one neighbor of one grid.
+    // MPI data for both buffers for one neighbor of one var.
     struct MPIBufs {
 
         // Need one buf for send and one for receive for each neighbor.
@@ -516,7 +516,7 @@ namespace yask {
         }
     };
 
-    // MPI data for one grid.
+    // MPI data for one var.
     // Contains a send and receive buffer for each neighbor
     // and some meta-data.
     struct MPIData {

@@ -29,26 +29,26 @@ IN THE SOFTWARE.
 
 namespace yask {
 
-    // Determine vectorizability information about this grid point.
-    // Called when a grid point is read in a stencil function.
-    string VecInfoVisitor::visit(GridPoint* gp) {
+    // Determine vectorizability information about this var point.
+    // Called when a var point is read in a stencil function.
+    string VecInfoVisitor::visit(VarPoint* gp) {
 
-        // Nothing to do if this grid-point is not vectorizable.
-        if (gp->getVecType() == GridPoint::VEC_NONE) {
+        // Nothing to do if this var-point is not vectorizable.
+        if (gp->getVecType() == VarPoint::VEC_NONE) {
 #ifdef DEBUG_VV
             cout << " //** cannot vectorize scalar-access " << gp->makeQuotedStr() << endl;
 #endif
             _scalarPoints.insert(*gp);
             return "";
         }
-        else if (gp->getVecType() == GridPoint::VEC_PARTIAL) {
+        else if (gp->getVecType() == VarPoint::VEC_PARTIAL) {
 #ifdef DEBUG_VV
             cout << " //** cannot vectorize non-standard-access " << gp->makeQuotedStr() << endl;
 #endif
             _nonVecPoints.insert(*gp);
             return "";
         }
-        assert(gp->getVecType() == GridPoint::VEC_FULL);
+        assert(gp->getVecType() == VarPoint::VEC_FULL);
 
         // Already seen this point?
         if (_vecPoints.count(*gp) > 0) {
@@ -68,11 +68,11 @@ namespace yask {
         _dims._fold.visitAllPoints([&](const IntTuple& vecPoint,
                                        size_t pelem){
 
-                // Final offset in each dim is offset of grid point plus
+                // Final offset in each dim is offset of var point plus
                 // fold offset.
-                // This works because we know this grid point is accessed
+                // This works because we know this var point is accessed
                 // only by simple offsets in each foldable dim.
-                // Note: there may be more or fewer dims in vecPoint than in grid point.
+                // Note: there may be more or fewer dims in vecPoint than in var point.
                 auto offsets = gp->getArgOffsets().addElements(vecPoint, false);
 
                 // Find aligned vector indices and offsets
@@ -99,7 +99,7 @@ namespace yask {
 #endif
 
                 // Create aligned vector block that contains this point.
-                GridPoint alignedVec = *gp;  // copy original.
+                VarPoint alignedVec = *gp;  // copy original.
                 alignedVec.setArgOffsets(vecLocation);
 
                 // Find linear offset within this aligned vector block.
@@ -130,10 +130,10 @@ namespace yask {
         return "";
     }                   // end of visit() method.
 
-    // Return code containing a vector of grid points, e.g., code fragment
+    // Return code containing a vector of var points, e.g., code fragment
     // or var name.  Optionally print memory reads and/or constructions to
     // 'os' as needed.
-    string VecPrintHelper::readFromPoint(ostream& os, const GridPoint& gp) {
+    string VecPrintHelper::readFromPoint(ostream& os, const VarPoint& gp) {
 
         string codeStr;
 
@@ -142,7 +142,7 @@ namespace yask {
             codeStr = _vecVars[gp]; // do nothing.
 
         // Scalar GP?
-        else if (gp.getVecType() == GridPoint::VEC_NONE) {
+        else if (gp.getVecType() == VarPoint::VEC_NONE) {
 #ifdef DEBUG_GP
             cout << " //** reading from point " << gp.makeStr() << " as scalar.\n";
 #endif
@@ -150,7 +150,7 @@ namespace yask {
         }
 
         // Non-scalar but non-vectorizable GP?
-        else if (gp.getVecType() == GridPoint::VEC_PARTIAL) {
+        else if (gp.getVecType() == VarPoint::VEC_PARTIAL) {
 #ifdef DEBUG_GP
             cout << " //** reading from point " << gp.makeStr() << " as partially vectorized.\n";
 #endif
@@ -203,9 +203,9 @@ namespace yask {
     }
 
     // Print any immediate memory writes to 'os'.
-    // Return code to update a vector of grid points or null string
+    // Return code to update a vector of var points or null string
     // if all writes were printed.
-    string VecPrintHelper::writeToPoint(ostream& os, const GridPoint& gp, const string& val) {
+    string VecPrintHelper::writeToPoint(ostream& os, const VarPoint& gp, const string& val) {
 
         // NB: currently, all eqs must be vectorizable on LHS,
         // so we only need to handle vectorized writes.
@@ -226,9 +226,9 @@ namespace yask {
         // Repeat until done.
         // TODO: make more efficient--this is O(n^2), so it blows up
         // when there are long exprs with many reads.
-        // TODO: sort based on all reused exprs, not just grid reads.
+        // TODO: sort based on all reused exprs, not just var reads.
 
-        GridPointSet alignedVecs; // aligned vecs needed so far.
+        VarPointSet alignedVecs; // aligned vecs needed so far.
         set<size_t> usedExprs; // expressions used.
         for (size_t i = 0; i < oev.size(); i++) {
 
@@ -239,7 +239,7 @@ namespace yask {
             // Scan unused exprs.
             size_t jBest = 0;
             size_t jBestCost = size_t(-1);
-            GridPointSet jBestAlignedVecs;
+            VarPointSet jBestAlignedVecs;
             for (size_t j = 0; j < oev.size(); j++) {
                 if (usedExprs.count(j) == 0) {
 
@@ -305,8 +305,8 @@ namespace yask {
         string separator(",");
         VecInfoVisitor::printStatsHeader(cout, separator);
 
-        // Loop through all grids.
-        for (auto gp : grids) {
+        // Loop through all vars.
+        for (auto gp : vars) {
 
             // Loop through possible folds of given length.
             for (int xlen = vlenForStats; xlen > 0; xlen--) {

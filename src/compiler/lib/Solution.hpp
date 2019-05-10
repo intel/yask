@@ -63,7 +63,7 @@ namespace yask {
         ostream* _dos = &std::cout; // just a handy pointer to an ostream.
 
         // All vars accessible by the kernel.
-        Grids _grids;
+        Vars _vars;
 
         // All equations defined in this solution.
         Eqs _eqs;
@@ -103,7 +103,7 @@ namespace yask {
         }
 
         // Simple accessors.
-        virtual Grids& getGrids() { return _grids; }
+        virtual Vars& getVars() { return _vars; }
         virtual Eqs& getEqs() { return _eqs; }
         virtual const CompilerSettings& getSettings() { return _settings; }
         virtual void setSettings(const CompilerSettings& settings) {
@@ -127,8 +127,8 @@ namespace yask {
             return *_dos;
         }
 
-        // Make a new grid.
-        virtual yc_grid_ptr newGrid(const std::string& name,
+        // Make a new var.
+        virtual yc_var_ptr newVar(const std::string& name,
                                     bool isScratch,
                                     const std::vector<yc_index_node_ptr>& dims);
 
@@ -154,37 +154,37 @@ namespace yask {
             return getLongName();
         }
 
-        virtual yc_grid_ptr new_grid(const std::string& name,
+        virtual yc_var_ptr new_var(const std::string& name,
                                      const std::vector<yc_index_node_ptr>& dims) {
-            return newGrid(name, false, dims);
+            return newVar(name, false, dims);
         }
-        virtual yc_grid_ptr new_grid(const std::string& name,
+        virtual yc_var_ptr new_var(const std::string& name,
                                      const std::initializer_list<yc_index_node_ptr>& dims) {
             std::vector<yc_index_node_ptr> dim_vec(dims);
-            return newGrid(name, false, dim_vec);
+            return newVar(name, false, dim_vec);
         }
-        virtual yc_grid_ptr new_scratch_grid(const std::string& name,
+        virtual yc_var_ptr new_scratch_var(const std::string& name,
                                              const std::vector<yc_index_node_ptr>& dims) {
-            return newGrid(name, true, dims);
+            return newVar(name, true, dims);
         }
-        virtual yc_grid_ptr new_scratch_grid(const std::string& name,
+        virtual yc_var_ptr new_scratch_var(const std::string& name,
                                              const std::initializer_list<yc_index_node_ptr>& dims) {
             std::vector<yc_index_node_ptr> dim_vec(dims);
-            return newGrid(name, true, dim_vec);
+            return newVar(name, true, dim_vec);
         }
-        virtual int get_num_grids() const {
-            return int(_grids.size());
+        virtual int get_num_vars() const {
+            return int(_vars.size());
         }
-        virtual yc_grid_ptr get_grid(const std::string& name) {
-            for (int i = 0; i < get_num_grids(); i++)
-                if (_grids.at(i)->getName() == name)
-                    return _grids.at(i);
+        virtual yc_var_ptr get_var(const std::string& name) {
+            for (int i = 0; i < get_num_vars(); i++)
+                if (_vars.at(i)->getName() == name)
+                    return _vars.at(i);
             return nullptr;
         }
-        virtual std::vector<yc_grid_ptr> get_grids() {
-            std::vector<yc_grid_ptr> gv;
-            for (int i = 0; i < get_num_grids(); i++)
-                gv.push_back(_grids.at(i));
+        virtual std::vector<yc_var_ptr> get_vars() {
+            std::vector<yc_var_ptr> gv;
+            for (int i = 0; i < get_num_vars(); i++)
+                gv.push_back(_vars.at(i));
             return gv;
         }
 

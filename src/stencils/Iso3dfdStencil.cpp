@@ -42,11 +42,11 @@ protected:
     yc_index_node_ptr y = new_domain_index("y");         // spatial dim.
     yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
 
-    // Grid vars.
-    yc_grid_var pressure =
-        yc_grid_var("pressure", get_soln(), { t, x, y, z }); // time-varying 3D pressure grid.
-    yc_grid_var vel =
-        yc_grid_var("vel", get_soln(), { x, y, z }); // constant 3D vel grid (c(x,y,z)^2 * delta_t^2).
+    // Vars.
+    yc_var_proxy pressure =
+        yc_var_proxy("pressure", get_soln(), { t, x, y, z }); // time-varying 3D pressure var.
+    yc_var_proxy vel =
+        yc_var_proxy("vel", get_soln(), { x, y, z }); // constant 3D vel var (c(x,y,z)^2 * delta_t^2).
 
 public:
 
@@ -61,7 +61,7 @@ public:
     // Define RHS expression for pressure at t+1 based on values from vel and pressure at t.
     virtual yc_number_node_ptr get_next_p() {
 
-        // yc_grid_var spacing.
+        // yc_var_proxy spacing.
         // In this implementation, it's a constant.
         // Could make this a YASK variable to allow setting at run-time.
         double delta_xyz = 50.0;
@@ -126,7 +126,7 @@ public:
         // Solve wave equation for p(t+1):
         // p(t+1) = 2 * p(t) - p(t-1) + c^2 * fd_sum * delta_t^2.
 
-        // Let vel = c^2 * delta_t^2 for each grid point.
+        // Let vel = c^2 * delta_t^2 for each var point.
         auto next_p = (2.0 * pressure(t, x, y, z)) -
             pressure(t-1, x, y, z) + (fd_sum * vel(x, y, z));
 
@@ -167,9 +167,9 @@ public:
         // In practice, the interior values would be set to 1.0,
         // and values nearer the boundary would be set to values
         // increasingly approaching 0.0.
-        yc_grid_var cr_x("cr_x", get_soln(), { x });
-        yc_grid_var cr_y("cr_y", get_soln(), { y });
-        yc_grid_var cr_z("cr_z", get_soln(), { z });
+        yc_var_proxy cr_x("cr_x", get_soln(), { x });
+        yc_var_proxy cr_y("cr_y", get_soln(), { y });
+        yc_var_proxy cr_z("cr_z", get_soln(), { z });
         
         // Get equation for RHS.
         auto next_p = get_next_p();

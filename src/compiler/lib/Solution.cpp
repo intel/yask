@@ -33,11 +33,11 @@ using namespace std;
 namespace yask {
 
     // Stencil-solution APIs.
-    yc_grid_ptr StencilSolution::newGrid(const std::string& name,
+    yc_var_ptr StencilSolution::newVar(const std::string& name,
                                          bool isScratch,
                                          const std::vector<yc_index_node_ptr>& dims) {
 
-        // Make new grid and add to solution.
+        // Make new var and add to solution.
         // TODO: fix this mem leak--make smart ptr.
 
         // Copy pointers to concrete type.
@@ -48,7 +48,7 @@ namespace yask {
             dims2.push_back(d2);
         }
 
-        auto* gp = new GridVar(name, isScratch, this, dims2);
+        auto* gp = new Var(name, isScratch, this, dims2);
         assert(gp);
         return gp;
     }
@@ -69,25 +69,25 @@ namespace yask {
     void StencilSolution::analyze_solution(int vlen,
                                            bool is_folding_efficient) {
 
-        // Find all the stencil dimensions from the grids.
+        // Find all the stencil dimensions from the vars.
         // Create the final folds and clusters from the cmd-line options.
-        _dims.setDims(_grids, _settings, vlen, is_folding_efficient, *_dos);
+        _dims.setDims(_vars, _settings, vlen, is_folding_efficient, *_dos);
 
-        // Determine which grids can be folded.
-        _grids.setFolding(_dims);
+        // Determine which vars can be folded.
+        _vars.setFolding(_dims);
 
-        // Determine which grid points can be vectorized and analyze inner-loop accesses.
+        // Determine which var points can be vectorized and analyze inner-loop accesses.
         _eqs.analyzeVec(_dims);
         _eqs.analyzeLoop(_dims);
 
         // Find dependencies between equations.
         _eqs.analyzeEqs(_settings, _dims, *_dos);
 
-        // Update access stats for the grids.
-        _eqs.updateGridStats();
+        // Update access stats for the vars.
+        _eqs.updateVarStats();
 
         // Create equation bundles based on dependencies and/or target strings.
-        // This process may alter the halos in scratch grids.
+        // This process may alter the halos in scratch vars.
         _eqBundles.set_basename_default(_settings._eq_bundle_basename_default);
         _eqBundles.set_dims(_dims);
         _eqBundles.makeEqBundles(_eqs, _settings, *_dos);

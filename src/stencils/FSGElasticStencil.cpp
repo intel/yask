@@ -50,66 +50,66 @@ namespace fsg {
 
     protected:
 
-        yc_grid_var v_bl_u = yc_grid_var("v_bl_u", get_soln(), { t, x, y, z });
-        yc_grid_var v_bl_v = yc_grid_var("v_bl_v", get_soln(), { t, x, y, z });
-        yc_grid_var v_bl_w = yc_grid_var("v_bl_w", get_soln(), { t, x, y, z });
-        yc_grid_var v_br_u = yc_grid_var("v_br_u", get_soln(), { t, x, y, z });
-        yc_grid_var v_br_v = yc_grid_var("v_br_v", get_soln(), { t, x, y, z });
-        yc_grid_var v_br_w = yc_grid_var("v_br_w", get_soln(), { t, x, y, z });
-        yc_grid_var v_tl_u = yc_grid_var("v_tl_u", get_soln(), { t, x, y, z });
-        yc_grid_var v_tl_v = yc_grid_var("v_tl_v", get_soln(), { t, x, y, z });
-        yc_grid_var v_tl_w = yc_grid_var("v_tl_w", get_soln(), { t, x, y, z });
-        yc_grid_var v_tr_u = yc_grid_var("v_tr_u", get_soln(), { t, x, y, z });
-        yc_grid_var v_tr_v = yc_grid_var("v_tr_v", get_soln(), { t, x, y, z });
-        yc_grid_var v_tr_w = yc_grid_var("v_tr_w", get_soln(), { t, x, y, z });
+        yc_var_proxy v_bl_u = yc_var_proxy("v_bl_u", get_soln(), { t, x, y, z });
+        yc_var_proxy v_bl_v = yc_var_proxy("v_bl_v", get_soln(), { t, x, y, z });
+        yc_var_proxy v_bl_w = yc_var_proxy("v_bl_w", get_soln(), { t, x, y, z });
+        yc_var_proxy v_br_u = yc_var_proxy("v_br_u", get_soln(), { t, x, y, z });
+        yc_var_proxy v_br_v = yc_var_proxy("v_br_v", get_soln(), { t, x, y, z });
+        yc_var_proxy v_br_w = yc_var_proxy("v_br_w", get_soln(), { t, x, y, z });
+        yc_var_proxy v_tl_u = yc_var_proxy("v_tl_u", get_soln(), { t, x, y, z });
+        yc_var_proxy v_tl_v = yc_var_proxy("v_tl_v", get_soln(), { t, x, y, z });
+        yc_var_proxy v_tl_w = yc_var_proxy("v_tl_w", get_soln(), { t, x, y, z });
+        yc_var_proxy v_tr_u = yc_var_proxy("v_tr_u", get_soln(), { t, x, y, z });
+        yc_var_proxy v_tr_v = yc_var_proxy("v_tr_v", get_soln(), { t, x, y, z });
+        yc_var_proxy v_tr_w = yc_var_proxy("v_tr_w", get_soln(), { t, x, y, z });
 
-        yc_grid_var s_bl_xx = yc_grid_var("s_bl_xx", get_soln(), { t, x, y, z });
-        yc_grid_var s_bl_yy = yc_grid_var("s_bl_yy", get_soln(), { t, x, y, z });
-        yc_grid_var s_bl_zz = yc_grid_var("s_bl_zz", get_soln(), { t, x, y, z });
-        yc_grid_var s_bl_yz = yc_grid_var("s_bl_yz", get_soln(), { t, x, y, z });
-        yc_grid_var s_bl_xz = yc_grid_var("s_bl_xz", get_soln(), { t, x, y, z });
-        yc_grid_var s_bl_xy = yc_grid_var("s_bl_xy", get_soln(), { t, x, y, z });
-        yc_grid_var s_br_xx = yc_grid_var("s_br_xx", get_soln(), { t, x, y, z });
-        yc_grid_var s_br_yy = yc_grid_var("s_br_yy", get_soln(), { t, x, y, z });
-        yc_grid_var s_br_zz = yc_grid_var("s_br_zz", get_soln(), { t, x, y, z });
-        yc_grid_var s_br_yz = yc_grid_var("s_br_yz", get_soln(), { t, x, y, z });
-        yc_grid_var s_br_xz = yc_grid_var("s_br_xz", get_soln(), { t, x, y, z });
-        yc_grid_var s_br_xy = yc_grid_var("s_br_xy", get_soln(), { t, x, y, z });
-        yc_grid_var s_tl_xx = yc_grid_var("s_tl_xx", get_soln(), { t, x, y, z });
-        yc_grid_var s_tl_yy = yc_grid_var("s_tl_yy", get_soln(), { t, x, y, z });
-        yc_grid_var s_tl_zz = yc_grid_var("s_tl_zz", get_soln(), { t, x, y, z });
-        yc_grid_var s_tl_yz = yc_grid_var("s_tl_yz", get_soln(), { t, x, y, z });
-        yc_grid_var s_tl_xz = yc_grid_var("s_tl_xz", get_soln(), { t, x, y, z });
-        yc_grid_var s_tl_xy = yc_grid_var("s_tl_xy", get_soln(), { t, x, y, z });
-        yc_grid_var s_tr_xx = yc_grid_var("s_tr_xx", get_soln(), { t, x, y, z });
-        yc_grid_var s_tr_yy = yc_grid_var("s_tr_yy", get_soln(), { t, x, y, z });
-        yc_grid_var s_tr_zz = yc_grid_var("s_tr_zz", get_soln(), { t, x, y, z });
-        yc_grid_var s_tr_yz = yc_grid_var("s_tr_yz", get_soln(), { t, x, y, z });
-        yc_grid_var s_tr_xz = yc_grid_var("s_tr_xz", get_soln(), { t, x, y, z });
-        yc_grid_var s_tr_xy = yc_grid_var("s_tr_xy", get_soln(), { t, x, y, z });
+        yc_var_proxy s_bl_xx = yc_var_proxy("s_bl_xx", get_soln(), { t, x, y, z });
+        yc_var_proxy s_bl_yy = yc_var_proxy("s_bl_yy", get_soln(), { t, x, y, z });
+        yc_var_proxy s_bl_zz = yc_var_proxy("s_bl_zz", get_soln(), { t, x, y, z });
+        yc_var_proxy s_bl_yz = yc_var_proxy("s_bl_yz", get_soln(), { t, x, y, z });
+        yc_var_proxy s_bl_xz = yc_var_proxy("s_bl_xz", get_soln(), { t, x, y, z });
+        yc_var_proxy s_bl_xy = yc_var_proxy("s_bl_xy", get_soln(), { t, x, y, z });
+        yc_var_proxy s_br_xx = yc_var_proxy("s_br_xx", get_soln(), { t, x, y, z });
+        yc_var_proxy s_br_yy = yc_var_proxy("s_br_yy", get_soln(), { t, x, y, z });
+        yc_var_proxy s_br_zz = yc_var_proxy("s_br_zz", get_soln(), { t, x, y, z });
+        yc_var_proxy s_br_yz = yc_var_proxy("s_br_yz", get_soln(), { t, x, y, z });
+        yc_var_proxy s_br_xz = yc_var_proxy("s_br_xz", get_soln(), { t, x, y, z });
+        yc_var_proxy s_br_xy = yc_var_proxy("s_br_xy", get_soln(), { t, x, y, z });
+        yc_var_proxy s_tl_xx = yc_var_proxy("s_tl_xx", get_soln(), { t, x, y, z });
+        yc_var_proxy s_tl_yy = yc_var_proxy("s_tl_yy", get_soln(), { t, x, y, z });
+        yc_var_proxy s_tl_zz = yc_var_proxy("s_tl_zz", get_soln(), { t, x, y, z });
+        yc_var_proxy s_tl_yz = yc_var_proxy("s_tl_yz", get_soln(), { t, x, y, z });
+        yc_var_proxy s_tl_xz = yc_var_proxy("s_tl_xz", get_soln(), { t, x, y, z });
+        yc_var_proxy s_tl_xy = yc_var_proxy("s_tl_xy", get_soln(), { t, x, y, z });
+        yc_var_proxy s_tr_xx = yc_var_proxy("s_tr_xx", get_soln(), { t, x, y, z });
+        yc_var_proxy s_tr_yy = yc_var_proxy("s_tr_yy", get_soln(), { t, x, y, z });
+        yc_var_proxy s_tr_zz = yc_var_proxy("s_tr_zz", get_soln(), { t, x, y, z });
+        yc_var_proxy s_tr_yz = yc_var_proxy("s_tr_yz", get_soln(), { t, x, y, z });
+        yc_var_proxy s_tr_xz = yc_var_proxy("s_tr_xz", get_soln(), { t, x, y, z });
+        yc_var_proxy s_tr_xy = yc_var_proxy("s_tr_xy", get_soln(), { t, x, y, z });
 
         // 3D-spatial coefficients.
-        yc_grid_var c11 = yc_grid_var("c11", get_soln(), { x, y, z });
-        yc_grid_var c12 = yc_grid_var("c12", get_soln(), { x, y, z });
-        yc_grid_var c13 = yc_grid_var("c13", get_soln(), { x, y, z });
-        yc_grid_var c14 = yc_grid_var("c14", get_soln(), { x, y, z });
-        yc_grid_var c15 = yc_grid_var("c15", get_soln(), { x, y, z });
-        yc_grid_var c16 = yc_grid_var("c16", get_soln(), { x, y, z });
-        yc_grid_var c22 = yc_grid_var("c22", get_soln(), { x, y, z });
-        yc_grid_var c23 = yc_grid_var("c23", get_soln(), { x, y, z });
-        yc_grid_var c24 = yc_grid_var("c24", get_soln(), { x, y, z });
-        yc_grid_var c25 = yc_grid_var("c25", get_soln(), { x, y, z });
-        yc_grid_var c26 = yc_grid_var("c26", get_soln(), { x, y, z });
-        yc_grid_var c33 = yc_grid_var("c33", get_soln(), { x, y, z });
-        yc_grid_var c34 = yc_grid_var("c34", get_soln(), { x, y, z });
-        yc_grid_var c35 = yc_grid_var("c35", get_soln(), { x, y, z });
-        yc_grid_var c36 = yc_grid_var("c36", get_soln(), { x, y, z });
-        yc_grid_var c44 = yc_grid_var("c44", get_soln(), { x, y, z });
-        yc_grid_var c45 = yc_grid_var("c45", get_soln(), { x, y, z });
-        yc_grid_var c46 = yc_grid_var("c46", get_soln(), { x, y, z });
-        yc_grid_var c55 = yc_grid_var("c55", get_soln(), { x, y, z });
-        yc_grid_var c56 = yc_grid_var("c56", get_soln(), { x, y, z });
-        yc_grid_var c66 = yc_grid_var("c66", get_soln(), { x, y, z });
+        yc_var_proxy c11 = yc_var_proxy("c11", get_soln(), { x, y, z });
+        yc_var_proxy c12 = yc_var_proxy("c12", get_soln(), { x, y, z });
+        yc_var_proxy c13 = yc_var_proxy("c13", get_soln(), { x, y, z });
+        yc_var_proxy c14 = yc_var_proxy("c14", get_soln(), { x, y, z });
+        yc_var_proxy c15 = yc_var_proxy("c15", get_soln(), { x, y, z });
+        yc_var_proxy c16 = yc_var_proxy("c16", get_soln(), { x, y, z });
+        yc_var_proxy c22 = yc_var_proxy("c22", get_soln(), { x, y, z });
+        yc_var_proxy c23 = yc_var_proxy("c23", get_soln(), { x, y, z });
+        yc_var_proxy c24 = yc_var_proxy("c24", get_soln(), { x, y, z });
+        yc_var_proxy c25 = yc_var_proxy("c25", get_soln(), { x, y, z });
+        yc_var_proxy c26 = yc_var_proxy("c26", get_soln(), { x, y, z });
+        yc_var_proxy c33 = yc_var_proxy("c33", get_soln(), { x, y, z });
+        yc_var_proxy c34 = yc_var_proxy("c34", get_soln(), { x, y, z });
+        yc_var_proxy c35 = yc_var_proxy("c35", get_soln(), { x, y, z });
+        yc_var_proxy c36 = yc_var_proxy("c36", get_soln(), { x, y, z });
+        yc_var_proxy c44 = yc_var_proxy("c44", get_soln(), { x, y, z });
+        yc_var_proxy c45 = yc_var_proxy("c45", get_soln(), { x, y, z });
+        yc_var_proxy c46 = yc_var_proxy("c46", get_soln(), { x, y, z });
+        yc_var_proxy c55 = yc_var_proxy("c55", get_soln(), { x, y, z });
+        yc_var_proxy c56 = yc_var_proxy("c56", get_soln(), { x, y, z });
+        yc_var_proxy c66 = yc_var_proxy("c66", get_soln(), { x, y, z });
 
     public:
 
@@ -119,64 +119,64 @@ namespace fsg {
         {
         }
 
-        yc_number_node_ptr cell_coeff( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_grid_var &c, const BR )
+        yc_number_node_ptr cell_coeff( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_var_proxy &c, const BR )
         {
             return  1.0 / (0.25*(c(x  , y  , z  ) +
                                  c(x  , y+1, z  ) +
                                  c(x  , y  , z+1) +
                                  c(x  , y+1, z+1)));
         }
-        yc_number_node_ptr cell_coeff( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_grid_var &c, const BL )
+        yc_number_node_ptr cell_coeff( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_var_proxy &c, const BL )
         {
             return  1.0 / (0.25*(c(x  , y  , z  ) +
                                  c(x+1, y  , z  ) +
                                  c(x  , y  , z+1) +
                                  c(x+1, y  , z+1)));
         }
-        yc_number_node_ptr cell_coeff( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_grid_var &c, const TR )
+        yc_number_node_ptr cell_coeff( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_var_proxy &c, const TR )
         {
             return  1.0 / (0.25*(c(x  , y  , z  ) +
                                  c(x  , y+1, z  ) +
                                  c(x+1, y  , z  ) +
                                  c(x+1, y+1, z  )));
         }
-        yc_number_node_ptr cell_coeff( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_grid_var &c, const TL )
+        yc_number_node_ptr cell_coeff( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_var_proxy &c, const TL )
         {
             return  1.0 /        c(x  , y  , z  );
         }
         template<typename N>
-        yc_number_node_ptr cell_coeff( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_grid_var &c )
+        yc_number_node_ptr cell_coeff( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_var_proxy &c )
         {
             return cell_coeff( x, y, z, c, N() );
         }
 
-        yc_number_node_ptr cell_coeff_artm( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_grid_var &c, const BR )
+        yc_number_node_ptr cell_coeff_artm( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_var_proxy &c, const BR )
         {
             return 0.25 *( 1.0 / c(x  , y  , z  ) +
                            1.0 / c(x  , y+1, z  ) +
                            1.0 / c(x  , y  , z+1) +
                            1.0 / c(x  , y+1, z+1) );
         }
-        yc_number_node_ptr cell_coeff_artm( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_grid_var &c, const BL )
+        yc_number_node_ptr cell_coeff_artm( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_var_proxy &c, const BL )
         {
             return 0.25 *( 1.0 / c(x  , y  , z  ) +
                            1.0 / c(x+1, y  , z  ) +
                            1.0 / c(x  , y  , z+1) +
                            1.0 / c(x+1, y  , z+1) );
         }
-        yc_number_node_ptr cell_coeff_artm( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_grid_var &c, const TR )
+        yc_number_node_ptr cell_coeff_artm( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_var_proxy &c, const TR )
         {
             return 0.25 *( 1.0 / c(x  , y  , z  ) +
                            1.0 / c(x  , y+1, z  ) +
                            1.0 / c(x+1, y  , z  ) +
                            1.0 / c(x+1, y+1, z  ) );
         }
-        yc_number_node_ptr cell_coeff_artm( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_grid_var &c, const TL )
+        yc_number_node_ptr cell_coeff_artm( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_var_proxy &c, const TL )
         {
             return  1.0 /        c(x  , y  , z  );
         }
         template<typename N>
-        yc_number_node_ptr cell_coeff_artm( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_grid_var &c )
+        yc_number_node_ptr cell_coeff_artm( const yc_number_node_ptr x, const yc_number_node_ptr y, const yc_number_node_ptr z, yc_var_proxy &c )
         {
             return cell_coeff_artm( x, y, z, c, N() );
         }
@@ -196,18 +196,18 @@ namespace fsg {
         }
 
         //
-        // Stress-grid define functions.  For each D in xx, yy, zz, xy, xz, yz,
-        // define stress_D at t+1 based on stress_D at t and vel grids at t+1.
-        // This implies that the velocity-grid define functions must be called
+        // Stress-var define functions.  For each D in xx, yy, zz, xy, xz, yz,
+        // define stress_D at t+1 based on stress_D at t and vel vars at t+1.
+        // This implies that the velocity-var define functions must be called
         // before these for a given value of t.  Note that the t, x, y, z
-        // parameters are integer grid indices, not actual offsets in time or
-        // space, so half-steps due to staggered grids are adjusted
+        // parameters are integer var indices, not actual offsets in time or
+        // space, so half-steps due to staggered vars are adjusted
         // appropriately.
 
         template<typename N, typename SZ, typename SX, typename SY>
         void define_str(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
-                        yc_grid_var &sxx, yc_grid_var &syy, yc_grid_var &szz, yc_grid_var &sxy, yc_grid_var &sxz, yc_grid_var &syz,
-                        yc_grid_var &vxu, yc_grid_var &vxv, yc_grid_var &vxw, yc_grid_var &vyu, yc_grid_var &vyv, yc_grid_var &vyw, yc_grid_var &vzu, yc_grid_var &vzv, yc_grid_var &vzw ) {
+                        yc_var_proxy &sxx, yc_var_proxy &syy, yc_var_proxy &szz, yc_var_proxy &sxy, yc_var_proxy &sxz, yc_var_proxy &syz,
+                        yc_var_proxy &vxu, yc_var_proxy &vxv, yc_var_proxy &vxw, yc_var_proxy &vyu, yc_var_proxy &vyv, yc_var_proxy &vyw, yc_var_proxy &vzu, yc_var_proxy &vzv, yc_var_proxy &vzw ) {
 
             // Interpolate coeffs.
             auto ic11 = cell_coeff     <N>(x, y, z, c11);
@@ -321,18 +321,18 @@ namespace fsg {
         const int abc_width = 20;
 
         // Sponge coefficients.
-        yc_grid_var sponge_lx = yc_grid_var("sponge_lx", get_soln(), { x, y, z });
-        yc_grid_var sponge_rx = yc_grid_var("sponge_rx", get_soln(), { x, y, z });
-        yc_grid_var sponge_bz = yc_grid_var("sponge_bz", get_soln(), { x, y, z });
-        yc_grid_var sponge_tz = yc_grid_var("sponge_tz", get_soln(), { x, y, z });
-        yc_grid_var sponge_fy = yc_grid_var("sponge_fy", get_soln(), { x, y, z });
-        yc_grid_var sponge_by = yc_grid_var("sponge_by", get_soln(), { x, y, z });
-        yc_grid_var sponge_sq_lx = yc_grid_var("sponge_sq_lx", get_soln(), { x, y, z });
-        yc_grid_var sponge_sq_rx = yc_grid_var("sponge_sq_rx", get_soln(), { x, y, z });
-        yc_grid_var sponge_sq_bz = yc_grid_var("sponge_sq_bz", get_soln(), { x, y, z });
-        yc_grid_var sponge_sq_tz = yc_grid_var("sponge_sq_tz", get_soln(), { x, y, z });
-        yc_grid_var sponge_sq_fy = yc_grid_var("sponge_sq_fy", get_soln(), { x, y, z });
-        yc_grid_var sponge_sq_by = yc_grid_var("sponge_sq_by", get_soln(), { x, y, z });
+        yc_var_proxy sponge_lx = yc_var_proxy("sponge_lx", get_soln(), { x, y, z });
+        yc_var_proxy sponge_rx = yc_var_proxy("sponge_rx", get_soln(), { x, y, z });
+        yc_var_proxy sponge_bz = yc_var_proxy("sponge_bz", get_soln(), { x, y, z });
+        yc_var_proxy sponge_tz = yc_var_proxy("sponge_tz", get_soln(), { x, y, z });
+        yc_var_proxy sponge_fy = yc_var_proxy("sponge_fy", get_soln(), { x, y, z });
+        yc_var_proxy sponge_by = yc_var_proxy("sponge_by", get_soln(), { x, y, z });
+        yc_var_proxy sponge_sq_lx = yc_var_proxy("sponge_sq_lx", get_soln(), { x, y, z });
+        yc_var_proxy sponge_sq_rx = yc_var_proxy("sponge_sq_rx", get_soln(), { x, y, z });
+        yc_var_proxy sponge_sq_bz = yc_var_proxy("sponge_sq_bz", get_soln(), { x, y, z });
+        yc_var_proxy sponge_sq_tz = yc_var_proxy("sponge_sq_tz", get_soln(), { x, y, z });
+        yc_var_proxy sponge_sq_fy = yc_var_proxy("sponge_sq_fy", get_soln(), { x, y, z });
+        yc_var_proxy sponge_sq_by = yc_var_proxy("sponge_sq_by", get_soln(), { x, y, z });
 
         FSGElasticStencilBase &fsg;
 
@@ -358,8 +358,8 @@ namespace fsg {
 
         template<typename N, typename SZ, typename SX, typename SY>
         void define_vel_abc(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
-                            yc_grid_var &v, yc_grid_var &sx, yc_grid_var &sy, yc_grid_var &sz,
-                            yc_grid_var &abc_x, yc_grid_var &abc_y, yc_grid_var &abc_z, yc_grid_var &abc_sq_x, yc_grid_var &abc_sq_y, yc_grid_var &abc_sq_z) {
+                            yc_var_proxy &v, yc_var_proxy &sx, yc_var_proxy &sy, yc_var_proxy &sz,
+                            yc_var_proxy &abc_x, yc_var_proxy &abc_y, yc_var_proxy &abc_z, yc_var_proxy &abc_sq_x, yc_var_proxy &abc_sq_y, yc_var_proxy &abc_sq_z) {
 
             yc_bool_node_ptr at_abc = is_at_boundary();
 
@@ -408,9 +408,9 @@ namespace fsg {
 
         template<typename N, typename SZ, typename SX, typename SY>
         void define_str_abc(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
-                            yc_grid_var &sxx, yc_grid_var &syy, yc_grid_var &szz, yc_grid_var &sxy, yc_grid_var &sxz, yc_grid_var &syz,
-                            yc_grid_var &vxu, yc_grid_var &vxv, yc_grid_var &vxw, yc_grid_var &vyu, yc_grid_var &vyv, yc_grid_var &vyw, yc_grid_var &vzu, yc_grid_var &vzv, yc_grid_var &vzw,
-                            yc_grid_var &abc_x, yc_grid_var &abc_y, yc_grid_var &abc_z, yc_grid_var &abc_sq_x, yc_grid_var &abc_sq_y, yc_grid_var &abc_sq_z) {
+                            yc_var_proxy &sxx, yc_var_proxy &syy, yc_var_proxy &szz, yc_var_proxy &sxy, yc_var_proxy &sxz, yc_var_proxy &syz,
+                            yc_var_proxy &vxu, yc_var_proxy &vxv, yc_var_proxy &vxw, yc_var_proxy &vyu, yc_var_proxy &vyv, yc_var_proxy &vyw, yc_var_proxy &vzu, yc_var_proxy &vzv, yc_var_proxy &vzw,
+                            yc_var_proxy &abc_x, yc_var_proxy &abc_y, yc_var_proxy &abc_z, yc_var_proxy &abc_sq_x, yc_var_proxy &abc_sq_y, yc_var_proxy &abc_sq_z) {
 
             auto abc = abc_x(x,y,z) * abc_y(x,y,z) * abc_z(x,y,z);
             auto next_sxx = sxx(t, x, y, z) * abc;

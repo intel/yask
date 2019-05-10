@@ -23,26 +23,26 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-///////// Methods for Grids, etc. ////////////
+///////// Methods for Vars, etc. ////////////
 
 #include "Print.hpp"
 #include "ExprUtils.hpp"
 #include "Parse.hpp"
-#include "Grid.hpp"
+#include "Var.hpp"
 #include "Print.hpp"
 #include "CppIntrin.hpp"
 
 namespace yask {
 
 
-    // grid APIs.
-    yc_grid_point_node_ptr
-    GridVar::new_grid_point(const std::vector<yc_number_node_ptr>& index_exprs) {
+    // var APIs.
+    yc_var_point_node_ptr
+    Var::new_var_point(const std::vector<yc_number_node_ptr>& index_exprs) {
 
         // Check for correct number of indices.
         if (_dims.size() != index_exprs.size()) {
-            FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to create a grid point in " <<
-                                            _dims.size() << "D grid '" << _name << "' with " <<
+            FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to create a var point in " <<
+                                            _dims.size() << "D var '" << _name << "' with " <<
                                             index_exprs.size() << " index expressions");
         }
 
@@ -55,17 +55,17 @@ namespace yask {
         }
 
         // Create a point from the args.
-        gridPointPtr gpp = make_shared<GridPoint>(this, args);
+        varPointPtr gpp = make_shared<VarPoint>(this, args);
         return gpp;
     }
 
-    yc_grid_point_node_ptr
-    GridVar::new_relative_grid_point(const std::vector<int>& dim_offsets) {
+    yc_var_point_node_ptr
+    Var::new_relative_var_point(const std::vector<int>& dim_offsets) {
 
         // Check for correct number of indices.
         if (_dims.size() != dim_offsets.size()) {
-            FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to create a relative grid point in " <<
-                                            _dims.size() << "D grid '" << _name << "' with " <<
+            FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to create a relative var point in " <<
+                                            _dims.size() << "D var '" << _name << "' with " <<
                                             dim_offsets.size() << " indices");
         }
 
@@ -75,8 +75,8 @@ namespace yask {
         for (size_t i = 0; i < _dims.size(); i++) {
             auto dim = _dims.at(i);
             if (dim->getType() == MISC_INDEX) {
-                FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to create a relative grid point in " <<
-                                                _dims.size() << "D grid '" << _name <<
+                FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to create a relative var point in " <<
+                                                _dims.size() << "D var '" << _name <<
                                                 "' containing non-step or non-domain dim '" <<
                                                 dim->getName() << "'");
             }
@@ -85,7 +85,7 @@ namespace yask {
         }
 
         // Create a point from the args.
-        gridPointPtr gpp = make_shared<GridPoint>(this, args);
+        varPointPtr gpp = make_shared<VarPoint>(this, args);
 
         // Set the offsets, which creates a new
         // expression for each index.
@@ -97,15 +97,15 @@ namespace yask {
         return gpp;
     }
 
-    vector<string> GridVar::get_dim_names() const {
+    vector<string> Var::get_dim_names() const {
         vector<string> ret;
         for (auto dn : getDims())
             ret.push_back(dn->getName());
         return ret;
     }
 
-    // Ctor for GridVar.
-    GridVar::GridVar(string name,
+    // Ctor for Var.
+    Var::Var(string name,
                      bool isScratch,
                      StencilSolution* soln,
                      const indexExprPtrVec& dims) :
@@ -116,21 +116,21 @@ namespace yask {
         assert(soln);
 
         // Name already used?
-        auto& grids = soln->getGrids();
-        for (auto gp : grids) {
+        auto& vars = soln->getVars();
+        for (auto gp : vars) {
             if (gp->getName() == name)
-                THROW_YASK_EXCEPTION("Error: grid name '" + name + "' already used");
+                THROW_YASK_EXCEPTION("Error: var name '" + name + "' already used");
         }
 
         // Register in soln.
-        grids.insert(this);
+        vars.insert(this);
 
         // Define dims.
         _dims = dims;
     }
 
-    // Determine whether grid can be folded.
-    void GridVar::setFolding(const Dimensions& dims) {
+    // Determine whether var can be folded.
+    void Var::setFolding(const Dimensions& dims) {
 
         _numFoldableDims = 0;
 
@@ -140,11 +140,11 @@ namespace yask {
             return;
         }
 
-        // Find the number of folded dims used in this grid.
+        // Find the number of folded dims used in this var.
         for (auto fdim : dims._foldGT1.getDims()) {
             auto& fdname = fdim.getName();
 
-            // Search for dim in grid.
+            // Search for dim in var.
             bool found = false;
             for (auto gdim : _dims) {
                 auto& gdname = gdim->getName();
@@ -157,7 +157,7 @@ namespace yask {
                 _numFoldableDims++;
         }
 
-        // Can fold if ALL fold dims >1 are used in this grid.
+        // Can fold if ALL fold dims >1 are used in this var.
 
         // NB: this will always be true if there is no vectorization, i.e.,
         // both are zero.  We do this because the compiler expects stencils
@@ -166,7 +166,7 @@ namespace yask {
     }
     
     // Determine whether halo sizes are equal.
-    bool GridVar::isHaloSame(const GridVar& other) const {
+    bool Var::isHaloSame(const Var& other) const {
 
         // Same dims?
         if (!areDimsSame(other))
@@ -188,12 +188,12 @@ namespace yask {
         return true;
     }
 
-    // Update halos based on halo in 'other' grid.
-    // This grid's halos can only be increased.
-    void GridVar::updateHalo(const GridVar& other) {
+    // Update halos based on halo in 'other' var.
+    // This var's halos can only be increased.
+    void Var::updateHalo(const Var& other) {
         assert(areDimsSame(other));
 
-        // Loop thru other grid's halo values.
+        // Loop thru other var's halo values.
         for (auto& hi : other._halos) {
             auto& pname = hi.first;
             auto& h2 = hi.second;
@@ -227,9 +227,9 @@ namespace yask {
     }
 
     // Update halos based on each value in 'offsets' in some
-    // read or write to this grid.
-    // This grid's halos can only be increased.
-    void GridVar::updateHalo(const string& packName, const IntTuple& offsets) {
+    // read or write to this var.
+    // This var's halos can only be increased.
+    void Var::updateHalo(const string& packName, const IntTuple& offsets) {
 
         // Find step value or use 0 if none.
         int stepVal = 0;
@@ -270,7 +270,7 @@ namespace yask {
     }
 
     // Update const indices based on 'indices'.
-    void GridVar::updateConstIndices(const IntTuple& indices) {
+    void Var::updateConstIndices(const IntTuple& indices) {
 
         for (auto& dim : indices.getDims()) {
             auto& dname = dim.getName();
@@ -293,7 +293,7 @@ namespace yask {
     }
 
     // Determine how many values in step-dim are needed.
-    int GridVar::getStepDimSize() const
+    int Var::getStepDimSize() const
     {
         // Specified by API.
         if (_stepAlloc > 0)
@@ -339,7 +339,7 @@ namespace yask {
                     // Any existing value?
                     if (halo.size()) {
 #ifdef DEBUG_HALOS
-                        cout << "** grid " << _name << " has halo " << halo.makeDimValStr() <<
+                        cout << "** var " << _name << " has halo " << halo.makeDimValStr() <<
                             " at ofs " << ofs << " in pack " << pname << endl;
 #endif
 
@@ -354,7 +354,7 @@ namespace yask {
                 }
             }
 #ifdef DEBUG_HALOS
-            cout << "** grid " << _name << " has halos from " << first_ofs <<
+            cout << "** var " << _name << " has halos from " << first_ofs <<
                 " to " << last_ofs << " in pack " << pname << endl;
 #endif
 
@@ -392,8 +392,8 @@ namespace yask {
         return max_sz;
     }
 
-    // Description of this grid.
-    string GridVar::getDescr() const {
+    // Description of this var.
+    string Var::getDescr() const {
         string d = _name + "(";
         int i = 0;
         for (auto dn : getDims()) {
