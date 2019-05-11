@@ -70,13 +70,24 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
 
 ## Backward-compatibility notices, including changes in default behavior
 ### Version 3
-* Version 3.00.00 implemented a unification of the old (v2) internal DSL with the YASK compiler API.
-Canonical v2 DSL code should still work using the `Soln.hpp` backward-compatibility header file.
-To convert v2 DSL code to v3 format, use the `./utils/bin/convert_v2_stencil.pl` utility.
-All references to the term "grid" has been changed to "var"; backward-compatibility APIs should maintain
-functionality of v2 DSL and kernel code.
-DSL and kernel code and any local output-parsing scripts that has used any undocumented files,
-data, or types may have to be updated.
+
+* Version 3.00.00 implemented a unification of the old (v1 and v2) internal
+DSL that used undocumented types such as `SolutionBase` and `GridValue` and
+undocumented macros such as `MAKE_GRID` with the newer documented YASK
+compiler API.  Canonical v2 DSL code should still work using the `Soln.hpp`
+backward-compatibility header file.  To convert v2 DSL code to v3 format,
+use the `./utils/bin/convert_v2_stencil.pl` utility.  Also, for both the
+compiler and kernel APIs, all uses of the term "grid" were changed to "var".
+(Historically, early versions of YASK allowed only variables whose elements
+were points on the domain grid, so the terms were essentially
+interchangeable. Later, variables became more flexible.  They could be
+defined with a subset of the domain dimensions, include non-domain or
+"miscellaneous" indices, or even be simple scalar values, so the term "grid"
+to describe any variable became inaccurate. This change addresses that
+contradiction.) Again, backward-compatibility features in the API should
+maintain functionality of v2 DSL and kernel code.  However, old DSL and
+kernel code or user-written output-parsing scripts that use any
+undocumented files, data, or types may have to be updated.
 
 ### Version 2
 * Version 2.22.00 changed the heuristic to determine vector-folding sizes when some
