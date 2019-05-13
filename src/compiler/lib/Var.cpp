@@ -224,6 +224,7 @@ namespace yask {
                 }
             }
         }
+        updateL1Dist(other._l1Dist);
     }
 
     // Update halos based on each value in 'offsets' in some
@@ -240,6 +241,9 @@ namespace yask {
                 stepVal = *p;
         }
 
+        // Manhattan dist of halo.
+        int l1Dist = 0;
+
         // Update halo vals.
         for (auto& dim : offsets.getDims()) {
             auto& dname = dim.getName();
@@ -251,9 +255,13 @@ namespace yask {
             if (stepDim && dname == stepDim->getName())
                 continue;
 
-            // Store abs value.
+            // Store abs value (neg values are on "left").
             val = abs(val);
 
+            // Track num dims.
+            if (val > 0)
+                l1Dist++;
+            
             // Any existing value?
             auto* p = halos.lookup(dname);
 
@@ -267,6 +275,9 @@ namespace yask {
 
             // Else, current value is larger than val, so don't update.
         }
+
+        // Update L1.
+        updateL1Dist(l1Dist);
     }
 
     // Update const indices based on 'indices'.

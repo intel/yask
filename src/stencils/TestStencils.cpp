@@ -51,7 +51,7 @@ protected:
     virtual yc_number_node_ptr def_1d(yc_var_proxy& V, const yc_number_node_ptr& t0, const yc_number_node_ptr& x0,
                              int left_ext, int right_ext) {
         yc_number_node_ptr v;
-        int n = 1;
+        int n = 0;
         for (int i = -_radius - left_ext; i <= _radius + right_ext; i++, n++)
             v += V(t0, x0+i);
         return v / n;
@@ -62,7 +62,7 @@ protected:
     virtual yc_number_node_ptr def_no_t_1d(yc_var_proxy& V, const yc_number_node_ptr& x0,
                                      int left_ext, int right_ext) {
         yc_number_node_ptr v;
-        int n = 1;
+        int n = 0;
         for (int i = -_radius - left_ext; i <= _radius + right_ext; i++, n++)
             v += V(x0+i);
         return v / n;
@@ -78,10 +78,11 @@ protected:
                              int y_left_ext, int y_right_ext) {
         yc_number_node_ptr v;
         int n = 0;
-        for (int i = -_radius - x_left_ext; i <= _radius + x_right_ext; i++)
-            for (int j = -_radius - y_left_ext; j <= _radius + y_right_ext; j++, n++)
-                if (i * j == 0 || i == j)
-                    v += V(t0, x0+i, y0+j);
+        for (int i : { -_radius - x_left_ext, 0, _radius + x_right_ext })
+            for (int j : { -_radius - y_left_ext, 0, _radius + y_right_ext }) {
+                v += V(t0, x0+i, y0+j);
+                n++;
+            }
         return v / n;
     }    
 
@@ -95,10 +96,11 @@ protected:
                                      int y_left_ext, int y_right_ext) {
         yc_number_node_ptr v;
         int n = 0;
-        for (int i = -_radius - x_left_ext; i <= _radius + x_right_ext; i++)
-            for (int j = -_radius - y_left_ext; j <= _radius + y_right_ext; j++, n++)
-                if (i * j == 0 || i == j)
-                    v += V(x0+i, y0+j);
+        for (int i : { -_radius - x_left_ext, 0, _radius + x_right_ext })
+            for (int j : { -_radius - y_left_ext, 0, _radius + y_right_ext }) {
+                v += V(x0+i, y0+j);
+                n++;
+            }
         return v / n;
     }    
 
@@ -114,11 +116,12 @@ protected:
                              int z_left_ext, int z_right_ext) {
         yc_number_node_ptr v;
         int n = 0;
-        for (int i = -_radius - x_left_ext; i <= _radius + x_right_ext; i++)
-            for (int j = -_radius - y_left_ext; j <= _radius + y_right_ext; j++)
-                for (int k = -_radius - z_left_ext; k <= _radius + z_right_ext; k++, n++)
-                    if (i * j * k == 0 || (i == j && j == k))
-                        v += V(t0, x0+i, y0+j, z0+k);
+        for (int i : { -_radius - x_left_ext, 0, _radius + x_right_ext })
+            for (int j : { -_radius - y_left_ext, 0, _radius + y_right_ext })
+                for (int k : { -_radius - z_left_ext, 0, _radius + z_right_ext }) {
+                    v += V(t0, x0+i, y0+j, z0+k);
+                    n++;
+                }
         return v / n;
     }
 
@@ -134,11 +137,12 @@ protected:
                                      int z_left_ext, int z_right_ext) {
         yc_number_node_ptr v;
         int n = 0;
-        for (int i = -_radius - x_left_ext; i <= _radius + x_right_ext; i++)
-            for (int j = -_radius - y_left_ext; j <= _radius + y_right_ext; j++)
-                for (int k = -_radius - z_left_ext; k <= _radius + z_right_ext; k++, n++)
-                    if (i * j * k == 0 || (i == j && j == k))
-                        v += V(x0+i, y0+j, z0+k);
+        for (int i : { -_radius - x_left_ext, 0, _radius + x_right_ext })
+            for (int j : { -_radius - y_left_ext, 0, _radius + y_right_ext })
+                for (int k : { -_radius - z_left_ext, 0, _radius + z_right_ext }) {
+                    v += V(x0+i, y0+j, z0+k);
+                    n++;
+                }
         return v / n;
     }    
 
@@ -160,9 +164,8 @@ protected:
             for (int i : { -_radius - x_left_ext, 0, _radius + x_right_ext })
                 for (int j : { -_radius - y_left_ext, 0, _radius + y_right_ext })
                     for (int k : { -_radius - z_left_ext, 0, _radius + z_right_ext }) {
+                        v += V(t0, w0+h, x0+i, y0+j, z0+k);
                         n++;
-                        if (h * i * j * k == 0 || (h == i && i == j && j == k))
-                            v += V(t0, w0+h, x0+i, y0+j, z0+k);
                     }
         return v / n;
     }    

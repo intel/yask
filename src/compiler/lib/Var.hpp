@@ -72,6 +72,9 @@ namespace yask {
         // int key: step-dim offset or 0 if no step-dim.
         map<string, map<bool, map<int, IntTuple>>> _halos;
 
+        // Greatest L1 dist of any halo point that accesses this var.
+        int _l1Dist = 0;
+
     public:
         // Ctors.
         Var(string name,
@@ -150,6 +153,11 @@ namespace yask {
             return h;
         }
 
+        // Get max L1 dist of halos.
+        virtual int getL1Dist() const {
+            return _l1Dist;
+        }
+
         // Determine whether dims are same.
         virtual bool areDimsSame(const Var& other) const {
             if (_dims.size() != other._dims.size())
@@ -173,11 +181,16 @@ namespace yask {
         // Determine whether halo sizes are equal.
         virtual bool isHaloSame(const Var& other) const;
 
-        // Update halos based on halo in 'other' var.
+        // Update halos and L1 dist based on halo in 'other' var.
         virtual void updateHalo(const Var& other);
 
-        // Update halos based on each value in 'offsets'.
+        // Update halos and L1 dist based on each value in 'offsets'.
         virtual void updateHalo(const string& packName, const IntTuple& offsets);
+
+        // Update L1 dist.
+        virtual void updateL1Dist(int l1Dist) {
+            _l1Dist = max(_l1Dist, l1Dist);
+        }
 
         // Update const indices based on 'indices'.
         virtual void updateConstIndices(const IntTuple& indices);

@@ -64,6 +64,7 @@ namespace yask {
                 return;
 
             // Add 'a' to copy of path.
+            // Important to make a separate copy for recursive calls.
             TpList seen1;
             if (seen)
                 seen1 = *seen; // copy nodes already seen.

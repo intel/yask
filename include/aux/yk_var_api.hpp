@@ -731,6 +731,36 @@ namespace yask {
 
         /* Advanced APIs for yk_var found below are not needed for most applications. */
 
+        /// **[Advanced]** Get the maximum L1-norm of a neighbor rank for halo exchange.
+        /**
+           This setting determines which MPI neighbors participate in a halo exchange.
+           The L1-norm is also known as the "Manhattan distance" or "taxicab norm".
+           In this case, the distance in *each* domain dimension can be only zero or one,
+           so the sum can range from zero to the number of domain dimensions.
+           
+           Examples for a domain size with 2 spatial dimensions (e.g., "x" and "y"):
+           * L1-norm = 0: no halos are exchanged for this var.
+           * L1-norm = 1: halos are exchanged between "up", "down", "left" and "right"
+             neighbors.
+           * L1-norm = 2: halos are exchanged as above plus diagonal neighbors.
+
+           The actual exchanges are further controlled by the size of the halo in each
+           direction per get_halo_size().
+           
+           @returns L1-norm, ranging from zero to number of domain dimensions.
+        */
+        virtual int
+        get_halo_exchange_l1_norm() const =0;
+        
+        /// **[Advanced]** Set the maximum L1-norm of a neighbor rank for halo exchange.
+        /**
+           @see get_halo_exchange_l1_norm().
+        */
+        virtual void
+        set_halo_exchange_l1_norm(int norm
+                                  /**< [in] Maximum L1-norm of neighbor rank
+                                     with which to exchange halos. */) =0;
+        
         /// **[Advanced]** Get whether the allocation of the step dimension of this var can be modified at run-time.
         /**
            See set_alloc_size().

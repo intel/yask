@@ -1089,14 +1089,15 @@ namespace yask {
 
         // Next, propagate halos through scratch vars as needed.
 
-        // Example:
-        // eq1: scr(x) EQUALS u(t,x+1); <-- orig halo of u = 1.
-        // eq2: u(t+1,x) EQUALS scr(x+2); <-- orig halo of scr = 2.
+        // Example 1:
+        // eq1: scr1(x) EQUALS u(t,x+1); <-- orig halo of u = 1.
+        // eq2: u(t+1,x) EQUALS scr1(x+2); <-- orig halo of scr1 = 2.
         // Direct deps: eq2 -> eq1(s).
         // Halo of u must be increased to 1 + 2 = 3 due to
-        // eq1: u(t,x+1) on rhs and orig halo of scr on lhs.
+        // eq1: u(t,x+1) on rhs and orig halo of scr1 on lhs,
+        // i.e., because u(t+1,x) EQUALS u(t,(x+2)+1) by subst.
 
-        // Example:
+        // Example 2:
         // eq1: scr1(x) EQUALS u(t,x+1); <-- orig halo of u = 1.
         // eq2: scr2(x) EQUALS scr1(x+2); <-- orig halo of scr1 = 2.
         // eq3: u(t+1,x) EQUALS scr2(x+4); <-- orig halo of scr2 = 4.
@@ -1105,15 +1106,18 @@ namespace yask {
         // eq2: scr1(x+2) on rhs and orig halo of scr2 on lhs.
         // Then, halo of u must be increased to 1 + 6 = 7 due to
         // eq1: u(t,x+1) on rhs and new halo of scr1 on lhs.
+        // Or, u(t+1,x) EQUALS u(t,((x+4)+2)+1) by subst.
 
-        // Example:
+        // Example 3:
         // eq1: scr1(x) EQUALS u(t,x+1); <--|
         // eq2: scr2(x) EQUALS u(t,x+2); <--| orig halo of u = max(1,2) = 2.
         // eq3: u(t+1,x) EQUALS scr1(x+3) + scr2(x+4);
         // eq1 and eq2 are bundled => scr1 and scr2 halos are max(3,4) = 4.
         // Direct deps: eq3 -> eq1(s), eq3 -> eq2(s).
+        // Halo of u is 4 + 2 = 6.
+        // Or, u(t+1,x) EQUALS u(t,(x+3)+1) + u(t,(x+4)+2) by subst.
         
-        // Keep a list of maps of shadow vars.
+        // Algo: Keep a list of maps of shadow vars.
         // Each map: key=real-var ptr, val=shadow-var ptr.
         // These shadow vars will be used to track
         // updated halos for each path.
@@ -1227,6 +1231,7 @@ namespace yask {
                             // also be written to.
                             auto left_ohalo = og1->getHaloSizes(pname, true);
                             auto right_ohalo = og1->getHaloSizes(pname, false);
+                            auto l1Dist = og1->getL1Dist();
 
 #ifdef DEBUG_SCRATCH
                             cout << "** cH: processing " << b2->getDescr() << "...\n" 
@@ -1251,6 +1256,7 @@ namespace yask {
                                     ig->updateHalo(pname, left_ihalo);
                                     auto right_ihalo = ao.addElements(right_ohalo, false);
                                     ig->updateHalo(pname, right_ihalo);
+                                    ig->updateL1Dist(l1Dist);
 #ifdef DEBUG_SCRATCH
                                     cout << "*** cH: updated min halos of '" << ig->get_name() << "' to " <<
                                         left_ihalo.makeDimValStr() <<

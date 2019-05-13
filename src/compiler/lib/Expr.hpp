@@ -1039,26 +1039,5 @@ namespace yask {
     typedef set<varPointPtr> varPointPtrSet;
     typedef vector<VarPoint> VarPointVec;
 
-    // Use SET_VALUE_FROM_EXPR for creating a string to insert any C++ code
-    // that evaluates to a real_t.
-    // The 1st arg must be the LHS of an assignment statement.
-    // The 2nd arg must evaluate to a real_t (float or double) expression,
-    // but it must NOT include access to a var.
-    // The code string is constructed as if writing to an ostream,
-    // so '<<' operators may be used to evaluate local variables.
-    // Floating-point variables will be printed w/o loss of precision.
-    // The code may access the following:
-    // - Any parameter to the 'calc_stencil_{cluster,scalar}' generated functions,
-    //   including fields of the user-defined 'context' object.
-    // - A variable within the global or current namespace where it will be used.
-    // - A local variable in the 'value' method; in this case, the value
-    //   of the local var must be evaluated and inserted in the expr.
-#define SET_VALUE_FROM_EXPR(lhs, rhs) do {      \
-        ostringstream oss;                      \
-        oss << setprecision(15) << scientific;  \
-        oss << "(" << rhs << ")";               \
-        lhs  make_shared<CodeExpr>(oss.str());  \
-    } while(0)
-
 } // namespace yask.
 

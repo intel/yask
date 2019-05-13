@@ -95,6 +95,9 @@ namespace yask {
         bool _is_dynamic_step_alloc = false;
         bool _is_dynamic_misc_alloc = false;
 
+        // Max L1 dist of halo accesses to this var.
+        int _l1Dist = 0;
+
         // Data that needs to be copied to neighbor's halos if using MPI.
         // If this var has the step dim, there is one bit per alloc'd step.
         // Otherwise, only bit 0 is used.
@@ -476,6 +479,14 @@ namespace yask {
                                      get_name() + "' that does not use the step dimension");
             return gb()._local_offsets[+Indices::step_posn] +
                 gb()._domains[+Indices::step_posn] - 1;
+        }
+        virtual int
+        get_halo_exchange_l1_norm() const {
+            return gb()._l1Dist;
+        }
+        virtual void
+        set_halo_exchange_l1_norm(int norm) {
+            gb()._l1Dist = norm;
         }
 
 #define GET_VAR_API(api_name)                                      \

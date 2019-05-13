@@ -35,6 +35,8 @@ namespace yask {
     string CppPrintHelper::formatReal(double v) {
 
         // Int representation equivalent?
+        // This is needed to properly format int expressions
+        // like 'x > 5'.
         if (double(int(v)) == v)
             return to_string(int(v));
         

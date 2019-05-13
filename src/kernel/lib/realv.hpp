@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// This file defines a union to use for folded vectors of floats or doubles.
+// This file defines a union to use for optionally-folded vectors of floats or doubles.
 
 #ifndef _REAL_VEC_H
 #define _REAL_VEC_H

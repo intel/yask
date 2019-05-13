@@ -255,30 +255,6 @@ namespace yask {
                 if (neigh_rank == MPI_PROC_NULL)
                     return; // from lambda fn.
 
-                // Determine max dist needed.  TODO: determine max dist
-                // automatically from stencils; may not be same for all
-                // vars.
-#ifndef MAX_EXCH_DIST
-#define MAX_EXCH_DIST (NUM_STENCIL_DIMS - 1)
-#endif
-                // Always use max dist with WF. Do this because edge
-                // and/or corner values may be needed in WF extensions
-                // even it not needed w/o WFs.
-                // TODO: determine if max is always needed.
-                int maxdist = MAX_EXCH_DIST;
-                if (wf_steps > 0)
-                    maxdist = NUM_STENCIL_DIMS - 1;
-
-                // Manhattan dist. of current neighbor.
-                int mandist = mpiInfo->man_dists.at(neigh_idx);
-
-                // Check distance.
-                if (mandist > maxdist) {
-                    TRACE_MSG("no halo exchange needed with rank " << neigh_rank <<
-                              " because L1-norm = " << mandist);
-                    return;     // from lambda fn.
-                }
-
                 // Is vectorized exchange allowed based on domain sizes?
                 // Both my rank and neighbor rank must have *all* domain sizes
                 // of vector multiples.
@@ -300,6 +276,29 @@ namespace yask {
                     auto& gname = gp->get_name();
                     bool var_vec_ok = vec_ok;
 
+
+                    // Get calculated max dist needed for this var.
+                    int maxdist = gp->get_halo_exchange_l1_norm();
+                    
+                    // Always use max dist with WF. Do this because edge
+                    // and/or corner values may be needed in WF extensions
+                    // even it not needed w/o WFs.
+                    // TODO: determine if max is always needed.
+                    if (wf_steps > 0)
+                        maxdist = NUM_STENCIL_DIMS - 1;
+
+                    // Manhattan dist. of current neighbor.
+                    int mandist = mpiInfo->man_dists.at(neigh_idx);
+
+                    // Check distance.
+                    if (mandist > maxdist) {
+                        TRACE_MSG("no halo exchange needed with rank " << neigh_rank <<
+                                  " (L1-norm = " << mandist <<
+                                  ") for var '" << gname <<
+                                  "' (max L1-norm = " << maxdist << ")");
+                        continue; // to next var.
+                    }
+                    
                     // Lookup first & last domain indices and calc exchange sizes
                     // for this var.
                     bool found_delta = false;
@@ -578,17 +577,15 @@ namespace yask {
                         } // all dims in this var.
 
                         // Unique name for buffer based on var name, direction, and ranks.
-                        ostringstream oss;
-                        oss << gname;
+                        string bname = gname;
                         if (bd == MPIBufs::bufSend)
-                            oss << "_send_halo_from_" << me << "_to_" << neigh_rank;
+                            bname += "_send_halo_from_" + to_string(me) + "_to_" + to_string(neigh_rank);
                         else if (bd == MPIBufs::bufRecv)
-                            oss << "_recv_halo_from_" << neigh_rank << "_to_" << me;
-                        string bufname = oss.str();
+                            bname += "_recv_halo_from_" + to_string(neigh_rank) + "_to_" + to_string(me);
 
                         // Does buffer have non-zero size?
                         if (buf_sizes.size() == 0 || buf_sizes.product() == 0) {
-                            TRACE_MSG("MPI buffer '" << bufname <<
+                            TRACE_MSG("MPI buffer '" << bname <<
                                       "' not needed because there is no data to exchange");
                             continue;
                         }
@@ -610,7 +607,7 @@ namespace yask {
                         buf.begin_pt = copy_begin;
                         buf.last_pt = copy_last;
                         buf.num_pts = buf_sizes;
-                        buf.name = bufname;
+                        buf.name = bname;
                         buf.vec_copy_ok = buf_vec_ok;
 
                         TRACE_MSG("MPI buffer '" << buf.name <<

@@ -58,20 +58,7 @@ YC_STENCIL	:=	$(stencil)
 ifeq ($(YC_STENCIL),)
  $(error Stencil not specified)
 
-else ifeq ($(YC_STENCIL),3axis)
- MACROS		+=	MAX_EXCH_DIST=1
-
-else ifeq ($(YC_STENCIL),3axis_with_diags)
- MACROS		+=	MAX_EXCH_DIST=2
-
-else ifeq ($(YC_STENCIL),3plane)
- MACROS		+=	MAX_EXCH_DIST=2
-
-else ifeq ($(YC_STENCIL),cube)
- MACROS		+=	MAX_EXCH_DIST=3
-
 else ifneq ($(findstring iso3dfd,$(YC_STENCIL)),)
- MACROS			+=	MAX_EXCH_DIST=1
  def_pad_args		:=	-ep 1
  ifeq ($(arch),knl)
   fold			:=	x=2,y=8
@@ -130,13 +117,11 @@ else ifneq ($(findstring fsg,$(YC_STENCIL)),)
  endif
 
 else ifeq ($(YC_STENCIL),tti)
- MACROS			+=	MAX_EXCH_DIST=3
  ifneq ($(filter $(arch),skx skl clx),)
   def_block_args	:=	-bx 80 -by 16 -bz 40
  endif
 
 else ifeq ($(YC_STENCIL),stream)
- MACROS		+=	MAX_EXCH_DIST=0
  cluster	:=	x=2
 
 endif # stencil-specific.

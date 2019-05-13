@@ -354,12 +354,14 @@ namespace yask {
             }
 
             // Alloc-setting code.
+            bool gotDomain = false;
             for (auto& dim : gp->getDims()) {
                 auto& dname = dim->getName();
                 auto dtype = dim->getType();
 
                 // domain dimension.
                 if (dtype == DOMAIN_INDEX) {
+                    gotDomain = true;
 
                     // Halos for this dimension.
                     for (bool left : { true, false }) {
@@ -406,6 +408,15 @@ namespace yask {
                 }
             } // dims.
 
+            // L1 dist.
+            if (gotDomain) {
+                auto l1var = var + "_l1_norm";
+                os << " const int " << l1var << " = " << gp->getL1Dist() <<
+                    "; // Max L1-norm of MPI neighbor for halo exchanges.\n";
+                initCode += " " + var + "_ptr->set_halo_exchange_l1_norm(" +
+                    l1var + ");\n";
+            }
+            
             // Allow dynamic misc alloc setting if not interleaved.
             initCode += " " + var + "_base_ptr->_set_dynamic_misc_alloc(" +
                 (_settings._innerMisc ? "false" : "true") +
