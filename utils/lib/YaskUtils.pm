@@ -133,7 +133,9 @@ sub removeSuf($) {
   return $val if $val !~ /^[0-9]/;
 
   # Look for suffix.
-  if ($val =~ /^([0-9.e+-]+)\s*Ki?B$/i) {
+  if ($val =~ /^([0-9.e+-]+)B$/i) {
+    $val = $1;
+  } elsif ($val =~ /^([0-9.e+-]+)\s*Ki?B$/i) {
     $val = $1 * $oneKi;
   } elsif ($val =~ /^([0-9.e+-]+)\s*Mi?B$/i) {
     $val = $1 * $oneMi;

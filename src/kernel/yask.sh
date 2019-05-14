@@ -345,6 +345,7 @@ fi
 
 echo $invo
 echo "Log saved in '$logfile'."
+echo "Run 'utils/bin/yask_log_to_csv.pl $logfile' to output in CSV format."
 
 # A summary of the command to print.
 exe_str="'$mpi_cmd $exe_prefix $exe $opts'"
