@@ -1093,50 +1093,32 @@ namespace yask {
         /* Deprecated APIs for yk_var found below should be avoided.
            Use the more explicit form found in the documentation. */
 
-        /// **[Deprecated]** Get the left halo size in the specified dimension.
-        /**
-           Alias for get_left_halo_size(dim, size).
-           @returns Elements in halo in given dimension before the domain.
-        */
-        virtual idx_t
-        get_halo_size(const std::string& dim
-                      /**< [in] Name of dimension to get.
-                         Must be one of
-                         the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+        /// **[Deprecated]** Use get_left_halo_size() and get_right_halo_size().
+        inline idx_t
+        get_halo_size(const std::string& dim) const {
+            return get_left_halo_size(dim);
+        }
+        /// **[Deprecated]** Use get_left_pad_size() and get_right_pad_size().
+        inline idx_t
+        get_pad_size(const std::string& dim) const {
+            return get_left_pad_size(dim);
+        }
+        /// **[Deprecated]** Use get_left_extra_pad_size() and get_right_extra_pad_size().
+        inline idx_t
+        get_extra_pad_size(const std::string& dim) const {
+            return get_left_extra_pad_size(dim);
+        }
 
-        /// **[Deprecated]** Get the left padding in the specified dimension.
-        /**
-           Alias for get_left_pad_size(dim).
-           @returns Elements in left padding in given dimension.
-        */
-        virtual idx_t
-        get_pad_size(const std::string& dim
-                     /**< [in] Name of dimension to get.
-                         Must be one of
-                         the names from yk_solution::get_domain_dim_names(). */ ) const =0;
-
-        /// **[Deprecated]** Get the extra left padding in the specified dimension.
-        /**
-           Alias for get_extra_left_pad_size(dim).
-           @returns Elements in padding in given dimension before the
-           left halo area.
-        */
-        virtual idx_t
-        get_extra_pad_size(const std::string& dim
-                           /**< [in] Name of dimension to get.
-                              Must be one of
-                              the names from yk_solution::get_domain_dim_names(). */ ) const =0;
-
-        /// **[Deprecated]** Use are_indices_local() instead.
-        virtual bool
+        /// **[Deprecated]** Use are_indices_local().
+        inline bool
         is_element_allocated(const std::vector<idx_t>& indices
                              /**< [in] List of indices, one for each var dimension. */ ) const {
             return are_indices_local(indices);
         }
 
 #ifndef SWIG
-        /// **[Deprecated]** Use are_indices_local() instead.
-        virtual bool
+        /// **[Deprecated]** Use are_indices_local().
+        inline bool
         is_element_allocated(const std::initializer_list<idx_t>& indices
                              /**< [in] List of indices, one for each var dimension. */ ) const {
             return are_indices_local(indices);
@@ -1144,7 +1126,7 @@ namespace yask {
 #endif
 
         /// **[Deprecated]** Use fuse_vars().
-        virtual void
+        inline void
         fuse_grids(yk_var_ptr source) {
             fuse_vars(source);
         }

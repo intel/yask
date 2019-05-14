@@ -82,12 +82,6 @@ namespace yask {
                  gb()._right_halos[posn] - 1, false, true, false, true)
     GET_VAR_API(get_first_rank_alloc_index, gb().get_first_local_index(posn), false, true, false, true)
     GET_VAR_API(get_last_rank_alloc_index, gb().get_last_local_index(posn), false, true, false, true)
-
-    // Deprecated APIs.
-    GET_VAR_API(get_pad_size, gb()._actl_left_pads[posn]; DEPRECATED(get_pad_size), false, true, false, false)
-    GET_VAR_API(get_halo_size, gb()._left_halos[posn]; DEPRECATED(get_halo_size), false, true, false, false)
-    GET_VAR_API(get_extra_pad_size, gb()._actl_left_pads[posn] - gb()._left_halos[posn];
-                 DEPRECATED(get_extra_pad_size), false, true, false, false)
 #undef GET_VAR_API
 
     // APIs to set vars.

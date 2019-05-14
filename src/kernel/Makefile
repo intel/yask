@@ -121,9 +121,6 @@ else ifeq ($(YC_STENCIL),tti)
   def_block_args	:=	-bx 80 -by 16 -bz 40
  endif
 
-else ifeq ($(YC_STENCIL),stream)
- cluster	:=	x=2
-
 endif # stencil-specific.
 
 # Defaut settings based on architecture.

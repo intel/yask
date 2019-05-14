@@ -517,7 +517,7 @@ namespace yask {
         clear_dependencies() =0;
 
         /// **[Deprecated]** Use new_var().
-        virtual yc_var_ptr
+        inline yc_var_ptr
         new_grid(const std::string& name,
                  const std::vector<yc_index_node_ptr>& dims) {
             return new_var(name, dims);
@@ -525,7 +525,7 @@ namespace yask {
 
 #ifndef SWIG
         /// **[Deprecated]** Use new_var().
-        virtual yc_var_ptr
+        inline yc_var_ptr
         new_grid(const std::string& name,
                  const std::initializer_list<yc_index_node_ptr>& dims) {
             return new_var(name, dims);
@@ -533,7 +533,7 @@ namespace yask {
 #endif
 
         /// **[Deprecated]** Use new_scratch_var().
-        virtual yc_var_ptr
+        inline yc_var_ptr
         new_scratch_grid(const std::string& name,
                          const std::vector<yc_index_node_ptr>& dims) {
             return new_scratch_var(name, dims);
@@ -541,7 +541,7 @@ namespace yask {
 
 #ifndef SWIG
         /// **[Deprecated]** Use new_scratch_var().
-        virtual yc_var_ptr
+        inline yc_var_ptr
         new_scratch_grid(const std::string& name,
                          const std::initializer_list<yc_index_node_ptr>& dims) {
             return new_scratch_var(name, dims);
@@ -549,23 +549,23 @@ namespace yask {
 #endif
 
         /// **[Deprecated]** Use get_num_vars().
-        virtual int
+        inline int
         get_num_grids() const {
             return get_num_vars();
         }
 
         /// **[Deprecated]** Use get_vars().
-        virtual std::vector<yc_var_ptr>
+        inline std::vector<yc_var_ptr>
         get_grids() {
             return get_vars();
         }
 
         /// **[Deprecated]** Use get_var().
-        virtual yc_var_ptr
+        inline yc_var_ptr
         get_grid(const std::string& name) {
             return get_var(name);
         }
-    };
+    };                          // yc_solution.
 
     /// A compile-time data variable.
     /** "Var" is a generic term for any n-dimensional variable.  A 0-dim var
@@ -691,7 +691,29 @@ namespace yask {
         virtual void
         set_step_alloc_size(idx_t size
                             /**< [in] Number of elements to allocate in the step dimension. */) =0;
-    };
+
+        /// **[Deprecated]** Use new_var_point().
+        inline yc_var_point_node_ptr
+        new_grid_point(const std::vector<yc_number_node_ptr>& index_exprs) {
+            return new_var_point(index_exprs);
+        }
+        /// **[Deprecated]** Use new_var_point().
+        inline yc_var_point_node_ptr
+        new_grid_point(const std::initializer_list<yc_number_node_ptr>& index_exprs) {
+            return new_var_point(index_exprs);
+        }
+        /// **[Deprecated]** Use new_relative_var_point().
+        inline yc_var_point_node_ptr
+        new_relative_grid_point(const std::vector<int>& dim_offsets) {
+            return new_relative_var_point(dim_offsets);
+        }
+        /// **[Deprecated]** Use new_relative_var_point().
+        inline yc_var_point_node_ptr
+        new_relative_grid_point(const std::initializer_list<int>& dim_offsets) {
+            return new_relative_var_point(dim_offsets);
+        }
+        
+    };                      // yc_var.
 
     /// A wrapper or "proxy" class around a \ref yc_var pointer.
     /**
@@ -718,10 +740,10 @@ namespace yask {
        ~~~
        Compare to the example shown in yc_solution::new_var().
        
-       *Scoping and lifetime:* Since the \ref yc_var pointer in a \ref
+       _Scoping and lifetime:_ Since the \ref yc_var pointer in a \ref
        yc_var_proxy object is a shared pointer also owned by the \ref
        yc_solution object used to construct the \ref yc_var_proxy object, the
-       underlying var will not be destroyed until both the \ref yc_var_proxy
+       underlying YASK var will not be destroyed until both the \ref yc_var_proxy
        object and the \ref yc_solution object are destroyed.
        A \ref yc_var_proxy object created from an existing \ref yc_var
        object will have the same properties.
@@ -741,7 +763,7 @@ namespace yask {
                     /**< [in] Name of the new var; must be a valid C++
                        identifier and unique across vars. */,
                     yc_solution_ptr soln
-                    /**< [in] Pointer to solution that will own the var. */,
+                    /**< [in] Shared pointer to solution that will share ownership of the \ref yc_var. */,
                     const std::vector< yc_index_node_ptr > &dims
                     /**< [in] Dimensions of the var.
                        Each dimension is identified by an associated index. */,
@@ -835,34 +857,11 @@ namespace yask {
             return _var->new_var_point(index_exprs);
         }
 
-        /// Create an expression for a point in a zero-dim (scalar) var using implicit conversion.
-        /**
-           A wrapper around yc_var::new_var_point().
-
-           Example w/0D var `B`: `A(t+1, x) EQUALS A(t, x) + B`.
-           @note Not available in Python API. 
-           Use vector version with empty vector.
-        */
-        virtual operator yc_number_ptr_arg() {
-            return _var->new_var_point({});
-        }
-
-        /// Create an expression for a point in a one-dim (array) var.
-        /**
-           A wrapper around yc_var::new_var_point().
-
-           Example w/1D var `B`: `A(t+1, x) EQUALS A(t, x) + B[x]`.
-           @note Not available in Python API. 
-           Use vector version with 1-element vector.
-        */
-        virtual yc_var_point_node_ptr operator[](const yc_number_any_arg i1) {
-            return _var->new_var_point({i1});
-        }
-        
         /// Create an expression for a point in a 1-6 dim var.
         /**
            A wrapper around yc_var::new_var_point().
            The number of non-null arguments must match the dimensionality of the var.
+           For more than 6 dims, use the vector or initializer-list version.
 
            Example w/2D var `B`: `A(t+1, x) EQUALS A(t, x) + B(x, 3)`.
            @note Not available in Python API. Use vector version.
@@ -888,9 +887,34 @@ namespace yask {
                 args.push_back(i6);
             return _var->new_var_point(args);
         }
+
+        /// Create an expression for a point in a zero-dim (scalar) var using implicit conversion.
+        /**
+           A wrapper around yc_var::new_var_point().
+
+           Example w/0D var `B`: `A(t+1, x) EQUALS A(t, x) + B`.
+           @note Not available in Python API. 
+           Use vector version with empty vector.
+        */
+        virtual operator yc_number_ptr_arg() {
+            return _var->new_var_point({});
+        }
+
+        /// Create an expression for a point in a one-dim (array) var.
+        /**
+           A wrapper around yc_var::new_var_point().
+
+           Example w/1D var `B`: `A(t+1, x) EQUALS A(t, x) + B[x]`.
+           @note Not available in Python API. 
+           Use vector version with 1-element vector.
+        */
+        virtual yc_var_point_node_ptr operator[](const yc_number_any_arg i1) {
+            return _var->new_var_point({i1});
+        }
+        
 #endif
         
-    };
+    };                          // yc_var_proxy.
     /** @}*/
 
     /// **[Deprecated]** Use yc_var.

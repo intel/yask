@@ -289,7 +289,7 @@ namespace yask {
         get_var() =0;
 
         /// **[Deprecated]** Use get_var().
-        virtual yc_var_ptr
+        inline yc_var_ptr
         get_grid() {
             return get_var();
         }

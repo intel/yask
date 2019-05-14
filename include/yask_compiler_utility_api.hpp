@@ -47,15 +47,15 @@ namespace yask {
      * @{
      */
 
-    /// The class all C++ stencil solutions written for the YASK compiler utility `yask_compiler.exe` must implement.
+    /// All C++ stencil solutions written for the YASK compiler utility must implement this class.
     /**
-       Mostly, this is a wrapper around a \ref yc_solution pointer.
+       This is a wrapper around a \ref yc_solution pointer.
        The `define()` method must be overloaded by
        the YASK DSL programmer to add stencil equations.
 
        Not to be used by DSL code that is not a part of the YASK compiler
        utility `yask_compiler.exe`. For DSL code not using this utility,
-       call yc_factory::new_solution directly.
+       call yc_factory::new_solution(), yc_solution::format(), etc. directly.
     */
     class yc_solution_base {
     private:
