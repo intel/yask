@@ -49,13 +49,13 @@ fi
 # Default arch.
 cpu_flags=`grep -m1 '^flags' /proc/cpuinfo`
 if [[ $cpu_flags =~ avx512dq ]]; then
-    arch=skx
+    arch=avx512
 elif [[ $cpu_flags =~ avx512pf ]]; then
     arch=knl
 elif [[ $cpu_flags =~ avx2 ]]; then
-    arch=hsw
+    arch=avx2
 elif [[ $cpu_flags =~ avx ]]; then
-    arch=snb
+    arch=avx
 else
     arch=intel64
 fi

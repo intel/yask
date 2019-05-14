@@ -190,8 +190,11 @@ namespace yask {
         STATE_VARS(this);
 
         os <<
-            " num-wave-front-steps:      " << wf_steps << endl;
-        if (wf_steps > 0) {
+            " num-wave-front-steps:      " << wf_steps << endl <<
+            " num-temporal-block-steps:  " << tb_steps << endl;
+
+        // Print detailed info only if temporal tiling enabled.
+        if (wf_steps > 0 || tb_steps > 0) {
             os <<
                 " wave-front-angles:         " << wf_angles.makeDimValStr() << endl <<
                 " num-wave-front-shifts:     " << num_wf_shifts << endl <<
@@ -200,7 +203,6 @@ namespace yask {
                 " right-wave-front-exts:     " << right_wf_exts.makeDimValStr() << endl <<
                 " ext-local-domain:          " << ext_bb.bb_begin.makeDimValStr() <<
                 " ... " << ext_bb.bb_end.subElements(1).makeDimValStr() << endl <<
-                " num-temporal-block-steps:  " << tb_steps << endl <<
                 " temporal-block-angles:     " << tb_angles.makeDimValStr() << endl <<
                 " num-temporal-block-shifts: " << num_tb_shifts << endl <<
                 " temporal-block-long-base:  " << tb_widths.makeDimValStr(" * ") << endl <<
@@ -243,6 +245,7 @@ namespace yask {
 #endif
         os << "\nOther settings:\n"
             " yask-version:          " << yask_get_version_string() << endl <<
+            " target-ISA:            " << YSTR2(ARCH_NAME) << endl <<
             " stencil-name:          " << get_name() << endl <<
             " stencil-description:   " << get_description() << endl <<
             " element-size:          " << makeByteStr(get_element_bytes()) << endl <<

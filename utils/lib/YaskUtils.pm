@@ -45,16 +45,23 @@ our @special_log_keys =
 our @log_keys =
   (
    # values from binary.
+   'mid throughput (num-points/sec)',
+   'mid throughput (num-reads/sec)',
+   'mid throughput (num-writes/sec)',
+   'mid throughput (est-FLOPS)',
+   'mid elapsed time (sec)',
+   'mid num-steps-done',
    'best throughput (num-points/sec)',
    'best throughput (num-reads/sec)',
    'best throughput (num-writes/sec)',
    'best throughput (est-FLOPS)',
    'best elapsed time (sec)',
    'best num-steps-done',
-   'mid throughput (num-points/sec)',
-   'version',
+   'yask version',
+   'target ISA',
    'stencil name',
    'stencil description',
+   'element size',
    'invocation',
    'binary invocation',
    'num MPI ranks',
@@ -307,7 +314,8 @@ sub printCsvValues($$) {
   for my $m (@all_log_keys) {
     my $r = $results->{$m};
     $r = '' if !defined $r;
-    $r = '"'.$r.'"' if $r !~ /^[0-9.e+-]+$/;  # add quotes if not a number.
+    $r = '"'.$r.'"'  # add quotes if not a number.
+      if $r !~ /^[0-9.e+-]+$/ || $r =~ /[.].*[.]/;
     push @cols, $r;
   }
   print $fh join(',', @cols);

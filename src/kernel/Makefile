@@ -43,16 +43,34 @@ check			?=	0
 # it adds a few MiB to the binary and can impact perfomance
 # even if not used, but only around 1%.
 
-# Determine default architecture by running kernel script w/special knob.
-# Do not assume it has been installed in $(BIN_OUT_DIR) yet.
-arch			?=	$(shell $(BASH) ./yask.sh -show_arch)
+# If 'arch' isn't set, determine default architecture by running kernel
+# script w/special knob.  Do not assume it has been installed in
+# $(BIN_OUT_DIR) yet.
+arch		?=	$(shell $(BASH) ./yask.sh -show_arch)
 
-# Specify YK_STENCIL and/or YK_ARCH to name binaries differently.
+# Specify YK_STENCIL and/or YK_ARCH on 'make' cmd-line to name binaries differently.
 YK_STENCIL	:=	$(stencil)
 YK_ARCH		:=	$(arch)
 
-# Specify YC_STENCIL to pass different stencil name to YASK compiler.
+# Specify YC_STENCIL on 'make' cmd-line to pass different stencil name to YASK compiler.
 YC_STENCIL	:=	$(stencil)
+
+# Set 'ARCH', converting old codenames to ISA names.
+ifneq ($(filter $(arch),avx snb ivb),)
+  ARCH		:=	avx
+else ifneq ($(filter $(arch),avx2 hsw bdw),)
+  ARCH		:=	avx2
+else ifneq ($(filter $(arch),avx512 skx skl clx),)
+  ARCH		:=	avx512
+else ifneq ($(filter $(arch),knl),)
+  ARCH		:=	knl
+else ifneq ($(filter $(arch),knc),)
+  ARCH		:=	knc
+else ifneq ($(filter $(arch),intel64),)
+  ARCH		:=	intel64
+else
+  $(error Instruction-set architecture (ISA) not recognized; use arch=avx512, avx2, avx, knl, knc, or intel64 (no explicit vectorization))
+endif
 
 # Defaults based on stencil type (and arch for some stencils).
 ifeq ($(YC_STENCIL),)
@@ -60,88 +78,87 @@ ifeq ($(YC_STENCIL),)
 
 else ifneq ($(findstring iso3dfd,$(YC_STENCIL)),)
  def_pad_args		:=	-ep 1
- ifeq ($(arch),knl)
+ ifeq ($(ARCH),knl)
   fold			:=	x=2,y=8
   cluster		:=	x=2
   def_block_args	:=	-bx 160 -by 256 -bz 96
   pfd_l1		:=	1
   pfd_l2		:=	0
- else ifneq ($(filter $(arch),hsw bdw),)
-  def_block_args	:=	-bx 48 -by 60 -bz 112
-  pfd_l1		:=	0
-  pfd_l2		:=	0
- else ifneq ($(filter $(arch),skx skl clx),)
+ else ifeq ($(arch),avx512)
   def_block_args	:=	-bx 108	 -by 28 -bz 132
   pfd_l1		:=	0
   pfd_l2		:=	2
+ else
+  def_block_args	:=	-bx 48 -by 60 -bz 112
+  pfd_l1		:=	0
+  pfd_l2		:=	0
  endif
 
 else ifneq ($(findstring awp,$(YC_STENCIL)),)
  YC_FLAGS		+=	-min-es 1
  def_pad_args		:=	-ep 1
- ifeq ($(arch),knl)
+ ifeq ($(ARCH),knl)
   def_thread_divisor	:=	2
   def_block_threads	:=	4
   def_block_args	:=	-bx 48 -by 48 -bx 112
   pfd_l1		:=	1
   pfd_l2		:=	0
- else ifneq ($(filter $(arch),hsw bdw),)
-  def_block_args	:=	-bx 64 -by 8 -bz 64
-  pfd_l1		:=	1
-  pfd_l2		:=	2
- else ifneq ($(filter $(arch),skx skl clx),)
+ else ifeq ($(ARCH),avx512)
   def_block_args	:=	-bx 64 -by 8 -bz 108
   pfd_l1		:=	1
   pfd_l2		:=	0
+ else
+  def_block_args	:=	-bx 64 -by 8 -bz 64
+  pfd_l1		:=	1
+  pfd_l2		:=	2
  endif
 
 else ifneq ($(findstring ssg,$(YC_STENCIL)),)
- ifneq ($(filter $(arch),hsw bdw),)
-  def_block_args	:=	-bx 64 -by 16 -bz 96
- else ifneq ($(filter $(arch),skx skl clx),)
+ ifeq ($(ARCH),avx512)
   def_block_args	:=	-bx 96 -by 16 -bz 80
+ else
+  def_block_args	:=	-bx 64 -by 16 -bz 96
  endif
 
 else ifneq ($(findstring fsg,$(YC_STENCIL)),)
- ifeq ($(arch),knl)
+ ifeq ($(ARCH),knl)
   omp_region_schedule	:=	guided
   def_block_args	:=	-b 16
   def_thread_divisor	:=	4
   def_block_threads	:=	2
   pfd_l1		:=	0
   pfd_l2		:=	2
- else ifneq ($(filter $(arch),hsw bdw),)
-  def_block_args	:=	-bx 48 -by 4 -bz 128
- else ifneq ($(filter $(arch),skx skl clx),)
+ else ifeq ($(ARCH),avx512)
   def_block_args	:=	-bx 188 -by 12 -bz 24
+ else
+  def_block_args	:=	-bx 48 -by 4 -bz 128
  endif
 
 else ifeq ($(YC_STENCIL),tti)
- ifneq ($(filter $(arch),skx skl clx),)
+ ifeq ($(ARCH),avx512)
   def_block_args	:=	-bx 80 -by 16 -bz 40
  endif
 
 endif # stencil-specific.
 
-# Defaut settings based on architecture.
-# (Use '?=' to avoid replacing above settings.)
-ifeq ($(arch),knc)
+# Default settings based on architecture.
+ifeq ($(ARCH),knc)
 
- ISA		?=	-mmic
+ ICC_ISA	?=	-mmic
  MACROS		+=	USE_INTRIN512
  YC_TARGET	?=	knc
  def_block_threads  ?=	4
  pfd_l1		?=	1
  pfd_l2		?=	2
 
-else ifeq ($(arch),knl)
+else ifeq ($(ARCH),knl)
 
  # NUMA_PREF=1 causes YASK to use MCDRAM on a node in "flat" memory mode. It
  # will fall-back to NUMA node 0 in "cache" memory mode. It will *NOT* do
  # the right thing by default in SNC-2 or SNC-4 clustering modes (using
  # either flat or cache memory modes, but these configurations are uncommon.
- ISA		?=	-xMIC-AVX512
- GCXX_ISA	?=	-march=knl
+ ICC_ISA	?=	-xMIC-AVX512
+ GCC_ISA	?=	-march=knl
  MACROS		+=	USE_INTRIN512 USE_RCP28 NUMA_PREF=1
  YC_TARGET	?=	avx512
  def_block_args ?=	-b 64
@@ -149,45 +166,36 @@ else ifeq ($(arch),knl)
  pfd_l1		?=	1
  pfd_l2		?=	0
 
-else ifneq ($(filter $(arch),skx skl clx),)
+else ifeq ($(ARCH),avx512)
 
- # Note that 'skl' targets the server SKUs with avx512 ISA,
- # not the client SKUs without.
- ISA		?=	-xCORE-AVX512
- GCXX_ISA	?=	-march=knl -mno-avx512er -mno-avx512pf
+ ICC_ISA	?=	-xCORE-AVX512
+ GCC_ISA	?=	-march=knl -mno-avx512er -mno-avx512pf
  MACROS		+=	USE_INTRIN512
  YC_TARGET	?=	avx512
 
-else ifneq ($(filter $(arch),hsw bdw),)
+else ifeq ($(ARCH),avx2)
 
- ISA		?=	-xCORE-AVX2
- GCXX_ISA	?=	-march=haswell
+ ICC_ISA	?=	-xCORE-AVX2
+ GCC_ISA	?=	-march=haswell
  MACROS		+=	USE_INTRIN256 USE_AVX2
  YC_TARGET	?=	avx2
 
-else ifeq ($(arch),ivb)
+else ifeq ($(ARCH),avx)
 
- ISA		?=	-xCORE-AVX-I
- GCXX_ISA	?=	-march=ivybridge
+ ICC_ISA	?=	-xAVX
+ GCC_ISA	?=	-march=sandybridge
  MACROS		+=	USE_INTRIN256
  YC_TARGET	?=	avx
 
-else ifeq ($(arch),snb)
+else ifeq ($(ARCH),intel64)
 
- ISA		?=	-xAVX
- GCXX_ISA	?=	-march=sandybridge
- MACROS		+=	USE_INTRIN256
- YC_TARGET	?=	avx
-
-else ifeq ($(arch),intel64)
-
- ISA		?=	-xHOST
- GCXX_ISA	?=	-march=native
+ ICC_ISA	?=	-xHOST
+ GCC_ISA	?=	-march=native
  YC_TARGET	?=	cpp
 
 else
 
-$(error Architecture not recognized; use arch=knl, knc, clx, skx, hsw, bdw, ivb, snb, or intel64 (no explicit vectorization))
+$(error Internal error: arch lists are not consistent)
 
 endif # arch-specific.
 
@@ -256,7 +264,7 @@ YK_OUT_DIR	:=	$(BUILD_OUT_DIR)/kernel
 
 # Dir for output files dependent on arch but
 # not on the stencil.
-YK_ARCH_DIR	:=	$(YK_OUT_DIR)/$(arch)
+YK_ARCH_DIR	:=	$(YK_OUT_DIR)/$(YK_ARCH)
 YK_OBJ_DIR	:=	$(YK_ARCH_DIR)/obj
 
 # Dirs for stencil-specific output files.
@@ -387,8 +395,8 @@ DEF_ARGS	+=	$(def_block_args) $(def_pad_args) $(more_def_args)
 YK_CXXFLAGS	+=	-DDEF_ARGS='"$(DEF_ARGS) $(EXTRA_DEF_ARGS)"'
 
 # arch.
-ARCH		:=	$(shell echo $(arch) | tr '[:lower:]' '[:upper:]')
-MACROS		+=	ARCH_$(ARCH)
+UC_ARCH		:=	$(shell echo $(ARCH) | tr '[:lower:]' '[:upper:]')
+MACROS		+=	ARCH_$(UC_ARCH) ARCH_NAME=$(ARCH)
 
 # MPI settings.
 ifeq ($(mpi),1)
@@ -433,7 +441,7 @@ ifneq ($(filter %icpc %icc,$(notdir $(YK_CXX))),)  # Intel compiler
 
 # Use 512-bit code on SKX and CLX.
 # (Commented out because it doesn't help performance, and it breaks Devito.)
-ifneq ($(filter $(arch),skx skl clx),)
+ifeq ($(ARCH),avx512)
  #YK_CXXFLAGS	+=	-qopt-zmm-usage=high
 endif
 
@@ -869,6 +877,7 @@ realclean: clean
 echo-settings:
 	@echo "Build environment for" $(YK_EXEC) on `date`; \
 	$(YK_CXX) --version; \
+	echo ARCH=$(ARCH); \
 	echo BLOCK_LOOP_CODE="\"$(BLOCK_LOOP_CODE)\""; \
 	echo BLOCK_LOOP_INNER_MODS="\"$(BLOCK_LOOP_INNER_MODS)\""; \
 	echo BLOCK_LOOP_OPTS="\"$(BLOCK_LOOP_OPTS)\""; \
@@ -969,7 +978,7 @@ help:
 	echo " "; \
 	echo "Example debug builds of kernel cmd-line tool:"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' check=1 # No optimization, OpenMP or MPI; internal checking."; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=test_2d mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' trace=1 # Enable tracing; run with '-trace' to get trace."; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=avx stencil=test_2d mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' trace=1 # Enable tracing; run with '-trace' to get trace."; \
 	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' trace_mem=1 # Trace all mem accesses with '-trace'."; \
 	echo " "; \
 	echo "Example builds with test runs:"; \
