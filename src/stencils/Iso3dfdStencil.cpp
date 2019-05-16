@@ -68,8 +68,8 @@ public:
         double d2 = delta_xyz * delta_xyz;
         
         // Spatial FD coefficients for 2nd derivative.
-        auto coeff = get_center_fd_coefficients(2, _radius);
-        size_t c0i = _radius;      // index of center sample.
+        auto coeff = get_center_fd_coefficients(2, get_radius());
+        size_t c0i = get_radius();      // index of center sample.
 
         for (size_t i = 0; i < coeff.size(); i++) {
 
@@ -87,7 +87,7 @@ public:
 
         // Add values from x, y, and z axes multiplied by the
         // coeff for the given radius.
-        for (int r = 1; r <= _radius; r++) {
+        for (int r = 1; r <= get_radius(); r++) {
 
             // Add values from axes at radius r.
             fd_sum += (
@@ -143,7 +143,7 @@ public:
 
         // Only valid for SP FP and radius 8.
         if (soln->get_element_bytes() == 4 &&
-            _radius == 8) {
+            get_radius() == 8) {
 
             // Change the settings immediately after the kernel solution
             // is created.

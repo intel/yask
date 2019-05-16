@@ -80,7 +80,7 @@ protected:
     virtual int addPoints(yc_number_node_ptr& v)
     {
         int pts = 0;
-        for (int r = 1; r <= _radius; r++) {
+        for (int r = 1; r <= get_radius(); r++) {
 
             v +=
                 // x-axis.
@@ -122,7 +122,7 @@ protected:
         int pts = AxisStencil::addPoints(v);
 
         // Add points from diagonals.
-        for (int r = 1; r <= _radius; r++) {
+        for (int r = 1; r <= get_radius(); r++) {
 
             v += 
                 // x-y diagonal.
@@ -170,8 +170,8 @@ protected:
         int pts = DiagStencil::addPoints(v);
 
         // Add remaining points on planes.
-        for (int r = 1; r <= _radius; r++) {
-            for (int m = r+1; m <= _radius; m++) {
+        for (int r = 1; r <= get_radius(); r++) {
+            for (int m = r+1; m <= get_radius(); m++) {
 
                 v += 
                     // x-y plane.
@@ -232,9 +232,9 @@ protected:
         int pts = PlaneStencil::addPoints(v);
 
         // Add points from rest of cube.
-        for (int rx = 1; rx <= _radius; rx++)
-            for (int ry = 1; ry <= _radius; ry++)
-                for (int rz = 1; rz <= _radius; rz++) {
+        for (int rx = 1; rx <= get_radius(); rx++)
+            for (int ry = 1; ry <= get_radius(); ry++)
+                for (int rz = 1; rz <= get_radius(); rz++) {
 
                     v +=
                         // Each quadrant.

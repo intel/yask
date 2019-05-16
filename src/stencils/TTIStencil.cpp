@@ -2487,7 +2487,7 @@ TTIStencil (int radius = 2):
   // Required stencil-definition method.
   virtual void define ()
   {
-    switch (_radius)
+    switch (get_radius())
       {
       case 2:
 	define_so4 ();

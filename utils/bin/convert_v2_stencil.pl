@@ -129,6 +129,9 @@ sub convert($) {
       s/\bIndexExprPtr\b/yc_index_node_ptr/g;
       s/\bBoolExprPtr\b/yc_bool_node_ptr/g;
 
+      # Vars.
+      s/\b_radius\b/get_radius()/g;
+
       # Other macros.
       s/\b(EQUALS_OPER|IS_EQUIV_TO|IS_EQUIVALENT_TO)\b/EQUALS/g;
       s/\b(IF|IF_OPER)\b/IF_DOMAIN/g;

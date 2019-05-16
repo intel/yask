@@ -52,7 +52,7 @@ protected:
                              int left_ext, int right_ext) {
         yc_number_node_ptr v;
         int n = 0;
-        for (int i = -_radius - left_ext; i <= _radius + right_ext; i++, n++)
+        for (int i = -get_radius() - left_ext; i <= get_radius() + right_ext; i++, n++)
             v += V(t0, x0+i);
         return v / n;
     }
@@ -63,7 +63,7 @@ protected:
                                      int left_ext, int right_ext) {
         yc_number_node_ptr v;
         int n = 0;
-        for (int i = -_radius - left_ext; i <= _radius + right_ext; i++, n++)
+        for (int i = -get_radius() - left_ext; i <= get_radius() + right_ext; i++, n++)
             v += V(x0+i);
         return v / n;
     }
@@ -78,8 +78,8 @@ protected:
                              int y_left_ext, int y_right_ext) {
         yc_number_node_ptr v;
         int n = 0;
-        for (int i : { -_radius - x_left_ext, 0, _radius + x_right_ext })
-            for (int j : { -_radius - y_left_ext, 0, _radius + y_right_ext }) {
+        for (int i : { -get_radius() - x_left_ext, 0, get_radius() + x_right_ext })
+            for (int j : { -get_radius() - y_left_ext, 0, get_radius() + y_right_ext }) {
                 v += V(t0, x0+i, y0+j);
                 n++;
             }
@@ -96,8 +96,8 @@ protected:
                                      int y_left_ext, int y_right_ext) {
         yc_number_node_ptr v;
         int n = 0;
-        for (int i : { -_radius - x_left_ext, 0, _radius + x_right_ext })
-            for (int j : { -_radius - y_left_ext, 0, _radius + y_right_ext }) {
+        for (int i : { -get_radius() - x_left_ext, 0, get_radius() + x_right_ext })
+            for (int j : { -get_radius() - y_left_ext, 0, get_radius() + y_right_ext }) {
                 v += V(x0+i, y0+j);
                 n++;
             }
@@ -116,9 +116,9 @@ protected:
                              int z_left_ext, int z_right_ext) {
         yc_number_node_ptr v;
         int n = 0;
-        for (int i : { -_radius - x_left_ext, 0, _radius + x_right_ext })
-            for (int j : { -_radius - y_left_ext, 0, _radius + y_right_ext })
-                for (int k : { -_radius - z_left_ext, 0, _radius + z_right_ext }) {
+        for (int i : { -get_radius() - x_left_ext, 0, get_radius() + x_right_ext })
+            for (int j : { -get_radius() - y_left_ext, 0, get_radius() + y_right_ext })
+                for (int k : { -get_radius() - z_left_ext, 0, get_radius() + z_right_ext }) {
                     v += V(t0, x0+i, y0+j, z0+k);
                     n++;
                 }
@@ -137,9 +137,9 @@ protected:
                                      int z_left_ext, int z_right_ext) {
         yc_number_node_ptr v;
         int n = 0;
-        for (int i : { -_radius - x_left_ext, 0, _radius + x_right_ext })
-            for (int j : { -_radius - y_left_ext, 0, _radius + y_right_ext })
-                for (int k : { -_radius - z_left_ext, 0, _radius + z_right_ext }) {
+        for (int i : { -get_radius() - x_left_ext, 0, get_radius() + x_right_ext })
+            for (int j : { -get_radius() - y_left_ext, 0, get_radius() + y_right_ext })
+                for (int k : { -get_radius() - z_left_ext, 0, get_radius() + z_right_ext }) {
                     v += V(x0+i, y0+j, z0+k);
                     n++;
                 }
@@ -160,10 +160,10 @@ protected:
                              int z_left_ext, int z_right_ext) {
         yc_number_node_ptr v;
         int n = 0;
-        for (int h : { -_radius - w_left_ext, 0, _radius + w_right_ext })
-            for (int i : { -_radius - x_left_ext, 0, _radius + x_right_ext })
-                for (int j : { -_radius - y_left_ext, 0, _radius + y_right_ext })
-                    for (int k : { -_radius - z_left_ext, 0, _radius + z_right_ext }) {
+        for (int h : { -get_radius() - w_left_ext, 0, get_radius() + w_right_ext })
+            for (int i : { -get_radius() - x_left_ext, 0, get_radius() + x_right_ext })
+                for (int j : { -get_radius() - y_left_ext, 0, get_radius() + y_right_ext })
+                    for (int k : { -get_radius() - z_left_ext, 0, get_radius() + z_right_ext }) {
                         v += V(t0, w0+h, x0+i, y0+j, z0+k);
                         n++;
                     }
@@ -350,13 +350,13 @@ public:
         // Define the value at t+1 using asymmetric stencil
         // with various pos & neg indices in misc dims.
         yc_number_node_ptr v = A(t, x, 0, y, -1, 2) + 1.0;
-        for (int r = 1; r <= _radius; r++)
+        for (int r = 1; r <= get_radius(); r++)
             v += A(t, x + r, 3, y, 0, 1);
-        for (int r = 1; r <= _radius + 1; r++)
+        for (int r = 1; r <= get_radius() + 1; r++)
             v += A(t, x - r, 4, y, 2, 1);
-        for (int r = 1; r <= _radius + 2; r++)
+        for (int r = 1; r <= get_radius() + 2; r++)
             v += A(t, x, -2, y + r, 2, 0);
-        for (int r = 1; r <= _radius + 3; r++)
+        for (int r = 1; r <= get_radius() + 3; r++)
             v += A(t, x, 0, y - r, 0, -1);
         A(t+1, x, 1, y, 2, 3) EQUALS v;
     }
@@ -393,13 +393,13 @@ public:
         yc_solution_with_radius_base("test_stream_3d", radius) { }
     virtual ~StreamStencil() { }
 
-    // Define equation to read '_radius' values and write one.
+    // Define equation to read 'get_radius()' values and write one.
     virtual void define() {
 
         yc_number_node_ptr v;
 
-        // Add '_radius' values from past time-steps.
-        for (int r = 0; r < _radius; r++)
+        // Add 'get_radius()' values from past time-steps.
+        for (int r = 0; r < get_radius(); r++)
             v += A(t-r, x, y, z);
 
         // define the value at t+1 to be equivalent to v + 1.

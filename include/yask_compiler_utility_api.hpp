@@ -161,18 +161,18 @@ namespace yask {
         }
     };
 
-    /// A base class for stencils that have a 'radius' size parameter.
+    /// A base class for stencils that have a "radius" size parameter.
+    /**
+       For a symmetric finite-difference stencil, the "radius" is often the
+       number of points in the spatial dimension(s) from the center
+       point of a finite-difference approximation. However, any meaning
+       may be given to this variable. For example, it could be the
+       minimum or maximum radius for an asymmetical stencil.
+    */
     class yc_solution_with_radius_base : public yc_solution_base {
-    protected:
+    private:
 
         /// A variable that controls the size the stencil.
-        /**
-           For a symmetric finite-difference stencil, this is often the
-           number of points in the spatial dimension(s) from the center
-           point of a finite-difference approximation. However, any meaning
-           may be given to this variable. For example, it could be the
-           minimum or maximum radius for an asymmetical stencil.
-	*/
         int _radius;
 
     public:

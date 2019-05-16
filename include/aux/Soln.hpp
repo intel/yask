@@ -43,11 +43,7 @@ namespace yask {
     /// Dummy object from compiler utility for backward-compatibility.
     extern StencilList stub_stencils;
 
-    /// **[Deprecated]** The class all old-style C++ stencil solutions
-    /// written for the YASK compiler binary must implement.
-    /**
-       New DSL code should use yc_solution_base directly.
-    */
+    /// **[Deprecated]** Use yc_solution_base.
     class StencilBase : public yc_solution_base {
         
     public:
@@ -57,14 +53,32 @@ namespace yask {
             yc_solution_base(name) { }
     };
 
-    /// **[Deprecated]** A base class for stencils that have a 'radius'.
+    /// **[Deprecated]** Use yc_solution_with_radius_base.
     class StencilRadiusBase : public yc_solution_with_radius_base {
+
+    protected:
+
+        // Backward-compatibility bridge to emulate old `_radius` member var.
+        class RadiusBridge {
+            yc_solution_with_radius_base* _base;
+
+        public:
+            RadiusBridge(yc_solution_with_radius_base* base) :
+                _base(base) { }
+            
+            // Access this object as an 'int' using implicit conversion.
+            inline operator int() {
+                return _base->get_radius();
+            }
+
+        } _radius;
 
     public:
         
         /// Backward-compatibility constructor.
         StencilRadiusBase(const std::string& name, StencilList& stencils, int radius) :
-            yc_solution_with_radius_base(name, radius) { }
+            yc_solution_with_radius_base(name, radius),
+            _radius(this) { }
     };
 
     // Aliases for backward-compatibility.
