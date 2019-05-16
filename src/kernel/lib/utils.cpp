@@ -416,7 +416,7 @@ namespace yask {
 
     // Check for matching option to "-"str at args[argi].
     // Return true and increment argi if match.
-    bool CommandLineParser::OptionBase::_check_arg(std::vector<std::string>& args,
+    bool CommandLineParser::OptionBase::_check_arg(const std::vector<std::string>& args,
                                                    int& argi,
                                                    const std::string& str) const
     {
@@ -431,7 +431,7 @@ namespace yask {
     // Get one idx_t value from args[argi].
     // On failure, print msg using string from args[argi-1] and exit.
     // On success, increment argi and return value.
-    idx_t CommandLineParser::OptionBase::_idx_val(vector<string>& args,
+    idx_t CommandLineParser::OptionBase::_idx_val(const vector<string>& args,
                                                   int& argi)
     {
         if (size_t(argi) >= args.size() || args[argi].length() == 0) {
@@ -450,7 +450,7 @@ namespace yask {
     }
 
     // Check for a boolean option.
-    bool CommandLineParser::BoolOption::check_arg(std::vector<std::string>& args,
+    bool CommandLineParser::BoolOption::check_arg(const std::vector<std::string>& args,
                                                   int& argi) {
         if (_check_arg(args, argi, _name)) {
             _val = true;
@@ -473,7 +473,7 @@ namespace yask {
     }
 
     // Check for an int option.
-    bool CommandLineParser::IntOption::check_arg(std::vector<std::string>& args,
+    bool CommandLineParser::IntOption::check_arg(const std::vector<std::string>& args,
                                                  int& argi) {
         if (_check_arg(args, argi, _name)) {
             _val = (int)_idx_val(args, argi); // TODO: check for under/overflow.
@@ -491,7 +491,7 @@ namespace yask {
     }
 
     // Check for an idx_t option.
-    bool CommandLineParser::IdxOption::check_arg(std::vector<std::string>& args,
+    bool CommandLineParser::IdxOption::check_arg(const std::vector<std::string>& args,
                                                  int& argi) {
         if (_check_arg(args, argi, _name)) {
             _val = _idx_val(args, argi);
@@ -522,7 +522,7 @@ namespace yask {
     }
 
     // Check for an multi-idx_t option.
-    bool CommandLineParser::MultiIdxOption::check_arg(std::vector<std::string>& args,
+    bool CommandLineParser::MultiIdxOption::check_arg(const std::vector<std::string>& args,
                                                       int& argi) {
         if (_check_arg(args, argi, _name)) {
             idx_t val = _idx_val(args, argi);
@@ -543,9 +543,9 @@ namespace yask {
 
     // Parse options from the command-line and set corresponding vars.
     // Recognized strings from args are consumed, and unused ones
-    // remain for further processing by the application.
-    void CommandLineParser::parse_args(const std::string& pgmName,
-                                       std::vector<std::string>& args) {
+    // are returned.
+    string CommandLineParser::parse_args(const std::string& pgmName,
+                                         const std::vector<std::string>& args) {
         vector<string> non_args;
 
         // Loop through strings in args.
@@ -566,21 +566,28 @@ namespace yask {
 
             // Save unused args.
             if (!matched) {
-                string& opt = args[argi];
+                string opt = args[argi];
                 non_args.push_back(opt);
                 argi++;
             }
         }
 
-        // Return unused args in args var.
-        args.swap(non_args);
+        // Return any left-over strings.
+        string rem;
+        for (auto r : non_args) {
+            if (rem.length())
+                rem += " ";
+            // TODO: add quotes around 'r' if it has a space.
+            rem += r;
+        }
+        return rem;
     }
 
     // Tokenize args from a string.
-    void CommandLineParser::set_args(std::string arg_string,
-                                     std::vector<std::string>& args) {
+    vector<string> CommandLineParser::set_args(const string& arg_string) {
         string tmp;
         bool in_quotes = false;
+        vector<string> args;
         for (char c : arg_string) {
 
             // If WS, start a new string unless in quotes.
@@ -594,7 +601,8 @@ namespace yask {
                 }
             }
 
-            // If quote, start or end quotes.
+            // If quote, start or end double-quotes.
+            // TODO: handle single-quotes.
             else if (c == '"') {
                 if (in_quotes) {
                     if (tmp.length())
@@ -614,5 +622,6 @@ namespace yask {
         // Last string.
         if (tmp.length())
             args.push_back(tmp);
+        return args;
     }
 }

@@ -36,15 +36,6 @@ using namespace std;
 
 namespace yask {
 
-    // TODO: add API to add to this.
-    typedef enum { STENCIL_CONTEXT } YASKSection;
-    typedef vector<string> CodeList;
-    typedef map<YASKSection, CodeList > ExtensionsList;
-
-// Convenience macros for adding 'extension' code to a stencil.
-#define _REGISTER_CODE_EXTENSION(section, code) _extensions[section].push_back(code);
-#define _REGISTER_STENCIL_CONTEXT_EXTENSION(...) REGISTER_CODE_EXTENSION(STENCIL_CONTEXT, #__VA_ARGS__)
-
     // A base class for whole stencil solutions.  This is used by solutions
     // defined in C++ that are inherited from StencilBase as well as those
     // defined via the stencil-compiler API.
@@ -73,6 +64,8 @@ namespace yask {
 
         // Code extensions that overload default functions from YASK in the
         // generated code for this solution.
+        typedef vector<string> CodeList;
+        typedef map<kernel_code_key, CodeList > ExtensionsList;
         ExtensionsList _extensions;
 
     private:
@@ -112,7 +105,7 @@ namespace yask {
         virtual const Dimensions& getDims() { return _dims; }
 
         // Get user-provided code for the given section.
-        CodeList * getExtensionCode(YASKSection section)
+        CodeList * getExtensionCode(kernel_code_key section)
         {
             auto elem = _extensions.find(section);
             if ( elem != _extensions.end() ) {
@@ -196,6 +189,11 @@ namespace yask {
             for (int i = 0; i < get_num_equations(); i++)
                 ev.push_back(_eqs.getAll().at(i));
             return ev;
+        }
+        virtual void
+        insert_kernel_code(kernel_code_key key,
+                           string code) {
+            _extensions[key].push_back(code);
         }
         virtual void add_flow_dependency(yc_equation_node_ptr from,
                                          yc_equation_node_ptr to) {

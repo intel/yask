@@ -158,7 +158,7 @@ namespace yask {
                      const yk_solution_ptr source
                      /**< [in] Pointer to existing \ref yk_solution from which
                         the settings will be copied. */ ) const;
-    };
+    }; // yk_factory.
 
     /// Kernel environment.
     class yk_env {
@@ -184,7 +184,8 @@ namespace yask {
          */
         virtual void
         global_barrier() const =0;
-    };
+
+    }; // yk_env.
 
     /// **[Deprecated]** Use yk_var.
     typedef yk_var yk_grid;

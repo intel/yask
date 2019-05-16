@@ -494,6 +494,15 @@ namespace yask {
                                   const VarDimNames& dims,
                                   const VarDimSizes* sizes);
 
+        // Stubs for user-inserted code.
+        virtual void after_new_solution_hook() { }
+        virtual void before_prepare_solution_hook() { }
+        virtual void after_prepare_solution_hook() { }
+        virtual void before_run_solution_hook(idx_t first_step_index,
+                                              idx_t last_step_index) { }
+        virtual void after_run_solution_hook(idx_t first_step_index,
+                                              idx_t last_step_index) { }
+
         // APIs.
         // See yask_kernel_api.hpp.
         virtual const std::string& get_name() const {
@@ -507,6 +516,9 @@ namespace yask {
         }
         virtual int get_element_bytes() const {
             return REAL_BYTES;
+        }
+        virtual std::string get_target_isa() const {
+            return YSTR2(ARCH_NAME);
         }
 
         virtual int get_num_vars() const {
@@ -600,6 +612,8 @@ namespace yask {
         virtual idx_t get_num_ranks(const std::string& dim) const;
         virtual idx_t get_rank_index(const std::string& dim) const;
         virtual std::string apply_command_line_options(const std::string& args);
+        virtual std::string apply_command_line_options(int argc, char* argv[]);
+        virtual std::string apply_command_line_options(const std::vector<std::string>& args);
         virtual bool get_step_wrap() const {
             STATE_VARS(this);
             return opts->_step_wrap;

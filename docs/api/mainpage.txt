@@ -55,16 +55,14 @@ utility, `bin/yask_compiler.exe`.
     This is done automatically when building a YASK kernel using the YASK `Makefile`, or
     you can build it explicity via `make compiler` and run it from your shell command-prompt.
   - When you run `make` to build the kernel library, the generated output from the compiler utility
-    is automatically written to `src/kernel/gen/yask_stencil_code.hpp`
-    and compiled into the optimized kernel library.
+    is automatically written to a pre-determined temporary file and compiled into the optimized kernel library.
   - See example stencils of this type in `src/stencils`.
 -# Create a custom application that defines stencils.
   - This approach is typically taken when a 3rd-party front-end tool will be creating stencils
     automatically from some other existing format or description.
   - In this case, you don't use the provided \ref yc_solution_base class or overload yc_solution_base::define(),
     but equations may be expressed in the same way, because both techniques use the YASK compiler API.
-  - The output from the custom application may be written to `src/kernel/gen/yask_stencil_code.hpp`
-    and compiled into the optimized kernel library. Or, it can write the output to any file
+  - The output from the custom application may be written to any file
     that is then specified via `YK_CODE_FILE=`<em>filename</em> when running `make` to build the kernel library.
   - See `src/compiler/tests/yask_compiler_api_test.cpp` for an example stencil definition in C++ or
     `bin/yask_compiler_api_test.py` for an example stencil definition in Python.

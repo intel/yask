@@ -321,7 +321,7 @@ namespace yask {
                            multi_vars));
     }
 
-    // Add these settigns to a cmd-line parser.
+    // Add access to these options from a cmd-line parser.
     void KernelSettings::add_options(CommandLineParser& parser)
     {
         // Following options are in the 'yask' namespace, i.e., no object.
@@ -446,14 +446,17 @@ namespace yask {
 
     // Print usage message.
     void KernelSettings::print_usage(ostream& os,
-                                     CommandLineParser& parser,
+                                     CommandLineParser& appParser,
                                      const string& pgmName,
                                      const string& appNotes,
-                                     const vector<string>& appExamples) const
+                                     const vector<string>& appExamples)
     {
         os << "Usage: " << pgmName << " [options]\n"
             "Options:\n";
-        parser.print_help(os);
+        appParser.print_help(os);
+        CommandLineParser solnParser;
+        add_options(solnParser);
+        solnParser.print_help(os);
         os << "\nTerms for the various levels of tiling from smallest to largest:\n"
             " A 'point' is a single floating-point (FP) element.\n"
             "  This binary uses " << REAL_BYTES << "-byte FP elements.\n"

@@ -82,6 +82,9 @@ namespace yask {
     void StencilContext::prepare_solution() {
         STATE_VARS(this);
 
+        // User-provided code.
+        before_prepare_solution_hook();
+
         // Don't continue until all ranks are this far.
         env->global_barrier();
 
@@ -163,6 +166,9 @@ namespace yask {
             makeNumStr(allocTimer.get_elapsed_secs()) << " secs.\n" << flush;
 
         init_stats();
+
+        // User-provided code.
+        after_prepare_solution_hook();
 
     } // prepare_solution().
 
@@ -319,28 +325,27 @@ namespace yask {
         }
     }
 
-    string StencilContext::apply_command_line_options(const string& args) {
+    string StencilContext::apply_command_line_options(const string& argstr) {
+        auto args = CommandLineParser::set_args(argstr);
+        return apply_command_line_options(args);
+    }
+
+    string StencilContext::apply_command_line_options(int argc, char* argv[]) {
+        std::vector<std::string> args;
+        for (int i = 1; i < argc; i++)
+            args.push_back(argv[i]);
+        return apply_command_line_options(args);
+    }
+
+    string StencilContext::apply_command_line_options(const vector<string>& args) {
         STATE_VARS(this);
 
         // Create a parser and add base options to it.
         CommandLineParser parser;
         opts->add_options(parser);
 
-        // Tokenize default args.
-        vector<string> argsv;
-        parser.set_args(args, argsv);
-
         // Parse cmd-line options, which sets values in settings.
-        parser.parse_args("YASK", argsv);
-
-        // Return any left-over strings.
-        string rem;
-        for (auto r : argsv) {
-            if (rem.length())
-                rem += " ";
-            rem += r;
-        }
-        return rem;
+        return parser.parse_args("YASK", args);
     }
 
     // Add a new var to the containers.

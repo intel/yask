@@ -55,7 +55,7 @@ YK_ARCH		:=	$(arch)
 # Specify YC_STENCIL on 'make' cmd-line to pass different stencil name to YASK compiler.
 YC_STENCIL	:=	$(stencil)
 
-# Set 'ARCH', converting old codenames to ISA names.
+# Set 'ARCH', converting codenames to ISA names.
 ifneq ($(filter $(arch),avx snb ivb),)
   ARCH		:=	avx
 else ifneq ($(filter $(arch),avx2 hsw bdw),)
@@ -389,10 +389,7 @@ endif
 MACROS		+=	ALLOW_NEW_VARS=$(allow_new_var_types)
 
 # Default cmd-line args.
-DEF_ARGS	+=	-thread_divisor $(def_thread_divisor)
-DEF_ARGS	+=	-block_threads $(def_block_threads)
-DEF_ARGS	+=	$(def_block_args) $(def_pad_args) $(more_def_args) 
-YK_CXXFLAGS	+=	-DDEF_ARGS='"$(DEF_ARGS) $(EXTRA_DEF_ARGS)"'
+YK_CXXFLAGS	+=	-DDEF_ARGS='"$(DEF_ARGS)"'
 
 # arch.
 UC_ARCH		:=	$(shell echo $(ARCH) | tr '[:lower:]' '[:upper:]')
@@ -884,7 +881,7 @@ echo-settings:
 	echo BLOCK_LOOP_ORDER="\"$(BLOCK_LOOP_ORDER)\""; \
 	echo BLOCK_LOOP_OUTER_MODS="\"$(BLOCK_LOOP_OUTER_MODS)\""; \
 	echo BLOCK_LOOP_OUTER_VARS="\"$(BLOCK_LOOP_OUTER_VARS)\""; \
-	echo EXTRA_DEF_ARGS=$(EXTRA_DEF_ARGS); \
+	echo DEF_ARGS="\"$(DEF_ARGS)\""; \
 	echo EXTRA_MACROS="\"$(EXTRA_MACROS)\""; \
 	echo EXTRA_YC_FLAGS="\"$(EXTRA_YC_FLAGS)\""; \
 	echo EXTRA_YK_CXXFLAGS="\"$(EXTRA_YK_CXXFLAGS)\""; \
@@ -943,7 +940,6 @@ echo-settings:
 	echo def_thread_divisor=$(def_thread_divisor); \
 	echo fold=$(fold); \
 	echo host=`hostname`; \
-	echo more_def_args=$(more_def_args); \
 	echo omp_block_schedule=$(omp_block_schedule); \
 	echo omp_misc_schedule=$(omp_misc_schedule); \
 	echo omp_region_schedule=$(omp_region_schedule); \

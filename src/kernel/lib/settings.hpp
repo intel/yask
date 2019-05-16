@@ -279,7 +279,7 @@ namespace yask {
                          CommandLineParser& parser,
                          const std::string& pgmName,
                          const std::string& appNotes,
-                         const std::vector<std::string>& appExamples) const;
+                         const std::vector<std::string>& appExamples);
 
         // Make sure all user-provided settings are valid by rounding-up
         // values as needed.

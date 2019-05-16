@@ -877,7 +877,8 @@ namespace yask {
             os << "  stPacks.push_back(" << bpName << ");\n";
         }
 
-        os << " } // Ctor.\n";
+        os << "\n after_new_solution_hook();\n"
+            " } // Ctor.\n";
 
         // Dims creator.
         os << "\n  // Create Dims object.\n"
@@ -930,13 +931,28 @@ namespace yask {
         os << "    return p;\n"
             "  }\n";
 
-        // Stencil provided code for StencilContext
-        CodeList *extraCode;
-        if ( (extraCode = _stencil.getExtensionCode(STENCIL_CONTEXT)) != NULL )
-        {
-            os << "\n  // Functions provided by user.\n";
-            for ( auto code : *extraCode )
-                os << code << endl;
+        os << "\n // Code provided by user.\n";
+        map<yc_solution::kernel_code_key, string> protos =
+            { { yc_solution::after_new_solution, "after_new_solution_hook()" },
+              { yc_solution::before_prepare_solution, "before_prepare_solution_hook()" },
+              { yc_solution::after_prepare_solution, "after_prepare_solution_hook()" },
+              { yc_solution::before_run_solution,
+                "before_run_solution_hook(idx_t first_step_index, idx_t last_step_index)" },
+              { yc_solution::after_run_solution,
+                "after_run_solution_hook(idx_t first_step_index, idx_t last_step_index)" } };
+        for (auto& i : protos) {
+            auto key = i.first;
+            auto& proto = i.second;
+            os << " virtual void " << proto << " override {\n"
+                "  STATE_VARS(this);\n"
+                "  TRACE_MSG(\"" << proto << "...\");\n";
+            auto *extraCode = _stencil.getExtensionCode(key);
+            if (extraCode) {
+                for ( auto code : *extraCode )
+                    os << "  " << code << ";\n";
+            }
+            os << "  TRACE_MSG(\"" << proto << " done\");\n"
+                " }\n";
         }
 
         os << "}; // " << _context << endl;

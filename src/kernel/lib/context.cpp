@@ -184,6 +184,11 @@ namespace yask {
                                       idx_t last_step_index)
     {
         STATE_VARS(this);
+
+        // User-provided code.
+        before_run_solution_hook(first_step_index, last_step_index);
+
+        // Start timer.
         run_time.start();
 
         // Start vtune collection.
@@ -551,10 +556,12 @@ namespace yask {
         }
 #endif
 
-        // Stop vtune collection.
+        // Stop vtune collection & timer.
         VTUNE_PAUSE;
-
         run_time.stop();
+
+        // User-provided code.
+        after_run_solution_hook(first_step_index, last_step_index);
 
     } // run_solution().
 

@@ -133,6 +133,37 @@ public:
         return next_p;
     }
 
+    // Add some code to the kernel to set default options.
+    virtual void add_kernel_code() {
+        auto soln = get_soln();
+
+        // These best-known settings were found
+        // by automated and manual tuning. They are only applied
+        // for certain target configs.
+
+        // Only valid for SP FP and radius 8.
+        if (soln->get_element_bytes() == 4 &&
+            _radius == 8) {
+
+            // Change the settings immediately after the kernel solution
+            // is created.
+            soln->INSERT_YASK_KERNEL_CODE
+                (yc_solution::after_new_solution,
+                 if (get_target_isa() == "avx512") {
+                     set_block_size("x", 108);
+                     set_block_size("y", 28);
+                     set_block_size("z", 132);
+                 }
+                 else {
+                     set_block_size("x", 48);
+                     set_block_size("y", 64);
+                     set_block_size("z", 112);
+                 }
+                 );
+        }
+        
+    }
+    
     // Define equation for pressure at t+1 based on values from vel and pressure at t.
     virtual void define() {
 
@@ -143,6 +174,9 @@ public:
         // Since this implements the finite-difference method, this
         // is actually an approximation.
         pressure(t+1, x, y, z) EQUALS next_p;
+
+        // Insert custom kernel code.
+        add_kernel_code();
     }
 };
 
@@ -179,6 +213,9 @@ public:
 
         // Define the value at t+1 to be equal to next_p.
         pressure(t+1, x, y, z) EQUALS next_p;
+
+        // Insert custom kernel code.
+        add_kernel_code();
     }
 };
 

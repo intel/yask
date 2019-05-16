@@ -86,6 +86,15 @@ namespace yask {
         virtual const std::string&
         get_name() const =0;
 
+        /// Get the target ISA.
+        /**
+           @returns String describing the instruction-set architecture targeted
+           during kernel compilation.
+           This is currently "avx512", "avx2", "avx", "knl", "knc", or "intel64".
+        */
+        virtual std::string
+        get_target_isa() const =0;
+
         /// Get the floating-point precision size.
         /**
            @returns Number of bytes in each FP element: 4 or 8.
@@ -335,6 +344,45 @@ namespace yask {
                        /**< [in] Name of dimension to get.  Must be one of
                          the names from get_domain_dim_names(). */ ) const =0;
 
+        /// Set kernel options from a string.
+        /**
+           Parses the string for options as if from a command-line.
+           Example: "-bx 64 -block_threads 4" sets the block-size in the *x*
+           dimension to 64 and the number of threads used to process each
+           block to 4.
+           See the help message from the YASK kernel binary for documentation
+           on the command-line options.
+           Used to set less-common options not directly supported by the
+           APIs above (set_block_size(), etc.).
+
+           @returns Any parts of `args` that were not recognized by the parser as options.
+           Thus, a non-empty returned string may be used to signal an error or
+           interpreted by a custom application in another way.
+        */
+        virtual std::string
+        apply_command_line_options(const std::string& args
+                                   /**< [in] String of arguments to parse. */ ) =0;
+
+        /// Set kernel options from standard C or C++ `argc` and `argv` parameters to `main()`.
+        /**
+           Discards `argv[0]`, which is the executable name.
+           Then, parses the remaining `argv` values for options as
+           described in apply_command_line_options() with a string argument.
+
+           @returns Any parts of `argv` that were not recognized by the parser as options.
+        */
+        virtual std::string
+        apply_command_line_options(int argc, char* argv[]) =0;
+
+        /// Set kernel options from a vector of strings.
+        /**
+           Parses `args` values for options as
+           described in apply_command_line_options() with a string argument.
+
+           @returns Any parts of `args` that were not recognized by the parser as options.
+        */
+        virtual std::string
+        apply_command_line_options(const std::vector<std::string>& args) =0;
 
         /// Get the number of vars in the solution.
         /**
@@ -830,21 +878,6 @@ namespace yask {
         */
         virtual int
         get_default_numa_preferred() const =0;
-
-        /// **[Advanced]** Set performance parameters from an option string.
-        /**
-           Parses the string for options as if from a command-line.
-           Example: "-bx 64 -block_threads 4" sets the block-size in the *x*
-           dimension to 64 and the number of threads used to process each
-           block to 4.
-           See the help message from the YASK kernel binary for documentation
-           on the command-line options.
-
-           @returns Any strings that were not recognized by the parser as options.
-        */
-        virtual std::string
-        apply_command_line_options(const std::string& args
-                                   /**< [in] String of arguments to parse. */ ) =0;
 
         /// **[Advanced]** Merge YASK variables with another solution.
         /**
