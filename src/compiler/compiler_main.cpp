@@ -28,10 +28,7 @@ IN THE SOFTWARE.
 // YASK compiler APIs.
 #include "yask_compiler_api.hpp"
 
-// API for using this utility.
-#include "yask_compiler_utility_api.hpp"
-
-// Backward-compatible API.
+// Backward-compatible API for undocumented YASK v2 DSL.
 #include "aux/Soln.hpp"
 
 // YASK compiler-solution code.
@@ -57,26 +54,9 @@ namespace yask {
     string solutionName;
     int radius = -1;
     
-    // Collection of known stencils.
-    typedef map<string, yc_solution_base*> StencilMap;
-    StencilMap stencils;
-    
     // Dummy object for backward-compatibility with old stencil DSL.
     StencilList stub_stencils;
 
-    // Constructor from the DSL API.
-    // Create new solution and register it.
-    yc_solution_base::yc_solution_base(const std::string& name) {
-        if (stencils.count(name))
-            THROW_YASK_EXCEPTION("Error: stencil '" + name +
-                                 "' already defined");
-        _soln = factory.new_solution(name);
-        assert(_soln.get());
-
-        // Add this new 'yc_solution_base' to the map.
-        stencils[name] = this;
-    }
-    
 } // yask namespace.
 
 void usage(const string& cmd) {
@@ -92,8 +72,8 @@ void usage(const string& cmd) {
             cout << "       Built-in test solutions:\n";
         else
             cout << "       Built-in example solutions:\n";
-        for (auto si : stencils) {
-            auto name = si.first;
+        for (auto si : yc_solution_base::get_registry()) {
+            auto& name = si.first;
             if ((name.rfind("test_", 0) == 0) == show_test) {
                 auto* sp = si.second;
                 cout << "           " << name;
@@ -378,6 +358,7 @@ void parseOpts(int argc, const char* argv[])
     }
 
     // Find the stencil in the registry.
+    auto& stencils = yc_solution_base::get_registry();
     auto stencilIter = stencils.find(solutionName);
     if (stencilIter == stencils.end()) {
         cerr << "Error: unknown stencil solution '" << solutionName << "'." << endl;

@@ -32,6 +32,9 @@ using namespace std;
 
 namespace yask {
 
+    // Static registry.
+    yc_solution_base::soln_map yc_solution_base::_soln_registry;
+    
     // Stencil-solution APIs.
     yc_var_ptr StencilSolution::newVar(const std::string& name,
                                          bool isScratch,
@@ -53,7 +56,6 @@ namespace yask {
         return gp;
     }
 
-    // Stencil-solution APIs.
     void StencilSolution::set_fold_len(const yc_index_node_ptr dim,
                                        int len) {
         auto& fold = _settings._foldOptions;
@@ -64,7 +66,37 @@ namespace yask {
         auto& cluster = _settings._clusterOptions;
         cluster.addDimBack(dim->get_name(), mult);
     }
-
+    yc_solution_base::yc_solution_base(const std::string& name) {
+        if (_soln_registry.count(name)) {
+            yask_exception e("Error: solution '" + name +
+                             "' is already defined");
+            throw e;
+        }
+        _soln = _yc_factory.new_solution(name);
+        assert(_soln.get());
+            
+        // Add this new 'yc_solution_base' to the map.
+        _soln_registry[name] = this;
+    }
+    yc_solution_base::yc_solution_base(yc_solution_base& base) {
+        _soln = base.get_soln();
+        assert(_soln.get());
+    }
+    void yc_solution_base::define() {
+        yask_exception e("Error: no stencil equations are defined in solution '" +
+                         get_soln()->get_name() +
+                         "'. Implement the 'define()' method in the class "
+                         "derived from 'yc_solution_base'");
+        throw e;
+    }
+    void yc_solution_with_radius_base::define() {
+        yask_exception e("Error: no stencil equations are defined in solution '" +
+                         get_soln()->get_name() +
+                         "'. Implement the 'define()' method in the class "
+                         "derived from 'yc_solution_with_radius_base'");
+        throw e;
+    }
+    
     // Create the intermediate data for printing.
     void StencilSolution::analyze_solution(int vlen,
                                            bool is_folding_efficient) {

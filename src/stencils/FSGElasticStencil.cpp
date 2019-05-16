@@ -27,7 +27,7 @@ IN THE SOFTWARE.
 // Contributed by Albert Farres from the Barcelona Supercomputing Center.
 
 // YASK stencil solution(s) in this file will be integrated into the YASK compiler utility.
-#include "yask_compiler_utility_api.hpp"
+#include "yask_compiler_api.hpp"
 using namespace std;
 using namespace yask;
 #include "ElasticStencil/ElasticStencil.hpp"

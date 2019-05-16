@@ -32,8 +32,8 @@ IN THE SOFTWARE.
 
 #pragma once
 
-// These functions and macros are built upon the YASK compiler utility APIs.
-#include "yask_compiler_utility_api.hpp"
+// These functions and macros are built upon the YASK compiler APIs.
+#include "yask_compiler_api.hpp"
 
 namespace yask {
 

@@ -84,7 +84,7 @@ sub convert($) {
     # Include file.
     elsif (/[#]include.*Soln[.]hpp/) {
       $result .= "// YASK stencil solution(s) in this file will be integrated into the YASK compiler utility.\n".
-        "#include \"yask_compiler_utility_api.hpp\"\n".
+        "#include \"yask_compiler_api.hpp\"\n".
         "using namespace std;\n".
         "using namespace yask;\n";
     }

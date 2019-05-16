@@ -932,7 +932,7 @@ namespace yask {
             "  }\n";
 
         os << "\n // Code provided by user.\n";
-        map<yc_solution::kernel_code_key, string> protos =
+        map<yc_solution::kernel_code_key, string> protos
             { { yc_solution::after_new_solution, "after_new_solution_hook()" },
               { yc_solution::before_prepare_solution, "before_prepare_solution_hook()" },
               { yc_solution::after_prepare_solution, "after_prepare_solution_hook()" },

@@ -28,7 +28,7 @@ IN THE SOFTWARE.
 // See https://software.intel.com/en-us/articles/eight-optimizations-for-3-dimensional-finite-difference-3dfd-code-with-an-isotropic-iso.
 
 // YASK stencil solution(s) in this file will be integrated into the YASK compiler utility.
-#include "yask_compiler_utility_api.hpp"
+#include "yask_compiler_api.hpp"
 using namespace std;
 using namespace yask;
 
@@ -43,10 +43,10 @@ protected:
     yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
 
     // Vars.
-    yc_var_proxy pressure =
-        yc_var_proxy("pressure", get_soln(), { t, x, y, z }); // time-varying 3D pressure var.
-    yc_var_proxy vel =
-        yc_var_proxy("vel", get_soln(), { x, y, z }); // constant 3D vel var (c(x,y,z)^2 * delta_t^2).
+    yc_var_proxy p =
+        yc_var_proxy("p", get_soln(), { t, x, y, z }); // time-varying 3D var.
+    yc_var_proxy v =
+        yc_var_proxy("v", get_soln(), { x, y, z }); // constant 3D var = (c(x,y,z)^2 * delta_t^2).
 
 public:
 
@@ -58,7 +58,7 @@ public:
         yc_solution_with_radius_base("iso3dfd" + suffix, radius) { }
     virtual ~Iso3dfdStencil() { }
 
-    // Define RHS expression for pressure at t+1 based on values from vel and pressure at t.
+    // Define RHS expression for p at t+1 based on values from v and p at t.
     virtual yc_number_node_ptr get_next_p() {
 
         // yc_var_proxy spacing.
@@ -83,7 +83,7 @@ public:
 
         // Calculate FDx + FDy + FDz.
         // Start with center value multiplied by coeff 0.
-        auto fd_sum = pressure(t, x, y, z) * coeff[c0i];
+        auto fd_sum = p(t, x, y, z) * coeff[c0i];
 
         // Add values from x, y, and z axes multiplied by the
         // coeff for the given radius.
@@ -92,43 +92,40 @@ public:
             // Add values from axes at radius r.
             fd_sum += (
                        // x-axis.
-                       pressure(t, x-r, y, z) +
-                       pressure(t, x+r, y, z) +
+                       p(t, x-r, y, z) +
+                       p(t, x+r, y, z) +
 
                        // y-axis.
-                       pressure(t, x, y-r, z) +
-                       pressure(t, x, y+r, z) +
+                       p(t, x, y-r, z) +
+                       p(t, x, y+r, z) +
 
                        // z-axis.
-                       pressure(t, x, y, z-r) +
-                       pressure(t, x, y, z+r)
+                       p(t, x, y, z-r) +
+                       p(t, x, y, z+r)
 
                        ) * coeff[c0i + r]; // R & L coeffs are identical.
         }
 
-        // Temporal FD coefficients.
-        // For this implementation, just check the known values to
-        // simplify the solution.
-        // But we could parameterize by accuracy-order in time as well.
-        int torder = 2;
-        auto tcoeff = get_forward_fd_coefficients(2, torder);
-        assert(tcoeff[0] == 1.0);  // pressure(t+1).
-        assert(tcoeff[1] == -2.0); // -2 * pressure(t+1).
-        assert(tcoeff[2] == 1.0);  // pressure(t-1).
-
         // Wave equation is:
-        // 2nd time derivative(p) = c^2 * laplacian(p).
+        // 2nd_time_derivative(p) = c^2 * laplacian(p).
         // See https://en.wikipedia.org/wiki/Wave_equation.
         
+        // For this implementation, we are fixing the accuracy-order in time
+        // to 2 and using the known FD coefficients (1, -2, 1) to solve the
+        // equation manually.  But we could parameterize by accuracy-order
+        // in time as well, starting with a call to
+        // 'get_forward_fd_coefficients(2, time_order)' for the temporal FD
+        // coefficients.
+
         // So, wave equation with FD approximations is:
         // (p(t+1) - 2 * p(t) + p(t-1)) / delta_t^2 = c^2 * fd_sum.
 
-        // Solve wave equation for p(t+1):
+        // Solve for p(t+1):
         // p(t+1) = 2 * p(t) - p(t-1) + c^2 * fd_sum * delta_t^2.
 
-        // Let vel = c^2 * delta_t^2 for each var point.
-        auto next_p = (2.0 * pressure(t, x, y, z)) -
-            pressure(t-1, x, y, z) + (fd_sum * vel(x, y, z));
+        // Let v = c^2 * delta_t^2 for each var point.
+        auto next_p = (2.0 * p(t, x, y, z)) -
+            p(t-1, x, y, z) + (fd_sum * v(x, y, z));
 
         return next_p;
     }
@@ -164,7 +161,7 @@ public:
         
     }
     
-    // Define equation for pressure at t+1 based on values from vel and pressure at t.
+    // Define equation for p at t+1 based on values from v and p at t.
     virtual void define() {
 
         // Get equation for RHS.
@@ -173,7 +170,7 @@ public:
         // Define the value at t+1 to be equal to next_p.
         // Since this implements the finite-difference method, this
         // is actually an approximation.
-        pressure(t+1, x, y, z) EQUALS next_p;
+        p(t+1, x, y, z) EQUALS next_p;
 
         // Insert custom kernel code.
         add_kernel_code();
@@ -194,7 +191,7 @@ public:
         Iso3dfdStencil("_sponge", radius) { }
     virtual ~Iso3dfdSpongeStencil() { }
 
-    // Define equation for pressure at t+1 based on values from vel and pressure at t.
+    // Define equation for p at t+1 based on values from v and p at t.
     virtual void define() {
 
         // Sponge coefficients.
@@ -212,7 +209,7 @@ public:
         next_p *= cr_x(x) * cr_y(y) * cr_z(z);
 
         // Define the value at t+1 to be equal to next_p.
-        pressure(t+1, x, y, z) EQUALS next_p;
+        p(t+1, x, y, z) EQUALS next_p;
 
         // Insert custom kernel code.
         add_kernel_code();

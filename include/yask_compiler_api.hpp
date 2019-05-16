@@ -437,7 +437,7 @@ namespace yask {
         /// A convenience macro for calling yask::yc_solution::insert_kernel_code().
         /**
            Allows inserting code without the surrounding quotes, making it easier
-           to format in many IDEs.
+           to format in many editors and IDEs.
         */
 #define INSERT_YASK_KERNEL_CODE(key, ...) insert_kernel_code(key, #__VA_ARGS__)
         
@@ -995,3 +995,5 @@ namespace yask {
 
 } // namespace yask.
 
+// More solution-based objects.
+#include "aux/yc_solution_api.hpp"

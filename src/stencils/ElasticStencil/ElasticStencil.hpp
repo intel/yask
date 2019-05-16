@@ -28,7 +28,7 @@ IN THE SOFTWARE.
 #pragma once
 
 // YASK stencil solution(s) in this file will be integrated into the YASK compiler utility.
-#include "yask_compiler_utility_api.hpp"
+#include "yask_compiler_api.hpp"
 using namespace std;
 using namespace yask;
 
