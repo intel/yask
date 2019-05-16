@@ -85,32 +85,34 @@ namespace yask {
     /** Objects of this exception contain additional message from yask framework */
     class yask_exception: public std::exception {
     private:
-    	/// Additional message container
+    	/// Description of exception.
     	std::string _msg;
 
     public:
 
         /// Construct a YASK exception with no message.
-    	yask_exception() {};
+    	yask_exception() :
+            _msg("YASK exception") { };
 
         /// Construct a YASK exception with `message`.
     	yask_exception(const std::string& message) :
-            _msg(message) {};
+            _msg(message) { };
 
-    	virtual ~yask_exception() {};
+    	virtual ~yask_exception() { };
 
-        /// Get default message.
-        /** Returns a C-style character string describing the general cause of the current error.
-            @returns default message of the exception. */
-    	virtual const char* what() noexcept;
+        /// Get description.
+        /** Returns a C-style character string describing the cause of the current error.
+            @returns description of the exception. */
+    	virtual const char* what() const noexcept;
 
-    	/// Add additional message to this exception.
-    	void add_message(const std::string& message
-                         /**< [in] Additional message as string. */ );
+    	/// Append `message` to description of this exception.
+    	virtual void add_message(const std::string& message
+                                 /**< [in] Additional message as string. */ );
 
-        /// Get additional message.
-        /** @returns additional message as string */
-    	const char* get_message() const;
+        /// Get description.
+        /** Same as what().
+            @returns description of the exception. */
+    	virtual const char* get_message() const;
     };
 
     /// Factory to create output objects.

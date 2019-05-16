@@ -148,8 +148,8 @@ namespace yask {
     int yask_num_threads[yask_max_levels] = { 0 };
 
     // See yask_common_api.hpp for documentation.
-    const char* yask_exception::what() noexcept {
-        return "yask::yask_exception\n";
+    const char* yask_exception::what() const noexcept {
+        return _msg.c_str();
     }
 
     void yask_exception::add_message(const string& arg_msg) {

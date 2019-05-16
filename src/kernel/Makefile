@@ -633,6 +633,7 @@ $(YK_GEN_DIR)/yask_var_code.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
 
 $(YK_CODE_FILE): $(YC_EXEC)
 	$(MKDIR) $(dir $@)
+	@- rm -f $@
 	$(RUN_PREFIX) $< $(YC_FLAGS) $(EXTRA_YC_FLAGS) -p $(YC_TARGET) $@ | tee $(YC_REPORT_FILE) 2>&1
 	@ grep -q -E 'End of .* code' $@
 	@- gindent -fca $@ || \
