@@ -33,232 +33,237 @@ IN THE SOFTWARE.
 using namespace std;
 using namespace yask;
 
-class AvePtsStencil : public yc_solution_with_radius_base {
+// Create an anonymous namespace to ensure that types are local.
+namespace {
 
-protected:
+    class AvePtsStencil : public yc_solution_with_radius_base {
 
-    // Indices & dimensions.
-    yc_index_node_ptr t = new_step_index("t");           // step in time dim.
-    yc_index_node_ptr x = new_domain_index("x");         // spatial dim.
-    yc_index_node_ptr y = new_domain_index("y");         // spatial dim.
-    yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
+    protected:
 
-    // Vars.
-    yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y, z }); // time-varying 3D var.
+        // Indices & dimensions.
+        yc_index_node_ptr t = new_step_index("t");           // step in time dim.
+        yc_index_node_ptr x = new_domain_index("x");         // spatial dim.
+        yc_index_node_ptr y = new_domain_index("y");         // spatial dim.
+        yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
 
-    // Add additional points to expression v.
-    // Returns number of points added.
-    virtual int addPoints(yc_number_node_ptr& v) =0;
+        // Vars.
+        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y, z }); // time-varying 3D var.
 
-public:
-    AvePtsStencil(const string& name, int radius) :
-        yc_solution_with_radius_base(name, radius) { }
+        // Add additional points to expression v.
+        // Returns number of points added.
+        virtual int addPoints(yc_number_node_ptr& v) =0;
 
-    // Define equation at t+1 based on values at t.
-    virtual void define() {
+    public:
+        AvePtsStencil(const string& name, int radius) :
+            yc_solution_with_radius_base(name, radius) { }
 
-        // start with center point.
-        yc_number_node_ptr v = A(t, x, y, z);
+        // Define equation at t+1 based on values at t.
+        virtual void define() {
 
-        // Add additional points from derived class.
-        int pts = 1 + addPoints(v);
+            // start with center point.
+            yc_number_node_ptr v = A(t, x, y, z);
 
-        // Average.
-        if (pts > 1)
-            v *= 1.0 / pts;
+            // Add additional points from derived class.
+            int pts = 1 + addPoints(v);
+
+            // Average.
+            if (pts > 1)
+                v *= 1.0 / pts;
         
-        // Define the value at t+1 to be equivalent to v.
-        A(t+1, x, y, z) EQUALS v;
-    }
-};
-
-// Add points from x, y, and z axes.
-class AxisStencil : public AvePtsStencil {
-protected:
-
-    // Add additional points to expression v.
-    virtual int addPoints(yc_number_node_ptr& v)
-    {
-        int pts = 0;
-        for (int r = 1; r <= get_radius(); r++) {
-
-            v +=
-                // x-axis.
-                A(t, x-r, y, z) +
-                A(t, x+r, y, z) +
-
-                // y-axis.
-                A(t, x, y-r, z) +
-                A(t, x, y+r, z) +
-
-                // z-axis.
-                A(t, x, y, z-r) +
-                A(t, x, y, z+r);
-            pts += 3 * 2;
+            // Define the value at t+1 to be equivalent to v.
+            A(t+1, x, y, z) EQUALS v;
         }
-        return pts;
-    }
+    };
 
-public:
-    AxisStencil(int radius=4) :
-        AvePtsStencil("3axis", radius) { }
-    AxisStencil(const string& name, int radius=4) :
-        AvePtsStencil(name, radius) { }
-};
+    // Add points from x, y, and z axes.
+    class AxisStencil : public AvePtsStencil {
+    protected:
 
-// Create an object of type 'AxisStencil',
-// making it available in the YASK compiler utility via the
-// '-stencil' commmand-line option or the 'stencil=' build option.
-static AxisStencil AxisStencil_instance;
+        // Add additional points to expression v.
+        virtual int addPoints(yc_number_node_ptr& v)
+        {
+            int pts = 0;
+            for (int r = 1; r <= get_radius(); r++) {
 
-// Add points from x-y, x-z, and y-z diagonals.
-class DiagStencil : public AxisStencil {
-protected:
+                v +=
+                    // x-axis.
+                    A(t, x-r, y, z) +
+                    A(t, x+r, y, z) +
 
-    // Add additional points to v.
-    virtual int addPoints(yc_number_node_ptr& v)
-    {
-        // Get points from axes.
-        int pts = AxisStencil::addPoints(v);
+                    // y-axis.
+                    A(t, x, y-r, z) +
+                    A(t, x, y+r, z) +
 
-        // Add points from diagonals.
-        for (int r = 1; r <= get_radius(); r++) {
-
-            v += 
-                // x-y diagonal.
-                A(t, x-r, y-r, z) + 
-                A(t, x+r, y-r, z) +
-                A(t, x-r, y+r, z) +
-                A(t, x+r, y+r, z) +
-
-                // x-z diagonal.
-                A(t, x-r, y, z-r) +
-                A(t, x+r, y, z+r) +
-                A(t, x-r, y, z+r) +
-                A(t, x+r, y, z-r) +
-
-                // y-z diagonal.
-                A(t, x, y-r, z-r) +
-                A(t, x, y+r, z+r) +
-                A(t, x, y-r, z+r) +
-                A(t, x, y+r, z-r);
-            pts += 3 * 4;
+                    // z-axis.
+                    A(t, x, y, z-r) +
+                    A(t, x, y, z+r);
+                pts += 3 * 2;
+            }
+            return pts;
         }
-        return pts;
-    }
 
-public:
-    DiagStencil(int radius=4) :
-        AxisStencil("3axis_with_diags", radius) { }
-    DiagStencil(const string& name, int radius=4) :
-        AxisStencil(name, radius) { }
-};
+    public:
+        AxisStencil(int radius=4) :
+            AvePtsStencil("3axis", radius) { }
+        AxisStencil(const string& name, int radius=4) :
+            AvePtsStencil(name, radius) { }
+    };
 
-// Create an object of type 'DiagStencil',
-// making it available in the YASK compiler utility via the
-// '-stencil' commmand-line option or the 'stencil=' build option.
-static DiagStencil DiagStencil_instance;
+    // Create an object of type 'AxisStencil',
+    // making it available in the YASK compiler utility via the
+    // '-stencil' commmand-line option or the 'stencil=' build option.
+    static AxisStencil AxisStencil_instance;
 
-// Add points from x-y, x-z, and y-z planes not covered by axes or diagonals.
-class PlaneStencil : public DiagStencil {
-protected:
+    // Add points from x-y, x-z, and y-z diagonals.
+    class DiagStencil : public AxisStencil {
+    protected:
 
-    // Add additional points to v.
-    virtual int addPoints(yc_number_node_ptr& v)
-    {
-        // Get points from axes and diagonals.
-        int pts = DiagStencil::addPoints(v);
+        // Add additional points to v.
+        virtual int addPoints(yc_number_node_ptr& v)
+        {
+            // Get points from axes.
+            int pts = AxisStencil::addPoints(v);
 
-        // Add remaining points on planes.
-        for (int r = 1; r <= get_radius(); r++) {
-            for (int m = r+1; m <= get_radius(); m++) {
+            // Add points from diagonals.
+            for (int r = 1; r <= get_radius(); r++) {
 
                 v += 
-                    // x-y plane.
-                    A(t, x-r, y-m, z) +
-                    A(t, x-m, y-r, z) +
-                    A(t, x+r, y+m, z) +
-                    A(t, x+m, y+r, z) +
-                    A(t, x-r, y+m, z) +
-                    A(t, x-m, y+r, z) +
-                    A(t, x+r, y-m, z) +
-                    A(t, x+m, y-r, z) +
+                    // x-y diagonal.
+                    A(t, x-r, y-r, z) + 
+                    A(t, x+r, y-r, z) +
+                    A(t, x-r, y+r, z) +
+                    A(t, x+r, y+r, z) +
 
-                    // x-z plane.
-                    A(t, x-r, y, z-m) +
-                    A(t, x-m, y, z-r) +
-                    A(t, x+r, y, z+m) +
-                    A(t, x+m, y, z+r) +
-                    A(t, x-r, y, z+m) +
-                    A(t, x-m, y, z+r) +
-                    A(t, x+r, y, z-m) +
-                    A(t, x+m, y, z-r) +
+                    // x-z diagonal.
+                    A(t, x-r, y, z-r) +
+                    A(t, x+r, y, z+r) +
+                    A(t, x-r, y, z+r) +
+                    A(t, x+r, y, z-r) +
 
-                    // y-z plane.
-                    A(t, x, y-r, z-m) +
-                    A(t, x, y-m, z-r) +
-                    A(t, x, y+r, z+m) +
-                    A(t, x, y+m, z+r) +
-                    A(t, x, y-r, z+m) +
-                    A(t, x, y-m, z+r) +
-                    A(t, x, y+r, z-m) +
-                    A(t, x, y+m, z-r);
-                pts += 3 * 8;
+                    // y-z diagonal.
+                    A(t, x, y-r, z-r) +
+                    A(t, x, y+r, z+r) +
+                    A(t, x, y-r, z+r) +
+                    A(t, x, y+r, z-r);
+                pts += 3 * 4;
             }
+            return pts;
         }
-        return pts;
-    }
 
-public:
-    PlaneStencil(int radius=3) :
-        DiagStencil("3plane", radius) { }
-    PlaneStencil(const string& name, int radius=3) :
-        DiagStencil(name, radius) { }
-};
+    public:
+        DiagStencil(int radius=4) :
+            AxisStencil("3axis_with_diags", radius) { }
+        DiagStencil(const string& name, int radius=4) :
+            AxisStencil(name, radius) { }
+    };
 
-// Create an object of type 'PlaneStencil',
-// making it available in the YASK compiler utility via the
-// '-stencil' commmand-line option or the 'stencil=' build option.
-static PlaneStencil PlaneStencil_instance;
+    // Create an object of type 'DiagStencil',
+    // making it available in the YASK compiler utility via the
+    // '-stencil' commmand-line option or the 'stencil=' build option.
+    static DiagStencil DiagStencil_instance;
 
-// Add points from rest of cube.
-class CubeStencil : public PlaneStencil {
-protected:
+    // Add points from x-y, x-z, and y-z planes not covered by axes or diagonals.
+    class PlaneStencil : public DiagStencil {
+    protected:
 
-    // Add additional points to v.
-    virtual int addPoints(yc_number_node_ptr& v)
-    {
-        // Get points from planes.
-        int pts = PlaneStencil::addPoints(v);
+        // Add additional points to v.
+        virtual int addPoints(yc_number_node_ptr& v)
+        {
+            // Get points from axes and diagonals.
+            int pts = DiagStencil::addPoints(v);
 
-        // Add points from rest of cube.
-        for (int rx = 1; rx <= get_radius(); rx++)
-            for (int ry = 1; ry <= get_radius(); ry++)
-                for (int rz = 1; rz <= get_radius(); rz++) {
+            // Add remaining points on planes.
+            for (int r = 1; r <= get_radius(); r++) {
+                for (int m = r+1; m <= get_radius(); m++) {
 
-                    v +=
-                        // Each quadrant.
-                        A(t, x+rx, y+ry, z+rz) +
-                        A(t, x+rx, y-ry, z-rz) +
-                        A(t, x+rx, y+ry, z-rz) +
-                        A(t, x+rx, y-ry, z+rz) +
-                        A(t, x-rx, y+ry, z+rz) +
-                        A(t, x-rx, y-ry, z-rz) +
-                        A(t, x-rx, y+ry, z-rz) +
-                        A(t, x-rx, y-ry, z+rz);
-                    pts += 8;
+                    v += 
+                        // x-y plane.
+                        A(t, x-r, y-m, z) +
+                        A(t, x-m, y-r, z) +
+                        A(t, x+r, y+m, z) +
+                        A(t, x+m, y+r, z) +
+                        A(t, x-r, y+m, z) +
+                        A(t, x-m, y+r, z) +
+                        A(t, x+r, y-m, z) +
+                        A(t, x+m, y-r, z) +
+
+                        // x-z plane.
+                        A(t, x-r, y, z-m) +
+                        A(t, x-m, y, z-r) +
+                        A(t, x+r, y, z+m) +
+                        A(t, x+m, y, z+r) +
+                        A(t, x-r, y, z+m) +
+                        A(t, x-m, y, z+r) +
+                        A(t, x+r, y, z-m) +
+                        A(t, x+m, y, z-r) +
+
+                        // y-z plane.
+                        A(t, x, y-r, z-m) +
+                        A(t, x, y-m, z-r) +
+                        A(t, x, y+r, z+m) +
+                        A(t, x, y+m, z+r) +
+                        A(t, x, y-r, z+m) +
+                        A(t, x, y-m, z+r) +
+                        A(t, x, y+r, z-m) +
+                        A(t, x, y+m, z-r);
+                    pts += 3 * 8;
                 }
-        return pts;
-    }
+            }
+            return pts;
+        }
 
-public:
-    CubeStencil(int radius=2) :
-        PlaneStencil("cube", radius) { }
-    CubeStencil(const string& name, int radius=2) :
-        PlaneStencil(name, radius) { }
-};
+    public:
+        PlaneStencil(int radius=3) :
+            DiagStencil("3plane", radius) { }
+        PlaneStencil(const string& name, int radius=3) :
+            DiagStencil(name, radius) { }
+    };
 
-// Create an object of type 'CubeStencil',
-// making it available in the YASK compiler utility via the
-// '-stencil' commmand-line option or the 'stencil=' build option.
-static CubeStencil CubeStencil_instance;
+    // Create an object of type 'PlaneStencil',
+    // making it available in the YASK compiler utility via the
+    // '-stencil' commmand-line option or the 'stencil=' build option.
+    static PlaneStencil PlaneStencil_instance;
+
+    // Add points from rest of cube.
+    class CubeStencil : public PlaneStencil {
+    protected:
+
+        // Add additional points to v.
+        virtual int addPoints(yc_number_node_ptr& v)
+        {
+            // Get points from planes.
+            int pts = PlaneStencil::addPoints(v);
+
+            // Add points from rest of cube.
+            for (int rx = 1; rx <= get_radius(); rx++)
+                for (int ry = 1; ry <= get_radius(); ry++)
+                    for (int rz = 1; rz <= get_radius(); rz++) {
+
+                        v +=
+                            // Each quadrant.
+                            A(t, x+rx, y+ry, z+rz) +
+                            A(t, x+rx, y-ry, z-rz) +
+                            A(t, x+rx, y+ry, z-rz) +
+                            A(t, x+rx, y-ry, z+rz) +
+                            A(t, x-rx, y+ry, z+rz) +
+                            A(t, x-rx, y-ry, z-rz) +
+                            A(t, x-rx, y+ry, z-rz) +
+                            A(t, x-rx, y-ry, z+rz);
+                        pts += 8;
+                    }
+            return pts;
+        }
+
+    public:
+        CubeStencil(int radius=2) :
+            PlaneStencil("cube", radius) { }
+        CubeStencil(const string& name, int radius=2) :
+            PlaneStencil(name, radius) { }
+    };
+
+    // Create an object of type 'CubeStencil',
+    // making it available in the YASK compiler utility via the
+    // '-stencil' commmand-line option or the 'stencil=' build option.
+    static CubeStencil CubeStencil_instance;
+
+} // namespace.

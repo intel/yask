@@ -86,7 +86,9 @@ sub convert($) {
       $result .= "// YASK stencil solution(s) in this file will be integrated into the YASK compiler utility.\n".
         "#include \"yask_compiler_api.hpp\"\n".
         "using namespace std;\n".
-        "using namespace yask;\n";
+        "using namespace yask;\n".
+        "\n// Create an anonymous namespace to ensure that types are local.\n".
+        "namespace {\n";
     }
 
     # For other code, make substitutions and append changes.
@@ -148,6 +150,7 @@ sub convert($) {
     }
   }
   close INF;
+  $result .= "\n} // anonymous namespace.\n";
 
   if ($OPT{in_place}) {
 

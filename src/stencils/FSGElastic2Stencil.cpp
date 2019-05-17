@@ -32,6 +32,7 @@ IN THE SOFTWARE.
 #include "yask_compiler_api.hpp"
 using namespace std;
 using namespace yask;
+
 #include "ElasticStencil/Elastic2Stencil.hpp"
 
 namespace fsg {
@@ -503,3 +504,4 @@ namespace fsg {
     static FSG2ABCElasticStencil FSG2ABCElasticStencil_instance;
 
 }
+ 

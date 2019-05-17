@@ -32,9 +32,6 @@ using namespace std;
 
 namespace yask {
 
-    // Static registry.
-    yc_solution_base::soln_map yc_solution_base::_soln_registry;
-    
     // Stencil-solution APIs.
     yc_var_ptr StencilSolution::newVar(const std::string& name,
                                          bool isScratch,
@@ -66,17 +63,28 @@ namespace yask {
         auto& cluster = _settings._clusterOptions;
         cluster.addDimBack(dim->get_name(), mult);
     }
+    yc_solution_base::soln_map& yc_solution_base::get_registry() {
+        static yc_solution_base::soln_map* rp = 0;
+        if (!rp)
+
+            // Creates a global singleton.
+            // Small memory leak because it's never deleted, but not important.
+            rp = new yc_solution_base::soln_map;
+        assert(rp);
+        return *rp;
+    }
     yc_solution_base::yc_solution_base(const std::string& name) {
-        if (_soln_registry.count(name)) {
+        auto& reg = yc_solution_base::get_registry();
+        if (reg.count(name)) {
             yask_exception e("Error: solution '" + name +
                              "' is already defined");
             throw e;
         }
         _soln = _yc_factory.new_solution(name);
         assert(_soln.get());
-            
+
         // Add this new 'yc_solution_base' to the map.
-        _soln_registry[name] = this;
+        reg[name] = this;
     }
     yc_solution_base::yc_solution_base(yc_solution_base& base) {
         _soln = base.get_soln();

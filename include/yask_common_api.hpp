@@ -33,9 +33,11 @@ IN THE SOFTWARE.
 
 #include <string>
 #include <vector>
+#include <map>
 #include <iostream>
 #include <ostream>
 #include <memory>
+#include <functional>
 
 namespace yask {
 

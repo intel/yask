@@ -71,9 +71,6 @@ namespace yask {
         /// Factory to create new nodes.
         yc_node_factory _node_factory;
 
-        /// A common registry shared among all yc_solution_base objects.
-        static soln_map _soln_registry;
-        
     public:
 
         /// Constructor.
@@ -99,9 +96,7 @@ namespace yask {
         /**
            @returns Reference to the registry.
         */
-        static const soln_map& get_registry() {
-            return _soln_registry;
-        }
+        static soln_map& get_registry();
 
         /// Define all functionality of this solution.
         /**

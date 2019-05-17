@@ -257,7 +257,7 @@ namespace yask {
     protected:
         EqBundlePacks& _eqBundlePacks; // packs of bundles w/o inter-dependencies.
         EqBundles& _clusterEqBundles;  // eq-bundles for scalar and vector.
-        string _context, _context_base;
+        string _context, _context_base; // class names;
 
         // Print an expression as a one-line C++ comment.
         void addComment(ostream& os, EqBundle& eq);
