@@ -349,10 +349,11 @@ namespace yask {
         /** Currently supported format types:
             Type    | Output
             --------|--------
-            cpp     | YASK stencil classes for generic C++.
+            intel64 | YASK stencil classes for generic 64-bit C++.
             avx     | YASK stencil classes for CORE AVX ISA.
             avx2    | YASK stencil classes for CORE AVX2 ISA.
-            avx512  | YASK stencil classes for CORE AVX-512 & MIC AVX-512 ISAs.
+            avx512  | YASK stencil classes for CORE AVX-512 ISA.
+            knl     | YASK stencil classes for MIC AVX-512 ISA.
             knc     | YASK stencil classes for Knights Corner ISA.
             dot     | DOT-language description.
             dot-lite| DOT-language description of var accesses only.
@@ -361,7 +362,8 @@ namespace yask {
 
             Progress text will be written to the output stream set via set_debug_output().
 
-            @note "avx512f" is allowed as an alias for "avx512".
+            Deprecated alias "avx512f" is allowed for "avx512" and "cpp" for "intel64".
+
             @warning *Side effect:* Applies optimizations to the equation(s), so some pointers
             to nodes in the original equations may refer to modified nodes or nodes
             that have been optimized away after calling format(). In general, do not use

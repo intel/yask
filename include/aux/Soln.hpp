@@ -28,7 +28,7 @@ IN THE SOFTWARE.
 // It is to be used only for backward compatibility for old-style
 // stencil DSL code in YASK version 2.
 // Newer DSL code using the provided YASK compiler utility should include
-// "yask_compiler_utility_api.hpp" and use only published APIs.
+// "yask_compiler_api.hpp" directly and use only published APIs.
 
 #pragma once
 

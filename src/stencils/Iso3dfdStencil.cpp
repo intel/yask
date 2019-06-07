@@ -133,18 +133,17 @@ namespace {
             return next_p;
         }
 
-        // Add some code to the kernel to set default run-time options.
-        virtual void add_kernel_code() {
+        // Set BKC (best-known configs) found by automated and manual
+        // tuning. They are only applied for certain target configs.
+        virtual void set_BKC() {
             auto soln = get_soln(); // pointer to compile-time soln.
-
-            // These best-known settings were found by automated and manual
-            // tuning. They are only applied for certain target configs.
 
             // Settings are only for SP FP and radius 8, which
             // can be checked by the YASK compiler.
             if (soln->get_element_bytes() == 4 &&
                 get_radius() == 8) {
 
+                // Add some code to the kernel to set default run-time options.
                 // Change the settings immediately after the kernel solution
                 // is created.
                 soln->CALL_AFTER_NEW_SOLUTION
@@ -179,8 +178,8 @@ namespace {
             // is actually an approximation.
             p(t+1, x, y, z) EQUALS next_p;
 
-            // Insert custom kernel code.
-            add_kernel_code();
+            // Insert code from tuning.
+            set_BKC();
         }
     };
 
@@ -218,8 +217,8 @@ namespace {
             // Define the value at t+1 to be equal to next_p.
             p(t+1, x, y, z) EQUALS next_p;
 
-            // Insert custom kernel code.
-            add_kernel_code();
+            // Insert code from tuning.
+            set_BKC();
         }
     };
 

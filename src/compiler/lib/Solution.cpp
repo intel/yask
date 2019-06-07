@@ -156,28 +156,35 @@ namespace yask {
     // Format in given format-type.
     void StencilSolution::format(const string& format_type,
                                  yask_output_ptr output) {
-
+        _format_name = format_type;
+        
+        // Aliases.
+        if (_format_name == "cpp")
+            _format_name = "intel64";
+        else if (_format_name == "avx512f")
+            _format_name = "avx512";
+        
         // Look for format match.
         // Most args to the printers just set references to data.
         // Data itself will be created in analyze_solution().
         PrinterBase* printer = 0;
-        if (format_type == "cpp")
+        if (_format_name == "intel64")
             printer = new YASKCppPrinter(*this, _eqBundles, _eqBundlePacks, _clusterEqBundles);
-        else if (format_type == "knc")
+        else if (_format_name == "knc")
             printer = new YASKKncPrinter(*this, _eqBundles, _eqBundlePacks, _clusterEqBundles);
-        else if (format_type == "avx" || format_type == "avx2")
+        else if (_format_name == "avx" || _format_name == "avx2")
             printer = new YASKAvx256Printer(*this, _eqBundles, _eqBundlePacks, _clusterEqBundles);
-        else if (format_type == "avx512" || format_type == "avx512f")
+        else if (_format_name == "avx512" || _format_name == "knl")
             printer = new YASKAvx512Printer(*this, _eqBundles, _eqBundlePacks, _clusterEqBundles);
-        else if (format_type == "dot")
+        else if (_format_name == "dot")
             printer = new DOTPrinter(*this, _clusterEqBundles, false);
-        else if (format_type == "dot-lite")
+        else if (_format_name == "dot-lite")
             printer = new DOTPrinter(*this, _clusterEqBundles, true);
-        else if (format_type == "pseudo")
+        else if (_format_name == "pseudo")
             printer = new PseudoPrinter(*this, _clusterEqBundles, false);
-        else if (format_type == "pseudo-long")
+        else if (_format_name == "pseudo-long")
             printer = new PseudoPrinter(*this, _clusterEqBundles, true);
-        else if (format_type == "pov-ray") // undocumented.
+        else if (_format_name == "pov-ray") // undocumented.
             printer = new POVRayPrinter(*this, _clusterEqBundles);
         else {
             THROW_YASK_EXCEPTION("Error: format-type '" + format_type +
@@ -191,7 +198,7 @@ namespace yask {
         analyze_solution(vlen, is_folding_efficient);
 
         // Create the output.
-        *_dos << "\nGenerating '" << format_type << "' output...\n";
+        *_dos << "\nGenerating '" << _format_name << "' output...\n";
         printer->print(output->get_ostream());
         delete printer;
     }

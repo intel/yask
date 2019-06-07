@@ -68,6 +68,7 @@ namespace yask {
     private:
 
         // Intermediate data needed to format output.
+        string _format_name;          // name of format.
         Dimensions _dims;             // various dimensions.
         EqBundles _eqBundles;         // eq-bundles for scalar and vector.
         EqBundlePacks _eqBundlePacks; // packs of bundles w/o inter-dependencies.

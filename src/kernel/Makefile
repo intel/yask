@@ -60,13 +60,13 @@ ifneq ($(filter $(arch),avx snb ivb),)
   ARCH		:=	avx
 else ifneq ($(filter $(arch),avx2 hsw bdw),)
   ARCH		:=	avx2
-else ifneq ($(filter $(arch),avx512 skx skl clx),)
+else ifneq ($(filter $(arch),avx512 avx512f skx skl clx),)
   ARCH		:=	avx512
 else ifneq ($(filter $(arch),knl),)
   ARCH		:=	knl
 else ifneq ($(filter $(arch),knc),)
   ARCH		:=	knc
-else ifneq ($(filter $(arch),intel64),)
+else ifneq ($(filter $(arch),intel64 cpp),)
   ARCH		:=	intel64
 else
   $(error Instruction-set architecture (ISA) not recognized; use arch=avx512, avx2, avx, knl, knc, or intel64 (no explicit vectorization))
