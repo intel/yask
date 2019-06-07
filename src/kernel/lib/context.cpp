@@ -186,7 +186,8 @@ namespace yask {
         STATE_VARS(this);
 
         // User-provided code.
-        before_run_solution_hook(first_step_index, last_step_index);
+        call_2idx_hooks(_before_run_solution_hooks,
+                        first_step_index, last_step_index);
 
         // Start timer.
         run_time.start();
@@ -561,7 +562,8 @@ namespace yask {
         run_time.stop();
 
         // User-provided code.
-        after_run_solution_hook(first_step_index, last_step_index);
+        call_2idx_hooks(_after_run_solution_hooks,
+                        first_step_index, last_step_index);
 
     } // run_solution().
 

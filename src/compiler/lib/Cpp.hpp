@@ -257,7 +257,7 @@ namespace yask {
     protected:
         EqBundlePacks& _eqBundlePacks; // packs of bundles w/o inter-dependencies.
         EqBundles& _clusterEqBundles;  // eq-bundles for scalar and vector.
-        string _context, _context_base; // class names;
+        string _context, _context_base, _context_hook; // class names;
 
         // Print an expression as a one-line C++ comment.
         void addComment(ostream& os, EqBundle& eq);
@@ -293,6 +293,7 @@ namespace yask {
             // name of C++ struct.
             _context = "StencilContext_" + _stencil.getName();
             _context_base = _context + "_data";
+            _context_hook = _context + "_hook";
         }
         virtual ~YASKCppPrinter() { }
 

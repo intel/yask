@@ -30,128 +30,6 @@ import ctypes as ct
 import argparse
 import yask_kernel
 
-# Read data from var using NumPy ndarray.
-def read_var(var, timestep) :
-
-    # Ignore with fixed-sized vars.
-    if var.is_fixed_size():
-        return
-
-    print("Reading var '" + var.get_name() + "' at time " + repr(timestep) + "...")
-
-    # Create indices for YASK and shape for NumPy.
-    first_indices = []
-    last_indices = []
-    shape = []
-    nelems = 1
-    for dname in var.get_dim_names() :
-
-        if dname == soln.get_step_dim_name() :
-
-            # Read one timestep only.
-            # So, we don't need to add a time axis in 'shape'.
-            first_indices += [timestep]
-            last_indices += [timestep]
-
-        # Domain dim?
-        elif dname in soln.get_domain_dim_names() :
-
-            # Full domain in this rank.
-            first_idx = soln.get_first_rank_domain_index(dname)
-            last_idx = soln.get_last_rank_domain_index(dname)
-
-            # Read one point in the halo, too.
-            first_idx -= 1
-            last_idx += 1
-
-            first_indices += [first_idx]
-            last_indices += [last_idx]
-            shape += [last_idx - first_idx + 1]
-            nelems *= last_idx - first_idx + 1
-
-        # Misc dim?
-        else :
-
-            # Read first index only.
-            first_indices += [var.get_first_misc_index(dname)]
-            last_indices += [var.get_first_misc_index(dname)]
-
-    # Create a NumPy ndarray to hold the extracted data.
-    ndarray1 = np.empty(shape, dtype, 'C');
-
-    print("Reading " + repr(nelems) + " element(s)...")
-    nread = var.get_elements_in_slice(ndarray1.data, first_indices, last_indices)
-    print(ndarray1)
-
-    # Raw access to this var.
-    if soln.get_element_bytes() == 4 :
-        ptype = ct.POINTER(ct.c_float)
-    else :
-        ptype = ct.POINTER(ct.c_double)
-    raw_ptr = var.get_raw_storage_buffer()
-    fp_ptr = ct.cast(int(raw_ptr), ptype)
-    num_elems = var.get_num_storage_elements()
-    print("Raw data: " + repr(fp_ptr[0]) + ", ..., " + repr(fp_ptr[num_elems-1]))
-    #ndarray2 = np.fromiter(fp_ptr, dtype, num_elems); print(ndarray2)
-
-# Init var using NumPy ndarray.
-def init_var(var, timestep) :
-    print("Initializing var '" + var.get_name() + "' at time " + repr(timestep) + "...")
-
-    # Create indices for YASK, shape & point for NumPy.
-    first_indices = []
-    last_indices = []
-    shape = []
-    point = ()
-    nelems = 1
-    for dname in var.get_dim_names() :
-
-        if dname == soln.get_step_dim_name() :
-
-            # Write one timestep only.
-            # So, we don't need to add a time axis in 'shape'.
-            first_indices += [timestep]
-            last_indices += [timestep]
-
-        # Domain dim?
-        elif dname in soln.get_domain_dim_names() :
-
-            # Full domain in this rank.
-            first_idx = soln.get_first_rank_domain_index(dname)
-            last_idx = soln.get_last_rank_domain_index(dname)
-
-            # Write one point in the halo, too.
-            first_idx -= 1
-            last_idx += 1
-
-            first_indices += [first_idx]
-            last_indices += [last_idx]
-            shape += [last_idx - first_idx + 1]
-            nelems *= last_idx - first_idx + 1
-
-            # Since the array covers one layer of points in the halo
-            # starting at 0,..,0, 1,..,1 is the first point in the
-            # computable domain.
-            point += (1,)
-
-        # Misc dim?
-        else :
-
-            # Write first index only.
-            first_indices += [var.get_first_misc_index(dname)]
-            last_indices += [var.get_first_misc_index(dname)]
-
-    # Create a NumPy ndarray to hold the data.
-    ndarray = np.zeros(shape, dtype, 'C');
-
-    # Set one point to a non-zero value.
-    ndarray[point] = 21.0;
-    print(ndarray)
-
-    print("Writing " + repr(nelems) + " element(s)...")
-    nset = var.set_elements_in_slice(ndarray.data, first_indices, last_indices)
-    print("Set " + repr(nset) + " element(s) in rank " + repr(env.get_rank_index()))
-
 # Main script.
 if __name__ == "__main__":
 
@@ -188,15 +66,6 @@ if __name__ == "__main__":
 
         # Set domain size in each dim.
         soln.set_overall_domain_size(dim_name, 128)
-
-        # Set block size.
-        soln.set_block_size(dim_name, 32)
-
-    # Make a test fixed-size var.
-    fvar_sizes = ()
-    for dim_name in soln_dims :
-        fvar_sizes += (5,)
-    fvar = soln.new_fixed_size_var("fvar", soln_dims, fvar_sizes)
 
     # Exception test
     print("Exception Test: Call 'run_solution' without calling prepare_solution().")
@@ -243,92 +112,12 @@ if __name__ == "__main__":
     for var in soln.get_vars() :
 
         # Init all values including padding.
-        var.set_all_elements_same(-9.0)
-
-        # Done with fixed-sized vars.
-        if var.is_fixed_size():
-            continue
-        
-        # Init timestep 0 using NumPy.
-        # This will set one point in each rank.
-        init_var(var, 0)
-        read_var(var, 0)
-
-        # Simple one-index example.
-        # Note that index relative to overall problem domain,
-        # so it will only appear in one rank.
-        one_index = 100
-        one_indices = []
-
-        # Create indices to bound a subset of domain:
-        # Index 0 in time, and a small cube in center
-        # of overall problem.
-        # Note that indices are relative to overall problem domain,
-        # so the cube may be in one rank or it may be spread over
-        # more than one.
-        cube_radius = 20
-        first_indices = []
-        last_indices = []
-            
-        for dname in var.get_dim_names() :
-
-            # Step dim?
-            if dname == soln.get_step_dim_name() :
-
-                # Add index for timestep zero (0) only.
-                one_indices += [0]
-                first_indices += [0]
-                last_indices += [0]
-
-            # Domain dim?
-            elif dname in soln.get_domain_dim_names() :
-
-                # Simple index for one point.
-                one_indices += [one_index]
-                    
-                # Midpoint of overall problem in this dim.
-                midpt = soln.get_overall_domain_size(dname) // 2;
-
-                # Create indices a small amount before and after the midpoint.
-                first_indices += [midpt - cube_radius]
-                last_indices += [midpt + cube_radius]
-
-            # Misc dim?
-            else :
-
-                # Add indices to set all allowed values.
-                # (This isn't really meaningful; it's just illustrative.)
-                one_indices += [var.get_first_misc_index(dname)]
-                first_indices += [var.get_first_misc_index(dname)]
-                last_indices += [var.get_last_misc_index(dname)]
-
-        # Init value at one point.
-        nset = var.set_element(15.0, one_indices)
-        print("Set " + repr(nset) + " element(s) in rank " + repr(env.get_rank_index()))
-
-        # Init the values within the small cube.
-        nset = var.set_elements_in_slice_same(0.5, first_indices, last_indices)
-        print("Set " + repr(nset) + " element(s) in rank " + repr(env.get_rank_index()))
-
-        # Print the initial contents of the var at timesteps 0 and 1.
-        read_var(var, 0)
-        read_var(var, 1)
+        var.set_all_elements_same(1.0)
 
     # Apply the stencil solution to the data.
     env.global_barrier()
     print("Running the solution for 1 step...")
     soln.run_solution(0)
-
-    # Print result at timestep 1.
-    for var in soln.get_vars() :
-        read_var(var, 1)
-
-    print("Running the solution for 10 more steps...")
-    soln.run_solution(1, 10)
-
-    # Print final result at timestep 11, assuming update was to t+1.
-    for var in soln.get_vars() :
-        read_var(var, 11)
 
     print("Debug output captured:\n" + debug_output.get_string())
 

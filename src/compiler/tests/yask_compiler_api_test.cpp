@@ -104,6 +104,15 @@ int main() {
         auto n_eq1 = fac.new_equation_node(n_lhs, -n8, !sd0);
         cout << n_eq1->format_simple() << endl;
 
+        // Insert code that will register a run-time hook.
+        soln->CALL_AFTER_NEW_SOLUTION
+            (
+             kernel_soln.call_after_prepare_solution
+             ([](yk_solution& ksoln) {
+                  auto vars = ksoln.get_vars();
+              });
+             );
+                    
         cout << "Solution '" << soln->get_name() << "' contains " <<
             soln->get_num_vars() << " var(s), and " <<
             soln->get_num_equations() << " equation(s)." << endl;

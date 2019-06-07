@@ -879,6 +879,72 @@ namespace yask {
         virtual int
         get_default_numa_preferred() const =0;
 
+#ifndef SWIG
+        /// **[Advanced]** Callback hook with \ref yk_solution parameter.
+        typedef std::function<void(yk_solution&)> hook_fn_t;
+        
+        /// **[Advanced]** Callback hook with \ref yk_solution and step-index parameters.
+        typedef std::function<void(yk_solution&,
+                                   idx_t first_step_index,
+                                   idx_t last_step_index)> hook_fn_2idx_t;
+
+        /// **[Advanced]** Register a hook function to be called at the beginning of yk_solution::prepare_solution().
+        /**
+           A reference to the \ref yk_solution is passed to the `hook_fn`.
+
+           If this method is called more than once, the hook functions will be
+           called in the order registered.
+
+           @note Not available in the Python API.
+         */
+        virtual void
+        call_before_prepare_solution(hook_fn_t hook_fn
+                                     /**< [in] callback function */) =0;
+
+        /// **[Advanced]** Register a hook function to be called at the end of yk_solution::prepare_solution().
+        /**
+           A reference to the \ref yk_solution is passed to the `hook_fn`.
+
+           If this method is called more than once, the hook functions will be
+           called in the order registered.
+
+           @note Not available in the Python API.
+         */
+        virtual void
+        call_after_prepare_solution(hook_fn_t hook_fn
+                                    /**< [in] callback function */) =0;
+
+        /// **[Advanced]** Register a hook function to be called at the beginning of yk_solution::run_solution().
+        /**
+           A reference to the \ref yk_solution
+           and the `first_step_index` and `last_step_index` passed to run_solution()
+           are passed to the `hook_fn`.
+
+           If this method is called more than once, the hook functions will be
+           called in the order registered.
+
+           @note Not available in the Python API.
+         */
+        virtual void
+        call_before_run_solution(hook_fn_2idx_t hook_fn
+                                 /**< [in] callback function */) =0;
+
+        /// **[Advanced]** Register a hook function to be called at the end of yk_solution::run_solution().
+        /**
+           A reference to the \ref yk_solution
+           and the `first_step_index` and `last_step_index` passed to run_solution()
+           are passed to the `hook_fn`.
+
+           If this method is called more than once, the hook functions will be
+           called in the order registered.
+
+           @note Not available in the Python API.
+         */
+        virtual void
+        call_after_run_solution(hook_fn_2idx_t hook_fn
+                                /**< [in] callback function */) =0;
+#endif
+        
         /// **[Advanced]** Merge YASK variables with another solution.
         /**
            Calls yk_var::fuse_vars() for each pair of vars that have the same name
@@ -958,7 +1024,7 @@ namespace yask {
         fuse_grids(yk_solution_ptr source) {
             fuse_vars(source);
         }
-    };
+    };                          // yk_solution.
 
     /// Statistics from calls to run_solution().
     /**
@@ -1013,7 +1079,7 @@ namespace yask {
         */
         virtual double
         get_elapsed_secs() =0;
-    };
+    };                          // yk_stats.
 
     /** @}*/
 } // namespace yask.

@@ -136,7 +136,7 @@ namespace yask {
         get_elapsed_secs() { return run_time; }
     };
 
-    // Collections of things in a context.
+    // Things in a context.
     class StencilBundleBase;
     class BundlePack;
     typedef std::vector<StencilBundleBase*> StencilBundleList;
@@ -167,6 +167,14 @@ namespace yask {
                                  std::map <int, std::shared_ptr<char>>& _data_buf,
                                  const std::string& type);
 
+        // Callbacks.
+        typedef std::vector<hook_fn_t> hook_fn_vec;
+        hook_fn_vec _before_prepare_solution_hooks;
+        hook_fn_vec _after_prepare_solution_hooks;
+        typedef std::vector<hook_fn_2idx_t> hook_fn_2idx_vec;
+        hook_fn_2idx_vec _before_run_solution_hooks;
+        hook_fn_2idx_vec _after_run_solution_hooks;
+        
     public:
 
         // Name.
@@ -494,14 +502,11 @@ namespace yask {
                                   const VarDimNames& dims,
                                   const VarDimSizes* sizes);
 
-        // Stubs for user-inserted code.
-        virtual void after_new_solution_hook() { }
-        virtual void before_prepare_solution_hook() { }
-        virtual void after_prepare_solution_hook() { }
-        virtual void before_run_solution_hook(idx_t first_step_index,
-                                              idx_t last_step_index) { }
-        virtual void after_run_solution_hook(idx_t first_step_index,
-                                              idx_t last_step_index) { }
+        // Call user-inserted code.
+        virtual void call_hooks(hook_fn_vec& hook_fns);
+        virtual void call_2idx_hooks(hook_fn_2idx_vec& hook_fns,
+                                     idx_t first_step_index,
+                                     idx_t last_step_index);
 
         // APIs.
         // See yask_kernel_api.hpp.
@@ -635,6 +640,22 @@ namespace yask {
         virtual int get_default_numa_preferred() const {
             STATE_VARS_CONST(this);
             return opts->_numa_pref;
+        }
+        virtual void
+        call_before_prepare_solution(hook_fn_t hook_fn) {
+            _before_prepare_solution_hooks.push_back(hook_fn);
+        }
+        virtual void
+        call_after_prepare_solution(hook_fn_t hook_fn) {
+            _after_prepare_solution_hooks.push_back(hook_fn);
+        }
+        virtual void
+        call_before_run_solution(hook_fn_2idx_t hook_fn) {
+            _before_run_solution_hooks.push_back(hook_fn);
+        }
+        virtual void
+        call_after_run_solution(hook_fn_2idx_t hook_fn) {
+            _after_run_solution_hooks.push_back(hook_fn);
         }
 
         // Auto-tuner methods.

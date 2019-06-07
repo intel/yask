@@ -133,34 +133,39 @@ namespace {
             return next_p;
         }
 
-        // Add some code to the kernel to set default options.
+        // Add some code to the kernel to set default run-time options.
         virtual void add_kernel_code() {
-            auto soln = get_soln();
+            auto soln = get_soln(); // pointer to compile-time soln.
 
-            // These best-known settings were found
-            // by automated and manual tuning. They are only applied
-            // for certain target configs.
+            // These best-known settings were found by automated and manual
+            // tuning. They are only applied for certain target configs.
 
-            // Settings are tested only for SP FP and radius 8.
+            // Settings are only for SP FP and radius 8, which
+            // can be checked by the YASK compiler.
             if (soln->get_element_bytes() == 4 &&
                 get_radius() == 8) {
 
                 // Change the settings immediately after the kernel solution
                 // is created.
-                soln->INSERT_YASK_KERNEL_CODE
-                    (if (get_target_isa() == "avx512") {
-                        set_block_size("x", 108);
-                        set_block_size("y", 28);
-                        set_block_size("z", 132);
-                    }
-                    else {
-                        set_block_size("x", 48);
-                        set_block_size("y", 64);
-                        set_block_size("z", 112);
-                    }
-                        );
+                soln->CALL_AFTER_NEW_SOLUTION
+                    (
+                     // Add extra padding in all dimensions.
+                     kernel_soln.apply_command_line_options("-ep 1");
+                     
+                     // Check target ISA at kernel run-time for block-size.
+                     auto isa = kernel_soln.get_target_isa();
+                     if (isa == "avx512") {
+                         kernel_soln.set_block_size("x", 108);
+                         kernel_soln.set_block_size("y", 28);
+                         kernel_soln.set_block_size("z", 132);
+                     }
+                     else {
+                         kernel_soln.set_block_size("x", 48);
+                         kernel_soln.set_block_size("y", 64);
+                         kernel_soln.set_block_size("z", 112);
+                     }
+                     );
             }
-        
         }
     
         // Define equation for p at t+1 based on values from v and p at t.

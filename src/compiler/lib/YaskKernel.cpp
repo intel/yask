@@ -484,7 +484,7 @@ namespace yask {
         os << "\n // Make a new var iff its dims match any in the stencil.\n"
             " // Returns pointer to the new var or nullptr if no match.\n"
             " virtual VarBasePtr newStencilVar(const std::string& name,"
-            " const VarDimNames& dims) {\n"
+            " const VarDimNames& dims) override {\n"
             " VarBasePtr gp;\n" <<
             newVarCode <<
             " return gp;\n"
@@ -492,7 +492,7 @@ namespace yask {
 
         // Scratch-vars method.
         os << "\n // Make new scratch vars.\n"
-            " virtual void makeScratchVars(int num_threads) {\n" <<
+            " virtual void makeScratchVars(int num_threads) override {\n" <<
             scratchCode <<
             " } // newScratchVars\n";
 
@@ -804,7 +804,16 @@ namespace yask {
     // Print final YASK context.
     void YASKCppPrinter::printContext(ostream& os) {
 
-        os << endl << " ////// Overall stencil-specific context //////" << endl <<
+        os << "\n ////// User-provided code //////" << endl <<
+            "struct " << _context_hook << " {\n"
+            " static void call_after_new_solution(yk_solution& kernel_soln) {\n"
+            "  // Code provided by user.\n";
+        for (auto& code : _stencil.getKernelCode())
+            os << "  " << code << "\n";
+        os << " }\n"
+            "};\n";
+        
+        os << "\n ////// Overall stencil-specific context //////" << endl <<
             "struct " << _context << " : public " << _context_base << " {" << endl;
 
         // Stencil eqBundle objects.
@@ -877,8 +886,10 @@ namespace yask {
             os << "  stPacks.push_back(" << bpName << ");\n";
         }
 
-        os << "\n after_new_solution_hook();\n"
-            " } // Ctor.\n";
+        os << "\n // Call code provided by user.\n" <<
+            _context_hook << "::call_after_new_solution(*this);\n";
+
+        os << " } // Ctor.\n";
 
         // Dims creator.
         os << "\n  // Create Dims object.\n"
@@ -930,30 +941,6 @@ namespace yask {
 
         os << "    return p;\n"
             "  }\n";
-
-        os << "\n // Code provided by user.\n";
-        map<yc_solution::kernel_code_key, string> protos
-            { { yc_solution::after_new_solution, "after_new_solution_hook()" },
-              { yc_solution::before_prepare_solution, "before_prepare_solution_hook()" },
-              { yc_solution::after_prepare_solution, "after_prepare_solution_hook()" },
-              { yc_solution::before_run_solution,
-                "before_run_solution_hook(idx_t first_step_index, idx_t last_step_index)" },
-              { yc_solution::after_run_solution,
-                "after_run_solution_hook(idx_t first_step_index, idx_t last_step_index)" } };
-        for (auto& i : protos) {
-            auto key = i.first;
-            auto& proto = i.second;
-            os << " virtual void " << proto << " override {\n"
-                "  STATE_VARS(this);\n"
-                "  TRACE_MSG(\"" << proto << "...\");\n";
-            auto *extraCode = _stencil.getExtensionCode(key);
-            if (extraCode) {
-                for ( auto code : *extraCode )
-                    os << "  " << code << ";\n";
-            }
-            os << "  TRACE_MSG(\"" << proto << " done\");\n"
-                " }\n";
-        }
 
         os << "}; // " << _context << endl;
     }

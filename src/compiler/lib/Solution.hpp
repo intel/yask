@@ -62,11 +62,8 @@ namespace yask {
         // Settings for the solution.
         CompilerSettings _settings;
 
-        // Code extensions that overload default functions from YASK in the
-        // generated code for this solution.
-        typedef vector<string> CodeList;
-        typedef map<kernel_code_key, CodeList > ExtensionsList;
-        ExtensionsList _extensions;
+        // Code extensions.
+        vector<string> _kernel_code;
 
     private:
 
@@ -103,16 +100,7 @@ namespace yask {
             _settings = settings;
         }
         virtual const Dimensions& getDims() { return _dims; }
-
-        // Get user-provided code for the given section.
-        CodeList * getExtensionCode(kernel_code_key section)
-        {
-            auto elem = _extensions.find(section);
-            if ( elem != _extensions.end() ) {
-                return &elem->second;
-            }
-            return NULL;
-        }
+        virtual const vector<string>& getKernelCode() { return _kernel_code; }
 
         // Get the messsage output stream.
         virtual std::ostream& get_ostr() const {
@@ -191,9 +179,8 @@ namespace yask {
             return ev;
         }
         virtual void
-        insert_kernel_code(kernel_code_key key,
-                           string code) {
-            _extensions[key].push_back(code);
+        call_after_new_solution(const string& code) {
+            _kernel_code.push_back(code);
         }
         virtual void add_flow_dependency(yc_equation_node_ptr from,
                                          yc_equation_node_ptr to) {

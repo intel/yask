@@ -87,7 +87,6 @@ public:
         return interp_mu( x, y, z, N() );
     }
 
-
     // Stress-var define functions.  For each D in xx, yy, zz, xy, xz, yz,
     // define stress_D at t+1 based on stress_D at t and vel vars at t+1.
     // This implies that the velocity-var define functions must be called

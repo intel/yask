@@ -77,13 +77,34 @@ namespace yask {
     SET_SOLN_API(set_min_pad_size, opts->_min_pad_sizes[dim] = n, false, true, false, false)
 #undef SET_SOLN_API
 
+    // Callbacks.
+    void StencilContext::call_hooks(hook_fn_vec& hook_fns) {
+        STATE_VARS(this);
+        int n=0;
+        for (auto& cb : hook_fns) {
+            TRACE_MSG("Calling hook " << (++n) << "...");
+            cb(*this);
+        }
+    }
+    void StencilContext::call_2idx_hooks(hook_fn_2idx_vec& hook_fns,
+                                         idx_t first_step_index,
+                                         idx_t last_step_index) {
+        STATE_VARS(this);
+        int n=0;
+        for (auto& cb : hook_fns) {
+            TRACE_MSG("Calling hook " << (++n) << "...");
+            cb(*this, first_step_index, last_step_index);
+        }
+    }
+    
     // Allocate vars and MPI bufs.
     // Initialize some data structures.
     void StencilContext::prepare_solution() {
         STATE_VARS(this);
+        TRACE_MSG("Calling prepare_solution()...");
 
         // User-provided code.
-        before_prepare_solution_hook();
+        call_hooks(_before_prepare_solution_hooks);
 
         // Don't continue until all ranks are this far.
         env->global_barrier();
@@ -168,7 +189,7 @@ namespace yask {
         init_stats();
 
         // User-provided code.
-        after_prepare_solution_hook();
+        call_hooks(_after_prepare_solution_hooks);
 
     } // prepare_solution().
 

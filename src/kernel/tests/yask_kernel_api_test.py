@@ -30,7 +30,7 @@ import ctypes as ct
 import argparse
 import yask_kernel as yk
 
-# Prepare an NymPy ndarray to hold a slice of 'var'.
+# Prepare a NumPy ndarray to hold a slice of 'var'.
 def make_ndarray(var, timestep) :
 
     # Create indices for YASK and shape for NumPy.
