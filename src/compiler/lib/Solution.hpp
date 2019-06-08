@@ -35,6 +35,7 @@ IN THE SOFTWARE.
 using namespace std;
 
 namespace yask {
+    class PrinterBase;
 
     // A base class for whole stencil solutions.  This is used by solutions
     // defined in C++ that are inherited from StencilBase as well as those
@@ -64,12 +65,12 @@ namespace yask {
 
         // Code extensions.
         vector<string> _kernel_code;
-        vector<format_hook_t> _format_hooks;
+        vector<output_hook_t> _output_hooks;
 
     private:
 
         // Intermediate data needed to format output.
-        string _format_name;          // name of format.
+        PrinterBase* _printer = 0;
         Dimensions _dims;             // various dimensions.
         EqBundles _eqBundles;         // eq-bundles for scalar and vector.
         EqBundlePacks _eqBundlePacks; // packs of bundles w/o inter-dependencies.
@@ -86,7 +87,7 @@ namespace yask {
             auto so = ofac.new_stdout_output();
             set_debug_output(so);
         }
-        virtual ~StencilSolution() {}
+        virtual ~StencilSolution();
 
         // Identification.
         virtual const string& getName() const { return _name; }
@@ -97,7 +98,7 @@ namespace yask {
         // Simple accessors.
         virtual Vars& getVars() { return _vars; }
         virtual Eqs& getEqs() { return _eqs; }
-        virtual const CompilerSettings& getSettings() { return _settings; }
+        virtual CompilerSettings& getSettings() { return _settings; }
         virtual void setSettings(const CompilerSettings& settings) {
             _settings = settings;
         }
@@ -203,17 +204,33 @@ namespace yask {
         virtual bool is_clustering_set() { return _settings._clusterOptions.size() > 0; }
         virtual void clear_clustering() { _settings._clusterOptions.clear(); }
 
-        virtual void set_element_bytes(int nbytes) { _settings._elem_bytes = nbytes; }
-        virtual int get_element_bytes() const { return _settings._elem_bytes; }
+        virtual bool is_target_set() override {
+            return _settings._target.length() > 0;
+        }
+        virtual std::string get_target() override {
+            if (!is_target_set())
+                THROW_YASK_EXCEPTION("Error: call to get_target() before set_target()");
+            return _settings._target;
+        }
+        virtual void set_target(const std::string& format) override;
+        virtual void set_element_bytes(int nbytes) override {
+            _settings._elem_bytes = nbytes;
+        }
+        virtual int get_element_bytes() const override {
+            return _settings._elem_bytes;
+        }
 
-        virtual bool is_dependency_checker_enabled() const { return _settings._findDeps; }
-        virtual void set_dependency_checker_enabled(bool enable) { _settings._findDeps = enable; }
+        virtual bool is_dependency_checker_enabled() const override {
+            return _settings._findDeps;
+        }
+        virtual void set_dependency_checker_enabled(bool enable) override {
+            _settings._findDeps = enable;
+        }
 
-        virtual void format(const std::string& format_type,
-                            yask_output_ptr output);
+        virtual void output_solution(yask_output_ptr output) override;
         virtual void
-        call_before_format(format_hook_t hook_fn) {
-                _format_hooks.push_back(hook_fn);
+        call_before_output(output_hook_t hook_fn) {
+                _output_hooks.push_back(hook_fn);
         }
         virtual void
         set_domain_dims(const std::vector<yc_index_node_ptr>& dims) {

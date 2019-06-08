@@ -90,10 +90,10 @@ namespace yask {
         /**
            @returns String describing the instruction-set architecture targeted
            during kernel compilation.
-           This is currently "avx512", "avx2", "avx", "knl", "knc", or "intel64".
+           See the allowed YASK kernel targets in yc_solution::set_target().
         */
         virtual std::string
-        get_target_isa() const =0;
+        get_target() const =0;
 
         /// Get the floating-point precision size.
         /**

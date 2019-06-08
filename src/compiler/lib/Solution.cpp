@@ -32,6 +32,11 @@ using namespace std;
 
 namespace yask {
 
+    StencilSolution::~StencilSolution() {
+        if (_printer)
+            delete _printer;
+    }
+    
     // Stencil-solution APIs.
     yc_var_ptr StencilSolution::newVar(const std::string& name,
                                          bool isScratch,
@@ -153,58 +158,67 @@ namespace yask {
             _clusterEqBundles.optimizeEqBundles(_settings, "cluster", true, *_dos);
     }
 
-    // Format in given format-type.
-    void StencilSolution::format(const string& format_type,
-                                 yask_output_ptr output) {
-        _format_name = format_type;
+    // Set format.
+    void StencilSolution::set_target(const std::string& format) {
+        auto& target = _settings._target;
+        target = format;
         
         // Aliases.
-        if (_format_name == "cpp")
-            _format_name = "intel64";
-        else if (_format_name == "avx512f")
-            _format_name = "avx512";
-        
-        // Call hooks.
-        for (auto& hook : _format_hooks)
-            hook(*this, _format_name, output);
+        if (target == "cpp")
+            target = "intel64";
+        else if (target == "avx512f")
+            target = "avx512";
         
         // Create the appropriate printer object based on the format.
         // Most args to the printers just set references to data.
         // Data itself will be created in analyze_solution().
-        PrinterBase* printer = 0;
-        if (_format_name == "intel64")
-            printer = new YASKCppPrinter(*this, _eqBundles, _eqBundlePacks, _clusterEqBundles);
-        else if (_format_name == "knc")
-            printer = new YASKKncPrinter(*this, _eqBundles, _eqBundlePacks, _clusterEqBundles);
-        else if (_format_name == "avx" || _format_name == "avx2")
-            printer = new YASKAvx256Printer(*this, _eqBundles, _eqBundlePacks, _clusterEqBundles);
-        else if (_format_name == "avx512" || _format_name == "knl")
-            printer = new YASKAvx512Printer(*this, _eqBundles, _eqBundlePacks, _clusterEqBundles);
-        else if (_format_name == "dot")
-            printer = new DOTPrinter(*this, _clusterEqBundles, false);
-        else if (_format_name == "dot-lite")
-            printer = new DOTPrinter(*this, _clusterEqBundles, true);
-        else if (_format_name == "pseudo")
-            printer = new PseudoPrinter(*this, _clusterEqBundles, false);
-        else if (_format_name == "pseudo-long")
-            printer = new PseudoPrinter(*this, _clusterEqBundles, true);
-        else if (_format_name == "pov-ray") // undocumented.
-            printer = new POVRayPrinter(*this, _clusterEqBundles);
+        if (target == "intel64")
+            _printer = new YASKCppPrinter(*this, _eqBundles, _eqBundlePacks, _clusterEqBundles);
+        else if (target == "knc")
+            _printer = new YASKKncPrinter(*this, _eqBundles, _eqBundlePacks, _clusterEqBundles);
+        else if (target == "avx" || target == "avx2")
+            _printer = new YASKAvx256Printer(*this, _eqBundles, _eqBundlePacks, _clusterEqBundles);
+        else if (target == "avx512" || target == "knl")
+            _printer = new YASKAvx512Printer(*this, _eqBundles, _eqBundlePacks, _clusterEqBundles);
+        else if (target == "dot")
+            _printer = new DOTPrinter(*this, _clusterEqBundles, false);
+        else if (target == "dot-lite")
+            _printer = new DOTPrinter(*this, _clusterEqBundles, true);
+        else if (target == "pseudo")
+            _printer = new PseudoPrinter(*this, _clusterEqBundles, false);
+        else if (target == "pseudo-long")
+            _printer = new PseudoPrinter(*this, _clusterEqBundles, true);
+        else if (target == "pov-ray") // undocumented.
+            _printer = new POVRayPrinter(*this, _clusterEqBundles);
         else {
-            THROW_YASK_EXCEPTION("Error: format-type '" + format_type +
+            _printer = 0;
+            target = "";
+            THROW_YASK_EXCEPTION("Error: format-target '" + format +
                                  "' is not recognized");
         }
-        assert(printer);
+        assert(_printer);
+    }
+    
+    // Format in given format-type.
+    void StencilSolution::output_solution(yask_output_ptr output) {
+        auto& target = _settings._target;
 
+        if (!is_target_set())
+            THROW_YASK_EXCEPTION("Error: output_solution() called before set_target()");
+        assert(_printer);
+        
         // Set data for equation bundles, dims, etc.
-        int vlen = printer->num_vec_elems();
-        bool is_folding_efficient = printer->is_folding_efficient();
+        int vlen = _printer->num_vec_elems();
+        bool is_folding_efficient = _printer->is_folding_efficient();
         analyze_solution(vlen, is_folding_efficient);
 
+        // Call hooks.
+        for (auto& hook : _output_hooks)
+            hook(*this, output);
+        
         // Create the output.
-        *_dos << "\nGenerating '" << _format_name << "' output...\n";
-        printer->print(output->get_ostream());
-        delete printer;
+        *_dos << "\nGenerating '" << target << "' output...\n";
+        _printer->print(output->get_ostream());
     }
 
 } // namespace yask.

@@ -37,6 +37,7 @@ namespace yask {
     // May be provided via cmd-line or API.
     class CompilerSettings {
     public:
+        string _target;             // format type.
         int _elem_bytes = 4;    // bytes in an FP element.
         string _stepDim;        // explicit step dim.
         vector<string> _domainDims; // explicit domain dims.

@@ -45,28 +45,27 @@ namespace yask {
     yc_factory factory;
 
     // output streams.
-    map<string, string> outfiles;
+    vector<string> outfiles;
     
     // other vars set via cmd-line options.
-    CompilerSettings settings;
-    int vlenForStats = 0;
-    yc_solution_base* stencilSoln = NULL;
     string solutionName;
     int radius = -1;
+    int vlenForStats = 0;
     
     // Dummy object for backward-compatibility with old stencil DSL.
     StencilList stub_stencils;
 
 } // yask namespace.
 
-void usage(const string& cmd) {
+void usage(const string& cmd,
+           CompilerSettings& settings) {
 
     cout << "Options:\n"
         " -h\n"
         "     Print this help message.\n"
         "\n"
         " -stencil <name>\n"
-        "     Select stencil solution (required)\n";
+        "     Set stencil solution (required)\n";
     for (bool show_test : { false, true }) {
         if (show_test)
             cout << "       Built-in test solutions:\n";
@@ -90,7 +89,21 @@ void usage(const string& cmd) {
         " -radius <radius>\n"
         "     Set radius for stencils marked with '*' above (default is stencil-specific).\n"
         "\n"
-        " -elem-bytes <n>"
+        " -target <format>\n"
+        "    Set the output format (required).\n"
+        "    Supported formats:\n"
+        "      avx         YASK stencil classes for CORE AVX ISA (256-bit HW SIMD vectors).\n"
+        "      avx2        YASK stencil classes for CORE AVX2 ISA (256-bit HW SIMD vectors).\n"
+        "      avx512      YASK stencil classes for CORE AVX-512 ISA (512-bit HW SIMD vectors).\n"
+        "      knc         YASK stencil classes for Knights-Corner ISA (512-bit HW SIMD vectors).\n"
+        "      knl         YASK stencil classes for Knights-Landing (MIC) AVX-512 ISA (512-bit HW SIMD vectors).\n"
+        "      intel64     YASK stencil classes for generic C++ (no explicit HW SIMD vectors).\n"
+        "      pseudo      Human-readable scalar pseudo-code.\n"
+        "      pseudo-long Human-readable scalar pseudo-code with intermediate variables.\n"
+        "      dot         DOT-language description.\n"
+        "      dot-lite    DOT-language description of var accesses only.\n"
+        //"      pov-ray    POV-Ray code.\n"
+        " -elem-bytes <n>\n"
         "    Set number of bytes in each FP element (default=" << settings._elem_bytes << ").\n"
         "      Currently, only 4 (single-precision) and 8 (double) are allowed.\n"
         " -domain-dims <dim>,<dim>,...\n"
@@ -171,19 +184,8 @@ void usage(const string& cmd) {
         " [-no]-print-eqs\n"
         "    Print each equation when defined (default=" << settings._printEqs << ").\n"
         "\n"
-        " -p <format-type> <filename>\n"
-        "    Format output per <format-type> and write to <filename>.\n"
-        "    Supported format-types:\n"
-        "      cpp         YASK stencil classes for generic C++ (no explicit HW SIMD vectors).\n"
-        "      avx         YASK stencil classes for CORE AVX ISA (256-bit HW SIMD vectors).\n"
-        "      avx2        YASK stencil classes for CORE AVX2 ISA (256-bit HW SIMD vectors).\n"
-        "      avx512      YASK stencil classes for CORE AVX-512 & MIC AVX-512 ISAs (512-bit HW SIMD vectors).\n"
-        "      knc         YASK stencil classes for KNC ISA (512-bit HW SIMD vectors).\n"
-        "      pseudo      Human-readable scalar pseudo-code.\n"
-        "      pseudo-long Human-readable scalar pseudo-code with intermediate variables.\n"
-        "      dot         DOT-language description.\n"
-        "      dot-lite    DOT-language description of var accesses only.\n"
-        //"      pov-ray    POV-Ray code.\n"
+        " -p <filename>\n"
+        "    Write formatted output to <filename>.\n"
         //" -ps <vec-len>         Print stats for all folding options for given vector length.\n"
         "\n"
         "Examples:\n"
@@ -195,10 +197,11 @@ void usage(const string& cmd) {
 
 // Parse command-line and set global cmd-line option vars.
 // Exits on error.
-void parseOpts(int argc, const char* argv[])
+void parseOpts(int argc, const char* argv[],
+               CompilerSettings& settings)
 {
     if (argc <= 1)
-        usage(argv[0]);
+        usage(argv[0], settings);
 
     int argi;               // current arg index.
     for (argi = 1; argi < argc; argi++) {
@@ -207,7 +210,7 @@ void parseOpts(int argc, const char* argv[])
 
             // options w/o values.
             if (opt == "-h" || opt == "-help" || opt == "--help")
-                usage(argv[0]);
+                usage(argv[0], settings);
 
             else if (opt == "-fus")
                 settings._firstInner = true;
@@ -258,13 +261,17 @@ void parseOpts(int argc, const char* argv[])
                 // at least one value needed.
                 if (argi + 1 >= argc) {
                     cerr << "Error: value missing or bad option '" << opt << "'." << endl;
-                    usage(argv[0]);
+                    usage(argv[0], settings);
                 }
                 string argop = argv[++argi];
 
                 // options w/a string value.
                 if (opt == "-stencil")
                     solutionName = argop;
+                else if (opt == "-target")
+                    settings._target = argop;
+                else if (opt == "-p")
+                    outfiles.push_back(argop);
                 else if (opt == "-vars")
                     settings._varRegex = argop;
                 else if (opt == "-eq-bundles")
@@ -299,19 +306,6 @@ void parseOpts(int argc, const char* argv[])
                          });
                 }
 
-                // Print options w/format & filename args.
-                else if (opt == "-p") {
-
-                    // another arg needed.
-                    if (argi + 1 >= argc) {
-                        cerr << "Error: filename missing after '" << opt <<
-                            " " << argop << "'." << endl;
-                        usage(argv[0]);
-                    }
-                    string argop2 = argv[++argi];
-                    outfiles[argop] = argop2;
-                }
-
                 // add any more options w/a string value above.
 
                 else {
@@ -341,7 +335,7 @@ void parseOpts(int argc, const char* argv[])
 
                     else {
                         cerr << "Error: option '" << opt << "' not recognized." << endl;
-                        usage(argv[0]);
+                        usage(argv[0], settings);
                     }
                 }
             }
@@ -350,51 +344,16 @@ void parseOpts(int argc, const char* argv[])
     }
     if (argi < argc) {
         cerr << "Error: unrecognized parameter '" << argv[argi] << "'." << endl;
-        usage(argv[0]);
+        usage(argv[0], settings);
     }
     if (solutionName.length() == 0) {
-        cerr << "Error: solution not specified." << endl;
-        usage(argv[0]);
+        cerr << "Error: stencil solution not specified; use -stencil." << endl;
+        usage(argv[0], settings);
     }
-
-    // Find the stencil in the registry.
-    auto& stencils = yc_solution_base::get_registry();
-    auto stencilIter = stencils.find(solutionName);
-    if (stencilIter == stencils.end()) {
-        cerr << "Error: unknown stencil solution '" << solutionName << "'." << endl;
-        usage(argv[0]);
+    if (settings._target.length() == 0) {
+        cerr << "Error: target not specified; use -target." << endl;
+        usage(argv[0], settings);
     }
-    stencilSoln = stencilIter->second;
-    assert(stencilSoln);
-    auto soln = stencilSoln->get_soln();
-
-    cout << "Stencil-solution name: " << soln->get_name() << endl;
-
-    // Set radius if applicable.
-    auto* srp = dynamic_cast<yc_solution_with_radius_base*>(stencilSoln);
-    if (srp) {
-        if (radius >= 0) {
-            bool rOk = srp->set_radius(radius);
-            if (!rOk) {
-                cerr << "Error: invalid radius=" << radius << " for stencil type '" <<
-                    solutionName << "'." << endl;
-                usage(argv[0]);
-            }
-        }
-        cout << "Stencil radius: " << srp->get_radius() << endl;
-    }
-    cout << "Stencil-solution description: " << soln->get_description() << endl;
-
-    // Copy cmd-line settings into solution.
-    // TODO: remove this reliance on internal (non-API) functionality.
-    auto sp = dynamic_pointer_cast<StencilSolution>(soln);
-    assert(sp);
-    sp->setSettings(settings);
-
-    // Create equations from the overloaded 'define()' methods.
-    stencilSoln->define();
-    cout << "Num vars defined: " << soln->get_num_vars() << endl;
-    cout << "Num equations defined: " << soln->get_num_equations() << endl;
 }
 
 // Main program.
@@ -406,16 +365,62 @@ int main(int argc, const char* argv[]) {
         "Version: " << yask_get_version_string() << endl;
 
     try {
-        // Parse options and create the stencil-solution object.
-        parseOpts(argc, argv);
+        // Parse options.
+        CompilerSettings settings;
+        parseOpts(argc, argv, settings);
 
-        if (outfiles.size() == 0)
-            cout << "Use the '-p' option to generate output from this stencil.\n";
+        // Find the requested stencil in the registry.
+        auto& stencils = yc_solution_base::get_registry();
+        auto stencilIter = stencils.find(solutionName);
+        if (stencilIter == stencils.end()) {
+            cerr << "Error: unknown stencil solution '" << solutionName << "'." << endl;
+            usage(argv[0], settings);
+        }
+        auto* stencilSoln = stencilIter->second;
+        assert(stencilSoln);
+        auto soln = stencilSoln->get_soln();
+        cout << "Stencil-solution name: " << soln->get_name() << endl;
+
+        // Set radius if applicable.
+        auto* srp = dynamic_cast<yc_solution_with_radius_base*>(stencilSoln);
+        if (srp) {
+            if (radius >= 0) {
+                bool rOk = srp->set_radius(radius);
+                if (!rOk) {
+                    cerr << "Error: invalid radius=" << radius << " for stencil type '" <<
+                        solutionName << "'." << endl;
+                    usage(argv[0], settings);
+                }
+            }
+            cout << "Stencil radius: " << srp->get_radius() << endl;
+        }
+        cout << "Stencil-solution description: " << soln->get_description() << endl;
+
+        // Make sure that target is legal.
+        soln->set_target(settings._target);
+        cout << "Output target: " << soln->get_target() << endl;
+
+        // Copy cmd-line settings into solution.
+        // TODO: remove this reliance on internal (non-API) functionality.
+        auto sp = dynamic_pointer_cast<StencilSolution>(soln);
+        assert(sp);
+        sp->setSettings(settings);
+
+        // Create equations and change settings from the overloaded 'define()' methods.
+        stencilSoln->define();
+
+        // Apply the cmd-line settings again to override the defaults
+        // set in 'define()'
+        parseOpts(argc, argv, sp->getSettings());
+
+        // A bit more info.
+        cout << "Num vars defined: " << soln->get_num_vars() << endl;
+        cout << "Num equations defined: " << soln->get_num_equations() << endl;
         
         // Create the requested output.
-        for (auto i : outfiles) {
-            auto& type = i.first;
-            auto& fname = i.second;
+        if (outfiles.size() == 0)
+            cout << "Use the '-p' option to generate output from this stencil.\n";
+        for (auto& fname : outfiles) {
 
             yask_output_factory ofac;
             yask_output_ptr os;
@@ -423,7 +428,7 @@ int main(int argc, const char* argv[]) {
                 os = ofac.new_stdout_output();
             else
                 os = ofac.new_file_output(fname);
-            stencilSoln->get_soln()->format(type, os);
+            stencilSoln->get_soln()->output_solution(os);
         }
     } catch (yask_exception& e) {
         cerr << "YASK Stencil Compiler: " << e.get_message() << ".\n";

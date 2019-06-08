@@ -183,9 +183,17 @@ namespace yask {
         CounterVisitor cve;
         _eqBundles.visitEqs(&cve);
 
-        os << endl << " ////// Stencil-specific data //////" << endl <<
+        os << "\n ////// Stencil-specific data //////" << endl <<
             "class " << _context_base << " : public StencilContext {\n"
             "public:\n";
+
+        // APIs.
+        os << "\n virtual std::string get_target() const override {\n"
+            "  return \"" << _settings._target << "\";\n"
+            " }\n"
+            "\n virtual int get_element_bytes() const override {\n"
+            "  return " << _settings._elem_bytes << ";\n"
+            " }\n";
 
         // Save data for ctor and new-var method.
         string ctorCode, ctorList, newVarCode, scratchCode;

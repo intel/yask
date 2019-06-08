@@ -164,6 +164,45 @@ namespace yask {
         set_description(std::string description
                         /**< [in] Any descriptive phrase. */ ) =0;
 
+        /// Get the current output target.
+        /**
+           @returns Current target.
+
+           Throws an exception if the target hasn't been set via set_target().
+        */
+        virtual std::string
+        get_target() =0;
+
+        /// Set the output target.
+        /**
+           Currently supported targets:
+            Type    | Output
+            --------|--------
+            intel64 | YASK kernel for generic 64-bit C++.
+            avx     | YASK kernel for CORE AVX ISA.
+            avx2    | YASK kernel for CORE AVX2 ISA.
+            avx512  | YASK kernel for CORE AVX-512 ISA.
+            knl     | YASK kernel for MIC AVX-512 ISA.
+            knc     | YASK kernel for Knights Corner ISA.
+            dot     | DOT-language description.
+            dot-lite| DOT-language description of var accesses only.
+            pseudo  | Human-readable pseudo-code (for debug).
+            pseudo-long  | Human-readable pseudo-code with intermediate variables.
+
+            Deprecated alias "avx512f" will be converted to "avx512" and "cpp" to "intel64".
+        */
+        virtual void
+        set_target(/** [in] Output target from above list */
+                   const std::string& format) =0;
+
+        /// Determine whether target has been set.
+        /**
+           @returns `true` if set_target() has been called with a valid format;
+           `false` otherwise.
+        */
+        virtual bool
+        is_target_set() =0;
+
         /// Get current floating-point precision setting.
         /** @returns Number of bytes in a FP number. */
         virtual int
@@ -361,24 +400,12 @@ namespace yask {
         virtual std::vector<yc_equation_node_ptr>
         get_equations() =0;
 
-        /// Format the current equation(s) and write to given output object.
-        /** Currently supported format types:
-            Type    | Output
-            --------|--------
-            intel64 | YASK stencil classes for generic 64-bit C++.
-            avx     | YASK stencil classes for CORE AVX ISA.
-            avx2    | YASK stencil classes for CORE AVX2 ISA.
-            avx512  | YASK stencil classes for CORE AVX-512 ISA.
-            knl     | YASK stencil classes for MIC AVX-512 ISA.
-            knc     | YASK stencil classes for Knights Corner ISA.
-            dot     | DOT-language description.
-            dot-lite| DOT-language description of var accesses only.
-            pseudo  | Human-readable pseudo-code (for debug).
-            pseudo-long  | Human-readable pseudo-code with intermediate variables.
+        /// Optimize and the current equation(s) and write to given output object.
+        /** 
+            Output will be formatted according to set_target() and all other preceding
+            YASK compiler API calls.
 
             Progress text will be written to the output stream set via set_debug_output().
-
-            Deprecated alias "avx512f" is allowed for "avx512" and "cpp" for "intel64".
 
             @warning *Side effect:* Applies optimizations to the equation(s), so some pointers
             to nodes in the original equations may refer to modified nodes or nodes
@@ -386,23 +413,22 @@ namespace yask {
             pointers to nodes across calls to format().
          */
         virtual void
-        format(const std::string& format_type
-               /**< [in] Name of type from above table. */,
-               yask_output_ptr output
-               /**< [out] Pointer to object to receive formatted output.
-                  See \ref yask_output_factory. */) =0;
+        output_solution(yask_output_ptr output
+                        /**< [out] Pointer to object to receive formatted output.
+                           See \ref yask_output_factory. */) =0;
 
 #ifndef SWIG
-        /// **[Advanced]** Callback type for call_before_format().
+        /// **[Advanced]** Callback type for call_before_output().
         typedef std::function<void(yc_solution& soln,
-                                   const std::string& format_type,
-                                   yask_output_ptr output)> format_hook_t;
+                                   yask_output_ptr output)> output_hook_t;
 
-        /// **[Advanced]** Register a function to be called at the beginning of format().
+        /// **[Advanced]** Register a function to be called before a solution is output.
         /**
-           A reference to the solution and the parameters to format() are passed to the `hook_fn`.
-           Any aliases to `format_type` as listed in the format() documentation
-           are replaced before the call.
+           The registered functions will be called during a call to output_solution()
+           after the equations optimizations have been applied but before the
+           output is written.
+
+           A reference to the solution and the parameter to output_solution() are passed to the `hook_fn`.
 
            If this method is called more than once, the hook functions will be
            called in the order registered.
@@ -410,8 +436,8 @@ namespace yask {
            @note Not available in the Python API.
         */
         virtual void
-        call_before_format(/** [in] callback function */
-                           format_hook_t hook_fn) =0;
+        call_before_output(/** [in] callback function */
+                           output_hook_t hook_fn) =0;
 #endif
 
         /// **[Advanced]** Add block of custom C++ code to the kernel solution.
@@ -590,6 +616,14 @@ namespace yask {
          */
         virtual void
         clear_dependencies() =0;
+
+        /// **[Deprecated]** Use set_target() and output_solution().
+        inline void
+        format(const std::string& format_type,
+               yask_output_ptr output) {
+            set_target(format_type);
+            output_solution(output);
+        }
 
         /// **[Deprecated]** Use new_var().
         inline yc_var_ptr

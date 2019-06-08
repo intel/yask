@@ -95,7 +95,8 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
   - The default strings used in the kernel library and filenames to identify
     the targeted architecture were changed from Intel CPU codenames to
     [approximate] instruction-set architecture (ISA) names "avx512", "avx2",
-    "avx", "knl", "knc", or "intel64".
+    "avx", "knl", "knc", or "intel64". The YASK targets used in the YASK
+    compiler were updated to be consistent with this list.
 
   - The "mid" (roughly, median) performance results are now the first
     ones printed by the `utils/bin/yask_log_to_csv.pl` script.

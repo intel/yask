@@ -519,12 +519,6 @@ namespace yask {
         virtual void set_debug_output(yask_output_ptr debug) {
             KernelStateBase::set_debug_output(debug);
         }
-        virtual int get_element_bytes() const {
-            return REAL_BYTES;
-        }
-        virtual std::string get_target_isa() const {
-            return YSTR2(ARCH_NAME);
-        }
 
         virtual int get_num_vars() const {
             return int(varPtrs.size());
