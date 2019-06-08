@@ -138,10 +138,27 @@ namespace {
         virtual void set_BKC() {
             auto soln = get_soln(); // pointer to compile-time soln.
 
-            // Settings are only for SP FP and radius 8, which
-            // can be checked by the YASK compiler.
+            // Settings are only for SP FP and radius 8.
             if (soln->get_element_bytes() == 4 &&
                 get_radius() == 8) {
+
+                // Some format-specific YASK compiler settings.
+                soln->call_before_format
+                    ([this](yc_solution& yc_soln,
+                        const std::string& format_type,
+                        yask_output_ptr output) {
+
+                         if (format_type == "knl") {
+
+                             // Set folding and clustering if neither is set.
+                             if (!yc_soln.is_folding_set() &&
+                                 !yc_soln.is_clustering_set()) {
+                                 yc_soln.set_fold_len(x, 2);
+                                 yc_soln.set_fold_len(y, 8);
+                                 yc_soln.set_cluster_mult(x, 2);
+                             }
+                         }
+                     });
 
                 // Add some code to the kernel to set default run-time options.
                 // Change the settings immediately after the kernel solution
@@ -153,7 +170,12 @@ namespace {
                      
                      // Check target ISA at kernel run-time for block-size.
                      auto isa = kernel_soln.get_target_isa();
-                     if (isa == "avx512") {
+                     if (isa == "knl") {
+                         kernel_soln.set_block_size("x", 160);
+                         kernel_soln.set_block_size("y", 256);
+                         kernel_soln.set_block_size("z", 96);
+                     }
+                     else if (isa == "avx512") {
                          kernel_soln.set_block_size("x", 108);
                          kernel_soln.set_block_size("y", 28);
                          kernel_soln.set_block_size("z", 132);

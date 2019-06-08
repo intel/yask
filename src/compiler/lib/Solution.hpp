@@ -64,6 +64,7 @@ namespace yask {
 
         // Code extensions.
         vector<string> _kernel_code;
+        vector<format_hook_t> _format_hooks;
 
     private:
 
@@ -196,8 +197,10 @@ namespace yask {
         }
 
         virtual void set_fold_len(const yc_index_node_ptr, int len);
+        virtual bool is_folding_set() { return _settings._foldOptions.size() > 0; }
         virtual void clear_folding() { _settings._foldOptions.clear(); }
         virtual void set_cluster_mult(const yc_index_node_ptr, int mult);
+        virtual bool is_clustering_set() { return _settings._clusterOptions.size() > 0; }
         virtual void clear_clustering() { _settings._clusterOptions.clear(); }
 
         virtual void set_element_bytes(int nbytes) { _settings._elem_bytes = nbytes; }
@@ -208,6 +211,10 @@ namespace yask {
 
         virtual void format(const std::string& format_type,
                             yask_output_ptr output);
+        virtual void
+        call_before_format(format_hook_t hook_fn) {
+                _format_hooks.push_back(hook_fn);
+        }
         virtual void
         set_domain_dims(const std::vector<yc_index_node_ptr>& dims) {
             _settings._domainDims.clear();

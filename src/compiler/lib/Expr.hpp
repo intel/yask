@@ -83,8 +83,6 @@ namespace yask {
     typedef map<string, string> VarMap; // map used when substituting vars.
 
     //// Classes to implement parts of expressions.
-    // The expressions are constructed at run-time when the
-    // StencilSolution::define() method is called.
 
     // The base class for all expression nodes.
     // NB: there is no clone() method defined here; they

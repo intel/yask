@@ -32,6 +32,7 @@ IN THE SOFTWARE.
 #pragma once
 
 #include "yask_common_api.hpp"
+#include <functional>
 #include <vector>
 
 namespace yask {
@@ -294,23 +295,31 @@ namespace yask {
             The number of elements in a HW SIMD register is
             determined by the number of bytes in an element and the print
             format.
+
             Example: For SP FP elements in AVX-512 vectors, the product of
             the fold lengths should be 16, e.g., x=4 and y=4.
-            @note If the product
-            of the fold lengths is *not* the number of elements in a HW SIMD
-            register, the fold lengths will be adjusted based on an internal
-            heuristic. In this heuristic, any fold length that is >1 is
-            used as a hint to indicate where to apply folding.
-            @note A fold can only be applied in a domain dimension.
-            @note Default length is one (1) in each domain dimension. */
+
+            If the product of the fold lengths is *not* the number of
+            elements in a HW SIMD register, the fold lengths will be
+            adjusted based on an internal heuristic. In this heuristic, any
+            specified fold length is used as a hint to determine the final
+            folding.
+        */
         virtual void
         set_fold_len(const yc_index_node_ptr dim
                      /**< [in] Dimension of fold, e.g., "x".
                       This must be an index created by new_domain_index(). */,
                      int len /**< [in] Length of vectorization in `dim` */ ) =0;
 
-        /// Reset all vector-folding settings.
-        /** All fold lengths will return to the default of one (1). */
+        /// Determine whether any folding has been set.
+        /**
+           @returns `true` if any fold length has been specified;
+           `false` if not.
+        */
+        virtual bool
+        is_folding_set() =0;
+        
+        /// Remove all vector-folding settings.
         virtual void
         clear_folding() =0;
 
@@ -328,8 +337,15 @@ namespace yask {
                             This must be an index created by new_domain_index().  */,
                          int mult /**< [in] Number of vectors in `dim` */ ) =0;
 
-        /// Reset all vector-clustering settings.
-        /** All cluster multipliers will return to the default of one (1). */
+        /// Determine whether any clustering has been set.
+        /**
+           @returns `true` if any cluster multiple has been specified;
+           `false` if not.
+        */
+        virtual bool
+        is_clustering_set() =0;
+        
+        /// Remove all vector-clustering settings.
         virtual void
         clear_clustering() =0;
 
@@ -375,6 +391,28 @@ namespace yask {
                yask_output_ptr output
                /**< [out] Pointer to object to receive formatted output.
                   See \ref yask_output_factory. */) =0;
+
+#ifndef SWIG
+        /// **[Advanced]** Callback type for call_before_format().
+        typedef std::function<void(yc_solution& soln,
+                                   const std::string& format_type,
+                                   yask_output_ptr output)> format_hook_t;
+
+        /// **[Advanced]** Register a function to be called at the beginning of format().
+        /**
+           A reference to the solution and the parameters to format() are passed to the `hook_fn`.
+           Any aliases to `format_type` as listed in the format() documentation
+           are replaced before the call.
+
+           If this method is called more than once, the hook functions will be
+           called in the order registered.
+
+           @note Not available in the Python API.
+        */
+        virtual void
+        call_before_format(/** [in] callback function */
+                           format_hook_t hook_fn) =0;
+#endif
 
         /// **[Advanced]** Add block of custom C++ code to the kernel solution.
         /**

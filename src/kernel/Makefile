@@ -79,17 +79,12 @@ ifeq ($(YC_STENCIL),)
 else ifneq ($(findstring iso3dfd,$(YC_STENCIL)),)
  def_pad_args		:=	-ep 1
  ifeq ($(ARCH),knl)
-  fold			:=	x=2,y=8
-  cluster		:=	x=2
-  def_block_args	:=	-bx 160 -by 256 -bz 96
   pfd_l1		:=	1
   pfd_l2		:=	0
  else ifeq ($(arch),avx512)
-  def_block_args	:=	-bx 108	 -by 28 -bz 132
   pfd_l1		:=	0
   pfd_l2		:=	2
  else
-  def_block_args	:=	-bx 48 -by 60 -bz 112
   pfd_l1		:=	0
   pfd_l2		:=	0
  endif

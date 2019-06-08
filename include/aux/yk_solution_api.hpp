@@ -880,15 +880,15 @@ namespace yask {
         get_default_numa_preferred() const =0;
 
 #ifndef SWIG
-        /// **[Advanced]** Callback hook with \ref yk_solution parameter.
+        /// **[Advanced]** Callback type with \ref yk_solution parameter.
         typedef std::function<void(yk_solution&)> hook_fn_t;
         
-        /// **[Advanced]** Callback hook with \ref yk_solution and step-index parameters.
-        typedef std::function<void(yk_solution&,
+        /// **[Advanced]** Callback type with \ref yk_solution and step-index parameters.
+        typedef std::function<void(yk_solution& soln,
                                    idx_t first_step_index,
                                    idx_t last_step_index)> hook_fn_2idx_t;
 
-        /// **[Advanced]** Register a hook function to be called at the beginning of yk_solution::prepare_solution().
+        /// **[Advanced]** Register a function to be called at the beginning of yk_solution::prepare_solution().
         /**
            A reference to the \ref yk_solution is passed to the `hook_fn`.
 

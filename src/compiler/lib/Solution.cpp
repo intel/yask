@@ -164,7 +164,11 @@ namespace yask {
         else if (_format_name == "avx512f")
             _format_name = "avx512";
         
-        // Look for format match.
+        // Call hooks.
+        for (auto& hook : _format_hooks)
+            hook(*this, _format_name, output);
+        
+        // Create the appropriate printer object based on the format.
         // Most args to the printers just set references to data.
         // Data itself will be created in analyze_solution().
         PrinterBase* printer = 0;
@@ -191,10 +195,10 @@ namespace yask {
                                  "' is not recognized");
         }
         assert(printer);
-        int vlen = printer->num_vec_elems();
-        bool is_folding_efficient = printer->is_folding_efficient();
 
         // Set data for equation bundles, dims, etc.
+        int vlen = printer->num_vec_elems();
+        bool is_folding_efficient = printer->is_folding_efficient();
         analyze_solution(vlen, is_folding_efficient);
 
         // Create the output.

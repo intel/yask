@@ -114,7 +114,8 @@ namespace yask {
            For custom code using the YASK compiler library but not
            the YASK compiler utility, calling define() is possible but optional.
          */
-        virtual void define();
+        virtual void
+        define();
 
         /// Access the underlying solution.
         inline yc_solution_ptr
