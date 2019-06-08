@@ -69,15 +69,17 @@ else ifneq ($(filter $(arch),knc),)
 else ifneq ($(filter $(arch),intel64 cpp),)
   ARCH		:=	intel64
 else
-  $(error Instruction-set architecture (ISA) not recognized; use arch=avx512, avx2, avx, knl, knc, or intel64 (no explicit vectorization))
+  $(error Instruction-set architecture (ISA) not recognized; use arch=avx512, avx2, avx, knl, knc, or intel64)
 endif
+
+# Specify YC_TARGET on 'make' cmd-line to override ARCH.
+YC_TARGET	:=	$(ARCH)
 
 # Defaults based on stencil type (and arch for some stencils).
 ifeq ($(YC_STENCIL),)
  $(error Stencil not specified)
 
 else ifneq ($(findstring iso3dfd,$(YC_STENCIL)),)
- def_pad_args		:=	-ep 1
  ifeq ($(ARCH),knl)
   pfd_l1		:=	1
   pfd_l2		:=	0
@@ -141,7 +143,6 @@ ifeq ($(ARCH),knc)
 
  ICC_ISA	?=	-mmic
  MACROS		+=	USE_INTRIN512
- YC_TARGET	?=	knc
  def_block_threads  ?=	4
  pfd_l1		?=	1
  pfd_l2		?=	2
@@ -155,7 +156,6 @@ else ifeq ($(ARCH),knl)
  ICC_ISA	?=	-xMIC-AVX512
  GCC_ISA	?=	-march=knl
  MACROS		+=	USE_INTRIN512 USE_RCP28 NUMA_PREF=1
- YC_TARGET	?=	avx512
  def_block_args ?=	-b 64
  def_block_threads ?=	8
  pfd_l1		?=	1
@@ -166,27 +166,23 @@ else ifeq ($(ARCH),avx512)
  ICC_ISA	?=	-xCORE-AVX512
  GCC_ISA	?=	-march=knl -mno-avx512er -mno-avx512pf
  MACROS		+=	USE_INTRIN512
- YC_TARGET	?=	avx512
 
 else ifeq ($(ARCH),avx2)
 
  ICC_ISA	?=	-xCORE-AVX2
  GCC_ISA	?=	-march=haswell
  MACROS		+=	USE_INTRIN256 USE_AVX2
- YC_TARGET	?=	avx2
 
 else ifeq ($(ARCH),avx)
 
  ICC_ISA	?=	-xAVX
  GCC_ISA	?=	-march=sandybridge
  MACROS		+=	USE_INTRIN256
- YC_TARGET	?=	avx
 
 else ifeq ($(ARCH),intel64)
 
  ICC_ISA	?=	-xHOST
  GCC_ISA	?=	-march=native
- YC_TARGET	?=	cpp
 
 else
 
@@ -219,7 +215,7 @@ include $(YASK_BASE)/src/common/common.mk
 # Vars starting with 'YK_' apply to the stencil kernel.
 
 # Flags passed to stencil compiler.
-YC_FLAGS	+=	-stencil $(YC_STENCIL) -elem-bytes $(real_bytes)
+YC_FLAGS	+=	-stencil $(YC_STENCIL) -target $(YC_TARGET) -elem-bytes $(real_bytes)
 ifneq ($(fold),)
  YC_FLAGS	+=	-fold $(fold)
 endif
@@ -629,7 +625,7 @@ $(YK_GEN_DIR)/yask_var_code.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
 $(YK_CODE_FILE): $(YC_EXEC)
 	$(MKDIR) $(dir $@)
 	@- rm -f $@
-	$(RUN_PREFIX) $< $(YC_FLAGS) -target $(YC_TARGET) -p $@ $(EXTRA_YC_FLAGS) | tee $(YC_REPORT_FILE) 2>&1
+	$(RUN_PREFIX) $< $(YC_FLAGS) -p $@ $(EXTRA_YC_FLAGS) | tee $(YC_REPORT_FILE) 2>&1
 	@ grep -q -E 'End of .* code' $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \

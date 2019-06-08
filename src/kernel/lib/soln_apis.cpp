@@ -272,7 +272,7 @@ namespace yask {
 #endif
         os << "\nOther settings:\n"
             " yask-version:          " << yask_get_version_string() << endl <<
-            " target-ISA:            " << YSTR2(ARCH_NAME) << endl <<
+            " target:                " << get_target() << endl <<
             " stencil-name:          " << get_name() << endl <<
             " stencil-description:   " << get_description() << endl <<
             " element-size:          " << makeByteStr(get_element_bytes()) << endl <<

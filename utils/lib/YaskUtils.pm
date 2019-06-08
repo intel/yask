@@ -58,7 +58,7 @@ our @log_keys =
    'best elapsed time (sec)',
    'best num-steps-done',
    'yask version',
-   'target ISA',
+   'target',
    'stencil name',
    'stencil description',
    'element size',
@@ -210,6 +210,7 @@ sub getResultsFromLine($$) {
   $line =~ s/rank.domain/local-domain/g;
   $line =~ s/grid/var/g;
   $line =~ s/Grid/Var/g;
+  $line =~ s/target.ISA/target/g;
   
   # special cases for manual parsing...
   # TODO: catch output of auto-tuner and update relevant results.

@@ -163,10 +163,15 @@ namespace yask {
         auto& target = _settings._target;
         target = format;
         
-        // Aliases.
+        // Aliases for backward-compatibility.
         if (target == "cpp")
             target = "intel64";
-        else if (target == "avx512f")
+        else if (target == "snb" || target == "ivb")
+            target = "avx";
+        else if (target == "hsw" || target == "bdw")
+            target = "avx2";
+        else if (target == "avx512f" || target == "skx" ||
+                 target == "skl" || target == "clx")
             target = "avx512";
         
         // Create the appropriate printer object based on the format.

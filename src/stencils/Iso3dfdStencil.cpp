@@ -133,12 +133,27 @@ namespace {
             return next_p;
         }
 
+        // Define equation for p at t+1 based on values from v and p at t.
+        virtual void define() override {
+
+            // Get equation for RHS.
+            auto next_p = get_next_p();
+
+            // Define the value at t+1 to be equal to next_p.
+            // Since this implements the finite-difference method, this
+            // is actually an approximation.
+            p(t+1, x, y, z) EQUALS next_p;
+
+            // Apply BKCs.
+            set_configs();
+        }
+
         // Set BKC (best-known configs) found by automated and manual
         // tuning. They are only applied for certain target configs.
-        virtual void set_BKC() {
+        virtual void set_configs() {
             auto soln = get_soln(); // pointer to compile-time soln.
 
-            // BKCs are only for SP FP and radius 8.
+            // Only have BKCs for SP FP (4B) and radius 8.
             if (soln->get_element_bytes() == 4 &&
                 get_radius() == 8) {
 
@@ -180,20 +195,6 @@ namespace {
             }
         }
     
-        // Define equation for p at t+1 based on values from v and p at t.
-        virtual void define() {
-
-            // Get equation for RHS.
-            auto next_p = get_next_p();
-
-            // Define the value at t+1 to be equal to next_p.
-            // Since this implements the finite-difference method, this
-            // is actually an approximation.
-            p(t+1, x, y, z) EQUALS next_p;
-
-            // Insert code from tuning.
-            set_BKC();
-        }
     };
 
     // Create an object of type 'Iso3dfdStencil',
@@ -211,7 +212,7 @@ namespace {
         virtual ~Iso3dfdSpongeStencil() { }
 
         // Define equation for p at t+1 based on values from v and p at t.
-        virtual void define() {
+        virtual void define() override {
 
             // Sponge coefficients.
             // In practice, the interior values would be set to 1.0,
@@ -230,8 +231,8 @@ namespace {
             // Define the value at t+1 to be equal to next_p.
             p(t+1, x, y, z) EQUALS next_p;
 
-            // Insert code from tuning.
-            set_BKC();
+            // Apply BKCs.
+            set_configs();
         }
     };
 
