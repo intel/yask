@@ -32,9 +32,15 @@ using namespace std;
 
 namespace yask {
 
-    StencilSolution::~StencilSolution() {
-        if (_printer)
+    void StencilSolution::_free(bool free_printer) {
+        if (free_printer && _printer)
             delete _printer;
+        if (_eqBundles)
+            delete _eqBundles;
+        if (_eqBundlePacks)
+            delete _eqBundlePacks;
+        if (_clusterEqBundles)
+            delete _clusterEqBundles;
     }
     
     // Stencil-solution APIs.
@@ -133,18 +139,18 @@ namespace yask {
 
         // Create equation bundles based on dependencies and/or target strings.
         // This process may alter the halos in scratch vars.
-        _eqBundles.set_basename_default(_settings._eq_bundle_basename_default);
-        _eqBundles.set_dims(_dims);
-        _eqBundles.makeEqBundles(_eqs, _settings, *_dos);
+        _eqBundles->set_basename_default(_settings._eq_bundle_basename_default);
+        _eqBundles->set_dims(_dims);
+        _eqBundles->makeEqBundles(_eqs, _settings, *_dos);
 
         // Optimize bundles.
-        _eqBundles.optimizeEqBundles(_settings, "scalar & vector", false, *_dos);
+        _eqBundles->optimizeEqBundles(_settings, "scalar & vector", false, *_dos);
         
         // Separate bundles into packs.
-        _eqBundlePacks.makePacks(_eqBundles, *_dos);
+        _eqBundlePacks->makePacks(*_eqBundles, *_dos);
 
         // Compute halos.
-        _eqBundlePacks.calcHalos(_eqBundles);
+        _eqBundlePacks->calcHalos(*_eqBundles);
 
         // Make a copy of each equation at each cluster offset.
         // We will use these for inter-cluster optimizations and code generation.
@@ -152,13 +158,14 @@ namespace yask {
         // for sorting, making packs, etc.
         *_dos << "\nConstructing cluster of equations containing " <<
             _dims._clusterMults.product() << " vector(s)...\n";
-        _clusterEqBundles = _eqBundles;
-        _clusterEqBundles.replicateEqsInCluster(_dims);
+        *_clusterEqBundles = *_eqBundles;
+        _clusterEqBundles->replicateEqsInCluster(_dims);
         if (_settings._doOptCluster)
-            _clusterEqBundles.optimizeEqBundles(_settings, "cluster", true, *_dos);
+            _clusterEqBundles->optimizeEqBundles(_settings, "cluster", true, *_dos);
     }
 
     // Set format.
+    // Create new printer and intermediate data.
     void StencilSolution::set_target(const std::string& format) {
         auto& target = _settings._target;
         target = format;
@@ -173,28 +180,34 @@ namespace yask {
         else if (target == "avx512f" || target == "skx" ||
                  target == "skl" || target == "clx")
             target = "avx512";
+
+        // Ensure all intermediate data is clean.
+        _free(true);
+        _eqBundles = new EqBundles;
+        _eqBundlePacks = new EqBundlePacks;
+        _clusterEqBundles = new EqBundles;
         
         // Create the appropriate printer object based on the format.
         // Most args to the printers just set references to data.
         // Data itself will be created in analyze_solution().
         if (target == "intel64")
-            _printer = new YASKCppPrinter(*this, _eqBundles, _eqBundlePacks, _clusterEqBundles);
+            _printer = new YASKCppPrinter(*this, *_eqBundles, *_eqBundlePacks, *_clusterEqBundles);
         else if (target == "knc")
-            _printer = new YASKKncPrinter(*this, _eqBundles, _eqBundlePacks, _clusterEqBundles);
+            _printer = new YASKKncPrinter(*this, *_eqBundles, *_eqBundlePacks, *_clusterEqBundles);
         else if (target == "avx" || target == "avx2")
-            _printer = new YASKAvx256Printer(*this, _eqBundles, _eqBundlePacks, _clusterEqBundles);
+            _printer = new YASKAvx256Printer(*this, *_eqBundles, *_eqBundlePacks, *_clusterEqBundles);
         else if (target == "avx512" || target == "knl")
-            _printer = new YASKAvx512Printer(*this, _eqBundles, _eqBundlePacks, _clusterEqBundles);
+            _printer = new YASKAvx512Printer(*this, *_eqBundles, *_eqBundlePacks, *_clusterEqBundles);
         else if (target == "dot")
-            _printer = new DOTPrinter(*this, _clusterEqBundles, false);
+            _printer = new DOTPrinter(*this, *_clusterEqBundles, false);
         else if (target == "dot-lite")
-            _printer = new DOTPrinter(*this, _clusterEqBundles, true);
+            _printer = new DOTPrinter(*this, *_clusterEqBundles, true);
         else if (target == "pseudo")
-            _printer = new PseudoPrinter(*this, _clusterEqBundles, false);
+            _printer = new PseudoPrinter(*this, *_clusterEqBundles, false);
         else if (target == "pseudo-long")
-            _printer = new PseudoPrinter(*this, _clusterEqBundles, true);
+            _printer = new PseudoPrinter(*this, *_clusterEqBundles, true);
         else if (target == "pov-ray") // undocumented.
-            _printer = new POVRayPrinter(*this, _clusterEqBundles);
+            _printer = new POVRayPrinter(*this, *_clusterEqBundles);
         else {
             _printer = 0;
             target = "";
@@ -210,7 +223,10 @@ namespace yask {
 
         if (!is_target_set())
             THROW_YASK_EXCEPTION("Error: output_solution() called before set_target()");
-        assert(_printer);
+
+        // Call set_target() to ensure intermediate data is clean
+        // before calling analyze_solution().
+        set_target(target);
         
         // Set data for equation bundles, dims, etc.
         int vlen = _printer->num_vec_elems();

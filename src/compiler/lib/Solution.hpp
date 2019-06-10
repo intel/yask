@@ -70,15 +70,18 @@ namespace yask {
     private:
 
         // Intermediate data needed to format output.
+        Dimensions _dims;          // various dimensions.
         PrinterBase* _printer = 0;
-        Dimensions _dims;             // various dimensions.
-        EqBundles _eqBundles;         // eq-bundles for scalar and vector.
-        EqBundlePacks _eqBundlePacks; // packs of bundles w/o inter-dependencies.
-        EqBundles _clusterEqBundles;  // eq-bundles for scalar and vector.
+        EqBundles* _eqBundles = 0;         // eq-bundles for scalar and vector.
+        EqBundlePacks* _eqBundlePacks = 0; // packs of bundles w/o inter-dependencies.
+        EqBundles* _clusterEqBundles = 0;  // eq-bundles for scalar and vector.
 
         // Create the intermediate data.
         void analyze_solution(int vlen,
                               bool is_folding_efficient);
+
+        // Free allocated objs.
+        void _free(bool free_printer);
 
     public:
         StencilSolution(const string& name) :
@@ -87,7 +90,7 @@ namespace yask {
             auto so = ofac.new_stdout_output();
             set_debug_output(so);
         }
-        virtual ~StencilSolution();
+        virtual ~StencilSolution() { _free(true); }
 
         // Identification.
         virtual const string& getName() const { return _name; }

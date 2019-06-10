@@ -45,7 +45,7 @@ namespace yask {
     yc_factory factory;
 
     // output streams.
-    vector<string> outfiles;
+    string outfile;
     
     // other vars set via cmd-line options.
     string solutionName;
@@ -271,7 +271,7 @@ void parseOpts(int argc, const char* argv[],
                 else if (opt == "-target")
                     settings._target = argop;
                 else if (opt == "-p")
-                    outfiles.push_back(argop);
+                    outfile = argop;
                 else if (opt == "-vars")
                     settings._varRegex = argop;
                 else if (opt == "-eq-bundles")
@@ -418,16 +418,15 @@ int main(int argc, const char* argv[]) {
         cout << "Num equations defined: " << soln->get_num_equations() << endl;
         
         // Create the requested output.
-        if (outfiles.size() == 0)
+        if (outfile.length() == 0)
             cout << "Use the '-p' option to generate output from this stencil.\n";
-        for (auto& fname : outfiles) {
-
+        else {
             yask_output_factory ofac;
             yask_output_ptr os;
-            if (fname == "-")
+            if (outfile == "-")
                 os = ofac.new_stdout_output();
             else
-                os = ofac.new_file_output(fname);
+                os = ofac.new_file_output(outfile);
             stencilSoln->get_soln()->output_solution(os);
         }
     } catch (yask_exception& e) {
