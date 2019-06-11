@@ -148,7 +148,7 @@ namespace {
             set_configs();
         }
 
-        // Set BKC (best-known configs) found by automated and manual
+        // Set BKC (best-known configs) found by automated and/or manual
         // tuning. They are only applied for certain target configs.
         virtual void set_configs() {
             auto soln = get_soln(); // pointer to compile-time soln.
@@ -157,24 +157,34 @@ namespace {
             if (soln->get_element_bytes() == 4 &&
                 get_radius() == 8) {
 
-                // Compile-time defaults.
-                if (soln->is_target_set() &&
-                    soln->get_target() == "knl") {
-
-                    // Default folding and clustering for KNL.
-                    soln->set_fold_len(x, 2);
-                    soln->set_fold_len(y, 8);
-                    soln->set_cluster_mult(x, 2);
+                // Compile-time defaults, e.g., folding and prefetching.
+                if (soln->is_target_set()) {
+                    auto target = soln->get_target();
+                    if (target == "knl") {
+                        soln->set_fold_len(x, 2);
+                        soln->set_fold_len(y, 8);
+                        soln->set_cluster_mult(x, 2);
+                        soln->set_prefetch_dist(1, 1);
+                        soln->set_prefetch_dist(2, 0);
+                    }
+                    else if (target == "avx512") {
+                        soln->set_prefetch_dist(1, 0);
+                        soln->set_prefetch_dist(2, 2);
+                    }
+                    else {
+                        soln->set_prefetch_dist(1, 0);
+                        soln->set_prefetch_dist(2, 0);
+                    }
                 }
 
-                // Kernel run-time defaults.  This code is run immediately
-                // after 'kernel_soln' is created.
+                // Kernel run-time defaults, e.g., block-sizes.
+                // This code is run immediately after 'kernel_soln' is created.
                 soln->CALL_AFTER_NEW_SOLUTION
                     (
                      // Add extra padding in all dimensions.
                      kernel_soln.apply_command_line_options("-ep 1");
                      
-                     // Check target at kernel run-time for block-size.
+                     // Check target at kernel run-time.
                      auto isa = kernel_soln.get_target();
                      if (isa == "knl") {
                          kernel_soln.set_block_size("x", 160);

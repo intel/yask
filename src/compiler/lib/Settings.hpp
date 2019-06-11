@@ -43,6 +43,7 @@ namespace yask {
         vector<string> _domainDims; // explicit domain dims.
         IntTuple _foldOptions;    // vector fold.
         IntTuple _clusterOptions; // cluster multipliers.
+        map<int, int> _prefetchDists;
         bool _firstInner = true; // first dimension of fold is unit step.
         string _eq_bundle_basename_default = "stencil_bundle";
         bool _allowUnalignedLoads = false;

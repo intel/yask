@@ -171,9 +171,15 @@ namespace yask {
             auto& dname = dim.getName();
             string ucDim = allCaps(dname);
             os << "#define CMULT_" << ucDim << " (" <<
-                dim.getVal() << ")" << endl;
+                dim.getVal() << ")\n";
         }
-        os << "#define CMULT (" << _dims._clusterMults.product() << ")" << endl;
+        os << "#define CMULT (" << _dims._clusterMults.product() << ")\n";
+
+        os << "\n// Prefetch distances\n";
+        for (int level : { 1, 2 }) {
+            os << "#define PFD_L" << level << " (" <<
+                _stencil.get_prefetch_dist(level) << ")\n";
+        }
     }
 
     // Print YASK data class.

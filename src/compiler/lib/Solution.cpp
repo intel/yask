@@ -74,6 +74,47 @@ namespace yask {
         auto& cluster = _settings._clusterOptions;
         cluster.addDimBack(dim->get_name(), mult);
     }
+    int StencilSolution::get_prefetch_dist(int level) {
+        if (level < 1 || level > 2)
+            THROW_YASK_EXCEPTION("Error: cache-level " +
+                                 to_string(level) +
+                                 " is not 1 or 2.");
+        if (_settings._prefetchDists.count(level))
+            return _settings._prefetchDists.at(level);
+        else if (is_target_set()) {
+            auto target = get_target();
+
+            // Defaults for various targets.
+            if (target == "knc") {
+                if (level == 1)
+                    return 1;
+                else
+                    return 2;
+            }
+            if (target == "knl") {
+                if (level == 1)
+                    return 1;
+                else
+                    return 0;
+            }
+            else {
+                if (level == 1)
+                    return 0;
+                else
+                    return 2;
+            }
+        }
+        return 0;
+    }
+    void StencilSolution::set_prefetch_dist(int level,
+                                            int distance) {
+        get_prefetch_dist(level); // check legality.
+        if (distance < 0)
+            THROW_YASK_EXCEPTION("Error: prefetch-distance " +
+                                 to_string(distance) +
+                                 " is not positive.");
+        _settings._prefetchDists[level] = distance;
+    }
     yc_solution_base::soln_map& yc_solution_base::get_registry() {
         static yc_solution_base::soln_map* rp = 0;
         if (!rp)

@@ -89,7 +89,26 @@ namespace
     // for spatial order = 4.
     virtual void define_so4 ()
     {
+        // Set BKC (best-known configs) found by automated and/or manual
+        // tuning. 
+        // Only have BKCs for SP FP (4B).
+        auto soln = get_soln(); // pointer to compile-time soln.
+        if (soln->get_element_bytes() == 4) {
 
+            // Kernel run-time defaults, e.g., block-sizes.
+            // This code is run immediately after 'kernel_soln' is created.
+            soln->CALL_AFTER_NEW_SOLUTION
+                (
+                 // Check target at kernel run-time.
+                 auto isa = kernel_soln.get_target();
+                 if (isa == "avx512") {
+                     kernel_soln.set_block_size("x", 80);
+                     kernel_soln.set_block_size("y", 16);
+                     kernel_soln.set_block_size("z", 40);
+                 }
+                 );
+        }
+        
       auto temp161 = 2.5e-2 * (-u (t, x - 1, y, z) + u (t, x + 1, y, z));
       auto temp163 = -7.5e-2 * u (t, x, y, z) + 1.0e-1 * u (t, x, y + 1,
 							    z) - 2.5e-2 * u (t, x, y + 2,

@@ -40,11 +40,13 @@ IN THE SOFTWARE.
 #include <fstream>
 
 // Need g++ >= 4.9 for regex.
-#define GCC_VERSION (__GNUC__ * 10000 \
+#ifdef __GNUC__
+#define GCC_VERSION (__GNUC__ * 10000       \
                      + __GNUC_MINOR__ * 100 \
                      + __GNUC_PATCHLEVEL__)
 #if GCC_VERSION < 40900
 #error G++ 4.9.0 or later is required
+#endif
 #endif
 #include <regex>
 
@@ -115,7 +117,7 @@ namespace yask {
             return makePair(other.get());
         }
 
-        // Return a simple string expr.
+        // Return a formatted expr.
         virtual string makeStr(const VarMap* varMap = 0) const;
         virtual string makeQuotedStr(string quote = "'",
                                      const VarMap* varMap = 0) const {
@@ -814,10 +816,12 @@ namespace yask {
         VecType _vecType = VEC_UNSET; // allowed vectorization.
         LoopType _loopType = LOOP_UNSET; // analysis for looping.
 
+        // Cache the string repr.
         string _defStr;
         void _updateStr() {
-            _defStr = makeStr();
+            _defStr = _makeStr();
         }
+        string _makeStr(const VarMap* varMap = 0) const;
 
     public:
 
@@ -895,7 +899,11 @@ namespace yask {
 
         // String w/name and parens around args, e.g., 'u(x, y+2)'.
         // Apply substitutions to indices using 'varMap' if provided.
-        virtual string makeStr(const VarMap* varMap = 0) const;
+        virtual string makeStr(const VarMap* varMap = 0) const {
+            if (varMap)
+                return _makeStr(varMap);
+            return _defStr;
+        }
 
         // String w/name and parens around const args, e.g., 'u(n=4)'.
         // Apply substitutions to indices using 'varMap' if provided.
@@ -933,7 +941,6 @@ namespace yask {
 } // namespace yask.
 
 // Define hash function for VarPoint for unordered_{set,map}.
-// TODO: make this more efficient.
 namespace std {
     using namespace yask;
 

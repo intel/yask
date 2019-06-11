@@ -684,7 +684,7 @@ namespace yask {
         }
         return str;
     }
-    string VarPoint::makeStr(const VarMap* varMap) const {
+    string VarPoint::_makeStr(const VarMap* varMap) const {
         string str = _var->getName() + "(" +
                              makeArgStr(varMap) + ")";
         return str;

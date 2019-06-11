@@ -400,6 +400,27 @@ namespace yask {
         virtual std::vector<yc_equation_node_ptr>
         get_equations() =0;
 
+        /// Get the current prefetch distance for the given cache.
+        /**
+           @returns Prefetch distance in number of iterations
+           or zero (0) if disabled.
+        */
+        virtual int
+        get_prefetch_dist(/** [in] Cache level: 1 or 2. */
+                          int level) =0;
+
+        /// Set the prefetch distance for the given cache.
+        /**
+           If the prefetch distance is not set for a given cache,
+           a default will be used based on the target format.
+         */
+        virtual void
+        set_prefetch_dist(/** [in] Cache level: 1 or 2. */
+                          int level,
+                          /** [in] Number of iterations ahead to prefetch data
+                              or zero (0) to disable. */
+                          int distance) =0;
+        
         /// Optimize and the current equation(s) and write to given output object.
         /** 
             Output will be formatted according to set_target() and all other preceding
@@ -445,6 +466,8 @@ namespace yask {
            This block of code will be executed immediately after the stencil solution 
            is constructed in the kernel, i.e., at the end of a call to
            yk_factory::new_solution().
+           The code may access the new solution via the reference
+           `kernel_soln` of type \ref yk_solution.
 
            Common uses of this facility include setting default run-time settings
            such as block sizes and registering call-back routines, e.g., via
@@ -453,9 +476,9 @@ namespace yask {
            Unlike yk_solution::call_before_prepare_solution() and similar functions
            which have `std::function` parameters,
            the parameter to this function is a string because the code is not compiled
-           until the kernel library is built.
+           (or compilable) until the kernel library is built.
 
-           Alternatively , equivalent code can be added directly to any
+           Alternatively, equivalent code can be added directly to any
            custom application using the kernel library APIs.  However, this
            function is useful when using the provided YASK
            kernel-performance utility launched via `bin/yask.sh`.  It also

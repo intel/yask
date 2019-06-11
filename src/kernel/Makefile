@@ -77,38 +77,7 @@ YC_TARGET	:=	$(ARCH)
 
 # Defaults based on stencil type (and arch for some stencils).
 ifeq ($(YC_STENCIL),)
- $(error Stencil not specified)
-
-else ifneq ($(findstring iso3dfd,$(YC_STENCIL)),)
- ifeq ($(ARCH),knl)
-  pfd_l1		:=	1
-  pfd_l2		:=	0
- else ifeq ($(arch),avx512)
-  pfd_l1		:=	0
-  pfd_l2		:=	2
- else
-  pfd_l1		:=	0
-  pfd_l2		:=	0
- endif
-
-else ifneq ($(findstring awp,$(YC_STENCIL)),)
- YC_FLAGS		+=	-min-es 1
- def_pad_args		:=	-ep 1
- ifeq ($(ARCH),knl)
-  def_thread_divisor	:=	2
-  def_block_threads	:=	4
-  def_block_args	:=	-bx 48 -by 48 -bx 112
-  pfd_l1		:=	1
-  pfd_l2		:=	0
- else ifeq ($(ARCH),avx512)
-  def_block_args	:=	-bx 64 -by 8 -bz 108
-  pfd_l1		:=	1
-  pfd_l2		:=	0
- else
-  def_block_args	:=	-bx 64 -by 8 -bz 64
-  pfd_l1		:=	1
-  pfd_l2		:=	2
- endif
+ $(error Stencil solution not specified)
 
 else ifneq ($(findstring ssg,$(YC_STENCIL)),)
  ifeq ($(ARCH),avx512)
@@ -131,11 +100,6 @@ else ifneq ($(findstring fsg,$(YC_STENCIL)),)
   def_block_args	:=	-bx 48 -by 4 -bz 128
  endif
 
-else ifeq ($(YC_STENCIL),tti)
- ifeq ($(ARCH),avx512)
-  def_block_args	:=	-bx 80 -by 16 -bz 40
- endif
-
 endif # stencil-specific.
 
 # Default settings based on architecture.
@@ -144,8 +108,6 @@ ifeq ($(ARCH),knc)
  ICC_ISA	?=	-mmic
  MACROS		+=	USE_INTRIN512
  def_block_threads  ?=	4
- pfd_l1		?=	1
- pfd_l2		?=	2
 
 else ifeq ($(ARCH),knl)
 
@@ -158,8 +120,6 @@ else ifeq ($(ARCH),knl)
  MACROS		+=	USE_INTRIN512 USE_RCP28 NUMA_PREF=1
  def_block_args ?=	-b 64
  def_block_threads ?=	8
- pfd_l1		?=	1
- pfd_l2		?=	0
 
 else ifeq ($(ARCH),avx512)
 
@@ -201,8 +161,6 @@ omp_misc_schedule	?=	guided
 def_thread_divisor	?=	1
 def_block_threads	?=	2
 def_block_args		?=	-b 32
-pfd_l1			?=	0
-pfd_l2			?=	2
 
 ######## End of vars that control the function and performance of the kernel.
 
@@ -373,7 +331,6 @@ else ifeq ($(check),1)
 endif
 
 # Set MACROS based on individual makefile vars.
-MACROS		+=	PFD_L1=$(pfd_l1) PFD_L2=$(pfd_l2)
 ifeq ($(streaming_stores),1)
  MACROS		+=	USE_STREAMING_STORE
 endif
@@ -827,7 +784,7 @@ stencil-tests:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=ssg fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=ssg_merged fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=awp fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=awp_elastic fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=awp_abc fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=fsg_abc fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=fsg_merged fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=tti fold=x=2,y=2

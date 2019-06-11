@@ -125,6 +125,10 @@ void usage(const string& cmd,
         "      formats with explicit lengths, lengths will adjusted as needed.\n"
         " -cluster <dim>=<size>,...\n"
         "    Set number of vectors to evaluate in each dimension.\n"
+        " -l1-prefetch-dist <n>\n"
+        "    Set L1 prefetch distance to <n> iterations ahead. Use zero (0) to disable.\n"
+        " -l2-prefetch-dist <n>\n"
+        "    Set L2 prefetch distance to <n> iterations ahead. Use zero (0) to disable.\n"
         " -vars <regex>\n"
         "    Only process updates to vars whose names match <regex>.\n"
         "      This can be used to generate code for a subset of the stencil equations.\n"
@@ -313,7 +317,11 @@ void parseOpts(int argc, const char* argv[],
                     // options w/an int value.
                     int val = atoi(argop.c_str());
 
-                    if (opt == "-max-es")
+                    if (opt == "-l1-prefetch-dist")
+                        settings._prefetchDists[1] = val;
+                    if (opt == "-l2-prefetch-dist")
+                        settings._prefetchDists[2] = val;
+                    else if (opt == "-max-es")
                         settings._maxExprSize = val;
                     else if (opt == "-min-es")
                         settings._minExprSize = val;

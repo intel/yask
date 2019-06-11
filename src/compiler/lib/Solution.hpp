@@ -188,6 +188,11 @@ namespace yask {
         call_after_new_solution(const string& code) {
             _kernel_code.push_back(code);
         }
+        virtual int
+        get_prefetch_dist(int level);
+        virtual void
+        set_prefetch_dist(int level,
+                          int distance);
         virtual void add_flow_dependency(yc_equation_node_ptr from,
                                          yc_equation_node_ptr to) {
             auto fp = dynamic_pointer_cast<EqualsExpr>(from);
