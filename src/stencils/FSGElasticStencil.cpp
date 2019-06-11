@@ -278,6 +278,51 @@ namespace fsg {
             }
         }
 
+        // Set BKC (best-known configs) found by automated and/or manual
+        // tuning. They are only applied for certain target configs.
+        virtual void set_configs() {
+            auto soln = get_soln(); // pointer to compile-time soln.
+
+            // Only have BKCs for SP FP (4B).
+            if (soln->get_element_bytes() == 4) {
+
+                // Compile-time defaults, e.g., prefetching.
+                if (soln->is_target_set()) {
+                    auto target = soln->get_target();
+                    if (target == "knl") {
+                        soln->set_prefetch_dist(1, 0);
+                        soln->set_prefetch_dist(2, 2);
+                    }
+                }
+
+                // Kernel run-time defaults, e.g., block-sizes.
+                // This code is run immediately after 'kernel_soln' is created.
+                soln->CALL_AFTER_NEW_SOLUTION
+                    (
+                     // Check target at kernel run-time.
+                     auto isa = kernel_soln.get_target();
+                     if (isa == "knl") {
+                         // Use only 1 thread per core.
+                         kernel_soln.apply_command_line_options("-thread_divisor 4 -block_threads 2");
+
+                         kernel_soln.set_block_size("x", 16);
+                         kernel_soln.set_block_size("y", 16);
+                         kernel_soln.set_block_size("z", 16);
+                     }
+                     else if (isa == "avx512") {
+                         kernel_soln.set_block_size("x", 188);
+                         kernel_soln.set_block_size("y", 12);
+                         kernel_soln.set_block_size("z", 24);
+                     }
+                     else {
+                         kernel_soln.set_block_size("x", 48);
+                         kernel_soln.set_block_size("y", 4);
+                         kernel_soln.set_block_size("z", 128);
+                     }
+                     );
+            }
+        }
+        
         // Call all the define_* functions.
         virtual void define() {
 
@@ -312,6 +357,8 @@ namespace fsg {
 
             if ( hasBoundaryCondition() )
                 fsg_bc.stress(t,x,y,z);
+
+            set_configs();
         }
     };
 

@@ -54,6 +54,9 @@ YK_ARCH		:=	$(arch)
 
 # Specify YC_STENCIL on 'make' cmd-line to pass different stencil name to YASK compiler.
 YC_STENCIL	:=	$(stencil)
+ifeq ($(YC_STENCIL),)
+ $(error Stencil not specified)
+endif
 
 # Set 'ARCH', converting codenames to ISA names.
 ifneq ($(filter $(arch),avx snb ivb),)
@@ -72,35 +75,8 @@ else
   $(error Instruction-set architecture (ISA) not recognized; use arch=avx512, avx2, avx, knl, knc, or intel64)
 endif
 
-# Specify YC_TARGET on 'make' cmd-line to override ARCH.
+# Specify YC_TARGET on 'make' cmd-line to override ARCH for YASK compiler.
 YC_TARGET	:=	$(ARCH)
-
-# Defaults based on stencil type (and arch for some stencils).
-ifeq ($(YC_STENCIL),)
- $(error Stencil solution not specified)
-
-else ifneq ($(findstring ssg,$(YC_STENCIL)),)
- ifeq ($(ARCH),avx512)
-  def_block_args	:=	-bx 96 -by 16 -bz 80
- else
-  def_block_args	:=	-bx 64 -by 16 -bz 96
- endif
-
-else ifneq ($(findstring fsg,$(YC_STENCIL)),)
- ifeq ($(ARCH),knl)
-  omp_region_schedule	:=	guided
-  def_block_args	:=	-b 16
-  def_thread_divisor	:=	4
-  def_block_threads	:=	2
-  pfd_l1		:=	0
-  pfd_l2		:=	2
- else ifeq ($(ARCH),avx512)
-  def_block_args	:=	-bx 188 -by 12 -bz 24
- else
-  def_block_args	:=	-bx 48 -by 4 -bz 128
- endif
-
-endif # stencil-specific.
 
 # Default settings based on architecture.
 ifeq ($(ARCH),knc)
