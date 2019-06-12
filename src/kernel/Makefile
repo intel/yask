@@ -28,6 +28,7 @@
 # command-line that control kernel configuration and performance.
 
 # Initial defaults.
+# These can be overridden on the 'make' command-line.
 stencil			?=	iso3dfd
 mpi			?=	1
 numa			?=	1
@@ -549,11 +550,12 @@ $(YK_GEN_DIR)/yask_var_code.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
 	$(PERL) $< -v $(NVDIMS) > $@
 
+# NB: 'set -o pipefail' ensures failure of command before '| tee' is visible.
 $(YK_CODE_FILE): $(YC_EXEC)
 	$(MKDIR) $(dir $@)
 	@- rm -f $@
-	$(RUN_PREFIX) $< $(YC_FLAGS) -p $@ $(EXTRA_YC_FLAGS) | tee $(YC_REPORT_FILE) 2>&1
-	@ grep -q -E 'End of .* code' $@
+	set -o pipefail; \
+	  $(RUN_PREFIX) $< $(YC_FLAGS) -p $@ $(EXTRA_YC_FLAGS) | tee $(YC_REPORT_FILE) 2>&1
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because no indent program was found."
