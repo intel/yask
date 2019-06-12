@@ -189,9 +189,6 @@ namespace yask {
 
     protected:
 
-        // Default sizes.
-        idx_t def_block = 32;   // TODO: calculate this.
-
         // Make a null output stream.
         // TODO: put this somewhere else.
         yask_output_factory yof;

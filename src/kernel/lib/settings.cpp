@@ -239,6 +239,17 @@ namespace yask {
         _dims(dims), max_threads(env->max_threads) {
         auto& step_dim = dims->_step_dim;
 
+        // Target-dependent defaults.
+        int def_blk_size = 32;  // TODO: calculate based on actual cache size and stencil.
+        num_block_threads = 2;
+        if (YASK_TARGET == "knl") {
+            def_blk_size = 64;   // larger L2.
+            num_block_threads = 8; // 4 threads per core * 2 cores per tile.
+        }
+        else if (YASK_TARGET == "knc") {
+            num_block_threads = 4; // 4 threads per core.
+        }
+
         // Use both step and domain dims for all size tuples.
         _global_sizes = dims->_stencil_dims;
         _global_sizes.setValsSame(0); // 0 => calc from rank.
@@ -253,7 +264,7 @@ namespace yask {
         _block_group_sizes.setValsSame(0); // 0 => min size.
 
         _block_sizes = dims->_stencil_dims;
-        _block_sizes.setValsSame(def_block); // size of block. TODO: calculate good value.
+        _block_sizes.setValsSame(def_blk_size);
         _block_sizes.setVal(step_dim, 0); // 0 => default.
 
         _mini_block_group_sizes = dims->_stencil_dims;

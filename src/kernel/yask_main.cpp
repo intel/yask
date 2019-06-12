@@ -207,7 +207,9 @@ struct MySettings {
             "Stencil name: " YASK_STENCIL_NAME << endl;
 
         // Echo invocation parameters for record-keeping.
+#ifdef DEF_ARGS
         os << "Default arguments: " DEF_ARGS << endl;
+#endif
         os << "Binary invocation:";
         for (int argi = 0; argi < argc; argi++)
             os << " " << argv[argi];

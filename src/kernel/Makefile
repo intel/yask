@@ -34,19 +34,46 @@ numa			?=	1
 pmem			?=	0
 real_bytes		?=	4
 allow_new_var_types	?=	1
+streaming_stores	?=	0
+omp_par			?=	omp parallel
+omp_par_for		?=	omp parallel for
+omp_for			?=	omp for
+omp_region_schedule	?=	dynamic,1
+omp_block_schedule	?=	static,1
+omp_misc_schedule	?=	guided
 trace			?=	0
 trace_mem		?=	0
 check			?=	0
-# NB: setting the "trace" var just includes the tracing code.
-# To actually output the trace, you must also use the "-trace"
-# run-time option. Enabling tracing is off by default because
-# it adds a few MiB to the binary and can impact perfomance
-# even if not used, but only around 1%.
+# NB: setting the "trace" and "trace_mem" vars just includes the tracing
+# code.  To actually output the trace, you must also use the "-trace"
+# run-time option.  Including the "trace" code has a small impact on
+# binary size and performance, even if not used. Including the "trace_mem"
+# code has a large impact, even if not used.
 
 # If 'arch' isn't set, determine default architecture by running kernel
-# script w/special knob.  Do not assume it has been installed in
-# $(BIN_OUT_DIR) yet.
-arch		?=	$(shell $(BASH) ./yask.sh -show_arch)
+# script w/special knob.
+# The "knc" arch must be set manually because it is always cross-compiled.
+# (Do not assume 'yask.sh' has been installed in $(BIN_OUT_DIR) yet.)
+arch			?=	$(shell $(BASH) ./yask.sh -show_arch)
+
+# Set 'TARGET' from 'arch', converting codenames and other aliases to ISA names.
+# 'TARGET' is the canonical target name.
+# The possible values must agree with those in the APIs and YASK compiler.
+ifneq ($(filter $(arch),avx snb ivb),)
+  TARGET		:=	avx
+else ifneq ($(filter $(arch),avx2 hsw bdw),)
+  TARGET		:=	avx2
+else ifneq ($(filter $(arch),avx512 avx512f skx skl clx),)
+  TARGET		:=	avx512
+else ifneq ($(filter $(arch),knl),)
+  TARGET		:=	knl
+else ifneq ($(filter $(arch),knc),)
+  TARGET		:=	knc
+else ifneq ($(filter $(arch),intel64 cpp),)
+  TARGET		:=	intel64
+else
+  $(error Target not recognized; use arch=avx512, avx2, avx, knl, knc, or intel64)
+endif
 
 # Specify YK_STENCIL and/or YK_ARCH on 'make' cmd-line to name binaries differently.
 YK_STENCIL	:=	$(stencil)
@@ -54,38 +81,17 @@ YK_ARCH		:=	$(arch)
 
 # Specify YC_STENCIL on 'make' cmd-line to pass different stencil name to YASK compiler.
 YC_STENCIL	:=	$(stencil)
-ifeq ($(YC_STENCIL),)
- $(error Stencil not specified)
-endif
 
-# Set 'ARCH', converting codenames to ISA names.
-ifneq ($(filter $(arch),avx snb ivb),)
-  ARCH		:=	avx
-else ifneq ($(filter $(arch),avx2 hsw bdw),)
-  ARCH		:=	avx2
-else ifneq ($(filter $(arch),avx512 avx512f skx skl clx),)
-  ARCH		:=	avx512
-else ifneq ($(filter $(arch),knl),)
-  ARCH		:=	knl
-else ifneq ($(filter $(arch),knc),)
-  ARCH		:=	knc
-else ifneq ($(filter $(arch),intel64 cpp),)
-  ARCH		:=	intel64
-else
-  $(error Instruction-set architecture (ISA) not recognized; use arch=avx512, avx2, avx, knl, knc, or intel64)
-endif
+# Specify YC_TARGET on 'make' cmd-line to override target for YASK compiler.
+YC_TARGET	:=	$(TARGET)
 
-# Specify YC_TARGET on 'make' cmd-line to override ARCH for YASK compiler.
-YC_TARGET	:=	$(ARCH)
-
-# Default settings based on architecture.
-ifeq ($(ARCH),knc)
+# Default compiler settings based on target.
+ifeq ($(TARGET),knc)
 
  ICC_ISA	?=	-mmic
  MACROS		+=	USE_INTRIN512
- def_block_threads  ?=	4
 
-else ifeq ($(ARCH),knl)
+else ifeq ($(TARGET),knl)
 
  # NUMA_PREF=1 causes YASK to use MCDRAM on a node in "flat" memory mode. It
  # will fall-back to NUMA node 0 in "cache" memory mode. It will *NOT* do
@@ -94,28 +100,26 @@ else ifeq ($(ARCH),knl)
  ICC_ISA	?=	-xMIC-AVX512
  GCC_ISA	?=	-march=knl
  MACROS		+=	USE_INTRIN512 USE_RCP28 NUMA_PREF=1
- def_block_args ?=	-b 64
- def_block_threads ?=	8
 
-else ifeq ($(ARCH),avx512)
+else ifeq ($(TARGET),avx512)
 
  ICC_ISA	?=	-xCORE-AVX512
  GCC_ISA	?=	-march=knl -mno-avx512er -mno-avx512pf
  MACROS		+=	USE_INTRIN512
 
-else ifeq ($(ARCH),avx2)
+else ifeq ($(TARGET),avx2)
 
  ICC_ISA	?=	-xCORE-AVX2
  GCC_ISA	?=	-march=haswell
  MACROS		+=	USE_INTRIN256 USE_AVX2
 
-else ifeq ($(ARCH),avx)
+else ifeq ($(TARGET),avx)
 
  ICC_ISA	?=	-xAVX
  GCC_ISA	?=	-march=sandybridge
  MACROS		+=	USE_INTRIN256
 
-else ifeq ($(ARCH),intel64)
+else ifeq ($(TARGET),intel64)
 
  ICC_ISA	?=	-xHOST
  GCC_ISA	?=	-march=native
@@ -126,19 +130,16 @@ $(error Internal error: arch lists are not consistent)
 
 endif # arch-specific.
 
-# general defaults for vars if not set above.
-streaming_stores	?=	0
-omp_par			?=	omp parallel
-omp_par_for		?=	omp parallel for
-omp_for			?=	omp for
-omp_region_schedule	?=	dynamic,1
-omp_block_schedule	?=	static,1
-omp_misc_schedule	?=	guided
-def_thread_divisor	?=	1
-def_block_threads	?=	2
-def_block_args		?=	-b 32
+# Turn off prefetching at O0 or O1.
+ifneq ($(filter -O0 -O1,$(YK_CXXOPT)),)
+ pfd_l1		:=	0
+ pfd_l2		:=	0
+endif
 
-######## End of vars that control the function and performance of the kernel.
+# Turn on checking at O0.
+ifneq ($(filter -O0,$(YK_CXXOPT)),)
+ check		:=	1
+endif
 
 # Common settings.
 YASK_BASE	?=	$(abspath ../..)
@@ -149,7 +150,7 @@ include $(YASK_BASE)/src/common/common.mk
 # Vars starting with 'YK_' apply to the stencil kernel.
 
 # Flags passed to stencil compiler.
-YC_FLAGS	+=	-stencil $(YC_STENCIL) -target $(YC_TARGET) -elem-bytes $(real_bytes)
+YC_FLAGS	:=	-stencil $(YC_STENCIL) -target $(YC_TARGET) -elem-bytes $(real_bytes)
 ifneq ($(fold),)
  YC_FLAGS	+=	-fold $(fold)
 endif
@@ -173,6 +174,12 @@ ifneq ($(domain_dims),)
 endif
 ifneq ($(step_dim),)
  YC_FLAGS	+=	-step-dim $(step_dim)
+endif
+ifneq ($(pfd_l1),)
+ YC_FLAGS	+=	-l1-prefetch-dist $(pfd_l1)
+endif
+ifneq ($(pfd_l2),)
+ YC_FLAGS	+=	-l2-prefetch-dist $(pfd_l2)
 endif
 
 # Kernel base names.
@@ -286,17 +293,6 @@ ifeq ($(pmem),1)
  MACROS		+=	USE_PMEM
 endif
 
-# Turn off prefetching at O0 or O1.
-ifneq ($(filter -O0 -O1,$(YK_CXXOPT)),)
- pfd_l1		:=	0
- pfd_l2		:=	0
-endif
-
-# Turn on checking at O0.
-ifneq ($(filter -O0,$(YK_CXXOPT)),)
- check		?=	1
-endif
-
 # Turn on debug macros.
 ifeq ($(trace_mem),1)
  MACROS		+=	CHECK TRACE TRACE_MEM
@@ -313,11 +309,9 @@ endif
 MACROS		+=	ALLOW_NEW_VARS=$(allow_new_var_types)
 
 # Default cmd-line args.
-YK_CXXFLAGS	+=	-DDEF_ARGS='"$(DEF_ARGS)"'
-
-# arch.
-UC_ARCH		:=	$(shell echo $(ARCH) | tr '[:lower:]' '[:upper:]')
-MACROS		+=	ARCH_$(UC_ARCH) ARCH_NAME=$(ARCH)
+ifneq ($(DEF_ARGS),)
+ YK_CXXFLAGS	+=	-DDEF_ARGS='"$(DEF_ARGS)"'
+endif
 
 # MPI settings.
 ifeq ($(mpi),1)
@@ -360,11 +354,11 @@ ifneq ($(filter %icpc %icc,$(notdir $(YK_CXX))),)  # Intel compiler
  YK_CXX_VER_CMD :=	$(YK_CXX) -V
  MACROS		+=	USE_SVML
 
-# Use 512-bit code on SKX and CLX.
-# (Commented out because it doesn't help performance, and it breaks Devito.)
-ifeq ($(ARCH),avx512)
- #YK_CXXFLAGS	+=	-qopt-zmm-usage=high
-endif
+ # Use real 512-bit code.
+ # (Commented out because it doesn't help performance, and it breaks Devito.)
+ ifeq ($(TARGET),avx512)
+  #YK_CXXFLAGS	+=	-qopt-zmm-usage=high
+ endif
 
 else # not Intel compiler
  YK_CXXFLAGS	+=	$(GCXX_ISA) -Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
@@ -799,7 +793,7 @@ realclean: clean
 echo-settings:
 	@echo "Build environment for" $(YK_EXEC) on `date`; \
 	$(YK_CXX) --version; \
-	echo ARCH=$(ARCH); \
+	echo TARGET=$(TARGET); \
 	echo BLOCK_LOOP_CODE="\"$(BLOCK_LOOP_CODE)\""; \
 	echo BLOCK_LOOP_INNER_MODS="\"$(BLOCK_LOOP_INNER_MODS)\""; \
 	echo BLOCK_LOOP_OPTS="\"$(BLOCK_LOOP_OPTS)\""; \
@@ -858,11 +852,6 @@ echo-settings:
 	echo YK_TAG=$(YK_TAG); \
 	echo arch=$(arch); \
 	echo cluster=$(cluster); \
-	echo def_block_args=$(def_block_args); \
-	echo def_block_threads=$(def_block_threads); \
-	echo def_pad_args=$(def_pad_args); \
-	echo def_rank_args=$(def_rank_args); \
-	echo def_thread_divisor=$(def_thread_divisor); \
 	echo fold=$(fold); \
 	echo host=`hostname`; \
 	echo omp_block_schedule=$(omp_block_schedule); \

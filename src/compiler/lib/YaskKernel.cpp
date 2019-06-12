@@ -87,7 +87,8 @@ namespace yask {
             "#define YASK_STENCIL_NAME \"" << _stencil.getName() << "\"\n"
             "#define YASK_STENCIL_CONTEXT " << _context << endl;
 
-        os << "\n// FP precision:\n"
+        os << "\n// target:\n"
+            "#define YASK_TARGET \"" << _settings._target << "\"\n"
             "#define REAL_BYTES (" << _settings._elem_bytes << ")\n";
 
         os << "\n// Number of domain dimensions:\n"
