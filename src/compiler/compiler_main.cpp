@@ -319,21 +319,18 @@ void parseOpts(int argc, const char* argv[],
 
                     if (opt == "-l1-prefetch-dist")
                         settings._prefetchDists[1] = val;
-                    if (opt == "-l2-prefetch-dist")
+                    else if (opt == "-l2-prefetch-dist")
                         settings._prefetchDists[2] = val;
                     else if (opt == "-max-es")
                         settings._maxExprSize = val;
                     else if (opt == "-min-es")
                         settings._minExprSize = val;
-
                     else if (opt == "-radius")
                         radius = val;
                     else if (opt == "-elem-bytes")
                         settings._elem_bytes = val;
-
                     else if (opt == "-ps")
                         vlenForStats = val;
-
                     else if (opt == "-halo")
                         settings._haloSize = val;
                     else if (opt == "-step-alloc")
