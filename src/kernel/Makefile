@@ -105,7 +105,7 @@ else ifeq ($(TARGET),knl)
 else ifeq ($(TARGET),avx512)
 
  ICC_ISA	?=	-xCORE-AVX512
- GCC_ISA	?=	-march=knl -mno-avx512er -mno-avx512pf
+ GCC_ISA	?=	-march=skylake-avx512
  MACROS		+=	USE_INTRIN512
 
 else ifeq ($(TARGET),avx2)
@@ -339,7 +339,8 @@ YK_CXXFLAGS	+=	-I$(VTUNE_DIR)/include
 YK_LIBS		+=	$(VTUNE_DIR)/lib64/libittnotify.a
 endif
 
-# compiler-specific settings
+# compiler-specific settings.
+# TODO: make check for Intel compiler more robust.
 ifneq ($(filter %icpc %icc,$(notdir $(YK_CXX))),)  # Intel compiler
 
  YK_CXXFLAGS	+=	$(ISA) -debug extended -restrict -ansi-alias -fno-alias
@@ -353,7 +354,7 @@ ifneq ($(filter %icpc %icc,$(notdir $(YK_CXX))),)  # Intel compiler
  #YK_CXXFLAGS	+=	-qopt-report=5
  #YK_CXXFLAGS	+=	-qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
  YK_CXX_VER_CMD :=	$(YK_CXX) -V
- MACROS		+=	USE_SVML
+ MACROS		+=	USE_SVML USE_ALWAYS_INLINE
 
  # Use real 512-bit code.
  # (Commented out because it doesn't help performance, and it breaks Devito.)
@@ -362,7 +363,8 @@ ifneq ($(filter %icpc %icc,$(notdir $(YK_CXX))),)  # Intel compiler
  endif
 
 else # not Intel compiler
- YK_CXXFLAGS	+=	$(GCXX_ISA) -Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
+ YK_CXXFLAGS	+=	$(GCC_ISA) -Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
+ MACROS		+=	USE_ALWAYS_INLINE
 
 endif # compiler.
 

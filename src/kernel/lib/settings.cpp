@@ -242,11 +242,11 @@ namespace yask {
         // Target-dependent defaults.
         int def_blk_size = 32;  // TODO: calculate based on actual cache size and stencil.
         num_block_threads = 2;
-        if (YASK_TARGET == "knl") {
+        if (string(YASK_TARGET) == "knl") {
             def_blk_size = 64;   // larger L2.
             num_block_threads = 8; // 4 threads per core * 2 cores per tile.
         }
-        else if (YASK_TARGET == "knc") {
+        else if (string(YASK_TARGET) == "knc") {
             num_block_threads = 4; // 4 threads per core.
         }
 

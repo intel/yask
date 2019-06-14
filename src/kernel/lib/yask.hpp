@@ -89,10 +89,10 @@ typedef int MPI_Request;
 #endif
 
 // Conditional inlining
-#ifdef CHECK
-#define ALWAYS_INLINE inline
-#else
+#if defined(USE_ALWAYS_INLINE) && !defined(CHECK)
 #define ALWAYS_INLINE __attribute__((always_inline)) inline
+#else
+#define ALWAYS_INLINE inline
 #endif
 
 // Additional type for unsigned indices.

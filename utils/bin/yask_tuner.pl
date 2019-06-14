@@ -1356,9 +1356,9 @@ sub fitness {
 
   # various commands.
   my $testCmd = "$runCmd -v $runArgs"; # validation on a small problem size.
-  my $simCmd = "$runCmd $args -t 1 -dt 1 $runArgs";  # simulation w/1 trial & 1 step.
-  my $shortRunCmd = "$runCmd $args -t $shortTrials -trial_time $shortTime $runArgs"; # fast run for 'upper-bound' time.
-  my $longRunCmd = "$runCmd $args -t $longTrials -trial_time $longTime $runArgs";  # normal run w/more trials.
+  my $simCmd = "$runCmd $args -num_trials 1 -trial_steps 1 $runArgs";  # simulation w/1 trial & 1 step.
+  my $shortRunCmd = "$runCmd $args -num_trials $shortTrials -trial_time $shortTime $runArgs"; # fast run for 'upper-bound' time.
+  my $longRunCmd = "$runCmd $args -num_trials $longTrials -trial_time $longTime $runArgs";  # normal run w/more trials.
 
   # add kill command to prevent runaway code.
   if (-x $killCmd) {

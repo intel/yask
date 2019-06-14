@@ -153,7 +153,7 @@ namespace {
         virtual void set_configs() {
             auto soln = get_soln(); // pointer to compile-time soln.
 
-            // Only have BKCs for SP FP (4B) and radius 8.
+            // BKCs are only for SP FP (4B) and radius 8.
             if (soln->get_element_bytes() == 4 &&
                 get_radius() == 8) {
 
