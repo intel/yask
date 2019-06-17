@@ -831,7 +831,7 @@ namespace yask {
 #endif
         
         // Init block begin & end from region start & stop indices.
-        ScanIndices block_idxs(*dims, true, 0);
+        ScanIndices block_idxs(*dims, true);
         block_idxs.initFromOuter(region_idxs);
 
         // Time range.
@@ -1004,7 +1004,7 @@ namespace yask {
         }
 
         // Init mini-block begin & end from blk start & stop indices.
-        ScanIndices mini_block_idxs(*dims, true, 0);
+        ScanIndices mini_block_idxs(*dims, true);
         mini_block_idxs.initFromOuter(adj_block_idxs);
 
         // Time range.

@@ -242,7 +242,7 @@ namespace yask {
         ScratchVecs scratchVecs;
 
         // Some calculated sizes for this rank and overall.
-        IdxTuple rank_domain_offsets;       // Domain index offsets for this rank.
+        Indices rank_domain_offsets;       // Domain index offsets for this rank.
         idx_t rank_nbytes=0, tot_nbytes=0;
         idx_t rank_domain_pts=0, tot_domain_pts=0;
 

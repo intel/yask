@@ -148,6 +148,9 @@ namespace yask {
                 _idxs[i] = val;
             _ndims = n;
         }
+        void setValsSame(idx_t val) {
+            setFromConst(val);
+        }
 
         // Some comparisons.
         // These assume all the indices are valid or
@@ -306,6 +309,14 @@ namespace yask {
                 tmp.addDimBack(names[i], _idxs[i]);
             return tmp.makeDimValStr(separator, infix, prefix, suffix);
         }
+        std::string makeDimValStr(const IdxTuple& names, // ignore values.
+                                  std::string separator=", ",
+                                  std::string infix="=",
+                                  std::string prefix="",
+                                  std::string suffix="") const {
+            auto tmp = names.getDimNames();
+            return makeDimValStr(tmp, separator, infix, prefix, suffix);
+        }
 
         // Make string like "4, 3, 2".
         std::string makeValStr(int nvals,
@@ -376,7 +387,25 @@ namespace yask {
         //                                       start   stop  (index = 2)
 
         // Ctor.
-        ScanIndices(const Dims& dims, bool use_vec_align, IdxTuple* ofs);
+        ScanIndices(const Dims& dims, bool use_vec_align);
+        ScanIndices(const Dims& dims, bool use_vec_align, Indices* ofs) :
+            ScanIndices(dims, use_vec_align) {
+            if (ofs) {
+                DOMAIN_VAR_LOOP(i, j) {
+                    assert(ofs->getNumDims() == ndims - 1);
+                    align_ofs[i] = (*ofs)[j];
+                }
+            }
+        }
+        ScanIndices(const Dims& dims, bool use_vec_align, IdxTuple* ofs) :
+            ScanIndices(dims, use_vec_align) {
+            if (ofs) {
+                DOMAIN_VAR_LOOP(i, j) {
+                    assert(ofs->getNumDims() == ndims - 1);
+                    align_ofs[i] = ofs->getVal(j);
+                }
+            }
+        }
 
         // Init from outer-loop indices.
         // Start..stop from point in outer loop become begin..end

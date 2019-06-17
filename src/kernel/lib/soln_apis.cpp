@@ -282,7 +282,7 @@ namespace yask {
         os <<
             " num-ranks:             " << opts->_num_ranks.makeDimValStr(" * ") << endl <<
             " rank-indices:          " << opts->_rank_indices.makeDimValStr() << endl <<
-            " local-domain-offsets:  " << rank_domain_offsets.makeDimValStr() << endl;
+            " local-domain-offsets:  " << rank_domain_offsets.makeDimValStr(dims->_domain_dims) << endl;
         if (opts->overlap_comms)
             os <<
                 " mpi-interior:          " << mpi_interior.bb_begin.makeDimValStr() <<

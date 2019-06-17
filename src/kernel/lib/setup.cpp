@@ -38,7 +38,7 @@ namespace yask {
     }
     
     // ScanIndices ctor.
-    ScanIndices::ScanIndices(const Dims& dims, bool use_vec_align, IdxTuple* ofs) :
+    ScanIndices::ScanIndices(const Dims& dims, bool use_vec_align) :
         ndims(NUM_STENCIL_DIMS),
         begin(idx_t(0), ndims),
         end(idx_t(0), ndims),
@@ -57,12 +57,6 @@ namespace yask {
             // Set alignment to vector lengths.
             if (use_vec_align)
                 align[i] = fold_pts[j];
-
-            // Set alignment offset.
-            if (ofs) {
-                assert(ofs->getNumDims() == ndims - 1);
-                align_ofs[i] = ofs->getVal(j);
-            }
         }
     }
 
@@ -75,8 +69,8 @@ namespace yask {
         STATE_VARS(this);
 
         // Init various tuples to make sure they have the correct dims.
-        rank_domain_offsets = domain_dims;
-        rank_domain_offsets.setValsSame(-1); // indicates prepare_solution() not called. TODO: add flag.
+        rank_domain_offsets.setFromTuple(domain_dims);
+        rank_domain_offsets.setFromConst(-1); // indicates prepare_solution() not called. TODO: add flag.
         max_halos = domain_dims;
         wf_angles = domain_dims;
         wf_shift_pts = domain_dims;
@@ -293,7 +287,7 @@ namespace yask {
                             // Adjust my offset in the global problem by adding all domain
                             // sizes from prev ranks only.
                             if (rdeltas[di] < 0)
-                                rank_domain_offsets[dname] += rsizes[rn][di];
+                                rank_domain_offsets[di] += rsizes[rn][di];
 
                         } // 2nd pass.
                     } // is inline w/me.
@@ -485,7 +479,8 @@ namespace yask {
                     gp->set_min_pad_size(dname, opts->_min_pad_sizes[dname]);
                         
                     // Offsets.
-                    gp->_set_rank_offset(dname, rank_domain_offsets[dname]);
+                    auto dp = dims->_domain_dims.lookup_posn(dname);
+                    gp->_set_rank_offset(dname, rank_domain_offsets[dp]);
                     gp->_set_local_offset(dname, 0);
                 }
 
@@ -782,8 +777,9 @@ namespace yask {
         bbtimer.start();
 
         // Rank BB is based only on rank offsets and rank domain sizes.
-        rank_bb.bb_begin = rank_domain_offsets;
-        rank_bb.bb_end = rank_domain_offsets.addElements(opts->_rank_sizes, false);
+        rank_bb.bb_begin = dims->_domain_dims;
+        rank_domain_offsets.setTupleVals(rank_bb.bb_begin);
+        rank_bb.bb_end = rank_bb.bb_begin.addElements(opts->_rank_sizes, false);
         rank_bb.update_bb("rank", *this, true, &os);
 
         // BB may be extended for wave-fronts.
@@ -1136,10 +1132,9 @@ namespace yask {
 
         // Does everything start on a vector-length boundary?
         bb_is_aligned = true;
-        for (auto& dim : domain_dims.getDims()) {
-            auto& dname = dim.getName();
-            if ((bb_begin[dname] - context.rank_domain_offsets[dname]) %
-                dims->_fold_pts[dname] != 0) {
+        DOMAIN_VAR_LOOP(i, j) {
+            if ((bb_begin[j] - context.rank_domain_offsets[j]) %
+                dims->_fold_pts[j] != 0) {
                 if (os)
                     *os << "Note: '" << name << "' domain"
                         " has one or more starting edges not on vector boundaries;"

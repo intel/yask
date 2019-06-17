@@ -222,7 +222,7 @@ namespace yask {
         // Init sub-block begin & end from block start & stop indices.
         // Use the 'misc' loops. Indices for these loops will be scalar and
         // global rather than normalized as in the cluster and vector loops.
-        ScanIndices misc_idxs(*dims, true, 0);
+        ScanIndices misc_idxs(*dims, true);
         misc_idxs.initFromOuter(mini_block_idxs);
         
         // Stride sizes and alignment are one element.
@@ -274,7 +274,7 @@ namespace yask {
 
         // Init sub-block begin & end from block start & stop indices.
         // These indices are in element units and global (NOT rank-relative).
-        ScanIndices sub_block_idxs(*dims, true, 0);
+        ScanIndices sub_block_idxs(*dims, true);
         sub_block_idxs.initFromOuter(mini_block_idxs);
 
         // Sub block indices in element units and rank-relative.
