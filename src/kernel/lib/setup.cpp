@@ -70,7 +70,6 @@ namespace yask {
 
         // Init various tuples to make sure they have the correct dims.
         rank_domain_offsets.setFromTuple(domain_dims);
-        rank_domain_offsets.setFromConst(-1); // indicates prepare_solution() not called. TODO: add flag.
         max_halos = domain_dims;
         wf_angles = domain_dims;
         wf_shift_pts = domain_dims;

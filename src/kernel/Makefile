@@ -247,7 +247,7 @@ GEN_LOOPS	:=	$(UTILS_BIN_DIR)/gen_loops.pl
 
 # Other scripts and cmds.
 GEN_LAYOUTS	:=	$(UTILS_BIN_DIR)/gen_layouts.pl
-GET_LOOP_STATS	:=	$(UTILS_BIN_DIR)/get_loop_stats.pl
+VIEW_ASM	:=	$(UTILS_BIN_DIR)/view_asm.pl
 
 # Compiler and default flags.
 ifeq ($(mpi),1)
@@ -874,7 +874,7 @@ echo-settings:
 # won't rebuild if only '-Fa' is added.)
 code-stats:
 	@echo "Code stats for stencil computation:"
-	$(PERL) $(GET_LOOP_STATS) -p -f=calc_loop_of_clusters factory.s
+	$(PERL) $(VIEW_ASM) -p -l -f=calc_loop_of_clusters factory.s
 
 # Print some usage info.
 help:
