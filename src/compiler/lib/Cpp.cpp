@@ -56,7 +56,7 @@ namespace yask {
                                          string optArg) {
 
         // Get/set local vars.
-        string varPtr = getLocalVar(os, gp.getVarPtr(), _var_ptr_type);
+        string varPtr = getLocalVar(os, gp.getVarPtr(), _var_ptr_restrict_type);
         string stepArgVar = getLocalVar(os, gp.makeStepArgStr(varPtr, _dims), _step_val_type);
 
         string res = varPtr + "->" + fname + "(";
@@ -94,7 +94,7 @@ namespace yask {
         string gtype = folded ? "YkVecVar" : "YkElemVar";
 
         // Get/set local vars.
-        string varPtr = getLocalVar(os, gp.getVarPtr(), CppPrintHelper::_var_ptr_type);
+        string varPtr = getLocalVar(os, gp.getVarPtr(), CppPrintHelper::_var_ptr_restrict_type);
         string stepArgVar = getLocalVar(os, gp.makeStepArgStr(varPtr, _dims),
                                         CppPrintHelper::_step_val_type);
 
@@ -171,7 +171,7 @@ namespace yask {
                                                 bool isNorm) {
 
         // Get/set local vars.
-        string varPtr = getLocalVar(os, gp.getVarPtr(), CppPrintHelper::_var_ptr_type);
+        string varPtr = getLocalVar(os, gp.getVarPtr(), CppPrintHelper::_var_ptr_restrict_type);
         string stepArgVar = getLocalVar(os, gp.makeStepArgStr(varPtr, _dims),
                                         CppPrintHelper::_step_val_type);
 
@@ -409,10 +409,11 @@ namespace yask {
         auto* var = gp.getVar();
         bool is_unique = (var->getStepDim() == nullptr);
         // || (!var->is_dynamic_step_alloc() && var->get_step_alloc_size() == 1);
-        string type = is_unique ? "auto* restrict " : "auto* ";
+        string type = is_unique ? CppPrintHelper::_var_ptr_restrict_type :
+            CppPrintHelper::_var_ptr_type;
 
         // Print type and value.
-        os << _linePrefix << type << ptrName << " = " << vp << _lineSuffix;
+        os << _linePrefix << type << " " << ptrName << " = " << vp << _lineSuffix;
     }
 
     // Get expression for offset of 'gp' from base pointer.  Base pointer
@@ -652,7 +653,7 @@ namespace yask {
     string CppStepVarPrintVisitor::visit(VarPoint* gp) {
 
         // Pointer to var.
-        string varPtr = _cvph.getLocalVar(_os, gp->getVarPtr(), CppPrintHelper::_var_ptr_type);
+        string varPtr = _cvph.getLocalVar(_os, gp->getVarPtr(), CppPrintHelper::_var_ptr_restrict_type);
 
         // Time var.
         auto& dims = _cvph.getDims();

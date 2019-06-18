@@ -322,10 +322,10 @@ namespace yask {
                     }
                     else {
                         num_neighbors++;
-                        os << "Neighbor #" << num_neighbors << " is MPI rank " << rn <<
-                            " at absolute rank indices " << rcoords.makeDimValStr() <<
-                            " (" << rdeltas.makeDimValOffsetStr() << " relative to rank " <<
-                            me << ")";
+                        DEBUG_MSG("Neighbor #" << num_neighbors << " is MPI rank " << rn <<
+                                  " at absolute rank indices " << rcoords.makeDimValStr() <<
+                                  " (" << rdeltas.makeDimValOffsetStr() << " relative to rank " <<
+                                  me << ")");
 
                         // Determine whether neighbor is in my shm group.
                         // If so, record rank number in shmcomm.
@@ -336,12 +336,9 @@ namespace yask {
                                                       env->shm_group, &s_rank);
                             if (s_rank != MPI_UNDEFINED) {
                                 mpiInfo->shm_ranks.at(rn_ofs) = s_rank;
-                                os << " and is MPI shared-memory rank " << s_rank;
-                            } else {
-                                os << " and will not use shared-memory";
+                                DEBUG_MSG("  is MPI shared-memory rank " << s_rank);
                             }
                         }
-                        os << ".\n";
                     }
 
                     // Save manhattan dist.
@@ -754,7 +751,7 @@ namespace yask {
         STATE_VARS(this);
 
         real_t seed = 0.1;
-        os << "Initializing vars...\n" << flush;
+        DEBUG_MSG("Initializing vars...");
         YaskTimer itimer;
         itimer.start();
         for (auto gp : varPtrs) {
@@ -762,16 +759,16 @@ namespace yask {
             seed += 0.01;
         }
         itimer.stop();
-        os << "Var initialization done in " <<
-            makeNumStr(itimer.get_elapsed_secs()) << " secs.\n" << flush;
+        DEBUG_MSG("Var initialization done in " <<
+                  makeNumStr(itimer.get_elapsed_secs()) << " secs.");
     }
 
     // Set the bounding-box for each stencil-bundle and whole domain.
     void StencilContext::find_bounding_boxes()
     {
         STATE_VARS(this);
-        os << "Constructing bounding boxes for " <<
-            stBundles.size() << " stencil-bundles(s)...\n" << flush;
+        DEBUG_MSG("Constructing bounding boxes for " <<
+                  stBundles.size() << " stencil-bundles(s)...");
         YaskTimer bbtimer;
         bbtimer.start();
 
@@ -779,12 +776,12 @@ namespace yask {
         rank_bb.bb_begin = dims->_domain_dims;
         rank_domain_offsets.setTupleVals(rank_bb.bb_begin);
         rank_bb.bb_end = rank_bb.bb_begin.addElements(opts->_rank_sizes, false);
-        rank_bb.update_bb("rank", *this, true, &os);
+        rank_bb.update_bb("rank", this, true, true);
 
         // BB may be extended for wave-fronts.
         ext_bb.bb_begin = rank_bb.bb_begin.subElements(left_wf_exts);
         ext_bb.bb_end = rank_bb.bb_end.addElements(right_wf_exts);
-        ext_bb.update_bb("extended-rank", *this, true);
+        ext_bb.update_bb("extended-rank", this, true);
 
         // Remember sub-domain for each bundle.
         map<string, StencilBundleBase*> bb_descrs;
@@ -819,15 +816,15 @@ namespace yask {
                 spbb.bb_begin = spbb.bb_begin.minElements(sbbb.bb_begin);
                 spbb.bb_end = spbb.bb_end.maxElements(sbbb.bb_end);
             }
-            spbb.update_bb(sp->get_name(), *this, false);
+            spbb.update_bb(sp->get_name(), this, false);
         }
 
         // Init MPI interior to extended BB.
         mpi_interior = ext_bb;
 
         bbtimer.stop();
-        os << "Bounding-box construction done in " <<
-            makeNumStr(bbtimer.get_elapsed_secs()) << " secs.\n" << flush;
+        DEBUG_MSG("Bounding-box construction done in " <<
+                  makeNumStr(bbtimer.get_elapsed_secs()) << " secs.");
     }
 
     // Copy BB vars from another.
@@ -1015,7 +1012,7 @@ namespace yask {
                             BoundingBox new_bb;
                             new_bb.bb_begin = bdpt;
                             new_bb.bb_end = bdpt.addElements(scan_len);
-                            new_bb.update_bb("sub-bb", *_context, true);
+                            new_bb.update_bb("sub-bb", _context, true);
                             cur_bb_list.push_back(new_bb);
                             
                         } // new rect found.
@@ -1084,7 +1081,7 @@ namespace yask {
                         bb.bb_end[odim] = bbn.bb_end[odim];
                         TRACE_MSG("  merging to form [" << bb.bb_begin.makeDimValStr() <<
                                    " ... " << bb.bb_end.makeDimValStr() << ")");
-                        bb.update_bb("sub-bb", *_context, true);
+                        bb.update_bb("sub-bb", _context, true);
                         break;
                     }
                 }
@@ -1098,7 +1095,7 @@ namespace yask {
         }
 
         // Finalize overall BB.
-        _bundle_bb.update_bb(get_name(), *_context, false);
+        _bundle_bb.update_bb(get_name(), _context, false);
         bbtimer.stop();
         TRACE_MSG("find-bounding-box: done in " <<
                    bbtimer.get_elapsed_secs() << " secs.");
@@ -1106,12 +1103,12 @@ namespace yask {
 
     // Compute convenience values for a bounding-box.
     void BoundingBox::update_bb(const string& name,
-                                StencilContext& context,
+                                StencilContext* context,
                                 bool force_full,
-                                ostream* os) {
+                                bool print_info) {
 
-        auto dims = context.get_dims();
-        auto& domain_dims = dims->_domain_dims;
+        STATE_VARS(context);
+
         bb_len = bb_end.subElements(bb_begin);
         bb_size = bb_len.product();
         if (force_full)
@@ -1120,24 +1117,24 @@ namespace yask {
         // Solid rectangle?
         bb_is_full = true;
         if (bb_num_points != bb_size) {
-            if (os)
-                *os << "Note: '" << name << "' domain has only " <<
-                    makeNumStr(bb_num_points) <<
-                    " valid point(s) inside its bounding-box of " <<
-                    makeNumStr(bb_size) <<
-                    " point(s); multiple sub-boxes will be used.\n";
+            if (print_info)
+                DEBUG_MSG("Note: '" << name << "' domain has only " <<
+                          makeNumStr(bb_num_points) <<
+                          " valid point(s) inside its bounding-box of " <<
+                          makeNumStr(bb_size) <<
+                          " point(s); multiple sub-boxes will be used.");
             bb_is_full = false;
         }
 
         // Does everything start on a vector-length boundary?
         bb_is_aligned = true;
         DOMAIN_VAR_LOOP(i, j) {
-            if ((bb_begin[j] - context.rank_domain_offsets[j]) %
+            if ((bb_begin[j] - context->rank_domain_offsets[j]) %
                 dims->_fold_pts[j] != 0) {
-                if (os)
-                    *os << "Note: '" << name << "' domain"
-                        " has one or more starting edges not on vector boundaries;"
-                        " masked calculations will be used in peel and remainder sub-blocks.\n";
+                if (print_info)
+                    DEBUG_MSG("Note: '" << name << "' domain"
+                              " has one or more starting edges not on vector boundaries;"
+                              " masked calculations will be used in peel and remainder sub-blocks.");
                 bb_is_aligned = false;
                 break;
             }
@@ -1149,10 +1146,10 @@ namespace yask {
             auto& dname = dim.getName();
             if (bb_len[dname] % dims->_cluster_pts[dname] != 0) {
                 if (bb_is_full && bb_is_aligned)
-                    if (os && bb_is_aligned)
-                        *os << "Note: '" << name << "' domain"
-                            " has one or more sizes that are not vector-cluster multiples;"
-                            " masked calculations will be used in peel and remainder sub-blocks.\n";
+                    if (print_info && bb_is_aligned)
+                        DEBUG_MSG("Note: '" << name << "' domain"
+                                  " has one or more sizes that are not vector-cluster multiples;"
+                                  " masked calculations will be used in peel and remainder sub-blocks.");
                 bb_is_cluster_mult = false;
                 break;
             }

@@ -46,9 +46,9 @@ namespace yask {
         // Calc values and set valid to true.
         // If 'force_full', set 'bb_num_points' as well as 'bb_size'.
         void update_bb(const std::string& name,
-                       StencilContext& context,
+                       StencilContext* context,
                        bool force_full,
-                       std::ostream* os = NULL);
+                       bool print_info = false);
 
         // Is point in BB?
         // 'pt' must have same dims as BB.

@@ -42,6 +42,7 @@ namespace yask {
 
     public:
         static constexpr const char* _var_ptr_type = "auto*";
+        static constexpr const char* _var_ptr_restrict_type = "auto* restrict";
         static constexpr const char* _step_val_type = "const auto";
 
         CppPrintHelper(const CompilerSettings& settings,

@@ -659,7 +659,7 @@ namespace yask {
         virtual void alloc_storage() {
             STATE_VARS(gbp());
             gg().default_alloc();
-            os << gb().make_info_string() << std::endl;
+            DEBUG_MSG(gb().make_info_string());
         }
         virtual void release_storage() {
             STATE_VARS(gbp());
@@ -1007,7 +1007,7 @@ namespace yask {
         // Indices must be normalized and rank-relative.
         // It's important that this function be efficient, since
         // it's indiectly used from the stencil kernel.
-        inline const real_vec_t* getVecPtrNorm(const Indices& vec_idxs,
+        ALWAYS_INLINE const real_vec_t* getVecPtrNorm(const Indices& vec_idxs,
                                                idx_t alloc_step_idx,
                                                bool checkBounds=true) const {
             STATE_VARS_CONST(this);
@@ -1047,7 +1047,7 @@ namespace yask {
         }
 
         // Non-const version.
-        inline real_vec_t* getVecPtrNorm(const Indices& vec_idxs,
+        ALWAYS_INLINE real_vec_t* getVecPtrNorm(const Indices& vec_idxs,
                                          idx_t alloc_step_idx,
                                          bool checkBounds=true) {
 

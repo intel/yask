@@ -126,7 +126,7 @@ namespace yask {
         void eval();
 
         // Print the best settings.
-        void print_settings(std::ostream& os) const;
+        void print_settings() const;
 
         // Apply settings.
         void apply();

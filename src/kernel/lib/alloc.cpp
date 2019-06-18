@@ -65,10 +65,11 @@ namespace yask {
 
             // Alloc data depending on magic key.
             shared_ptr<char> p;
-            os << "Allocating " << makeByteStr(nb) <<
-                " for " << ng << " " << type << "(s) ";
+            string msg = "Allocating " + makeByteStr(nb) +
+                " for " + to_string(ng) + " " + type + "(s) ";
             if (mem_key == _shmem_key) {
-                os << "using MPI shm...\n" << flush;
+                msg += "using MPI shm";
+                DEBUG_MSG(msg << "...");
                 p = shared_shm_alloc<char>(nb, &env->shm_comm, &mpiInfo->halo_win);
 
                 // Get pointer for each neighbor rank.
@@ -93,21 +94,22 @@ namespace yask {
             }
             else if (mem_key >= _pmem_key) {
                 auto dev_num = mem_key - _pmem_key;
-                os << "on PMEM device " << dev_num << "...\n" << flush;
+                msg += "on PMEM device " + to_string(dev_num);
+                DEBUG_MSG(msg << "...");
                 p = shared_pmem_alloc<char>(nb, dev_num);
             }
             else {
                 if (mem_key == yask_numa_none)
-                    os << "using default allocator";
+                    msg += "using default allocator";
                 else if (mem_key == yask_numa_local)
-                    os << "preferring local NUMA node";
+                    msg += "preferring local NUMA node";
                 else if (mem_key == yask_numa_interleave)
-                    os << "interleaved across all NUMA nodes";
+                    msg += "interleaved across all NUMA nodes";
                 else if (mem_key >= 0)
-                    os << "preferring NUMA node " << mem_key;
+                    msg += "preferring NUMA node " + to_string(mem_key);
                 else
-                    os << "using mem policy " << mem_key;
-                os << "...\n" << flush;
+                    msg += "using mem policy " + to_string(mem_key);
+                DEBUG_MSG(msg << "...");
                 p = shared_numa_alloc<char>(nb, mem_key);
             }
 
@@ -182,7 +184,7 @@ namespace yask {
                         auto p = _var_data_buf[numa_pref];
                         assert(p);
                         gp->set_storage(p, npbytes[numa_pref]);
-                        os << gb.make_info_string() << endl;
+                        DEBUG_MSG(gb.make_info_string());
                     }
 
                     // Determine padded size (also offset to next location).
@@ -213,7 +215,7 @@ namespace yask {
 
                 // Otherwise, just print existing var info.
                 else if (pass == 1)
-                    os << gb.make_info_string() << endl;
+                    DEBUG_MSG(gb.make_info_string());
             }
 
             // Reset the counters
@@ -631,7 +633,7 @@ namespace yask {
 
         // Finalize interior BB if there are multiple ranks and overlap enabled.
         if (env->num_ranks > 1 && opts->overlap_comms) {
-            mpi_interior.update_bb("interior", *this, true);
+            mpi_interior.update_bb("interior", this, true);
             TRACE_MSG("MPI interior BB: [" << mpi_interior.bb_begin.makeDimValStr() <<
                       " ... " << mpi_interior.bb_end.makeDimValStr() << ")");
         }

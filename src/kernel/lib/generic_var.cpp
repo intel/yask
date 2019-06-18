@@ -56,15 +56,11 @@ namespace yask {
 
         // Alloc required number of bytes.
         size_t sz = get_num_bytes();
-        os << "Allocating " << makeByteStr(sz) <<
-            " for var '" << _name << "'";
-#ifdef USE_NUMA
-        if (numa_pref >= 0)
-            os << " preferring NUMA node " << numa_pref;
-        else
-            os << " on local NUMA node";
-#endif
-        os << "...\n" << flush;
+        string loc = (numa_pref >= 0) ?
+            "preferring NUMA node " + to_string(numa_pref) :
+            "on default NUMA node";
+        DEBUG_MSG("Allocating " << makeByteStr(sz) <<
+                  " for var '" << _name << "' " << loc << "...");
         _base = shared_numa_alloc<char>(sz, numa_pref);
 
         // No offset.

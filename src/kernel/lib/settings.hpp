@@ -31,6 +31,7 @@ namespace yask {
     class StencilContext;
     class YkVarBase;
     class YkVarImpl;
+    class KernelStateBase;
 
     // Some derivations from var types.
     typedef std::shared_ptr<YkVarImpl> YkVarPtr;
@@ -282,10 +283,7 @@ namespace yask {
         // values as needed.
         // Called from prepare_solution(), so it doesn't normally need to be called from user code.
         // Prints informational info to 'os'.
-        virtual void adjustSettings(std::ostream& os);
-        virtual void adjustSettings() {
-            adjustSettings(nullop->get_ostream());
-        }
+        virtual void adjustSettings(KernelStateBase* ksb = 0);
 
         // Determine if this is the first or last rank in given dim.
         virtual bool is_first_rank(const std::string dim) {
@@ -594,13 +592,15 @@ namespace yask {
     // Macro to define and set commonly-needed state vars efficiently.
     // '_ksbp' is pointer to a 'KernelStateBase' object.
     // '*_posn' vars are positions in stencil_dims.
+    // It is critical that statements here can be easily optimized
+    // away by the compiler if some vars are not needed. Thus,
+    // avoid accessing vars in virtual classes or calling any
+    // functions with side-effects.
 #define STATE_VARS0(_ksbp, pfx)                                         \
     pfx auto* ksbp = _ksbp;                                             \
     assert(ksbp);                                                       \
-    pfx auto* state = ksbp->_state.get();                               \
+    pfx auto* state = ksbp->get_state().get();                          \
     assert(state);                                                      \
-    assert(state->_debug.get());                                        \
-    auto& os = state->_debug.get()->get_ostream();                      \
     pfx auto* env = state->_env.get();                                  \
     assert(env);                                                        \
     pfx auto* opts = state->_opts.get();                                \
@@ -643,11 +643,11 @@ namespace yask {
         virtual ~KernelStateBase() {}
 
         // Access to state.
-        KernelStatePtr& get_state() {
+        ALWAYS_INLINE KernelStatePtr& get_state() {
             assert(_state);
             return _state;
         }
-        const KernelStatePtr& get_state() const {
+        ALWAYS_INLINE const KernelStatePtr& get_state() const {
             assert(_state);
             return _state;
         }

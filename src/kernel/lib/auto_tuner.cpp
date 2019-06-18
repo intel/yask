@@ -85,7 +85,7 @@ namespace yask {
         if (!rank_bb.bb_valid)
             THROW_YASK_EXCEPTION("Error: run_auto_tuner_now() called without calling prepare_solution() first");
 
-        os << "Auto-tuning...\n" << flush;
+        DEBUG_MSG("Auto-tuning...");
         YaskTimer at_timer;
         at_timer.start();
 
@@ -121,7 +121,7 @@ namespace yask {
         }
 
         // Wait for all ranks to finish.
-        os << "Waiting for auto-tuner to converge on all ranks...\n";
+        DEBUG_MSG("Waiting for auto-tuner to converge on all ranks...");
         env->global_barrier();
 
         // reenable normal operation.
@@ -132,13 +132,13 @@ namespace yask {
 
         // Report results.
         at_timer.stop();
-        os << "Auto-tuner done after " << steps_done << " step(s) in " <<
-            makeNumStr(at_timer.get_elapsed_secs()) << " secs.\n";
+        DEBUG_MSG("Auto-tuner done after " << steps_done << " step(s) in " <<
+                  makeNumStr(at_timer.get_elapsed_secs()) << " secs.");
         if (state->_use_pack_tuners) {
             for (auto& sp : stPacks)
-                sp->getAT().print_settings(os);
+                sp->getAT().print_settings();
         } else
-            _at.print_settings(os);
+            _at.print_settings();
         print_temporal_tiling_info();
 
         // Reset stats.
@@ -146,18 +146,18 @@ namespace yask {
     }
 
     // Print the best settings.
-    void AutoTuner::print_settings(ostream& os) const {
+    void AutoTuner::print_settings() const {
+        STATE_VARS(this);
         if (tune_mini_blks())
-            os << _name << ": best-mini-block-size: " <<
-                target_sizes().makeDimValStr(" * ") << endl;
+            DEBUG_MSG(_name << ": best-mini-block-size: " <<
+                      target_sizes().makeDimValStr(" * "));
         else
-            os << _name << ": best-block-size: " <<
-                target_sizes().makeDimValStr(" * ") << endl <<
-                _name << ": mini-block-size: " <<
-                _settings->_mini_block_sizes.makeDimValStr(" * ") << endl;
-        os << _name << ": sub-block-size: " <<
-            _settings->_sub_block_sizes.makeDimValStr(" * ") << endl <<
-            flush;
+            DEBUG_MSG(_name << ": best-block-size: " <<
+                      target_sizes().makeDimValStr(" * ") << endl <<
+                      _name << ": mini-block-size: " <<
+                      _settings->_mini_block_sizes.makeDimValStr(" * "));
+        DEBUG_MSG(_name << ": sub-block-size: " <<
+                  _settings->_sub_block_sizes.makeDimValStr(" * "));
     }
     
     // Access settings.
@@ -179,8 +179,8 @@ namespace yask {
         if (best_rate > 0.) {
             target_sizes() = best_sizes;
             apply();
-            os << _name << ": applying size "  <<
-                best_sizes.makeDimValStr(" * ") << endl;
+            DEBUG_MSG(_name << ": applying size "  <<
+                      best_sizes.makeDimValStr(" * "));
         }
 
         // Reset all vars.
@@ -259,11 +259,11 @@ namespace yask {
                 return;
 
             // Done.
-            os << _name << ": finished warmup for " <<
-                csteps << " steps(s) in " <<
-                makeNumStr(ctime) << " secs\n" <<
-                _name << ": tuning " << (tune_mini_blks() ? "mini-" : "") <<
-                "block sizes...\n";
+            DEBUG_MSG(_name << ": finished warmup for " <<
+                      csteps << " steps(s) in " <<
+                      makeNumStr(ctime) << " secs\n" <<
+                      _name << ": tuning " << (tune_mini_blks() ? "mini-" : "") <<
+                      "block sizes...");
             in_warmup = false;
 
             // Restart for first real measurement.
@@ -316,10 +316,10 @@ namespace yask {
             return;
 
         // Print progress and reset vars for next time.
-        os << _name << ": search-dist=" << radius << ": " <<
-            makeNumStr(rate) << " steps/sec (" <<
-            csteps << " steps(s) in " << makeNumStr(ctime) <<
-            " secs) with size " << target_sizes().makeDimValStr(" * ") << endl;
+        DEBUG_MSG(_name << ": search-dist=" << radius << ": " <<
+                  makeNumStr(rate) << " steps/sec (" <<
+                  csteps << " steps(s) in " << makeNumStr(ctime) <<
+                  " secs) with size " << target_sizes().makeDimValStr(" * "));
         csteps = 0;
         ctime = 0.;
 
@@ -446,7 +446,7 @@ namespace yask {
 
                         // Reset AT and disable.
                         clear(true);
-                        os << _name << ": done" << endl;
+                        DEBUG_MSG(_name << ": done");
                         return;
                     }
                     TRACE_MSG(_name << ": new search radius=" << radius);

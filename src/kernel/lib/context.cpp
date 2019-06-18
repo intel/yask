@@ -1529,9 +1529,9 @@ namespace yask {
     idx_t StencilContext::compareData(const StencilContext& ref) const {
         STATE_VARS_CONST(this);
 
-        os << "Comparing var(s) in '" << name << "' to '" << ref.name << "'..." << endl;
+        DEBUG_MSG("Comparing var(s) in '" << name << "' to '" << ref.name << "'...");
         if (varPtrs.size() != ref.varPtrs.size()) {
-            cerr << "** number of vars not equal." << endl;
+            TRACE_MSG("** number of vars not equal");
             return 1;
         }
         idx_t errs = 0;

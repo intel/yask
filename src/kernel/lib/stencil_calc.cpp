@@ -800,11 +800,10 @@ namespace yask {
         num_writes_per_step = 0;
         num_fpops_per_step = 0;
 
-        os <<
-            "Pack '" << get_name() << "':\n" <<
-            " num bundles:                 " << size() << endl <<
-            " pack scope:                  " << _pack_bb.bb_begin.makeDimValStr() <<
-            " ... " << _pack_bb.bb_end.subElements(1).makeDimValStr() << endl;
+        DEBUG_MSG("Pack '" << get_name() << "':\n" <<
+                  " num bundles:                 " << size() << endl <<
+                  " pack scope:                  " << _pack_bb.bb_begin.makeDimValStr() <<
+                  " ... " << _pack_bb.bb_end.subElements(1).makeDimValStr());
 
         // Bundles.
         for (auto* sg : *this) {
@@ -832,50 +831,44 @@ namespace yask {
             idx_t fpops_bb = fpops1 * bb.bb_num_points;
             num_fpops_per_step += fpops_bb;
 
-            os << " Bundle '" << sg->get_name() << "':\n" <<
-                "  num reqd scratch bundles:   " << (sg_list.size() - 1) << endl;
+            DEBUG_MSG(" Bundle '" << sg->get_name() << "':\n" <<
+                      "  num reqd scratch bundles:   " << (sg_list.size() - 1));
             // TODO: add info on scratch bundles here.
 
             if (sg->is_sub_domain_expr())
-                os << "  sub-domain expr:            '" << sg->get_domain_description() << "'\n";
+                DEBUG_MSG("  sub-domain expr:            '" << sg->get_domain_description() << "'");
             if (sg->is_step_cond_expr())
-                os << "  step-condition expr:        '" << sg->get_step_cond_description() << "'\n";
+                DEBUG_MSG("  step-condition expr:        '" << sg->get_step_cond_description() << "'");
 
-            os <<
-                "  bundle size (points):       " << makeNumStr(bb.bb_size) << endl;
+            DEBUG_MSG("  bundle size (points):       " << makeNumStr(bb.bb_size));
             if (bb.bb_size) {
-                os << 
-                    "  valid points in bundle:     " << makeNumStr(bb.bb_num_points) << endl;
+                DEBUG_MSG("  valid points in bundle:     " << makeNumStr(bb.bb_num_points));
                 if (bb.bb_num_points) {
-                    os <<
-                        "  bundle scope:               " << bb.bb_begin.makeDimValStr() <<
-                        " ... " << bb.bb_end.subElements(1).makeDimValStr() << endl <<
-                        "  bundle bounding-box size:   " << bb.bb_len.makeDimValStr(" * ") << endl;
+                    DEBUG_MSG("  bundle scope:               " << bb.bb_begin.makeDimValStr() <<
+                              " ... " << bb.bb_end.subElements(1).makeDimValStr() << endl <<
+                              "  bundle bounding-box size:   " << bb.bb_len.makeDimValStr(" * "));
                 }
             }
-            os <<
-                "  num full rectangles in box: " << sg->getBBs().size() << endl;
+            DEBUG_MSG("  num full rectangles in box: " << sg->getBBs().size());
             if (sg->getBBs().size() > 1) {
                 for (size_t ri = 0; ri < sg->getBBs().size(); ri++) {
                     auto& rbb = sg->getBBs()[ri];
-                    os <<
-                        "   Rectangle " << ri << ":\n"
-                        "    num points in rect:       " << makeNumStr(rbb.bb_num_points) << endl;
+                    DEBUG_MSG("   Rectangle " << ri << ":\n"
+                              "    num points in rect:       " << makeNumStr(rbb.bb_num_points));
                     if (rbb.bb_num_points) {
-                        os << "    rect scope:               " << rbb.bb_begin.makeDimValStr() <<
-                            " ... " << rbb.bb_end.subElements(1).makeDimValStr() << endl;
-                        os << "    rect size:                " << rbb.bb_len.makeDimValStr(" * ") << endl;
+                        DEBUG_MSG("    rect scope:               " << rbb.bb_begin.makeDimValStr() <<
+                                  " ... " << rbb.bb_end.subElements(1).makeDimValStr() << endl <<
+                                  "    rect size:                " << rbb.bb_len.makeDimValStr(" * "));
                     }
                 }
             }
-            os <<
-                "  var-reads per point:       " << reads1 << endl <<
-                "  var-reads in rank:         " << makeNumStr(reads_bb) << endl <<
-                "  var-writes per point:      " << writes1 << endl <<
-                "  var-writes in rank:        " << makeNumStr(writes_bb) << endl <<
-                "  est FP-ops per point:       " << fpops1 << endl <<
-                "  est FP-ops in rank:         " << makeNumStr(fpops_bb) << endl;
-
+            DEBUG_MSG("  var-reads per point:       " << reads1 << endl <<
+                      "  var-reads in rank:         " << makeNumStr(reads_bb) << endl <<
+                      "  var-writes per point:      " << writes1 << endl <<
+                      "  var-writes in rank:        " << makeNumStr(writes_bb) << endl <<
+                      "  est FP-ops per point:       " << fpops1 << endl <<
+                      "  est FP-ops in rank:         " << makeNumStr(fpops_bb));
+                      
             // Classify vars.
             VarPtrs idvars, imvars, odvars, omvars, iodvars, iomvars; // i[nput], o[utput], d[omain], m[isc].
             for (auto gp : sg->inputVarPtrs) {
@@ -907,6 +900,8 @@ namespace yask {
                         omvars.push_back(gp);
                 }
             }
+            yask_output_ptr op = ksbp->get_debug_output();
+            ostream& os = op->get_ostream();
             print_var_list(os, idvars, "input-only domain");
             print_var_list(os, odvars, "output-only domain");
             print_var_list(os, iodvars, "input-output domain");

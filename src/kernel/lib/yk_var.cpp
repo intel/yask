@@ -331,14 +331,14 @@ namespace yask {
                               int maxPrint) const {
         STATE_VARS(this);
         if (!ref) {
-            os << "** mismatch: no reference var.\n";
+            DEBUG_MSG("** mismatch: no reference var.");
             return _allocs.product(); // total number of elements.
         }
 
         // Dims & sizes same?
         if (!_ggb->are_dims_and_sizes_same(*ref->_ggb)) {
-            os << "** mismatch due to incompatible vars: " <<
-                make_info_string() << " and " << ref->make_info_string() << ".\n";
+            DEBUG_MSG("** mismatch due to incompatible vars: " <<
+                      make_info_string() << " and " << ref->make_info_string());
             return _allocs.product(); // total number of elements.
         }
 
@@ -394,12 +394,12 @@ namespace yask {
                         errs++;
                         if (errs <= maxPrint) {
                             if (errs < maxPrint)
-                                os << "** mismatch at " << _ggb->get_name() <<
-                                    "(" << opt.makeDimValStr() << "): " <<
-                                    te << " != " << re << endl;
+                                DEBUG_MSG("** mismatch at " << _ggb->get_name() <<
+                                          "(" << opt.makeDimValStr() << "): " <<
+                                          te << " != " << re);
                             else
-                                os << "** Additional errors not printed for var '" <<
-                                    _ggb->get_name() << "'.\n";
+                                DEBUG_MSG("** Additional errors not printed for var '" <<
+                                          _ggb->get_name() << "'");
                         }
                     }
                 }

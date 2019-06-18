@@ -638,7 +638,9 @@ namespace yask {
     // Make sure all user-provided settings are valid and finish setting up some
     // other vars before allocating memory.
     // Called from prepare_solution(), during auto-tuning, etc.
-    void KernelSettings::adjustSettings(std::ostream& os) {
+    void KernelSettings::adjustSettings(KernelStateBase* ksb) {
+        yask_output_ptr op = ksb ? ksb->get_debug_output() : nullop;
+        ostream& os = op->get_ostream();
 
         auto& step_dim = _dims->_step_dim;
         auto& inner_dim = _dims->_inner_dim;
