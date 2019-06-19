@@ -91,7 +91,7 @@ namespace yask {
                 else
                     return 2;
             }
-            if (target == "knl") {
+            else if (target == "knl") {
                 if (level == 1)
                     return 1;
                 else

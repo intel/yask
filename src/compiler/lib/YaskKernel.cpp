@@ -702,13 +702,6 @@ namespace yask {
                 VecInfoVisitor vv(_dims);
                 vceq->visitEqs(&vv);
 
-                // Reorder some equations based on vector info.
-                // TODO: make a knob to control this.
-                if (false) {
-                    ExprReorderVisitor erv(vv);
-                    vceq->visitEqs(&erv);
-                }
-
                 // Collect stats.
                 CounterVisitor cv;
                 vceq->visitEqs(&cv);

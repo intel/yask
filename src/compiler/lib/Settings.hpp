@@ -57,6 +57,7 @@ namespace yask {
         bool _doComb = true;    // combine commutative operations.
         bool _doPairs = true;   // find equation pairs.
         bool _doOptCluster = true; // apply optimizations also to cluster.
+        bool _doReorder = false;   // reorder commutative operations.
         string _eqBundleTargets;  // how to bundle equations.
         string _varRegex;       // vars to update.
         bool _findDeps = true;

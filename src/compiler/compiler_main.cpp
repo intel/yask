@@ -172,6 +172,8 @@ void usage(const string& cmd,
         "        the memory layout used by YASK must have that same dimension in unit stride.\n"
         " [-no]-opt-comb\n"
         "    Do [not] combine commutative operations (default=" << settings._doComb << ").\n"
+        " [-no]-opt-reorder\n"
+        "    Do [not] reorder commutative operations (default=" << settings._doReorder << ").\n"
         " [-no]-opt-cse\n"
         "    Do [not] eliminate common subexpressions (default=" << settings._doCse << ").\n"
         " [-no]-opt-pair\n"
@@ -228,6 +230,10 @@ void parseOpts(int argc, const char* argv[],
                 settings._doComb = true;
             else if (opt == "-no-opt-comb")
                 settings._doComb = false;
+            else if (opt == "-opt-reorder")
+                settings._doReorder = true;
+            else if (opt == "-no-opt-reorder")
+                settings._doReorder = false;
             else if (opt == "-opt-cse")
                 settings._doCse = true;
             else if (opt == "-no-opt-cse")

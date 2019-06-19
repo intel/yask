@@ -1441,6 +1441,29 @@ namespace yask {
                 printStats(os, odescr);
             else
                 os << " No changes " << odescr << '.' << endl;
+
+            delete optimizer;
+            optimizer = 0;
+        }
+
+        // Reordering. TODO: make this an optimizer.
+        if (settings._doReorder) {
+            
+            // Create vector info for this eqBundle.
+            // The visitor is accepted at all nodes in the cluster AST;
+            // for each var access node in the AST, the vectors
+            // needed are determined and saved in the visitor.
+            VecInfoVisitor vv(*_dims);
+            visitEqs(&vv);
+
+            // Reorder some equations based on vector info.
+            ExprReorderVisitor erv(vv);
+            visitEqs(&erv);
+
+            // Get new stats.
+            string odescr = "after applying reordering to " +
+                descr + " equation-bundle(s)";
+            printStats(os, odescr);
         }
 
         // Final stats per equation bundle.
