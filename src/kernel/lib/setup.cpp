@@ -773,9 +773,8 @@ namespace yask {
         bbtimer.start();
 
         // Rank BB is based only on rank offsets and rank domain sizes.
-        rank_bb.bb_begin = dims->_domain_dims;
-        rank_domain_offsets.setTupleVals(rank_bb.bb_begin);
-        rank_bb.bb_end = rank_bb.bb_begin.addElements(opts->_rank_sizes, false);
+        rank_bb.bb_begin = rank_domain_offsets;
+        rank_bb.bb_end = rank_bb.bb_begin_tuple(domain_dims).addElements(opts->_rank_sizes, false);
         rank_bb.update_bb("rank", this, true, true);
 
         // BB may be extended for wave-fronts.
@@ -890,19 +889,17 @@ namespace yask {
                 auto& cur_bb_list = bb_lists[start];
 
                 // Begin and end of this slice.
-                // These tuples contain domain dims.
-                IdxTuple slice_begin(_bundle_bb.bb_begin);
-                slice_begin[odim] += start * len_per_thr;
-                IdxTuple slice_end(_bundle_bb.bb_end);
-                slice_end[odim] = min(slice_end[odim], slice_begin[odim] + len_per_thr);
-                if (slice_end[odim] <= slice_begin[odim])
+                // These Indices contain domain dims.
+                Indices islice_begin(_bundle_bb.bb_begin);
+                islice_begin[odim] += start * len_per_thr;
+                Indices islice_end(_bundle_bb.bb_end);
+                islice_end[odim] = min(islice_end[odim], islice_begin[odim] + len_per_thr);
+                if (islice_end[odim] <= islice_begin[odim])
                     return; // from lambda.
-                Indices islice_begin(slice_begin);
-                Indices islice_end(slice_end);
 
                 // Construct len of slice in all dims.
-                IdxTuple slice_len = slice_end.subElements(slice_begin);
-                Indices islice_len(slice_len);
+                Indices islice_len = islice_end.subElements(islice_begin);
+                auto slice_len = islice_len.makeTuple(domain_dims);
                 
                 // Visit all points in slice, looking for a new
                 // valid beginning point, 'ib*pt'.
@@ -936,9 +933,8 @@ namespace yask {
 
                             // Scan from 'ib*pt' to end of this slice
                             // looking for end of rect.
-                            IdxTuple bdpt(domain_dims);
-                            ibdpt.setTupleVals(bdpt);
-                            IdxTuple scan_len = slice_end.subElements(bdpt);
+                            auto iscan_len = islice_end.subElements(ibdpt);
+                            auto scan_len = iscan_len.makeTuple(domain_dims);
 
                             // End point to be found, 'ie*pt'.
                             Indices iespt(stencil_dims); // stencil dims.
@@ -1010,8 +1006,8 @@ namespace yask {
 
                             // 'scan_len' now contains sizes of the new BB.
                             BoundingBox new_bb;
-                            new_bb.bb_begin = bdpt;
-                            new_bb.bb_end = bdpt.addElements(scan_len);
+                            new_bb.bb_begin = ibdpt;
+                            new_bb.bb_end = ibdpt.addElements(iscan_len);
                             new_bb.update_bb("sub-bb", _context, true);
                             cur_bb_list.push_back(new_bb);
                             
@@ -1142,9 +1138,10 @@ namespace yask {
 
         // Lengths are cluster-length multiples?
         bb_is_cluster_mult = true;
-        for (auto& dim : domain_dims.getDims()) {
+        DOMAIN_VAR_LOOP(i, j) {
+            auto& dim = domain_dims.getDim(j);
             auto& dname = dim.getName();
-            if (bb_len[dname] % dims->_cluster_pts[dname] != 0) {
+            if (bb_len[j] % dims->_cluster_pts[dname] != 0) {
                 if (bb_is_full && bb_is_aligned)
                     if (print_info && bb_is_aligned)
                         DEBUG_MSG("Note: '" << name << "' domain"

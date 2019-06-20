@@ -52,10 +52,10 @@ namespace yask {
         // Based on rank bounding box, not extended
         // BB because we don't use wave-fronts in the ref code.
         IdxTuple begin(stencil_dims);
-        begin.setVals(rank_bb.bb_begin, false);
+        begin.setVals(rank_bb.bb_begin_tuple(domain_dims), false); // 'false' because dims aren't same.
         begin[step_dim] = begin_t;
         IdxTuple end(stencil_dims);
-        end.setVals(rank_bb.bb_end, false);
+        end.setVals(rank_bb.bb_end_tuple(domain_dims), false);
         end[step_dim] = end_t;
 
         TRACE_MSG("run_ref: [" << begin.makeDimValStr() << " ... " <<
@@ -155,8 +155,8 @@ namespace yask {
                     // Scan through n-D space.
                     TRACE_MSG("run_ref: step " << start_t <<
                               " in bundle '" << sg->get_name() << "': [" <<
-                              misc_idxs.begin.makeValStr(nsdims) <<
-                              " ... " << misc_idxs.end.makeValStr(nsdims) << ")");
+                              misc_idxs.begin.makeValStr() <<
+                              " ... " << misc_idxs.end.makeValStr() << ")");
 #include "yask_misc_loops.hpp"
 #undef misc_fn
                 } // needed bundles.
@@ -211,10 +211,10 @@ namespace yask {
         // Based on overall bounding box, which includes
         // any needed extensions for wave-fronts.
         IdxTuple begin(stencil_dims);
-        begin.setVals(ext_bb.bb_begin, false);
+        begin.setVals(ext_bb.bb_begin_tuple(domain_dims), false);
         begin[step_posn] = begin_t;
         IdxTuple end(stencil_dims);
-        end.setVals(ext_bb.bb_end, false);
+        end.setVals(ext_bb.bb_end_tuple(domain_dims), false);
         end[step_posn] = end_t;
         IdxTuple stride(stencil_dims);
         stride.setVals(opts->_region_sizes, false); // stride by region sizes.
@@ -576,10 +576,10 @@ namespace yask {
                                      const ScanIndices& rank_idxs) {
         STATE_VARS(this);
         TRACE_MSG("calc_region: region [" <<
-                  rank_idxs.start.makeValStr(nsdims) << " ... " <<
-                  rank_idxs.stop.makeValStr(nsdims) << ") within rank [" <<
-                  rank_idxs.begin.makeValStr(nsdims) << " ... " <<
-                  rank_idxs.end.makeValStr(nsdims) << ")" );
+                  rank_idxs.start.makeValStr() << " ... " <<
+                  rank_idxs.stop.makeValStr() << ") within rank [" <<
+                  rank_idxs.begin.makeValStr() << " ... " <<
+                  rank_idxs.end.makeValStr() << ")" );
 
         // Track time (use "else" to avoid double-counting).
         if (!do_mpi_interior && (do_mpi_left || do_mpi_right))
@@ -785,11 +785,11 @@ namespace yask {
         auto* bp = sel_bp.get();
         int region_thread_idx = omp_get_thread_num();
         TRACE_MSG("calc_block: phase " << phase << ", block [" <<
-                  region_idxs.start.makeValStr(nsdims) << " ... " <<
-                  region_idxs.stop.makeValStr(nsdims) << 
+                  region_idxs.start.makeValStr() << " ... " <<
+                  region_idxs.stop.makeValStr() << 
                   ") within region [" <<
-                  region_idxs.begin.makeValStr(nsdims) << " ... " <<
-                  region_idxs.end.makeValStr(nsdims) << 
+                  region_idxs.begin.makeValStr() << " ... " <<
+                  region_idxs.end.makeValStr() << 
                   ") by region thread " << region_thread_idx);
 
 #ifdef OVERLAP_WITH_BLOCKS
@@ -932,8 +932,8 @@ namespace yask {
             }
             TRACE_MSG("calc_block: phase " << phase <<
                       ", adjusted block [" <<
-                      adj_block_idxs.begin.makeValStr(nsdims) << " ... " <<
-                      adj_block_idxs.end.makeValStr(nsdims) << 
+                      adj_block_idxs.begin.makeValStr() << " ... " <<
+                      adj_block_idxs.end.makeValStr() << 
                       ") with mini-block stride " <<
                       adj_block_idxs.stride.makeValStr(nsdims));
                     
@@ -987,12 +987,12 @@ namespace yask {
         TRACE_MSG("calc_mini_block: phase " << phase <<
                   ", shape " << shape <<
                   ", mini-block [" <<
-                  adj_block_idxs.start.makeValStr(nsdims) << " ... " <<
-                  adj_block_idxs.stop.makeValStr(nsdims) << ") within base-block [" <<
-                  base_block_idxs.begin.makeValStr(nsdims) << " ... " <<
-                  base_block_idxs.end.makeValStr(nsdims) << ") within base-region [" <<
-                  base_region_idxs.begin.makeValStr(nsdims) << " ... " <<
-                  base_region_idxs.end.makeValStr(nsdims) <<
+                  adj_block_idxs.start.makeValStr() << " ... " <<
+                  adj_block_idxs.stop.makeValStr() << ") within base-block [" <<
+                  base_block_idxs.begin.makeValStr() << " ... " <<
+                  base_block_idxs.end.makeValStr() << ") within base-region [" <<
+                  base_region_idxs.begin.makeValStr() << " ... " <<
+                  base_region_idxs.end.makeValStr() <<
                   ") by region thread " << region_thread_idx);
 
         // Promote forward progress in MPI when calc'ing interior
@@ -1293,10 +1293,10 @@ namespace yask {
             idxs.end[i] = rstop;
         }
         TRACE_MSG("shift_region: updated span: [" <<
-                  idxs.begin.makeValStr(nsdims) << " ... " <<
-                  idxs.end.makeValStr(nsdims) << ") within region base [" <<
-                  base_start.makeValStr(nsdims) << " ... " <<
-                  base_stop.makeValStr(nsdims) << ") shifted " <<
+                  idxs.begin.makeValStr() << " ... " <<
+                  idxs.end.makeValStr() << ") within region base [" <<
+                  base_start.makeValStr() << " ... " <<
+                  base_stop.makeValStr() << ") shifted " <<
                   shift_num << " time(s) is " <<
                   (ok ? "not " : "") << "empty");
         return ok;
@@ -1458,17 +1458,17 @@ namespace yask {
         TRACE_MSG("shift_mini_block: phase " << phase << "/" << nphases <<
                   ", shape " << shape << "/" << nshapes <<
                   ", updated span: [" <<
-                  idxs.begin.makeValStr(nsdims) << " ... " <<
-                  idxs.end.makeValStr(nsdims) << ") from original mini-block [" <<
-                  mb_base_start.makeValStr(nsdims) << " ... " <<
-                  mb_base_stop.makeValStr(nsdims) << ") shifted " <<
+                  idxs.begin.makeValStr() << " ... " <<
+                  idxs.end.makeValStr() << ") from original mini-block [" <<
+                  mb_base_start.makeValStr() << " ... " <<
+                  mb_base_stop.makeValStr() << ") shifted " <<
                   mb_shift_num << " time(s) within adj-block base [" <<
-                  adj_block_base_start.makeValStr(nsdims) << " ... " <<
-                  adj_block_base_stop.makeValStr(nsdims) << ") and actual block base [" <<
-                  block_base_start.makeValStr(nsdims) << " ... " <<
-                  block_base_stop.makeValStr(nsdims) << ") and region base [" <<
-                  region_base_start.makeValStr(nsdims) << " ... " <<
-                  region_base_stop.makeValStr(nsdims) << ") is " <<
+                  adj_block_base_start.makeValStr() << " ... " <<
+                  adj_block_base_stop.makeValStr() << ") and actual block base [" <<
+                  block_base_start.makeValStr() << " ... " <<
+                  block_base_stop.makeValStr() << ") and region base [" <<
+                  region_base_start.makeValStr() << " ... " <<
+                  region_base_stop.makeValStr() << ") is " <<
                   (ok ? "not " : "") << "empty");
         return ok;
     }

@@ -449,7 +449,8 @@ namespace yask {
                         IdxTuple copy_end = gb.get_allocs(); // one past last!
 
                         // Adjust along domain dims in this var.
-                        for (auto& dim : domain_dims.getDims()) {
+                        DOMAIN_VAR_LOOP(i, j) {
+                            auto& dim = domain_dims.getDim(j);
                             auto& dname = dim.getName();
                             if (gp->is_dim_used(dname)) {
 
@@ -482,8 +483,8 @@ namespace yask {
                                         idx_t ext_end = ROUND_UP(first_inner_idx[dname] +
                                                                  max(min_ext, neigh_halo_sizes[dname]),
                                                                  dims->_fold_pts[dname]);
-                                        mpi_interior.bb_begin[dname] =
-                                            max(mpi_interior.bb_begin[dname], ext_end);
+                                        mpi_interior.bb_begin[j] =
+                                            max(mpi_interior.bb_begin[j], ext_end);
                                     }
 
                                     // Neighbor is to the right.
@@ -497,8 +498,8 @@ namespace yask {
                                         idx_t ext_begin = ROUND_DOWN(last_inner_idx[dname] + 1 -
                                                                      max(min_ext, neigh_halo_sizes[dname]),
                                                                      dims->_fold_pts[dname]);
-                                        mpi_interior.bb_end[dname] =
-                                            min(mpi_interior.bb_end[dname], ext_begin);
+                                        mpi_interior.bb_end[j] =
+                                            min(mpi_interior.bb_end[j], ext_begin);
                                     }
 
                                     // Else, this neighbor is in same posn as I am in this dim,

@@ -295,18 +295,38 @@ namespace yask {
             return res;
         }
 
-        // Make string like "x=4, y=8".
-        std::string makeDimValStr(const VarDimNames& names,
-                                  std::string separator=", ",
-                                  std::string infix="=",
-                                  std::string prefix="",
-                                  std::string suffix="") const {
+        // Make a Tuple w/given names.
+        IdxTuple makeTuple(const VarDimNames& names) const {
             assert((int)names.size() == _ndims);
 
             // Make a Tuple from names.
             IdxTuple tmp;
             for (int i = 0; i < int(names.size()); i++)
                 tmp.addDimBack(names[i], _idxs[i]);
+            return tmp;
+        }
+
+        // Make a Tuple w/o useful names.
+        IdxTuple makeTuple() const {
+            IdxTuple tmp;
+            for (int i = 0; i < _ndims; i++)
+                tmp.addDimBack(std::string("d") + std::to_string(i), _idxs[i]);
+            return tmp;
+        }
+
+        // Make a Tuple w/names from another Tuple.
+        IdxTuple makeTuple(const IdxTuple& names) const {
+            auto tmp = names.getDimNames();
+            return makeTuple(tmp);
+        }
+
+        // Make string like "x=4, y=8".
+        std::string makeDimValStr(const VarDimNames& names,
+                                  std::string separator=", ",
+                                  std::string infix="=",
+                                  std::string prefix="",
+                                  std::string suffix="") const {
+            auto tmp = makeTuple(names);
             return tmp.makeDimValStr(separator, infix, prefix, suffix);
         }
         std::string makeDimValStr(const IdxTuple& names, // ignore values.
@@ -314,21 +334,17 @@ namespace yask {
                                   std::string infix="=",
                                   std::string prefix="",
                                   std::string suffix="") const {
-            auto tmp = names.getDimNames();
-            return makeDimValStr(tmp, separator, infix, prefix, suffix);
+            auto tmp = makeTuple(names);
+            return tmp.makeDimValStr(separator, infix, prefix, suffix);
         }
 
         // Make string like "4, 3, 2".
-        std::string makeValStr(int nvals,
-                               std::string separator=", ",
+        std::string makeValStr(std::string separator=", ",
                                std::string prefix="",
                                std::string suffix="") const {
-            assert(nvals == _ndims);
 
             // Make a Tuple w/o useful names.
-            IdxTuple tmp;
-            for (int i = 0; i < nvals; i++)
-                tmp.addDimBack(std::string(1, '0' + char(i)), _idxs[i]);
+            auto tmp = makeTuple();
             return tmp.makeValStr(separator, prefix, suffix);
         }
     };

@@ -640,6 +640,8 @@ namespace yask {
             _state(state) {}
         KernelStateBase(KernelEnvPtr& env,
                         KernelSettingsPtr& settings);
+        KernelStateBase(KernelStateBase* p) :
+            _state(p->_state) { }
         virtual ~KernelStateBase() {}
 
         // Access to state.

@@ -48,8 +48,8 @@ namespace yask {
     GET_SOLN_API(get_rank_domain_size, opts->_rank_sizes[dim], false, true, false, false)
     GET_SOLN_API(get_region_size, opts->_region_sizes[dim], true, true, false, false)
     GET_SOLN_API(get_block_size, opts->_block_sizes[dim], true, true, false, false)
-    GET_SOLN_API(get_first_rank_domain_index, rank_bb.bb_begin[dim], false, true, false, true)
-    GET_SOLN_API(get_last_rank_domain_index, rank_bb.bb_end[dim] - 1, false, true, false, true)
+    GET_SOLN_API(get_first_rank_domain_index, rank_bb.bb_begin_tuple(domain_dims)[dim], false, true, false, true)
+    GET_SOLN_API(get_last_rank_domain_index, rank_bb.bb_end_tuple(domain_dims)[dim] - 1, false, true, false, true)
     GET_SOLN_API(get_min_pad_size, opts->_min_pad_sizes[dim], false, true, false, false)
     GET_SOLN_API(get_rank_index, opts->_rank_indices[dim], false, true, false, true)
 #undef GET_SOLN_API
@@ -224,8 +224,7 @@ namespace yask {
                       " wave-front-shift-amounts:  " << wf_shift_pts.makeDimValStr() << endl <<
                       " left-wave-front-exts:      " << left_wf_exts.makeDimValStr() << endl <<
                       " right-wave-front-exts:     " << right_wf_exts.makeDimValStr() << endl <<
-                      " ext-local-domain:          " << ext_bb.bb_begin.makeDimValStr() <<
-                      " ... " << ext_bb.bb_end.subElements(1).makeDimValStr() << endl <<
+                      " ext-local-domain:          " << ext_bb.make_range_string(domain_dims) << endl <<
                       " temporal-block-angles:     " << tb_angles.makeDimValStr() << endl <<
                       " num-temporal-block-shifts: " << num_tb_shifts << endl <<
                       " temporal-block-long-base:  " << tb_widths.makeDimValStr(" * ") << endl <<
@@ -269,15 +268,13 @@ namespace yask {
                   " stencil-name:          " << get_name() << endl <<
                   " stencil-description:   " << get_description() << endl <<
                   " element-size:          " << makeByteStr(get_element_bytes()) << endl <<
-                  " local-domain:          " << rank_bb.bb_begin.makeDimValStr() <<
-                  " ... " << rank_bb.bb_end.subElements(1).makeDimValStr());
+                  " local-domain:          " << rank_bb.make_range_string(domain_dims));
 #ifdef USE_MPI
         DEBUG_MSG(" num-ranks:             " << opts->_num_ranks.makeDimValStr(" * ") << endl <<
                   " rank-indices:          " << opts->_rank_indices.makeDimValStr() << endl <<
                   " local-domain-offsets:  " << rank_domain_offsets.makeDimValStr(dims->_domain_dims));
         if (opts->overlap_comms)
-            DEBUG_MSG(" mpi-interior:          " << mpi_interior.bb_begin.makeDimValStr() <<
-                      " ... " << mpi_interior.bb_end.subElements(1).makeDimValStr());
+            DEBUG_MSG(" mpi-interior:          " << mpi_interior.make_range_string(domain_dims));
 #endif
         DEBUG_MSG( " vector-len:            " << VLEN << endl <<
                    " extra-padding:         " << opts->_extra_pad_sizes.removeDim(step_posn).makeDimValStr() << endl <<

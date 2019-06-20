@@ -31,18 +31,38 @@ namespace yask {
     struct BoundingBox {
 
         // Boundaries around all points.
-        IdxTuple bb_begin;   // first indices.
-        IdxTuple bb_end;     // one past last indices.
-        idx_t bb_num_points=1;  // valid points within the box.
+        Indices bb_begin;   // first indices.
+        Indices bb_end;     // one past last indices.
+
+        // Number of valid points within the box.
+        idx_t bb_num_points=0;
 
         // Following values are calculated from the above ones.
-        IdxTuple bb_len;       // size in each dim.
-        idx_t bb_size=1;       // points in the entire box; bb_size >= bb_num_points.
+        Indices bb_len;       // size in each dim.
+        idx_t bb_size=0;       // points in the entire box; bb_size >= bb_num_points.
         bool bb_is_full=false; // all points in box are valid (bb_size == bb_num_points).
         bool bb_is_aligned=false; // starting points are vector-aligned in all dims.
         bool bb_is_cluster_mult=false; // num points are cluster multiples in all dims.
         bool bb_valid=false;   // lengths and sizes have been calculated.
 
+        // Make Tuples.
+        IdxTuple bb_begin_tuple(const IdxTuple& ddims) const {
+            return bb_begin.makeTuple(ddims);
+        }
+        IdxTuple bb_end_tuple(const IdxTuple& ddims) const {
+            return bb_end.makeTuple(ddims);
+        }
+        IdxTuple bb_len_tuple(const IdxTuple& ddims) const {
+            return bb_len.makeTuple(ddims);
+        }
+        std::string make_range_string(const IdxTuple& ddims) const {
+            return bb_begin_tuple(ddims).makeDimValStr() +
+                " ... " + bb_end_tuple(ddims).subElements(1).makeDimValStr();
+        }
+        std::string make_len_string(const IdxTuple& ddims) const {
+            return bb_len_tuple(ddims).makeDimValStr(" * ");
+        }
+        
         // Calc values and set valid to true.
         // If 'force_full', set 'bb_num_points' as well as 'bb_size'.
         void update_bb(const std::string& name,

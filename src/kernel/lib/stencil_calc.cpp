@@ -42,9 +42,9 @@ namespace yask {
                                             const ScanIndices& mini_block_idxs) {
         STATE_VARS(this);
         TRACE_MSG("calc_mini_block('" << get_name() << "'): [" <<
-                   mini_block_idxs.begin.makeValStr(nsdims) << " ... " <<
-                   mini_block_idxs.end.makeValStr(nsdims) << ") by " <<
-                   mini_block_idxs.stride.makeValStr(nsdims) <<
+                   mini_block_idxs.begin.makeValStr() << " ... " <<
+                   mini_block_idxs.end.makeValStr() << ") by " <<
+                   mini_block_idxs.stride.makeValStr() <<
                    " by region thread " << region_thread_idx);
         assert(!is_scratch());
 
@@ -113,8 +113,8 @@ namespace yask {
             
             TRACE_MSG("calc_mini_block('" << get_name() <<
                        "'): after trimming for BB " << bbn << ": [" <<
-                       mb_idxs.begin.makeValStr(nsdims) <<
-                       " ... " << mb_idxs.end.makeValStr(nsdims) << ")");
+                       mb_idxs.begin.makeValStr() <<
+                       " ... " << mb_idxs.end.makeValStr() << ")");
 
             // Get the bundles that need to be processed in
             // this block. This will be any prerequisite scratch-var
@@ -165,9 +165,9 @@ namespace yask {
 
                     TRACE_MSG("calc_mini_block('" << get_name() << "'): " <<
                                " for reqd bundle '" << sg->get_name() << "': [" <<
-                               adj_mb_idxs.begin.makeValStr(nsdims) << " ... " <<
-                               adj_mb_idxs.end.makeValStr(nsdims) << ") by " <<
-                               adj_mb_idxs.stride.makeValStr(nsdims) <<
+                               adj_mb_idxs.begin.makeValStr() << " ... " <<
+                               adj_mb_idxs.end.makeValStr() << ") by " <<
+                               adj_mb_idxs.stride.makeValStr() <<
                                " by region thread " << region_thread_idx <<
                                " and block thread " << block_thread_idx);
 
@@ -214,8 +214,8 @@ namespace yask {
                                                   const ScanIndices& mini_block_idxs) {
         STATE_VARS(this);
         TRACE_MSG("calc_sub_block_scalar for bundle '" << get_name() << "': [" <<
-                   mini_block_idxs.start.makeValStr(nsdims) <<
-                   " ... " << mini_block_idxs.stop.makeValStr(nsdims) <<
+                   mini_block_idxs.start.makeValStr() <<
+                   " ... " << mini_block_idxs.stop.makeValStr() <<
                    ") by region thread " << region_thread_idx <<
                    " and block thread " << block_thread_idx);
 
@@ -252,8 +252,8 @@ namespace yask {
                                                const ScanIndices& mini_block_idxs) {
         STATE_VARS(this);
         TRACE_MSG("calc_sub_block_vec for bundle '" << get_name() << "': [" <<
-                   mini_block_idxs.start.makeValStr(nsdims) <<
-                   " ... " << mini_block_idxs.stop.makeValStr(nsdims) <<
+                   mini_block_idxs.start.makeValStr() <<
+                   " ... " << mini_block_idxs.stop.makeValStr() <<
                    ") by region thread " << region_thread_idx <<
                    " and block thread " << block_thread_idx);
 
@@ -494,11 +494,11 @@ namespace yask {
         // the inner one.
         if (do_vectors) {
             TRACE_MSG("calc_sub_block_vec:  using vector code for [" <<
-                       sub_block_vidxs.begin.makeValStr(nsdims) <<
-                       " ... " << sub_block_vidxs.end.makeValStr(nsdims) <<
+                       sub_block_vidxs.begin.makeValStr() <<
+                       " ... " << sub_block_vidxs.end.makeValStr() <<
                        ") *not* within full vector-clusters at [" <<
-                       sub_block_fcidxs.begin.makeValStr(nsdims) <<
-                       " ... " << sub_block_fcidxs.end.makeValStr(nsdims) <<
+                       sub_block_fcidxs.begin.makeValStr() <<
+                       " ... " << sub_block_fcidxs.end.makeValStr() <<
                        ") by region thread " << region_thread_idx <<
                        " and block thread " << block_thread_idx);
 
@@ -578,11 +578,11 @@ namespace yask {
             misc_idxs.align.setFromConst(1);
 
             TRACE_MSG("calc_sub_block_vec:  using scalar code for [" <<
-                       misc_idxs.begin.makeValStr(nsdims) << " ... " <<
-                       misc_idxs.end.makeValStr(nsdims) <<
+                       misc_idxs.begin.makeValStr() << " ... " <<
+                       misc_idxs.end.makeValStr() <<
                        ") *not* within vectors at [" <<
-                       sub_block_vidxs.begin.makeValStr(nsdims) << " ... " <<
-                       sub_block_vidxs.end.makeValStr(nsdims) << 
+                       sub_block_vidxs.begin.makeValStr() << " ... " <<
+                       sub_block_vidxs.end.makeValStr() << 
                        ") by region thread " << region_thread_idx <<
                        " and block thread " << block_thread_idx);
 
@@ -622,8 +622,8 @@ namespace yask {
                                                   const ScanIndices& loop_idxs) {
         STATE_VARS(this);
         TRACE_MSG("calc_loop_of_clusters: local vector-indices [" <<
-                   loop_idxs.start.makeValStr(nsdims) <<
-                   " ... " << loop_idxs.stop.makeValStr(nsdims) <<
+                   loop_idxs.start.makeValStr() <<
+                   " ... " << loop_idxs.stop.makeValStr() <<
                    ") by region thread " << region_thread_idx <<
                    " and block thread " << block_thread_idx);
 
@@ -656,8 +656,8 @@ namespace yask {
                                                  idx_t write_mask) {
         STATE_VARS(this);
         TRACE_MSG("calc_loop_of_vectors: local vector-indices [" <<
-                   loop_idxs.start.makeValStr(nsdims) <<
-                   " ... " << loop_idxs.stop.makeValStr(nsdims) <<
+                   loop_idxs.start.makeValStr() <<
+                  " ... " << loop_idxs.stop.makeValStr() <<
                    ") w/write-mask = 0x" << hex << write_mask << dec <<
                    " by region thread " << region_thread_idx <<
                    " and block thread " << block_thread_idx);
@@ -802,8 +802,7 @@ namespace yask {
 
         DEBUG_MSG("Pack '" << get_name() << "':\n" <<
                   " num bundles:                 " << size() << endl <<
-                  " pack scope:                  " << _pack_bb.bb_begin.makeDimValStr() <<
-                  " ... " << _pack_bb.bb_end.subElements(1).makeDimValStr());
+                  " pack scope:                  " << _pack_bb.make_range_string(domain_dims));
 
         // Bundles.
         for (auto* sg : *this) {
@@ -844,9 +843,8 @@ namespace yask {
             if (bb.bb_size) {
                 DEBUG_MSG("  valid points in bundle:     " << makeNumStr(bb.bb_num_points));
                 if (bb.bb_num_points) {
-                    DEBUG_MSG("  bundle scope:               " << bb.bb_begin.makeDimValStr() <<
-                              " ... " << bb.bb_end.subElements(1).makeDimValStr() << endl <<
-                              "  bundle bounding-box size:   " << bb.bb_len.makeDimValStr(" * "));
+                    DEBUG_MSG("  bundle scope:               " << bb.make_range_string(domain_dims) <<
+                              "\n  bundle bounding-box size:   " << bb.make_len_string(domain_dims));
                 }
             }
             DEBUG_MSG("  num full rectangles in box: " << sg->getBBs().size());
@@ -856,9 +854,8 @@ namespace yask {
                     DEBUG_MSG("   Rectangle " << ri << ":\n"
                               "    num points in rect:       " << makeNumStr(rbb.bb_num_points));
                     if (rbb.bb_num_points) {
-                        DEBUG_MSG("    rect scope:               " << rbb.bb_begin.makeDimValStr() <<
-                                  " ... " << rbb.bb_end.subElements(1).makeDimValStr() << endl <<
-                                  "    rect size:                " << rbb.bb_len.makeDimValStr(" * "));
+                        DEBUG_MSG("    rect scope:               " << rbb.make_range_string(domain_dims) <<
+                                  "\n    rect size:                " << rbb.make_len_string(domain_dims));
                     }
                 }
             }
