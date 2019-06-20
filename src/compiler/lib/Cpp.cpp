@@ -298,35 +298,34 @@ namespace yask {
                     if (left.length() == 0) left = "0";
                     string right = _dims.makeNormStr(_ptrOfsHi[ptr], idim);
 
-                    // Start loop of prefetches.
-                    os << "\n // For pointer '" << ptr << "'\n"
-                        "#pragma unroll\n" <<
-                        _linePrefix << " for (int ofs = ";
-
-                    // First offset.
+                    // Loop bounds.
+                    string start, stop;
+                    
                     // If fetching ahead, only need to get those following
                     // the previous one.
                     if (ahead)
-                        os << "(PFD_L" << level << "*" << imult << ")" << right;
+                        start = "(PFD_L" + to_string(level) + "*" + imult + ")" + right;
 
                     // If fetching first time, need to fetch across whole range;
                     // starting at left edge.
                     else
-                        os << left;
-
-                    // End of offsets.
-                    os << "; ofs < ";
-
+                        start = left;
+                    start = "(" + start + ")";
+                    
                     // If fetching again, stop before next one.
                     if (ahead)
-                        os << "((PFD_L" << level << "+1)*" << imult << ")" << right;
+                        stop = "((PFD_L" + to_string(level) + "+1)*" + imult + ")" + right;
 
                     // If fetching first time, stop where next "ahead" one ends.
                     else
-                        os << "(PFD_L" << level << "*" << imult << ")" << right;
+                        stop = "(PFD_L" + to_string(level) + "*" + imult + ")" + right;
+                    stop = "(" + stop + ")";
 
-                    // Finish loop header.
-                    os << "; ofs++) {\n";
+                    // Start loop of prefetches.
+                    os << "\n // For pointer '" << ptr << "'\n"
+                        "#pragma unroll(" << stop << " - " << start << ")\n" <<
+                        _linePrefix << " for (int ofs = " << start <<
+                        "; ofs < " << stop << "; ofs++) {\n";
 
                     // Need to print prefetch for every unique var-point read.
                     set<string> done;
