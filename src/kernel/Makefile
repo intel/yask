@@ -343,7 +343,7 @@ endif
 # TODO: make check for Intel compiler more robust.
 ifneq ($(filter %icpc %icc,$(notdir $(YK_CXX))),)  # Intel compiler
 
- YK_CXXFLAGS	+=	$(ISA) -debug extended -restrict -ansi-alias -fno-alias
+ YK_CXXFLAGS	+=	$(ICC_ISA) -debug extended -restrict -ansi-alias -fno-alias
  YK_CXXFLAGS	+=	-fimf-use-svml=true -fimf-precision=low -fast-transcendentals \
 			-no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -ftz \
 			-fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
@@ -796,7 +796,6 @@ realclean: clean
 
 echo-settings:
 	@echo "Build environment for" $(YK_EXEC) on `date`; \
-	$(YK_CXX) --version; \
 	echo TARGET=$(TARGET); \
 	echo BLOCK_LOOP_CODE="\"$(BLOCK_LOOP_CODE)\""; \
 	echo BLOCK_LOOP_INNER_MODS="\"$(BLOCK_LOOP_INNER_MODS)\""; \
@@ -857,7 +856,6 @@ echo-settings:
 	echo arch=$(arch); \
 	echo cluster=$(cluster); \
 	echo fold=$(fold); \
-	echo host=`hostname`; \
 	echo omp_block_schedule=$(omp_block_schedule); \
 	echo omp_misc_schedule=$(omp_misc_schedule); \
 	echo omp_region_schedule=$(omp_region_schedule); \
@@ -867,6 +865,9 @@ echo-settings:
 	echo real_bytes=$(real_bytes); \
 	echo stencil=$(stencil); \
 	echo streaming_stores=$(streaming_stores)
+	git status
+	uname -a
+	$(YK_CXX) --version
 
 # Print stats on inner SIMD loops from asm file.
 # Compile with 'EXTRA_YK_CXXFLAGS=-Fa CXX_PREFIX=' to make asm file.
