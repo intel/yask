@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -34,22 +34,22 @@ IN THE SOFTWARE.
 
 namespace yask {
 
-    // A visitor to collect grids and points visited in a set of eqs.
-    // For each eq, there are accessors for its output grid and point
-    // and its input grids and points.
+    // A visitor to collect vars and points visited in a set of eqs.
+    // For each eq, there are accessors for its output var and point
+    // and its input vars and points.
     class PointVisitor : public ExprVisitor {
 
-        // A type to hold a mapping of equations to a set of grids in each.
-        typedef unordered_set<Grid*> GridSet;
-        typedef unordered_map<EqualsExpr*, Grid*> GridMap;
-        typedef unordered_map<EqualsExpr*, GridSet> GridSetMap;
+        // A type to hold a mapping of equations to a set of vars in each.
+        typedef unordered_set<Var*> VarSet;
+        typedef unordered_map<EqualsExpr*, Var*> VarMap;
+        typedef unordered_map<EqualsExpr*, VarSet> VarSetMap;
 
-        GridMap _lhs_grids; // outputs of eqs.
-        GridSetMap _rhs_grids; // inputs of eqs.
+        VarMap _lhs_vars; // outputs of eqs.
+        VarSetMap _rhs_vars; // inputs of eqs.
 
         // A type to hold a mapping of equations to a set of points in each.
-        typedef unordered_set<GridPoint*> PointSet;
-        typedef unordered_map<EqualsExpr*, GridPoint*> PointMap;
+        typedef unordered_set<VarPoint*> PointSet;
+        typedef unordered_map<EqualsExpr*, VarPoint*> PointMap;
         typedef unordered_map<EqualsExpr*, PointSet> PointSetMap;
 
         PointMap _lhs_pts; // outputs of eqs.
@@ -68,9 +68,9 @@ namespace yask {
         PointVisitor() {}
         virtual ~PointVisitor() {}
 
-        // Get access to grids per eq.
-        GridMap& getOutputGrids() { return _lhs_grids; }
-        GridSetMap& getInputGrids() { return _rhs_grids; }
+        // Get access to vars per eq.
+        VarMap& getOutputVars() { return _lhs_vars; }
+        VarSetMap& getInputVars() { return _rhs_vars; }
 
         // Get access to pts per eq.
         // Contains unique ptrs to pts, but pts may not
@@ -84,15 +84,15 @@ namespace yask {
         int getNumEqs() const { return (int)_lhs_pts.size(); }
 
         // Callback at an equality.
-        // Visits all parts that might have grid points.
+        // Visits all parts that might have var points.
         virtual string visit(EqualsExpr* ee) {
 
             // Set this equation as current one.
             _eq = ee;
 
             // Make sure all map entries exist for this eq.
-            _lhs_grids[_eq];
-            _rhs_grids[_eq];
+            _lhs_vars[_eq];
+            _rhs_vars[_eq];
             _lhs_pts[_eq];
             _rhs_pts[_eq];
             _cond_pts[_eq];
@@ -105,7 +105,7 @@ namespace yask {
             lhs->accept(this);
             
             // visit RHS.
-            NumExprPtr rhs = ee->getRhs();
+            numExprPtr rhs = ee->getRhs();
             _state = _in_rhs;
             rhs->accept(this);
 
@@ -123,23 +123,23 @@ namespace yask {
             return "";
         }
 
-        // Callback at a grid point.
-        virtual string visit(GridPoint* gp) {
+        // Callback at a var point.
+        virtual string visit(VarPoint* gp) {
             assert(_eq);
-            auto* g = gp->getGrid();
+            auto* g = gp->getVar();
             _all_pts[_eq].insert(gp);
 
-            // Save pt and/or grid based on state.
+            // Save pt and/or var based on state.
             switch (_state) {
 
             case _in_lhs:
                 _lhs_pts[_eq] = gp;
-                _lhs_grids[_eq] = g;
+                _lhs_vars[_eq] = g;
                 break;
 
             case _in_rhs:
                 _rhs_pts[_eq].insert(gp);
-                _rhs_grids[_eq].insert(g);
+                _rhs_vars[_eq].insert(g);
                 break;
 
             case _in_cond:
@@ -173,8 +173,8 @@ namespace yask {
         // Gather initial stats from all eqs.
         PointVisitor pt_vis;
         visitEqs(&pt_vis);
-        auto& outGrids = pt_vis.getOutputGrids();
-        auto& inGrids = pt_vis.getInputGrids();
+        auto& outVars = pt_vis.getOutputVars();
+        auto& inVars = pt_vis.getInputVars();
         auto& outPts = pt_vis.getOutputPts();
         auto& inPts = pt_vis.getInputPts();
         //auto& condPts = pt_vis.getCondPts();
@@ -184,44 +184,59 @@ namespace yask {
         os << "\nProcessing " << getNum() << " stencil equation(s)...\n";
         for (auto eq1 : getAll()) {
             auto* eq1p = eq1.get();
-            assert(outGrids.count(eq1p));
-            assert(inGrids.count(eq1p));
-            auto* og1 = outGrids.at(eq1p);
-            assert(og1 == eq1->getGrid());
+            assert(outVars.count(eq1p));
+            assert(inVars.count(eq1p));
+            auto* og1 = outVars.at(eq1p);
+            assert(og1 == eq1->getVar());
             auto* op1 = outPts.at(eq1p);
-            //auto& ig1 = inGrids.at(eq1p);
+            //auto& ig1 = inVars.at(eq1p);
             auto& ip1 = inPts.at(eq1p);
             auto cond1 = eq1p->getCond();
             auto stcond1 = eq1p->getStepCond();
-            NumExprPtr step_expr1 = op1->getArg(stepDim); // may be null.
+            numExprPtr step_expr1 = op1->getArg(stepDim); // may be null.
 
 #ifdef DEBUG_DEP
             cout << " Checking internal consistency of equation " <<
                 eq1->makeQuotedStr() << "...\n";
 #endif
 
-            // Scratch grid must not have a condition.
+            // Scratch var must not have a condition.
             if (cond1 && og1->isScratch())
-                THROW_YASK_EXCEPTION("Error: scratch-grid equation '" + eq1->makeQuotedStr() +
-                                     "' cannot have a domain condition");
+                THROW_YASK_EXCEPTION("Error: scratch-var equation " + eq1->makeQuotedStr() +
+                                     " cannot have a domain condition");
             if (stcond1 && og1->isScratch())
-                THROW_YASK_EXCEPTION("Error: scratch-grid equation '" + eq1->makeQuotedStr() +
-                                     "' cannot have a step condition");
+                THROW_YASK_EXCEPTION("Error: scratch-var equation " + eq1->makeQuotedStr() +
+                                     " cannot have a step condition");
 
-            // Check LHS grid dimensions and associated args.
+            // LHS must have all domain dims.
+            for (auto& dd : dims._domainDims.getDims()) {
+                auto& dname = dd.getName();
+                numExprPtr dexpr = op1->getArg(dname);
+                if (!dexpr)
+                    THROW_YASK_EXCEPTION("Error: var equation " + eq1->makeQuotedStr() +
+                                         " does not use domain-dimension '" + dname +
+                                         "' on LHS");
+            }
+
+            // LHS of non-scratch must have step dim and vice-versa.
+            if (!og1->isScratch()) {
+                if (!step_expr1)
+                    THROW_YASK_EXCEPTION("Error: non-scratch var equation " + eq1->makeQuotedStr() +
+                                         " does not use step-dimension '" + stepDim +
+                                         "' on LHS");
+            } else {
+                if (step_expr1)
+                    THROW_YASK_EXCEPTION("Error: scratch-var equation " + eq1->makeQuotedStr() +
+                                         " cannot use step-dimension '" + stepDim + "'");
+            }
+
+            // Check LHS var dimensions and associated args.
             for (int di = 0; di < og1->get_num_dims(); di++) {
                 auto& dn = og1->get_dim_name(di);  // name of this dim.
                 auto argn = op1->getArgs().at(di); // LHS arg for this dim.
 
                 // Check based on dim type.
                 if (dn == stepDim) {
-
-                    // Scratch grid must not use step dim.
-                    if (og1->isScratch())
-                        THROW_YASK_EXCEPTION("Error: scratch-grid '" + og1->getName() +
-                                             "' cannot use '" + dn + "' dim");
-
-                    // Validity of step-dim expression in non-scratch grids is checked later.
                 }
 
                 // LHS must have simple indices in domain dims.
@@ -239,28 +254,25 @@ namespace yask {
                                              " is expected");
                 }
 
-                // Misc dim must be a const.
+                // Misc dim must be a const.  TODO: allow non-const misc
+                // dims and treat const and non-const ones separately, e.g.,
+                // for interleaving.
                 else {
 
                     if (!argn->isConstVal())
                         THROW_YASK_EXCEPTION("Error: LHS of equation " + eq1->makeQuotedStr() +
                                              " contains expression " + argn->makeQuotedStr() +
                                              " for misc dimension '" + dn +
-                                             "' where constant integer is expected");
+                                             "' where kernel-run-time constant integer is expected");
                     argn->getIntVal(); // throws exception if not an integer.
                 }
             }
         
-            // Checks for a non-scratch eq.
+            // Heuristics to set the default step direction.
+            // The accuracy isn't critical, because the default is only be
+            // used in the standalone test utility and the auto-tuner.
             if (!og1->isScratch()) {
 
-                if (!step_expr1)
-                    THROW_YASK_EXCEPTION("Error: non-scratch-grid '" + og1->getName() +
-                                         "' does not use '" + stepDim + "' dim");
-
-                // Heuristics to set the default step direction.
-                // The accuracy isn't critical, because the default should only be
-                // used in the standalone test utility and the auto-tuner.
                 // First, see if LHS step arg is a simple offset, e.g., 'u(t+1, ...)'.
                 // This is the most common case.
                 auto& lofss = op1->getArgOffsets();
@@ -283,7 +295,7 @@ namespace yask {
                                 dims._stepDir = 1;
                                 break;
                             }
-                            else if (lofs > rofs) {
+                            else if (lofs < rofs) {
                                 dims._stepDir = -1;
                                 break;
                             }
@@ -301,7 +313,7 @@ namespace yask {
 
             // LHS of equation must be vectorizable.
             // TODO: relax this restriction.
-            if (op1->getVecType() != GridPoint::VEC_FULL) {
+            if (op1->getVecType() != VarPoint::VEC_FULL) {
                 THROW_YASK_EXCEPTION("Error: LHS of equation " + eq1->makeQuotedStr() +
                                      " is not fully vectorizable because not all folded"
                                      " dimensions are accessed via simple offsets from their respective indices");
@@ -310,7 +322,7 @@ namespace yask {
             // Check that domain indices are simple offsets and
             // misc indices are consts on RHS.
             for (auto i1 : ip1) {
-                auto* ig1 = i1->getGrid();
+                auto* ig1 = i1->getVar();
 
                 for (int di = 0; di < ig1->get_num_dims(); di++) {
                     auto& dn = ig1->get_dim_name(di);  // name of this dim.
@@ -351,24 +363,24 @@ namespace yask {
         os << "Analyzing for dependencies...\n";
         for (auto eq1 : getAll()) {
             auto* eq1p = eq1.get();
-            assert(outGrids.count(eq1p));
-            assert(inGrids.count(eq1p));
-            auto* og1 = outGrids.at(eq1p);
-            assert(og1 == eq1->getGrid());
+            assert(outVars.count(eq1p));
+            assert(inVars.count(eq1p));
+            auto* og1 = outVars.at(eq1p);
+            assert(og1 == eq1->getVar());
             auto* op1 = outPts.at(eq1p);
-            //auto& ig1 = inGrids.at(eq1p);
+            //auto& ig1 = inVars.at(eq1p);
             //auto& ip1 = inPts.at(eq1p);
             auto cond1 = eq1p->getCond();
             auto stcond1 = eq1p->getStepCond();
-            NumExprPtr step_expr1 = op1->getArg(stepDim);
+            numExprPtr step_expr1 = op1->getArg(stepDim);
 
             // Check each 'eq2' to see if it depends on 'eq1'.
             for (auto eq2 : getAll()) {
                 auto* eq2p = eq2.get();
-                auto& og2 = outGrids.at(eq2p);
-                assert(og2 == eq2->getGrid());
+                auto& og2 = outVars.at(eq2p);
+                assert(og2 == eq2->getVar());
                 auto& op2 = outPts.at(eq2p);
-                auto& ig2 = inGrids.at(eq2p);
+                auto& ig2 = inVars.at(eq2p);
                 auto& ip2 = inPts.at(eq2p);
                 auto cond2 = eq2p->getCond();
                 auto stcond2 = eq2p->getStepCond();
@@ -384,8 +396,8 @@ namespace yask {
                 bool same_cond = areExprsSame(cond1, cond2);
                 bool same_stcond = areExprsSame(stcond1, stcond2);
 
-                // A separate grid is defined by its name and any const indices.
-                //bool same_og = op1->isSameLogicalGrid(*op2);
+                // A separate var is defined by its name and any const indices.
+                //bool same_og = op1->isSameLogicalVar(*op2);
 
                 // If two different eqs have the same conditions, they
                 // cannot have the same LHS.
@@ -438,7 +450,7 @@ namespace yask {
                     continue;
 
                 // Next dep check: inexact matches on LHS of eq1 to RHS of eq2.
-                // Does eq1 define *any* point in a grid that eq2 inputs
+                // Does eq1 define *any* point in a var that eq2 inputs
                 // at the same step index?  If so, they *might* have a
                 // dependency. Some of these may not be real
                 // dependencies due to conditions. Those that are real
@@ -459,16 +471,16 @@ namespace yask {
                     // detailed check of g1 input points on RHS of eq2.
                     for (auto* i2 : ip2) {
 
-                        // Same logical grid?
-                        bool same_grid = i2->isSameLogicalGrid(*op1);
+                        // Same logical var?
+                        bool same_var = i2->isSameLogicalVar(*op1);
 
-                        // If not same grid, no dependency.
-                        if (!same_grid)
+                        // If not same var, no dependency.
+                        if (!same_var)
                             continue;
 
                         // Both points at same step?
                         bool same_step = false;
-                        NumExprPtr step_expr2 = i2->getArg(stepDim);
+                        numExprPtr step_expr2 = i2->getArg(stepDim);
                         if (step_expr1 && step_expr2 &&
                             areExprsSame(step_expr1, step_expr2))
                             same_step = true;
@@ -482,8 +494,8 @@ namespace yask {
 
                                 // Exit with error.
                                 string stepmsg = same_step ? " at '" + step_expr1->makeQuotedStr() + "'" : "";
-                                THROW_YASK_EXCEPTION("Error: disallowed dependency: grid '" +
-                                                     op1->makeLogicalGridStr() + "' on LHS of equation " +
+                                THROW_YASK_EXCEPTION("Error: disallowed dependency: var '" +
+                                                     op1->makeLogicalVarStr() + "' on LHS of equation " +
                                                      eq1->makeQuotedStr() + " also appears on its RHS" +
                                                      stepmsg);
                             }
@@ -534,9 +546,9 @@ namespace yask {
         topo_sort();
     }
 
-    // Visitor for determining vectorization potential of grid points.
-    // Vectorization depends not only on the dims of the grid itself
-    // but also on how the grid is indexed at each point.
+    // Visitor for determining vectorization potential of var points.
+    // Vectorization depends not only on the dims of the var itself
+    // but also on how the var is indexed at each point.
     class SetVecVisitor : public ExprVisitor {
         const Dimensions& _dims;
 
@@ -544,28 +556,28 @@ namespace yask {
         SetVecVisitor(const Dimensions& dims) :
             _dims(dims) { 
             _visitEqualsLhs = true;
-            _visitGridPointArgs = true;
+            _visitVarPointArgs = true;
             _visitConds = true;
         }
 
-        // Check each grid point in expr.
-        virtual string visit(GridPoint* gp) {
-            auto* grid = gp->getGrid();
+        // Check each var point in expr.
+        virtual string visit(VarPoint* gp) {
+            auto* var = gp->getVar();
 
             // Never vectorize scalars.
-            if (grid->get_num_dims() == 0) {
-                gp->setVecType(GridPoint::VEC_NONE);
+            if (var->get_num_dims() == 0) {
+                gp->setVecType(VarPoint::VEC_NONE);
                 return "";      // Also, no args to visit.
             }
 
             // Amount of vectorization allowed primarily depends on number
-            // of folded dimensions in the grid accessed at this point.
-            int grid_nfd = grid->getNumFoldableDims();
+            // of folded dimensions in the var accessed at this point.
+            int var_nfd = var->getNumFoldableDims();
             int soln_nfd = _dims._foldGT1.size();
-            assert(grid_nfd <= soln_nfd);
+            assert(var_nfd <= soln_nfd);
 
             // Vectorization is only possible if each access to a vectorized
-            // dim is a simple offset.  For example, in grid dim 'x', the
+            // dim is a simple offset.  For example, in var dim 'x', the
             // index in the corresponding posn must be 'x', 'x+n', or 'x-n'.
             int fdoffsets = 0;
             for (auto fdim : _dims._foldGT1.getDims()) {
@@ -573,28 +585,28 @@ namespace yask {
                 if (gp->getArgOffsets().lookup(fdname))
                     fdoffsets++;
             }
-            assert(fdoffsets <= grid_nfd);
+            assert(fdoffsets <= var_nfd);
 
             // All folded dims are vectorizable?
             // NB: this will always be the case when there is
             // no folding in the soln.
             if (fdoffsets == soln_nfd)
-                gp->setVecType(GridPoint::VEC_FULL); // all good.
+                gp->setVecType(VarPoint::VEC_FULL); // all good.
 
             // Some dims are vectorizable?
             else if (fdoffsets > 0)
-                gp->setVecType(GridPoint::VEC_PARTIAL);
+                gp->setVecType(VarPoint::VEC_PARTIAL);
 
             // Uses no folded dims, so scalar only.
             else
-                gp->setVecType(GridPoint::VEC_NONE);
+                gp->setVecType(VarPoint::VEC_NONE);
 
-            // Also check args of this grid point.
+            // Also check args of this var point.
             return ExprVisitor::visit(gp);
         }
     };
 
-    // Determine which grid points can be vectorized.
+    // Determine which var points can be vectorized.
     void Eqs::analyzeVec(const Dimensions& dims) {
 
         // Send a 'SetVecVisitor' to each point in
@@ -616,7 +628,7 @@ namespace yask {
         }
     };
 
-    // Visitor for determining inner-loop accesses of grid points.
+    // Visitor for determining inner-loop accesses of var points.
     class SetLoopVisitor : public ExprVisitor {
         const Dimensions& _dims;
 
@@ -626,19 +638,19 @@ namespace yask {
             _visitEqualsLhs = true;
         }
 
-        // Check each grid point in expr.
-        virtual string visit(GridPoint* gp) {
+        // Check each var point in expr.
+        virtual string visit(VarPoint* gp) {
 
-            // Info from grid.
-            auto* grid = gp->getGrid();
-            auto gdims = grid->get_dim_names();
+            // Info from var.
+            auto* var = gp->getVar();
+            auto gdims = var->get_dim_names();
 
             // Check loop in this dim.
             auto idim = _dims._innerDim;
 
             // Access type.
             // Assume invariant, then check below.
-            GridPoint::LoopType lt = GridPoint::LOOP_INVARIANT;
+            VarPoint::LoopType lt = VarPoint::LOOP_INVARIANT;
 
             // Check every point arg.
             auto& args = gp->getArgs();
@@ -657,13 +669,13 @@ namespace yask {
                     int offset = 0;
                     if (gdims.at(ai) == idim &&
                         arg->isOffsetFrom(idim, offset)) {
-                        lt = GridPoint::LOOP_OFFSET;
+                        lt = VarPoint::LOOP_OFFSET;
                     }
 
                     // Otherwise, this arg uses idim, but not
                     // in a simple way.
                     else {
-                        lt = GridPoint::LOOP_OTHER;
+                        lt = VarPoint::LOOP_OTHER;
                         break;  // no need to continue.
                     }
                 }
@@ -673,7 +685,7 @@ namespace yask {
         }
     };
 
-    // Determine loop access behavior of grid points.
+    // Determine loop access behavior of var points.
     void Eqs::analyzeLoop(const Dimensions& dims) {
 
         // Send a 'SetLoopVisitor' to each point in
@@ -682,30 +694,30 @@ namespace yask {
         visitEqs(&slv);
     }
 
-    // Update access stats for the grids.
+    // Update access stats for the vars.
     // For now, this us just const indices.
     // Halos are updated later, after packs are established.
-    void Eqs::updateGridStats() {
+    void Eqs::updateVarStats() {
 
-        // Find all LHS and RHS points and grids for all eqs.
+        // Find all LHS and RHS points and vars for all eqs.
         PointVisitor pv;
         visitEqs(&pv);
 
         // Analyze each eq.
         for (auto& eq : getAll()) {
 
-            // Get all grid points touched by this eq.
+            // Get all var points touched by this eq.
             auto& allPts1 = pv.getAllPts().at(eq.get());
 
-            // Update stats of each grid accessed in 'eq'.
+            // Update stats of each var accessed in 'eq'.
             for (auto ap : allPts1) {
-                auto* g = ap->getGrid(); // grid for point 'ap'.
+                auto* g = ap->getVar(); // var for point 'ap'.
                 g->updateConstIndices(ap->getArgConsts());
             }
         }
     }
 
-    // Find scratch-grid eqs needed for each non-scratch eq.  These will
+    // Find scratch-var eqs needed for each non-scratch eq.  These will
     // eventually be gathered into bundles and saved as the "scratch
     // children" for each non-scratch bundles.
     void Eqs::analyzeScratch() {
@@ -723,15 +735,15 @@ namespace yask {
         // Direct deps: eq3 -> eq2(s) -> eq1(s).
         // eq1 and eq2 are scratch children of eq3.
         
-        // Find all LHS and RHS points and grids for all eqs.
+        // Find all LHS and RHS points and vars for all eqs.
         PointVisitor pv;
         visitEqs(&pv);
 
         // Analyze each eq.
         for (auto& eq1 : getAll()) {
 
-            // Output grid for this eq.
-            auto* og1 = pv.getOutputGrids().at(eq1.get());
+            // Output var for this eq.
+            auto* og1 = pv.getOutputVars().at(eq1.get());
 
             // Only need to look at dep paths starting from non-scratch eqs.
             if (og1->isScratch())
@@ -740,7 +752,7 @@ namespace yask {
             // We start with each non-scratch eq and walk the dep tree to
             // find all dependent scratch eqs.  It's important to
             // then visit the eqs in dep order using 'path' to get only
-            // unbroken chains of scratch grids.
+            // unbroken chains of scratch vars.
             // Note that sub-paths may be visited more than once, e.g.,
             // 'eq3 -> eq2(s)' and 'eq3 -> eq2(s) -> eq1(s)' are 2 paths from
             // the second example above, but this shouldn't cause any issues,
@@ -750,13 +762,13 @@ namespace yask {
                 // For each 'b', 'eq1' is 'b' or depends on 'b',
                 // immediately or indirectly; 'path' leads from
                 // 'eq1' to 'b'.
-                (eq1, [&](EqualsExprPtr b, EqList& path) {
-                    //auto* ogb = pv.getOutputGrids().at(b.get());
+                (eq1, [&](equalsExprPtr b, EqList& path) {
+                    //auto* ogb = pv.getOutputVars().at(b.get());
 
-                    // Find scratch-grid eqs in this dep path that are
+                    // Find scratch-var eqs in this dep path that are
                     // needed for 'eq1'. Walk dep path from 'eq1' to 'b'
-                    // until a non-scratch grid is found.
-                    unordered_set<Grid*> scratches_seen;
+                    // until a non-scratch var is found.
+                    unordered_set<Var*> scratches_seen;
                     for (auto eq2 : path) {
 
                         // Don't process 'eq1', the initial non-scratch eq.
@@ -766,8 +778,8 @@ namespace yask {
                         // If this isn't a scratch eq, we are done
                         // w/this path because we only want the eqs
                         // from 'eq1' through an *unbroken* chain of
-                        // scratch grids.
-                        auto* og2 = pv.getOutputGrids().at(eq2.get());
+                        // scratch vars.
+                        auto* og2 = pv.getOutputVars().at(eq2.get());
                         if (!og2->isScratch())
                             break;
 
@@ -777,12 +789,12 @@ namespace yask {
 
                         // Check for illegal scratch path.
                         // TODO: this is only illegal because the scratch
-                        // write area is stored in the grid, so >1 write
+                        // write area is stored in the var, so >1 write
                         // areas can't be shared. Need to store the write
                         // areas somewhere else, maybe in the equation or
                         // bundle. Would require changes to kernel as well.
                         if (scratches_seen.count(og2))
-                            THROW_YASK_EXCEPTION("Error: scratch-grid '" +
+                            THROW_YASK_EXCEPTION("Error: scratch-var '" +
                                                  og2->get_name() + "' depends upon itself");
                         scratches_seen.insert(og2);
                     }
@@ -821,7 +833,7 @@ namespace yask {
     }
 
     // Add an equation to an EqBundle.
-    void EqBundle::addEq(EqualsExprPtr ee)
+    void EqBundle::addEq(equalsExprPtr ee)
     {
 #ifdef DEBUG_EQ_BUNDLE
         cout << "EqBundle: adding " << ee->makeQuotedStr() << endl;
@@ -832,12 +844,12 @@ namespace yask {
         PointVisitor pv;
         ee->accept(&pv);
 
-        // update list of input and output grids for this bundle.
-        auto* outGrid = pv.getOutputGrids().at(ee.get());
-        _outGrids.insert(outGrid);
-        auto& inGrids = pv.getInputGrids().at(ee.get());
-        for (auto* g : inGrids)
-            _inGrids.insert(g);
+        // update list of input and output vars for this bundle.
+        auto* outVar = pv.getOutputVars().at(ee.get());
+        _outVars.insert(outVar);
+        auto& inVars = pv.getInputVars().at(ee.get());
+        for (auto* g : inVars)
+            _inVars.insert(g);
     }
 
     // Print stats from eqs.
@@ -861,7 +873,7 @@ namespace yask {
         cv.printStats(os, msg);
     }
 
-    // Visitor that will shift each grid point by an offset.
+    // Visitor that will shift each var point by an offset.
     class OffsetVisitor: public ExprVisitor {
         IntTuple _ofs;
 
@@ -871,10 +883,10 @@ namespace yask {
             _visitEqualsLhs = true;
         }
 
-        // Visit a grid point.
-        virtual string visit(GridPoint* gp) {
+        // Visit a var point.
+        virtual string visit(VarPoint* gp) {
 
-            // Shift grid _ofs points.
+            // Shift var _ofs points.
             auto ofs0 = gp->getArgOffsets();
             IntTuple new_loc = ofs0.addElements(_ofs, false);
             gp->setArgOffsets(new_loc);
@@ -910,7 +922,7 @@ namespace yask {
                         // Make a copy.
                         auto eq2 = eq->clone();
 
-                        // Add offsets to each grid point.
+                        // Add offsets to each var point.
                         OffsetVisitor ov(clusterOffset);
                         eq2->accept(&ov);
 
@@ -930,7 +942,7 @@ namespace yask {
     // be incremented if a new bundle is created.  Returns whether a new
     // bundle was created.
     bool EqBundles::addEqToBundle(Eqs& allEqs,
-                                  EqualsExprPtr eq,
+                                  equalsExprPtr eq,
                                   const string& baseName,
                                   const CompilerSettings& settings) {
         assert(_dims);
@@ -953,7 +965,7 @@ namespace yask {
         // Loop through existing bundles, looking for one that
         // 'eq' can be added to.
         EqBundle* target = 0;
-        auto eqg = eq->getGrid();
+        auto eqg = eq->getVar();
         for (auto& eg : getAll()) {
 
             // Must be same scratch-ness.
@@ -978,7 +990,7 @@ namespace yask {
             // adding 'eq' to 'eg'.
             bool is_ok = true;
             for (auto& eq2 : eg->getEqs()) {
-                auto eq2g = eq2->getGrid();
+                auto eq2g = eq2->getVar();
                 assert (eqg);
                 assert (eq2g);
 
@@ -995,7 +1007,7 @@ namespace yask {
                 // Look for any dependency between 'eq' and 'eq2'.
                 if (is_ok && eq_deps.is_dep(eq, eq2)) {
 #if DEBUG_ADD_EXPRS
-                    cout << "addEqFromGrid: not adding equation " <<
+                    cout << "addEqFromVar: not adding equation " <<
                         eq->makeQuotedStr() << " to " << eg.getDescr() <<
                         " because of dependency w/equation " <<
                         eq2->makeQuotedStr() << endl;
@@ -1040,17 +1052,17 @@ namespace yask {
 #endif
         target->addEq(eq);
 
-        // Remember eq and updated grid.
+        // Remember eq and updated var.
         _eqs_in_bundles.insert(eq);
-        _outGrids.insert(eq->getGrid());
+        _outVars.insert(eq->getVar());
 
         return newBundle;
     }
 
-    // Find halos needed for each grid.
+    // Find halos needed for each var.
     void EqBundlePacks::calcHalos(EqBundles& allBundles) {
 
-        // Find all LHS and RHS points and grids for all eqs.
+        // Find all LHS and RHS points and vars for all eqs.
         PointVisitor pv;
         visitEqs(&pv);
 
@@ -1064,27 +1076,28 @@ namespace yask {
             
             for (auto& eq : bp->getEqs()) {
 
-                // Get all grid points touched by this eq.
+                // Get all var points touched by this eq.
                 auto& allPts1 = pv.getAllPts().at(eq.get());
 
-                // Update stats of each grid accessed in 'eq'.
+                // Update stats of each var accessed in 'eq'.
                 for (auto ap : allPts1) {
-                    auto* g = ap->getGrid(); // grid for point 'ap'.
+                    auto* g = ap->getVar(); // var for point 'ap'.
                     g->updateHalo(pname, ap->getArgOffsets());
                 }
             }
         }
 
-        // Next, propagate halos through scratch grids as needed.
+        // Next, propagate halos through scratch vars as needed.
 
-        // Example:
-        // eq1: scr(x) EQUALS u(t,x+1); <-- orig halo of u = 1.
-        // eq2: u(t+1,x) EQUALS scr(x+2); <-- orig halo of scr = 2.
+        // Example 1:
+        // eq1: scr1(x) EQUALS u(t,x+1); <-- orig halo of u = 1.
+        // eq2: u(t+1,x) EQUALS scr1(x+2); <-- orig halo of scr1 = 2.
         // Direct deps: eq2 -> eq1(s).
         // Halo of u must be increased to 1 + 2 = 3 due to
-        // eq1: u(t,x+1) on rhs and orig halo of scr on lhs.
+        // eq1: u(t,x+1) on rhs and orig halo of scr1 on lhs,
+        // i.e., because u(t+1,x) EQUALS u(t,(x+2)+1) by subst.
 
-        // Example:
+        // Example 2:
         // eq1: scr1(x) EQUALS u(t,x+1); <-- orig halo of u = 1.
         // eq2: scr2(x) EQUALS scr1(x+2); <-- orig halo of scr1 = 2.
         // eq3: u(t+1,x) EQUALS scr2(x+4); <-- orig halo of scr2 = 4.
@@ -1093,24 +1106,27 @@ namespace yask {
         // eq2: scr1(x+2) on rhs and orig halo of scr2 on lhs.
         // Then, halo of u must be increased to 1 + 6 = 7 due to
         // eq1: u(t,x+1) on rhs and new halo of scr1 on lhs.
+        // Or, u(t+1,x) EQUALS u(t,((x+4)+2)+1) by subst.
 
-        // Example:
-        // eq1: scr1(x) EQUALS u(t,x+1); <-|
-        // eq2: scr2(x) EQUALS u(t,x+2); <-- orig halo of u = max(1,2) = 2.
+        // Example 3:
+        // eq1: scr1(x) EQUALS u(t,x+1); <--|
+        // eq2: scr2(x) EQUALS u(t,x+2); <--| orig halo of u = max(1,2) = 2.
         // eq3: u(t+1,x) EQUALS scr1(x+3) + scr2(x+4);
         // eq1 and eq2 are bundled => scr1 and scr2 halos are max(3,4) = 4.
         // Direct deps: eq3 -> eq1(s), eq3 -> eq2(s).
+        // Halo of u is 4 + 2 = 6.
+        // Or, u(t+1,x) EQUALS u(t,(x+3)+1) + u(t,(x+4)+2) by subst.
         
-        // Keep a list of maps of shadow grids.
-        // Each map: key=real-grid ptr, val=shadow-grid ptr.
-        // These shadow grids will be used to track
+        // Algo: Keep a list of maps of shadow vars.
+        // Each map: key=real-var ptr, val=shadow-var ptr.
+        // These shadow vars will be used to track
         // updated halos for each path.
         // We don't want to update the real halos until
         // we've walked all the paths using the original
         // halos.
-        // At the end, the real grids will be updated
+        // At the end, the real vars will be updated
         // from the shadows.
-        vector< map<Grid*, Grid*>> shadows;
+        vector< map<Var*, Var*>> shadows;
 
         // Packs.
         for (auto& bp : getAll()) {
@@ -1142,7 +1158,7 @@ namespace yask {
                     // 'b1' to 'bn'.
                     (b1, [&](EqBundlePtr bn, EqBundleList& path) {
 
-                        // Create a new empty map of shadow grids for this path.
+                        // Create a new empty map of shadow vars for this path.
                         shadows.resize(shadows.size() + 1);
                         auto& shadow_map = shadows.back();
 
@@ -1161,41 +1177,41 @@ namespace yask {
                             if (!b2->isScratch())
                                 break;
 
-                            // Make shadow copies of all grids touched by 'eq2'.
-                            // All changes will be applied to these shadow grids
+                            // Make shadow copies of all vars touched by 'eq2'.
+                            // All changes will be applied to these shadow vars
                             // for the current 'path'.
                             for (auto& eq : b2->getEqs()) {
 
-                                // Output grid.
-                                auto* og = pv.getOutputGrids().at(eq.get());
+                                // Output var.
+                                auto* og = pv.getOutputVars().at(eq.get());
                                 if (shadow_map.count(og) == 0)
-                                    shadow_map[og] = new Grid(*og);
+                                    shadow_map[og] = new Var(*og);
 
-                                // Input grids.
+                                // Input vars.
                                 auto& inPts = pv.getInputPts().at(eq.get());
                                 for (auto* ip : inPts) {
-                                    auto* ig = ip->getGrid();
+                                    auto* ig = ip->getVar();
                                     if (shadow_map.count(ig) == 0)
-                                        shadow_map[ig] = new Grid(*ig);
+                                        shadow_map[ig] = new Var(*ig);
                                 }
                             }
                         
                             // For each scratch bundle, set the size of all its
-                            // output grids' halos to the max across its
+                            // output vars' halos to the max across its
                             // halos. We need to do this because halos are
-                            // written in a scratch grid.  Since they are
+                            // written in a scratch var.  Since they are
                             // bundled, all the writes must be over the same
                             // area.
 
                             // First, set first eq halo the max of all.
                             auto& eq1 = b2->getEqs().front();
-                            auto* og1 = shadow_map[eq1->getGrid()];
+                            auto* og1 = shadow_map[eq1->getVar()];
                             for (auto& eq2 : b2->getEqs()) {
                                 if (eq1 == eq2)
                                     continue;
 
                                 // Adjust g1 to max(g1, g2).
-                                auto* og2 = shadow_map[eq2->getGrid()];
+                                auto* og2 = shadow_map[eq2->getVar()];
                                 og1->updateHalo(*og2);
                             }
 
@@ -1205,16 +1221,17 @@ namespace yask {
                                     continue;
 
                                 // Adjust g2 to g1.
-                                auto* og2 = shadow_map[eq2->getGrid()];
+                                auto* og2 = shadow_map[eq2->getVar()];
                                 og2->updateHalo(*og1);
                             }
 
                             // Get updated halos from the scratch bundle.  These
                             // are the points that are read from the dependent
-                            // eq(s).  For scratch grids, the halo areas must
+                            // eq(s).  For scratch vars, the halo areas must
                             // also be written to.
                             auto left_ohalo = og1->getHaloSizes(pname, true);
                             auto right_ohalo = og1->getHaloSizes(pname, false);
+                            auto l1Dist = og1->getL1Dist();
 
 #ifdef DEBUG_SCRATCH
                             cout << "** cH: processing " << b2->getDescr() << "...\n" 
@@ -1222,15 +1239,15 @@ namespace yask {
                                 " & " << right_ohalo.makeDimValStr() << endl;
 #endif
                         
-                            // Recalc min halos of all input grids of all
+                            // Recalc min halos of all input vars of all
                             // scratch eqs in this bundle by adding size of
-                            // output-grid halos.
+                            // output-var halos.
                             for (auto& eq : b2->getEqs()) {
                                 auto& inPts = pv.getInputPts().at(eq.get());
 
                                 // Input points.
                                 for (auto ip : inPts) {
-                                    auto* ig = shadow_map[ip->getGrid()];
+                                    auto* ig = shadow_map[ip->getVar()];
                                     auto& ao = ip->getArgOffsets(); // e.g., '2' for 'x+2'.
 
                                     // Increase range by subtracting left halos and
@@ -1239,6 +1256,7 @@ namespace yask {
                                     ig->updateHalo(pname, left_ihalo);
                                     auto right_ihalo = ao.addElements(right_ohalo, false);
                                     ig->updateHalo(pname, right_ihalo);
+                                    ig->updateL1Dist(l1Dist);
 #ifdef DEBUG_SCRATCH
                                     cout << "*** cH: updated min halos of '" << ig->get_name() << "' to " <<
                                         left_ihalo.makeDimValStr() <<
@@ -1251,8 +1269,8 @@ namespace yask {
             } // bundles.
         } // packs.
 
-        // Apply the changes from the shadow grids.
-        // This will result in the grids containing the max
+        // Apply the changes from the shadow vars.
+        // This will result in the vars containing the max
         // of the shadow halos.
         for (auto& shadow_map : shadows) {
 #ifdef DEBUG_SCRATCH
@@ -1270,7 +1288,7 @@ namespace yask {
                 cout << "** cH: updated '" << orig_gp->get_name() << "'.\n";
 #endif
 
-                // Release the shadow grid.
+                // Release the shadow var.
                 delete shadow_gp;
                 shadow_map.at(orig_gp) = NULL;
             }
@@ -1278,7 +1296,7 @@ namespace yask {
     } // calcHalos().
 
     // Divide all equations into eqBundles.
-    // Only process updates to grids in 'gridRegex'.
+    // Only process updates to vars in 'varRegex'.
     // 'targets': string provided by user to specify bundleing.
     void EqBundles::makeEqBundles(Eqs& allEqs,
                                   const CompilerSettings& settings,
@@ -1296,8 +1314,8 @@ namespace yask {
             }
         }
 
-        // Make a regex for the allowed grids.
-        regex gridx(settings._gridRegex);
+        // Make a regex for the allowed vars.
+        regex varx(settings._varRegex);
 
         // Handle each key-value pair in 'targets' string.
         // Key is eq-bundle name (with possible format strings); value is regex pattern.
@@ -1312,13 +1330,13 @@ namespace yask {
                 // Search allEqs for matches to current value.
                 for (auto eq : allEqs.getAll()) {
 
-                    // Get name of updated grid.
-                    auto gp = eq->getGrid();
+                    // Get name of updated var.
+                    auto gp = eq->getVar();
                     assert(gp);
                     string gname = gp->getName();
 
-                    // Match to gridx?
-                    if (!regex_search(gname, gridx))
+                    // Match to varx?
+                    if (!regex_search(gname, varx))
                         continue;
 
                     // Match to patx?
@@ -1337,13 +1355,13 @@ namespace yask {
         // Add all remaining equations.
         for (auto eq : allEqs.getAll()) {
 
-            // Get name of updated grid.
-            auto gp = eq->getGrid();
+            // Get name of updated var.
+            auto gp = eq->getVar();
             assert(gp);
             string gname = gp->getName();
 
-            // Match to gridx?
-            if (!regex_search(gname, gridx))
+            // Match to varx?
+            if (!regex_search(gname, varx))
                 continue;
 
             // Add equation.
@@ -1361,9 +1379,9 @@ namespace yask {
         for (auto& eg1 : getAll()) {
             os << " " << eg1->getDescr() << ":\n"
                 "  Contains " << eg1->getNumEqs() << " equation(s).\n"
-                "  Updates the following grid(s): ";
+                "  Updates the following var(s): ";
             int i = 0;
-            for (auto* g : eg1->getOutputGrids()) {
+            for (auto* g : eg1->getOutputVars()) {
                 if (i++)
                     os << ", ";
                 os << g->getName();
@@ -1423,6 +1441,29 @@ namespace yask {
                 printStats(os, odescr);
             else
                 os << " No changes " << odescr << '.' << endl;
+
+            delete optimizer;
+            optimizer = 0;
+        }
+
+        // Reordering. TODO: make this an optimizer.
+        if (settings._doReorder) {
+            
+            // Create vector info for this eqBundle.
+            // The visitor is accepted at all nodes in the cluster AST;
+            // for each var access node in the AST, the vectors
+            // needed are determined and saved in the visitor.
+            VecInfoVisitor vv(*_dims);
+            visitEqs(&vv);
+
+            // Reorder some equations based on vector info.
+            ExprReorderVisitor erv(vv);
+            visitEqs(&erv);
+
+            // Get new stats.
+            string odescr = "after applying reordering to " +
+                descr + " equation-bundle(s)";
+            printStats(os, odescr);
         }
 
         // Final stats per equation bundle.
@@ -1459,11 +1500,11 @@ namespace yask {
         for (auto& eq : bp->getEqs())
             _eqs.insert(eq);
 
-        // update list of input and output grids for this pack.
-        for (auto& g : bp->getOutputGrids())
-            _outGrids.insert(g);
-        for (auto& g : bp->getInputGrids())
-            _inGrids.insert(g);
+        // update list of input and output vars for this pack.
+        for (auto& g : bp->getOutputVars())
+            _outVars.insert(g);
+        for (auto& g : bp->getInputVars())
+            _inVars.insert(g);
     }
 
     // Add 'bp' from 'allBundles'. Create new pack if needed.  Returns
@@ -1529,10 +1570,10 @@ namespace yask {
         assert(target);
         target->addBundle(bp);
 
-        // Remember pack and updated grids.
+        // Remember pack and updated vars.
         _bundles_in_packs.insert(bp);
-        for (auto& g : bp->getOutputGrids())
-            _outGrids.insert(g);
+        for (auto& g : bp->getOutputVars())
+            _outVars.insert(g);
 
         return newPack;
     }
@@ -1564,9 +1605,9 @@ namespace yask {
                 os << b->getName();
             }
             os << ".\n";
-            os << "  Updates the following grid(s): ";
+            os << "  Updates the following var(s): ";
             i = 0;
-            for (auto* g : bp1->getOutputGrids()) {
+            for (auto* g : bp1->getOutputVars()) {
                 if (i++)
                     os << ", ";
                 os << g->getName();

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 ##############################################################################
-## YASK: Yet Another Stencil Kernel
+## YASK: Yet Another Stencil Kit
 ## Copyright (c) 2014-2019, Intel Corporation
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -49,13 +49,13 @@ fi
 # Default arch.
 cpu_flags=`grep -m1 '^flags' /proc/cpuinfo`
 if [[ $cpu_flags =~ avx512dq ]]; then
-    arch=skx
+    arch=avx512
 elif [[ $cpu_flags =~ avx512pf ]]; then
     arch=knl
 elif [[ $cpu_flags =~ avx2 ]]; then
-    arch=hsw
+    arch=avx2
 elif [[ $cpu_flags =~ avx ]]; then
-    arch=snb
+    arch=avx
 else
     arch=intel64
 fi
@@ -345,6 +345,7 @@ fi
 
 echo $invo
 echo "Log saved in '$logfile'."
+echo "Run 'utils/bin/yask_log_to_csv.pl $logfile' to output in CSV format."
 
 # A summary of the command to print.
 exe_str="'$mpi_cmd $exe_prefix $exe $opts'"

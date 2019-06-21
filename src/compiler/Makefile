@@ -1,5 +1,5 @@
 ##############################################################################
-## YASK: Yet Another Stencil Kernel
+## YASK: Yet Another Stencil Kit
 ## Copyright (c) 2014-2019, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -46,19 +46,21 @@ YC_PY_LIB	:=	$(PY_OUT_DIR)/_$(YC_MODULE)$(SO_SUFFIX)
 YC_PY_MOD	:=	$(PY_OUT_DIR)/$(YC_MODULE).py
 YC_TEST_EXEC	:=	$(BIN_OUT_DIR)/$(YC_BASE)_api_test.exe
 YC_TEST_EXEC_WITH_EXCEPTION	:=	$(BIN_OUT_DIR)/$(YC_BASE)_api_exception_test.exe
-YC_SRC_NAMES	:=	Expr ExprUtils Grid Eqs Print Vec Cpp CppIntrin YaskKernel Soln
+YC_SRC_NAMES	:=	Expr ExprUtils Var Settings Eqs Print Vec Cpp CppIntrin YaskKernel Solution
 YC_STENCIL_NAMES:=	$(notdir $(patsubst %.cpp,%,$(wildcard $(YC_STENCIL_DIR)/*.cpp)))
 YC_OBJS		:=	$(addprefix $(YC_OBJ_DIR)/,$(addsuffix .o,$(YC_SRC_NAMES) $(COMM_SRC_NAMES)))
 YC_STENCIL_OBJS	:=	$(addprefix $(YC_OBJ_DIR)/,$(addsuffix .o,$(YC_STENCIL_NAMES)))
-YC_INC_DIRS	:=	$(INC_DIR) $(YC_LIB_SRC_DIR) $(COMM_DIR)
+YC_INC_DIRS	:=	$(INC_DIR) $(YC_LIB_SRC_DIR) $(COMM_DIR) $(COEFF_DIR)
 YC_INC_GLOB	:=	$(wildcard $(addsuffix /*.hpp,$(YC_INC_DIRS)))
 YC_STENCIL_INC_GLOB :=	$(wildcard $(YC_STENCIL_DIR)/*.hpp $(YC_STENCIL_DIR)/*/*.hpp)
 
 # Compiler and default flags.
 YC_CXX    	?=	g++  # usually faster than icpc for building the compiler.
 YC_CXXOPT	:= 	-O2
-YC_CXXFLAGS 	:=	-g -std=c++11 -Wall $(YC_CXXOPT)
-YC_CXXFLAGS	+=	$(addprefix -I,$(YC_INC_DIRS) $(YC_STENCIL_DIR))
+YC_CXXFLAGS 	:=	-g -std=c++11 $(YC_CXXOPT) -Wall
+YC_CXXFLAGS	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
+YC_CXXFLAGS	+=	$(INC_CXXFLAGS)
+YC_INC_CXXFLAGS :=	$(addprefix -I,$(YC_INC_DIRS))
 
 # Add user-defined flags.
 YC_CXXFLAGS	+=	$(EXTRA_YC_CXXFLAGS)
@@ -72,19 +74,24 @@ YC_LFLAGS	:=	-lrt -Wl,-rpath=$(LIB_OUT_DIR) -L$(LIB_OUT_DIR) -l$(YC_BASE)
 # - Build at O0 to avoid C++ compiler wasting time optimizing them.
 # - Set macro to use internal DSL instead of conflicting API operators.
 
-$(YC_OBJ_DIR)/%.o: $(YC_STENCIL_DIR)/%.cpp $(YC_INC_GLOB) $(YC_STENCIL_INC_GLOB)
+$(YC_OBJ_DIR)/%.o: $(YC_STENCIL_DIR)/%.cpp $(INC_GLOB) $(YC_STENCIL_INC_GLOB)
 	$(MKDIR) $(YC_OBJ_DIR)
 	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -x c++ -DUSE_INTERNAL_DSL -O0 -c -o $@ $<
 	@ls -l $@
 
-$(YC_OBJ_DIR)/%.o: $(YC_LIB_SRC_DIR)/%.cpp $(YC_INC_GLOB)
-	$(MKDIR) $(YC_OBJ_DIR)
-	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
-	@ls -l $@
-
 $(YC_OBJ_DIR)/%.o: $(COMM_DIR)/%.cpp $(YC_INC_GLOB)
 	$(MKDIR) $(YC_OBJ_DIR)
-	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) $(YC_INC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
+	@ls -l $@
+
+$(YC_OBJ_DIR)/%.o: $(COEFF_DIR)/%.cpp $(YC_INC_GLOB)
+	$(MKDIR) $(YC_OBJ_DIR)
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) $(YC_INC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
+	@ls -l $@
+
+$(YC_OBJ_DIR)/%.o: $(YC_LIB_SRC_DIR)/%.cpp $(YC_INC_GLOB)
+	$(MKDIR) $(YC_OBJ_DIR)
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) $(YC_INC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
 ######## Primary targets.
@@ -101,9 +108,9 @@ $(YC_LIB): $(YC_OBJS)
 	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
 	@ls -l $@
 
-$(YC_EXEC): main.cpp $(YC_STENCIL_OBJS) $(YC_LIB)
+$(YC_EXEC): compiler_main.cpp $(YC_STENCIL_OBJS) $(YC_LIB)
 	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(YC_LD) $(YC_CXXFLAGS) $^ $(YC_LFLAGS) -o $@
+	$(CXX_PREFIX) $(YC_LD) $(YC_CXXFLAGS) $(YC_INC_CXXFLAGS) $^ $(YC_LFLAGS) -o $@
 	@ls -l $@
 	$(MAKE) echo-settings
 
@@ -120,7 +127,7 @@ $(YC_SWIG_OUT_DIR)/yask_compiler_api_wrap.cpp: $(YC_SWIG_DIR)/yask*.i $(INC_DIR)
 	$(SWIG) -version
 	$(MKDIR) $(YC_SWIG_OUT_DIR) $(PY_OUT_DIR)
 	$(SWIG) -v -DYC_MODULE=$(YC_MODULE) -cppext cpp \
-	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig \
+	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig -I$(COEFF_DIR) \
 	  -c++ -python -o $@ -outdir $(PY_OUT_DIR) -builtin $<
 
 # Turn off asserts to work around known SWIG issue:

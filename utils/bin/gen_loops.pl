@@ -2,7 +2,7 @@
 #-*-Perl-*- This line forces emacs to use Perl mode.
 
 ##############################################################################
-## YASK: Yet Another Stencil Kernel
+## YASK: Yet Another Stencil Kit
 ## Copyright (c) 2014-2019, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -738,7 +738,7 @@ sub processCode($) {
         }
         
         # use serpentine path in next loop if possible.
-        elsif (lc $tok eq 'broken_serpentine') {
+        elsif (lc $tok eq 'serpentine') {
             $features |= $bSerp;
         }
         
@@ -923,7 +923,7 @@ sub processCode($) {
 
     # header.
     print OUT "/*\n",
-        " * ".scalar(@dims)."-D grid-scanning code.\n",
+        " * ".scalar(@dims)."-D var-scanning code.\n",
         " * Generated automatically from the following pseudo-code:\n",
         " *\n",
         " * N = ",$#dims,";\n";
@@ -965,19 +965,21 @@ sub main() {
 
     my $script = basename($0);
     if (!$command_line || $OPT{help} || @ARGV < 1) {
-        print "Outputs C++ code to scan N-D grids.\n",
+        print "Outputs C++ code to scan N-D vars.\n",
             "Usage: $script [options] <code-string>\n",
-            "The <code-string> contains optionally-nested scans across the given",
+            "The <code-string> contains optionally-nested scans across the given\n",
             "  indices between 0 and N-1 indicated by 'loop(<indices>)'\n",
             "Indices may be specified as a comma-separated list or <first..last> range,\n",
             "  using the variable 'N' as needed.\n",
             "Inner loops should contain call statements that generate calls to calculation functions.\n",
             "A loop statement with more than one argument will generate a single collapsed loop.\n",
             "Optional loop modifiers:\n",
-            "  omp:             generate an OpenMP for loop (distribute work across SW threads).\n",
+            "  omp:             generate an OpenMP for loop (distribute work across SW threads).*\n",
             "  grouped:         generate grouped scan within a collapsed loop.\n",
-            ## broken: "  serpentine:      generate reverse scan when enclosing loop dimension is odd.\n",
-            "  square_wave:     generate 2D square-wave scan for two innermost dimensions of a collapsed loop.\n",
+            "  serpentine:      generate reverse scan when enclosing loop dimension is odd.*\n",
+            "  square_wave:     generate 2D square-wave scan for two innermost dimensions of a collapsed loop.*\n",
+            "      * Do not use these modifiers for YASK rank or block loops because they must\n",
+            "        execute with strictly-increasing indices when using temporal tiling.\n",
             "A 'ScanIndices' var must be defined in C++ code prior to including the generated code.\n",
             "  This struct contains the following 'Indices' elements:\n",
             "  'begin':       [in] first index to scan in each dim.\n",
@@ -1001,13 +1003,13 @@ sub main() {
             "  $script -ndims 3 'omp loop(0,1) { loop(2) { call(f); } }'\n",
             "  $script -ndims 3 'omp loop(0) { loop(1,2) { call(f); } }'\n",
             "  $script -ndims 3 'grouped omp loop(0..N-1) { call(f); }'\n",
-            "  $script -ndims 3 'omp loop(0) { square loop(1..N-1) { call(f); } }'\n",
+            "  $script -ndims 3 'omp loop(0) { square_wave loop(1..N-1) { call(f); } }'\n",
             "  $script -ndims 4 'omp loop(0..N+1) { loop(N+2,N-1) { call(f); } }'\n";
         exit 1;
     }
 
     @dims = 0 .. ($OPT{ndims} - 1);
-    print "info: generating scanning code for ".scalar(@dims)."-D grids...\n";
+    print "info: generating scanning code for ".scalar(@dims)."-D vars...\n";
     $inputVar = $OPT{inVar};
 
     my $codeString = join(' ', @ARGV); # just concat all non-options params together.

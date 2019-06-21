@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -25,11 +25,10 @@ IN THE SOFTWARE.
 
 ///////// Classes for equations, equation bundles, and bundle packs. ////////////
 
-#ifndef EQS_HPP
-#define EQS_HPP
+#pragma once
 
 #include "Expr.hpp"
-#include "Grid.hpp"
+#include "Settings.hpp"
 
 using namespace std;
 
@@ -65,6 +64,7 @@ namespace yask {
                 return;
 
             // Add 'a' to copy of path.
+            // Important to make a separate copy for recursive calls.
             TpList seen1;
             if (seen)
                 seen1 = *seen; // copy nodes already seen.
@@ -352,7 +352,7 @@ namespace yask {
     };
 
     // A list of unique equation ptrs.
-    typedef vector_set<EqualsExprPtr> EqList;
+    typedef vector_set<equalsExprPtr> EqList;
 
     // A set of equations and related dependency data.
     class Eqs : public DepGroup<EqualsExpr> {
@@ -371,16 +371,16 @@ namespace yask {
                                 Dimensions& dims,
                                 std::ostream& os);
 
-        // Determine which grid points can be vectorized.
+        // Determine which var points can be vectorized.
         virtual void analyzeVec(const Dimensions& dims);
 
-        // Determine how grid points are accessed in a loop.
+        // Determine how var points are accessed in a loop.
         virtual void analyzeLoop(const Dimensions& dims);
 
-        // Update grid access stats.
-        virtual void updateGridStats();
+        // Update var access stats.
+        virtual void updateVarStats();
 
-        // Find scratch-grid eqs needed for each non-scratch eq.
+        // Find scratch-var eqs needed for each non-scratch eq.
         virtual void analyzeScratch();
     };
 
@@ -388,9 +388,9 @@ namespace yask {
     class EqLot {
     protected:
         EqList _eqs;            // all equations.
-        Grids _outGrids;        // grids updated by _eqs.
-        Grids _inGrids;         // grids read from by _eqs.
-        bool _isScratch = false; // true if _eqs update temp grid(s).
+        Vars _outVars;        // vars updated by _eqs.
+        Vars _inVars;         // vars read from by _eqs.
+        bool _isScratch = false; // true if _eqs update temp var(s).
 
     public:
 
@@ -426,19 +426,19 @@ namespace yask {
         // Updating temp vars?
         virtual bool isScratch() const { return _isScratch; }
 
-        // Get grids output and input.
-        virtual const Grids& getOutputGrids() const {
-            return _outGrids;
+        // Get vars output and input.
+        virtual const Vars& getOutputVars() const {
+            return _outVars;
         }
-        virtual const Grids& getInputGrids() const {
-            return _inGrids;
+        virtual const Vars& getInputVars() const {
+            return _inVars;
         }
 
         // Print stats for the equation(s).
         virtual void printStats(ostream& os, const string& msg);
     };
 
-    // A named equation bundle, which contains one or more grid-update
+    // A named equation bundle, which contains one or more var-update
     // equations.  All equations in a bundle must have the same conditions.
     // Equations in a bundle must not have inter-dependencies because they
     // will be combined into a single expression.
@@ -451,11 +451,11 @@ namespace yask {
         // TODO: move these into protected section and make accessors.
 
         // Common conditions.
-        BoolExprPtr cond;
-        BoolExprPtr step_cond;
+        boolExprPtr cond;
+        boolExprPtr step_cond;
 
         // Common step expr.
-        NumExprPtr step_expr;
+        numExprPtr step_expr;
 
         // Create a copy containing clones of the equations.
         virtual shared_ptr<EqBundle> clone() const {
@@ -482,7 +482,7 @@ namespace yask {
                                 string quote = "'") const;
 
         // Add an equation to this bundle.
-        virtual void addEq(EqualsExprPtr ee);
+        virtual void addEq(equalsExprPtr ee);
 
         // Get the list of all equations.
         virtual const EqList& getItems() const {
@@ -522,21 +522,21 @@ namespace yask {
         string _basename_default;
         Dimensions* _dims = 0;
 
-        // Track grids that are updated.
-        Grids _outGrids;
+        // Track vars that are updated.
+        Vars _outVars;
 
         // Map to track indices per eq-bundle name.
         map<string, int> _indices;
 
         // Track equations that have been added already.
-        set<EqualsExprPtr> _eqs_in_bundles;
+        set<equalsExprPtr> _eqs_in_bundles;
 
         // Add 'eq' from 'eqs' to eq-bundle with 'baseName'
         // unless already added or illegal.  The corresponding index in
         // '_indices' will be incremented if a new bundle is created.
         // Returns whether a new bundle was created.
         virtual bool addEqToBundle(Eqs& eqs,
-                                   EqualsExprPtr eq,
+                                   equalsExprPtr eq,
                                    const string& baseName,
                                    const CompilerSettings& settings);
 
@@ -558,15 +558,15 @@ namespace yask {
         // on the target string.
         // Target string is a comma-separated list of key-value pairs, e.g.,
         // "eqBundle1=foo,eqBundle2=bar".
-        // In this example, all eqs updating grid names containing 'foo' go in eqBundle1,
-        // all eqs updating grid names containing 'bar' go in eqBundle2, and
+        // In this example, all eqs updating var names containing 'foo' go in eqBundle1,
+        // all eqs updating var names containing 'bar' go in eqBundle2, and
         // each remaining eq goes into a separate eqBundle.
         void makeEqBundles(Eqs& eqs,
                            const CompilerSettings& settings,
                            std::ostream& os);
 
-        virtual const Grids& getOutputGrids() const {
-            return _outGrids;
+        virtual const Vars& getOutputVars() const {
+            return _outVars;
         }
 
         // Visit all the equations in all eqBundles.
@@ -609,7 +609,7 @@ namespace yask {
     public:
 
         // Common condition.
-        BoolExprPtr step_cond;
+        boolExprPtr step_cond;
 
         // Ctor.
         EqBundlePack(bool is_scratch) :
@@ -665,8 +665,8 @@ namespace yask {
         // Bundle index.
         int _idx = 0;
 
-        // Track grids that are updated.
-        Grids _outGrids;
+        // Track vars that are updated.
+        Vars _outVars;
 
         // Track bundles that have been added already.
         set<EqBundlePtr> _bundles_in_packs;
@@ -682,9 +682,9 @@ namespace yask {
         void makePacks(EqBundles& bundles,
                        std::ostream& os);
 
-        // Get all output grids.
-        virtual const Grids& getOutputGrids() const {
-            return _outGrids;
+        // Get all output vars.
+        virtual const Vars& getOutputVars() const {
+            return _outVars;
         }
 
         // Visit all the equations in all packs.
@@ -693,11 +693,10 @@ namespace yask {
                 bp->visitEqs(ev);
         }
 
-        // Find halos needed for each grid.
+        // Find halos needed for each var.
         virtual void calcHalos(EqBundles& allBundles);
 
     }; // EqBundlePacks.
 
 } // namespace yask.
 
-#endif

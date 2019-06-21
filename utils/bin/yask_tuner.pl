@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 
 ##############################################################################
-## YASK: Yet Another Stencil Kernel
+## YASK: Yet Another Stencil Kit
 ## Copyright (c) 2014-2019, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -371,9 +371,10 @@ my @loopOrders =
   ('123', '132', '213', '231', '312', '321');
 
 # Possible space-filling curve modifiers.
+my @pathNamesIncreasing =
+  ('', 'grouped');
 my @pathNames =
-  ('', 'square_wave', 'grouped');
-##  ('', 'serpentine', 'square_wave serpentine', 'grouped');
+  (@pathNamesIncreasing, 'serpentine', 'square_wave serpentine', 'square_wave');
 
 # List of folds.
 if ( !@folds ) {
@@ -471,14 +472,17 @@ if ($doBuild) {
 
      # Loops, from the list above.
      # Each loop consists of index order and path mods.
+     # Block and rank paths require increasing indices.
      [ 0, $#loopOrders, 1, 'subBlockOrder' ],
      [ 0, $#pathNames, 1, 'subBlockPath' ],
      [ 0, $#loopOrders, 1, 'miniBlockOrder' ],
      [ 0, $#pathNames, 1, 'miniBlockPath' ],
      [ 0, $#loopOrders, 1, 'blockOrder' ],
-     [ 0, $#pathNames, 1, 'blockPath' ],
+     [ 0, $#pathNamesIncreasing, 1, 'blockPath' ],
      [ 0, $#loopOrders, 1, 'regionOrder' ],
      [ 0, $#pathNames, 1, 'regionPath' ],
+     [ 0, $#loopOrders, 1, 'rankOrder' ],
+     [ 0, $#pathNamesIncreasing, 1, 'rankPath' ],
 
      # how to shape vectors, from the list above.
      [ 0, $#folds, 1, 'fold' ],
@@ -495,7 +499,7 @@ if ($doBuild) {
 
      # other build options.
      [ 0, $#schedules, 1, 'ompRegionSchedule' ], # OMP schedule for region loop.
-     [ 0, $#schedules, 1, 'ompBlockSchedule' ], # OMP schedule for block loop.
+     [ 0, $#schedules, 1, 'ompBlockSchedule' ], # OMP schedule for mini-block loop.
 
     );
 }
@@ -660,7 +664,7 @@ sub readHash($$$) {
   $val = $fixedVals{$key};
   return $val if defined $val;
 
-  # return default value for build var if disabled.
+  # return dummy value for build var if disabled.
   return 1 if (!$doBuild && $isBuildVar);
 
   die "internal error: value for gene '$key' not provided.\n";
@@ -731,11 +735,16 @@ sub getMakeCmd($$) {
   my $makeCmd = "echo 'build disabled'";
 
   if ($doBuild) {
-    $tag .= "_".md5_hex($macros, $margs, $makeArgs, $realBytes, $radius);
+    my $tagPrefix = $tag."_p".$$."_";
+    $tag = $tagPrefix.md5_hex($macros, $margs, $makeArgs, $realBytes, $radius);
+
+    # Remove binaries that haven't been used in a while.
+    system "find bin lib -name '*$tagPrefix*' -amin +15 | xargs --no-run-if-empty rm";
 
     # Already exists?
-    if (-x "bin/yask_kernel.$tag.$arch.exe") {
-      $makeCmd = "echo 'binary exists'";
+    if (-x "bin/yask_kernel.$tag.$arch.exe" &&
+        -x "lib/libyask_kernel.$tag.$arch.so") {
+      $makeCmd = "echo 'binary & library exist'";
     }
     else {
       $makeCmd =
@@ -768,28 +777,28 @@ sub getRunCmd($) {
 }
 
 # return estimate of mem footprint in bytes.
-my $numSpatialGrids = 0;
+my $numSpatialVars = 0;
 sub calcSize($$$) {
   my $sizes = shift;            # ref to size array.
   my $pads = shift;             # ref to pad array.
   my $mults = shift;            # ref to array of multiples.
 
-  # need to determine how many XYZ grids will be allocated for this stencil.
+  # need to determine how many XYZ vars will be allocated for this stencil.
   # TODO: get info from compiler report.
-  if (!$numSpatialGrids) {
+  if (!$numSpatialVars) {
 
     my ( $makeCmd, $tag ) = getMakeCmd('', 'EXTRA_CXXFLAGS=-O1');
     my $runCmd = getRunCmd($tag)." -t 0 -l 32 $runArgs";
     my $cmd = "$makeCmd 2>&1 && $runCmd";
 
     my $timeDim = 0;
-    my $numGrids = 0;
-    my $numUpdatedGrids = 0;
+    my $numVars = 0;
+    my $numUpdatedVars = 0;
     my @cmdOut;
     if ($testing) {
-      $numSpatialGrids = 1;
+      $numSpatialVars = 1;
     } else {
-      print "Running '$cmd' to determine number of grids...\n";
+      print "Running '$cmd' to determine number of vars...\n";
       open CMD, "$cmd 2>&1 |" or die "error: cannot run '$cmd'\n";
       while (<CMD>) {
         chomp;
@@ -797,31 +806,28 @@ sub calcSize($$$) {
         push @cmdOut, $line;
 
         # E.g.,
-        # 5-D grid (t=2 * tidx=2 * x=12 * y=12 * z=42) 't_grids' with data at 0x7fa476600000 containing 1.47656MiB (24.192K SIMD FP element(s) of 64 byte(s) each)
-        # 4-D grid (t=2 * x=5 * y=19 * z=19) 'pressure' with data at 0x65cbc0 containing 112.812KiB (3.61K SIMD FP element(s) of 32 byte(s) each)
-        # 3-D grid (x=3 * y=3 * z=3) 'vel' with data at 0x6790c0 containing 864B (27 SIMD FP element(s) of 32 byte(s) each)
-        # 1-D grid (r=9) 'coeff' with data at 0x679600 containing 36B (9 FP element(s) of 4 byte(s) each)
-        my $ngrids = 1;
-        if (/^\d-?D grid.*x=.*y=.*z=/) {
+        # 'A' 4-D var (t=2 * x=8 * y=48 * z=49) with storage at 0x2aba63016000 ...
+        my $nvars = 1;
+        if (/\d-?D .*x=.*y=.*z=/) {
           for my $w (split ' ',$line) {
             if ($w =~ /(\w+)=(\d+)/) {
               my ($dim, $sz) = ($1, $2);
-              if ($dim !~ /^[xyz]/) {
-                $ngrids *= $sz;
+              if ($dim eq 't') {
+                $nvars *= $sz;
               }
             }
           }
-          $numSpatialGrids += $ngrids;
-          print "$line => $ngrids XYZ grids\n";
+          $numSpatialVars += $nvars;
+          print "$line => $nvars XYZ vars\n";
         }
       }
       close CMD;
     }
-    if (!$numSpatialGrids) {
+    if (!$numSpatialVars) {
       map { print ">> $_\n"; } @cmdOut;
-      die "error: no relevant grid allocations found in '$cmd'; $0 only works with 'x, y, z' 3-D stencils.\n";
+      die "error: no relevant var allocations found in '$cmd'; $0 only works with 'x, y, z' 3-D stencils.\n";
     }
-    print "Determined that $numSpatialGrids XYZ grids are allocated.\n";
+    print "Determined that $numSpatialVars XYZ vars are allocated.\n";
   }
 
   # estimate each dim of allocated memory as size + 2 * (halo + pad).
@@ -831,8 +837,8 @@ sub calcSize($$$) {
   my $n = mult(@sizes);      # mult sizes plus padding & halos.
   my $nb = $n * $realBytes;
 
-  # mult by number of grids.
-  $nb *= $numSpatialGrids;
+  # mult by number of vars.
+  $nb *= $numSpatialVars;
 
   return $nb;
 }
@@ -1015,17 +1021,14 @@ sub evalIndiv($$$$$$) {
 }
 
 # return loop-ctrl vars.
-sub makeLoopVars($$$$$) {
+sub makeLoopVars($$$$) {
   my $h = shift;
   my $makePrefix = shift;       # e.g., 'BLOCK'.
   my $tunerPrefix = shift;      # e.g., 'block'.
-  my $reqdMods = shift;         # e.g., ''.
   my $lastDim = shift;          # e.g., 2 or 3.
 
   my $order = readHash($h, $tunerPrefix."Order", 1);
   my $orderStr = $loopOrders[$order];           # e.g., '231'.
-  my $path = readHash($h, $tunerPrefix."Path", 1);
-  my $pathStr = @pathNames[$path];                # e.g., 'grouped'.
 
   # dimension vars.
   my @dims = split '',$orderStr;      # e.g., ('2', '3', '1).
@@ -1033,9 +1036,17 @@ sub makeLoopVars($$$$$) {
 
   # vars to create.
   my $order = join(',', @dims);  # e.g., '2, 1'.
-  my $outerMods = "$pathStr $reqdMods";
+  my $outerMods = '';
   my $innerMods = '';
 
+  # path gene?
+  my $pathKey = $tunerPrefix."Path";
+  if (exists $h->{$pathKey}) {
+    my $path = readHash($h, $pathKey, 1);
+    my $pathStr = @pathNames[$path];                # e.g., 'grouped'.
+    $outerMods = $pathStr;
+  }
+  
   my $loopVars = " ".$makePrefix."_LOOP_ORDER='$order'";
   $loopVars .= " ".$makePrefix."_LOOP_OUTER_MODS='$outerMods'";
   $loopVars .= " ".$makePrefix."_LOOP_INNER_MODS='$innerMods'";
@@ -1306,10 +1317,11 @@ sub fitness {
   $mvars .= " fold=x=$fs[0],y=$fs[1],z=$fs[2]";
 
   # gen-loops vars.
-  $mvars .= makeLoopVars($h, 'REGION', 'region', '', 3);
-  $mvars .= makeLoopVars($h, 'BLOCK', 'block', '', 3);
-  $mvars .= makeLoopVars($h, 'MINI_BLOCK', 'miniBlock', '', 3);
-  $mvars .= makeLoopVars($h, 'SUB_BLOCK', 'subBlock', '', 2);
+  $mvars .= makeLoopVars($h, 'RANK', 'rank', 3);
+  $mvars .= makeLoopVars($h, 'REGION', 'region', 3);
+  $mvars .= makeLoopVars($h, 'BLOCK', 'block', 3);
+  $mvars .= makeLoopVars($h, 'MINI_BLOCK', 'miniBlock', 3);
+  $mvars .= makeLoopVars($h, 'SUB_BLOCK', 'subBlock', 2);
 
   # other vars.
   $mvars .= " omp_region_schedule=$regionScheduleStr omp_block_schedule=$blockScheduleStr";
@@ -1344,9 +1356,9 @@ sub fitness {
 
   # various commands.
   my $testCmd = "$runCmd -v $runArgs"; # validation on a small problem size.
-  my $simCmd = "$runCmd $args -t 1 -dt 1 $runArgs";  # simulation w/1 trial & 1 step.
-  my $shortRunCmd = "$runCmd $args -t $shortTrials -trial_time $shortTime $runArgs"; # fast run for 'upper-bound' time.
-  my $longRunCmd = "$runCmd $args -t $longTrials -trial_time $longTime $runArgs";  # normal run w/more trials.
+  my $simCmd = "$runCmd $args -num_trials 1 -trial_steps 1 $runArgs";  # simulation w/1 trial & 1 step.
+  my $shortRunCmd = "$runCmd $args -num_trials $shortTrials -trial_time $shortTime $runArgs"; # fast run for 'upper-bound' time.
+  my $longRunCmd = "$runCmd $args -num_trials $longTrials -trial_time $longTime $runArgs";  # normal run w/more trials.
 
   # add kill command to prevent runaway code.
   if (-x $killCmd) {

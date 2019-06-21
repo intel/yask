@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 
 ##############################################################################
-## YASK: Yet Another Stencil Kernel
+## YASK: Yet Another Stencil Kit
 ## Copyright (c) 2014-2019, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -23,8 +23,8 @@
 ## IN THE SOFTWARE.
 ##############################################################################
 
-# Purpose: Process the output of a log from a binary and compare every grid write.
-# Build with the following options: real_bytes=8 check=1 trace=1 trace_mem=1
+# Purpose: Process the output of a log from a binary and compare every write.
+# Build with the following options: real_bytes=8 trace_mem=1
 # Run kernel with '-v -force_scalar -trace' and pipe output to this script.
 
 use strict;
@@ -65,18 +65,18 @@ while (<>) {
 
   # writeElem: pressure[t=0, x=0, y=0, z=0] = 5.7 at line 287
   elsif (/^(YASK: )?writeElem:\s*(\w+)\[(.*)\]\s*=\s*(\S+)/) {
-    my ($grid, $indices, $val) = ($2, $3, $4);
+    my ($var, $indices, $val) = ($2, $3, $4);
     if (defined $key) {
       $indices =~ s/\b\d\b/0$&/g; # make indices 2 digits.
 
       # track last value.
-      $vals{$key}{$grid}{$indices} = $val;
+      $vals{$key}{$var}{$indices} = $val;
 
       # track all pts written.
-      $pts{$grid}{$indices} = 1;
+      $pts{$var}{$indices} = 1;
 
       # track writes in order.
-      push @{$writes{$key}}, [ $grid, $indices, $val ];
+      push @{$writes{$key}}, [ $var, $indices, $val ];
     }
   }
 
@@ -87,18 +87,18 @@ while (<>) {
 my $nissues = 0;
 
 sub comp($$$) {
-  my $grid = shift;
+  my $var = shift;
   my $indices = shift;
   my $pval = shift;
   
-  print "$grid\[$indices\] =";
+  print "$var\[$indices\] =";
   if (defined $pval) {
     print "\t $pval";
   } else {
     print " NOT written in perf";
     $nissues++;
   }
-  my $val = $vals{val}{$grid}{$indices};
+  my $val = $vals{val}{$var}{$indices};
   if (defined $val) {
     print "\t $val";
     if (defined $pval && $pval) {
@@ -121,20 +121,20 @@ print "\n===== Comparisons in perf-write order =====\n".
 print "Values are from perf, then validation trial\n";
 my %nwrites;
 for my $pw (@{$writes{perf}}) {
-  my ($grid, $indices, $pval) = ($pw->[0], $pw->[1], $pw->[2]);
-  comp($grid, $indices, $pval);
-  my $nw = ++$nwrites{$grid}{$indices};
+  my ($var, $indices, $pval) = ($pw->[0], $pw->[1], $pw->[2]);
+  comp($var, $indices, $pval);
+  my $nw = ++$nwrites{$var}{$indices};
   if ($nw > 1) {
     print "^^^^^^^^ $nw writes!!!\n";
     $nissues++;
   }
 }
 
-print "\n===== Comparisons in grid & index order =====\n";
+print "\n===== Comparisons in var & index order =====\n";
 print "Values are from perf, then validation trial\n";
-for my $grid (sort keys %pts) {
-  for my $indices (sort keys %{$pts{$grid}}) {
-    comp($grid, $indices, $vals{perf}{$grid}{$indices});
+for my $var (sort keys %pts) {
+  for my $indices (sort keys %{$pts{$var}}) {
+    comp($var, $indices, $vals{perf}{$var}{$indices});
   }
 }
 

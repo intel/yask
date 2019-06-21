@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -43,7 +43,7 @@ namespace yask {
     // for numbers above 9 (at least up to 99).
 
     // Format: "major.minor.patch".
-    const string version = "2.20.00";
+    const string version = "3.00.00";
 
     string yask_get_version_string() {
         return version;
@@ -148,8 +148,8 @@ namespace yask {
     int yask_num_threads[yask_max_levels] = { 0 };
 
     // See yask_common_api.hpp for documentation.
-    const char* yask_exception::what() noexcept {
-        return "yask::yask_exception\n";
+    const char* yask_exception::what() const noexcept {
+        return _msg.c_str();
     }
 
     void yask_exception::add_message(const string& arg_msg) {
@@ -159,4 +159,5 @@ namespace yask {
     const char* yask_exception::get_message() const {
         return _msg.c_str();
     }
+
 }

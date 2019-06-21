@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -578,6 +578,12 @@ namespace yask {
                                                 std::string prefix="",
                                                std::string suffix="") const;
 
+        // Return a "compact" set of K factors of N,
+        // a set of factors with largest factor as small as possible,
+        // where K is the size of 'this'.
+        // Any non-zero numbers in 'this' will be kept if possible.
+        Tuple get_compact_factors(idx_t N) const;
+
         // Call the 'visitor' lambda function at every point in the space defined by 'this'.
         // 'idx' parameter contains sequentially-numbered index.
         // Visitation order is with first dimension in unit stride, i.e., a conceptual
@@ -726,7 +732,13 @@ namespace yask {
 #endif
         }
             
-    };
+    }; // Tuple.
+
+    // Explicit types.
+    typedef Scalar<int> IntScalar;
+    typedef Scalar<idx_t> IdxScalar;
+    typedef Tuple<int> IntTuple;
+    typedef Tuple<idx_t> IdxTuple;
 
 } // namespace yask.
 

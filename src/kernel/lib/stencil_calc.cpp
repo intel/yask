@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -33,7 +33,7 @@ namespace yask {
 
     // Calculate results within a mini-block defined by 'mini_block_idxs'.
     // This is called by StencilContext::calc_mini_block() for each bundle.
-    // It is here that any required scratch-grid stencils are evaluated
+    // It is here that any required scratch-var stencils are evaluated
     // first and then the non-scratch stencils in the stencil bundle.
     // It is also here that the boundaries of the bounding-box(es) of the bundle
     // are respected. There must not be any temporal blocking at this point.
@@ -42,9 +42,9 @@ namespace yask {
                                             const ScanIndices& mini_block_idxs) {
         STATE_VARS(this);
         TRACE_MSG("calc_mini_block('" << get_name() << "'): [" <<
-                   mini_block_idxs.begin.makeValStr(nsdims) << " ... " <<
-                   mini_block_idxs.end.makeValStr(nsdims) << ") by " <<
-                   mini_block_idxs.stride.makeValStr(nsdims) <<
+                   mini_block_idxs.begin.makeValStr() << " ... " <<
+                   mini_block_idxs.end.makeValStr() << ") by " <<
+                   mini_block_idxs.stride.makeValStr() <<
                    " by region thread " << region_thread_idx);
         assert(!is_scratch());
 
@@ -113,11 +113,11 @@ namespace yask {
             
             TRACE_MSG("calc_mini_block('" << get_name() <<
                        "'): after trimming for BB " << bbn << ": [" <<
-                       mb_idxs.begin.makeValStr(nsdims) <<
-                       " ... " << mb_idxs.end.makeValStr(nsdims) << ")");
+                       mb_idxs.begin.makeValStr() <<
+                       " ... " << mb_idxs.end.makeValStr() << ")");
 
             // Get the bundles that need to be processed in
-            // this block. This will be any prerequisite scratch-grid
+            // this block. This will be any prerequisite scratch-var
             // bundles plus this non-scratch bundle.
             auto sg_list = get_reqd_bundles();
 
@@ -139,7 +139,7 @@ namespace yask {
                     }
                     
                     // Indices needed for the generated loops.  Will normally be a
-                    // copy of 'mb_idxs' except when updating scratch-grids.
+                    // copy of 'mb_idxs' except when updating scratch-vars.
                     ScanIndices adj_mb_idxs = sg->adjust_span(region_thread_idx, mb_idxs);
 
                     // Tweak settings for adjusted indices.
@@ -165,9 +165,9 @@ namespace yask {
 
                     TRACE_MSG("calc_mini_block('" << get_name() << "'): " <<
                                " for reqd bundle '" << sg->get_name() << "': [" <<
-                               adj_mb_idxs.begin.makeValStr(nsdims) << " ... " <<
-                               adj_mb_idxs.end.makeValStr(nsdims) << ") by " <<
-                               adj_mb_idxs.stride.makeValStr(nsdims) <<
+                               adj_mb_idxs.begin.makeValStr() << " ... " <<
+                               adj_mb_idxs.end.makeValStr() << ") by " <<
+                               adj_mb_idxs.stride.makeValStr() <<
                                " by region thread " << region_thread_idx <<
                                " and block thread " << block_thread_idx);
 
@@ -214,15 +214,15 @@ namespace yask {
                                                   const ScanIndices& mini_block_idxs) {
         STATE_VARS(this);
         TRACE_MSG("calc_sub_block_scalar for bundle '" << get_name() << "': [" <<
-                   mini_block_idxs.start.makeValStr(nsdims) <<
-                   " ... " << mini_block_idxs.stop.makeValStr(nsdims) <<
+                   mini_block_idxs.start.makeValStr() <<
+                   " ... " << mini_block_idxs.stop.makeValStr() <<
                    ") by region thread " << region_thread_idx <<
                    " and block thread " << block_thread_idx);
 
         // Init sub-block begin & end from block start & stop indices.
         // Use the 'misc' loops. Indices for these loops will be scalar and
         // global rather than normalized as in the cluster and vector loops.
-        ScanIndices misc_idxs(*dims, true, 0);
+        ScanIndices misc_idxs(*dims, true);
         misc_idxs.initFromOuter(mini_block_idxs);
         
         // Stride sizes and alignment are one element.
@@ -252,8 +252,8 @@ namespace yask {
                                                const ScanIndices& mini_block_idxs) {
         STATE_VARS(this);
         TRACE_MSG("calc_sub_block_vec for bundle '" << get_name() << "': [" <<
-                   mini_block_idxs.start.makeValStr(nsdims) <<
-                   " ... " << mini_block_idxs.stop.makeValStr(nsdims) <<
+                   mini_block_idxs.start.makeValStr() <<
+                   " ... " << mini_block_idxs.stop.makeValStr() <<
                    ") by region thread " << region_thread_idx <<
                    " and block thread " << block_thread_idx);
 
@@ -274,7 +274,7 @@ namespace yask {
 
         // Init sub-block begin & end from block start & stop indices.
         // These indices are in element units and global (NOT rank-relative).
-        ScanIndices sub_block_idxs(*dims, true, 0);
+        ScanIndices sub_block_idxs(*dims, true);
         sub_block_idxs.initFromOuter(mini_block_idxs);
 
         // Sub block indices in element units and rank-relative.
@@ -467,8 +467,8 @@ namespace yask {
         // Full rectilinear polytope of aligned clusters: use optimized code.
         if (do_clusters) {
             TRACE_MSG("calc_sub_block_vec:  using cluster code for [" <<
-                       sub_block_fcidxs.begin.makeValStr(nsdims) <<
-                       " ... " << sub_block_fcidxs.end.makeValStr(nsdims) <<
+                       sub_block_fcidxs.begin.makeValStr() <<
+                       " ... " << sub_block_fcidxs.end.makeValStr() <<
                        ") by region thread " << region_thread_idx <<
                        " and block thread " << block_thread_idx);
 
@@ -494,11 +494,11 @@ namespace yask {
         // the inner one.
         if (do_vectors) {
             TRACE_MSG("calc_sub_block_vec:  using vector code for [" <<
-                       sub_block_vidxs.begin.makeValStr(nsdims) <<
-                       " ... " << sub_block_vidxs.end.makeValStr(nsdims) <<
+                       sub_block_vidxs.begin.makeValStr() <<
+                       " ... " << sub_block_vidxs.end.makeValStr() <<
                        ") *not* within full vector-clusters at [" <<
-                       sub_block_fcidxs.begin.makeValStr(nsdims) <<
-                       " ... " << sub_block_fcidxs.end.makeValStr(nsdims) <<
+                       sub_block_fcidxs.begin.makeValStr() <<
+                       " ... " << sub_block_fcidxs.end.makeValStr() <<
                        ") by region thread " << region_thread_idx <<
                        " and block thread " << block_thread_idx);
 
@@ -578,11 +578,11 @@ namespace yask {
             misc_idxs.align.setFromConst(1);
 
             TRACE_MSG("calc_sub_block_vec:  using scalar code for [" <<
-                       misc_idxs.begin.makeValStr(nsdims) << " ... " <<
-                       misc_idxs.end.makeValStr(nsdims) <<
+                       misc_idxs.begin.makeValStr() << " ... " <<
+                       misc_idxs.end.makeValStr() <<
                        ") *not* within vectors at [" <<
-                       sub_block_vidxs.begin.makeValStr(nsdims) << " ... " <<
-                       sub_block_vidxs.end.makeValStr(nsdims) << 
+                       sub_block_vidxs.begin.makeValStr() << " ... " <<
+                       sub_block_vidxs.end.makeValStr() << 
                        ") by region thread " << region_thread_idx <<
                        " and block thread " << block_thread_idx);
 
@@ -622,8 +622,8 @@ namespace yask {
                                                   const ScanIndices& loop_idxs) {
         STATE_VARS(this);
         TRACE_MSG("calc_loop_of_clusters: local vector-indices [" <<
-                   loop_idxs.start.makeValStr(nsdims) <<
-                   " ... " << loop_idxs.stop.makeValStr(nsdims) <<
+                   loop_idxs.start.makeValStr() <<
+                   " ... " << loop_idxs.stop.makeValStr() <<
                    ") by region thread " << region_thread_idx <<
                    " and block thread " << block_thread_idx);
 
@@ -656,8 +656,8 @@ namespace yask {
                                                  idx_t write_mask) {
         STATE_VARS(this);
         TRACE_MSG("calc_loop_of_vectors: local vector-indices [" <<
-                   loop_idxs.start.makeValStr(nsdims) <<
-                   " ... " << loop_idxs.stop.makeValStr(nsdims) <<
+                   loop_idxs.start.makeValStr() <<
+                  " ... " << loop_idxs.stop.makeValStr() <<
                    ") w/write-mask = 0x" << hex << write_mask << dec <<
                    " by region thread " << region_thread_idx <<
                    " and block thread " << block_thread_idx);
@@ -680,14 +680,14 @@ namespace yask {
         calc_loop_of_vectors(region_thread_idx, block_thread_idx, start_idxs, stop_inner, write_mask);
     }
 
-    // If this bundle is updating scratch grid(s),
+    // If this bundle is updating scratch var(s),
     // expand begin & end of 'idxs' by sizes of halos.
     // Stride indices may also change.
-    // NB: it is not necessary that the domain of each grid
+    // NB: it is not necessary that the domain of each var
     // is the same as the span of 'idxs'. However, it should be
-    // at least that large to ensure that grid is able to hold
+    // at least that large to ensure that var is able to hold
     // calculated results. This is checked when 'CHECK' is defined.
-    // In other words, grid can be larger than span of 'idxs', but
+    // In other words, var can be larger than span of 'idxs', but
     // its halo sizes are still used to specify how much to
     // add to 'idxs'.
     // Returns adjusted indices.
@@ -696,7 +696,7 @@ namespace yask {
         STATE_VARS(this);
         ScanIndices adj_idxs(idxs);
 
-        // Loop thru vecs of scratch grids for this bundle.
+        // Loop thru vecs of scratch vars for this bundle.
         for (auto* sv : outputScratchVecs) {
             assert(sv);
 
@@ -711,7 +711,7 @@ namespace yask {
                 auto& dim = dims->_stencil_dims.getDim(i);
                 auto& dname = dim.getName();
 
-                // Is this dim used in this grid?
+                // Is this dim used in this var?
                 int posn = gb.get_dim_posn(dname);
                 if (posn >= 0) {
 
@@ -728,12 +728,12 @@ namespace yask {
                     adj_idxs.begin[i] = idxs.begin[i] - lh;
                     adj_idxs.end[i] = idxs.end[i] + rh;
 
-                    // Make sure grid covers index bounds.
+                    // Make sure var covers index bounds.
                     TRACE_MSG("adjust_span: mini-blk [" << 
                               idxs.begin[i] << "..." <<
                               idxs.end[i] << ") adjusted to [" << 
                               adj_idxs.begin[i] << "..." <<
-                              adj_idxs.end[i] << ") within scratch-grid '" << 
+                              adj_idxs.end[i] << ") within scratch-var '" << 
                               gp->get_name() << "' allocated [" <<
                               gp->get_first_rank_alloc_index(posn) << "..." <<
                               gp->get_last_rank_alloc_index(posn) << "] in dim '" << dname << "'");
@@ -749,8 +749,8 @@ namespace yask {
                 }
             }
 
-            // Only need to get info from one grid.
-            // TODO: check that grids are consistent.
+            // Only need to get info from one var.
+            // TODO: check that vars are consistent.
             break;
         }
         return adj_idxs;
@@ -773,7 +773,7 @@ namespace yask {
         getAT().steps_done += num_steps;
     }
 
-    static void print_grid_list(ostream& os, const GridPtrs& gps, const string& type) {
+    static void print_var_list(ostream& os, const VarPtrs& gps, const string& type) {
         os << "  num " << type << " vars:";
         for (size_t i = 0; i < max(21ULL - type.length(), 1ULL); i++)
             os << ' ';
@@ -800,11 +800,9 @@ namespace yask {
         num_writes_per_step = 0;
         num_fpops_per_step = 0;
 
-        os <<
-            "Pack '" << get_name() << "':\n" <<
-            " num bundles:                 " << size() << endl <<
-            " pack scope:                  " << _pack_bb.bb_begin.makeDimValStr() <<
-            " ... " << _pack_bb.bb_end.subElements(1).makeDimValStr() << endl;
+        DEBUG_MSG("Pack '" << get_name() << "':\n" <<
+                  " num bundles:                 " << size() << endl <<
+                  " pack scope:                  " << _pack_bb.make_range_string(domain_dims));
 
         // Bundles.
         for (auto* sg : *this) {
@@ -832,56 +830,48 @@ namespace yask {
             idx_t fpops_bb = fpops1 * bb.bb_num_points;
             num_fpops_per_step += fpops_bb;
 
-            os << " Bundle '" << sg->get_name() << "':\n" <<
-                "  num reqd scratch bundles:   " << (sg_list.size() - 1) << endl;
+            DEBUG_MSG(" Bundle '" << sg->get_name() << "':\n" <<
+                      "  num reqd scratch bundles:   " << (sg_list.size() - 1));
             // TODO: add info on scratch bundles here.
 
             if (sg->is_sub_domain_expr())
-                os << "  sub-domain expr:            '" << sg->get_domain_description() << "'\n";
+                DEBUG_MSG("  sub-domain expr:            '" << sg->get_domain_description() << "'");
             if (sg->is_step_cond_expr())
-                os << "  step-condition expr:        '" << sg->get_step_cond_description() << "'\n";
+                DEBUG_MSG("  step-condition expr:        '" << sg->get_step_cond_description() << "'");
 
-            os <<
-                "  bundle size (points):       " << makeNumStr(bb.bb_size) << endl;
+            DEBUG_MSG("  bundle size (points):       " << makeNumStr(bb.bb_size));
             if (bb.bb_size) {
-                os << 
-                    "  valid points in bundle:     " << makeNumStr(bb.bb_num_points) << endl;
+                DEBUG_MSG("  valid points in bundle:     " << makeNumStr(bb.bb_num_points));
                 if (bb.bb_num_points) {
-                    os <<
-                        "  bundle scope:               " << bb.bb_begin.makeDimValStr() <<
-                        " ... " << bb.bb_end.subElements(1).makeDimValStr() << endl <<
-                        "  bundle bounding-box size:   " << bb.bb_len.makeDimValStr(" * ") << endl;
+                    DEBUG_MSG("  bundle scope:               " << bb.make_range_string(domain_dims) <<
+                              "\n  bundle bounding-box size:   " << bb.make_len_string(domain_dims));
                 }
             }
-            os <<
-                "  num full rectangles in box: " << sg->getBBs().size() << endl;
+            DEBUG_MSG("  num full rectangles in box: " << sg->getBBs().size());
             if (sg->getBBs().size() > 1) {
                 for (size_t ri = 0; ri < sg->getBBs().size(); ri++) {
                     auto& rbb = sg->getBBs()[ri];
-                    os <<
-                        "   Rectangle " << ri << ":\n"
-                        "    num points in rect:       " << makeNumStr(rbb.bb_num_points) << endl;
+                    DEBUG_MSG("   Rectangle " << ri << ":\n"
+                              "    num points in rect:       " << makeNumStr(rbb.bb_num_points));
                     if (rbb.bb_num_points) {
-                        os << "    rect scope:               " << rbb.bb_begin.makeDimValStr() <<
-                            " ... " << rbb.bb_end.subElements(1).makeDimValStr() << endl;
-                        os << "    rect size:                " << rbb.bb_len.makeDimValStr(" * ") << endl;
+                        DEBUG_MSG("    rect scope:               " << rbb.make_range_string(domain_dims) <<
+                                  "\n    rect size:                " << rbb.make_len_string(domain_dims));
                     }
                 }
             }
-            os <<
-                "  grid-reads per point:       " << reads1 << endl <<
-                "  grid-reads in rank:         " << makeNumStr(reads_bb) << endl <<
-                "  grid-writes per point:      " << writes1 << endl <<
-                "  grid-writes in rank:        " << makeNumStr(writes_bb) << endl <<
-                "  est FP-ops per point:       " << fpops1 << endl <<
-                "  est FP-ops in rank:         " << makeNumStr(fpops_bb) << endl;
-
+            DEBUG_MSG("  var-reads per point:       " << reads1 << endl <<
+                      "  var-reads in rank:         " << makeNumStr(reads_bb) << endl <<
+                      "  var-writes per point:      " << writes1 << endl <<
+                      "  var-writes in rank:        " << makeNumStr(writes_bb) << endl <<
+                      "  est FP-ops per point:       " << fpops1 << endl <<
+                      "  est FP-ops in rank:         " << makeNumStr(fpops_bb));
+                      
             // Classify vars.
-            GridPtrs idvars, imvars, odvars, omvars, iodvars, iomvars; // i[nput], o[utput], d[omain], m[isc].
-            for (auto gp : sg->inputGridPtrs) {
+            VarPtrs idvars, imvars, odvars, omvars, iodvars, iomvars; // i[nput], o[utput], d[omain], m[isc].
+            for (auto gp : sg->inputVarPtrs) {
                 auto& gb = gp->gb();
                 bool isdom = gb.is_domain_var();
-                auto& ogps = sg->outputGridPtrs;
+                auto& ogps = sg->outputVarPtrs;
                 bool isout = find(ogps.begin(), ogps.end(), gp) != ogps.end();
                 if (isout) {
                     if (isdom)
@@ -895,10 +885,10 @@ namespace yask {
                         imvars.push_back(gp);
                 }
             }
-            for (auto gp : sg->outputGridPtrs) {
+            for (auto gp : sg->outputVarPtrs) {
                 auto& gb = gp->gb();
                 bool isdom = gb.is_domain_var();
-                auto& igps = sg->inputGridPtrs;
+                auto& igps = sg->inputVarPtrs;
                 bool isin = find(igps.begin(), igps.end(), gp) != igps.end();
                 if (!isin) {
                     if (isdom)
@@ -907,12 +897,14 @@ namespace yask {
                         omvars.push_back(gp);
                 }
             }
-            print_grid_list(os, idvars, "input-only domain");
-            print_grid_list(os, odvars, "output-only domain");
-            print_grid_list(os, iodvars, "input-output domain");
-            print_grid_list(os, imvars, "input-only other");
-            print_grid_list(os, omvars, "output-only other");
-            print_grid_list(os, iomvars, "input-output other");
+            yask_output_ptr op = ksbp->get_debug_output();
+            ostream& os = op->get_ostream();
+            print_var_list(os, idvars, "input-only domain");
+            print_var_list(os, odvars, "output-only domain");
+            print_var_list(os, iodvars, "input-output domain");
+            print_var_list(os, imvars, "input-only other");
+            print_var_list(os, omvars, "output-only other");
+            print_var_list(os, iomvars, "input-output other");
             
         } // bundles.
 

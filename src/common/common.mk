@@ -1,5 +1,5 @@
 ##############################################################################
-## YASK: Yet Another Stencil Kernel
+## YASK: Yet Another Stencil Kit
 ## Copyright (c) 2014-2019, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -55,7 +55,13 @@ endif
 
 # Common source.
 COMM_DIR	:=	$(SRC_DIR)/common
-COMM_SRC_NAMES	:=	output common_utils tuple combo
+COMM_SRC_NAMES	:=	output common_utils tuple combo fd_coeff fd_coeff2
+COEFF_DIR	:=	$(SRC_DIR)/contrib/coefficients
+
+# Globs and flags.
+INC_DIRS	:=	$(INC_DIR) $(INC_DIR)/aux
+INC_GLOB	:=	$(wildcard $(addsuffix /*.hpp,$(INC_DIRS)))
+INC_CXXFLAGS	:=	$(addprefix -I,$(INC_DIRS))
 
 # YASK stencil compiler.
 # This is here because both the compiler and kernel

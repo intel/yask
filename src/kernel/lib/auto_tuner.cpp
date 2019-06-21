@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -79,13 +79,13 @@ namespace yask {
     }
     
     // Apply auto-tuning immediately, i.e., not as part of normal processing.
-    // Will alter data in grids.
+    // Will alter data in vars.
     void StencilContext::run_auto_tuner_now(bool verbose) {
         STATE_VARS(this);
-        if (!rank_bb.bb_valid)
+        if (!is_prepared())
             THROW_YASK_EXCEPTION("Error: run_auto_tuner_now() called without calling prepare_solution() first");
 
-        os << "Auto-tuning...\n" << flush;
+        DEBUG_MSG("Auto-tuning...");
         YaskTimer at_timer;
         at_timer.start();
 
@@ -121,7 +121,7 @@ namespace yask {
         }
 
         // Wait for all ranks to finish.
-        os << "Waiting for auto-tuner to converge on all ranks...\n";
+        DEBUG_MSG("Waiting for auto-tuner to converge on all ranks...");
         env->global_barrier();
 
         // reenable normal operation.
@@ -132,13 +132,13 @@ namespace yask {
 
         // Report results.
         at_timer.stop();
-        os << "Auto-tuner done after " << steps_done << " step(s) in " <<
-            makeNumStr(at_timer.get_elapsed_secs()) << " secs.\n";
+        DEBUG_MSG("Auto-tuner done after " << steps_done << " step(s) in " <<
+                  makeNumStr(at_timer.get_elapsed_secs()) << " secs.");
         if (state->_use_pack_tuners) {
             for (auto& sp : stPacks)
-                sp->getAT().print_settings(os);
+                sp->getAT().print_settings();
         } else
-            _at.print_settings(os);
+            _at.print_settings();
         print_temporal_tiling_info();
 
         // Reset stats.
@@ -146,18 +146,18 @@ namespace yask {
     }
 
     // Print the best settings.
-    void AutoTuner::print_settings(ostream& os) const {
+    void AutoTuner::print_settings() const {
+        STATE_VARS(this);
         if (tune_mini_blks())
-            os << _name << ": best-mini-block-size: " <<
-                target_sizes().makeDimValStr(" * ") << endl;
+            DEBUG_MSG(_name << ": best-mini-block-size: " <<
+                      target_sizes().makeDimValStr(" * "));
         else
-            os << _name << ": best-block-size: " <<
-                target_sizes().makeDimValStr(" * ") << endl <<
-                _name << ": mini-block-size: " <<
-                _settings->_mini_block_sizes.makeDimValStr(" * ") << endl;
-        os << _name << ": sub-block-size: " <<
-            _settings->_sub_block_sizes.makeDimValStr(" * ") << endl <<
-            flush;
+            DEBUG_MSG(_name << ": best-block-size: " <<
+                      target_sizes().makeDimValStr(" * ") << endl <<
+                      _name << ": mini-block-size: " <<
+                      _settings->_mini_block_sizes.makeDimValStr(" * "));
+        DEBUG_MSG(_name << ": sub-block-size: " <<
+                  _settings->_sub_block_sizes.makeDimValStr(" * "));
     }
     
     // Access settings.
@@ -179,16 +179,14 @@ namespace yask {
         if (best_rate > 0.) {
             target_sizes() = best_sizes;
             apply();
-            os << _name << ": applying size "  <<
-                best_sizes.makeDimValStr(" * ") << endl;
+            DEBUG_MSG(_name << ": applying size "  <<
+                      best_sizes.makeDimValStr(" * "));
         }
 
         // Reset all vars.
         results.clear();
         n2big = n2small = n2far = 0;
-        best_sizes = target_sizes();
         best_rate = 0.;
-        center_sizes = best_sizes;
         radius = max_radius;
         done = mark_done;
         neigh_idx = 0;
@@ -198,33 +196,39 @@ namespace yask {
         in_warmup = true;
         timer.clear();
         steps_done = 0;
+        target_steps = target_sizes()[step_dim];
+        center_sizes = target_sizes();
+        best_sizes = target_sizes();
 
         // Set min blocks to number of region threads.
         int rt=0, bt=0;
         get_num_comp_threads(rt, bt);
         min_blks = rt;
 
-        // Adjust starting block if needed.
-        for (auto dim : center_sizes.getDims()) {
-            auto& dname = dim.getName();
-            auto& dval = dim.getVal();
-
-            if (dname == step_dim) {
-                target_steps = target_sizes()[dname]; // save value.
-                center_sizes[dname] = target_steps;
-            } else {
-                auto dmax = max(idx_t(1), outer_sizes()[dname] / 2);
-                if (dval > dmax || dval < 1)
-                    center_sizes[dname] = dmax;
-            }
-        }
-        if (!done) {
-            TRACE_MSG(_name << ": starting size: "  <<
-                      center_sizes.makeDimValStr(" * "));
-            TRACE_MSG(_name << ": starting search radius: " << radius);
-        }
     } // clear.
 
+    // Check whether sizes within search limits.
+    bool AutoTuner::checkSizes(const IdxTuple& bsize) {
+        bool ok = true;
+        
+        // Too small?
+        if (ok && get_num_domain_points(bsize) < min_pts) {
+            n2small++;
+            ok = false;
+        }
+
+        // Too few?
+        else if (ok) {
+            idx_t nblks = get_num_domain_points(outer_sizes()) /
+                get_num_domain_points(bsize);
+            if (nblks < min_blks) {
+                ok = false;
+                n2big++;
+            }
+        }
+        return ok;
+    }
+    
     // Evaluate the previous run and take next auto-tuner step.
     void AutoTuner::eval() {
         STATE_VARS(this);
@@ -255,35 +259,67 @@ namespace yask {
                 return;
 
             // Done.
-            os << _name << ": finished warmup for " <<
-                csteps << " steps(s) in " <<
-                makeNumStr(ctime) << " secs\n" <<
-                _name << ": tuning " << (tune_mini_blks() ? "mini-" : "") <<
-                "block sizes...\n";
+            DEBUG_MSG(_name << ": finished warmup for " <<
+                      csteps << " steps(s) in " <<
+                      makeNumStr(ctime) << " secs\n" <<
+                      _name << ": tuning " << (tune_mini_blks() ? "mini-" : "") <<
+                      "block sizes...");
             in_warmup = false;
 
-            // Restart for first measurement.
+            // Restart for first real measurement.
             csteps = 0;
             ctime = 0;
 
-            // Fix settings for next step.
+            // Set center point for search.
+            center_sizes = target_sizes();
+
+            // Pick better starting point if needed.
+            if (!checkSizes(center_sizes)) {
+                for (auto dim : center_sizes.getDims()) {
+                    auto& dname = dim.getName();
+                    auto& dval = dim.getVal();
+                    if (dname != step_dim) {
+                        auto dmax = max(idx_t(1), outer_sizes()[dname] / 2);
+                        center_sizes[dname] = dmax;
+                    }
+                }
+            }
+
+            // Set vars to starting point.
+            best_sizes = center_sizes;
+            target_sizes() = center_sizes;
             apply();
-            TRACE_MSG(_name << ": first size "  <<
-                      target_sizes().makeDimValStr(" * "));
+            TRACE_MSG(_name << ": starting size: "  << center_sizes.makeDimValStr(" * "));
+            TRACE_MSG(_name << ": starting search radius: " << radius);
             return;
         }
 
-        // Need more steps to get a good measurement?
-        if (ctime < min_secs && csteps < min_steps)
+        // Calc perf.
+        double rate = (ctime > 0.) ? (double(csteps) / ctime) : 0.;
+        TRACE_MSG(_name << ": " <<
+                  makeNumStr(rate) << " steps/sec (" <<
+                  csteps << " steps(s) in " << makeNumStr(ctime) <<
+                  " secs)");
+        bool rate_ok = false;
+
+        // If the current rate is much less than the best,
+        // we don't need a better measurement.
+        if (rate > 0. && best_rate > 0. && rate < best_rate * cutoff)
+            rate_ok = true;
+
+        // Enough time or steps to get a good measurement?
+        else if (ctime >= min_secs || csteps >= min_steps)
+            rate_ok = true;
+
+        // Return from eval if we need to do more work.
+        if (!rate_ok)
             return;
 
-        // Calc perf and reset vars for next time.
-        double rate = (ctime > 0.) ? (double(csteps) / ctime) : 0.;
-        os << _name << ": search-dist=" << radius << ": " <<
-            csteps << " steps(s) in " <<
-            makeNumStr(ctime) << " secs (" <<
-            makeNumStr(rate) << " steps/sec) with size " <<
-            target_sizes().makeDimValStr(" * ") << endl;
+        // Print progress and reset vars for next time.
+        DEBUG_MSG(_name << ": search-dist=" << radius << ": " <<
+                  makeNumStr(rate) << " steps/sec (" <<
+                  csteps << " steps(s) in " << makeNumStr(ctime) <<
+                  " secs) with size " << target_sizes().makeDimValStr(" * "));
         csteps = 0;
         ctime = 0.;
 
@@ -370,24 +406,13 @@ namespace yask {
                 TRACE_MSG(_name << ": checking size "  <<
                           bsize.makeDimValStr(" * "));
 
-                // Too small?
-                if (ok && get_num_domain_points(bsize) < min_pts) {
-                    n2small++;
+                // Check sizes.
+                if (ok && !checkSizes(bsize))
                     ok = false;
-                }
-
-                // Too few?
-                else if (ok) {
-                    idx_t nblks = get_num_domain_points(outer_sizes()) /
-                        get_num_domain_points(bsize);
-                    if (nblks < min_blks) {
-                        ok = false;
-                        n2big++;
-                    }
-                }
+                
 
                 // Valid size and not already checked?
-                if (ok && !results.count(bsize)) {
+                if (ok && results.count(bsize) == 0) {
 
                     // Run next step with this size.
                     target_sizes() = bsize;
@@ -421,7 +446,7 @@ namespace yask {
 
                         // Reset AT and disable.
                         clear(true);
-                        os << _name << ": done" << endl;
+                        DEBUG_MSG(_name << ": done");
                         return;
                     }
                     TRACE_MSG(_name << ": new search radius=" << radius);
@@ -439,7 +464,7 @@ namespace yask {
                   target_sizes().makeDimValStr(" * "));
     } // eval.
 
-    // Apply auto-tuner settings to prepare for a run.
+    // Adjust related kernel settings to prepare for a run.
     // Does *not* set the settings being tuned.
     void AutoTuner::apply() {
         STATE_VARS(this);

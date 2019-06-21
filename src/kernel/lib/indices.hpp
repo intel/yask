@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -27,10 +27,9 @@ IN THE SOFTWARE.
 
 namespace yask {
 
-    typedef Tuple<idx_t> IdxTuple;
-    typedef std::vector<idx_t> GridIndices;
-    typedef std::vector<idx_t> GridDimSizes;
-    typedef std::vector<std::string> GridDimNames;
+    typedef std::vector<idx_t> VarIndices;
+    typedef std::vector<idx_t> VarDimSizes;
+    typedef std::vector<std::string> VarDimNames;
 
     // A class to hold up to a given number of sizes or indices efficiently.
     // Similar to a Tuple, but less overhead and doesn't keep names.
@@ -61,7 +60,7 @@ namespace yask {
         Indices(const IdxTuple& src) {
             setFromTuple(src);
         }
-        Indices(const GridIndices& src) {
+        Indices(const VarIndices& src) {
             setFromVec(src);
         }
         Indices(const std::initializer_list<idx_t>& src) {
@@ -115,7 +114,7 @@ namespace yask {
         }
 
         // Other inits.
-        void setFromVec(const GridIndices& src) {
+        void setFromVec(const VarIndices& src) {
             assert(src.size() <= +max_idxs);
             int n = int(src.size());
             for (int i = 0; i < n; i++)
@@ -148,6 +147,9 @@ namespace yask {
             for (int i = 0; i < n; i++)
                 _idxs[i] = val;
             _ndims = n;
+        }
+        void setValsSame(idx_t val) {
+            setFromConst(val);
         }
 
         // Some comparisons.
@@ -293,32 +295,56 @@ namespace yask {
             return res;
         }
 
-        // Make string like "x=4, y=8".
-        std::string makeDimValStr(const GridDimNames& names,
-                                  std::string separator=", ",
-                                  std::string infix="=",
-                                  std::string prefix="",
-                                  std::string suffix="") const {
+        // Make a Tuple w/given names.
+        IdxTuple makeTuple(const VarDimNames& names) const {
             assert((int)names.size() == _ndims);
 
             // Make a Tuple from names.
             IdxTuple tmp;
             for (int i = 0; i < int(names.size()); i++)
                 tmp.addDimBack(names[i], _idxs[i]);
+            return tmp;
+        }
+
+        // Make a Tuple w/o useful names.
+        IdxTuple makeTuple() const {
+            IdxTuple tmp;
+            for (int i = 0; i < _ndims; i++)
+                tmp.addDimBack(std::string("d") + std::to_string(i), _idxs[i]);
+            return tmp;
+        }
+
+        // Make a Tuple w/names from another Tuple.
+        IdxTuple makeTuple(const IdxTuple& names) const {
+            auto tmp = names.getDimNames();
+            return makeTuple(tmp);
+        }
+
+        // Make string like "x=4, y=8".
+        std::string makeDimValStr(const VarDimNames& names,
+                                  std::string separator=", ",
+                                  std::string infix="=",
+                                  std::string prefix="",
+                                  std::string suffix="") const {
+            auto tmp = makeTuple(names);
+            return tmp.makeDimValStr(separator, infix, prefix, suffix);
+        }
+        std::string makeDimValStr(const IdxTuple& names, // ignore values.
+                                  std::string separator=", ",
+                                  std::string infix="=",
+                                  std::string prefix="",
+                                  std::string suffix="") const {
+            auto tmp = makeTuple(names);
             return tmp.makeDimValStr(separator, infix, prefix, suffix);
         }
 
         // Make string like "4, 3, 2".
-        std::string makeValStr(int nvals,
-                               std::string separator=", ",
+        std::string makeValStr(std::string separator=", ",
                                std::string prefix="",
                                std::string suffix="") const {
-            assert(nvals == _ndims);
 
             // Make a Tuple w/o useful names.
-            IdxTuple tmp;
-            for (int i = 0; i < nvals; i++)
-                tmp.addDimBack(std::string(1, '0' + char(i)), _idxs[i]);
+            auto tmp = makeTuple();
             return tmp.makeValStr(separator, prefix, suffix);
         }
     };
@@ -377,7 +403,25 @@ namespace yask {
         //                                       start   stop  (index = 2)
 
         // Ctor.
-        ScanIndices(const Dims& dims, bool use_vec_align, IdxTuple* ofs);
+        ScanIndices(const Dims& dims, bool use_vec_align);
+        ScanIndices(const Dims& dims, bool use_vec_align, Indices* ofs) :
+            ScanIndices(dims, use_vec_align) {
+            if (ofs) {
+                DOMAIN_VAR_LOOP(i, j) {
+                    assert(ofs->getNumDims() == ndims - 1);
+                    align_ofs[i] = (*ofs)[j];
+                }
+            }
+        }
+        ScanIndices(const Dims& dims, bool use_vec_align, IdxTuple* ofs) :
+            ScanIndices(dims, use_vec_align) {
+            if (ofs) {
+                DOMAIN_VAR_LOOP(i, j) {
+                    assert(ofs->getNumDims() == ndims - 1);
+                    align_ofs[i] = ofs->getVal(j);
+                }
+            }
+        }
 
         // Init from outer-loop indices.
         // Start..stop from point in outer loop become begin..end

@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -29,135 +29,24 @@ IN THE SOFTWARE.
 
 #include "ElasticStencil.hpp"
 
-// This class implements StencilPart but is not the main solution.
-// The main solution is provided during construction.
-class Elastic2BoundaryCondition : public StencilPart
-{
-protected:
-    StencilSolution& _sol;
-
-    // Indices & dimensions.
-    MAKE_STEP_INDEX(t);           // step in time dim.
-    MAKE_DOMAIN_INDEX(x);         // spatial dim.
-    MAKE_DOMAIN_INDEX(y);         // spatial dim.
-    MAKE_DOMAIN_INDEX(z);         // spatial dim.
-
-    // Grid selectors.
-    MAKE_MISC_INDEX(vidx);
-    MAKE_MISC_INDEX(sidx);
-    MAKE_MISC_INDEX(cidx);
-    MAKE_MISC_INDEX(spidx);
-
-    public:
-    Elastic2BoundaryCondition(StencilSolution& solution) :
-        _sol(solution) {}
-    virtual ~Elastic2BoundaryCondition() {}
-
-    // Determine whether current indices are at boundary.
-    virtual Condition is_at_boundary() =0;
-    virtual Condition is_not_at_boundary() =0;
-
-    // Return a reference to the main stencil-solution object provided during construction.
-    virtual StencilSolution& get_stencil_solution() {
-        return _sol;
-    }
-};
-
-class Elastic2StencilBase : public StencilBase {
+// This class extends ElasticStencilBase to provide methods to make
+// stencils with merged vars.
+class Elastic2StencilBase : public ElasticStencilBase {
 
 protected:
 
-    // Dimensions.
-    MAKE_STEP_INDEX(t);           // step in time dim.
-    MAKE_DOMAIN_INDEX(x);         // spatial dim.
-    MAKE_DOMAIN_INDEX(y);         // spatial dim.
-    MAKE_DOMAIN_INDEX(z);         // spatial dim.
-
-    // Grid selectors.
-    MAKE_MISC_INDEX(vidx);
-    MAKE_MISC_INDEX(sidx);
-    MAKE_MISC_INDEX(cidx);
-
-    // 3D-spatial coefficients.
-    MAKE_GRID(coef, x, y, z, cidx);
-    enum CIDX { C_MU, C_LAMBDA, C_LAMBDA_MU2, C_RHO };
-
-    // Spatial FD coefficients.
-    const double c0_8 = 1.2;
-    const double c1_8 = 1.4;
-    const double c2_8 = 1.6;
-    const double c3_8 = 1.8;
-
-    // Physical dimensions in time and space.
-    const double delta_t = 0.002452;
-
-    // Inverse of discretization.
-    const double dxi = 36.057693;
-    const double dyi = 36.057693;
-    const double dzi = 36.057693;
-
-    Elastic2BoundaryCondition *bc = NULL;
+    // yc_var_proxy selectors.
+    yc_index_node_ptr vidx = new_misc_index("vidx");
+    yc_index_node_ptr sidx = new_misc_index("sidx");
+    yc_index_node_ptr cidx = new_misc_index("cidx");
 
 public:
-    Elastic2StencilBase(const string& name, StencilList& stencils,
-                       Elastic2BoundaryCondition *_bc = NULL) :
-        StencilBase(name, stencils), bc(_bc)
-    {
-        init();
-    }
+    Elastic2StencilBase(const string& name,
+                        ElasticBoundaryCondition *_bc = NULL) :
+        ElasticStencilBase(name, _bc) { }
 
-    void init() {
-        // StencilContex specific code
-        REGISTER_STENCIL_CONTEXT_EXTENSION(
-           virtual void initData() {
-               initDiff();
-           }
-                                           );
-    }
-
-    bool hasBoundaryCondition()
-    {
-        return bc != NULL;
-    }
-
-    GridValue interp_rho(GridIndex x, GridIndex y, GridIndex z, const TL)
-    {
-        return (2.0/ (coef(x  , y  , z, C_RHO) +
-                      coef(x+1, y  , z, C_RHO)));
-    }
-
-    GridValue interp_rho(GridIndex x, GridIndex y, GridIndex z, const TR)
-    {
-        return (2.0/ (coef(x  , y  , z, C_RHO) +
-                      coef(x  , y+1, z, C_RHO)));
-    }
-
-    GridValue interp_rho(GridIndex x, GridIndex y, GridIndex z, const BL)
-    {
-        return (2.0/ (coef(x  , y  , z, C_RHO) +
-                       coef(x  , y  , z+1, C_RHO)));
-    }
-
-    GridValue interp_rho(GridIndex x, GridIndex y, GridIndex z, const BR)
-    {
-        return (8.0/ (coef(x  , y  , z, C_RHO) +
-                       coef(x  , y  , z+1, C_RHO) +
-                       coef(x  , y+1, z, C_RHO) +
-                       coef(x+1, y  , z, C_RHO) +
-                       coef(x+1, y+1, z, C_RHO) +
-                       coef(x  , y+1, z+1, C_RHO) +
-                       coef(x+1, y  , z+1, C_RHO) +
-                       coef(x+1, y+1, z+1, C_RHO)));
-    }
-
-    template<typename N>
-    GridValue interp_rho(GridIndex x, GridIndex y, GridIndex z)
-    {
-        return interp_rho(x, y, z, N());
-    }
-
-    GridValue stencil_O8_Z(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                           Grid &g, GridIndex gidx, const int offset)
+    yc_number_node_ptr stencil_O8_Z(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                           yc_var_proxy &g, yc_number_any_arg gidx, const int offset)
     {
         return
             (c0_8 * (g(t,x,y,z  +offset, gidx)  -
@@ -170,20 +59,20 @@ public:
                      g(t,x,y,z-4+offset, gidx)))*dzi;
     }
 
-    GridValue stencil_O8(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                         Grid &g, GridIndex gidx, const Z, const B)
+    yc_number_node_ptr stencil_O8(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                         yc_var_proxy &g, yc_number_any_arg gidx, const Z, const B)
     {
         return stencil_O8_Z(t, x, y, z, g, gidx, 0);
     }
 
-    GridValue stencil_O8(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                         Grid &g, GridIndex gidx, const Z, const F)
+    yc_number_node_ptr stencil_O8(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                         yc_var_proxy &g, yc_number_any_arg gidx, const Z, const F)
     {
         return stencil_O8_Z(t, x, y, z, g, gidx, 1);
     }
 
-    GridValue stencil_O8_Y(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                           Grid &g, GridIndex gidx, const int offset)
+    yc_number_node_ptr stencil_O8_Y(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                           yc_var_proxy &g, yc_number_any_arg gidx, const int offset)
     {
         return
             (c0_8 * (g(t,x,y  +offset,z, gidx)  -
@@ -196,19 +85,19 @@ public:
                      g(t,x,y-4+offset,z, gidx)))*dyi;
     }
 
-    GridValue stencil_O8(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                         Grid &g, GridIndex gidx, const Y, const B)
+    yc_number_node_ptr stencil_O8(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                         yc_var_proxy &g, yc_number_any_arg gidx, const Y, const B)
     {
         return stencil_O8_Y(t, x, y, z, g, gidx, 0);
     }
 
-    GridValue stencil_O8(GridIndex t, GridIndex x, GridIndex y, GridIndex z, Grid &g, GridIndex gidx, const Y, const F)
+    yc_number_node_ptr stencil_O8(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, yc_var_proxy &g, yc_number_any_arg gidx, const Y, const F)
     {
         return stencil_O8_Y(t, x, y, z, g, gidx, 1);
     }
 
-    GridValue stencil_O8_X(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                           Grid &g, GridIndex gidx, const int offset)
+    yc_number_node_ptr stencil_O8_X(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                           yc_var_proxy &g, yc_number_any_arg gidx, const int offset)
     {
         return
             (c0_8 * (g(t,x  +offset,y,z, gidx)  -
@@ -221,138 +110,130 @@ public:
                      g(t,x-4+offset,y,z, gidx)))*dxi;
     }
 
-    GridValue stencil_O8(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                         Grid &g, GridIndex gidx, const X, const B)
+    yc_number_node_ptr stencil_O8(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                         yc_var_proxy &g, yc_number_any_arg gidx, const X, const B)
     {
         return stencil_O8_X(t, x, y, z, g, gidx, 0);
     }
 
-    GridValue stencil_O8(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                         Grid &g, GridIndex gidx,
+    yc_number_node_ptr stencil_O8(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                         yc_var_proxy &g, yc_number_any_arg gidx,
                          const X, const F)
     {
         return stencil_O8_X(t, x, y, z, g, gidx, 1);
     }
 
     template<typename Dim, typename Dir>
-    GridValue stencil_O8(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                         Grid &g, GridIndex gidx)
+    yc_number_node_ptr stencil_O8(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                         yc_var_proxy &g, yc_number_any_arg gidx)
     {
         return stencil_O8(t, x, y, z, g, gidx, Dim(), Dir());
     }
 
-    // Velocity-grid define functions.  For each D in x, y, z, define vel_D
-    // at t+1 based on vel_x at t and stress grids at t.  Note that the t,
-    // x, y, z parameters are integer grid indices, not actual offsets in
-    // time or space, so half-steps due to staggered grids are adjusted
+    // Velocity-var define functions.  For each D in x, y, z, define vel_D
+    // at t+1 based on vel_x at t and stress vars at t.  Note that the t,
+    // x, y, z parameters are integer var indices, not actual offsets in
+    // time or space, so half-steps due to staggered vars are adjusted
     // appropriately.
 
     template<typename N, typename SZ, typename SX, typename SY>
-    void define_vel(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                    Grid& v, GridIndex vidx,
-                    Grid& s, GridIndex sx_idx, GridIndex sy_idx, GridIndex sz_idx) {
+    void define_vel(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                    yc_var_proxy& v, yc_number_any_arg vidx,
+                    yc_var_proxy& s, yc_number_any_arg sx_idx, yc_number_any_arg sy_idx, yc_number_any_arg sz_idx) {
 
-        GridValue lrho   = interp_rho<N>(x, y, z);
+        yc_number_node_ptr lrho   = interp_rho<N>(x, y, z);
 
-        GridValue stx    = stencil_O8<X,SX>(t, x, y, z, s, sx_idx);
-        GridValue sty    = stencil_O8<Y,SY>(t, x, y, z, s, sy_idx);
-        GridValue stz    = stencil_O8<Z,SZ>(t, x, y, z, s, sz_idx);
+        yc_number_node_ptr stx    = stencil_O8<X,SX>(t, x, y, z, s, sx_idx);
+        yc_number_node_ptr sty    = stencil_O8<Y,SY>(t, x, y, z, s, sy_idx);
+        yc_number_node_ptr stz    = stencil_O8<Z,SZ>(t, x, y, z, s, sz_idx);
 
-        GridValue next_v = v(t, x, y, z, vidx) + ((stx + sty + stz) * delta_t * lrho);
+        yc_number_node_ptr next_v = v(t, x, y, z, vidx) + ((stx + sty + stz) * delta_t * lrho);
 
         // define the value at t+1.
         if (hasBoundaryCondition()) {
-            Condition not_at_bc = bc->is_not_at_boundary();
-            v(t+1, x, y, z, vidx) EQUALS next_v IF not_at_bc;
+            yc_bool_node_ptr not_at_bc = bc->is_not_at_boundary();
+            v(t+1, x, y, z, vidx) EQUALS next_v IF_DOMAIN not_at_bc;
         } else
             v(t+1, x, y, z, vidx) EQUALS next_v;
     }
-    template<typename N, typename SZ, typename SX, typename SY>
-    void define_vel(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                    Grid& v, int vidx,
-                    Grid& s, int sx_idx, int sy_idx, int sz_idx) {
-        define_vel<N, SZ, SX, SY>(t, x, y, z,
-                                  v, constNum(vidx),
-                                  s, constNum(sx_idx), constNum(sy_idx), constNum(sz_idx));
-    }
-
-    GridValue stencil_O2_Z(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                           Grid &g, GridIndex gidx, const int offset)
+    
+    yc_number_node_ptr stencil_O2_Z(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                           yc_var_proxy &g, yc_number_any_arg gidx, const int offset)
     {
         return
             (g(t,x,y,z, gidx)  -
              g(t,x,y,z+offset, gidx))*dzi;
     }
 
-    GridValue stencil_O2_Z(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                           Grid &g, GridIndex gidx, const B)
+    yc_number_node_ptr stencil_O2_Z(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                           yc_var_proxy &g, yc_number_any_arg gidx, const B)
     {
         return stencil_O2_Z(t, x, y, z, g, gidx, -1);
     }
 
-    GridValue stencil_O2_Z(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                           Grid &g, GridIndex gidx, const F)
+    yc_number_node_ptr stencil_O2_Z(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                           yc_var_proxy &g, yc_number_any_arg gidx, const F)
     {
         return stencil_O2_Z(t, x, y, z, g, gidx, 1);
     }
 
     template<typename D>
-    GridValue stencil_O2_Z(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                           Grid &g, GridIndex gidx)
+    yc_number_node_ptr stencil_O2_Z(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                           yc_var_proxy &g, yc_number_any_arg gidx)
     {
         return stencil_O2_Z(t, x, y, z, g, gidx, D());
     }
 
-    GridValue stencil_O2_Y(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                           Grid &g, GridIndex gidx, const int offset)
+    yc_number_node_ptr stencil_O2_Y(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                           yc_var_proxy &g, yc_number_any_arg gidx, const int offset)
     {
         return
             (g(t,x,y       ,z, gidx)  -
              g(t,x,y+offset,z, gidx))*dyi;
     }
 
-    GridValue stencil_O2_Y(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                           Grid &g, GridIndex gidx, const B)
+    yc_number_node_ptr stencil_O2_Y(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                           yc_var_proxy &g, yc_number_any_arg gidx, const B)
     {
         return stencil_O2_Y(t, x, y, z, g, gidx,-1);
     }
 
-    GridValue stencil_O2_Y(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                           Grid &g, GridIndex gidx, const F)
+    yc_number_node_ptr stencil_O2_Y(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                           yc_var_proxy &g, yc_number_any_arg gidx, const F)
     {
         return stencil_O2_Y(t, x, y, z, g, gidx, 1);
     }
 
     template<typename D>
-    GridValue stencil_O2_Y(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                           Grid &g, GridIndex gidx)
+    yc_number_node_ptr stencil_O2_Y(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                           yc_var_proxy &g, yc_number_any_arg gidx)
     {
         return stencil_O2_Y(t, x, y, z, g, gidx, D());
     }
 
-    GridValue stencil_O2_X(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                           Grid &g, GridIndex gidx, const int offset)
+    yc_number_node_ptr stencil_O2_X(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                           yc_var_proxy &g, yc_number_any_arg gidx, const int offset)
     {
         return
             (g(t,x       ,y,z, gidx)  -
              g(t,x+offset,y,z, gidx))*dxi;
     }
 
-    GridValue stencil_O2_X(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                           Grid &g, GridIndex gidx, const B)
+    yc_number_node_ptr stencil_O2_X(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                           yc_var_proxy &g, yc_number_any_arg gidx, const B)
     {
         return stencil_O2_X(t, x, y, z, g, gidx,-1);
     }
 
-    GridValue stencil_O2_X(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                           Grid &g, GridIndex gidx, const F)
+    yc_number_node_ptr stencil_O2_X(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                           yc_var_proxy &g, yc_number_any_arg gidx, const F)
     {
         return stencil_O2_X(t, x, y, z, g, gidx, 1);
     }
 
     template<typename D>
-    GridValue stencil_O2_X(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                           Grid &g, GridIndex gidx)
+    yc_number_node_ptr stencil_O2_X(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                           yc_var_proxy &g, yc_number_any_arg gidx)
     {
         return stencil_O2_X(t, x, y, z, g, gidx, D());
     }

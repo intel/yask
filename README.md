@@ -1,18 +1,19 @@
-# YASK--Yet Another Stencil Kernel
+# YASK--Yet Another Stencil Kit
 
 * New YASK users may want to start with the [YASK tutorial](docs/YASK-tutorial.pdf).
 * Users with existing YASK-based code may want to jump to the [backward-compatibility notices](#backward-compatibility-notices).
 
 ## Overview
 YASK is a framework to rapidly create high-performance stencil code including optimizations and features such as
-* Vector-folding to increase data reuse via non-traditional data layout,
-* Multi-level OpenMP parallelism to exploit multiple cores and threads,
-* Scaling to multiple sockets and nodes via MPI with overlapped communication and compute, and
-* Spatial tiling with automatically-tuned block sizes,
-* Temporal tiling in multiple dimensions to further increase cache locality,
+* Support for boundary layers and staggered-grid stencils.
+* Vector-folding to increase data reuse via non-traditional data layout.
+* Multi-level OpenMP parallelism to exploit multiple cores and threads.
+* Scaling to multiple sockets and nodes via MPI with overlapped communication and compute.
+* Spatial tiling with automatically-tuned block sizes.
+* Temporal tiling in multiple dimensions to further increase cache locality.
 * APIs for C++ and Python: [API documentation](https://rawgit.com/intel/yask/api-docs/html/index.html).
 
-YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-optimized code for Intel(R) Xeon Phi(TM) and Intel(R) Xeon(R) processors.
+YASK contains a domain-specific compiler to convert stencil-equation specifications to SIMD-optimized code for Intel(R) Xeon Phi(TM) and Intel(R) Xeon(R) processors.
 
 ### Supported Platforms and Processors:
 * 64-bit Linux.
@@ -39,20 +40,21 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
        the Intel C++ compiler.
        Older Gnu C++ compilers can produce kernels that run
        many times slower.
-* Gnu C++ compiler, g++ (4.9.0 or later; 8.2.0 or later recommended).
+* Gnu C++ compiler, g++ (4.9.0 or later; 9.1.0 or later recommended).
+  Even when using Intel compilers, they rely on functionality provided by a g++ installation.
 * Linux libraries `librt` and `libnuma`.
 * Perl (5.010 or later).
 * Awk.
 * Gnu make.
 * Bash shell.
-* Numactl.
+* Numactl utility.
 * Optional utilities and their purposes:
     * The `indent` or `gindent` utility, used automatically during the build process
       to make the generated code easier for humans to read.
       You'll get a warning when running `make` if one of these doesn't exist.
       Everything will still work, but the generated code will be difficult to read.
       Reading the generated code is only necessary for debug or curiosity.
-    * SWIG (3.0.12 or later),
+    * SWIG (3.0.12 or later; 4.0.0 or later recommended),
       http://www.swig.org, for creating the Python interface.
     * Python 2 (2.7.5 or later) or 3 (3.6.1 or later),
       https://www.python.org/downloads, for creating and using the Python interface.
@@ -66,7 +68,49 @@ YASK contains a domain-specific compiler to convert scalar stencil code to SIMD-
       https://software.intel.com/en-us/articles/intel-software-development-emulator,
       for functional testing if you don't have native support for any given instruction set.
 
-### Backward-compatibility notices, including changes in default behavior:
+## Backward-compatibility notices, including changes in default behavior
+### Version 3
+
+* Version 3.00.00 was a major release with a number of backward-compatibility notices:
+
+  - The old (v1 and v2) internal DSL that used undocumented types such as
+    `SolutionBase` and `GridValue` and undocumented macros such as
+    `MAKE_GRID` was replaced with an expanded version of the documented YASK
+    compiler API.  Canonical v2 DSL code should still work using the
+    `Soln.hpp` backward-compatibility header file.  To convert v2 DSL code
+    to v3 format, use the `./utils/bin/convert_v2_stencil.pl` utility.
+    Conversion is recommended.
+
+  - For both the compiler and kernel APIs, all uses of the term "grid" were
+    changed to "var".  (Historically, early versions of YASK allowed only
+    variables whose elements were points on the domain grid, so the terms
+    were essentially interchangeable. Later, variables became more flexible.
+    They could be defined with a subset of the domain dimensions, include
+    non-domain or "miscellaneous" indices, or even be simple scalar values,
+    so the term "grid" to describe any variable became inaccurate. This
+    change addresses that contradiction.) Again, backward-compatibility
+    features in the API should maintain functionality of v2 DSL and kernel
+    code.
+
+  - The default strings used in the kernel library and filenames to identify
+    the targeted architecture were changed from Intel CPU codenames to
+    [approximate] instruction-set architecture (ISA) names "avx512", "avx2",
+    "avx", "knl", "knc", or "intel64". The YASK targets used in the YASK
+    compiler were updated to be consistent with this list.
+
+  - The "mid" (roughly, median) performance results are now the first
+    ones printed by the `utils/bin/yask_log_to_csv.pl` script.
+
+  - In general, any old DSL and kernel code or user-written output-parsing
+    scripts that use any undocumented files, data, or types may have to be
+    updated.
+
+### Version 2
+* Version 2.22.00 changed the heuristic to determine vector-folding sizes when some
+sizes are specified. This did not affect the default folding sizes.
+* Version 2.21.02 simplified the example 3-D stencils (`3axis`, `3plane`, etc.)
+to calculate simple averages like those in the MiniGhost benchmark.
+This reduced the number of floating-point operations but not the number of points read for each stencil.
 * Version 2.20.00 added checking of the step-dimension index value in the `yk_grid::get_element()` and similar APIs.
 Previously, invalid values silently "wrapped" around to valid values.
 Now, by default, the step index must be valid when reading, and the valid step indices are updated when writing.

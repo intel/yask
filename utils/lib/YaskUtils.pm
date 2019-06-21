@@ -1,5 +1,5 @@
 ##############################################################################
-## YASK: Yet Another Stencil Kernel
+## YASK: Yet Another Stencil Kit
 ## Copyright (c) 2014-2019, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -45,16 +45,23 @@ our @special_log_keys =
 our @log_keys =
   (
    # values from binary.
+   'mid throughput (num-points/sec)',
+   'mid throughput (num-reads/sec)',
+   'mid throughput (num-writes/sec)',
+   'mid throughput (est-FLOPS)',
+   'mid elapsed time (sec)',
+   'mid num-steps-done',
    'best throughput (num-points/sec)',
    'best throughput (num-reads/sec)',
    'best throughput (num-writes/sec)',
    'best throughput (est-FLOPS)',
    'best elapsed time (sec)',
    'best num-steps-done',
-   'mid throughput (num-points/sec)',
-   'version',
+   'yask version',
+   'target',
    'stencil name',
    'stencil description',
+   'element size',
    'invocation',
    'binary invocation',
    'num MPI ranks',
@@ -126,7 +133,9 @@ sub removeSuf($) {
   return $val if $val !~ /^[0-9]/;
 
   # Look for suffix.
-  if ($val =~ /^([0-9.e+-]+)\s*Ki?B$/i) {
+  if ($val =~ /^([0-9.e+-]+)B$/i) {
+    $val = $1;
+  } elsif ($val =~ /^([0-9.e+-]+)\s*Ki?B$/i) {
     $val = $1 * $oneKi;
   } elsif ($val =~ /^([0-9.e+-]+)\s*Mi?B$/i) {
     $val = $1 * $oneMi;
@@ -199,6 +208,9 @@ sub getResultsFromLine($$) {
   # Substitutions to handle old formats.
   $line =~ s/overall.problem/global-domain/g;
   $line =~ s/rank.domain/local-domain/g;
+  $line =~ s/grid/var/g;
+  $line =~ s/Grid/Var/g;
+  $line =~ s/target.ISA/target/g;
   
   # special cases for manual parsing...
   # TODO: catch output of auto-tuner and update relevant results.
@@ -305,7 +317,8 @@ sub printCsvValues($$) {
   for my $m (@all_log_keys) {
     my $r = $results->{$m};
     $r = '' if !defined $r;
-    $r = '"'.$r.'"' if $r !~ /^[0-9.e+-]+$/;  # add quotes if not a number.
+    $r = '"'.$r.'"'  # add quotes if not a number.
+      if $r !~ /^[0-9.e+-]+$/ || $r =~ /[.].*[.]/;
     push @cols, $r;
   }
   print $fh join(',', @cols);

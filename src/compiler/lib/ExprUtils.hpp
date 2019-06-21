@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -77,12 +77,12 @@ namespace yask {
     // example: a+b+c * b+d+a => c+(a+b) * d+(a+b) w/expr a+b combined.
     class CseVisitor : public OptVisitor {
     protected:
-        set<NumExprPtr> _seen;
+        set<numExprPtr> _seen;
 
         // If 'ep' has already been seen, just return true.
         // Else if 'ep' has a match, change pointer to that match, return true.
         // Else, return false.
-        virtual bool findMatchTo(NumExprPtr& ep);
+        virtual bool findMatchTo(numExprPtr& ep);
 
     public:
         CseVisitor()  :
@@ -224,8 +224,8 @@ namespace yask {
             os << ":" << endl <<
                 "  " << getNumNodes() << " node(s)." << endl <<
                 "  " << getNumPairs() << " node pair(s)." << endl <<
-                "  " << getNumReads() << " grid read(s)." << endl <<
-                "  " << getNumWrites() << " grid write(s)." << endl <<
+                "  " << getNumReads() << " var read(s)." << endl <<
+                "  " << getNumWrites() << " var write(s)." << endl <<
                 "  " << getNumOps() << " FP math operation(s)." << endl;
         }
 
@@ -246,7 +246,7 @@ namespace yask {
             _numNodes++;
             return "";
         }
-        virtual string visit(GridPoint* gp) {
+        virtual string visit(VarPoint* gp) {
             if (alreadyVisited(gp)) return "";
             _numNodes++;
             _numReads++;

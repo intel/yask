@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -29,8 +29,6 @@ IN THE SOFTWARE.
 #include <iostream>
 #include <cstring>
 #include "fd_coeff.hpp"
-#define MIN(x, y) (((x) < (y)) ? (x): (y))
-#define MAX(x, y) (((x) > (y)) ? (x): (y))
 
 using namespace std;
 
@@ -41,52 +39,45 @@ int main()
     const int order = 2;
 
     //set the evaluation point e.g. we want to approximate some derivative f^(m)[eval_point]
-    //for most application, this is 0
-    float eval_point = 0;
+    //for most applications, this is 0
+    double eval_point = 0.0;
 
     const int radius = 2;
     const int num_points = 2*radius+1;
-    float coeff[num_points];
-    memset(coeff, 0.0, sizeof(coeff));
-
-    //float* coeff = (float*) malloc(num_points*sizeof(float));
-    //memset(coeff, 0.0, num_points*sizeof(float));
+    double coeff[num_points];
 
     //Construct a set of points (-h*radius, -h*(radius-1), .. 0, h,..., h*radius)
-    //Could pass any arbitrary array grid_points = {x_0, x_1, ... x_n}
+    //Could pass any arbitrary array var_points = {x_0, x_1, ... x_n}
 
-    //float* grid_points = (float*) malloc(num_points*sizeof(float));
-    float grid_points[num_points];
-    cout << "Approximating derivative from grid points: " ;
+    double var_points[num_points];
+    cout << "Approximating derivative from var points: " ;
     for(int i=0; i<num_points; i++){
-        grid_points[i] = (-radius + i);
-        cout << grid_points[i]<< ", ";
+        var_points[i] = (-radius + i);
+        cout << var_points[i]<< ", ";
     }
-
     cout << endl;
 
-    fd_coeff(coeff, eval_point, order, grid_points, num_points);
+    yask::fd_coeff(coeff, eval_point, order, var_points, num_points);
+
+    cout << "The coefficients are: ";
+    for(int i=0; i<num_points; i++) {
+        if (i)
+            cout << ", ";
+    	cout << coeff[i];
+    }
+    cout << endl;
 
     string suffix = (order == 1) ? "st" : (order == 2) ? "nd" : (order == 3) ? "rd" : "th";
     cout << "The " << order << suffix << " derivative of f("<< eval_point <<
         ") is approximated by this " << num_points << "-point FD formula:" << endl;
     cout << "f^(" << order << ")(" << eval_point << ") ~= ";
 
-
     for(int i=0; i<num_points; i++) {
         if (i)
             cout << " + ";
-            cout << coeff[i] << "*f[" << grid_points[i] << "]";
+        cout << coeff[i] << "*f[" << var_points[i] << "]";
     }
     cout << endl;
 
-    cout << "Therefore, the coefficients are: ";
-    for(int i=0; i<num_points; i++) {
-    	cout << coeff[i] << ", ";
-    }
-    cout << endl;
-
-//free(grid_points);
-//free(coeff);
-return 0;
+    return 0;
 }

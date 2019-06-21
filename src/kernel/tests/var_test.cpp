@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// Test the YASK grids.
+// Test the YASK vars.
 // This must be compiled with a kernel lib containing 'x', 'y', and 'z' dims.
 
 // enable assert().
@@ -68,14 +68,14 @@ int main(int argc, char** argv) {
     // 0D test.
     {
         os << "0-D test...\n";
-        GridDimNames gdims;
-        string name = "test grid";
-        auto gb0 = make_shared<YkElemGrid<Layout_0d, false>>(*context, name, gdims);
-        YkGridPtr g0 = make_shared<YkGridImpl>(gb0);
+        VarDimNames gdims;
+        string name = "test var";
+        auto gb0 = make_shared<YkElemVar<Layout_0d, false>>(*context, name, gdims);
+        YkVarPtr g0 = make_shared<YkVarImpl>(gb0);
         g0->alloc_storage();
         os << gb0->make_info_string() << endl;
-        auto gb1 = make_shared<YkElemGrid<Layout_0d, false>>(*context, name, gdims);
-        YkGridPtr g1 = make_shared<YkGridImpl>(gb1);
+        auto gb1 = make_shared<YkElemVar<Layout_0d, false>>(*context, name, gdims);
+        YkVarPtr g1 = make_shared<YkVarImpl>(gb1);
         g1->alloc_storage();
         os << gb1->make_info_string() << endl;
 
@@ -91,12 +91,12 @@ int main(int argc, char** argv) {
     // 3D test.
     {
         os << "3-D test...\n";
-        GridDimNames gdims = {"x", "y", "z"};
-        string name = "test grid";
-        auto gb3 = make_shared<YkElemGrid<Layout_321, false>>(*context, name, gdims);
-        YkGridPtr g3 = make_shared<YkGridImpl>(gb3);
-        auto gb3f = make_shared<YkVecGrid<Layout_123, false, VLEN_X, VLEN_Y, VLEN_Z>>(*context, name, gdims);
-        YkGridPtr g3f = make_shared<YkGridImpl>(gb3f);
+        VarDimNames gdims = {"x", "y", "z"};
+        string name = "test var";
+        auto gb3 = make_shared<YkElemVar<Layout_321, false>>(*context, name, gdims);
+        YkVarPtr g3 = make_shared<YkVarImpl>(gb3);
+        auto gb3f = make_shared<YkVecVar<Layout_123, false, VLEN_X, VLEN_Y, VLEN_Z>>(*context, name, gdims);
+        YkVarPtr g3f = make_shared<YkVarImpl>(gb3f);
         int i = 0;
         int min_pad = 3;
         for (auto dname : gdims) {
@@ -139,6 +139,6 @@ int main(int argc, char** argv) {
             });
     }
 
-    os << "End of YASK grid test.\n";
+    os << "End of YASK var test.\n";
     return 0;
 }

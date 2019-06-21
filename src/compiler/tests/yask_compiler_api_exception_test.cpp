@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -52,10 +52,14 @@ int main() {
     auto y = fac.new_domain_index("y");
     auto z = fac.new_domain_index("z");
 
-    // Create a grid var.
-    auto g1 = soln->new_grid("test_grid", {t, x, y, z});
+    // Explicitly set the stencil dims in the solution.
+    soln->set_step_dim(t);
+    soln->set_domain_dims({x, z, y});
+    
+    // Create a var.
+    auto g1 = soln->new_var("test_var", {t, x, y, z});
 
-    // Create an equation for the grid.
+    // Create an equation for the var.
 
     auto n1 = fac.new_const_number_node(3.14);
     cout << n1->format_simple() << endl;
@@ -64,9 +68,9 @@ int main() {
     cout << n2->format_simple() << endl;
 
     // Exception test
-    cout << "Exception Test: Call 'new_relative_grid_point' with wrong argument.\n";
+    cout << "Exception Test: Call 'new_relative_var_point' with wrong argument.\n";
     try {
-        auto n3 = g1->new_relative_grid_point({0, +1, 0, -2, 1});
+        auto n3 = g1->new_relative_var_point({0, +1, 0, -2, 1});
     } catch (yask_exception& e) {
         cout << "YASK threw an expected exception.\n";
         cout << e.get_message() << endl;
@@ -74,27 +78,27 @@ int main() {
         num_exception++;
     }
 
-    auto n3 = g1->new_relative_grid_point({0, +1, 0, -2});
+    auto n3 = g1->new_relative_var_point({0, +1, 0, -2});
     cout << n3->format_simple() << endl;
 
     auto n4a = fac.new_add_node(n2, n3);
     auto n4b = fac.new_add_node(n4a, n1);
     cout << n4b->format_simple() << endl;
 
-    auto n5 = g1->new_relative_grid_point({0, +1, -1, 0});
+    auto n5 = g1->new_relative_var_point({0, +1, -1, 0});
     cout << n5->format_simple() << endl;
 
     auto n6 = fac.new_multiply_node(n4b, n5);
     cout << n6->format_simple() << endl;
 
-    auto n_lhs = g1->new_relative_grid_point({+1, 0, 0, 0});
+    auto n_lhs = g1->new_relative_var_point({+1, 0, 0, 0});
     cout << n_lhs->format_simple() << endl;
 
     auto n_eq = fac.new_equation_node(n_lhs, n6);
     cout << n_eq->format_simple() << endl;
 
     cout << "Solution '" << soln->get_name() << "' contains " <<
-        soln->get_num_grids() << " grid(s), and " <<
+        soln->get_num_vars() << " var(s), and " <<
         soln->get_num_equations() << " equation(s)." << endl;
 
     // Number of bytes in each FP value.
@@ -135,7 +139,7 @@ int main() {
     // TODO: better to have exception test for the methods below
     // Eqs::findDeps (<-EqGroups::makeEqGroups<-StencilSolution::analyze_solution<-StencilSolution::format())
     // EqGroups::sort (<-EqGroups::makeEqGroups<-StencilSolution::analyze_solution<-StencilSolution::format())
-    // GridPoint::GridPoint
+    // VarPoint::VarPoint
     // castExpr
     // NumExpr::getNumVal, NumExpr::getIntVal, NumExpr::getBoolVal
     // Dimensions::setDims (<-StencilSolution::analyze_solution<-StencilSolution::format)

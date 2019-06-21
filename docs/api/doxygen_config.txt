@@ -44,7 +44,7 @@ PROJECT_NUMBER         =
 # for a project that appears at the top of each page and should give viewer a
 # quick idea about the purpose of the project. Keep the description short.
 
-PROJECT_BRIEF          = "Yet Another Stencil Kernel: a software framework for creating HPC stencil code. Copyright 2014-2019 Intel Corporation."
+PROJECT_BRIEF          = "Yet Another Stencil Kit: a software framework for creating HPC stencil code. Copyright 2014-2019 Intel Corporation."
 
 # With the PROJECT_LOGO tag one can specify a logo or an icon that is included
 # in the documentation. The maximum height of the logo should not exceed 55
@@ -809,7 +809,7 @@ WARN_LOGFILE           =
 # spaces. See also FILE_PATTERNS and EXTENSION_MAPPING
 # Note: If this tag is empty the current directory is searched.
 
-INPUT                  = ../../include \
+INPUT                  = ../../include ../../include/aux \
                          mainpage.txt
 
 # This tag can be used to specify the character encoding of the source files
@@ -835,7 +835,7 @@ INPUT_ENCODING         = UTF-8
 # *.m, *.markdown, *.md, *.mm, *.dox, *.py, *.pyw, *.f90, *.f95, *.f03, *.f08,
 # *.f, *.for, *.tcl, *.vhd, *.vhdl, *.ucf, *.qsf and *.ice.
 
-FILE_PATTERNS          = *.hpp
+FILE_PATTERNS          = y*.hpp
 
 # The RECURSIVE tag can be used to specify whether or not subdirectories should
 # be searched for input files as well.

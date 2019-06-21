@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -29,7 +29,7 @@ IN THE SOFTWARE.
 
 %module YC_MODULE
 
-// See http://www.swig.org/Doc3.0/Library.html
+// See http://www.swig.org/Doc4.0/Library.html
 %include <std_string.i>
 %include <std_shared_ptr.i>
 %include <std_vector.i>
@@ -39,12 +39,12 @@ IN THE SOFTWARE.
 
 // Must declare shared_ptrs for the entire expr_node hierarchy!
 %shared_ptr(yask::yc_solution)
- //%shared_ptr(yask::yc_grid)
+ //%shared_ptr(yask::yc_var)
 %shared_ptr(yask::yc_expr_node)
 %shared_ptr(yask::yc_index_node)
 %shared_ptr(yask::yc_equation_node)
 %shared_ptr(yask::yc_number_node)
-%shared_ptr(yask::yc_grid_point_node)
+%shared_ptr(yask::yc_var_point_node)
 %shared_ptr(yask::yc_const_number_node)
 %shared_ptr(yask::yc_negate_node)
 %shared_ptr(yask::yc_commutative_number_node)
@@ -66,19 +66,36 @@ IN THE SOFTWARE.
 %shared_ptr(yask::yc_not_greater_than_node)
 %shared_ptr(yask::yc_and_node)
 %shared_ptr(yask::yc_or_node)
+%shared_ptr(yask::yc_number_ptr_arg)
+%shared_ptr(yask::yc_number_const_arg)
+%shared_ptr(yask::yc_number_any_arg)
 
+// From http://www.swig.org/Doc4.0/SWIG.html#SWIG_nn2: Everything in the %{
+// ... %} block is simply copied verbatim to the resulting wrapper file
+// created by SWIG. This section is almost always used to include header
+// files and other declarations that are required to make the generated
+// wrapper code compile. It is important to emphasize that just because you
+// include a declaration in a SWIG input file, that declaration does not
+// automatically appear in the generated wrapper code---therefore you need
+// to make sure you include the proper header files in the %{ ... %}
+// section. It should be noted that the text enclosed in %{ ... %} is not
+// parsed or interpreted by SWIG.
+%{
+#define SWIG_FILE_WITH_INIT
+#include "yask_kernel_api.hpp"
+%}
 %{
 #define SWIG_FILE_WITH_INIT
 #include "yask_compiler_api.hpp"
 %}
 
 // All vector types used in API.
-%template(vector_int) std::vector<int>;
-%template(vector_str) std::vector<std::string>;
-%template(vector_index) std::vector<std::shared_ptr<yask::yc_index_node>>;
-%template(vector_num) std::vector<std::shared_ptr<yask::yc_number_node>>;
-%template(vector_eq) std::vector<std::shared_ptr<yask::yc_equation_node>>;
-%template(vector_grid) std::vector<yask::yc_grid*>;
+%template(yc_vector_int) std::vector<int>;
+%template(yc_vector_str) std::vector<std::string>;
+%template(yc_vector_index) std::vector<std::shared_ptr<yask::yc_index_node>>;
+%template(yc_vector_num) std::vector<std::shared_ptr<yask::yc_number_node>>;
+%template(yc_vector_eq) std::vector<std::shared_ptr<yask::yc_equation_node>>;
+%template(yc_vector_var) std::vector<yask::yc_var*>;
 
  // Tell SWIG how to catch a YASK exception and rethrow it in Python.
 %exception {
@@ -198,4 +215,4 @@ BOOL_OP(__le__, <=);
 
 %include "yask_common_api.hpp"
 %include "yask_compiler_api.hpp"
-%include "yc_node_api.hpp"
+%include "aux/yc_node_api.hpp"

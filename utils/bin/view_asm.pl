@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 
 ##############################################################################
-## YASK: Yet Another Stencil Kernel
+## YASK: Yet Another Stencil Kit
 ## Copyright (c) 2014-2019, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -23,15 +23,20 @@
 ## IN THE SOFTWARE.
 ##############################################################################
 
-# Purpose: find SIMD inner loops in asm file(s) and
+# Purpose: expand info in asm files.
+# Optionally, find SIMD inner loops in asm file(s) and
 # report some stats on them.
 
 use strict;
+use File::Basename;
+
 my $minInstrs = 2;
 my $printAsm = 0;
-my $targetLabel = "";
+my $simdOnly = 0;
+my $loopsOnly = 0;
 my $targetText = "";
 my $targetFn = "";
+my @fnames;
 
 sub usage {
   my $msg = shift;
@@ -39,10 +44,11 @@ sub usage {
   warn "$msg\n" if defined $msg;
   die "usage: [options] file...\n".
     "options:\n".
-    " -p           print instrs\n".
-    " -f=<regex>   print only loops in matching function\n".
-    " -l=<regex>   print only loops at matching label\n".
-    " -t=<regex>   print only loops with matching text\n";
+    " -p           print instrs in addition to stats\n".
+    " -l           view only inner loops\n".
+    " -s           view funcs/loops only with SIMD code\n".
+    " -f=<regex>   view only in matching function\n".
+    " -t=<regex>   view only if containing matching text\n";
 }
 
 for my $arg (@ARGV) {
@@ -52,35 +58,109 @@ for my $arg (@ARGV) {
   }
   elsif ($arg eq '-p') {
     $printAsm = 1;
-    next;
   }
-  elsif ($arg =~ /^-(\w+)=(.*)$/) {
+  elsif ($arg eq '-l') {
+    $loopsOnly = 1;
+  }
+  elsif ($arg eq '-s') {
+    $simdOnly = 1;
+  }
+  elsif ($arg =~ /^-(\w+)=(.+)$/) {
     my ($key, $val) = ($1, $2);
-    if ($key eq "l") { $targetLabel = $val; }
-    elsif ($key eq "t") { $targetText = $val; }
+    if ($key eq "t") { $targetText = $val; }
     elsif ($key eq "f") { $targetFn = $val; }
     else { usage("error: unknown option '$key'"); }
-    next;
   }
+  elsif ($arg =~ /^-/) {
+    usage("error: unknown or badly-formatted option '$arg'");
+  }
+  else {
+    die "error: cannot read '$arg'\n" if !-r $arg;
+    push @fnames, $arg;
+  }
+}
+usage() if !@fnames;
 
-  my $fname = $arg;
+
+my @lines;                  # following stats apply to these lines.
+my $ninstrs = 0;            # num instrs.
+my %istats;                   # instr stats.
+my %astats;                   # arg stats.
+my %fstats;                   # src-file stats.
+my %rstats;                   # SIMD reg stats.
+my $curFn = "";
+
+sub clearStats() {
+  $ninstrs = 0;
+  undef %istats;
+  undef %astats;
+  undef %fstats;
+  undef %rstats;
+  undef @lines;
+}
+    
+sub printLines() {
+  if ($ninstrs > $minInstrs &&
+      (!$simdOnly || scalar %rstats > 0) &&
+      (!$targetFn || $curFn =~ /$targetFn/) &&
+      (!$targetText || grep(/$targetText/, @lines))) {
+    print "\n";
+    if ($loopsOnly) {
+      print "non-" if !scalar %rstats;
+      print "SIMD loop:\n";
+    }
+    print "Function '$curFn'\n" if defined $curFn;
+    print @lines if $printAsm;
+    print "$ninstrs total instrs\n";
+    print "Instr counts per instr type (FLOP count is a subtotal):\n";
+    for my $key (sort keys %istats) {
+      my $value = $istats{$key};
+      printf "%4i  $key\n", $value;
+    }
+    print "Instr counts per operand type:\n";
+    for my $key (sort keys %astats) {
+      my $value = $astats{$key};
+      printf "%4i  $key\n", $value;
+    }
+    print "Instr counts per source file:\n";
+    for my $key (sort keys %fstats) {
+      my $value = $fstats{$key};
+      printf "%4i  $key\n", $value;
+    }
+    print "Num SIMD regs used: ".(scalar keys %rstats)."\n";
+  }
+}
+    
+
+for my $fname (@fnames) {
+  my %loopLabels;               # labels that begin inner loops.
   my %files;                    # map from file index to source file-name.
-  my %loopLabels;
-  my %astats;                   # arg stats.
-  my %istats;                   # instr stats.
-  my %fstats;                   # src-file stats.
-  my %rstats;                   # SIMD reg stats.
+  my %dirs;                     # map from file index to source dir-name.
+  my %dirIndices;               # map from dir-name to dir index.
 
   for my $pass (0..1) {
 
     my %labels;
+
     my $asmLine = 0;
     my $getData = 0;
-    my ($locInfo, $srcFile, $curFn); # strings describing current location.
-    my @lines;                  # lines to print.
+    my ($locInfo, $srcFile); # strings describing current location.
 
-    open F, "<$fname" or usage("error: cannot open '$fname'");
-    print "\n'$fname'...\n" if !$pass;
+    # Header.
+    if (!$pass) {
+      print "\n'$fname'...\n";
+    } else {
+      my %id;
+      for my $dir (keys %dirIndices) {
+        $id{$dirIndices{$dir}} = $dir;
+      }
+      print "\nDirectory key:\n";
+      for my $di (sort { $a <=> $b } keys %id) {
+        print "  <dir$di> = $id{$di}\n";
+      }
+    }
+
+    open F, "c++filt < $fname |" or usage("error: cannot open '$fname'");
     while (<F>) {
       chomp;
 
@@ -88,7 +168,12 @@ for my $arg (@ARGV) {
       #  .file   40 "src/stencil_block_loops.hpp"
       if (/^\s*\.file\s+(\d+)\s+"(.*)"/) {
         my ($fi, $fn) = ($1, $2);
-        $files{$fi} = $fn;
+        $files{$fi} = basename($fn);
+        my $dir = dirname($fn);
+        $dirs{$fi} = dirname($fn);
+        if ($dir && !exists($dirIndices{$dir})) {
+          $dirIndices{$dir} = scalar keys %dirIndices;
+        }
       }
 
       # location, e.g.,
@@ -98,40 +183,52 @@ for my $arg (@ARGV) {
         if (exists $files{$fi}) {
           $srcFile = $files{$fi};
           $locInfo = "$srcFile:$info";
+          my $srcDir = $dirs{$fi};
+          if ($srcDir && exists($dirIndices{$srcDir})) {
+            $locInfo = "<dir$dirIndices{$srcDir}>/$locInfo";
+          }
         } else {
           $srcFile = "";
           $locInfo = "";
         }
       }
 
-      # new function.
-      elsif (/^\s*\.section/) {
-        undef $curFn;
+      # begin function.
+      elsif (/^\#\s+[-]+\s+Begin\s+(.+)/) {
+        $curFn = $1;
+        clearStats();
+      }
+
+      # end function.
+      elsif (/^\#\s+[-]+\s+End /) {
+        printLines() if $pass && !$loopsOnly;
+        clearStats();
       }
 
       # unmangled function name, e.g.,
       # # --- yask::Indices::setFromInitList(yask::Indices *, const std::initializer_list<yask::idx_t> &)
-      elsif (/^\#\s+---\s+(.*)/) {
-        $curFn = $1;
+      elsif (/^\#\s+[-]+\s+(\w+)::(.+)/) {
+        $curFn = "$1::$2";
+      }
+
+      # parameter.
+      elsif (/^\#\s+parameter/) {
+        push @lines, "$_\n" if !$loopsOnly;
       }
 
       # label, e.g.,
       #..B1.39:                        # Preds ..B1.54 ..B1.38
       elsif (/^\s*(\S+):/) {
         my $lab = $1;
-        #warn "$lab: @ $asmLine\n";
         $labels{$lab} = $asmLine;
 
         # beginning of an inner loop?
-        if ($pass && exists $loopLabels{$lab}) {
+        if ($pass && $loopsOnly && exists $loopLabels{$lab}) {
 
-          # clear loop data.
-          undef %istats;
-          undef %astats;
-          undef %fstats;
-          undef %rstats;
-          undef @lines;
+          # clear previous loop data.
+          clearStats();
         }
+        push @lines, "$_\n" if $lab =~ /\.\.B/;
       }
 
       # line of code, e.g.,
@@ -140,6 +237,7 @@ for my $arg (@ARGV) {
         my ($instr, $args, $comment) = ($1, $2, $3);
         $asmLine++;
         push @lines, "$_\t$locInfo\n";
+        $ninstrs++;
 
         # collect stats in this instr.
         {
@@ -161,7 +259,7 @@ for my $arg (@ARGV) {
             $itype = 'packed DP';
           }
 
-          # reg stats.
+          # SIMD reg stats.
           if ($args =~ /[xyz]mm(\d+)/) {
             $rstats{$1}++;
           }
@@ -238,46 +336,19 @@ for my $arg (@ARGV) {
           # this assumes loops jump backward.
           if (exists $labels{$lab}) {
 
-            my $dist = $asmLine - $labels{$lab};
+            # remember for 2nd pass.
             $loopLabels{$lab} = 1;
-            #warn "$lab: $dist instrs\n";
 
-            # 2nd pass: print results under certain conditions.
-            if ($pass &&
-                $dist > $minInstrs &&
-                scalar keys %rstats &&
-                (!$targetFn || $curFn =~ /$targetFn/) &&
-                (!$targetLabel || $lab =~ /$targetLabel/) &&
-                (!$targetText || grep(/$targetText/, @lines))) {
-              print "\nSIMD loop $lab:\n";
-              print "'$curFn'\n" if defined $curFn;
-              print @lines if $printAsm;
-              print "$dist total instrs\n";
-              print "Instr counts per instr type (FLOP count is a subtotal):\n";
-              for my $key (sort keys %istats) {
-                my $value = $istats{$key};
-                printf "%4i  $key\n", $value;
-              }
-              print "Instr counts per operand type:\n";
-              for my $key (sort keys %astats) {
-                my $value = $astats{$key};
-                printf "%4i  $key\n", $value;
-              }
-              print "Instr counts per source file:\n";
-              for my $key (sort keys %fstats) {
-                my $value = $fstats{$key};
-                printf "%4i  $key\n", $value;
-              }
-              print "Num SIMD regs used: ".(scalar keys %rstats)."\n";
+            # Print loop.
+            if ($pass && $loopsOnly) {
+              printLines();
+            
+              # we only want inner loops,
+              # so we delete all previous label info now.
+              undef %labels;
+              
+              clearStats();
             }
-
-            # we only want inner loops,
-            # so we can delete all label info now.
-            undef %labels;
-            undef %istats;
-            undef %astats;
-            undef %fstats;
-            undef %rstats;
           }
         }
       }
@@ -285,5 +356,5 @@ for my $arg (@ARGV) {
   }
 }
 
-print "To see the asm code for the above loop(s), run '$0 -p @ARGV'.\n"
+print "To see the asm code for the above, run '$0 -p @ARGV'.\n"
   if !$printAsm;

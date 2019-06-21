@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -35,7 +35,7 @@ using namespace yask;
 
 // Add some command-line options for this application in addition to the
 // default ones provided by YASK.
-struct AppSettings : public KernelSettings {
+struct MySettings {
     bool help = false;          // help requested.
     bool doWarmup = true;       // whether to do warmup run.
     bool doPreAutoTune = true;  // whether to do pre-auto-tuning.
@@ -47,25 +47,28 @@ struct AppSettings : public KernelSettings {
     int pre_trial_sleep_time = 1; // sec to sleep before each trial.
     int debug_sleep = 0;          // sec to sleep for debug attach.
 
-    AppSettings(DimsPtr dims, KernelEnvPtr env) :
-        KernelSettings(dims, env) { }
+    // Ptr to the soln.
+    yk_solution_ptr _ksoln;
+
+    MySettings(yk_solution_ptr ksoln) :
+        _ksoln(ksoln) { }
 
     // A custom option-handler for '-v'.
     class ValOption : public CommandLineParser::OptionBase {
-        AppSettings& _as;
+        MySettings& _as;
         static constexpr idx_t _lsz=63, _bsz=24;
 
     public:
 
-        ValOption(AppSettings& as) :
+        ValOption(MySettings& as) :
                 OptionBase("v",
-                           "Minimal validation: shortcut for '-validate -no-pre-auto_tune -no-auto_tune"
+                           "Minimal validation: shortcut for '-validate -no-pre_auto_tune -no-auto_tune"
                            " -no-warmup -t 1 -trial_steps 1 -l " + to_string(_lsz) +
                            " -b " + to_string(_bsz) + "'."),
                 _as(as) { }
 
         // Set multiple vars.
-        virtual bool check_arg(std::vector<std::string>& args,
+        virtual bool check_arg(const std::vector<std::string>& args,
                                int& argi) {
             if (_check_arg(args, argi, _name)) {
                 _as.validate = true;
@@ -73,10 +76,19 @@ struct AppSettings : public KernelSettings {
                 _as.doWarmup = false;
                 _as.num_trials = 1;
                 _as.trial_steps = 1;
-                for (auto dim : _as._dims->_domain_dims.getDims()) {
-                    auto& dname = dim.getName();
-                    _as._rank_sizes[dname] = _lsz;
-                    _as._block_sizes[dname] = _bsz;
+
+                // Create new args and parse them.
+                for (auto& dname : _as._ksoln->get_domain_dim_names()) {
+
+                    // Local domain size, e.g., "-lx 63".
+                    string arg = "-l" + dname + " " + to_string(_lsz);
+
+                    // Block size, e.g., "-bx 24".
+                    arg += " -b" + dname + " " + to_string(_bsz);
+
+                    // Parse 'arg'.
+                    auto rem = _as._ksoln->apply_command_line_options(arg);
+                    assert(rem.length() == 0);
                 }
                 return true;
             }
@@ -88,15 +100,8 @@ struct AppSettings : public KernelSettings {
     // Exit with message on error or request for help.
     void parse(int argc, char** argv) {
 
-        // Create a parser and add base options to it.
+        // Create a parser and add options to it.
         CommandLineParser parser;
-        add_options(parser);
-
-        // Add more options for this app.
-        parser.add_option(new CommandLineParser::BoolOption
-                          ("h",
-                           "Print help message.",
-                           help));
         parser.add_option(new CommandLineParser::BoolOption
                           ("help",
                            "Print help message.",
@@ -114,7 +119,7 @@ struct AppSettings : public KernelSettings {
                            doWarmup));
         parser.add_option(new CommandLineParser::IntOption
                           ("step_alloc",
-                           "Number of steps to allocate in relevant grids, "
+                           "Number of steps to allocate in relevant vars, "
                            "overriding default value from YASK compiler.",
                            step_alloc));
         parser.add_option(new CommandLineParser::IntOption
@@ -155,13 +160,12 @@ struct AppSettings : public KernelSettings {
                            validate));
         parser.add_option(new ValOption(*this));
 
-        // Tokenize default args.
-        vector<string> args;
-        parser.set_args(DEF_ARGS, args);
+        // Parse 'args' and 'argv' cmd-line options, which sets values.
+        // Any remaining strings will be returned.
+        auto rem_args = parser.parse_args(argc, argv);
 
-        // Parse cmd-line options, which sets values.
-        // Any remaining strings will be left in args.
-        parser.parse_args(argc, argv, args);
+        // Parse standard args not handled by this parser.
+        rem_args = _ksoln->apply_command_line_options(rem_args);
 
         if (help) {
             string appNotes =
@@ -170,21 +174,21 @@ struct AppSettings : public KernelSettings {
                 " If validation fails, it may be due to rounding error;\n"
                 "  try building with 8-byte reals.\n";
             vector<string> appExamples;
-            appExamples.push_back("-g 768 -t 2");
+            appExamples.push_back("-g 768 -num_trials 2");
             appExamples.push_back("-v");
-            print_usage(cout, parser, argv[0], appNotes, appExamples);
+
+            // TODO: make an API for this.
+            auto context = dynamic_pointer_cast<StencilContext>(_ksoln);
+            assert(context.get());
+            auto& opts = context->get_settings();
+            opts->print_usage(cout, parser, argv[0], appNotes, appExamples);
             exit_yask(1);
         }
 
-        if (args.size()) {
-            yask_exception e;
-            stringstream err;
-            err << "Error: extraneous parameter(s):";
-            for (auto arg : args)
-                err << " '" << arg << "'";
-            err << "; run with '-help' option for usage";
-            THROW_YASK_EXCEPTION(err.str());
-        }
+        if (rem_args.length())
+            THROW_YASK_EXCEPTION("Error: extraneous parameter(s): '" +
+                                 rem_args +
+                                 "'; run with '-help' option for usage");
     }
 
     // Print splash banner and invocation string.
@@ -194,7 +198,7 @@ struct AppSettings : public KernelSettings {
         // See https://en.wikipedia.org/wiki/Box-drawing_character.
         os <<
             " \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n"
-            " \u2502   Y.A.S.K. \u2500\u2500 Yet Another Stencil Kernel   \u2502\n"
+            " \u2502     Y.A.S.K. \u2500\u2500 Yet Another Stencil Kit    \u2502\n"
             " \u2502       https://github.com/intel/yask        \u2502\n"
             " \u2502 Copyright (c) 2014-2019, Intel Corporation \u2502\n"
             " \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n"
@@ -203,7 +207,9 @@ struct AppSettings : public KernelSettings {
             "Stencil name: " YASK_STENCIL_NAME << endl;
 
         // Echo invocation parameters for record-keeping.
+#ifdef DEF_ARGS
         os << "Default arguments: " DEF_ARGS << endl;
+#endif
         os << "Binary invocation:";
         for (int argi = 0; argi < argc; argi++)
             os << " " << argv[argi];
@@ -217,21 +223,21 @@ struct AppSettings : public KernelSettings {
             os << "Resuming...\n";
         }
     }
-};
+};                              // AppSettings.
 
 // Override step allocation.
-void alloc_steps(yk_solution_ptr soln, const AppSettings& opts) {
+void alloc_steps(yk_solution_ptr soln, const MySettings& opts) {
     if (opts.step_alloc <= 0)
         return;
 
-    // Find grids with steps.
+    // Find vars with steps.
     auto step_dim = soln->get_step_dim_name();
-    auto grids = soln->get_grids();
-    for (auto grid : grids) {
-        if (grid->is_dim_used(step_dim))
+    auto vars = soln->get_vars();
+    for (auto var : vars) {
+        if (var->is_dim_used(step_dim))
 
             // override num steps.
-            grid->set_alloc_size(step_dim, opts.step_alloc);
+            var->set_alloc_size(step_dim, opts.step_alloc);
     }
 }
 
@@ -254,36 +260,32 @@ int main(int argc, char** argv)
         auto ep = dynamic_pointer_cast<KernelEnv>(kenv);
         auto num_ranks = kenv->get_num_ranks();
 
-        // Problem dimensions.
-        auto dims = YASK_STENCIL_CONTEXT::new_dims();
-
-        // Parse cmd-line options.
-        // TODO: do this through APIs.
-        auto opts = make_shared<AppSettings>(dims, ep);
-        opts->parse(argc, argv);
-
-        // Make sure warmup is on if needed.
-        if (opts->trial_steps <= 0 && opts->trial_time > 0)
-            opts->doWarmup = true;
-
-        // Object containing data and parameters for stencil eval.
+        // Make solution object containing data and parameters for stencil eval.
         // TODO: do everything through API without cast to StencilContext.
         auto ksoln = kfac.new_solution(kenv);
         auto context = dynamic_pointer_cast<StencilContext>(ksoln);
         assert(context.get());
+        ostream& os = context->set_ostr();
+        auto& copts = context->get_settings();
+        assert(copts);
 
-        // Replace the default settings with 'opts'.
-        context->set_settings(opts);
+        // Parse cmd-line options and exit on -help or error.
+        // TODO: do this through APIs.
+        MySettings opts(ksoln);
+        opts.parse(argc, argv);
+
+        // Make sure warmup is on if needed.
+        if (opts.trial_steps <= 0 && opts.trial_time > 0)
+            opts.doWarmup = true;
 
         // Make sure any MPI/OMP debug data is dumped from all ranks before continuing.
         kenv->global_barrier();
 
         // Print splash banner and related info.
-        ostream& os = context->set_ostr();
-        opts->splash(os, argc, argv);
+        opts.splash(os, argc, argv);
 
         // Override alloc if requested.
-        alloc_steps(ksoln, *opts);
+        alloc_steps(ksoln, opts);
 
         // Alloc memory, etc.
         ksoln->prepare_solution();
@@ -292,20 +294,20 @@ int main(int argc, char** argv)
         if (context->rank_bb.bb_num_points < 1)
             THROW_YASK_EXCEPTION("Exiting because there are no points in the domain");
 
-        // init data in grids and params.
-        if (opts->doWarmup || !opts->validate)
+        // init data in vars and params.
+        if (opts.doWarmup || !opts.validate)
             context->initData();
 
         // Invoke auto-tuner.
-        if (opts->doPreAutoTune)
+        if (opts.doPreAutoTune)
             ksoln->run_auto_tuner_now();
 
         // Enable/disable further auto-tuning.
-        ksoln->reset_auto_tuner(opts->_do_auto_tune);
+        ksoln->reset_auto_tuner(copts->_do_auto_tune);
 
         // Warmup caches, threading, etc.
         // Measure time to change number of steps.
-        if (opts->doWarmup) {
+        if (opts.doWarmup) {
 
             // Turn off debug.
             auto dbg_out = context->get_debug_output();
@@ -332,7 +334,7 @@ int main(int argc, char** argv)
                 rate = (wtime > 0.) ? double(warmup_steps) / wtime : 0;
 
                 // Done if time est. isn't needed.
-                if (opts->trial_steps > 0)
+                if (opts.trial_steps > 0)
                     break;
 
                 // Use time to set number of steps for next trial.
@@ -347,20 +349,20 @@ int main(int argc, char** argv)
             }
 
             // Set final number of steps.
-            if (opts->trial_steps <= 0) {
-                idx_t tsteps = ceil(rate * opts->trial_time);
+            if (opts.trial_steps <= 0) {
+                idx_t tsteps = ceil(rate * opts.trial_time);
                 tsteps = CEIL_DIV(sumOverRanks(tsteps, ep->comm), num_ranks);
 
                 // Round up to multiple of temporal tiling if not too big.
                 auto step_dim = ksoln->get_step_dim_name();
-                auto rt = opts->_region_sizes[step_dim];
-                auto bt = opts->_block_sizes[step_dim];
+                auto rt = copts->_region_sizes[step_dim];
+                auto bt = copts->_block_sizes[step_dim];
                 auto tt = max(rt, bt);
                 const idx_t max_mult = 5;
                 if (tt > 1 && tt < max_mult * tsteps)
                     tsteps = ROUND_UP(tsteps, tt);
                 
-                opts->trial_steps = tsteps;
+                opts.trial_steps = tsteps;
             }
             
             // Restore debug.
@@ -369,9 +371,9 @@ int main(int argc, char** argv)
         kenv->global_barrier();
 
         // Exit if nothing to do.
-        if (opts->num_trials < 1)
+        if (opts.num_trials < 1)
             THROW_YASK_EXCEPTION("Exiting because zero trials are specified");
-        if (opts->trial_steps <= 0)
+        if (opts.trial_steps <= 0)
             THROW_YASK_EXCEPTION("Exiting because zero steps per trial are specified");
 
         // Track results.
@@ -379,36 +381,36 @@ int main(int argc, char** argv)
 
         // First & last steps.
         idx_t first_t = 0;
-        idx_t last_t = opts->trial_steps - 1;
+        idx_t last_t = opts.trial_steps - 1;
 
         // Stencils seem to be backward?
         // (This is just a heuristic, but the direction
         // is not usually critical to perf measurement.)
-        if (opts->_dims->_step_dir < 0) {
+        if (copts->_dims->_step_dir < 0) {
             first_t = last_t;
             last_t = 0;
         }
         
         /////// Performance run(s).
         os << endl << divLine <<
-            "Running " << opts->num_trials << " performance trial(s) of " <<
-            opts->trial_steps << " step(s) each...\n" << flush;
-        for (idx_t tr = 0; tr < opts->num_trials; tr++) {
+            "Running " << opts.num_trials << " performance trial(s) of " <<
+            opts.trial_steps << " step(s) each...\n" << flush;
+        for (idx_t tr = 0; tr < opts.num_trials; tr++) {
             os << divLine <<
                 "Trial number:                      " << (tr + 1) << endl << flush;
 
             // init data before each trial for comparison if validating.
-            if (opts->validate)
-                context->initDiff();
+            if (opts.validate)
+                context->initData();
 
             // Warn if tuning.
             if (ksoln->is_auto_tuner_enabled())
                 os << "auto-tuner is active during this trial, so results may not be representative.\n";
 
             // Stabilize.
-            if (opts->pre_trial_sleep_time > 0) {
+            if (opts.pre_trial_sleep_time > 0) {
                 os << flush;
-                sleep(opts->pre_trial_sleep_time);
+                sleep(opts.pre_trial_sleep_time);
             }
             kenv->global_barrier();
 
@@ -472,12 +474,12 @@ int main(int argc, char** argv)
 
         /////// Validation run.
         bool ok = true;
-        if (opts->validate) {
+        if (opts.validate) {
             kenv->global_barrier();
             os << endl << divLine <<
                 "Setup for validation...\n";
 
-            // Make a reference context for comparisons w/new grids.
+            // Make a reference context for comparisons w/new vars.
             auto ref_soln = kfac.new_solution(kenv, ksoln);
             auto ref_context = dynamic_pointer_cast<StencilContext>(ref_soln);
             assert(ref_context.get());
@@ -491,7 +493,7 @@ int main(int argc, char** argv)
             ref_opts->_numa_pref = yask_numa_none;
 
             // TODO: re-enable the region and block settings below;
-            // requires allowing consistent init of different-sized grids
+            // requires allowing consistent init of different-sized vars
             // in kernel code.
 #if 0
             auto sdim = ref_soln->get_step_dim_name();
@@ -504,24 +506,24 @@ int main(int argc, char** argv)
 #endif
 
             // Override allocations and prep solution as with ref soln.
-            alloc_steps(ref_soln, *opts);
+            alloc_steps(ref_soln, opts);
             ref_soln->prepare_solution();
 
             // init to same value used in context.
-            ref_context->initDiff();
+            ref_context->initData();
 
 #ifdef CHECK_INIT
 
             // Debug code to determine if data compares immediately after init matches.
             os << endl << divLine <<
                 "Reinitializing data for minimal validation...\n" << flush;
-            context->initDiff();
+            context->initData();
 #else
 
             // Ref trial.
             // Do same number as last perf run.
             os << endl << divLine <<
-                "Running " << opts->trial_steps << " step(s) for validation...\n" << flush;
+                "Running " << opts.trial_steps << " step(s) for validation...\n" << flush;
             ref_context->run_ref(first_t, last_t);
 
             // Discard perf report.

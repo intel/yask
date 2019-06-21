@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -44,11 +44,11 @@ namespace yask {
         // Other bundles that this one depends on.
         StencilBundleSet _depends_on;
 
-        // List of scratch-grid bundles that need to be evaluated
+        // List of scratch-var bundles that need to be evaluated
         // before this bundle. Listed in eval order first-to-last.
         StencilBundleList _scratch_children;
 
-        // Whether this updates scratch grid(s);
+        // Whether this updates scratch var(s);
         bool _is_scratch = false;
 
         // Overall bounding box for the bundle.
@@ -85,14 +85,14 @@ namespace yask {
 
     public:
 
-        // Grids that are written to by these stencils.
-        GridPtrs outputGridPtrs;
+        // Vars that are written to by these stencils.
+        VarPtrs outputVarPtrs;
 
-        // Grids that are read by these stencils (not necessarify
-        // read-only, i.e., a grid can be input and output).
-        GridPtrs inputGridPtrs;
+        // Vars that are read by these stencils (not necessarify
+        // read-only, i.e., a var can be input and output).
+        VarPtrs inputVarPtrs;
 
-        // Vectors of scratch grids that are written to/read from.
+        // Vectors of scratch vars that are written to/read from.
         ScratchVecs outputScratchVecs;
         ScratchVecs inputScratchVecs;
 
@@ -146,9 +146,9 @@ namespace yask {
             return sg_list;
         }
 
-        // If this bundle is updating scratch grid(s),
+        // If this bundle is updating scratch var(s),
         // expand indices to calculate values in halo.
-        // Adjust offsets in grids based on original idxs.
+        // Adjust offsets in vars based on original idxs.
         // Return adjusted indices.
         ScanIndices adjust_span(int thread_idx, const ScanIndices& idxs) const;
 
@@ -178,7 +178,7 @@ namespace yask {
         virtual bool
         is_in_valid_step(idx_t input_step_index) const =0;
 
-        // If bundle updates grid(s) with the step index,
+        // If bundle updates var(s) with the step index,
         // set 'output_step_index' to the step that an update
         // occurs when calling one of the calc_*() methods with
         // 'input_step_index' and return 'true'.

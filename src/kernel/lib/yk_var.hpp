@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -27,21 +27,21 @@ IN THE SOFTWARE.
 
 namespace yask {
 
-    // Underlying storage using GenericGrids.
-    typedef GenericGridTemplate<real_t> RealElemGrid;
-    typedef GenericGridTemplate<real_vec_t> RealVecGrid;
+    // Underlying storage using GenericVars.
+    typedef GenericVarTemplate<real_t> RealElemVar;
+    typedef GenericVarTemplate<real_vec_t> RealVecVar;
 
-    // Base class implementing all yk_grid functionality. Used for
-    // grids that contain either individual elements or vectors.
-    class YkGridBase :
+    // Base class implementing all yk_var functionality. Used for
+    // vars that contain either individual elements or vectors.
+    class YkVarBase :
         public KernelStateBase {
-        friend class YkGridImpl;
+        friend class YkVarImpl;
 
         // Rank and local offsets in domain dim:
 
         // | ... |        +------+       |
         // |  global ofs  |      |       |
-        // |<------------>|grid  |       |
+        // |<------------>|var  |       |
         // |     |  loc   |domain|       |
         // |rank |  ofs   |      |       |
         // | ofs |<------>|      |       |
@@ -56,32 +56,32 @@ namespace yask {
         // Local offset must be a vector multiple.
 
     protected:
-        // Underlying storage.  A GenericGrid doesn't have stencil features
-        // like padding, halos, offsets, etc.  Holds name of grid, names of
+        // Underlying storage.  A GenericVar doesn't have stencil features
+        // like padding, halos, offsets, etc.  Holds name of var, names of
         // dims, sizes of dims, memory layout, actual data.
-        GenericGridBase* _ggb = 0;
+        GenericVarBase* _ggb = 0;
 
-        // The following masks have one bit for each dim in the grid.
+        // The following masks have one bit for each dim in the var.
         idx_t _step_dim_mask = 0;
         idx_t _domain_dim_mask = 0;
         idx_t _misc_dim_mask = 0;
 
-        // The following indices have one value for each dim in the grid.
+        // The following indices have one value for each dim in the var.
         // All values are in units of reals, not underlying elements, if different.
         // See diagram above for '_rank_offsets' and '_local_offsets'.
         // Comments show settings for domain dims | non-domain dims.
-        Indices _domains;   // size of "interior" of grid | alloc size.
+        Indices _domains;   // size of "interior" of var | alloc size.
         Indices _req_left_pads, _req_right_pads; // requested extra space around domains | zero.
         Indices _actl_left_pads, _actl_right_pads; // actual extra space around domains | zero.
         Indices _left_halos, _right_halos; // space within pads for halo exchange | zero.
         Indices _left_wf_exts, _right_wf_exts; // additional halos for wave-fronts | zero.
-        Indices _rank_offsets;   // offsets of this grid domain in overall problem | zero.
-        Indices _local_offsets; // offsets of this grid domain in this rank | first index for step or misc.
-        Indices _allocs;    // actual grid alloc in reals | same.
+        Indices _rank_offsets;   // offsets of this var domain in overall problem | zero.
+        Indices _local_offsets; // offsets of this var domain in this rank | first index for step or misc.
+        Indices _allocs;    // actual var alloc in reals | same.
 
         // Sizes in vectors for sizes that are always vec lens (to avoid division).
         // Each entry _vec_lens may be same as dims->_fold_pts or one, depending
-        // on whether grid is fully vectorized.
+        // on whether var is fully vectorized.
         Indices _vec_lens;  // num reals in each elem | one.
         Indices _vec_left_pads; // same as _actl_left_pads.
         Indices _vec_allocs; // same as _allocs.
@@ -95,22 +95,25 @@ namespace yask {
         bool _is_dynamic_step_alloc = false;
         bool _is_dynamic_misc_alloc = false;
 
+        // Max L1 dist of halo accesses to this var.
+        int _l1Dist = 0;
+
         // Data that needs to be copied to neighbor's halos if using MPI.
-        // If this grid has the step dim, there is one bit per alloc'd step.
+        // If this var has the step dim, there is one bit per alloc'd step.
         // Otherwise, only bit 0 is used.
         std::vector<bool> _dirty_steps;
 
         // Data layout for slice APIs.
         bool _is_col_major = false;
 
-        // Whether to resize this grid based on solution parameters.
+        // Whether to resize this var based on solution parameters.
         bool _fixed_size = false;
 
-        // Whether this is a scratch grid.
+        // Whether this is a scratch var.
         bool _is_scratch = false;
 
         // Whether this was created via an API.
-        bool _is_user_grid = false;
+        bool _is_user_var = false;
 
         // Convenience function to format indices like
         // "x=5, y=3".
@@ -162,10 +165,10 @@ namespace yask {
                                  const Indices& last_indices) const;
 
     public:
-        YkGridBase(KernelStateBase& state,
-                   GenericGridBase* ggb,
-                   const GridDimNames& dimNames);
-        virtual ~YkGridBase() { }
+        YkVarBase(KernelStateBase& state,
+                   GenericVarBase* ggb,
+                   const VarDimNames& dimNames);
+        virtual ~YkVarBase() { }
 
         // Step-indices.
         void update_valid_step(idx_t t);
@@ -215,13 +218,13 @@ namespace yask {
                 _rank_offsets.setFromConst(0);
         }
 
-        // New-grid accessors.
-        virtual bool is_user_grid() const {
-            return _is_user_grid;
+        // New-var accessors.
+        virtual bool is_user_var() const {
+            return _is_user_var;
         }
-        virtual void set_user_grid(bool is_user_grid) {
-            _is_user_grid = is_user_grid;
-            if (_is_user_grid) {
+        virtual void set_user_var(bool is_user_var) {
+            _is_user_var = is_user_var;
+            if (_is_user_var) {
                 _is_dynamic_step_alloc = true;
                 _is_dynamic_misc_alloc = true;
             }
@@ -254,24 +257,24 @@ namespace yask {
         }
 
         // Convert logical step index to index in allocated range.
-        // If this grid doesn't use the step dim, returns 0.
+        // If this var doesn't use the step dim, returns 0.
         inline idx_t get_alloc_step_index(const Indices& indices) const {
             return _has_step_dim ? _wrap_step(indices[+Indices::step_posn]) : 0;
         }
 
-        // Get grid dims with allocations in number of reals.
+        // Get var dims with allocations in number of reals.
         virtual IdxTuple get_allocs() const {
             IdxTuple allocs = _ggb->get_dims(); // make a copy.
             _allocs.setTupleVals(allocs);
             return allocs;
         }
 
-        // Make a human-readable description of the grid var.
+        // Make a human-readable description of the var.
         virtual std::string _make_info_string() const =0;
         virtual std::string make_info_string() const {
             std::stringstream oss;
             if (is_scratch()) oss << "scratch ";
-            if (is_user_grid()) oss << "user-defined ";
+            if (is_user_var()) oss << "user-defined ";
             if (_fixed_size) oss << "fixed-size ";
             oss << _make_info_string() << " and meta-data at " <<
                 (void*)this;
@@ -280,7 +283,7 @@ namespace yask {
 
         // Check for equality.
         // Return number of mismatches greater than epsilon.
-        virtual idx_t compare(const YkGridBase* ref,
+        virtual idx_t compare(const YkVarBase* ref,
                               real_t epsilon = EPSILON,
                               int maxPrint = 20) const;
 
@@ -368,42 +371,42 @@ namespace yask {
                                   int line) const;
 
     };
-    typedef std::shared_ptr<YkGridBase> GridBasePtr;
+    typedef std::shared_ptr<YkVarBase> VarBasePtr;
     
-    // Implementation of yk_grid interface.  Class contains no real data,
-    // just a pointer to the underlying data and meta-data. This allows grid
+    // Implementation of yk_var interface.  Class contains no real data,
+    // just a pointer to the underlying data and meta-data. This allows var
     // data to be shared and moved without changing pointers.
-    class YkGridImpl : public virtual yk_grid {
+    class YkVarImpl : public virtual yk_var {
     protected:
-        GridBasePtr _gbp;
+        VarBasePtr _gbp;
         
     public:
-        YkGridImpl() { }
-        YkGridImpl(const GridBasePtr& gp) : _gbp(gp) { }
-        virtual ~YkGridImpl() { }
+        YkVarImpl() { }
+        YkVarImpl(const VarBasePtr& gp) : _gbp(gp) { }
+        virtual ~YkVarImpl() { }
 
-        inline void set_gbp(const GridBasePtr& gp) {
+        inline void set_gbp(const VarBasePtr& gp) {
             _gbp = gp;
         }
-        inline YkGridBase& gb() {
+        inline YkVarBase& gb() {
             assert(_gbp.get());
             return *(_gbp.get());
         }
-        inline YkGridBase& gb() const {
+        inline YkVarBase& gb() const {
             assert(_gbp.get());
             return *(_gbp.get());
         }
-        inline YkGridBase* gbp() {
+        inline YkVarBase* gbp() {
             return _gbp.get();
         }
-        inline YkGridBase* gbp() const {
+        inline YkVarBase* gbp() const {
             return _gbp.get();
         }
-        inline GenericGridBase& gg() {
+        inline GenericVarBase& gg() {
             assert(gb()._ggb);
             return *(gb()._ggb);
         }
-        inline GenericGridBase& gg() const {
+        inline GenericVarBase& gg() const {
             assert(gb()._ggb);
             return *(gb()._ggb);
         }
@@ -442,7 +445,7 @@ namespace yask {
             assert(n < get_num_dims());
             return gg().get_dim_name(n);
         }
-        virtual GridDimNames get_dim_names() const {
+        virtual VarDimNames get_dim_names() const {
             std::vector<std::string> dims(get_num_dims());
             for (int i = 0; i < get_num_dims(); i++)
                 dims.at(i) = get_dim_name(i);
@@ -466,22 +469,30 @@ namespace yask {
 
         virtual idx_t get_first_valid_step_index() const {
             if (!gb()._has_step_dim)
-                THROW_YASK_EXCEPTION("Error: 'get_first_valid_step_index()' called on grid '" +
+                THROW_YASK_EXCEPTION("Error: 'get_first_valid_step_index()' called on var '" +
                                      get_name() + "' that does not use the step dimension");
             return gb()._local_offsets[+Indices::step_posn];
         }
         virtual idx_t get_last_valid_step_index() const {
             if (!gb()._has_step_dim)
-                THROW_YASK_EXCEPTION("Error: 'get_last_valid_step_index()' called on grid '" +
+                THROW_YASK_EXCEPTION("Error: 'get_last_valid_step_index()' called on var '" +
                                      get_name() + "' that does not use the step dimension");
             return gb()._local_offsets[+Indices::step_posn] +
                 gb()._domains[+Indices::step_posn] - 1;
         }
+        virtual int
+        get_halo_exchange_l1_norm() const {
+            return gb()._l1Dist;
+        }
+        virtual void
+        set_halo_exchange_l1_norm(int norm) {
+            gb()._l1Dist = norm;
+        }
 
-#define GET_GRID_API(api_name)                                      \
+#define GET_VAR_API(api_name)                                      \
         virtual idx_t api_name(const std::string& dim) const;       \
         virtual idx_t api_name(int posn) const;
-#define SET_GRID_API(api_name)                                      \
+#define SET_VAR_API(api_name)                                      \
         virtual void api_name(const std::string& dim, idx_t n);     \
         virtual void api_name(int posn, idx_t n);
 
@@ -489,64 +500,61 @@ namespace yask {
         // they can break the usage model.
         // They are not protected because they are used from outside
         // this class hierarchy.
-        GET_GRID_API(_get_left_wf_ext)
-        GET_GRID_API(_get_local_offset)
-        GET_GRID_API(_get_rank_offset)
-        GET_GRID_API(_get_right_wf_ext)
-        GET_GRID_API(_get_vec_len)
+        GET_VAR_API(_get_left_wf_ext)
+        GET_VAR_API(_get_local_offset)
+        GET_VAR_API(_get_rank_offset)
+        GET_VAR_API(_get_right_wf_ext)
+        GET_VAR_API(_get_vec_len)
 
-        SET_GRID_API(_set_alloc_size)
-        SET_GRID_API(_set_domain_size)
-        SET_GRID_API(_set_left_pad_size)
-        SET_GRID_API(_set_left_wf_ext)
-        SET_GRID_API(_set_local_offset)
-        SET_GRID_API(_set_rank_offset)
-        SET_GRID_API(_set_right_pad_size)
-        SET_GRID_API(_set_right_wf_ext)
+        SET_VAR_API(_set_alloc_size)
+        SET_VAR_API(_set_domain_size)
+        SET_VAR_API(_set_left_pad_size)
+        SET_VAR_API(_set_left_wf_ext)
+        SET_VAR_API(_set_local_offset)
+        SET_VAR_API(_set_rank_offset)
+        SET_VAR_API(_set_right_pad_size)
+        SET_VAR_API(_set_right_wf_ext)
 
         // Exposed APIs.
-        GET_GRID_API(get_first_local_index)
-        GET_GRID_API(get_last_local_index)
-        GET_GRID_API(get_rank_domain_size)
-        GET_GRID_API(get_first_rank_domain_index)
-        GET_GRID_API(get_last_rank_domain_index)
-        GET_GRID_API(get_left_halo_size)
-        GET_GRID_API(get_right_halo_size)
-        GET_GRID_API(get_halo_size)
-        GET_GRID_API(get_first_rank_halo_index)
-        GET_GRID_API(get_last_rank_halo_index)
-        GET_GRID_API(get_left_extra_pad_size)
-        GET_GRID_API(get_right_extra_pad_size)
-        GET_GRID_API(get_extra_pad_size)
-        GET_GRID_API(get_left_pad_size)
-        GET_GRID_API(get_right_pad_size)
-        GET_GRID_API(get_pad_size)
-        GET_GRID_API(get_alloc_size)
-        GET_GRID_API(get_first_rank_alloc_index)
-        GET_GRID_API(get_last_rank_alloc_index)
-        GET_GRID_API(get_first_misc_index)
-        GET_GRID_API(get_last_misc_index)
+        GET_VAR_API(get_first_local_index)
+        GET_VAR_API(get_last_local_index)
+        GET_VAR_API(get_rank_domain_size)
+        GET_VAR_API(get_first_rank_domain_index)
+        GET_VAR_API(get_last_rank_domain_index)
+        GET_VAR_API(get_left_halo_size)
+        GET_VAR_API(get_right_halo_size)
+        GET_VAR_API(get_first_rank_halo_index)
+        GET_VAR_API(get_last_rank_halo_index)
+        GET_VAR_API(get_left_extra_pad_size)
+        GET_VAR_API(get_right_extra_pad_size)
+        GET_VAR_API(get_left_pad_size)
+        GET_VAR_API(get_right_pad_size)
+        GET_VAR_API(get_alloc_size)
+        GET_VAR_API(get_first_rank_alloc_index)
+        GET_VAR_API(get_last_rank_alloc_index)
+        GET_VAR_API(get_first_misc_index)
+        GET_VAR_API(get_last_misc_index)
 
-        SET_GRID_API(set_left_halo_size)
-        SET_GRID_API(set_right_halo_size)
-        SET_GRID_API(set_halo_size)
-        SET_GRID_API(set_left_min_pad_size)
-        SET_GRID_API(set_right_min_pad_size)
-        SET_GRID_API(set_min_pad_size)
-        SET_GRID_API(set_left_extra_pad_size)
-        SET_GRID_API(set_right_extra_pad_size)
-        SET_GRID_API(set_extra_pad_size)
-        SET_GRID_API(set_alloc_size)
-        SET_GRID_API(set_first_misc_index)
+        SET_VAR_API(set_left_halo_size)
+        SET_VAR_API(set_right_halo_size)
+        SET_VAR_API(set_halo_size)
+        SET_VAR_API(set_left_min_pad_size)
+        SET_VAR_API(set_right_min_pad_size)
+        SET_VAR_API(set_min_pad_size)
+        SET_VAR_API(set_left_extra_pad_size)
+        SET_VAR_API(set_right_extra_pad_size)
+        SET_VAR_API(set_extra_pad_size)
+        SET_VAR_API(set_alloc_size)
+        SET_VAR_API(set_first_misc_index)
 
-#undef GET_GRID_API
-#undef SET_GRID_API
+#undef GET_VAR_API
+#undef SET_VAR_API
 
         virtual std::string format_indices(const Indices& indices) const {
             std::string str = get_name() + "(" + gb().makeIndexString(indices) + ")";
             return str;
         }
-        virtual std::string format_indices(const GridIndices& indices) const {
+        virtual std::string format_indices(const VarIndices& indices) const {
             const Indices indices2(indices);
             return format_indices(indices2);
         }
@@ -556,7 +564,7 @@ namespace yask {
         }
 
         virtual bool are_indices_local(const Indices& indices) const;
-        virtual bool are_indices_local(const GridIndices& indices) const {
+        virtual bool are_indices_local(const VarIndices& indices) const {
             const Indices indices2(indices);
             return are_indices_local(indices2);
         }
@@ -566,7 +574,7 @@ namespace yask {
         }
 
         virtual double get_element(const Indices& indices) const;
-        virtual double get_element(const GridIndices& indices) const {
+        virtual double get_element(const VarIndices& indices) const {
             const Indices indices2(indices);
             return get_element(indices2);
         }
@@ -580,8 +588,8 @@ namespace yask {
             return gb().get_elements_in_slice(buffer_ptr, first_indices, last_indices);
         }
         virtual idx_t get_elements_in_slice(void* buffer_ptr,
-                                            const GridIndices& first_indices,
-                                            const GridIndices& last_indices) const {
+                                            const VarIndices& first_indices,
+                                            const VarIndices& last_indices) const {
             const Indices first(first_indices);
             const Indices last(last_indices);
             return get_elements_in_slice(buffer_ptr, first, last);
@@ -590,7 +598,7 @@ namespace yask {
                                   const Indices& indices,
                                   bool strict_indices = false);
         virtual idx_t set_element(double val,
-                                  const GridIndices& indices,
+                                  const VarIndices& indices,
                                   bool strict_indices = false) {
             const Indices indices2(indices);
             return set_element(val, indices2, strict_indices);
@@ -605,7 +613,7 @@ namespace yask {
                                   const Indices& indices,
                                   bool strict_indices = false);
         virtual idx_t add_to_element(double val,
-                                  const GridIndices& indices,
+                                  const VarIndices& indices,
                                   bool strict_indices = false) {
             const Indices indices2(indices);
             return add_to_element(val, indices2, strict_indices);
@@ -627,8 +635,8 @@ namespace yask {
             return gb().set_elements_in_slice_same(val, first_indices, last_indices, strict_indices);
         }
         virtual idx_t set_elements_in_slice_same(double val,
-                                                 const GridIndices& first_indices,
-                                                 const GridIndices& last_indices,
+                                                 const VarIndices& first_indices,
+                                                 const VarIndices& last_indices,
                                                  bool strict_indices) {
             const Indices first(first_indices);
             const Indices last(last_indices);
@@ -641,8 +649,8 @@ namespace yask {
             return gb().set_elements_in_slice(buffer_ptr, first_indices, last_indices);
         }
         virtual idx_t set_elements_in_slice(const void* buffer_ptr,
-                                            const GridIndices& first_indices,
-                                            const GridIndices& last_indices) {
+                                            const VarIndices& first_indices,
+                                            const VarIndices& last_indices) {
             const Indices first(first_indices);
             const Indices last(last_indices);
             return set_elements_in_slice(buffer_ptr, first, last);
@@ -651,7 +659,7 @@ namespace yask {
         virtual void alloc_storage() {
             STATE_VARS(gbp());
             gg().default_alloc();
-            os << gb().make_info_string() << std::endl;
+            DEBUG_MSG(gb().make_info_string());
         }
         virtual void release_storage() {
             STATE_VARS(gbp());
@@ -668,14 +676,14 @@ namespace yask {
         virtual idx_t get_num_storage_elements() const {
             return gb()._allocs.product();
         }
-        virtual bool is_storage_layout_identical(const YkGridImpl* other,
+        virtual bool is_storage_layout_identical(const YkVarImpl* other,
                                                  bool check_sizes) const;
-        virtual bool is_storage_layout_identical(const yk_grid_ptr other) const {
-            auto op = std::dynamic_pointer_cast<YkGridImpl>(other);
+        virtual bool is_storage_layout_identical(const yk_var_ptr other) const {
+            auto op = std::dynamic_pointer_cast<YkVarImpl>(other);
             assert(op);
             return is_storage_layout_identical(op.get(), true);
         }
-        virtual void fuse_grids(yk_grid_ptr other);
+        virtual void fuse_vars(yk_var_ptr other);
         virtual void* get_raw_storage_buffer() {
             return gg().get_storage();
         }
@@ -684,21 +692,21 @@ namespace yask {
         }
     };
 
-    // YASK grid of real elements.
-    // Used for grids that do not contain folded vectors.
+    // YASK var of real elements.
+    // Used for vars that do not contain folded vectors.
     // If '_use_step_idx', then index to step dim will wrap around.
     template <typename LayoutFn, bool _use_step_idx>
-    class YkElemGrid : public YkGridBase {
+    class YkElemVar : public YkVarBase {
 
     protected:
-        typedef GenericGrid<real_t, LayoutFn> _grid_type;
-        _grid_type _data;
+        typedef GenericVar<real_t, LayoutFn> _var_type;
+        _var_type _data;
 
     public:
-        YkElemGrid(KernelStateBase& state,
+        YkElemVar(KernelStateBase& state,
                    std::string name,
-                   const GridDimNames& dimNames) :
-            YkGridBase(state, &_data, dimNames),
+                   const VarDimNames& dimNames) :
+            YkVarBase(state, &_data, dimNames),
             _data(state, name, dimNames) {
             _has_step_dim = _use_step_idx;
             resize();
@@ -729,7 +737,7 @@ namespace yask {
                                          idx_t alloc_step_idx,
                                          bool checkBounds=true) const final {
             STATE_VARS_CONST(this);
-            TRACE_MEM_MSG(_data.get_name() << "." << "YkElemGrid::getElemPtr(" <<
+            TRACE_MEM_MSG(_data.get_name() << "." << "YkElemVar::getElemPtr(" <<
                           idxs.makeValStr(get_num_dims()) << ")");
             const auto n = _data.get_num_dims();
             Indices adj_idxs(n);
@@ -770,7 +778,7 @@ namespace yask {
                                    bool checkBounds=true) final {
 
             const real_t* p =
-                const_cast<const YkElemGrid*>(this)->getElemPtr(idxs, alloc_step_idx, checkBounds);
+                const_cast<const YkElemVar*>(this)->getElemPtr(idxs, alloc_step_idx, checkBounds);
             return const_cast<real_t*>(p);
         }
 
@@ -779,7 +787,7 @@ namespace yask {
         virtual real_t readElem(const Indices& idxs,
                                 idx_t alloc_step_idx,
                                 int line) const final {
-            const real_t* ep = YkElemGrid::getElemPtr(idxs, alloc_step_idx);
+            const real_t* ep = YkElemVar::getElemPtr(idxs, alloc_step_idx);
             real_t e = *ep;
 #ifdef TRACE_MEM
             printElem("readElem", idxs, e, line);
@@ -798,28 +806,28 @@ namespace yask {
                                         const Indices& last_indices) const {
             return get_elements_in_slice(buffer_ptr, first_indices, last_indices);
         }
-    };                          // YkElemGrid.
+    };                          // YkElemVar.
 
-    // YASK grid of real vectors.
-    // Used for grids that contain all the folded dims.
+    // YASK var of real vectors.
+    // Used for vars that contain all the folded dims.
     // If '_use_step_idx', then index to step dim will wrap around.
     // The '_templ_vec_lens' arguments must contain a list of vector lengths
-    // corresponding to each dim in the grid.
+    // corresponding to each dim in the var.
     template <typename LayoutFn, bool _use_step_idx, idx_t... _templ_vec_lens>
-    class YkVecGrid : public YkGridBase {
+    class YkVecVar : public YkVarBase {
 
     protected:
-        typedef GenericGrid<real_vec_t, LayoutFn> _grid_type;
-        _grid_type _data;
+        typedef GenericVar<real_vec_t, LayoutFn> _var_type;
+        _var_type _data;
 
-        // Positions of grid dims in vector fold dims.
+        // Positions of var dims in vector fold dims.
         Indices _vec_fold_posns;
 
     public:
-        YkVecGrid(KernelStateBase& stateb,
+        YkVecVar(KernelStateBase& stateb,
                   const std::string& name,
-                  const GridDimNames& dimNames) :
-            YkGridBase(stateb, &_data, dimNames),
+                  const VarDimNames& dimNames) :
+            YkVarBase(stateb, &_data, dimNames),
             _data(stateb, name, dimNames),
             _vec_fold_posns(idx_t(0), int(dimNames.size())) {
             STATE_VARS(this);
@@ -831,7 +839,7 @@ namespace yask {
             assert((size_t)nvls == dimNames.size());
 
             // Init vec sizes.
-            // For each dim in the grid, use the number of vector
+            // For each dim in the var, use the number of vector
             // fold points or 1 if not set.
             for (size_t i = 0; i < dimNames.size(); i++) {
                 auto& dname = dimNames.at(i);
@@ -844,12 +852,12 @@ namespace yask {
                 assert(dval == vls[i]);
             }
 
-            // Init grid-dim positions of fold dims.
+            // Init var-dim positions of fold dims.
             assert(dims->_vec_fold_pts.getNumDims() == NUM_VEC_FOLD_DIMS);
             for (int i = 0; i < NUM_VEC_FOLD_DIMS; i++) {
                 auto& fdim = dims->_vec_fold_pts.getDimName(i);
                 int j = get_dim_posn(fdim, true,
-                                     "internal error: folded grid missing folded dim");
+                                     "internal error: folded var missing folded dim");
                 assert(j >= 0);
                 _vec_fold_posns[i] = j;
             }
@@ -891,7 +899,7 @@ namespace yask {
                                          idx_t alloc_step_idx,
                                          bool checkBounds=true) const final {
             STATE_VARS_CONST(this);
-            TRACE_MEM_MSG(_data.get_name() << "." << "YkVecGrid::getElemPtr(" <<
+            TRACE_MEM_MSG(_data.get_name() << "." << "YkVecVar::getElemPtr(" <<
                           idxs.makeValStr(get_num_dims()) << ")");
 
             // Use template vec lengths instead of run-time values for
@@ -940,7 +948,7 @@ namespace yask {
             // Get only the vectorized fold offsets, i.e., those
             // with vec-lengths > 1.
             // And, they need to be in the original folding order,
-            // which might be different than the grid-dim order.
+            // which might be different than the var-dim order.
             Indices fold_ofs(NUM_VEC_FOLD_DIMS);
 #pragma unroll
             for (int i = 0; i < NUM_VEC_FOLD_DIMS; i++) {
@@ -953,7 +961,7 @@ namespace yask {
 
 #ifdef DEBUG_LAYOUT
             // Compare to more explicit offset extraction.
-            IdxTuple eofs = get_allocs(); // get dims for this grid.
+            IdxTuple eofs = get_allocs(); // get dims for this var.
             elem_ofs.setTupleVals(eofs);  // set vals from elem_ofs.
             auto i2 = dims->getElemIndexInVec(eofs);
             assert(i == i2);
@@ -977,7 +985,7 @@ namespace yask {
                                    bool checkBounds=true) final {
 
             const real_t* p =
-                const_cast<const YkVecGrid*>(this)->getElemPtr(idxs, alloc_step_idx,
+                const_cast<const YkVecVar*>(this)->getElemPtr(idxs, alloc_step_idx,
                                                                checkBounds);
             return const_cast<real_t*>(p);
         }
@@ -987,7 +995,7 @@ namespace yask {
         virtual real_t readElem(const Indices& idxs,
                                 idx_t alloc_step_idx,
                                 int line) const final {
-            const real_t* ep = YkVecGrid::getElemPtr(idxs, alloc_step_idx);
+            const real_t* ep = YkVecVar::getElemPtr(idxs, alloc_step_idx);
             real_t e = *ep;
 #ifdef TRACE_MEM
             printElem("readElem", idxs, e, line);
@@ -999,11 +1007,11 @@ namespace yask {
         // Indices must be normalized and rank-relative.
         // It's important that this function be efficient, since
         // it's indiectly used from the stencil kernel.
-        inline const real_vec_t* getVecPtrNorm(const Indices& vec_idxs,
+        ALWAYS_INLINE const real_vec_t* getVecPtrNorm(const Indices& vec_idxs,
                                                idx_t alloc_step_idx,
                                                bool checkBounds=true) const {
             STATE_VARS_CONST(this);
-            TRACE_MEM_MSG(_data.get_name() << "." << "YkVecGrid::getVecPtrNorm(" <<
+            TRACE_MEM_MSG(_data.get_name() << "." << "YkVecVar::getVecPtrNorm(" <<
                           vec_idxs.makeValStr(get_num_dims()) << ")");
 
             static constexpr int nvls = sizeof...(_templ_vec_lens);
@@ -1039,12 +1047,12 @@ namespace yask {
         }
 
         // Non-const version.
-        inline real_vec_t* getVecPtrNorm(const Indices& vec_idxs,
+        ALWAYS_INLINE real_vec_t* getVecPtrNorm(const Indices& vec_idxs,
                                          idx_t alloc_step_idx,
                                          bool checkBounds=true) {
 
             const real_vec_t* p =
-                const_cast<const YkVecGrid*>(this)->getVecPtrNorm(vec_idxs,
+                const_cast<const YkVecVar*>(this)->getVecPtrNorm(vec_idxs,
                                                                   alloc_step_idx, checkBounds);
             return const_cast<real_vec_t*>(p);
         }
@@ -1158,7 +1166,7 @@ namespace yask {
                                         const Indices& last_indices) const {
             STATE_VARS(this);
             if (_data.get_storage() == 0)
-                FORMAT_AND_THROW_YASK_EXCEPTION("Error: call to 'get_vecs_in_slice' with no storage allocated for grid '" <<
+                FORMAT_AND_THROW_YASK_EXCEPTION("Error: call to 'get_vecs_in_slice' with no storage allocated for var '" <<
                                                 _data.get_name());
             Indices firstv, lastv;
             checkIndices(first_indices, "get_vecs_in_slice", true, true, true, &firstv);
@@ -1208,6 +1216,6 @@ namespace yask {
             // Return number of writes.
             return n;
         }
-    };                          // YkVecGrid.
+    };                          // YkVecVar.
 
 }                               // namespace.

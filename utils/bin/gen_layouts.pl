@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 
 ##############################################################################
-## YASK: Yet Another Stencil Kernel
+## YASK: Yet Another Stencil Kit
 ## Copyright (c) 2014-2019, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -30,7 +30,7 @@ sub usage {
     "options:\n".
     " -p    generate perl lists of permutes\n".
     " -d    generate C++ class definitions\n".
-    " -g    generate C++ grid-creation code\n".
+    " -v    generate C++ var-creation code\n".
     " -m    generate CPP layout/unlayout macros\n";
 }
 
@@ -266,8 +266,8 @@ END
     } @a;
   }
 
-  # grid-creation code.
-  elsif ($opt eq '-g') {
+  # YASK ar-creation code.
+  elsif ($opt eq '-v') {
 
     # Make type name.
     my $layout = "Layout_" . join('', 1 .. $n);
@@ -277,7 +277,7 @@ END
     
       # Creation.
       print " else if (ndims == $n && step_used == $wrap)\n",
-        "  gp = make_shared<YkElemGrid<$layout, $wrap>>(*this, name, gdims);\n";
+        "  gp = make_shared<YkElemVar<$layout, $wrap>>(*this, name, gdims);\n";
     }
   }
   

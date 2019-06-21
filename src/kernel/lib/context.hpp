@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -31,24 +31,49 @@ namespace yask {
     struct BoundingBox {
 
         // Boundaries around all points.
-        IdxTuple bb_begin;   // first indices.
-        IdxTuple bb_end;     // one past last indices.
-        idx_t bb_num_points=1;  // valid points within the box.
+        Indices bb_begin;   // first indices.
+        Indices bb_end;     // one past last indices.
+
+        // Number of valid points within the box.
+        idx_t bb_num_points=0;
 
         // Following values are calculated from the above ones.
-        IdxTuple bb_len;       // size in each dim.
-        idx_t bb_size=1;       // points in the entire box; bb_size >= bb_num_points.
+        Indices bb_len;       // size in each dim.
+        idx_t bb_size=0;       // points in the entire box; bb_size >= bb_num_points.
         bool bb_is_full=false; // all points in box are valid (bb_size == bb_num_points).
         bool bb_is_aligned=false; // starting points are vector-aligned in all dims.
         bool bb_is_cluster_mult=false; // num points are cluster multiples in all dims.
         bool bb_valid=false;   // lengths and sizes have been calculated.
 
+        BoundingBox() :
+            bb_begin(NUM_DOMAIN_DIMS),
+            bb_end(NUM_DOMAIN_DIMS),
+            bb_len(NUM_DOMAIN_DIMS) { }
+        
+        // Make Tuples.
+        IdxTuple bb_begin_tuple(const IdxTuple& ddims) const {
+            return bb_begin.makeTuple(ddims);
+        }
+        IdxTuple bb_end_tuple(const IdxTuple& ddims) const {
+            return bb_end.makeTuple(ddims);
+        }
+        IdxTuple bb_len_tuple(const IdxTuple& ddims) const {
+            return bb_len.makeTuple(ddims);
+        }
+        std::string make_range_string(const IdxTuple& ddims) const {
+            return bb_begin_tuple(ddims).makeDimValStr() +
+                " ... " + bb_end_tuple(ddims).subElements(1).makeDimValStr();
+        }
+        std::string make_len_string(const IdxTuple& ddims) const {
+            return bb_len_tuple(ddims).makeDimValStr(" * ");
+        }
+        
         // Calc values and set valid to true.
         // If 'force_full', set 'bb_num_points' as well as 'bb_size'.
         void update_bb(const std::string& name,
-                       StencilContext& context,
+                       StencilContext* context,
                        bool force_full,
-                       std::ostream* os = NULL);
+                       bool print_info = false);
 
         // Is point in BB?
         // 'pt' must have same dims as BB.
@@ -136,7 +161,7 @@ namespace yask {
         get_elapsed_secs() { return run_time; }
     };
 
-    // Collections of things in a context.
+    // Things in a context.
     class StencilBundleBase;
     class BundlePack;
     typedef std::vector<StencilBundleBase*> StencilBundleList;
@@ -163,10 +188,18 @@ namespace yask {
 
         // Alloc given bytes on each NUMA node.
         virtual void _alloc_data(const std::map <int, size_t>& nbytes,
-                                 const std::map <int, size_t>& ngrids,
+                                 const std::map <int, size_t>& nvars,
                                  std::map <int, std::shared_ptr<char>>& _data_buf,
                                  const std::string& type);
 
+        // Callbacks.
+        typedef std::vector<hook_fn_t> hook_fn_vec;
+        hook_fn_vec _before_prepare_solution_hooks;
+        hook_fn_vec _after_prepare_solution_hooks;
+        typedef std::vector<hook_fn_2idx_t> hook_fn_2idx_vec;
+        hook_fn_2idx_vec _before_run_solution_hooks;
+        hook_fn_2idx_vec _after_run_solution_hooks;
+        
     public:
 
         // Name.
@@ -217,24 +250,24 @@ namespace yask {
         // which they should be evaluated within a step.
         BundlePackList stPacks;
 
-        // All non-scratch grids, including those created by APIs.
-        GridPtrs gridPtrs;
-        GridPtrMap gridMap;
+        // All non-scratch vars, including those created by APIs.
+        VarPtrs varPtrs;
+        VarPtrMap varMap;
 
-        // Only grids defined by the YASK compiler.
-        GridPtrs origGridPtrs;
-        GridPtrMap origGridMap;
+        // Only vars defined by the YASK compiler.
+        VarPtrs origVarPtrs;
+        VarPtrMap origVarMap;
 
-        // Only grids defined by the YASK compiler that are updated by the stencils.
-        GridPtrs outputGridPtrs;
-        GridPtrMap outputGridMap;
+        // Only vars defined by the YASK compiler that are updated by the stencils.
+        VarPtrs outputVarPtrs;
+        VarPtrMap outputVarMap;
 
-        // Scratch-grid vectors.
-        // Each vector contains a grid for each thread.
+        // Scratch-var vectors.
+        // Each vector contains a var for each thread.
         ScratchVecs scratchVecs;
 
         // Some calculated sizes for this rank and overall.
-        IdxTuple rank_domain_offsets;       // Domain index offsets for this rank.
+        Indices rank_domain_offsets;       // Domain index offsets for this rank.
         idx_t rank_nbytes=0, tot_nbytes=0;
         idx_t rank_domain_pts=0, tot_domain_pts=0;
 
@@ -247,7 +280,7 @@ namespace yask {
         YaskTimer test_time;     // time spent just doing MPI tests.
         idx_t steps_done = 0;   // number of steps that have been run.
 
-        // Maximum halos, skewing angles, and work extensions over all grids
+        // Maximum halos, skewing angles, and work extensions over all vars
         // used for wave-front rank tiling (wf).
         IdxTuple max_halos;  // spatial halos.
         idx_t wf_steps = 0;  // max number of steps in a WF. 0 => no WF.
@@ -281,8 +314,8 @@ namespace yask {
         // Clear this to ignore step conditions.
         bool check_step_conds = true;
 
-        // MPI buffers for each grid.
-        // Map key: grid name.
+        // MPI buffers for each var.
+        // Map key: var name.
         std::map<std::string, MPIData> mpiData;
 
         // Constructor.
@@ -297,6 +330,14 @@ namespace yask {
                 get_stats();
         }
 
+        // Ready?
+        bool is_prepared() const {
+            return rank_bb.bb_valid;
+        }
+        void set_prepared(bool prep) {
+            rank_bb.bb_valid = prep;
+        }
+
         // Modify settings in shared state and auto-tuner.
         void set_settings(KernelSettingsPtr opts) {
             _state->_opts = opts;
@@ -309,9 +350,9 @@ namespace yask {
         // Misc accessors.
         AutoTuner& getAT() { return _at; }
 
-        // Add a new grid to the containers.
-        virtual void addGrid(YkGridPtr gp, bool is_orig, bool is_output);
-        virtual void addScratch(GridPtrs& scratch_vec) {
+        // Add a new var to the containers.
+        virtual void addVar(YkVarPtr gp, bool is_orig, bool is_output);
+        virtual void addScratch(VarPtrs& scratch_vec) {
             scratchVecs.push_back(&scratch_vec);
         }
 
@@ -319,9 +360,9 @@ namespace yask {
         // Allocate MPI buffers as needed.
         virtual void setupRank();
 
-        // Allocate grid memory for any grids that do not
+        // Allocate var memory for any vars that do not
         // already have storage.
-        virtual void allocGridData();
+        virtual void allocVarData();
 
         // Determine sizes of MPI buffers and allocate MPI buffer memory.
         // Dealloc any existing MPI buffers first.
@@ -330,14 +371,14 @@ namespace yask {
             mpiData.clear();
         }
 
-        // Alloc scratch-grid memory.
-        // Dealloc any existing scratch-grids first.
+        // Alloc scratch-var memory.
+        // Dealloc any existing scratch-vars first.
         virtual void allocScratchData();
         virtual void freeScratchData() {
-            makeScratchGrids(0);
+            makeScratchVars(0);
         }
 
-        // Allocate grids, params, MPI bufs, etc.
+        // Allocate vars, params, MPI bufs, etc.
         // Calculate rank position in problem.
         // Initialize some other data structures.
         // Print lots of stats.
@@ -356,28 +397,28 @@ namespace yask {
         /// Get statistics associated with preceding calls to run_solution().
         virtual yk_stats_ptr get_stats();
 
-        // Dealloc grids, etc.
+        // Dealloc vars, etc.
         virtual void end_solution();
 
-        // Set grid sizes and offsets.
+        // Set var sizes and offsets.
         // This should be called anytime a setting or offset is changed.
-        virtual void update_grid_info(bool force);
+        virtual void update_var_info(bool force);
 
         // Set temporal blocking data.
         // This should be called anytime a block size is changed.
         virtual void update_tb_info();
 
-        // Adjust offsets of scratch grids based
+        // Adjust offsets of scratch vars based
         // on thread and scan indices.
-        virtual void update_scratch_grid_info(int region_thread_idx,
+        virtual void update_scratch_var_info(int region_thread_idx,
                                               const Indices& idxs);
 
-        // Get total memory allocation required by grids.
+        // Get total memory allocation required by vars.
         // Does not include MPI buffers.
         // TODO: add MPI buffers.
         virtual size_t get_num_bytes() {
             size_t sz = 0;
-            for (auto gp : gridPtrs) {
+            for (auto gp : varPtrs) {
                 if (gp)
                     sz += gp->get_num_storage_bytes() + _data_buf_pad;
             }
@@ -389,29 +430,29 @@ namespace yask {
             return sz;
         }
 
-        // Init all grids & params by calling realInitFn.
-        virtual void initValues(std::function<void (YkGridPtr gp,
+        // Init all vars & params by calling realInitFn.
+        virtual void initValues(std::function<void (YkVarPtr gp,
                                                     real_t seed)> realInitFn);
 
-        // Init all grids & params to same value within grids,
-        // but different for each grid.
+        // Init all vars & params to same value within vars,
+        // but different for each var.
         virtual void initSame() {
-            initValues([&](YkGridPtr gp, real_t seed){ gp->set_all_elements_same(seed); });
+            initValues([&](YkVarPtr gp, real_t seed){ gp->set_all_elements_same(seed); });
         }
 
-        // Init all grids & params to different values within grids,
-        // and different for each grid.
+        // Init all vars & params to different values within vars,
+        // and different for each var.
         virtual void initDiff() {
-            initValues([&](YkGridPtr gp, real_t seed){ gp->set_all_elements_in_seq(seed); });
+            initValues([&](YkVarPtr gp, real_t seed){ gp->set_all_elements_in_seq(seed); });
         }
 
-        // Init all grids & params.
+        // Init all vars & params.
         // By default it uses the initSame initialization routine.
         virtual void initData() {
-            initSame();
+            initDiff();         // Safer than initSame() to avoid NaNs due to div-by-zero.
         }
 
-        // Compare grids in contexts for validation.
+        // Compare vars in contexts for validation.
         // Params should not be written to, so they are not compared.
         // Return number of mis-compares.
         virtual idx_t compareData(const StencilContext& ref) const;
@@ -449,10 +490,10 @@ namespace yask {
         // Call MPI_Test() on all unfinished requests to promote MPI progress.
         void poke_halo_exchange();
 
-        // Update valid steps in grids that have been written to by bundle pack 'sel_bp'.
+        // Update valid steps in vars that have been written to by bundle pack 'sel_bp'.
         // If sel_bp==null, use all bundles.
         // If 'mark_dirty', also mark as needing halo exchange.
-        void update_grids(const BundlePackPtr& sel_bp,
+        void update_vars(const BundlePackPtr& sel_bp,
                           idx_t start, idx_t stop,
                           bool mark_dirty);
 
@@ -480,19 +521,25 @@ namespace yask {
         // Set the bounding-box around all stencil bundles.
         void find_bounding_boxes();
 
-        // Make new scratch grids.
-        virtual void makeScratchGrids (int num_threads) =0;
+        // Make new scratch vars.
+        virtual void makeScratchVars (int num_threads) =0;
 
-        // Make a new grid iff its dims match any in the stencil.
-        // Returns pointer to the new grid or nullptr if no match.
-        virtual GridBasePtr newStencilGrid (const std::string & name,
-                                            const GridDimNames & dims) =0;
+        // Make a new var iff its dims match any in the stencil.
+        // Returns pointer to the new var or nullptr if no match.
+        virtual VarBasePtr newStencilVar (const std::string & name,
+                                            const VarDimNames & dims) =0;
 
-        // Make a new grid with 'name' and 'dims'.
+        // Make a new var with 'name' and 'dims'.
         // Set sizes if 'sizes' is non-null.
-        virtual YkGridPtr newGrid(const std::string& name,
-                                  const GridDimNames& dims,
-                                  const GridDimSizes* sizes);
+        virtual YkVarPtr newVar(const std::string& name,
+                                  const VarDimNames& dims,
+                                  const VarDimSizes* sizes);
+
+        // Call user-inserted code.
+        virtual void call_hooks(hook_fn_vec& hook_fns);
+        virtual void call_2idx_hooks(hook_fn_2idx_vec& hook_fns,
+                                     idx_t first_step_index,
+                                     idx_t last_step_index);
 
         // APIs.
         // See yask_kernel_api.hpp.
@@ -505,50 +552,47 @@ namespace yask {
         virtual void set_debug_output(yask_output_ptr debug) {
             KernelStateBase::set_debug_output(debug);
         }
-        virtual int get_element_bytes() const {
-            return REAL_BYTES;
+
+        virtual int get_num_vars() const {
+            return int(varPtrs.size());
         }
 
-        virtual int get_num_grids() const {
-            return int(gridPtrs.size());
-        }
-
-        virtual yk_grid_ptr get_grid(const std::string& name) {
-            auto i = gridMap.find(name);
-            if (i != gridMap.end())
+        virtual yk_var_ptr get_var(const std::string& name) {
+            auto i = varMap.find(name);
+            if (i != varMap.end())
                 return i->second;
             return nullptr;
         }
-        virtual std::vector<yk_grid_ptr> get_grids() {
-            std::vector<yk_grid_ptr> grids;
-            for (int i = 0; i < get_num_grids(); i++)
-                grids.push_back(gridPtrs.at(i));
-            return grids;
+        virtual std::vector<yk_var_ptr> get_vars() {
+            std::vector<yk_var_ptr> vars;
+            for (int i = 0; i < get_num_vars(); i++)
+                vars.push_back(varPtrs.at(i));
+            return vars;
         }
-        virtual yk_grid_ptr
-        new_grid(const std::string& name,
-                 const GridDimNames& dims) {
-            return newGrid(name, dims, NULL);
+        virtual yk_var_ptr
+        new_var(const std::string& name,
+                 const VarDimNames& dims) {
+            return newVar(name, dims, NULL);
         }
-        virtual yk_grid_ptr
-        new_grid(const std::string& name,
+        virtual yk_var_ptr
+        new_var(const std::string& name,
                  const std::initializer_list<std::string>& dims) {
-            GridDimNames dims2(dims);
-            return new_grid(name, dims2);
+            VarDimNames dims2(dims);
+            return new_var(name, dims2);
         }
-        virtual yk_grid_ptr
-        new_fixed_size_grid(const std::string& name,
-                             const GridDimNames& dims,
-                             const GridDimSizes& dim_sizes) {
-            return newGrid(name, dims, &dim_sizes);
+        virtual yk_var_ptr
+        new_fixed_size_var(const std::string& name,
+                             const VarDimNames& dims,
+                             const VarDimSizes& dim_sizes) {
+            return newVar(name, dims, &dim_sizes);
         }
-        virtual yk_grid_ptr
-        new_fixed_size_grid(const std::string& name,
+        virtual yk_var_ptr
+        new_fixed_size_var(const std::string& name,
                              const std::initializer_list<std::string>& dims,
                              const std::initializer_list<idx_t>& dim_sizes) {
-            GridDimNames dims2(dims);
-            GridDimSizes sizes2(dim_sizes);
-            return new_fixed_size_grid(name, dims2, sizes2);
+            VarDimNames dims2(dims);
+            VarDimSizes sizes2(dim_sizes);
+            return new_fixed_size_var(name, dims2, sizes2);
         }
 
         virtual std::string get_step_dim_name() const {
@@ -582,7 +626,7 @@ namespace yask {
         virtual void run_solution(idx_t step_index) {
             run_solution(step_index, step_index);
         }
-        virtual void fuse_grids(yk_solution_ptr other);
+        virtual void fuse_vars(yk_solution_ptr other);
 
         // APIs that access settings.
         virtual void set_overall_domain_size(const std::string& dim, idx_t size);
@@ -600,6 +644,8 @@ namespace yask {
         virtual idx_t get_num_ranks(const std::string& dim) const;
         virtual idx_t get_rank_index(const std::string& dim) const;
         virtual std::string apply_command_line_options(const std::string& args);
+        virtual std::string apply_command_line_options(int argc, char* argv[]);
+        virtual std::string apply_command_line_options(const std::vector<std::string>& args);
         virtual bool get_step_wrap() const {
             STATE_VARS(this);
             return opts->_step_wrap;
@@ -621,6 +667,22 @@ namespace yask {
         virtual int get_default_numa_preferred() const {
             STATE_VARS_CONST(this);
             return opts->_numa_pref;
+        }
+        virtual void
+        call_before_prepare_solution(hook_fn_t hook_fn) {
+            _before_prepare_solution_hooks.push_back(hook_fn);
+        }
+        virtual void
+        call_after_prepare_solution(hook_fn_t hook_fn) {
+            _after_prepare_solution_hooks.push_back(hook_fn);
+        }
+        virtual void
+        call_before_run_solution(hook_fn_2idx_t hook_fn) {
+            _before_run_solution_hooks.push_back(hook_fn);
+        }
+        virtual void
+        call_after_run_solution(hook_fn_2idx_t hook_fn) {
+            _after_run_solution_hooks.push_back(hook_fn);
         }
 
         // Auto-tuner methods.

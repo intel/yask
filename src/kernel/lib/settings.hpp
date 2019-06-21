@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -29,15 +29,16 @@ namespace yask {
 
     // Forward defns.
     class StencilContext;
-    class YkGridBase;
-    class YkGridImpl;
+    class YkVarBase;
+    class YkVarImpl;
+    class KernelStateBase;
 
-    // Some derivations from grid types.
-    typedef std::shared_ptr<YkGridImpl> YkGridPtr;
-    typedef std::set<YkGridPtr> GridPtrSet;
-    typedef std::vector<YkGridPtr> GridPtrs;
-    typedef std::map<std::string, YkGridPtr> GridPtrMap;
-    typedef std::vector<GridPtrs*> ScratchVecs;
+    // Some derivations from var types.
+    typedef std::shared_ptr<YkVarImpl> YkVarPtr;
+    typedef std::set<YkVarPtr> VarPtrSet;
+    typedef std::vector<YkVarPtr> VarPtrs;
+    typedef std::map<std::string, YkVarPtr> VarPtrMap;
+    typedef std::vector<VarPtrs*> ScratchVecs;
 
     // Environmental settings.
     class KernelEnv :
@@ -189,9 +190,6 @@ namespace yask {
 
     protected:
 
-        // Default sizes.
-        idx_t def_block = 32;   // TODO: calculate this.
-
         // Make a null output stream.
         // TODO: put this somewhere else.
         yask_output_factory yof;
@@ -233,7 +231,7 @@ namespace yask {
         int num_block_threads = 1; // Number of threads to use for a block.
         bool bind_block_threads = false; // Bind block threads to indices.
 
-        // Grid behavior.
+        // Var behavior.
         bool _step_wrap = false; // Allow invalid step indices to alias to valid ones.
         
         // Stencil-dim posn in which to apply block-thread binding.
@@ -279,16 +277,13 @@ namespace yask {
                          CommandLineParser& parser,
                          const std::string& pgmName,
                          const std::string& appNotes,
-                         const std::vector<std::string>& appExamples) const;
+                         const std::vector<std::string>& appExamples);
 
         // Make sure all user-provided settings are valid by rounding-up
         // values as needed.
         // Called from prepare_solution(), so it doesn't normally need to be called from user code.
         // Prints informational info to 'os'.
-        virtual void adjustSettings(std::ostream& os);
-        virtual void adjustSettings() {
-            adjustSettings(nullop->get_ostream());
-        }
+        virtual void adjustSettings(KernelStateBase* ksb = 0);
 
         // Determine if this is the first or last rank in given dim.
         virtual bool is_first_rank(const std::string dim) {
@@ -404,7 +399,7 @@ namespace yask {
     };
     typedef std::shared_ptr<MPIInfo> MPIInfoPtr;
 
-    // MPI data for one buffer for one neighbor of one grid.
+    // MPI data for one buffer for one neighbor of one var.
     class MPIBuf {
         
         // Ptr to read/write lock when buffer is in shared mem.
@@ -419,11 +414,11 @@ namespace yask {
         std::shared_ptr<char> _base;
         real_t* _elems = 0;
 
-        // Range to copy to/from grid.
-        // NB: step index not set properly for grids with step dim.
+        // Range to copy to/from var.
+        // NB: step index not set properly for vars with step dim.
         IdxTuple begin_pt, last_pt;
 
-        // Number of points to copy to/from grid in each dim.
+        // Number of points to copy to/from var in each dim.
         IdxTuple num_pts;
 
         // Whether the number of points is a multiple of the
@@ -501,7 +496,7 @@ namespace yask {
         }
     };
 
-    // MPI data for both buffers for one neighbor of one grid.
+    // MPI data for both buffers for one neighbor of one var.
     struct MPIBufs {
 
         // Need one buf for send and one for receive for each neighbor.
@@ -516,7 +511,7 @@ namespace yask {
         }
     };
 
-    // MPI data for one grid.
+    // MPI data for one var.
     // Contains a send and receive buffer for each neighbor
     // and some meta-data.
     struct MPIData {
@@ -597,13 +592,15 @@ namespace yask {
     // Macro to define and set commonly-needed state vars efficiently.
     // '_ksbp' is pointer to a 'KernelStateBase' object.
     // '*_posn' vars are positions in stencil_dims.
+    // It is critical that statements here can be easily optimized
+    // away by the compiler if some vars are not needed. Thus,
+    // avoid accessing vars in virtual classes or calling any
+    // functions with side-effects.
 #define STATE_VARS0(_ksbp, pfx)                                         \
     pfx auto* ksbp = _ksbp;                                             \
     assert(ksbp);                                                       \
-    pfx auto* state = ksbp->_state.get();                               \
+    pfx auto* state = ksbp->get_state().get();                          \
     assert(state);                                                      \
-    assert(state->_debug.get());                                        \
-    auto& os = state->_debug.get()->get_ostream();                      \
     pfx auto* env = state->_env.get();                                  \
     assert(env);                                                        \
     pfx auto* opts = state->_opts.get();                                \
@@ -643,14 +640,16 @@ namespace yask {
             _state(state) {}
         KernelStateBase(KernelEnvPtr& env,
                         KernelSettingsPtr& settings);
+        KernelStateBase(KernelStateBase* p) :
+            _state(p->_state) { }
         virtual ~KernelStateBase() {}
 
         // Access to state.
-        KernelStatePtr& get_state() {
+        ALWAYS_INLINE KernelStatePtr& get_state() {
             assert(_state);
             return _state;
         }
-        const KernelStatePtr& get_state() const {
+        ALWAYS_INLINE const KernelStatePtr& get_state() const {
             assert(_state);
             return _state;
         }

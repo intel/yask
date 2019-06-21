@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// Implement methods for RealVecGridBase.
+// Implement methods for RealVecVarBase.
 
 #include "yask_stencil.hpp"
 using namespace std;
@@ -32,9 +32,9 @@ namespace yask {
 
     // Ctor.
     // Important: '*ggb' exists but is NOT yet constructed.
-    YkGridBase::YkGridBase(KernelStateBase& stateb,
-                           GenericGridBase* ggb,
-                           const GridDimNames& dimNames) :
+    YkVarBase::YkVarBase(KernelStateBase& stateb,
+                           GenericVarBase* ggb,
+                           const VarDimNames& dimNames) :
         KernelStateBase(stateb),
         _ggb(ggb) {
         STATE_VARS(this);
@@ -74,7 +74,7 @@ namespace yask {
 
     // Convenience function to format indices like
     // "x=5, y=3".
-    std::string YkGridBase::makeIndexString(const Indices& idxs,
+    std::string YkVarBase::makeIndexString(const Indices& idxs,
                                             std::string separator,
                                             std::string infix,
                                             std::string prefix,
@@ -85,7 +85,7 @@ namespace yask {
     }
 
     // Does this var cover the N-D domain?
-    bool YkGridBase::is_domain_var() const {
+    bool YkVarBase::is_domain_var() const {
 
         // Problem dims.
         auto* dims = get_dims().get();
@@ -100,16 +100,16 @@ namespace yask {
     }
     
     // Halo-exchange flag accessors.
-    bool YkGridBase::is_dirty(idx_t step_idx) const {
+    bool YkVarBase::is_dirty(idx_t step_idx) const {
         if (_dirty_steps.size() == 0)
-            const_cast<YkGridBase*>(this)->resize();
+            const_cast<YkVarBase*>(this)->resize();
         if (_has_step_dim)
             step_idx = _wrap_step(step_idx);
         else
             step_idx = 0;
         return _dirty_steps[step_idx];
     }
-    void YkGridBase::set_dirty(bool dirty, idx_t step_idx) {
+    void YkVarBase::set_dirty(bool dirty, idx_t step_idx) {
         if (_dirty_steps.size() == 0)
             resize();
         if (_has_step_dim) {
@@ -125,7 +125,7 @@ namespace yask {
             step_idx = 0;
         set_dirty_using_alloc_index(dirty, step_idx);
     }
-    void YkGridBase::set_dirty_all(bool dirty) {
+    void YkVarBase::set_dirty_all(bool dirty) {
         if (_dirty_steps.size() == 0)
             resize();
         for (auto i : _dirty_steps)
@@ -134,7 +134,7 @@ namespace yask {
 
     // Lookup position by dim name.
     // Return -1 or die if not found, depending on flag.
-    int YkGridBase::get_dim_posn(const std::string& dim,
+    int YkVarBase::get_dim_posn(const std::string& dim,
                                  bool die_on_failure,
                                  const std::string& die_msg) const {
         auto& dims = _ggb->get_dims();
@@ -149,39 +149,37 @@ namespace yask {
     // Determine required padding from halos.
     // Does not include user-specified min padding or
     // final rounding for left pad.
-    Indices YkGridBase::getReqdPad(const Indices& halos, const Indices& wf_exts) const {
+    Indices YkVarBase::getReqdPad(const Indices& halos, const Indices& wf_exts) const {
         STATE_VARS(this);
 
         // Start with halos plus WF exts.
         Indices mp = halos.addElements(wf_exts);
 
-        // For scratch grids, halo area must be written to.  Halo is sum
-        // of dependent's write halo and depender's read halo, but these
-        // two components are not stored individually.  Write halo will
-        // be expanded to full vec len during computation, requiring
+        // For any var, reads will be expanded to full vec-len during
+        // computation.  For scratch vars, halo area must be written to.
+        // Halo is sum of dependent's write halo and depender's read halo,
+        // but these two components are not stored individually.  Write halo
+        // will be expanded to full vec len during computation, requiring
         // load from read halo beyond full vec len.  Worst case is when
-        // write halo is one and rest is read halo.  So if there is a
-        // halo and/or wf-ext, padding should be that plus all but one
-        // element of a vector. In addition, this vec-len should be the
-        // global one, not the one for this grid to handle the case where
-        // this grid is not vectorized.
+        // write halo is one and rest is read halo.  So, min padding should
+        // be halos + wave-front exts + vec-len - 1. This vec-len should be
+        // the solution one, not the one for this var to handle the case
+        // where this var is not vectorized.
         for (int i = 0; i < _ggb->get_num_dims(); i++) {
-            if (mp[i] >= 1) {
-                auto& dname = _ggb->get_dim_name(i);
-                auto* p = dims->_fold_pts.lookup(dname);
-                if (p) {
-                    assert (*p >= 1);
-                    mp[i] += *p - 1;
-                }
+            auto& dname = _ggb->get_dim_name(i);
+            auto* p = dims->_fold_pts.lookup(dname); // solution vec-len.
+            if (p) {
+                assert (*p >= 1);
+                mp[i] += *p - 1;
             }
         }
         return mp;
     }
 
-    // Resizes the underlying generic grid.
+    // Resizes the underlying generic var.
     // Modifies _pads and _allocs.
     // Fails if mem different and already alloc'd.
-    void YkGridBase::resize() {
+    void YkVarBase::resize() {
         STATE_VARS(this);
 
         // Original size.
@@ -191,17 +189,17 @@ namespace yask {
         // Check settings.
         for (int i = 0; i < _ggb->get_num_dims(); i++) {
             if (_left_halos[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative left halo in grid '" + _ggb->get_name() + "'");
+                THROW_YASK_EXCEPTION("Error: negative left halo in var '" + _ggb->get_name() + "'");
             if (_right_halos[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative right halo in grid '" + _ggb->get_name() + "'");
+                THROW_YASK_EXCEPTION("Error: negative right halo in var '" + _ggb->get_name() + "'");
             if (_left_wf_exts[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative left wave-front ext in grid '" + _ggb->get_name() + "'");
+                THROW_YASK_EXCEPTION("Error: negative left wave-front ext in var '" + _ggb->get_name() + "'");
             if (_right_wf_exts[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative right wave-front ext in grid '" + _ggb->get_name() + "'");
+                THROW_YASK_EXCEPTION("Error: negative right wave-front ext in var '" + _ggb->get_name() + "'");
             if (_req_left_pads[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative left padding in grid '" + _ggb->get_name() + "'");
+                THROW_YASK_EXCEPTION("Error: negative left padding in var '" + _ggb->get_name() + "'");
             if (_req_right_pads[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative right padding in grid '" + _ggb->get_name() + "'");
+                THROW_YASK_EXCEPTION("Error: negative right padding in var '" + _ggb->get_name() + "'");
         }
 
         // Increase padding as needed and calculate new allocs.
@@ -258,7 +256,7 @@ namespace yask {
         // TODO: restore the values before the API that called
         // resize() on failure.
         if (p && old_allocs != new_allocs) {
-            THROW_YASK_EXCEPTION("Error: attempt to change allocation size of grid '" +
+            THROW_YASK_EXCEPTION("Error: attempt to change allocation size of var '" +
                 _ggb->get_name() + "' from " +
                 makeIndexString(old_allocs, " * ") + " to " +
                 makeIndexString(new_allocs, " * ") +
@@ -277,7 +275,7 @@ namespace yask {
             _vec_left_pads[i] = new_left_pads[i] / _vec_lens[i];
             _vec_allocs[i] = _allocs[i] / _vec_lens[i];
 
-            // Actual resize of underlying grid.
+            // Actual resize of underlying var.
             _ggb->set_dim_size(i, _vec_allocs[i]);
 
             // Number of dirty bits is number of steps.
@@ -300,7 +298,7 @@ namespace yask {
         if (old_allocs != new_allocs || old_dirty != new_dirty) {
             Indices first_allocs = _rank_offsets.subElements(_actl_left_pads);
             Indices end_allocs = first_allocs.addElements(_allocs);
-            TRACE_MSG("grid '" << _ggb->get_name() << "' resized from " <<
+            TRACE_MSG("var '" << _ggb->get_name() << "' resized from " <<
                        makeIndexString(old_allocs, " * ") << " to " <<
                        makeIndexString(new_allocs, " * ") << " at [" <<
                        makeIndexString(first_allocs) << " ... " << 
@@ -314,7 +312,7 @@ namespace yask {
     }
 
     // Check whether dim is used and of allowed type.
-    void YkGridBase::checkDimType(const std::string& dim,
+    void YkVarBase::checkDimType(const std::string& dim,
                                   const std::string& fn_name,
                                   bool step_ok,
                                   bool domain_ok,
@@ -328,19 +326,19 @@ namespace yask {
 
     // Check for equality.
     // Return number of mismatches greater than epsilon.
-    idx_t YkGridBase::compare(const YkGridBase* ref,
+    idx_t YkVarBase::compare(const YkVarBase* ref,
                               real_t epsilon,
                               int maxPrint) const {
         STATE_VARS(this);
         if (!ref) {
-            os << "** mismatch: no reference grid.\n";
+            DEBUG_MSG("** mismatch: no reference var.");
             return _allocs.product(); // total number of elements.
         }
 
         // Dims & sizes same?
         if (!_ggb->are_dims_and_sizes_same(*ref->_ggb)) {
-            os << "** mismatch due to incompatible grids: " <<
-                make_info_string() << " and " << ref->make_info_string() << ".\n";
+            DEBUG_MSG("** mismatch due to incompatible vars: " <<
+                      make_info_string() << " and " << ref->make_info_string());
             return _allocs.product(); // total number of elements.
         }
 
@@ -396,12 +394,12 @@ namespace yask {
                         errs++;
                         if (errs <= maxPrint) {
                             if (errs < maxPrint)
-                                os << "** mismatch at " << _ggb->get_name() <<
-                                    "(" << opt.makeDimValStr() << "): " <<
-                                    te << " != " << re << endl;
+                                DEBUG_MSG("** mismatch at " << _ggb->get_name() <<
+                                          "(" << opt.makeDimValStr() << "): " <<
+                                          te << " != " << re);
                             else
-                                os << "** Additional errors not printed for grid '" <<
-                                    _ggb->get_name() << "'.\n";
+                                DEBUG_MSG("** Additional errors not printed for var '" <<
+                                          _ggb->get_name() << "'");
                         }
                     }
                 }
@@ -415,7 +413,7 @@ namespace yask {
     // Side-effect: If clipped_indices is not NULL,
     // 1) set them to in-range if out-of-range, and
     // 2) normalize them if 'normalize' is 'true'.
-    bool YkGridBase::checkIndices(const Indices& indices,
+    bool YkVarBase::checkIndices(const Indices& indices,
                                   const string& fn,    // name for error msg.
                                   bool strict_indices, // die if out-of-range.
                                   bool check_step,     // check step index.
@@ -458,7 +456,7 @@ namespace yask {
                         THROW_YASK_EXCEPTION("Error: " + fn + ": index in dim '" + dname +
                                              "' is " + to_string(idx) + ", which is not in allowed range [" +
                                              to_string(first_ok) + "..." + to_string(last_ok) +
-                                             "] of grid '" + _ggb->get_name() + "'");
+                                             "] of var '" + _ggb->get_name() + "'");
                     }
                     
                     // Update the output indices.
@@ -479,12 +477,12 @@ namespace yask {
                     (*clipped_indices)[i] = idiv_flr((*clipped_indices)[i], _vec_lens[i]);
                 }
             }
-        } // grid dims.
+        } // var dims.
         return all_ok;
     }
 
     // Update what steps are valid.
-    void YkGridBase::update_valid_step(idx_t t) {
+    void YkVarBase::update_valid_step(idx_t t) {
         STATE_VARS(this);
         if (_has_step_dim) {
 
@@ -504,7 +502,7 @@ namespace yask {
     
     
     // Set dirty flags between indices.
-    void YkGridBase::set_dirty_in_slice(const Indices& first_indices,
+    void YkVarBase::set_dirty_in_slice(const Indices& first_indices,
                                         const Indices& last_indices) {
         if (_has_step_dim) {
             for (idx_t i = first_indices[+Indices::step_posn];
@@ -515,7 +513,7 @@ namespace yask {
     }
 
     // Make tuple needed for slicing.
-    IdxTuple YkGridBase::get_slice_range(const Indices& first_indices,
+    IdxTuple YkVarBase::get_slice_range(const Indices& first_indices,
                                          const Indices& last_indices) const {
         // Find ranges.
         Indices numElems = last_indices.addConst(1).subElements(first_indices);
@@ -527,8 +525,8 @@ namespace yask {
     }
 
     // Print one element like
-    // "message: mygrid[x=4, y=7] = 3.14 at line 35".
-    void YkGridBase::printElem(const std::string& msg,
+    // "message: myvar[x=4, y=7] = 3.14 at line 35".
+    void YkVarBase::printElem(const std::string& msg,
                                const Indices& idxs,
                                real_t eval,
                                int line) const {
@@ -545,7 +543,7 @@ namespace yask {
 
     // Print one vector.
     // Indices must be normalized and rank-relative.
-    void YkGridBase::printVecNorm(const std::string& msg,
+    void YkVarBase::printVecNorm(const std::string& msg,
                                           const Indices& idxs,
                                           const real_vec_t& val,
                                           int line) const {
