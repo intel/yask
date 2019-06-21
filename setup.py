@@ -20,7 +20,7 @@ class Install(install):
 setup(
     name='yask',
     version='v3',
-    description='YASK--Yet Another Stencil Kernel',
+    description='YASK--Yet Another Stencil Kit',
     url='https://github.com/intel/yask',
     author='Intel Corporation',
     license='MIT',

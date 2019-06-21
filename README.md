@@ -1,4 +1,4 @@
-# YASK--Yet Another Stencil Kernel
+# YASK--Yet Another Stencil Kit
 
 * New YASK users may want to start with the [YASK tutorial](docs/YASK-tutorial.pdf).
 * Users with existing YASK-based code may want to jump to the [backward-compatibility notices](#backward-compatibility-notices).
@@ -40,14 +40,14 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
        the Intel C++ compiler.
        Older Gnu C++ compilers can produce kernels that run
        many times slower.
-* Gnu C++ compiler, g++ (4.9.0 or later; 8.2.0 or later recommended).
+* Gnu C++ compiler, g++ (4.9.0 or later; 9.1.0 or later recommended).
   Even when using Intel compilers, they rely on functionality provided by a g++ installation.
 * Linux libraries `librt` and `libnuma`.
 * Perl (5.010 or later).
 * Awk.
 * Gnu make.
 * Bash shell.
-* Numactl.
+* Numactl utility.
 * Optional utilities and their purposes:
     * The `indent` or `gindent` utility, used automatically during the build process
       to make the generated code easier for humans to read.
