@@ -85,8 +85,8 @@ Once the stencil-code file is created, it must be compiled into a YASK kernel li
 If `make` is invoked as in one of the above examples, it will create the kernel library
 as `lib/libyask_kernel.`<em>stencil.arch</em>`.so`, where *stencil* and *arch* match the corresponding
 variables provided during `make`.
-(If you want the file named differently, you can override <em>stencil</em> with `YK_STENCIL=`<em>stencil_name<\em>
-and/or <em>arch</em> with `YK_ARCH=`<em>arch_name<\em>.)
+(If you want the file named differently, you can override <em>stencil</em> with
+`YK_STENCIL=`<em>stencil_name</em> and/or <em>arch</em> with `YK_ARCH=`<em>arch_name</em>.)
 
 To use the kernel library, an executable must be created from it.
 This may be done in one of the following ways:
