@@ -857,8 +857,7 @@ namespace yask {
 
         // If there is no condition, just add full BB to list.
         if (!is_sub_domain_expr()) {
-            TRACE_MSG("adding 1 sub-BB: [" << _bundle_bb.bb_begin.makeDimValStr() <<
-                       " ... " << _bundle_bb.bb_end.makeDimValStr() << ")");
+            TRACE_MSG("adding 1 sub-BB: [" << _bundle_bb.make_range_string(domain_dims) << "]");
             _bb_list.push_back(_bundle_bb);
             return;
         }
@@ -904,6 +903,7 @@ namespace yask {
                 // Visit all points in slice, looking for a new
                 // valid beginning point, 'ib*pt'.
                 Indices ibspt(stencil_dims); // in stencil dims.
+                ibspt[step_posn] = 0;
                 Indices ibdpt(domain_dims);  // in domain dims.
                 slice_len.visitAllPoints
                     ([&](const IdxTuple& ofs, size_t idx) {
@@ -911,10 +911,9 @@ namespace yask {
                         // Find global point from 'ofs' in domain
                         // and stencil dims.
                         Indices iofs(ofs);
-                        ibdpt = islice_begin.addElements(iofs); // domain tuple.
-                        DOMAIN_VAR_LOOP(i, j) {
-                            ibspt[i] = ibdpt[j];            // stencil tuple.
-                        }
+                        ibdpt = islice_begin.addElements(iofs); // domain indices.
+                        DOMAIN_VAR_LOOP(i, j)
+                            ibspt[i] = ibdpt[j];            // stencil indices.
 
                         // Valid point must be in sub-domain and
                         // not seen before in this slice.
@@ -938,6 +937,7 @@ namespace yask {
 
                             // End point to be found, 'ie*pt'.
                             Indices iespt(stencil_dims); // stencil dims.
+                            iespt[step_posn] = 0;
                             Indices iedpt(domain_dims);  // domain dims.
 
                             // Repeat scan until no adjustment is made.
@@ -946,20 +946,19 @@ namespace yask {
                                 do_scan = false;
 
                                 TRACE_MSG("scanning " << scan_len.makeDimValStr(" * ") <<
-                                           " starting at " << bdpt.makeDimValStr());
+                                           " starting at " << ibdpt.makeDimValStr(domain_dims));
                                 scan_len.visitAllPoints
                                     ([&](const IdxTuple& eofs, size_t eidx) {
 
                                         // Make sure scan_len range is observed.
-                                        for (int i = 0; i < nddims; i++)
-                                            assert(eofs[i] < scan_len[i]);
+                                        DOMAIN_VAR_LOOP(i, j)
+                                            assert(eofs[j] < scan_len[j]);
 
                                         // Find global point from 'eofs'.
                                         Indices ieofs(eofs);
                                         iedpt = ibdpt.addElements(ieofs); // domain tuple.
-                                        DOMAIN_VAR_LOOP(i, j) {
+                                        DOMAIN_VAR_LOOP(i, j)
                                             iespt[i] = iedpt[j];            // stencil tuple.
-                                        }
 
                                         // Valid point must be in sub-domain and
                                         // not seen before in this slice.
@@ -979,18 +978,18 @@ namespace yask {
 
                                             // Adjust 1st dim that is beyond its starting pt.
                                             // This will reduce the range of the scan.
-                                            for (int i = 0; i < nddims; i++) {
+                                            DOMAIN_VAR_LOOP(i, j) {
 
                                                 // Beyond starting point in this dim?
-                                                if (iedpt[i] > ibdpt[i]) {
-                                                    scan_len[i] = iedpt[i] - ibdpt[i];
+                                                if (iedpt[j] > ibdpt[j]) {
+                                                    scan_len[j] = iedpt[j] - ibdpt[j];
 
                                                     // restart scan for
                                                     // remaining dims.
                                                     // TODO: be smarter
                                                     // about where to
                                                     // restart scan.
-                                                    if (i < nddims - 1)
+                                                    if (j < nddims - 1)
                                                         do_scan = true;
 
                                                     return false; // stop this scan.
@@ -1002,7 +1001,8 @@ namespace yask {
                                     }); // Looking for invalid point.
                             } // while scan is adjusted.
                             TRACE_MSG("found BB " << scan_len.makeDimValStr(" * ") <<
-                                       " starting at " << bdpt.makeDimValStr());
+                                       " starting at " << ibdpt.makeDimValStr(domain_dims));
+                            iscan_len.setFromTuple(scan_len);
 
                             // 'scan_len' now contains sizes of the new BB.
                             BoundingBox new_bb;
@@ -1033,8 +1033,7 @@ namespace yask {
 
             // BBs in slice 'n'.
             for (auto& bbn : cur_bb_list) {
-                TRACE_MSG(" sub-BB: [" << bbn.bb_begin.makeDimValStr() <<
-                           " ... " << bbn.bb_end.makeDimValStr() << ")");
+                TRACE_MSG(" sub-BB: [" << bbn.make_range_string(domain_dims) << "]");
 
                 // Don't bother with empty BB.
                 if (bbn.bb_size == 0)
@@ -1075,8 +1074,7 @@ namespace yask {
 
                         // Merge by just increasing the size of 'bb'.
                         bb.bb_end[odim] = bbn.bb_end[odim];
-                        TRACE_MSG("  merging to form [" << bb.bb_begin.makeDimValStr() <<
-                                   " ... " << bb.bb_end.makeDimValStr() << ")");
+                        TRACE_MSG("  merging to form [" << bb.make_range_string(domain_dims) << "]");
                         bb.update_bb("sub-bb", _context, true);
                         break;
                     }

@@ -935,7 +935,7 @@ namespace yask {
                       adj_block_idxs.begin.makeValStr() << " ... " <<
                       adj_block_idxs.end.makeValStr() << 
                       ") with mini-block stride " <<
-                      adj_block_idxs.stride.makeValStr(nsdims));
+                      adj_block_idxs.stride.makeValStr());
                     
             // Loop thru shapes.
             for (idx_t shape = 0; shape < nshapes; shape++) {

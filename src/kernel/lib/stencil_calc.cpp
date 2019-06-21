@@ -467,8 +467,8 @@ namespace yask {
         // Full rectilinear polytope of aligned clusters: use optimized code.
         if (do_clusters) {
             TRACE_MSG("calc_sub_block_vec:  using cluster code for [" <<
-                       sub_block_fcidxs.begin.makeValStr(nsdims) <<
-                       " ... " << sub_block_fcidxs.end.makeValStr(nsdims) <<
+                       sub_block_fcidxs.begin.makeValStr() <<
+                       " ... " << sub_block_fcidxs.end.makeValStr() <<
                        ") by region thread " << region_thread_idx <<
                        " and block thread " << block_thread_idx);
 

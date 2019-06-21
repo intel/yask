@@ -635,8 +635,7 @@ namespace yask {
         // Finalize interior BB if there are multiple ranks and overlap enabled.
         if (env->num_ranks > 1 && opts->overlap_comms) {
             mpi_interior.update_bb("interior", this, true);
-            TRACE_MSG("MPI interior BB: [" << mpi_interior.bb_begin.makeDimValStr() <<
-                      " ... " << mpi_interior.bb_end.makeDimValStr() << ")");
+            TRACE_MSG("MPI interior BB: [" << mpi_interior.make_range_string(domain_dims) << "]");
         }
 
         // At this point, we have all the buffers configured.
