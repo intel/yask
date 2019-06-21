@@ -1036,7 +1036,7 @@ sub makeLoopVars($$$$) {
 
   # vars to create.
   my $order = join(',', @dims);  # e.g., '2, 1'.
-  my $outerMods = $reqdMods;
+  my $outerMods = '';
   my $innerMods = '';
 
   # path gene?
@@ -1044,7 +1044,7 @@ sub makeLoopVars($$$$) {
   if (exists $h->{$pathKey}) {
     my $path = readHash($h, $pathKey, 1);
     my $pathStr = @pathNames[$path];                # e.g., 'grouped'.
-    $outerMods = "$pathStr $outerMods";
+    $outerMods = $pathStr;
   }
   
   my $loopVars = " ".$makePrefix."_LOOP_ORDER='$order'";
