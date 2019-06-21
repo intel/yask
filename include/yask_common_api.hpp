@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -29,19 +29,20 @@ IN THE SOFTWARE.
 // See http://www.stack.nl/~dimitri/doxygen.
 /** @file yask_common_api.hpp */
 
-#ifndef YASK_COMMON_API
-#define YASK_COMMON_API
+#pragma once
 
 #include <string>
 #include <vector>
+#include <map>
 #include <iostream>
 #include <ostream>
 #include <memory>
+#include <functional>
 
 namespace yask {
 
     /**
-     * \defgroup yask YASK Common Utilities
+     * \defgroup yask YASK Common
      * Types, clases, and functions used in both the \ref sec_yc and \ref sec_yk.
      * @{
      */
@@ -86,32 +87,34 @@ namespace yask {
     /** Objects of this exception contain additional message from yask framework */
     class yask_exception: public std::exception {
     private:
-    	/// Additional message container
+    	/// Description of exception.
     	std::string _msg;
 
     public:
 
         /// Construct a YASK exception with no message.
-    	yask_exception() {};
+    	yask_exception() :
+            _msg("YASK exception") { };
 
         /// Construct a YASK exception with `message`.
     	yask_exception(const std::string& message) :
-            _msg(message) {};
+            _msg(message) { };
 
-    	virtual ~yask_exception() {};
+    	virtual ~yask_exception() { };
 
-        /// Get default message.
-        /** Returns a C-style character string describing the general cause of the current error.
-            @returns default message of the exception. */
-    	virtual const char* what() noexcept;
+        /// Get description.
+        /** Returns a C-style character string describing the cause of the current error.
+            @returns description of the exception. */
+    	virtual const char* what() const noexcept;
 
-    	/// Add additional message to this exception.
-    	void add_message(const std::string& message
-                         /**< [in] Additional message as string. */ );
+    	/// Append `message` to description of this exception.
+    	virtual void add_message(const std::string& message
+                                 /**< [in] Additional message as string. */ );
 
-        /// Get additional message.
-        /** @returns additional message as string */
-    	const char* get_message() const;
+        /// Get description.
+        /** Same as what().
+            @returns description of the exception. */
+    	virtual const char* get_message() const;
     };
 
     /// Factory to create output objects.
@@ -258,4 +261,3 @@ namespace yask {
 
 } // namespace yask.
 
-#endif

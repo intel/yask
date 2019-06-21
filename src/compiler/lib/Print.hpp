@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -30,7 +30,7 @@ IN THE SOFTWARE.
 
 #include "ExprUtils.hpp"
 #include "Eqs.hpp"
-#include "Soln.hpp"
+#include "Solution.hpp"
 
 namespace yask {
 
@@ -145,17 +145,17 @@ namespace yask {
             return to_string(v);
         }
 
-        // Return a grid reference.
+        // Return a var reference.
         // The 'os' parameter is provided for derived types that
         // need to write intermediate code to a stream.
-        virtual string readFromPoint(ostream& os, const GridPoint& gp) {
+        virtual string readFromPoint(ostream& os, const VarPoint& gp) {
             return gp.makeStr();
         }
 
-        // Return code to update a grid point.
+        // Return code to update a var point.
         // The 'os' parameter is provided for derived types that
         // need to write intermediate code to a stream.
-        virtual string writeToPoint(ostream& os, const GridPoint& gp, const string& val) {
+        virtual string writeToPoint(ostream& os, const VarPoint& gp, const string& val) {
             return gp.makeStr() + " EQUALS " + val;
         }
     };
@@ -215,10 +215,10 @@ namespace yask {
         // has been accepted.
         int getNumCommon() const { return _numCommon; }
 
-        // A grid access.
-        virtual string visit(GridPoint* gp);
+        // A var access.
+        virtual string visit(VarPoint* gp);
 
-        // A grid index.
+        // A var index.
         virtual string visit(IndexExpr* ie);
 
         // A constant.
@@ -269,8 +269,8 @@ namespace yask {
         // Return empty string if more complex method should be used.
         virtual string trySimplePrint(Expr* ex, bool force);
 
-        // A grid point.
-        virtual string visit(GridPoint* gp);
+        // A var point.
+        virtual string visit(VarPoint* gp);
 
         // An index.
         virtual string visit(IndexExpr* ie);
@@ -330,7 +330,7 @@ namespace yask {
         virtual string visit(EqualsExpr* ee);
 
         // A point.
-        virtual string visit(GridPoint* gp);
+        virtual string visit(VarPoint* gp);
     };
 
     // Outputs a full GraphViz input file.
@@ -350,15 +350,15 @@ namespace yask {
             }
             return key;
         }
-        virtual string getLabel(ExprPtr ep, bool once = true) {
+        virtual string getLabel(exprPtr ep, bool once = true) {
             return getLabel(ep.get(), once);
         }
 
     public:
         DOTPrintVisitor(ostream& os) : _os(os) { }
 
-        // A grid read.
-        virtual string visit(GridPoint* gp);
+        // A var read.
+        virtual string visit(VarPoint* gp);
 
         // A constant.
         virtual string visit(ConstExpr* ce);
@@ -385,14 +385,14 @@ namespace yask {
     // Outputs a simple GraphViz input file.
     class SimpleDOTPrintVisitor : public DOTPrintVisitor {
     protected:
-        set<string> _gridsSeen;
+        set<string> _varsSeen;
 
     public:
         SimpleDOTPrintVisitor(ostream& os) :
             DOTPrintVisitor(os) { }
 
-        // A grid read.
-        virtual string visit(GridPoint* gp);
+        // A var read.
+        virtual string visit(VarPoint* gp);
 
         // A constant.
         virtual string visit(ConstExpr* ce) { return ""; }
@@ -425,7 +425,7 @@ namespace yask {
         StencilSolution& _stencil;
         const CompilerSettings& _settings;
         const Dimensions& _dims;
-        Grids& _grids;
+        Vars& _vars;
         EqBundles& _eqBundles;
 
     public:
@@ -434,7 +434,7 @@ namespace yask {
             _stencil(stencil),
             _settings(stencil.getSettings()),
             _dims(stencil.getDims()),
-            _grids(stencil.getGrids()),
+            _vars(stencil.getVars()),
             _eqBundles(eqBundles)
         { }
         virtual ~PrinterBase() { }

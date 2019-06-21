@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -54,14 +54,14 @@ int main() {
         auto y = fac.new_domain_index("y");
         auto z = fac.new_domain_index("z");
 
-        // Create a grid var.
-        auto g1 = soln->new_grid("test_grid", {t, x, y, z});
+        // Create a var.
+        auto g1 = soln->new_var("test_var", {t, x, y, z});
 
         // Create an equation based on some values from 'g1'.
-        auto n1 = g1->new_grid_point({t, x, y, z});
+        auto n1 = g1->new_var_point({t, x, y, z});
         cout << n1->format_simple() << endl;
 
-        auto n2 = g1->new_grid_point({t, x+1, y, z-2});
+        auto n2 = g1->new_var_point({t, x+1, y, z-2});
         cout << n2->format_simple() << endl;
 
         auto n3 = n1 + n2;
@@ -70,42 +70,51 @@ int main() {
         auto n4 = n2 * -n3 * 0.9;
         cout << n4->format_simple() << endl;
 
-        auto n5 = g1->new_grid_point({t, x+2, y-1, z});
+        auto n5 = g1->new_var_point({t, x+2, y-1, z});
         cout << n5->format_simple() << endl;
 
         auto n6 = n4 / n5;
         cout << n6->format_simple() << endl;
 
-        // Create a scratch-grid var.
-        auto sg1 = soln->new_scratch_grid("scratch_grid", {x, y, z});
+        // Create a scratch var.
+        auto sg1 = soln->new_scratch_var("scratch_var", {x, y, z});
 
-        // Define scratch-grid value based on expression 'n6' above.
-        auto ns_lhs = sg1->new_grid_point({x, y, z});
+        // Define scratch-var value based on expression 'n6' above.
+        auto ns_lhs = sg1->new_var_point({x, y, z});
         auto ns_eq = fac.new_equation_node(ns_lhs, n6);
         cout << ns_eq->format_simple() << endl;
 
         // Define another equation based on some values from 'sg1'.
-        auto n7a = sg1->new_grid_point({x-1, y, z+2});
-        auto n7b = sg1->new_grid_point({x+1, y-1, z-2});
+        auto n7a = sg1->new_var_point({x-1, y, z+2});
+        auto n7b = sg1->new_var_point({x+1, y-1, z-2});
         auto n8 = n7a + n7b;
         cout << n8->format_simple() << endl;
 
-        // Define main grid value at t+1.
-        auto n_lhs = g1->new_grid_point({t+1, x, y, z});
+        // Define main var value at t+1.
+        auto n_lhs = g1->new_var_point({t+1, x, y, z});
         cout << n_lhs->format_simple() << endl;
 
         // Define a sub-domain in which to apply this value.
         auto sd0 = (x >= fac.new_first_domain_index(x) + 5);
 
-        // Set equations to update the main grid using
+        // Set equations to update the main var using
         // expression 'n8' in sub-domain 'sd0' and -'n8' otherwise.
         auto n_eq0 = fac.new_equation_node(n_lhs, n8, sd0);
         cout << n_eq0->format_simple() << endl;
         auto n_eq1 = fac.new_equation_node(n_lhs, -n8, !sd0);
         cout << n_eq1->format_simple() << endl;
 
+        // Insert code that will register a run-time hook.
+        soln->CALL_AFTER_NEW_SOLUTION
+            (
+             kernel_soln.call_after_prepare_solution
+             ([](yk_solution& ksoln) {
+                  auto vars = ksoln.get_vars();
+              });
+             );
+                    
         cout << "Solution '" << soln->get_name() << "' contains " <<
-            soln->get_num_grids() << " grid(s), and " <<
+            soln->get_num_vars() << " var(s), and " <<
             soln->get_num_equations() << " equation(s)." << endl;
 
         // Generate DOT output.

@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -42,12 +42,22 @@ IN THE SOFTWARE.
 %shared_ptr(yask::yk_env)
 %shared_ptr(yask::yk_settings)
 %shared_ptr(yask::yk_solution)
-%shared_ptr(yask::yk_grid)
+%shared_ptr(yask::yk_var)
 %shared_ptr(yask::yk_stats)
 
 // Mutable buffer to access raw data.
 %pybuffer_mutable_string(void* buffer_ptr)
 
+// From http://www.swig.org/Doc4.0/SWIG.html#SWIG_nn2: Everything in the %{
+// ... %} block is simply copied verbatim to the resulting wrapper file
+// created by SWIG. This section is almost always used to include header
+// files and other declarations that are required to make the generated
+// wrapper code compile. It is important to emphasize that just because you
+// include a declaration in a SWIG input file, that declaration does not
+// automatically appear in the generated wrapper code---therefore you need
+// to make sure you include the proper header files in the %{ ... %}
+// section. It should be noted that the text enclosed in %{ ... %} is not
+// parsed or interpreted by SWIG.
 %{
 #define SWIG_FILE_WITH_INIT
 #include "yask_kernel_api.hpp"
@@ -56,7 +66,7 @@ IN THE SOFTWARE.
 // All vector types used in API.
 %template(vector_idx) std::vector<long int>;
 %template(vector_str) std::vector<std::string>;
-%template(vector_grid_ptr) std::vector<std::shared_ptr<yask::yk_grid>>;
+%template(vector_var_ptr) std::vector<std::shared_ptr<yask::yk_var>>;
 
 %exception {
   try {
@@ -69,5 +79,5 @@ IN THE SOFTWARE.
 
 %include "yask_common_api.hpp"
 %include "yask_kernel_api.hpp"
-%include "yk_solution_api.hpp"
-%include "yk_grid_api.hpp"
+%include "aux/yk_solution_api.hpp"
+%include "aux/yk_var_api.hpp"

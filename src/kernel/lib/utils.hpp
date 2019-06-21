@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -341,12 +341,12 @@ namespace yask {
 
             // Check for matching option to str at args[argi].
             // Return true and increment argi if match.
-            virtual bool _check_arg(std::vector<std::string>& args, int& argi,
+            virtual bool _check_arg(const std::vector<std::string>& args, int& argi,
                                     const std::string& str) const;
 
             // Get one idx_t value from args[argi++].
             // Exit on failure.
-            virtual idx_t _idx_val(std::vector<std::string>& args, int& argi);
+            virtual idx_t _idx_val(const std::vector<std::string>& args, int& argi);
 
         public:
             OptionBase(const std::string& name,
@@ -373,7 +373,7 @@ namespace yask {
 
             // Check for matching option and any needed args at args[argi].
             // Return true, set val, and increment argi if match.
-            virtual bool check_arg(std::vector<std::string>& args, int& argi) =0;
+            virtual bool check_arg(const std::vector<std::string>& args, int& argi) =0;
         };
 
         // An allowed boolean option.
@@ -388,7 +388,7 @@ namespace yask {
 
             virtual void print_help(std::ostream& os,
                                     int width) const;
-            virtual bool check_arg(std::vector<std::string>& args, int& argi);
+            virtual bool check_arg(const std::vector<std::string>& args, int& argi);
         };
 
         // An allowed int option.
@@ -403,7 +403,7 @@ namespace yask {
 
             virtual void print_help(std::ostream& os,
                                     int width) const;
-            virtual bool check_arg(std::vector<std::string>& args, int& argi);
+            virtual bool check_arg(const std::vector<std::string>& args, int& argi);
         };
 
         // An allowed idx_t option.
@@ -418,7 +418,7 @@ namespace yask {
 
             virtual void print_help(std::ostream& os,
                                     int width) const;
-            virtual bool check_arg(std::vector<std::string>& args, int& argi);
+            virtual bool check_arg(const std::vector<std::string>& args, int& argi);
         };
 
         // An allowed idx_t option that sets multiple vars.
@@ -435,7 +435,8 @@ namespace yask {
 
             virtual void print_help(std::ostream& os,
                                     int width) const;
-            virtual bool check_arg(std::vector<std::string>& args, int& argi);
+            virtual bool check_arg(const std::vector<std::string>& args,
+                                   int& argi);
         };
 
     protected:
@@ -456,6 +457,9 @@ namespace yask {
             }
         }
 
+        // Tokenize args from a string.
+        static std::vector<std::string> set_args(const std::string& arg_string);
+
         // Set help width.
         virtual void set_width(int width) {
             _width = width;
@@ -470,26 +474,28 @@ namespace yask {
         // Print help info on all options.
         virtual void print_help(std::ostream& os) const;
 
-        // Parse options from the command-line and set corresponding vars.
+        // Parse options from 'args' and set corresponding vars.
         // Recognized strings from args are consumed, and unused ones
         // remain for further processing by the application.
-        virtual void parse_args(const std::string& pgmName,
-                                std::vector<std::string>& args);
+        virtual std::string parse_args(const std::string& pgmName,
+                                       const std::vector<std::string>& args);
 
+        // Same as above, but splits 'arg_string' into tokens.
+        virtual std::string parse_args(const std::string& pgmName,
+                                       const std::string& arg_string) {
+            auto args = set_args(arg_string);
+            return parse_args(pgmName, args);
+        }
+        
         // Same as above, but pgmName is populated from argv[0]
-        // and args is appended from remainder of argv array.
-        // Unused strings are returned in args vector.
-        virtual void parse_args(int argc, char** argv,
-                                std::vector<std::string>& args) {
+        // and rest of argv is parsed.
+        virtual std::string parse_args(int argc, char** argv) {
             std::string pgmName = argv[0];
+            std::vector<std::string> args;
             for (int i = 1; i < argc; i++)
                 args.push_back(argv[i]);
-            parse_args(pgmName, args);
+            return parse_args(pgmName, args);
         }
-
-        // Tokenize args from a string.
-        virtual void set_args(std::string arg_string,
-                              std::vector<std::string>& args);
     };
 }
 

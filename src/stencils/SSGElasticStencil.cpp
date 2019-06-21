@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -32,32 +32,32 @@ class SSGElasticStencil : public ElasticStencilBase {
 
 protected:
 
-    // Time-varying 3D-spatial velocity grids.
-    MAKE_GRID(v_bl_w, t, x, y, z);
-    MAKE_GRID(v_tl_v, t, x, y, z);
-    MAKE_GRID(v_tr_u, t, x, y, z);
+    // Time-varying 3D-spatial velocity vars.
+    yc_var_proxy v_bl_w = yc_var_proxy("v_bl_w", get_soln(), { t, x, y, z });
+    yc_var_proxy v_tl_v = yc_var_proxy("v_tl_v", get_soln(), { t, x, y, z });
+    yc_var_proxy v_tr_u = yc_var_proxy("v_tr_u", get_soln(), { t, x, y, z });
 
-    // Time-varying 3D-spatial Stress grids.
-    MAKE_GRID(s_bl_yz, t, x, y, z);
-    MAKE_GRID(s_br_xz, t, x, y, z);
-    MAKE_GRID(s_tl_xx, t, x, y, z);
-    MAKE_GRID(s_tl_yy, t, x, y, z);
-    MAKE_GRID(s_tl_zz, t, x, y, z);
-    MAKE_GRID(s_tr_xy, t, x, y, z);
+    // Time-varying 3D-spatial Stress vars.
+    yc_var_proxy s_bl_yz = yc_var_proxy("s_bl_yz", get_soln(), { t, x, y, z });
+    yc_var_proxy s_br_xz = yc_var_proxy("s_br_xz", get_soln(), { t, x, y, z });
+    yc_var_proxy s_tl_xx = yc_var_proxy("s_tl_xx", get_soln(), { t, x, y, z });
+    yc_var_proxy s_tl_yy = yc_var_proxy("s_tl_yy", get_soln(), { t, x, y, z });
+    yc_var_proxy s_tl_zz = yc_var_proxy("s_tl_zz", get_soln(), { t, x, y, z });
+    yc_var_proxy s_tr_xy = yc_var_proxy("s_tr_xy", get_soln(), { t, x, y, z });
 
     // 3D-spatial coefficients.
-    MAKE_GRID(mu, x, y, z);
-    MAKE_GRID(lambda, x, y, z);
-    MAKE_GRID(lambdamu2, x, y, z);
+    yc_var_proxy mu = yc_var_proxy("mu", get_soln(), { x, y, z });
+    yc_var_proxy lambda = yc_var_proxy("lambda", get_soln(), { x, y, z });
+    yc_var_proxy lambdamu2 = yc_var_proxy("lambdamu2", get_soln(), { x, y, z });
 
 public:
 
-    SSGElasticStencil( StencilList& stencils) :
-        ElasticStencilBase("ssg", stencils)
+    SSGElasticStencil( ) :
+        ElasticStencilBase("ssg")
     {
     }
 
-    GridValue interp_mu( GridIndex x, GridIndex y, GridIndex z, const BR )
+    yc_number_node_ptr interp_mu( yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, const BR )
     {
         return ( 2.0/ (mu(x  , y  , z  ) +
                        mu(x  , y+1, z  ) +
@@ -65,7 +65,7 @@ public:
                        mu(x  , y+1, z+1)) );
     }
 
-    GridValue interp_mu( GridIndex x, GridIndex y, GridIndex z, const BL )
+    yc_number_node_ptr interp_mu( yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, const BL )
     {
         return ( 2.0/ (mu(x  , y  , z  ) +
                        mu(x+1, y  , z  ) +
@@ -73,7 +73,7 @@ public:
                        mu(x+1, y  , z+1)) );
     }
 
-    GridValue interp_mu( GridIndex x, GridIndex y, GridIndex z, const TR )
+    yc_number_node_ptr interp_mu( yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z, const TR )
     {
         return ( 2.0/ (mu(x  , y  , z  ) +
                        mu(x+1, y  , z  ) +
@@ -82,52 +82,51 @@ public:
     }
 
     template<typename N>
-    GridValue interp_mu( GridIndex x, GridIndex y, GridIndex z )
+    yc_number_node_ptr interp_mu( yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z )
     {
         return interp_mu( x, y, z, N() );
     }
 
-
-    // Stress-grid define functions.  For each D in xx, yy, zz, xy, xz, yz,
-    // define stress_D at t+1 based on stress_D at t and vel grids at t+1.
-    // This implies that the velocity-grid define functions must be called
+    // Stress-var define functions.  For each D in xx, yy, zz, xy, xz, yz,
+    // define stress_D at t+1 based on stress_D at t and vel vars at t+1.
+    // This implies that the velocity-var define functions must be called
     // before these for a given value of t.  Note that the t, x, y, z
-    // parameters are integer grid indices, not actual offsets in time or
-    // space, so half-steps due to staggered grids are adjusted
+    // parameters are integer var indices, not actual offsets in time or
+    // space, so half-steps due to staggered vars are adjusted
     // appropriately.
 
     template<typename N, typename DA, typename SA, typename DB, typename SB>
-    void define_str(GridIndex t, GridIndex x, GridIndex y, GridIndex z,
-                    Grid &s, Grid &va, Grid &vb) {
+    void define_str(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z,
+                    yc_var_proxy &s, yc_var_proxy &va, yc_var_proxy &vb) {
 
-        GridValue lcoeff = interp_mu<N>( x, y, z );
+        auto lcoeff = interp_mu<N>( x, y, z );
 
-        GridValue vta    = stencil_O8<DA,SA>( t+1, x, y, z, va );
-        GridValue vtb    = stencil_O8<DB,SB>( t+1, x, y, z, vb );
+        auto vta    = stencil_O8<DA,SA>( t+1, x, y, z, va );
+        auto vtb    = stencil_O8<DB,SB>( t+1, x, y, z, vb );
 
-        GridValue next_s = s(t, x, y, z) + ((vta + vtb) * lcoeff) * delta_t;
+        auto next_s = s(t, x, y, z) + ((vta + vtb) * lcoeff) * delta_t;
 
         // define the value at t+1.
         s(t+1, x, y, z) EQUALS next_s;
     }
 
-    void define_str_TL(GridIndex t, GridIndex x, GridIndex y, GridIndex z )
+    void define_str_TL(yc_number_node_ptr t, yc_number_node_ptr x, yc_number_node_ptr y, yc_number_node_ptr z )
     {
 
-        GridValue ilambdamu2 = 1.0 / lambdamu2(x,y,z);
-        GridValue ilambda    = 1.0 / lambda   (x,y,z);
+        auto ilambdamu2 = 1.0 / lambdamu2(x,y,z);
+        auto ilambda    = 1.0 / lambda   (x,y,z);
 
-        GridValue vtx    = stencil_O8<X,F>( t+1, x, y, z, v_tr_u );
-        GridValue vty    = stencil_O8<Y,B>( t+1, x, y, z, v_tl_v );
-        GridValue vtz    = stencil_O8<Z,B>( t+1, x, y, z, v_bl_w );
+        auto vtx    = stencil_O8<X,F>( t+1, x, y, z, v_tr_u );
+        auto vty    = stencil_O8<Y,B>( t+1, x, y, z, v_tl_v );
+        auto vtz    = stencil_O8<Z,B>( t+1, x, y, z, v_bl_w );
 
-        GridValue next_xx = s_tl_xx(t, x, y, z) + ilambdamu2 * vtx * delta_t
+        auto next_xx = s_tl_xx(t, x, y, z) + ilambdamu2 * vtx * delta_t
             + ilambda    * vty * delta_t
             + ilambda    * vtz * delta_t;
-        GridValue next_yy = s_tl_yy(t, x, y, z) + ilambda    * vtx * delta_t
+        auto next_yy = s_tl_yy(t, x, y, z) + ilambda    * vtx * delta_t
             + ilambdamu2 * vty * delta_t
             + ilambda    * vtz * delta_t;
-        GridValue next_zz = s_tl_zz(t, x, y, z) + ilambda    * vtx * delta_t
+        auto next_zz = s_tl_zz(t, x, y, z) + ilambda    * vtx * delta_t
             + ilambda    * vty * delta_t
             + ilambdamu2 * vtz * delta_t;
 
@@ -135,6 +134,39 @@ public:
         s_tl_xx(t+1, x, y, z) EQUALS next_xx;
         s_tl_yy(t+1, x, y, z) EQUALS next_yy;
         s_tl_zz(t+1, x, y, z) EQUALS next_zz;
+    }
+
+    // Set BKC (best-known configs) found by automated and/or manual
+    // tuning. They are only applied for certain target configs.
+    virtual void set_configs() {
+        auto soln = get_soln(); // pointer to compile-time soln.
+            
+        // Only have BKCs for SP FP (4B).
+        if (soln->get_element_bytes() == 4) {
+
+            // Kernel run-time defaults, e.g., block-sizes.
+            // This code is run immediately after 'kernel_soln' is created.
+            soln->CALL_AFTER_NEW_SOLUTION
+                (
+                 // Check target at kernel run-time.
+                 auto isa = kernel_soln.get_target();
+                 if (isa == "knl") {
+                     kernel_soln.set_block_size("x", 16);
+                     kernel_soln.set_block_size("y", 16);
+                     kernel_soln.set_block_size("z", 32);
+                 }
+                 else if (isa == "avx512") {
+                     kernel_soln.set_block_size("x", 96);
+                     kernel_soln.set_block_size("y", 16);
+                     kernel_soln.set_block_size("z", 80);
+                 }
+                 else {
+                     kernel_soln.set_block_size("x", 64);
+                     kernel_soln.set_block_size("y", 16);
+                     kernel_soln.set_block_size("z", 96);
+                 }
+                 );
+        }
     }
 
     // Call all the define_* functions.
@@ -151,7 +183,11 @@ public:
         define_str<BL, Y, F, Z, F>(t, x, y, z, s_bl_yz, v_bl_w, v_tl_v );
         define_str_TL(t, x, y, z);
 
+        set_configs();
     }
 };
 
-REGISTER_STENCIL(SSGElasticStencil);
+// Create an object of type 'SSGElasticStencil',
+// making it available in the YASK compiler utility via the
+// '-stencil' commmand-line option or the 'stencil=' build option.
+static SSGElasticStencil SSGElasticStencil_instance;

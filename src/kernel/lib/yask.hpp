@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -89,10 +89,10 @@ typedef int MPI_Request;
 #endif
 
 // Conditional inlining
-#ifdef CHECK
-#define ALWAYS_INLINE inline
-#else
+#if defined(USE_ALWAYS_INLINE) && !defined(CHECK)
 #define ALWAYS_INLINE __attribute__((always_inline)) inline
+#else
+#define ALWAYS_INLINE inline
 #endif
 
 // Additional type for unsigned indices.
@@ -150,24 +150,51 @@ typedef std::uint64_t uidx_t;
 #define NUMA_PREF yask_numa_local
 #endif
 
-// macro for debug message.
-#ifdef TRACE
-#define TRACE_MSG0(os, msg) do { if (opts->_trace) {        \
+// Macro for debug message.
+
+// 'os is an ostream.
+#define DEBUG_MSG0(os, msg) do {                            \
         KernelEnv::set_debug_lock();                        \
-        (os) << "YASK: " << std::boolalpha << std::dec <<   \
+        (os) << std::boolalpha << std::dec <<               \
             msg << std::endl << std::flush;                 \
         KernelEnv::unset_debug_lock();                      \
+    } while(0)
+
+// 'state' is a pointer to a KernelState.
+#define DEBUG_MSG1(state, msg) do {                         \
+        assert(state->_debug.get());                        \
+        auto& os = state->_debug.get()->get_ostream();      \
+        DEBUG_MSG0(os, msg);                                \
+    } while(0)
+    
+// Macro for debug message when 'state' is defined.
+#define DEBUG_MSG(msg) DEBUG_MSG1(state, msg)
+
+// Macro for trace message.
+// Enabled only if compiled with TRACE macro and run with -trace option.
+#ifdef TRACE
+
+// 'os is an ostream.
+#define TRACE_MSG0(os, msg) do { if (opts->_trace) {        \
+            DEBUG_MSG0(os, "YASK: " << msg);                \
+        } } while(0)
+
+// 'state' is a pointer to a KernelState.
+#define TRACE_MSG1(state, msg) do { if (opts->_trace) {     \
+            DEBUG_MSG1(state, "YASK: " << msg);             \
         } } while(0)
 #else
 #define TRACE_MSG0(os, msg) ((void)0)
+#define TRACE_MSG1(state, msg) ((void)0)
 #endif
 
-// macro for debug message when 'os' is defined.
-#define TRACE_MSG(msg) TRACE_MSG0(os, msg)
+// Macro for trace message when 'state' is defined.
+#define TRACE_MSG(msg) TRACE_MSG1(state, msg)
 
-// macro for mem-trace.
+// Macro for mem-trace when 'state' is defined.
+// Enabled only if compiled with TRACE_MEM macro and run with -trace option.
 #ifdef TRACE_MEM
-#define TRACE_MEM_MSG(msg) TRACE_MSG0(os, msg)
+#define TRACE_MEM_MSG(msg) TRACE_MSG1(state, msg)
 #else
 #define TRACE_MEM_MSG(msg) ((void)0)
 #endif

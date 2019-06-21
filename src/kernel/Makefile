@@ -1,5 +1,5 @@
 ##############################################################################
-## YASK: Yet Another Stencil Kernel
+## YASK: Yet Another Stencil Kit
 ## Copyright (c) 2014-2019, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -28,188 +28,13 @@
 # command-line that control kernel configuration and performance.
 
 # Initial defaults.
+# These can be overridden on the 'make' command-line.
 stencil			?=	iso3dfd
 mpi			?=	1
 numa			?=	1
 pmem			?=	0
 real_bytes		?=	4
-allow_new_grid_types	?=	1
-trace			?=	0
-trace_mem		?=	0
-check			?=	0
-# NB: setting the "trace" var just includes the tracing code.
-# To actually output the trace, you must also use the "-trace"
-# run-time option. Enabling tracing is off by default because
-# it adds a few MiB to the binary and can impact perfomance
-# even if not used, but only around 1%.
-
-# Determine default architecture by running kernel script w/special knob.
-# Do not assume it has been installed in $(BIN_OUT_DIR) yet.
-arch			?=	$(shell $(BASH) ./yask.sh -show_arch)
-
-# Specify YK_STENCIL and/or YK_ARCH to name binaries differently.
-YK_STENCIL	:=	$(stencil)
-YK_ARCH		:=	$(arch)
-
-# Specify YC_STENCIL to pass different stencil name to YASK compiler.
-YC_STENCIL	:=	$(stencil)
-
-# Defaults based on stencil type (and arch for some stencils).
-ifeq ($(YC_STENCIL),)
- $(error Stencil not specified)
-
-else ifeq ($(YC_STENCIL),3axis)
- MACROS		+=	MAX_EXCH_DIST=1
-
-else ifeq ($(YC_STENCIL),3axis_with_diags)
- MACROS		+=	MAX_EXCH_DIST=2
-
-else ifeq ($(YC_STENCIL),3plane)
- MACROS		+=	MAX_EXCH_DIST=2
-
-else ifeq ($(YC_STENCIL),cube)
- MACROS		+=	MAX_EXCH_DIST=3
-
-else ifneq ($(findstring iso3dfd,$(YC_STENCIL)),)
- MACROS			+=	MAX_EXCH_DIST=1
- def_pad_args		:=	-ep 1
- ifeq ($(arch),knl)
-  fold			:=	x=2,y=8
-  cluster		:=	x=2
-  def_block_args	:=	-bx 160 -by 256 -bz 96
-  pfd_l1		:=	1
-  pfd_l2		:=	0
- else ifneq ($(filter $(arch),hsw bdw),)
-  def_block_args	:=	-bx 48 -by 60 -bz 112
-  pfd_l1		:=	0
-  pfd_l2		:=	0
- else ifneq ($(filter $(arch),skx skl clx),)
-  def_block_args	:=	-bx 108	 -by 28 -bz 132
-  pfd_l1		:=	0
-  pfd_l2		:=	2
- endif
-
-else ifneq ($(findstring awp,$(YC_STENCIL)),)
- YC_FLAGS		+=	-min-es 1
- def_pad_args		:=	-ep 1
- ifeq ($(arch),knl)
-  def_thread_divisor	:=	2
-  def_block_threads	:=	4
-  def_block_args	:=	-bx 48 -by 48 -bx 112
-  pfd_l1		:=	1
-  pfd_l2		:=	0
- else ifneq ($(filter $(arch),hsw bdw),)
-  def_block_args	:=	-bx 64 -by 8 -bz 64
-  pfd_l1		:=	1
-  pfd_l2		:=	2
- else ifneq ($(filter $(arch),skx skl clx),)
-  def_block_args	:=	-bx 64 -by 8 -bz 108
-  pfd_l1		:=	1
-  pfd_l2		:=	0
- endif
-
-else ifneq ($(findstring ssg,$(YC_STENCIL)),)
- ifneq ($(filter $(arch),hsw bdw),)
-  def_block_args	:=	-bx 64 -by 16 -bz 96
- else ifneq ($(filter $(arch),skx skl clx),)
-  def_block_args	:=	-bx 96 -by 16 -bz 80
- endif
-
-else ifneq ($(findstring fsg,$(YC_STENCIL)),)
- ifeq ($(arch),knl)
-  omp_region_schedule	:=	guided
-  def_block_args	:=	-b 16
-  def_thread_divisor	:=	4
-  def_block_threads	:=	2
-  pfd_l1		:=	0
-  pfd_l2		:=	2
- else ifneq ($(filter $(arch),hsw bdw),)
-  def_block_args	:=	-bx 48 -by 4 -bz 128
- else ifneq ($(filter $(arch),skx skl clx),)
-  def_block_args	:=	-bx 188 -by 12 -bz 24
- endif
-
-else ifeq ($(YC_STENCIL),tti)
- MACROS			+=	MAX_EXCH_DIST=3
- ifneq ($(filter $(arch),skx skl clx),)
-  def_block_args	:=	-bx 80 -by 16 -bz 40
- endif
-
-else ifeq ($(YC_STENCIL),stream)
- MACROS		+=	MAX_EXCH_DIST=0
- cluster	:=	x=2
-
-endif # stencil-specific.
-
-# Defaut settings based on architecture.
-# (Use '?=' to avoid replacing above settings.)
-ifeq ($(arch),knc)
-
- ISA		?=	-mmic
- MACROS		+=	USE_INTRIN512
- YC_TARGET	?=	knc
- def_block_threads  ?=	4
- pfd_l1		?=	1
- pfd_l2		?=	2
-
-else ifeq ($(arch),knl)
-
- # NUMA_PREF=1 causes YASK to use MCDRAM on a node in "flat" memory mode. It
- # will fall-back to NUMA node 0 in "cache" memory mode. It will *NOT* do
- # the right thing by default in SNC-2 or SNC-4 clustering modes (using
- # either flat or cache memory modes, but these configurations are uncommon.
- ISA		?=	-xMIC-AVX512
- GCXX_ISA	?=	-march=knl
- MACROS		+=	USE_INTRIN512 USE_RCP28 NUMA_PREF=1
- YC_TARGET	?=	avx512
- def_block_args ?=	-b 64
- def_block_threads ?=	8
- pfd_l1		?=	1
- pfd_l2		?=	0
-
-else ifneq ($(filter $(arch),skx skl clx),)
-
- # Note that 'skl' targets the server SKUs with avx512 ISA,
- # not the client SKUs without.
- ISA		?=	-xCORE-AVX512
- GCXX_ISA	?=	-march=knl -mno-avx512er -mno-avx512pf
- MACROS		+=	USE_INTRIN512
- YC_TARGET	?=	avx512
-
-else ifneq ($(filter $(arch),hsw bdw),)
-
- ISA		?=	-xCORE-AVX2
- GCXX_ISA	?=	-march=haswell
- MACROS		+=	USE_INTRIN256 USE_AVX2
- YC_TARGET	?=	avx2
-
-else ifeq ($(arch),ivb)
-
- ISA		?=	-xCORE-AVX-I
- GCXX_ISA	?=	-march=ivybridge
- MACROS		+=	USE_INTRIN256
- YC_TARGET	?=	avx
-
-else ifeq ($(arch),snb)
-
- ISA		?=	-xAVX
- GCXX_ISA	?=	-march=sandybridge
- MACROS		+=	USE_INTRIN256
- YC_TARGET	?=	avx
-
-else ifeq ($(arch),intel64)
-
- ISA		?=	-xHOST
- GCXX_ISA	?=	-march=native
- YC_TARGET	?=	cpp
-
-else
-
-$(error Architecture not recognized; use arch=knl, knc, clx, skx, hsw, bdw, ivb, snb, or intel64 (no explicit vectorization))
-
-endif # arch-specific.
-
-# general defaults for vars if not set above.
+allow_new_var_types	?=	1
 streaming_stores	?=	0
 omp_par			?=	omp parallel
 omp_par_for		?=	omp parallel for
@@ -217,13 +42,105 @@ omp_for			?=	omp for
 omp_region_schedule	?=	dynamic,1
 omp_block_schedule	?=	static,1
 omp_misc_schedule	?=	guided
-def_thread_divisor	?=	1
-def_block_threads	?=	2
-def_block_args		?=	-b 32
-pfd_l1			?=	0
-pfd_l2			?=	2
+trace			?=	0
+trace_mem		?=	0
+check			?=	0
+# NB: setting the "trace" and "trace_mem" vars just includes the tracing
+# code.  To actually output the trace, you must also use the "-trace"
+# run-time option.  Including the "trace" code has a small impact on
+# binary size and performance, even if not used. Including the "trace_mem"
+# code has a large impact, even if not used.
 
-######## End of vars that control the function and performance of the kernel.
+# If 'arch' isn't set, determine default architecture by running kernel
+# script w/special knob.
+# The "knc" arch must be set manually because it is always cross-compiled.
+# (Do not assume 'yask.sh' has been installed in $(BIN_OUT_DIR) yet.)
+arch			?=	$(shell $(BASH) ./yask.sh -show_arch)
+
+# Set 'TARGET' from 'arch', converting codenames and other aliases to ISA names.
+# 'TARGET' is the canonical target name.
+# The possible values must agree with those in the APIs and YASK compiler.
+ifneq ($(filter $(arch),avx snb ivb),)
+  TARGET		:=	avx
+else ifneq ($(filter $(arch),avx2 hsw bdw),)
+  TARGET		:=	avx2
+else ifneq ($(filter $(arch),avx512 avx512f skx skl clx),)
+  TARGET		:=	avx512
+else ifneq ($(filter $(arch),knl),)
+  TARGET		:=	knl
+else ifneq ($(filter $(arch),knc),)
+  TARGET		:=	knc
+else ifneq ($(filter $(arch),intel64 cpp),)
+  TARGET		:=	intel64
+else
+  $(error Target not recognized; use arch=avx512, avx2, avx, knl, knc, or intel64)
+endif
+
+# Specify YK_STENCIL and/or YK_ARCH on 'make' cmd-line to name binaries differently.
+YK_STENCIL	:=	$(stencil)
+YK_ARCH		:=	$(arch)
+
+# Specify YC_STENCIL on 'make' cmd-line to pass different stencil name to YASK compiler.
+YC_STENCIL	:=	$(stencil)
+
+# Specify YC_TARGET on 'make' cmd-line to override target for YASK compiler.
+YC_TARGET	:=	$(TARGET)
+
+# Default compiler settings based on target.
+ifeq ($(TARGET),knc)
+
+ ICC_ISA	?=	-mmic
+ MACROS		+=	USE_INTRIN512
+
+else ifeq ($(TARGET),knl)
+
+ # NUMA_PREF=1 causes YASK to use MCDRAM on a node in "flat" memory mode. It
+ # will fall-back to NUMA node 0 in "cache" memory mode. It will *NOT* do
+ # the right thing by default in SNC-2 or SNC-4 clustering modes (using
+ # either flat or cache memory modes, but these configurations are uncommon.
+ ICC_ISA	?=	-xMIC-AVX512
+ GCC_ISA	?=	-march=knl
+ MACROS		+=	USE_INTRIN512 USE_RCP28 NUMA_PREF=1
+
+else ifeq ($(TARGET),avx512)
+
+ ICC_ISA	?=	-xCORE-AVX512
+ GCC_ISA	?=	-march=skylake-avx512
+ MACROS		+=	USE_INTRIN512
+
+else ifeq ($(TARGET),avx2)
+
+ ICC_ISA	?=	-xCORE-AVX2
+ GCC_ISA	?=	-march=haswell
+ MACROS		+=	USE_INTRIN256 USE_AVX2
+
+else ifeq ($(TARGET),avx)
+
+ ICC_ISA	?=	-xAVX
+ GCC_ISA	?=	-march=sandybridge
+ MACROS		+=	USE_INTRIN256
+
+else ifeq ($(TARGET),intel64)
+
+ ICC_ISA	?=	-xHOST
+ GCC_ISA	?=	-march=native
+
+else
+
+$(error Internal error: arch lists are not consistent)
+
+endif # arch-specific.
+
+# Turn off prefetching at O0 or O1.
+ifneq ($(filter -O0 -O1,$(YK_CXXOPT)),)
+ pfd_l1		:=	0
+ pfd_l2		:=	0
+endif
+
+# Turn on checking at O0.
+ifneq ($(filter -O0,$(YK_CXXOPT)),)
+ check		:=	1
+endif
 
 # Common settings.
 YASK_BASE	?=	$(abspath ../..)
@@ -234,7 +151,7 @@ include $(YASK_BASE)/src/common/common.mk
 # Vars starting with 'YK_' apply to the stencil kernel.
 
 # Flags passed to stencil compiler.
-YC_FLAGS	+=	-stencil $(YC_STENCIL) -elem-bytes $(real_bytes)
+YC_FLAGS	:=	-stencil $(YC_STENCIL) -target $(YC_TARGET) -elem-bytes $(real_bytes)
 ifneq ($(fold),)
  YC_FLAGS	+=	-fold $(fold)
 endif
@@ -259,6 +176,12 @@ endif
 ifneq ($(step_dim),)
  YC_FLAGS	+=	-step-dim $(step_dim)
 endif
+ifneq ($(pfd_l1),)
+ YC_FLAGS	+=	-l1-prefetch-dist $(pfd_l1)
+endif
+ifneq ($(pfd_l2),)
+ YC_FLAGS	+=	-l2-prefetch-dist $(pfd_l2)
+endif
 
 # Kernel base names.
 YK_BASE		:=	yask_kernel
@@ -274,7 +197,7 @@ YK_OUT_DIR	:=	$(BUILD_OUT_DIR)/kernel
 
 # Dir for output files dependent on arch but
 # not on the stencil.
-YK_ARCH_DIR	:=	$(YK_OUT_DIR)/$(arch)
+YK_ARCH_DIR	:=	$(YK_OUT_DIR)/$(YK_ARCH)
 YK_OBJ_DIR	:=	$(YK_ARCH_DIR)/obj
 
 # Dirs for stencil-specific output files.
@@ -292,8 +215,8 @@ YK_LIB		:=	$(LIB_OUT_DIR)/lib$(YK_EXT_BASE)$(SO_SUFFIX)
 YK_PY_LIB	:=	$(PY_OUT_DIR)/_$(YK_PY_MOD_BASE)$(SO_SUFFIX)
 YK_PY_MOD	:=	$(PY_OUT_DIR)/$(YK_PY_MOD_BASE).py
 YK_SRC_NAMES	:=	utils
-YK_EXT_SRC_NAMES :=	factory grid_apis soln_apis context stencil_calc setup alloc \
-			realv_grids new_grid settings generic_grids auto_tuner
+YK_EXT_SRC_NAMES :=	factory soln_apis context stencil_calc setup alloc \
+			generic_var yk_var yk_var_apis new_var settings auto_tuner
 YK_OBJS		:=	$(addprefix $(YK_OBJ_DIR)/,$(addsuffix .o,$(YK_SRC_NAMES) $(COMM_SRC_NAMES)))
 YK_EXT_OBJS	:=	$(addprefix $(YK_EXT_OBJ_DIR)/,$(addsuffix .o,$(YK_EXT_SRC_NAMES)))
 YK_CODE_FILE	:=	$(YK_GEN_DIR)/yask_stencil_code.hpp
@@ -306,12 +229,12 @@ YK_GEN_HEADERS	:=	$(addprefix $(YK_GEN_DIR)/, \
 				yask_misc_loops.hpp \
 				yask_layout_macros.hpp \
 				yask_layouts.hpp \
-				yask_grid_code.hpp) \
+				yask_var_code.hpp) \
 				$(YK_CODE_FILE)
-YK_INC_DIRS	:=	$(INC_DIR) $(YK_LIB_SRC_DIR) $(COMM_DIR) $(COEFF_DIR)
+YK_INC_DIRS	:=	$(INC_DIRS) $(YK_LIB_SRC_DIR) $(COMM_DIR) $(COEFF_DIR)
 YK_INC_GLOB	:=	$(addsuffix /*.hpp,$(YK_INC_DIRS))
 YK_API_TEST_EXEC :=	$(BIN_OUT_DIR)/$(YK_BASE)_api_test.exe
-YK_GRID_TEST_EXEC :=	$(BIN_OUT_DIR)/$(YK_BASE)_grid_test.exe
+YK_VAR_TEST_EXEC :=	$(BIN_OUT_DIR)/$(YK_BASE)_var_test.exe
 YK_API_TEST_EXEC_WITH_EXCEPTION :=	$(BIN_OUT_DIR)/$(YK_BASE)_api_exception_test.exe
 MAKE_REPORT_FILE :=	$(BUILD_OUT_DIR)/$(YK_EXT_BASE).make-report.txt
 YC_REPORT_FILE :=	$(BUILD_OUT_DIR)/$(YK_EXT_BASE).yask_compiler-report.txt
@@ -324,7 +247,7 @@ GEN_LOOPS	:=	$(UTILS_BIN_DIR)/gen_loops.pl
 
 # Other scripts and cmds.
 GEN_LAYOUTS	:=	$(UTILS_BIN_DIR)/gen_layouts.pl
-GET_LOOP_STATS	:=	$(UTILS_BIN_DIR)/get_loop_stats.pl
+VIEW_ASM	:=	$(UTILS_BIN_DIR)/view_asm.pl
 
 # Compiler and default flags.
 ifeq ($(mpi),1)
@@ -371,17 +294,6 @@ ifeq ($(pmem),1)
  MACROS		+=	USE_PMEM
 endif
 
-# Turn off prefetching at O0 or O1.
-ifneq ($(filter -O0 -O1,$(YK_CXXOPT)),)
- pfd_l1		:=	0
- pfd_l2		:=	0
-endif
-
-# Turn on checking at O0.
-ifneq ($(filter -O0,$(YK_CXXOPT)),)
- check		?=	1
-endif
-
 # Turn on debug macros.
 ifeq ($(trace_mem),1)
  MACROS		+=	CHECK TRACE TRACE_MEM
@@ -392,21 +304,15 @@ else ifeq ($(check),1)
 endif
 
 # Set MACROS based on individual makefile vars.
-MACROS		+=	PFD_L1=$(pfd_l1) PFD_L2=$(pfd_l2)
 ifeq ($(streaming_stores),1)
  MACROS		+=	USE_STREAMING_STORE
 endif
-MACROS		+=	ALLOW_NEW_GRIDS=$(allow_new_grid_types)
+MACROS		+=	ALLOW_NEW_VARS=$(allow_new_var_types)
 
 # Default cmd-line args.
-DEF_ARGS	+=	-thread_divisor $(def_thread_divisor)
-DEF_ARGS	+=	-block_threads $(def_block_threads)
-DEF_ARGS	+=	$(def_block_args) $(def_pad_args) $(more_def_args) 
-YK_CXXFLAGS	+=	-DDEF_ARGS='"$(DEF_ARGS) $(EXTRA_DEF_ARGS)"'
-
-# arch.
-ARCH		:=	$(shell echo $(arch) | tr '[:lower:]' '[:upper:]')
-MACROS		+=	ARCH_$(ARCH)
+ifneq ($(DEF_ARGS),)
+ YK_CXXFLAGS	+=	-DDEF_ARGS='"$(DEF_ARGS)"'
+endif
 
 # MPI settings.
 ifeq ($(mpi),1)
@@ -433,10 +339,11 @@ YK_CXXFLAGS	+=	-I$(VTUNE_DIR)/include
 YK_LIBS		+=	$(VTUNE_DIR)/lib64/libittnotify.a
 endif
 
-# compiler-specific settings
+# compiler-specific settings.
+# TODO: make check for Intel compiler more robust.
 ifneq ($(filter %icpc %icc,$(notdir $(YK_CXX))),)  # Intel compiler
 
- YK_CXXFLAGS	+=	$(ISA) -debug extended -restrict -ansi-alias -fno-alias
+ YK_CXXFLAGS	+=	$(ICC_ISA) -debug extended -restrict -ansi-alias -fno-alias
  YK_CXXFLAGS	+=	-fimf-use-svml=true -fimf-precision=low -fast-transcendentals \
 			-no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -ftz \
 			-fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
@@ -447,16 +354,17 @@ ifneq ($(filter %icpc %icc,$(notdir $(YK_CXX))),)  # Intel compiler
  #YK_CXXFLAGS	+=	-qopt-report=5
  #YK_CXXFLAGS	+=	-qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
  YK_CXX_VER_CMD :=	$(YK_CXX) -V
- MACROS		+=	USE_SVML
+ MACROS		+=	USE_SVML USE_ALWAYS_INLINE
 
-# Use 512-bit code on SKX and CLX.
-# (Commented out because it doesn't help performance, and it breaks Devito.)
-ifneq ($(filter $(arch),skx skl clx),)
- #YK_CXXFLAGS	+=	-qopt-zmm-usage=high
-endif
+ # Use real 512-bit code.
+ # (Commented out because it doesn't help performance, and it breaks Devito.)
+ ifeq ($(TARGET),avx512)
+  #YK_CXXFLAGS	+=	-qopt-zmm-usage=high
+ endif
 
 else # not Intel compiler
- YK_CXXFLAGS	+=	$(GCXX_ISA) -Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
+ YK_CXXFLAGS	+=	$(GCC_ISA) -Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
+ MACROS		+=	USE_ALWAYS_INLINE
 
 endif # compiler.
 
@@ -475,9 +383,9 @@ endif
 YK_CXXFLAGS	+=	$(YK_CXXOPT) $(OMPFLAGS) $(addprefix -D,$(MACROS) $(EXTRA_MACROS)) $(EXTRA_YK_CXXFLAGS)
 YK_LIBS		+=	$(EXTRA_YK_LIBS)
 
-# Number of stencil/grid dims extracted from YASK compiler output.
+# Number of stencil/var dims extracted from YASK compiler output.
 NSDIMS		:=	`awk '/NUM_STENCIL_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
-NGDIMS		:=	`awk '/NUM_STENCIL_AND_GRID_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
+NVDIMS		:=	`awk '/NUM_STENCIL_AND_VAR_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
 
 ######## Loop-compiler configuration:
 # The loop indices range from 0..N-1.
@@ -486,7 +394,7 @@ NGDIMS		:=	`awk '/NUM_STENCIL_AND_GRID_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
 # so the following loop codes do not scan over dim 0.
 # Dims 1..N-1 are the domain dims, usually spatial.
 # Thus, N-1 is the inner-most dim.
-# For best perf, this should be the unit-stride dim in the grids.
+# For best perf, this should be the unit-stride dim in the vars.
 
 # Rank loops break up the whole rank into smaller regions.  In order for
 # temporal wavefronts to operate properly, the scanning paths must have
@@ -624,30 +532,32 @@ $(YK_GEN_DIR)/yask_sub_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 
 $(YK_GEN_DIR)/yask_misc_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
-	$< -output $@ $(MISC_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_MISC_LOOP_OPTS) "$(MISC_LOOP_CODE)"
+	$(PERL) $< -output $@ $(MISC_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_MISC_LOOP_OPTS) "$(MISC_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_layout_macros.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
-	$(PERL) $< -m $(NGDIMS) > $@
+	$(PERL) $< -m $(NVDIMS) > $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because indent program failed or was not found."
 
 $(YK_GEN_DIR)/yask_layouts.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
-	$(PERL) $< -d $(NGDIMS) > $@
+	$(PERL) $< -d $(NVDIMS) > $@
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because indent program failed or was not found."
 
-$(YK_GEN_DIR)/yask_grid_code.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
+$(YK_GEN_DIR)/yask_var_code.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
-	$(PERL) $< -g $(NGDIMS) > $@
+	$(PERL) $< -v $(NVDIMS) > $@
 
+# NB: 'set -o pipefail' ensures failure of command before '| tee' is visible.
 $(YK_CODE_FILE): $(YC_EXEC)
 	$(MKDIR) $(dir $@)
-	$(RUN_PREFIX) $< $(YC_FLAGS) $(EXTRA_YC_FLAGS) -p $(YC_TARGET) $@ | tee $(YC_REPORT_FILE) 2>&1
-	@ grep -q -E 'End of .* code' $@
+	@- rm -f $@
+	set -o pipefail; \
+	  $(RUN_PREFIX) $< $(YC_FLAGS) -p $@ $(EXTRA_YC_FLAGS) | tee $(YC_REPORT_FILE) 2>&1
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because no indent program was found."
@@ -686,7 +596,7 @@ $(YK_PY_LIB): $(YK_OBJS)  $(YK_EXT_OBJS) $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap
 
 # Simple tests.
 
-$(YK_GRID_TEST_EXEC): $(YK_TEST_SRC_DIR)/grid_test.cpp $(YK_LIB)
+$(YK_VAR_TEST_EXEC): $(YK_TEST_SRC_DIR)/var_test.cpp $(YK_LIB)
 	$(MKDIR) $(dir $@)
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
 	@ls -l $@
@@ -700,8 +610,8 @@ $(YK_API_TEST_EXEC): $(YK_TEST_SRC_DIR)/yask_kernel_api_test.cpp $(YK_LIB)
 	@ls -l $@
 
 # Run C++ tests.
-cxx-yk-grid-test: $(YK_GRID_TEST_EXEC)
-	@echo '*** Running the C++ YASK grid test...'
+cxx-yk-var-test: $(YK_VAR_TEST_EXEC)
+	@echo '*** Running the C++ YASK var test...'
 	$(RUN_PREFIX) $<
 
 cxx-yk-api-test: $(YK_API_TEST_EXEC)
@@ -814,7 +724,7 @@ api-tests:
 # These tests are focused on the kernel and not the compiler.
 # For testing both the kernel and compiler in various combinations,
 # run the tests from the top-level Makefile.
-STENCIL_TEST_ARGS := yc-and-yk-test real_bytes=8 allow_new_grid_types=0
+STENCIL_TEST_ARGS := yc-and-yk-test real_bytes=8 allow_new_var_types=0
 stencil-tests:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_empty step_dim=t domain_dims=d1,d2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_empty_2d
@@ -828,15 +738,16 @@ stencil-tests:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_func_1d fold=x=4
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_dep_1d fold=x=4
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_dep_2d fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_dep_3d fold=y=2,x=2 domain_dims=x,z,y
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_misc_2d fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_misc_2d fold=x=2,y=2 EXTRA_YC_FLAGS=-interleave-misc
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_step_cond_1d fold=x=4
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_subdomain_1d fold=x=4
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_subdomain_2d fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_subdomain_3d fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_boundary_1d fold=x=4
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_boundary_2d fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_boundary_3d fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_scratch_1d fold=x=4
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_scratch_3d fold=x=2,z=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_scratch_subdomain_1d fold=x=4
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_scratch_boundary_1d fold=x=4
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=iso3dfd radius=3 fold=x=2,y=2 domain_dims=z,x,y
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=iso3dfd_sponge radius=3 fold=x=2,z=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=3axis fold=x=2,y=2 cluster=x=2
@@ -845,16 +756,16 @@ stencil-tests:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=3plane fold=y=2,z=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=cube fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=ssg fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=ssg2 fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=ssg_merged fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=awp fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=awp_elastic fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=awp_abc fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=fsg_abc fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=fsg2 fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=fsg_merged fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=tti fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_4d fold=w=2,x=2
 
 all-tests:
-	$(MAKE) clean; $(MAKE) cxx-yk-grid-test stencil=test_3d fold=x=4,y=2
+	$(MAKE) clean; $(MAKE) cxx-yk-var-test stencil=test_3d fold=x=4,y=2
 	$(MAKE) stencil-tests
 	$(MAKE) api-tests
 
@@ -885,14 +796,14 @@ realclean: clean
 
 echo-settings:
 	@echo "Build environment for" $(YK_EXEC) on `date`; \
-	$(YK_CXX) --version; \
+	echo TARGET=$(TARGET); \
 	echo BLOCK_LOOP_CODE="\"$(BLOCK_LOOP_CODE)\""; \
 	echo BLOCK_LOOP_INNER_MODS="\"$(BLOCK_LOOP_INNER_MODS)\""; \
 	echo BLOCK_LOOP_OPTS="\"$(BLOCK_LOOP_OPTS)\""; \
 	echo BLOCK_LOOP_ORDER="\"$(BLOCK_LOOP_ORDER)\""; \
 	echo BLOCK_LOOP_OUTER_MODS="\"$(BLOCK_LOOP_OUTER_MODS)\""; \
 	echo BLOCK_LOOP_OUTER_VARS="\"$(BLOCK_LOOP_OUTER_VARS)\""; \
-	echo EXTRA_DEF_ARGS=$(EXTRA_DEF_ARGS); \
+	echo DEF_ARGS="\"$(DEF_ARGS)\""; \
 	echo EXTRA_MACROS="\"$(EXTRA_MACROS)\""; \
 	echo EXTRA_YC_FLAGS="\"$(EXTRA_YC_FLAGS)\""; \
 	echo EXTRA_YK_CXXFLAGS="\"$(EXTRA_YK_CXXFLAGS)\""; \
@@ -944,14 +855,7 @@ echo-settings:
 	echo YK_TAG=$(YK_TAG); \
 	echo arch=$(arch); \
 	echo cluster=$(cluster); \
-	echo def_block_args=$(def_block_args); \
-	echo def_block_threads=$(def_block_threads); \
-	echo def_pad_args=$(def_pad_args); \
-	echo def_rank_args=$(def_rank_args); \
-	echo def_thread_divisor=$(def_thread_divisor); \
 	echo fold=$(fold); \
-	echo host=`hostname`; \
-	echo more_def_args=$(more_def_args); \
 	echo omp_block_schedule=$(omp_block_schedule); \
 	echo omp_misc_schedule=$(omp_misc_schedule); \
 	echo omp_region_schedule=$(omp_region_schedule); \
@@ -961,6 +865,9 @@ echo-settings:
 	echo real_bytes=$(real_bytes); \
 	echo stencil=$(stencil); \
 	echo streaming_stores=$(streaming_stores)
+	git status
+	uname -a
+	$(YK_CXX) --version
 
 # Print stats on inner SIMD loops from asm file.
 # Compile with 'EXTRA_YK_CXXFLAGS=-Fa CXX_PREFIX=' to make asm file.
@@ -968,7 +875,7 @@ echo-settings:
 # won't rebuild if only '-Fa' is added.)
 code-stats:
 	@echo "Code stats for stencil computation:"
-	$(PERL) $(GET_LOOP_STATS) -p -f=calc_loop_of_clusters factory.s
+	$(PERL) $(VIEW_ASM) -p -l -f=calc_loop_of_clusters factory.s
 
 # Print some usage info.
 help:
@@ -986,7 +893,7 @@ help:
 	echo " "; \
 	echo "Example debug builds of kernel cmd-line tool:"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' check=1 # No optimization, OpenMP or MPI; internal checking."; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=test_2d mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' trace=1 # Enable tracing; run with '-trace' to get trace."; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=avx stencil=test_2d mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' trace=1 # Enable tracing; run with '-trace' to get trace."; \
 	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' trace_mem=1 # Trace all mem accesses with '-trace'."; \
 	echo " "; \
 	echo "Example builds with test runs:"; \

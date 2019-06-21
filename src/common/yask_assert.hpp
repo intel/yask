@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -27,7 +27,7 @@ IN THE SOFTWARE.
 // Control assert() by turning on with CHECK instead of turning off with
 // NDEBUG. This makes it off by default.
 #ifdef CHECK
-#include <assert.h>
+#include <cassert>
 #else
 #define assert(expr) ((void)0)
 #define NDEBUG

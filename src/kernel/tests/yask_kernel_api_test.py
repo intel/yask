@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 ##############################################################################
-## YASK: Yet Another Stencil Kernel
+## YASK: Yet Another Stencil Kit
 ## Copyright (c) 2014-2019, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -30,8 +30,8 @@ import ctypes as ct
 import argparse
 import yask_kernel as yk
 
-# Prepare an NymPy ndarray to hold a slice of 'grid'.
-def make_ndarray(grid, timestep) :
+# Prepare a NumPy ndarray to hold a slice of 'var'.
+def make_ndarray(var, timestep) :
 
     # Create indices for YASK and shape for NumPy.
     first_indices = []
@@ -39,7 +39,7 @@ def make_ndarray(grid, timestep) :
     shape = []
     point = ()
     nelems = 1
-    for dname in grid.get_dim_names() :
+    for dname in var.get_dim_names() :
 
         if dname == soln.get_step_dim_name() :
 
@@ -51,15 +51,15 @@ def make_ndarray(grid, timestep) :
         elif dname in soln.get_domain_dim_names() :
 
             # Cover full alloc in this rank.
-            first_idx = grid.get_first_rank_alloc_index(dname)
-            last_idx = grid.get_last_rank_alloc_index(dname)
+            first_idx = var.get_first_rank_alloc_index(dname)
+            last_idx = var.get_last_rank_alloc_index(dname)
 
         # Misc dim?
         else :
 
             # Cover all misc values.
-            first_idx = grid.get_first_misc_index(dname)
-            last_idx = grid.get_last_misc_index(dname)
+            first_idx = var.get_first_misc_index(dname)
+            last_idx = var.get_last_misc_index(dname)
 
         # Add indices to API vars.
         first_indices += [first_idx]
@@ -77,59 +77,59 @@ def make_ndarray(grid, timestep) :
     ndarray = np.zeros(shape, dtype, 'C');
     return ndarray, first_indices, last_indices, point
 
-# Read data from grid using NumPy ndarray.
-def read_grid(grid, timestep) :
+# Read data from var using NumPy ndarray.
+def read_var(var, timestep) :
 
-    # Ignore with fixed-sized grids.
-    if grid.is_fixed_size():
+    # Ignore with fixed-sized vars.
+    if var.is_fixed_size():
         return
-    print("Testing reading grid '" + grid.get_name() + "' at time " + repr(timestep) + "...")
-    ndarray, first_indices, last_indices, point = make_ndarray(grid, timestep)
+    print("Testing reading var '" + var.get_name() + "' at time " + repr(timestep) + "...")
+    ndarray, first_indices, last_indices, point = make_ndarray(var, timestep)
 
     print("Reading 1 element...")
-    val1 = grid.get_element(first_indices)
+    val1 = var.get_element(first_indices)
     print("Read value " + repr(val1))
 
     print("Reading all element(s) in ndarray...")
-    nread = grid.get_elements_in_slice(ndarray.data, first_indices, last_indices)
+    nread = var.get_elements_in_slice(ndarray.data, first_indices, last_indices)
     print(ndarray)
 
-    # Raw access to this grid.
+    # Raw access to this var.
     if soln.get_element_bytes() == 4 :
         ptype = ct.POINTER(ct.c_float)
     else :
         ptype = ct.POINTER(ct.c_double)
-    raw_ptr = grid.get_raw_storage_buffer()
+    raw_ptr = var.get_raw_storage_buffer()
     fp_ptr = ct.cast(int(raw_ptr), ptype)
-    num_elems = grid.get_num_storage_elements()
+    num_elems = var.get_num_storage_elements()
     print("Raw data: " + repr(fp_ptr[0]) + ", ..., " + repr(fp_ptr[num_elems-1]))
 
-# Init grid using NumPy ndarray.
-def init_grid(grid, timestep) :
-    print("Initializing grid '" + grid.get_name() + "' at time " + repr(timestep) + "...")
-    ndarray, first_indices, last_indices, point = make_ndarray(grid, timestep)
+# Init var using NumPy ndarray.
+def init_var(var, timestep) :
+    print("Initializing var '" + var.get_name() + "' at time " + repr(timestep) + "...")
+    ndarray, first_indices, last_indices, point = make_ndarray(var, timestep)
 
     # Set one point to a non-zero value.
     val1 = 21.0
     ndarray[point] = val1
     print(ndarray)
 
-    print("Setting grid from all element(s) in ndarray...")
-    nset = grid.set_elements_in_slice(ndarray.data, first_indices, last_indices)
+    print("Setting var from all element(s) in ndarray...")
+    nset = var.set_elements_in_slice(ndarray.data, first_indices, last_indices)
     print("Set " + repr(nset) + " element(s) in rank " + repr(env.get_rank_index()))
 
     # Check that set worked.
     print("Reading those element(s)...")
-    val2 = grid.get_element(first_indices)
+    val2 = var.get_element(first_indices)
     assert val2 == val1
-    val2 = grid.get_element(last_indices)
+    val2 = var.get_element(last_indices)
     if nset > 1 :
         assert val2 == 0.0
     else :
         assert val2 == val1  # Only 1 val => first == last.
     ndarray2 = ndarray
     ndarray2.fill(5.0)
-    nread = grid.get_elements_in_slice(ndarray2.data, first_indices, last_indices)
+    nread = var.get_elements_in_slice(ndarray2.data, first_indices, last_indices)
     assert nread == ndarray2.size
     assert ndarray2[point] == val1
     assert ndarray2.sum() == val1  # One point is val1; others are zero.
@@ -137,17 +137,17 @@ def init_grid(grid, timestep) :
     # Test element set.
     print("Testing setting 1 point at " + repr(last_indices) + "...")
     val1 += 1.0
-    nset = grid.set_element(val1, last_indices);
+    nset = var.set_element(val1, last_indices);
     assert nset == 1
-    val2 = grid.get_element(last_indices)
+    val2 = var.get_element(last_indices)
     assert val2 == val1
 
     # Test add.
     val3 = 2.0
     print("Testing adding to 1 point at " + repr(last_indices) + "...")
-    nset = grid.add_to_element(val3, last_indices);
+    nset = var.add_to_element(val3, last_indices);
     assert nset == 1
-    val2 = grid.get_element(last_indices)
+    val2 = var.get_element(last_indices)
     assert val2 == val1 + val3
     
 # Main script.
@@ -166,7 +166,7 @@ if __name__ == "__main__":
     soln.set_debug_output(debug_output)
     name = soln.get_name()
 
-    # NB: At this point, the grids' meta-data exists, but the grids have no
+    # NB: At this point, the vars' meta-data exists, but the vars have no
     # data allocated. We need to set the size of the domain before
     # allocating data.
 
@@ -184,7 +184,7 @@ if __name__ == "__main__":
         # Set domain size in each dim.
         soln.set_overall_domain_size(dim_name, 128)
 
-        # Ensure some minimal padding on all grids.
+        # Ensure some minimal padding on all vars.
         soln.set_min_pad_size(dim_name, 1)
 
         # Set block size to 64 in z dim and 32 in other dims.
@@ -194,15 +194,15 @@ if __name__ == "__main__":
         else :
             soln.set_block_size(dim_name, 32)
 
-    # Make a test fixed-size grid and set its NUMA preference.
-    fgrid_sizes = ()
+    # Make a test fixed-size var and set its NUMA preference.
+    fvar_sizes = ()
     for dim_name in soln_dims :
-        fgrid_sizes += (5,)
-    fgrid = soln.new_fixed_size_grid("fgrid", soln_dims, fgrid_sizes)
-    fgrid.set_numa_preferred(yk.cvar.yask_numa_local)
-    fgrid.alloc_storage()
+        fvar_sizes += (5,)
+    fvar = soln.new_fixed_size_var("fvar", soln_dims, fvar_sizes)
+    fvar.set_numa_preferred(yk.cvar.yask_numa_local)
+    fvar.alloc_storage()
 
-    # Allocate memory for any grids that do not have storage set.
+    # Allocate memory for any vars that do not have storage set.
     # Set other data structures needed for stencil application.
     soln.prepare_solution()
 
@@ -210,38 +210,38 @@ if __name__ == "__main__":
     print("Stencil-solution '" + name + "':")
     print("  Step dimension: " + repr(soln.get_step_dim_name()))
     print("  Domain dimensions: " + repr(soln.get_domain_dim_names()))
-    print("  Grids:")
-    for grid in soln.get_grids() :
-        print("    " + grid.get_name() + repr(grid.get_dim_names()))
-        for dname in grid.get_dim_names() :
+    print("  Vars:")
+    for var in soln.get_vars() :
+        print("    " + var.get_name() + repr(var.get_dim_names()))
+        for dname in var.get_dim_names() :
             if dname in soln.get_domain_dim_names() :
                 print("      '" + dname + "' allowed domain index range in this rank: " +
-                      repr(grid.get_first_rank_alloc_index(dname)) + " ... " +
-                      repr(grid.get_last_rank_alloc_index(dname)))
+                      repr(var.get_first_rank_alloc_index(dname)) + " ... " +
+                      repr(var.get_last_rank_alloc_index(dname)))
             elif dname == soln.get_step_dim_name() :
                 print("      '" + dname + "' allowed step index range: " +
-                      repr(grid.get_first_valid_step_index()) + " ... " +
-                      repr(grid.get_last_valid_step_index()))
+                      repr(var.get_first_valid_step_index()) + " ... " +
+                      repr(var.get_last_valid_step_index()))
             else :
                 print("      '" + dname + "' allowed misc index range: " +
-                      repr(grid.get_first_misc_index(dname)) + " ... " +
-                      repr(grid.get_last_misc_index(dname)))
+                      repr(var.get_first_misc_index(dname)) + " ... " +
+                      repr(var.get_last_misc_index(dname)))
 
-    # Init the grids.
-    for grid in soln.get_grids() :
+    # Init the vars.
+    for var in soln.get_vars() :
 
         # Init all values including padding.
-        grid.set_all_elements_same(-9.0)
+        var.set_all_elements_same(-9.0)
 
-        # Done with fixed-sized grids.
-        if grid.is_fixed_size():
+        # Done with fixed-sized vars.
+        if var.is_fixed_size():
             continue
         
         # Init timestep 0 using NumPy.
-        init_grid(grid, 0)
+        init_var(var, 0)
 
         # Print out the values.
-        read_grid(grid, 0)
+        read_var(var, 0)
 
         # Simple one-index example.
         # Note that index relative to overall problem domain,
@@ -259,7 +259,7 @@ if __name__ == "__main__":
         first_indices = []
         last_indices = []
             
-        for dname in grid.get_dim_names() :
+        for dname in var.get_dim_names() :
 
             # Step dim?
             if dname == soln.get_step_dim_name() :
@@ -287,20 +287,20 @@ if __name__ == "__main__":
 
                 # Add indices to set all allowed values.
                 # (This isn't really meaningful; it's just illustrative.)
-                one_indices += [grid.get_first_misc_index(dname)]
-                first_indices += [grid.get_first_misc_index(dname)]
-                last_indices += [grid.get_last_misc_index(dname)]
+                one_indices += [var.get_first_misc_index(dname)]
+                first_indices += [var.get_first_misc_index(dname)]
+                last_indices += [var.get_last_misc_index(dname)]
 
         # Init value at one point.
-        nset = grid.set_element(15.0, one_indices)
+        nset = var.set_element(15.0, one_indices)
         print("Set " + repr(nset) + " element(s) in rank " + repr(env.get_rank_index()))
 
         # Init the values within the small cube.
-        nset = grid.set_elements_in_slice_same(0.5, first_indices, last_indices, False)
+        nset = var.set_elements_in_slice_same(0.5, first_indices, last_indices, False)
         print("Set " + repr(nset) + " element(s) in rank " + repr(env.get_rank_index()))
 
-        # Print the initial contents of the grid.
-        read_grid(grid, 0)
+        # Print the initial contents of the var.
+        read_var(var, 0)
 
     # Apply the stencil solution to the data.
     env.global_barrier()
@@ -308,15 +308,15 @@ if __name__ == "__main__":
     soln.run_solution(0)
 
     # Print result at timestep 1.
-    for grid in soln.get_grids() :
-        read_grid(grid, 1)
+    for var in soln.get_vars() :
+        read_var(var, 1)
 
     print("Running the solution for 10 more steps...")
     soln.run_solution(1, 10)
 
     # Print final result at timestep 11, assuming update was to t+1.
-    for grid in soln.get_grids() :
-        read_grid(grid, 11)
+    for var in soln.get_vars() :
+        read_var(var, 11)
 
     print("Debug output captured:\n" + debug_output.get_string())
     print("End of YASK kernel API test.")

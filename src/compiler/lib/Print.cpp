@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -52,9 +52,9 @@ namespace yask {
 
     /////// Top-down
 
-    // A grid read.
+    // A var read.
     // Uses the PrintHelper to format.
-    string PrintVisitorTopDown::visit(GridPoint* gp) {
+    string PrintVisitorTopDown::visit(VarPoint* gp) {
         _numCommon += _ph.getNumCommon(gp);
         return _ph.readFromPoint(_os, *gp);
     }
@@ -156,7 +156,7 @@ namespace yask {
         string rhs = ee->getRhs()->accept(this);
 
         // Write statement with embedded rhs.
-        GridPointPtr gpp = ee->getLhs();
+        varPointPtr gpp = ee->getLhs();
         _os << _ph.getLinePrefix() << _ph.writeToPoint(_os, *gpp, rhs);
 
         // Null ptr => no condition.
@@ -238,12 +238,12 @@ namespace yask {
         return res;
     }
 
-    // A grid point: just set expr.
-    string PrintVisitorBottomUp::visit(GridPoint* gp) {
+    // A var point: just set expr.
+    string PrintVisitorBottomUp::visit(VarPoint* gp) {
         return trySimplePrint(gp, true);
     }
 
-    // A grid index.
+    // A var index.
     string PrintVisitorBottomUp::visit(IndexExpr* ie) {
         return trySimplePrint(ie, true);
     }
@@ -430,7 +430,7 @@ namespace yask {
     string PrintVisitorBottomUp::visit(EqualsExpr* ee) {
 
         // Note that we don't try top-down here.
-        // We always assign the RHS to the grid.
+        // We always assign the RHS to the var.
 
         // Eval RHS.
         Expr* rp = ee->getRhs().get();
@@ -441,7 +441,7 @@ namespace yask {
         makeNextTempVar(tmp, rp) << rhs << _ph.getLineSuffix(); // sets _exprStr.
 
         // Comment about update.
-        GridPointPtr gpp = ee->getLhs();
+        varPointPtr gpp = ee->getLhs();
         _os << "\n // Update value at " << gpp->makeStr();
 
         // Comment about condition.
@@ -456,7 +456,7 @@ namespace yask {
         }
         _os << ".\n";
 
-        // Write RHS expr to grid.
+        // Write RHS expr to var.
         _os << _ph.getLinePrefix() << _ph.writeToPoint(_os, *gpp, tmp) << _ph.getLineSuffix();
 
         return "";              // EQUALS doesn't return a value.
@@ -470,7 +470,7 @@ namespace yask {
     }
 
     // A point: output it.
-    string POVRayPrintVisitor::visit(GridPoint* gp) {
+    string POVRayPrintVisitor::visit(VarPoint* gp) {
         _numPts++;
 
         // Pick a color based on its distance.
@@ -483,8 +483,8 @@ namespace yask {
 
     ////// DOT-language.
 
-    // A grid access.
-    string DOTPrintVisitor::visit(GridPoint* gp) {
+    // A var access.
+    string DOTPrintVisitor::visit(VarPoint* gp) {
         string label = getLabel(gp);
         if (label.size())
             _os << label << " [ shape = box ];" << endl;
@@ -577,12 +577,12 @@ namespace yask {
         return "";
     }
 
-    // A grid access.
-    string SimpleDOTPrintVisitor::visit(GridPoint* gp) {
+    // A var access.
+    string SimpleDOTPrintVisitor::visit(VarPoint* gp) {
         string label = getLabel(gp);
         if (label.size()) {
             _os << label << " [ shape = box ];" << endl;
-            _gridsSeen.insert(label);
+            _varsSeen.insert(label);
         }
         return "";
     }
@@ -620,15 +620,15 @@ namespace yask {
         // LHS is source.
         ee->getLhs()->accept(this);
         string label = getLabel(ee, false);
-        for (auto g : _gridsSeen)
+        for (auto g : _varsSeen)
             label = g;              // really should only be one.
-        _gridsSeen.clear();
+        _varsSeen.clear();
 
         // RHS nodes are target.
         ee->getRhs()->accept(this);
-        for (auto g : _gridsSeen)
+        for (auto g : _varsSeen)
             _os << label << " -> " << g  << ";" << endl;
-        _gridsSeen.clear();
+        _varsSeen.clear();
 
         // Ignoring conditions.
         return "";
@@ -713,7 +713,7 @@ namespace yask {
         // Loop through all eqBundles.
         for (auto& eq : _eqBundles.getAll()) {
 
-            // TODO: separate mutiple grids.
+            // TODO: separate mutiple vars.
             POVRayPrintVisitor pv(os);
             eq->visitEqs(&pv);
             os << " // " << pv.getNumPoints() << " stencil points" << endl;

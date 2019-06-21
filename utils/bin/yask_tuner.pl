@@ -1,7 +1,7 @@
 #!/usr/bin/env perl
 
 ##############################################################################
-## YASK: Yet Another Stencil Kernel
+## YASK: Yet Another Stencil Kit
 ## Copyright (c) 2014-2019, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -777,28 +777,28 @@ sub getRunCmd($) {
 }
 
 # return estimate of mem footprint in bytes.
-my $numSpatialGrids = 0;
+my $numSpatialVars = 0;
 sub calcSize($$$) {
   my $sizes = shift;            # ref to size array.
   my $pads = shift;             # ref to pad array.
   my $mults = shift;            # ref to array of multiples.
 
-  # need to determine how many XYZ grids will be allocated for this stencil.
+  # need to determine how many XYZ vars will be allocated for this stencil.
   # TODO: get info from compiler report.
-  if (!$numSpatialGrids) {
+  if (!$numSpatialVars) {
 
     my ( $makeCmd, $tag ) = getMakeCmd('', 'EXTRA_CXXFLAGS=-O1');
     my $runCmd = getRunCmd($tag)." -t 0 -l 32 $runArgs";
     my $cmd = "$makeCmd 2>&1 && $runCmd";
 
     my $timeDim = 0;
-    my $numGrids = 0;
-    my $numUpdatedGrids = 0;
+    my $numVars = 0;
+    my $numUpdatedVars = 0;
     my @cmdOut;
     if ($testing) {
-      $numSpatialGrids = 1;
+      $numSpatialVars = 1;
     } else {
-      print "Running '$cmd' to determine number of grids...\n";
+      print "Running '$cmd' to determine number of vars...\n";
       open CMD, "$cmd 2>&1 |" or die "error: cannot run '$cmd'\n";
       while (<CMD>) {
         chomp;
@@ -807,27 +807,27 @@ sub calcSize($$$) {
 
         # E.g.,
         # 'A' 4-D var (t=2 * x=8 * y=48 * z=49) with storage at 0x2aba63016000 ...
-        my $ngrids = 1;
+        my $nvars = 1;
         if (/\d-?D .*x=.*y=.*z=/) {
           for my $w (split ' ',$line) {
             if ($w =~ /(\w+)=(\d+)/) {
               my ($dim, $sz) = ($1, $2);
               if ($dim eq 't') {
-                $ngrids *= $sz;
+                $nvars *= $sz;
               }
             }
           }
-          $numSpatialGrids += $ngrids;
-          print "$line => $ngrids XYZ grids\n";
+          $numSpatialVars += $nvars;
+          print "$line => $nvars XYZ vars\n";
         }
       }
       close CMD;
     }
-    if (!$numSpatialGrids) {
+    if (!$numSpatialVars) {
       map { print ">> $_\n"; } @cmdOut;
-      die "error: no relevant grid allocations found in '$cmd'; $0 only works with 'x, y, z' 3-D stencils.\n";
+      die "error: no relevant var allocations found in '$cmd'; $0 only works with 'x, y, z' 3-D stencils.\n";
     }
-    print "Determined that $numSpatialGrids XYZ grids are allocated.\n";
+    print "Determined that $numSpatialVars XYZ vars are allocated.\n";
   }
 
   # estimate each dim of allocated memory as size + 2 * (halo + pad).
@@ -837,8 +837,8 @@ sub calcSize($$$) {
   my $n = mult(@sizes);      # mult sizes plus padding & halos.
   my $nb = $n * $realBytes;
 
-  # mult by number of grids.
-  $nb *= $numSpatialGrids;
+  # mult by number of vars.
+  $nb *= $numSpatialVars;
 
   return $nb;
 }
@@ -1036,7 +1036,7 @@ sub makeLoopVars($$$$) {
 
   # vars to create.
   my $order = join(',', @dims);  # e.g., '2, 1'.
-  my $outerMods = $reqdMods;
+  my $outerMods = '';
   my $innerMods = '';
 
   # path gene?
@@ -1044,7 +1044,7 @@ sub makeLoopVars($$$$) {
   if (exists $h->{$pathKey}) {
     my $path = readHash($h, $pathKey, 1);
     my $pathStr = @pathNames[$path];                # e.g., 'grouped'.
-    $outerMods = "$pathStr $outerMods";
+    $outerMods = $pathStr;
   }
   
   my $loopVars = " ".$makePrefix."_LOOP_ORDER='$order'";
@@ -1356,9 +1356,9 @@ sub fitness {
 
   # various commands.
   my $testCmd = "$runCmd -v $runArgs"; # validation on a small problem size.
-  my $simCmd = "$runCmd $args -t 1 -dt 1 $runArgs";  # simulation w/1 trial & 1 step.
-  my $shortRunCmd = "$runCmd $args -t $shortTrials -trial_time $shortTime $runArgs"; # fast run for 'upper-bound' time.
-  my $longRunCmd = "$runCmd $args -t $longTrials -trial_time $longTime $runArgs";  # normal run w/more trials.
+  my $simCmd = "$runCmd $args -num_trials 1 -trial_steps 1 $runArgs";  # simulation w/1 trial & 1 step.
+  my $shortRunCmd = "$runCmd $args -num_trials $shortTrials -trial_time $shortTime $runArgs"; # fast run for 'upper-bound' time.
+  my $longRunCmd = "$runCmd $args -num_trials $longTrials -trial_time $longTime $runArgs";  # normal run w/more trials.
 
   # add kill command to prevent runaway code.
   if (-x $killCmd) {

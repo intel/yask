@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -27,7 +27,7 @@ IN THE SOFTWARE.
 
 #pragma once
 
-#include "Grid.hpp"
+#include "Var.hpp"
 
 using namespace std;
 
@@ -37,11 +37,13 @@ namespace yask {
     // May be provided via cmd-line or API.
     class CompilerSettings {
     public:
+        string _target;             // format type.
         int _elem_bytes = 4;    // bytes in an FP element.
         string _stepDim;        // explicit step dim.
         vector<string> _domainDims; // explicit domain dims.
         IntTuple _foldOptions;    // vector fold.
         IntTuple _clusterOptions; // cluster multipliers.
+        map<int, int> _prefetchDists;
         bool _firstInner = true; // first dimension of fold is unit step.
         string _eq_bundle_basename_default = "stencil_bundle";
         bool _allowUnalignedLoads = false;
@@ -55,8 +57,9 @@ namespace yask {
         bool _doComb = true;    // combine commutative operations.
         bool _doPairs = true;   // find equation pairs.
         bool _doOptCluster = true; // apply optimizations also to cluster.
+        bool _doReorder = false;   // reorder commutative operations.
         string _eqBundleTargets;  // how to bundle equations.
-        string _gridRegex;       // grids to update.
+        string _varRegex;       // vars to update.
         bool _findDeps = true;
         bool _printEqs = false;
     };
@@ -100,7 +103,7 @@ namespace yask {
         }
         
         // Find the dimensions to be used.
-        void setDims(Grids& grids,
+        void setDims(Vars& vars,
                      CompilerSettings& settings,
                      int vlen,
                      bool is_folding_efficient,

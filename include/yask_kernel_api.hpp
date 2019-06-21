@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -29,8 +29,7 @@ IN THE SOFTWARE.
 // See http://www.stack.nl/~dimitri/doxygen.
 /** @file yask_kernel_api.hpp */
 
-#ifndef YASK_KERNEL_API
-#define YASK_KERNEL_API
+#pragma once
 
 #include "yask_common_api.hpp"
 #include <vector>
@@ -58,9 +57,9 @@ namespace yask {
     /// Shared pointer to \ref yk_solution.
     typedef std::shared_ptr<yk_solution> yk_solution_ptr;
 
-    class yk_grid;
-    /// Shared pointer to \ref yk_grid.
-    typedef std::shared_ptr<yk_grid> yk_grid_ptr;
+    class yk_var;
+    /// Shared pointer to \ref yk_var.
+    typedef std::shared_ptr<yk_var> yk_var_ptr;
 
     class yk_stats;
     /// Shared pointer to \ref yk_stats.
@@ -69,8 +68,8 @@ namespace yask {
     /** @}*/
 } // namespace yask.
 
-#include "yk_solution_api.hpp"
-#include "yk_grid_api.hpp"
+#include "aux/yk_solution_api.hpp"
+#include "aux/yk_var_api.hpp"
 
 namespace yask {
 
@@ -131,7 +130,7 @@ namespace yask {
            MPI must be enabled and initialized before calling this function
            following the usage notes for new_env().
 
-           @note `#include "mpi.h"` should precede `#include "yask_kernel_api.hpp"`
+           @note #`include "mpi.h"` should precede #`include "yask_kernel_api.hpp"`
            to ensure proper MPI type definitions.
         */
         virtual yk_env_ptr
@@ -139,7 +138,7 @@ namespace yask {
 
         /// Create a stencil solution.
         /**
-           A stencil solution contains all the grids and equations
+           A stencil solution contains all the vars and equations
            that were created during stencil compilation.
            @returns Pointer to new solution object.
         */
@@ -150,8 +149,8 @@ namespace yask {
         /**
            All the settings that were specified via the `yk_solution::set_*()`
            functions in the source solution will be copied to the new solution.
-           This does *not* copy any grids, grid settings, or grid data;
-           see yk_solution::share_grid_storage().
+           This does *not* copy any vars, var settings, or var data;
+           see yk_solution::fuse_vars().
            @returns Pointer to new solution object.
         */
         virtual yk_solution_ptr
@@ -159,7 +158,7 @@ namespace yask {
                      const yk_solution_ptr source
                      /**< [in] Pointer to existing \ref yk_solution from which
                         the settings will be copied. */ ) const;
-    };
+    }; // yk_factory.
 
     /// Kernel environment.
     class yk_env {
@@ -185,9 +184,14 @@ namespace yask {
          */
         virtual void
         global_barrier() const =0;
-    };
+
+    }; // yk_env.
+
+    /// **[Deprecated]** Use yk_var.
+    typedef yk_var yk_grid;
+    /// **[Deprecated]** Use yk_var_ptr.
+    typedef yk_var_ptr yk_grid_ptr;
 
     /** @}*/
-} // namespace yask.
 
-#endif
+} // namespace yask.

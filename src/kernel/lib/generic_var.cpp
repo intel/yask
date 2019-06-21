@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -29,15 +29,15 @@ using namespace std;
 namespace yask {
 
     // Ctor. No allocation is done. See notes on default_alloc().
-    GenericGridBase::GenericGridBase(KernelStateBase& state,
+    GenericVarBase::GenericVarBase(KernelStateBase& state,
                                      const string& name,
                                      Layout& layout_base,
-                                     const GridDimNames& dimNames) :
+                                     const VarDimNames& dimNames) :
         KernelStateBase(state),
         _name(name),
         _layout_base(&layout_base) {
         for (auto& dn : dimNames)
-            _grid_dims.addDimBack(dn, 1);
+            _var_dims.addDimBack(dn, 1);
         _sync_layout_with_dims();
     }
 
@@ -45,7 +45,7 @@ namespace yask {
     // For other options,
     // programmer should call get_num_elems() or get_num_bytes() and
     // then provide allocated memory via set_storage().
-    void GenericGridBase::default_alloc() {
+    void GenericVarBase::default_alloc() {
         STATE_VARS(this);
 
         // Release any old data if last owner.
@@ -56,15 +56,11 @@ namespace yask {
 
         // Alloc required number of bytes.
         size_t sz = get_num_bytes();
-        os << "Allocating " << makeByteStr(sz) <<
-            " for grid '" << _name << "'";
-#ifdef USE_NUMA
-        if (numa_pref >= 0)
-            os << " preferring NUMA node " << numa_pref;
-        else
-            os << " on local NUMA node";
-#endif
-        os << "...\n" << flush;
+        string loc = (numa_pref >= 0) ?
+            "preferring NUMA node " + to_string(numa_pref) :
+            "on default NUMA node";
+        DEBUG_MSG("Allocating " << makeByteStr(sz) <<
+                  " for var '" << _name << "' " << loc << "...");
         _base = shared_numa_alloc<char>(sz, numa_pref);
 
         // No offset.
@@ -72,14 +68,14 @@ namespace yask {
     }
 
     // Make some descriptive info.
-    string GenericGridBase::make_info_string(const string& elem_name) const {
+    string GenericVarBase::make_info_string(const string& elem_name) const {
         stringstream oss;
         oss << "'" << _name << "' ";
-        if (_grid_dims.getNumDims() == 0)
+        if (_var_dims.getNumDims() == 0)
             oss << "scalar";
         else
-            oss << _grid_dims.getNumDims() << "-D var (" <<
-                _grid_dims.makeDimValStr(" * ") << ")";
+            oss << _var_dims.getNumDims() << "-D var (" <<
+                _var_dims.makeDimValStr(" * ") << ")";
         if (_elems)
             oss << " with storage at " << _elems << " containing ";
         else
@@ -94,13 +90,13 @@ namespace yask {
     // Set pointer to storage.
     // Free old storage.
     // 'base' should provide get_num_bytes() bytes at offset bytes.
-    void GenericGridBase::set_storage(shared_ptr<char>& base, size_t offset) {
+    void GenericVarBase::set_storage(shared_ptr<char>& base, size_t offset) {
 
         // Release any old data if last owner.
         release_storage();
 
         // Share ownership of base.
-        // This ensures that last grid to use a shared allocation
+        // This ensures that last var to use a shared allocation
         // will trigger dealloc.
         _base = base;
 
@@ -116,7 +112,7 @@ namespace yask {
     // Template implementations.
 
     template <typename T>
-    void GenericGridTemplate<T>::set_elems_same(T val) {
+    void GenericVarTemplate<T>::set_elems_same(T val) {
         if (_elems) {
             yask_for(0, get_num_elems(), 1,
                      [&](idx_t start, idx_t stop, idx_t thread_num) {
@@ -126,7 +122,7 @@ namespace yask {
     }
     
     template <typename T>
-    void GenericGridTemplate<T>::set_elems_in_seq(T seed) {
+    void GenericVarTemplate<T>::set_elems_in_seq(T seed) {
         if (_elems) {
             const idx_t wrap = 71; // TODO: avoid multiple of any dim size.
             yask_for(0, get_num_elems(), 1,
@@ -137,17 +133,17 @@ namespace yask {
     }
 
     template <typename T>
-    idx_t GenericGridTemplate<T>::count_diffs(const GenericGridBase* ref,
+    idx_t GenericVarTemplate<T>::count_diffs(const GenericVarBase* ref,
                                               double epsilon) const {
 
         if (!ref)
             return get_num_elems();
-        auto* p = dynamic_cast<const GenericGridTemplate<T>*>(ref);
+        auto* p = dynamic_cast<const GenericVarTemplate<T>*>(ref);
         if (!p)
             return get_num_elems();
 
         // Dims & sizes same?
-        if (_grid_dims != p->_grid_dims)
+        if (_var_dims != p->_var_dims)
             return get_num_elems();
 
         // Count abs diffs > epsilon.
@@ -162,7 +158,7 @@ namespace yask {
     }
 
     // Explicitly allowed instantiations.
-    template class GenericGridTemplate<real_t>;
-    template class GenericGridTemplate<real_vec_t>;
+    template class GenericVarTemplate<real_t>;
+    template class GenericVarTemplate<real_vec_t>;
 
 } // yask namespace.

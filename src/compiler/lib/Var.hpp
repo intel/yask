@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-///////// Classes for Grids ////////////
+///////// Classes for Vars ////////////
 
 #pragma once
 
@@ -36,31 +36,31 @@ namespace yask {
     // Fwd decl.
     struct Dimensions;
 
-    // A class for a Grid.
+    // A class for a Var.
     // This is a generic container for all variables to be accessed
-    // from the kernel. A 0-D grid is a scalar, a 1-D grid is an array, etc.
+    // from the kernel. A 0-D var is a scalar, a 1-D var is an array, etc.
     // Dims can be the step dim, a domain dim, or anything else.
-    class Grid : public virtual yc_grid {
+    class Var : public virtual yc_var {
 
     protected:
-        string _name;           // name of this grid.
-        IndexExprPtrVec _dims;  // dimensions of this grid.
-        bool _isScratch = false; // true if a temp grid.
+        string _name;           // name of this var.
+        indexExprPtrVec _dims;  // dimensions of this var.
+        bool _isScratch = false; // true if a temp var.
 
         // Step-dim info.
         bool _isStepAllocFixed = true; // step alloc cannot be changed at run-time.
         idx_t _stepAlloc = 0;         // step-alloc override (0 => calculate).
 
-        // Ptr to solution that this grid belongs to (its parent).
+        // Ptr to solution that this var belongs to (its parent).
         StencilSolution* _soln = 0;
 
         // How many dims are foldable.
         int _numFoldableDims = -1; // -1 => unknown.
 
-        // Whether this grid can be vector-folded.
+        // Whether this var can be vector-folded.
         bool _isFoldable = false;
 
-        ///// Values below are computed based on GridPoint accesses in equations.
+        ///// Values below are computed based on VarPoint accesses in equations.
 
         // Min and max const indices that are used to access each dim.
         IntTuple _minIndices, _maxIndices;
@@ -72,24 +72,18 @@ namespace yask {
         // int key: step-dim offset or 0 if no step-dim.
         map<string, map<bool, map<int, IntTuple>>> _halos;
 
+        // Greatest L1 dist of any halo point that accesses this var.
+        int _l1Dist = 0;
+
     public:
         // Ctors.
-        Grid(string name,
+        Var(string name,
              bool isScratch,
              StencilSolution* soln,
-             const IndexExprPtrVec& dims);
-        Grid(string name,
-             bool isScratch,
-             StencilSolution* soln,
-             IndexExprPtr dim1 = nullptr,
-             IndexExprPtr dim2 = nullptr,
-             IndexExprPtr dim3 = nullptr,
-             IndexExprPtr dim4 = nullptr,
-             IndexExprPtr dim5 = nullptr,
-             IndexExprPtr dim6 = nullptr);
+             const indexExprPtrVec& dims);
 
         // Dtor.
-        virtual ~Grid() { }
+        virtual ~Var() { }
 
         // Name accessors.
         const string& getName() const { return _name; }
@@ -97,17 +91,17 @@ namespace yask {
         string getDescr() const;
 
         // Access dims.
-        virtual const IndexExprPtrVec& getDims() const { return _dims; }
+        virtual const indexExprPtrVec& getDims() const { return _dims; }
 
         // Step dim or null if none.
-        virtual const IndexExprPtr getStepDim() const {
+        virtual const indexExprPtr getStepDim() const {
             for (auto d : _dims)
                 if (d->getType() == STEP_INDEX)
                     return d;
             return nullptr;
         }
 
-        // Temp grid?
+        // Temp var?
         virtual bool isScratch() const { return _isScratch; }
 
         // Access to solution.
@@ -159,8 +153,13 @@ namespace yask {
             return h;
         }
 
+        // Get max L1 dist of halos.
+        virtual int getL1Dist() const {
+            return _l1Dist;
+        }
+
         // Determine whether dims are same.
-        virtual bool areDimsSame(const Grid& other) const {
+        virtual bool areDimsSame(const Var& other) const {
             if (_dims.size() != other._dims.size())
                 return false;
             size_t i = 0;
@@ -176,98 +175,25 @@ namespace yask {
         // Determine how many values in step-dim are needed.
         virtual int getStepDimSize() const;
 
-        // Determine whether grid can be folded.
+        // Determine whether var can be folded.
         virtual void setFolding(const Dimensions& dims);
 
         // Determine whether halo sizes are equal.
-        virtual bool isHaloSame(const Grid& other) const;
+        virtual bool isHaloSame(const Var& other) const;
 
-        // Update halos based on halo in 'other' grid.
-        virtual void updateHalo(const Grid& other);
+        // Update halos and L1 dist based on halo in 'other' var.
+        virtual void updateHalo(const Var& other);
 
-        // Update halos based on each value in 'offsets'.
+        // Update halos and L1 dist based on each value in 'offsets'.
         virtual void updateHalo(const string& packName, const IntTuple& offsets);
+
+        // Update L1 dist.
+        virtual void updateL1Dist(int l1Dist) {
+            _l1Dist = max(_l1Dist, l1Dist);
+        }
 
         // Update const indices based on 'indices'.
         virtual void updateConstIndices(const IntTuple& indices);
-
-        // Create an expression to a specific point in this grid.
-        // Note that this doesn't actually 'read' or 'write' a value;
-        // it's just a node in an expression.
-        virtual GridPointPtr makePoint(const NumExprPtrVec& args);
-        virtual GridPointPtr makePoint() {
-            NumExprPtrVec args;
-            return makePoint(args);
-        }
-
-        // Convenience functions for zero dimensions (scalar).
-        virtual operator NumExprPtr() { // implicit conversion.
-            return makePoint();
-        }
-        virtual operator GridPointPtr() { // implicit conversion.
-            return makePoint();
-        }
-        virtual GridPointPtr operator()() {
-            return makePoint();
-        }
-
-        // Convenience functions for one dimension (array).
-        virtual GridPointPtr operator[](const NumExprArg i1) {
-            NumExprPtrVec args;
-            args.push_back(i1);
-            return makePoint(args);
-        }
-        virtual GridPointPtr operator()(const NumExprArg i1) {
-            return operator[](i1);
-        }
-
-        // Convenience functions for more dimensions.
-        virtual GridPointPtr operator()(const NumExprArg i1, const NumExprArg i2) {
-            NumExprPtrVec args;
-            args.push_back(i1);
-            args.push_back(i2);
-            return makePoint(args);
-        }
-        virtual GridPointPtr operator()(const NumExprArg i1, const NumExprArg i2,
-                                        const NumExprArg i3) {
-            NumExprPtrVec args;
-            args.push_back(i1);
-            args.push_back(i2);
-            args.push_back(i3);
-            return makePoint(args);
-        }
-        virtual GridPointPtr operator()(const NumExprArg i1, const NumExprArg i2,
-                                        const NumExprArg i3, const NumExprArg i4) {
-            NumExprPtrVec args;
-            args.push_back(i1);
-            args.push_back(i2);
-            args.push_back(i3);
-            args.push_back(i4);
-            return makePoint(args);
-        }
-        virtual GridPointPtr operator()(const NumExprArg i1, const NumExprArg i2,
-                                        const NumExprArg i3, const NumExprArg i4,
-                                        const NumExprArg i5) {
-            NumExprPtrVec args;
-            args.push_back(i1);
-            args.push_back(i2);
-            args.push_back(i3);
-            args.push_back(i4);
-            args.push_back(i5);
-            return makePoint(args);
-        }
-        virtual GridPointPtr operator()(const NumExprArg i1, const NumExprArg i2,
-                                        const NumExprArg i3, const NumExprArg i4,
-                                        const NumExprArg i5, const NumExprArg i6) {
-            NumExprPtrVec args;
-            args.push_back(i1);
-            args.push_back(i2);
-            args.push_back(i3);
-            args.push_back(i4);
-            args.push_back(i5);
-            args.push_back(i6);
-            return makePoint(args);
-        }
 
         // APIs.
         virtual const string& get_name() const {
@@ -300,35 +226,35 @@ namespace yask {
         set_step_alloc_size(idx_t size) {
             _stepAlloc = size;
         }
-        virtual yc_grid_point_node_ptr
-        new_grid_point(const std::vector<yc_number_node_ptr>& index_exprs);
-        virtual yc_grid_point_node_ptr
-        new_grid_point(const std::initializer_list<yc_number_node_ptr>& index_exprs) {
+        virtual yc_var_point_node_ptr
+        new_var_point(const std::vector<yc_number_node_ptr>& index_exprs);
+        virtual yc_var_point_node_ptr
+        new_var_point(const std::initializer_list<yc_number_node_ptr>& index_exprs) {
             std::vector<yc_number_node_ptr> idx_expr_vec(index_exprs);
-            return new_grid_point(idx_expr_vec);
+            return new_var_point(idx_expr_vec);
         }
-        virtual yc_grid_point_node_ptr
-        new_relative_grid_point(const std::vector<int>& dim_offsets);
-        virtual yc_grid_point_node_ptr
-        new_relative_grid_point(const std::initializer_list<int>& dim_offsets) {
+        virtual yc_var_point_node_ptr
+        new_relative_var_point(const std::vector<int>& dim_offsets);
+        virtual yc_var_point_node_ptr
+        new_relative_var_point(const std::initializer_list<int>& dim_offsets) {
             std::vector<int> dim_ofs_vec(dim_offsets);
-            return new_relative_grid_point(dim_ofs_vec);
+            return new_relative_var_point(dim_ofs_vec);
         }
     };
 
-    // A list of grids.  This holds pointers to grids defined by the stencil
-    // class in the order in which they are added via the INIT_GRID_* macros.
-    class Grids : public vector_set<Grid*> {
+    // A list of vars.  This holds pointers to vars defined by the stencil
+    // class in the order in which they are added via the INIT_VAR_* macros.
+    class Vars : public vector_set<Var*> {
     public:
 
-        Grids() {}
-        virtual ~Grids() {}
+        Vars() {}
+        virtual ~Vars() {}
 
         // Copy ctor.
-        // Copies list of grid pointers, but not grids (shallow copy).
-        Grids(const Grids& src) : vector_set<Grid*>(src) {}
+        // Copies list of var pointers, but not vars (shallow copy).
+        Vars(const Vars& src) : vector_set<Var*>(src) {}
 
-        // Determine whether each grid can be folded.
+        // Determine whether each var can be folded.
         virtual void setFolding(const Dimensions& dims) {
             for (auto gp : *this)
                 gp->setFolding(dims);

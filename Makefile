@@ -1,5 +1,5 @@
 ##############################################################################
-## YASK: Yet Another Stencil Kernel
+## YASK: Yet Another Stencil Kit
 ## Copyright (c) 2014-2019, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -130,7 +130,7 @@ api:
 	$(YK_MAKE) $@
 
 # Format API documents.
-docs/api/html/index.html: include/*.hpp docs/api/*.*
+docs/api/html/index.html: include/*.hpp include/*/*.hpp docs/api/*.*
 	doxygen -v
 	cd docs/api; doxygen doxygen_config.txt
 

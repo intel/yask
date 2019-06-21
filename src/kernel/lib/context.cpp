@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -33,7 +33,7 @@ namespace yask {
 
     ///// Top-level methods for evaluating reference and optimized stencils.
 
-    // Eval stencil bundle(s) over grid(s) using reference scalar code.
+    // Eval stencil bundle(s) over var(s) using reference scalar code.
     void StencilContext::run_ref(idx_t first_step_index,
                                  idx_t last_step_index) {
         STATE_VARS(this);
@@ -52,31 +52,31 @@ namespace yask {
         // Based on rank bounding box, not extended
         // BB because we don't use wave-fronts in the ref code.
         IdxTuple begin(stencil_dims);
-        begin.setVals(rank_bb.bb_begin, false);
+        begin.setVals(rank_bb.bb_begin_tuple(domain_dims), false); // 'false' because dims aren't same.
         begin[step_dim] = begin_t;
         IdxTuple end(stencil_dims);
-        end.setVals(rank_bb.bb_end, false);
+        end.setVals(rank_bb.bb_end_tuple(domain_dims), false);
         end[step_dim] = end_t;
 
         TRACE_MSG("run_ref: [" << begin.makeDimValStr() << " ... " <<
                   end.makeDimValStr() << ")");
 
         // Force sub-sizes to whole rank size so that scratch
-        // grids will be large enough. Turn off any temporal blocking.
+        // vars will be large enough. Turn off any temporal blocking.
         opts->_region_sizes.setValsSame(0);
         opts->_block_sizes.setValsSame(0);
         opts->_mini_block_sizes.setValsSame(0);
         opts->_sub_block_sizes.setValsSame(0);
         opts->adjustSettings();
-        update_grid_info(true);
+        update_var_info(true);
 
-        // Copy these settings to packs and realloc scratch grids.
+        // Copy these settings to packs and realloc scratch vars.
         for (auto& sp : stPacks)
             sp->getLocalSettings() = *opts;
         allocScratchData();
 
-        // Use only one set of scratch grids.
-        int scratch_grid_idx = 0;
+        // Use only one set of scratch vars.
+        int scratch_var_idx = 0;
 
         // Indices to loop through.
         // Init from begin & end tuples.
@@ -84,10 +84,10 @@ namespace yask {
         rank_idxs.begin = begin;
         rank_idxs.end = end;
 
-        // Set offsets in scratch grids.
-        // Requires scratch grids to be allocated for whole
-        // rank instead of smaller grid size.
-        update_scratch_grid_info(scratch_grid_idx, rank_idxs.begin);
+        // Set offsets in scratch vars.
+        // Requires scratch vars to be allocated for whole
+        // rank instead of smaller var size.
+        update_scratch_var_info(scratch_var_idx, rank_idxs.begin);
 
         // Initial halo exchange.
         // TODO: get rid of all halo exchanges in this function,
@@ -130,7 +130,7 @@ namespace yask {
                 exchange_halos();
 
                 // Find the bundles that need to be processed.
-                // This will be the prerequisite scratch-grid
+                // This will be the prerequisite scratch-var
                 // bundles plus this non-scratch group.
                 auto sg_list = asg->get_reqd_bundles();
 
@@ -138,35 +138,35 @@ namespace yask {
                 for (auto* sg : sg_list) {
 
                     // Indices needed for the generated misc loops.  Will normally be a
-                    // copy of rank_idxs except when updating scratch-grids.
-                    ScanIndices misc_idxs = sg->adjust_span(scratch_grid_idx, rank_idxs);
+                    // copy of rank_idxs except when updating scratch-vars.
+                    ScanIndices misc_idxs = sg->adjust_span(scratch_var_idx, rank_idxs);
                     misc_idxs.stride.setFromConst(1); // ensure unit stride.
 
                     // Define misc-loop function.  Since stride is always 1, we
                     // ignore misc_stop.  If point is in sub-domain for this
                     // bundle, then evaluate the reference scalar code.
-                    // TODO: fix domain of scratch grids.
+                    // TODO: fix domain of scratch vars.
 #define MISC_FN(misc_idxs) \
                     do {                                                \
                         if (sg->is_in_valid_domain(misc_idxs.start))    \
-                            sg->calc_scalar(scratch_grid_idx, misc_idxs.start); \
+                            sg->calc_scalar(scratch_var_idx, misc_idxs.start); \
                     } while(0)
 
                     // Scan through n-D space.
                     TRACE_MSG("run_ref: step " << start_t <<
                               " in bundle '" << sg->get_name() << "': [" <<
-                              misc_idxs.begin.makeValStr(nsdims) <<
-                              " ... " << misc_idxs.end.makeValStr(nsdims) << ")");
+                              misc_idxs.begin.makeValStr() <<
+                              " ... " << misc_idxs.end.makeValStr() << ")");
 #include "yask_misc_loops.hpp"
 #undef misc_fn
                 } // needed bundles.
 
-                // Mark grids that [may] have been written to.
-                // Mark grids as dirty even if not actually written by this
+                // Mark vars that [may] have been written to.
+                // Mark vars as dirty even if not actually written by this
                 // rank. This is needed because neighbors will not know what
-                // grids are actually dirty, and all ranks must have the same
-                // information about which grids are possibly dirty.
-                update_grids(nullptr, start_t, stop_t, true);
+                // vars are actually dirty, and all ranks must have the same
+                // information about which vars are possibly dirty.
+                update_vars(nullptr, start_t, stop_t, true);
 
             } // all bundles.
 
@@ -179,11 +179,17 @@ namespace yask {
         run_time.stop();
     } // run_ref.
 
-    // Eval stencil bundle pack(s) over grid(s) using optimized code.
+    // Eval stencil bundle pack(s) over var(s) using optimized code.
     void StencilContext::run_solution(idx_t first_step_index,
                                       idx_t last_step_index)
     {
         STATE_VARS(this);
+
+        // User-provided code.
+        call_2idx_hooks(_before_run_solution_hooks,
+                        first_step_index, last_step_index);
+
+        // Start timer.
         run_time.start();
 
         // Start vtune collection.
@@ -205,10 +211,10 @@ namespace yask {
         // Based on overall bounding box, which includes
         // any needed extensions for wave-fronts.
         IdxTuple begin(stencil_dims);
-        begin.setVals(ext_bb.bb_begin, false);
+        begin.setVals(ext_bb.bb_begin_tuple(domain_dims), false);
         begin[step_posn] = begin_t;
         IdxTuple end(stencil_dims);
-        end.setVals(ext_bb.bb_end, false);
+        end.setVals(ext_bb.bb_end_tuple(domain_dims), false);
         end[step_posn] = end_t;
         IdxTuple stride(stencil_dims);
         stride.setVals(opts->_region_sizes, false); // stride by region sizes.
@@ -218,7 +224,7 @@ namespace yask {
                   begin.makeDimValStr() << " ... " <<
                   end.makeDimValStr() << ") by " <<
                   stride.makeDimValStr());
-        if (!rank_bb.bb_valid)
+        if (!is_prepared())
             THROW_YASK_EXCEPTION("Error: run_solution() called without calling prepare_solution() first");
         if (ext_bb.bb_size < 1) {
             TRACE_MSG("nothing to do in solution");
@@ -390,16 +396,16 @@ namespace yask {
                         } // domain dims.
 #endif
 
-                        // Mark grids that [may] have been written to by
-                        // this pack. Mark grids as dirty even if not
+                        // Mark vars that [may] have been written to by
+                        // this pack. Mark vars as dirty even if not
                         // actually written by this rank, perhaps due to
                         // sub-domains or asymmetrical stencils. This is
-                        // needed because neighbors will not know what grids
+                        // needed because neighbors will not know what vars
                         // are actually dirty, and all ranks must have the
-                        // same information about which grids are possibly
+                        // same information about which vars are possibly
                         // dirty.  TODO: make this smarter to save unneeded
                         // MPI exchanges.
-                        update_grids(bp, start_t, stop_t, true);
+                        update_vars(bp, start_t, stop_t, true);
                         
                         // Do the appropriate steps for halo exchange of exterior.
                         // TODO: exchange halo for each dim as soon as it's done.
@@ -421,7 +427,7 @@ namespace yask {
 
                     // Mark as dirty only if we did exterior.
                     bool mark_dirty = do_mpi_left || do_mpi_right;
-                    update_grids(bp, start_t, stop_t, mark_dirty);
+                    update_vars(bp, start_t, stop_t, mark_dirty);
 
                     // Do the appropriate steps for halo exchange depending
                     // on 'do_mpi_*' flags.
@@ -476,8 +482,8 @@ namespace yask {
                         } // left/right.
                     } // domain dims.
 
-                    // Mark grids dirty for all packs.
-                    update_grids(bp, start_t, stop_t, true);
+                    // Mark vars dirty for all packs.
+                    update_vars(bp, start_t, stop_t, true);
                     
                     // Do the appropriate steps for halo exchange of exterior.
                     // TODO: exchange halo for each dim as soon as it's done.
@@ -499,7 +505,7 @@ namespace yask {
 
                 // Mark as dirty only if we did exterior.
                 bool mark_dirty = do_mpi_left || do_mpi_right;
-                update_grids(bp, start_t, stop_t, mark_dirty);
+                update_vars(bp, start_t, stop_t, mark_dirty);
 
                 // Do the appropriate steps for halo exchange depending
                 // on 'do_mpi_*' flags.
@@ -551,10 +557,13 @@ namespace yask {
         }
 #endif
 
-        // Stop vtune collection.
+        // Stop vtune collection & timer.
         VTUNE_PAUSE;
-
         run_time.stop();
+
+        // User-provided code.
+        call_2idx_hooks(_after_run_solution_hooks,
+                        first_step_index, last_step_index);
 
     } // run_solution().
 
@@ -567,10 +576,10 @@ namespace yask {
                                      const ScanIndices& rank_idxs) {
         STATE_VARS(this);
         TRACE_MSG("calc_region: region [" <<
-                  rank_idxs.start.makeValStr(nsdims) << " ... " <<
-                  rank_idxs.stop.makeValStr(nsdims) << ") within rank [" <<
-                  rank_idxs.begin.makeValStr(nsdims) << " ... " <<
-                  rank_idxs.end.makeValStr(nsdims) << ")" );
+                  rank_idxs.start.makeValStr() << " ... " <<
+                  rank_idxs.stop.makeValStr() << ") within rank [" <<
+                  rank_idxs.begin.makeValStr() << " ... " <<
+                  rank_idxs.end.makeValStr() << ")" );
 
         // Track time (use "else" to avoid double-counting).
         if (!do_mpi_interior && (do_mpi_left || do_mpi_right))
@@ -776,11 +785,11 @@ namespace yask {
         auto* bp = sel_bp.get();
         int region_thread_idx = omp_get_thread_num();
         TRACE_MSG("calc_block: phase " << phase << ", block [" <<
-                  region_idxs.start.makeValStr(nsdims) << " ... " <<
-                  region_idxs.stop.makeValStr(nsdims) << 
+                  region_idxs.start.makeValStr() << " ... " <<
+                  region_idxs.stop.makeValStr() << 
                   ") within region [" <<
-                  region_idxs.begin.makeValStr(nsdims) << " ... " <<
-                  region_idxs.end.makeValStr(nsdims) << 
+                  region_idxs.begin.makeValStr() << " ... " <<
+                  region_idxs.end.makeValStr() << 
                   ") by region thread " << region_thread_idx);
 
 #ifdef OVERLAP_WITH_BLOCKS
@@ -822,7 +831,7 @@ namespace yask {
 #endif
         
         // Init block begin & end from region start & stop indices.
-        ScanIndices block_idxs(*dims, true, 0);
+        ScanIndices block_idxs(*dims, true);
         block_idxs.initFromOuter(region_idxs);
 
         // Time range.
@@ -923,10 +932,10 @@ namespace yask {
             }
             TRACE_MSG("calc_block: phase " << phase <<
                       ", adjusted block [" <<
-                      adj_block_idxs.begin.makeValStr(nsdims) << " ... " <<
-                      adj_block_idxs.end.makeValStr(nsdims) << 
+                      adj_block_idxs.begin.makeValStr() << " ... " <<
+                      adj_block_idxs.end.makeValStr() << 
                       ") with mini-block stride " <<
-                      adj_block_idxs.stride.makeValStr(nsdims));
+                      adj_block_idxs.stride.makeValStr());
                     
             // Loop thru shapes.
             for (idx_t shape = 0; shape < nshapes; shape++) {
@@ -978,12 +987,12 @@ namespace yask {
         TRACE_MSG("calc_mini_block: phase " << phase <<
                   ", shape " << shape <<
                   ", mini-block [" <<
-                  adj_block_idxs.start.makeValStr(nsdims) << " ... " <<
-                  adj_block_idxs.stop.makeValStr(nsdims) << ") within base-block [" <<
-                  base_block_idxs.begin.makeValStr(nsdims) << " ... " <<
-                  base_block_idxs.end.makeValStr(nsdims) << ") within base-region [" <<
-                  base_region_idxs.begin.makeValStr(nsdims) << " ... " <<
-                  base_region_idxs.end.makeValStr(nsdims) <<
+                  adj_block_idxs.start.makeValStr() << " ... " <<
+                  adj_block_idxs.stop.makeValStr() << ") within base-block [" <<
+                  base_block_idxs.begin.makeValStr() << " ... " <<
+                  base_block_idxs.end.makeValStr() << ") within base-region [" <<
+                  base_region_idxs.begin.makeValStr() << " ... " <<
+                  base_region_idxs.end.makeValStr() <<
                   ") by region thread " << region_thread_idx);
 
         // Promote forward progress in MPI when calc'ing interior
@@ -995,7 +1004,7 @@ namespace yask {
         }
 
         // Init mini-block begin & end from blk start & stop indices.
-        ScanIndices mini_block_idxs(*dims, true, 0);
+        ScanIndices mini_block_idxs(*dims, true);
         mini_block_idxs.initFromOuter(adj_block_idxs);
 
         // Time range.
@@ -1089,10 +1098,10 @@ namespace yask {
 
                 if (ok) {
 
-                    // Update offsets of scratch grids based on the current
+                    // Update offsets of scratch vars based on the current
                     // mini-block location.
                     if (scratchVecs.size())
-                        update_scratch_grid_info(region_thread_idx, mini_block_idxs.begin);
+                        update_scratch_var_info(region_thread_idx, mini_block_idxs.begin);
 
                     // Call calc_mini_block() for each non-scratch bundle.
                     for (auto* sb : *bp)
@@ -1284,10 +1293,10 @@ namespace yask {
             idxs.end[i] = rstop;
         }
         TRACE_MSG("shift_region: updated span: [" <<
-                  idxs.begin.makeValStr(nsdims) << " ... " <<
-                  idxs.end.makeValStr(nsdims) << ") within region base [" <<
-                  base_start.makeValStr(nsdims) << " ... " <<
-                  base_stop.makeValStr(nsdims) << ") shifted " <<
+                  idxs.begin.makeValStr() << " ... " <<
+                  idxs.end.makeValStr() << ") within region base [" <<
+                  base_start.makeValStr() << " ... " <<
+                  base_stop.makeValStr() << ") shifted " <<
                   shift_num << " time(s) is " <<
                   (ok ? "not " : "") << "empty");
         return ok;
@@ -1449,35 +1458,35 @@ namespace yask {
         TRACE_MSG("shift_mini_block: phase " << phase << "/" << nphases <<
                   ", shape " << shape << "/" << nshapes <<
                   ", updated span: [" <<
-                  idxs.begin.makeValStr(nsdims) << " ... " <<
-                  idxs.end.makeValStr(nsdims) << ") from original mini-block [" <<
-                  mb_base_start.makeValStr(nsdims) << " ... " <<
-                  mb_base_stop.makeValStr(nsdims) << ") shifted " <<
+                  idxs.begin.makeValStr() << " ... " <<
+                  idxs.end.makeValStr() << ") from original mini-block [" <<
+                  mb_base_start.makeValStr() << " ... " <<
+                  mb_base_stop.makeValStr() << ") shifted " <<
                   mb_shift_num << " time(s) within adj-block base [" <<
-                  adj_block_base_start.makeValStr(nsdims) << " ... " <<
-                  adj_block_base_stop.makeValStr(nsdims) << ") and actual block base [" <<
-                  block_base_start.makeValStr(nsdims) << " ... " <<
-                  block_base_stop.makeValStr(nsdims) << ") and region base [" <<
-                  region_base_start.makeValStr(nsdims) << " ... " <<
-                  region_base_stop.makeValStr(nsdims) << ") is " <<
+                  adj_block_base_start.makeValStr() << " ... " <<
+                  adj_block_base_stop.makeValStr() << ") and actual block base [" <<
+                  block_base_start.makeValStr() << " ... " <<
+                  block_base_stop.makeValStr() << ") and region base [" <<
+                  region_base_start.makeValStr() << " ... " <<
+                  region_base_stop.makeValStr() << ") is " <<
                   (ok ? "not " : "") << "empty");
         return ok;
     }
     
-    // Adjust offsets of scratch grids based on thread number 'thread_idx'
-    // and beginning point of mini-block 'idxs'.  Each scratch-grid is
+    // Adjust offsets of scratch vars based on thread number 'thread_idx'
+    // and beginning point of mini-block 'idxs'.  Each scratch-var is
     // assigned to a thread, so it must "move around" as the thread is
     // assigned to each mini-block.  This move is accomplished by changing
-    // the grids' local offsets.
-    void StencilContext::update_scratch_grid_info(int thread_idx,
+    // the vars' local offsets.
+    void StencilContext::update_scratch_var_info(int thread_idx,
                                                   const Indices& idxs) {
         STATE_VARS(this);
 
-        // Loop thru vecs of scratch grids.
+        // Loop thru vecs of scratch vars.
         for (auto* sv : scratchVecs) {
             assert(sv);
 
-            // Get ptr to the scratch grid for this thread.
+            // Get ptr to the scratch var for this thread.
             auto& gp = sv->at(thread_idx);
             assert(gp);
             auto& gb = gp->gb();
@@ -1489,22 +1498,22 @@ namespace yask {
                 auto& dim = stencil_dims.getDim(i);
                 auto& dname = dim.getName();
 
-                // Is this dim used in this grid?
+                // Is this dim used in this var?
                 int posn = gb.get_dim_posn(dname);
                 if (posn >= 0) {
 
-                    // Set rank offset of grid based on starting point of rank.
+                    // Set rank offset of var based on starting point of rank.
                     // Thus, it it not necessarily a vec mult.
                     auto rofs = rank_domain_offsets[j];
                     gp->_set_rank_offset(posn, rofs);
 
-                    // Must use the vector len in this grid, which may
-                    // not be the same as vec_lens[posn] because grid
+                    // Must use the vector len in this var, which may
+                    // not be the same as vec_lens[posn] because var
                     // may not be vectorized.
                     auto vlen = gp->_get_vec_len(posn);
                     
-                    // See diagram in yk_grid defn.  Local offset is the
-                    // offset of this grid relative to the beginning of the
+                    // See diagram in yk_var defn.  Local offset is the
+                    // offset of this var relative to the beginning of the
                     // current rank.  Set local offset to diff between
                     // global offset and rank offset.  Round down to make
                     // sure it's vec-aligned.
@@ -1515,21 +1524,21 @@ namespace yask {
         }
     }
 
-    // Compare grids in contexts.
+    // Compare vars in contexts.
     // Return number of mis-compares.
     idx_t StencilContext::compareData(const StencilContext& ref) const {
         STATE_VARS_CONST(this);
 
-        os << "Comparing grid(s) in '" << name << "' to '" << ref.name << "'..." << endl;
-        if (gridPtrs.size() != ref.gridPtrs.size()) {
-            cerr << "** number of grids not equal." << endl;
+        DEBUG_MSG("Comparing var(s) in '" << name << "' to '" << ref.name << "'...");
+        if (varPtrs.size() != ref.varPtrs.size()) {
+            TRACE_MSG("** number of vars not equal");
             return 1;
         }
         idx_t errs = 0;
-        for (size_t gi = 0; gi < gridPtrs.size(); gi++) {
-            TRACE_MSG("Grid '" << ref.gridPtrs[gi]->get_name() << "'...");
-            auto& gb = gridPtrs[gi]->gb();
-            auto* rgbp = ref.gridPtrs[gi]->gbp();
+        for (size_t gi = 0; gi < varPtrs.size(); gi++) {
+            TRACE_MSG("Var '" << ref.varPtrs[gi]->get_name() << "'...");
+            auto& gb = varPtrs[gi]->gb();
+            auto* rgbp = ref.varPtrs[gi]->gbp();
             errs += gb.compare(rgbp);
         }
 
@@ -1552,22 +1561,22 @@ namespace yask {
         int num_tests = 0;
         for (auto& mdi : mpiData) {
             auto& gname = mdi.first;
-            auto& grid_mpi_data = mdi.second;
-            MPI_Request* grid_recv_reqs = grid_mpi_data.recv_reqs.data();
-            MPI_Request* grid_send_reqs = grid_mpi_data.send_reqs.data();
+            auto& var_mpi_data = mdi.second;
+            MPI_Request* var_recv_reqs = var_mpi_data.recv_reqs.data();
+            MPI_Request* var_send_reqs = var_mpi_data.send_reqs.data();
 
             int flag;
 #if 1
-            int indices[max(grid_mpi_data.recv_reqs.size(), grid_mpi_data.send_reqs.size())];
-            MPI_Testsome(int(grid_mpi_data.recv_reqs.size()), grid_recv_reqs, &flag, indices, MPI_STATUS_IGNORE);
-            MPI_Testsome(int(grid_mpi_data.send_reqs.size()), grid_send_reqs, &flag, indices, MPI_STATUS_IGNORE);
+            int indices[max(var_mpi_data.recv_reqs.size(), var_mpi_data.send_reqs.size())];
+            MPI_Testsome(int(var_mpi_data.recv_reqs.size()), var_recv_reqs, &flag, indices, MPI_STATUS_IGNORE);
+            MPI_Testsome(int(var_mpi_data.send_reqs.size()), var_send_reqs, &flag, indices, MPI_STATUS_IGNORE);
 #elif 0
             int index;
-            MPI_Testany(int(grid_mpi_data.recv_reqs.size()), grid_recv_reqs, &index, &flag, MPI_STATUS_IGNORE);
-            MPI_Testany(int(grid_mpi_data.send_reqs.size()), grid_send_reqs, &index, &flag, MPI_STATUS_IGNORE);
+            MPI_Testany(int(var_mpi_data.recv_reqs.size()), var_recv_reqs, &index, &flag, MPI_STATUS_IGNORE);
+            MPI_Testany(int(var_mpi_data.send_reqs.size()), var_send_reqs, &index, &flag, MPI_STATUS_IGNORE);
 #else
-            for (size_t i = 0; i < grid_mpi_data.recv_reqs.size(); i++) {
-                auto& r = grid_recv_reqs[i];
+            for (size_t i = 0; i < var_mpi_data.recv_reqs.size(); i++) {
+                auto& r = var_recv_reqs[i];
                 if (r != MPI_REQUEST_NULL) {
                     //TRACE_MSG(gname << " recv test &MPI_Request = " << &r);
                     MPI_Test(&r, &flag, MPI_STATUS_IGNORE);
@@ -1576,8 +1585,8 @@ namespace yask {
                         r = MPI_REQUEST_NULL;
                 }
             }
-            for (size_t i = 0; i < grid_mpi_data.send_reqs.size(); i++) {
-                auto& r = grid_send_reqs[i];
+            for (size_t i = 0; i < var_mpi_data.send_reqs.size(); i++) {
+                auto& r = var_send_reqs[i];
                 if (r != MPI_REQUEST_NULL) {
                     //TRACE_MSG(gname << " send test &MPI_Request = " << &r);
                     MPI_Test(&r, &flag, MPI_STATUS_IGNORE);
@@ -1594,7 +1603,7 @@ namespace yask {
 #endif
     }
 
-    // Exchange dirty halo data for all grids and all steps.
+    // Exchange dirty halo data for all vars and all steps.
     void StencilContext::exchange_halos() {
         
 #ifdef USE_MPI
@@ -1614,30 +1623,30 @@ namespace yask {
                 TRACE_MSG(" following calc of MPI interior");
         }
         
-        // Vars for list of grids that need to be swapped and their step
-        // indices.  Use an ordered map by *name* to make sure grids are
-        // swapped in same order on all ranks. (If we order grids by
+        // Vars for list of vars that need to be swapped and their step
+        // indices.  Use an ordered map by *name* to make sure vars are
+        // swapped in same order on all ranks. (If we order vars by
         // pointer, pointer values will not generally be the same on each
         // rank.)
-        GridPtrMap gridsToSwap;
-        map<YkGridPtr, idx_t> firstStepsToSwap;
-        map<YkGridPtr, idx_t> lastStepsToSwap;
+        VarPtrMap varsToSwap;
+        map<YkVarPtr, idx_t> firstStepsToSwap;
+        map<YkVarPtr, idx_t> lastStepsToSwap;
 
-        // Loop thru all grids.
-        for (auto& gp : gridPtrs) {
+        // Loop thru all vars.
+        for (auto& gp : varPtrs) {
             auto& gb = gp->gb();
 
-            // Don't swap scratch grids.
+            // Don't swap scratch vars.
             if (gb.is_scratch())
                 continue;
 
-            // Only need to swap grids that have any MPI buffers.
+            // Only need to swap vars that have any MPI buffers.
             auto& gname = gp->get_name();
             if (mpiData.count(gname) == 0)
                 continue;
 
             // Check all allocated step indices.
-            // Use '0' for grids that don't use the step dim.
+            // Use '0' for vars that don't use the step dim.
             idx_t start_t = 0, stop_t = 1;
             if (gp->is_dim_used(step_dim)) {
                 start_t = gp->get_first_valid_step_index();
@@ -1645,13 +1654,13 @@ namespace yask {
             }
             for (idx_t t = start_t; t < stop_t; t++) {
                             
-                // Only need to swap grids whose halos are not up-to-date
+                // Only need to swap vars whose halos are not up-to-date
                 // for this step.
                 if (!gb.is_dirty(t))
                     continue;
 
-                // Swap this grid.
-                gridsToSwap[gname] = gp;
+                // Swap this var.
+                varsToSwap[gname] = gp;
 
                 // Update first step.
                 if (firstStepsToSwap.count(gp) == 0 || t < firstStepsToSwap[gp])
@@ -1662,19 +1671,19 @@ namespace yask {
                     lastStepsToSwap[gp] = t;
 
             } // steps.
-        } // grids.
+        } // vars.
         TRACE_MSG("exchange_halos: need to exchange halos for " <<
-                  gridsToSwap.size() << " grid(s)");
-        assert(gridsToSwap.size() == firstStepsToSwap.size());
-        assert(gridsToSwap.size() == lastStepsToSwap.size());
+                  varsToSwap.size() << " var(s)");
+        assert(varsToSwap.size() == firstStepsToSwap.size());
+        assert(varsToSwap.size() == lastStepsToSwap.size());
 
         // Sequence of things to do for each neighbor.
         enum halo_steps { halo_irecv, halo_pack_isend, halo_unpack, halo_final };
         vector<halo_steps> steps_to_do;
 
-        // Flags indicate what part of grids were most recently calc'd.
+        // Flags indicate what part of vars were most recently calc'd.
         // These determine what exchange steps need to be done now.
-        if (gridsToSwap.size()) {
+        if (varsToSwap.size()) {
             if (do_mpi_left || do_mpi_right) {
                 steps_to_do.push_back(halo_irecv);
                 steps_to_do.push_back(halo_pack_isend);
@@ -1700,20 +1709,20 @@ namespace yask {
             else
                 THROW_YASK_EXCEPTION("internal error: unknown halo-exchange step");
 
-            // Loop thru all grids to swap.
+            // Loop thru all vars to swap.
             // Use 'gi' as an MPI tag.
             int gi = 0;
-            for (auto gtsi : gridsToSwap) {
+            for (auto gtsi : varsToSwap) {
                 gi++;
                 auto& gname = gtsi.first;
                 auto& gp = gtsi.second;
                 auto& gb = gp->gb();
-                auto& grid_mpi_data = mpiData.at(gname);
-                MPI_Request* grid_recv_reqs = grid_mpi_data.recv_reqs.data();
-                MPI_Request* grid_send_reqs = grid_mpi_data.send_reqs.data();
+                auto& var_mpi_data = mpiData.at(gname);
+                MPI_Request* var_recv_reqs = var_mpi_data.recv_reqs.data();
+                MPI_Request* var_send_reqs = var_mpi_data.send_reqs.data();
 
                 // Loop thru all this rank's neighbors.
-                grid_mpi_data.visitNeighbors
+                var_mpi_data.visitNeighbors
                     ([&](const IdxTuple& offsets, // NeighborOffset.
                          int neighbor_rank,
                          int ni, // unique neighbor index.
@@ -1735,7 +1744,7 @@ namespace yask {
                                 else {
                                     void* buf = (void*)recvBuf._elems;
                                     TRACE_MSG("exchange_halos:    requesting up to " << makeByteStr(nbytes));
-                                    auto& r = grid_recv_reqs[ni];
+                                    auto& r = var_recv_reqs[ni];
                                     MPI_Irecv(buf, nbytes, MPI_BYTE,
                                               neighbor_rank, int(gi),
                                               env->comm, &r);
@@ -1776,7 +1785,7 @@ namespace yask {
                                     wait_delta += wait_time.stop();
                                 }
                                 
-                                // Copy (pack) data from grid to buffer.
+                                // Copy (pack) data from var to buffer.
                                 void* buf = (void*)sendBuf._elems;
                                 idx_t nelems = 0;
                                 TRACE_MSG("exchange_halos:    packing [" << first.makeDimValStr() <<
@@ -1798,7 +1807,7 @@ namespace yask {
                                     // Send packed buffer to neighbor.
                                     assert(nbytes <= sendBuf.get_bytes());
                                     TRACE_MSG("exchange_halos:    sending " << makeByteStr(nbytes));
-                                    auto& r = grid_send_reqs[ni];
+                                    auto& r = var_send_reqs[ni];
                                     MPI_Isend(buf, nbytes, MPI_BYTE,
                                               neighbor_rank, int(gi), env->comm, &r);
                                     num_send_reqs++;
@@ -1823,7 +1832,7 @@ namespace yask {
                                 else {
 
                                     // Wait for data from neighbor before unpacking it.
-                                    auto& r = grid_recv_reqs[ni];
+                                    auto& r = var_recv_reqs[ni];
                                     if (r != MPI_REQUEST_NULL) {
                                         TRACE_MSG("   waiting for receipt of " << makeByteStr(nbytes));
                                         wait_time.start();
@@ -1846,7 +1855,7 @@ namespace yask {
                                     last.setVal(step_dim, lastStepsToSwap[gp]);
                                 }
 
-                                // Copy data from buffer to grid.
+                                // Copy data from buffer to var.
                                 void* buf = (void*)recvBuf._elems;
                                 idx_t nelems = 0;
                                 TRACE_MSG("exchange_halos:    got data; unpacking into [" << first.makeDimValStr() <<
@@ -1881,22 +1890,22 @@ namespace yask {
                                     // send to finish until we want to reuse this buffer,
                                     // so we could wait on the *previous* send right before
                                     // doing another one.
-                                    auto& r = grid_send_reqs[ni];
+                                    auto& r = var_send_reqs[ni];
                                     if (r != MPI_REQUEST_NULL) {
                                         TRACE_MSG("   waiting to finish send of " << makeByteStr(nbytes));
                                         wait_time.start();
-                                        MPI_Wait(&grid_send_reqs[ni], MPI_STATUS_IGNORE);
+                                        MPI_Wait(&var_send_reqs[ni], MPI_STATUS_IGNORE);
                                         wait_delta += wait_time.stop();
                                     }
                                     r = MPI_REQUEST_NULL;
                                 }
                             }
 
-                            // Mark grids as up-to-date when done.
+                            // Mark vars as up-to-date when done.
                             for (idx_t si = firstStepsToSwap[gp]; si <= lastStepsToSwap[gp]; si++) {
                                 if (gb.is_dirty(si)) {
                                     gb.set_dirty(false, si);
-                                    TRACE_MSG("exchange_halos: grid '" << gname <<
+                                    TRACE_MSG("exchange_halos: var '" << gname <<
                                               "' marked as clean at step-index " << si);
                                 }
                             }
@@ -1904,7 +1913,7 @@ namespace yask {
                             
                     }); // visit neighbors.
 
-            } // grids.
+            } // vars.
 
         } // exchange sequence.
 
@@ -1917,13 +1926,13 @@ namespace yask {
 #endif
     }
 
-    // Update data in grids that have been written to by bundle pack 'sel_bp'.
-    void StencilContext::update_grids(const BundlePackPtr& sel_bp,
+    // Update data in vars that have been written to by bundle pack 'sel_bp'.
+    void StencilContext::update_vars(const BundlePackPtr& sel_bp,
                                       idx_t start, idx_t stop,
                                       bool mark_dirty) {
         STATE_VARS(this);
         idx_t stride = (start > stop) ? -1 : 1;
-        map<YkGridPtr, set<idx_t>> grids_done;
+        map<YkVarPtr, set<idx_t>> vars_done;
 
         // Stencil bundle packs.
         for (auto& bp : stPacks) {
@@ -1945,25 +1954,25 @@ namespace yask {
                     if (!sb->get_output_step_index(t, t_out))
                         continue;
 
-                    // Output grids for this bundle.  NB: don't need to mark
-                    // scratch grids as dirty because they are never exchanged.
-                    for (auto gp : sb->outputGridPtrs) {
+                    // Output vars for this bundle.  NB: don't need to mark
+                    // scratch vars as dirty because they are never exchanged.
+                    for (auto gp : sb->outputVarPtrs) {
                         auto& gb = gp->gb();
 
                         // Update if not already done.
-                        if (grids_done[gp].count(t_out) == 0) {
+                        if (vars_done[gp].count(t_out) == 0) {
                             gb.update_valid_step(t_out);
                             if (mark_dirty)
                                 gb.set_dirty(true, t_out);
-                            TRACE_MSG("grid '" << gp->get_name() <<
+                            TRACE_MSG("var '" << gp->get_name() <<
                                       "' updated at step " << t_out);
-                            grids_done[gp].insert(t_out);
+                            vars_done[gp].insert(t_out);
                         }
                     }
                 } // bundles.
             } // steps.
         } // packs.
-    } // update_grids().
+    } // update_vars().
 
     // Reset any locks, etc.
     void StencilContext::reset_locks() {

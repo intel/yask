@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -45,7 +45,7 @@ namespace yask {
         return coeffs;
     }
 
-    // Common FD forms for uniform grid spacing.
+    // Common FD forms for uniform var spacing.
     vector<double> get_center_fd_coefficients(int derivative_order, int radius) {
         if (radius < 1)
             THROW_YASK_EXCEPTION("get_center_fd_coefficients() called with less than radius 1");

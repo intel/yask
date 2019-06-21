@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-YASK: Yet Another Stencil Kernel
+YASK: Yet Another Stencil Kit
 Copyright (c) 2014-2019, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -60,9 +60,11 @@ namespace yask {
         auto sp = make_shared<YASK_STENCIL_CONTEXT>(ep, op);
         assert(sp);
 
+#ifdef DEF_ARGS
         // If no source, init settings from default args.
         if (!source.get())
             sp->apply_command_line_options(DEF_ARGS);
+#endif
 
         return sp;
     }
