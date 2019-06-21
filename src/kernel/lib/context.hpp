@@ -45,6 +45,11 @@ namespace yask {
         bool bb_is_cluster_mult=false; // num points are cluster multiples in all dims.
         bool bb_valid=false;   // lengths and sizes have been calculated.
 
+        BoundingBox() :
+            bb_begin(NUM_DOMAIN_DIMS),
+            bb_end(NUM_DOMAIN_DIMS),
+            bb_len(NUM_DOMAIN_DIMS) { }
+        
         // Make Tuples.
         IdxTuple bb_begin_tuple(const IdxTuple& ddims) const {
             return bb_begin.makeTuple(ddims);
@@ -323,6 +328,14 @@ namespace yask {
             // Dump stats if get_stats() hasn't been called yet.
             if (steps_done)
                 get_stats();
+        }
+
+        // Ready?
+        bool is_prepared() const {
+            return rank_bb.bb_valid;
+        }
+        void set_prepared(bool prep) {
+            rank_bb.bb_valid = prep;
         }
 
         // Modify settings in shared state and auto-tuner.

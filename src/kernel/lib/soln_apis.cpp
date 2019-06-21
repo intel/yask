@@ -37,8 +37,8 @@ namespace yask {
 #define GET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
     idx_t StencilContext::api_name(const string& dim) const {           \
         STATE_VARS(this);                                               \
-        if (prep_req && !rank_bb.bb_valid)                              \
-            THROW_YASK_EXCEPTION("Error: '" #api_name \
+        if (prep_req && !is_prepared())                                 \
+            THROW_YASK_EXCEPTION("Error: '" #api_name                   \
                                  "()' called before calling 'prepare_solution()'"); \
         dims->checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok); \
         return expr;                                                    \
@@ -63,7 +63,7 @@ namespace yask {
         dims->checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok); \
         expr;                                                           \
         update_var_info(false);                                        \
-        if (reset_prep) rank_bb.bb_valid = ext_bb.bb_valid = false;     \
+        if (reset_prep) set_prepared(false);                           \
     }
     SET_SOLN_API(set_rank_index, opts->_rank_indices[dim] = n;
                  opts->find_loc = false, false, true, false, true)

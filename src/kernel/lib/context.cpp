@@ -224,7 +224,7 @@ namespace yask {
                   begin.makeDimValStr() << " ... " <<
                   end.makeDimValStr() << ") by " <<
                   stride.makeDimValStr());
-        if (!rank_bb.bb_valid)
+        if (!is_prepared())
             THROW_YASK_EXCEPTION("Error: run_solution() called without calling prepare_solution() first");
         if (ext_bb.bb_size < 1) {
             TRACE_MSG("nothing to do in solution");

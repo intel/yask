@@ -82,7 +82,7 @@ namespace yask {
     // Will alter data in vars.
     void StencilContext::run_auto_tuner_now(bool verbose) {
         STATE_VARS(this);
-        if (!rank_bb.bb_valid)
+        if (!is_prepared())
             THROW_YASK_EXCEPTION("Error: run_auto_tuner_now() called without calling prepare_solution() first");
 
         DEBUG_MSG("Auto-tuning...");
