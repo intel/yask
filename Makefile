@@ -129,10 +129,10 @@ api:
 	$(YC_MAKE) $@
 	$(YK_MAKE) $@
 
-# Format API documents.
+# Remove old generated API documents and make new ones.
 docs/api/html/index.html: include/*.hpp include/*/*.hpp docs/api/*.*
 	doxygen -v
-	- rm -rf docs/api/html
+	find docs/api -type f | xargs rm
 	cd docs/api; doxygen doxygen_config.txt
 
 #### API tests.
@@ -250,8 +250,6 @@ clean:
 realclean: clean
 	rm -rf $(LIB_OUT_DIR) $(BIN_OUT_DIR) $(BUILD_OUT_DIR)
 	rm -fv TAGS '*~'
-	rm -fr docs/api/html
-	rm -fr docs/api/latex
 	- find * -name '*~' -print -delete
 	- find * -name '*.optrpt' -print -delete
 	- find * -name __pycache__ -print -delete
