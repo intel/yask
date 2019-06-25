@@ -132,6 +132,7 @@ api:
 # Format API documents.
 docs/api/html/index.html: include/*.hpp include/*/*.hpp docs/api/*.*
 	doxygen -v
+	- rm -rf docs/api/html
 	cd docs/api; doxygen doxygen_config.txt
 
 #### API tests.
