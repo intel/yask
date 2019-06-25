@@ -1,6 +1,6 @@
 # YASK--Yet Another Stencil Kit
 
-* New YASK users may want to start with the [YASK tutorial](docs/YASK-tutorial.pdf).
+* New YASK users may want to start with the [YASK tutorial](http://intel.github.io/yask/YASK-tutorial.pdf).
 * Users with existing YASK-based code may want to jump to the [backward-compatibility notices](#backward-compatibility-notices).
 
 ## Overview

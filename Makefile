@@ -132,7 +132,7 @@ api:
 # Remove old generated API documents and make new ones.
 docs/api/html/index.html: include/*.hpp include/*/*.hpp docs/api/*.*
 	doxygen -v
-	find docs/api -type f | xargs rm
+	find docs/api/html -type f | xargs -r rm
 	cd docs/api; doxygen doxygen_config.txt
 
 #### API tests.
