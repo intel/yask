@@ -10,6 +10,8 @@ namespace yask {
 
 @section intro Introduction
 
+For an overview of YASK, see the [YASK tutorial](../../YASK-tutorial.pdf).
+
 The typical high-level YASK workflow is as follows:
 -# \ref yc_intro
   - Define a stencil solution using the YASK domain-specific language (DSL).
