@@ -846,7 +846,7 @@ namespace yask {
            This value is typically set by the stencil compiler, but
            this function allows you to override that value.
            If the left halo is set to a value larger than the left padding size, the
-           left padding size will be automatically increase to accomodate it.
+           left padding size will be automatically increase to accommodate it.
            @note After data storage has been allocated, the left halo size
            can only be set to a value less than or equal to the left padding size
            in the given dimension.
@@ -864,7 +864,7 @@ namespace yask {
            This value is typically set by the stencil compiler, but
            this function allows you to override that value.
            If the right halo is set to a value larger than the right padding size, the
-           right padding size will be automatically increase to accomodate it.
+           right padding size will be automatically increase to accommodate it.
            @note After data storage has been allocated, the right halo size
            can only be set to a value less than or equal to the right padding size
            in the given dimension.
