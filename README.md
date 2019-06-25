@@ -11,7 +11,7 @@ YASK is a framework to rapidly create high-performance stencil code including op
 * Scaling to multiple sockets and nodes via MPI with overlapped communication and compute.
 * Spatial tiling with automatically-tuned block sizes.
 * Temporal tiling in multiple dimensions to further increase cache locality.
-* APIs for C++ and Python: [API documentation](https://rawgit.com/intel/yask/api-docs/html/index.html).
+* APIs for C++ and Python: [API documentation](https://rawgit.com/intel/yask/gh-pages/html/index.html)
 
 YASK contains a domain-specific compiler to convert stencil-equation specifications to SIMD-optimized code for Intel(R) Xeon Phi(TM) and Intel(R) Xeon(R) processors.
 
