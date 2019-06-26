@@ -937,20 +937,6 @@ namespace yask {
         // APIs.
         virtual yc_var* get_var();
     };
-} // namespace yask.
-
-// Define hash function for VarPoint for unordered_{set,map}.
-namespace std {
-    using namespace yask;
-
-    template <> struct hash<VarPoint> {
-        size_t operator()(const VarPoint& k) const {
-            return hash<string>{}(k.makeStr());
-        }
-    };
-}
-
-namespace yask {
 
     // Equality operator for a var point.
     // This defines the LHS as equal to the RHS; it is NOT
@@ -1045,3 +1031,13 @@ namespace yask {
 
 } // namespace yask.
 
+// Define hash function for VarPoint for unordered_{set,map}.
+namespace std {
+    using namespace yask;
+
+    template <> struct hash<VarPoint> {
+        size_t operator()(const VarPoint& k) const {
+            return hash<string>{}(k.makeStr());
+        }
+    };
+}
