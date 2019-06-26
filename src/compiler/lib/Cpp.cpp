@@ -56,7 +56,7 @@ namespace yask {
                                          string optArg) {
 
         // Get/set local vars.
-        string varPtr = getLocalVar(os, gp.getVarPtr(), _var_ptr_restrict_type);
+        string varPtr = getLocalVar(os, getVarPtr(gp), _var_ptr_restrict_type);
         string stepArgVar = getLocalVar(os, gp.makeStepArgStr(varPtr, _dims), _step_val_type);
 
         string res = varPtr + "->" + fname + "(";
@@ -94,9 +94,9 @@ namespace yask {
         string gtype = folded ? "YkVecVar" : "YkElemVar";
 
         // Get/set local vars.
-        string varPtr = getLocalVar(os, gp.getVarPtr(), CppPrintHelper::_var_ptr_restrict_type);
+        string varPtr = getLocalVar(os, getVarPtr(gp), _var_ptr_restrict_type);
         string stepArgVar = getLocalVar(os, gp.makeStepArgStr(varPtr, _dims),
-                                        CppPrintHelper::_step_val_type);
+                                        _step_val_type);
 
         // Assume that broadcast will be handled automatically by
         // operator overloading in kernel code.
@@ -171,7 +171,7 @@ namespace yask {
                                                 bool isNorm) {
 
         // Get/set local vars.
-        string varPtr = getLocalVar(os, gp.getVarPtr(), CppPrintHelper::_var_ptr_restrict_type);
+        string varPtr = getLocalVar(os, getVarPtr(gp), CppPrintHelper::_var_ptr_restrict_type);
         string stepArgVar = getLocalVar(os, gp.makeStepArgStr(varPtr, _dims),
                                         CppPrintHelper::_step_val_type);
 
@@ -408,8 +408,7 @@ namespace yask {
         auto* var = gp.getVar();
         bool is_unique = (var->getStepDim() == nullptr);
         // || (!var->is_dynamic_step_alloc() && var->get_step_alloc_size() == 1);
-        string type = is_unique ? CppPrintHelper::_var_ptr_restrict_type :
-            CppPrintHelper::_var_ptr_type;
+        string type = is_unique ? _var_ptr_restrict_type : _var_ptr_type;
 
         // Print type and value.
         os << _linePrefix << type << " " << ptrName << " = " << vp << _lineSuffix;
@@ -499,16 +498,69 @@ namespace yask {
             }
         }
 
-        // Did we make some code to read the point?
-        if (codeStr.length()) {
+        // If not done, continue based on type of vectorization.
+        if (!codeStr.length()) {
 
-            // Remember this point and return it.
-            savePointVar(gp, codeStr);
-            return codeStr;
+            // Scalar GP?
+            if (gp.getVecType() == VarPoint::VEC_NONE) {
+#ifdef DEBUG_GP
+                cout << " //** reading from point " << gp.makeStr() << " as scalar.\n";
+#endif
+                codeStr = readFromScalarPoint(os, gp);
+            }
+
+            // Non-scalar but non-vectorizable GP?
+            else if (gp.getVecType() == VarPoint::VEC_PARTIAL) {
+#ifdef DEBUG_GP
+                cout << " //** reading from point " << gp.makeStr() << " as partially vectorized.\n";
+#endif
+                codeStr = printNonVecRead(os, gp);
+            }
+
+            // Everything below this should be VEC_FULL.
+
+            // An aligned vector block?
+            else if (_vv._alignedVecs.count(gp)) {
+#ifdef DEBUG_GP
+                cout << " //** reading from point " << gp.makeStr() << " as fully vectorized and aligned.\n";
+#endif
+                codeStr = printAlignedVecRead(os, gp);
+            }
+
+            // Unaligned loads allowed?
+            else if (_settings._allowUnalignedLoads) {
+#ifdef DEBUG_GP
+                cout << " //** reading from point " << gp.makeStr() << " as fully vectorized and unaligned.\n";
+#endif
+                codeStr = printUnalignedVecRead(os, gp);
+            }
+
+            // Need to construct an unaligned vector block?
+            else if (_vv._vblk2elemLists.count(gp)) {
+#ifdef DEBUG_GP
+                cout << " //** reading from point " << gp.makeStr() << " as fully vectorized and unaligned.\n";
+#endif
+
+                // make sure prerequisites exist by recursing.
+                auto avbs = _vv._vblk2avblks[gp];
+                for (auto pi = avbs.begin(); pi != avbs.end(); pi++) {
+                    auto& p = *pi;
+                    readFromPoint(os, p);
+                }
+
+                // output this construction.
+                codeStr = printUnalignedVec(os, gp);
+            }
+
+            else {
+                THROW_YASK_EXCEPTION("Internal error: type unknown for point " + gp.makeStr());
+            }
         }
 
-        // If not done, use parent method.
-        return VecPrintHelper::readFromPoint(os, gp);
+        // Remember this point and return it.
+        if (codeStr.length())
+            savePointVar(gp, codeStr);
+        return codeStr;
     }
 
     // Print any immediate memory writes to 'os'.
@@ -539,9 +591,15 @@ namespace yask {
             }
         }
 
-        // If not done, use parent method.
-        return VecPrintHelper::writeToPoint(os, gp, val);
+        // If no pointer, use vec write.
+        // NB: currently, all eqs must be vectorizable on LHS,
+        // so we only need to handle vectorized writes.
+        // TODO: relax this restriction.
+        printAlignedVecWrite(os, gp, val);
+
+        return "";              // no returned expression.
     }
+
 
     // Print aligned memory read.
     string CppVecPrintHelper::printAlignedVecRead(ostream& os, const VarPoint& gp) {
@@ -652,8 +710,8 @@ namespace yask {
     string CppStepVarPrintVisitor::visit(VarPoint* gp) {
 
         // Pointer to var.
-        string varPtr = _cvph.getLocalVar(_os, gp->getVarPtr(), CppPrintHelper::_var_ptr_restrict_type);
-
+        string varPtr = _cvph.getLocalVar(_os, getVarPtr(*gp), CppPrintHelper::_var_ptr_restrict_type);
+        
         // Time var.
         auto& dims = _cvph.getDims();
         _cvph.getLocalVar(_os, gp->makeStepArgStr(varPtr, dims),

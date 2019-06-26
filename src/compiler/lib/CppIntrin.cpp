@@ -244,7 +244,7 @@ void CppIntrinPrintHelper::tryPerm1(ostream& os,
 
             // Create NA var if needed (this is just for clarity).
             if (needNA)
-                makeNA(os);
+                makeNA(os, _linePrefix, _lineSuffix);
 
             // Create control if needed.
             if (definedCtrls.count(nameS) == 0) {
@@ -361,7 +361,7 @@ void CppIntrinPrintHelper::tryPerm2(ostream& os,
 
                 // Create NA var if needed (this is just for clarity).
                 if (needNA)
-                    makeNA(os);
+                    makeNA(os, _linePrefix, _lineSuffix);
 
                 // Var names.
                 ctrlS12 = "{ .ci = { " + ctrlS12 + " } }";

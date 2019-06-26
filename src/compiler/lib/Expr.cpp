@@ -662,16 +662,6 @@ namespace yask {
     const string& VarPoint::getVarName() const {
         return _var->getName();
     }
-    string VarPoint::getVarPtr() const {
-        string gname = _var->getName();
-        string expr = "(static_cast<_context_type::" + gname + "_type*>(_context_data->";
-        if (_var->isScratch())
-            expr += gname + "_list[region_thread_idx]";
-        else
-            expr += gname + "_ptr";
-        expr += ".get()->gbp()))";
-        return expr;
-    }
     bool VarPoint::isVarFoldable() const {
         return _var->isFoldable();
     }
@@ -871,6 +861,8 @@ namespace yask {
     bool SubExpr::isOffsetFrom(string dim, int& offset) {
 
         // Is this of the form 'dim - offset'?
+        // Allow any similar form, e.g., '(dim + 4) - 2',
+        // Could allow '0 - dim', but seems silly.
         int tmp = 0;
         if (_lhs->isOffsetFrom(dim, tmp) &&
             _rhs->isConstVal()) {
@@ -882,13 +874,14 @@ namespace yask {
     bool AddExpr::isOffsetFrom(string dim, int& offset) {
 
         // Is this of the form 'dim + offset'?
-        // Allow any similar form, e.g., '-5 + dim + 2'.
+        // Allow any similar form, e.g., '-5 + dim + 2',
+        // (dim + 3) + 7.
         int sum = 0;
         int num_dims = 0;
         int tmp = 0;
         for (auto op : _ops) {
 
-            // Is this operand 'dim'?
+            // Is this operand 'dim' or an offset from 'dim'?
             if (op->isOffsetFrom(dim, tmp))
                 num_dims++;
 
@@ -900,7 +893,7 @@ namespace yask {
             else
                 return false;
         }
-        // Must be exactly one 'dim'.
+        // Must be exactly one 'dim' in the expr.
         // Don't allow silly forms like 'dim - dim + dim + 2'.
         if (num_dims == 1) {
             offset = tmp + sum;

@@ -809,7 +809,7 @@ namespace yask {
         IntTuple _offsets;
 
         // Simple value for each expr that is a const, e.g.,
-        // "w=3" from above example.
+        // "n=3" from above example.
         // Set in ctor and modified via setArgOffset/Const().
         IntTuple _consts;
 
@@ -835,7 +835,6 @@ namespace yask {
         const Var* getVar() const { return _var; }
         Var* getVar() { return _var; }
         virtual const string& getVarName() const;
-        virtual string getVarPtr() const;
         virtual bool isVarFoldable() const;
         virtual const indexExprPtrVec& getDims() const;
 

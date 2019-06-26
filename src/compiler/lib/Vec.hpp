@@ -199,7 +199,7 @@ namespace yask {
     };
 
     // Define methods for printing a vectorized version of the stencil.
-    class VecPrintHelper : public PrintHelper {
+    class VecPrintHelper {
     protected:
         VecInfoVisitor& _vv;
         bool _reuseVars; // if true, load to a local var; else, reload on every access.
@@ -240,15 +240,7 @@ namespace yask {
 
     public:
         VecPrintHelper(VecInfoVisitor& vv,
-                       const CompilerSettings& settings,
-                       const Dimensions& dims,
-                       const CounterVisitor* cv,
-                       const string& varPrefix,
-                       const string& varType,
-                       const string& linePrefix,
-                       const string& lineSuffix,
                        bool reuseVars = true) :
-            PrintHelper(settings, dims, cv, varPrefix, varType, linePrefix, lineSuffix),
             _vv(vv), _reuseVars(reuseVars), _definedNA(false) { }
         virtual ~VecPrintHelper() {}
 
@@ -258,9 +250,9 @@ namespace yask {
         }
 
         // Add a N/A var, just for readability.
-        virtual void makeNA(ostream& os) {
+        virtual void makeNA(ostream& os, string linePrefix, string lineSuffix) {
             if (!_definedNA) {
-                os << _linePrefix << "const int NA = 0; // indicates element not used." << endl;
+                os << linePrefix << "const int NA = 0; // indicates element not used." << lineSuffix;
                 _definedNA = true;
             }
         }
@@ -279,15 +271,6 @@ namespace yask {
                 return &_vecVars.at(gp);
             return 0;
         }
-
-        // Print any needed memory reads and/or constructions to 'os'.
-        // Return code containing a vector of var points.
-        virtual string readFromPoint(ostream& os, const VarPoint& gp);
-
-        // Print any immediate memory writes to 'os'.
-        // Return code to update a vector of var points or null string
-        // if all writes were printed.
-        virtual string writeToPoint(ostream& os, const VarPoint& gp, const string& val);
     };
 
     // A visitor that reorders exprs based on vector info.
