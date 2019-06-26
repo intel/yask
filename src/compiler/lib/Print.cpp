@@ -164,7 +164,7 @@ namespace yask {
             string cond = ee->getCond()->accept(this);
 
             // pseudo-code format.
-            _os << " IF (" << cond << ")";
+            _os << " IF_DOMAIN (" << cond << ")";
         }
         if (ee->getStepCond()) {
             string cond = ee->getStepCond()->accept(this);
@@ -448,7 +448,7 @@ namespace yask {
         // Null ptr => no condition.
         if (ee->getCond()) {
             string cond = ee->getCond()->makeStr();
-            _os << " IF (" << cond << ")";
+            _os << " IF_DOMAIN (" << cond << ")";
         }
         if (ee->getStepCond()) {
             string cond = ee->getStepCond()->makeStr();
@@ -657,7 +657,7 @@ namespace yask {
             if (eq->cond.get()) {
                 string condStr = eq->cond->makeStr();
                 os << endl << " // Valid under the following domain condition:" << endl <<
-                    ph.getLinePrefix() << "IF " << condStr << ph.getLineSuffix();
+                    ph.getLinePrefix() << "IF_DOMAIN " << condStr << ph.getLineSuffix();
             }
             if (eq->step_cond.get()) {
                 string condStr = eq->step_cond->makeStr();

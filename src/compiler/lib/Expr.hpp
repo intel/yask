@@ -980,7 +980,7 @@ namespace yask {
         void setStepCond(boolExprPtr step_cond) { _step_cond = step_cond; }
         virtual string accept(ExprVisitor* ev);
         static string exprOpStr() { return "EQUALS"; }
-        static string condOpStr() { return "IF"; }
+        static string condOpStr() { return "IF_DOMAIN"; }
         static string stepCondOpStr() { return "IF_STEP"; }
 
         // Get pointer to var on LHS or NULL if not set.
