@@ -50,8 +50,7 @@ int main(int argc, char** argv) {
     auto ksoln = kfac.new_solution(kenv);
     auto context = dynamic_pointer_cast<StencilContext>(ksoln);
     assert(context.get());
-    ostream& os = context->set_ostr();
-    ostream* osp = &os;
+    ostream& os = kenv->get_debug_output()->get_ostream();
     auto settings = context->get_settings();
 
     // Problem dimensions.
