@@ -126,12 +126,10 @@ namespace yask {
     SET_VAR_API(set_right_min_pad_size, gb()._req_right_pads[posn] = n; resize(), false, true, false)
     SET_VAR_API(set_min_pad_size, gb()._req_left_pads[posn] = gb()._req_right_pads[posn] = n; resize(),
                  false, true, false)
-    SET_VAR_API(set_left_extra_pad_size,
-                 set_left_min_pad_size(posn, gb()._left_halos[posn] + n), false, true, false)
-    SET_VAR_API(set_right_extra_pad_size,
-                 set_right_min_pad_size(posn, gb()._right_halos[posn] + n), false, true, false)
-    SET_VAR_API(set_extra_pad_size, set_left_extra_pad_size(posn, n);
-                 set_right_extra_pad_size(posn, n), false, true, false)
+    SET_VAR_API(set_left_extra_pad_size, gb()._req_left_epads[posn] = n; resize(), false, true, false)
+    SET_VAR_API(set_right_extra_pad_size, gb()._req_right_epads[posn] = n; resize(), false, true, false)
+    SET_VAR_API(set_extra_pad_size, gb()._req_left_epads[posn] = gb()._req_right_epads[posn] = n; resize(),
+                false, true, false)
     SET_VAR_API(set_first_misc_index, gb()._local_offsets[posn] = n, false, false, gb()._is_user_var)
 #undef COMMA
 #undef SET_VAR_API

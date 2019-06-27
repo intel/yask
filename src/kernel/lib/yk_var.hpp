@@ -71,6 +71,7 @@ namespace yask {
         // See diagram above for '_rank_offsets' and '_local_offsets'.
         // Comments show settings for domain dims | non-domain dims.
         Indices _domains;   // size of "interior" of var | alloc size.
+        Indices _req_left_epads, _req_right_epads; // requested extra space around halos | zero.
         Indices _req_left_pads, _req_right_pads; // requested extra space around domains | zero.
         Indices _actl_left_pads, _actl_right_pads; // actual extra space around domains | zero.
         Indices _left_halos, _right_halos; // space within pads for halo exchange | zero.

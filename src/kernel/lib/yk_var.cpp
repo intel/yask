@@ -45,6 +45,8 @@ namespace yask {
         _domains.setFromConst(0, n);
         _req_left_pads.setFromConst(0, n);
         _req_right_pads.setFromConst(0, n);
+        _req_left_epads.setFromConst(0, n);
+        _req_right_epads.setFromConst(0, n);
         _actl_left_pads.setFromConst(0, n);
         _actl_right_pads.setFromConst(0, n);
         _left_halos.setFromConst(0, n);
@@ -166,11 +168,13 @@ namespace yask {
         // the solution one, not the one for this var to handle the case
         // where this var is not vectorized.
         for (int i = 0; i < _ggb->get_num_dims(); i++) {
-            auto& dname = _ggb->get_dim_name(i);
-            auto* p = dims->_fold_pts.lookup(dname); // solution vec-len.
-            if (p) {
-                assert (*p >= 1);
-                mp[i] += *p - 1;
+            if (mp[i]) {
+                auto& dname = _ggb->get_dim_name(i);
+                auto* p = dims->_fold_pts.lookup(dname); // solution vec-len.
+                if (p) {
+                    assert (*p >= 1);
+                    mp[i] += *p - 1;
+                }
             }
         }
         return mp;
@@ -200,6 +204,10 @@ namespace yask {
                 THROW_YASK_EXCEPTION("Error: negative left padding in var '" + _ggb->get_name() + "'");
             if (_req_right_pads[i] < 0)
                 THROW_YASK_EXCEPTION("Error: negative right padding in var '" + _ggb->get_name() + "'");
+             if (_req_left_epads[i] < 0)
+                THROW_YASK_EXCEPTION("Error: negative left extra padding in var '" + _ggb->get_name() + "'");
+            if (_req_right_epads[i] < 0)
+                THROW_YASK_EXCEPTION("Error: negative right extra padding in var '" + _ggb->get_name() + "'");
         }
 
         // Increase padding as needed and calculate new allocs.
@@ -215,14 +223,20 @@ namespace yask {
             // Adjust padding only for domain dims.
             if (_domain_dim_mask & mbit) {
 
-                // Get max of existing pad & new required pad.
-                new_left_pads[i] = max(new_left_pads[i], _actl_left_pads[i]);
-                new_right_pads[i] = max(new_right_pads[i], _actl_right_pads[i]);
+                // Get max of existing pad & new required pad if allocated.
+                // This will avoid throwing an exception due to decreasing
+                // requested padding after allocation.
+                if (p) {
+                    new_left_pads[i] = max(new_left_pads[i], _actl_left_pads[i]);
+                    new_right_pads[i] = max(new_right_pads[i], _actl_right_pads[i]);
+                }
 
-                // If storage not yet allocated, also increase to requested pad.
-                // This will avoid throwing an exception due to unneeded
-                // extra padding after allocation.
+                // If storage not yet allocated, increase to requested pad.
+                // This will avoid throwing an exception due to increasing
+                // requested padding after allocation.
                 if (!p) {
+                    new_left_pads[i] = max(new_left_pads[i], _left_halos[i] + _req_left_epads[i]);
+                    new_right_pads[i] = max(new_right_pads[i], _right_halos[i] + _req_right_epads[i]);
                     new_left_pads[i] = max(new_left_pads[i], _req_left_pads[i]);
                     new_right_pads[i] = max(new_right_pads[i], _req_right_pads[i]);
                 }
