@@ -28,20 +28,6 @@ using namespace std;
 
 namespace yask {
 
-    // Set debug output to cout if my_rank == msg_rank
-    // or a null stream otherwise.
-    ostream& KernelStateBase::set_ostr() {
-        assert(_state);
-        assert(_state->_env);
-        assert(_state->_opts);
-        yask_output_factory yof;
-        if (_state->_env->my_rank == _state->_opts->msg_rank)
-            set_debug_output(yof.new_stdout_output());
-        else
-            set_debug_output(yof.new_null_output());
-        return get_debug_output()->get_ostream();
-    }
-
     // Check whether dim is of allowed type.
     void Dims::checkDimType(const std::string& dim,
                             const std::string& fn_name,
@@ -96,7 +82,8 @@ namespace yask {
         MPI_Initialized(&is_init);
 
         // No MPI communicator provided.
-        if (existing_comm == MPI_COMM_NULL) {
+        if (existing_comm == MPI_COMM_NULL ||
+            existing_comm == MPI_COMM_WORLD) {
             if (!is_init) {
                 int provided = 0;
                 MPI_Init_thread(argc, argv, MPI_THREAD_MULTIPLE, &provided);
@@ -345,7 +332,7 @@ namespace yask {
         // Following options are in 'this' object.
         _add_domain_option(parser, "g", "Global-domain (overall-problem) size", _global_sizes);
         _add_domain_option(parser, "l", "Local-domain (rank) size", _rank_sizes);
-        _add_domain_option(parser, "d", "Alias for local-domain size (deprecated)", _rank_sizes);
+        _add_domain_option(parser, "d", "Deprecated alias for local-domain size", _rank_sizes);
         _add_domain_option(parser, "r", "Region size", _region_sizes, true);
         _add_domain_option(parser, "b", "Block size", _block_sizes, true);
         _add_domain_option(parser, "mb", "Mini-block size", _mini_block_sizes);
@@ -357,13 +344,14 @@ namespace yask {
 #endif
         _add_domain_option(parser, "mp", "Minimum var-padding size (including halo)", _min_pad_sizes);
         _add_domain_option(parser, "ep", "Extra var-padding size (beyond halo)", _extra_pad_sizes);
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("allow_addl_padding",
+                           "Allow automatic extension of padding beyond what is needed for"
+                           " vector alignment for additional performance reasons",
+                           _allow_addl_pad));
 #ifdef USE_MPI
         _add_domain_option(parser, "nr", "Num ranks", _num_ranks);
         _add_domain_option(parser, "ri", "This rank's logical index (0-based)", _rank_indices);
-        parser.add_option(new CommandLineParser::IntOption
-                          ("msg_rank",
-                           "Index of MPI rank that will print informational messages.",
-                           msg_rank));
         parser.add_option(new CommandLineParser::BoolOption
                           ("overlap_comms",
                            "Overlap MPI communication with calculation of interior elements whenever possible.",
@@ -376,12 +364,6 @@ namespace yask {
                           ("min_exterior",
                            "Minimum width of MPI exterior section to compute before starting MPI communication.",
                            _min_exterior));
-#endif
-#ifdef TRACE
-        parser.add_option(new CommandLineParser::BoolOption
-                          ("trace",
-                           "Print internal debug messages.",
-                           _trace));
 #endif
         parser.add_option(new CommandLineParser::BoolOption
                           ("force_scalar",
@@ -848,14 +830,14 @@ namespace yask {
         _state = make_shared<KernelState>();
 
         // Share passed ptrs.
+        assert(kenv);
         _state->_env = kenv;
+        assert(ksettings);
         _state->_opts = ksettings;
+        assert(ksettings->_dims);
         _state->_dims = ksettings->_dims;
 
-        // Set _state->_debug per settings.
-        set_ostr();
-
-        // Create MPI Info object.
+       // Create MPI Info object.
         _state->_mpiInfo = make_shared<MPIInfo>(ksettings->_dims);
 
         // Set vars after above inits.

@@ -46,6 +46,8 @@ struct MySettings {
     int trial_time = 10;        // sec to run each trial if trial_steps == 0.
     int pre_trial_sleep_time = 1; // sec to sleep before each trial.
     int debug_sleep = 0;          // sec to sleep for debug attach.
+    bool doTrace = false;         // tracing.
+    int msgRank = 0;              // rank to print debug msgs.
 
     // Ptr to the soln.
     yk_solution_ptr _ksoln;
@@ -77,18 +79,20 @@ struct MySettings {
                 _as.num_trials = 1;
                 _as.trial_steps = 1;
 
-                // Create new args and parse them.
-                for (auto& dname : _as._ksoln->get_domain_dim_names()) {
+                // Create soln options and parse them if there is a soln.
+                if (_as._ksoln) {
+                    for (auto& dname : _as._ksoln->get_domain_dim_names()) {
 
-                    // Local domain size, e.g., "-lx 63".
-                    string arg = "-l" + dname + " " + to_string(_lsz);
+                        // Local domain size, e.g., "-lx 63".
+                        string arg = "-l" + dname + " " + to_string(_lsz);
 
-                    // Block size, e.g., "-bx 24".
-                    arg += " -b" + dname + " " + to_string(_bsz);
+                        // Block size, e.g., "-bx 24".
+                        arg += " -b" + dname + " " + to_string(_bsz);
 
-                    // Parse 'arg'.
-                    auto rem = _as._ksoln->apply_command_line_options(arg);
-                    assert(rem.length() == 0);
+                        // Parse 'arg'.
+                        auto rem = _as._ksoln->apply_command_line_options(arg);
+                        assert(rem.length() == 0);
+                    }
                 }
                 return true;
             }
@@ -106,6 +110,15 @@ struct MySettings {
                           ("help",
                            "Print help message.",
                            help));
+        parser.add_option(new CommandLineParser::IntOption
+                          ("msg_rank",
+                           "Index of MPI rank that will print informational messages.",
+                           msgRank));
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("trace",
+                           "Print internal debug messages if compiled with"
+                           " general and/or memory-access tracing enabled.",
+                           doTrace));
         parser.add_option(new CommandLineParser::BoolOption
                           ("pre_auto_tune",
                            "Run iteration(s) *before* performance trial(s) to find good-performing "
@@ -164,31 +177,35 @@ struct MySettings {
         // Any remaining strings will be returned.
         auto rem_args = parser.parse_args(argc, argv);
 
-        // Parse standard args not handled by this parser.
-        rem_args = _ksoln->apply_command_line_options(rem_args);
+        // Handle additional knobs and help if there is a soln.
+        if (_ksoln) {
+        
+            // Parse standard args not handled by this parser.
+            rem_args = _ksoln->apply_command_line_options(rem_args);
 
-        if (help) {
-            string appNotes =
-                "\nValidation is very slow and uses 2x memory,\n"
-                " so run with very small sizes and number of time-steps.\n"
-                " If validation fails, it may be due to rounding error;\n"
-                "  try building with 8-byte reals.\n";
-            vector<string> appExamples;
-            appExamples.push_back("-g 768 -num_trials 2");
-            appExamples.push_back("-v");
+            if (help) {
+                string appNotes =
+                    "\nValidation is very slow and uses 2x memory,\n"
+                    " so run with very small sizes and number of time-steps.\n"
+                    " If validation fails, it may be due to rounding error;\n"
+                    " try building with 8-byte reals.\n";
+                vector<string> appExamples;
+                appExamples.push_back("-g 768 -num_trials 2");
+                appExamples.push_back("-v");
+                
+                // TODO: make an API for this.
+                auto context = dynamic_pointer_cast<StencilContext>(_ksoln);
+                assert(context.get());
+                auto& opts = context->get_settings();
+                opts->print_usage(cout, parser, argv[0], appNotes, appExamples);
+                exit_yask(1);
+            }
 
-            // TODO: make an API for this.
-            auto context = dynamic_pointer_cast<StencilContext>(_ksoln);
-            assert(context.get());
-            auto& opts = context->get_settings();
-            opts->print_usage(cout, parser, argv[0], appNotes, appExamples);
-            exit_yask(1);
+            if (rem_args.length())
+                THROW_YASK_EXCEPTION("Error: extraneous parameter(s): '" +
+                                     rem_args +
+                                     "'; run with '-help' option for usage");
         }
-
-        if (rem_args.length())
-            THROW_YASK_EXCEPTION("Error: extraneous parameter(s): '" +
-                                 rem_args +
-                                 "'; run with '-help' option for usage");
     }
 
     // Print splash banner and invocation string.
@@ -255,21 +272,31 @@ int main(int argc, char** argv)
         yk_factory kfac;
         yask_output_factory yof;
 
+        // Parse options once just to get vars needed for env.
+        MySettings opts1(nullptr);
+        opts1.parse(argc, argv);
+        
         // Set up the environment (mostly MPI).
         auto kenv = kfac.new_env();
+        kenv->set_trace_enabled(opts1.doTrace);
+        if (opts1.msgRank == kenv->get_rank_index())
+            kenv->set_debug_output(yof.new_stdout_output());
+        else
+            kenv->set_debug_output(yof.new_null_output());
         auto ep = dynamic_pointer_cast<KernelEnv>(kenv);
         auto num_ranks = kenv->get_num_ranks();
+        auto& os = kenv->get_debug_output()->get_ostream();
 
         // Make solution object containing data and parameters for stencil eval.
         // TODO: do everything through API without cast to StencilContext.
         auto ksoln = kfac.new_solution(kenv);
         auto context = dynamic_pointer_cast<StencilContext>(ksoln);
         assert(context.get());
-        ostream& os = context->set_ostr();
         auto& copts = context->get_settings();
         assert(copts);
 
-        // Parse cmd-line options and exit on -help or error.
+        // Parse custom and library-provided cmd-line options and
+        // exit on -help or error.
         // TODO: do this through APIs.
         MySettings opts(ksoln);
         opts.parse(argc, argv);
@@ -480,10 +507,15 @@ int main(int argc, char** argv)
                 "Setup for validation...\n";
 
             // Make a reference context for comparisons w/new vars.
+            // Reuse 'kenv' and copy library settings from 'ksoln'.
             auto ref_soln = kfac.new_solution(kenv, ksoln);
             auto ref_context = dynamic_pointer_cast<StencilContext>(ref_soln);
             assert(ref_context.get());
             auto& ref_opts = ref_context->get_settings();
+
+            // Reapply cmd-line options to override default settings.
+            MySettings my_ref_opts(ref_soln);
+            my_ref_opts.parse(argc, argv);
 
             // Change some settings.
             ref_context->name += "-reference";
@@ -506,7 +538,7 @@ int main(int argc, char** argv)
 #endif
 
             // Override allocations and prep solution as with ref soln.
-            alloc_steps(ref_soln, opts);
+            alloc_steps(ref_soln, my_ref_opts);
             ref_soln->prepare_solution();
 
             // init to same value used in context.

@@ -161,11 +161,11 @@ typedef std::uint64_t uidx_t;
     } while(0)
 
 // 'state' is a pointer to a KernelState.
-#define DEBUG_MSG1(state, msg) do {                         \
-        assert(state->_debug.get());                        \
-        auto& os = state->_debug.get()->get_ostream();      \
-        DEBUG_MSG0(os, msg);                                \
-    } while(0)
+#define DEBUG_MSG1(state, msg) do {                            \
+    if (state->_env->_debug.get()) {                           \
+        auto& os = state->_env->_debug.get()->get_ostream();   \
+        DEBUG_MSG0(os, msg);                                   \
+    } } while(0)
     
 // Macro for debug message when 'state' is defined.
 #define DEBUG_MSG(msg) DEBUG_MSG1(state, msg)
@@ -175,12 +175,14 @@ typedef std::uint64_t uidx_t;
 #ifdef TRACE
 
 // 'os is an ostream.
-#define TRACE_MSG0(os, msg) do { if (opts->_trace) {        \
+#define TRACE_MSG0(os, msg) do {                            \
+        if (state->_env->_trace) {                          \
             DEBUG_MSG0(os, "YASK: " << msg);                \
         } } while(0)
 
 // 'state' is a pointer to a KernelState.
-#define TRACE_MSG1(state, msg) do { if (opts->_trace) {     \
+#define TRACE_MSG1(state, msg) do {                         \
+        if (state->_env->_trace) {                          \
             DEBUG_MSG1(state, "YASK: " << msg);             \
         } } while(0)
 #else

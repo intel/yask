@@ -54,9 +54,9 @@ namespace yask {
         _rank_offsets.setFromConst(0, n);
         _local_offsets.setFromConst(0, n);
         _vec_lens.setFromConst(1, n);
-        _allocs.setFromConst(1, n);
-        _vec_left_pads.setFromConst(1, n);
-        _vec_allocs.setFromConst(1, n);
+        _allocs.setFromConst(0, n);
+        _vec_left_pads.setFromConst(0, n);
+        _vec_allocs.setFromConst(0, n);
         _vec_local_offsets.setFromConst(0, n);
 
         // Set masks.
@@ -239,7 +239,9 @@ namespace yask {
 
                 // Make inner dim an odd number of vecs.
                 // This reportedly helps avoid some uarch aliasing.
-                if (!p && _ggb->get_dim_name(i) == inner_dim &&
+                if (!p &&
+                    opts->_allow_addl_pad &&
+                    _ggb->get_dim_name(i) == inner_dim &&
                     (new_allocs[i] / _vec_lens[i]) % 2 == 0) {
                     new_right_pads[i] += _vec_lens[i];
                     new_allocs[i] += _vec_lens[i];

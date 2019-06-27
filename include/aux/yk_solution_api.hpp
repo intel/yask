@@ -68,12 +68,18 @@ namespace yask {
     /**
        Objects of this type contain all the vars and equations
        that comprise a solution.
+
+       Created via yk_factory::new_solution().
     */
     class yk_solution {
     public:
         virtual ~yk_solution() {}
 
         /// Set object to receive debug output.
+        /**
+           Just a shortcut for setting the debug output in the \ref yk_env
+           used to create the solution.
+        */
         virtual void
         set_debug_output(yask_output_ptr debug
                          /**< [out] Pointer to object to receive debug output.
