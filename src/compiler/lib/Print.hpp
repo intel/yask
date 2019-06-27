@@ -202,7 +202,7 @@ namespace yask {
     };
 
     // Outputs an AST traversed in a top-down fashion. Expressions will be
-    // written to 'os', and anything 'left over' will be left in '_exprStr'.
+    // written to 'os'.
     class PrintVisitorTopDown : public PrintVisitorBase {
         int _numCommon;
 
