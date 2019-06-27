@@ -139,21 +139,19 @@ namespace yask {
 
                 // Read or reuse.
                 string stmt = readFromScalarPoint(os, gp, &vMap);
-                string varname;
-                if (_elemVars.count(stmt))
-                    varname = _elemVars.at(stmt);
-                else {
+                auto* varname = lookupElemVar(stmt);
+                if (!varname) {
 
                     // Read val into a new scalar var.
-                    varname = makeVarName();
-                    os << _linePrefix << "real_t " << varname <<
+                    string vname = makeVarName();
+                    os << _linePrefix << "real_t " << vname <<
                         " = " << stmt << _lineSuffix;
-                    _elemVars[stmt] = varname;
+                    varname = saveElemVar(stmt, vname);
                 }
 
                 // Output translated expression for this element.
                 os << _linePrefix << mvName << "[" << pelem << "] = " <<
-                    varname << "; // for offset " << vecPoint.makeDimValStr() <<
+                    *varname << "; // for offset " << vecPoint.makeDimValStr() <<
                     _lineSuffix;
 
                 return true;

@@ -203,7 +203,7 @@ namespace yask {
     protected:
         VecInfoVisitor& _vv;
         bool _reuseVars; // if true, load to a local var; else, reload on every access.
-        map<VarPoint, string> _vecVars; // vecs that are already constructed.
+        map<VarPoint, string> _vecVars; // vecs that are already constructed (key is var point).
         map<string, string> _elemVars; // elems that are already read (key is read stmt).
 
         // Print access to an aligned vector block.
@@ -254,12 +254,22 @@ namespace yask {
         }
 
         // Access cached values.
-        virtual void savePointVar(const VarPoint& gp, string var) {
+        virtual const string* savePointVar(const VarPoint& gp, const string& var) {
             _vecVars[gp] = var;
+            return &_vecVars.at(gp);
         }
-        virtual string* lookupPointVar(const VarPoint& gp) {
+        virtual const string* lookupPointVar(const VarPoint& gp) {
             if (_vecVars.count(gp))
                 return &_vecVars.at(gp);
+            return 0;
+        }
+        virtual const string* saveElemVar(const string& expr, const string& var) {
+            _elemVars[expr] = var;
+            return &_elemVars.at(expr);
+        }
+        virtual const string* lookupElemVar(const string& expr) {
+            if (_elemVars.count(expr))
+                return &_elemVars.at(expr);
             return 0;
         }
     };
