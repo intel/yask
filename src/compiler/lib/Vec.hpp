@@ -203,7 +203,6 @@ namespace yask {
     protected:
         VecInfoVisitor& _vv;
         bool _reuseVars; // if true, load to a local var; else, reload on every access.
-        bool _definedNA;           // NA var defined.
         map<VarPoint, string> _vecVars; // vecs that are already constructed.
         map<string, string> _elemVars; // elems that are already read (key is read stmt).
 
@@ -241,20 +240,12 @@ namespace yask {
     public:
         VecPrintHelper(VecInfoVisitor& vv,
                        bool reuseVars = true) :
-            _vv(vv), _reuseVars(reuseVars), _definedNA(false) { }
+            _vv(vv), _reuseVars(reuseVars) { }
         virtual ~VecPrintHelper() {}
 
         // get fold info.
         virtual const IntTuple& getFold() const {
             return _vv.getFold();
-        }
-
-        // Add a N/A var, just for readability.
-        virtual void makeNA(ostream& os, string linePrefix, string lineSuffix) {
-            if (!_definedNA) {
-                os << linePrefix << "const int NA = 0; // indicates element not used." << lineSuffix;
-                _definedNA = true;
-            }
         }
 
         // Return point info.

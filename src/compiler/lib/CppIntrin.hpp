@@ -39,6 +39,7 @@ namespace yask {
 
     protected:
         set<string> definedCtrls; // control vars already defined.
+        bool _definedNA = false;        // NA var defined.
 
         // Ctor.
         CppIntrinPrintHelper(VecInfoVisitor& vv,
@@ -54,6 +55,14 @@ namespace yask {
 
         // Dtor.
         virtual ~CppIntrinPrintHelper() { }
+
+        // Add N/A var, just for readability.
+        virtual void makeNA(ostream& os, string linePrefix, string lineSuffix) {
+            if (!_definedNA) {
+                os << linePrefix << "const int NA = 0; // indicates element not used." << lineSuffix;
+                _definedNA = true;
+            }
+        }
 
         // Print mask when needed for multi-step construction.
         virtual void printMask(ostream& os, unsigned mask) {
