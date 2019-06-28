@@ -626,10 +626,9 @@ namespace yask {
            The padding size cannot be changed after data storage
            has been allocated for a given var; attempted changes to the pad size for such
            vars will be ignored.
-           In addition, once a var's padding is set, it cannot be reduced, only increased.
 
            Use yk_var::set_left_min_pad_size and yk_var::set_right_min_pad_size()
-           for specific setting of each var.
+           for individual setting of each var.
            Call yk_var::get_left_pad_size() and yk_var::get_right_pad_size()
            to determine the actual padding sizes for a given var.
            See the "Detailed Description" for \ref yk_var for more information on var sizes.

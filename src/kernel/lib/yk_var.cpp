@@ -55,8 +55,9 @@ namespace yask {
         _right_wf_exts.setFromConst(0, n);
         _rank_offsets.setFromConst(0, n);
         _local_offsets.setFromConst(0, n);
-        _vec_lens.setFromConst(1, n);
         _allocs.setFromConst(0, n);
+        _soln_vec_lens.setFromConst(1, n);
+        _var_vec_lens.setFromConst(1, n);
         _vec_left_pads.setFromConst(0, n);
         _vec_allocs.setFromConst(0, n);
         _vec_local_offsets.setFromConst(0, n);
@@ -168,14 +169,8 @@ namespace yask {
         // the solution one, not the one for this var to handle the case
         // where this var is not vectorized.
         for (int i = 0; i < _ggb->get_num_dims(); i++) {
-            if (mp[i]) {
-                auto& dname = _ggb->get_dim_name(i);
-                auto* p = dims->_fold_pts.lookup(dname); // solution vec-len.
-                if (p) {
-                    assert (*p >= 1);
-                    mp[i] += *p - 1;
-                }
-            }
+            if (mp[i])
+                mp[i] += _soln_vec_lens[i];
         }
         return mp;
     }
@@ -232,7 +227,9 @@ namespace yask {
                 }
 
                 // If storage not yet allocated, increase to requested pad.
-                // This will avoid throwing an exception due to increasing
+                // Final pad is max of requested pad and halo + requested extra pad.
+                // Requested padding is a hint, so ignoring it when allocated
+                // will avoid throwing an exception due to increasing
                 // requested padding after allocation.
                 if (!p) {
                     new_left_pads[i] = max(new_left_pads[i], _left_halos[i] + _req_left_epads[i]);
@@ -241,11 +238,13 @@ namespace yask {
                     new_right_pads[i] = max(new_right_pads[i], _req_right_pads[i]);
                 }
 
-                // Round left pad up to vec len.
-                new_left_pads[i] = ROUND_UP(new_left_pads[i], _vec_lens[i]);
+                // Round left pad up to soln vec len.
+                // Using soln vec len instead of var vec len to allow successful mixing
+                // of vec and non-vec vars in an equation.
+                new_left_pads[i] = ROUND_UP(new_left_pads[i], _soln_vec_lens[i]);
 
                 // Round domain + right pad up to vec len by extending right pad.
-                idx_t dprp = ROUND_UP(_domains[i] + new_right_pads[i], _vec_lens[i]);
+                idx_t dprp = ROUND_UP(_domains[i] + new_right_pads[i], _soln_vec_lens[i]);
                 new_right_pads[i] = dprp - _domains[i];
 
                 // New allocation in each dim.
@@ -256,15 +255,15 @@ namespace yask {
                 if (!p &&
                     opts->_allow_addl_pad &&
                     _ggb->get_dim_name(i) == inner_dim &&
-                    (new_allocs[i] / _vec_lens[i]) % 2 == 0) {
-                    new_right_pads[i] += _vec_lens[i];
-                    new_allocs[i] += _vec_lens[i];
+                    (new_allocs[i] / _soln_vec_lens[i]) % 2 == 0) {
+                    new_right_pads[i] += _soln_vec_lens[i];
+                    new_allocs[i] += _soln_vec_lens[i];
                 }
                 assert(new_allocs[i] == new_left_pads[i] + _domains[i] + new_right_pads[i]);
 
                 // Since the left pad and domain + right pad were rounded up,
                 // the sum should also be a vec mult.
-                assert(new_allocs[i] % _vec_lens[i] == 0);
+                assert(new_allocs[i] % _soln_vec_lens[i] == 0);
             }
         }
 
@@ -288,8 +287,8 @@ namespace yask {
             idx_t mbit = 1LL << i;
 
             // Calc vec-len values.
-            _vec_left_pads[i] = new_left_pads[i] / _vec_lens[i];
-            _vec_allocs[i] = _allocs[i] / _vec_lens[i];
+            _vec_left_pads[i] = new_left_pads[i] / _var_vec_lens[i];
+            _vec_allocs[i] = _allocs[i] / _var_vec_lens[i];
 
             // Actual resize of underlying var.
             _ggb->set_dim_size(i, _vec_allocs[i]);
@@ -490,7 +489,7 @@ namespace yask {
             if (clipped_indices && normalize) {
                 if (_domain_dim_mask & mbit) {
                     (*clipped_indices)[i] -= _rank_offsets[i]; // rank-local.
-                    (*clipped_indices)[i] = idiv_flr((*clipped_indices)[i], _vec_lens[i]);
+                    (*clipped_indices)[i] = idiv_flr((*clipped_indices)[i], _var_vec_lens[i]);
                 }
             }
         } // var dims.
@@ -566,7 +565,7 @@ namespace yask {
         STATE_VARS_CONST(this);
 
         // Convert to elem indices.
-        Indices eidxs = idxs.mulElements(_vec_lens);
+        Indices eidxs = idxs.mulElements(_var_vec_lens);
 
         // Add offsets, i.e., convert to overall indices.
         eidxs = eidxs.addElements(_rank_offsets);

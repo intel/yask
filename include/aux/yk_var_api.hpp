@@ -383,7 +383,7 @@ namespace yask {
                                     /**< [in] Name of dimension to get.  Must be one of
                                        the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
-        /// Get the left padding in the specified dimension.
+        /// Get the actual left padding in the specified dimension.
         /**
            The left padding is the memory allocated before
            the domain in a given dimension.
@@ -398,7 +398,7 @@ namespace yask {
                          Must be one of
                          the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
-        /// Get the right padding in the specified dimension.
+        /// Get the actual right padding in the specified dimension.
         /**
            The right padding is the memory allocated after
            the domain in a given dimension.
@@ -413,7 +413,7 @@ namespace yask {
                          Must be one of
                          the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
-        /// Get the extra left padding in the specified dimension.
+        /// Get the actual extra left padding in the specified dimension.
         /**
            The *extra* padding size is the left padding size minus the left halo size.
            @returns Elements in padding in given dimension before the
@@ -425,7 +425,7 @@ namespace yask {
                               Must be one of
                               the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
-        /// Get the extra right padding in the specified dimension.
+        /// Get the actual extra right padding in the specified dimension.
         /**
            The *extra* padding size is the right padding size minus the right halo size.
            @returns Elements in padding in given dimension after the

@@ -312,7 +312,7 @@ namespace yask {
 
                         // Only consider domain dims that are used in this var.
                         if (gp->is_dim_used(dname)) {
-                            auto vlen = gp->_get_vec_len(dname);
+                            auto vlen = gp->_get_var_vec_len(dname);
                             auto lhalo = gp->get_left_halo_size(dname);
                             auto rhalo = gp->get_right_halo_size(dname);
 
@@ -418,7 +418,7 @@ namespace yask {
                         for (auto& dim : domain_dims.getDims()) {
                             auto& dname = dim.getName();
                             if (gp->is_dim_used(dname)) {
-                                auto vlen = gp->_get_vec_len(dname);
+                                auto vlen = gp->_get_var_vec_len(dname);
 
                                 // First index rounded down.
                                 auto fidx = first_outer_idx[dname];
@@ -544,7 +544,7 @@ namespace yask {
                                 dsize = copy_end[dname] - copy_begin[dname];
 
                                 // Check whether alignment and size are multiple of vlen.
-                                auto vlen = gp->_get_vec_len(dname);
+                                auto vlen = gp->_get_var_vec_len(dname);
                                 if (dsize % vlen != 0)
                                     buf_vec_ok = false;
                                 if (imod_flr(copy_begin[dname], vlen) != 0)

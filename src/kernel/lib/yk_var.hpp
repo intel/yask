@@ -81,12 +81,14 @@ namespace yask {
         Indices _allocs;    // actual var alloc in reals | same.
 
         // Sizes in vectors for sizes that are always vec lens (to avoid division).
-        // Each entry _vec_lens may be same as dims->_fold_pts or one, depending
+        // Each entry in _soln_vec_lens is same as dims->_fold_pts.
+        // Each entry in _var_vec_lens may be same as dims->_fold_pts or one, depending
         // on whether var is fully vectorized.
-        Indices _vec_lens;  // num reals in each elem | one.
-        Indices _vec_left_pads; // same as _actl_left_pads.
-        Indices _vec_allocs; // same as _allocs.
-        Indices _vec_local_offsets; // same as _local_offsets.
+        Indices _soln_vec_lens;  // num reals in each elem in soln fold | one.
+        Indices _var_vec_lens;  // num reals in each elem in this var | one.
+        Indices _vec_left_pads; // _actl_left_pads / _var_vec_lens.
+        Indices _vec_allocs; // _allocs / _var_vec_lens.
+        Indices _vec_local_offsets; // _local_offsets / _var_vec_lens.
 
         // Whether step dim is used.
         // If true, will always be in Indices::step_posn.
@@ -505,7 +507,8 @@ namespace yask {
         GET_VAR_API(_get_local_offset)
         GET_VAR_API(_get_rank_offset)
         GET_VAR_API(_get_right_wf_ext)
-        GET_VAR_API(_get_vec_len)
+        GET_VAR_API(_get_soln_vec_len)
+        GET_VAR_API(_get_var_vec_len)
 
         SET_VAR_API(_set_alloc_size)
         SET_VAR_API(_set_domain_size)
@@ -704,12 +707,25 @@ namespace yask {
         _var_type _data;
 
     public:
-        YkElemVar(KernelStateBase& state,
+        YkElemVar(KernelStateBase& stateb,
                    std::string name,
                    const VarDimNames& dimNames) :
-            YkVarBase(state, &_data, dimNames),
-            _data(state, name, dimNames) {
+            YkVarBase(stateb, &_data, dimNames),
+            _data(stateb, name, dimNames) {
+            STATE_VARS(this);
             _has_step_dim = _use_step_idx;
+
+            // Init vec sizes.
+            // A non-vectorized var still needs to know about
+            // the solution folding of its dims for proper
+            // padding.
+            for (size_t i = 0; i < dimNames.size(); i++) {
+                auto& dname = dimNames.at(i);
+                auto* p = dims->_vec_fold_pts.lookup(dname);
+                idx_t dval = p ? *p : 1;
+                _soln_vec_lens[i] = dval;
+            }
+
             resize();
         }
 
@@ -840,16 +856,18 @@ namespace yask {
             assert((size_t)nvls == dimNames.size());
 
             // Init vec sizes.
+            // A vectorized var must use all the vectorized
+            // dims of the solution folding.
             // For each dim in the var, use the number of vector
             // fold points or 1 if not set.
             for (size_t i = 0; i < dimNames.size(); i++) {
                 auto& dname = dimNames.at(i);
                 auto* p = dims->_vec_fold_pts.lookup(dname);
                 idx_t dval = p ? *p : 1;
-                _vec_lens[i] = dval;
-                _vec_allocs[i] = dval;
+                _soln_vec_lens[i] = dval;
+                _var_vec_lens[i] = dval;
 
-                // Compare to template parameter pack.
+                // Must be same as that in template parameter pack.
                 assert(dval == vls[i]);
             }
 
@@ -941,8 +959,8 @@ namespace yask {
                     // emit code for preserving sign when using shifts.
                     vec_idxs[i] = idx_t(adj_idx / vls[i]);
                     elem_ofs[i] = idx_t(adj_idx % vls[i]);
-                    assert(vec_idxs[i] == idx_t(adj_idx / _vec_lens[i]));
-                    assert(elem_ofs[i] == idx_t(adj_idx % _vec_lens[i]));
+                    assert(vec_idxs[i] == idx_t(adj_idx / _var_vec_lens[i]));
+                    assert(elem_ofs[i] == idx_t(adj_idx % _var_vec_lens[i]));
                 }
             }
 
@@ -1096,7 +1114,7 @@ namespace yask {
                              int line) const {
             STATE_VARS_CONST(this);
             TRACE_MEM_MSG("prefetchVecNorm<" << level << ">(" <<
-                          makeIndexString(vec_idxs.mulElements(_vec_lens)) << ")");
+                          makeIndexString(vec_idxs.mulElements(_var_vec_lens)) << ")");
 
             auto p = getVecPtrNorm(vec_idxs, alloc_step_idx, false);
             prefetch<level>(p);
