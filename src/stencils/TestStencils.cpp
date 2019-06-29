@@ -297,7 +297,7 @@ namespace {
         yc_var_proxy F = yc_var_proxy("F", get_soln(), { y, z });
         yc_var_proxy G = yc_var_proxy("G", get_soln(), { z, y });
         yc_var_proxy H = yc_var_proxy("H", get_soln(), { y, z, x });      // different order.
-        yc_var_proxy I = yc_var_proxy("I", get_soln(), { });
+        yc_var_proxy I = yc_var_proxy("I", get_soln(), { }); // scalar.
 
     public:
 

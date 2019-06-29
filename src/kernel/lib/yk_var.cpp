@@ -149,6 +149,31 @@ namespace yask {
         return posn;
     }
 
+    string YkVarBase::make_info_string(bool long_info) const {
+            std::stringstream oss;
+            if (is_scratch()) oss << "scratch ";
+            if (is_user_var()) oss << "user-defined ";
+            if (_fixed_size) oss << "fixed-size ";
+            oss << _make_info_string() << " and meta-data at " <<
+                (void*)this;
+            if (long_info) {
+                oss << " for ";
+                if (_domains.getNumDims())
+                    oss << makeIndexString(_allocs, " * ") << " FP elem(s)"
+                        " at rank-offsets " << makeIndexString(_rank_offsets) <<
+                        ", local-offsets " << makeIndexString(_local_offsets) <<
+                        ", left-halos " << makeIndexString(_left_halos) <<
+                        ", right-halos " << makeIndexString(_right_halos) <<
+                        ", left-pads " << makeIndexString(_actl_left_pads) <<
+                        ", right-pads " << makeIndexString(_actl_right_pads) <<
+                        ", left-wf-exts " << makeIndexString(_left_wf_exts) <<
+                        ", right-wf-exts " << makeIndexString(_right_wf_exts) <<
+                        ", and ";
+                oss << _dirty_steps.size() << " dirty flag(s)";
+            }
+            return oss.str();
+        }
+
     // Determine required padding from halos.
     // Does not include user-specified min padding or
     // final rounding for left pad.
@@ -184,6 +209,12 @@ namespace yask {
         // Original size.
         auto p = _ggb->get_storage();
         IdxTuple old_allocs = get_allocs();
+
+#ifdef TRACE
+        string old_info;
+        if (state->_env->_trace)
+            old_info = make_info_string(true);
+#endif
 
         // Check settings.
         for (int i = 0; i < _ggb->get_num_dims(); i++) {
@@ -310,20 +341,13 @@ namespace yask {
         }
 
         // Report changes in TRACE mode.
-        if (old_allocs != new_allocs || old_dirty != new_dirty) {
-            Indices first_allocs = _rank_offsets.subElements(_actl_left_pads);
-            Indices end_allocs = first_allocs.addElements(_allocs);
-            TRACE_MSG("var '" << _ggb->get_name() << "' resized from " <<
-                       makeIndexString(old_allocs, " * ") << " to " <<
-                       makeIndexString(new_allocs, " * ") << " at [" <<
-                       makeIndexString(first_allocs) << " ... " << 
-                       makeIndexString(end_allocs) << ") with left-halos " <<
-                       makeIndexString(_left_halos) << ", right-halos " <<
-                       makeIndexString(_right_halos) << ", left-wf-exts " <<
-                       makeIndexString(_left_wf_exts) << ", right-wf-exts " <<
-                       makeIndexString(_right_wf_exts) << ", and " <<
-                       _dirty_steps.size() << " dirty flag(s)");
+#ifdef TRACE
+        if (state->_env->_trace) {
+            string new_info = make_info_string(true);
+            if (old_info != new_info)
+                TRACE_MSG("resize: FROM " << old_info << " TO " << new_info);
         }
+#endif
     }
 
     // Check whether dim is used and of allowed type.

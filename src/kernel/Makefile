@@ -887,6 +887,7 @@ help:
 	echo " $(MAKE) clean; $(MAKE) -j stencil=awp EXTRA_YK_CXXFLAGS=-qopt-report"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis fold='x=1,y=2,z=4' cluster='x=2'"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis radius=4 real_bytes=8 # DP FP."; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=cube SHELL=/bin/bash  # Specify shell to use (if pipefail gives error)"; \
 	echo " "; \
 	echo "Example performance builds of kernel API for C++ and Python apps:"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd yk-api"; \

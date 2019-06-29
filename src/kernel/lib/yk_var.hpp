@@ -274,15 +274,7 @@ namespace yask {
 
         // Make a human-readable description of the var.
         virtual std::string _make_info_string() const =0;
-        virtual std::string make_info_string() const {
-            std::stringstream oss;
-            if (is_scratch()) oss << "scratch ";
-            if (is_user_var()) oss << "user-defined ";
-            if (_fixed_size) oss << "fixed-size ";
-            oss << _make_info_string() << " and meta-data at " <<
-                (void*)this;
-            return oss.str();
-        }
+        virtual std::string make_info_string(bool long_info = false) const;
 
         // Check for equality.
         // Return number of mismatches greater than epsilon.
