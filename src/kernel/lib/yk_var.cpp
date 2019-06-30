@@ -279,9 +279,6 @@ namespace yask {
                 idx_t dprp = ROUND_UP(_domains[i] + new_right_pads[i], _soln_vec_lens[i]);
                 new_right_pads[i] = dprp - _domains[i];
 
-                // New allocation in each dim.
-                new_allocs[i] += new_left_pads[i] + new_right_pads[i];
-
                 // Make inner dim an odd number of vecs.
                 // This reportedly helps avoid some uarch aliasing.
                 if (!p &&
@@ -289,19 +286,25 @@ namespace yask {
                     _ggb->get_dim_name(i) == inner_dim &&
                     (new_allocs[i] / _var_vec_lens[i]) % 2 == 0) {
                     new_right_pads[i] += _var_vec_lens[i];
-                    new_allocs[i] += _var_vec_lens[i];
                 }
+
+                // New allocation in each dim.
+                new_allocs[i] += new_left_pads[i] + new_right_pads[i];
                 assert(new_allocs[i] == new_left_pads[i] + _domains[i] + new_right_pads[i]);
 
                 // Since the left pad and domain + right pad were rounded up,
                 // the sum should also be a vec mult.
                 assert(new_allocs[i] % _var_vec_lens[i] == 0);
             }
+
+            // Non-domain dims.
+            else {
+                assert(new_allocs[i] == _domains[i]);
+                assert(_var_vec_lens[i] == 1);
+            }
         }
 
         // Attempt to change alloc with existing storage?
-        // TODO: restore the values before the API that called
-        // resize() on failure.
         if (p && old_allocs != new_allocs) {
             THROW_YASK_EXCEPTION("Error: attempt to change allocation size of var '" +
                 _ggb->get_name() + "' from " +

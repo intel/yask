@@ -80,12 +80,14 @@ namespace yask {
         Indices _local_offsets; // offsets of this var domain in this rank | first index for step or misc.
         Indices _allocs;    // actual var alloc in reals | same.
 
-        // Sizes in vectors for sizes that are always vec lens (to avoid division).
         // Each entry in _soln_vec_lens is same as dims->_fold_pts.
+        Indices _soln_vec_lens;  // num reals in each elem in soln fold | one.
+
         // Each entry in _var_vec_lens may be same as dims->_fold_pts or one, depending
         // on whether var is fully vectorized.
-        Indices _soln_vec_lens;  // num reals in each elem in soln fold | one.
         Indices _var_vec_lens;  // num reals in each elem in this var | one.
+
+        // Sizes in vectors for sizes that are always vec lens (to avoid division).
         Indices _vec_left_pads; // _actl_left_pads / _var_vec_lens.
         Indices _vec_allocs; // _allocs / _var_vec_lens.
         Indices _vec_local_offsets; // _local_offsets / _var_vec_lens.
