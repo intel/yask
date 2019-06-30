@@ -364,6 +364,7 @@ ifneq ($(filter %icpc %icc,$(notdir $(YK_CXX))),)  # Intel compiler
 
 else # not Intel compiler
  YK_CXXFLAGS	+=	$(GCC_ISA) -Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
+ SWIG_CXXFLAGS	:=	$(SWIG_GCCFLAGS)
  MACROS		+=	USE_ALWAYS_INLINE
 
 endif # compiler.
