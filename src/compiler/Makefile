@@ -134,7 +134,7 @@ $(YC_SWIG_OUT_DIR)/yask_compiler_api_wrap.cpp: $(YC_SWIG_DIR)/yask*.i $(INC_DIR)
 # https://github.com/swig/swig/issues/773
 $(YC_OBJ_DIR)/yask_compiler_api_wrap.o: $(YC_SWIG_OUT_DIR)/yask_compiler_api_wrap.cpp
 	$(MKDIR) $(YC_OBJ_DIR)
-	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -x c++ $(SWIG_CXXFLAGS) -DNDEBUG $(PYINC) -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -x c++ $(SWIG_GCCFLAGS) -DNDEBUG $(PYINC) -fPIC -c -o $@ $<
 	@ls -l $@
 
 $(YC_PY_LIB): $(YC_OBJS) $(YC_OBJ_DIR)/yask_compiler_api_wrap.o
