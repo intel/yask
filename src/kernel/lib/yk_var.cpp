@@ -195,7 +195,7 @@ namespace yask {
         // where this var is not vectorized.
         for (int i = 0; i < _ggb->get_num_dims(); i++) {
             if (mp[i])
-                mp[i] += _soln_vec_lens[i];
+                mp[i] += _soln_vec_lens[i] - 1;
         }
         return mp;
     }
@@ -269,12 +269,13 @@ namespace yask {
                     new_right_pads[i] = max(new_right_pads[i], _req_right_pads[i]);
                 }
 
-                // Round left pad up to soln vec len.
-                // Using soln vec len instead of var vec len to allow successful mixing
-                // of vec and non-vec vars in an equation.
-                new_left_pads[i] = ROUND_UP(new_left_pads[i], _soln_vec_lens[i]);
+                // Round left pad up to vec len.
+                new_left_pads[i] = ROUND_UP(new_left_pads[i], _var_vec_lens[i]);
 
-                // Round domain + right pad up to vec len by extending right pad.
+                // Round domain + right pad up to soln vec len by extending right pad.
+                // Using soln vec len to allow reading a non-vec var in this dim
+                // while calculating a vec var. (The var vec-len is always 1 or the same
+                // as the soln vec-len in a given dim.)
                 idx_t dprp = ROUND_UP(_domains[i] + new_right_pads[i], _soln_vec_lens[i]);
                 new_right_pads[i] = dprp - _domains[i];
 
@@ -286,15 +287,15 @@ namespace yask {
                 if (!p &&
                     opts->_allow_addl_pad &&
                     _ggb->get_dim_name(i) == inner_dim &&
-                    (new_allocs[i] / _soln_vec_lens[i]) % 2 == 0) {
-                    new_right_pads[i] += _soln_vec_lens[i];
-                    new_allocs[i] += _soln_vec_lens[i];
+                    (new_allocs[i] / _var_vec_lens[i]) % 2 == 0) {
+                    new_right_pads[i] += _var_vec_lens[i];
+                    new_allocs[i] += _var_vec_lens[i];
                 }
                 assert(new_allocs[i] == new_left_pads[i] + _domains[i] + new_right_pads[i]);
 
                 // Since the left pad and domain + right pad were rounded up,
                 // the sum should also be a vec mult.
-                assert(new_allocs[i] % _soln_vec_lens[i] == 0);
+                assert(new_allocs[i] % _var_vec_lens[i] == 0);
             }
         }
 
