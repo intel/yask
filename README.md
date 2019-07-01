@@ -68,11 +68,11 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
       https://software.intel.com/en-us/articles/intel-software-development-emulator,
       for functional testing if you don't have native support for any given instruction set.
 
-## Backward-compatibility notices, including changes in default behavior
+## Backward-compatibility notices
 ### Version 3
 * Version 3.01.00 moved the `-trace` and `-msg_rank` options from the kernel
   library to the kernel utility, so those options may no longer be set via
-  yk_solution::apply_command_line_options(). APIs to set the corresponding
+  `yk_solution::apply_command_line_options()`. APIs to set the corresponding
   options are now in `yk_env`. This allows configuring the debug output
   before a `yk_solution` is created.
 
