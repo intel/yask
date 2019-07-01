@@ -164,7 +164,7 @@ namespace yask {
             string cond = ee->getCond()->accept(this);
 
             // pseudo-code format.
-            _os << " IF (" << cond << ")";
+            _os << " IF_DOMAIN (" << cond << ")";
         }
         if (ee->getStepCond()) {
             string cond = ee->getStepCond()->accept(this);
@@ -263,7 +263,7 @@ namespace yask {
 
         // Try top-down on whole expression.
         // Example: '-a' creates no immediate output,
-        // and '-(a)' is saved in _exprStr.
+        // and '-(a)' is returned.
         string res = trySimplePrint(ue, false);
         if (res.length())
             return res;
@@ -272,7 +272,7 @@ namespace yask {
         // Example: '-(a * b)' might output the following:
         // temp1 = a * b;
         // temp2 = -temp1;
-        // with 'temp2' saved in _exprStr.
+        // with 'temp2' returned.
         string rhs = ue->getRhs()->accept(this);
         makeNextTempVar(res, ue) << ue->getOpStr() << rhs << _ph.getLineSuffix();
         return res;
@@ -283,7 +283,7 @@ namespace yask {
 
         // Try top-down on whole expression.
         // Example: 'a/b' creates no immediate output,
-        // and 'a/b' is saved in _exprStr.
+        // and 'a/b' is returned.
         string res = trySimplePrint(be, false);
         if (res.length())
             return res;
@@ -293,7 +293,7 @@ namespace yask {
         // temp1 = a * b;
         // temp2 = b * c;
         // temp3 = temp1 / temp2;
-        // with 'temp3' saved in _exprStr.
+        // with 'temp3' returned.
         string lhs = be->getLhs()->accept(this);
         string rhs = be->getRhs()->accept(this);
         makeNextTempVar(res, be) << lhs << ' ' << be->getOpStr() << ' ' << rhs << _ph.getLineSuffix();
@@ -339,7 +339,7 @@ namespace yask {
                 string args;
                 auto& ops = fe->getOps();
                 for (auto ep : ops)
-                    args += ", " + ep->accept(this); // sets _exprStr;
+                    args += ", " + ep->accept(this);
 
                 // Make 2 temp vars.
                 string res2;
@@ -378,7 +378,7 @@ namespace yask {
 
         // Try top-down on whole expression.
         // Example: 'a*b' creates no immediate output,
-        // and 'a*b' is saved in _exprStr.
+        // and 'a*b' is returned.
         string res = trySimplePrint(ce, false);
         if (res.length())
             return res;
@@ -388,7 +388,7 @@ namespace yask {
         // temp1 = a + b;
         // temp2 = temp1 + c;
         // temp3 = temp2 = d;
-        // with 'temp3' left in _exprStr;
+        // with 'temp3' returned.
         auto& ops = ce->getOps();
         assert(ops.size() > 1);
         string lhs, exStr;
@@ -438,7 +438,7 @@ namespace yask {
 
         // Assign RHS to a temp var.
         string tmp;
-        makeNextTempVar(tmp, rp) << rhs << _ph.getLineSuffix(); // sets _exprStr.
+        makeNextTempVar(tmp, rp) << rhs << _ph.getLineSuffix();
 
         // Comment about update.
         varPointPtr gpp = ee->getLhs();
@@ -448,7 +448,7 @@ namespace yask {
         // Null ptr => no condition.
         if (ee->getCond()) {
             string cond = ee->getCond()->makeStr();
-            _os << " IF (" << cond << ")";
+            _os << " IF_DOMAIN (" << cond << ")";
         }
         if (ee->getStepCond()) {
             string cond = ee->getStepCond()->makeStr();
@@ -657,7 +657,7 @@ namespace yask {
             if (eq->cond.get()) {
                 string condStr = eq->cond->makeStr();
                 os << endl << " // Valid under the following domain condition:" << endl <<
-                    ph.getLinePrefix() << "IF " << condStr << ph.getLineSuffix();
+                    ph.getLinePrefix() << "IF_DOMAIN " << condStr << ph.getLineSuffix();
             }
             if (eq->step_cond.get()) {
                 string condStr = eq->step_cond->makeStr();

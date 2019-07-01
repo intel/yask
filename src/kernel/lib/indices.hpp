@@ -42,7 +42,7 @@ namespace yask {
 
         // Max number of indices that can be held.
         // Note use of "+max_idxs" in code below to avoid compiler
-        // trying to take a reference to it, resulting in a undefined
+        // trying to take a reference to it, resulting in an undefined
         // symbol (sometimes).
         static constexpr int max_idxs = MAX_DIMS;
 

@@ -161,9 +161,33 @@ namespace yask {
     }; // yk_factory.
 
     /// Kernel environment.
+    /**
+       Created via yk_factory::new_env().
+    */
     class yk_env {
     public:
         virtual ~yk_env() {}
+
+        /// Set object to receive debug output.
+        virtual void
+        set_debug_output(yask_output_ptr debug
+                         /**< [out] Pointer to object to receive debug output.
+                            See \ref yask_output_factory. */ ) =0;
+
+        /// Get object to receive debug output.
+        /**
+           Returns pointer to \ref yask_output set via set_debug_output
+           or pointer to a \ref yask_stdout_output if not set.
+        */
+        virtual yask_output_ptr
+        get_debug_output() const =0;
+
+        /// Enable or disable additional debug tracing.
+        /**
+           Must also compile with general tracing and/or memory-access tracing enabled.
+        */
+        virtual void
+        set_trace_enabled(bool enable) =0;
 
         /// Get number of MPI ranks.
         /**

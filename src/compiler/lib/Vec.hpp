@@ -199,12 +199,11 @@ namespace yask {
     };
 
     // Define methods for printing a vectorized version of the stencil.
-    class VecPrintHelper : public PrintHelper {
+    class VecPrintHelper {
     protected:
         VecInfoVisitor& _vv;
         bool _reuseVars; // if true, load to a local var; else, reload on every access.
-        bool _definedNA;           // NA var defined.
-        map<VarPoint, string> _vecVars; // vecs that are already constructed.
+        map<VarPoint, string> _vecVars; // vecs that are already constructed (key is var point).
         map<string, string> _elemVars; // elems that are already read (key is read stmt).
 
         // Print access to an aligned vector block.
@@ -240,29 +239,13 @@ namespace yask {
 
     public:
         VecPrintHelper(VecInfoVisitor& vv,
-                       const CompilerSettings& settings,
-                       const Dimensions& dims,
-                       const CounterVisitor* cv,
-                       const string& varPrefix,
-                       const string& varType,
-                       const string& linePrefix,
-                       const string& lineSuffix,
                        bool reuseVars = true) :
-            PrintHelper(settings, dims, cv, varPrefix, varType, linePrefix, lineSuffix),
-            _vv(vv), _reuseVars(reuseVars), _definedNA(false) { }
+            _vv(vv), _reuseVars(reuseVars) { }
         virtual ~VecPrintHelper() {}
 
         // get fold info.
         virtual const IntTuple& getFold() const {
             return _vv.getFold();
-        }
-
-        // Add a N/A var, just for readability.
-        virtual void makeNA(ostream& os) {
-            if (!_definedNA) {
-                os << _linePrefix << "const int NA = 0; // indicates element not used." << endl;
-                _definedNA = true;
-            }
         }
 
         // Return point info.
@@ -271,23 +254,24 @@ namespace yask {
         }
 
         // Access cached values.
-        virtual void savePointVar(const VarPoint& gp, string var) {
+        virtual const string* savePointVar(const VarPoint& gp, const string& var) {
             _vecVars[gp] = var;
+            return &_vecVars.at(gp);
         }
-        virtual string* lookupPointVar(const VarPoint& gp) {
+        virtual const string* lookupPointVar(const VarPoint& gp) {
             if (_vecVars.count(gp))
                 return &_vecVars.at(gp);
             return 0;
         }
-
-        // Print any needed memory reads and/or constructions to 'os'.
-        // Return code containing a vector of var points.
-        virtual string readFromPoint(ostream& os, const VarPoint& gp);
-
-        // Print any immediate memory writes to 'os'.
-        // Return code to update a vector of var points or null string
-        // if all writes were printed.
-        virtual string writeToPoint(ostream& os, const VarPoint& gp, const string& val);
+        virtual const string* saveElemVar(const string& expr, const string& var) {
+            _elemVars[expr] = var;
+            return &_elemVars.at(expr);
+        }
+        virtual const string* lookupElemVar(const string& expr) {
+            if (_elemVars.count(expr))
+                return &_elemVars.at(expr);
+            return 0;
+        }
     };
 
     // A visitor that reorders exprs based on vector info.

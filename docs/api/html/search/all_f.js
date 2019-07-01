@@ -5,7 +5,7 @@ var searchData=
   ['set_5fblock_5fsize',['set_block_size',['../classyask_1_1yk__solution.html#abd3c7317bf1b397f332962d658f38839',1,'yask::yk_solution']]],
   ['set_5fcluster_5fmult',['set_cluster_mult',['../classyask_1_1yc__solution.html#a45cb1df4af6886e82f98904473873272',1,'yask::yc_solution']]],
   ['set_5fcond',['set_cond',['../classyask_1_1yc__equation__node.html#ac264942915dfb99fcfc9578873109bdb',1,'yask::yc_equation_node']]],
-  ['set_5fdebug_5foutput',['set_debug_output',['../classyask_1_1yc__solution.html#aff540803d358a5dcd304f09c522ec867',1,'yask::yc_solution::set_debug_output()'],['../classyask_1_1yk__solution.html#aa315469b5836e531425836f4fc5eff1c',1,'yask::yk_solution::set_debug_output()']]],
+  ['set_5fdebug_5foutput',['set_debug_output',['../classyask_1_1yc__solution.html#aff540803d358a5dcd304f09c522ec867',1,'yask::yc_solution::set_debug_output()'],['../classyask_1_1yk__env.html#a313519caed64266832618f0b00e8f45f',1,'yask::yk_env::set_debug_output()'],['../classyask_1_1yk__solution.html#aa315469b5836e531425836f4fc5eff1c',1,'yask::yk_solution::set_debug_output()']]],
   ['set_5fdefault_5fnuma_5fpreferred',['set_default_numa_preferred',['../classyask_1_1yk__solution.html#ac8bde8dfc73219cec84ad3033faabb90',1,'yask::yk_solution']]],
   ['set_5fdependency_5fchecker_5fenabled',['set_dependency_checker_enabled',['../classyask_1_1yc__solution.html#ac181c24ab7af945318a055cef3b52ee6',1,'yask::yc_solution']]],
   ['set_5fdescription',['set_description',['../classyask_1_1yc__solution.html#a3cc13f5daf402805f9b1f66996d9d6d3',1,'yask::yc_solution']]],
@@ -38,6 +38,7 @@ var searchData=
   ['set_5fstep_5fdim',['set_step_dim',['../classyask_1_1yc__solution.html#ad234ecd4964bcb57b1876be87baf57bd',1,'yask::yc_solution']]],
   ['set_5fstep_5fwrap',['set_step_wrap',['../classyask_1_1yk__solution.html#af9b7c6f23e3190f3958fa1843fd0cba0',1,'yask::yk_solution']]],
   ['set_5ftarget',['set_target',['../classyask_1_1yc__solution.html#a1c03fc69e306a700de8c5ae3973229c2',1,'yask::yc_solution']]],
+  ['set_5ftrace_5fenabled',['set_trace_enabled',['../classyask_1_1yk__env.html#a1705f55210c095cec5d8347bacd24c57',1,'yask::yk_env']]],
   ['set_5fvalue',['set_value',['../classyask_1_1yc__const__number__node.html#a8e1cf3c96519e6f9f8729e5736d791e3',1,'yask::yc_const_number_node']]],
   ['soln_5fmap',['soln_map',['../classyask_1_1yc__solution__base.html#ab5607f329a35a073145389a4f8cb06b5',1,'yask::yc_solution_base']]]
 ];

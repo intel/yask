@@ -809,7 +809,7 @@ namespace yask {
         IntTuple _offsets;
 
         // Simple value for each expr that is a const, e.g.,
-        // "w=3" from above example.
+        // "n=3" from above example.
         // Set in ctor and modified via setArgOffset/Const().
         IntTuple _consts;
 
@@ -835,7 +835,6 @@ namespace yask {
         const Var* getVar() const { return _var; }
         Var* getVar() { return _var; }
         virtual const string& getVarName() const;
-        virtual string getVarPtr() const;
         virtual bool isVarFoldable() const;
         virtual const indexExprPtrVec& getDims() const;
 
@@ -938,20 +937,6 @@ namespace yask {
         // APIs.
         virtual yc_var* get_var();
     };
-} // namespace yask.
-
-// Define hash function for VarPoint for unordered_{set,map}.
-namespace std {
-    using namespace yask;
-
-    template <> struct hash<VarPoint> {
-        size_t operator()(const VarPoint& k) const {
-            return hash<string>{}(k.makeStr());
-        }
-    };
-}
-
-namespace yask {
 
     // Equality operator for a var point.
     // This defines the LHS as equal to the RHS; it is NOT
@@ -995,7 +980,7 @@ namespace yask {
         void setStepCond(boolExprPtr step_cond) { _step_cond = step_cond; }
         virtual string accept(ExprVisitor* ev);
         static string exprOpStr() { return "EQUALS"; }
-        static string condOpStr() { return "IF"; }
+        static string condOpStr() { return "IF_DOMAIN"; }
         static string stepCondOpStr() { return "IF_STEP"; }
 
         // Get pointer to var on LHS or NULL if not set.
@@ -1046,3 +1031,13 @@ namespace yask {
 
 } // namespace yask.
 
+// Define hash function for VarPoint for unordered_{set,map}.
+namespace std {
+    using namespace yask;
+
+    template <> struct hash<VarPoint> {
+        size_t operator()(const VarPoint& k) const {
+            return hash<string>{}(k.makeStr());
+        }
+    };
+}

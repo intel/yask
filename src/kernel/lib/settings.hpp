@@ -50,6 +50,12 @@ namespace yask {
 
     public:
 
+        // Output stream for messages.
+        yask_output_ptr _debug;
+
+        // Is tracing enabled?
+        bool _trace = false;
+
         // MPI vars.
         MPI_Comm comm = MPI_COMM_NULL; // global communicator.
         MPI_Group group = MPI_GROUP_NULL;
@@ -65,7 +71,10 @@ namespace yask {
         // OMP vars.
         int max_threads=0;      // initial value from OMP.
 
-        KernelEnv() { }
+        KernelEnv() {
+            yask_output_factory yof;
+            set_debug_output(yof.new_stdout_output());
+        }
         virtual ~KernelEnv() { }
 
         // Init MPI, OMP, etc.
@@ -94,6 +103,18 @@ namespace yask {
         }
         virtual void global_barrier() const {
             MPI_Barrier(comm);
+        }
+        virtual yask_output_ptr get_debug_output() const {
+            return _debug;
+        }
+        virtual void set_debug_output(yask_output_ptr debug) {
+            _debug = debug;
+        }
+        virtual bool is_trace_enabled() const {
+            return _trace;
+        }
+        virtual void set_trace_enabled(bool enable) {
+            _trace = enable;
         }
     };
     typedef std::shared_ptr<KernelEnv> KernelEnvPtr;
@@ -188,14 +209,11 @@ namespace yask {
     // of these vars can be set via cmd-line options and/or APIs.
     class KernelSettings {
 
-    protected:
-
-        // Make a null output stream.
-        // TODO: put this somewhere else.
+         // Null stream to throw away debug info.
         yask_output_factory yof;
         yask_output_ptr nullop = yof.new_null_output();
-
-    public:
+        
+   public:
 
         // Ptr to problem dimensions (NOT sizes), folding, etc.
         // This is solution info from the YASK compiler.
@@ -220,7 +238,6 @@ namespace yask {
         IdxTuple _num_ranks;       // number of ranks in each dim.
         IdxTuple _rank_indices;    // my rank index in each dim.
         bool find_loc = true;      // whether my rank index needs to be calculated.
-        int msg_rank = 0;          // rank that prints informational messages.
         bool overlap_comms = true; // overlap comms with computation.
         bool use_shm = false;      // use shared memory if possible.
         idx_t _min_exterior = 0;   // minimum size of MPI exterior to calculate.
@@ -232,7 +249,8 @@ namespace yask {
         bool bind_block_threads = false; // Bind block threads to indices.
 
         // Var behavior.
-        bool _step_wrap = false; // Allow invalid step indices to alias to valid ones.
+        bool _step_wrap = false; // Allow invalid step indices to alias to valid ones (set via APIs only).
+        bool _allow_addl_pad = true; // Allow extending padding beyond what's needed for alignment.
         
         // Stencil-dim posn in which to apply block-thread binding.
         // TODO: make this a cmd-line parameter.
@@ -245,7 +263,6 @@ namespace yask {
         
         // Debug.
         bool force_scalar = false; // Do only scalar ops.
-        bool _trace = false;       // Print verbose tracing.
 
         // NUMA settings.
         int _numa_pref = NUMA_PREF;
@@ -561,9 +578,6 @@ namespace yask {
     struct KernelState {
         virtual ~KernelState() { }
 
-        // Output stream for messages.
-        yask_output_ptr _debug;
-
         // Environment (mostly MPI).
         KernelEnvPtr _env;
 
@@ -662,12 +676,12 @@ namespace yask {
         MPIInfoPtr& get_mpi_info() { return _state->_mpiInfo; }
         const MPIInfoPtr& get_mpi_info() const { return _state->_mpiInfo; }
         bool use_pack_tuners() const { return _state->_use_pack_tuners; }
-        virtual yask_output_ptr get_debug_output() const { return _state->_debug; }
-        virtual void set_debug_output(yask_output_ptr debug) { _state->_debug = debug; }
-
-        // Set debug output to cout if my_rank == msg_rank
-        // or a null stream otherwise.
-        std::ostream& set_ostr();
+        virtual yask_output_ptr get_debug_output() const {
+            return _state->_env->get_debug_output();
+        }
+        virtual void set_debug_output(yask_output_ptr debug) {
+            _state->_env->set_debug_output(debug);
+        }
 
         // Set number of threads w/o using thread-divisor.
         // Return number of threads.

@@ -58,7 +58,8 @@ namespace yask {
     // Internal APIs.
     GET_VAR_API(_get_left_wf_ext, gb()._left_wf_exts[posn], true, true, true, false)
     GET_VAR_API(_get_right_wf_ext, gb()._right_wf_exts[posn], true, true, true, false)
-    GET_VAR_API(_get_vec_len, gb()._vec_lens[posn], true, true, true, true)
+    GET_VAR_API(_get_soln_vec_len, gb()._soln_vec_lens[posn], true, true, true, true)
+    GET_VAR_API(_get_var_vec_len, gb()._var_vec_lens[posn], true, true, true, true)
     GET_VAR_API(_get_rank_offset, gb()._rank_offsets[posn], true, true, true, true)
     GET_VAR_API(_get_local_offset, gb()._local_offsets[posn], true, true, true, false)
 
@@ -107,8 +108,8 @@ namespace yask {
     // changes prohibited thru the APIs.
     SET_VAR_API(_set_rank_offset, gb()._rank_offsets[posn] = n, true, true, true)
     SET_VAR_API(_set_local_offset, gb()._local_offsets[posn] = n;
-                 assert(imod_flr(n, gb()._vec_lens[posn]) == 0);
-                 gb()._vec_local_offsets[posn] = n / gb()._vec_lens[posn], true, true, true)
+                 assert(imod_flr(n, gb()._var_vec_lens[posn]) == 0);
+                 gb()._vec_local_offsets[posn] = n / gb()._var_vec_lens[posn], true, true, true)
     SET_VAR_API(_set_domain_size, gb()._domains[posn] = n; resize(), true, true, true)
     SET_VAR_API(_set_left_pad_size, gb()._actl_left_pads[posn] = n; resize(), true, true, true)
     SET_VAR_API(_set_right_pad_size, gb()._actl_right_pads[posn] = n; resize(), true, true, true)
@@ -126,12 +127,10 @@ namespace yask {
     SET_VAR_API(set_right_min_pad_size, gb()._req_right_pads[posn] = n; resize(), false, true, false)
     SET_VAR_API(set_min_pad_size, gb()._req_left_pads[posn] = gb()._req_right_pads[posn] = n; resize(),
                  false, true, false)
-    SET_VAR_API(set_left_extra_pad_size,
-                 set_left_min_pad_size(posn, gb()._left_halos[posn] + n), false, true, false)
-    SET_VAR_API(set_right_extra_pad_size,
-                 set_right_min_pad_size(posn, gb()._right_halos[posn] + n), false, true, false)
-    SET_VAR_API(set_extra_pad_size, set_left_extra_pad_size(posn, n);
-                 set_right_extra_pad_size(posn, n), false, true, false)
+    SET_VAR_API(set_left_extra_pad_size, gb()._req_left_epads[posn] = n; resize(), false, true, false)
+    SET_VAR_API(set_right_extra_pad_size, gb()._req_right_epads[posn] = n; resize(), false, true, false)
+    SET_VAR_API(set_extra_pad_size, gb()._req_left_epads[posn] = gb()._req_right_epads[posn] = n; resize(),
+                false, true, false)
     SET_VAR_API(set_first_misc_index, gb()._local_offsets[posn] = n, false, false, gb()._is_user_var)
 #undef COMMA
 #undef SET_VAR_API
@@ -154,7 +153,7 @@ namespace yask {
                 return false;
 
             // Same folding?
-            if (gb()._vec_lens[i] != op->gb()._vec_lens[i])
+            if (gb()._var_vec_lens[i] != op->gb()._var_vec_lens[i])
                 return false;
 
             // Same dim sizes?

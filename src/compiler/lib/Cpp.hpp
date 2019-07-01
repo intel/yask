@@ -65,6 +65,19 @@ namespace yask {
             return formatReal(v);
         }
 
+        // Format a pointer to a var.
+        virtual string getVarPtr(const VarPoint& gp) {
+            const auto* var = gp.getVar();
+            string gname = var->getName();
+            string expr = "(static_cast<_context_type::" + gname + "_type*>(_context_data->";
+            if (var->isScratch())
+                expr += gname + "_list[region_thread_idx]";
+            else
+                expr += gname + "_ptr";
+            expr += ".get()->gbp()))";
+            return expr;
+        }
+        
         // Make call for a point.
         // This is a utility function used for both reads and writes.
         virtual string makePointCall(ostream& os,
@@ -83,7 +96,8 @@ namespace yask {
     /////////// Vector code /////////////
 
     // Output generic C++ vector code for YASK.
-    class CppVecPrintHelper : public VecPrintHelper {
+    class CppVecPrintHelper : public CppPrintHelper,
+                              public VecPrintHelper {
 
     public:
         CppVecPrintHelper(VecInfoVisitor& vv,
@@ -94,8 +108,9 @@ namespace yask {
                           const string& varType,
                           const string& linePrefix,
                           const string& lineSuffix) :
-            VecPrintHelper(vv, settings, dims, cv,
-                           varPrefix, varType, linePrefix, lineSuffix) { }
+            CppPrintHelper(settings, dims, cv,
+                           varPrefix, varType, linePrefix, lineSuffix),
+            VecPrintHelper(vv) { }
         
     protected:
 
@@ -179,6 +194,16 @@ namespace yask {
 
     public:
 
+
+        // Print any needed memory reads and/or constructions to 'os'.
+        // Return code containing a vector of var points.
+        virtual string readFromPoint(ostream& os, const VarPoint& gp) override;
+
+        // Print any immediate memory writes to 'os'.
+        // Return code to update a vector of var points or null string
+        // if all writes were printed.
+        virtual string writeToPoint(ostream& os, const VarPoint& gp, const string& val) override;
+
         // Print code to set pointers of aligned reads.
         virtual void printBasePtrs(ostream& os);
 
@@ -188,16 +213,6 @@ namespace yask {
         // Print prefetches for each base pointer.
         // Print only 'ptrVar' if provided.
         virtual void printPrefetches(ostream& os, bool ahead, string ptrVar = "");
-
-        // Print any needed memory reads and/or constructions to 'os'.
-        // Return code containing a vector of var points.
-        virtual string readFromPoint(ostream& os, const VarPoint& gp);
-
-        // Print any immediate memory writes to 'os'.
-        // Return code to update a vector of var points or null string
-        // if all writes were printed.
-        virtual string writeToPoint(ostream& os, const VarPoint& gp,
-                                    const string& val);
 
         // print init of un-normalized indices.
         virtual void printElemIndices(ostream& os);
@@ -235,7 +250,11 @@ namespace yask {
 
         // A var access.
         virtual string visit(VarPoint* gp);
-    };
+
+        virtual string getVarPtr(VarPoint& gp) {
+            return _cvph.getVarPtr(gp);
+        }
+};
 
     // Outputs the loop-invariant variables for an inner loop.
     class CppLoopVarPrintVisitor : public PrintVisitorBase {

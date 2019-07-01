@@ -1508,9 +1508,9 @@ namespace yask {
                     gp->_set_rank_offset(posn, rofs);
 
                     // Must use the vector len in this var, which may
-                    // not be the same as vec_lens[posn] because var
+                    // not be the same as soln fold length because var
                     // may not be vectorized.
-                    auto vlen = gp->_get_vec_len(posn);
+                    auto vlen = gp->_get_var_vec_len(posn);
                     
                     // See diagram in yk_var defn.  Local offset is the
                     // offset of this var relative to the beginning of the

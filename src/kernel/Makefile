@@ -364,6 +364,7 @@ ifneq ($(filter %icpc %icc,$(notdir $(YK_CXX))),)  # Intel compiler
 
 else # not Intel compiler
  YK_CXXFLAGS	+=	$(GCC_ISA) -Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
+ SWIG_CXXFLAGS	:=	$(SWIG_GCCFLAGS)
  MACROS		+=	USE_ALWAYS_INLINE
 
 endif # compiler.
@@ -680,7 +681,8 @@ py-api-no-yc:
 
 # Validation runs for each binary.
 DEF_TEST_ARGS := -ranks $(ranks) -stencil $(YK_STENCIL) -arch $(YK_ARCH) -v \
-	-trial_steps 2 -max_threads 6 -block_threads 2 -no-use_shm -overlap_comms
+	-trial_steps 2 -max_threads 6 -block_threads 2 -no-use_shm -overlap_comms \
+	-ep 0 -mp 0 -no-allow_addl_padding
 
 val0	:=	$(DEF_TEST_ARGS) -l 48 -r 32 -b 24 -rt 0 $(EXTRA_TEST_ARGS)
 val1	:=	$(DEF_TEST_ARGS) -l 48 -r 32 -b 24 -mb 16 -rt 1 $(EXTRA_TEST_ARGS)
@@ -720,11 +722,11 @@ api-tests:
 
 # Run several stencils using built-in validation.
 # NB: set arch var as applicable.
-# NB: save some compile time by using YK_CXXOPT=-O2.
+# NB: save some compile time by using YK_CXXOPT=-O2 or -O1.
 # These tests are focused on the kernel and not the compiler.
 # For testing both the kernel and compiler in various combinations,
 # run the tests from the top-level Makefile.
-STENCIL_TEST_ARGS := yc-and-yk-test real_bytes=8 allow_new_var_types=0
+STENCIL_TEST_ARGS := yc-and-yk-test real_bytes=8 allow_new_var_types=0 check=1 trace=1
 stencil-tests:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_empty step_dim=t domain_dims=d1,d2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_empty_2d
@@ -886,6 +888,7 @@ help:
 	echo " $(MAKE) clean; $(MAKE) -j stencil=awp EXTRA_YK_CXXFLAGS=-qopt-report"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis fold='x=1,y=2,z=4' cluster='x=2'"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis radius=4 real_bytes=8 # DP FP."; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=cube SHELL=/bin/bash  # Specify shell to use (if pipefail gives error)"; \
 	echo " "; \
 	echo "Example performance builds of kernel API for C++ and Python apps:"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd yk-api"; \
@@ -897,6 +900,6 @@ help:
 	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' trace_mem=1 # Trace all mem accesses with '-trace'."; \
 	echo " "; \
 	echo "Example builds with test runs:"; \
-	echo " $(MAKE) -j all # Normal full API and stencil tests"; \
-	echo " $(MAKE) -j all YK_CXXOPT=-O2 YK_CXX=g++ mpi=0 ranks=1 # g++ w/o MPI."; \
-	echo " $(MAKE) -j all YK_CXXOPT=-O1 ranks=4 check=1 # Run 4 ranks w/checking."
+	echo " $(MAKE) -j all   # Normal full API and stencil tests"; \
+	echo " $(MAKE) -j all YK_CXX=g++ mpi=0 ranks=1   # Test g++ w/o MPI."; \
+	echo " $(MAKE) -j all YK_CXXOPT=-O1 ranks=4   # Test on 4 ranks."
