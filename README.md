@@ -73,8 +73,8 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
 * Version 3.01.00 moved the `-trace` and `-msg_rank` options from the kernel
   library to the kernel utility, so those options may no longer be set via
   yk_solution::apply_command_line_options(). APIs to set the corresponding
-  options are now in \ref yk_env. This allows configuring the debug output
-  before a \ref yk_solution is created.
+  options are now in `yk_env`. This allows configuring the debug output
+  before a `yk_solution` is created.
 
 * Version 3.00.00 was a major release with a number of backward-compatibility notices:
 
