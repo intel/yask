@@ -605,17 +605,11 @@ namespace yask {
         }
         virtual std::vector<std::string> get_domain_dim_names() const {
             STATE_VARS_CONST(this);
-            std::vector<std::string> ddims;
-            for (auto& dim : dims->_domain_dims.getDims())
-                ddims.push_back(dim.getName());
-            return ddims;
+            return domain_dims.getDimNames();
         }
         virtual std::vector<std::string> get_misc_dim_names() const {
             STATE_VARS_CONST(this);
-            std::vector<std::string> mdims;
-            for (auto& dim : dims->_misc_dims.getDims())
-                mdims.push_back(dim.getName());
-            return mdims;
+            return misc_dims.getDimNames();
         }
 
         virtual idx_t get_first_rank_domain_index(const std::string& dim) const;

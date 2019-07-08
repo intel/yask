@@ -183,6 +183,12 @@ namespace yask {
         const std::vector<Scalar<T>>& getDims() const {
             return _q;
         }
+        typename std::vector<Scalar<T>>::const_iterator begin() const {
+            return _q.begin();
+        }
+        typename std::vector<Scalar<T>>::const_iterator end() const {
+            return _q.end();
+        }
 
         // Clear data.
         void clear() {

@@ -209,7 +209,7 @@ namespace yask {
                                      " cannot have a step condition");
 
             // LHS must have all domain dims.
-            for (auto& dd : dims._domainDims.getDims()) {
+            for (auto& dd : dims._domainDims) {
                 auto& dname = dd.getName();
                 numExprPtr dexpr = op1->getArg(dname);
                 if (!dexpr)
@@ -580,7 +580,7 @@ namespace yask {
             // dim is a simple offset.  For example, in var dim 'x', the
             // index in the corresponding posn must be 'x', 'x+n', or 'x-n'.
             int fdoffsets = 0;
-            for (auto fdim : _dims._foldGT1.getDims()) {
+            for (auto fdim : _dims._foldGT1) {
                 auto& fdname = fdim.getName();
                 if (gp->getArgOffsets().lookup(fdname))
                     fdoffsets++;

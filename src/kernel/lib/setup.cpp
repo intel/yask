@@ -451,7 +451,7 @@ namespace yask {
         max_halos = dims->_domain_dims;
 
         // Loop through each domain dim.
-        for (auto& dim : domain_dims.getDims()) {
+        for (auto& dim : domain_dims) {
             auto& dname = dim.getName();
             
             // Each non-scratch var.
@@ -513,7 +513,7 @@ namespace yask {
         state->_use_pack_tuners = opts->_allow_pack_tuners && (tb_steps == 0) && (stPacks.size() > 1);
 
         // Calculate angles and related settings.
-        for (auto& dim : domain_dims.getDims()) {
+        for (auto& dim : domain_dims) {
             auto& dname = dim.getName();
             auto rnsize = opts->_region_sizes[dname];
             auto rksize = opts->_rank_sizes[dname];
@@ -565,7 +565,7 @@ namespace yask {
             assert(gp);
 
             // Loop through each domain dim.
-            for (auto& dim : domain_dims.getDims()) {
+            for (auto& dim : domain_dims) {
                 auto& dname = dim.getName();
                 if (gp->is_dim_used(dname)) {
                     // Set extensions to be the same as the global ones.

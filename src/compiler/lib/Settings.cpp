@@ -127,7 +127,7 @@ namespace yask {
 
         // Extract domain fold lengths based on cmd-line options.
         IntTuple foldOpts;
-        for (auto& dim : _domainDims.getDims()) {
+        for (auto& dim : _domainDims) {
             auto& dname = dim.getName();
 
             // Was folding specified for this dim?
@@ -193,7 +193,7 @@ namespace yask {
                 // sizes.
                 else {
                     IntTuple innerOpts;
-                    for (auto& dim : _domainDims.getDims()) {
+                    for (auto& dim : _domainDims) {
                         auto& dname = dim.getName();
                         if (dname == _innerDim)
                             continue;
@@ -208,7 +208,7 @@ namespace yask {
                 }
 
                 // Put them into the fold.
-                for (auto& dim : _domainDims.getDims()) {
+                for (auto& dim : _domainDims) {
                     auto& dname = dim.getName();
                     if (dname == _innerDim)
                         _fold[dname] = inner_sz;
@@ -227,7 +227,7 @@ namespace yask {
         }
 
         // Set foldGT1.
-        for (auto i : _fold.getDims()) {
+        for (auto i : _fold) {
             auto& dname = i.getName();
             auto& val = i.getVal();
             if (val > 1)
@@ -254,7 +254,7 @@ namespace yask {
         }
 
         // Create final cluster lengths based on cmd-line options.
-        for (auto& dim : settings._clusterOptions.getDims()) {
+        for (auto& dim : settings._clusterOptions) {
             auto& dname = dim.getName();
             int mult = dim.getVal();
 
