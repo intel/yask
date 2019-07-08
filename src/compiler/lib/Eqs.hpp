@@ -296,9 +296,7 @@ namespace yask {
                             }
 
                             // Swap them.
-                            auto temp = oi;
-                            oi = oj;
-                            oj = temp;
+                            _all.swap(i, j);
 
                             // Start over at index i.
                             done = false;

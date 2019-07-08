@@ -179,50 +179,91 @@ namespace yask {
 
     // Set that retains order of things added.
     // Or, vector that allows insertion if element doesn't exist.
-    // TODO: hide vector inside class and provide proper accessor methods.
     template <typename T>
-    class vector_set : public std::vector<T> {
-        std::map<T, size_t> _posn;
-
-    private:
-        virtual void push_front(const T& val) {
-            THROW_YASK_EXCEPTION("push_front() not allowed");
-        }
+    class vector_set final {
+        std::vector<T> _items;     // no duplicates.
+        std::map<T, size_t> _posn; // _posn[_items[i]] = i;
 
     public:
         vector_set() {}
-        virtual ~vector_set() {}
+        ~vector_set() {}
 
-        // Copy ctor.
-        vector_set(const vector_set& src) :
-            std::vector<T>(src), _posn(src._posn) {}
+        // Default assign and copy ctor are okay.
 
-        virtual size_t count(const T& val) const {
+        // STL methods.
+        // Do not provide any non-const iterators or element access to prevent
+        // breaking _items <-> _posn relationship.
+        typename std::vector<T>::const_iterator begin() const {
+            return _items.begin();
+        }
+        typename std::vector<T>::const_iterator end() const {
+            return _items.end();
+        }
+        const T& at(size_t i) const {
+            return _items.at(i);
+        }
+        const T& operator[](size_t i) const {
+            return _items[i];
+        }
+        const T& front() const {
+            return _items.front();
+        }
+        const T& back() const {
+            return _items.back();
+        }
+        size_t size() const {
+            assert(_items.size() == _posn.size());
+            return _items.size();
+        }
+        bool empty() const {
+            return size() == 0 ;
+        }
+        size_t count(const T& val) const {
+            assert(_items.size() == _posn.size());
             return _posn.count(val);
         }
-        virtual void insert(const T& val) {
+        void insert(const T& val) {
+            assert(_items.size() == _posn.size());
             if (_posn.count(val) == 0) {
-                std::vector<T>::push_back(val);
-                _posn[val] = std::vector<T>::size() - 1;
+                _items.push_back(val);
+                _posn[val] = _items.size() - 1;
             }
+            assert(_items.size() == _posn.size());
         }
-        virtual void push_back(const T& val) {
-            insert(val);
+        void push_back(const T& val) {
+            insert(val);        // Does nothing if already exists.
         }
-        virtual void erase(const T& val) {
+        void erase(const T& val) {
             if (_posn.count(val) > 0) {
                 size_t op = _posn.at(val);
-                std::vector<T>::erase(std::vector<T>::begin() + op);
+                _items.erase(_items.begin() + op);
+
+                // Repair positions of items after 'val'.
                 for (auto pi : _posn) {
                     auto& p = pi.second;
                     if (p > op)
                         p--;
                 }
+                _posn.erase(val);
             }
+            assert(_items.size() == _posn.size());
         }
-        virtual void clear() {
-            std::vector<T>::clear();
+        void clear() {
+            _items.clear();
             _posn.clear();
+        }
+
+        // New methods.
+        void swap(size_t i, size_t j) {
+            assert(i < _items.size());
+            assert(j < _items.size());
+            if (i == j)
+                return;
+            T tmp = _items[i];
+            _items[i] = _items[j];
+            _items[j] = tmp;
+            _posn[_items[i]] = i;
+            _posn[_items[j]] = j;
         }
     };
 
