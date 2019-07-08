@@ -273,15 +273,16 @@ namespace yask {
             // Want to keep original order as much as possible.
             // Only reorder if dependencies are in conflict.
 
-            // Scan from beginning to end.
-            for (size_t i = 0; i < _all.size(); i++) {
-                auto& oi = _all.at(i);
+            // Scan from beginning to next-to-last.
+            for (size_t i = 0; i < _all.size() - 1; i++) {
 
                 // Repeat until no dependent found.
                 bool done = false;
                 while (!done) {
 
                     // Does obj[i] depend on any obj after it?
+                    auto& oi = _all.at(i);
+                    done = true;
                     for (size_t j = i+1; j < _all.size(); j++) {
                         auto& oj = _all.at(j);
 
@@ -303,7 +304,6 @@ namespace yask {
                             break;
                         }
                     }
-                    done = true;
                 }
             }
         }
