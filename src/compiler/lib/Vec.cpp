@@ -78,7 +78,7 @@ namespace yask {
                 // Find aligned vector indices and offsets
                 // for this one point.
                 IntTuple vecOffsets, vecLocation;
-                for (auto& dim : offsets.getDims()) {
+                for (auto& dim : offsets) {
                     auto& dname = dim.getName();
 
                     // length of this dimension in fold, if it exists.

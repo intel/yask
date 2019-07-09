@@ -275,7 +275,7 @@ namespace yask {
 
             // Pick better starting point if needed.
             if (!checkSizes(center_sizes)) {
-                for (auto dim : center_sizes.getDims()) {
+                for (auto dim : center_sizes) {
                     auto& dname = dim.getName();
                     auto& dval = dim.getVal();
                     if (dname != step_dim) {
@@ -352,7 +352,7 @@ namespace yask {
                 IdxTuple bsize(center_sizes);
                 bool ok = true;
                 int mdist = 0; // manhattan dist from center.
-                for (auto odim : ofs.getDims()) {
+                for (auto odim : ofs) {
                     auto& dname = odim.getName(); // a domain-dim name.
                     auto& dofs = odim.getVal(); // always [0..2].
 

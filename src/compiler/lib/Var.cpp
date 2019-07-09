@@ -141,7 +141,7 @@ namespace yask {
         }
 
         // Find the number of folded dims used in this var.
-        for (auto fdim : dims._foldGT1.getDims()) {
+        for (auto fdim : dims._foldGT1) {
             auto& fdname = fdim.getName();
 
             // Search for dim in var.
@@ -203,7 +203,7 @@ namespace yask {
                 for (auto& i1 : m1) {
                     auto& step = i1.first;
                     const IntTuple& ohalos = i1.second;
-                    for (auto& dim : ohalos.getDims()) {
+                    for (auto& dim : ohalos) {
                         auto& dname = dim.getName();
                         auto& val = dim.getVal();
                         
@@ -245,7 +245,7 @@ namespace yask {
         int l1Dist = 0;
 
         // Update halo vals.
-        for (auto& dim : offsets.getDims()) {
+        for (auto& dim : offsets) {
             auto& dname = dim.getName();
             int val = dim.getVal();
             bool left = val <= 0;
@@ -283,7 +283,7 @@ namespace yask {
     // Update const indices based on 'indices'.
     void Var::updateConstIndices(const IntTuple& indices) {
 
-        for (auto& dim : indices.getDims()) {
+        for (auto& dim : indices) {
             auto& dname = dim.getName();
             int val = dim.getVal();
 

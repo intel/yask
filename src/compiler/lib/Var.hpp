@@ -244,7 +244,9 @@ namespace yask {
 
     // A list of vars.  This holds pointers to vars defined by the stencil
     // class in the order in which they are added via the INIT_VAR_* macros.
-    class Vars : public vector_set<Var*> {
+    class Vars {
+        vector_set<Var*> _vars;
+
     public:
 
         Vars() {}
@@ -252,11 +254,34 @@ namespace yask {
 
         // Copy ctor.
         // Copies list of var pointers, but not vars (shallow copy).
-        Vars(const Vars& src) : vector_set<Var*>(src) {}
+        Vars(const Vars& src) : _vars(src._vars) {}
+
+        // STL methods.
+        size_t size() const {
+            return _vars.size();
+        }
+        Var* at(size_t i) {
+            return _vars.at(i);
+        }
+        const Var* at(size_t i) const {
+            return _vars.at(i);
+        }
+        vector<Var*>::const_iterator begin() const {
+            return _vars.begin();
+        }
+        vector<Var*>::const_iterator end() const {
+            return _vars.end();
+        }
+        size_t count(Var* p) const {
+            return _vars.count(p);
+        }
+        void insert(Var* p) {
+            _vars.insert(p);
+        }
 
         // Determine whether each var can be folded.
         virtual void setFolding(const Dimensions& dims) {
-            for (auto gp : *this)
+            for (auto gp : _vars)
                 gp->setFolding(dims);
         }
     };

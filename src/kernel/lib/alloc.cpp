@@ -307,7 +307,7 @@ namespace yask {
                     IdxTuple my_halo_sizes, neigh_halo_sizes;
                     IdxTuple first_inner_idx, last_inner_idx;
                     IdxTuple first_outer_idx, last_outer_idx;
-                    for (auto& dim : domain_dims.getDims()) {
+                    for (auto& dim : domain_dims) {
                         auto& dname = dim.getName();
 
                         // Only consider domain dims that are used in this var.
@@ -415,7 +415,7 @@ namespace yask {
                     // to be so.
                     // TODO: add a heuristic to avoid increasing by a large factor.
                     if (var_vec_ok) {
-                        for (auto& dim : domain_dims.getDims()) {
+                        for (auto& dim : domain_dims) {
                             auto& dname = dim.getName();
                             if (gp->is_dim_used(dname)) {
                                 auto vlen = gp->_get_var_vec_len(dname);
@@ -853,7 +853,7 @@ namespace yask {
                     auto& gb = gp->gb();
 
                     // Loop through each domain dim.
-                    for (auto& dim : domain_dims.getDims()) {
+                    for (auto& dim : domain_dims) {
                         auto& dname = dim.getName();
 
                         if (gp->is_dim_used(dname)) {

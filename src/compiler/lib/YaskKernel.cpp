@@ -33,7 +33,7 @@ namespace yask {
     void YASKCppPrinter::printIndices(ostream& os) const {
         os << endl << " // Extract individual indices.\n";
         int i = 0;
-        for (auto& dim : _dims._stencilDims.getDims()) {
+        for (auto& dim : _dims._stencilDims) {
             auto& dname = dim.getName();
             os << " idx_t " << dname << " = idxs[" << i << "];\n";
             i++;
@@ -94,12 +94,12 @@ namespace yask {
         os << "\n// Number of domain dimensions:\n"
             "#define NUM_DOMAIN_DIMS " << _dims._domainDims.size() << "\n";
         int i = 0;
-        for (auto& dim : _dims._domainDims.getDims()) {
+        for (auto& dim : _dims._domainDims) {
             auto& dname = dim.getName();
             os << "#define DOMAIN_DIM_IDX_" << dname << " (" << (i++) << ")\n";
         }
         i = 0;
-        for (auto& dim : _dims._stencilDims.getDims()) {
+        for (auto& dim : _dims._stencilDims) {
             auto& dname = dim.getName();
             os << "#define STENCIL_DIM_IDX_" << dname << " (" << (i++) << ")\n";
         }
@@ -122,7 +122,7 @@ namespace yask {
         // Vec/cluster lengths.
         auto nvec = _dims._foldGT1.getNumDims();
         os << "\n// One vector fold: " << _dims._fold.makeDimValStr(" * ") << endl;
-        for (auto& dim : _dims._fold.getDims()) {
+        for (auto& dim : _dims._fold) {
             auto& dname = dim.getName();
             string ucDim = allCaps(dname);
             os << "#define VLEN_" << ucDim << " (" << dim.getVal() << ")" << endl;
@@ -168,7 +168,7 @@ namespace yask {
         os << endl;
         os << "// Cluster multipliers of vector folds: " <<
             _dims._clusterMults.makeDimValStr(" * ") << endl;
-        for (auto& dim : _dims._clusterMults.getDims()) {
+        for (auto& dim : _dims._clusterMults) {
             auto& dname = dim.getName();
             string ucDim = allCaps(dname);
             os << "#define CMULT_" << ucDim << " (" <<
@@ -910,24 +910,24 @@ namespace yask {
         os <<
             "    p->_step_dim = \"" << _dims._stepDim << "\";\n"
             "    p->_inner_dim = \"" << _dims._innerDim << "\";\n";
-        for (auto& dim : _dims._domainDims.getDims()) {
+        for (auto& dim : _dims._domainDims) {
             auto& dname = dim.getName();
             os << "    p->_domain_dims.addDimBack(\"" << dname << "\", 0);\n";
         }
-        for (auto& dim : _dims._stencilDims.getDims()) {
+        for (auto& dim : _dims._stencilDims) {
             auto& dname = dim.getName();
             os << "    p->_stencil_dims.addDimBack(\"" << dname << "\", 0);\n";
         }
-        for (auto& dim : _dims._miscDims.getDims()) {
+        for (auto& dim : _dims._miscDims) {
             auto& dname = dim.getName();
             os << "    p->_misc_dims.addDimBack(\"" << dname << "\", 0);\n";
         }
-        for (auto& dim : _dims._fold.getDims()) {
+        for (auto& dim : _dims._fold) {
             auto& dname = dim.getName();
             auto& dval = dim.getVal();
             os << "    p->_fold_pts.addDimBack(\"" << dname << "\", " << dval << ");\n";
         }
-        for (auto& dim : _dims._foldGT1.getDims()) {
+        for (auto& dim : _dims._foldGT1) {
             auto& dname = dim.getName();
             auto& dval = dim.getVal();
             os << "    p->_vec_fold_pts.addDimBack(\"" << dname << "\", " << dval << ");\n";
@@ -935,12 +935,12 @@ namespace yask {
         string ffi = (_dims._fold.isFirstInner()) ? "true" : "false";
         os << "    p->_fold_pts.setFirstInner(" << ffi << ");\n"
             "    p->_vec_fold_pts.setFirstInner(" << ffi << ");\n";
-        for (auto& dim : _dims._clusterPts.getDims()) {
+        for (auto& dim : _dims._clusterPts) {
             auto& dname = dim.getName();
             auto& dval = dim.getVal();
             os << "    p->_cluster_pts.addDimBack(\"" << dname << "\", " << dval << ");\n";
         }
-        for (auto& dim : _dims._clusterMults.getDims()) {
+        for (auto& dim : _dims._clusterMults) {
             auto& dname = dim.getName();
             auto& dval = dim.getVal();
             os << "    p->_cluster_mults.addDimBack(\"" << dname << "\", " << dval << ");\n";

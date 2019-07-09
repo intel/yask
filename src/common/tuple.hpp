@@ -125,6 +125,9 @@ namespace yask {
         void setVal(const T& val) { _val = val; }
 
         // Comparison ops.
+        // Compare name pointers and actual names in case there
+        // is more than one pool, which can happen when loading
+        // more than one dynamic lib.
         bool operator==(const Scalar& rhs) const {
             return _val == rhs._val &&
                 (_namep == rhs._namep || *_namep == *rhs._namep);
@@ -133,7 +136,7 @@ namespace yask {
             return (_val < rhs._val) ? true :
                 (_val > rhs._val) ? false :
                 (_namep == rhs._namep) ? false :
-                (*_namep < *rhs._namep) ? true : false;
+                (*_namep < *rhs._namep);
         }
     };
 
@@ -182,6 +185,12 @@ namespace yask {
         // Get iteratable contents.
         const std::vector<Scalar<T>>& getDims() const {
             return _q;
+        }
+        typename std::vector<Scalar<T>>::const_iterator begin() const {
+            return _q.begin();
+        }
+        typename std::vector<Scalar<T>>::const_iterator end() const {
+            return _q.end();
         }
 
         // Clear data.
@@ -251,10 +260,17 @@ namespace yask {
         // Return dim posn or -1 if it doesn't exist.
         // Lookup by name.
         int lookup_posn(const std::string& dim) const {
+
+            // First check pointers.
             for (size_t i = 0; i < _q.size(); i++) {
                 auto& s = _q[i];
-                
-                // Check for match of name.
+                if (s.getNamePtr() == &dim)
+                    return int(i);
+            }
+
+            // Then check full strings.
+            for (size_t i = 0; i < _q.size(); i++) {
+                auto& s = _q[i];
                 if (s.getName() == dim)
                     return int(i);
             }

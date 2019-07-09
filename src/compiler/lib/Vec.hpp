@@ -158,7 +158,7 @@ namespace yask {
 
             // calc footprint in each dim.
             map<const string, int> footprints;
-            for (auto& dim : _dims._fold.getDims()) {
+            for (auto& dim : _dims._fold) {
                 auto& dname = dim.getName();
 
                 // Make set of aligned vecs projected in this dir.
@@ -176,7 +176,7 @@ namespace yask {
                 separator << getNumPoints() <<
                 separator << getNumAlignedVecs() <<
                 separator << numBlends;
-            for (auto& dim : _dims._fold.getDims())
+            for (auto& dim : _dims._fold)
                 os << separator << footprints[dim.getName()];
             os << endl;
         }

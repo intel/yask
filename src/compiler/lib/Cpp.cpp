@@ -125,7 +125,7 @@ namespace yask {
                 // x=>x_elem, y=>(y_elem+2), z=>(z_elem+1) in var-point
                 // index args.
                 VarMap vMap;
-                for (auto& dim : vecPoint.getDims()) {
+                for (auto& dim : vecPoint) {
                     auto& dname = dim.getName();
                     int dofs = dim.getVal();
 
@@ -692,7 +692,7 @@ namespace yask {
         auto& fold = getFold();
         os << "\n // Element indices derived from vector indices.\n";
         int i = 0;
-        for (auto& dim : fold.getDims()) {
+        for (auto& dim : fold) {
             auto& dname = dim.getName();
             string ename = dname + _elemSuffix;
             string cap_dname = PrinterBase::allCaps(dname);

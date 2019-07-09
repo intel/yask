@@ -865,7 +865,7 @@ namespace yask {
 
         // Set given args to be given offsets.
         virtual void setArgOffsets(const IntTuple& offsets) {
-            for (auto ofs : offsets.getDims())
+            for (auto ofs : offsets)
                 setArgOffset(ofs);
         }
 

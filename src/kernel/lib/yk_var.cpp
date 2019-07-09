@@ -94,7 +94,7 @@ namespace yask {
         auto* dims = get_dims().get();
         const auto& domain_dims = dims->_domain_dims;
 
-        for (auto& d : domain_dims.getDims()) {
+        for (auto& d : domain_dims) {
             auto& dname = d.getName();
             if (!_ggb->is_dim_used(dname))
                 return false;

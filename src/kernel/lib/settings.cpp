@@ -290,7 +290,7 @@ namespace yask {
         // Add step + domain vars.
         vector<idx_t*> multi_vars;
         string multi_help;
-        for (auto& dim : var.getDims()) {
+        for (auto& dim : var) {
             auto& dname = dim.getName();
             if (!allow_step && _dims->_step_dim == dname)
                 continue;
@@ -585,7 +585,7 @@ namespace yask {
                                           const IdxTuple& mults, const std::string& step_dim) {
 
         idx_t prod = 1;
-        for (auto& dim : inner_sizes.getDims()) {
+        for (auto& dim : inner_sizes) {
             auto& dname = dim.getName();
             if (dname == step_dim)
                 continue;
