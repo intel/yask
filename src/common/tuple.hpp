@@ -260,11 +260,18 @@ namespace yask {
         // Return dim posn or -1 if it doesn't exist.
         // Lookup by name.
         int lookup_posn(const std::string& dim) const {
+
+            // First check pointers.
             for (size_t i = 0; i < _q.size(); i++) {
                 auto& s = _q[i];
-                
-                // Check for match of name.
-                if (s.getNamePtr() == &dim || s.getName() == dim)
+                if (s.getNamePtr() == &dim)
+                    return int(i);
+            }
+
+            // Then check full strings.
+            for (size_t i = 0; i < _q.size(); i++) {
+                auto& s = _q[i];
+                if (s.getName() == dim)
                     return int(i);
             }
             return -1;
