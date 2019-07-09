@@ -125,6 +125,9 @@ namespace yask {
         void setVal(const T& val) { _val = val; }
 
         // Comparison ops.
+        // Compare name pointers and actual names in case there
+        // is more than one pool, which can happen when loading
+        // more than one dynamic lib.
         bool operator==(const Scalar& rhs) const {
             return _val == rhs._val &&
                 (_namep == rhs._namep || *_namep == *rhs._namep);
@@ -133,7 +136,7 @@ namespace yask {
             return (_val < rhs._val) ? true :
                 (_val > rhs._val) ? false :
                 (_namep == rhs._namep) ? false :
-                (*_namep < *rhs._namep) ? true : false;
+                (*_namep < *rhs._namep);
         }
     };
 
@@ -261,7 +264,7 @@ namespace yask {
                 auto& s = _q[i];
                 
                 // Check for match of name.
-                if (s.getName() == dim)
+                if (s.getNamePtr() == &dim || s.getName() == dim)
                     return int(i);
             }
             return -1;
