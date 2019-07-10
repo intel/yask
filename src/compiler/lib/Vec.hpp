@@ -43,6 +43,7 @@ namespace yask {
 
         VecElem(const VarPoint& vec, int offset, const IntTuple& offsets) :
             _vec(vec), _offset(offset), _offsets(offsets) { }
+        virtual ~VecElem() { }
 
         virtual bool operator==(const VecElem& rhs) const {
             return _vec == rhs._vec && _offset == rhs._offset;

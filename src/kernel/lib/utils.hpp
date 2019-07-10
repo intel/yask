@@ -84,7 +84,8 @@ namespace yask {
 
     // Helpers for aligned malloc and free.
     extern char* alignedAlloc(std::size_t nbytes);
-    struct AlignedDeleter {
+    class AlignedDeleter {
+    public:
         void operator()(char* p) {
             if (p) {
                 std::free(p);
@@ -96,7 +97,7 @@ namespace yask {
     // Alloc aligned data as a shared ptr.
     template<typename T>
     std::shared_ptr<T> shared_aligned_alloc(size_t sz) {
-        auto _base = std::shared_ptr<T>(alignedAlloc(sz), AlignedDeleter(sz));
+        auto _base = std::shared_ptr<T>(alignedAlloc(sz), AlignedDeleter());
         return _base;
     }
 

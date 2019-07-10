@@ -396,6 +396,7 @@ namespace yask {
             halo_buf_ptrs.resize(neighborhood_size, 0);
             halo_buf_sizes.resize(neighborhood_size, 0);
         }
+        virtual ~MPIInfo() { }
 
         // Get a 1D index for a neighbor.
         // Input 'offsets': tuple of NeighborOffset vals.

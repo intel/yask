@@ -312,7 +312,7 @@ namespace yask {
         // Adjust indices to be rank-relative.
         // Determine the subset of this sub-block that is
         // clusters, vectors, and partial vectors.
-        DOMAIN_VAR_LOOP(i, j) {
+        _DOMAIN_VAR_LOOP(i, j) {
 
             // Rank offset.
             auto rofs = _context->rank_domain_offsets[j];

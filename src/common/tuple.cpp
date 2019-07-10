@@ -39,6 +39,32 @@ namespace yask {
     // Implementations.
 
     template <typename T>
+    const std::string* Scalar<T>::_getPoolPtr(const std::string& name) {
+        const std::string* p = 0;
+
+#ifdef _OPENMP
+#pragma omp critical
+#endif
+        {
+            // Look for existing entry.
+            for (auto& i : _allNames) {
+                if (i == name) {
+                    p = &i;
+                    break;
+                }
+            }
+
+            // If not found, insert.
+            if (!p) {
+                _allNames.push_back(name);
+                auto& li = _allNames.back();
+                p = &li;
+            }
+        }
+        return p;
+    }
+    
+    template <typename T>
     const std::vector<std::string> Tuple<T>::getDimNames() const {
         std::vector<std::string> names;
         for (auto& i : _q)
@@ -410,6 +436,8 @@ namespace yask {
     }
     
     // Explicitly allowed instantiations.
+    template class Scalar<int>;
+    template class Scalar<idx_t>;
     template class Tuple<int>;
     template class Tuple<idx_t>;
 

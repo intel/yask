@@ -40,13 +40,15 @@ IN THE SOFTWARE.
 
 // Macro to loop thru domain dims w/stencil index 'i' and domain index 'j'.
 // Step index must be at index zero.
-#if (defined CHECK) || (defined TRACE)
-#define DOMAIN_VAR_LOOP(i, j)                                   \
+#define _DOMAIN_VAR_LOOP(i, j)                                  \
     for (int i = 1, j = 0; j < NUM_DOMAIN_DIMS; i++, j++)
+#if (defined CHECK) || (defined TRACE)
+#define DOMAIN_VAR_LOOP(i, j)                   \
+    _DOMAIN_VAR_LOOP(i, j)
 #else
 #define DOMAIN_VAR_LOOP(i, j)                                   \
     _Pragma("unroll")                                           \
-    for (int i = 1, j = 0; j < NUM_DOMAIN_DIMS; i++, j++)
+    _DOMAIN_VAR_LOOP(i, j)
 #endif
     
 // Max number of dims allowed in Indices.

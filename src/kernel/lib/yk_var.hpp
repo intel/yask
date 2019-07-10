@@ -935,9 +935,8 @@ namespace yask {
 
             // Try to force compiler to use shifts instead of DIV and MOD
             // when the vec-lengths are 2^n.
-#pragma unroll
-#pragma novector
             // All other indices.
+            _UNROLL _NO_VECTOR
             for (int i = 0; i < nvls; i++) {
                 if (!(_use_step_idx && i == sp)) {
 

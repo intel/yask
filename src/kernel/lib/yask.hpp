@@ -113,6 +113,14 @@ typedef std::uint64_t uidx_t;
 #define _Pragma(x)
 #endif
 
+#if defined(__ICC)
+#define _NO_VECTOR _Pragma("novector")
+#else
+#define _NO_VECTOR
+#endif
+
+#define _UNROLL _Pragma("unroll")
+
 #if defined(__GNUC__) && !defined(__ICC)
 #define __assume(x) ((void)0)
 //#define __declspec(x)
