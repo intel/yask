@@ -30,6 +30,8 @@ IN THE SOFTWARE.
 #include "yask_assert.hpp"
 
 #include "yask_common_api.hpp"
+#include <cmath>
+#include <cfloat>
 #include <set>
 #include <vector>
 #include <map>

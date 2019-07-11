@@ -82,11 +82,11 @@ IN THE SOFTWARE.
 // parsed or interpreted by SWIG.
 %{
 #define SWIG_FILE_WITH_INIT
-#include "yask_kernel_api.hpp"
-%}
-%{
-#define SWIG_FILE_WITH_INIT
 #include "yask_compiler_api.hpp"
+#include <cmath>
+#include <cfloat>
+#include <cstdint>
+#include <cstdlib>
 %}
 
 // All vector types used in API.

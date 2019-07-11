@@ -259,6 +259,7 @@ YK_CXXFLAGS	:=	-g -std=c++11 -Wall
 YK_CXXFLAGS	+=	$(addprefix -I,$(YK_INC_DIRS) $(YK_GEN_DIR))
 OMPFLAGS	+=	-fopenmp
 YK_CXXOPT	?=	-O3
+SWIG_CXXFLAGS	:= 	$(DBL_EPSILON_CXXFLAG)
 
 # Linker.
 YK_LD		:=	$(YK_CXX)
@@ -364,7 +365,7 @@ ifneq ($(filter icpc icc mpiicpc mpiicc,$(notdir $(YK_CXX))),)  # Intel compiler
 
 else ifneq ($(filter gcc g++ mpigcc mpigxx,$(notdir $(YK_CXX))),)  # GNU compiler
  YK_CXXFLAGS	+=	$(GCC_ISA) -Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
- SWIG_CXXFLAGS	:=	$(SWIG_GCCFLAGS)
+ SWIG_CXXFLAGS	+=	$(SWIG_GCCFLAGS)
  MACROS		+=	USE_ALWAYS_INLINE
 
 else # other compiler
@@ -685,7 +686,7 @@ py-api-no-yc:
 
 # Validation runs for each binary.
 DEF_TEST_ARGS := -ranks $(ranks) -stencil $(YK_STENCIL) -arch $(YK_ARCH) -v \
-	-trial_steps 2 -max_threads 6 -block_threads 2 -no-use_shm -overlap_comms \
+	-trial_steps 2 -max_threads 6 -block_threads 2 \
 	-ep 0 -mp 0 -no-allow_addl_padding
 
 val0	:=	$(DEF_TEST_ARGS) -l 48 -r 32 -b 24 -rt 0 $(EXTRA_TEST_ARGS)
@@ -704,13 +705,15 @@ yk-tests:
 	$(YK_SCRIPT) $(val2)
 	$(YK_SCRIPT) $(val3)
 	$(YK_SCRIPT) $(val4a)
+
+yk-mpi-tests:
 	$(YK_SCRIPT) $(val4b)
 	$(YK_SCRIPT) $(val4c)
 
 # Run the default YASK compiler and kernel.
 yc-and-yk-test: $(YK_EXEC) $(YK_SCRIPT)
 	$(MAKE) ranks=1 yk-tests
-	if (( $(ranks) > 1 )); then $(MAKE) yk-tests; fi
+	if (( $(ranks) > 1 )); then $(MAKE) yk-tests yk-mpi-tests; fi
 
 # Run the YASK kernel test without implicity using the YASK compiler.
 yk-test-no-yc: kernel-no-yc $(YK_SCRIPT)
