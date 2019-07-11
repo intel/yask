@@ -760,9 +760,8 @@ namespace yask {
                 adj_idxs[sp] = alloc_step_idx;
             }
 
-#pragma unroll
             // All other indices.
-            for (int i = 0; i < n; i++) {
+            _UNROLL for (int i = 0; i < n; i++) {
                 if (!(_use_step_idx && i == sp)) {
 
                     // Adjust for offsets and padding.
@@ -962,8 +961,7 @@ namespace yask {
             // And, they need to be in the original folding order,
             // which might be different than the var-dim order.
             Indices fold_ofs(NUM_VEC_FOLD_DIMS);
-#pragma unroll
-            for (int i = 0; i < NUM_VEC_FOLD_DIMS; i++) {
+            _UNROLL for (int i = 0; i < NUM_VEC_FOLD_DIMS; i++) {
                 int j = _vec_fold_posns[i];
                 fold_ofs[i] = elem_ofs[j];
             }
@@ -1040,9 +1038,8 @@ namespace yask {
                 adj_idxs[sp] = alloc_step_idx;
             }
 
-#pragma unroll
             // Domain indices.
-            for (int i = 0; i < nvls; i++) {
+            _UNROLL for (int i = 0; i < nvls; i++) {
                 if (!(_use_step_idx && i == sp)) {
 
                     // Adjust for padding.
