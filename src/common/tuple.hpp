@@ -685,7 +685,7 @@ namespace yask {
                 // Loop through points.
                 // Each thread gets its own copy of 'tp', which
                 // gets updated with the loop index.
-                // TODO: convert to yask_for().
+                // TODO: convert to yask_parallel_for().
 #pragma omp parallel for firstprivate(tp)
                 for (T i = 0; i < dsize; i++) {
                     tp.setVal(curDimNum, i);
@@ -707,15 +707,15 @@ namespace yask {
 
                 // Parallel loop over elements w/stride = size of
                 // last dim.
-                yask_for(0, ne, nel,
-                         [&](idx_t start, idx_t stop, idx_t thread_num) {
-
-                             // Convert linear index to n-dimensional tuple.
-                             Tuple tp = unlayout(start);
-                             
-                             // Visit points in last dim.
-                             _visitAllPoints(visitor, lastDimNum, step, tp);
-                         });
+                yask_parallel_for(0, ne, nel,
+                                  [&](idx_t start, idx_t stop, idx_t thread_num) {
+                                      
+                                      // Convert linear index to n-dimensional tuple.
+                                      Tuple tp = unlayout(start);
+                                      
+                                      // Visit points in last dim.
+                                      _visitAllPoints(visitor, lastDimNum, step, tp);
+                                  });
             }
             return true;
 #else

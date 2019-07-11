@@ -876,16 +876,23 @@ namespace yask {
         TRACE_MSG("find_bounding_box: running " << nthreads << " thread(s) over " <<
                    outer_len << " point(s) in outer dim");
 
+        // Struct w/padding to avoid false sharing.
+        struct BBL_t {
+            BBList bbl;
+            char pad[CACHELINE_BYTES];
+        };
+        
         // List of full BBs for each thread.
-        BBList bb_lists[nthreads];
+        // TODO: remove false sharing.
+        vector<BBL_t> bb_lists(nthreads);
 
         // Run rect-finding code on each thread.
         // When these are done, we will merge the
         // rects from all threads.
-        yask_for
+        yask_parallel_for
             (0, nthreads, 1,
              [&](idx_t start, idx_t stop, idx_t thread_num) {
-                auto& cur_bb_list = bb_lists[start];
+                auto& cur_bb_list = bb_lists[start].bbl;
 
                 // Begin and end of this slice.
                 // These Indices contain domain dims.
@@ -1026,7 +1033,7 @@ namespace yask {
         // Collect BBs in all slices.
         // TODO: merge in a parallel binary tree instead of sequentially.
         for (int n = 0; n < nthreads; n++) {
-            auto& cur_bb_list = bb_lists[n];
+            auto& cur_bb_list = bb_lists[n].bbl;
             TRACE_MSG("processing " << cur_bb_list.size() <<
                        " sub-BB(s) in bundle '" << get_name() <<
                        "' from thread " << n);
