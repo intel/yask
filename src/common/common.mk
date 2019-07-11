@@ -79,6 +79,9 @@ BASH		:=	bash
 # Options to avoid warnings when compiling SWIG-generated code w/gcc.
 SWIG_GCCFLAGS	:=	-Wno-class-memaccess -Wno-stringop-overflow -Wno-stringop-truncation
 
+# Define deprecated macro used by SWIG.
+DBL_EPSILON_CXXFLAG	:=	-DDBL_EPSILON=2.2204460492503131e-16
+
 # Find include path needed for python interface.
 # NB: constructing string inside print() to work for python 2 or 3.
 PYINC		:= 	$(addprefix -I,$(shell $(PYTHON) -c 'import distutils.sysconfig; print(distutils.sysconfig.get_python_inc() + " " + distutils.sysconfig.get_python_inc(plat_specific=1))'))

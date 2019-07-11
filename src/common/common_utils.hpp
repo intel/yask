@@ -30,6 +30,8 @@ IN THE SOFTWARE.
 #include "yask_assert.hpp"
 
 #include "yask_common_api.hpp"
+#include <cmath>
+#include <cfloat>
 #include <set>
 #include <vector>
 #include <map>
@@ -97,7 +99,7 @@ namespace yask {
     constexpr int yask_max_levels = 2;
     extern int yask_num_threads[];
 
-    // Get number of threads that will execute a yask_for() loop
+    // Get number of threads that will execute a yask_parallel_for() loop
     // based on the current OpenMP nesting level.
     inline idx_t yask_get_num_threads() {
         if (omp_get_max_active_levels() > 1 &&
@@ -113,8 +115,9 @@ namespace yask {
     // 'start' will be 'begin', 'begin'+'stride', 'begin'+2*'stride', etc.
     // 'stop' will be 'begin'+'stride', etc.
     // 'thread_num' will be a unique number across the nested threads.
-    inline void yask_for(idx_t begin, idx_t end, idx_t stride,
-                         std::function<void (idx_t start, idx_t stop, idx_t thread_num)> visitor) {
+    inline void yask_parallel_for(idx_t begin, idx_t end, idx_t stride,
+                                  std::function<void (idx_t start, idx_t stop,
+                                                      idx_t thread_num)> visitor) {
         if (end <= begin)
             return;
         
@@ -132,7 +135,7 @@ namespace yask {
 
             if (yask_num_threads[0])
                 omp_set_num_threads(yask_num_threads[0]);
-#pragma omp parallel for
+#pragma omp parallel for schedule(static)
             for (idx_t i = 0; i < end; i += stride) {
                 idx_t stop = std::min(i + stride, end);
                 idx_t tn = omp_get_thread_num();
@@ -154,7 +157,7 @@ namespace yask {
             idx_t niters_per_thr = CEIL_DIV(niter, nthr);
 
             // Outer parallel loop.
-#pragma omp parallel for
+#pragma omp parallel for schedule(static)
             for (idx_t n = 0; n < nthr; n++) {
 
                 // Calculate begin and end points for this thread.
@@ -166,7 +169,7 @@ namespace yask {
                 omp_set_num_threads(tnthr);
 
                 // Inner parallel loop over elements.
-#pragma omp parallel for
+#pragma omp parallel for schedule(static)
                 for (idx_t i = tbegin; i < tend; i += stride) {
                     idx_t stop = std::min(i + stride, end);
                     idx_t thread_num = n * tnthr + omp_get_thread_num();

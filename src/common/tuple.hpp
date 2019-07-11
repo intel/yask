@@ -30,7 +30,8 @@ IN THE SOFTWARE.
 // Include this first to assure NDEBUG is set properly.
 #include "yask_assert.hpp"
 
-#include <math.h>
+#include <cstdlib>
+#include <cmath>
 #include <iostream>
 #include <iomanip>
 #include <memory>
@@ -65,30 +66,7 @@ namespace yask {
 
         // Look up names in the pool.
         // Should only need to do this when we're adding a new dim.
-        static const std::string* _getPoolPtr(const std::string& name) {
-            const std::string* p = 0;
-
-#ifdef _OPENMP
-#pragma omp critical
-#endif
-            {
-                // Look for existing entry.
-                for (auto& i : _allNames) {
-                    if (i == name) {
-                        p = &i;
-                        break;
-                    }
-                }
-
-                // If not found, insert.
-                if (!p) {
-                    _allNames.push_back(name);
-                    auto& li = _allNames.back();
-                    p = &li;
-                }
-            }
-            return p;
-        }
+        static const std::string* _getPoolPtr(const std::string& name);
 
         // Name and value for this object.
         const std::string* _namep = 0; // Ptr from the _allNames pool.
@@ -570,7 +548,7 @@ namespace yask {
             return mapElements([&](T in){ return -in; });
         }
         Tuple absElements() const {
-            return mapElements([&](T in){ return abs(in); });
+            return mapElements([&](T in){ return T(llabs(in)); });
         }
 
         // make string like "4x3x2" or "4, 3, 2".
@@ -707,7 +685,7 @@ namespace yask {
                 // Loop through points.
                 // Each thread gets its own copy of 'tp', which
                 // gets updated with the loop index.
-                // TODO: convert to yask_for().
+                // TODO: convert to yask_parallel_for().
 #pragma omp parallel for firstprivate(tp)
                 for (T i = 0; i < dsize; i++) {
                     tp.setVal(curDimNum, i);
@@ -729,15 +707,15 @@ namespace yask {
 
                 // Parallel loop over elements w/stride = size of
                 // last dim.
-                yask_for(0, ne, nel,
-                         [&](idx_t start, idx_t stop, idx_t thread_num) {
-
-                             // Convert linear index to n-dimensional tuple.
-                             Tuple tp = unlayout(start);
-                             
-                             // Visit points in last dim.
-                             _visitAllPoints(visitor, lastDimNum, step, tp);
-                         });
+                yask_parallel_for(0, ne, nel,
+                                  [&](idx_t start, idx_t stop, idx_t thread_num) {
+                                      
+                                      // Convert linear index to n-dimensional tuple.
+                                      Tuple tp = unlayout(start);
+                                      
+                                      // Visit points in last dim.
+                                      _visitAllPoints(visitor, lastDimNum, step, tp);
+                                  });
             }
             return true;
 #else

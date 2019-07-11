@@ -114,10 +114,10 @@ namespace yask {
     template <typename T>
     void GenericVarTemplate<T>::set_elems_same(T val) {
         if (_elems) {
-            yask_for(0, get_num_elems(), 1,
-                     [&](idx_t start, idx_t stop, idx_t thread_num) {
-                         ((T*)_elems)[start] = val;
-                     });
+            yask_parallel_for(0, get_num_elems(), 1,
+                              [&](idx_t start, idx_t stop, idx_t thread_num) {
+                                  ((T*)_elems)[start] = val;
+                              });
         }
     }
     
@@ -125,10 +125,10 @@ namespace yask {
     void GenericVarTemplate<T>::set_elems_in_seq(T seed) {
         if (_elems) {
             const idx_t wrap = 71; // TODO: avoid multiple of any dim size.
-            yask_for(0, get_num_elems(), 1,
-                     [&](idx_t start, idx_t stop, idx_t thread_num) {
-                         ((T*)_elems)[start] = seed * T(start % wrap + 1);
-                     });
+            yask_parallel_for(0, get_num_elems(), 1,
+                              [&](idx_t start, idx_t stop, idx_t thread_num) {
+                                  ((T*)_elems)[start] = seed * T(start % wrap + 1);
+                              });
         }
     }
 
@@ -146,14 +146,27 @@ namespace yask {
         if (_var_dims != p->_var_dims)
             return get_num_elems();
 
+        // Object w/padding to avoid false sharing.
+        union err_t {
+            idx_t nerrs;
+            char buf[CACHELINE_BYTES];
+
+            err_t() : nerrs(0) { }
+        };
+        
         // Count abs diffs > epsilon.
         T ep = epsilon;
+        auto nthr = yask_get_num_threads();
+        vector<err_t> errv(nthr);
+        yask_parallel_for(0, get_num_elems(), 1,
+                          [&](idx_t start, idx_t stop, idx_t thread_num) {
+                              if (!within_tolerance(((T*)_elems)[start],
+                                                    ((T*)p->_elems)[start], ep))
+                                  errv[thread_num].nerrs++;
+                          });
         idx_t errs = 0;
-#pragma omp parallel for reduction(+:errs)
-        for (idx_t ai = 0; ai < get_num_elems(); ai++) {
-            if (!within_tolerance(((T*)_elems)[ai], ((T*)p->_elems)[ai], ep))
-                errs++;
-        }
+        for (auto& errn : errv)
+            errs += errn.nerrs;
         return errs;
     }
 

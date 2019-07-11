@@ -202,8 +202,7 @@ namespace yask {
             for (int i = 0; i < _ndims; i++)
 #else
             // Use all to allow unroll and avoid jumps.
-#pragma unroll
-            for (int i = 0; i < max_idxs; i++)
+            _UNROLL for (int i = 0; i < max_idxs; i++)
 #endif
                 func(res._idxs[i], other._idxs[i]);
             return res;
@@ -248,8 +247,7 @@ namespace yask {
             for (int i = 0; i < _ndims; i++)
 #else
             // Use all to allow unroll and avoid jumps.
-#pragma unroll
-            for (int i = 0; i < max_idxs; i++)
+            _UNROLL for (int i = 0; i < max_idxs; i++)
 #endif
                 func(res._idxs[i], crhs);
             return res;

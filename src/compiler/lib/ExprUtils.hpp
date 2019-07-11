@@ -64,11 +64,11 @@ namespace yask {
             OptVisitor("commutative recombination") {}
         virtual ~CombineVisitor() {}
 
-        virtual int getNumChanges() {
+        virtual int getNumChanges() const override {
             return _numChanges;
         }
 
-        virtual string visit(CommutativeExpr* ce);
+        virtual string visit(CommutativeExpr* ce) override;
     };
 
 

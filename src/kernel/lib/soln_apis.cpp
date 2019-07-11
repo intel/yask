@@ -137,8 +137,8 @@ namespace yask {
 
         // Run a dummy nested OMP loop to make sure nested threading is
         // initialized.
-        yask_for(0, rthreads * 100, 1,
-                 [&](idx_t start, idx_t stop, idx_t thread_num) { });
+        yask_parallel_for(0, rthreads * 100, 1,
+                          [&](idx_t start, idx_t stop, idx_t thread_num) { });
 
         // Some var stats.
         DEBUG_MSG("\nNum vars: " << varPtrs.size() <<

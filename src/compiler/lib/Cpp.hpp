@@ -61,7 +61,7 @@ namespace yask {
 
         // Return a constant expression.
         // This is overloaded to preserve precision.
-        virtual string addConstExpr(ostream& os, double v) {
+        virtual string addConstExpr(ostream& os, double v) override {
             return formatReal(v);
         }
 
@@ -86,11 +86,11 @@ namespace yask {
                                      string optArg = "");
 
         // Return a var-point reference.
-        virtual string readFromPoint(ostream& os, const VarPoint& gp);
+        virtual string readFromPoint(ostream& os, const VarPoint& gp) override;
 
         // Return code to update a var point.
         virtual string writeToPoint(ostream& os, const VarPoint& gp,
-                                    const string& val);
+                                    const string& val) override;
     };
 
     /////////// Vector code /////////////
@@ -124,12 +124,12 @@ namespace yask {
         VarMap _vec2elemMap; // maps vector indices to elem indices; filled by printElemIndices.
 
         // A simple constant.
-        virtual string addConstExpr(ostream& os, double v) {
+        virtual string addConstExpr(ostream& os, double v) override {
             return CppPrintHelper::formatReal(v);
         }
 
         // Any code.
-        virtual string addCodeExpr(ostream& os, const string& code) {
+        virtual string addCodeExpr(ostream& os, const string& code) override {
             return code;
         }
 
@@ -152,20 +152,20 @@ namespace yask {
                                          bool isNorm);
 
         // Print aligned memory read.
-        virtual string printAlignedVecRead(ostream& os, const VarPoint& gp);
+        virtual string printAlignedVecRead(ostream& os, const VarPoint& gp) override;
 
         // Print unaliged memory read.
         // Assumes this results in same values as printUnalignedVec().
-        virtual string printUnalignedVecRead(ostream& os, const VarPoint& gp);
+        virtual string printUnalignedVecRead(ostream& os, const VarPoint& gp) override;
 
         // Print aligned memory write.
         virtual string printAlignedVecWrite(ostream& os, const VarPoint& gp,
-                                            const string& val);
+                                            const string& val) override;
 
         // Print conversion from memory vars to point var gp if needed.
         // This calls printUnalignedVecCtor(), which can be overloaded
         // by derived classes.
-        virtual string printUnalignedVec(ostream& os, const VarPoint& gp);
+        virtual string printUnalignedVec(ostream& os, const VarPoint& gp) override;
 
         // Print per-element construction for one point var pvName from elems.
         virtual void printUnalignedVecSimple(ostream& os, const VarPoint& gp,
@@ -175,16 +175,16 @@ namespace yask {
         // Read from a single point to be broadcast to a vector.
         // Return code for read.
         virtual string readFromScalarPoint(ostream& os, const VarPoint& gp,
-                                           const VarMap* vMap=0);
+                                           const VarMap* vMap=0) override;
 
         // Read from multiple points that are not vectorizable.
         // Return var name.
-        virtual string printNonVecRead(ostream& os, const VarPoint& gp);
+        virtual string printNonVecRead(ostream& os, const VarPoint& gp) override;
 
         // Print construction for one point var pvName from elems.
         // This version prints inefficient element-by-element assignment.
         // Override this in derived classes for more efficient implementations.
-        virtual void printUnalignedVecCtor(ostream& os, const VarPoint& gp, const string& pvName) {
+        virtual void printUnalignedVecCtor(ostream& os, const VarPoint& gp, const string& pvName) override {
             printUnalignedVecSimple(os, gp, pvName, _linePrefix);
         }
 

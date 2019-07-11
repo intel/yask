@@ -259,6 +259,7 @@ YK_CXXFLAGS	:=	-g -std=c++11 -Wall
 YK_CXXFLAGS	+=	$(addprefix -I,$(YK_INC_DIRS) $(YK_GEN_DIR))
 OMPFLAGS	+=	-fopenmp
 YK_CXXOPT	?=	-O3
+SWIG_CXXFLAGS	:= 	$(DBL_EPSILON_CXXFLAG)
 
 # Linker.
 YK_LD		:=	$(YK_CXX)
@@ -340,8 +341,8 @@ YK_LIBS		+=	$(VTUNE_DIR)/lib64/libittnotify.a
 endif
 
 # compiler-specific settings.
-# TODO: make check for Intel compiler more robust.
-ifneq ($(filter %icpc %icc,$(notdir $(YK_CXX))),)  # Intel compiler
+# TODO: make check for compiler name more robust.
+ifneq ($(filter icpc icc mpiicpc mpiicc,$(notdir $(YK_CXX))),)  # Intel compiler
 
  YK_CXXFLAGS	+=	$(ICC_ISA) -debug extended -restrict -ansi-alias -fno-alias
  YK_CXXFLAGS	+=	-fimf-use-svml=true -fimf-precision=low -fast-transcendentals \
@@ -362,9 +363,13 @@ ifneq ($(filter %icpc %icc,$(notdir $(YK_CXX))),)  # Intel compiler
   #YK_CXXFLAGS	+=	-qopt-zmm-usage=high
  endif
 
-else # not Intel compiler
+else ifneq ($(filter gcc g++ mpigcc mpigxx,$(notdir $(YK_CXX))),)  # GNU compiler
  YK_CXXFLAGS	+=	$(GCC_ISA) -Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
- SWIG_CXXFLAGS	:=	$(SWIG_GCCFLAGS)
+ SWIG_CXXFLAGS	+=	$(SWIG_GCCFLAGS)
+ MACROS		+=	USE_ALWAYS_INLINE
+
+else # other compiler
+ YK_CXXFLAGS	+=	$(GCC_ISA) -Wno-unused-variable 
  MACROS		+=	USE_ALWAYS_INLINE
 
 endif # compiler.
@@ -681,7 +686,7 @@ py-api-no-yc:
 
 # Validation runs for each binary.
 DEF_TEST_ARGS := -ranks $(ranks) -stencil $(YK_STENCIL) -arch $(YK_ARCH) -v \
-	-trial_steps 2 -max_threads 6 -block_threads 2 -no-use_shm -overlap_comms \
+	-trial_steps 2 -max_threads 6 -block_threads 2 \
 	-ep 0 -mp 0 -no-allow_addl_padding
 
 val0	:=	$(DEF_TEST_ARGS) -l 48 -r 32 -b 24 -rt 0 $(EXTRA_TEST_ARGS)
@@ -700,13 +705,15 @@ yk-tests:
 	$(YK_SCRIPT) $(val2)
 	$(YK_SCRIPT) $(val3)
 	$(YK_SCRIPT) $(val4a)
+
+yk-mpi-tests:
 	$(YK_SCRIPT) $(val4b)
 	$(YK_SCRIPT) $(val4c)
 
 # Run the default YASK compiler and kernel.
 yc-and-yk-test: $(YK_EXEC) $(YK_SCRIPT)
 	$(MAKE) ranks=1 yk-tests
-	if (( $(ranks) > 1 )); then $(MAKE) yk-tests; fi
+	if (( $(ranks) > 1 )); then $(MAKE) yk-tests yk-mpi-tests; fi
 
 # Run the YASK kernel test without implicity using the YASK compiler.
 yk-test-no-yc: kernel-no-yc $(YK_SCRIPT)
@@ -732,6 +739,7 @@ stencil-tests:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_empty_2d
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_1d fold=x=4
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_2d fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_2d fold=x=2,y=2 mpi=0 ranks=1
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_2d arch=intel64 fold=x=3,y=2 domain_dims=y,x
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_3d fold=x=2,z=2 domain_dims=z,y,x
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_partial_3d fold=x=2,z=2 domain_dims=x,z,y
@@ -883,23 +891,24 @@ code-stats:
 help:
 	@echo "Example performance builds of kernel cmd-line tool:"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd arch=knl # Explicit arch target."; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd radius=4 YK_STENCIL=iso3dfd_rt # Specify binary stencil name."; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=awp EXTRA_YK_CXXFLAGS=-qopt-report"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd arch=knl # Explicit arch target"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd radius=4 YK_STENCIL=iso3dfd_rt # Specify binary stencil name"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis fold='x=1,y=2,z=4' cluster='x=2'"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis radius=4 real_bytes=8 # DP FP."; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis radius=4 real_bytes=8 # DP FP"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=awp EXTRA_YK_CXXFLAGS='-qopt-report -Fa'"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=clang++ EXTRA_YK_CXXFLAGS='--gcc-toolchain=/local/gcc9.1'"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=cube SHELL=/bin/bash  # Specify shell to use (if pipefail gives error)"; \
-	echo " "; \
-	echo "Example performance builds of kernel API for C++ and Python apps:"; \
+	echo " "
+	@echo "Example performance builds of kernel API for C++ and Python apps:"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd yk-api"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=awp yk-api"; \
-	echo " "; \
-	echo "Example debug builds of kernel cmd-line tool:"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' check=1 # No optimization, OpenMP or MPI; internal checking."; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=avx stencil=test_2d mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' trace=1 # Enable tracing; run with '-trace' to get trace."; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' trace_mem=1 # Trace all mem accesses with '-trace'."; \
-	echo " "; \
-	echo "Example builds with test runs:"; \
+	echo " "
+	@echo "Example debug builds of kernel cmd-line tool:"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' check=1 # No optimization, OpenMP or MPI; internal checking"; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=avx stencil=test_2d mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' trace=1 # Enable tracing; run with '-trace' to get trace"; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' trace_mem=1 # Trace all mem accesses with '-trace'"; \
+	echo " "
+	@echo "Example builds with test runs:"; \
 	echo " $(MAKE) -j all   # Normal full API and stencil tests"; \
-	echo " $(MAKE) -j all YK_CXX=g++ mpi=0 ranks=1   # Test g++ w/o MPI."; \
-	echo " $(MAKE) -j all YK_CXXOPT=-O1 ranks=4   # Test on 4 ranks."
+	echo " $(MAKE) -j all YK_CXX=g++ mpi=0 ranks=1   # Test g++ w/o MPI"; \
+	echo " $(MAKE) -j all YK_CXXOPT=-O1 ranks=4   # Test on 4 ranks"

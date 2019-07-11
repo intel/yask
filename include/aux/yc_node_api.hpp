@@ -685,7 +685,7 @@ namespace yask {
         virtual yc_number_node_ptr
         new_number_node(yc_number_any_arg arg
                         /**< [in] Argument to convert to a numerical expression. */) const {
-            return arg;
+            return std::move(arg);
         }
 #endif
         
