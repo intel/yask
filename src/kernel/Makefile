@@ -739,6 +739,7 @@ stencil-tests:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_empty_2d
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_1d fold=x=4
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_2d fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_2d fold=x=2,y=2 mpi=0 ranks=1
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_2d arch=intel64 fold=x=3,y=2 domain_dims=y,x
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_3d fold=x=2,z=2 domain_dims=z,y,x
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_partial_3d fold=x=2,z=2 domain_dims=x,z,y
