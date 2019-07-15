@@ -76,15 +76,19 @@ PERL		:=	perl
 MKDIR		:=	mkdir -p -v
 BASH		:=	bash
 
-# Options to avoid warnings when compiling SWIG-generated code w/gcc.
-SWIG_GCCFLAGS	:=	-Wno-class-memaccess -Wno-stringop-overflow -Wno-stringop-truncation
-
-# Define deprecated macro used by SWIG.
-DBL_EPSILON_CXXFLAG	:=	-DDBL_EPSILON=2.2204460492503131e-16
-
 # Find include path needed for python interface.
 # NB: constructing string inside print() to work for python 2 or 3.
 PYINC		:= 	$(addprefix -I,$(shell $(PYTHON) -c 'import distutils.sysconfig; print(distutils.sysconfig.get_python_inc() + " " + distutils.sysconfig.get_python_inc(plat_specific=1))'))
 
 RUN_PYTHON	:= 	$(RUN_PREFIX) \
 	env PYTHONPATH=$(LIB_DIR):$(LIB_OUT_DIR):$(YASK_DIR):$(PY_OUT_DIR):$(PYTHONPATH) $(PYTHON)
+
+# Function to check for pre-defined compiler macro.
+# Ex: "ifeq ($(call MACRO_DEF,$(CXX),__clang__),1)"...
+MACRO_DEF	=	$(shell $(1) -x c++ /dev/null -dM -E | grep -m 1 -c $(2))
+
+# Options to avoid warnings when compiling SWIG-generated code w/gcc.
+SWIG_GCCFLAGS	:=	-Wno-class-memaccess -Wno-stringop-overflow -Wno-stringop-truncation
+
+# Define deprecated macro used by SWIG.
+DBL_EPSILON_CXXFLAG	:=	-DDBL_EPSILON=2.2204460492503131e-16

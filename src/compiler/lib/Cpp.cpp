@@ -404,8 +404,8 @@ namespace yask {
         //   offsets from the step dim w/compatible offsets (TODO).
         // TODO: must also share pointers during code gen in last 2 cases.
         auto* var = gp.getVar();
-        bool is_unique = (var->getStepDim() == nullptr);
-        // || (!var->is_dynamic_step_alloc() && var->get_step_alloc_size() == 1);
+        bool is_unique = false;
+        //bool is_unique = (var->getStepDim() == nullptr);
         string type = is_unique ? _var_ptr_restrict_type : _var_ptr_type;
 
         // Print type and value.

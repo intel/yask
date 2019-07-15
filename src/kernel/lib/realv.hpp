@@ -364,7 +364,7 @@ namespace yask {
         }
 
         // aligned load.
-        ALWAYS_INLINE void loadFrom(const real_vec_t* __restrict__ from) {
+        ALWAYS_INLINE void loadFrom(const real_vec_t* __restrict from) {
 #if defined(NO_INTRINSICS) || defined(NO_LOAD_INTRINSICS)
             REAL_VEC_LOOP(i) u.r[i] = (*from)[i];
 #else
@@ -373,7 +373,7 @@ namespace yask {
         }
 
         // unaligned load.
-        ALWAYS_INLINE void loadUnalignedFrom(const real_vec_t* __restrict__ from) {
+        ALWAYS_INLINE void loadUnalignedFrom(const real_vec_t* __restrict from) {
 #if defined(NO_INTRINSICS) || defined(NO_LOAD_INTRINSICS)
             REAL_VEC_LOOP_UNALIGNED(i) u.r[i] = (*from)[i];
 #else
@@ -382,7 +382,7 @@ namespace yask {
         }
 
         // aligned store.
-        ALWAYS_INLINE void storeTo(real_vec_t* __restrict__ to) const {
+        ALWAYS_INLINE void storeTo(real_vec_t* __restrict to) const {
 
             // Using an explicit loop here instead of a store intrinsic may
             // allow the compiler to do more optimizations.  This is true
@@ -405,7 +405,7 @@ namespace yask {
         }
 
         // masked store.
-        ALWAYS_INLINE void storeTo_masked(real_vec_t* __restrict__ to, uidx_t k1) const {
+        ALWAYS_INLINE void storeTo_masked(real_vec_t* __restrict to, uidx_t k1) const {
 
             // Using an explicit loop here instead of a store intrinsic may
             // allow the compiler to do more optimizations.  This is true
