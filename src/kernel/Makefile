@@ -99,31 +99,31 @@ else ifeq ($(TARGET),knl)
  # the right thing by default in SNC-2 or SNC-4 clustering modes (using
  # either flat or cache memory modes, but these configurations are uncommon.
  ICC_ISA	?=	-xMIC-AVX512
- GCC_ISA	?=	-march=knl
+ CXX_ISA	?=	-march=knl
  MACROS		+=	USE_INTRIN512 USE_RCP28 NUMA_PREF=1
 
 else ifeq ($(TARGET),avx512)
 
  ICC_ISA	?=	-xCORE-AVX512
- GCC_ISA	?=	-march=skylake-avx512
+ CXX_ISA	?=	-march=skylake-avx512
  MACROS		+=	USE_INTRIN512
 
 else ifeq ($(TARGET),avx2)
 
  ICC_ISA	?=	-xCORE-AVX2
- GCC_ISA	?=	-march=haswell
+ CXX_ISA	?=	-march=haswell
  MACROS		+=	USE_INTRIN256 USE_AVX2
 
 else ifeq ($(TARGET),avx)
 
  ICC_ISA	?=	-xAVX
- GCC_ISA	?=	-march=sandybridge
+ CXX_ISA	?=	-march=sandybridge
  MACROS		+=	USE_INTRIN256
 
 else ifeq ($(TARGET),intel64)
 
  ICC_ISA	?=	-xHOST
- GCC_ISA	?=	-march=native
+ CXX_ISA	?=	-march=native
 
 else
 
@@ -341,10 +341,19 @@ YK_LIBS		+=	$(VTUNE_DIR)/lib64/libittnotify.a
 endif
 
 # compiler-specific settings.
-# TODO: make check for compiler name more robust.
-ifneq ($(filter icpc icc mpiicpc mpiicc,$(notdir $(YK_CXX))),)  # Intel compiler
 
- YK_CXXFLAGS	+=	$(ICC_ISA) -debug extended -restrict -ansi-alias -fno-alias
+# Clang (LLVM-based) compiler.
+ifeq ($(call MACRO_DEF,$(YK_CXX),__clang__),1)
+ YK_CXXFLAGS	+=	$(CXX_ISA)
+ YK_CXXFLAGS	+=	-Wno-unused-variable 
+ MACROS		+=	NO_VEC
+ MACROS		+=	NO_SVML
+
+# Intel compiler (but not clang-based).
+else ifeq ($(call MACRO_DEF,$(YK_CXX),__INTEL_COMPILER),1)
+
+ YK_CXXFLAGS	+=	$(ICC_ISA)
+ YK_CXXFLAGS	+=	-debug extended -restrict -ansi-alias -fno-alias
  YK_CXXFLAGS	+=	-fimf-use-svml=true -fimf-precision=low -fast-transcendentals \
 			-no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -ftz \
 			-fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
@@ -355,7 +364,6 @@ ifneq ($(filter icpc icc mpiicpc mpiicc,$(notdir $(YK_CXX))),)  # Intel compiler
  #YK_CXXFLAGS	+=	-qopt-report=5
  #YK_CXXFLAGS	+=	-qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
  YK_CXX_VER_CMD :=	$(YK_CXX) -V
- MACROS		+=	USE_SVML USE_ALWAYS_INLINE
 
  # Use real 512-bit code.
  # (Commented out because it doesn't help performance, and it breaks Devito.)
@@ -363,14 +371,14 @@ ifneq ($(filter icpc icc mpiicpc mpiicc,$(notdir $(YK_CXX))),)  # Intel compiler
   #YK_CXXFLAGS	+=	-qopt-zmm-usage=high
  endif
 
-else ifneq ($(filter gcc g++ mpigcc mpigxx,$(notdir $(YK_CXX))),)  # GNU compiler
- YK_CXXFLAGS	+=	$(GCC_ISA) -Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
+# Gnu-compatible compiler (but not Intel or Clang).
+else ifeq ($(call MACRO_DEF,$(YK_CXX),__GNUC__),1)
+ YK_CXXFLAGS	+=	$(CXX_ISA)
+ YK_CXXFLAGS	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
  SWIG_CXXFLAGS	+=	$(SWIG_GCCFLAGS)
- MACROS		+=	USE_ALWAYS_INLINE
+ MACROS		+=	NO_SVML
 
-else # other compiler
- YK_CXXFLAGS	+=	$(GCC_ISA) -Wno-unused-variable 
- MACROS		+=	USE_ALWAYS_INLINE
+# NB: if none of the above tests is triggered, the ISA will not be specified.
 
 endif # compiler.
 
@@ -392,6 +400,12 @@ YK_LIBS		+=	$(EXTRA_YK_LIBS)
 # Number of stencil/var dims extracted from YASK compiler output.
 NSDIMS		:=	`awk '/NUM_STENCIL_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
 NVDIMS		:=	`awk '/NUM_STENCIL_AND_VAR_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
+
+# Run knobs
+ifeq ($(mpi),0)
+ YK_SCRIPT_OPTS	+= -ranks 1
+endif
+YK_SCRIPT_OPTS	+= "-stencil" $(YK_STENCIL) "-arch" $(YK_ARCH)
 
 ######## Loop-compiler configuration:
 # The loop indices range from 0..N-1.
@@ -492,7 +506,7 @@ default: kernel
 kernel: $(YK_EXEC) $(YK_SCRIPT) $(MAKE_REPORT_FILE)
 	@echo "*** Binary" $(YK_EXEC) "has been built."; \
 	echo "*** See" $(MAKE_REPORT_FILE) "for build information."; \
-	echo "*** Run command:" $(YK_SCRIPT) "-stencil" $(YK_STENCIL) "-arch" $(YK_ARCH) "[options]"
+	echo "*** Run command:" $(YK_SCRIPT) $(YK_SCRIPT_OPTS) "[options]"
 
 $(YK_LIB): $(YK_OBJS) $(YK_EXT_OBJS)
 	$(MKDIR) $(dir $@)
@@ -558,12 +572,12 @@ $(YK_GEN_DIR)/yask_var_code.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
 	$(PERL) $< -v $(NVDIMS) > $@
 
-# NB: 'set -o pipefail' ensures failure of command before '| tee' is visible.
+# NB: '$(BASH) -o pipefail' ensures failure of command before '| tee' is visible.
 $(YK_CODE_FILE): $(YC_EXEC)
 	$(MKDIR) $(dir $@)
 	@- rm -f $@
-	set -o pipefail; \
-	  $(RUN_PREFIX) $< $(YC_FLAGS) -p $@ $(EXTRA_YC_FLAGS) | tee $(YC_REPORT_FILE) 2>&1
+	$(BASH) -o pipefail -c \
+	  "$(RUN_PREFIX) $< $(YC_FLAGS) -p $@ $(EXTRA_YC_FLAGS) 2>&1 | tee $(YC_REPORT_FILE)"
 	@- gindent -fca $@ || \
 	  indent -fca $@ ||   \
 	  echo "note:" $@ "is not properly indented because no indent program was found."
@@ -896,8 +910,8 @@ help:
 	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis fold='x=1,y=2,z=4' cluster='x=2'"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis radius=4 real_bytes=8 # DP FP"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=awp EXTRA_YK_CXXFLAGS='-qopt-report -Fa'"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=clang++ EXTRA_YK_CXXFLAGS='--gcc-toolchain=/local/gcc9.1'"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=cube SHELL=/bin/bash  # Specify shell to use (if pipefail gives error)"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=clang++ mpi=0  # Use clang w/o MPI"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=mpiCC OMPI_CXX=clang++  # Use clang w/MPI"; \
 	echo " "
 	@echo "Example performance builds of kernel API for C++ and Python apps:"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd yk-api"; \

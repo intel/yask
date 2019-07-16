@@ -114,21 +114,34 @@ typedef std::uint64_t uidx_t;
 #define _Pragma(x)
 #endif
 
-#if defined(__ICC)
+#ifndef NO_VEC
 #define _NO_VECTOR _Pragma("novector")
+#define _VEC_ALIGNED _Pragma("vector aligned")
+#define _VEC_UNALIGNED _Pragma("vector unaligned")
+#define _VEC_ALWAYS _Pragma("vector always")
+#define _VEC_STREAMING _Pragma("vector nontemporal")
 #else
 #define _NO_VECTOR
+#define _VEC_ALIGNED
+#define _VEC_UNALIGNED
+#define _VEC_ALWAYS
+#define _VEC_STREAMING
 #endif
 
+#ifndef NO_SIMD
+#define _SIMD _Pragma("omp simd")
+#else
+#define _SIMD
+#endif
+
+#ifndef NO_UNROLL
 #define _UNROLL _Pragma("unroll")
-
-#if defined(__GNUC__) && !defined(__ICC)
-#define __assume(x) ((void)0)
-//#define __declspec(x)
+#else
+#define _UNROLL
 #endif
 
-#if (defined(__GNUC__) && !defined(__ICC)) || defined(WIN32)
-#define restrict
+#ifdef NO_ASSUME
+#define __assume(x) ((void)0)
 #define __assume_aligned(p,n) ((void)0)
 #endif
 
