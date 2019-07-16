@@ -25,8 +25,7 @@ IN THE SOFTWARE.
 
 // This file defines a union to use for optionally-folded vectors of floats or doubles.
 
-#ifndef _REAL_VEC_H
-#define _REAL_VEC_H
+#pragma once
 
 namespace yask {
 
@@ -103,18 +102,18 @@ namespace yask {
 #undef VEC_ELEMS
 
     // Macro for looping through an aligned real_vec_t.
-#if defined(CHECK) || (VLEN==1) || !defined(__INTEL_COMPILER)
+#if defined(CHECK) || (VLEN==1)
 #define REAL_VEC_LOOP(i)                        \
     for (int i=0; i<VLEN; i++)
 #define REAL_VEC_LOOP_UNALIGNED(i)              \
     for (int i=0; i<VLEN; i++)
 #else
-#define REAL_VEC_LOOP(i)                                                \
-    _Pragma("vector aligned") _Pragma("vector always") _Pragma("omp simd") \
-    for (int i=0; i<VLEN; i++)
-#define REAL_VEC_LOOP_UNALIGNED(i)                      \
-    _Pragma("vector always") _Pragma("omp simd")        \
-    for (int i=0; i<VLEN; i++)
+#define REAL_VEC_LOOP(i)               \
+    _VEC_ALIGNED _VEC_ALWAYS _SIMD \
+      for (int i=0; i<VLEN; i++)
+#define REAL_VEC_LOOP_UNALIGNED(i)   \
+    _VEC_UNALIGNED _VEC_ALWAYS _SIMD \
+      for (int i=0; i<VLEN; i++)
 #endif
 
     // fence needed before loads after streaming stores.
@@ -350,16 +349,20 @@ namespace yask {
         }
 
         // equal-to comparator.
-        bool operator==(const real_vec_t& rhs) const {
+        ALWAYS_INLINE bool operator==(const real_vec_t& rhs) const {
+#ifdef NO_SIMD_COMPARE
             for (int j = 0; j < VLEN; j++) {
                 if (u.r[j] != rhs.u.r[j])
                     return false;
             }
             return true;
+#else
+            return u.r == rhs.u.r;
+#endif
         }
 
         // not-equal-to comparator.
-        bool operator!=(const real_vec_t& rhs) const {
+        ALWAYS_INLINE bool operator!=(const real_vec_t& rhs) const {
             return !operator==(rhs);
         }
 
@@ -391,8 +394,8 @@ namespace yask {
             // the sizes of the stencil computation loop and the overall
             // performance.
 #if defined(NO_INTRINSICS) || defined(NO_STORE_INTRINSICS)
-#if defined(__INTEL_COMPILER) && (VLEN > 1) && defined(USE_STREAMING_STORE)
-            _Pragma("vector nontemporal")
+#if (VLEN > 1) && defined(USE_STREAMING_STORE)
+            _VEC_STREAMING
 #endif
                 REAL_VEC_LOOP(i) (*to)[i] = u.r[i];
 #elif !defined(USE_STREAMING_STORE)
@@ -414,8 +417,8 @@ namespace yask {
             // the sizes of the stencil computation loop and the overall
             // performance.
 #if defined(NO_INTRINSICS) || defined(NO_STORE_INTRINSICS)
-#if defined(__INTEL_COMPILER) && (VLEN > 1) && defined(USE_STREAMING_STORE)
-            _Pragma("vector nontemporal")
+#if (VLEN > 1) && defined(USE_STREAMING_STORE)
+            _VEC_STREAMING
 #endif
                 REAL_VEC_LOOP(i) if ((k1 >> i) & 1) (*to)[i] = u.r[i];
 
@@ -531,7 +534,7 @@ namespace yask {
 #endif
 
     // SVML emulation.
-#if defined(NO_INTRINSICS) || !defined(USE_SVML)
+#if defined(NO_INTRINSICS) || defined(NO_SVML)
 #define SVML_1ARG(yask_fn, svml_fn, libm_dpfn, libm_spfn)      \
     SVML_1ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)            \
     ALWAYS_INLINE real_vec_t yask_fn(const real_vec_t& a) {     \
@@ -601,7 +604,7 @@ namespace yask {
     ALWAYS_INLINE void yask_sin_and_cos(real_vec_t& sin_res, 
                                         real_vec_t& cos_res, 
                                         const real_vec_t& a) {
-#if defined(NO_INTRINSICS) || !defined(USE_SVML)
+#if defined(NO_INTRINSICS) || defined(NO_SVML)
         REAL_VEC_LOOP(i) yask_sin_and_cos(sin_res[i], cos_res[i], a[i]);
 #else
         sin_res.u.mr = INAME(sincos)(&cos_res.u.mr, a.u.mr);
@@ -848,10 +851,12 @@ namespace yask {
     // check whether two reals are close enough.
     template<typename T>
     inline bool within_tolerance(T val, T ref, T epsilon) {
+        if (val == ref)
+            return true;
         bool ok;
         double adiff = fabs(val - ref);
-        if (fabs(ref) > 1.0)
-            epsilon = fabs(ref * epsilon);
+        if (fabs(ref) > T(1.0))
+            epsilon = T(fabs(ref * epsilon));
         ok = adiff < epsilon;
 #ifdef DEBUG_TOLERANCE
         if (!ok)
@@ -864,6 +869,8 @@ namespace yask {
     // Compare two real_vec_t's.
     inline bool within_tolerance(const real_vec_t& val, const real_vec_t& ref,
                                  const real_vec_t& epsilon) {
+        if (val == ref)
+            return true;
         for (int j = 0; j < VLEN; j++) {
             if (!within_tolerance(val.u.r[j], ref.u.r[j], epsilon.u.r[j]))
                 return false;
@@ -872,4 +879,3 @@ namespace yask {
     }
 
 }
-#endif

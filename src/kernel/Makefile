@@ -342,17 +342,18 @@ endif
 
 # compiler-specific settings.
 
-# Clang compiler.
+# Clang (LLVM-based) compiler.
 ifeq ($(call MACRO_DEF,$(YK_CXX),__clang__),1)
- YK_CXXFLAGS	+=	$(CXX_ISA) -Wno-unused-variable 
- MACROS		+=	USE_ALWAYS_INLINE
- MACROS		+=	USE_UNROLL
- MACROS		+=	USE_ASSUME
+ YK_CXXFLAGS	+=	$(CXX_ISA)
+ YK_CXXFLAGS	+=	-Wno-unused-variable 
+ MACROS		+=	NO_VEC
+ MACROS		+=	NO_SVML
 
 # Intel compiler (but not clang-based).
 else ifeq ($(call MACRO_DEF,$(YK_CXX),__INTEL_COMPILER),1)
 
- YK_CXXFLAGS	+=	$(ICC_ISA) -debug extended -restrict -ansi-alias -fno-alias
+ YK_CXXFLAGS	+=	$(ICC_ISA)
+ YK_CXXFLAGS	+=	-debug extended -restrict -ansi-alias -fno-alias
  YK_CXXFLAGS	+=	-fimf-use-svml=true -fimf-precision=low -fast-transcendentals \
 			-no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -ftz \
 			-fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
@@ -363,11 +364,6 @@ else ifeq ($(call MACRO_DEF,$(YK_CXX),__INTEL_COMPILER),1)
  #YK_CXXFLAGS	+=	-qopt-report=5
  #YK_CXXFLAGS	+=	-qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
  YK_CXX_VER_CMD :=	$(YK_CXX) -V
- MACROS		+=	USE_ALWAYS_INLINE
- MACROS		+=	USE_NOVEC
- MACROS		+=	USE_UNROLL
- MACROS		+=	USE_ASSUME
- MACROS		+=	USE_SVML
 
  # Use real 512-bit code.
  # (Commented out because it doesn't help performance, and it breaks Devito.)
@@ -377,11 +373,10 @@ else ifeq ($(call MACRO_DEF,$(YK_CXX),__INTEL_COMPILER),1)
 
 # Gnu-compatible compiler (but not Intel or Clang).
 else ifeq ($(call MACRO_DEF,$(YK_CXX),__GNUC__),1)
- YK_CXXFLAGS	+=	$(CXX_ISA) -Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
+ YK_CXXFLAGS	+=	$(CXX_ISA)
+ YK_CXXFLAGS	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
  SWIG_CXXFLAGS	+=	$(SWIG_GCCFLAGS)
- MACROS		+=	USE_ALWAYS_INLINE
- MACROS		+=	USE_NOVEC
- MACROS		+=	USE_ASSUME
+ MACROS		+=	NO_SVML
 
 # NB: if none of the above tests is triggered, the ISA will not be specified.
 
