@@ -486,9 +486,12 @@ namespace yask {
        'yc_number_node_ptr' from other YASK pointer types.
 
        Used only to provide conversions in function arguments.
+
+       Not a virtual class.
+
        @note Not used in Python API.
     */
-    class yc_number_ptr_arg : public virtual yc_number_node_ptr {
+    class yc_number_ptr_arg : public yc_number_node_ptr {
 
     public:
 
@@ -511,14 +514,17 @@ namespace yask {
        'yc_number_node_ptr' from non-YASK fundamental numeric types.
 
        Used only to provide conversions in function arguments.
+
+       Not a virtual class.
+
        @note Not used in Python API.
     */
-    class yc_number_const_arg : public virtual yc_number_node_ptr {
+    class yc_number_const_arg : public yc_number_node_ptr {
 
     protected:
         
         /// Create an argument from a constant value.
-        virtual yc_number_node_ptr _convert_const(double val) const;
+        yc_number_node_ptr _convert_const(double val) const;
 
     public:
 
@@ -546,14 +552,17 @@ namespace yask {
        numeric types.
 
        Used only to provide conversions in function arguments.
+
+       Not a virtual class.
+
        @note Not used in Python API.
     */
-    class yc_number_any_arg : public virtual yc_number_node_ptr {
+    class yc_number_any_arg : public yc_number_node_ptr {
 
     protected:
         
         /// Create an argument from a constant value.
-        virtual yc_number_node_ptr _convert_const(double val) const;
+        yc_number_node_ptr _convert_const(double val) const;
 
     public:
 
