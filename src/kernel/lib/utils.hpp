@@ -345,6 +345,10 @@ namespace yask {
             virtual bool _check_arg(const std::vector<std::string>& args, int& argi,
                                     const std::string& str) const;
 
+            // Get one double value from args[argi++].
+            // Exit on failure.
+            virtual double _double_val(const std::vector<std::string>& args, int& argi);
+
             // Get one idx_t value from args[argi++].
             // Exit on failure.
             virtual idx_t _idx_val(const std::vector<std::string>& args, int& argi);
@@ -400,6 +404,21 @@ namespace yask {
             IntOption(const std::string& name,
                       const std::string& help_msg,
                       int& val) :
+                OptionBase(name, help_msg), _val(val) { }
+
+            virtual void print_help(std::ostream& os,
+                                    int width) const;
+            virtual bool check_arg(const std::vector<std::string>& args, int& argi);
+        };
+
+        // An allowed double option.
+        class DoubleOption : public OptionBase {
+            double& _val;
+
+        public:
+            DoubleOption(const std::string& name,
+                      const std::string& help_msg,
+                      double& val) :
                 OptionBase(name, help_msg), _val(val) { }
 
             virtual void print_help(std::ostream& os,

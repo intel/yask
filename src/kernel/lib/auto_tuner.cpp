@@ -150,14 +150,14 @@ namespace yask {
         STATE_VARS(this);
         if (tune_mini_blks())
             DEBUG_MSG(_name << ": best-mini-block-size: " <<
-                      target_sizes().makeDimValStr(" * "));
+                      target_sizes().removeDim(step_posn).makeDimValStr(" * "));
         else
             DEBUG_MSG(_name << ": best-block-size: " <<
-                      target_sizes().makeDimValStr(" * ") << endl <<
+                      target_sizes().removeDim(step_posn).makeDimValStr(" * ") << endl <<
                       _name << ": mini-block-size: " <<
-                      _settings->_mini_block_sizes.makeDimValStr(" * "));
+                      _settings->_mini_block_sizes.removeDim(step_posn).makeDimValStr(" * "));
         DEBUG_MSG(_name << ": sub-block-size: " <<
-                  _settings->_sub_block_sizes.makeDimValStr(" * "));
+                  _settings->_sub_block_sizes.removeDim(step_posn).makeDimValStr(" * "));
     }
     
     // Access settings.
@@ -238,7 +238,7 @@ namespace yask {
         timer.clear();
         idx_t steps = steps_done;
         steps_done = 0;
-        
+
         // Leave if done.
         if (done)
             return;
@@ -247,15 +247,22 @@ namespace yask {
         if (!nullop)
             return;
 
-        // Cumulative stats.
+        // Cumulative stats and rate.
         csteps += steps;
         ctime += etime;
-
+        double rate = (ctime > 0.) ? (double(csteps) / ctime) : 0.;
+        double min_secs = _settings->_tuner_min_secs;
+        TRACE_MSG(_name << " eval() callback: " << steps << " step(s) in " <<
+                  etime << " secs; " << csteps << " step(s) in " <<
+                  ctime << " secs (" << rate <<
+                  " steps/sec) cumulative; best-rate = " << best_rate <<
+                  "; min-secs = " << min_secs);
+        
         // Still in warmup?
         if (in_warmup) {
 
             // Warmup not done?
-            if (ctime < warmup_secs && csteps < warmup_steps)
+            if (ctime < max(warmup_secs, min_secs) && csteps < warmup_steps)
                 return;
 
             // Done.
@@ -294,12 +301,7 @@ namespace yask {
             return;
         }
 
-        // Calc perf.
-        double rate = (ctime > 0.) ? (double(csteps) / ctime) : 0.;
-        TRACE_MSG(_name << ": " <<
-                  makeNumStr(rate) << " steps/sec (" <<
-                  csteps << " steps(s) in " << makeNumStr(ctime) <<
-                  " secs)");
+        // Determine whether we've done enough.
         bool rate_ok = false;
 
         // If the current rate is much less than the best,
@@ -315,14 +317,6 @@ namespace yask {
         if (!rate_ok)
             return;
 
-        // Print progress and reset vars for next time.
-        DEBUG_MSG(_name << ": search-dist=" << radius << ": " <<
-                  makeNumStr(rate) << " steps/sec (" <<
-                  csteps << " steps(s) in " << makeNumStr(ctime) <<
-                  " secs) with size " << target_sizes().makeDimValStr(" * "));
-        csteps = 0;
-        ctime = 0.;
-
         // Save result.
         results[target_sizes()] = rate;
         bool is_better = rate > best_rate;
@@ -331,6 +325,16 @@ namespace yask {
             best_rate = rate;
             better_neigh_found = true;
         }
+
+        // Print progress and reset vars for next time.
+        DEBUG_MSG(_name << ": search-dist=" << radius << ": " <<
+                  makeNumStr(rate) << " steps/sec (" <<
+                  csteps << " steps(s) in " << makeNumStr(ctime) <<
+                  " secs) with size " <<
+                  target_sizes().removeDim(step_posn).makeDimValStr(" * ") <<
+                  (is_better ? " -- best so far" : ""));
+        csteps = 0;
+        ctime = 0.;
 
         // At this point, we have gathered perf info on the current settings.
         // Now, we need to determine next unevaluated point in search space.

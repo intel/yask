@@ -51,7 +51,6 @@ namespace yask {
         double warmup_steps = 100;
         double warmup_secs = 0.5; // end warmup when either warmup_steps OR warmup_secs is reached.
         idx_t min_steps = 100;
-        double min_secs = 0.25; // eval when either min_steps OR min_secs is reached.
         double cutoff = 0.8;   // can stop eval if current rate < best rate * cutoff;
         idx_t max_radius = 8;   // starting search radius.
         idx_t min_dist = 4;     // min distance to move in any direction per eval.
