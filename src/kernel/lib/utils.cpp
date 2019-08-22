@@ -428,6 +428,28 @@ namespace yask {
         return false;
     }
 
+    // Get one double value from args[argi].
+    // On failure, print msg using string from args[argi-1] and exit.
+    // On success, increment argi and return value.
+    double CommandLineParser::OptionBase::_double_val(const vector<string>& args,
+                                                     int& argi)
+    {
+        if (size_t(argi) >= args.size() || args[argi].length() == 0) {
+            THROW_YASK_EXCEPTION("Error: no argument for option '" + args[argi - 1] + "'");
+        }
+
+        const char* nptr = args[argi].c_str();
+        char* endptr = 0;
+        double val = strtod(nptr, &endptr);
+        if (val == HUGE_VAL || val == -HUGE_VAL || *endptr != '\0') {
+            THROW_YASK_EXCEPTION("Error: argument for option '" + args[argi - 1] +
+                                 "' is not a valid floating-point number");
+        }
+
+        argi++;
+        return val;
+    }
+
     // Get one idx_t value from args[argi].
     // On failure, print msg using string from args[argi-1] and exit.
     // On success, increment argi and return value.
@@ -472,11 +494,29 @@ namespace yask {
             (_val ? "true" : "false") << "." << endl;
     }
 
+    // Check for a double option.
+    bool CommandLineParser::DoubleOption::check_arg(const std::vector<std::string>& args,
+                                                    int& argi) {
+        if (_check_arg(args, argi, _name)) {
+            _val = _double_val(args, argi);
+            return true;
+        }
+        return false;
+    }
+
+    // Print help on a double option.
+    void CommandLineParser::DoubleOption::print_help(ostream& os,
+                                                     int width) const {
+        _print_help(os, _name + " <floating-point number>", width);
+        os << _help_leader << _current_value_str <<
+            _val << "." << endl;
+    }
+
     // Check for an int option.
     bool CommandLineParser::IntOption::check_arg(const std::vector<std::string>& args,
                                                  int& argi) {
         if (_check_arg(args, argi, _name)) {
-            _val = (int)_idx_val(args, argi); // TODO: check for under/overflow.
+            _val = (int)_idx_val(args, argi); // TODO: check for over/underflow.
             return true;
         }
         return false;

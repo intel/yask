@@ -272,7 +272,7 @@ int main(int argc, char** argv)
         yk_factory kfac;
         yask_output_factory yof;
 
-        // Parse options once just to get vars needed for env.
+        // Parse custom options once just to get vars needed for env.
         MySettings opts1(nullptr);
         opts1.parse(argc, argv);
         

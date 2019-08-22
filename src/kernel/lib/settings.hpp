@@ -260,6 +260,7 @@ namespace yask {
         bool _do_auto_tune = false;    // whether to do auto-tuning.
         bool _tune_mini_blks = false; // auto-tune mini-blks instead of blks.
         bool _allow_pack_tuners = false; // allow per-pack tuners when possible.
+        double _tuner_min_secs = 0.25;   // min time to run tuner for new better setting.
         
         // Debug.
         bool force_scalar = false; // Do only scalar ops.

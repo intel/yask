@@ -424,6 +424,11 @@ namespace yask {
                            "Adjust block sizes *during* normal operation to tune for performance. "
                            "May cause varying performance between steps.",
                            _do_auto_tune));
+        parser.add_option(new CommandLineParser::DoubleOption
+                          ("auto_tune_min_secs",
+                           "Minimum seconds to run trial during auto-tuning for trial settings to be "
+                           "considered better than the existing best.",
+                           _tuner_min_secs));
         parser.add_option(new CommandLineParser::BoolOption
                           ("auto_tune_mini_blocks",
                            "Apply the auto-tuner to mini-block sizes instead of block sizes. "
