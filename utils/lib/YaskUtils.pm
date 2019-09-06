@@ -32,10 +32,12 @@ use Carp;
 # Special keys.
 my $linux_key = "Linux kernel";
 my $nodes_key = "MPI node(s)";
+my $auto_tuner_key = "auto-tuner used";
 our @special_log_keys =
   (
    $linux_key,
    $nodes_key,
+   $auto_tuner_key,
    );
 
 # Values to get from log file.
@@ -213,7 +215,6 @@ sub getResultsFromLine($$) {
   $line =~ s/target.ISA/target/g;
   
   # special cases for manual parsing...
-  # TODO: catch output of auto-tuner and update relevant results.
 
   # Output of 'uname -a'
   if ($line =~ /^\s*Linux\s/) {
@@ -233,6 +234,8 @@ sub getResultsFromLine($$) {
   # Invalidate settings overridden by auto-tuner on multiple packs.
   elsif ($line =~ /^auto-tuner(.).*size:/) {
     my $c = $1;
+
+    $results->{$auto_tuner_key} = 'TRUE';
 
     # If colon found above, tuner is global.
     my $onep = ($c eq ':');
@@ -288,15 +291,25 @@ sub getResultsFromFile($$) {
   my $results = shift;          # ref to hash.
   my $fname = shift;            # filename.
 
+  # Init values.
+  $results->{$auto_tuner_key} = 'FALSE';
+  my $ok = 0;
+
+  # Open file.
   my $fh = new FileHandle;
   if (!$fh->open("<$fname")) {
     carp "error: cannot open '$fname'";
   } else {
+
+    # Parse each line.
     while (<$fh>) {
+      $ok = 1 if /DONE/;
       getResultsFromLine($results, $_);
     }
     $fh->close();
   }
+
+  return $ok;
 }
 
 # Print standard CSV header to given file.
@@ -317,8 +330,8 @@ sub printCsvValues($$) {
   for my $m (@all_log_keys) {
     my $r = $results->{$m};
     $r = '' if !defined $r;
-    $r = '"'.$r.'"'  # add quotes if not a number.
-      if $r !~ /^[0-9.e+-]+$/ || $r =~ /[.].*[.]/;
+    $r = '"'.$r.'"'  # add quotes if not simple chars.
+      if $r !~ /^[\w.]+$/ || $r =~ /[.].*[.]/;
     push @cols, $r;
   }
   print $fh join(',', @cols);

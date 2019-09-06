@@ -51,9 +51,13 @@ print $outFH ",log file\n";
 for my $arg (@ARGV) {
   for my $fn (glob $arg) {
     my %results;
-    YaskUtils::getResultsFromFile(\%results, $fn);
 
-    YaskUtils::printCsvValues(\%results, $outFH);
-    print $outFH ",\"$fn\"\n";
+    # Parse file.
+    if (YaskUtils::getResultsFromFile(\%results, $fn)) {
+
+      # Print results if ok.
+      YaskUtils::printCsvValues(\%results, $outFH);
+      print $outFH ",\"$fn\"\n";
+    }
   }
 }
