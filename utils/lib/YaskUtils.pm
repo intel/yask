@@ -90,6 +90,8 @@ our @log_keys =
    'L2 prefetch distance',
    'num temporal block steps',
    'num wave front steps',
+   'use shm',
+   'overlap comms',
 
    # other values from log file.
    'model name',
@@ -235,7 +237,7 @@ sub getResultsFromLine($$) {
   elsif ($line =~ /^auto-tuner(.).*size:/) {
     my $c = $1;
 
-    $results->{$auto_tuner_key} = 'TRUE';
+    $results->{$auto_tuner_key} = 'true';
 
     # If colon found above, tuner is global.
     my $onep = ($c eq ':');
@@ -249,6 +251,14 @@ sub getResultsFromLine($$) {
         $results->{$k} = $val;
       }
     }
+  }
+
+  # Shared-mem & overlap backward-compat.
+  elsif ($line =~ /^Allocating.*MPI buffer/) {
+    $results->{'use shm'} = ($line =~ /using MPI shm/) ? 'true' : 'false';
+  }
+  elsif ($line =~ /^\s*mpi-interior:/) {
+    $results->{'overlap comms'} = 'true';
   }
 
   # look for matches to all other keys.
@@ -292,7 +302,9 @@ sub getResultsFromFile($$) {
   my $fname = shift;            # filename.
 
   # Init values.
-  $results->{$auto_tuner_key} = 'FALSE';
+  $results->{$auto_tuner_key} = 'false';
+  $results->{'use shm'} = 'false';
+  $results->{'overlap comms'} = 'false';
   my $ok = 0;
 
   # Open file.
@@ -304,6 +316,11 @@ sub getResultsFromFile($$) {
     # Parse each line.
     while (<$fh>) {
       $ok = 1 if /DONE/;
+      if (/^Setup for validation/) {
+        $ok = 1;
+        last;
+      }
+
       getResultsFromLine($results, $_);
     }
     $fh->close();
