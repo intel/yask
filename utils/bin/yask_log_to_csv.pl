@@ -59,5 +59,8 @@ for my $arg (@ARGV) {
       YaskUtils::printCsvValues(\%results, $outFH);
       print $outFH ",\"$fn\"\n";
     }
+    else {
+      warn "Warning: log file '$fn' does not seem to contain a successful YASK run; ignoring.\n";
+    }
   }
 }
