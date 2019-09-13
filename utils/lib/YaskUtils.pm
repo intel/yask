@@ -94,11 +94,15 @@ our @log_keys =
    'overlap comms',
 
    # other values from log file.
+   'vendor ID',
    'model name',
    'CPU(s)',
+   'thread(s) per core',
    'core(s) per socket',
    'socket(s)',
    'NUMA node(s)',
+   'CPU MHz',
+   'CPU max MHz',
    'MemTotal',
    'MemFree',
    'ShMem',
