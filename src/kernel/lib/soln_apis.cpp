@@ -272,7 +272,9 @@ namespace yask {
 #ifdef USE_MPI
         DEBUG_MSG(" num-ranks:             " << opts->_num_ranks.makeDimValStr(" * ") << endl <<
                   " rank-indices:          " << opts->_rank_indices.makeDimValStr() << endl <<
-                  " local-domain-offsets:  " << rank_domain_offsets.makeDimValStr(dims->_domain_dims));
+                  " local-domain-offsets:  " << rank_domain_offsets.makeDimValStr(dims->_domain_dims) << endl <<
+                  " use-shm:               " << opts->use_shm << endl <<
+                  " overlap-comms:         " << opts->overlap_comms);
         if (opts->overlap_comms)
             DEBUG_MSG(" mpi-interior:          " << mpi_interior.make_range_string(domain_dims));
 #endif

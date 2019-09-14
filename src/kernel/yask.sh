@@ -317,7 +317,7 @@ else
 fi
 
 # Commands to capture some important system status and config info for benchmark documentation.
-config_cmds="sleep 1; uptime; lscpu; sed '/^$/q' /proc/cpuinfo; uname -a; $dump /etc/system-release; $dump /proc/cmdline; $dump /proc/meminfo; free -gt; numactl -H; ulimit -a"
+config_cmds="sleep 1; uptime; lscpu; cpuinfo -A; sed '/^$/q' /proc/cpuinfo; $dump /sys/devices/system/cpu/cpufreq/boost; uname -a; $dump /etc/system-release; $dump /proc/cmdline; $dump /proc/meminfo; free -gt; numactl -H; ulimit -a"
 
 # Command sequence to be run in a shell.
 # Captures
