@@ -959,7 +959,7 @@ namespace yask {
         }
 
         /// Get the underlying \ref yc_var pointer.
-        virtual const yc_var_ptr get_var() const {
+        virtual yc_var_ptr get_var() const {
             return _var;
         }
 
