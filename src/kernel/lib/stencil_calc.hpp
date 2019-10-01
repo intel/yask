@@ -32,7 +32,7 @@ namespace yask {
     // A stencil context contains one or more packs.
 
     // A pure-virtual class base for a stencil bundle.
-    class StencilBundleBase : 
+    class StencilBundleBase :
         public ContextLinker {
 
     protected:
@@ -56,12 +56,12 @@ namespace yask {
         // may contain some invalid points.
         // This must fit inside the extended BB for this rank.
         BoundingBox _bundle_bb;
-        
+
 	// Bounding box(es) that indicate where this bundle is valid.
 	// These must be non-overlapping. These do NOT contain
         // any invalid points. These will all be inside '_bundle_bb'.
 	BBList _bb_list;
-	
+
         // Normalize the indices, i.e., divide by vector len in each dim.
         // Ranks offsets must already be subtracted.
         // Each dim in 'orig' must be a multiple of corresponding vec len.
@@ -72,12 +72,12 @@ namespace yask {
 
             // i: index for stencil dims, j: index for domain dims.
             DOMAIN_VAR_LOOP(i, j) {
-            
+
                 // Divide indices by fold lengths as needed by
                 // read/writeVecNorm().  Use idiv_flr() instead of '/'
                 // because begin/end vars may be negative (if in halo).
                 norm[i] = idiv_flr<idx_t>(orig[i], fold_pts[j]);
-            
+
                 // Check for no remainder.
                 assert(imod_flr<idx_t>(orig[i], fold_pts[j]) == 0);
             }
@@ -157,7 +157,7 @@ namespace yask {
 
         // Copy BB vars from another.
         void copy_bounding_box(const StencilBundleBase* src);
-        
+
         // Determine whether indices are in [sub-]domain.
         virtual bool
         is_in_valid_domain(const Indices& idxs) const =0;
@@ -173,7 +173,7 @@ namespace yask {
         get_domain_description() const =0;
         virtual std::string
         get_step_cond_description() const =0;
-        
+
         // Determine whether step index is enabled.
         virtual bool
         is_in_valid_step(idx_t input_step_index) const =0;
@@ -288,7 +288,7 @@ namespace yask {
 
         // Auto-tuner for pack settings.
         AutoTuner _at;
-        
+
     public:
 
         // Perf stats for this pack.
@@ -305,7 +305,7 @@ namespace yask {
         idx_t tot_reads_per_step = 0;
         idx_t tot_writes_per_step = 0;
         idx_t tot_fpops_per_step = 0;
-        
+
         BundlePack(StencilContext* context,
                    const std::string& name) :
             ContextLinker(context),

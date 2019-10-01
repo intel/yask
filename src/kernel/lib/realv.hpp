@@ -601,8 +601,8 @@ namespace yask {
     ALWAYS_INLINE void yask_cos_and_sin(real_t& cos_res, real_t& sin_res, real_t a) {
         yask_sin_and_cos(sin_res, cos_res, a);
     }
-    ALWAYS_INLINE void yask_sin_and_cos(real_vec_t& sin_res, 
-                                        real_vec_t& cos_res, 
+    ALWAYS_INLINE void yask_sin_and_cos(real_vec_t& sin_res,
+                                        real_vec_t& cos_res,
                                         const real_vec_t& a) {
 #if defined(NO_INTRINSICS) || defined(NO_SVML)
         REAL_VEC_LOOP(i) yask_sin_and_cos(sin_res[i], cos_res[i], a[i]);
@@ -610,8 +610,8 @@ namespace yask {
         sin_res.u.mr = INAME(sincos)(&cos_res.u.mr, a.u.mr);
 #endif
     }
-    ALWAYS_INLINE void yask_cos_and_sin(real_vec_t& cos_res, 
-                                        real_vec_t& sin_res, 
+    ALWAYS_INLINE void yask_cos_and_sin(real_vec_t& cos_res,
+                                        real_vec_t& sin_res,
                                         const real_vec_t& a) {
         yask_sin_and_cos(sin_res, cos_res, a);
     }
@@ -636,7 +636,7 @@ namespace yask {
         else if (count == VLEN)
             res.u = a.u;
         else {
-        
+
 #if defined(NO_INTRINSICS)
             // must make temp copies in case &res == &a or &b.
             real_vec_t tmpa = a, tmpb = b;
@@ -691,7 +691,7 @@ namespace yask {
             res.u.mi = INAMEI(alignr)(a.u.mi, b.u.mi, count);
 #endif
         }
-        
+
 #ifdef TRACE_INTRINSICS
         std::cout << " res: ";
         res.print_reals(std::cout);

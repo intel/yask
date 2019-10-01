@@ -147,7 +147,7 @@ namespace yask {
         inline idx_t get_last_local_index(idx_t posn) const {
             return _rank_offsets[posn] + _local_offsets[posn] + _domains[posn] + _actl_right_pads[posn] - 1;
         }
-        
+
         // Make sure indices are in range.
         // Optionally fix them to be in range and return in 'fixed_indices'.
         // If 'normalize', make rank-relative, divide by vlen and return in 'fixed_indices'.
@@ -185,7 +185,7 @@ namespace yask {
             if (_has_step_dim)
                 _local_offsets[+Indices::step_posn] = 0;
         }
-        
+
         // Halo-exchange flag accessors.
         virtual bool is_dirty(idx_t step_idx) const;
         virtual void set_dirty(bool dirty, idx_t step_idx);
@@ -212,7 +212,7 @@ namespace yask {
 
         // Does this var cover the N-D domain?
         virtual bool is_domain_var() const;
-        
+
         // Scratch accessors.
         virtual bool is_scratch() const {
             return _is_scratch;
@@ -233,7 +233,7 @@ namespace yask {
                 _is_dynamic_step_alloc = true;
                 _is_dynamic_misc_alloc = true;
             }
-        }        
+        }
 
         // Lookup position by dim name.
         // Return -1 or die if not found, depending on flag.
@@ -299,7 +299,7 @@ namespace yask {
         virtual idx_t get_elements_in_slice(void* buffer_ptr,
                                             const Indices& first_indices,
                                             const Indices& last_indices) const;
-        
+
         // Possibly vectorized version of set/get_elements_in_slice().
         virtual idx_t set_vecs_in_slice(const void* buffer_ptr,
                                         const Indices& first_indices,
@@ -369,14 +369,14 @@ namespace yask {
 
     };
     typedef std::shared_ptr<YkVarBase> VarBasePtr;
-    
+
     // Implementation of yk_var interface.  Class contains no real data,
     // just a pointer to the underlying data and meta-data. This allows var
     // data to be shared and moved without changing pointers.
     class YkVarImpl : public virtual yk_var {
     protected:
         VarBasePtr _gbp;
-        
+
     public:
         YkVarImpl() { }
         YkVarImpl(const VarBasePtr& gp) : _gbp(gp) { }
@@ -1157,7 +1157,7 @@ namespace yask {
                          size_t idx) {
                         Indices pt = firstv.addElements(ofs);
                         real_vec_t val = ((real_vec_t*)buffer_ptr)[idx + iofs];
-                        
+
                         writeVecNorm(val, pt, ti, __LINE__);
                         return true;    // keep going.
                     });
@@ -1213,7 +1213,7 @@ namespace yask {
                     ([&](const IdxTuple& ofs,
                          size_t idx) {
                         Indices pt = firstv.addElements(ofs);
-                        
+
                         real_vec_t val = readVecNorm(pt, ti, __LINE__);
                         ((real_vec_t*)buffer_ptr)[idx + iofs] = val;
                         return true;    // keep going.

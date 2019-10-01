@@ -217,7 +217,7 @@ namespace yask {
         SimpleLock() {
             init();
         }
-        
+
         // Allow write and block read.
         void init() {
             _write_count.val = _read_count.val = _ival;
@@ -265,7 +265,7 @@ namespace yask {
             _check("mark_write_done");
         }
     };
-    
+
     // A class for maintaining elapsed time.
     class YaskTimer {
 
@@ -295,7 +295,7 @@ namespace yask {
             clock_gettime(CLOCK_REALTIME, &ts);
             return ts;
         }
-        
+
         // Start a timed region.
         // start() and stop() can be called multiple times in
         // pairs before calling get_elapsed_secs(), which
@@ -313,7 +313,7 @@ namespace yask {
 
             // Make sure timer was stopped.
             assert(_begin.tv_sec == 0);
-            
+
             return double(_elapsed.tv_sec) + double(_elapsed.tv_nsec) * 1e-9;
         }
 
@@ -506,7 +506,7 @@ namespace yask {
             auto args = set_args(arg_string);
             return parse_args(pgmName, args);
         }
-        
+
         // Same as above, but pgmName is populated from argv[0]
         // and rest of argv is parsed.
         virtual std::string parse_args(int argc, char** argv) {

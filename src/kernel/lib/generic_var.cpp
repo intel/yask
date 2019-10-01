@@ -120,7 +120,7 @@ namespace yask {
                               });
         }
     }
-    
+
     template <typename T>
     void GenericVarTemplate<T>::set_elems_in_seq(T seed) {
         if (_elems) {
@@ -153,7 +153,7 @@ namespace yask {
 
             err_t() : nerrs(0) { }
         };
-        
+
         // Count abs diffs > epsilon.
         T ep = epsilon;
         auto nthr = yask_get_num_threads();

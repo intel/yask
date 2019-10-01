@@ -93,7 +93,7 @@ namespace yask {
             assert(_debug_lock_init_done);
             omp_unset_lock(&_debug_lock);
         }
-        
+
         // APIs.
         virtual int get_num_ranks() const {
             return num_ranks;
@@ -212,7 +212,7 @@ namespace yask {
          // Null stream to throw away debug info.
         yask_output_factory yof;
         yask_output_ptr nullop = yof.new_null_output();
-        
+
    public:
 
         // Ptr to problem dimensions (NOT sizes), folding, etc.
@@ -251,7 +251,7 @@ namespace yask {
         // Var behavior.
         bool _step_wrap = false; // Allow invalid step indices to alias to valid ones (set via APIs only).
         bool _allow_addl_pad = true; // Allow extending padding beyond what's needed for alignment.
-        
+
         // Stencil-dim posn in which to apply block-thread binding.
         // TODO: make this a cmd-line parameter.
         int _bind_posn = 1;
@@ -261,7 +261,7 @@ namespace yask {
         bool _tune_mini_blks = false; // auto-tune mini-blks instead of blks.
         bool _allow_pack_tuners = false; // allow per-pack tuners when possible.
         double _tuner_min_secs = 0.25;   // min time to run tuner for new better setting.
-        
+
         // Debug.
         bool force_scalar = false; // Do only scalar ops.
 
@@ -375,7 +375,7 @@ namespace yask {
         // Shm halo buffers for each neighbor.
         std::vector<void*> halo_buf_ptrs;
         std::vector<size_t> halo_buf_sizes;
-        
+
         // Ctor based on pre-set problem dimensions.
         MPIInfo(DimsPtr dims) : _dims(dims) {
 
@@ -420,7 +420,7 @@ namespace yask {
 
     // MPI data for one buffer for one neighbor of one var.
     class MPIBuf {
-        
+
         // Ptr to read/write lock when buffer is in shared mem.
         SimpleLock* _shm_lock = 0;
 
@@ -475,7 +475,7 @@ namespace yask {
             if (_shm_lock)
                 _shm_lock->mark_write_done();
         }
-        
+
         // Number of points overall.
         idx_t get_size() const {
             if (num_pts.size() == 0)
@@ -545,7 +545,7 @@ namespace yask {
         // These are used for async comms.
         std::vector<MPI_Request> recv_reqs;
         std::vector<MPI_Request> send_reqs;
-        
+
         MPIData(MPIInfoPtr mpiInfo) :
             _mpiInfo(mpiInfo) {
 
@@ -563,7 +563,7 @@ namespace yask {
             for (auto& mb : bufs)
                 mb.reset_locks();
         }
-        
+
         // Apply a function to each neighbor rank.
         // Called visitor function will contain the rank index of the neighbor.
         virtual void visitNeighbors(std::function<void (const IdxTuple& neighbor_offsets, // NeighborOffset.
@@ -692,7 +692,7 @@ namespace yask {
 
         // Get total number of computation threads to use.
         int get_num_comp_threads(int& region_threads, int& blk_threads) const;
-        
+
         // Set number of threads to use for a region.
         // Enable nested OMP if there are >1 block threads,
         // disable otherwise.

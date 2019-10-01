@@ -101,7 +101,7 @@ namespace yask {
         }
         return true;
     }
-    
+
     // Halo-exchange flag accessors.
     bool YkVarBase::is_dirty(idx_t step_idx) const {
         if (_dirty_steps.size() == 0)
@@ -501,7 +501,7 @@ namespace yask {
                                              to_string(first_ok) + "..." + to_string(last_ok) +
                                              "] of var '" + _ggb->get_name() + "'");
                     }
-                    
+
                     // Update the output indices.
                     if (clipped_indices) {
                         if (idx < first_ok)
@@ -542,8 +542,8 @@ namespace yask {
                       " ... " << get_last_local_index(step_posn) << "]");
         }
     }
-    
-    
+
+
     // Set dirty flags between indices.
     void YkVarBase::set_dirty_in_slice(const Indices& first_indices,
                                         const Indices& last_indices) {

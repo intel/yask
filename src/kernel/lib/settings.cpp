@@ -69,7 +69,7 @@ namespace yask {
     // KernelEnv global lock objects.
     omp_lock_t KernelEnv::_debug_lock;
     bool KernelEnv::_debug_lock_init_done = false;
-    
+
     // Init MPI, OMP.
     void KernelEnv::initEnv(int* argc, char*** argv, MPI_Comm existing_comm)
     {
@@ -115,7 +115,7 @@ namespace yask {
         MPI_Comm_rank(shm_comm, &my_shm_rank);
         MPI_Comm_group(shm_comm, &shm_group);
         MPI_Comm_size(shm_comm, &num_shm_ranks);
-        
+
 #else
         comm = MPI_COMM_NULL;
 #endif
@@ -167,7 +167,7 @@ namespace yask {
     void* MPIBuf::set_storage(std::shared_ptr<char>& base, size_t offset) {
 
         void* p = set_storage(base.get(), offset);
-        
+
         // Share ownership of base.  This ensures that [only] last MPI
         // buffer to use a shared allocation will trigger dealloc.
         _base = base;
@@ -196,7 +196,7 @@ namespace yask {
 
         return (void*)_elems;
     }
-    
+
     // Apply a function to each neighbor rank.
     // Does NOT visit self or non-existent neighbors.
     void MPIData::visitNeighbors(std::function<void
@@ -636,7 +636,7 @@ namespace yask {
         auto& mbt = _mini_block_sizes[step_dim];
         auto& cluster_pts = _dims->_cluster_pts;
         int nddims = _dims->_domain_dims.getNumDims();
-        
+
         // Fix up step-dim sizes.
         rt = max(rt, idx_t(0));
         bt = max(bt, idx_t(0));
@@ -765,9 +765,9 @@ namespace yask {
                 if (sb_per_b >= num_block_threads) {
                     _bind_posn = i;
                     break;
-                }                        
+                }
             }
-            os << " Note: only the sub-block size in the '" << 
+            os << " Note: only the sub-block size in the '" <<
                 _dims->_stencil_dims.getDimName(_bind_posn) << "' dimension may be used at run-time\n"
                 "  because block-thread binding is enabled on " << num_block_threads << " block threads.\n";
         }
@@ -903,7 +903,7 @@ namespace yask {
         assert(ct <= mt);
         return ct;
     }
-        
+
     // Set number of threads to use for a region.
     // Enable nested OMP if there are >1 block threads,
     // disable otherwise.
@@ -952,7 +952,7 @@ namespace yask {
         return bt;
     }
 
-    
+
     // ContextLinker ctor.
     ContextLinker::ContextLinker(StencilContext* context) :
         KernelStateBase(context->get_state()),

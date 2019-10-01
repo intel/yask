@@ -49,7 +49,7 @@ namespace yask {
             bb_begin(NUM_DOMAIN_DIMS),
             bb_end(NUM_DOMAIN_DIMS),
             bb_len(NUM_DOMAIN_DIMS) { }
-        
+
         // Make Tuples.
         IdxTuple bb_begin_tuple(const IdxTuple& ddims) const {
             return bb_begin.makeTuple(ddims);
@@ -67,7 +67,7 @@ namespace yask {
         std::string make_len_string(const IdxTuple& ddims) const {
             return bb_len_tuple(ddims).makeDimValStr(" * ");
         }
-        
+
         // Calc values and set valid to true.
         // If 'force_full', set 'bb_num_points' as well as 'bb_size'.
         void update_bb(const std::string& name,
@@ -199,7 +199,7 @@ namespace yask {
         typedef std::vector<hook_fn_2idx_t> hook_fn_2idx_vec;
         hook_fn_2idx_vec _before_run_solution_hooks;
         hook_fn_2idx_vec _after_run_solution_hooks;
-        
+
     public:
 
         // Name.
@@ -241,7 +241,7 @@ namespace yask {
                 mpi_interior.bb_begin[ddim] > ext_bb.bb_begin[ddim] :
                 mpi_interior.bb_end[ddim] < ext_bb.bb_end[ddim];
         }
-        
+
         // List of all non-scratch stencil bundles in the order in which
         // they should be evaluated within a step.
         StencilBundleList stBundles;
@@ -517,7 +517,7 @@ namespace yask {
                               idx_t nshapes, idx_t shape,
                               const BridgeMask& bridge_mask,
                               ScanIndices& idxs);
-        
+
         // Set the bounding-box around all stencil bundles.
         void find_bounding_boxes();
 
@@ -681,7 +681,7 @@ namespace yask {
 
         // Auto-tuner methods.
         virtual void eval_auto_tuner(idx_t num_steps);
-        
+
         // Auto-tuner APIs.
         virtual void reset_auto_tuner(bool enable, bool verbose = false);
         virtual void run_auto_tuner_now(bool verbose = true);
