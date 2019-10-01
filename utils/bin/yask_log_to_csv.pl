@@ -51,16 +51,9 @@ print $outFH ",log file\n";
 for my $arg (@ARGV) {
   for my $fn (glob $arg) {
     my %results;
+    YaskUtils::getResultsFromFile(\%results, $fn);
 
-    # Parse file.
-    if (YaskUtils::getResultsFromFile(\%results, $fn)) {
-
-      # Print results if ok.
-      YaskUtils::printCsvValues(\%results, $outFH);
-      print $outFH ",\"$fn\"\n";
-    }
-    else {
-      warn "Warning: log file '$fn' does not seem to contain a successful YASK run; ignoring.\n";
-    }
+    YaskUtils::printCsvValues(\%results, $outFH);
+    print $outFH ",\"$fn\"\n";
   }
 }

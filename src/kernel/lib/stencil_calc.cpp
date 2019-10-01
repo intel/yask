@@ -63,14 +63,15 @@ namespace yask {
 
         // TODO: if >1 BB, check limits of outer one first to save time.
 
-        // Lookup some thread-binding info.
+        // Set number of threads in this block.
+        int nbt = _context->set_block_threads();
+
+        // Thread-binding info.
+        // We only bind threads if there is more than one block thread
+        // and binding is enabled.
+        bool bind_threads = nbt > 1 && settings.bind_block_threads;
         int bind_posn = settings._bind_posn;
-        string bind_dim;
-        idx_t bind_slab_pts = 1;
-        if (settings.bind_block_threads) {
-            bind_dim = stencil_dims.getDimName(bind_posn);
-            bind_slab_pts = settings._sub_block_sizes[bind_posn];
-        }
+        idx_t bind_slab_pts = settings._sub_block_sizes[bind_posn];
 
         // Loop through each solid BB for this bundle.
         // For each BB, calc intersection between it and 'mini_block_idxs'.
@@ -124,12 +125,11 @@ namespace yask {
             // Loop through all the needed bundles.
             for (auto* sg : sg_list) {
 
-                // Start threads within a block.  Each of these threads will
-                // eventually work on a separate sub-block.  This is nested within
-                // an OMP region thread.  If there is only one block per thread,
-                // nested OMP is disabled, and this OMP pragma does nothing.
-                int nbt = _context->set_block_threads();
-                bool bind_threads = nbt > 1 && settings.bind_block_threads;
+                // If binding threads to data, start threads within a block.
+                // Each of these threads will eventually work on a separate
+                // sub-block.  This is nested within an OMP region thread.
+                // If there is only one block per thread, nested OMP is
+                // disabled, and this OMP pragma does nothing.
                 _Pragma("omp parallel proc_bind(spread)") {
                     int block_thread_idx = 0;
                     if (nbt > 1) {
@@ -201,7 +201,7 @@ namespace yask {
 #undef CALC_SUB_BLOCK
                     }
 
-                } // OMP parallel.
+                } // OMP parallel when binding threads to data.
             } // bundles.
         } // BB list.
     }
@@ -792,7 +792,7 @@ namespace yask {
     }
 
     // Calc the work stats.
-    // Requires MPI barriers!
+    // Contains MPI barriers!
     void BundlePack::init_work_stats() {
         STATE_VARS(this);
 
