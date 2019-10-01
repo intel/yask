@@ -304,10 +304,10 @@ namespace yask {
         virtual void adjustSettings(KernelStateBase* ksb = 0);
 
         // Determine if this is the first or last rank in given dim.
-        virtual bool is_first_rank(const std::string dim) {
+        bool is_first_rank(const std::string dim) {
             return _rank_indices[dim] == 0;
         }
-        virtual bool is_last_rank(const std::string dim) {
+        bool is_last_rank(const std::string dim) {
             return _rank_indices[dim] == _num_ranks[dim] - 1;
         }
     };
@@ -577,8 +577,8 @@ namespace yask {
 
     // A collection of solution meta-data whose ownership is shared between
     // various objects.
+    // This is not a virtual class.
     struct KernelState {
-        virtual ~KernelState() { }
 
         // Environment (mostly MPI).
         KernelEnvPtr _env;
@@ -644,6 +644,7 @@ namespace yask {
     // A base class containing a shared pointer to a kernel state.
     // Used to ensure that the shared state object stays allocated when
     // at least one of its owners exists.
+    // This is not a virtual class.
     class KernelStateBase {
     protected:
 
@@ -658,7 +659,6 @@ namespace yask {
                         KernelSettingsPtr& settings);
         KernelStateBase(KernelStateBase* p) :
             _state(p->_state) { }
-        virtual ~KernelStateBase() {}
 
         // Access to state.
         ALWAYS_INLINE KernelStatePtr& get_state() {
@@ -678,10 +678,10 @@ namespace yask {
         MPIInfoPtr& get_mpi_info() { return _state->_mpiInfo; }
         const MPIInfoPtr& get_mpi_info() const { return _state->_mpiInfo; }
         bool use_pack_tuners() const { return _state->_use_pack_tuners; }
-        virtual yask_output_ptr get_debug_output() const {
+        yask_output_ptr get_debug_output() const {
             return _state->_env->get_debug_output();
         }
-        virtual void set_debug_output(yask_output_ptr debug) {
+        void set_debug_output(yask_output_ptr debug) {
             _state->_env->set_debug_output(debug);
         }
 
@@ -701,6 +701,7 @@ namespace yask {
         int set_region_threads();
 
         // Set number of threads for a block.
+        // Must be called from within a top-level OMP parallel region.
         // Return number of threads.
         // Do nothing and return 0 if not properly initialized.
         int set_block_threads();
@@ -711,6 +712,7 @@ namespace yask {
     // state, and keeps a pointer back to the context. However, it does not
     // share ownership of the context itself. That would create an ownership
     // loop that would not allow the context to be deleted.
+    // This is not a virtual class.
     class ContextLinker :
         public KernelStateBase {
 
@@ -719,7 +721,6 @@ namespace yask {
 
     public:
         ContextLinker(StencilContext* context);
-        virtual ~ContextLinker() { }
     };
 
 } // yask namespace.

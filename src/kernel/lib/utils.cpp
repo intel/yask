@@ -112,7 +112,8 @@ namespace yask {
 #endif
 
         if (!p)
-            THROW_YASK_EXCEPTION("error: cannot allocate " + makeByteStr(nbytes));
+            THROW_YASK_EXCEPTION("error: cannot allocate " + makeByteStr(nbytes) +
+                                 " aligned to " + makeByteStr(align));
         return static_cast<char*>(p);
     }
 
@@ -230,7 +231,8 @@ namespace yask {
 
         // Should not get here w/null p; throw exception.
         if (!p)
-            THROW_YASK_EXCEPTION("Error: cannot allocate " + makeByteStr(nbytes));
+            THROW_YASK_EXCEPTION("Error: cannot allocate " + makeByteStr(nbytes) +
+                                 " using numa-node (or policy) " + to_string(numa_pref));
 
         // Check alignment.
         if ((size_t(p) & (CACHELINE_BYTES - 1)) != 0)
@@ -287,6 +289,10 @@ namespace yask {
         THROW_YASK_EXCEPTION("Error: PMEM allocation is not enabled; build with pmem=1");
 #endif
 
+        if (!p)
+            THROW_YASK_EXCEPTION("Error: cannot allocate " + makeByteStr(nbytes) +
+                                 " on pmem dev " + to_string(dev_num));
+
         // Check alignment.
         if ((size_t(p) & (CACHELINE_BYTES - 1)) != 0)
             FORMAT_AND_THROW_YASK_EXCEPTION("Error: PMEM-allocated " << p << " is not " <<
@@ -323,6 +329,10 @@ namespace yask {
 #else
         THROW_YASK_EXCEPTION("Error: MPI shm allocation is not enabled; build with mpi=1");
 #endif
+
+        if (!p)
+            THROW_YASK_EXCEPTION("Error: cannot allocate " + makeByteStr(nbytes) +
+                                 " using MPI shm");
 
         // Check alignment.
         if ((size_t(p) & (CACHELINE_BYTES - 1)) != 0)

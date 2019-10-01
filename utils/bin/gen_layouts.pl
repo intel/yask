@@ -46,80 +46,6 @@ use lib dirname($0)."/../lib";
 
 print "// Automatically generated; do not edit.\n\n" if $opt ne '-p';
 
-if ($opt eq '-d') {
-  print "#pragma once\n";
-  print <<"END";
-
- // Layout base class.
- class Layout {
-
- protected:
-  Indices _sizes;   // Size of each dimension.
-  Layout(int n, const Indices& sizes) :
-   _sizes(sizes) { _sizes.setNumDims(n); }
-
- public:
-  Layout(int nsizes) :
-   _sizes(idx_t(0), nsizes) { }
-  virtual ~Layout() { }
-
-  // Access sizes.
-  const Indices& get_sizes() const { return _sizes; }
-  void set_sizes(const Indices& sizes) { _sizes = sizes; }
-  idx_t get_size(int i) const {
-    assert(i >= 0);
-    assert(i < _sizes.getNumDims());
-    return _sizes[i]; 
-  }
-  void set_size(int i, idx_t size) {
-    assert(i >= 0);
-    assert(i < _sizes.getNumDims());
-    _sizes[i] = size; 
-  }
-  virtual int get_num_sizes() const {
-    return _sizes.getNumDims(); 
-  }
-
-  // Product of valid sizes.
-  virtual idx_t get_num_elements() const {
-    idx_t nelems = 1;
-    for (int i = 0; i < _sizes.getNumDims(); i++)
-      nelems *= _sizes[i];
-    return nelems;
-  }
-
-  // Return 1-D offset from n-D 'j' indices.
-  virtual idx_t layout(const Indices& j) const =0;
-
-  // Return n indices based on 1-D 'ai' input.
-  virtual Indices unlayout(idx_t ai) const =0;
- };
-
- // 0-D <-> 1-D layout class.
- // (Trivial layout.)
- class Layout_0d : public Layout {
- public:
-  Layout_0d() : Layout(0) { }
-  Layout_0d(const Indices& sizes) : Layout(0, sizes) { }
-  virtual int get_num_sizes() const final {
-    return 0;
-  }
-
-  // Return 1-D offset from 0-D 'j' indices.
-  virtual idx_t layout(const Indices& j) const final {
-    return 0; 
-  }
-
-  // Return 0 indices based on 1-D 'ai' input.
-  virtual Indices unlayout(idx_t ai) const final {
-    Indices j(idx_t(0), 0);
-    return j;
-  }
- };
-
-END
-}
-
 # permute items in a list.
 # args: block of code to run on each permutation and list to permute.
 sub permute(&@) {
@@ -246,17 +172,17 @@ END
  public:
   Layout_$name() { }
   Layout_$name(const Indices& sizes) : ${basename}(sizes) { }
-  virtual int get_num_sizes() const final {
+  inline int get_num_sizes() const {
     return $n;
   }
 
   // Return 1-D offset from $n-D 'j' indices.
-  virtual idx_t layout(const Indices& j) const final {
+  inline idx_t layout(const Indices& j) const {
     return $layout;
   }
 
   // Return $n index(indices) based on 1-D 'ai' input.
-  virtual Indices unlayout(idx_t ai) const final {
+  inline Indices unlayout(idx_t ai) const {
     Indices j(_sizes);
     $unlayout;
     return j;

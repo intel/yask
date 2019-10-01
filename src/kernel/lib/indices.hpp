@@ -33,7 +33,7 @@ namespace yask {
 
     // A class to hold up to a given number of sizes or indices efficiently.
     // Similar to a Tuple, but less overhead and doesn't keep names.
-    // Make sure this stays non-virtual.
+    // This class is NOT virtual.
     // TODO: make this a template with _ndims as a parameter.
     // TODO: ultimately, combine with Tuple w/o loss of efficiency.
     class Indices {
@@ -280,13 +280,13 @@ namespace yask {
         }
 
         // Reduce over all elements.
-        idx_t sum() const {
+        inline idx_t sum() const {
             idx_t res = 0;
             for (int i = 0; i < _ndims; i++)
                 res += _idxs[i];
             return res;
         }
-        idx_t product() const {
+        inline idx_t product() const {
             idx_t res = 1;
             for (int i = 0; i < _ndims; i++)
                 res *= _idxs[i];
@@ -355,7 +355,62 @@ namespace yask {
                               omp_out = omp_out.maxElements(omp_in) )   \
     initializer (omp_priv = omp_orig)
 
-    // Layout algorithms using Indices.
+    // Layout base class.
+    // This class hierarchy is NOT virtual.
+    class Layout {
+
+    protected:
+        Indices _sizes;   // Size of each dimension.
+        Layout(int n, const Indices& sizes) :
+            _sizes(sizes) { _sizes.setNumDims(n); }
+
+    public:
+        Layout(int nsizes) :
+            _sizes(idx_t(0), nsizes) { }
+
+        // Access sizes.
+        inline const Indices& get_sizes() const { return _sizes; }
+        void set_sizes(const Indices& sizes) { _sizes = sizes; }
+        inline idx_t get_size(int i) const {
+            assert(i >= 0);
+            assert(i < _sizes.getNumDims());
+            return _sizes[i];
+        }
+        void set_size(int i, idx_t size) {
+            assert(i >= 0);
+            assert(i < _sizes.getNumDims());
+            _sizes[i] = size;
+        }
+
+        // Product of valid sizes.
+        inline idx_t get_num_elements() const {
+            return _sizes.product();
+        }
+    };
+
+    // 0-D <-> 1-D layout class.
+    // (Trivial layout.)
+    class Layout_0d : public Layout {
+    public:
+        Layout_0d() : Layout(0) { }
+        Layout_0d(const Indices& sizes) : Layout(0, sizes) { }
+        inline int get_num_sizes() const {
+            return 0;
+        }
+
+        // Return 1-D offset from 0-D 'j' indices.
+        inline idx_t layout(const Indices& j) const {
+            return 0;
+        }
+
+        // Return 0 indices based on 1-D 'ai' input.
+        inline Indices unlayout(idx_t ai) const {
+            Indices j(idx_t(0), 0);
+            return j;
+        }
+    };
+
+    // Auto-generated layout algorithms for >0 dims.
 #include "yask_layouts.hpp"
 
     // Forward defns.
@@ -364,7 +419,7 @@ namespace yask {
     // A group of Indices needed for generated loops.
     // See the help message from gen_loops.pl for the
     // documentation of the indices.
-    // Make sure this stays non-virtual.
+    // This class is NOT virtual.
     struct ScanIndices {
         int ndims = 0;
 
@@ -420,6 +475,8 @@ namespace yask {
                 }
             }
         }
+
+        // Default bit-wise copy should be okay.
 
         // Init from outer-loop indices.
         // Start..stop from point in outer loop become begin..end

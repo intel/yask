@@ -30,45 +30,19 @@ namespace yask {
 
     // Ctor. No allocation is done. See notes on default_alloc().
     GenericVarBase::GenericVarBase(KernelStateBase& state,
-                                     const string& name,
-                                     Layout& layout_base,
-                                     const VarDimNames& dimNames) :
+                                   const string& name,
+                                   const VarDimNames& dimNames) :
         KernelStateBase(state),
-        _name(name),
-        _layout_base(&layout_base) {
+        _name(name) {
         for (auto& dn : dimNames)
             _var_dims.addDimBack(dn, 1);
-        _sync_layout_with_dims();
     }
 
-    // Perform default allocation.
-    // For other options,
-    // programmer should call get_num_elems() or get_num_bytes() and
-    // then provide allocated memory via set_storage().
-    void GenericVarBase::default_alloc() {
-        STATE_VARS(this);
-
-        // Release any old data if last owner.
-        release_storage();
-
-        // What node?
-        int numa_pref = get_numa_pref();
-
-        // Alloc required number of bytes.
-        size_t sz = get_num_bytes();
-        string loc = (numa_pref >= 0) ?
-            "preferring NUMA node " + to_string(numa_pref) :
-            "on default NUMA node";
-        DEBUG_MSG("Allocating " << makeByteStr(sz) <<
-                  " for var '" << _name << "' " << loc << "...");
-        _base = shared_numa_alloc<char>(sz, numa_pref);
-
-        // No offset.
-        _elems = _base.get();
-    }
+    // Template implementations.
 
     // Make some descriptive info.
-    string GenericVarBase::make_info_string(const string& elem_name) const {
+    template <typename T>
+    string GenericVarTyped<T>::make_info_string(const string& elem_name) const {
         stringstream oss;
         oss << "'" << _name << "' ";
         if (_var_dims.getNumDims() == 0)
@@ -87,10 +61,12 @@ namespace yask {
         return oss.str();
     }
 
+    // Free any old storage.
     // Set pointer to storage.
-    // Free old storage.
     // 'base' should provide get_num_bytes() bytes at offset bytes.
-    void GenericVarBase::set_storage(shared_ptr<char>& base, size_t offset) {
+    template <typename T>
+    void GenericVarTyped<T>::set_storage(shared_ptr<char>& base, size_t offset) {
+        STATE_VARS(this);
 
         // Release any old data if last owner.
         release_storage();
@@ -109,10 +85,40 @@ namespace yask {
         }
     }
 
-    // Template implementations.
+    // Release storage.
+    template <typename T>
+    void GenericVarTyped<T>::release_storage() {
+        STATE_VARS(this);
+
+        _base.reset();
+        _elems = 0;
+    }
+
+    // Perform default allocation.  For other options, programmer should
+    // call get_num_elems() or get_num_bytes() and then provide allocated
+    // memory via set_storage().
+    template <typename T>
+    void GenericVarTyped<T>::default_alloc() {
+        STATE_VARS(this);
+
+        // What node?
+        int numa_pref = get_numa_pref();
+
+        // Alloc required number of bytes.
+        size_t sz = get_num_bytes();
+        string loc = (numa_pref >= 0) ?
+            "preferring NUMA node " + to_string(numa_pref) :
+            "on default NUMA node";
+        DEBUG_MSG("Allocating " << makeByteStr(sz) <<
+                  " for var '" << _name << "' " << loc << "...");
+        auto base = shared_numa_alloc<char>(sz, numa_pref);
+
+        // Set as storage for this var.
+        set_storage(base, 0);
+    }
 
     template <typename T>
-    void GenericVarTemplate<T>::set_elems_same(T val) {
+    void GenericVarTyped<T>::set_elems_same(T val) {
         if (_elems) {
             yask_parallel_for(0, get_num_elems(), 1,
                               [&](idx_t start, idx_t stop, idx_t thread_num) {
@@ -122,7 +128,7 @@ namespace yask {
     }
 
     template <typename T>
-    void GenericVarTemplate<T>::set_elems_in_seq(T seed) {
+    void GenericVarTyped<T>::set_elems_in_seq(T seed) {
         if (_elems) {
             const idx_t wrap = 71; // TODO: avoid multiple of any dim size.
             yask_parallel_for(0, get_num_elems(), 1,
@@ -132,46 +138,8 @@ namespace yask {
         }
     }
 
-    template <typename T>
-    idx_t GenericVarTemplate<T>::count_diffs(const GenericVarBase* ref,
-                                              double epsilon) const {
-
-        if (!ref)
-            return get_num_elems();
-        auto* p = dynamic_cast<const GenericVarTemplate<T>*>(ref);
-        if (!p)
-            return get_num_elems();
-
-        // Dims & sizes same?
-        if (_var_dims != p->_var_dims)
-            return get_num_elems();
-
-        // Object w/padding to avoid false sharing.
-        union err_t {
-            idx_t nerrs;
-            char buf[CACHELINE_BYTES];
-
-            err_t() : nerrs(0) { }
-        };
-
-        // Count abs diffs > epsilon.
-        T ep = epsilon;
-        auto nthr = yask_get_num_threads();
-        vector<err_t> errv(nthr);
-        yask_parallel_for(0, get_num_elems(), 1,
-                          [&](idx_t start, idx_t stop, idx_t thread_num) {
-                              if (!within_tolerance(((T*)_elems)[start],
-                                                    ((T*)p->_elems)[start], ep))
-                                  errv[thread_num].nerrs++;
-                          });
-        idx_t errs = 0;
-        for (auto& errn : errv)
-            errs += errn.nerrs;
-        return errs;
-    }
-
     // Explicitly allowed instantiations.
-    template class GenericVarTemplate<real_t>;
-    template class GenericVarTemplate<real_vec_t>;
+    template class GenericVarTyped<real_t>;
+    template class GenericVarTyped<real_vec_t>;
 
 } // yask namespace.
