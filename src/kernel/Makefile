@@ -64,6 +64,8 @@ ifneq ($(filter $(arch),avx snb ivb),)
   TARGET		:=	avx
 else ifneq ($(filter $(arch),avx2 hsw bdw),)
   TARGET		:=	avx2
+else ifneq ($(filter $(arch),avx512lo),)
+  TARGET		:=	avx512lo
 else ifneq ($(filter $(arch),avx512 avx512f skx skl clx),)
   TARGET		:=	avx512
 else ifneq ($(filter $(arch),knl),)
@@ -73,7 +75,7 @@ else ifneq ($(filter $(arch),knc),)
 else ifneq ($(filter $(arch),intel64 cpp),)
   TARGET		:=	intel64
 else
-  $(error Target not recognized; use arch=avx512, avx2, avx, knl, knc, or intel64)
+  $(error Target not recognized; use arch=avx512, avx512lo, avx2, avx, knl, knc, or intel64)
 endif
 
 # Specify YK_STENCIL and/or YK_ARCH on 'make' cmd-line to name binaries differently.
@@ -107,6 +109,12 @@ else ifeq ($(TARGET),avx512)
  ICC_ISA	?=	-xCORE-AVX512
  CXX_ISA	?=	-march=skylake-avx512
  MACROS		+=	USE_INTRIN512
+
+else ifeq ($(TARGET),avx512lo)
+
+ ICC_ISA	?=	-xCORE-AVX512
+ CXX_ISA	?=	-march=skylake-avx512
+ MACROS		+=	USE_INTRIN512LO
 
 else ifeq ($(TARGET),avx2)
 
