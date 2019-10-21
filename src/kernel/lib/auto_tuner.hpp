@@ -43,7 +43,7 @@ namespace yask {
         // Null stream to throw away debug info.
         yask_output_factory yof;
         yask_output_ptr nullop = yof.new_null_output();
-        
+
         // Whether to print progress.
         bool verbose = false;
 
@@ -112,12 +112,12 @@ namespace yask {
             return tune_mini_blks() ?
                 _settings->_block_sizes : _settings->_region_sizes;
         }
-        
+
         // Change settings pointers.
         void set_settings(KernelSettings* p) {
             _settings = p;
         }
-        
+
         // Reset all state to beginning.
         void clear(bool mark_done, bool verbose = false);
 

@@ -31,14 +31,11 @@ using namespace std;
 namespace yask {
 
     // Ctor.
-    // Important: '*ggb' exists but is NOT yet constructed.
+    // Important: _data is NOT yet constructed.
     YkVarBase::YkVarBase(KernelStateBase& stateb,
-                           GenericVarBase* ggb,
-                           const VarDimNames& dimNames) :
-        KernelStateBase(stateb),
-        _ggb(ggb) {
+                         const VarDimNames& dimNames) :
+        KernelStateBase(stateb) {
         STATE_VARS(this);
-        assert(ggb);
 
         // Init indices.
         int n = int(dimNames.size());
@@ -89,19 +86,17 @@ namespace yask {
 
     // Does this var cover the N-D domain?
     bool YkVarBase::is_domain_var() const {
+        STATE_VARS(this);
 
-        // Problem dims.
-        auto* dims = get_dims().get();
-        const auto& domain_dims = dims->_domain_dims;
-
+        // Check problem dims.
         for (auto& d : domain_dims) {
             auto& dname = d.getName();
-            if (!_ggb->is_dim_used(dname))
+            if (!is_dim_used(dname))
                 return false;
         }
         return true;
     }
-    
+
     // Halo-exchange flag accessors.
     bool YkVarBase::is_dirty(idx_t step_idx) const {
         if (_dirty_steps.size() == 0)
@@ -140,7 +135,7 @@ namespace yask {
     int YkVarBase::get_dim_posn(const std::string& dim,
                                  bool die_on_failure,
                                  const std::string& die_msg) const {
-        auto& dims = _ggb->get_dims();
+        auto& dims = get_dim_tuple();
         int posn = dims.lookup_posn(dim);
         if (posn < 0 && die_on_failure) {
             THROW_YASK_EXCEPTION("Error: " + die_msg + ": dimension '" +
@@ -193,7 +188,7 @@ namespace yask {
         // be halos + wave-front exts + vec-len - 1. This vec-len should be
         // the solution one, not the one for this var to handle the case
         // where this var is not vectorized.
-        for (int i = 0; i < _ggb->get_num_dims(); i++) {
+        for (int i = 0; i < get_num_dims(); i++) {
             if (mp[i])
                 mp[i] += _soln_vec_lens[i] - 1;
         }
@@ -207,7 +202,7 @@ namespace yask {
         STATE_VARS(this);
 
         // Original size.
-        auto p = _ggb->get_storage();
+        auto p = get_storage();
         IdxTuple old_allocs = get_allocs();
 
 #ifdef TRACE
@@ -217,30 +212,30 @@ namespace yask {
 #endif
 
         // Check settings.
-        for (int i = 0; i < _ggb->get_num_dims(); i++) {
+        for (int i = 0; i < get_num_dims(); i++) {
             if (_left_halos[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative left halo in var '" + _ggb->get_name() + "'");
+                THROW_YASK_EXCEPTION("Error: negative left halo in var '" + get_name() + "'");
             if (_right_halos[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative right halo in var '" + _ggb->get_name() + "'");
+                THROW_YASK_EXCEPTION("Error: negative right halo in var '" + get_name() + "'");
             if (_left_wf_exts[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative left wave-front ext in var '" + _ggb->get_name() + "'");
+                THROW_YASK_EXCEPTION("Error: negative left wave-front ext in var '" + get_name() + "'");
             if (_right_wf_exts[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative right wave-front ext in var '" + _ggb->get_name() + "'");
+                THROW_YASK_EXCEPTION("Error: negative right wave-front ext in var '" + get_name() + "'");
             if (_req_left_pads[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative left padding in var '" + _ggb->get_name() + "'");
+                THROW_YASK_EXCEPTION("Error: negative left padding in var '" + get_name() + "'");
             if (_req_right_pads[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative right padding in var '" + _ggb->get_name() + "'");
+                THROW_YASK_EXCEPTION("Error: negative right padding in var '" + get_name() + "'");
              if (_req_left_epads[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative left extra padding in var '" + _ggb->get_name() + "'");
+                THROW_YASK_EXCEPTION("Error: negative left extra padding in var '" + get_name() + "'");
             if (_req_right_epads[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative right extra padding in var '" + _ggb->get_name() + "'");
+                THROW_YASK_EXCEPTION("Error: negative right extra padding in var '" + get_name() + "'");
         }
 
         // Increase padding as needed and calculate new allocs.
         Indices new_left_pads = getReqdPad(_left_halos, _left_wf_exts);
         Indices new_right_pads = getReqdPad(_right_halos, _right_wf_exts);
         IdxTuple new_allocs(old_allocs);
-        for (int i = 0; i < _ggb->get_num_dims(); i++) {
+        for (int i = 0; i < get_num_dims(); i++) {
             idx_t mbit = 1LL << i;
 
             // New allocation in each dim.
@@ -283,7 +278,7 @@ namespace yask {
                 // This reportedly helps avoid some uarch aliasing.
                 if (!p &&
                     opts->_allow_addl_pad &&
-                    _ggb->get_dim_name(i) == inner_dim &&
+                    get_dim_name(i) == inner_dim &&
                     (new_allocs[i] / _var_vec_lens[i]) % 2 == 0) {
                     new_right_pads[i] += _var_vec_lens[i];
                 }
@@ -307,7 +302,7 @@ namespace yask {
         // Attempt to change alloc with existing storage?
         if (p && old_allocs != new_allocs) {
             THROW_YASK_EXCEPTION("Error: attempt to change allocation size of var '" +
-                _ggb->get_name() + "' from " +
+                get_name() + "' from " +
                 makeIndexString(old_allocs, " * ") + " to " +
                 makeIndexString(new_allocs, " * ") +
                 " after storage has been allocated");
@@ -318,7 +313,7 @@ namespace yask {
         _actl_left_pads = new_left_pads;
         _actl_right_pads = new_right_pads;
         size_t new_dirty = 1;      // default if no step dim.
-        for (int i = 0; i < _ggb->get_num_dims(); i++) {
+        for (int i = 0; i < get_num_dims(); i++) {
             idx_t mbit = 1LL << i;
 
             // Calc vec-len values.
@@ -326,7 +321,7 @@ namespace yask {
             _vec_allocs[i] = _allocs[i] / _var_vec_lens[i];
 
             // Actual resize of underlying var.
-            _ggb->set_dim_size(i, _vec_allocs[i]);
+            set_dim_size(i, _vec_allocs[i]);
 
             // Number of dirty bits is number of steps.
             if (_step_dim_mask & mbit)
@@ -361,7 +356,7 @@ namespace yask {
                                   bool domain_ok,
                                   bool misc_ok) const {
         STATE_VARS(this);
-        if (!_ggb->is_dim_used(dim))
+        if (!is_dim_used(dim))
             THROW_YASK_EXCEPTION("Error in " + fn_name + "(): dimension '" +
                                  dim + "' not found in " + make_info_string());
         dims->checkDimType(dim, fn_name, step_ok, domain_ok, misc_ok);
@@ -379,22 +374,14 @@ namespace yask {
         }
 
         // Dims & sizes same?
-        if (!_ggb->are_dims_and_sizes_same(*ref->_ggb)) {
+        if (!are_dims_and_sizes_same(*ref)) {
             DEBUG_MSG("** mismatch due to incompatible vars: " <<
                       make_info_string() << " and " << ref->make_info_string());
             return _allocs.product(); // total number of elements.
         }
 
-        // Quick check for errors, assuming same layout and
-        // same values in extra-padding area.
-        // TODO: check layout.
-        idx_t errs = _ggb->count_diffs(ref->_ggb, epsilon);
-        TRACE_MSG("count_diffs() returned " << errs);
-        if (!errs)
-            return 0;
-
-        // Run detailed comparison if any errors found.
-        errs = 0;
+        // Compare each element.
+        idx_t errs = 0;
         auto allocs = get_allocs();
 
         // This will loop over the entire allocation.
@@ -437,12 +424,12 @@ namespace yask {
                         errs++;
                         if (errs <= maxPrint) {
                             if (errs < maxPrint)
-                                DEBUG_MSG("** mismatch at " << _ggb->get_name() <<
+                                DEBUG_MSG("** mismatch at " << get_name() <<
                                           "(" << opt.makeDimValStr() << "): " <<
                                           te << " != " << re);
                             else
                                 DEBUG_MSG("** Additional errors not printed for var '" <<
-                                          _ggb->get_name() << "'");
+                                          get_name() << "'");
                         }
                     }
                 }
@@ -464,7 +451,7 @@ namespace yask {
                                   Indices* clipped_indices) const {
         STATE_VARS(this);
         bool all_ok = true;
-        auto n = _ggb->get_num_dims();
+        auto n = get_num_dims();
         if (indices.getNumDims() != n) {
             FORMAT_AND_THROW_YASK_EXCEPTION("Error: '" << fn << "' called with " <<
                                             indices.getNumDims() <<
@@ -477,7 +464,7 @@ namespace yask {
             bool is_step_dim = _step_dim_mask & mbit;
             idx_t idx = indices[i];
             bool ok = false;
-            auto& dname = _ggb->get_dim_name(i);
+            auto& dname = get_dim_name(i);
 
             // If this is the step dim and we're not checking
             // it, then anything is ok.
@@ -499,9 +486,9 @@ namespace yask {
                         THROW_YASK_EXCEPTION("Error: " + fn + ": index in dim '" + dname +
                                              "' is " + to_string(idx) + ", which is not in allowed range [" +
                                              to_string(first_ok) + "..." + to_string(last_ok) +
-                                             "] of var '" + _ggb->get_name() + "'");
+                                             "] of var '" + get_name() + "'");
                     }
-                    
+
                     // Update the output indices.
                     if (clipped_indices) {
                         if (idx < first_ok)
@@ -538,12 +525,12 @@ namespace yask {
                 _local_offsets[step_posn] = t - _domains[step_posn] + 1;
 
             TRACE_MSG("update_valid_step(" << t << "): valid step(s) in '" <<
-                      _ggb->get_name() << "' are now [" << get_first_local_index(step_posn) <<
+                      get_name() << "' are now [" << get_first_local_index(step_posn) <<
                       " ... " << get_last_local_index(step_posn) << "]");
         }
     }
-    
-    
+
+
     // Set dirty flags between indices.
     void YkVarBase::set_dirty_in_slice(const Indices& first_indices,
                                         const Indices& last_indices) {
@@ -577,7 +564,7 @@ namespace yask {
         string str;
         if (msg.length())
             str = msg + ": ";
-        str += _ggb->get_name() + "[" +
+        str += get_name() + "[" +
             makeIndexString(idxs) + "] = " + to_string(eval);
         if (line)
             str += " at line " + to_string(line);

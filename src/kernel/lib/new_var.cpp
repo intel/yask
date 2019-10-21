@@ -58,7 +58,7 @@ namespace yask {
 
 #if ALLOW_NEW_VARS
             // Allow new var types.
-            
+
             // Check dims.
             int ndims = gdims.size();
             bool step_used = false;
@@ -126,7 +126,7 @@ namespace yask {
 
         // Wrap with a Yk var.
         YkVarPtr ygp = make_shared<YkVarImpl>(gp);
-        
+
         // Add to context.
         addVar(ygp, false, false);     // mark as non-orig, non-output var.
 

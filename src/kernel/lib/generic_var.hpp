@@ -25,7 +25,6 @@ IN THE SOFTWARE.
 
 // Generic vars:
 // T: type stored in var.
-// LayoutFn: class that transforms N dimensions to 1.
 
 #pragma once
 
@@ -33,11 +32,16 @@ namespace yask {
 
     // A base class for a generic n-D var.
     // This class does not define a type or memory layout.
+    // This class hierarchy is not virtual.
     class GenericVarBase :
         public KernelStateBase {
 
     protected:
-        std::string _name;      // name for var.
+        // Start of actual data, which is some offset from _base on host.
+        void* _elems = 0;
+
+        // Name for var.
+        std::string _name;
 
         // Base address of malloc'd memory.
         // Not necessarily the address at which the data is stored.
@@ -45,90 +49,63 @@ namespace yask {
         // to release it will free the mem.
         std::shared_ptr<char> _base;
 
-        void* _elems = 0;          // actual data, which may be offset from _base.
-
         // Preferred NUMA node.
         const static int _numa_unset = -999;
         int _numa_pref = _numa_unset; // use default from _opts.
 
-        // Note that both _dims and *_layout_base hold sizes unless this
-        // is a scalar. For a scalar, _dims is empty and _layout_base = 0.
-        IdxTuple _var_dims;         // names and lengths of var dimensions.
-        Layout* _layout_base = 0; // memory layout.
-
-        void _sync_dims_with_layout() {
-            Indices idxs(_layout_base->get_sizes());
-            idxs.setTupleVals(_var_dims);
-        }
-        void _sync_layout_with_dims() {
-            Indices idxs(_var_dims);
-            _layout_base->set_sizes(idxs);
-        }
-
-    public:
+        // Names and lengths of var dimensions.
+        IdxTuple _var_dims;
 
         // Ctor. No allocation is done. See notes on default_alloc().
+        // This is protected to avoid construction except by derived type.
         GenericVarBase(KernelStateBase& state,
-                        const std::string& name,
-                        Layout& layout_base,
-                        const VarDimNames& dimNames);
+                       const std::string& name,
+                       const VarDimNames& dimNames);
 
-        virtual ~GenericVarBase() { }
-
-        // Perform default allocation.
-        // For other options,
-        // programmer should call get_num_elems() or get_num_bytes() and
-        // then provide allocated memory via set_storage().
-        virtual void default_alloc();
+    public:
 
         // Access name.
         const std::string& get_name() const { return _name; }
         void set_name(const std::string& name) { _name = name; }
 
         // NUMA accessors.
-        virtual int get_numa_pref() const {
+        int get_numa_pref() const {
             STATE_VARS_CONST(this);
             return (_numa_pref != _numa_unset) ?
                 _numa_pref : opts->_numa_pref;
         }
-        virtual bool set_numa_pref(int numa_node) {
-#ifdef USE_NUMA
+        bool set_numa_pref(int numa_node) {
+            #ifdef USE_NUMA
             _numa_pref = numa_node;
             return true;
-#else
+            #else
             _numa_pref = yask_numa_none;
             return numa_node == yask_numa_none;
-#endif
+            #endif
         }
 
         // Access dims of this var (not necessarily same as solution dims).
-        const IdxTuple& get_dims() const {
+        const IdxTuple& get_dim_tuple() const {
             return _var_dims;
         }
 
         // Get number of elements.
-        virtual idx_t get_num_elems() const {
+        idx_t get_num_elems() const {
             return _var_dims.product();
         }
 
-        // Get size of one element.
-        virtual size_t get_elem_bytes() const =0;
-
-        // Get size in bytes.
-        virtual size_t get_num_bytes() const =0;
-
         // Get number of dimensions.
-        virtual int get_num_dims() const {
+        int get_num_dims() const {
             return _var_dims.getNumDims();
         }
 
         // Get the nth dim name.
-        virtual const std::string& get_dim_name(int n) const {
+        const std::string& get_dim_name(int n) const {
             return _var_dims.getDimName(n);
         }
 
         // Is dim used?
-        virtual bool is_dim_used(const std::string& dim) const {
+        bool is_dim_used(const std::string& dim) const {
             return _var_dims.lookup(dim) != 0;
         }
 
@@ -136,131 +113,70 @@ namespace yask {
         idx_t get_dim_size(int n) const {
             return _var_dims.getVal(n);
         }
-        void set_dim_size(int n, idx_t size) {
-            _var_dims.setVal(n, size);
-            _sync_layout_with_dims();
-        }
-
-        // Access all dim sizes.
-        virtual const Indices& get_dim_sizes() const {
-            return _layout_base->get_sizes();
-        }
-        void set_dim_sizes(const Indices& sizes) {
-            for (int i = 0; size_t(i) < _var_dims.size(); i++)
-                _var_dims.setVal(i, sizes[i]);
-            _sync_layout_with_dims();
-        }
 
         // Return 'true' if dimensions are same names
         // and sizes, 'false' otherwise.
-        inline bool are_dims_and_sizes_same(const GenericVarBase& src) {
+        bool are_dims_and_sizes_same(const GenericVarBase& src) const {
             return _var_dims == src._var_dims;
         }
 
-        // Print some descriptive info.
-        virtual std::string make_info_string(const std::string& elem_name) const;
-
-        // Get linear index.
-        virtual idx_t get_index(const Indices& idxs, bool check=true) const =0;
-        virtual idx_t get_index(const IdxTuple& pt, bool check=true) const {
-            assert(_var_dims.areDimsSame(pt));
-            Indices idxs(pt);
-            return get_index(idxs, check);
-        }
-
         // Direct access to data.
-        virtual void* get_storage() {
+        void* get_storage() {
             return (void*)_elems;
         }
-        virtual const void* get_storage() const {
+        const void* get_storage() const {
             return (void*)_elems;
         }
-
-        // Release storage.
-        virtual void release_storage() {
-            _base.reset();
-            _elems = 0;
-        }
-
-        // Set pointer to storage.
-        // Free old storage.
-        // 'base' should provide get_num_bytes() bytes at offset bytes.
-        virtual void set_storage(std::shared_ptr<char>& base, size_t offset);
-
-        // Share storage from another var.
-        virtual void share_storage(const GenericVarBase* src) {
-            _base = src->_base;
-            _elems = src->_elems;
-        }
-
-        // Check for equality, assuming same layout.
-        // Return number of mismatches greater than epsilon.
-        virtual idx_t count_diffs(const GenericVarBase* ref,
-                                  double epsilon) const =0;
-
     };
 
     // A base class for a generic n-D var of elements of arithmetic type T.
     // This class defines the type but does not define the memory layout.
     template <typename T>
-    class GenericVarTemplate : public GenericVarBase {
+    class GenericVarTyped : public GenericVarBase {
+
+    protected:
+
+        // Ctor. No allocation is done. See notes on default_alloc().
+        // This is protected to avoid construction except by derived type.
+        GenericVarTyped(KernelStateBase& state,
+                        const std::string& name,
+                        const VarDimNames& dimNames) :
+            GenericVarBase(state, name, dimNames) { }
 
     public:
 
-        // Ctor. No allocation is done. See notes on default_alloc().
-        GenericVarTemplate(KernelStateBase& state,
-                            const std::string& name,
-                            Layout& layout_base,
-                            const VarDimNames& dimNames) :
-            GenericVarBase(state, name, layout_base, dimNames) { }
-
-        // Dealloc _base when last pointer to it is destructed.
-        virtual ~GenericVarTemplate() {
-
-            // Release data.
-            release_storage();
-        }
-
         // Get size of one element.
-        virtual size_t get_elem_bytes() const {
+        size_t get_elem_bytes() const {
             return sizeof(T);
         }
 
         // Get size in bytes.
-        virtual size_t get_num_bytes() const {
+        size_t get_num_bytes() const {
             return sizeof(T) * get_num_elems();
         }
 
+        // Free any old storage.
+        // Set pointer to storage.
+        // 'base' should provide get_num_bytes() bytes at offset bytes.
+        void set_storage(std::shared_ptr<char>& base, size_t offset);
+
+        // Release storage.
+        void release_storage();
+
+        // Perform default allocation.
+        // For other options,
+        // programmer should call get_num_elems() or get_num_bytes() and
+        // then provide allocated memory via set_storage().
+        void default_alloc();
+
+        // Print some descriptive info.
+        std::string make_info_string(const std::string& elem_name) const;
+
         // Initialize all elements to the same given value.
-        virtual void set_elems_same(T val);
+        void set_elems_same(T val);
 
         // Initialize memory using 'seed' as a starting point.
-        virtual void set_elems_in_seq(T seed);
-
-        // Return ref to given element.
-        const T& operator()(const Indices& pt, bool check=true) const {
-            idx_t ai = get_index(pt, check);
-            return ((T*)_elems)[ai];
-        }
-        const T& operator()(const IdxTuple& pt, bool check=true) const {
-            idx_t ai = get_index(pt, check);
-            return ((T*)_elems)[ai];
-        }
-
-        // Non-const access to given element.
-        T& operator()(const Indices& pt, bool check=true) {
-            idx_t ai = get_index(pt, check);
-            return ((T*)_elems)[ai];
-        }
-        T& operator()(const IdxTuple& pt, bool check=true) {
-            idx_t ai = get_index(pt, check);
-            return ((T*)_elems)[ai];
-        }
-
-        // Check for equality, assuming same layout.
-        // Return number of mismatches greater than epsilon.
-        virtual idx_t count_diffs(const GenericVarBase* ref,
-                                  double epsilon) const;
+        void set_elems_in_seq(T seed);
     };
 
     // A generic n-D var of elements of type T.
@@ -269,35 +185,66 @@ namespace yask {
     // n-D and 1-D indices.
     template <typename T, typename LayoutFn>
     class GenericVar :
-        public GenericVarTemplate<T> {
+        public GenericVarTyped<T> {
+
     protected:
+
+        // Sizes and index transform functions.
         LayoutFn _layout;
+
+        // Both _var_dims and _layout hold sizes unless this is a
+        // scalar. (For a scalar, _var_dims is empty.)
+        // These functions keep them in sync.
+        void _sync_dims_with_layout() {
+            Indices idxs(_layout.get_sizes());
+            idxs.setTupleVals(GenericVarBase::_var_dims);
+        }
+        void _sync_layout_with_dims() {
+            STATE_VARS(this);
+            Indices idxs(GenericVarBase::_var_dims);
+            _layout.set_sizes(idxs);
+        }
 
     public:
 
         // Construct an unallocated var.
         GenericVar(KernelStateBase& state,
-                    std::string name,
-                    const VarDimNames& dimNames) :
-            GenericVarTemplate<T>(state, name, _layout, dimNames) {
+                   std::string name,
+                   const VarDimNames& dimNames) :
+            GenericVarTyped<T>(state, name, dimNames) {
+
+            // '_var_dims' was set in GenericVar construction.
+            // Need to sync '_layout' w/it.
+            _sync_layout_with_dims();
             assert(int(dimNames.size()) == _layout.get_num_sizes());
         }
 
-        // Get number of dims.
-        // More efficient version overriding base method because layout is known.
-        virtual int get_num_dims() const final {
-            return _layout.get_num_sizes();
+        ~GenericVar() {
+
+            // Release data.
+            GenericVarTyped<T>::release_storage();
         }
 
-        // Get sizes of dims.
-        // More efficient version overriding base method because layout is known.
-        virtual const Indices& get_dim_sizes() const final {
+        // Modify dim sizes.
+        void set_dim_size(int n, idx_t size) {
+            GenericVarBase::_var_dims.setVal(n, size);
+            _sync_layout_with_dims();
+        }
+        void set_dim_sizes(const Indices& sizes) {
+            auto& vd = GenericVarBase::_var_dims;
+            for (int i = 0; size_t(i) < vd.size(); i++)
+                vd.setVal(i, sizes[i]);
+            _sync_layout_with_dims();
+        }
+
+        // Access all dim sizes.
+        inline const Indices& get_dim_sizes() const {
             return _layout.get_sizes();
         }
 
         // Get 1D index using layout.
-        virtual idx_t get_index(const Indices& idxs, bool check=true) const final {
-#ifdef CHECK
+        ALWAYS_INLINE idx_t get_index(const Indices& idxs, bool check=true) const {
+            #ifdef CHECK
             if (check) {
                 for (int i = 0; size_t(i) < this->_var_dims.size(); i++) {
                     idx_t j = idxs[i];
@@ -305,44 +252,52 @@ namespace yask {
                     assert(j < this->_var_dims.getVal(i));
                 }
             }
-#endif
+            #endif
+
             idx_t ai = _layout.layout(idxs);
-#ifdef CHECK
+
+            #ifdef CHECK
             if (check)
                 assert(ai < this->get_num_elems());
-#endif
+            #endif
             return ai;
+        }
+        ALWAYS_INLINE idx_t get_index(const IdxTuple& pt, bool check=true) const {
+            assert(GenericVarBase::_var_dims.areDimsSame(pt));
+            Indices idxs(pt);
+            return get_index(idxs, check);
         }
 
         // Pointer to given element.
-        // Calling this helps the compiler avoid virtual function calls.
-        const T* getPtr(const Indices& pt, bool check=true) const {
-            idx_t ai = GenericVar::get_index(pt, check);
-            return &((T*)this->_elems)[ai];
+        ALWAYS_INLINE const T* getPtr(const Indices& pt, bool check=true) const {
+            idx_t ai = get_index(pt, check);
+            return &((T*)GenericVarBase::_elems)[ai];
         }
-        T* getPtr(const Indices& pt, bool check=true) {
-            idx_t ai = GenericVar::get_index(pt, check);
-            return &((T*)this->_elems)[ai];
+        ALWAYS_INLINE T* getPtr(const Indices& pt, bool check=true) {
+            idx_t ai = get_index(pt, check);
+            return &((T*)GenericVarBase::_elems)[ai];
         }
 
-    };
+        // Return const ref to given element.
+        ALWAYS_INLINE const T& operator()(const Indices& pt, bool check=true) const {
+            idx_t ai = get_index(pt, check);
+            return ((T*)GenericVarBase::_elems)[ai];
+        }
+        ALWAYS_INLINE const T& operator()(const IdxTuple& pt, bool check=true) const {
+            idx_t ai = get_index(pt, check);
+            return ((T*)GenericVarBase::_elems)[ai];
+        }
 
-    // A generic 0-D var (scalar) of elements of type T.
-    // Special case: No layout or dim names needed.
-    template <typename T> class GenericScalar :
-        public GenericVar<T, Layout_0d> {
+        // Non-const access to given element.
+        ALWAYS_INLINE T& operator()(const Indices& pt, bool check=true) {
+            idx_t ai = get_index(pt, check);
+            return ((T*)GenericVarBase::_elems)[ai];
+        }
+        ALWAYS_INLINE T& operator()(const IdxTuple& pt, bool check=true) {
+            idx_t ai = get_index(pt, check);
+            return ((T*)GenericVarBase::_elems)[ai];
+        }
 
-    protected:
-
-        // List of dims is for consistency; should be empty for 0-D.
-        const VarDimNames _dimNames;
-
-    public:
-
-        // Construct an unallocated scalar.
-        GenericScalar(KernelStateBase& state,
-                      std::string name) :
-            GenericVar<T, Layout_0d>(state, name, _dimNames) { }
     };
 
 } // namespace yask.

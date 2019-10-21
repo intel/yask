@@ -145,7 +145,7 @@ namespace yask {
             os << endl;
         }
 #endif
-        
+
         // Base ptrs for all default-alloc'd data.
         // These pointers will be shared by the ones in the var
         // objects, which will take over ownership when these go
@@ -156,7 +156,7 @@ namespace yask {
 #ifdef USE_PMEM
         auto preferredNUMASize = opts->_numa_pref_max * 1024*1024*(size_t)1024;
 #endif
-        
+
         // Pass 0: assign PMEM node when preferred NUMA node is not enough.
         // Pass 1: count required size for each NUMA node, allocate chunk of memory at end.
         // Pass 2: distribute parts of already-allocated memory chunk.
@@ -281,7 +281,7 @@ namespace yask {
 
                     // Get calculated max dist needed for this var.
                     int maxdist = gp->get_halo_exchange_l1_norm();
-                    
+
                     // Always use max dist with WF. Do this because edge
                     // and/or corner values may be needed in WF extensions
                     // even it not needed w/o WFs.
@@ -300,7 +300,7 @@ namespace yask {
                                   "' (max L1-norm = " << maxdist << ")");
                         continue; // to next var.
                     }
-                    
+
                     // Lookup first & last domain indices and calc exchange sizes
                     // for this var.
                     bool found_delta = false;
@@ -640,7 +640,7 @@ namespace yask {
 
         // At this point, we have all the buffers configured.
         // Now we need to allocate space for them.
-        
+
         // Base ptrs for all alloc'd data.
         // These pointers will be shared by the ones in the var
         // objects, which will take over ownership when these go
@@ -656,7 +656,7 @@ namespace yask {
 
         // Make sure pad is big enough for shm locks.
         assert(_data_buf_pad >= sizeof(SimpleLock));
- 
+
         // Allocate MPI buffers.
         // Pass 0: count required size, allocate chunk of memory at end.
         // Pass 1: distribute parts of already-allocated memory chunk.
@@ -685,7 +685,7 @@ namespace yask {
                     for (auto& gtab : sb_ofs[gname])
                         gtab.resize(env->num_shm_ranks, 0);
                 }
-                
+
                 // Visit buffers for each neighbor for this var.
                 var_mpi_data.visitNeighbors
                     ([&](const IdxTuple& roffsets,
@@ -704,7 +704,7 @@ namespace yask {
                             numa_pref = _shmem_key;
                             assert(nshm_rank < env->num_shm_ranks);
                         }
-                            
+
                         // Send and recv.
                         for (int bd = 0; bd < MPIBufs::nBufDirs; bd++) {
                             auto& buf = var_mpi_data.getBuf(MPIBufs::BufDir(bd), roffsets);
@@ -758,7 +758,7 @@ namespace yask {
                                 nbufs[numa_pref]++;
                                 if (pass == 0)
                                     TRACE_MSG("  MPI buf '" << buf.name << "' needs " <<
-                                              makeByteStr(sbytes) << 
+                                              makeByteStr(sbytes) <<
                                               " (mem-key = " << numa_pref << ")");
                             }
                         } // snd/rcv.
@@ -828,7 +828,7 @@ namespace yask {
         }
         TRACE_MSG("allocScratchData: max mini-block size across pack(s) is " <<
                   mblksize.makeDimValStr(" * "));
-        
+
         // Pass 0: count required size, allocate chunk of memory at end.
         // Pass 1: distribute parts of already-allocated memory chunk.
         for (int pass = 0; pass < 2; pass++) {
@@ -900,5 +900,5 @@ namespace yask {
 
         } // scratch-var passes.
     }
-    
+
 } // namespace yask.

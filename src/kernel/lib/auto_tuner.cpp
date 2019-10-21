@@ -43,7 +43,7 @@ namespace yask {
             _name += "(" + name + ")";
         clear(settings->_do_auto_tune);
     }
-    
+
     // Eval auto-tuner for given number of steps.
     void StencilContext::eval_auto_tuner(idx_t num_steps) {
         STATE_VARS(this);
@@ -57,7 +57,7 @@ namespace yask {
         else
             _at.eval();
     }
-    
+
     // Reset auto-tuners.
     void StencilContext::reset_auto_tuner(bool enable, bool verbose) {
         for (auto& sp : stPacks)
@@ -77,7 +77,7 @@ namespace yask {
             done = _at.is_done();
         return !done;
     }
-    
+
     // Apply auto-tuning immediately, i.e., not as part of normal processing.
     // Will alter data in vars.
     void StencilContext::run_auto_tuner_now(bool verbose) {
@@ -159,7 +159,7 @@ namespace yask {
         DEBUG_MSG(_name << ": sub-block-size: " <<
                   _settings->_sub_block_sizes.removeDim(step_posn).makeDimValStr(" * "));
     }
-    
+
     // Access settings.
     bool AutoTuner::tune_mini_blks() const {
         return _context->get_settings()->_tune_mini_blks;
@@ -210,7 +210,7 @@ namespace yask {
     // Check whether sizes within search limits.
     bool AutoTuner::checkSizes(const IdxTuple& bsize) {
         bool ok = true;
-        
+
         // Too small?
         if (ok && get_num_domain_points(bsize) < min_pts) {
             n2small++;
@@ -228,7 +228,7 @@ namespace yask {
         }
         return ok;
     }
-    
+
     // Evaluate the previous run and take next auto-tuner step.
     void AutoTuner::eval() {
         STATE_VARS(this);
@@ -257,7 +257,7 @@ namespace yask {
                   ctime << " secs (" << rate <<
                   " steps/sec) cumulative; best-rate = " << best_rate <<
                   "; min-secs = " << min_secs);
-        
+
         // Still in warmup?
         if (in_warmup) {
 
@@ -413,7 +413,7 @@ namespace yask {
                 // Check sizes.
                 if (ok && !checkSizes(bsize))
                     ok = false;
-                
+
 
                 // Valid size and not already checked?
                 if (ok && results.count(bsize) == 0) {
@@ -475,7 +475,7 @@ namespace yask {
 
         // Restore step-dim value for block.
         target_sizes()[step_posn] = target_steps;
-        
+
         // Change derived sizes to 0 so adjustSettings()
         // will set them to the default.
         if (!tune_mini_blks()) {

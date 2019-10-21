@@ -36,7 +36,7 @@ namespace yask {
     yk_factory::yk_factory() {
         VTUNE_PAUSE;
     }
-    
+
     // ScanIndices ctor.
     ScanIndices::ScanIndices(const Dims& dims, bool use_vec_align) :
         ndims(NUM_STENCIL_DIMS),
@@ -118,7 +118,7 @@ namespace yask {
         opts->_rank_indices.setValsSame(0);
         rank_domain_offsets.setValsSame(0);
         assert(nr == 1);
-        
+
         // Init vars w/o MPI.
         DOMAIN_VAR_LOOP(i, j) {
 
@@ -139,8 +139,8 @@ namespace yask {
                                                 opts->_global_sizes[i] << " in '" << dname <<
                                                 "' dimension");
             }
-        }        
-        
+        }
+
 #else
         // Set number of ranks in each dim if any is unset (zero).
         TRACE_MSG("rank layout " << opts->_num_ranks.makeDimValStr(" * ") << " requested");
@@ -171,7 +171,7 @@ namespace yask {
                                      "] in '" + dname + "' dimension on rank " +
                                      to_string(me));
         }
-        
+
         // Init starting indices for this rank.
         rank_domain_offsets.setValsSame(0);
 
@@ -204,7 +204,7 @@ namespace yask {
             // Now, the tables are filled in for all ranks.
             // Some rank sizes may be zero on the 1st pass,
             // but they should all be non-zero on 2nd pass.
-            
+
             // Loop over all ranks, including myself.
             int num_neighbors = 0;
             for (int rn = 0; rn < nr; rn++) {
@@ -390,7 +390,7 @@ namespace yask {
 
                         // Divide sum by num of ranks in this dim.
                         auto rsz = CEIL_DIV(gsz, nranks);
-                        
+
                         // Round up to whole vector-clusters.
                         rsz = ROUND_UP(rsz, dims->_cluster_pts[j]);
 
@@ -454,7 +454,7 @@ namespace yask {
         // Loop through each domain dim.
         for (auto& dim : domain_dims) {
             auto& dname = dim.getName();
-            
+
             // Each non-scratch var.
             for (auto gp : varPtrs) {
                 assert(gp);
@@ -469,12 +469,12 @@ namespace yask {
 
                     // Rank domains.
                     gp->_set_domain_size(dname, opts->_rank_sizes[dname]);
-                    
+
                     // Pads.
                     // Set via both 'extra' and 'min'; larger result will be used.
                     gp->set_extra_pad_size(dname, opts->_extra_pad_sizes[dname]);
                     gp->set_min_pad_size(dname, opts->_min_pad_sizes[dname]);
-                        
+
                     // Offsets.
                     auto dp = dims->_domain_dims.lookup_posn(dname);
                     gp->_set_rank_offset(dname, rank_domain_offsets[dp]);
@@ -522,7 +522,7 @@ namespace yask {
 
             // Req'd shift in this dim based on max halos.
             idx_t angle = ROUND_UP(max_halos[dname], dims->_fold_pts[dname]);
-            
+
             // Determine the spatial skewing angles for WF tiling.  We
             // only need non-zero angles if the region size is less than the
             // rank size or there are other ranks in this dim, i.e., if
@@ -579,7 +579,7 @@ namespace yask {
         // Calculate temporal-block shifts.
         // NB: this will change if/when block sizes change.
         update_tb_info();
-        
+
     } // update_var_info().
 
     // Set temporal blocking data.  This should be called anytime a block
@@ -631,7 +631,7 @@ namespace yask {
                 // TODO: make round-up optional.
                 auto fpts = dims->_fold_pts[j];
                 idx_t angle = ROUND_UP(max_halos[j], fpts);
-            
+
                 // Determine the spatial skewing angles for MB.
                 // If MB covers whole blk, no shifting is needed in that dim.
                 idx_t mb_angle = 0;
@@ -729,7 +729,7 @@ namespace yask {
             // If no shift or angle in this dim, we don't need
             // bridges at all, so base is entire block.
             if (num_tb_shifts > 0 && tb_angle > 0) {
-                
+
                 // See equations above for block size.
                 auto fpts = dims->_fold_pts[j];
                 idx_t min_top_sz = fpts;
@@ -803,7 +803,7 @@ namespace yask {
                     auto* src = bb_descrs.at(bb_descr);
                     sb->copy_bounding_box(src);
                 }
-                
+
                 // Find bundle BB.
                 else {
                     sb->find_bounding_box();
@@ -837,7 +837,7 @@ namespace yask {
         assert(_bundle_bb.bb_valid);
         _bb_list = src->_bb_list;
     }
-    
+
     // Find the bounding-boxes for this bundle in this rank.
     // Only tests domain-var values, not step-vars.
     // Step-vars are tested dynamically for each step
@@ -851,7 +851,7 @@ namespace yask {
         _bundle_bb = _context->ext_bb;
         assert(_bundle_bb.bb_valid);
         _bb_list.clear();
-        
+
         // If BB is empty, we are done.
         if (!_bundle_bb.bb_size)
             return;
@@ -882,7 +882,7 @@ namespace yask {
             BBList bbl;
             char pad[CACHELINE_BYTES];
         };
-        
+
         // List of full BBs for each thread.
         // TODO: remove false sharing.
         vector<BBL_t> bb_lists(nthreads);
@@ -907,7 +907,7 @@ namespace yask {
                 // Construct len of slice in all dims.
                 Indices islice_len = islice_end.subElements(islice_begin);
                 auto slice_len = islice_len.makeTuple(domain_dims);
-                
+
                 // Visit all points in slice, looking for a new
                 // valid beginning point, 'ib*pt'.
                 Indices ibspt(stencil_dims); // in stencil dims.
@@ -934,7 +934,7 @@ namespace yask {
                                 }
                             }
                         }
-                        
+
                         // Process this new rect starting at 'ib*pt'.
                         if (is_valid) {
 
@@ -1018,7 +1018,7 @@ namespace yask {
                             new_bb.bb_end = ibdpt.addElements(iscan_len);
                             new_bb.update_bb("sub-bb", _context, true);
                             cur_bb_list.push_back(new_bb);
-                            
+
                         } // new rect found.
 
                         return true;  // from labmda; keep looking.
@@ -1030,7 +1030,7 @@ namespace yask {
 
         // Reset overall BB.
         _bundle_bb.bb_num_points = 0;
-            
+
         // Collect BBs in all slices.
         // TODO: merge in a parallel binary tree instead of sequentially.
         for (int n = 0; n < nthreads; n++) {

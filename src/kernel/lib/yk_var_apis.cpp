@@ -172,9 +172,9 @@ namespace yask {
     void YkVarImpl::fuse_vars(yk_var_ptr src) {
         STATE_VARS(gbp());
         auto op = dynamic_pointer_cast<YkVarImpl>(src);
+        assert(op);
         TRACE_MSG("fuse_vars(" << src.get() << "): this=" << gb().make_info_string() <<
                   "; source=" << op->gb().make_info_string());
-        assert(op);
         auto* sp = op.get();
         assert(!_gbp->is_scratch());
 
@@ -189,19 +189,16 @@ namespace yask {
                                      sp->gb().make_info_string());
         }
 
-        // Save ptr to source-storage var before fusing meta-data.
-        VarBasePtr st_gbp = sp->_gbp; // Shared-ptr to keep source active to end of method.
-        GenericVarBase* st_ggb = st_gbp->_ggb;
+        // Copy shared-ptr to keep source YkVarBase active to end of method.
+        VarBasePtr st_gbp = sp->_gbp;
 
         // Fuse meta-data.
+        // After this, both YkVarImpls will point to same YkVarBase.
         _gbp = sp->_gbp;
 
         // Tag var as a non-user var if the original one was.
         if (force_native)
             _gbp->set_user_var(false);
-
-        // Fuse storage.
-        gg().share_storage(st_ggb);
 
         TRACE_MSG("after fuse_vars: this=" << gb().make_info_string() <<
                   "; source=" << op->gb().make_info_string());
@@ -295,9 +292,9 @@ namespace yask {
                   makeIndexString(first_indices) << "}, {" <<
                   makeIndexString(last_indices) << "}) on " <<
                   make_info_string());
-        if (_ggb->get_storage() == 0)
+        if (get_storage() == 0)
             THROW_YASK_EXCEPTION("Error: call to 'get_elements_in_slice' with no storage allocated for var '" +
-                                 _ggb->get_name() + "'");
+                                 get_name() + "'");
         checkIndices(first_indices, "get_elements_in_slice", true, true, false);
         checkIndices(last_indices, "get_elements_in_slice", true, true, false);
 
@@ -320,7 +317,7 @@ namespace yask {
         TRACE_MSG("get_elements_in_slice(" << buffer_ptr << ", {" <<
                   makeIndexString(first_indices) << "}, {" <<
                   makeIndexString(last_indices) << "}) on '" <<
-                  _ggb->get_name() + "' returns " << nup);
+                  get_name() + "' returns " << nup);
         return nup;
     }
     idx_t YkVarBase::set_elements_in_slice_same(double val,
@@ -333,10 +330,10 @@ namespace yask {
                   makeIndexString(last_indices) <<  "}, " <<
                   strict_indices << ") on " <<
                   make_info_string());
-        if (_ggb->get_storage() == 0) {
+        if (get_storage() == 0) {
             if (strict_indices)
                 THROW_YASK_EXCEPTION("Error: call to 'set_elements_in_slice_same' with no storage allocated for var '" +
-                                     _ggb->get_name() + "'");
+                                     get_name() + "'");
             return 0;
         }
 
@@ -371,7 +368,7 @@ namespace yask {
                   makeIndexString(first_indices) << "}, {" <<
                   makeIndexString(last_indices) <<  "}, " <<
                   strict_indices << ") on '" <<
-                  _ggb->get_name() + "' returns " << nup);
+                  get_name() + "' returns " << nup);
         return nup;
     }
     idx_t YkVarBase::set_elements_in_slice(const void* buffer_ptr,
@@ -382,9 +379,9 @@ namespace yask {
                   makeIndexString(first_indices) << "}, {" <<
                   makeIndexString(last_indices) <<  "}) on " <<
                   make_info_string());
-        if (_ggb->get_storage() == 0)
+        if (get_storage() == 0)
             THROW_YASK_EXCEPTION("Error: call to 'set_elements_in_slice' with no storage allocated for var '" +
-                                 _ggb->get_name() + "'");
+                                 get_name() + "'");
         checkIndices(first_indices, "set_elements_in_slice", true, false, false);
         checkIndices(last_indices, "set_elements_in_slice", true, false, false);
 
@@ -412,7 +409,7 @@ namespace yask {
         TRACE_MSG("set_elements_in_slice(" << buffer_ptr << ", {" <<
                   makeIndexString(first_indices) << "}, {" <<
                   makeIndexString(last_indices) <<  "}) on '" <<
-                  _ggb->get_name() + "' returns " << nup);
+                  get_name() + "' returns " << nup);
         return nup;
     }
 

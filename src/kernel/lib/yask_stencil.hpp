@@ -47,7 +47,7 @@ IN THE SOFTWARE.
 #else
 #define DOMAIN_VAR_LOOP(i, j) _UNROLL _DOMAIN_VAR_LOOP(i, j)
 #endif
-    
+
 // Max number of dims allowed in Indices.
 // TODO: make Indices a templated class based on
 // number of dims.

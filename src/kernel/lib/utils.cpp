@@ -40,7 +40,7 @@ namespace yask {
         // Make sure timer was stopped.
         assert(_begin.tv_sec == 0);
         assert(_begin.tv_nsec == 0);
-        
+
         if (ts)
             _begin = *ts;
         else {
@@ -62,11 +62,11 @@ namespace yask {
 
         // Make sure time is going forward.
         assert(end.tv_sec >= _begin.tv_sec);
-        
+
         // Elapsed time is just end - begin times.
         delta.tv_sec = end.tv_sec - _begin.tv_sec;
         _elapsed.tv_sec += delta.tv_sec;
-        
+
         // No need to check for sign or to normalize, because tv_nsec is
         // signed and 64-bit.
         delta.tv_nsec = end.tv_nsec - _begin.tv_nsec;
@@ -75,7 +75,7 @@ namespace yask {
         // Clear begin to catch misuse.
         _begin.tv_sec = 0;
         _begin.tv_nsec = 0;
-        
+
         return double(delta.tv_sec) + double(delta.tv_nsec) * 1e-9;
     }
     double YaskTimer::get_secs_since_start() const {
@@ -92,7 +92,7 @@ namespace yask {
 
         return double(delta.tv_sec) + double(delta.tv_nsec) * 1e-9;
     }
-    
+
     // Aligned allocation.
     char* alignedAlloc(std::size_t nbytes) {
 
@@ -112,7 +112,8 @@ namespace yask {
 #endif
 
         if (!p)
-            THROW_YASK_EXCEPTION("error: cannot allocate " + makeByteStr(nbytes));
+            THROW_YASK_EXCEPTION("error: cannot allocate " + makeByteStr(nbytes) +
+                                 " aligned to " + makeByteStr(align));
         return static_cast<char*>(p);
     }
 
@@ -227,10 +228,11 @@ namespace yask {
 #else
         THROW_YASK_EXCEPTION("Error: NUMA allocation is not enabled; build with numa=1");
 #endif // USE_NUMA.
-        
+
         // Should not get here w/null p; throw exception.
         if (!p)
-            THROW_YASK_EXCEPTION("Error: cannot allocate " + makeByteStr(nbytes));
+            THROW_YASK_EXCEPTION("Error: cannot allocate " + makeByteStr(nbytes) +
+                                 " using numa-node (or policy) " + to_string(numa_pref));
 
         // Check alignment.
         if ((size_t(p) & (CACHELINE_BYTES - 1)) != 0)
@@ -267,7 +269,7 @@ namespace yask {
             p = NULL;
         }
     }
-        
+
     // PMEM allocation.
     char* pmemAlloc(std::size_t nbytes, int dev_num) {
 
@@ -287,6 +289,10 @@ namespace yask {
         THROW_YASK_EXCEPTION("Error: PMEM allocation is not enabled; build with pmem=1");
 #endif
 
+        if (!p)
+            THROW_YASK_EXCEPTION("Error: cannot allocate " + makeByteStr(nbytes) +
+                                 " on pmem dev " + to_string(dev_num));
+
         // Check alignment.
         if ((size_t(p) & (CACHELINE_BYTES - 1)) != 0)
             FORMAT_AND_THROW_YASK_EXCEPTION("Error: PMEM-allocated " << p << " is not " <<
@@ -303,7 +309,7 @@ namespace yask {
             p = NULL;
         }
     }
-        
+
     // MPI shm allocation.
     char* shmAlloc(std::size_t nbytes,
                    const MPI_Comm* shm_comm, MPI_Win* shm_win) {
@@ -323,6 +329,10 @@ namespace yask {
 #else
         THROW_YASK_EXCEPTION("Error: MPI shm allocation is not enabled; build with mpi=1");
 #endif
+
+        if (!p)
+            THROW_YASK_EXCEPTION("Error: cannot allocate " + makeByteStr(nbytes) +
+                                 " using MPI shm");
 
         // Check alignment.
         if ((size_t(p) & (CACHELINE_BYTES - 1)) != 0)
@@ -346,7 +356,7 @@ namespace yask {
         THROW_YASK_EXCEPTION("Error: MPI shm deallocation is not enabled; build with mpi=1");
 #endif
     }
-        
+
     // Find sum of rank_vals over all ranks.
     idx_t sumOverRanks(idx_t rank_val, MPI_Comm comm) {
         idx_t sum_val = rank_val;

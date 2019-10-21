@@ -188,7 +188,7 @@ typedef std::uint64_t uidx_t;
         auto& os = state->_env->_debug.get()->get_ostream();   \
         DEBUG_MSG0(os, msg);                                   \
     } } while(0)
-    
+
 // Macro for debug message when 'state' is defined.
 #define DEBUG_MSG(msg) DEBUG_MSG1(state, msg)
 

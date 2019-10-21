@@ -239,6 +239,8 @@ namespace yask {
             _printer = new YASKAvx256Printer(*this, *_eqBundles, *_eqBundlePacks, *_clusterEqBundles);
         else if (target == "avx512" || target == "knl")
             _printer = new YASKAvx512Printer(*this, *_eqBundles, *_eqBundlePacks, *_clusterEqBundles);
+        else if (target == "avx512lo")
+            _printer = new YASKAvx512Printer(*this, *_eqBundles, *_eqBundlePacks, *_clusterEqBundles, true);
         else if (target == "dot")
             _printer = new DOTPrinter(*this, *_clusterEqBundles, false);
         else if (target == "dot-lite")

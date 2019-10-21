@@ -96,7 +96,7 @@ namespace yask {
             cb(*this, first_step_index, last_step_index);
         }
     }
-    
+
     // Allocate vars and MPI bufs.
     // Initialize some data structures.
     void StencilContext::prepare_solution() {
@@ -210,7 +210,7 @@ namespace yask {
 #endif
         TRACE_MSG("***  WARNING: YASK run with -trace; ignore performance results");
     }
-    
+
     void StencilContext::print_temporal_tiling_info() const {
         STATE_VARS(this);
 
@@ -232,7 +232,7 @@ namespace yask {
                       " mini-block-angles:         " << mb_angles.makeDimValStr());
         }
     }
-    
+
     void StencilContext::init_stats() {
         STATE_VARS(this);
 
@@ -272,9 +272,7 @@ namespace yask {
 #ifdef USE_MPI
         DEBUG_MSG(" num-ranks:             " << opts->_num_ranks.makeDimValStr(" * ") << endl <<
                   " rank-indices:          " << opts->_rank_indices.makeDimValStr() << endl <<
-                  " local-domain-offsets:  " << rank_domain_offsets.makeDimValStr(dims->_domain_dims) << endl <<
-                  " use-shm:               " << opts->use_shm << endl <<
-                  " overlap-comms:         " << opts->overlap_comms);
+                  " local-domain-offsets:  " << rank_domain_offsets.makeDimValStr(dims->_domain_dims));
         if (opts->overlap_comms)
             DEBUG_MSG(" mpi-interior:          " << mpi_interior.make_range_string(domain_dims));
 #endif
@@ -500,7 +498,7 @@ namespace yask {
             p->flops = double(p->nfpops) / rtime;
             p->pts_ps = double(npts_done) / rtime;
         }
-      
+
         if (steps_done > 0) {
             DEBUG_MSG("\nWork stats:\n"
                       " num-steps-done:                   " << makeNumStr(steps_done) << endl <<
@@ -575,7 +573,7 @@ namespace yask {
                               pfx << "throughput (num-writes/sec):  " << makeNumStr(ps.writes_ps) << endl <<
                               pfx << "throughput (est-FLOPS):       " << makeNumStr(ps.flops) << endl <<
                               pfx << "throughput (num-points/sec):  " << makeNumStr(ps.pts_ps));
-                    
+
                 }
             }
         }
@@ -600,5 +598,5 @@ namespace yask {
             sp->steps_done = 0;
         }
     }
-    
+
 } // namespace yask.

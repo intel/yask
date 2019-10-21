@@ -41,7 +41,7 @@ namespace yask {
 
         // Determine step dir from order of first/last.
         idx_t step_dir = (last_step_index >= first_step_index) ? 1 : -1;
-        
+
         // Find begin, stride and end in step-dim.
         idx_t begin_t = first_step_index;
         idx_t stride_t = step_dir; // always +/- 1 for ref run.
@@ -125,7 +125,7 @@ namespace yask {
                     TRACE_MSG("run_ref: not valid for step " << start_t);
                     continue;
                 }
-                
+
                 // Exchange all dirty halos.
                 exchange_halos();
 
@@ -197,7 +197,7 @@ namespace yask {
 
         // Determine step dir from order of first/last.
         idx_t step_dir = (last_step_index >= first_step_index) ? 1 : -1;
-        
+
         // Find begin, stride and end in step-dim.
         idx_t begin_t = first_step_index;
 
@@ -324,7 +324,7 @@ namespace yask {
 
             // Start timer for auto-tuner.
             _at.timer.start();
-            
+
             // If no wave-fronts (default), loop through packs here, and do
             // only one pack at a time in calc_region(). This is similar to
             // loop in calc_rank_ref(), but with packs instead of bundles.
@@ -344,7 +344,7 @@ namespace yask {
                     // Do MPI-external passes?
                     if (mpi_interior.bb_valid) {
                         do_mpi_interior = false;
-                        
+
                         // Old overlap method calculates full blocks in exterior
                         // and then in interior. Only works without WF tiling.
                         // Also, if blocks are too big, then the interior is
@@ -376,7 +376,7 @@ namespace yask {
                                 // section.
                                 if (!does_exterior_exist(j, is_left))
                                     continue;
-                        
+
                                 // Set the proper flags to indicate what
                                 // section we're working on.
                                 do_mpi_left = is_left;
@@ -406,12 +406,12 @@ namespace yask {
                         // dirty.  TODO: make this smarter to save unneeded
                         // MPI exchanges.
                         update_vars(bp, start_t, stop_t, true);
-                        
+
                         // Do the appropriate steps for halo exchange of exterior.
                         // TODO: exchange halo for each dim as soon as it's done.
                         do_mpi_left = do_mpi_right = true;
                         exchange_halos();
-                        
+
                         // Do interior only in next pass.
                         do_mpi_left = do_mpi_right = false;
                         do_mpi_interior = true;
@@ -463,7 +463,7 @@ namespace yask {
                             // section.
                             if (!does_exterior_exist(j, is_left))
                                 continue;
-                        
+
                             // Set the proper flags to indicate what
                             // section we're working on.
                             do_mpi_left = is_left;
@@ -484,12 +484,12 @@ namespace yask {
 
                     // Mark vars dirty for all packs.
                     update_vars(bp, start_t, stop_t, true);
-                    
+
                     // Do the appropriate steps for halo exchange of exterior.
                     // TODO: exchange halo for each dim as soon as it's done.
                     do_mpi_left = do_mpi_right = true;
                     exchange_halos();
-                        
+
                     // Do interior only in next pass.
                     do_mpi_left = do_mpi_right = false;
                     do_mpi_interior = true;
@@ -658,13 +658,13 @@ namespace yask {
                                            region_idxs);
 
                     DOMAIN_VAR_LOOP(i, j) {
-                        
+
                         // If there is only one blk in a region, make sure
                         // this blk fills this whole region.
                         if (settings._block_sizes[i] >= settings._region_sizes[i])
                             region_idxs.stride[i] = region_idxs.end[i] - region_idxs.begin[i];
                     }
-                
+
                     // Only need to loop through the span of the region if it is
                     // at least partly inside the extended BB. For overlapping
                     // regions, they may start outside the domain but enter the
@@ -684,7 +684,7 @@ namespace yask {
 
                     // Need to shift for next pack and/or time.
                     region_shift_num++;
-                    
+
                 } // stencil bundle packs.
             } // no temporal blocking.
 
@@ -724,22 +724,22 @@ namespace yask {
                     if (settings._block_sizes[i] >= settings._region_sizes[i])
                         region_idxs.stride[i] = region_idxs.end[i] - region_idxs.begin[i];
                 }
-                
+
                 // To tesselate n-D domain space, we use n+1 distinct
                 // "phases".  For example, 1-D TB uses "upward" triangles
                 // and "downward" triangles. Region threads sync after every
                 // phase. Thus, the phase loop is here around the generated
                 // OMP loops.  TODO: schedule phases and their shapes via task
                 // dependencies.
-                idx_t nphases = nddims + 1; 
+                idx_t nphases = nddims + 1;
                 for (idx_t phase = 0; phase < nphases; phase++) {
-                    
+
                     // Call calc_block() on every block concurrently.  Only
                     // the shapes corresponding to the current 'phase' will
                     // be calculated.
 #include "yask_region_loops.hpp"
                 }
-            
+
                 // Loop thru stencil bundle packs that were evaluated in
                 // these 'tb_steps' to increment shift for next region
                 // "layer", if any. This is needed when there are more WF
@@ -769,7 +769,7 @@ namespace yask {
         }
 
     } // calc_region.
-    
+
     // Calculate results within a block. This function calls
     // 'calc_mini_block()' for the specified pack or all packs if 'sel_bp'
     // is null.  When using TB, only the shape(s) needed for the tesselation
@@ -786,10 +786,10 @@ namespace yask {
         int region_thread_idx = omp_get_thread_num();
         TRACE_MSG("calc_block: phase " << phase << ", block [" <<
                   region_idxs.start.makeValStr() << " ... " <<
-                  region_idxs.stop.makeValStr() << 
+                  region_idxs.stop.makeValStr() <<
                   ") within region [" <<
                   region_idxs.begin.makeValStr() << " ... " <<
-                  region_idxs.end.makeValStr() << 
+                  region_idxs.end.makeValStr() <<
                   ") by region thread " << region_thread_idx);
 
 #ifdef OVERLAP_WITH_BLOCKS
@@ -829,7 +829,7 @@ namespace yask {
             }
         }
 #endif
-        
+
         // Init block begin & end from region start & stop indices.
         ScanIndices block_idxs(*dims, true);
         block_idxs.initFromOuter(region_idxs);
@@ -855,7 +855,7 @@ namespace yask {
             assert(abs(stride_t) == 1);
             assert(abs(end_t - begin_t) == 1);
             assert(num_t == 1);
-        
+
             // Set step indices that will pass through generated code.
             block_idxs.index[step_posn] = 0;
             block_idxs.start[step_posn] = begin_t;
@@ -865,7 +865,7 @@ namespace yask {
             auto& settings = bp->getActiveSettings();
             block_idxs.stride = settings._mini_block_sizes;
             block_idxs.stride[step_posn] = stride_t;
-        
+
             // Groups in block loops are based on mini-block-group sizes.
             block_idxs.group_size = settings._mini_block_group_sizes;
 
@@ -887,7 +887,7 @@ namespace yask {
         else {
             assert(phase >= 0);
             assert(phase < nphases); // E.g., phase = 0..2 for 2D.
-            
+
             // Determine number of shapes for this 'phase'. First and last
             // phase need one shape. Other (bridge) phases need one shape
             // for each combination of domain dims. E.g., need 'x' and
@@ -913,7 +913,7 @@ namespace yask {
             // shapes.
             ScanIndices adj_block_idxs = block_idxs;
             DOMAIN_VAR_LOOP(i, j) {
-                    
+
                 // TB shapes can extend to the right only.  They can
                 // cover a range as big as this block's base plus the
                 // next block in all dims, so we add the width of the
@@ -933,10 +933,10 @@ namespace yask {
             TRACE_MSG("calc_block: phase " << phase <<
                       ", adjusted block [" <<
                       adj_block_idxs.begin.makeValStr() << " ... " <<
-                      adj_block_idxs.end.makeValStr() << 
+                      adj_block_idxs.end.makeValStr() <<
                       ") with mini-block stride " <<
                       adj_block_idxs.stride.makeValStr());
-                    
+
             // Loop thru shapes.
             for (idx_t shape = 0; shape < nshapes; shape++) {
 
@@ -951,12 +951,12 @@ namespace yask {
                     auto dim = dims_to_bridge[i] - 1;
                     bridge_mask.at(dim) = true;
                 }
-                
+
                 // Can only be one time iteration here when doing TB
                 // because mini-block temporal size is always same
                 // as block temporal size.
                 assert(num_t == 1);
-                    
+
                 // Include automatically-generated loop code that calls
                 // calc_mini_block() for each mini-block in this block.
                 BundlePackPtr bp; // null.
@@ -1030,7 +1030,7 @@ namespace yask {
                       ", shape " << shape <<
                       ", in step " << start_t);
             assert(abs(stop_t - start_t) == 1); // no more TB.
-            
+
             // Set step indices that will pass through generated code.
             mini_block_idxs.index[step_posn] = index_t;
             mini_block_idxs.begin[step_posn] = start_t;
@@ -1040,11 +1040,11 @@ namespace yask {
 
             // Stencil bundle packs to evaluate at this time step.
             for (auto& bp : stPacks) {
-            
+
                 // Not a selected bundle pack?
                 if (sel_bp && sel_bp != bp)
                     continue;
-            
+
                 // Check step.
                 if (check_step_conds && !bp->is_in_valid_step(start_t)) {
                     TRACE_MSG("calc_mini_block: step " << start_t <<
@@ -1062,7 +1062,7 @@ namespace yask {
                 // 0. TODO: track all threads and report cross-thread stats.
                 if (region_thread_idx == 0)
                     bp->start_timers();
-                
+
                 // Strides within a mini-blk are based on sub-blk sizes.
                 // This will get overridden later if thread binding is enabled.
                 auto& settings = bp->getActiveSettings();
@@ -1185,7 +1185,7 @@ namespace yask {
                     // Interior boundaries.
                     idx_t int_begin = mpi_interior.bb_begin[j];
                     idx_t int_end = mpi_interior.bb_end[j];
-                    
+
                     if (wf_steps > 0) {
 
                         // If doing WF tiling, each exterior shape is a
@@ -1193,15 +1193,15 @@ namespace yask {
                         // shift reduces the width of the trapezoid until it is
                         // the minimum width at the top.  Thus, the interior is
                         // an inverted trapezoid between the exterior ones.
-                        
-                        //       +----+---------------+----+ 
+
+                        //       +----+---------------+----+
                         // t    / ext  \  interior   / ext  \    .
                         // ^   /  left  \           /  right \   .
-                        // |  +----------+---------+----------+  
+                        // |  +----------+---------+----------+
                         // +--->x        ^          ^
                         //               |          |
                         //             int_begin  int_end
-                        
+
                         // Modify interior if there is an external MPI
                         // section on either side.  Reduce interior by
                         // 'wf_shift_pts' to get size at base of region,
@@ -1287,7 +1287,7 @@ namespace yask {
                     break;
                 }
             } // Trimming.
-            
+
             // Copy result into idxs.
             idxs.begin[i] = rstart;
             idxs.end[i] = rstop;
@@ -1301,7 +1301,7 @@ namespace yask {
                   (ok ? "not " : "") << "empty");
         return ok;
     }
-    
+
     // For given 'phase' and 'shape', find boundaries within mini-block at
     // 'mb_base_start' to 'mb_base_stop' shifted by 'mb_shift_num', which
     // should start at 0 and increment for each pack in each time-step.
@@ -1326,7 +1326,7 @@ namespace yask {
         STATE_VARS(this);
         auto npacks = stPacks.size();
         bool ok = true;
-        
+
         // Loop thru dims, breaking out if any dim has no work.
         DOMAIN_VAR_LOOP(i, j) {
 
@@ -1394,15 +1394,15 @@ namespace yask {
                 TRACE_MSG("shift_mini_block: phase " << phase <<
                           ", shape " << shape <<
                           ": bridging dim " << j);
-                
+
                 // Start at end of base block, but not
                 // before start of block.
                 shape_start = max(blk_stop, blk_start);
-                
+
                 // Stop at beginning of next block.
                 shape_stop = next_blk_start;
             }
-            
+
             // We now have bounds of this shape in shape_{start,stop}
             // for given phase and shift.
             if (shape_stop <= shape_start)
@@ -1437,7 +1437,7 @@ namespace yask {
                 // Trim mini-block to fit in region.
                 mb_start = max(mb_start, idxs.begin[i]);
                 mb_stop = min(mb_stop, idxs.end[i]);
-            
+
                 // Trim mini-block range to fit in shape.
                 mb_start = max(mb_start, shape_start);
                 mb_stop = min(mb_stop, shape_stop);
@@ -1472,7 +1472,7 @@ namespace yask {
                   (ok ? "not " : "") << "empty");
         return ok;
     }
-    
+
     // Adjust offsets of scratch vars based on thread number 'thread_idx'
     // and beginning point of mini-block 'idxs'.  Each scratch-var is
     // assigned to a thread, so it must "move around" as the thread is
@@ -1511,7 +1511,7 @@ namespace yask {
                     // not be the same as soln fold length because var
                     // may not be vectorized.
                     auto vlen = gp->_get_var_vec_len(posn);
-                    
+
                     // See diagram in yk_var defn.  Local offset is the
                     // offset of this var relative to the beginning of the
                     // current rank.  Set local offset to diff between
@@ -1605,7 +1605,7 @@ namespace yask {
 
     // Exchange dirty halo data for all vars and all steps.
     void StencilContext::exchange_halos() {
-        
+
 #ifdef USE_MPI
         STATE_VARS(this);
         if (!enable_halo_exchange || env->num_ranks < 2)
@@ -1622,7 +1622,7 @@ namespace yask {
             if (do_mpi_interior)
                 TRACE_MSG(" following calc of MPI interior");
         }
-        
+
         // Vars for list of vars that need to be swapped and their step
         // indices.  Use an ordered map by *name* to make sure vars are
         // swapped in same order on all ranks. (If we order vars by
@@ -1653,7 +1653,7 @@ namespace yask {
                 stop_t = gp->get_last_valid_step_index() + 1;
             }
             for (idx_t t = start_t; t < stop_t; t++) {
-                            
+
                 // Only need to swap vars whose halos are not up-to-date
                 // for this step.
                 if (!gb.is_dirty(t))
@@ -1784,7 +1784,7 @@ namespace yask {
                                     sendBuf.wait_for_ok_to_write();
                                     wait_delta += wait_time.stop();
                                 }
-                                
+
                                 // Copy (pack) data from var to buffer.
                                 void* buf = (void*)sendBuf._elems;
                                 idx_t nelems = 0;
@@ -1910,7 +1910,7 @@ namespace yask {
                                 }
                             }
                         }
-                            
+
                     }); // visit neighbors.
 
             } // vars.

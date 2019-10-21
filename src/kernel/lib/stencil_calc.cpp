@@ -60,18 +60,19 @@ namespace yask {
             TRACE_MSG("calc_mini_block: empty BB");
             return;
         }
-        
+
         // TODO: if >1 BB, check limits of outer one first to save time.
 
-        // Lookup some thread-binding info.
+        // Set number of threads in this block.
+        int nbt = _context->set_block_threads();
+
+        // Thread-binding info.
+        // We only bind threads if there is more than one block thread
+        // and binding is enabled.
+        bool bind_threads = nbt > 1 && settings.bind_block_threads;
         int bind_posn = settings._bind_posn;
-        string bind_dim;
-        idx_t bind_slab_pts = 1;
-        if (settings.bind_block_threads) {
-            bind_dim = stencil_dims.getDimName(bind_posn);
-            bind_slab_pts = settings._sub_block_sizes[bind_posn];
-        }
-        
+        idx_t bind_slab_pts = settings._sub_block_sizes[bind_posn];
+
         // Loop through each solid BB for this bundle.
         // For each BB, calc intersection between it and 'mini_block_idxs'.
         // If this is non-empty, apply the bundle to all its required sub-blocks.
@@ -96,7 +97,7 @@ namespace yask {
                 // End point.
                 auto bend = min(mini_block_idxs.end[i], bb.bb_end[j]);
                 mb_idxs.end[i] = bend;
-		
+
                 // Anything to do?
                 if (bend <= bbegin) {
                     bb_ok = false;
@@ -110,7 +111,7 @@ namespace yask {
                            "': no overlap between bundle " << bbn << " and current block");
                 continue; // to next BB.
             }
-            
+
             TRACE_MSG("calc_mini_block('" << get_name() <<
                        "'): after trimming for BB " << bbn << ": [" <<
                        mb_idxs.begin.makeValStr() <<
@@ -124,12 +125,11 @@ namespace yask {
             // Loop through all the needed bundles.
             for (auto* sg : sg_list) {
 
-                // Start threads within a block.  Each of these threads will
-                // eventually work on a separate sub-block.  This is nested within
-                // an OMP region thread.  If there is only one block per thread,
-                // nested OMP is disabled, and this OMP pragma does nothing.
-                int nbt = _context->set_block_threads();
-                bool bind_threads = nbt > 1 && settings.bind_block_threads;
+                // If binding threads to data, start threads within a block.
+                // Each of these threads will eventually work on a separate
+                // sub-block.  This is nested within an OMP region thread.
+                // If there is only one block per thread, nested OMP is
+                // disabled, and this OMP pragma does nothing.
                 _Pragma("omp parallel proc_bind(spread)") {
                     int block_thread_idx = 0;
                     if (nbt > 1) {
@@ -137,7 +137,7 @@ namespace yask {
                         assert(omp_get_num_threads() == nbt);
                         block_thread_idx = omp_get_thread_num();
                     }
-                    
+
                     // Indices needed for the generated loops.  Will normally be a
                     // copy of 'mb_idxs' except when updating scratch-vars.
                     ScanIndices adj_mb_idxs = sg->adjust_span(region_thread_idx, mb_idxs);
@@ -201,7 +201,7 @@ namespace yask {
 #undef CALC_SUB_BLOCK
                     }
 
-                } // OMP parallel.
+                } // OMP parallel when binding threads to data.
             } // bundles.
         } // BB list.
     }
@@ -224,7 +224,7 @@ namespace yask {
         // global rather than normalized as in the cluster and vector loops.
         ScanIndices misc_idxs(*dims, true);
         misc_idxs.initFromOuter(mini_block_idxs);
-        
+
         // Stride sizes and alignment are one element.
         misc_idxs.stride.setFromConst(1);
         misc_idxs.align.setFromConst(1);
@@ -449,7 +449,7 @@ namespace yask {
                 sub_block_vidxs.end[i] = fcend;
             }
         }
-            
+
         // Normalized indices needed for sub-block loop.
         ScanIndices norm_sub_block_idxs(sub_block_eidxs);
 
@@ -572,7 +572,7 @@ namespace yask {
             // Use the 'misc' loops. Indices for these loops will be scalar and
             // global rather than normalized as in the cluster and vector loops.
             ScanIndices misc_idxs(sub_block_idxs);
-            
+
             // Stride sizes and alignment are one element.
             misc_idxs.stride.setFromConst(1);
             misc_idxs.align.setFromConst(1);
@@ -582,7 +582,7 @@ namespace yask {
                        misc_idxs.end.makeValStr() <<
                        ") *not* within vectors at [" <<
                        sub_block_vidxs.begin.makeValStr() << " ... " <<
-                       sub_block_vidxs.end.makeValStr() << 
+                       sub_block_vidxs.end.makeValStr() <<
                        ") by region thread " << region_thread_idx <<
                        " and block thread " << block_thread_idx);
 
@@ -610,7 +610,7 @@ namespace yask {
 #include "yask_misc_loops.hpp"
 #undef MISC_FN
         }
-        
+
     } // calc_sub_block_vec.
 
     // Calculate a series of cluster results within an inner loop.
@@ -729,11 +729,11 @@ namespace yask {
                     adj_idxs.end[i] = idxs.end[i] + rh;
 
                     // Make sure var covers index bounds.
-                    TRACE_MSG("adjust_span: mini-blk [" << 
+                    TRACE_MSG("adjust_span: mini-blk [" <<
                               idxs.begin[i] << "..." <<
-                              idxs.end[i] << ") adjusted to [" << 
+                              idxs.end[i] << ") adjusted to [" <<
                               adj_idxs.begin[i] << "..." <<
-                              adj_idxs.end[i] << ") within scratch-var '" << 
+                              adj_idxs.end[i] << ") within scratch-var '" <<
                               gp->get_name() << "' allocated [" <<
                               gp->get_first_rank_alloc_index(posn) << "..." <<
                               gp->get_last_rank_alloc_index(posn) << "] in dim '" << dname << "'");
@@ -790,9 +790,9 @@ namespace yask {
             os << endl;
         }
     }
-    
+
     // Calc the work stats.
-    // Requires MPI barriers!
+    // Contains MPI barriers!
     void BundlePack::init_work_stats() {
         STATE_VARS(this);
 
@@ -809,7 +809,7 @@ namespace yask {
 
             // Stats for this bundle for 1 pt.
             idx_t writes1 = 0, reads1 = 0, fpops1 = 0;
-            
+
             // Loop through all the needed bundles to
             // count stats for scratch bundles.
             // Does not count extra ops needed in scratch halos
@@ -865,7 +865,7 @@ namespace yask {
                       "  var-writes in rank:        " << makeNumStr(writes_bb) << endl <<
                       "  est FP-ops per point:       " << fpops1 << endl <<
                       "  est FP-ops in rank:         " << makeNumStr(fpops_bb));
-                      
+
             // Classify vars.
             VarPtrs idvars, imvars, odvars, omvars, iodvars, iomvars; // i[nput], o[utput], d[omain], m[isc].
             for (auto gp : sg->inputVarPtrs) {
@@ -905,14 +905,14 @@ namespace yask {
             print_var_list(os, imvars, "input-only other");
             print_var_list(os, omvars, "output-only other");
             print_var_list(os, iomvars, "input-output other");
-            
+
         } // bundles.
 
         // Sum across ranks.
         tot_reads_per_step = sumOverRanks(num_reads_per_step, env->comm);
         tot_writes_per_step = sumOverRanks(num_writes_per_step, env->comm);
         tot_fpops_per_step = sumOverRanks(num_fpops_per_step, env->comm);
-        
+
     } // init_work_stats().
 
 } // namespace yask.

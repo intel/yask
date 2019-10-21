@@ -69,7 +69,7 @@ namespace yask {
     // KernelEnv global lock objects.
     omp_lock_t KernelEnv::_debug_lock;
     bool KernelEnv::_debug_lock_init_done = false;
-    
+
     // Init MPI, OMP.
     void KernelEnv::initEnv(int* argc, char*** argv, MPI_Comm existing_comm)
     {
@@ -115,7 +115,7 @@ namespace yask {
         MPI_Comm_rank(shm_comm, &my_shm_rank);
         MPI_Comm_group(shm_comm, &shm_group);
         MPI_Comm_size(shm_comm, &num_shm_ranks);
-        
+
 #else
         comm = MPI_COMM_NULL;
 #endif
@@ -167,7 +167,7 @@ namespace yask {
     void* MPIBuf::set_storage(std::shared_ptr<char>& base, size_t offset) {
 
         void* p = set_storage(base.get(), offset);
-        
+
         // Share ownership of base.  This ensures that [only] last MPI
         // buffer to use a shared allocation will trigger dealloc.
         _base = base;
@@ -196,7 +196,7 @@ namespace yask {
 
         return (void*)_elems;
     }
-    
+
     // Apply a function to each neighbor rank.
     // Does NOT visit self or non-existent neighbors.
     void MPIData::visitNeighbors(std::function<void
@@ -325,7 +325,7 @@ namespace yask {
         // Following options are in the 'yask' namespace, i.e., no object.
         parser.add_option(new CommandLineParser::BoolOption
                           ("print_suffixes",
-                           "Format output with suffixes for human readibility, e.g., 6.15K, 12.3G, 7.45m."
+                           "Format output with suffixes for human readibility, e.g., 6.15K, 12.3GiB, 7.45m."
                            " If disabled, prints without suffixes for computer parsing, e.g., 6150, 1.23e+10, 7.45e-3.",
                            yask::is_suffix_print_enabled));
 
@@ -344,6 +344,11 @@ namespace yask {
 #endif
         _add_domain_option(parser, "mp", "Minimum var-padding size (including halo)", _min_pad_sizes);
         _add_domain_option(parser, "ep", "Extra var-padding size (beyond halo)", _extra_pad_sizes);
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("allow_addl_padding",
+                           "Allow automatic extension of padding beyond what is needed for"
+                           " vector alignment for additional performance reasons",
+                           _allow_addl_pad));
 #ifdef USE_MPI
         _add_domain_option(parser, "nr", "Num ranks", _num_ranks);
         _add_domain_option(parser, "ri", "This rank's logical index (0-based)", _rank_indices);
@@ -360,11 +365,6 @@ namespace yask {
                            "Minimum width of MPI exterior section to compute before starting MPI communication.",
                            _min_exterior));
 #endif
-        parser.add_option(new CommandLineParser::BoolOption
-                          ("allow_addl_padding",
-                           "Allow automatic extension of padding beyond what is needed for"
-                           " vector alignment for additional performance reasons.",
-                           _allow_addl_pad));
         parser.add_option(new CommandLineParser::BoolOption
                           ("force_scalar",
                            "Evaluate every var point with scalar stencil operations (for debug).",
@@ -400,7 +400,7 @@ namespace yask {
                            "This setting may increase cache locality when using multiple "
                            "block-threads when scratch vars are used and/or "
                            "when temporal blocking is active. "
-                           "This option is ignored if there is only one thread per block.",
+                           "This option is ignored if there are fewer than two block threads.",
                            bind_block_threads));
 #ifdef USE_NUMA
         stringstream msg;
@@ -636,7 +636,7 @@ namespace yask {
         auto& mbt = _mini_block_sizes[step_dim];
         auto& cluster_pts = _dims->_cluster_pts;
         int nddims = _dims->_domain_dims.getNumDims();
-        
+
         // Fix up step-dim sizes.
         rt = max(rt, idx_t(0));
         bt = max(bt, idx_t(0));
@@ -765,9 +765,9 @@ namespace yask {
                 if (sb_per_b >= num_block_threads) {
                     _bind_posn = i;
                     break;
-                }                        
+                }
             }
-            os << " Note: only the sub-block size in the '" << 
+            os << " Note: only the sub-block size in the '" <<
                 _dims->_stencil_dims.getDimName(_bind_posn) << "' dimension may be used at run-time\n"
                 "  because block-thread binding is enabled on " << num_block_threads << " block threads.\n";
         }
@@ -903,7 +903,7 @@ namespace yask {
         assert(ct <= mt);
         return ct;
     }
-        
+
     // Set number of threads to use for a region.
     // Enable nested OMP if there are >1 block threads,
     // disable otherwise.
@@ -913,12 +913,16 @@ namespace yask {
         int rt=0, bt=0;
         int at = get_num_comp_threads(rt, bt);
 
+        // Must call before entering top parallel region.
+        int ol = omp_get_level();
+        assert(ol == 0);
+
         // Limit outer nesting to allow num_block_threads per nested
         // block loop.
         yask_num_threads[0] = rt;
 
         if (bt > 1) {
-            omp_set_nested(1);
+            omp_set_nested(1);  // deprecated for OMP 5, but needed for Intel OMP.
             omp_set_max_active_levels(2);
             int mal = omp_get_max_active_levels();
             assert (mal == 2);
@@ -938,11 +942,16 @@ namespace yask {
     }
 
     // Set number of threads for a block.
+    // Must be called from within a top-level OMP parallel region.
     // Return number of threads.
     // Do nothing and return 0 if not properly initialized.
     int KernelStateBase::set_block_threads() {
         int rt=0, bt=0;
         int at = get_num_comp_threads(rt, bt);
+
+        // Must call within top parallel region.
+        int ol = omp_get_level();
+        assert(ol == 1);
 
         if (bt > 1) {
             int mal = omp_get_max_active_levels();
@@ -952,7 +961,7 @@ namespace yask {
         return bt;
     }
 
-    
+
     // ContextLinker ctor.
     ContextLinker::ContextLinker(StencilContext* context) :
         KernelStateBase(context->get_state()),

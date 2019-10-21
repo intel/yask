@@ -28,8 +28,8 @@ IN THE SOFTWARE.
 namespace yask {
 
     // Underlying storage using GenericVars.
-    typedef GenericVarTemplate<real_t> RealElemVar;
-    typedef GenericVarTemplate<real_vec_t> RealVecVar;
+    typedef GenericVarTyped<real_t> RealElemVar;
+    typedef GenericVarTyped<real_vec_t> RealVecVar;
 
     // Base class implementing all yk_var functionality. Used for
     // vars that contain either individual elements or vectors.
@@ -41,7 +41,7 @@ namespace yask {
 
         // | ... |        +------+       |
         // |  global ofs  |      |       |
-        // |<------------>|var  |       |
+        // |<------------>| var  |       |
         // |     |  loc   |domain|       |
         // |rank |  ofs   |      |       |
         // | ofs |<------>|      |       |
@@ -56,10 +56,6 @@ namespace yask {
         // Local offset must be a vector multiple.
 
     protected:
-        // Underlying storage.  A GenericVar doesn't have stencil features
-        // like padding, halos, offsets, etc.  Holds name of var, names of
-        // dims, sizes of dims, memory layout, actual data.
-        GenericVarBase* _ggb = 0;
 
         // The following masks have one bit for each dim in the var.
         idx_t _step_dim_mask = 0;
@@ -147,7 +143,7 @@ namespace yask {
         inline idx_t get_last_local_index(idx_t posn) const {
             return _rank_offsets[posn] + _local_offsets[posn] + _domains[posn] + _actl_right_pads[posn] - 1;
         }
-        
+
         // Make sure indices are in range.
         // Optionally fix them to be in range and return in 'fixed_indices'.
         // If 'normalize', make rank-relative, divide by vlen and return in 'fixed_indices'.
@@ -171,9 +167,37 @@ namespace yask {
 
     public:
         YkVarBase(KernelStateBase& state,
-                   GenericVarBase* ggb,
-                   const VarDimNames& dimNames);
+                  const VarDimNames& dimNames);
         virtual ~YkVarBase() { }
+
+        // Wrappers to GenericVar.
+        virtual GenericVarBase* get_gvbp() =0;
+        virtual const GenericVarBase* get_gvbp() const =0;
+        virtual const IdxTuple& get_dim_tuple() const =0;
+        virtual const std::string& get_name() const =0;
+        virtual bool is_dim_used(const std::string& dim) const =0;
+        virtual const std::string& get_dim_name(int n) const =0;
+        virtual idx_t get_dim_size(int n) const =0;
+        virtual void set_dim_size(int n, idx_t size) =0;
+        virtual int get_numa_pref() const =0;
+        virtual bool set_numa_pref(int numa_node) =0;
+        virtual void default_alloc() =0;
+        virtual void release_storage() =0;
+        virtual void* get_storage() =0;
+        virtual const void* get_storage() const =0;
+        virtual size_t get_num_bytes() const =0;
+        virtual void set_storage(std::shared_ptr<char>& base, size_t offset) =0;
+
+        // Num dims.
+        inline int get_num_dims() const {
+            return _domains.getNumDims();
+        }
+
+        // Dims same?
+        bool are_dims_and_sizes_same(const YkVarBase& src) const {
+            return get_num_bytes() == src.get_num_bytes() &&
+                get_dim_tuple() == src.get_dim_tuple();
+        }
 
         // Step-indices.
         void update_valid_step(idx_t t);
@@ -185,7 +209,7 @@ namespace yask {
             if (_has_step_dim)
                 _local_offsets[+Indices::step_posn] = 0;
         }
-        
+
         // Halo-exchange flag accessors.
         virtual bool is_dirty(idx_t step_idx) const;
         virtual void set_dirty(bool dirty, idx_t step_idx);
@@ -212,7 +236,7 @@ namespace yask {
 
         // Does this var cover the N-D domain?
         virtual bool is_domain_var() const;
-        
+
         // Scratch accessors.
         virtual bool is_scratch() const {
             return _is_scratch;
@@ -233,7 +257,7 @@ namespace yask {
                 _is_dynamic_step_alloc = true;
                 _is_dynamic_misc_alloc = true;
             }
-        }        
+        }
 
         // Lookup position by dim name.
         // Return -1 or die if not found, depending on flag.
@@ -269,7 +293,7 @@ namespace yask {
 
         // Get var dims with allocations in number of reals.
         virtual IdxTuple get_allocs() const {
-            IdxTuple allocs = _ggb->get_dims(); // make a copy.
+            IdxTuple allocs = get_dim_tuple(); // make a copy.
             _allocs.setTupleVals(allocs);
             return allocs;
         }
@@ -299,7 +323,7 @@ namespace yask {
         virtual idx_t get_elements_in_slice(void* buffer_ptr,
                                             const Indices& first_indices,
                                             const Indices& last_indices) const;
-        
+
         // Possibly vectorized version of set/get_elements_in_slice().
         virtual idx_t set_vecs_in_slice(const void* buffer_ptr,
                                         const Indices& first_indices,
@@ -369,14 +393,641 @@ namespace yask {
 
     };
     typedef std::shared_ptr<YkVarBase> VarBasePtr;
-    
+
+    // YASK var of real elements.
+    // Used for vars that do not contain folded vectors.
+    // If '_use_step_idx', then index to step dim will wrap around.
+    template <typename LayoutFn, bool _use_step_idx>
+    class YkElemVar final : public YkVarBase {
+
+    protected:
+        typedef GenericVar<real_t, LayoutFn> _var_type;
+        _var_type _data;
+
+    public:
+        YkElemVar(KernelStateBase& stateb,
+                   std::string name,
+                   const VarDimNames& dimNames) :
+            YkVarBase(stateb, dimNames),
+            _data(stateb, name, dimNames) {
+            STATE_VARS(this);
+            _has_step_dim = _use_step_idx;
+
+            // Init vec sizes.
+            // A non-vectorized var still needs to know about
+            // the solution folding of its dims for proper
+            // padding.
+            for (size_t i = 0; i < dimNames.size(); i++) {
+                auto& dname = dimNames.at(i);
+                auto* p = dims->_vec_fold_pts.lookup(dname);
+                idx_t dval = p ? *p : 1;
+                _soln_vec_lens[i] = dval;
+            }
+
+            resize();
+        }
+
+        // Wrappers to GenericVar.
+        virtual GenericVarBase* get_gvbp() override final {
+            return &_data;
+        }
+        virtual const GenericVarBase* get_gvbp() const override final {
+            return &_data;
+        }
+        virtual const IdxTuple& get_dim_tuple() const override final {
+            return _data.get_dim_tuple();
+        }
+        virtual const std::string& get_name() const override final {
+            return _data.get_name();
+        }
+        virtual bool is_dim_used(const std::string& dim) const override final {
+            return _data.is_dim_used(dim);
+        }
+        virtual const std::string& get_dim_name(int n) const override final {
+            return _data.get_dim_name(n);
+        };
+        virtual idx_t get_dim_size(int n) const override final {
+            return _data.get_dim_size(n);
+        }
+        virtual void set_dim_size(int n, idx_t size) override final {
+            _data.set_dim_size(n, size);
+        }
+        virtual int get_numa_pref() const override final {
+            return _data.get_numa_pref();
+        };
+        virtual bool set_numa_pref(int numa_node) override final {
+            return _data.set_numa_pref(numa_node);
+        };
+        virtual void default_alloc() override final {
+            _data.default_alloc();
+        };
+        virtual void release_storage() override final {
+            _data.release_storage();
+        };
+        virtual void* get_storage() override final {
+            return _data.get_storage();
+        };
+        virtual const void* get_storage() const override final {
+            return _data.get_storage();
+        };
+        virtual size_t get_num_bytes() const override final {
+            return _data.get_num_bytes();
+        };
+        virtual void set_storage(std::shared_ptr<char>& base, size_t offset) override final {
+            return _data.set_storage(base, offset);
+        };
+
+        // Make a human-readable description.
+        virtual std::string _make_info_string() const override final {
+            return _data.make_info_string("FP");
+        }
+
+        // Init data.
+        virtual void set_all_elements_same(double seed) override final {
+            _data.set_elems_same(seed);
+            set_dirty_all(true);
+        }
+        virtual void set_all_elements_in_seq(double seed) override final {
+            _data.set_elems_in_seq(seed);
+            set_dirty_all(true);
+        }
+
+        // Get a pointer to given element.
+        virtual const real_t* getElemPtr(const Indices& idxs,
+                                         idx_t alloc_step_idx,
+                                         bool checkBounds=true) const final {
+            STATE_VARS_CONST(this);
+            TRACE_MEM_MSG(_data.get_name() << "." << "YkElemVar::getElemPtr(" <<
+                          idxs.makeValStr(get_num_dims()) << ")");
+            const auto n = get_num_dims();
+            Indices adj_idxs(n);
+
+            // Special handling for step index.
+            auto sp = +Indices::step_posn;
+            if (_use_step_idx) {
+                assert(alloc_step_idx == _wrap_step(idxs[sp]));
+                adj_idxs[sp] = alloc_step_idx;
+            }
+
+            // All other indices.
+            _UNROLL for (int i = 0; i < n; i++) {
+                if (!(_use_step_idx && i == sp)) {
+
+                    // Adjust for offsets and padding.
+                    // This gives a positive 0-based local element index.
+                    idx_t ai = idxs[i] + _actl_left_pads[i] -
+                        (_rank_offsets[i] + _local_offsets[i]);
+                    assert(ai >= 0);
+                    adj_idxs[i] = uidx_t(ai);
+                }
+            }
+
+#ifdef TRACE_MEM
+            if (checkBounds)
+                TRACE_MEM_MSG(" => " << _data.get_index(adj_idxs));
+#endif
+
+            // Get pointer via layout in _data.
+            return _data.getPtr(adj_idxs, checkBounds);
+        }
+
+        // Non-const version.
+        virtual real_t* getElemPtr(const Indices& idxs,
+                                   idx_t alloc_step_idx,
+                                   bool checkBounds=true) final {
+
+            const real_t* p =
+                const_cast<const YkElemVar*>(this)->getElemPtr(idxs, alloc_step_idx, checkBounds);
+            return const_cast<real_t*>(p);
+        }
+
+        // Read one element.
+        // Indices are relative to overall problem domain.
+        virtual real_t readElem(const Indices& idxs,
+                                idx_t alloc_step_idx,
+                                int line) const final {
+            const real_t* ep = YkElemVar::getElemPtr(idxs, alloc_step_idx);
+            real_t e = *ep;
+#ifdef TRACE_MEM
+            printElem("readElem", idxs, e, line);
+#endif
+            return e;
+        }
+
+        // Non-vectorized fall-back versions.
+        virtual idx_t set_vecs_in_slice(const void* buffer_ptr,
+                                        const Indices& first_indices,
+                                        const Indices& last_indices) override {
+            return set_elements_in_slice(buffer_ptr, first_indices, last_indices);
+        }
+        virtual idx_t get_vecs_in_slice(void* buffer_ptr,
+                                        const Indices& first_indices,
+                                        const Indices& last_indices) const override {
+            return get_elements_in_slice(buffer_ptr, first_indices, last_indices);
+        }
+    };                          // YkElemVar.
+
+    // YASK var of real vectors.
+    // Used for vars that contain all the folded dims.
+    // If '_use_step_idx', then index to step dim will wrap around.
+    // The '_templ_vec_lens' arguments must contain a list of vector lengths
+    // corresponding to each dim in the var.
+    template <typename LayoutFn, bool _use_step_idx, idx_t... _templ_vec_lens>
+    class YkVecVar final : public YkVarBase {
+
+    protected:
+        typedef GenericVar<real_vec_t, LayoutFn> _var_type;
+        _var_type _data;
+
+        // Positions of var dims in vector fold dims.
+        Indices _vec_fold_posns;
+
+    public:
+        YkVecVar(KernelStateBase& stateb,
+                  const std::string& name,
+                  const VarDimNames& dimNames) :
+            YkVarBase(stateb, dimNames),
+            _data(stateb, name, dimNames),
+            _vec_fold_posns(idx_t(0), int(dimNames.size())) {
+            STATE_VARS(this);
+            _has_step_dim = _use_step_idx;
+
+            // Template vec lengths.
+            const int nvls = sizeof...(_templ_vec_lens);
+            const idx_t vls[nvls] { _templ_vec_lens... };
+            assert((size_t)nvls == dimNames.size());
+
+            // Init vec sizes.
+            // A vectorized var must use all the vectorized
+            // dims of the solution folding.
+            // For each dim in the var, use the number of vector
+            // fold points or 1 if not set.
+            for (size_t i = 0; i < dimNames.size(); i++) {
+                auto& dname = dimNames.at(i);
+                auto* p = dims->_vec_fold_pts.lookup(dname);
+                idx_t dval = p ? *p : 1;
+                _soln_vec_lens[i] = dval;
+                _var_vec_lens[i] = dval;
+
+                // Must be same as that in template parameter pack.
+                assert(dval == vls[i]);
+            }
+
+            // Init var-dim positions of fold dims.
+            assert(dims->_vec_fold_pts.getNumDims() == NUM_VEC_FOLD_DIMS);
+            for (int i = 0; i < NUM_VEC_FOLD_DIMS; i++) {
+                auto& fdim = dims->_vec_fold_pts.getDimName(i);
+                int j = get_dim_posn(fdim, true,
+                                     "internal error: folded var missing folded dim");
+                assert(j >= 0);
+                _vec_fold_posns[i] = j;
+            }
+
+            resize();
+        }
+
+        // Wrappers to GenericVar.
+        virtual GenericVarBase* get_gvbp() override final {
+            return &_data;
+        }
+        virtual const GenericVarBase* get_gvbp() const override final {
+            return &_data;
+        }
+        virtual const IdxTuple& get_dim_tuple() const override final {
+            return _data.get_dim_tuple();
+        }
+        virtual const std::string& get_name() const override final {
+            return _data.get_name();
+        }
+        virtual bool is_dim_used(const std::string& dim) const override final {
+            return _data.is_dim_used(dim);
+        }
+        virtual const std::string& get_dim_name(int n) const override final {
+            return _data.get_dim_name(n);
+        };
+        virtual idx_t get_dim_size(int n) const override final {
+            return _data.get_dim_size(n);
+        }
+        virtual void set_dim_size(int n, idx_t size) override final {
+            _data.set_dim_size(n, size);
+        }
+        virtual int get_numa_pref() const override final {
+            return _data.get_numa_pref();
+        };
+        virtual bool set_numa_pref(int numa_node) override final {
+            return _data.set_numa_pref(numa_node);
+        };
+        virtual void default_alloc() override final {
+            _data.default_alloc();
+        };
+        virtual void release_storage() override final {
+            _data.release_storage();
+        };
+        virtual void* get_storage() override final {
+            return _data.get_storage();
+        };
+        virtual const void* get_storage() const override final {
+            return _data.get_storage();
+        };
+        virtual size_t get_num_bytes() const override final {
+            return _data.get_num_bytes();
+        };
+        virtual void set_storage(std::shared_ptr<char>& base, size_t offset) override final {
+            return _data.set_storage(base, offset);
+        };
+
+        // Make a human-readable description.
+        virtual std::string _make_info_string() const override final {
+            return _data.make_info_string("SIMD FP");
+        }
+
+        // Init data.
+        virtual void set_all_elements_same(double seed) override final {
+            real_vec_t seedv = seed; // bcast.
+            _data.set_elems_same(seedv);
+            set_dirty_all(true);
+        }
+        virtual void set_all_elements_in_seq(double seed) override final {
+            real_vec_t seedv;
+            auto n = seedv.get_num_elems();
+
+            // Init elements to values between seed and 2*seed.
+            // For example if n==4, init to
+            // seed * 1.0, seed * 1.25, seed * 1.5, seed * 1.75.
+            for (int i = 0; i < n; i++)
+                seedv[i] = seed * (1.0 + double(i) / n);
+            _data.set_elems_in_seq(seedv);
+            set_dirty_all(true);
+        }
+
+        // Get a pointer to given element.
+        virtual const real_t* getElemPtr(const Indices& idxs,
+                                         idx_t alloc_step_idx,
+                                         bool checkBounds=true) const final {
+            STATE_VARS_CONST(this);
+            TRACE_MEM_MSG(_data.get_name() << "." << "YkVecVar::getElemPtr(" <<
+                          idxs.makeValStr(get_num_dims()) << ")");
+
+            // Use template vec lengths instead of run-time values for
+            // efficiency.
+            static constexpr int nvls = sizeof...(_templ_vec_lens);
+            static constexpr uidx_t vls[nvls] { _templ_vec_lens... };
+            Indices vec_idxs(nvls), elem_ofs(nvls);
+#ifdef DEBUG_LAYOUT
+            const auto nd = get_num_dims();
+            assert(nd == nvls);
+#endif
+
+            // Special handling for step index.
+            auto sp = +Indices::step_posn;
+            if (_use_step_idx) {
+                assert(alloc_step_idx == _wrap_step(idxs[sp]));
+                vec_idxs[sp] = alloc_step_idx;
+                elem_ofs[sp] = 0;
+            }
+
+            // Try to force compiler to use shifts instead of DIV and MOD
+            // when the vec-lengths are 2^n.
+            // All other indices.
+            _UNROLL _NO_VECTOR
+            for (int i = 0; i < nvls; i++) {
+                if (!(_use_step_idx && i == sp)) {
+
+                    // Adjust for offset and padding.
+                    // This gives a positive 0-based local element index.
+                    idx_t ai = idxs[i] + _actl_left_pads[i] -
+                        (_rank_offsets[i] + _local_offsets[i]);
+                    assert(ai >= 0);
+                    uidx_t adj_idx = uidx_t(ai);
+
+                    // Get vector index and offset.
+                    // Use unsigned DIV and MOD to avoid compiler having to
+                    // emit code for preserving sign when using shifts.
+                    vec_idxs[i] = idx_t(adj_idx / vls[i]);
+                    elem_ofs[i] = idx_t(adj_idx % vls[i]);
+                    assert(vec_idxs[i] == idx_t(adj_idx / _var_vec_lens[i]));
+                    assert(elem_ofs[i] == idx_t(adj_idx % _var_vec_lens[i]));
+                }
+            }
+
+            // Get only the vectorized fold offsets, i.e., those
+            // with vec-lengths > 1.
+            // And, they need to be in the original folding order,
+            // which might be different than the var-dim order.
+            Indices fold_ofs(NUM_VEC_FOLD_DIMS);
+            _UNROLL for (int i = 0; i < NUM_VEC_FOLD_DIMS; i++) {
+                int j = _vec_fold_posns[i];
+                fold_ofs[i] = elem_ofs[j];
+            }
+
+            // Get 1D element index into vector.
+            auto i = dims->getElemIndexInVec(fold_ofs);
+
+#ifdef DEBUG_LAYOUT
+            // Compare to more explicit offset extraction.
+            IdxTuple eofs = get_allocs(); // get dims for this var.
+            elem_ofs.setTupleVals(eofs);  // set vals from elem_ofs.
+            auto i2 = dims->getElemIndexInVec(eofs);
+            assert(i == i2);
+#endif
+
+            if (checkBounds)
+                TRACE_MEM_MSG(" => " << _data.get_index(vec_idxs) <<
+                              "[" << i << "]");
+
+            // Get pointer to vector.
+            const real_vec_t* vp = _data.getPtr(vec_idxs, checkBounds);
+
+            // Get pointer to element.
+            const real_t* ep = &(*vp)[i];
+            return ep;
+        }
+
+        // Non-const version.
+        virtual real_t* getElemPtr(const Indices& idxs,
+                                   idx_t alloc_step_idx,
+                                   bool checkBounds=true) override final {
+
+            const real_t* p =
+                const_cast<const YkVecVar*>(this)->getElemPtr(idxs, alloc_step_idx,
+                                                               checkBounds);
+            return const_cast<real_t*>(p);
+        }
+
+        // Read one element.
+        // Indices are relative to overall problem domain.
+        virtual real_t readElem(const Indices& idxs,
+                                idx_t alloc_step_idx,
+                                int line) const override final {
+            const real_t* ep = YkVecVar::getElemPtr(idxs, alloc_step_idx);
+            real_t e = *ep;
+#ifdef TRACE_MEM
+            printElem("readElem", idxs, e, line);
+#endif
+            return e;
+        }
+
+        // Get a pointer to given vector.
+        // Indices must be normalized and rank-relative.
+        // It's important that this function be efficient, since
+        // it's indiectly used from the stencil kernel.
+        ALWAYS_INLINE const real_vec_t* getVecPtrNorm(const Indices& vec_idxs,
+                                               idx_t alloc_step_idx,
+                                               bool checkBounds=true) const {
+            STATE_VARS_CONST(this);
+            TRACE_MEM_MSG(_data.get_name() << "." << "YkVecVar::getVecPtrNorm(" <<
+                          vec_idxs.makeValStr(get_num_dims()) << ")");
+
+            static constexpr int nvls = sizeof...(_templ_vec_lens);
+#ifdef DEBUG_LAYOUT
+            const auto nd = get_num_dims();
+            assert(nd == nvls);
+#endif
+            Indices adj_idxs(nvls);
+
+            // Special handling for step index.
+            auto sp = +Indices::step_posn;
+            if (_use_step_idx) {
+                assert(alloc_step_idx == _wrap_step(vec_idxs[sp]));
+                adj_idxs[sp] = alloc_step_idx;
+            }
+
+            // Domain indices.
+            _UNROLL for (int i = 0; i < nvls; i++) {
+                if (!(_use_step_idx && i == sp)) {
+
+                    // Adjust for padding.
+                    // Since the indices are rank-relative, subtract only
+                    // the local offsets. (Compare to getElemPtr().)
+                    // This gives a 0-based local *vector* index.
+                    adj_idxs[i] = vec_idxs[i] + _vec_left_pads[i] - _vec_local_offsets[i];
+                }
+            }
+            TRACE_MEM_MSG(" => " << _data.get_index(adj_idxs, checkBounds));
+
+            // Get ptr via layout in _data.
+            return _data.getPtr(adj_idxs, checkBounds);
+        }
+
+        // Non-const version.
+        ALWAYS_INLINE real_vec_t* getVecPtrNorm(const Indices& vec_idxs,
+                                         idx_t alloc_step_idx,
+                                         bool checkBounds=true) {
+
+            const real_vec_t* p =
+                const_cast<const YkVecVar*>(this)->getVecPtrNorm(vec_idxs,
+                                                                  alloc_step_idx, checkBounds);
+            return const_cast<real_vec_t*>(p);
+        }
+
+        // Read one vector.
+        // Indices must be normalized and rank-relative.
+        // 'alloc_step_idx' is pre-calculated or 0 if not used.
+        inline real_vec_t readVecNorm(const Indices& vec_idxs,
+                                      idx_t alloc_step_idx,
+                                      int line) const {
+            const real_vec_t* vp = getVecPtrNorm(vec_idxs, alloc_step_idx);
+            real_vec_t v = *vp;
+#ifdef TRACE_MEM
+            printVecNorm("readVecNorm", vec_idxs, v, line);
+#endif
+            return v;
+        }
+
+        // Write one vector.
+        // Indices must be normalized and rank-relative.
+        // 'alloc_step_idx' is pre-calculated or 0 if not used.
+        inline void writeVecNorm(real_vec_t val,
+                                 const Indices& vec_idxs,
+                                 idx_t alloc_step_idx,
+                                 int line) {
+            real_vec_t* vp = getVecPtrNorm(vec_idxs, alloc_step_idx);
+            *vp = val;
+#ifdef TRACE_MEM
+            printVecNorm("writeVecNorm", vec_idxs, val, line);
+#endif
+        }
+
+        // Prefetch one vector.
+        // Indices must be normalized and rank-relative.
+        // 'alloc_step_idx' is pre-calculated or 0 if not used.
+        template <int level>
+        ALWAYS_INLINE
+        void prefetchVecNorm(const Indices& vec_idxs,
+                             idx_t alloc_step_idx,
+                             int line) const {
+            STATE_VARS_CONST(this);
+            TRACE_MEM_MSG("prefetchVecNorm<" << level << ">(" <<
+                          makeIndexString(vec_idxs.mulElements(_var_vec_lens)) << ")");
+
+            auto p = getVecPtrNorm(vec_idxs, alloc_step_idx, false);
+            prefetch<level>(p);
+#ifdef MODEL_CACHE
+            cache_model.prefetch(p, level, line);
+#endif
+        }
+
+        // Vectorized version of set/get_elements_in_slice().
+        // Indices must be vec-normalized and rank-relative.
+        virtual idx_t set_vecs_in_slice(const void* buffer_ptr,
+                                        const Indices& first_indices,
+                                        const Indices& last_indices) override {
+            STATE_VARS(this);
+            if (_data.get_storage() == 0)
+                return 0;
+            Indices firstv, lastv;
+            checkIndices(first_indices, "set_vecs_in_slice", true, false, true, &firstv);
+            checkIndices(last_indices, "set_vecs_in_slice", true, false, true, &lastv);
+
+            // Find range.
+            IdxTuple numVecsTuple = get_slice_range(firstv, lastv);
+            TRACE_MSG("set_vecs_in_slice: setting " <<
+                       numVecsTuple.makeDimValStr(" * ") << " vecs at [" <<
+                       makeIndexString(firstv) << " ... " <<
+                       makeIndexString(lastv) << "]");
+
+            // Do step loop explicitly.
+            auto sp = +Indices::step_posn;
+            idx_t first_t = 0, last_t = 0;
+            if (_has_step_dim) {
+                first_t = firstv[sp];
+                last_t = lastv[sp];
+                numVecsTuple[sp] = 1; // Do one at a time.
+            }
+            idx_t iofs = 0;
+            for (idx_t t = first_t; t <= last_t; t++) {
+
+                // Do only this one step in this iteration.
+                idx_t ti = 0;
+                if (_has_step_dim) {
+                    ti = _wrap_step(t);
+                    firstv[sp] = t;
+                    lastv[sp] = t;
+                }
+
+                // Visit points in slice.
+                numVecsTuple.visitAllPointsInParallel
+                    ([&](const IdxTuple& ofs,
+                         size_t idx) {
+                        Indices pt = firstv.addElements(ofs);
+                        real_vec_t val = ((real_vec_t*)buffer_ptr)[idx + iofs];
+
+                        writeVecNorm(val, pt, ti, __LINE__);
+                        return true;    // keep going.
+                    });
+                iofs += numVecsTuple.product();
+            }
+
+            // Set appropriate dirty flag(s).
+            set_dirty_in_slice(first_indices, last_indices);
+
+            return numVecsTuple.product() * VLEN;
+        }
+
+        virtual idx_t get_vecs_in_slice(void* buffer_ptr,
+                                        const Indices& first_indices,
+                                        const Indices& last_indices) const override final {
+            STATE_VARS(this);
+            if (_data.get_storage() == 0)
+                FORMAT_AND_THROW_YASK_EXCEPTION("Error: call to 'get_vecs_in_slice' with no storage allocated for var '" <<
+                                                _data.get_name());
+            Indices firstv, lastv;
+            checkIndices(first_indices, "get_vecs_in_slice", true, true, true, &firstv);
+            checkIndices(last_indices, "get_vecs_in_slice", true, true, true, &lastv);
+
+            // Find range.
+            IdxTuple numVecsTuple = get_slice_range(firstv, lastv);
+            TRACE_MSG("get_vecs_in_slice: getting " <<
+                       numVecsTuple.makeDimValStr(" * ") << " vecs at " <<
+                       makeIndexString(firstv) << " ... " <<
+                       makeIndexString(lastv));
+            auto n = numVecsTuple.product() * VLEN;
+
+            // Do step loop explicitly.
+            auto sp = +Indices::step_posn;
+            idx_t first_t = 0, last_t = 0;
+            if (_has_step_dim) {
+                first_t = firstv[sp];
+                last_t = lastv[sp];
+                numVecsTuple[sp] = 1; // Do one at a time.
+            }
+            idx_t iofs = 0;
+            for (idx_t t = first_t; t <= last_t; t++) {
+
+                // Do only this one step in this iteration.
+                idx_t ti = 0;
+                if (_has_step_dim) {
+                    ti = _wrap_step(t);
+                    firstv[sp] = t;
+                    lastv[sp] = t;
+                }
+
+                // Visit points in slice.
+                numVecsTuple.visitAllPointsInParallel
+                    ([&](const IdxTuple& ofs,
+                         size_t idx) {
+                        Indices pt = firstv.addElements(ofs);
+
+                        real_vec_t val = readVecNorm(pt, ti, __LINE__);
+                        ((real_vec_t*)buffer_ptr)[idx + iofs] = val;
+                        return true;    // keep going.
+                    });
+                iofs += numVecsTuple.product();
+            }
+            assert(iofs * VLEN == n);
+
+            // Return number of writes.
+            return n;
+        }
+    };                          // YkVecVar.
+
     // Implementation of yk_var interface.  Class contains no real data,
     // just a pointer to the underlying data and meta-data. This allows var
     // data to be shared and moved without changing pointers.
     class YkVarImpl : public virtual yk_var {
     protected:
         VarBasePtr _gbp;
-        
+
     public:
         YkVarImpl() { }
         YkVarImpl(const VarBasePtr& gp) : _gbp(gp) { }
@@ -398,14 +1049,6 @@ namespace yask {
         }
         inline YkVarBase* gbp() const {
             return _gbp.get();
-        }
-        inline GenericVarBase& gg() {
-            assert(gb()._ggb);
-            return *(gb()._ggb);
-        }
-        inline GenericVarBase& gg() const {
-            assert(gb()._ggb);
-            return *(gb()._ggb);
         }
 
         // Pass-thru methods to base.
@@ -429,18 +1072,18 @@ namespace yask {
         // APIs.
         // See yask_kernel_api.hpp.
         virtual const std::string& get_name() const {
-            return gg().get_name();
-        }
-        virtual bool is_dim_used(const std::string& dim) const {
-            return gg().is_dim_used(dim);
+            return gb().get_name();
         }
         virtual int get_num_dims() const {
-            return gg().get_num_dims();
+            return gb().get_num_dims();
+        }
+        virtual bool is_dim_used(const std::string& dim) const {
+            return gb().is_dim_used(dim);
         }
         virtual const std::string& get_dim_name(int n) const {
             assert(n >= 0);
             assert(n < get_num_dims());
-            return gg().get_dim_name(n);
+            return gb().get_dim_name(n);
         }
         virtual VarDimNames get_dim_names() const {
             std::vector<std::string> dims(get_num_dims());
@@ -458,10 +1101,10 @@ namespace yask {
             return gb()._is_dynamic_misc_alloc;
         }
         virtual int get_numa_preferred() const {
-            return gg().get_numa_pref();
+            return gb().get_numa_pref();
         }
         virtual bool set_numa_preferred(int numa_node) {
-            return gg().set_numa_pref(numa_node);
+            return gb().set_numa_pref(numa_node);
         }
 
         virtual idx_t get_first_valid_step_index() const {
@@ -656,20 +1299,20 @@ namespace yask {
 
         virtual void alloc_storage() {
             STATE_VARS(gbp());
-            gg().default_alloc();
+            gb().default_alloc();
             DEBUG_MSG(gb().make_info_string());
         }
         virtual void release_storage() {
             STATE_VARS(gbp());
             TRACE_MSG("release_storage(): " << gb().make_info_string());
-            gg().release_storage();
+            gb().release_storage();
             TRACE_MSG("after release_storage(): " << gb().make_info_string());
         }
         virtual bool is_storage_allocated() const {
-            return gg().get_storage() != 0;
+            return gb().get_storage() != 0;
         }
         virtual idx_t get_num_storage_bytes() const {
-            return idx_t(gg().get_num_bytes());
+            return idx_t(gb().get_num_bytes());
         }
         virtual idx_t get_num_storage_elements() const {
             return gb()._allocs.product();
@@ -683,548 +1326,11 @@ namespace yask {
         }
         virtual void fuse_vars(yk_var_ptr other);
         virtual void* get_raw_storage_buffer() {
-            return gg().get_storage();
+            return gb().get_storage();
         }
         virtual void set_storage(std::shared_ptr<char> base, size_t offset) {
-            gg().set_storage(base, offset);
+            gb().set_storage(base, offset);
         }
     };
-
-    // YASK var of real elements.
-    // Used for vars that do not contain folded vectors.
-    // If '_use_step_idx', then index to step dim will wrap around.
-    template <typename LayoutFn, bool _use_step_idx>
-    class YkElemVar : public YkVarBase {
-
-    protected:
-        typedef GenericVar<real_t, LayoutFn> _var_type;
-        _var_type _data;
-
-    public:
-        YkElemVar(KernelStateBase& stateb,
-                   std::string name,
-                   const VarDimNames& dimNames) :
-            YkVarBase(stateb, &_data, dimNames),
-            _data(stateb, name, dimNames) {
-            STATE_VARS(this);
-            _has_step_dim = _use_step_idx;
-
-            // Init vec sizes.
-            // A non-vectorized var still needs to know about
-            // the solution folding of its dims for proper
-            // padding.
-            for (size_t i = 0; i < dimNames.size(); i++) {
-                auto& dname = dimNames.at(i);
-                auto* p = dims->_vec_fold_pts.lookup(dname);
-                idx_t dval = p ? *p : 1;
-                _soln_vec_lens[i] = dval;
-            }
-
-            resize();
-        }
-
-        // Get num dims from compile-time const.
-        virtual int get_num_dims() const final {
-            return _data.get_num_dims();
-        }
-
-        // Make a human-readable description.
-        virtual std::string _make_info_string() const {
-            return _data.make_info_string("FP");
-        }
-
-        // Init data.
-        virtual void set_all_elements_same(double seed) {
-            _data.set_elems_same(seed);
-            set_dirty_all(true);
-        }
-        virtual void set_all_elements_in_seq(double seed) {
-            _data.set_elems_in_seq(seed);
-            set_dirty_all(true);
-        }
-
-        // Get a pointer to given element.
-        virtual const real_t* getElemPtr(const Indices& idxs,
-                                         idx_t alloc_step_idx,
-                                         bool checkBounds=true) const final {
-            STATE_VARS_CONST(this);
-            TRACE_MEM_MSG(_data.get_name() << "." << "YkElemVar::getElemPtr(" <<
-                          idxs.makeValStr(get_num_dims()) << ")");
-            const auto n = _data.get_num_dims();
-            Indices adj_idxs(n);
-
-            // Special handling for step index.
-            auto sp = +Indices::step_posn;
-            if (_use_step_idx) {
-                assert(alloc_step_idx == _wrap_step(idxs[sp]));
-                adj_idxs[sp] = alloc_step_idx;
-            }
-
-            // All other indices.
-            _UNROLL for (int i = 0; i < n; i++) {
-                if (!(_use_step_idx && i == sp)) {
-
-                    // Adjust for offsets and padding.
-                    // This gives a positive 0-based local element index.
-                    idx_t ai = idxs[i] + _actl_left_pads[i] -
-                        (_rank_offsets[i] + _local_offsets[i]);
-                    assert(ai >= 0);
-                    adj_idxs[i] = uidx_t(ai);
-                }
-            }
-
-#ifdef TRACE_MEM
-            if (checkBounds)
-                TRACE_MEM_MSG(" => " << _data.get_index(adj_idxs));
-#endif
-
-            // Get pointer via layout in _data.
-            return _data.getPtr(adj_idxs, checkBounds);
-        }
-
-        // Non-const version.
-        virtual real_t* getElemPtr(const Indices& idxs,
-                                   idx_t alloc_step_idx,
-                                   bool checkBounds=true) final {
-
-            const real_t* p =
-                const_cast<const YkElemVar*>(this)->getElemPtr(idxs, alloc_step_idx, checkBounds);
-            return const_cast<real_t*>(p);
-        }
-
-        // Read one element.
-        // Indices are relative to overall problem domain.
-        virtual real_t readElem(const Indices& idxs,
-                                idx_t alloc_step_idx,
-                                int line) const final {
-            const real_t* ep = YkElemVar::getElemPtr(idxs, alloc_step_idx);
-            real_t e = *ep;
-#ifdef TRACE_MEM
-            printElem("readElem", idxs, e, line);
-#endif
-            return e;
-        }
-
-        // Non-vectorized fall-back versions.
-        virtual idx_t set_vecs_in_slice(const void* buffer_ptr,
-                                        const Indices& first_indices,
-                                        const Indices& last_indices) {
-            return set_elements_in_slice(buffer_ptr, first_indices, last_indices);
-        }
-        virtual idx_t get_vecs_in_slice(void* buffer_ptr,
-                                        const Indices& first_indices,
-                                        const Indices& last_indices) const {
-            return get_elements_in_slice(buffer_ptr, first_indices, last_indices);
-        }
-    };                          // YkElemVar.
-
-    // YASK var of real vectors.
-    // Used for vars that contain all the folded dims.
-    // If '_use_step_idx', then index to step dim will wrap around.
-    // The '_templ_vec_lens' arguments must contain a list of vector lengths
-    // corresponding to each dim in the var.
-    template <typename LayoutFn, bool _use_step_idx, idx_t... _templ_vec_lens>
-    class YkVecVar : public YkVarBase {
-
-    protected:
-        typedef GenericVar<real_vec_t, LayoutFn> _var_type;
-        _var_type _data;
-
-        // Positions of var dims in vector fold dims.
-        Indices _vec_fold_posns;
-
-    public:
-        YkVecVar(KernelStateBase& stateb,
-                  const std::string& name,
-                  const VarDimNames& dimNames) :
-            YkVarBase(stateb, &_data, dimNames),
-            _data(stateb, name, dimNames),
-            _vec_fold_posns(idx_t(0), int(dimNames.size())) {
-            STATE_VARS(this);
-            _has_step_dim = _use_step_idx;
-
-            // Template vec lengths.
-            const int nvls = sizeof...(_templ_vec_lens);
-            const idx_t vls[nvls] { _templ_vec_lens... };
-            assert((size_t)nvls == dimNames.size());
-
-            // Init vec sizes.
-            // A vectorized var must use all the vectorized
-            // dims of the solution folding.
-            // For each dim in the var, use the number of vector
-            // fold points or 1 if not set.
-            for (size_t i = 0; i < dimNames.size(); i++) {
-                auto& dname = dimNames.at(i);
-                auto* p = dims->_vec_fold_pts.lookup(dname);
-                idx_t dval = p ? *p : 1;
-                _soln_vec_lens[i] = dval;
-                _var_vec_lens[i] = dval;
-
-                // Must be same as that in template parameter pack.
-                assert(dval == vls[i]);
-            }
-
-            // Init var-dim positions of fold dims.
-            assert(dims->_vec_fold_pts.getNumDims() == NUM_VEC_FOLD_DIMS);
-            for (int i = 0; i < NUM_VEC_FOLD_DIMS; i++) {
-                auto& fdim = dims->_vec_fold_pts.getDimName(i);
-                int j = get_dim_posn(fdim, true,
-                                     "internal error: folded var missing folded dim");
-                assert(j >= 0);
-                _vec_fold_posns[i] = j;
-            }
-
-            resize();
-        }
-
-        // Get num dims from compile-time const.
-        virtual int get_num_dims() const final {
-            return _data.get_num_dims();
-        }
-
-        // Make a human-readable description.
-        virtual std::string _make_info_string() const {
-            return _data.make_info_string("SIMD FP");
-        }
-
-        // Init data.
-        virtual void set_all_elements_same(double seed) {
-            real_vec_t seedv = seed; // bcast.
-            _data.set_elems_same(seedv);
-            set_dirty_all(true);
-        }
-        virtual void set_all_elements_in_seq(double seed) {
-            real_vec_t seedv;
-            auto n = seedv.get_num_elems();
-
-            // Init elements to values between seed and 2*seed.
-            // For example if n==4, init to
-            // seed * 1.0, seed * 1.25, seed * 1.5, seed * 1.75.
-            for (int i = 0; i < n; i++)
-                seedv[i] = seed * (1.0 + double(i) / n);
-            _data.set_elems_in_seq(seedv);
-            set_dirty_all(true);
-        }
-
-        // Get a pointer to given element.
-        virtual const real_t* getElemPtr(const Indices& idxs,
-                                         idx_t alloc_step_idx,
-                                         bool checkBounds=true) const final {
-            STATE_VARS_CONST(this);
-            TRACE_MEM_MSG(_data.get_name() << "." << "YkVecVar::getElemPtr(" <<
-                          idxs.makeValStr(get_num_dims()) << ")");
-
-            // Use template vec lengths instead of run-time values for
-            // efficiency.
-            static constexpr int nvls = sizeof...(_templ_vec_lens);
-            static constexpr uidx_t vls[nvls] { _templ_vec_lens... };
-            Indices vec_idxs(nvls), elem_ofs(nvls);
-#ifdef DEBUG_LAYOUT
-            const auto nd = _data.get_num_dims();
-            assert(nd == nvls);
-#endif
-
-            // Special handling for step index.
-            auto sp = +Indices::step_posn;
-            if (_use_step_idx) {
-                assert(alloc_step_idx == _wrap_step(idxs[sp]));
-                vec_idxs[sp] = alloc_step_idx;
-                elem_ofs[sp] = 0;
-            }
-
-            // Try to force compiler to use shifts instead of DIV and MOD
-            // when the vec-lengths are 2^n.
-            // All other indices.
-            _UNROLL _NO_VECTOR
-            for (int i = 0; i < nvls; i++) {
-                if (!(_use_step_idx && i == sp)) {
-
-                    // Adjust for offset and padding.
-                    // This gives a positive 0-based local element index.
-                    idx_t ai = idxs[i] + _actl_left_pads[i] -
-                        (_rank_offsets[i] + _local_offsets[i]);
-                    assert(ai >= 0);
-                    uidx_t adj_idx = uidx_t(ai);
-
-                    // Get vector index and offset.
-                    // Use unsigned DIV and MOD to avoid compiler having to
-                    // emit code for preserving sign when using shifts.
-                    vec_idxs[i] = idx_t(adj_idx / vls[i]);
-                    elem_ofs[i] = idx_t(adj_idx % vls[i]);
-                    assert(vec_idxs[i] == idx_t(adj_idx / _var_vec_lens[i]));
-                    assert(elem_ofs[i] == idx_t(adj_idx % _var_vec_lens[i]));
-                }
-            }
-
-            // Get only the vectorized fold offsets, i.e., those
-            // with vec-lengths > 1.
-            // And, they need to be in the original folding order,
-            // which might be different than the var-dim order.
-            Indices fold_ofs(NUM_VEC_FOLD_DIMS);
-            _UNROLL for (int i = 0; i < NUM_VEC_FOLD_DIMS; i++) {
-                int j = _vec_fold_posns[i];
-                fold_ofs[i] = elem_ofs[j];
-            }
-
-            // Get 1D element index into vector.
-            auto i = dims->getElemIndexInVec(fold_ofs);
-
-#ifdef DEBUG_LAYOUT
-            // Compare to more explicit offset extraction.
-            IdxTuple eofs = get_allocs(); // get dims for this var.
-            elem_ofs.setTupleVals(eofs);  // set vals from elem_ofs.
-            auto i2 = dims->getElemIndexInVec(eofs);
-            assert(i == i2);
-#endif
-
-            if (checkBounds)
-                TRACE_MEM_MSG(" => " << _data.get_index(vec_idxs) <<
-                              "[" << i << "]");
-
-            // Get pointer to vector.
-            const real_vec_t* vp = _data.getPtr(vec_idxs, checkBounds);
-
-            // Get pointer to element.
-            const real_t* ep = &(*vp)[i];
-            return ep;
-        }
-
-        // Non-const version.
-        virtual real_t* getElemPtr(const Indices& idxs,
-                                   idx_t alloc_step_idx,
-                                   bool checkBounds=true) final {
-
-            const real_t* p =
-                const_cast<const YkVecVar*>(this)->getElemPtr(idxs, alloc_step_idx,
-                                                               checkBounds);
-            return const_cast<real_t*>(p);
-        }
-
-        // Read one element.
-        // Indices are relative to overall problem domain.
-        virtual real_t readElem(const Indices& idxs,
-                                idx_t alloc_step_idx,
-                                int line) const final {
-            const real_t* ep = YkVecVar::getElemPtr(idxs, alloc_step_idx);
-            real_t e = *ep;
-#ifdef TRACE_MEM
-            printElem("readElem", idxs, e, line);
-#endif
-            return e;
-        }
-
-        // Get a pointer to given vector.
-        // Indices must be normalized and rank-relative.
-        // It's important that this function be efficient, since
-        // it's indiectly used from the stencil kernel.
-        ALWAYS_INLINE const real_vec_t* getVecPtrNorm(const Indices& vec_idxs,
-                                               idx_t alloc_step_idx,
-                                               bool checkBounds=true) const {
-            STATE_VARS_CONST(this);
-            TRACE_MEM_MSG(_data.get_name() << "." << "YkVecVar::getVecPtrNorm(" <<
-                          vec_idxs.makeValStr(get_num_dims()) << ")");
-
-            static constexpr int nvls = sizeof...(_templ_vec_lens);
-#ifdef DEBUG_LAYOUT
-            const auto nd = _data.get_num_dims();
-            assert(nd == nvls);
-#endif
-            Indices adj_idxs(nvls);
-
-            // Special handling for step index.
-            auto sp = +Indices::step_posn;
-            if (_use_step_idx) {
-                assert(alloc_step_idx == _wrap_step(vec_idxs[sp]));
-                adj_idxs[sp] = alloc_step_idx;
-            }
-
-            // Domain indices.
-            _UNROLL for (int i = 0; i < nvls; i++) {
-                if (!(_use_step_idx && i == sp)) {
-
-                    // Adjust for padding.
-                    // Since the indices are rank-relative, subtract only
-                    // the local offsets. (Compare to getElemPtr().)
-                    // This gives a 0-based local *vector* index.
-                    adj_idxs[i] = vec_idxs[i] + _vec_left_pads[i] - _vec_local_offsets[i];
-                }
-            }
-            TRACE_MEM_MSG(" => " << _data.get_index(adj_idxs, checkBounds));
-
-            // Get ptr via layout in _data.
-            return _data.getPtr(adj_idxs, checkBounds);
-        }
-
-        // Non-const version.
-        ALWAYS_INLINE real_vec_t* getVecPtrNorm(const Indices& vec_idxs,
-                                         idx_t alloc_step_idx,
-                                         bool checkBounds=true) {
-
-            const real_vec_t* p =
-                const_cast<const YkVecVar*>(this)->getVecPtrNorm(vec_idxs,
-                                                                  alloc_step_idx, checkBounds);
-            return const_cast<real_vec_t*>(p);
-        }
-
-        // Read one vector.
-        // Indices must be normalized and rank-relative.
-        // 'alloc_step_idx' is pre-calculated or 0 if not used.
-        inline real_vec_t readVecNorm(const Indices& vec_idxs,
-                                      idx_t alloc_step_idx,
-                                      int line) const {
-            const real_vec_t* vp = getVecPtrNorm(vec_idxs, alloc_step_idx);
-            real_vec_t v = *vp;
-#ifdef TRACE_MEM
-            printVecNorm("readVecNorm", vec_idxs, v, line);
-#endif
-            return v;
-        }
-
-        // Write one vector.
-        // Indices must be normalized and rank-relative.
-        // 'alloc_step_idx' is pre-calculated or 0 if not used.
-        inline void writeVecNorm(real_vec_t val,
-                                 const Indices& vec_idxs,
-                                 idx_t alloc_step_idx,
-                                 int line) {
-            real_vec_t* vp = getVecPtrNorm(vec_idxs, alloc_step_idx);
-            *vp = val;
-#ifdef TRACE_MEM
-            printVecNorm("writeVecNorm", vec_idxs, val, line);
-#endif
-        }
-
-        // Prefetch one vector.
-        // Indices must be normalized and rank-relative.
-        // 'alloc_step_idx' is pre-calculated or 0 if not used.
-        template <int level>
-        ALWAYS_INLINE
-        void prefetchVecNorm(const Indices& vec_idxs,
-                             idx_t alloc_step_idx,
-                             int line) const {
-            STATE_VARS_CONST(this);
-            TRACE_MEM_MSG("prefetchVecNorm<" << level << ">(" <<
-                          makeIndexString(vec_idxs.mulElements(_var_vec_lens)) << ")");
-
-            auto p = getVecPtrNorm(vec_idxs, alloc_step_idx, false);
-            prefetch<level>(p);
-#ifdef MODEL_CACHE
-            cache_model.prefetch(p, level, line);
-#endif
-        }
-
-        // Vectorized version of set/get_elements_in_slice().
-        // Indices must be vec-normalized and rank-relative.
-        virtual idx_t set_vecs_in_slice(const void* buffer_ptr,
-                                        const Indices& first_indices,
-                                        const Indices& last_indices) {
-            STATE_VARS(this);
-            if (_data.get_storage() == 0)
-                return 0;
-            Indices firstv, lastv;
-            checkIndices(first_indices, "set_vecs_in_slice", true, false, true, &firstv);
-            checkIndices(last_indices, "set_vecs_in_slice", true, false, true, &lastv);
-
-            // Find range.
-            IdxTuple numVecsTuple = get_slice_range(firstv, lastv);
-            TRACE_MSG("set_vecs_in_slice: setting " <<
-                       numVecsTuple.makeDimValStr(" * ") << " vecs at [" <<
-                       makeIndexString(firstv) << " ... " <<
-                       makeIndexString(lastv) << "]");
-
-            // Do step loop explicitly.
-            auto sp = +Indices::step_posn;
-            idx_t first_t = 0, last_t = 0;
-            if (_has_step_dim) {
-                first_t = firstv[sp];
-                last_t = lastv[sp];
-                numVecsTuple[sp] = 1; // Do one at a time.
-            }
-            idx_t iofs = 0;
-            for (idx_t t = first_t; t <= last_t; t++) {
-
-                // Do only this one step in this iteration.
-                idx_t ti = 0;
-                if (_has_step_dim) {
-                    ti = _wrap_step(t);
-                    firstv[sp] = t;
-                    lastv[sp] = t;
-                }
-
-                // Visit points in slice.
-                numVecsTuple.visitAllPointsInParallel
-                    ([&](const IdxTuple& ofs,
-                         size_t idx) {
-                        Indices pt = firstv.addElements(ofs);
-                        real_vec_t val = ((real_vec_t*)buffer_ptr)[idx + iofs];
-                        
-                        writeVecNorm(val, pt, ti, __LINE__);
-                        return true;    // keep going.
-                    });
-                iofs += numVecsTuple.product();
-            }
-
-            // Set appropriate dirty flag(s).
-            set_dirty_in_slice(first_indices, last_indices);
-
-            return numVecsTuple.product() * VLEN;
-        }
-
-        virtual idx_t get_vecs_in_slice(void* buffer_ptr,
-                                        const Indices& first_indices,
-                                        const Indices& last_indices) const {
-            STATE_VARS(this);
-            if (_data.get_storage() == 0)
-                FORMAT_AND_THROW_YASK_EXCEPTION("Error: call to 'get_vecs_in_slice' with no storage allocated for var '" <<
-                                                _data.get_name());
-            Indices firstv, lastv;
-            checkIndices(first_indices, "get_vecs_in_slice", true, true, true, &firstv);
-            checkIndices(last_indices, "get_vecs_in_slice", true, true, true, &lastv);
-
-            // Find range.
-            IdxTuple numVecsTuple = get_slice_range(firstv, lastv);
-            TRACE_MSG("get_vecs_in_slice: getting " <<
-                       numVecsTuple.makeDimValStr(" * ") << " vecs at " <<
-                       makeIndexString(firstv) << " ... " <<
-                       makeIndexString(lastv));
-            auto n = numVecsTuple.product() * VLEN;
-
-            // Do step loop explicitly.
-            auto sp = +Indices::step_posn;
-            idx_t first_t = 0, last_t = 0;
-            if (_has_step_dim) {
-                first_t = firstv[sp];
-                last_t = lastv[sp];
-                numVecsTuple[sp] = 1; // Do one at a time.
-            }
-            idx_t iofs = 0;
-            for (idx_t t = first_t; t <= last_t; t++) {
-
-                // Do only this one step in this iteration.
-                idx_t ti = 0;
-                if (_has_step_dim) {
-                    ti = _wrap_step(t);
-                    firstv[sp] = t;
-                    lastv[sp] = t;
-                }
-
-                // Visit points in slice.
-                numVecsTuple.visitAllPointsInParallel
-                    ([&](const IdxTuple& ofs,
-                         size_t idx) {
-                        Indices pt = firstv.addElements(ofs);
-                        
-                        real_vec_t val = readVecNorm(pt, ti, __LINE__);
-                        ((real_vec_t*)buffer_ptr)[idx + iofs] = val;
-                        return true;    // keep going.
-                    });
-                iofs += numVecsTuple.product();
-            }
-            assert(iofs * VLEN == n);
-
-            // Return number of writes.
-            return n;
-        }
-    };                          // YkVecVar.
 
 }                               // namespace.
