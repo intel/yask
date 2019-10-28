@@ -105,7 +105,7 @@ Public Member Functions</h2></td></tr>
 <tr class="memdesc:a3cc13f5daf402805f9b1f66996d9d6d3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the description of the solution.  <a href="#a3cc13f5daf402805f9b1f66996d9d6d3">More...</a><br /></td></tr>
 <tr class="separator:a3cc13f5daf402805f9b1f66996d9d6d3"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ab7d444584538c565e9bf618a311ade6f"><td class="memItemLeft" align="right" valign="top">virtual std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__solution.html#ab7d444584538c565e9bf618a311ade6f">get_target</a> ()=0</td></tr>
-<tr class="memdesc:ab7d444584538c565e9bf618a311ade6f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the current output target.  <a href="#ab7d444584538c565e9bf618a311ade6f">More...</a><br /></td></tr>
+<tr class="memdesc:ab7d444584538c565e9bf618a311ade6f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the current output-file format.  <a href="#ab7d444584538c565e9bf618a311ade6f">More...</a><br /></td></tr>
 <tr class="separator:ab7d444584538c565e9bf618a311ade6f"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a1c03fc69e306a700de8c5ae3973229c2"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__solution.html#a1c03fc69e306a700de8c5ae3973229c2">set_target</a> (const std::string &amp;<a class="el" href="classyask_1_1yc__solution.html#a8bedbd4e6834f58c8e5d0452638ee64c">format</a>)=0</td></tr>
 <tr class="memdesc:a1c03fc69e306a700de8c5ae3973229c2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the output target.  <a href="#a1c03fc69e306a700de8c5ae3973229c2">More...</a><br /></td></tr>
@@ -422,7 +422,7 @@ std::vector&lt; <a class="el" href="group__yc.html#ga90f589d7fb0dc32e895384b6514
 </table>
 </div><div class="memdoc">
 
-<p>Get the current output target. </p>
+<p>Get the current output-file format. </p>
 <dl class="section return"><dt>Returns</dt><dd>Current target.</dd></dl>
 <p>Throws an exception if the target hasn't been set via <a class="el" href="classyask_1_1yc__solution.html#a1c03fc69e306a700de8c5ae3973229c2" title="Set the output target.">set_target()</a>. </p>
 
@@ -465,22 +465,23 @@ std::vector&lt; <a class="el" href="group__yc.html#ga90f589d7fb0dc32e895384b6514
 <tr class="markdownTableRowEven">
 <td class="markdownTableBodyNone">avx512  </td><td class="markdownTableBodyNone">YASK kernel for CORE AVX-512 ISA.   </td></tr>
 <tr class="markdownTableRowOdd">
+<td class="markdownTableBodyNone">avx512lo  </td><td class="markdownTableBodyNone">YASK kernel for CORE AVX-512 ISA with 256-bit SIMD.   </td></tr>
+<tr class="markdownTableRowEven">
 <td class="markdownTableBodyNone">knl  </td><td class="markdownTableBodyNone">YASK kernel for MIC AVX-512 ISA.   </td></tr>
-<tr class="markdownTableRowEven">
+<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyNone">knc  </td><td class="markdownTableBodyNone">YASK kernel for Knights Corner ISA.   </td></tr>
-<tr class="markdownTableRowOdd">
+<tr class="markdownTableRowEven">
 <td class="markdownTableBodyNone">dot  </td><td class="markdownTableBodyNone">DOT-language description.   </td></tr>
-<tr class="markdownTableRowEven">
-<td class="markdownTableBodyNone">dot-lite  </td><td class="markdownTableBodyNone">DOT-language description of var accesses only.   </td></tr>
 <tr class="markdownTableRowOdd">
-<td class="markdownTableBodyNone">pseudo  </td><td class="markdownTableBodyNone">Human-readable pseudo-code (for debug).   </td></tr>
+<td class="markdownTableBodyNone">dot-lite  </td><td class="markdownTableBodyNone">DOT-language description of var accesses only.   </td></tr>
 <tr class="markdownTableRowEven">
+<td class="markdownTableBodyNone">pseudo  </td><td class="markdownTableBodyNone">Human-readable pseudo-code (for debug).   </td></tr>
+<tr class="markdownTableRowOdd">
 <td class="markdownTableBodyNone">pseudo-long  </td><td class="markdownTableBodyNone">Human-readable pseudo-code with intermediate variables.   </td></tr>
 </table>
-<p>Deprecated alias "avx512f" will be converted to "avx512" and "cpp" to "intel64". </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">format</td><td>Output target from above list </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">format</td><td>Output-file format from above list </td></tr>
   </table>
   </dd>
 </dl>
