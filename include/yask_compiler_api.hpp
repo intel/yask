@@ -164,7 +164,7 @@ namespace yask {
         set_description(std::string description
                         /**< [in] Any descriptive phrase. */ ) =0;
 
-        /// Get the current output target.
+        /// Get the current output-file format.
         /**
            @returns Current target.
 
@@ -182,17 +182,16 @@ namespace yask {
             avx     | YASK kernel for CORE AVX ISA.
             avx2    | YASK kernel for CORE AVX2 ISA.
             avx512  | YASK kernel for CORE AVX-512 ISA.
+            avx512lo| YASK kernel for CORE AVX-512 ISA with 256-bit SIMD.
             knl     | YASK kernel for MIC AVX-512 ISA.
             knc     | YASK kernel for Knights Corner ISA.
             dot     | DOT-language description.
             dot-lite| DOT-language description of var accesses only.
             pseudo  | Human-readable pseudo-code (for debug).
             pseudo-long  | Human-readable pseudo-code with intermediate variables.
-
-            Deprecated alias "avx512f" will be converted to "avx512" and "cpp" to "intel64".
         */
         virtual void
-        set_target(/** [in] Output target from above list */
+        set_target(/** [in] Output-file format from above list */
                    const std::string& format) =0;
 
         /// Determine whether target has been set.
