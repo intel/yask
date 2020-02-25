@@ -218,9 +218,9 @@ namespace yask {
         // copy whole vector.
         ALWAYS_INLINE real_vec_t& operator=(const real_vec_t& rhs) {
             #ifdef NO_INTRINSICS
-            REAL_VEC_LOOP(i) u.r[i] = rhs[i];
+            REAL_VEC_LOOP(i) u.ci[i] = rhs.u.ci[i];
             #else
-            u.mr = rhs.u.mr;
+            u.mi = rhs.u.mi;
             #endif
             return *this;
         }
@@ -231,6 +231,10 @@ namespace yask {
         #ifndef NO_INTRINSICS
         ALWAYS_INLINE real_vec_t& operator=(const simd_t& rhs) {
             u.mr = rhs;
+            return *this;
+        }
+        ALWAYS_INLINE real_vec_t& operator=(const isimd_t& rhs) {
+            u.mi = rhs;
             return *this;
         }
         #endif
@@ -360,38 +364,37 @@ namespace yask {
         }
 
         // less-than comparator.
+        // uses int comparison for reliable results, even w/NaNs.
         bool operator<(const real_vec_t& rhs) const {
             for (int j = 0; j < VLEN; j++) {
-                if (u.r[j] < rhs.u.r[j])
+                if (u.ci[j] < rhs.u.ci[j])
                     return true;
-                else if (u.r[j] > rhs.u.r[j])
+                else if (u.ci[j] > rhs.u.ci[j])
                     return false;
             }
             return false;
         }
 
         // greater-than comparator.
+        // uses int comparison for reliable results, even w/NaNs.
         bool operator>(const real_vec_t& rhs) const {
             for (int j = 0; j < VLEN; j++) {
-                if (u.r[j] > rhs.u.r[j])
+                if (u.ci[j] > rhs.u.ci[j])
                     return true;
-                else if (u.r[j] < rhs.u.r[j])
+                else if (u.ci[j] < rhs.u.ci[j])
                     return false;
             }
             return false;
         }
 
         // equal-to comparator.
+        // uses int comparison for reliable results, even w/NaNs.
         ALWAYS_INLINE bool operator==(const real_vec_t& rhs) const {
-            #ifdef NO_SIMD_COMPARE
             for (int j = 0; j < VLEN; j++) {
-                if (u.r[j] != rhs.u.r[j])
+                if (u.ci[j] != rhs.u.ci[j])
                     return false;
             }
             return true;
-            #else
-            return u.r == rhs.u.r;
-            #endif
         }
 
         // not-equal-to comparator.

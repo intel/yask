@@ -35,7 +35,7 @@ namespace yask {
     static inline int getnode() {
         #ifdef SYS_getcpu
         int node, status;
-       status = syscall(SYS_getcpu, NULL, &node, NULL);
+        status = syscall(SYS_getcpu, NULL, &node, NULL);
         return (status == -1) ? status : node;
         #else
         return -1; // unavailable
