@@ -38,6 +38,8 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
        an internal error. Use 2019.0.5 to work around until a patch is released.
      * If you are using g++ version 8.x or later, Intel(R) C++ version 2019
        is required.
+     * Building a YASK kernel with clang is possible; however,
+       SIMD operations for functions such as sin() is not supported.
      * Building a YASK kernel with the Gnu C++ compiler is possible.
        Limited testing with g++ 8.2.0 shows the "iso3dfd" kernel
        runs about 30% slower compared to the same kernel built with
