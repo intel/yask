@@ -35,7 +35,8 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
        versions are not recommended when using the `-use_shm` feature.
        This issue was resolved in MPI version 2019u3.
      * There is an issue in the Intel C++ compiler 2019.1.x that causes
-       an internal error. Use 2019.0.5 to work around until a patch is released.
+       an internal error when building YASK kernels.
+       Use 2019.0.5 to work around until a patch is released.
      * If you are using g++ version 8.x or later, Intel(R) C++ version 2019
        is required.
      * Building a YASK kernel with clang is possible; however,
