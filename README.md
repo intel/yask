@@ -27,14 +27,20 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
   for multi-socket and multi-node operation or
   Intel(R) Parallel Studio XE Composer Edition for C++ Linux
   for single-socket only
-  (2018 or later; 2019 update 5 (2019.0.5 or 2019u5) or later recommended).
+  (2018 or later; 2019 update 5 (2019.0.5) recommended;
+   2019.1.x has an issue that prevents compilation).
      * There was an issue in Intel(R) MPI versions 2019u1 and 2019u2 that
        caused the application to crash when allocating very
        large shared-memory (shm) regions, so those
        versions are not recommended when using the `-use_shm` feature.
        This issue was resolved in MPI version 2019u3.
+     * There is an issue in the Intel C++ compiler 2019.1.x that causes
+       an internal error when building YASK kernels.
+       Use 2019.0.5 to work around until a patch is released.
      * If you are using g++ version 8.x or later, Intel(R) C++ version 2019
        is required.
+     * Building a YASK kernel with clang is possible; however,
+       SIMD operations for functions such as sin() is not supported.
      * Building a YASK kernel with the Gnu C++ compiler is possible.
        Limited testing with g++ 8.2.0 shows the "iso3dfd" kernel
        runs about 30% slower compared to the same kernel built with
