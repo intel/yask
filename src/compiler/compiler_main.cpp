@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2019, Intel Corporation
+Copyright (c) 2014-2020, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -373,7 +373,7 @@ int main(int argc, const char* argv[]) {
 
     cout << "YASK -- Yet Another Stencil Kit\n"
         "YASK Stencil Compiler Utility\n"
-        "Copyright (c) 2014-2019, Intel Corporation.\n"
+        "Copyright (c) 2014-2020, Intel Corporation.\n"
         "Version: " << yask_get_version_string() << endl;
 
     try {
