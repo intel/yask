@@ -275,7 +275,7 @@ namespace yask {
     // Print out a stencil in C++ form for YASK.
     class YASKCppPrinter : public PrinterBase {
     protected:
-        EqBundlePacks& _eqBundlePacks; // packs of bundles w/o inter-dependencies.
+        EqStages& _eqStages; // stages of bundles w/o inter-dependencies.
         EqBundles& _clusterEqBundles;  // eq-bundles for scalar and vector.
         string _context, _context_base, _context_hook; // class names;
 
@@ -304,10 +304,10 @@ namespace yask {
     public:
         YASKCppPrinter(StencilSolution& stencil,
                        EqBundles& eqBundles,
-                       EqBundlePacks& eqBundlePacks,
+                       EqStages& eqStages,
                        EqBundles& clusterEqBundles) :
             PrinterBase(stencil, eqBundles),
-            _eqBundlePacks(eqBundlePacks),
+            _eqStages(eqStages),
             _clusterEqBundles(clusterEqBundles)
         {
             // name of C++ struct.

@@ -813,11 +813,11 @@ namespace yask {
         // data allocated.
         makeScratchVars(rthreads);
 
-        // Find the max mini-block size across all packs.
-        // They can be different across packs when pack-specific
+        // Find the max mini-block size across all stages.
+        // They can be different across stages when stage-specific
         // auto-tuning has been used.
         IdxTuple mblksize(domain_dims);
-        for (auto& sp : stPacks) {
+        for (auto& sp : stStages) {
             auto& psettings = sp->getActiveSettings();
             DOMAIN_VAR_LOOP(i, j) {
 
@@ -826,7 +826,7 @@ namespace yask {
                 mblksize[j] = max(mblksize[j], sz);
             }
         }
-        TRACE_MSG("allocScratchData: max mini-block size across pack(s) is " <<
+        TRACE_MSG("allocScratchData: max mini-block size across stage(s) is " <<
                   mblksize.makeDimValStr(" * "));
 
         // Pass 0: count required size, allocate chunk of memory at end.

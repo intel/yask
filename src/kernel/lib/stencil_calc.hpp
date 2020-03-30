@@ -28,8 +28,8 @@ IN THE SOFTWARE.
 namespace yask {
 
     // Classes that support evaluation of one stencil bundle
-    // and a 'pack' of bundles.
-    // A stencil context contains one or more packs.
+    // and a stage of bundles.
+    // A stencil context contains one or more stages.
 
     // A pure-virtual class base for a stencil bundle.
     class StencilBundleBase :
@@ -272,26 +272,26 @@ namespace yask {
     // A collection of independent stencil bundles.
     // "Independent" implies that they may be evaluated
     // in any order.
-    class BundlePack :
+    class Stage :
         public ContextLinker,
         public std::vector<StencilBundleBase*> {
 
     protected:
         std::string _name;
 
-        // Union of bounding boxes for all bundles in this pack.
-        BoundingBox _pack_bb;
+        // Union of bounding boxes for all bundles in this stage.
+        BoundingBox _stage_bb;
 
-        // Local pack settings.
+        // Local stage settings.
         // Only some of these will be used.
-        KernelSettings _pack_opts;
+        KernelSettings _stage_opts;
 
-        // Auto-tuner for pack settings.
+        // Auto-tuner for stage settings.
         AutoTuner _at;
 
     public:
 
-        // Perf stats for this pack.
+        // Perf stats for this stage.
         YaskTimer timer;
         idx_t steps_done = 0;
         Stats stats;
@@ -306,13 +306,13 @@ namespace yask {
         idx_t tot_writes_per_step = 0;
         idx_t tot_fpops_per_step = 0;
 
-        BundlePack(StencilContext* context,
+        Stage(StencilContext* context,
                    const std::string& name) :
             ContextLinker(context),
             _name(name),
-            _pack_opts(*context->get_state()->_opts), // init w/a copy of the base settings.
-            _at(context, &_pack_opts, name) { }
-        virtual ~BundlePack() { }
+            _stage_opts(*context->get_state()->_opts), // init w/a copy of the base settings.
+            _at(context, &_stage_opts, name) { }
+        virtual ~Stage() { }
 
         const std::string& get_name() {
             return _name;
@@ -334,15 +334,15 @@ namespace yask {
         }
 
         // Accessors.
-        BoundingBox& getBB() { return _pack_bb; }
+        BoundingBox& getBB() { return _stage_bb; }
         AutoTuner& getAT() { return _at; }
-        KernelSettings& getLocalSettings() { return _pack_opts; }
+        KernelSettings& getLocalSettings() { return _stage_opts; }
 
-        // If using separate pack tuners, return local settings.
+        // If using separate stage tuners, return local settings.
         // Otherwise, return one in context.
         KernelSettings& getActiveSettings() {
             STATE_VARS(this);
-            return use_pack_tuners() ? _pack_opts : *opts;
+            return use_stage_tuners() ? _stage_opts : *opts;
         }
 
         // Perf-tracking methods.
@@ -350,6 +350,6 @@ namespace yask {
         void stop_timers();
         void add_steps(idx_t num_steps);
 
-    }; // BundlePack.
+    }; // Stage.
 
 } // yask namespace.

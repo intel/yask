@@ -445,7 +445,7 @@ namespace yask {
 
         // If we haven't finished constructing the context, it's too early
         // to do this.
-        if (!stPacks.size())
+        if (!stStages.size())
             return;
 
         // Reset max halos to zero.
@@ -500,9 +500,9 @@ namespace yask {
         num_wf_shifts = 0;
         if (wf_steps > 0) {
 
-            // Need to shift for each bundle pack.
-            assert(stPacks.size() > 0);
-            num_wf_shifts = idx_t(stPacks.size()) * wf_steps;
+            // Need to shift for each stage.
+            assert(stStages.size() > 0);
+            num_wf_shifts = idx_t(stStages.size()) * wf_steps;
 
             // Don't need to shift first one.
             if (num_wf_shifts > 0)
@@ -511,7 +511,7 @@ namespace yask {
         assert(num_wf_shifts >= 0);
 
         // Determine whether separate tuners can be used.
-        state->_use_pack_tuners = opts->_allow_pack_tuners && (tb_steps == 0) && (stPacks.size() > 1);
+        state->_use_stage_tuners = opts->_allow_stage_tuners && (tb_steps == 0) && (stStages.size() > 1);
 
         // Calculate angles and related settings.
         for (auto& dim : domain_dims) {
@@ -586,7 +586,7 @@ namespace yask {
     // size is changed.  Must be called after update_var_info() to ensure
     // angles are properly set.  TODO: calculate 'tb_steps' dynamically
     // considering temporal conditions; this assumes worst-case, which is
-    // all packs always done.
+    // all stages always done.
     void StencilContext::update_tb_info() {
         STATE_VARS(this);
         TRACE_MSG("update_tb_info()...");
@@ -605,7 +605,7 @@ namespace yask {
         // Determine max temporal depth based on block sizes
         // and requested temporal depth.
         // When using temporal blocking, all block sizes
-        // across all packs must be the same.
+        // across all stages must be the same.
         TRACE_MSG("update_tb_info: original TB steps = " << tb_steps);
         if (tb_steps > 0) {
 
@@ -620,14 +620,14 @@ namespace yask {
                 auto rnsize = opts->_region_sizes[i];
 
                 // There must be only one block size when using TB, so get
-                // sizes from context settings instead of packs.
-                assert(state->_use_pack_tuners == false);
+                // sizes from context settings instead of stages.
+                assert(state->_use_stage_tuners == false);
                 auto blksize = opts->_block_sizes[i];
                 auto mblksize = opts->_mini_block_sizes[i];
 
                 // Req'd shift in this dim based on max halos.
                 // Can't use separate L & R shift because of possible data reuse in vars.
-                // Can't use separate shifts for each pack for same reason.
+                // Can't use separate shifts for each stage for same reason.
                 // TODO: make round-up optional.
                 auto fpts = dims->_fold_pts[j];
                 idx_t angle = ROUND_UP(max_halos[j], fpts);
@@ -650,18 +650,18 @@ namespace yask {
                 // allowed this dim.
                 if (tb_angle > 0) {
 
-                    // min_blk_sz = min_top_sz + 2 * angle * (npacks * nsteps - 1).
+                    // min_blk_sz = min_top_sz + 2 * angle * (nstages * nsteps - 1).
                     // bs = ts + 2*a*np*ns - 2*a.
                     // 2*a*np*ns = bs - ts + 2*a.
                     // s = flr[ (bs - ts + 2*a) / 2*a*np ].
                     idx_t top_sz = fpts; // min pts on top row. TODO: is zero ok?
-                    idx_t sh_pts = tb_angle * 2 * stPacks.size(); // pts shifted per step.
+                    idx_t sh_pts = tb_angle * 2 * stStages.size(); // pts shifted per step.
                     idx_t nsteps = (blksize - top_sz + tb_angle * 2) / sh_pts; // might be zero.
                     TRACE_MSG("update_tb_info: max TB steps in dim '" <<
                               dname << "' = " << nsteps <<
                               " due to base block size of " << blksize <<
                               ", TB angle of " << tb_angle <<
-                              ", and " << stPacks.size() << " pack(s)");
+                              ", and " << stStages.size() << " stage(s)");
                     max_steps = min(max_steps, nsteps);
                 }
             }
@@ -673,9 +673,9 @@ namespace yask {
         // Calc number of shifts based on steps.
         if (tb_steps > 0) {
 
-            // Need to shift for each bundle pack.
-            assert(stPacks.size() > 0);
-            num_tb_shifts = idx_t(stPacks.size()) * tb_steps;
+            // Need to shift for each stage.
+            assert(stStages.size() > 0);
+            num_tb_shifts = idx_t(stStages.size()) * tb_steps;
 
             // Don't need to shift first one.
             if (num_tb_shifts > 0)
@@ -786,13 +786,13 @@ namespace yask {
         // Remember sub-domain for each bundle.
         map<string, StencilBundleBase*> bb_descrs;
 
-        // Find BB for each pack.
-        for (auto sp : stPacks) {
+        // Find BB for each stage.
+        for (auto sp : stStages) {
             auto& spbb = sp->getBB();
             spbb.bb_begin = domain_dims;
             spbb.bb_end = domain_dims;
 
-            // Find BB for each bundle in this pack.
+            // Find BB for each bundle in this stage.
             for (auto sb : *sp) {
 
                 // Already done?
@@ -812,7 +812,7 @@ namespace yask {
 
                 auto& sbbb = sb->getBB();
 
-                // Expand pack BB to encompass bundle BB.
+                // Expand stage BB to encompass bundle BB.
                 spbb.bb_begin = spbb.bb_begin.minElements(sbbb.bb_begin);
                 spbb.bb_end = spbb.bb_end.maxElements(sbbb.bb_end);
             }

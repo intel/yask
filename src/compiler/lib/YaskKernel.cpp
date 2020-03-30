@@ -877,13 +877,13 @@ namespace yask {
             }
         } // bundles.
 
-        // Packs.
-        os << "\n // Stencil bundle packs.\n";
-        for (auto& bp : _eqBundlePacks.getAll()) {
+        // Stages.
+        os << "\n // Stencil stages.\n";
+        for (auto& bp : _eqStages.getAll()) {
             if (bp->isScratch())
                 continue;
             string bpName = bp->getName();
-            os << "  auto " << bpName << " = std::make_shared<BundlePack>(this, \"" <<
+            os << "  auto " << bpName << " = std::make_shared<Stage>(this, \"" <<
                 bpName << "\");\n";
             for (auto& eg : bp->getBundles()) {
                 if (eg->isScratch())
@@ -891,7 +891,7 @@ namespace yask {
                 string egName = eg->getName();
                 os << "  " << bpName << "->push_back(&" << egName << ");\n";
             }
-            os << "  stPacks.push_back(" << bpName << ");\n";
+            os << "  stStages.push_back(" << bpName << ");\n";
         }
 
         os << "\n // Call code provided by user.\n" <<

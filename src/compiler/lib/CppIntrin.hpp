@@ -212,9 +212,9 @@ namespace yask {
     public:
         YASKKncPrinter(StencilSolution& stencil,
                        EqBundles& eqBundles,
-                       EqBundlePacks& eqBundlePacks,
+                       EqStages& eqStages,
                        EqBundles& clusterEqBundles) :
-            YASKCppPrinter(stencil, eqBundles, eqBundlePacks, clusterEqBundles) { }
+            YASKCppPrinter(stencil, eqBundles, eqStages, clusterEqBundles) { }
 
         virtual int num_vec_elems() const { return 64 / _settings._elem_bytes; }
 
@@ -234,9 +234,9 @@ namespace yask {
     public:
         YASKAvx256Printer(StencilSolution& stencil,
                           EqBundles& eqBundles,
-                          EqBundlePacks& eqBundlePacks,
+                          EqStages& eqStages,
                           EqBundles& clusterEqBundles) :
-            YASKCppPrinter(stencil, eqBundles, eqBundlePacks, clusterEqBundles) { }
+            YASKCppPrinter(stencil, eqBundles, eqStages, clusterEqBundles) { }
 
         virtual int num_vec_elems() const { return 32 / _settings._elem_bytes; }
     };
@@ -254,10 +254,10 @@ namespace yask {
     public:
         YASKAvx512Printer(StencilSolution& stencil,
                           EqBundles& eqBundles,
-                          EqBundlePacks& eqBundlePacks,
+                          EqStages& eqStages,
                           EqBundles& clusterEqBundles,
                           bool is_lo = false) :
-            YASKCppPrinter(stencil, eqBundles, eqBundlePacks, clusterEqBundles),
+            YASKCppPrinter(stencil, eqBundles, eqStages, clusterEqBundles),
             _is_lo(is_lo) { }
 
         virtual int num_vec_elems() const {

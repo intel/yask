@@ -73,7 +73,7 @@ namespace yask {
         Dimensions _dims;          // various dimensions.
         PrinterBase* _printer = 0;
         EqBundles* _eqBundles = 0;         // eq-bundles for scalar and vector.
-        EqBundlePacks* _eqBundlePacks = 0; // packs of bundles w/o inter-dependencies.
+        EqStages* _eqStages = 0; // packs of bundles w/o inter-dependencies.
         EqBundles* _clusterEqBundles = 0;  // eq-bundles for scalar and vector.
 
         // Create the intermediate data.

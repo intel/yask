@@ -230,7 +230,7 @@ sub getResultsFromLine($$) {
   }
 
   # If auto-tuner is run globally, capture updated values.
-  # Invalidate settings overridden by auto-tuner on multiple packs.
+  # Invalidate settings overridden by auto-tuner on multiple stages.
   elsif ($line =~ /^auto-tuner(.).*size:/) {
     my $c = $1;
 

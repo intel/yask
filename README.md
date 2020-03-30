@@ -77,6 +77,10 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
 
 ## Backward-compatibility notices
 ### Version 3
+* Version 3.04.00 changed the terms "pack" and "pass" to "stage", which may affect
+  user-written result parsers. Option `auto_tune_each_pass` changed to
+  `auto_tune_each_stage`.
+  
 * Version 3.01.00 moved the `-trace` and `-msg_rank` options from the kernel
   library to the kernel utility, so those options may no longer be set via
   `yk_solution::apply_command_line_options()`. APIs to set the corresponding

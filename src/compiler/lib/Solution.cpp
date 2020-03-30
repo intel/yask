@@ -37,8 +37,8 @@ namespace yask {
             delete _printer;
         if (_eqBundles)
             delete _eqBundles;
-        if (_eqBundlePacks)
-            delete _eqBundlePacks;
+        if (_eqStages)
+            delete _eqStages;
         if (_clusterEqBundles)
             delete _clusterEqBundles;
     }
@@ -187,16 +187,16 @@ namespace yask {
         // Optimize bundles.
         _eqBundles->optimizeEqBundles(_settings, "scalar & vector", false, *_dos);
         
-        // Separate bundles into packs.
-        _eqBundlePacks->makePacks(*_eqBundles, *_dos);
+        // Separate bundles into stages.
+        _eqStages->makeStages(*_eqBundles, *_dos);
 
         // Compute halos.
-        _eqBundlePacks->calcHalos(*_eqBundles);
+        _eqStages->calcHalos(*_eqBundles);
 
         // Make a copy of each equation at each cluster offset.
         // We will use these for inter-cluster optimizations and code generation.
         // NB: these cluster bundles do not maintain dependencies, so cannot be used
-        // for sorting, making packs, etc.
+        // for sorting, making stages, etc.
         *_dos << "\nConstructing cluster of equations containing " <<
             _dims._clusterMults.product() << " vector(s)...\n";
         *_clusterEqBundles = *_eqBundles;
@@ -225,22 +225,22 @@ namespace yask {
         // Ensure all intermediate data is clean.
         _free(true);
         _eqBundles = new EqBundles;
-        _eqBundlePacks = new EqBundlePacks;
+        _eqStages = new EqStages;
         _clusterEqBundles = new EqBundles;
         
         // Create the appropriate printer object based on the format.
         // Most args to the printers just set references to data.
         // Data itself will be created in analyze_solution().
         if (target == "intel64")
-            _printer = new YASKCppPrinter(*this, *_eqBundles, *_eqBundlePacks, *_clusterEqBundles);
+            _printer = new YASKCppPrinter(*this, *_eqBundles, *_eqStages, *_clusterEqBundles);
         else if (target == "knc")
-            _printer = new YASKKncPrinter(*this, *_eqBundles, *_eqBundlePacks, *_clusterEqBundles);
+            _printer = new YASKKncPrinter(*this, *_eqBundles, *_eqStages, *_clusterEqBundles);
         else if (target == "avx" || target == "avx2")
-            _printer = new YASKAvx256Printer(*this, *_eqBundles, *_eqBundlePacks, *_clusterEqBundles);
+            _printer = new YASKAvx256Printer(*this, *_eqBundles, *_eqStages, *_clusterEqBundles);
         else if (target == "avx512" || target == "knl")
-            _printer = new YASKAvx512Printer(*this, *_eqBundles, *_eqBundlePacks, *_clusterEqBundles);
+            _printer = new YASKAvx512Printer(*this, *_eqBundles, *_eqStages, *_clusterEqBundles);
         else if (target == "avx512lo")
-            _printer = new YASKAvx512Printer(*this, *_eqBundles, *_eqBundlePacks, *_clusterEqBundles, true);
+            _printer = new YASKAvx512Printer(*this, *_eqBundles, *_eqStages, *_clusterEqBundles, true);
         else if (target == "dot")
             _printer = new DOTPrinter(*this, *_clusterEqBundles, false);
         else if (target == "dot-lite")

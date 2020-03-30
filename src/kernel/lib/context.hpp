@@ -163,11 +163,11 @@ namespace yask {
 
     // Things in a context.
     class StencilBundleBase;
-    class BundlePack;
+    class Stage;
     typedef std::vector<StencilBundleBase*> StencilBundleList;
     typedef std::set<StencilBundleBase*> StencilBundleSet;
-    typedef std::shared_ptr<BundlePack> BundlePackPtr;
-    typedef std::vector<BundlePackPtr> BundlePackList;
+    typedef std::shared_ptr<Stage> StagePtr;
+    typedef std::vector<StagePtr> StageList;
     typedef std::vector<bool> BridgeMask;
 
     // Data and hierarchical sizes.
@@ -246,9 +246,9 @@ namespace yask {
         // they should be evaluated within a step.
         StencilBundleList stBundles;
 
-        // List of all non-scratch stencil-bundle packs in the order in
+        // List of all non-scratch stencil-stages in the order in
         // which they should be evaluated within a step.
-        BundlePackList stPacks;
+        StageList stStages;
 
         // All non-scratch vars, including those created by APIs.
         VarPtrs varPtrs;
@@ -462,11 +462,11 @@ namespace yask {
                      idx_t last_step_index);
 
         // Calculate results within a region.
-        void calc_region(BundlePackPtr& sel_bp,
+        void calc_region(StagePtr& sel_bp,
                          const ScanIndices& rank_idxs);
 
         // Calculate results within a block.
-        void calc_block(BundlePackPtr& sel_bp,
+        void calc_block(StagePtr& sel_bp,
                         idx_t region_shift_num,
                         idx_t nphases, idx_t phase,
                         const ScanIndices& rank_idxs,
@@ -474,7 +474,7 @@ namespace yask {
 
         // Calculate results within a mini-block.
         void calc_mini_block(int region_thread_idx,
-                             BundlePackPtr& sel_bp,
+                             StagePtr& sel_bp,
                              idx_t region_shift_num,
                              idx_t nphases, idx_t phase,
                              idx_t nshapes, idx_t shape,
@@ -490,17 +490,17 @@ namespace yask {
         // Call MPI_Test() on all unfinished requests to promote MPI progress.
         void poke_halo_exchange();
 
-        // Update valid steps in vars that have been written to by bundle pack 'sel_bp'.
+        // Update valid steps in vars that have been written to by stage 'sel_bp'.
         // If sel_bp==null, use all bundles.
         // If 'mark_dirty', also mark as needing halo exchange.
-        void update_vars(const BundlePackPtr& sel_bp,
+        void update_vars(const StagePtr& sel_bp,
                           idx_t start, idx_t stop,
                           bool mark_dirty);
 
         // Set various limits in 'idxs' based on current step in region.
         bool shift_region(const Indices& base_start, const Indices& base_stop,
                             idx_t shift_num,
-                            BundlePackPtr& bp,
+                            StagePtr& bp,
                             ScanIndices& idxs);
 
         // Set various limits in 'idxs' based on current step in block.

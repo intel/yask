@@ -259,7 +259,7 @@ namespace yask {
         // Tuning.
         bool _do_auto_tune = false;    // whether to do auto-tuning.
         bool _tune_mini_blks = false; // auto-tune mini-blks instead of blks.
-        bool _allow_pack_tuners = false; // allow per-pack tuners when possible.
+        bool _allow_stage_tuners = false; // allow per-stage tuners when possible.
         double _tuner_min_secs = 0.25;   // min time to run tuner for new better setting.
 
         // Debug.
@@ -585,7 +585,7 @@ namespace yask {
 
         // User settings.
         KernelSettingsPtr _opts;
-        bool _use_pack_tuners = false;
+        bool _use_stage_tuners = false;
 
         // Problem dims.
         DimsPtr _dims;
@@ -677,7 +677,7 @@ namespace yask {
         const DimsPtr& get_dims() const { return _state->_dims; }
         MPIInfoPtr& get_mpi_info() { return _state->_mpiInfo; }
         const MPIInfoPtr& get_mpi_info() const { return _state->_mpiInfo; }
-        bool use_pack_tuners() const { return _state->_use_pack_tuners; }
+        bool use_stage_tuners() const { return _state->_use_stage_tuners; }
         yask_output_ptr get_debug_output() const {
             return _state->_env->get_debug_output();
         }

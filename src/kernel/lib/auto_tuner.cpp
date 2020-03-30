@@ -50,8 +50,8 @@ namespace yask {
         _at.steps_done += num_steps;
         _at.timer.stop();
 
-        if (state->_use_pack_tuners) {
-            for (auto& sp : stPacks)
+        if (state->_use_stage_tuners) {
+            for (auto& sp : stStages)
                 sp->getAT().eval();
         }
         else
@@ -60,7 +60,7 @@ namespace yask {
 
     // Reset auto-tuners.
     void StencilContext::reset_auto_tuner(bool enable, bool verbose) {
-        for (auto& sp : stPacks)
+        for (auto& sp : stStages)
             sp->getAT().clear(!enable, verbose);
         _at.clear(!enable, verbose);
     }
@@ -69,8 +69,8 @@ namespace yask {
     bool StencilContext::is_auto_tuner_enabled() const {
         STATE_VARS(this);
         bool done = true;
-        if (state->_use_pack_tuners) {
-            for (auto& sp : stPacks)
+        if (state->_use_stage_tuners) {
+            for (auto& sp : stStages)
                 if (!sp->getAT().is_done())
                     done = false;
         } else
@@ -93,7 +93,7 @@ namespace yask {
         enable_halo_exchange = false;
 
         // Temporarily ignore step conditions to force eval of conditional
-        // bundles.  NB: may affect perf, e.g., if packs A and B run in
+        // bundles.  NB: may affect perf, e.g., if stages A and B run in
         // AAABAAAB sequence, perf may be [very] different if run as
         // ABABAB..., esp. w/temporal tiling.  TODO: work around this.
         check_step_conds = false;
@@ -134,8 +134,8 @@ namespace yask {
         at_timer.stop();
         DEBUG_MSG("Auto-tuner done after " << steps_done << " step(s) in " <<
                   makeNumStr(at_timer.get_elapsed_secs()) << " secs.");
-        if (state->_use_pack_tuners) {
-            for (auto& sp : stPacks)
+        if (state->_use_stage_tuners) {
+            for (auto& sp : stStages)
                 sp->getAT().print_settings();
         } else
             _at.print_settings();

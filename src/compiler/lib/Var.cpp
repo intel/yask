@@ -230,7 +230,7 @@ namespace yask {
     // Update halos based on each value in 'offsets' in some
     // read or write to this var.
     // This var's halos can only be increased.
-    void Var::updateHalo(const string& packName, const IntTuple& offsets) {
+    void Var::updateHalo(const string& stageName, const IntTuple& offsets) {
 
         // Find step value or use 0 if none.
         int stepVal = 0;
@@ -249,7 +249,7 @@ namespace yask {
             auto& dname = dim.getName();
             int val = dim.getVal();
             bool left = val <= 0;
-            auto& halos = _halos[packName][left][stepVal];
+            auto& halos = _halos[stageName][left][stepVal];
 
             // Don't keep halo in step dim.
             if (stepDim && dname == stepDim->getName())
@@ -323,10 +323,10 @@ namespace yask {
         if (_halos.size() == 0)
             return 1;
 
-        // Need the max across all packs.
+        // Need the max across all stages.
         int max_sz = 1;
 
-        // Loop thru each pack w/halos.
+        // Loop thru each stage w/halos.
         for (auto& hi : _halos) {
 #ifdef DEBUG_HALOS
             auto& pname = hi.first;
@@ -351,7 +351,7 @@ namespace yask {
                     if (halo.size()) {
 #ifdef DEBUG_HALOS
                         cout << "** var " << _name << " has halo " << halo.makeDimValStr() <<
-                            " at ofs " << ofs << " in pack " << pname << endl;
+                            " at ofs " << ofs << " in stage " << pname << endl;
 #endif
 
                         // Update vars.
@@ -366,7 +366,7 @@ namespace yask {
             }
 #ifdef DEBUG_HALOS
             cout << "** var " << _name << " has halos from " << first_ofs <<
-                " to " << last_ofs << " in pack " << pname << endl;
+                " to " << last_ofs << " in stage " << pname << endl;
 #endif
 
             // Only need to process if >1 offset.
@@ -398,7 +398,7 @@ namespace yask {
                 max_sz = max(max_sz, sz);
             }
 
-        } // packs.
+        } // stages.
 
         return max_sz;
     }
