@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2019, Intel Corporation
+Copyright (c) 2014-2020, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -41,6 +41,10 @@ IN THE SOFTWARE.
 // _OPENMP is defined.
 #ifdef _OPENMP
 #include <omp.h>
+#if !defined(KMP_VERSION_MAJOR) || KMP_VERSION_MAJOR >= 5
+// omp_set_nested() is deprecated.
+#define omp_set_nested(n) void(0)
+#endif
 #else
 typedef int omp_lock_t;
 inline int omp_get_num_procs() { return 1; }

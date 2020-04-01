@@ -1,6 +1,6 @@
 ##############################################################################
 ## YASK: Yet Another Stencil Kit
-## Copyright (c) 2014-2019, Intel Corporation
+## Copyright (c) 2014-2020, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -768,9 +768,9 @@ stencil-tests:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_stream_3d radius=5
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_reverse_2d radius=1
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_func_1d fold=x=4
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_dep_1d fold=x=4
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_dep_2d fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_dep_3d fold=y=2,x=2 domain_dims=x,z,y
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_stages_1d fold=x=4
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_stages_2d fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_stages_3d fold=y=2,x=2 domain_dims=x,z,y
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_misc_2d fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_misc_2d fold=x=2,y=2 EXTRA_YC_FLAGS=-interleave-misc
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST_ARGS) stencil=test_step_cond_1d fold=x=4

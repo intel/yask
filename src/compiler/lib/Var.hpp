@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2019, Intel Corporation
+Copyright (c) 2014-2020, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -67,7 +67,7 @@ namespace yask {
 
         // Max abs-value of domain-index halos required by all eqs at
         // various step-index values.
-        // string key: name of pack.
+        // string key: name of stage.
         // bool key: true=left, false=right.
         // int key: step-dim offset or 0 if no step-dim.
         map<string, map<bool, map<int, IntTuple>>> _halos;
@@ -122,11 +122,11 @@ namespace yask {
         virtual const IntTuple& getMinIndices() const { return _minIndices; }
         virtual const IntTuple& getMaxIndices() const { return _maxIndices; }
 
-        // Get the max sizes of halo across all steps for given pack.
-        virtual IntTuple getHaloSizes(const string& packName, bool left) const {
+        // Get the max sizes of halo across all steps for given stage.
+        virtual IntTuple getHaloSizes(const string& stageName, bool left) const {
             IntTuple halo;
-            if (_halos.count(packName) && _halos.at(packName).count(left)) {
-                for (auto i : _halos.at(packName).at(left)) {
+            if (_halos.count(stageName) && _halos.at(stageName).count(left)) {
+                for (auto i : _halos.at(stageName).at(left)) {
                     auto& hs = i.second; // halo at step-val 'i'.
                     halo = halo.makeUnionWith(hs);
                     halo = halo.maxElements(hs, false);
@@ -135,7 +135,7 @@ namespace yask {
             return halo;
         }
 
-        // Get the max size in 'dim' of halo across all packs and steps.
+        // Get the max size in 'dim' of halo across all stages and steps.
         virtual int getHaloSize(const string& dim, bool left) const {
             int h = 0;
             for (auto& hi : _halos) {
@@ -185,7 +185,7 @@ namespace yask {
         virtual void updateHalo(const Var& other);
 
         // Update halos and L1 dist based on each value in 'offsets'.
-        virtual void updateHalo(const string& packName, const IntTuple& offsets);
+        virtual void updateHalo(const string& stageName, const IntTuple& offsets);
 
         // Update L1 dist.
         virtual void updateL1Dist(int l1Dist) {

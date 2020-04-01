@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2019, Intel Corporation
+Copyright (c) 2014-2020, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -435,11 +435,11 @@ namespace yask {
                            "Particularly useful when using temporal block tiling.",
                            _tune_mini_blks));
         parser.add_option(new CommandLineParser::BoolOption
-                          ("auto_tune_each_pass",
-                           "Apply the auto-tuner separately to each stencil pack when "
-                           "those packs are applied in separate passes across the entire var, "
+                          ("auto_tune_each_stage",
+                           "Apply the auto-tuner separately to each stage when "
+                           "those stages are applied in separate passes across the entire var, "
                            "i.e., when no temporal tiling is used.",
-                           _allow_pack_tuners));
+                           _allow_stage_tuners));
     }
 
     // Print usage message.
@@ -516,7 +516,7 @@ namespace yask {
             "   block size is set to region size in that dimension.\n"
             "  A block size of 0 in the step dimension (e.g., '-bt') disables any temporal blocking.\n"
             "  A block size of 1 in the step dimension enables temporal blocking, but only between\n"
-            "   packs in the same step.\n"
+            "   stages in the same step.\n"
             "  A block size >1 in the step dimension enables temporal blocking across multiple steps.\n"
             "  The temporal block size may be automatically reduced if needed based on the\n"
             "   domain block sizes and the stencil halos.\n"
@@ -527,7 +527,7 @@ namespace yask {
             "   set to block size in the step dimension.\n"
             "  A region size >1 in the step dimension enables wave-front rank tiling.\n"
             "  The region size in the step dimension affects how often MPI halo-exchanges occur:\n"
-            "   A region size of 0 in the step dimension => exchange after every pack.\n"
+            "   A region size of 0 in the step dimension => exchange after every stage.\n"
             "   A region size >0 in the step dimension => exchange after that many steps.\n"
             " Set local-domain sizes to specify the work done on this MPI rank.\n"
             "  A local-domain size of 0 in a given domain dimension =>\n"
@@ -922,7 +922,7 @@ namespace yask {
         yask_num_threads[0] = rt;
 
         if (bt > 1) {
-            omp_set_nested(1);  // deprecated for OMP 5, but needed for Intel OMP.
+            omp_set_nested(1);
             omp_set_max_active_levels(2);
             int mal = omp_get_max_active_levels();
             assert (mal == 2);

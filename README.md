@@ -34,9 +34,10 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
        large shared-memory (shm) regions, so those
        versions are not recommended when using the `-use_shm` feature.
        This issue was resolved in MPI version 2019u3.
-     * There is an issue in the Intel C++ compiler 2019.1.x that causes
+     * There is an issue in the Intel C++ compiler 2019.1.0 that causes
        an internal error when building YASK kernels.
-       Use 2019.0.5 to work around until a patch is released.
+       This has been fixed in 19.1.1.
+       You may also use 2019.0.x to work around this.
      * If you are using g++ version 8.x or later, Intel(R) C++ version 2019
        is required.
      * Building a YASK kernel with clang is possible; however,
@@ -77,6 +78,10 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
 
 ## Backward-compatibility notices
 ### Version 3
+* Version 3.04.00 changed the terms "pack" and "pass" to "stage", which may affect
+  user-written result parsers. Option `auto_tune_each_pass` changed to
+  `auto_tune_each_stage`.
+  
 * Version 3.01.00 moved the `-trace` and `-msg_rank` options from the kernel
   library to the kernel utility, so those options may no longer be set via
   `yk_solution::apply_command_line_options()`. APIs to set the corresponding

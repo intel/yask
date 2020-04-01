@@ -1,6 +1,6 @@
 ##############################################################################
 ## YASK: Yet Another Stencil Kit
-## Copyright (c) 2014-2019, Intel Corporation
+## Copyright (c) 2014-2020, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -230,7 +230,7 @@ sub getResultsFromLine($$) {
   }
 
   # If auto-tuner is run globally, capture updated values.
-  # Invalidate settings overridden by auto-tuner on multiple packs.
+  # Invalidate settings overridden by auto-tuner on multiple stages.
   elsif ($line =~ /^auto-tuner(.).*size:/) {
     my $c = $1;
 

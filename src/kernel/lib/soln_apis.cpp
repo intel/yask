@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2019, Intel Corporation
+Copyright (c) 2014-2020, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -162,11 +162,11 @@ namespace yask {
         // This must be done after finding WF extensions.
         find_bounding_boxes();
 
-        // Copy current settings to packs.  Needed here because settings may
+        // Copy current settings to stages.  Needed here because settings may
         // have been changed via APIs or from call to setupRank() since last
         // call to prepare_solution().  This will wipe out any previous
         // auto-tuning.
-        for (auto& sp : stPacks)
+        for (auto& sp : stStages)
             sp->getLocalSettings() = *opts;
 
         // Alloc vars, scratch vars, MPI bufs.
@@ -285,15 +285,15 @@ namespace yask {
                    " max-halos:             " << max_halos.makeDimValStr());
         print_temporal_tiling_info();
 
-        // Info about eqs, packs and bundles.
+        // Info about eqs, stages and bundles.
         DEBUG_MSG("\n"
-                  "Num stencil packs:      " << stPacks.size() << endl <<
+                  "Num stages:             " << stStages.size() << endl <<
                   "Num stencil bundles:    " << stBundles.size() << endl <<
                   "Num stencil equations:  " << NUM_STENCIL_EQS);
 
-        // Info on work in packs.
+        // Info on work in stages.
         DEBUG_MSG("\nBreakdown of work stats in this rank:");
-        for (auto& sp : stPacks)
+        for (auto& sp : stStages)
             sp->init_work_stats();
     }
 
@@ -446,13 +446,13 @@ namespace yask {
         p->writes_ps = 0.;
         p->flops = 0.;
 
-        // Sum work done across packs using per-pack step counters.
+        // Sum work done across stages using per-stage step counters.
         double tptime = 0.;
         double optime = 0.;
         idx_t psteps = 0;
-        for (auto& sp : stPacks) {
+        for (auto& sp : stStages) {
 
-            // steps in this pack.
+            // steps in this stage.
             idx_t ns = sp->steps_done;
 
             auto& ps = sp->stats;
@@ -468,14 +468,14 @@ namespace yask {
             p->nwrites += ps.nwrites;
             p->nfpops += ps.nfpops;
 
-            // Adjust pack time to make sure total time is <= compute time.
+            // Adjust stage time to make sure total time is <= compute time.
             double ptime = sp->timer.get_elapsed_secs();
             ptime = min(ptime, ctime - tptime);
             tptime += ptime;
             ps.run_time = ptime;
             ps.halo_time = 0.;
 
-            // Pack rates.
+            // Stage rates.
             idx_t np = tot_domain_pts * ns; // Sum over steps.
             ps.reads_ps = 0.;
             ps.writes_ps = 0.;
@@ -507,8 +507,8 @@ namespace yask {
                       " num-est-FP-ops-per-step:          " << makeNumStr(double(p->nfpops) / steps_done) << endl <<
                       " num-points-per-step:              " << makeNumStr(tot_domain_pts));
             if (psteps != steps_done) {
-                DEBUG_MSG(" Work breakdown by stencil pack(s):");
-                for (auto& sp : stPacks) {
+                DEBUG_MSG(" Work breakdown by stage(s):");
+                for (auto& sp : stStages) {
                     idx_t ns = sp->steps_done;
                     idx_t nreads = sp->tot_reads_per_step;
                     idx_t nwrites = sp->tot_writes_per_step;
@@ -530,8 +530,8 @@ namespace yask {
                       "  other time (sec):                  " << makeNumStr(otime) <<
                       print_pct(otime, rtime));
             if (psteps != steps_done) {
-                DEBUG_MSG(" Compute-time breakdown by stencil pack(s):");
-                for (auto& sp : stPacks) {
+                DEBUG_MSG(" Compute-time breakdown by stage(s):");
+                for (auto& sp : stStages) {
                     auto& ps = sp->stats;
                     double ptime = ps.run_time;
                     string pfx = "  '" + sp->get_name() + "' ";
@@ -565,8 +565,8 @@ namespace yask {
                       " throughput (est-FLOPS):           " << makeNumStr(p->flops) << endl <<
                       " throughput (num-points/sec):      " << makeNumStr(p->pts_ps));
             if (psteps != steps_done) {
-                DEBUG_MSG(" Rate breakdown by stencil pack(s):");
-                for (auto& sp : stPacks) {
+                DEBUG_MSG(" Rate breakdown by stage(s):");
+                for (auto& sp : stStages) {
                     auto& ps = sp->stats;
                     string pfx = "  '" + sp->get_name() + "' ";
                     DEBUG_MSG(pfx << "throughput (num-reads/sec):   " << makeNumStr(ps.reads_ps) << endl <<
@@ -593,7 +593,7 @@ namespace yask {
         wait_time.clear();
         test_time.clear();
         steps_done = 0;
-        for (auto& sp : stPacks) {
+        for (auto& sp : stStages) {
             sp->timer.clear();
             sp->steps_done = 0;
         }

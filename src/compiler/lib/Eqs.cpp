@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2019, Intel Corporation
+Copyright (c) 2014-2020, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -696,7 +696,7 @@ namespace yask {
 
     // Update access stats for the vars.
     // For now, this us just const indices.
-    // Halos are updated later, after packs are established.
+    // Halos are updated later, after stages are established.
     void Eqs::updateVarStats() {
 
         // Find all LHS and RHS points and vars for all eqs.
@@ -1060,7 +1060,7 @@ namespace yask {
     }
 
     // Find halos needed for each var.
-    void EqBundlePacks::calcHalos(EqBundles& allBundles) {
+    void EqStages::calcHalos(EqBundles& allBundles) {
 
         // Find all LHS and RHS points and vars for all eqs.
         PointVisitor pv;
@@ -1128,7 +1128,7 @@ namespace yask {
         // from the shadows.
         vector< map<Var*, Var*>> shadows;
 
-        // Packs.
+        // Stages.
         for (auto& bp : getAll()) {
             auto pname = bp->getName();
             auto& pbundles = bp->getBundles(); // list of bundles.
@@ -1136,7 +1136,7 @@ namespace yask {
             // Bundles with their dependency info.
             for (auto& b1 : allBundles.getAll()) {
 
-                // Only need bundles in this pack.
+                // Only need bundles in this stage.
                 if (pbundles.count(b1) == 0)
                     continue;
 
@@ -1267,7 +1267,7 @@ namespace yask {
                         } // path.
                     }); // lambda fn.
             } // bundles.
-        } // packs.
+        } // stages.
 
         // Apply the changes from the shadow vars.
         // This will result in the vars containing the max
@@ -1474,13 +1474,13 @@ namespace yask {
         }
     }
 
-    // Make a human-readable description of this eq bundle pack.
-    string EqBundlePack::getDescr(string quote) const
+    // Make a human-readable description of this eq stage.
+    string EqStage::getDescr(string quote) const
     {
         string des;
         if (isScratch())
             des += "scratch ";
-        des += "equation bundle-pack " + quote + getName() + quote;
+        des += "equation bundle-stage " + quote + getName() + quote;
         if (!isScratch()) {
             if (step_cond.get())
                 des += " w/step condition " + step_cond->makeQuotedStr(quote);
@@ -1490,8 +1490,8 @@ namespace yask {
         return des;
     }
 
-    // Add a bundle to this pack.
-    void EqBundlePack::addBundle(EqBundlePtr bp)
+    // Add a bundle to this stage.
+    void EqStage::addBundle(EqBundlePtr bp)
     {
         _bundles.insert(bp);
         _isScratch = bp->isScratch();
@@ -1500,20 +1500,20 @@ namespace yask {
         for (auto& eq : bp->getEqs())
             _eqs.insert(eq);
 
-        // update list of input and output vars for this pack.
+        // update list of input and output vars for this stage.
         for (auto& g : bp->getOutputVars())
             _outVars.insert(g);
         for (auto& g : bp->getInputVars())
             _inVars.insert(g);
     }
 
-    // Add 'bp' from 'allBundles'. Create new pack if needed.  Returns
-    // whether a new pack was created.
-    bool EqBundlePacks::addBundleToPack(EqBundles& allBundles,
+    // Add 'bp' from 'allBundles'. Create new stage if needed.  Returns
+    // whether a new stage was created.
+    bool EqStages::addBundleToStage(EqBundles& allBundles,
                                         EqBundlePtr bp)
     {
         // Already added?
-        if (_bundles_in_packs.count(bp))
+        if (_bundles_in_stages.count(bp))
             return false;
 
         // Get condition, if any.
@@ -1522,9 +1522,9 @@ namespace yask {
         // Get deps between bundles.
         auto& deps = allBundles.getDeps();
 
-        // Loop through existing packs, looking for one that
+        // Loop through existing stages, looking for one that
         // 'bp' can be added to.
-        EqBundlePack* target = 0;
+        EqStage* target = 0;
         for (auto& ep : getAll()) {
 
             // Must be same scratch-ness.
@@ -1554,47 +1554,47 @@ namespace yask {
             }
         }
 
-        // Make new pack if no target pack found.
-        bool newPack = false;
+        // Make new stage if no target stage found.
+        bool newStage = false;
         if (!target) {
-            auto np = make_shared<EqBundlePack>(bp->isScratch());
+            auto np = make_shared<EqStage>(bp->isScratch());
             addItem(np);
             target = np.get();
             target->baseName = _baseName;
             target->index = _idx++;
             target->step_cond = stcond;
-            newPack = true;
+            newStage = true;
         }
 
         // Add bundle to target.
         assert(target);
         target->addBundle(bp);
 
-        // Remember pack and updated vars.
-        _bundles_in_packs.insert(bp);
+        // Remember stage and updated vars.
+        _bundles_in_stages.insert(bp);
         for (auto& g : bp->getOutputVars())
             _outVars.insert(g);
 
-        return newPack;
+        return newStage;
     }
 
-    // Divide all bundles into packs.
-    void EqBundlePacks::makePacks(EqBundles& allBundles,
+    // Divide all bundles into stages.
+    void EqStages::makeStages(EqBundles& allBundles,
                                   ostream& os)
     {
-        os << "\nPartitioning " << allBundles.getNum() << " bundle(s) into packs...\n";
+        os << "\nPartitioning " << allBundles.getNum() << " bundle(s) into stages...\n";
 
         for (auto bp : allBundles.getAll())
-            addBundleToPack(allBundles, bp);
+            addBundleToStage(allBundles, bp);
 
         os << "Collapsing dependencies from bundles and finding transitive closure...\n";
         inherit_deps_from(allBundles);
 
-        os << "Topologically ordering packs...\n";
+        os << "Topologically ordering stages...\n";
         topo_sort();
 
         // Dump info.
-        os << "Created " << getNum() << " equation bundle pack(s):\n";
+        os << "Created " << getNum() << " equation stage(s):\n";
         for (auto& bp1 : getAll()) {
             os << " " << bp1->getDescr() << ":\n"
                 "  Contains " << bp1->getBundles().size() << " bundle(s): ";
@@ -1616,9 +1616,9 @@ namespace yask {
 
             // Deps.
             for (auto& bp2 : _deps.get_deps_on(bp1))
-                os << "  Dependent on bundle pack " << bp2->getName() << ".\n";
+                os << "  Dependent on stage " << bp2->getName() << ".\n";
             for (auto& sp : _scratches.get_deps_on(bp1))
-                os << "  Requires scratch pack " << sp->getName() << ".\n";
+                os << "  Requires scratch stage " << sp->getName() << ".\n";
         }
 
     }

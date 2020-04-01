@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2019, Intel Corporation
+Copyright (c) 2014-2020, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// This file contains implementations of bundle and pack methods.
+// This file contains implementations of bundle and stage methods.
 // Also see context_setup.cpp.
 
 #include "yask_stencil.hpp"
@@ -148,7 +148,7 @@ namespace yask {
                         // If binding threads to sub-blocks and this is the
                         // binding dim, set stride size and alignment
                         // granularity to the slab width. Setting the
-                        // alignment keeps slabs aligned between packs.
+                        // alignment keeps slabs aligned between stages.
                         if (bind_threads && i == bind_posn) {
                             adj_mb_idxs.stride[i] = bind_slab_pts;
                             adj_mb_idxs.align[i] = bind_slab_pts;
@@ -757,18 +757,18 @@ namespace yask {
     } // adjust_span().
 
     // Timer methods.
-    // Start and stop pack timers for final stats and auto-tuners.
-    void BundlePack::start_timers() {
+    // Start and stop stage timers for final stats and auto-tuners.
+    void Stage::start_timers() {
         auto ts = YaskTimer::get_timespec();
         timer.start(&ts);
         getAT().timer.start(&ts);
     }
-    void BundlePack::stop_timers() {
+    void Stage::stop_timers() {
         auto ts = YaskTimer::get_timespec();
         timer.stop(&ts);
         getAT().timer.stop(&ts);
     }
-    void BundlePack::add_steps(idx_t num_steps) {
+    void Stage::add_steps(idx_t num_steps) {
         steps_done += num_steps;
         getAT().steps_done += num_steps;
     }
@@ -793,16 +793,16 @@ namespace yask {
 
     // Calc the work stats.
     // Contains MPI barriers!
-    void BundlePack::init_work_stats() {
+    void Stage::init_work_stats() {
         STATE_VARS(this);
 
         num_reads_per_step = 0;
         num_writes_per_step = 0;
         num_fpops_per_step = 0;
 
-        DEBUG_MSG("Pack '" << get_name() << "':\n" <<
+        DEBUG_MSG("Stage '" << get_name() << "':\n" <<
                   " num bundles:                 " << size() << endl <<
-                  " pack scope:                  " << _pack_bb.make_range_string(domain_dims));
+                  " stage scope:                 " << _stage_bb.make_range_string(domain_dims));
 
         // Bundles.
         for (auto* sg : *this) {
@@ -859,10 +859,10 @@ namespace yask {
                     }
                 }
             }
-            DEBUG_MSG("  var-reads per point:       " << reads1 << endl <<
-                      "  var-reads in rank:         " << makeNumStr(reads_bb) << endl <<
-                      "  var-writes per point:      " << writes1 << endl <<
-                      "  var-writes in rank:        " << makeNumStr(writes_bb) << endl <<
+            DEBUG_MSG("  var-reads per point:        " << reads1 << endl <<
+                      "  var-reads in rank:          " << makeNumStr(reads_bb) << endl <<
+                      "  var-writes per point:       " << writes1 << endl <<
+                      "  var-writes in rank:         " << makeNumStr(writes_bb) << endl <<
                       "  est FP-ops per point:       " << fpops1 << endl <<
                       "  est FP-ops in rank:         " << makeNumStr(fpops_bb));
 

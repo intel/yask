@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2019, Intel Corporation
+Copyright (c) 2014-2020, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -43,7 +43,7 @@ namespace yask {
     // for numbers above 9 (at least up to 99).
 
     // Format: "major.minor.patch".
-    const string version = "3.03.01";
+    const string version = "3.04.01";
 
     string yask_get_version_string() {
         return version;

@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2019, Intel Corporation
+Copyright (c) 2014-2020, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -70,8 +70,8 @@ namespace yask {
         opts->adjustSettings();
         update_var_info(true);
 
-        // Copy these settings to packs and realloc scratch vars.
-        for (auto& sp : stPacks)
+        // Copy these settings to stages and realloc scratch vars.
+        for (auto& sp : stStages)
             sp->getLocalSettings() = *opts;
         allocScratchData();
 
@@ -112,8 +112,8 @@ namespace yask {
             rank_idxs.stop[step_posn] = stop_t;
             rank_idxs.stride[step_posn] = stride_t;
 
-            // Loop thru bundles. We ignore bundle packs here
-            // because packing bundles is an optional optimizations.
+            // Loop thru bundles. We ignore stages here
+            // because staging is an optional optimizations.
             for (auto* asg : stBundles) {
 
                 // Scan through n-D space.
@@ -179,7 +179,7 @@ namespace yask {
         run_time.stop();
     } // run_ref.
 
-    // Eval stencil bundle pack(s) over var(s) using optimized code.
+    // Eval stage(s) over var(s) using optimized code.
     void StencilContext::run_solution(idx_t first_step_index,
                                       idx_t last_step_index)
     {
@@ -241,8 +241,8 @@ namespace yask {
         // Adjust end points for overlapping regions due to wavefront angle.
         // For each subsequent time step in a region, the spatial location
         // of each block evaluation is shifted by the angle for each
-        // bundle pack. So, the total shift in a region is the angle * num
-        // packs * num timesteps. This assumes all bundle packs
+        // stage. So, the total shift in a region is the angle * num
+        // stages * num timesteps. This assumes all stages
         // are inter-dependent to find maximum extension. Actual required
         // size may be less, but this will just result in some calls to
         // calc_region() that do nothing.
@@ -325,18 +325,18 @@ namespace yask {
             // Start timer for auto-tuner.
             _at.timer.start();
 
-            // If no wave-fronts (default), loop through packs here, and do
-            // only one pack at a time in calc_region(). This is similar to
-            // loop in calc_rank_ref(), but with packs instead of bundles.
+            // If no wave-fronts (default), loop through stages here, and do
+            // only one stage at a time in calc_region(). This is similar to
+            // loop in calc_rank_ref(), but with stages instead of bundles.
             if (wf_steps == 0) {
 
-                // Loop thru packs.
-                for (auto& bp : stPacks) {
+                // Loop thru stages.
+                for (auto& bp : stStages) {
 
                     // Check step.
                     if (check_step_conds && !bp->is_in_valid_step(start_t)) {
                         TRACE_MSG("run_solution: step " << start_t <<
-                                  " not valid for pack '" <<
+                                  " not valid for stage '" <<
                                   bp->get_name() << "'");
                         continue;
                     }
@@ -359,7 +359,7 @@ namespace yask {
                         // Include automatically-generated loop code that calls
                         // calc_region(bp) for each region.
                         TRACE_MSG("run_solution: step " << start_t <<
-                                  " for pack '" << bp->get_name() << "' in MPI exterior");
+                                  " for stage '" << bp->get_name() << "' in MPI exterior");
 #include "yask_rank_loops.hpp"
 
 #else
@@ -388,7 +388,7 @@ namespace yask {
                                 // each region. The region will be trimmed
                                 // to the active MPI exterior section.
                                 TRACE_MSG("run_solution: step " << start_t <<
-                                          " for pack '" << bp->get_name() <<
+                                          " for stage '" << bp->get_name() <<
                                           "' in MPI exterior dim " << j <<
                                           " on the " << (is_left ? "left" : "right"));
 #include "yask_rank_loops.hpp"
@@ -397,7 +397,7 @@ namespace yask {
 #endif
 
                         // Mark vars that [may] have been written to by
-                        // this pack. Mark vars as dirty even if not
+                        // this stage. Mark vars as dirty even if not
                         // actually written by this rank, perhaps due to
                         // sub-domains or asymmetrical stencils. This is
                         // needed because neighbors will not know what vars
@@ -422,7 +422,7 @@ namespace yask {
                     // comms, this will be just the interior.  If not, it
                     // will cover the whole rank.
                     TRACE_MSG("run_solution: step " << start_t <<
-                              " for pack '" << bp->get_name() << "'");
+                              " for stage '" << bp->get_name() << "'");
 #include "yask_rank_loops.hpp"
 
                     // Mark as dirty only if we did exterior.
@@ -436,16 +436,16 @@ namespace yask {
                     // Set the overlap flags back to default.
                     do_mpi_interior = do_mpi_left = do_mpi_right = true;
 
-                } // packs.
+                } // stages.
             } // No WF tiling.
 
-            // If doing wave-fronts, must loop through all packs in
+            // If doing wave-fronts, must loop through all stages in
             // calc_region().
             else {
 
-                // Null ptr => Eval all stencil packs each time
+                // Null ptr => Eval all stages each time
                 // calc_region() is called.
-                BundlePackPtr bp;
+                StagePtr bp;
 
                 // Do MPI-external passes?
                 if (mpi_interior.bb_valid) {
@@ -482,7 +482,7 @@ namespace yask {
                         } // left/right.
                     } // domain dims.
 
-                    // Mark vars dirty for all packs.
+                    // Mark vars dirty for all stages.
                     update_vars(bp, start_t, stop_t, true);
 
                     // Do the appropriate steps for halo exchange of exterior.
@@ -519,13 +519,13 @@ namespace yask {
             // Overall steps.
             steps_done += this_num_t;
 
-            // Count steps for each pack to properly account for
+            // Count steps for each stage to properly account for
             // step conditions when using temporal tiling.
-            for (auto& bp : stPacks) {
-                idx_t num_pack_steps = 0;
+            for (auto& bp : stStages) {
+                idx_t num_stage_steps = 0;
 
                 if (!check_step_conds)
-                    num_pack_steps = this_num_t;
+                    num_stage_steps = this_num_t;
                 else {
 
                     // Loop through each step.
@@ -534,12 +534,12 @@ namespace yask {
 
                         // Check step cond for this t.
                         if (bp->is_in_valid_step(t))
-                            num_pack_steps++;
+                            num_stage_steps++;
                     }
                 }
 
-                // Count steps for this pack.
-                bp->add_steps(num_pack_steps);
+                // Count steps for this stage.
+                bp->add_steps(num_stage_steps);
             }
 
             // Call the auto-tuner to evaluate these steps.
@@ -569,10 +569,10 @@ namespace yask {
 
     // Calculate results within a region.  Each region is typically computed
     // in a separate OpenMP 'for' region.  In this function, we loop over
-    // the time steps and bundle packs and evaluate a pack in each of
-    // the blocks in the region.  If 'sel_bp' is null, eval all packs; else
+    // the time steps and stages and evaluate a stage in each of
+    // the blocks in the region.  If 'sel_bp' is null, eval all stages; else
     // eval only the one pointed to.
-    void StencilContext::calc_region(BundlePackPtr& sel_bp,
+    void StencilContext::calc_region(StagePtr& sel_bp,
                                      const ScanIndices& rank_idxs) {
         STATE_VARS(this);
         TRACE_MSG("calc_region: region [" <<
@@ -617,31 +617,31 @@ namespace yask {
             region_idxs.start[step_posn] = start_t;
             region_idxs.stop[step_posn] = stop_t;
 
-            // If no temporal blocking (default), loop through packs here,
-            // and do only one pack at a time in calc_block(). If there is
-            // no WF blocking either, the pack loop body will only execute
-            // with one active pack, and 'region_shift_num' will never be > 0.
+            // If no temporal blocking (default), loop through stages here,
+            // and do only one stage at a time in calc_block(). If there is
+            // no WF blocking either, the stage loop body will only execute
+            // with one active stage, and 'region_shift_num' will never be > 0.
             if (tb_steps == 0) {
 
-                // Stencil bundle packs to evaluate at this time step.
-                for (auto& bp : stPacks) {
+                // Stages to evaluate at this time step.
+                for (auto& bp : stStages) {
 
-                    // Not a selected bundle pack?
+                    // Not a selected stage?
                     if (sel_bp && sel_bp != bp)
                         continue;
 
-                    TRACE_MSG("calc_region: no TB; pack '" <<
+                    TRACE_MSG("calc_region: no TB; stage '" <<
                               bp->get_name() << "' in step(s) [" <<
                               start_t << " ... " << stop_t << ")");
 
                     // Check step.
                     if (check_step_conds && !bp->is_in_valid_step(start_t)) {
                         TRACE_MSG("calc_region: step " << start_t <<
-                                  " not valid for pack '" << bp->get_name() << "'");
+                                  " not valid for stage '" << bp->get_name() << "'");
                         continue;
                     }
 
-                    // Strides within a region are based on pack block sizes.
+                    // Strides within a region are based on stage block sizes.
                     auto& settings = bp->getActiveSettings();
                     region_idxs.stride = settings._block_sizes;
                     region_idxs.stride[step_posn] = stride_t;
@@ -651,7 +651,7 @@ namespace yask {
 
                     // Set region_idxs begin & end based on shifted rank
                     // start & stop (original region begin & end), rank
-                    // boundaries, and pack BB. This will be the base of the
+                    // boundaries, and stage BB. This will be the base of the
                     // region loops.
                     bool ok = shift_region(rank_idxs.start, rank_idxs.stop,
                                            region_shift_num, bp,
@@ -682,21 +682,21 @@ namespace yask {
 #include "yask_region_loops.hpp"
                     }
 
-                    // Need to shift for next pack and/or time.
+                    // Need to shift for next stage and/or time.
                     region_shift_num++;
 
-                } // stencil bundle packs.
+                } // stages.
             } // no temporal blocking.
 
-            // If using TB, iterate thru steps in a WF and packs in calc_block().
+            // If using TB, iterate thru steps in a WF and stages in calc_block().
             else {
 
                 TRACE_MSG("calc_region: w/TB in step(s) [" <<
                           start_t << " ... " << stop_t << ")");
 
-                // Null ptr => Eval all stencil packs each time
+                // Null ptr => Eval all stages each time
                 // calc_block() is called.
-                BundlePackPtr bp;
+                StagePtr bp;
 
                 // Strides within a region are based on rank block sizes.
                 auto& settings = *opts;
@@ -740,19 +740,19 @@ namespace yask {
 #include "yask_region_loops.hpp"
                 }
 
-                // Loop thru stencil bundle packs that were evaluated in
+                // Loop thru stages that were evaluated in
                 // these 'tb_steps' to increment shift for next region
                 // "layer", if any. This is needed when there are more WF
                 // steps than TB steps.  TODO: consider moving this inside
                 // calc_block().
                 for (idx_t t = start_t; t != stop_t; t += step_dir) {
-                    for (auto& bp : stPacks) {
+                    for (auto& bp : stStages) {
 
                         // Check step.
                         if (check_step_conds && !bp->is_in_valid_step(t))
                             continue;
 
-                        // One shift for each pack in each TB step.
+                        // One shift for each stage in each TB step.
                         region_shift_num++;
                     }
                 }
@@ -771,11 +771,11 @@ namespace yask {
     } // calc_region.
 
     // Calculate results within a block. This function calls
-    // 'calc_mini_block()' for the specified pack or all packs if 'sel_bp'
+    // 'calc_mini_block()' for the specified stage or all stages if 'sel_bp'
     // is null.  When using TB, only the shape(s) needed for the tesselation
     // 'phase' are computed.  Typically called by a top-level OMP thread
     // from calc_region().
-    void StencilContext::calc_block(BundlePackPtr& sel_bp,
+    void StencilContext::calc_block(StagePtr& sel_bp,
                                     idx_t region_shift_num,
                                     idx_t nphases, idx_t phase,
                                     const ScanIndices& rank_idxs,
@@ -846,7 +846,7 @@ namespace yask {
         assert(stride_t);
         const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(stride_t));
 
-        // If TB is not being used, just process the given pack.
+        // If TB is not being used, just process the given stage.
         // No need for a time loop.
         // No need to check bounds, because they were checked in
         // calc_region() when not using TB.
@@ -861,7 +861,7 @@ namespace yask {
             block_idxs.start[step_posn] = begin_t;
             block_idxs.stop[step_posn] = end_t;
 
-            // Strides within a block are based on pack mini-block sizes.
+            // Strides within a block are based on stage mini-block sizes.
             auto& settings = bp->getActiveSettings();
             block_idxs.stride = settings._mini_block_sizes;
             block_idxs.stride[step_posn] = stride_t;
@@ -870,7 +870,7 @@ namespace yask {
             block_idxs.group_size = settings._mini_block_group_sizes;
 
             // Default settings for no TB.
-            BundlePackPtr bp = sel_bp;
+            StagePtr bp = sel_bp;
             assert(phase == 0);
             idx_t nshapes = 1;
             idx_t shape = 0;
@@ -959,7 +959,7 @@ namespace yask {
 
                 // Include automatically-generated loop code that calls
                 // calc_mini_block() for each mini-block in this block.
-                BundlePackPtr bp; // null.
+                StagePtr bp; // null.
 #include "yask_block_loops.hpp"
 
             } // shape loop.
@@ -968,12 +968,12 @@ namespace yask {
 
     // Calculate results within a mini-block.
     // This function calls 'StencilBundleBase::calc_mini_block()'
-    // for each bundle in the specified pack or all packs if 'sel_bp' is
+    // for each bundle in the specified stage or all stages if 'sel_bp' is
     // null. When using TB, only the 'shape' needed for the tesselation
     // 'phase' are computed. The starting 'shift_num' is relative
     // to the bottom of the current region and block.
     void StencilContext::calc_mini_block(int region_thread_idx,
-                                         BundlePackPtr& sel_bp,
+                                         StagePtr& sel_bp,
                                          idx_t region_shift_num,
                                          idx_t nphases, idx_t phase,
                                          idx_t nshapes, idx_t shape,
@@ -1038,27 +1038,27 @@ namespace yask {
             mini_block_idxs.start[step_posn] = start_t;
             mini_block_idxs.stop[step_posn] = stop_t;
 
-            // Stencil bundle packs to evaluate at this time step.
-            for (auto& bp : stPacks) {
+            // Stages to evaluate at this time step.
+            for (auto& bp : stStages) {
 
-                // Not a selected bundle pack?
+                // Not a selected stage?
                 if (sel_bp && sel_bp != bp)
                     continue;
 
                 // Check step.
                 if (check_step_conds && !bp->is_in_valid_step(start_t)) {
                     TRACE_MSG("calc_mini_block: step " << start_t <<
-                              " not valid for pack '" <<
+                              " not valid for stage '" <<
                               bp->get_name() << "'");
                     continue;
                 }
                 TRACE_MSG("calc_mini_block: phase " << phase <<
                           ", shape " << shape <<
                           ", step " << start_t <<
-                          ", pack '" << bp->get_name() <<
+                          ", stage '" << bp->get_name() <<
                           "', shift-num " << shift_num);
 
-                // Start timers for this pack.  Tracking only on thread
+                // Start timers for this stage.  Tracking only on thread
                 // 0. TODO: track all threads and report cross-thread stats.
                 if (region_thread_idx == 0)
                     bp->start_timers();
@@ -1074,7 +1074,7 @@ namespace yask {
 
                 // Set mini_block_idxs begin & end based on shifted rank
                 // start & stop (original region begin & end), rank
-                // boundaries, and pack BB. There may be several TB layers
+                // boundaries, and stage BB. There may be several TB layers
                 // within a region WF, so we need to add the region and
                 // local mini-block shift counts.
                 bool ok = shift_region(rank_idxs.start, rank_idxs.stop,
@@ -1112,35 +1112,35 @@ namespace yask {
                     make_stores_visible();
                 }
 
-                // Need to shift for next pack and/or time-step.
+                // Need to shift for next stage and/or time-step.
                 shift_num++;
 
-                // Stop timers for this pack.
+                // Stop timers for this stage.
                 if (region_thread_idx == 0)
                     bp->stop_timers();
 
-            } // packs.
+            } // stages.
         } // time-steps.
 
     } // calc_mini_block().
 
     // Find boundaries within region with 'base_start' to 'base_stop'
     // shifted 'shift_num' times, which should start at 0 and increment for
-    // each pack in each time-step.  Trim to ext-BB and MPI section if 'bp' if
+    // each stage in each time-step.  Trim to ext-BB and MPI section if 'bp' if
     // not null.  Write results into 'begin' and 'end' in 'idxs'.  Return
     // 'true' if resulting area is non-empty, 'false' if empty.
     bool StencilContext::shift_region(const Indices& base_start, const Indices& base_stop,
                                       idx_t shift_num,
-                                      BundlePackPtr& bp,
+                                      StagePtr& bp,
                                       ScanIndices& idxs) {
         STATE_VARS(this);
 
         // For wavefront adjustments, see conceptual diagram in
-        // run_solution().  At each pack and time-step, the parallelogram
+        // run_solution().  At each stage and time-step, the parallelogram
         // may be trimmed based on the BB and WF extensions outside of the
         // rank-BB.
 
-        // Actual region boundaries must stay within [extended] pack BB.
+        // Actual region boundaries must stay within [extended] stage BB.
         // We have to calculate the posn in the extended rank at each
         // value of 'shift_num' because it is being shifted spatially.
         bool ok = true;
@@ -1155,10 +1155,10 @@ namespace yask {
             idx_t rstart = base_start[i] - shift_amt;
             idx_t rstop = base_stop[i] - shift_amt;
 
-            // Trim only if pack is specified.
+            // Trim only if stage is specified.
             if (bp.get()) {
 
-                // Trim to extended BB of pack. This will also trim
+                // Trim to extended BB of stage. This will also trim
                 // to the extended BB of the rank.
                 auto& pbb = bp.get()->getBB();
                 rstart = max(rstart, pbb.bb_begin[j]);
@@ -1304,7 +1304,7 @@ namespace yask {
 
     // For given 'phase' and 'shape', find boundaries within mini-block at
     // 'mb_base_start' to 'mb_base_stop' shifted by 'mb_shift_num', which
-    // should start at 0 and increment for each pack in each time-step.
+    // should start at 0 and increment for each stage in each time-step.
     // 'mb_base' is subset of 'adj_block_base'.  Also trim to block at
     // 'block_base_start' to 'block_base_stop' shifted by 'mb_shift_num'.
     // Input 'begin' and 'end' of 'idxs' should be trimmed to region.  Writes
@@ -1324,7 +1324,7 @@ namespace yask {
                                           const BridgeMask& bridge_mask,
                                           ScanIndices& idxs) {
         STATE_VARS(this);
-        auto npacks = stPacks.size();
+        auto nstages = stStages.size();
         bool ok = true;
 
         // Loop thru dims, breaking out if any dim has no work.
@@ -1359,7 +1359,7 @@ namespace yask {
             // Adjust these based on current shift.  Adjust by pts in one TB
             // step, reducing size on R & L sides.  But if block is first
             // and/or last, clamp to region.  TODO: have different R & L
-            // angles. TODO: have different shifts for each pack.
+            // angles. TODO: have different shifts for each stage.
 
             // Shift start to right unless first.  First block will be a
             // parallelogram or trapezoid clamped to beginning of region.
@@ -1926,25 +1926,25 @@ namespace yask {
 #endif
     }
 
-    // Update data in vars that have been written to by bundle pack 'sel_bp'.
-    void StencilContext::update_vars(const BundlePackPtr& sel_bp,
+    // Update data in vars that have been written to by stage 'sel_bp'.
+    void StencilContext::update_vars(const StagePtr& sel_bp,
                                       idx_t start, idx_t stop,
                                       bool mark_dirty) {
         STATE_VARS(this);
         idx_t stride = (start > stop) ? -1 : 1;
         map<YkVarPtr, set<idx_t>> vars_done;
 
-        // Stencil bundle packs.
-        for (auto& bp : stPacks) {
+        // Stages.
+        for (auto& bp : stStages) {
 
-            // Not a selected bundle pack?
+            // Not a selected stage?
             if (sel_bp && sel_bp != bp)
                 continue;
 
             // Each input step.
             for (idx_t t = start; t != stop; t += stride) {
 
-                // Each bundle in this pack.
+                // Each bundle in this stage.
                 for (auto* sb : *bp) {
 
                     // Get output step for this bundle, if any.
@@ -1971,7 +1971,7 @@ namespace yask {
                     }
                 } // bundles.
             } // steps.
-        } // packs.
+        } // stages.
     } // update_vars().
 
     // Reset any locks, etc.

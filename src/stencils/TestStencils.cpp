@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2019, Intel Corporation
+Copyright (c) 2014-2020, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -444,7 +444,7 @@ namespace {
     static TestReverseStencil TestReverseStencil_instance;
 
     // Test dependent equations.
-    // These will create 2 stencil packs that will be applied in sequence
+    // These will create 2 stages that will be applied in sequence
     // for each time-step.
     class TestDepStencil1 : public TestBase {
 
@@ -457,7 +457,7 @@ namespace {
     public:
 
         TestDepStencil1(int radius=2) :
-            TestBase("test_dep_1d", radius) { }
+            TestBase("test_stages_1d", radius) { }
 
         // Define equation to apply to all points in 'A' and 'B' vars.
         virtual void define() {
@@ -486,7 +486,7 @@ namespace {
     public:
 
         TestDepStencil2(int radius=2) :
-            TestBase("test_dep_2d", radius) { }
+            TestBase("test_stages_2d", radius) { }
 
         // Define equation to apply to all points in 'A' and 'B' vars.
         virtual void define() {
@@ -515,7 +515,7 @@ namespace {
     public:
 
         TestDepStencil3(int radius=2) :
-            TestBase("test_dep_3d", radius) { }
+            TestBase("test_stages_3d", radius) { }
 
         // Define equation to apply to all points in 'A' and 'B' vars.
         virtual void define() {

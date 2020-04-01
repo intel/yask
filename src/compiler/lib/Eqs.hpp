@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2019, Intel Corporation
+Copyright (c) 2014-2020, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-///////// Classes for equations, equation bundles, and bundle packs. ////////////
+///////// Classes for equations, equation bundles, and stages. ////////////
 
 #pragma once
 
@@ -595,14 +595,14 @@ namespace yask {
     // A list of unique equation bundles.
     typedef vector_set<EqBundlePtr> EqBundleList;
 
-    // A named equation bundle pack, which contains one or more equation
-    // bundles.  All equations in a pack do not need to have the same
+    // A named equation stage, which contains one or more equation
+    // bundles.  All equations in a stage do not need to have the same
     // domain condition, but they must have the same step condition.
-    // Equations in a pack must not have inter-dependencies because they
+    // Equations in a stage must not have inter-dependencies because they
     // may be run in parallel or in any order on any sub-domain.
-    class EqBundlePack : public EqLot {
+    class EqStage : public EqLot {
     protected:
-        EqBundleList _bundles;  // bundles in this pack.
+        EqBundleList _bundles;  // bundles in this stage.
 
     public:
 
@@ -610,13 +610,13 @@ namespace yask {
         boolExprPtr step_cond;
 
         // Ctor.
-        EqBundlePack(bool is_scratch) :
+        EqStage(bool is_scratch) :
             EqLot(is_scratch) { }
-        virtual ~EqBundlePack() { }
+        virtual ~EqStage() { }
 
         // Create a copy containing clones of the bundles.
-        virtual shared_ptr<EqBundlePack> clone() const {
-            auto p = make_shared<EqBundlePack>(_isScratch);
+        virtual shared_ptr<EqStage> clone() const {
+            auto p = make_shared<EqStage>(_isScratch);
 
             // Shallow copy.
             *p = *this;
@@ -632,7 +632,7 @@ namespace yask {
         // Get a string description.
         virtual string getDescr(string quote = "'") const;
 
-        // Add a bundle to this pack.
+        // Add a bundle to this stage.
         virtual void addBundle(EqBundlePtr ee);
 
         // Get the list of all bundles
@@ -655,10 +655,10 @@ namespace yask {
 
     };
 
-    // Container for multiple equation bundle packs.
-    class EqBundlePacks : public DepGroup<EqBundlePack> {
+    // Container for multiple equation stages.
+    class EqStages : public DepGroup<EqStage> {
     protected:
-        string _baseName = "stencil_pack";
+        string _baseName = "stencil_stage";
 
         // Bundle index.
         int _idx = 0;
@@ -667,17 +667,17 @@ namespace yask {
         Vars _outVars;
 
         // Track bundles that have been added already.
-        set<EqBundlePtr> _bundles_in_packs;
+        set<EqBundlePtr> _bundles_in_stages;
 
-        // Add 'bp' from 'allBundles'. Create new pack if needed.  Returns
-        // whether a new pack was created.
-        bool addBundleToPack(EqBundles& allBundles,
+        // Add 'bp' from 'allBundles'. Create new stage if needed.  Returns
+        // whether a new stage was created.
+        bool addBundleToStage(EqBundles& allBundles,
                              EqBundlePtr bp);
 
     public:
 
-        // Separate bundles into packs.
-        void makePacks(EqBundles& bundles,
+        // Separate bundles into stages.
+        void makeStages(EqBundles& bundles,
                        std::ostream& os);
 
         // Get all output vars.
@@ -685,7 +685,7 @@ namespace yask {
             return _outVars;
         }
 
-        // Visit all the equations in all packs.
+        // Visit all the equations in all stages.
         virtual void visitEqs(ExprVisitor* ev) {
             for (auto& bp : _all)
                 bp->visitEqs(ev);
@@ -694,7 +694,7 @@ namespace yask {
         // Find halos needed for each var.
         virtual void calcHalos(EqBundles& allBundles);
 
-    }; // EqBundlePacks.
+    }; // EqStages.
 
 } // namespace yask.
 

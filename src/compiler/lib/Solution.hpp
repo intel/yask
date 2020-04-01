@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2019, Intel Corporation
+Copyright (c) 2014-2020, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -73,7 +73,7 @@ namespace yask {
         Dimensions _dims;          // various dimensions.
         PrinterBase* _printer = 0;
         EqBundles* _eqBundles = 0;         // eq-bundles for scalar and vector.
-        EqBundlePacks* _eqBundlePacks = 0; // packs of bundles w/o inter-dependencies.
+        EqStages* _eqStages = 0; // packs of bundles w/o inter-dependencies.
         EqBundles* _clusterEqBundles = 0;  // eq-bundles for scalar and vector.
 
         // Create the intermediate data.
