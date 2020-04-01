@@ -41,6 +41,10 @@ IN THE SOFTWARE.
 // _OPENMP is defined.
 #ifdef _OPENMP
 #include <omp.h>
+#if !defined(KMP_VERSION_MAJOR) || KMP_VERSION_MAJOR >= 5
+// omp_set_nested() is deprecated.
+#define omp_set_nested(n) void(0)
+#endif
 #else
 typedef int omp_lock_t;
 inline int omp_get_num_procs() { return 1; }

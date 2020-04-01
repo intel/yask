@@ -922,7 +922,7 @@ namespace yask {
         yask_num_threads[0] = rt;
 
         if (bt > 1) {
-            omp_set_nested(1);  // deprecated for OMP 5, but needed for Intel OMP.
+            omp_set_nested(1);
             omp_set_max_active_levels(2);
             int mal = omp_get_max_active_levels();
             assert (mal == 2);
