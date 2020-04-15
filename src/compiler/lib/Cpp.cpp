@@ -581,9 +581,12 @@ namespace yask {
                 // Output write using base addr.
                 printPointComment(os, gp, "Write aligned");
 
-                os << _linePrefix << val << ".storeTo_masked(" << *p << " + (" <<
-                    ofsStr << "), write_mask)" << _lineSuffix;
-                // without mask: os << _linePrefix << *p << "[" << ofs << "] = " << val << _lineSuffix;
+                if (_useMaskedWrites)
+                    os << _linePrefix << val << ".storeTo_masked(" << *p << " + (" <<
+                        ofsStr << "), write_mask)" << _lineSuffix;
+                else
+                    os << _linePrefix << val << ".storeTo(" << *p << " + (" <<
+                        ofsStr << "))" << _lineSuffix;
 
                 return "";
             }

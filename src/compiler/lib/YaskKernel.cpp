@@ -748,11 +748,10 @@ namespace yask {
                 os << " idx_t " << istart << " = " << idim << ";\n";
                 os << " idx_t " << istep << " = " << nvecs << "; // number of vectors per iter.\n";
                 os << " idx_t " << iestep << " = " << nelems << "; // number of elements per iter.\n";
-                if (do_cluster)
-                    os << " constexpr idx_t write_mask = idx_t(-1); // no masking for clusters.\n";
-
+ 
                 // C++ vector print assistant.
                 CppVecPrintHelper* vp = newCppVecPrintHelper(vv, cv);
+                vp->setUseMaskedWrites(!do_cluster);
                 vp->printElemIndices(os);
 
                 // Start forced-inline code.
