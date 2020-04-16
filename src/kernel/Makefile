@@ -351,14 +351,14 @@ endif
 # compiler-specific settings.
 
 # Clang (LLVM-based) compiler.
-ifeq ($(call MACRO_DEF,$(YK_CXX),__clang__),1)
+ifeq ($(call MACRO_DEF,$(YK_CXX) $(EXTRA_YK_CXXFLAGS),__clang__),1)
  YK_CXXFLAGS	+=	$(CXX_ISA)
  YK_CXXFLAGS	+=	-Wno-unused-variable 
  MACROS		+=	NO_VEC
  MACROS		+=	NO_SVML
 
-# Intel compiler (but not clang-based).
-else ifeq ($(call MACRO_DEF,$(YK_CXX),__INTEL_COMPILER),1)
+# Intel compiler (and not clang-based).
+else ifeq ($(call MACRO_DEF,$(YK_CXX) $(EXTRA_YK_CXXFLAGS),__INTEL_COMPILER),1)
 
  YK_CXXFLAGS	+=	$(ICC_ISA)
  YK_CXXFLAGS	+=	-debug extended -restrict -ansi-alias -fno-alias
@@ -380,7 +380,7 @@ else ifeq ($(call MACRO_DEF,$(YK_CXX),__INTEL_COMPILER),1)
  endif
 
 # Gnu-compatible compiler (but not Intel or Clang).
-else ifeq ($(call MACRO_DEF,$(YK_CXX),__GNUC__),1)
+else ifeq ($(call MACRO_DEF,$(YK_CXX) $(EXTRA_YK_CXXFLAGS),__GNUC__),1)
  YK_CXXFLAGS	+=	$(CXX_ISA)
  YK_CXXFLAGS	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
  SWIG_CXXFLAGS	+=	$(SWIG_GCCFLAGS)
@@ -918,8 +918,10 @@ help:
 	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis fold='x=1,y=2,z=4' cluster='x=2'"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis radius=4 real_bytes=8 # DP FP"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=awp EXTRA_YK_CXXFLAGS='-qopt-report -Fa'"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=clang++ mpi=0  # Use clang w/o MPI"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=mpiCC OMPI_CXX=clang++  # Use clang w/MPI"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis EXTRA_YK_CXXFLAGS='-qnextgen' # Use next-gen Intel compiler"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=clang++ mpi=0 # Use clang w/o MPI"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=clang++ EXTRA_YK_CXXFLAGS='-fno-color-diagnostics' mpi=0 # Use clang w/o color output"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=mpiCC OMPI_CXX=clang++ # Use clang w/MPI"; \
 	echo " "
 	@echo "Example performance builds of kernel API for C++ and Python apps:"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd yk-api"; \

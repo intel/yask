@@ -105,7 +105,7 @@ namespace yask {
                     break;
 
                 default:
-                    THROW_YASK_EXCEPTION("Error: unexpected dim type " + type);
+                    THROW_YASK_EXCEPTION("Error: unexpected dim type " + to_string(type));
                 }
             }
         }
