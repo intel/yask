@@ -635,18 +635,20 @@ namespace yask {
 
             // A compile-time const?
             if (arg->isConstVal()) {
-                _consts.addDimBack(dname, arg->getIntVal());
 #ifdef DEBUG_GP
                 cout << "  is const val " << arg->getIntVal() << endl;
 #endif
+                IntScalar c(dname, arg->getIntVal());
+                setArgConst(c);
             }
 
             // A simple offset?
             else if (arg->isOffsetFrom(dname, offset)) {
-                _offsets.addDimBack(dname, offset);
 #ifdef DEBUG_GP
                 cout << "  has offset " << offset << endl;
 #endif
+                IntScalar o(dname, offset);
+                setArgOffset(o);
             }
         }
         _updateStr();
@@ -698,11 +700,17 @@ namespace yask {
                                      const VarMap* varMap) const {
         string res;
 
-        // Non-0 const offset and dname exists in fold?
+        // Const offset?
         auto* ofs = _offsets.lookup(dname);
-        if (ofs && *ofs && dims._fold.lookup(dname))
-            res = "(" + dname + dims.makeNormStr(*ofs, dname) + ")";
 
+        // Zero offset?
+        if (ofs && *ofs == 0)
+            res = dname;
+        
+        // dname exists in fold?
+        else if (ofs && dims._fold.lookup(dname))
+            res = "(" + dname + dims.makeNormStr(*ofs, dname) + ")";
+        
         // Otherwise, just find and format arg as-is.
         else {
             auto& gdims = _var->getDims();
@@ -795,7 +803,7 @@ namespace yask {
                 // Set offset.
                 _offsets.addDimBack(dname, ofs);
 
-                // Remove const.
+                // Remove const if it exists.
                 _consts = _consts.removeDim(dname);
 
                 break;
