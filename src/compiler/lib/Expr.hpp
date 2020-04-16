@@ -805,6 +805,7 @@ namespace yask {
         
         // Simple offset for each expr that is dim +/- offset, e.g.,
         // "x=-5, z=4" from above example.
+        // Includes zero offsets.
         // Set in ctor and modified via setArgOffset/Const().
         IntTuple _offsets;
 

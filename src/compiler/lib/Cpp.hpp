@@ -123,6 +123,8 @@ namespace yask {
         string _elemSuffix = "_elem";
         VarMap _vec2elemMap; // maps vector indices to elem indices; filled by printElemIndices.
 
+        bool _useMaskedWrites = true;
+
         // A simple constant.
         virtual string addConstExpr(ostream& os, double v) override {
             return CppPrintHelper::formatReal(v);
@@ -194,6 +196,13 @@ namespace yask {
 
     public:
 
+        // Whether to use masks during write.
+        virtual void setUseMaskedWrites(bool do_use) {
+            _useMaskedWrites = do_use;
+        }
+        virtual bool getUseMaskedWrites() const {
+            return _useMaskedWrites;
+        }
 
         // Print any needed memory reads and/or constructions to 'os'.
         // Return code containing a vector of var points.

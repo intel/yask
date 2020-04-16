@@ -450,17 +450,11 @@ namespace yask {
         // aligned store from 'this'.
         ALWAYS_INLINE void storeTo(real_vec_t* __restrict to) const {
 
-            // Using an explicit loop here instead of a store intrinsic may
-            // allow the compiler to do more optimizations.  This is true
-            // for icc 2016 r2--it may change for later versions. Try
-            // defining and not defining NO_STORE_INTRINSICS and comparing
-            // the sizes of the stencil computation loop and the overall
-            // performance.
             #if defined(NO_INTRINSICS) || defined(NO_STORE_INTRINSICS)
             #if (VLEN > 1) && defined(USE_STREAMING_STORE)
             _VEC_STREAMING
-                #endif
-                REAL_VEC_LOOP(i) (*to)[i] = u.r[i];
+            #endif
+            REAL_VEC_LOOP(i) (*to)[i] = u.r[i];
             #elif !defined(USE_STREAMING_STORE)
             INAME(store)((imem_t*)to, u.mr);
             #elif defined(ARCH_KNC)
@@ -471,19 +465,10 @@ namespace yask {
         }
         ALWAYS_INLINE void storeTo_masked(real_vec_t* __restrict to, uidx_t k1) const {
 
-            // Using an explicit loop here instead of a store intrinsic may
-            // allow the compiler to do more optimizations.  This is true
-            // for icc 2016 r2--it may change for later versions. Try
-            // defining and not defining NO_STORE_INTRINSICS and comparing
-            // the sizes of the stencil computation loop and the overall
-            // performance.
+            // No masked streaming stores.
             #if defined(NO_INTRINSICS) || defined(NO_STORE_INTRINSICS) || !defined(USE_AVX512)
-            #if (VLEN > 1) && defined(USE_STREAMING_STORE)
-            _VEC_STREAMING
-                #endif
-                REAL_VEC_LOOP(i) if ((k1 >> i) & 1) (*to)[i] = u.r[i];
+            REAL_VEC_LOOP(i) if ((k1 >> i) & 1) (*to)[i] = u.r[i];
 
-            // No masked streaming store intrinsic.
             #elif defined USE_INTRIN256
 
             // Need to set [at least] upper bit in a SIMD reg to mask bit.
@@ -499,12 +484,7 @@ namespace yask {
         // unaligned store from 'this'.
         ALWAYS_INLINE void storeUnalignedTo(real_vec_t* __restrict to) const {
 
-            // Using an explicit loop here instead of a store intrinsic may
-            // allow the compiler to do more optimizations.  This is true
-            // for icc 2016 r2--it may change for later versions. Try
-            // defining and not defining NO_STORE_INTRINSICS and comparing
-            // the sizes of the stencil computation loop and the overall
-            // performance.
+            // No unaligned streaming stores.
             #if defined(NO_INTRINSICS) || defined(NO_STORE_INTRINSICS)
             REAL_VEC_LOOP(i) (*to)[i] = u.r[i];
             #else
@@ -514,12 +494,7 @@ namespace yask {
         ALWAYS_INLINE void storeUnalignedTo_masked(real_vec_t* __restrict to,
                                                    uidx_t k1) const {
 
-            // Using an explicit loop here instead of a store intrinsic may
-            // allow the compiler to do more optimizations.  This is true
-            // for icc 2016 r2--it may change for later versions. Try
-            // defining and not defining NO_STORE_INTRINSICS and comparing
-            // the sizes of the stencil computation loop and the overall
-            // performance.
+            // No unaligned masked streaming stores.
             #if defined(NO_INTRINSICS) || defined(NO_STORE_INTRINSICS) || !defined(USE_AVX512)
             REAL_VEC_LOOP(i) if ((k1 >> i) & 1) (*to)[i] = u.r[i];
 
