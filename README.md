@@ -31,16 +31,17 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
    2019.1.x has an issue that prevents compilation).
      * There was an issue in Intel(R) MPI versions 2019u1 and 2019u2 that
        caused the application to crash when allocating very
-       large shared-memory (shm) regions, so those
-       versions are not recommended when using the `-use_shm` feature.
+       large shared-memory (shm) regions, so you may have to
+       use the `-no-use_shm` option with these versions.
        This issue was resolved in MPI version 2019u3.
      * There is an issue in the Intel C++ compiler 2019.1.0 that causes
        an internal error when building YASK kernels.
        This has been fixed in 19.1.1.
        You may also use 2019.0.x to work around this.
      * If you are using g++ version 8.x or later, Intel(R) C++ version 2019
-       is required.
-     * Building a YASK kernel with clang is possible; however,
+       or later is required.
+     * Building a YASK kernel with clang or the "nextgen" Intel(R) C++
+       compiler is possible; however,
        SIMD operations for functions such as sin() is not supported.
      * Building a YASK kernel with the Gnu C++ compiler is possible.
        Limited testing with g++ 8.2.0 shows the "iso3dfd" kernel
@@ -78,18 +79,17 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
 
 ## Backward-compatibility notices
 ### Version 3
+* Version 3.05.00 changed the default setting of `-use_shm` to `true`.
+  Use `-no-use_shm` to disable shared-memory inter-rank communication.
 * Version 3.04.00 changed the terms "pack" and "pass" to "stage", which may affect
   user-written result parsers. Option `auto_tune_each_pass` changed to
   `auto_tune_each_stage`.
-  
 * Version 3.01.00 moved the `-trace` and `-msg_rank` options from the kernel
   library to the kernel utility, so those options may no longer be set via
   `yk_solution::apply_command_line_options()`. APIs to set the corresponding
   options are now in `yk_env`. This allows configuring the debug output
   before a `yk_solution` is created.
-
 * Version 3.00.00 was a major release with a number of backward-compatibility notices:
-
   - The old (v1 and v2) internal DSL that used undocumented types such as
     `SolutionBase` and `GridValue` and undocumented macros such as
     `MAKE_GRID` was replaced with an expanded version of the documented YASK
@@ -97,7 +97,6 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
     `Soln.hpp` backward-compatibility header file.  To convert v2 DSL code
     to v3 format, use the `./utils/bin/convert_v2_stencil.pl` utility.
     Conversion is recommended.
-
   - For both the compiler and kernel APIs, all uses of the term "grid" were
     changed to "var".  (Historically, early versions of YASK allowed only
     variables whose elements were points on the domain grid, so the terms
@@ -108,16 +107,13 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
     change addresses that contradiction.) Again, backward-compatibility
     features in the API should maintain functionality of v2 DSL and kernel
     code.
-
   - The default strings used in the kernel library and filenames to identify
     the targeted architecture were changed from Intel CPU codenames to
     [approximate] instruction-set architecture (ISA) names "avx512", "avx2",
     "avx", "knl", "knc", or "intel64". The YASK targets used in the YASK
     compiler were updated to be consistent with this list.
-
   - The "mid" (roughly, median) performance results are now the first
     ones printed by the `utils/bin/yask_log_to_csv.pl` script.
-
   - In general, any old DSL and kernel code or user-written output-parsing
     scripts that use any undocumented files, data, or types may have to be
     updated.
