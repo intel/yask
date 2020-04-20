@@ -27,8 +27,7 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
   for multi-socket and multi-node operation or
   Intel(R) Parallel Studio XE Composer Edition for C++ Linux
   for single-socket only
-  (2018 or later; 2019 update 5 (2019.0.5) recommended;
-   2019.1.x has an issue that prevents compilation).
+  (2020.1.217, a.k.a. 19.1.1.217, or later recommended).
      * There was an issue in Intel(R) MPI versions 2019u1 and 2019u2 that
        caused the application to crash when allocating very
        large shared-memory (shm) regions, so you may have to
@@ -36,7 +35,7 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
        This issue was resolved in MPI version 2019u3.
      * There is an issue in the Intel C++ compiler 2019.1.0 that causes
        an internal error when building YASK kernels.
-       This has been fixed in 19.1.1.
+       This has been fixed in 19.1.1.x.
        You may also use 2019.0.x to work around this.
      * If you are using g++ version 8.x or later, Intel(R) C++ version 2019
        or later is required.
