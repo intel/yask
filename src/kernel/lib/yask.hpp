@@ -110,10 +110,6 @@ typedef std::uint64_t uidx_t;
 
 // Simple macros and stubs.
 
-#ifdef WIN32
-#define _Pragma(x)
-#endif
-
 #ifndef NO_VEC
 #define _NO_VECTOR _Pragma("novector")
 #define _VEC_ALIGNED _Pragma("vector aligned")
