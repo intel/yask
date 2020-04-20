@@ -239,7 +239,7 @@ namespace yask {
         IdxTuple _rank_indices;    // my rank index in each dim.
         bool find_loc = true;      // whether my rank index needs to be calculated.
         bool overlap_comms = true; // overlap comms with computation.
-        bool use_shm = false;      // use shared memory if possible.
+        bool use_shm = true;      // use shared memory if possible.
         idx_t _min_exterior = 0;   // minimum size of MPI exterior to calculate.
 
         // OpenMP settings.
