@@ -139,6 +139,12 @@ $(error Internal error: arch lists are not consistent)
 
 endif # arch-specific.
 
+# Run knobs
+ifeq ($(mpi),0)
+ YK_SCRIPT_OPTS	+= -ranks 1
+endif
+YK_SCRIPT_OPTS	+= "-stencil" $(YK_STENCIL) "-arch" $(YK_ARCH)
+
 # Turn off prefetching at O0 or O1.
 ifneq ($(filter -O0 -O1,$(YK_CXXOPT)),)
  pfd_l1		:=	0
@@ -331,21 +337,28 @@ endif
 # VTUNE settings.
 ifeq ($(vtune),1)
  MACROS		+=	USE_VTUNE
-ifneq ($(VTUNE_AMPLIFIER_2020_DIR),)
- VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_2020_DIR)
-else ifneq ($(VTUNE_AMPLIFIER_2019_DIR),)
- VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_2019_DIR)
-else ifneq ($(VTUNE_AMPLIFIER_2018_DIR),)
- VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_2018_DIR)
-else ifneq ($(VTUNE_AMPLIFIER_XE_2017_DIR),)
- VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_XE_2017_DIR)
-else ifneq ($(VTUNE_AMPLIFIER_XE_2016_DIR),)
- VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_XE_2016_DIR)
-else
- VTUNE_DIR	:=	/opt/intel/vtune/latest/vtune_amplifier
-endif
-YK_CXXFLAGS	+=	-I$(VTUNE_DIR)/include
-YK_LIBS		+=	$(VTUNE_DIR)/lib64/libittnotify.a
+ VTUNE_GENERIC_DIR	:=	/opt/intel/vtune_profiler
+ YK_CXXFLAGS	+=	-I$(VTUNE_GENERIC_DIR)/include
+ YK_LIBS	+=	-L$(VTUNE_GENERIC_DIR)/lib64
+ ifneq ($(VTUNE_PROFILER_2020_DIR),)
+  VTUNE_DIR	:=	$(VTUNE_PROFILER_2020_DIR)
+ else ifneq ($(VTUNE_AMPLIFIER_2020_DIR),)
+  VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_2020_DIR)
+ else ifneq ($(VTUNE_AMPLIFIER_2019_DIR),)
+  VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_2019_DIR)
+ else ifneq ($(VTUNE_AMPLIFIER_2018_DIR),)
+  VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_2018_DIR)
+ else ifneq ($(VTUNE_AMPLIFIER_XE_2017_DIR),)
+  VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_XE_2017_DIR)
+ else ifneq ($(VTUNE_AMPLIFIER_XE_2016_DIR),)
+  VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_XE_2016_DIR)
+ endif
+ ifneq ($(VTUNE_DIR),)
+  YK_CXXFLAGS	+=	-I$(VTUNE_DIR)/include
+  YK_LIBS	+=	-L$(VTUNE_DIR)/lib64
+ endif
+ YK_LIBS	+=	-littnotify
+ YK_VTUNE_CMD	:=	echo "*** VTune command:" vtune -c hpc-performance $(YK_SCRIPT) $(YK_SCRIPT_OPTS) "[options]"
 endif
 
 # compiler-specific settings.
@@ -408,12 +421,6 @@ YK_LIBS		+=	$(EXTRA_YK_LIBS)
 # Number of stencil/var dims extracted from YASK compiler output.
 NSDIMS		:=	`awk '/NUM_STENCIL_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
 NVDIMS		:=	`awk '/NUM_STENCIL_AND_VAR_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
-
-# Run knobs
-ifeq ($(mpi),0)
- YK_SCRIPT_OPTS	+= -ranks 1
-endif
-YK_SCRIPT_OPTS	+= "-stencil" $(YK_STENCIL) "-arch" $(YK_ARCH)
 
 ######## Loop-compiler configuration:
 # The loop indices range from 0..N-1.
@@ -515,6 +522,7 @@ kernel: $(YK_EXEC) $(YK_SCRIPT) $(MAKE_REPORT_FILE)
 	@echo "*** Binary" $(YK_EXEC) "has been built."; \
 	echo "*** See" $(MAKE_REPORT_FILE) "for build information."; \
 	echo "*** Run command:" $(YK_SCRIPT) $(YK_SCRIPT_OPTS) "[options]"
+	@$(YK_VTUNE_CMD)
 
 $(YK_LIB): $(YK_OBJS) $(YK_EXT_OBJS)
 	$(MKDIR) $(dir $@)
@@ -922,6 +930,7 @@ help:
 	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=clang++ mpi=0 # Use clang w/o MPI"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=clang++ EXTRA_YK_CXXFLAGS='-fno-color-diagnostics' mpi=0 # Use clang w/o color output"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=mpiCC OMPI_CXX=clang++ # Use clang w/MPI"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=awp vtune=1 # Add VTune start/stop instrumentation"; \
 	echo " "
 	@echo "Example performance builds of kernel API for C++ and Python apps:"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd yk-api"; \
