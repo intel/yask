@@ -30,9 +30,9 @@ IN THE SOFTWARE.
 namespace yask {
 
     // Floored integer modulo and division.
-    // (Same as euclidian math when denominator b is positive.)
+    // (Same as euclidian math when denominator is positive.)
     // See https://en.wikipedia.org/wiki/Modulo_operation.
-    // These maintain a repeating pattern even with negative a's:
+    // These maintain a repeating pattern even with negative numerators:
     // -6 / +3 = -2, -6 % +3 = +0, idiv_flr(-6, +3) = -2, imod_flr(-6, +3) = +0
     // -5 / +3 = -1, -5 % +3 = -2, idiv_flr(-5, +3) = -2, imod_flr(-5, +3) = +1
     // -4 / +3 = -1, -4 % +3 = -1, idiv_flr(-4, +3) = -2, imod_flr(-4, +3) = +2
@@ -66,7 +66,7 @@ namespace yask {
     template<typename T>
     inline T round_up_flr(T a, T b) {
         assert(b);
-        return (idiv_flr(a + b - 1, b) * b);
+        return (ceil_idiv_flr(a, b) * b);
     }
 
     template<typename T>
@@ -86,5 +86,6 @@ namespace yask {
 
     // NB: (a>>(sizeof(a)*8-1) is equiv to (a >= 0) ? 0 : 1;
     // thus, (a>>(sizeof(a)*8-1) * b is equiv to (a >= 0) ? 0 : b;
+    // Assuming 'a' is a signed int.
 }
 
