@@ -23,20 +23,50 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-#pragma once
+// Test the combinatorial functions.
 
-// Include this first to assure NDEBUG is set properly.
-#include "yask_assert.hpp"
+// enable assert().
+#define CHECK
 
-#include <vector>
+#include "combo.hpp"
+#include <iostream>
 
-namespace yask {
+using namespace std;
+using namespace yask;
 
-    // Return the number of ways to choose 'k' things from a set of 'n'.
-    int n_choose_k(int n, int k);
+int main(int argc, char** argv) {
+    int n = 5;
 
-    // Get the 'r'th set of 'k' elements from set of integers between '0' and 'n-1'.
-    // Returns vector of 'k' values.
-    // 'r' must be between '0' and 'n_choose_k(n, k)-1'.
-    std::vector<int> n_choose_k_set(int n, int k, int r);
+    int exnc[n+2] = { 1, 5, 10, 10, 5, 1, 0 };
+    
+    for (int k = 0; k <= n+1; k++) {
+        int nc = n_choose_k(n,k);
+        cout << "choose(" << n << ", " << k << ") = " << nc << endl;
+        assert(nc == exnc[k]);
+        
+        vector<vector<int>> cvv;
+        for (int r = 0; r < nc; r++) {
+            auto cv = n_choose_k_set(n, k, r);
+            cout << " combo #" << r << " = ";
+            assert(cv.size() == (size_t)k);
+            for (int i = 0; i < k; i++) {
+                cout << " " << cv[i];
+                assert(cv[i] >= 0);
+                assert(cv[i] < n);
+
+                // Make sure this element is unique and in order.
+                if (i > 0)
+                    assert(cv[i] > cv[i-1]);
+            }
+            cout << endl;
+
+            // Make sure this set is unique.
+            for (size_t i = 0; i < cvv.size(); i++) {
+                auto& cvi = cvv[i];
+                assert(cv != cvi);
+            }
+            cvv.push_back(cv);
+        }
+    }
+    return 0;
 }

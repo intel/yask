@@ -892,8 +892,7 @@ namespace yask {
             // phase need one shape. Other (bridge) phases need one shape
             // for each combination of domain dims. E.g., need 'x' and
             // 'y' bridges for 2D problem in phase 1.
-            idx_t nshapes = choose(nddims, phase);
-            int dims_to_bridge[phase];
+            idx_t nshapes = n_choose_k(nddims, phase);
             BridgeMask bridge_mask(nddims, false);
 
             // Set temporal indices to full range.
@@ -942,13 +941,13 @@ namespace yask {
 
                 // Get 'shape'th combo of 'phase' things from 'nddims'.
                 // These will be used to create bridge shapes.
-                combination(dims_to_bridge, nddims, phase, shape + 1);
+                auto dims_to_bridge = n_choose_k_set(nddims, phase, shape);
 
                 // Set bits for selected dims.
                 DOMAIN_VAR_LOOP(i, j)
                     bridge_mask.at(j) = false;
                 for (int i = 0; i < phase; i++) {
-                    auto dim = dims_to_bridge[i] - 1;
+                    auto dim = dims_to_bridge[i];
                     bridge_mask.at(dim) = true;
                 }
 
