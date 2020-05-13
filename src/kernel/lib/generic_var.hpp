@@ -60,7 +60,7 @@ namespace yask {
         // This is protected to avoid construction except by derived type.
         GenericVarBase(KernelStateBase& state,
                        const std::string& name,
-                       const VarDimNames& dimNames);
+                       const VarDimNames& dim_names);
 
     public:
 
@@ -96,12 +96,12 @@ namespace yask {
 
         // Get number of dimensions.
         int get_num_dims() const {
-            return _var_dims.getNumDims();
+            return _var_dims._get_num_dims();
         }
 
         // Get the nth dim name.
         const std::string& get_dim_name(int n) const {
-            return _var_dims.getDimName(n);
+            return _var_dims.get_dim_name(n);
         }
 
         // Is dim used?
@@ -111,7 +111,7 @@ namespace yask {
 
         // Access nth dim size.
         idx_t get_dim_size(int n) const {
-            return _var_dims.getVal(n);
+            return _var_dims.get_val(n);
         }
 
         // Return 'true' if dimensions are same names
@@ -140,8 +140,8 @@ namespace yask {
         // This is protected to avoid construction except by derived type.
         GenericVarTyped(KernelStateBase& state,
                         const std::string& name,
-                        const VarDimNames& dimNames) :
-            GenericVarBase(state, name, dimNames) { }
+                        const VarDimNames& dim_names) :
+            GenericVarBase(state, name, dim_names) { }
 
     public:
 
@@ -197,7 +197,7 @@ namespace yask {
         // These functions keep them in sync.
         void _sync_dims_with_layout() {
             Indices idxs(_layout.get_sizes());
-            idxs.setTupleVals(GenericVarBase::_var_dims);
+            idxs.set_tuple_vals(GenericVarBase::_var_dims);
         }
         void _sync_layout_with_dims() {
             STATE_VARS(this);
@@ -210,13 +210,13 @@ namespace yask {
         // Construct an unallocated var.
         GenericVar(KernelStateBase& state,
                    std::string name,
-                   const VarDimNames& dimNames) :
-            GenericVarTyped<T>(state, name, dimNames) {
+                   const VarDimNames& dim_names) :
+            GenericVarTyped<T>(state, name, dim_names) {
 
             // '_var_dims' was set in GenericVar construction.
             // Need to sync '_layout' w/it.
             _sync_layout_with_dims();
-            assert(int(dimNames.size()) == _layout.get_num_sizes());
+            assert(int(dim_names.size()) == _layout.get_num_sizes());
         }
 
         ~GenericVar() {
@@ -227,13 +227,13 @@ namespace yask {
 
         // Modify dim sizes.
         void set_dim_size(int n, idx_t size) {
-            GenericVarBase::_var_dims.setVal(n, size);
+            GenericVarBase::_var_dims.set_val(n, size);
             _sync_layout_with_dims();
         }
         void set_dim_sizes(const Indices& sizes) {
             auto& vd = GenericVarBase::_var_dims;
             for (int i = 0; size_t(i) < vd.size(); i++)
-                vd.setVal(i, sizes[i]);
+                vd.set_val(i, sizes[i]);
             _sync_layout_with_dims();
         }
 
@@ -249,7 +249,7 @@ namespace yask {
                 for (int i = 0; size_t(i) < this->_var_dims.size(); i++) {
                     idx_t j = idxs[i];
                     assert(j >= 0);
-                    assert(j < this->_var_dims.getVal(i));
+                    assert(j < this->_var_dims.get_val(i));
                 }
             }
             #endif
@@ -263,17 +263,17 @@ namespace yask {
             return ai;
         }
         ALWAYS_INLINE idx_t get_index(const IdxTuple& pt, bool check=true) const {
-            assert(GenericVarBase::_var_dims.areDimsSame(pt));
+            assert(GenericVarBase::_var_dims.are_dims_same(pt));
             Indices idxs(pt);
             return get_index(idxs, check);
         }
 
         // Pointer to given element.
-        ALWAYS_INLINE const T* getPtr(const Indices& pt, bool check=true) const {
+        ALWAYS_INLINE const T* get_ptr(const Indices& pt, bool check=true) const {
             idx_t ai = get_index(pt, check);
             return &((T*)GenericVarBase::_elems)[ai];
         }
-        ALWAYS_INLINE T* getPtr(const Indices& pt, bool check=true) {
+        ALWAYS_INLINE T* get_ptr(const Indices& pt, bool check=true) {
             idx_t ai = get_index(pt, check);
             return &((T*)GenericVarBase::_elems)[ai];
         }

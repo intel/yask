@@ -31,7 +31,7 @@ IN THE SOFTWARE.
 // Stencil-independent definitions.
 #include "yask.hpp"
 
-// Auto-generated macros from foldBuilder.  It's important that this be
+// Auto-generated macros from fold_builder.  It's important that this be
 // included before the definitions below to properly set the vector lengths,
 // etc.
 #define DEFINE_MACROS
@@ -64,7 +64,7 @@ IN THE SOFTWARE.
 #define FIRST_INDEX(dim) (0)
 #define LAST_INDEX(dim) (_context->get_settings().get()->_global_sizes[STENCIL_DIM_IDX_ ## dim] - 1)
 
-// Macros for 1D<->nD transforms.
+// Macros for 1D<->n_d transforms.
 #include "yask_layout_macros.hpp"
 
 // Define a folded vector of reals.

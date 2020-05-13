@@ -48,9 +48,9 @@ namespace yask {
     string outfile;
     
     // other vars set via cmd-line options.
-    string solutionName;
+    string solution_name;
     int radius = -1;
-    int vlenForStats = 0;
+    int vlen_for_stats = 0;
     
     // Dummy object for backward-compatibility with old stencil DSL.
     StencilList stub_stencils;
@@ -151,7 +151,7 @@ void usage(const string& cmd,
         "        vars 'ber_x' and 'ber_y' because '$&' is substituted by the string that matches the regex.\n"
         " [-no]-bundle-scratch\n"
         "    Bundle scratch equations even if the sizes of their scratch vars must be increased\n"
-        "      to do so (default=" << settings._bundleScratch << ").\n"
+        "      to do so (default=" << settings._bundle_scratch << ").\n"
         " -halo <size>\n"
         "    Specify the size of the halos on all vars.\n"
         "      By default, halos are calculated automatically for each var.\n"
@@ -159,37 +159,37 @@ void usage(const string& cmd,
         "    Specify the size of the step-dimension memory allocation on all vars.\n"
         "      By default, allocations are calculated automatically for each var.\n"
         " [-no]-interleave-misc\n"
-        "    Allocate YASK vars with the 'misc' dims as the inner-most dims (default=" << settings._innerMisc << ").\n"
+        "    Allocate YASK vars with the 'misc' dims as the inner-most dims (default=" << settings._inner_misc << ").\n"
         "      This disallows dynamcally changing the 'misc' dim sizes during run-time.\n"
         " -fus\n"
-        "    Make first dimension of fold unit stride (default=" << settings._firstInner << ").\n"
+        "    Make first dimension of fold unit stride (default=" << settings._first_inner << ").\n"
         "      This controls the intra-vector memory layout.\n"
         " -lus\n"
-        "    Make last dimension of fold unit stride (default=" << (!settings._firstInner) << ").\n"
+        "    Make last dimension of fold unit stride (default=" << (!settings._first_inner) << ").\n"
         "      This controls the intra-vector memory layout.\n"
         " [-no]-ul\n"
-        "    Do [not] generate simple unaligned loads (default=" << settings._allowUnalignedLoads << ").\n"
+        "    Do [not] generate simple unaligned loads (default=" << settings._allow_unaligned_loads << ").\n"
         "      [Advanced] To use this correctly, only 1D folds are allowed, and\n"
         "        the memory layout used by YASK must have that same dimension in unit stride.\n"
         " [-no]-opt-comb\n"
-        "    Do [not] combine commutative operations (default=" << settings._doComb << ").\n"
+        "    Do [not] combine commutative operations (default=" << settings._do_comb << ").\n"
         " [-no]-opt-reorder\n"
-        "    Do [not] reorder commutative operations (default=" << settings._doReorder << ").\n"
+        "    Do [not] reorder commutative operations (default=" << settings._do_reorder << ").\n"
         " [-no]-opt-cse\n"
-        "    Do [not] eliminate common subexpressions (default=" << settings._doCse << ").\n"
+        "    Do [not] eliminate common subexpressions (default=" << settings._do_cse << ").\n"
         " [-no]-opt-pair\n"
-        "    Do [not] pair eligible function calls (default=" << settings._doPairs << ").\n"
+        "    Do [not] pair eligible function calls (default=" << settings._do_pairs << ").\n"
         "      Currently enables 'sin(x)' and 'cos(x)' to be replaced with 'sincos(x)'.\n"
         " [-no]-opt-cluster\n"
-        "    Do [not] apply optimizations across the cluster (default=" << settings._doOptCluster << ").\n"
+        "    Do [not] apply optimizations across the cluster (default=" << settings._do_opt_cluster << ").\n"
         " -max-es <num-nodes>\n"
-        "    Set heuristic for max single expression-size (default=" << settings._maxExprSize << ").\n"
+        "    Set heuristic for max single expression-size (default=" << settings._max_expr_size << ").\n"
         " -min-es <num-nodes>\n"
-        "    Set heuristic for min expression-size for reuse (default=" << settings._minExprSize << ").\n"
+        "    Set heuristic for min expression-size for reuse (default=" << settings._min_expr_size << ").\n"
         " [-no]-find-deps\n"
-        "    Find dependencies between stencil equations (default=" << settings._findDeps << ").\n"
+        "    Find dependencies between stencil equations (default=" << settings._find_deps << ").\n"
         " [-no]-print-eqs\n"
-        "    Print each equation when defined (default=" << settings._printEqs << ").\n"
+        "    Print each equation when defined (default=" << settings._print_eqs << ").\n"
         "\n"
         " -p <filename>\n"
         "    Write formatted output to <filename>.\n"
@@ -204,7 +204,7 @@ void usage(const string& cmd,
 
 // Parse command-line and set global cmd-line option vars.
 // Exits on error.
-void parseOpts(int argc, const char* argv[],
+void parse_opts(int argc, const char* argv[],
                CompilerSettings& settings)
 {
     if (argc <= 1)
@@ -220,49 +220,49 @@ void parseOpts(int argc, const char* argv[],
                 usage(argv[0], settings);
 
             else if (opt == "-fus")
-                settings._firstInner = true;
+                settings._first_inner = true;
             else if (opt == "-lus")
-                settings._firstInner = false;
+                settings._first_inner = false;
             else if (opt == "-ul")
-                settings._allowUnalignedLoads = true;
+                settings._allow_unaligned_loads = true;
             else if (opt == "-no-ul")
-                settings._allowUnalignedLoads = false;
+                settings._allow_unaligned_loads = false;
             else if (opt == "-opt-comb")
-                settings._doComb = true;
+                settings._do_comb = true;
             else if (opt == "-no-opt-comb")
-                settings._doComb = false;
+                settings._do_comb = false;
             else if (opt == "-opt-reorder")
-                settings._doReorder = true;
+                settings._do_reorder = true;
             else if (opt == "-no-opt-reorder")
-                settings._doReorder = false;
+                settings._do_reorder = false;
             else if (opt == "-opt-cse")
-                settings._doCse = true;
+                settings._do_cse = true;
             else if (opt == "-no-opt-cse")
-                settings._doCse = false;
+                settings._do_cse = false;
             else if (opt == "-opt-pair")
-                settings._doPairs = true;
+                settings._do_pairs = true;
             else if (opt == "-no-opt-pair")
-                settings._doPairs = false;
+                settings._do_pairs = false;
             else if (opt == "-opt-cluster")
-                settings._doOptCluster = true;
+                settings._do_opt_cluster = true;
             else if (opt == "-no-opt-cluster")
-                settings._doOptCluster = false;
+                settings._do_opt_cluster = false;
             else if (opt == "-find-deps")
-                settings._findDeps = true;
+                settings._find_deps = true;
             else if (opt == "-no-find-deps")
-                settings._findDeps = false;
+                settings._find_deps = false;
             else if (opt == "-bundle-scratch")
-                settings._bundleScratch = true;
+                settings._bundle_scratch = true;
             else if (opt == "-no-bundle-scratch")
-                settings._bundleScratch = false;
+                settings._bundle_scratch = false;
             else if (opt == "-print-eqs")
-                settings._printEqs = true;
+                settings._print_eqs = true;
             else if (opt == "-no-print-eqs")
-                settings._printEqs = false;
+                settings._print_eqs = false;
             else if (opt == "-interleave-misc")
-                settings._innerMisc = true;
+                settings._inner_misc = true;
             else if (opt == "-no-interleave-misc")
-                settings._innerMisc = false;
+                settings._inner_misc = false;
     
             // add any more options w/o values above.
 
@@ -278,42 +278,42 @@ void parseOpts(int argc, const char* argv[],
 
                 // options w/a string value.
                 if (opt == "-stencil")
-                    solutionName = argop;
+                    solution_name = argop;
                 else if (opt == "-target")
                     settings._target = argop;
                 else if (opt == "-p")
                     outfile = argop;
                 else if (opt == "-vars")
-                    settings._varRegex = argop;
+                    settings._var_regex = argop;
                 else if (opt == "-eq-bundles")
-                    settings._eqBundleTargets = argop;
+                    settings._eq_bundle_targets = argop;
                 else if (opt == "-step-dim")
-                    settings._stepDim = argop;
+                    settings._step_dim = argop;
                 else if (opt == "-domain-dims") {
-                    settings._domainDims.clear();
+                    settings._domain_dims.clear();
                     
                     // example: y,z
                     ArgParser ap;
-                    ap.parseList
+                    ap.parse_list
                         (argop,
                          [&](const string& dname) {
-                             settings._domainDims.push_back(dname);
+                             settings._domain_dims.push_back(dname);
                          });
                 }
                 else if (opt == "-fold" || opt == "-cluster") {
 
                     // example: x=4,y=2
                     ArgParser ap;
-                    ap.parseKeyValuePairs
+                    ap.parse_key_value_pairs
                         (argop,
                          [&](const string& key, const string& value) {
                              int size = atoi(value.c_str());
 
                              // set dim in tuple.
                              if (opt == "-fold")
-                                 settings._foldOptions.addDimBack(key, size);
+                                 settings._fold_options.add_dim_back(key, size);
                              else
-                                 settings._clusterOptions.addDimBack(key, size);
+                                 settings._cluster_options.add_dim_back(key, size);
                          });
                 }
 
@@ -325,23 +325,23 @@ void parseOpts(int argc, const char* argv[],
                     int val = atoi(argop.c_str());
 
                     if (opt == "-l1-prefetch-dist")
-                        settings._prefetchDists[1] = val;
+                        settings._prefetch_dists[1] = val;
                     else if (opt == "-l2-prefetch-dist")
-                        settings._prefetchDists[2] = val;
+                        settings._prefetch_dists[2] = val;
                     else if (opt == "-max-es")
-                        settings._maxExprSize = val;
+                        settings._max_expr_size = val;
                     else if (opt == "-min-es")
-                        settings._minExprSize = val;
+                        settings._min_expr_size = val;
                     else if (opt == "-radius")
                         radius = val;
                     else if (opt == "-elem-bytes")
                         settings._elem_bytes = val;
                     else if (opt == "-ps")
-                        vlenForStats = val;
+                        vlen_for_stats = val;
                     else if (opt == "-halo")
-                        settings._haloSize = val;
+                        settings._halo_size = val;
                     else if (opt == "-step-alloc")
-                        settings._stepAlloc = val;
+                        settings._step_alloc = val;
 
                     // add any more options w/int values here.
 
@@ -358,7 +358,7 @@ void parseOpts(int argc, const char* argv[],
         cerr << "Error: unrecognized parameter '" << argv[argi] << "'." << endl;
         usage(argv[0], settings);
     }
-    if (solutionName.length() == 0) {
+    if (solution_name.length() == 0) {
         cerr << "Error: stencil solution not specified; use -stencil." << endl;
         usage(argv[0], settings);
     }
@@ -379,28 +379,28 @@ int main(int argc, const char* argv[]) {
     try {
         // Parse options.
         CompilerSettings settings;
-        parseOpts(argc, argv, settings);
+        parse_opts(argc, argv, settings);
 
         // Find the requested stencil in the registry.
         auto& stencils = yc_solution_base::get_registry();
-        auto stencilIter = stencils.find(solutionName);
-        if (stencilIter == stencils.end()) {
-            cerr << "Error: unknown stencil solution '" << solutionName << "'." << endl;
+        auto stencil_iter = stencils.find(solution_name);
+        if (stencil_iter == stencils.end()) {
+            cerr << "Error: unknown stencil solution '" << solution_name << "'." << endl;
             usage(argv[0], settings);
         }
-        auto* stencilSoln = stencilIter->second;
-        assert(stencilSoln);
-        auto soln = stencilSoln->get_soln();
+        auto* stencil_soln = stencil_iter->second;
+        assert(stencil_soln);
+        auto soln = stencil_soln->get_soln();
         cout << "Stencil-solution name: " << soln->get_name() << endl;
 
         // Set radius if applicable.
-        auto* srp = dynamic_cast<yc_solution_with_radius_base*>(stencilSoln);
+        auto* srp = dynamic_cast<yc_solution_with_radius_base*>(stencil_soln);
         if (srp) {
             if (radius >= 0) {
-                bool rOk = srp->set_radius(radius);
-                if (!rOk) {
+                bool r_ok = srp->set_radius(radius);
+                if (!r_ok) {
                     cerr << "Error: invalid radius=" << radius << " for stencil type '" <<
-                        solutionName << "'." << endl;
+                        solution_name << "'." << endl;
                     usage(argv[0], settings);
                 }
             }
@@ -416,14 +416,14 @@ int main(int argc, const char* argv[]) {
         // TODO: remove this reliance on internal (non-API) functionality.
         auto sp = dynamic_pointer_cast<StencilSolution>(soln);
         assert(sp);
-        sp->setSettings(settings);
+        sp->set_settings(settings);
 
         // Create equations and change settings from the overloaded 'define()' methods.
-        stencilSoln->define();
+        stencil_soln->define();
 
         // Apply the cmd-line settings again to override the defaults
         // set in 'define()'
-        parseOpts(argc, argv, sp->getSettings());
+        parse_opts(argc, argv, sp->get_settings());
 
         // A bit more info.
         cout << "Num vars defined: " << soln->get_num_vars() << endl;
@@ -439,7 +439,7 @@ int main(int argc, const char* argv[]) {
                 os = ofac.new_stdout_output();
             else
                 os = ofac.new_file_output(outfile);
-            stencilSoln->get_soln()->output_solution(os);
+            stencil_soln->get_soln()->output_solution(os);
         }
     } catch (yask_exception& e) {
         cerr << "YASK Stencil Compiler: " << e.get_message() << ".\n";

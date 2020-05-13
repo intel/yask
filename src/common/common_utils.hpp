@@ -90,13 +90,13 @@ namespace yask {
     // machine parsing.
     extern bool is_suffix_print_enabled;
     
-    // Return num with SI multiplier and "iB" suffix,
+    // Return num with SI multiplier and "i_b" suffix,
     // e.g., 41.2KiB.
-    extern std::string makeByteStr(size_t nbytes);
+    extern std::string make_byte_str(size_t nbytes);
 
     // Return num with SI multiplier, e.g., 4.23M.
-    extern std::string makeNumStr(idx_t num);
-    extern std::string makeNumStr(double num);
+    extern std::string make_num_str(idx_t num);
+    extern std::string make_num_str(double num);
 
     // A var that behaves like OMP_NUM_THREADS to specify the
     // default number of threads in each level.

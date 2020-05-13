@@ -76,14 +76,14 @@ namespace yask {
     }
 
     // Find sum of rank_vals over all ranks.
-    extern idx_t sumOverRanks(idx_t rank_val, MPI_Comm comm);
+    extern idx_t sum_over_ranks(idx_t rank_val, MPI_Comm comm);
 
     // Make sure rank_val is same over all ranks.
-    extern void assertEqualityOverRanks(idx_t rank_val, MPI_Comm comm,
+    extern void assert_equality_over_ranks(idx_t rank_val, MPI_Comm comm,
                                         const std::string& descr);
 
     // Helpers for aligned malloc and free.
-    extern char* alignedAlloc(std::size_t nbytes);
+    extern char* yask_aligned_alloc(std::size_t nbytes);
     class AlignedDeleter {
     public:
         void operator()(char* p) {
@@ -97,12 +97,12 @@ namespace yask {
     // Alloc aligned data as a shared ptr.
     template<typename T>
     std::shared_ptr<T> shared_aligned_alloc(size_t sz) {
-        auto _base = std::shared_ptr<T>(alignedAlloc(sz), AlignedDeleter());
+        auto _base = std::shared_ptr<T>(yask_aligned_alloc(sz), AlignedDeleter());
         return _base;
     }
 
     // Helpers for NUMA malloc and free.
-    extern char* numaAlloc(std::size_t nbytes, int numa_pref);
+    extern char* numa_alloc(std::size_t nbytes, int numa_pref);
     struct NumaDeleter {
         std::size_t _nbytes;
         int _numa_pref;
@@ -120,13 +120,13 @@ namespace yask {
     // Allocate NUMA memory from preferred node.
     template<typename T>
     std::shared_ptr<T> shared_numa_alloc(size_t sz, int numa_pref) {
-        auto _base = std::shared_ptr<T>(numaAlloc(sz, numa_pref),
+        auto _base = std::shared_ptr<T>(numa_alloc(sz, numa_pref),
                                         NumaDeleter(sz, numa_pref));
         return _base;
     }
 
     // Helpers for PMEM malloc and free.
-    extern char* pmemAlloc(std::size_t nbytes, int dev_num);
+    extern char* pmem_alloc(std::size_t nbytes, int dev_num);
     struct PmemDeleter {
         std::size_t _nbytes;
         int _dev_num;
@@ -144,13 +144,13 @@ namespace yask {
     // Allocate PMEM memory from given device.
     template<typename T>
     std::shared_ptr<T> shared_pmem_alloc(size_t sz, int dev_num) {
-        auto _base = std::shared_ptr<T>(pmemAlloc(sz, dev_num),
+        auto _base = std::shared_ptr<T>(pmem_alloc(sz, dev_num),
                                         PmemDeleter(sz, dev_num));
         return _base;
     }
 
     // Helpers for MPI shm malloc and free.
-    extern char* shmAlloc(std::size_t nbytes,
+    extern char* shm_alloc(std::size_t nbytes,
                           const MPI_Comm* shm_comm, MPI_Win* shm_win);
     struct ShmDeleter {
         std::size_t _nbytes;
@@ -173,7 +173,7 @@ namespace yask {
     template<typename T>
     std::shared_ptr<T> shared_shm_alloc(size_t sz,
                                         const MPI_Comm* shm_comm, MPI_Win* shm_win) {
-        auto _base = std::shared_ptr<T>(shmAlloc(sz, shm_comm, shm_win),
+        auto _base = std::shared_ptr<T>(shm_alloc(sz, shm_comm, shm_win),
                                         ShmDeleter(sz, shm_comm, shm_win));
         return _base;
     }
@@ -497,24 +497,24 @@ namespace yask {
         // Parse options from 'args' and set corresponding vars.
         // Recognized strings from args are consumed, and unused ones
         // remain for further processing by the application.
-        virtual std::string parse_args(const std::string& pgmName,
+        virtual std::string parse_args(const std::string& pgm_name,
                                        const std::vector<std::string>& args);
 
         // Same as above, but splits 'arg_string' into tokens.
-        virtual std::string parse_args(const std::string& pgmName,
+        virtual std::string parse_args(const std::string& pgm_name,
                                        const std::string& arg_string) {
             auto args = set_args(arg_string);
-            return parse_args(pgmName, args);
+            return parse_args(pgm_name, args);
         }
 
-        // Same as above, but pgmName is populated from argv[0]
+        // Same as above, but pgm_name is populated from argv[0]
         // and rest of argv is parsed.
         virtual std::string parse_args(int argc, char** argv) {
-            std::string pgmName = argv[0];
+            std::string pgm_name = argv[0];
             std::vector<std::string> args;
             for (int i = 1; i < argc; i++)
                 args.push_back(argv[i]);
-            return parse_args(pgmName, args);
+            return parse_args(pgm_name, args);
         }
     };
 }

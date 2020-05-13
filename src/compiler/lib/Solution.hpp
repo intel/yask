@@ -72,9 +72,9 @@ namespace yask {
         // Intermediate data needed to format output.
         Dimensions _dims;          // various dimensions.
         PrinterBase* _printer = 0;
-        EqBundles* _eqBundles = 0;         // eq-bundles for scalar and vector.
-        EqStages* _eqStages = 0; // packs of bundles w/o inter-dependencies.
-        EqBundles* _clusterEqBundles = 0;  // eq-bundles for scalar and vector.
+        EqBundles* _eq_bundles = 0;         // eq-bundles for scalar and vector.
+        EqStages* _eq_stages = 0; // packs of bundles w/o inter-dependencies.
+        EqBundles* _cluster_eq_bundles = 0;  // eq-bundles for scalar and vector.
 
         // Create the intermediate data.
         void analyze_solution(int vlen,
@@ -93,20 +93,20 @@ namespace yask {
         virtual ~StencilSolution() { _free(true); }
 
         // Identification.
-        virtual const string& getName() const { return _name; }
-        virtual const string& getLongName() const {
+        virtual const string& _get_name() const { return _name; }
+        virtual const string& get_long_name() const {
             return _long_name.length() ? _long_name : _name;
         }
 
         // Simple accessors.
-        virtual Vars& getVars() { return _vars; }
-        virtual Eqs& getEqs() { return _eqs; }
-        virtual CompilerSettings& getSettings() { return _settings; }
-        virtual void setSettings(const CompilerSettings& settings) {
+        virtual Vars& _get_vars() { return _vars; }
+        virtual Eqs& get_eqs() { return _eqs; }
+        virtual CompilerSettings& get_settings() { return _settings; }
+        virtual void set_settings(const CompilerSettings& settings) {
             _settings = settings;
         }
-        virtual const Dimensions& getDims() { return _dims; }
-        virtual const vector<string>& getKernelCode() { return _kernel_code; }
+        virtual const Dimensions& get_dims() { return _dims; }
+        virtual const vector<string>& get_kernel_code() { return _kernel_code; }
 
         // Get the messsage output stream.
         virtual std::ostream& get_ostr() const {
@@ -115,8 +115,8 @@ namespace yask {
         }
 
         // Make a new var.
-        virtual yc_var_ptr newVar(const std::string& name,
-                                    bool isScratch,
+        virtual yc_var_ptr new_var(const std::string& name,
+                                    bool is_scratch,
                                     const std::vector<yc_index_node_ptr>& dims);
 
         // stencil_solution APIs.
@@ -138,33 +138,33 @@ namespace yask {
             return _name;
         }
         virtual std::string get_description() const override {
-            return getLongName();
+            return get_long_name();
         }
 
         virtual yc_var_ptr new_var(const std::string& name,
                                      const std::vector<yc_index_node_ptr>& dims) override {
-            return newVar(name, false, dims);
+            return new_var(name, false, dims);
         }
         virtual yc_var_ptr new_var(const std::string& name,
                                      const std::initializer_list<yc_index_node_ptr>& dims) override {
             std::vector<yc_index_node_ptr> dim_vec(dims);
-            return newVar(name, false, dim_vec);
+            return new_var(name, false, dim_vec);
         }
         virtual yc_var_ptr new_scratch_var(const std::string& name,
                                              const std::vector<yc_index_node_ptr>& dims) override {
-            return newVar(name, true, dims);
+            return new_var(name, true, dims);
         }
         virtual yc_var_ptr new_scratch_var(const std::string& name,
                                              const std::initializer_list<yc_index_node_ptr>& dims) override {
             std::vector<yc_index_node_ptr> dim_vec(dims);
-            return newVar(name, true, dim_vec);
+            return new_var(name, true, dim_vec);
         }
         virtual int get_num_vars() const override {
             return int(_vars.size());
         }
         virtual yc_var_ptr get_var(const std::string& name) override {
             for (int i = 0; i < get_num_vars(); i++)
-                if (_vars.at(i)->getName() == name)
+                if (_vars.at(i)->_get_name() == name)
                     return _vars.at(i);
             return nullptr;
         }
@@ -176,12 +176,12 @@ namespace yask {
         }
 
         virtual int get_num_equations() const override {
-            return _eqs.getNum();
+            return _eqs.get_num();
         }
         virtual std::vector<yc_equation_node_ptr> get_equations() override {
             std::vector<yc_equation_node_ptr> ev;
             for (int i = 0; i < get_num_equations(); i++)
-                ev.push_back(_eqs.getAll().at(i));
+                ev.push_back(_eqs.get_all().at(i));
             return ev;
         }
         virtual void
@@ -199,25 +199,25 @@ namespace yask {
             assert(fp);
             auto tp = dynamic_pointer_cast<EqualsExpr>(to);
             assert(tp);
-            _eqs.getDeps().set_imm_dep_on(fp, tp);
+            _eqs.get_deps().set_imm_dep_on(fp, tp);
         }
         virtual void clear_dependencies() override {
-            _eqs.getDeps().clear_deps();
+            _eqs.get_deps().clear_deps();
         }
 
         virtual void set_fold_len(const yc_index_node_ptr, int len) override;
         virtual bool is_folding_set() override {
-            return _settings._foldOptions.size() > 0;
+            return _settings._fold_options.size() > 0;
         }
         virtual void clear_folding() override {
-            _settings._foldOptions.clear();
+            _settings._fold_options.clear();
         }
         virtual void set_cluster_mult(const yc_index_node_ptr, int mult) override;
         virtual bool is_clustering_set() override {
-            return _settings._clusterOptions.size() > 0;
+            return _settings._cluster_options.size() > 0;
         }
         virtual void clear_clustering() override {
-            _settings._clusterOptions.clear();
+            _settings._cluster_options.clear();
         }
 
         virtual bool is_target_set() override {
@@ -237,10 +237,10 @@ namespace yask {
         }
 
         virtual bool is_dependency_checker_enabled() const override {
-            return _settings._findDeps;
+            return _settings._find_deps;
         }
         virtual void set_dependency_checker_enabled(bool enable) override {
-            _settings._findDeps = enable;
+            _settings._find_deps = enable;
         }
 
         virtual void output_solution(yask_output_ptr output) override;
@@ -250,15 +250,15 @@ namespace yask {
         }
         virtual void
         set_domain_dims(const std::vector<yc_index_node_ptr>& dims) override {
-            _settings._domainDims.clear();
+            _settings._domain_dims.clear();
             for (auto& d : dims) {
                 auto dp = dynamic_pointer_cast<IndexExpr>(d);
                 assert(dp);
                 auto& dname = d->get_name();
-                if (dp->getType() != DOMAIN_INDEX)
+                if (dp->get_type() != DOMAIN_INDEX)
                     THROW_YASK_EXCEPTION("Error: set_domain_dims() called with non-domain index '" +
                                          dname + "'");
-                _settings._domainDims.push_back(dname);
+                _settings._domain_dims.push_back(dname);
             }
         }
         virtual void
@@ -271,10 +271,10 @@ namespace yask {
             auto dp = dynamic_pointer_cast<IndexExpr>(dim);
             assert(dp);
             auto& dname = dim->get_name();
-            if (dp->getType() != STEP_INDEX)
+            if (dp->get_type() != STEP_INDEX)
                     THROW_YASK_EXCEPTION("Error: set_step_dim() called with non-step index '" +
                                          dname + "'");
-            _settings._stepDim = dname;
+            _settings._step_dim = dname;
         }
         
     };

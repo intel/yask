@@ -137,14 +137,14 @@ int main() {
     }
 
     // TODO: better to have exception test for the methods below
-    // Eqs::findDeps (<-EqGroups::makeEqGroups<-StencilSolution::analyze_solution<-StencilSolution::format())
-    // EqGroups::sort (<-EqGroups::makeEqGroups<-StencilSolution::analyze_solution<-StencilSolution::format())
+    // Eqs::find_deps (<-EqGroups::make_eq_groups<-StencilSolution::analyze_solution<-StencilSolution::format())
+    // EqGroups::sort (<-EqGroups::make_eq_groups<-StencilSolution::analyze_solution<-StencilSolution::format())
     // VarPoint::VarPoint
-    // castExpr
-    // NumExpr::getNumVal, NumExpr::getIntVal, NumExpr::getBoolVal
-    // Dimensions::setDims (<-StencilSolution::analyze_solution<-StencilSolution::format)
-    // ArgParser::parseKeyValuePairs
-    // YASKCppPrinter::printData (<-YASKCppPrinter::print<-StencilSolution::format)
+    // cast_expr
+    // NumExpr::get_num_val, NumExpr::get_int_val, NumExpr::get_bool_val
+    // Dimensions::set_dims (<-StencilSolution::analyze_solution<-StencilSolution::format)
+    // ArgParser::parse_key_value_pairs
+    // YASKCppPrinter::print_data (<-YASKCppPrinter::print<-StencilSolution::format)
 
     // Check whether program handles exceptions or not.
     if (num_exception != 3) {

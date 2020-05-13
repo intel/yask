@@ -94,7 +94,7 @@ namespace yask {
     }
 
     // Aligned allocation.
-    char* alignedAlloc(std::size_t nbytes) {
+    char* yask_aligned_alloc(std::size_t nbytes) {
 
         // Alignment to use based on size.
         const size_t _def_alignment = CACHELINE_BYTES;
@@ -112,15 +112,15 @@ namespace yask {
 #endif
 
         if (!p)
-            THROW_YASK_EXCEPTION("error: cannot allocate " + makeByteStr(nbytes) +
-                                 " aligned to " + makeByteStr(align));
+            THROW_YASK_EXCEPTION("error: cannot allocate " + make_byte_str(nbytes) +
+                                 " aligned to " + make_byte_str(align));
         return static_cast<char*>(p);
     }
 
 #ifdef USE_PMEM
     static int pmem_tmpfile(const char *dir, size_t size, int *fd, void **addr)
     {
-        static char tmpl[] = "/appdirect_memXXXXXX";
+        static char tmpl[] = "/appdirect_mem_xxxxxx";
         int err = 0;
 
         char fullname[strlen(dir) + sizeof (tmpl)];
@@ -155,12 +155,12 @@ namespace yask {
     // 'numa_pref' >= 0: preferred NUMA node.
     // 'numa_pref' < 0: use NUMA policy corresponding to value.
     // TODO: get rid of magic-number scheme.
-    char* numaAlloc(std::size_t nbytes, int numa_pref) {
+    char* numa_alloc(std::size_t nbytes, int numa_pref) {
 
         void *p = 0;
 
         if (numa_pref == yask_numa_none)
-            return alignedAlloc(nbytes);
+            return yask_aligned_alloc(nbytes);
 
 #ifdef USE_NUMA
 
@@ -217,7 +217,7 @@ namespace yask {
                 }
             }
             else
-                THROW_YASK_EXCEPTION("Error: anonymous mmap of " + makeByteStr(nbytes) +
+                THROW_YASK_EXCEPTION("Error: anonymous mmap of " + make_byte_str(nbytes) +
                                      " failed");
         }
         else
@@ -231,7 +231,7 @@ namespace yask {
 
         // Should not get here w/null p; throw exception.
         if (!p)
-            THROW_YASK_EXCEPTION("Error: cannot allocate " + makeByteStr(nbytes) +
+            THROW_YASK_EXCEPTION("Error: cannot allocate " + make_byte_str(nbytes) +
                                  " using numa-node (or policy) " + to_string(numa_pref));
 
         // Check alignment.
@@ -243,7 +243,7 @@ namespace yask {
         return static_cast<char*>(p);
     }
 
-    // Reverse numaAlloc().
+    // Reverse numa_alloc().
     void NumaDeleter::operator()(char* p) {
 
         if (p && _numa_pref == yask_numa_none) {
@@ -271,7 +271,7 @@ namespace yask {
     }
 
     // PMEM allocation.
-    char* pmemAlloc(std::size_t nbytes, int dev_num) {
+    char* pmem_alloc(std::size_t nbytes, int dev_num) {
 
         void *p = 0;
 
@@ -279,7 +279,7 @@ namespace yask {
 #ifdef USE_PMEM
         int err = 0;
         int fd;
-        // 'X' of pmemX should be matched with the NUMA node.
+        // 'X' of pmem_x should be matched with the NUMA node.
         string pmem_name("/mnt/pmem");
         pmem_name += to_string(dev_num);
         err = pmem_tmpfile(pmem_name.c_str(), nbytes, &fd, &p);
@@ -290,7 +290,7 @@ namespace yask {
 #endif
 
         if (!p)
-            THROW_YASK_EXCEPTION("Error: cannot allocate " + makeByteStr(nbytes) +
+            THROW_YASK_EXCEPTION("Error: cannot allocate " + make_byte_str(nbytes) +
                                  " on pmem dev " + to_string(dev_num));
 
         // Check alignment.
@@ -302,7 +302,7 @@ namespace yask {
         return static_cast<char*>(p);
     }
 
-    // Reverse pmemAlloc().
+    // Reverse pmem_alloc().
     void PmemDeleter::operator()(char* p) {
         if (p) {
             munmap(p, _nbytes);
@@ -311,7 +311,7 @@ namespace yask {
     }
 
     // MPI shm allocation.
-    char* shmAlloc(std::size_t nbytes,
+    char* shm_alloc(std::size_t nbytes,
                    const MPI_Comm* shm_comm, MPI_Win* shm_win) {
 
         void *p = 0;
@@ -331,7 +331,7 @@ namespace yask {
 #endif
 
         if (!p)
-            THROW_YASK_EXCEPTION("Error: cannot allocate " + makeByteStr(nbytes) +
+            THROW_YASK_EXCEPTION("Error: cannot allocate " + make_byte_str(nbytes) +
                                  " using MPI shm");
 
         // Check alignment.
@@ -343,7 +343,7 @@ namespace yask {
         return static_cast<char*>(p);
     }
 
-    // Reverse shmAlloc().
+    // Reverse shm_alloc().
     void ShmDeleter::operator()(char* p) {
 
 #ifdef USE_MPI
@@ -358,7 +358,7 @@ namespace yask {
     }
 
     // Find sum of rank_vals over all ranks.
-    idx_t sumOverRanks(idx_t rank_val, MPI_Comm comm) {
+    idx_t sum_over_ranks(idx_t rank_val, MPI_Comm comm) {
         idx_t sum_val = rank_val;
 #ifdef USE_MPI
         MPI_Allreduce(&rank_val, &sum_val, 1, MPI_INTEGER8, MPI_SUM, comm);
@@ -367,7 +367,7 @@ namespace yask {
     }
 
     // Make sure rank_val is same over all ranks.
-    void assertEqualityOverRanks(idx_t rank_val,
+    void assert_equality_over_ranks(idx_t rank_val,
                                  MPI_Comm comm,
                                  const string& descr) {
         idx_t min_val = rank_val;
@@ -594,7 +594,7 @@ namespace yask {
     // Parse options from the command-line and set corresponding vars.
     // Recognized strings from args are consumed, and unused ones
     // are returned.
-    string CommandLineParser::parse_args(const std::string& pgmName,
+    string CommandLineParser::parse_args(const std::string& pgm_name,
                                          const std::vector<std::string>& args) {
         vector<string> non_args;
 

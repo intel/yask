@@ -78,7 +78,7 @@ namespace yask {
         idx_t csteps = 0;
         bool in_warmup = true;
 
-        bool checkSizes(const IdxTuple& sizes);
+        bool check_sizes(const IdxTuple& sizes);
 
     public:
         static constexpr idx_t max_stride_t = 4;

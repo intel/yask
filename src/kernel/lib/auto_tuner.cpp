@@ -51,8 +51,8 @@ namespace yask {
         _at.timer.stop();
 
         if (state->_use_stage_tuners) {
-            for (auto& sp : stStages)
-                sp->getAT().eval();
+            for (auto& sp : st_stages)
+                sp->get_at().eval();
         }
         else
             _at.eval();
@@ -60,8 +60,8 @@ namespace yask {
 
     // Reset auto-tuners.
     void StencilContext::reset_auto_tuner(bool enable, bool verbose) {
-        for (auto& sp : stStages)
-            sp->getAT().clear(!enable, verbose);
+        for (auto& sp : st_stages)
+            sp->get_at().clear(!enable, verbose);
         _at.clear(!enable, verbose);
     }
 
@@ -70,8 +70,8 @@ namespace yask {
         STATE_VARS(this);
         bool done = true;
         if (state->_use_stage_tuners) {
-            for (auto& sp : stStages)
-                if (!sp->getAT().is_done())
+            for (auto& sp : st_stages)
+                if (!sp->get_at().is_done())
                     done = false;
         } else
             done = _at.is_done();
@@ -133,10 +133,10 @@ namespace yask {
         // Report results.
         at_timer.stop();
         DEBUG_MSG("Auto-tuner done after " << steps_done << " step(s) in " <<
-                  makeNumStr(at_timer.get_elapsed_secs()) << " secs.");
+                  make_num_str(at_timer.get_elapsed_secs()) << " secs.");
         if (state->_use_stage_tuners) {
-            for (auto& sp : stStages)
-                sp->getAT().print_settings();
+            for (auto& sp : st_stages)
+                sp->get_at().print_settings();
         } else
             _at.print_settings();
         print_temporal_tiling_info();
@@ -150,14 +150,14 @@ namespace yask {
         STATE_VARS(this);
         if (tune_mini_blks())
             DEBUG_MSG(_name << ": best-mini-block-size: " <<
-                      target_sizes().removeDim(step_posn).makeDimValStr(" * "));
+                      target_sizes().remove_dim(step_posn).make_dim_val_str(" * "));
         else
             DEBUG_MSG(_name << ": best-block-size: " <<
-                      target_sizes().removeDim(step_posn).makeDimValStr(" * ") << endl <<
+                      target_sizes().remove_dim(step_posn).make_dim_val_str(" * ") << endl <<
                       _name << ": mini-block-size: " <<
-                      _settings->_mini_block_sizes.removeDim(step_posn).makeDimValStr(" * "));
+                      _settings->_mini_block_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
         DEBUG_MSG(_name << ": sub-block-size: " <<
-                  _settings->_sub_block_sizes.removeDim(step_posn).makeDimValStr(" * "));
+                  _settings->_sub_block_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
     }
 
     // Access settings.
@@ -180,7 +180,7 @@ namespace yask {
             target_sizes() = best_sizes;
             apply();
             DEBUG_MSG(_name << ": applying size "  <<
-                      best_sizes.makeDimValStr(" * "));
+                      best_sizes.make_dim_val_str(" * "));
         }
 
         // Reset all vars.
@@ -208,7 +208,7 @@ namespace yask {
     } // clear.
 
     // Check whether sizes within search limits.
-    bool AutoTuner::checkSizes(const IdxTuple& bsize) {
+    bool AutoTuner::check_sizes(const IdxTuple& bsize) {
         bool ok = true;
 
         // Too small?
@@ -268,7 +268,7 @@ namespace yask {
             // Done.
             DEBUG_MSG(_name << ": finished warmup for " <<
                       csteps << " steps(s) in " <<
-                      makeNumStr(ctime) << " secs\n" <<
+                      make_num_str(ctime) << " secs\n" <<
                       _name << ": tuning " << (tune_mini_blks() ? "mini-" : "") <<
                       "block sizes...");
             in_warmup = false;
@@ -281,10 +281,10 @@ namespace yask {
             center_sizes = target_sizes();
 
             // Pick better starting point if needed.
-            if (!checkSizes(center_sizes)) {
+            if (!check_sizes(center_sizes)) {
                 for (auto dim : center_sizes) {
-                    auto& dname = dim.getName();
-                    auto& dval = dim.getVal();
+                    auto& dname = dim._get_name();
+                    auto& dval = dim.get_val();
                     if (dname != step_dim) {
                         auto dmax = max(idx_t(1), outer_sizes()[dname] / 2);
                         center_sizes[dname] = dmax;
@@ -296,7 +296,7 @@ namespace yask {
             best_sizes = center_sizes;
             target_sizes() = center_sizes;
             apply();
-            TRACE_MSG(_name << ": starting size: "  << center_sizes.makeDimValStr(" * "));
+            TRACE_MSG(_name << ": starting size: "  << center_sizes.make_dim_val_str(" * "));
             TRACE_MSG(_name << ": starting search radius: " << radius);
             return;
         }
@@ -328,10 +328,10 @@ namespace yask {
 
         // Print progress and reset vars for next time.
         DEBUG_MSG(_name << ": search-dist=" << radius << ": " <<
-                  makeNumStr(rate) << " steps/sec (" <<
-                  csteps << " steps(s) in " << makeNumStr(ctime) <<
+                  make_num_str(rate) << " steps/sec (" <<
+                  csteps << " steps(s) in " << make_num_str(ctime) <<
                   " secs) with size " <<
-                  target_sizes().removeDim(step_posn).makeDimValStr(" * ") <<
+                  target_sizes().remove_dim(step_posn).make_dim_val_str(" * ") <<
                   (is_better ? " -- best so far" : ""));
         csteps = 0;
         ctime = 0.;
@@ -344,10 +344,10 @@ namespace yask {
             // Use the neighborhood info from MPI to track neighbors.
             // TODO: move to a more general place.
             // Valid neighbor index?
-            if (neigh_idx < mpiInfo->neighborhood_size) {
+            if (neigh_idx < mpi_info->neighborhood_size) {
 
                 // Convert index to offsets in each domain dim.
-                auto ofs = mpiInfo->neighborhood_sizes.unlayout(neigh_idx);
+                auto ofs = mpi_info->neighborhood_sizes.unlayout(neigh_idx);
 
                 // Next neighbor of center point.
                 neigh_idx++;
@@ -357,8 +357,8 @@ namespace yask {
                 bool ok = true;
                 int mdist = 0; // manhattan dist from center.
                 for (auto odim : ofs) {
-                    auto& dname = odim.getName(); // a domain-dim name.
-                    auto& dofs = odim.getVal(); // always [0..2].
+                    auto& dname = odim._get_name(); // a domain-dim name.
+                    auto& dofs = odim.get_val(); // always [0..2].
 
                     // Min and max sizes of this dim.
                     auto dmin = dims->_cluster_pts[dname];
@@ -408,10 +408,10 @@ namespace yask {
 
                 } // domain dims.
                 TRACE_MSG(_name << ": checking size "  <<
-                          bsize.makeDimValStr(" * "));
+                          bsize.make_dim_val_str(" * "));
 
                 // Check sizes.
-                if (ok && !checkSizes(bsize))
+                if (ok && !check_sizes(bsize))
                     ok = false;
 
 
@@ -457,7 +457,7 @@ namespace yask {
                 }
                 else {
                     TRACE_MSG(_name << ": continuing search from " <<
-                               center_sizes.makeDimValStr(" * "));
+                               center_sizes.make_dim_val_str(" * "));
                 }
             } // beyond next neighbor of center.
         } // search for new setting to try.
@@ -465,7 +465,7 @@ namespace yask {
         // Fix settings for next step.
         apply();
         TRACE_MSG(_name << ": next size "  <<
-                  target_sizes().makeDimValStr(" * "));
+                  target_sizes().make_dim_val_str(" * "));
     } // eval.
 
     // Adjust related kernel settings to prepare for a run.
@@ -476,22 +476,22 @@ namespace yask {
         // Restore step-dim value for block.
         target_sizes()[step_posn] = target_steps;
 
-        // Change derived sizes to 0 so adjustSettings()
+        // Change derived sizes to 0 so adjust_settings()
         // will set them to the default.
         if (!tune_mini_blks()) {
-            _settings->_block_group_sizes.setValsSame(0);
-            _settings->_mini_block_sizes.setValsSame(0);
+            _settings->_block_group_sizes.set_vals_same(0);
+            _settings->_mini_block_sizes.set_vals_same(0);
         }
-        _settings->_mini_block_group_sizes.setValsSame(0);
-        _settings->_sub_block_sizes.setValsSame(0);
-        _settings->_sub_block_group_sizes.setValsSame(0);
+        _settings->_mini_block_group_sizes.set_vals_same(0);
+        _settings->_sub_block_sizes.set_vals_same(0);
+        _settings->_sub_block_group_sizes.set_vals_same(0);
 
         // Save debug output and set to null.
         auto saved_op = get_debug_output();
         set_debug_output(nullop);
 
         // Make sure everything is resized based on block size.
-        _settings->adjustSettings();
+        _settings->adjust_settings();
 
         // Update temporal blocking info.
         _context->update_tb_info();
@@ -499,7 +499,7 @@ namespace yask {
         // Reallocate scratch data based on new mini-block size.
         // TODO: only do this when blocks have increased or
         // decreased by a certain percentage.
-        _context->allocScratchData();
+        _context->alloc_scratch_data();
 
         // Restore debug output.
         set_debug_output(saved_op);

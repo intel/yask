@@ -34,12 +34,12 @@ namespace yask {
 
     // Declare static members.
     template <typename T>
-    std::list<std::string> Scalar<T>::_allNames;
+    std::list<std::string> Scalar<T>::_all_names;
 
     // Implementations.
 
     template <typename T>
-    const std::string* Scalar<T>::_getPoolPtr(const std::string& name) {
+    const std::string* Scalar<T>::_get_pool_ptr(const std::string& name) {
         const std::string* p = 0;
 
 #ifdef _OPENMP
@@ -47,7 +47,7 @@ namespace yask {
 #endif
         {
             // Look for existing entry.
-            for (auto& i : _allNames) {
+            for (auto& i : _all_names) {
                 if (i == name) {
                     p = &i;
                     break;
@@ -56,8 +56,8 @@ namespace yask {
 
             // If not found, insert.
             if (!p) {
-                _allNames.push_back(name);
-                auto& li = _allNames.back();
+                _all_names.push_back(name);
+                auto& li = _all_names.back();
                 p = &li;
             }
         }
@@ -65,15 +65,15 @@ namespace yask {
     }
     
     template <typename T>
-    const std::vector<std::string> Tuple<T>::getDimNames() const {
+    const std::vector<std::string> Tuple<T>::get_dim_names() const {
         std::vector<std::string> names;
         for (auto& i : _q)
-            names.push_back(i.getName());
+            names.push_back(i._get_name());
         return names;
     }
 
     template <typename T>
-    void Tuple<T>::addDimBack(const std::string& dim, const T& val) {
+    void Tuple<T>::add_dim_back(const std::string& dim, const T& val) {
         auto* p = lookup(dim);
         if (p)
             *p = val;
@@ -83,7 +83,7 @@ namespace yask {
         }
     }
     template <typename T>
-    void Tuple<T>::addDimFront(const std::string& dim, const T& val) {
+    void Tuple<T>::add_dim_front(const std::string& dim, const T& val) {
         auto* p = lookup(dim);
         if (p)
             *p = val;
@@ -94,41 +94,41 @@ namespace yask {
     }
 
     template <typename T>
-    void Tuple<T>::setVals(const Tuple& src, bool addMissing) {
-        for (auto& i : src.getDims()) {
-            auto& dim = i.getName();
-            auto& val = i.getVal();
+    void Tuple<T>::set_vals(const Tuple& src, bool add_missing) {
+        for (auto& i : src.get_dims()) {
+            auto& dim = i._get_name();
+            auto& val = i.get_val();
             auto* p = lookup(dim);
             if (p)
                 *p = val;
-            else if (addMissing)
-                addDimBack(dim, val);
+            else if (add_missing)
+                add_dim_back(dim, val);
         }
     }
 
     template <typename T>
-    Tuple<T> Tuple<T>::makeUnionWith(const Tuple& rhs) const {
+    Tuple<T> Tuple<T>::make_union_with(const Tuple& rhs) const {
         Tuple u = *this;    // copy.
         for (auto& i : rhs._q) {
-            auto& dim = i.getName();
-            auto& val = i.getVal();
+            auto& dim = i._get_name();
+            auto& val = i.get_val();
             auto* p = u.lookup(dim);
             if (!p)
-                u.addDimBack(dim, val);
+                u.add_dim_back(dim, val);
         }
         return u;
     }
 
     template <typename T>
-    bool Tuple<T>::areDimsSame(const Tuple& rhs, bool sameOrder) const {
+    bool Tuple<T>::are_dims_same(const Tuple& rhs, bool same_order) const {
         if (size() != rhs.size())
             return false;
 
         // Dims must be in same order.
-        if (sameOrder) {
+        if (same_order) {
             for (size_t i = 0; i < _q.size(); i++) {
-                auto& n = _q[i].getName();
-                auto& rn = rhs._q[i].getName();
+                auto& n = _q[i]._get_name();
+                auto& rn = rhs._q[i]._get_name();
                 if (n != rn)
                     return false;
             }
@@ -137,7 +137,7 @@ namespace yask {
         // Dims can be in any order.
         else {
             for (auto& i : _q) {
-                auto& dim = i.getName();
+                auto& dim = i._get_name();
                 if (!rhs.lookup(dim))
                     return false;
             }
@@ -149,12 +149,12 @@ namespace yask {
     bool Tuple<T>::operator==(const Tuple& rhs) const {
 
         // Check dims.
-        if (!areDimsSame(rhs, true))
+        if (!are_dims_same(rhs, true))
             return false;
 
         // Check values.
         for (size_t i = 0; i < _q.size(); i++) {
-            if (getVal(i) != rhs.getVal(i))
+            if (get_val(i) != rhs.get_val(i))
                 return false;
         }
         return true;
@@ -167,8 +167,8 @@ namespace yask {
 
         // compare vals.
         for (size_t i = 0; i < _q.size(); i++) {
-            auto v = getVal(i);
-            auto rv = rhs.getVal(i);
+            auto v = get_val(i);
+            auto rv = rhs.get_val(i);
             if (v < rv)
                 return true;
             else if (v > rv)
@@ -177,8 +177,8 @@ namespace yask {
 
         // compare dims.
         for (size_t i = 0; i < _q.size(); i++) {
-            auto& n = _q[i].getName();
-            auto& rn = rhs._q[i].getName();
+            auto& n = _q[i]._get_name();
+            auto& rn = rhs._q[i]._get_name();
             if (n < rn)
                 return true;
             else if (n > rn)
@@ -188,28 +188,28 @@ namespace yask {
     }
 
     template <typename T>
-    size_t Tuple<T>::layout(const Tuple& offsets, bool strictRhs) const {
-        if (strictRhs)
-            assert(areDimsSame(offsets, true));
+    size_t Tuple<T>::layout(const Tuple& offsets, bool strict_rhs) const {
+        if (strict_rhs)
+            assert(are_dims_same(offsets, true));
         size_t idx = 0;
-        size_t prevSize = 1;
+        size_t prev_size = 1;
 
         // Loop thru dims.
-        int startDim = _firstInner ? 0 : size()-1;
-        int endDim = _firstInner ? size() : -1;
-        int stepDim = _firstInner ? 1 : -1;
-        for (int di = startDim; di != endDim; di += stepDim) {
+        int start_dim = _first_inner ? 0 : size()-1;
+        int end_dim = _first_inner ? size() : -1;
+        int step_dim = _first_inner ? 1 : -1;
+        for (int di = start_dim; di != end_dim; di += step_dim) {
             auto& i = _q.at(di);
-            assert(i.getVal() >= 0);
-            size_t dsize = size_t(i.getVal());
+            assert(i.get_val() >= 0);
+            size_t dsize = size_t(i.get_val());
 
             // offset into this dim.
             size_t offset = 0;
-            if (strictRhs) {
+            if (strict_rhs) {
                 assert(offsets[di] >= 0);
                 offset = size_t(offsets[di]);
             } else {
-                auto& dim = i.getName();
+                auto& dim = i._get_name();
                 auto* op = offsets.lookup(dim);
                 if (op) {
                     assert(*op >= 0);
@@ -219,12 +219,12 @@ namespace yask {
             assert(offset < dsize);
 
             // mult offset by product of previous dims.
-            idx += (offset * prevSize);
+            idx += (offset * prev_size);
             assert(idx >= 0);
             assert(idx < size_t(product()));
 
-            prevSize *= dsize;
-            assert(prevSize <= size_t(product()));
+            prev_size *= dsize;
+            assert(prev_size <= size_t(product()));
         }
         return idx;
     }
@@ -232,20 +232,20 @@ namespace yask {
     template <typename T>
     Tuple<T> Tuple<T>::unlayout(size_t offset) const {
         Tuple res = *this;
-        size_t prevSize = 1;
+        size_t prev_size = 1;
 
         // Loop thru dims.
-        int startDim = _firstInner ? 0 : size()-1;
-        int endDim = _firstInner ? size() : -1;
-        int stepDim = _firstInner ? 1 : -1;
-        for (int di = startDim; di != endDim; di += stepDim) {
+        int start_dim = _first_inner ? 0 : size()-1;
+        int end_dim = _first_inner ? size() : -1;
+        int step_dim = _first_inner ? 1 : -1;
+        for (int di = start_dim; di != end_dim; di += step_dim) {
             auto& i = _q.at(di);
-            //auto& dim = i.getName();
-            size_t dsize = size_t(i.getVal());
+            //auto& dim = i._get_name();
+            size_t dsize = size_t(i.get_val());
             assert (dsize >= 0);
 
             // Div offset by product of previous dims.
-            size_t dofs = offset / prevSize;
+            size_t dofs = offset / prev_size;
 
             // Wrap within size of this dim.
             dofs %= dsize;
@@ -253,34 +253,34 @@ namespace yask {
             // Save in result.
             res[di] = dofs;
 
-            prevSize *= dsize;
-            assert(prevSize <= size_t(product()));
+            prev_size *= dsize;
+            assert(prev_size <= size_t(product()));
         }
         return res;
     }
 
     template <typename T>
-    Tuple<T> Tuple<T>::removeDim(int posn) const {
+    Tuple<T> Tuple<T>::remove_dim(int posn) const {
 
         // For some reason, copying *this and erasing
         // the element in newt._q causes an exception.
         Tuple newt;
-        for (int i = 0; i < getNumDims(); i++) {
+        for (int i = 0; i < _get_num_dims(); i++) {
             if (i != posn)
-                newt.addDimBack(getDimName(i), getVal(i));
+                newt.add_dim_back(get_dim_name(i), get_val(i));
         }
         return newt;
     }
 
     template <typename T>
-    std::string Tuple<T>::makeValStr(std::string separator,
+    std::string Tuple<T>::make_val_str(std::string separator,
                                      std::string prefix,
                                      std::string suffix) const {
         std::ostringstream oss;
         int n = 0;
         for (auto i : _q) {
-            //auto& tdim = i.getName();
-            auto& tval = i.getVal();
+            //auto& tdim = i._get_name();
+            auto& tval = i.get_val();
             if (n) oss << separator;
             oss << prefix << tval << suffix;
             n++;
@@ -289,14 +289,14 @@ namespace yask {
     }
 
     template <typename T>
-    std::string Tuple<T>::makeDimStr(std::string separator,
+    std::string Tuple<T>::make_dim_str(std::string separator,
                                      std::string prefix,
                                      std::string suffix) const {
         std::ostringstream oss;
         int n = 0;
         for (auto i : _q) {
-            auto& tdim = i.getName();
-            //auto& tval = i.getVal();
+            auto& tdim = i._get_name();
+            //auto& tval = i.get_val();
             if (n) oss << separator;
             oss << prefix << tdim << suffix;
             n++;
@@ -305,15 +305,15 @@ namespace yask {
     }
 
     template <typename T>
-    std::string Tuple<T>::makeDimValStr(std::string separator,
+    std::string Tuple<T>::make_dim_val_str(std::string separator,
                                         std::string infix,
                                         std::string prefix,
                                         std::string suffix) const {
         std::ostringstream oss;
         int n = 0;
         for (auto i : _q) {
-            auto& tdim = i.getName();
-            auto& tval = i.getVal();
+            auto& tdim = i._get_name();
+            auto& tval = i.get_val();
             if (n) oss << separator;
             oss << prefix << tdim << infix << tval << suffix;
             n++;
@@ -322,14 +322,14 @@ namespace yask {
     }
 
     template <typename T>
-    std::string Tuple<T>::makeDimValOffsetStr(std::string separator,
+    std::string Tuple<T>::make_dim_val_offset_str(std::string separator,
                                               std::string prefix,
                                               std::string suffix) const {
         std::ostringstream oss;
         int n = 0;
         for (auto i : _q) {
-            auto& tdim = i.getName();
-            auto& tval = i.getVal();
+            auto& tdim = i._get_name();
+            auto& tval = i.get_val();
             if (n) oss << separator;
             oss << prefix << tdim;
             if (tval > 0)
@@ -346,7 +346,7 @@ namespace yask {
     // Return a "compact" set of K factors of N.
     template <typename T>
     Tuple<T> Tuple<T>::get_compact_factors(idx_t N) const {
-        int K = getNumDims();
+        int K = _get_num_dims();
         
         // Keep track of "best" result, where the best is most compact.
         Tuple best;
@@ -356,7 +356,7 @@ namespace yask {
             return best;        // empty tuple.
         if (N == 0) {
             best = *this;
-            best.setValsSame(0); // tuple of all 0s.
+            best.set_vals_same(0); // tuple of all 0s.
             return best;
         }
         if (product() == N)
@@ -376,8 +376,8 @@ namespace yask {
             // set of K factors that are valid.
             Tuple combos;
             for (int j = 0; j < K; j++) {
-                auto& dname = getDimName(j);
-                auto dval = getVal(j);
+                auto& dname = get_dim_name(j);
+                auto dval = get_val(j);
 
                 // Number of factors.
                 auto sz = facts.size();
@@ -388,19 +388,19 @@ namespace yask {
                 if (j == 0 || (keep && dval > 0))
                     sz = 1;
                 
-                combos.addDimBack(dname, sz);
+                combos.add_dim_back(dname, sz);
             }
-            combos.visitAllPoints
+            combos.visit_all_points
                 ([&](const Tuple& combo, size_t idx)->bool {
 
                      // Make candidate tuple w/factors at given indices.
-                     auto can = combo.mapElements([&](T in) {
+                     auto can = combo.map_elements([&](T in) {
                                                       return facts.at(in);
                                                   });
 
                      // Override with specified values.
                      for (int j = 0; j < K; j++) {
-                         auto dval = getVal(j);
+                         auto dval = get_val(j);
                          if (keep && dval > 0)
                              can[j] = dval;
                          else if (j == 0)

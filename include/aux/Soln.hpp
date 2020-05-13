@@ -123,7 +123,7 @@ namespace yask {
 #define MAKE_SCRATCH_ARRAY(gvar, d1) MAKE_SCRATCH_GRID(gvar, d1)
 
 // Old namespace-level functions that are now part of yc_solution_base.
-#define constNum(n) new_number_node(n)
+#define const_num(n) new_number_node(n)
 #define first_index(d) first_domain_index(d)
 #define last_index(d) last_domain_index(d)
 

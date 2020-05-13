@@ -404,7 +404,7 @@ namespace yask {
 
         // masked copy: copy only the selected elements of 'from'
         // into 'this', keeping the existing ones.
-        ALWAYS_INLINE void copyFrom_masked(const real_vec_t& from,
+        ALWAYS_INLINE void copy_from_masked(const real_vec_t& from,
                                            uidx_t k1) {
             #if defined(NO_INTRINSICS) || !defined(USE_AVX512)
             REAL_VEC_LOOP(i) if ((k1 >> i) & 1) u.r[i] = from[i];
@@ -414,14 +414,14 @@ namespace yask {
         }
 
         // aligned load into 'this'.
-        ALWAYS_INLINE void loadFrom(const real_vec_t* __restrict from) {
+        ALWAYS_INLINE void load_from(const real_vec_t* __restrict from) {
             #if defined(NO_INTRINSICS) || defined(NO_LOAD_INTRINSICS)
             REAL_VEC_LOOP(i) u.r[i] = (*from)[i];
             #else
             u.mr = INAME(load)((imem_t const*)from);
             #endif
         }
-        ALWAYS_INLINE void loadFrom_masked(const real_vec_t* __restrict from,
+        ALWAYS_INLINE void load_from_masked(const real_vec_t* __restrict from,
                                            uidx_t k1) {
             #if defined(NO_INTRINSICS) || defined(NO_LOAD_INTRINSICS) || !defined(USE_AVX512)
             REAL_VEC_LOOP(i) if ((k1 >> i) & 1) u.r[i] = (*from)[i];
@@ -431,14 +431,14 @@ namespace yask {
         }
 
         // unaligned load into 'this'.
-        ALWAYS_INLINE void loadUnalignedFrom(const real_vec_t* __restrict from) {
+        ALWAYS_INLINE void load_unaligned_from(const real_vec_t* __restrict from) {
             #if defined(NO_INTRINSICS) || defined(NO_LOAD_INTRINSICS)
             REAL_VEC_LOOP_UNALIGNED(i) u.r[i] = (*from)[i];
             #else
             u.mr = INAME(loadu)((imem_t const*)from);
             #endif
         }
-        ALWAYS_INLINE void loadUnalignedFrom_masked(const real_vec_t* __restrict from,
+        ALWAYS_INLINE void load_unaligned_from_masked(const real_vec_t* __restrict from,
                                                     uidx_t k1) {
             #if defined(NO_INTRINSICS) || defined(NO_LOAD_INTRINSICS) || !defined(USE_AVX512)
             REAL_VEC_LOOP_UNALIGNED(i) if ((k1 >> i) & 1) u.r[i] = (*from)[i];
@@ -448,7 +448,7 @@ namespace yask {
         }
 
         // aligned store from 'this'.
-        ALWAYS_INLINE void storeTo(real_vec_t* __restrict to) const {
+        ALWAYS_INLINE void store_to(real_vec_t* __restrict to) const {
 
             #if defined(NO_INTRINSICS) || defined(NO_STORE_INTRINSICS)
             #if (VLEN > 1) && defined(USE_STREAMING_STORE)
@@ -463,7 +463,7 @@ namespace yask {
             INAME(stream)((imem_t*)to, u.mr);
             #endif
         }
-        ALWAYS_INLINE void storeTo_masked(real_vec_t* __restrict to, uidx_t k1) const {
+        ALWAYS_INLINE void store_to_masked(real_vec_t* __restrict to, uidx_t k1) const {
 
             // No masked streaming stores.
             #if defined(NO_INTRINSICS) || defined(NO_STORE_INTRINSICS) || !defined(USE_AVX512)
@@ -482,7 +482,7 @@ namespace yask {
         }
 
         // unaligned store from 'this'.
-        ALWAYS_INLINE void storeUnalignedTo(real_vec_t* __restrict to) const {
+        ALWAYS_INLINE void store_unaligned_to(real_vec_t* __restrict to) const {
 
             // No unaligned streaming stores.
             #if defined(NO_INTRINSICS) || defined(NO_STORE_INTRINSICS)
@@ -491,7 +491,7 @@ namespace yask {
             INAME(storeu)((imem_t*)to, u.mr);
             #endif
         }
-        ALWAYS_INLINE void storeUnalignedTo_masked(real_vec_t* __restrict to,
+        ALWAYS_INLINE void store_unaligned_to_masked(real_vec_t* __restrict to,
                                                    uidx_t k1) const {
 
             // No unaligned masked streaming stores.
@@ -511,21 +511,21 @@ namespace yask {
         }
 
         // Debug output.
-        void print_ctrls(std::ostream& os, bool doEnd=true) const {
+        void print_ctrls(std::ostream& os, bool do_end=true) const {
             for (int j = 0; j < VLEN; j++) {
                 if (j) os << ", ";
                 os << "[" << j << "]=" << u.ci[j];
             }
-            if (doEnd)
+            if (do_end)
                 os << std::endl;
         }
 
-        void print_reals(std::ostream& os, bool doEnd=true) const {
+        void print_reals(std::ostream& os, bool do_end=true) const {
             for (int j = 0; j < VLEN; j++) {
                 if (j) os << ", ";
                 os << "[" << j << "]=" << u.r[j];
             }
-            if (doEnd)
+            if (do_end)
                 os << std::endl;
         }
 

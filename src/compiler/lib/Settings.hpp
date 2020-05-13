@@ -39,71 +39,71 @@ namespace yask {
     public:
         string _target;             // format type.
         int _elem_bytes = 4;    // bytes in an FP element.
-        string _stepDim;        // explicit step dim.
-        vector<string> _domainDims; // explicit domain dims.
-        IntTuple _foldOptions;    // vector fold.
-        IntTuple _clusterOptions; // cluster multipliers.
-        map<int, int> _prefetchDists;
-        bool _firstInner = true; // first dimension of fold is unit step.
+        string _step_dim;        // explicit step dim.
+        vector<string> _domain_dims; // explicit domain dims.
+        IntTuple _fold_options;    // vector fold.
+        IntTuple _cluster_options; // cluster multipliers.
+        map<int, int> _prefetch_dists;
+        bool _first_inner = true; // first dimension of fold is unit step.
         string _eq_bundle_basename_default = "stencil_bundle";
-        bool _allowUnalignedLoads = false;
-        bool _bundleScratch = true;
-        int _haloSize = 0;      // 0 => calculate each halo automatically.
-        int _stepAlloc = 0;     // 0 => calculate each step allocation automatically.
-        bool _innerMisc = false;
-        int _maxExprSize = 50;
-        int _minExprSize = 2;
-        bool _doCse = true;      // do common-subexpr elim.
-        bool _doComb = true;    // combine commutative operations.
-        bool _doPairs = true;   // find equation pairs.
-        bool _doOptCluster = true; // apply optimizations also to cluster.
-        bool _doReorder = false;   // reorder commutative operations.
-        string _eqBundleTargets;  // how to bundle equations.
-        string _varRegex;       // vars to update.
-        bool _findDeps = true;
-        bool _printEqs = false;
+        bool _allow_unaligned_loads = false;
+        bool _bundle_scratch = true;
+        int _halo_size = 0;      // 0 => calculate each halo automatically.
+        int _step_alloc = 0;     // 0 => calculate each step allocation automatically.
+        bool _inner_misc = false;
+        int _max_expr_size = 50;
+        int _min_expr_size = 2;
+        bool _do_cse = true;      // do common-subexpr elim.
+        bool _do_comb = true;    // combine commutative operations.
+        bool _do_pairs = true;   // find equation pairs.
+        bool _do_opt_cluster = true; // apply optimizations also to cluster.
+        bool _do_reorder = false;   // reorder commutative operations.
+        string _eq_bundle_targets;  // how to bundle equations.
+        string _var_regex;       // vars to update.
+        bool _find_deps = true;
+        bool _print_eqs = false;
     };
 
     // Stencil dimensions.
     struct Dimensions {
-        string _stepDim;         // step dimension, usually time.
-        IntTuple _domainDims;    // domain dims, usually spatial (with zero value).
-        IntTuple _stencilDims;   // both step and domain dims.
-        string _innerDim;        // domain dim that will be used in the inner loop.
-        string _outerDim;        // domain dim that will be used in the outer loop.
-        IntTuple _miscDims;      // misc dims that are not the step or domain.
+        string _step_dim;         // step dimension, usually time.
+        IntTuple _domain_dims;    // domain dims, usually spatial (with zero value).
+        IntTuple _stencil_dims;   // both step and domain dims.
+        string _inner_dim;        // domain dim that will be used in the inner loop.
+        string _outer_dim;        // domain dim that will be used in the outer loop.
+        IntTuple _misc_dims;      // misc dims that are not the step or domain.
 
         // Following contain only domain dims.
         IntTuple _scalar;       // points in scalar (value 1 in each).
         IntTuple _fold;         // points in fold.
-        IntTuple _foldGT1;      // subset of _fold w/values >1.
-        IntTuple _clusterPts;    // cluster size in points.
-        IntTuple _clusterMults;  // cluster size in vectors.
+        IntTuple _fold_gt1;      // subset of _fold w/values >1.
+        IntTuple _cluster_pts;    // cluster size in points.
+        IntTuple _cluster_mults;  // cluster size in vectors.
 
         // Direction of stepping.
-        int _stepDir = 0;       // 0: undetermined, +1: forward, -1: backward.
+        int _step_dir = 0;       // 0: undetermined, +1: forward, -1: backward.
 
         Dimensions() {}
         virtual ~Dimensions() {}
 
         // Add step dim.
-        void addStepDim(const string& dname) {
-            _stepDim = dname;
-            _stencilDims.addDimFront(dname, 0); // must be first!
+        void add_step_dim(const string& dname) {
+            _step_dim = dname;
+            _stencil_dims.add_dim_front(dname, 0); // must be first!
         }
         
         // Add domain dims.
         // Last one added will be unit-stride.
-        void addDomainDim(const string& dname) {
-            _domainDims.addDimBack(dname, 0);
-            _stencilDims.addDimBack(dname, 0);
-            _scalar.addDimBack(dname, 1);
-            _fold.addDimBack(dname, 1);
-            _clusterMults.addDimBack(dname, 1);
+        void add_domain_dim(const string& dname) {
+            _domain_dims.add_dim_back(dname, 0);
+            _stencil_dims.add_dim_back(dname, 0);
+            _scalar.add_dim_back(dname, 1);
+            _fold.add_dim_back(dname, 1);
+            _cluster_mults.add_dim_back(dname, 1);
         }
         
         // Find the dimensions to be used.
-        void setDims(Vars& vars,
+        void set_dims(Vars& vars,
                      CompilerSettings& settings,
                      int vlen,
                      bool is_folding_efficient,
@@ -111,10 +111,10 @@ namespace yask {
 
         // Make string like "+(4/VLEN_X)" or "-(2/VLEN_Y)"
         // given signed offset and direction.
-        string makeNormStr(int offset, string dim) const;
+        string make_norm_str(int offset, string dim) const;
 
         // Make string like "t+1" or "t-1".
-        string makeStepStr(int offset) const;
+        string make_step_str(int offset) const;
     };
 
 } // namespace yask.

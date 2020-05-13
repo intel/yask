@@ -37,8 +37,8 @@ using namespace yask;
 // default ones provided by YASK.
 struct MySettings {
     bool help = false;          // help requested.
-    bool doWarmup = true;       // whether to do warmup run.
-    bool doPreAutoTune = true;  // whether to do pre-auto-tuning.
+    bool do_warmup = true;       // whether to do warmup run.
+    bool do_pre_auto_tune = true;  // whether to do pre-auto-tuning.
     int step_alloc = 0;         // if >0, override number of steps to alloc.
     int num_trials = 3;         // number of trials.
     bool validate = false;      // whether to do validation run.
@@ -46,8 +46,8 @@ struct MySettings {
     int trial_time = 10;        // sec to run each trial if trial_steps == 0.
     int pre_trial_sleep_time = 1; // sec to sleep before each trial.
     int debug_sleep = 0;          // sec to sleep for debug attach.
-    bool doTrace = false;         // tracing.
-    int msgRank = 0;              // rank to print debug msgs.
+    bool do_trace = false;         // tracing.
+    int msg_rank = 0;              // rank to print debug msgs.
 
     // Ptr to the soln.
     yk_solution_ptr _ksoln;
@@ -74,8 +74,8 @@ struct MySettings {
                                int& argi) {
             if (_check_arg(args, argi, _name)) {
                 _as.validate = true;
-                _as.doPreAutoTune = false;
-                _as.doWarmup = false;
+                _as.do_pre_auto_tune = false;
+                _as.do_warmup = false;
                 _as.num_trials = 1;
                 _as.trial_steps = 1;
 
@@ -113,23 +113,23 @@ struct MySettings {
         parser.add_option(new CommandLineParser::IntOption
                           ("msg_rank",
                            "Index of MPI rank that will print informational messages.",
-                           msgRank));
+                           msg_rank));
         parser.add_option(new CommandLineParser::BoolOption
                           ("trace",
                            "Print internal debug messages if compiled with"
                            " general and/or memory-access tracing enabled.",
-                           doTrace));
+                           do_trace));
         parser.add_option(new CommandLineParser::BoolOption
                           ("pre_auto_tune",
                            "Run iteration(s) *before* performance trial(s) to find good-performing "
                            "values for block sizes. "
                            "Uses default values or command-line-provided values as a starting point.",
-                           doPreAutoTune));
+                           do_pre_auto_tune));
         parser.add_option(new CommandLineParser::BoolOption
                           ("warmup",
                            "Run warmup iteration(s) before performance "
                            "trial(s) and after auto-tuning iterations, if enabled.",
-                           doWarmup));
+                           do_warmup));
         parser.add_option(new CommandLineParser::IntOption
                           ("step_alloc",
                            "Number of steps to allocate in relevant vars, "
@@ -184,20 +184,20 @@ struct MySettings {
             rem_args = _ksoln->apply_command_line_options(rem_args);
 
             if (help) {
-                string appNotes =
-                    "\nValidation is very slow and uses 2x memory,\n"
+                string app_notes =
+                    "\n_validation is very slow and uses 2x memory,\n"
                     " so run with very small sizes and number of time-steps.\n"
                     " If validation fails, it may be due to rounding error;\n"
                     " try building with 8-byte reals.\n";
-                vector<string> appExamples;
-                appExamples.push_back("-g 768 -num_trials 2");
-                appExamples.push_back("-v");
+                vector<string> app_examples;
+                app_examples.push_back("-g 768 -num_trials 2");
+                app_examples.push_back("-v");
                 
                 // TODO: make an API for this.
                 auto context = dynamic_pointer_cast<StencilContext>(_ksoln);
                 assert(context.get());
                 auto& opts = context->get_settings();
-                opts->print_usage(cout, parser, argv[0], appNotes, appExamples);
+                opts->print_usage(cout, parser, argv[0], app_notes, app_examples);
                 exit_yask(1);
             }
 
@@ -262,10 +262,10 @@ void alloc_steps(yk_solution_ptr soln, const MySettings& opts) {
 int main(int argc, char** argv)
 {
     // just a line.
-    string divLine;
+    string div_line;
     for (int i = 0; i < 70; i++)
-        divLine += "\u2500";
-    divLine += "\n";
+        div_line += "\u2500";
+    div_line += "\n";
 
     try {
         // Bootstrap factories from kernel API.
@@ -278,8 +278,8 @@ int main(int argc, char** argv)
         
         // Set up the environment (mostly MPI).
         auto kenv = kfac.new_env();
-        kenv->set_trace_enabled(opts1.doTrace);
-        if (opts1.msgRank == kenv->get_rank_index())
+        kenv->set_trace_enabled(opts1.do_trace);
+        if (opts1.msg_rank == kenv->get_rank_index())
             kenv->set_debug_output(yof.new_stdout_output());
         else
             kenv->set_debug_output(yof.new_null_output());
@@ -303,7 +303,7 @@ int main(int argc, char** argv)
 
         // Make sure warmup is on if needed.
         if (opts.trial_steps <= 0 && opts.trial_time > 0)
-            opts.doWarmup = true;
+            opts.do_warmup = true;
 
         // Make sure any MPI/OMP debug data is dumped from all ranks before continuing.
         kenv->global_barrier();
@@ -322,11 +322,11 @@ int main(int argc, char** argv)
             THROW_YASK_EXCEPTION("Exiting because there are no points in the domain");
 
         // init data in vars and params.
-        if (opts.doWarmup || !opts.validate)
-            context->initData();
+        if (opts.do_warmup || !opts.validate)
+            context->init_data();
 
         // Invoke auto-tuner.
-        if (opts.doPreAutoTune)
+        if (opts.do_pre_auto_tune)
             ksoln->run_auto_tuner_now();
 
         // Enable/disable further auto-tuning.
@@ -334,12 +334,12 @@ int main(int argc, char** argv)
 
         // Warmup caches, threading, etc.
         // Measure time to change number of steps.
-        if (opts.doWarmup) {
+        if (opts.do_warmup) {
 
             // Turn off debug.
             auto dbg_out = context->get_debug_output();
             context->set_debug_output(yof.new_null_output());
-            os << endl << divLine;
+            os << endl << div_line;
 
             // Warmup and calibration phases.
             double rate = 1.0;
@@ -357,7 +357,7 @@ int main(int argc, char** argv)
                 kenv->global_barrier();
                 auto stats = context->get_stats();
                 auto wtime = stats->get_elapsed_secs();
-                os << "  Done in " << makeNumStr(wtime) << " secs.\n";
+                os << "  Done in " << make_num_str(wtime) << " secs.\n";
                 rate = (wtime > 0.) ? double(warmup_steps) / wtime : 0;
 
                 // Done if time est. isn't needed.
@@ -372,13 +372,13 @@ int main(int argc, char** argv)
 
                 // Average across all ranks because it is critical that
                 // all ranks use the same number of steps to avoid deadlock.
-                warmup_steps = CEIL_DIV(sumOverRanks(warmup_steps, ep->comm), num_ranks);
+                warmup_steps = CEIL_DIV(sum_over_ranks(warmup_steps, ep->comm), num_ranks);
             }
 
             // Set final number of steps.
             if (opts.trial_steps <= 0) {
                 idx_t tsteps = ceil(rate * opts.trial_time);
-                tsteps = CEIL_DIV(sumOverRanks(tsteps, ep->comm), num_ranks);
+                tsteps = CEIL_DIV(sum_over_ranks(tsteps, ep->comm), num_ranks);
 
                 // Round up to multiple of temporal tiling if not too big.
                 auto step_dim = ksoln->get_step_dim_name();
@@ -419,16 +419,16 @@ int main(int argc, char** argv)
         }
         
         /////// Performance run(s).
-        os << endl << divLine <<
+        os << endl << div_line <<
             "Running " << opts.num_trials << " performance trial(s) of " <<
             opts.trial_steps << " step(s) each...\n" << flush;
         for (idx_t tr = 0; tr < opts.num_trials; tr++) {
-            os << divLine <<
+            os << div_line <<
                 "Trial number:                      " << (tr + 1) << endl << flush;
 
             // init data before each trial for comparison if validating.
             if (opts.validate)
-                context->initData();
+                context->init_data();
 
             // Warn if tuning.
             if (ksoln->is_auto_tuner_enabled())
@@ -468,23 +468,23 @@ int main(int argc, char** argv)
             auto r50 = trial_stats.size() / 2;
             auto& mid_trial = trial_stats.at(r50);
             
-            os << divLine <<
+            os << div_line <<
                 "Performance stats of best trial:\n"
                 " best-num-steps-done:              " << best_trial->nsteps << endl <<
-                " best-elapsed-time (sec):          " << makeNumStr(best_trial->run_time) << endl <<
-                " best-throughput (num-reads/sec):  " << makeNumStr(best_trial->reads_ps) << endl <<
-                " best-throughput (num-writes/sec): " << makeNumStr(best_trial->writes_ps) << endl <<
-                " best-throughput (est-FLOPS):      " << makeNumStr(best_trial->flops) << endl <<
-                " best-throughput (num-points/sec): " << makeNumStr(best_trial->pts_ps) << endl <<
-                divLine <<
+                " best-elapsed-time (sec):          " << make_num_str(best_trial->run_time) << endl <<
+                " best-throughput (num-reads/sec):  " << make_num_str(best_trial->reads_ps) << endl <<
+                " best-throughput (num-writes/sec): " << make_num_str(best_trial->writes_ps) << endl <<
+                " best-throughput (est-FLOPS):      " << make_num_str(best_trial->flops) << endl <<
+                " best-throughput (num-points/sec): " << make_num_str(best_trial->pts_ps) << endl <<
+                div_line <<
                 "Performance stats of 50th-percentile trial:\n"
                 " mid-num-steps-done:               " << mid_trial->nsteps << endl <<
-                " mid-elapsed-time (sec):           " << makeNumStr(mid_trial->run_time) << endl <<
-                " mid-throughput (num-reads/sec):   " << makeNumStr(mid_trial->reads_ps) << endl <<
-                " mid-throughput (num-writes/sec):  " << makeNumStr(mid_trial->writes_ps) << endl <<
-                " mid-throughput (est-FLOPS):       " << makeNumStr(mid_trial->flops) << endl <<
-                " mid-throughput (num-points/sec):  " << makeNumStr(mid_trial->pts_ps) << endl <<
-                divLine <<
+                " mid-elapsed-time (sec):           " << make_num_str(mid_trial->run_time) << endl <<
+                " mid-throughput (num-reads/sec):   " << make_num_str(mid_trial->reads_ps) << endl <<
+                " mid-throughput (num-writes/sec):  " << make_num_str(mid_trial->writes_ps) << endl <<
+                " mid-throughput (est-FLOPS):       " << make_num_str(mid_trial->flops) << endl <<
+                " mid-throughput (num-points/sec):  " << make_num_str(mid_trial->pts_ps) << endl <<
+                div_line <<
                 "Notes:\n"
                 " The 50th-percentile trial is the same as the median trial\n"
                 "  when there is an odd number of trials. When there is an even\n"
@@ -503,7 +503,7 @@ int main(int argc, char** argv)
         bool ok = true;
         if (opts.validate) {
             kenv->global_barrier();
-            os << endl << divLine <<
+            os << endl << div_line <<
                 "Setup for validation...\n";
 
             // Make a reference context for comparisons w/new vars.
@@ -542,19 +542,19 @@ int main(int argc, char** argv)
             ref_soln->prepare_solution();
 
             // init to same value used in context.
-            ref_context->initData();
+            ref_context->init_data();
 
 #ifdef CHECK_INIT
 
             // Debug code to determine if data compares immediately after init matches.
-            os << endl << divLine <<
+            os << endl << div_line <<
                 "Reinitializing data for minimal validation...\n" << flush;
-            context->initData();
+            context->init_data();
 #else
 
             // Ref trial.
             // Do same number as last perf run.
-            os << endl << divLine <<
+            os << endl << div_line <<
                 "Running " << opts.trial_steps << " step(s) for validation...\n" << flush;
             ref_context->run_ref(first_t, last_t);
 
@@ -563,11 +563,11 @@ int main(int argc, char** argv)
             ref_context->set_debug_output(yof.new_null_output());
             auto rstats = ref_context->get_stats();
             ref_context->set_debug_output(dbg_out);
-            os << "  Done in " << makeNumStr(rstats->get_elapsed_secs()) << " secs.\n" << flush;
+            os << "  Done in " << make_num_str(rstats->get_elapsed_secs()) << " secs.\n" << flush;
 #endif
             // check for equality.
-            os << "\nChecking results...\n";
-            idx_t errs = context->compareData(*ref_context);
+            os << "\n_checking results...\n";
+            idx_t errs = context->compare_data(*ref_context);
             auto ri = kenv->get_rank_index();
 
             // Trick to emulate MPI critical section.
@@ -594,7 +594,7 @@ int main(int argc, char** argv)
             ref_soln->end_solution();
         }
         else
-            os << "\nRESULTS NOT VERIFIED.\n";
+            os << "\n_results NOT VERIFIED.\n";
         ksoln->end_solution();
 
         os << "Stencil '" << ksoln->get_name() << "'.\n";
@@ -602,7 +602,7 @@ int main(int argc, char** argv)
             exit_yask(1);
 
         MPI_Finalize();
-        os << "YASK DONE." << endl << divLine << flush;
+        os << "YASK DONE." << endl << div_line << flush;
     }
     catch (yask_exception& e) {
         cerr << "YASK Kernel: " << e.get_message() << ".\n";

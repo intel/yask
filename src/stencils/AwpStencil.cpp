@@ -456,7 +456,7 @@ namespace {
         }
 
         // Define the t+1 values for all velocity and stress vars.
-        virtual void defineBase() {
+        virtual void define_base() {
 
             // Define velocity components.
             vel_x(t+1, x, y, z) EQUALS get_next_vel_x(x, y, z);
@@ -474,7 +474,7 @@ namespace {
         
         // Define the t+1 values for all velocity and stress vars
         // with ABC.
-        virtual void defineBaseABC() {
+        virtual void define_base_abc() {
 
             // Define velocity components.
             vel_x(t+1, x, y, z) EQUALS get_next_vel_x(x, y, z) IF_AT_OR_BELOW_SURFACE;
@@ -573,7 +573,7 @@ namespace {
 
         // Define the t+1 values for all velocity and stress vars.
         virtual void define() override {
-            defineBase();
+            define_base();
             set_configs();
         }
     };
@@ -586,7 +586,7 @@ namespace {
 
         // Define the t+1 values for all velocity and stress vars.
         virtual void define() override {
-            defineBaseABC();
+            define_base_abc();
             set_configs();
         }
     };
@@ -797,7 +797,7 @@ namespace {
 
         // Define the t+1 values for all velocity and stress vars.
         virtual void define() override {
-            defineBase();
+            define_base();
 
             // Define memory components.
             stress_mem_xx(t+1, x, y, z) EQUALS get_next_stress_mem_xx(x, y, z);
@@ -819,7 +819,7 @@ namespace {
 
         // Define the t+1 values for all velocity and stress vars.
         virtual void define() override {
-            defineBaseABC();
+            define_base_abc();
 
             // Define memory components using same sub-domains as the stress vars.
             for (auto cond : { BELOW_SURFACE, AT_SURFACE, ONE_ABOVE_SURFACE, TWO_ABOVE_SURFACE }) {

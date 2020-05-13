@@ -34,107 +34,107 @@ namespace yask {
     string VecInfoVisitor::visit(VarPoint* gp) {
 
         // Nothing to do if this var-point is not vectorizable.
-        if (gp->getVecType() == VarPoint::VEC_NONE) {
+        if (gp->get_vec_type() == VarPoint::VEC_NONE) {
 #ifdef DEBUG_VV
-            cout << " //** cannot vectorize scalar-access " << gp->makeQuotedStr() << endl;
+            cout << " //** cannot vectorize scalar-access " << gp->make_quoted_str() << endl;
 #endif
-            _scalarPoints.insert(*gp);
+            _scalar_points.insert(*gp);
             return "";
         }
-        else if (gp->getVecType() == VarPoint::VEC_PARTIAL) {
+        else if (gp->get_vec_type() == VarPoint::VEC_PARTIAL) {
 #ifdef DEBUG_VV
-            cout << " //** cannot vectorize non-standard-access " << gp->makeQuotedStr() << endl;
+            cout << " //** cannot vectorize non-standard-access " << gp->make_quoted_str() << endl;
 #endif
-            _nonVecPoints.insert(*gp);
+            _non_vec_points.insert(*gp);
             return "";
         }
-        assert(gp->getVecType() == VarPoint::VEC_FULL);
+        assert(gp->get_vec_type() == VarPoint::VEC_FULL);
 
         // Already seen this point?
-        if (_vecPoints.count(*gp) > 0) {
-            assert(_vblk2elemLists.count(*gp) > 0);
+        if (_vec_points.count(*gp) > 0) {
+            assert(_vblk2elem_lists.count(*gp) > 0);
             assert(_vblk2avblks.count(*gp) > 0);
             return "";
         }
-        assert(_vblk2elemLists.count(*gp) == 0);
+        assert(_vblk2elem_lists.count(*gp) == 0);
         assert(_vblk2avblks.count(*gp) == 0);
 
         // Vec of points to calculate.
 #ifdef DEBUG_VV
-        cout << " //** vec @ " << gp->makeQuotedStr() << " => " << endl;
+        cout << " //** vec @ " << gp->make_quoted_str() << " => " << endl;
 #endif
 
         // Loop through all points in the vector fold.
-        _dims._fold.visitAllPoints([&](const IntTuple& vecPoint,
+        _dims._fold.visit_all_points([&](const IntTuple& vec_point,
                                        size_t pelem){
 
                 // Final offset in each dim is offset of var point plus
                 // fold offset.
                 // This works because we know this var point is accessed
                 // only by simple offsets in each foldable dim.
-                // Note: there may be more or fewer dims in vecPoint than in var point.
-                auto offsets = gp->getArgOffsets().addElements(vecPoint, false);
+                // Note: there may be more or fewer dims in vec_point than in var point.
+                auto offsets = gp->get_arg_offsets().add_elements(vec_point, false);
 
                 // Find aligned vector indices and offsets
                 // for this one point.
-                IntTuple vecOffsets, vecLocation;
+                IntTuple vec_offsets, vec_location;
                 for (auto& dim : offsets) {
-                    auto& dname = dim.getName();
+                    auto& dname = dim._get_name();
 
                     // length of this dimension in fold, if it exists.
                     const int* p = _dims._fold.lookup(dname);
                     int len = p ? *p : 1;
 
                     // convert this offset to vector index and vector offset.
-                    int vecIndex, vecOffset;
-                    fixIndexOffset(0, dim.getVal(), vecIndex, vecOffset, len);
-                    vecOffsets.addDimBack(dname, vecOffset);
-                    vecLocation.addDimBack(dname, vecIndex * len);
+                    int vec_index, vec_offset;
+                    fix_index_offset(0, dim.get_val(), vec_index, vec_offset, len);
+                    vec_offsets.add_dim_back(dname, vec_offset);
+                    vec_location.add_dim_back(dname, vec_index * len);
                 }
 #ifdef DEBUG_VV
-                cout << "  //** element @ " << offsets.makeDimValStr() << " => " <<
-                    " vec-location @ " << vecLocation.makeDimValStr() <<
-                    " & vec-offsets @ " << vecOffsets.makeDimValStr() <<
+                cout << "  //** element @ " << offsets.make_dim_val_str() << " => " <<
+                    " vec-location @ " << vec_location.make_dim_val_str() <<
+                    " & vec-offsets @ " << vec_offsets.make_dim_val_str() <<
                     " => " << endl;
 #endif
 
                 // Create aligned vector block that contains this point.
-                VarPoint alignedVec = *gp;  // copy original.
-                alignedVec.setArgOffsets(vecLocation);
+                VarPoint aligned_vec = *gp;  // copy original.
+                aligned_vec.set_arg_offsets(vec_location);
 
                 // Find linear offset within this aligned vector block.
-                int alignedElem = _dims._fold.layout(vecOffsets, false);
-                assert(alignedElem >= 0);
-                assert(alignedElem < _vlen);
+                int aligned_elem = _dims._fold.layout(vec_offsets, false);
+                assert(aligned_elem >= 0);
+                assert(aligned_elem < _vlen);
 #ifdef DEBUG_VV
-                cout << "   //** " << gp->makeStr() << "[" << pelem << "] = aligned-" <<
-                    alignedVec.makeStr() << "[" << alignedElem << "]" << endl;
+                cout << "   //** " << gp->make_str() << "[" << pelem << "] = aligned-" <<
+                    aligned_vec.make_str() << "[" << aligned_elem << "]" << endl;
 #endif
 
                 // Update set of *all* aligned vec-blocks.
-                _alignedVecs.insert(alignedVec);
+                _aligned_vecs.insert(aligned_vec);
 
                 // Update set of aligned vec-blocks and elements needed for *this* vec-block element.
-                _vblk2avblks[*gp].insert(alignedVec);
+                _vblk2avblks[*gp].insert(aligned_vec);
 
                 // Save which aligned vec-block's element is needed for this vec-block element.
-                VecElem ve(alignedVec, alignedElem, offsets);
-                _vblk2elemLists[*gp].push_back(ve); // should be at pelem index.
-                assert(_vblk2elemLists[*gp].size() == pelem+1); // verify at pelem index.
+                VecElem ve(aligned_vec, aligned_elem, offsets);
+                _vblk2elem_lists[*gp].push_back(ve); // should be at pelem index.
+                assert(_vblk2elem_lists[*gp].size() == pelem+1); // verify at pelem index.
 
                 return true;
             });                  // end of vector lambda-function.
 
         // Mark as done.
-        _vecPoints.insert(*gp);
+        _vec_points.insert(*gp);
         return "";
     }                   // end of visit() method.
 
     // Sort a commutative expression.
     string ExprReorderVisitor::visit(CommutativeExpr* ce) {
 
-        auto& oev = ce->getOps(); // old exprs.
-        numExprPtrVec nev; // new exprs.
+        auto& oev = ce->get_ops(); // old exprs.
+        num_expr_ptr_vec nev; // new exprs.
 
         // Simple, greedy algorithm:
         // Select first element that needs the fewest new aligned vecs.
@@ -143,8 +143,8 @@ namespace yask {
         // when there are long exprs with many reads.
         // TODO: sort based on all reused exprs, not just var reads.
 
-        VarPointSet alignedVecs; // aligned vecs needed so far.
-        set<size_t> usedExprs; // expressions used.
+        VarPointSet aligned_vecs; // aligned vecs needed so far.
+        set<size_t> used_exprs; // expressions used.
         for (size_t i = 0; i < oev.size(); i++) {
 
 #ifdef DEBUG_SORT
@@ -152,11 +152,11 @@ namespace yask {
 #endif
 
             // Scan unused exprs.
-            size_t jBest = 0;
-            size_t jBestCost = size_t(-1);
-            VarPointSet jBestAlignedVecs;
+            size_t j_best = 0;
+            size_t j_best_cost = size_t(-1);
+            VarPointSet j_best_aligned_vecs;
             for (size_t j = 0; j < oev.size(); j++) {
-                if (usedExprs.count(j) == 0) {
+                if (used_exprs.count(j) == 0) {
 
                     // This unused expr.
                     auto& expr = oev[j];
@@ -164,17 +164,17 @@ namespace yask {
                     // Get aligned vecs needed for this expr.
                     VecInfoVisitor tmpvv(_vv);
                     expr->accept(&tmpvv);
-                    auto& tmpAlignedVecs = tmpvv._alignedVecs;
+                    auto& tmp_aligned_vecs = tmpvv._aligned_vecs;
 
                     // Calculate cost.
                     size_t cost = 0;
-                    for (auto k = tmpAlignedVecs.begin(); k != tmpAlignedVecs.end(); k++) {
+                    for (auto k = tmp_aligned_vecs.begin(); k != tmp_aligned_vecs.end(); k++) {
                         auto& av = *k;
 
                         // new vector needed?
-                        if (alignedVecs.count(av) == 0) {
+                        if (aligned_vecs.count(av) == 0) {
 #ifdef DEBUG_SORT
-                            cout << " Vec " << av.makeStr("tmp") << " is new" << endl;
+                            cout << " Vec " << av.make_str("tmp") << " is new" << endl;
 #endif
                             cost++;
                         }
@@ -183,27 +183,27 @@ namespace yask {
                     cout << " Cost of expr " << j << " = " << cost << endl;
 #endif
                     // Best so far?
-                    if (cost < jBestCost) {
-                        jBestCost = cost;
-                        jBest = j;
-                        jBestAlignedVecs = tmpAlignedVecs;
+                    if (cost < j_best_cost) {
+                        j_best_cost = cost;
+                        j_best = j;
+                        j_best_aligned_vecs = tmp_aligned_vecs;
 #ifdef DEBUG_SORT
-                        cout << "  Best so far has " << jBestAlignedVecs.size() << " aligned vecs" << endl;
+                        cout << "  Best so far has " << j_best_aligned_vecs.size() << " aligned vecs" << endl;
 #endif
                     }
                 }
             }
 
             // Must have a best one.
-            assert(jBestCost != size_t(-1));
+            assert(j_best_cost != size_t(-1));
 
             // Add it.
-            nev.push_back(oev[jBest]);
-            usedExprs.insert(jBest);
+            nev.push_back(oev[j_best]);
+            used_exprs.insert(j_best);
 
             // Remember used vectors.
-            for (auto k = jBestAlignedVecs.begin(); k != jBestAlignedVecs.end(); k++) {
-                alignedVecs.insert(*k);
+            for (auto k = j_best_aligned_vecs.begin(); k != j_best_aligned_vecs.end(); k++) {
+                aligned_vecs.insert(*k);
             }
         }
 
@@ -216,25 +216,25 @@ namespace yask {
     // TODO: fix this old code and make it available as an output.
 #if 0
     // Print stats for various folding options.
-    if (vlenForStats) {
+    if (vlen_for_stats) {
         string separator(",");
-        VecInfoVisitor::printStatsHeader(cout, separator);
+        VecInfoVisitor::print_stats_header(cout, separator);
 
         // Loop through all vars.
         for (auto gp : vars) {
 
             // Loop through possible folds of given length.
-            for (int xlen = vlenForStats; xlen > 0; xlen--) {
-                for (int ylen = vlenForStats / xlen; ylen > 0; ylen--) {
-                    int zlen = vlenForStats / xlen / ylen;
-                    if (vlenForStats == xlen * ylen * zlen) {
+            for (int xlen = vlen_for_stats; xlen > 0; xlen--) {
+                for (int ylen = vlen_for_stats / xlen; ylen > 0; ylen--) {
+                    int zlen = vlen_for_stats / xlen / ylen;
+                    if (vlen_for_stats == xlen * ylen * zlen) {
 
                         // Create vectors needed to implement RHS.
                         VecInfoVisitor vv(xlen, ylen, zlen);
-                        gp->visitExprs(&vv);
+                        gp->visit_exprs(&vv);
 
                         // Print stats.
-                        vv.printStats(cout, gp->getName(), separator);
+                        vv.print_stats(cout, gp->_get_name(), separator);
                     }
                 }
             }

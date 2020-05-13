@@ -53,8 +53,8 @@ namespace yask {
         bool _done = false;     // transitive closure done?
         TpSet _empty;
 
-        // Recursive helper for visitDeps().
-        virtual void _visitDeps(Tp a,
+        // Recursive helper for visit_deps().
+        virtual void _visit_deps(Tp a,
                                 std::function<void (Tp b, TpList& path)> visitor,
                                 TpList* seen) const {
 
@@ -81,7 +81,7 @@ namespace yask {
                 for (auto b : adeps) {
 
                     // Recurse to deps of 'b'.
-                    _visitDeps(b, visitor, &seen1);
+                    _visit_deps(b, visitor, &seen1);
                 }
             }
         }
@@ -144,22 +144,22 @@ namespace yask {
         // Visit 'a' and all its dependencies.
         // At each dep node 'b' in graph, 'visitor(b, path)' is called,
         // where 'path' contains all nodes from 'a' thru 'b' in dep order.
-        virtual void visitDeps(Tp a,
+        virtual void visit_deps(Tp a,
                                std::function<void (Tp b,
                                                    TpList& path)> visitor) const {
-            _visitDeps(a, visitor, NULL);
+            _visit_deps(a, visitor, NULL);
         }
 
-        // Print deps. 'T' must implement getDescr().
-        virtual void printDeps(ostream& os) const {
+        // Print deps. 'T' must implement get_descr().
+        virtual void print_deps(ostream& os) const {
             os << "Dependencies within " << _all.size() << " objects:\n";
             for (auto& a : _all) {
-                os << " For " << a->getDescr() << ":\n";
-                visitDeps(a, [&](Tp b, TpList& path) {
+                os << " For " << a->get_descr() << ":\n";
+                visit_deps(a, [&](Tp b, TpList& path) {
                         if (a == b)
                             os << "  depends on self";
                         else
-                            os << "  depends on " << b->getDescr();
+                            os << "  depends on " << b->get_descr();
                         os << " w/path of length " << path.size() << endl;
                     });
             }
@@ -171,7 +171,7 @@ namespace yask {
                 return;
             for (auto a : _all)
                 if (_full_deps.count(a) == 0)
-                    visitDeps(a, [&](Tp b, TpList& path) {
+                    visit_deps(a, [&](Tp b, TpList& path) {
 
                             // Walk path from ee to b.
                             // Every 'eq' in 'path' before 'b' depends on 'b'.
@@ -223,35 +223,35 @@ namespace yask {
         }
 
         // list accessors.
-        virtual void addItem(Tp p) {
+        virtual void add_item(Tp p) {
             _all.insert(p);
         }
-        virtual const TpList& getAll() const {
+        virtual const TpList& get_all() const {
             return _all;
         }
-        virtual int getNum() const {
+        virtual int get_num() const {
             return _all.size();
         }
 
         // Get the deps.
-        virtual const Deps<T>& getDeps() const {
+        virtual const Deps<T>& get_deps() const {
             return _deps;
         }
-        virtual Deps<T>& getDeps() {
+        virtual Deps<T>& get_deps() {
             return _deps;
         }
-        virtual const TpSet& getDeps(Tp p) const {
+        virtual const TpSet& get_deps(Tp p) const {
             return _deps.get_deps_on(p);
         }
 
         // Get the scratch deps.
-        virtual const Deps<T>& getScratchDeps() const {
+        virtual const Deps<T>& get_scratch_deps() const {
             return _scratches;
         }
-        virtual Deps<T>& getScratchDeps() {
+        virtual Deps<T>& get_scratch_deps() {
             return _scratches;
         }
-        virtual const TpSet& getScratchDeps(Tp p) const {
+        virtual const TpSet& get_scratch_deps(Tp p) const {
             return _scratches.get_deps_on(p);
         }
 
@@ -292,8 +292,8 @@ namespace yask {
                             // Error if also back-dep.
                             if (_deps.is_dep_on(oj, oi)) {
                                 THROW_YASK_EXCEPTION("Error: circular dependency between " +
-                                                     oi->getDescr() + " and " +
-                                                     oj->getDescr());
+                                                     oi->get_descr() + " and " +
+                                                     oj->get_descr());
                             }
 
                             // Swap them.
@@ -310,15 +310,15 @@ namespace yask {
 
         // Copy dependencies from the 'full' graph to this
         // condensed graph.
-        // Class 'T' must implement 'getItems()', which returns
+        // Class 'T' must implement 'get_items()', which returns
         // an iteratable container of 'Tf' types.
         // See https://en.wikipedia.org/wiki/Directed_acyclic_graph.
         template <typename Tf>
         void inherit_deps_from(const DepGroup<Tf>& full) {
 
             // Deps between Tf objs.
-            auto& fdeps = full.getDeps();
-            auto& fscrs = full.getScratchDeps();
+            auto& fdeps = full.get_deps();
+            auto& fscrs = full.get_scratch_deps();
 
             // All T objs in this.
             for (auto& oi : _all) {
@@ -330,10 +330,10 @@ namespace yask {
                     if (oi == oj) continue;
 
                     // All Tf objs in 'oi'.
-                    for (auto& foi : oi->getItems()) {
+                    for (auto& foi : oi->get_items()) {
 
                         // All Tf objs in 'oj'.
-                        for (auto& foj : oj->getItems()) {
+                        for (auto& foj : oj->get_items()) {
 
                             // If 'foi' is dep on 'foj',
                             // then 'oi' is dep on 'oj'.
@@ -350,7 +350,7 @@ namespace yask {
     };
 
     // A list of unique equation ptrs.
-    typedef vector_set<equalsExprPtr> EqList;
+    typedef vector_set<equals_expr_ptr> EqList;
 
     // A set of equations and related dependency data.
     class Eqs : public DepGroup<EqualsExpr> {
@@ -358,82 +358,82 @@ namespace yask {
     public:
 
         // Visit all equations.
-        virtual void visitEqs(ExprVisitor* ev) {
+        virtual void visit_eqs(ExprVisitor* ev) {
             for (auto& ep : _all) {
                 ep->accept(ev);
             }
         }
 
         // Find dependencies based on all eqs.
-        virtual void analyzeEqs(CompilerSettings& settings,
+        virtual void analyze_eqs(CompilerSettings& settings,
                                 Dimensions& dims,
                                 std::ostream& os);
 
         // Determine which var points can be vectorized.
-        virtual void analyzeVec(const Dimensions& dims);
+        virtual void analyze_vec(const Dimensions& dims);
 
         // Determine how var points are accessed in a loop.
-        virtual void analyzeLoop(const Dimensions& dims);
+        virtual void analyze_loop(const Dimensions& dims);
 
         // Update var access stats.
-        virtual void updateVarStats();
+        virtual void update_var_stats();
 
         // Find scratch-var eqs needed for each non-scratch eq.
-        virtual void analyzeScratch();
+        virtual void analyze_scratch();
     };
 
     // A collection that holds various independent eqs.
     class EqLot {
     protected:
         EqList _eqs;            // all equations.
-        Vars _outVars;        // vars updated by _eqs.
-        Vars _inVars;         // vars read from by _eqs.
-        bool _isScratch = false; // true if _eqs update temp var(s).
+        Vars _out_vars;        // vars updated by _eqs.
+        Vars _in_vars;         // vars read from by _eqs.
+        bool _is_scratch = false; // true if _eqs update temp var(s).
 
     public:
 
         // Parts of the name.
         // TODO: move these into protected section and make accessors.
-        string baseName;            // base name of this bundle.
+        string base_name;            // base name of this bundle.
         int index;                  // index to distinguish repeated names.
 
         // Ctor.
-        EqLot(bool is_scratch) : _isScratch(is_scratch) { }
+        EqLot(bool is_scratch) : _is_scratch(is_scratch) { }
         virtual ~EqLot() {}
 
         // Get all eqs.
-        virtual const EqList& getEqs() const {
+        virtual const EqList& get_eqs() const {
             return _eqs;
         }
 
         // Visit all the equations.
-        virtual void visitEqs(ExprVisitor* ev) {
+        virtual void visit_eqs(ExprVisitor* ev) {
             for (auto& ep : _eqs) {
                 ep->accept(ev);
             }
         }
 
         // Get the full name.
-        virtual string getName() const;
+        virtual string _get_name() const;
 
         // Get number of equations.
-        virtual int getNumEqs() const {
+        virtual int get_num_eqs() const {
             return _eqs.size();
         }
 
         // Updating temp vars?
-        virtual bool isScratch() const { return _isScratch; }
+        virtual bool is_scratch() const { return _is_scratch; }
 
         // Get vars output and input.
-        virtual const Vars& getOutputVars() const {
-            return _outVars;
+        virtual const Vars& get_output_vars() const {
+            return _out_vars;
         }
-        virtual const Vars& getInputVars() const {
-            return _inVars;
+        virtual const Vars& get_input_vars() const {
+            return _in_vars;
         }
 
         // Print stats for the equation(s).
-        virtual void printStats(ostream& os, const string& msg);
+        virtual void print_stats(ostream& os, const string& msg);
     };
 
     // A named equation bundle, which contains one or more var-update
@@ -449,15 +449,15 @@ namespace yask {
         // TODO: move these into protected section and make accessors.
 
         // Common conditions.
-        boolExprPtr cond;
-        boolExprPtr step_cond;
+        bool_expr_ptr cond;
+        bool_expr_ptr step_cond;
 
         // Common step expr.
-        numExprPtr step_expr;
+        num_expr_ptr step_expr;
 
         // Create a copy containing clones of the equations.
         virtual shared_ptr<EqBundle> clone() const {
-            auto p = make_shared<EqBundle>(*_dims, _isScratch);
+            auto p = make_shared<EqBundle>(*_dims, _is_scratch);
 
             // Shallow copy.
             *p = *this;
@@ -476,20 +476,20 @@ namespace yask {
         virtual ~EqBundle() {}
 
         // Get a string description.
-        virtual string getDescr(bool show_cond = true,
+        virtual string get_descr(bool show_cond = true,
                                 string quote = "'") const;
 
         // Add an equation to this bundle.
-        virtual void addEq(equalsExprPtr ee);
+        virtual void add_eq(equals_expr_ptr ee);
 
         // Get the list of all equations.
-        virtual const EqList& getItems() const {
+        virtual const EqList& get_items() const {
             return _eqs;
         }
 
         // Visit the condition.
         // Return true if there was one to visit.
-        virtual bool visitCond(ExprVisitor* ev) {
+        virtual bool visit_cond(ExprVisitor* ev) {
             if (cond.get()) {
                 cond->accept(ev);
                 return true;
@@ -499,7 +499,7 @@ namespace yask {
 
         // Visit the step condition.
         // Return true if there was one to visit.
-        virtual bool visitStepCond(ExprVisitor* ev) {
+        virtual bool visit_step_cond(ExprVisitor* ev) {
             if (step_cond.get()) {
                 step_cond->accept(ev);
                 return true;
@@ -509,7 +509,7 @@ namespace yask {
 
         // Replicate each equation at the non-zero offsets for
         // each vector in a cluster.
-        virtual void replicateEqsInCluster(Dimensions& dims);
+        virtual void replicate_eqs_in_cluster(Dimensions& dims);
     };
 
     // Container for multiple equation bundles.
@@ -521,21 +521,21 @@ namespace yask {
         Dimensions* _dims = 0;
 
         // Track vars that are updated.
-        Vars _outVars;
+        Vars _out_vars;
 
         // Map to track indices per eq-bundle name.
         map<string, int> _indices;
 
         // Track equations that have been added already.
-        set<equalsExprPtr> _eqs_in_bundles;
+        set<equals_expr_ptr> _eqs_in_bundles;
 
-        // Add 'eq' from 'eqs' to eq-bundle with 'baseName'
+        // Add 'eq' from 'eqs' to eq-bundle with 'base_name'
         // unless already added or illegal.  The corresponding index in
         // '_indices' will be incremented if a new bundle is created.
         // Returns whether a new bundle was created.
-        virtual bool addEqToBundle(Eqs& eqs,
-                                   equalsExprPtr eq,
-                                   const string& baseName,
+        virtual bool add_eq_to_bundle(Eqs& eqs,
+                                   equals_expr_ptr eq,
+                                   const string& base_name,
                                    const CompilerSettings& settings);
 
     public:
@@ -552,41 +552,41 @@ namespace yask {
             _dims = &dims;
         }
 
-        // Separate a set of equations into eqBundles based
+        // Separate a set of equations into eq_bundles based
         // on the target string.
         // Target string is a comma-separated list of key-value pairs, e.g.,
-        // "eqBundle1=foo,eqBundle2=bar".
-        // In this example, all eqs updating var names containing 'foo' go in eqBundle1,
-        // all eqs updating var names containing 'bar' go in eqBundle2, and
-        // each remaining eq goes into a separate eqBundle.
-        void makeEqBundles(Eqs& eqs,
+        // "eq_bundle1=foo,eq_bundle2=bar".
+        // In this example, all eqs updating var names containing 'foo' go in eq_bundle1,
+        // all eqs updating var names containing 'bar' go in eq_bundle2, and
+        // each remaining eq goes into a separate eq_bundle.
+        void make_eq_bundles(Eqs& eqs,
                            const CompilerSettings& settings,
                            std::ostream& os);
 
-        virtual const Vars& getOutputVars() const {
-            return _outVars;
+        virtual const Vars& get_output_vars() const {
+            return _out_vars;
         }
 
-        // Visit all the equations in all eqBundles.
-        virtual void visitEqs(ExprVisitor* ev) {
+        // Visit all the equations in all eq_bundles.
+        virtual void visit_eqs(ExprVisitor* ev) {
             for (auto& eg : _all)
-                eg->visitEqs(ev);
+                eg->visit_eqs(ev);
         }
 
         // Replicate each equation at the non-zero offsets for
         // each vector in a cluster.
-        virtual void replicateEqsInCluster(Dimensions& dims) {
+        virtual void replicate_eqs_in_cluster(Dimensions& dims) {
             for (auto& eg : _all)
-                eg->replicateEqsInCluster(dims);
+                eg->replicate_eqs_in_cluster(dims);
         }
 
         // Print stats for the equation(s) in all bundles.
-        virtual void printStats(ostream& os, const string& msg);
+        virtual void print_stats(ostream& os, const string& msg);
 
         // Apply optimizations requested in settings.
-        virtual void optimizeEqBundles(CompilerSettings& settings,
+        virtual void optimize_eq_bundles(CompilerSettings& settings,
                                        const string& descr,
-                                       bool printSets,
+                                       bool print_sets,
                                        ostream& os);
     };
 
@@ -607,7 +607,7 @@ namespace yask {
     public:
 
         // Common condition.
-        boolExprPtr step_cond;
+        bool_expr_ptr step_cond;
 
         // Ctor.
         EqStage(bool is_scratch) :
@@ -616,7 +616,7 @@ namespace yask {
 
         // Create a copy containing clones of the bundles.
         virtual shared_ptr<EqStage> clone() const {
-            auto p = make_shared<EqStage>(_isScratch);
+            auto p = make_shared<EqStage>(_is_scratch);
 
             // Shallow copy.
             *p = *this;
@@ -630,22 +630,22 @@ namespace yask {
         }
 
         // Get a string description.
-        virtual string getDescr(string quote = "'") const;
+        virtual string get_descr(string quote = "'") const;
 
         // Add a bundle to this stage.
-        virtual void addBundle(EqBundlePtr ee);
+        virtual void add_bundle(EqBundlePtr ee);
 
         // Get the list of all bundles
-        virtual const EqBundleList& getBundles() const {
+        virtual const EqBundleList& get_bundles() const {
             return _bundles;
         }
-        virtual const EqBundleList& getItems() const {
+        virtual const EqBundleList& get_items() const {
             return _bundles;
         }
 
         // Visit the step condition.
         // Return true if there was one to visit.
-        virtual bool visitStepCond(ExprVisitor* ev) {
+        virtual bool visit_step_cond(ExprVisitor* ev) {
             if (step_cond.get()) {
                 step_cond->accept(ev);
                 return true;
@@ -658,41 +658,41 @@ namespace yask {
     // Container for multiple equation stages.
     class EqStages : public DepGroup<EqStage> {
     protected:
-        string _baseName = "stencil_stage";
+        string _base_name = "stencil_stage";
 
         // Bundle index.
         int _idx = 0;
 
         // Track vars that are updated.
-        Vars _outVars;
+        Vars _out_vars;
 
         // Track bundles that have been added already.
         set<EqBundlePtr> _bundles_in_stages;
 
-        // Add 'bp' from 'allBundles'. Create new stage if needed.  Returns
+        // Add 'bp' from 'all_bundles'. Create new stage if needed.  Returns
         // whether a new stage was created.
-        bool addBundleToStage(EqBundles& allBundles,
+        bool add_bundle_to_stage(EqBundles& all_bundles,
                              EqBundlePtr bp);
 
     public:
 
         // Separate bundles into stages.
-        void makeStages(EqBundles& bundles,
+        void make_stages(EqBundles& bundles,
                        std::ostream& os);
 
         // Get all output vars.
-        virtual const Vars& getOutputVars() const {
-            return _outVars;
+        virtual const Vars& get_output_vars() const {
+            return _out_vars;
         }
 
         // Visit all the equations in all stages.
-        virtual void visitEqs(ExprVisitor* ev) {
+        virtual void visit_eqs(ExprVisitor* ev) {
             for (auto& bp : _all)
-                bp->visitEqs(ev);
+                bp->visit_eqs(ev);
         }
 
         // Find halos needed for each var.
-        virtual void calcHalos(EqBundles& allBundles);
+        virtual void calc_halos(EqBundles& all_bundles);
 
     }; // EqStages.
 

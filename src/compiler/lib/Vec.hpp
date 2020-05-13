@@ -78,107 +78,107 @@ namespace yask {
     public:
 
         // Data on vectorizable points.
-        VarPointSet _alignedVecs; // set of aligned vectors, i.e., ones that need to be read from memory.
+        VarPointSet _aligned_vecs; // set of aligned vectors, i.e., ones that need to be read from memory.
         Point2Vecs _vblk2avblks; // each vec block -> its constituent aligned vec blocks.
-        Point2VecElemLists _vblk2elemLists; // each vec block -> in-order list of its aligned vec blocks' elements.
-        VarPointSet _vecPoints;            // set of all vectorizable points read from, aligned and unaligned.
-        VarPointSet _vecWrites;            // set of vectors written to.
+        Point2VecElemLists _vblk2elem_lists; // each vec block -> in-order list of its aligned vec blocks' elements.
+        VarPointSet _vec_points;            // set of all vectorizable points read from, aligned and unaligned.
+        VarPointSet _vec_writes;            // set of vectors written to.
 
         // NB: the above hold much of the same info, but arranged differently:
-        // _alignedVecs contains only a set of aligned blocks.
+        // _aligned_vecs contains only a set of aligned blocks.
         // _vblk2avblks is used to quickly determine which aligned blocks contribute to a given block.
-        // _vblk2elemLists is used to find exactly where each element comes from.
+        // _vblk2elem_lists is used to find exactly where each element comes from.
         // The keys are the same for both maps: the vectorizable var points.
 
         // Data on non-vectorizable points.
-        VarPointSet _scalarPoints; // set of points that should be read as scalars and broadcast to vectors.
-        VarPointSet _nonVecPoints; // set of points that are not scalars or vectorizable.
+        VarPointSet _scalar_points; // set of points that should be read as scalars and broadcast to vectors.
+        VarPointSet _non_vec_points; // set of points that are not scalars or vectorizable.
 
         VecInfoVisitor(const Dimensions& dims) :
             _dims(dims) {
             _vlen = dims._fold.product();
         }
 
-        virtual const IntTuple& getFold() const {
+        virtual const IntTuple& get_fold() const {
             return _dims._fold;
         }
 
-        virtual size_t getNumPoints() const {
-            return _vblk2elemLists.size();
+        virtual size_t get_num_points() const {
+            return _vblk2elem_lists.size();
         }
 
-        virtual size_t getNumAlignedVecs() const {
-            return _alignedVecs.size();
+        virtual size_t get_num_aligned_vecs() const {
+            return _aligned_vecs.size();
         }
 
         // Make an index and offset canonical, i.e.,
-        // find indexOut and offsetOut such that
-        // (indexOut * vecLen) + offsetOut == (indexIn * vecLen) + offsetIn
-        // and offsetOut is in [0..vecLen-1].
+        // find index_out and offset_out such that
+        // (index_out * vec_len) + offset_out == (index_in * vec_len) + offset_in
+        // and offset_out is in [0..vec_len-1].
         // Makes proper adjustments for negative inputs.
-        virtual void fixIndexOffset(int indexIn, int offsetIn,
-                                    int& indexOut, int& offsetOut,
-                                    int vecLen) {
-            const int ofs = (indexIn * vecLen) + offsetIn;
-            indexOut = ofs / vecLen;
-            offsetOut = ofs % vecLen;
-            while(offsetOut < 0) {
-                offsetOut += vecLen;
-                indexOut--;
+        virtual void fix_index_offset(int index_in, int offset_in,
+                                    int& index_out, int& offset_out,
+                                    int vec_len) {
+            const int ofs = (index_in * vec_len) + offset_in;
+            index_out = ofs / vec_len;
+            offset_out = ofs % vec_len;
+            while(offset_out < 0) {
+                offset_out += vec_len;
+                index_out--;
             }
         }
 
 #if 0
         // Print stats header.
-        virtual void printStatsHeader(ostream& os, string separator) const {
+        virtual void print_stats_header(ostream& os, string separator) const {
             os << "destination var" <<
                 separator << "num vector elems" <<
                 separator << "fold" <<
                 separator << "num points in stencil" <<
                 separator << "num aligned vectors to read from memory" <<
                 separator << "num blends needed" <<
-                separator << _dims._fold.makeDimStr(separator, "footprint in ") <<
+                separator << _dims._fold.make_dim_str(separator, "footprint in ") <<
                 endl;
         }
 
         // Print some stats for the current values.
         // Pre-requisite: visitor has been accepted.
-        virtual void printStats(ostream& os, const string& destVar, const string& separator) const {
+        virtual void print_stats(ostream& os, const string& dest_var, const string& separator) const {
 
             // calc num blends needed.
-            int numBlends = 0;
-            for (auto i = _vblk2elemLists.begin(); i != _vblk2elemLists.end(); i++) {
+            int num_blends = 0;
+            for (auto i = _vblk2elem_lists.begin(); i != _vblk2elem_lists.end(); i++) {
                 //auto pt = i->first;
                 auto vev = i->second;
                 VarPointSet mems; // inputs for this point.
                 for (size_t j = 0; j < vev.size(); j++)
                     mems.insert(vev[j]._vec);
                 if (mems.size() > 1) // only need to blend if >1 inputs.
-                    numBlends += mems.size();
+                    num_blends += mems.size();
             }
 
             // calc footprint in each dim.
             map<const string, int> footprints;
             for (auto& dim : _dims._fold) {
-                auto& dname = dim.getName();
+                auto& dname = dim._get_name();
 
                 // Make set of aligned vecs projected in this dir.
                 set<IntTuple> footprint;
-                for (auto vb : _alignedVecs) {
-                    IntTuple proj = vb.removeDim(dim);
+                for (auto vb : _aligned_vecs) {
+                    IntTuple proj = vb.remove_dim(dim);
                     footprint.insert(proj);
                 }
                 footprints[dname] = footprint.size();
             }
 
-            os << destVar <<
+            os << dest_var <<
                 separator << _vlen <<
-                separator << _dims._fold.makeValStr("*") <<
-                separator << getNumPoints() <<
-                separator << getNumAlignedVecs() <<
-                separator << numBlends;
+                separator << _dims._fold.make_val_str("*") <<
+                separator << get_num_points() <<
+                separator << get_num_aligned_vecs() <<
+                separator << num_blends;
             for (auto& dim : _dims._fold)
-                os << separator << footprints[dim.getName()];
+                os << separator << footprints[dim._get_name()];
             os << endl;
         }
 #endif
@@ -186,12 +186,12 @@ namespace yask {
         // Equality.
         virtual string visit(EqualsExpr* ee) {
 
-            // Only want to continue visit on RHS of an eqGroup.
-            ee->getRhs()->accept(this);
+            // Only want to continue visit on RHS of an eq_group.
+            ee->_get_rhs()->accept(this);
 
             // For LHS, just save point.
-            auto lhs = ee->getLhs();
-            _vecWrites.insert(*lhs);
+            auto lhs = ee->_get_lhs();
+            _vec_writes.insert(*lhs);
             return "";
         }
 
@@ -203,74 +203,74 @@ namespace yask {
     class VecPrintHelper {
     protected:
         VecInfoVisitor& _vv;
-        bool _reuseVars; // if true, load to a local var; else, reload on every access.
-        map<VarPoint, string> _vecVars; // vecs that are already constructed (key is var point).
-        map<string, string> _elemVars; // elems that are already read (key is read stmt).
+        bool _reuse_vars; // if true, load to a local var; else, reload on every access.
+        map<VarPoint, string> _vec_vars; // vecs that are already constructed (key is var point).
+        map<string, string> _elem_vars; // elems that are already read (key is read stmt).
 
         // Print access to an aligned vector block.
         // Return var name.
-        virtual string printAlignedVecRead(ostream& os, const VarPoint& gp) =0;
+        virtual string print_aligned_vec_read(ostream& os, const VarPoint& gp) =0;
 
         // Print unaligned vector memory read.
-        // Assumes this results in same values as printUnalignedVec().
+        // Assumes this results in same values as print_unaligned_vec().
         // Return var name.
-        virtual string printUnalignedVecRead(ostream& os, const VarPoint& gp) =0;
+        virtual string print_unaligned_vec_read(ostream& os, const VarPoint& gp) =0;
 
         // Print write to an aligned vector block.
         // Return expression written.
-        virtual string printAlignedVecWrite(ostream& os, const VarPoint& gp,
+        virtual string print_aligned_vec_write(ostream& os, const VarPoint& gp,
                                             const string& val) =0;
 
         // Print conversion from existing vars to make an unaligned vector block.
         // Return var name.
-        virtual string printUnalignedVec(ostream& os, const VarPoint& gp) =0;
+        virtual string print_unaligned_vec(ostream& os, const VarPoint& gp) =0;
 
-        // Print construction for one point var pvName from elems.
-        virtual void printUnalignedVecCtor(ostream& os, const VarPoint& gp,
-                                           const string& pvName) =0;
+        // Print construction for one point var pv_name from elems.
+        virtual void print_unaligned_vec_ctor(ostream& os, const VarPoint& gp,
+                                           const string& pv_name) =0;
 
         // Read from a single point.
         // Return code for read.
-        virtual string readFromScalarPoint(ostream& os, const VarPoint& gp,
-                                           const VarMap* vMap=0) =0;
+        virtual string read_from_scalar_point(ostream& os, const VarPoint& gp,
+                                           const VarMap* v_map=0) =0;
 
         // Read from multiple points that are not vectorizable.
         // Return var name.
-        virtual string printNonVecRead(ostream& os, const VarPoint& gp) =0;
+        virtual string print_non_vec_read(ostream& os, const VarPoint& gp) =0;
 
     public:
         VecPrintHelper(VecInfoVisitor& vv,
-                       bool reuseVars = true) :
-            _vv(vv), _reuseVars(reuseVars) { }
+                       bool reuse_vars = true) :
+            _vv(vv), _reuse_vars(reuse_vars) { }
         virtual ~VecPrintHelper() {}
 
         // get fold info.
-        virtual const IntTuple& getFold() const {
-            return _vv.getFold();
+        virtual const IntTuple& get_fold() const {
+            return _vv.get_fold();
         }
 
         // Return point info.
-        virtual bool isAligned(const VarPoint& gp) {
-            return _vv._alignedVecs.count(gp) > 0;
+        virtual bool is_aligned(const VarPoint& gp) {
+            return _vv._aligned_vecs.count(gp) > 0;
         }
 
         // Access cached values.
-        virtual const string* savePointVar(const VarPoint& gp, const string& var) {
-            _vecVars[gp] = var;
-            return &_vecVars.at(gp);
+        virtual const string* save_point_var(const VarPoint& gp, const string& var) {
+            _vec_vars[gp] = var;
+            return &_vec_vars.at(gp);
         }
-        virtual const string* lookupPointVar(const VarPoint& gp) {
-            if (_vecVars.count(gp))
-                return &_vecVars.at(gp);
+        virtual const string* lookup_point_var(const VarPoint& gp) {
+            if (_vec_vars.count(gp))
+                return &_vec_vars.at(gp);
             return 0;
         }
-        virtual const string* saveElemVar(const string& expr, const string& var) {
-            _elemVars[expr] = var;
-            return &_elemVars.at(expr);
+        virtual const string* save_elem_var(const string& expr, const string& var) {
+            _elem_vars[expr] = var;
+            return &_elem_vars.at(expr);
         }
-        virtual const string* lookupElemVar(const string& expr) {
-            if (_elemVars.count(expr))
-                return &_elemVars.at(expr);
+        virtual const string* lookup_elem_var(const string& expr) {
+            if (_elem_vars.count(expr))
+                return &_elem_vars.at(expr);
             return 0;
         }
     };

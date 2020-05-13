@@ -32,22 +32,22 @@ IN THE SOFTWARE.
 using namespace std;
 using namespace yask;
 
-void ttest(bool firstInner) {
+void ttest(bool first_inner) {
 
     ostream& os = cout;
 
     IntTuple t1;
-    t1.setFirstInner(firstInner);
-    t1.addDimBack("x", 3);
-    t1.addDimBack("y", 4);
-    assert(t1.getNumDims() == 2);
+    t1.set_first_inner(first_inner);
+    t1.add_dim_back("x", 3);
+    t1.add_dim_back("y", 4);
+    assert(t1._get_num_dims() == 2);
     assert(t1[0] == 3);
     assert(t1[1] == 4);
     assert(t1["x"] == 3);
     assert(t1["y"] == 4);
 
-    os << "space: " << t1.makeDimValStr() << ", is ";
-    if (!t1.isFirstInner()) os << "NOT ";
+    os << "space: " << t1.make_dim_val_str() << ", is ";
+    if (!t1.is_first_inner()) os << "NOT ";
     os << "first-inner layout.\n";
 
     IntTuple t2(t1);
@@ -59,12 +59,12 @@ void ttest(bool firstInner) {
 
     IntTuple t3(t1);
     assert(t3 == t1);
-    t3.addDimFront("a", 1);
+    t3.add_dim_front("a", 1);
     assert(t3 > t1);            // more dims.
 
     IntTuple t4;
-    t4.addDimBack("x", 3);
-    t4.addDimBack("z", 4);
+    t4.add_dim_back("x", 3);
+    t4.add_dim_back("z", 4);
     assert(t4 > t1);
 
     os << "loop test...\n";
@@ -73,16 +73,16 @@ void ttest(bool firstInner) {
         for (int x = 0; x < t1["x"]; x++, j++) {
 
             IntTuple ofs;
-            ofs.addDimBack("x", x);
-            ofs.addDimBack("y", y);
+            ofs.add_dim_back("x", x);
+            ofs.add_dim_back("y", y);
 
             auto i = t1.layout(ofs);
-            os << " offset at " << ofs.makeDimValStr() << " = " << i << endl;
+            os << " offset at " << ofs.make_dim_val_str() << " = " << i << endl;
 
             IntTuple ofs2 = t1.unlayout(i);
             assert(ofs == ofs2);
 
-            if (firstInner)
+            if (first_inner)
                 assert(i == j);
         }
     }
@@ -90,19 +90,19 @@ void ttest(bool firstInner) {
     for (int d = 0; d <= 3; d++) {
 
         IntTuple t2;
-        if (d > 0) t2.addDimBack("x", 3);
-        if (d > 1) t2.addDimBack("y", 4);
-        if (d > 2) t2.addDimBack("z", 3);
+        if (d > 0) t2.add_dim_back("x", 3);
+        if (d > 1) t2.add_dim_back("y", 4);
+        if (d > 2) t2.add_dim_back("z", 3);
 
         os << d << "-d sequential visit test...\n";
         j = 0;
-        t2.visitAllPoints
+        t2.visit_all_points
             ([&](const IntTuple& ofs, size_t k) {
 
                 auto i = t2.layout(ofs);
-                os << " offset at " << ofs.makeDimValStr() << " = " << i << endl;
+                os << " offset at " << ofs.make_dim_val_str() << " = " << i << endl;
 
-                if (firstInner) {
+                if (first_inner) {
                     assert(i == j);
                     assert(i == k);
                 }
@@ -117,17 +117,17 @@ void ttest(bool firstInner) {
         yask_num_threads[0] = 4;
         yask_num_threads[1] = 2;
         j = 0;
-        t2.visitAllPointsInParallel
+        t2.visit_all_points_in_parallel
             ([&](const IntTuple& ofs, size_t k) {
 
                 auto i = t2.layout(ofs);
 #pragma omp critical
                 {
-                    os << " offset at " << ofs.makeDimValStr() << " = " << i << endl;
+                    os << " offset at " << ofs.make_dim_val_str() << " = " << i << endl;
                     j++;
                 }
 
-                if (firstInner)
+                if (first_inner)
                     assert(i == k);
                 return true;
             });
