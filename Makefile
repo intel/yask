@@ -82,6 +82,7 @@ YC_MAKE		:=	$(MAKE) $(YASK_MFLAGS) -C src/compiler YASK_OUTPUT_DIR=$(YASK_OUT_BA
 
 # Misc dirs & files.
 TUPLE_TEST_EXEC :=	$(BIN_OUT_DIR)/yask_tuple_test.exe
+COMBO_TEST_EXEC :=	$(BIN_OUT_DIR)/yask_combo_test.exe
 
 # Compiler and default flags--used only for targets in this Makefile.
 # For compiler, use YC_CXX*.
@@ -212,8 +213,16 @@ $(TUPLE_TEST_EXEC): $(COMM_DIR)/tests/tuple_test.cpp $(COMM_DIR)/*.*pp
 	$(MKDIR) $(dir $@)
 	$(CXX_PREFIX) $(CXX) $(CXXFLAGS) $(LFLAGS) -o $@ $< $(COMM_DIR)/tuple.cpp $(COMM_DIR)/common_utils.cpp
 
+$(COMBO_TEST_EXEC): $(COMM_DIR)/tests/combo_test.cpp $(COMM_DIR)/*.*pp
+	$(MKDIR) $(dir $@)
+	$(CXX_PREFIX) $(CXX) $(CXXFLAGS) $(LFLAGS) -o $@ $< $(COMM_DIR)/combo.cpp
+
 tuple-test: $(TUPLE_TEST_EXEC)
 	@echo '*** Running the C++ YASK tuple test...'
+	$(RUN_PREFIX) $<
+
+combo-test: $(COMBO_TEST_EXEC)
+	@echo '*** Running the C++ YASK combo test...'
 	$(RUN_PREFIX) $<
 
 api-tests: compiler-api
@@ -222,6 +231,7 @@ api-tests: compiler-api
 
 all-tests: compiler-api
 	$(MAKE) tuple-test
+	$(MAKE) combo-test
 	$(YK_MAKE) $@
 	$(MAKE) combo-api-tests
 

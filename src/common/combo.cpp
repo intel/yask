@@ -30,68 +30,74 @@ using namespace std;
 
 namespace yask {
 
-    // https://stackoverflow.com/questions/9330915/number-of-combinations-n-choose-r-in-c
-    int choose(int n, int k) {
-        if (k > n)
-            return 0;
-        if (k * 2 > n)
-            k = n-k;
-        if (k == 0)
+    // Compute binomial coefficient, i.e., the number of combos of n things taken k at a time
+    // w/o repetition.
+    // Returns n!/(k!*(n-k)!).
+    // https://en.wikipedia.org/wiki/Combination.
+    int n_choose_k(int n, int k) {
+        assert(n >= 0);
+        assert(k >= 0);
+
+        // Pick none or all.
+        if (k <= 0 || k == n)
             return 1;
 
-        int result = n;
-        for( int i = 2; i <= k; ++i ) {
-            result *= (n-i+1);
-            result /= i;
+        // Special case for k > n.
+        if (k > n)
+            return 0;
+
+        // Symmetry around center because
+        // n_choose_k == n_choose_n-k when k > n/2.
+        if (k * 2 > n)
+            k = n - k;
+
+        // nc = (n * (n-1) * (n-2) *...* (n-k+1)) / (1 * 2 * 3 *...* k).
+        //    = n * (n-2+1) / 2 * (n-3+1) / 3 *...* (n-k+1) / k.
+        // See "Another alternative computation..." on wikipedia page and
+        // comment that "this can be computed using only integer arithmetic."
+        int nc = n;
+        for( int i = 2; i <= k; i++ ) {
+            nc *= (n - i + 1);
+            nc /= i;
         }
-        return result;    
+        return nc;
     }
 
-    // https://stackoverflow.com/questions/561/how-to-use-combinations-of-sets-as-test-data#794
-    // Fixed to handle p==0 and p==1.
+    // Get the 'r'th set of 'k' elements from set of integers between '0' and 'n-1'.
+    // Returns vector of 'k' values.
+    // 'r' must be between '0' and 'n_choose_k(n, k)-1'.
+    vector<int> n_choose_k_set(int n, int k, int r) {
+        assert(n >= 0);
+        assert(k >= 0);
+        assert(r >= 0);
+        assert(r < n_choose_k(n, k));
 
-    // Get the 'x'th lexicographically ordered set of 'p' elements in 'n'.
-    // Returns 'p' values in 'c'.
-    // 'x' and values in 'c' are 1-based.
-    void combination(int* c, int n, int p, int x) {
-        assert(n > 0);
-        assert(p >= 0);
-        assert(p <= n);
-        assert(x >= 1);
-        assert(x <= choose(n, p));
-        if (p == 0)
-            return;
-        if (p == 1) {
-            c[0] = x;
-            return;
+        vector<int> c;
+
+        // Empty set.
+        if (n <= 0 || k <= 0)
+            return c;
+
+        // Pick one item.
+        if (k == 1) {
+            c.push_back(r);
+            return c;
         }
-        int r, k = 0;
-        for(int i=0; i<p-1; i++) {
-            c[i] = (i != 0) ? c[i-1] : 0;
-            do {
+
+        // Pick k items.
+        int j = 0;
+        for (int i = 0; i < k-1; i++) {
+            c.push_back((i == 0) ? -1 : c[i-1]);
+            while (true) {
                 c[i]++;
-                r = choose(n-c[i],p-(i+1));
-                k += r;
-            } while(k < x);
-            k -= r;
-        }
-        c[p-1] = c[p-2] + x - k;
-    }
-
-    void test_combo() {
-        int n = 5;
-        for (int p = 0; p <= n; p++) {
-            int nx = choose(n,p);
-            cout << "choose(" << n << ", " << p << ") = " << nx << endl;
-            int c[p];
-            for (int x = 1; x <= nx; x++) {
-                cout << "combo(" << c << ", "  << n << ", "  << p << ", "  << x << ") = ";
-                combination(c, n, p, x);
-                for (int i = 0; i < p; i++)
-                    cout << " " << c[i];
-                cout << endl;
+                int nc = n_choose_k(n - (c[i]+1), k - (i+1));
+                if (j + nc >= r + 1)
+                    break;
+                j += nc;
             }
         }
+        c.push_back(c[k-2] + r - j + 1);
+        return c;
     }
 
 }
