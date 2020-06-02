@@ -44,26 +44,26 @@ namespace yask {
 
     protected:
         string _name;           // name of this var.
-        indexExprPtrVec _dims;  // dimensions of this var.
-        bool _isScratch = false; // true if a temp var.
+        index_expr_ptr_vec _dims;  // dimensions of this var.
+        bool _is_scratch = false; // true if a temp var.
 
         // Step-dim info.
-        bool _isStepAllocFixed = true; // step alloc cannot be changed at run-time.
-        idx_t _stepAlloc = 0;         // step-alloc override (0 => calculate).
+        bool _is_step_alloc_fixed = true; // step alloc cannot be changed at run-time.
+        idx_t _step_alloc = 0;         // step-alloc override (0 => calculate).
 
         // Ptr to solution that this var belongs to (its parent).
         StencilSolution* _soln = 0;
 
         // How many dims are foldable.
-        int _numFoldableDims = -1; // -1 => unknown.
+        int _num_foldable_dims = -1; // -1 => unknown.
 
         // Whether this var can be vector-folded.
-        bool _isFoldable = false;
+        bool _is_foldable = false;
 
         ///// Values below are computed based on VarPoint accesses in equations.
 
         // Min and max const indices that are used to access each dim.
-        IntTuple _minIndices, _maxIndices;
+        IntTuple _min_indices, _max_indices;
 
         // Max abs-value of domain-index halos required by all eqs at
         // various step-index values.
@@ -73,70 +73,70 @@ namespace yask {
         map<string, map<bool, map<int, IntTuple>>> _halos;
 
         // Greatest L1 dist of any halo point that accesses this var.
-        int _l1Dist = 0;
+        int _l1_dist = 0;
 
     public:
         // Ctors.
         Var(string name,
-             bool isScratch,
+             bool is_scratch,
              StencilSolution* soln,
-             const indexExprPtrVec& dims);
+             const index_expr_ptr_vec& dims);
 
         // Dtor.
         virtual ~Var() { }
 
         // Name accessors.
-        const string& getName() const { return _name; }
-        void setName(const string& name) { _name = name; }
-        string getDescr() const;
+        const string& _get_name() const { return _name; }
+        void set_name(const string& name) { _name = name; }
+        string get_descr() const;
 
         // Access dims.
-        virtual const indexExprPtrVec& getDims() const { return _dims; }
+        virtual const index_expr_ptr_vec& get_dims() const { return _dims; }
 
         // Step dim or null if none.
-        virtual const indexExprPtr getStepDim() const {
+        virtual const index_expr_ptr get_step_dim() const {
             for (auto d : _dims)
-                if (d->getType() == STEP_INDEX)
+                if (d->get_type() == STEP_INDEX)
                     return d;
             return nullptr;
         }
 
         // Temp var?
-        virtual bool isScratch() const { return _isScratch; }
+        virtual bool is_scratch() const { return _is_scratch; }
 
         // Access to solution.
-        virtual StencilSolution* getSoln() { return _soln; }
-        virtual void setSoln(StencilSolution* soln) { _soln = soln; }
+        virtual StencilSolution* _get_soln() { return _soln; }
+        virtual void set_soln(StencilSolution* soln) { _soln = soln; }
 
         // Get foldablity.
-        virtual int getNumFoldableDims() const {
-            assert(_numFoldableDims >= 0);
-            return _numFoldableDims;
+        virtual int get_num_foldable_dims() const {
+            assert(_num_foldable_dims >= 0);
+            return _num_foldable_dims;
         }
-        virtual bool isFoldable() const {
-            assert(_numFoldableDims >= 0);
-            return _isFoldable;
+        virtual bool is_foldable() const {
+            assert(_num_foldable_dims >= 0);
+            return _is_foldable;
         }
 
         // Get min and max observed indices.
-        virtual const IntTuple& getMinIndices() const { return _minIndices; }
-        virtual const IntTuple& getMaxIndices() const { return _maxIndices; }
+        virtual const IntTuple& get_min_indices() const { return _min_indices; }
+        virtual const IntTuple& get_max_indices() const { return _max_indices; }
 
         // Get the max sizes of halo across all steps for given stage.
-        virtual IntTuple getHaloSizes(const string& stageName, bool left) const {
+        virtual IntTuple get_halo_sizes(const string& stage_name, bool left) const {
             IntTuple halo;
-            if (_halos.count(stageName) && _halos.at(stageName).count(left)) {
-                for (auto i : _halos.at(stageName).at(left)) {
+            if (_halos.count(stage_name) && _halos.at(stage_name).count(left)) {
+                for (auto i : _halos.at(stage_name).at(left)) {
                     auto& hs = i.second; // halo at step-val 'i'.
-                    halo = halo.makeUnionWith(hs);
-                    halo = halo.maxElements(hs, false);
+                    halo = halo.make_union_with(hs);
+                    halo = halo.max_elements(hs, false);
                 }
             }
             return halo;
         }
 
         // Get the max size in 'dim' of halo across all stages and steps.
-        virtual int getHaloSize(const string& dim, bool left) const {
+        virtual int get_halo_size(const string& dim, bool left) const {
             int h = 0;
             for (auto& hi : _halos) {
                 //auto& pname = hi.first;
@@ -154,18 +154,18 @@ namespace yask {
         }
 
         // Get max L1 dist of halos.
-        virtual int getL1Dist() const {
-            return _l1Dist;
+        virtual int get_l1_dist() const {
+            return _l1_dist;
         }
 
         // Determine whether dims are same.
-        virtual bool areDimsSame(const Var& other) const {
+        virtual bool are_dims_same(const Var& other) const {
             if (_dims.size() != other._dims.size())
                 return false;
             size_t i = 0;
             for (auto& dim : _dims) {
                 auto d2 = other._dims[i].get();
-                if (!dim->isSame(d2))
+                if (!dim->is_same(d2))
                     return false;
                 i++;
             }
@@ -173,27 +173,27 @@ namespace yask {
         }
 
         // Determine how many values in step-dim are needed.
-        virtual int getStepDimSize() const;
+        virtual int get_step_dim_size() const;
 
         // Determine whether var can be folded.
-        virtual void setFolding(const Dimensions& dims);
+        virtual void set_folding(const Dimensions& dims);
 
         // Determine whether halo sizes are equal.
-        virtual bool isHaloSame(const Var& other) const;
+        virtual bool is_halo_same(const Var& other) const;
 
         // Update halos and L1 dist based on halo in 'other' var.
-        virtual void updateHalo(const Var& other);
+        virtual void update_halo(const Var& other);
 
         // Update halos and L1 dist based on each value in 'offsets'.
-        virtual void updateHalo(const string& stageName, const IntTuple& offsets);
+        virtual void update_halo(const string& stage_name, const IntTuple& offsets);
 
         // Update L1 dist.
-        virtual void updateL1Dist(int l1Dist) {
-            _l1Dist = max(_l1Dist, l1Dist);
+        virtual void update_l1_dist(int l1_dist) {
+            _l1_dist = max(_l1_dist, l1_dist);
         }
 
         // Update const indices based on 'indices'.
-        virtual void updateConstIndices(const IntTuple& indices);
+        virtual void update_const_indices(const IntTuple& indices);
 
         // APIs.
         virtual const string& get_name() const {
@@ -207,24 +207,24 @@ namespace yask {
             assert(n < get_num_dims());
             auto dp = _dims.at(n);
             assert(dp);
-            return dp->getName();
+            return dp->_get_name();
         }
         virtual std::vector<std::string> get_dim_names() const;
         virtual bool
         is_dynamic_step_alloc() const {
-            return !_isStepAllocFixed;
+            return !_is_step_alloc_fixed;
         }
         virtual void
         set_dynamic_step_alloc(bool enable) {
-            _isStepAllocFixed = !enable;
+            _is_step_alloc_fixed = !enable;
         }
         virtual idx_t
         get_step_alloc_size() const {
-            return getStepDimSize();
+            return get_step_dim_size();
         }
         virtual void
         set_step_alloc_size(idx_t size) {
-            _stepAlloc = size;
+            _step_alloc = size;
         }
         virtual yc_var_point_node_ptr
         new_var_point(const std::vector<yc_number_node_ptr>& index_exprs);
@@ -280,9 +280,9 @@ namespace yask {
         }
 
         // Determine whether each var can be folded.
-        virtual void setFolding(const Dimensions& dims) {
+        virtual void set_folding(const Dimensions& dims) {
             for (auto gp : _vars)
-                gp->setFolding(dims);
+                gp->set_folding(dims);
         }
     };
 

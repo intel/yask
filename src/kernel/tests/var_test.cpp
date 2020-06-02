@@ -55,8 +55,8 @@ int main(int argc, char** argv) {
 
     // Problem dimensions.
     auto dims = YASK_STENCIL_CONTEXT::new_dims();
-    os << "Folding: " << dims->_fold_pts.makeDimValStr(" * ") << endl;
-    os << "Domain dims: " << dims->_domain_dims.makeDimStr() << endl;
+    os << "Folding: " << dims->_fold_pts.make_dim_val_str(" * ") << endl;
+    os << "Domain dims: " << dims->_domain_dims.make_dim_str() << endl;
 
     // Set domain size.
     int i = 0;
@@ -113,26 +113,26 @@ int main(int argc, char** argv) {
         os << "Copying seq of vals\n";
         gb3->set_all_elements_in_seq(1.0);
         auto sizes = gb3->get_allocs();
-        sizes.visitAllPointsInParallel([&](const IdxTuple& pt,
+        sizes.visit_all_points_in_parallel([&](const IdxTuple& pt,
                                            size_t idx) {
                 IdxTuple pt2 = pt;
                 for (auto dname : gdims)
                     pt2[dname] += g3->get_first_rank_alloc_index(dname);
                 Indices ipt(pt2);
-                auto val = gb3->readElem(ipt, 0, __LINE__);
-                gb3f->writeElem(val, ipt, 0, __LINE__);
+                auto val = gb3->read_elem(ipt, 0, __LINE__);
+                gb3f->write_elem(val, ipt, 0, __LINE__);
                 return true;
             });
         os << "Checking seq of vals\n";
-        sizes.visitAllPoints([&](const IdxTuple& pt,
+        sizes.visit_all_points([&](const IdxTuple& pt,
                                  size_t idx) {
                 IdxTuple pt2 = pt;
                 for (auto dname : gdims)
                     pt2[dname] += g3->get_first_rank_alloc_index(dname);
                 Indices ipt(pt2);
-                ipt.addConst(-min_pad);
-                auto val = gb3->readElem(ipt, 0, __LINE__);
-                auto valf = gb3f->readElem(ipt, 0, __LINE__);
+                ipt.add_const(-min_pad);
+                auto val = gb3->read_elem(ipt, 0, __LINE__);
+                auto valf = gb3f->read_elem(ipt, 0, __LINE__);
                 assert(val == valf);
                 return true;
             });

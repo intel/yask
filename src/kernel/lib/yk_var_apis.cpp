@@ -39,7 +39,7 @@ namespace yask {
 #define GET_VAR_API(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
     idx_t YkVarImpl::api_name(const string& dim) const {               \
         STATE_VARS(gbp());                                              \
-        dims->checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok); \
+        dims->check_dim_type(dim, #api_name, step_ok, domain_ok, misc_ok); \
         int posn = gb().get_dim_posn(dim, true, #api_name);             \
         idx_t mbit = 1LL << posn;                                       \
         if (prep_req && gb()._rank_offsets[posn] < 0)                   \
@@ -92,7 +92,7 @@ namespace yask {
         STATE_VARS(gbp());                                              \
         TRACE_MSG("var '" << get_name() << "'."                        \
                    #api_name "('" << dim << "', " << n << ")");         \
-        dims->checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok); \
+        dims->check_dim_type(dim, #api_name, step_ok, domain_ok, misc_ok); \
         int posn = gb().get_dim_posn(dim, true, #api_name);              \
         idx_t mbit = 1LL << posn;                                       \
         expr;                                                           \
@@ -208,19 +208,19 @@ namespace yask {
     bool YkVarImpl::are_indices_local(const Indices& indices) const {
         if (!is_storage_allocated())
             return false;
-        return gb().checkIndices(indices, "are_indices_local", false, true, false);
+        return gb().check_indices(indices, "are_indices_local", false, true, false);
     }
     double YkVarImpl::get_element(const Indices& indices) const {
         STATE_VARS(gbp());
-        TRACE_MSG("get_element({" << gb().makeIndexString(indices) << "}) on " <<
+        TRACE_MSG("get_element({" << gb().make_index_string(indices) << "}) on " <<
                   gb().make_info_string());
         if (!is_storage_allocated())
             THROW_YASK_EXCEPTION("Error: call to 'get_element' with no storage allocated for var '" +
                                  get_name() + "'");
-        gb().checkIndices(indices, "get_element", true, true, false);
+        gb().check_indices(indices, "get_element", true, true, false);
         idx_t asi = gb().get_alloc_step_index(indices);
-        real_t val = gb().readElem(indices, asi, __LINE__);
-        TRACE_MSG("get_element({" << gb().makeIndexString(indices) << "}) on '" <<
+        real_t val = gb().read_elem(indices, asi, __LINE__);
+        TRACE_MSG("get_element({" << gb().make_index_string(indices) << "}) on '" <<
                   get_name() + "' returns " << val);
         return double(val);
     }
@@ -229,7 +229,7 @@ namespace yask {
                                   bool strict_indices) {
         STATE_VARS(gbp());
         TRACE_MSG("set_element(" << val << ", {" <<
-                  gb().makeIndexString(indices) << "}, " <<
+                  gb().make_index_string(indices) << "}, " <<
                   strict_indices << ") on " <<
                   gb().make_info_string());
         idx_t nup = 0;
@@ -240,16 +240,16 @@ namespace yask {
 
             // Don't check step index because this is a write-only API
             // that updates the step index.
-            gb().checkIndices(indices, "set_element", strict_indices, false, false)) {
+            gb().check_indices(indices, "set_element", strict_indices, false, false)) {
             idx_t asi = gb().get_alloc_step_index(indices);
-            gb().writeElem(real_t(val), indices, asi, __LINE__);
+            gb().write_elem(real_t(val), indices, asi, __LINE__);
             nup++;
 
             // Set appropriate dirty flag.
             gb().set_dirty_using_alloc_index(true, asi);
         }
         TRACE_MSG("set_element(" << val << ", {" <<
-                  gb().makeIndexString(indices) << "}, " <<
+                  gb().make_index_string(indices) << "}, " <<
                   strict_indices << ") on '" <<
                   get_name() + "' returns " << nup);
         return nup;
@@ -259,7 +259,7 @@ namespace yask {
                                      bool strict_indices) {
         STATE_VARS(gbp());
         TRACE_MSG("add_to_element(" << val << ", {" <<
-                  gb().makeIndexString(indices) <<  "}, " <<
+                  gb().make_index_string(indices) <<  "}, " <<
                   strict_indices << ") on " <<
                   gb().make_info_string());
         idx_t nup = 0;
@@ -269,16 +269,16 @@ namespace yask {
         if (get_raw_storage_buffer() &&
 
             // Check step index because this API must read before writing.
-            gb().checkIndices(indices, "add_to_element", strict_indices, true, false)) {
+            gb().check_indices(indices, "add_to_element", strict_indices, true, false)) {
             idx_t asi = gb().get_alloc_step_index(indices);
-            gb().addToElem(real_t(val), indices, asi, __LINE__);
+            gb().add_to_elem(real_t(val), indices, asi, __LINE__);
             nup++;
 
             // Set appropriate dirty flag.
             gb().set_dirty_using_alloc_index(true, asi);
         }
         TRACE_MSG("add_to_element(" << val << ", {" <<
-                  gb().makeIndexString(indices) <<  "}, " <<
+                  gb().make_index_string(indices) <<  "}, " <<
                   strict_indices << ") on '" <<
                   get_name() + "' returns " << nup);
         return nup;
@@ -289,34 +289,34 @@ namespace yask {
                                             const Indices& last_indices) const {
         STATE_VARS(this);
         TRACE_MSG("get_elements_in_slice(" << buffer_ptr << ", {" <<
-                  makeIndexString(first_indices) << "}, {" <<
-                  makeIndexString(last_indices) << "}) on " <<
+                  make_index_string(first_indices) << "}, {" <<
+                  make_index_string(last_indices) << "}) on " <<
                   make_info_string());
         if (get_storage() == 0)
             THROW_YASK_EXCEPTION("Error: call to 'get_elements_in_slice' with no storage allocated for var '" +
                                  get_name() + "'");
-        checkIndices(first_indices, "get_elements_in_slice", true, true, false);
-        checkIndices(last_indices, "get_elements_in_slice", true, true, false);
+        check_indices(first_indices, "get_elements_in_slice", true, true, false);
+        check_indices(last_indices, "get_elements_in_slice", true, true, false);
 
         // Find range.
-        IdxTuple numElemsTuple = get_slice_range(first_indices, last_indices);
+        IdxTuple num_elems_tuple = get_slice_range(first_indices, last_indices);
 
         // Visit points in slice.
-        numElemsTuple.visitAllPointsInParallel
+        num_elems_tuple.visit_all_points_in_parallel
             ([&](const IdxTuple& ofs, size_t idx) {
-                Indices pt = first_indices.addElements(ofs);
+                Indices pt = first_indices.add_elements(ofs);
 
                 // TODO: move this outside of loop for const step index.
                 idx_t asi = get_alloc_step_index(pt);
 
-                real_t val = readElem(pt, asi, __LINE__);
+                real_t val = read_elem(pt, asi, __LINE__);
                 ((real_t*)buffer_ptr)[idx] = val;
                 return true;    // keep going.
             });
-        auto nup = numElemsTuple.product();
+        auto nup = num_elems_tuple.product();
         TRACE_MSG("get_elements_in_slice(" << buffer_ptr << ", {" <<
-                  makeIndexString(first_indices) << "}, {" <<
-                  makeIndexString(last_indices) << "}) on '" <<
+                  make_index_string(first_indices) << "}, {" <<
+                  make_index_string(last_indices) << "}) on '" <<
                   get_name() + "' returns " << nup);
         return nup;
     }
@@ -326,8 +326,8 @@ namespace yask {
                                                  bool strict_indices) {
         STATE_VARS(this);
         TRACE_MSG("set_elements_in_slice_same(" << val << ", {" <<
-                  makeIndexString(first_indices) << "}, {" <<
-                  makeIndexString(last_indices) <<  "}, " <<
+                  make_index_string(first_indices) << "}, {" <<
+                  make_index_string(last_indices) <<  "}, " <<
                   strict_indices << ") on " <<
                   make_info_string());
         if (get_storage() == 0) {
@@ -339,34 +339,34 @@ namespace yask {
 
         // 'Fixed' copy of indices.
         Indices first, last;
-        checkIndices(first_indices, "set_elements_in_slice_same",
+        check_indices(first_indices, "set_elements_in_slice_same",
                      strict_indices, false, false, &first);
-        checkIndices(last_indices, "set_elements_in_slice_same",
+        check_indices(last_indices, "set_elements_in_slice_same",
                      strict_indices, false, false, &last);
 
         // Find range.
-        IdxTuple numElemsTuple = get_slice_range(first, last);
+        IdxTuple num_elems_tuple = get_slice_range(first, last);
 
         // Visit points in slice.
         // TODO: optimize by setting vectors when possible.
-        numElemsTuple.visitAllPointsInParallel([&](const IdxTuple& ofs,
+        num_elems_tuple.visit_all_points_in_parallel([&](const IdxTuple& ofs,
                                                    size_t idx) {
-                Indices pt = first.addElements(ofs);
+                Indices pt = first.add_elements(ofs);
 
                 // TODO: move this outside of loop for const step index.
                 idx_t asi = get_alloc_step_index(pt);
 
-                writeElem(real_t(val), pt, asi, __LINE__);
+                write_elem(real_t(val), pt, asi, __LINE__);
                 return true;    // keep going.
             });
 
         // Set appropriate dirty flag(s).
         set_dirty_in_slice(first, last);
 
-        auto nup = numElemsTuple.product();
+        auto nup = num_elems_tuple.product();
         TRACE_MSG("set_elements_in_slice_same(" << val << ", {" <<
-                  makeIndexString(first_indices) << "}, {" <<
-                  makeIndexString(last_indices) <<  "}, " <<
+                  make_index_string(first_indices) << "}, {" <<
+                  make_index_string(last_indices) <<  "}, " <<
                   strict_indices << ") on '" <<
                   get_name() + "' returns " << nup);
         return nup;
@@ -376,39 +376,39 @@ namespace yask {
                                             const Indices& last_indices) {
         STATE_VARS(this);
         TRACE_MSG("set_elements_in_slice(" << buffer_ptr << ", {" <<
-                  makeIndexString(first_indices) << "}, {" <<
-                  makeIndexString(last_indices) <<  "}) on " <<
+                  make_index_string(first_indices) << "}, {" <<
+                  make_index_string(last_indices) <<  "}) on " <<
                   make_info_string());
         if (get_storage() == 0)
             THROW_YASK_EXCEPTION("Error: call to 'set_elements_in_slice' with no storage allocated for var '" +
                                  get_name() + "'");
-        checkIndices(first_indices, "set_elements_in_slice", true, false, false);
-        checkIndices(last_indices, "set_elements_in_slice", true, false, false);
+        check_indices(first_indices, "set_elements_in_slice", true, false, false);
+        check_indices(last_indices, "set_elements_in_slice", true, false, false);
 
         // Find range.
-        IdxTuple numElemsTuple = get_slice_range(first_indices, last_indices);
+        IdxTuple num_elems_tuple = get_slice_range(first_indices, last_indices);
 
         // Visit points in slice.
-        numElemsTuple.visitAllPointsInParallel
+        num_elems_tuple.visit_all_points_in_parallel
             ([&](const IdxTuple& ofs,
                  size_t idx) {
-                Indices pt = first_indices.addElements(ofs);
+                Indices pt = first_indices.add_elements(ofs);
 
                 // TODO: move this outside of loop for const step index.
                 idx_t asi = get_alloc_step_index(pt);
 
                 real_t val = ((real_t*)buffer_ptr)[idx];
-                writeElem(val, pt, asi, __LINE__);
+                write_elem(val, pt, asi, __LINE__);
                 return true;    // keep going.
             });
 
         // Set appropriate dirty flag(s).
         set_dirty_in_slice(first_indices, last_indices);
 
-        auto nup = numElemsTuple.product();
+        auto nup = num_elems_tuple.product();
         TRACE_MSG("set_elements_in_slice(" << buffer_ptr << ", {" <<
-                  makeIndexString(first_indices) << "}, {" <<
-                  makeIndexString(last_indices) <<  "}) on '" <<
+                  make_index_string(first_indices) << "}, {" <<
+                  make_index_string(last_indices) <<  "}) on '" <<
                   get_name() + "' returns " << nup);
         return nup;
     }

@@ -79,7 +79,7 @@ namespace yask {
 
         // Init MPI, OMP, etc.
         // This is normally called very early in the program.
-        virtual void initEnv(int* argc, char*** argv, MPI_Comm comm);
+        virtual void init_env(int* argc, char*** argv, MPI_Comm comm);
 
         // Lock.
         static void set_debug_lock() {
@@ -147,7 +147,7 @@ namespace yask {
 
         // Check whether dim exists and is of allowed type.
         // If not, abort with error, reporting 'fn_name'.
-        void checkDimType(const std::string& dim,
+        void check_dim_type(const std::string& dim,
                           const std::string& fn_name,
                           bool step_ok,
                           bool domain_ok,
@@ -155,8 +155,8 @@ namespace yask {
 
         // Get linear index into a vector given 'fold_ofs', which are
         // element offsets that must be *exactly* those in _vec_fold_pts.
-        idx_t getElemIndexInVec(const Indices& fold_ofs) const {
-            assert(fold_ofs.getNumDims() == NUM_VEC_FOLD_DIMS);
+        idx_t get_elem_index_in_vec(const Indices& fold_ofs) const {
+            assert(fold_ofs._get_num_dims() == NUM_VEC_FOLD_DIMS);
 
             // Use compiler-generated fold macro.
             idx_t i = VEC_FOLD_LAYOUT(fold_ofs);
@@ -172,19 +172,19 @@ namespace yask {
 
         // Get linear index into a vector given 'elem_ofs', which are
         // element offsets that may include other dimensions.
-        idx_t getElemIndexInVec(const IdxTuple& elem_ofs) const {
-            assert(_vec_fold_pts.getNumDims() == NUM_VEC_FOLD_DIMS);
+        idx_t get_elem_index_in_vec(const IdxTuple& elem_ofs) const {
+            assert(_vec_fold_pts._get_num_dims() == NUM_VEC_FOLD_DIMS);
             if (NUM_VEC_FOLD_DIMS == 0)
                 return 0;
 
             // Get required offsets into an Indices obj.
             IdxTuple fold_ofs(_vec_fold_pts);
-            fold_ofs.setValsSame(0);
-            fold_ofs.setVals(elem_ofs, false); // copy only fold offsets.
+            fold_ofs.set_vals_same(0);
+            fold_ofs.set_vals(elem_ofs, false); // copy only fold offsets.
             Indices fofs(fold_ofs);
 
             // Call version that requires vec-fold offsets only.
-            idx_t i = getElemIndexInVec(fofs);
+            idx_t i = get_elem_index_in_vec(fofs);
 
             // Use fold layout to find element index.
 #ifdef DEBUG_LAYOUT
@@ -198,7 +198,7 @@ namespace yask {
 
     // Utility to determine number of points in a "sizes" var.
     inline idx_t get_num_domain_points(const IdxTuple& sizes) {
-        assert(sizes.getNumDims() == NUM_STENCIL_DIMS);
+        assert(sizes._get_num_dims() == NUM_STENCIL_DIMS);
         idx_t pts = 1;
         DOMAIN_VAR_LOOP(i, j)
             pts *= sizes[i];
@@ -281,7 +281,7 @@ namespace yask {
                                         IdxTuple& var,
                                         bool allow_step = false);
 
-        idx_t findNumSubsets(std::ostream& os,
+        idx_t find_num_subsets(std::ostream& os,
                              IdxTuple& inner_sizes, const std::string& inner_name,
                              const IdxTuple& outer_sizes, const std::string& outer_name,
                              const IdxTuple& mults, const std::string& step_dim);
@@ -293,15 +293,15 @@ namespace yask {
         // Print usage message.
         void print_usage(std::ostream& os,
                          CommandLineParser& parser,
-                         const std::string& pgmName,
-                         const std::string& appNotes,
-                         const std::vector<std::string>& appExamples);
+                         const std::string& pgm_name,
+                         const std::string& app_notes,
+                         const std::vector<std::string>& app_examples);
 
         // Make sure all user-provided settings are valid by rounding-up
         // values as needed.
         // Called from prepare_solution(), so it doesn't normally need to be called from user code.
         // Prints informational info to 'os'.
-        virtual void adjustSettings(KernelStateBase* ksb = 0);
+        virtual void adjust_settings(KernelStateBase* ksb = 0);
 
         // Determine if this is the first or last rank in given dim.
         bool is_first_rank(const std::string dim) {
@@ -347,18 +347,18 @@ namespace yask {
         // NB: this is the *max* number of neighbors, not necessarily the actual number.
         idx_t neighborhood_size = 0;
 
-        // What getNeighborIndex() returns for myself.
+        // What get_neighbor_index() returns for myself.
         // Example: trunc(3^3 / 2) = 13 for 3D problem.
         int my_neighbor_index;
 
         // MPI rank of each neighbor.
         // MPI_PROC_NULL => no neighbor.
-        // Vector index is per getNeighborIndex().
+        // Vector index is per get_neighbor_index().
         typedef std::vector<int> Neighbors;
         Neighbors my_neighbors;
 
         // Manhattan distance to each neighbor.
-        // Vector index is per getNeighborIndex().
+        // Vector index is per get_neighbor_index().
         std::vector<int> man_dists;
 
         // Whether each neighbor has all its rank-domain
@@ -381,13 +381,13 @@ namespace yask {
 
             // Max neighbors.
             neighborhood_sizes = dims->_domain_dims; // copy dims from domain.
-            neighborhood_sizes.setValsSame(num_offsets); // set sizes in each domain dim.
+            neighborhood_sizes.set_vals_same(num_offsets); // set sizes in each domain dim.
             neighborhood_size = neighborhood_sizes.product(); // neighbors in all dims.
 
             // Myself.
             IdxTuple noffsets(neighborhood_sizes);
-            noffsets.setValsSame(rank_self);
-            my_neighbor_index = getNeighborIndex(noffsets);
+            noffsets.set_vals_same(rank_self);
+            my_neighbor_index = get_neighbor_index(noffsets);
 
             // Init arrays.
             my_neighbors.resize(neighborhood_size, MPI_PROC_NULL);
@@ -401,7 +401,7 @@ namespace yask {
 
         // Get a 1D index for a neighbor.
         // Input 'offsets': tuple of NeighborOffset vals.
-        virtual idx_t getNeighborIndex(const IdxTuple& offsets) const {
+        virtual idx_t get_neighbor_index(const IdxTuple& offsets) const {
             idx_t i = neighborhood_sizes.layout(offsets); // 1D index.
             assert(i >= 0);
             assert(i < neighborhood_size);
@@ -410,7 +410,7 @@ namespace yask {
 
         // Visit all neighbors.
         // Does NOT visit self.
-        virtual void visitNeighbors(std::function<void
+        virtual void visit_neighbors(std::function<void
                                     (const IdxTuple& offsets, // NeighborOffset vals.
                                      int rank, // MPI rank; might be MPI_PROC_NULL.
                                      int index // simple counter from 0.
@@ -519,14 +519,14 @@ namespace yask {
     struct MPIBufs {
 
         // Need one buf for send and one for receive for each neighbor.
-        enum BufDir { bufSend, bufRecv, nBufDirs };
+        enum BufDir { buf_send, buf_recv, n_buf_dirs };
 
-        MPIBuf bufs[nBufDirs];
+        MPIBuf bufs[n_buf_dirs];
 
         // Reset lock for send buffer.
         // Another rank owns recv buffer.
         void reset_locks() {
-            bufs[bufSend].shm_lock_init();
+            bufs[buf_send].shm_lock_init();
         }
     };
 
@@ -535,7 +535,7 @@ namespace yask {
     // and some meta-data.
     struct MPIData {
 
-        MPIInfoPtr _mpiInfo;
+        MPIInfoPtr _mpi_info;
 
         // Buffers for all possible neighbors.
         typedef std::vector<MPIBufs> NeighborBufs;
@@ -546,13 +546,13 @@ namespace yask {
         std::vector<MPI_Request> recv_reqs;
         std::vector<MPI_Request> send_reqs;
 
-        MPIData(MPIInfoPtr mpiInfo) :
-            _mpiInfo(mpiInfo) {
+        MPIData(MPIInfoPtr mpi_info) :
+            _mpi_info(mpi_info) {
 
             // Init vector of buffers.
-            auto n = _mpiInfo->neighborhood_size;
-            MPIBufs emptyBufs;
-            bufs.resize(n, emptyBufs);
+            auto n = _mpi_info->neighborhood_size;
+            MPIBufs empty_bufs;
+            bufs.resize(n, empty_bufs);
 
             // Init handles.
             recv_reqs.resize(n, MPI_REQUEST_NULL);
@@ -566,13 +566,13 @@ namespace yask {
 
         // Apply a function to each neighbor rank.
         // Called visitor function will contain the rank index of the neighbor.
-        virtual void visitNeighbors(std::function<void (const IdxTuple& neighbor_offsets, // NeighborOffset.
+        virtual void visit_neighbors(std::function<void (const IdxTuple& neighbor_offsets, // NeighborOffset.
                                                         int rank,
                                                         int index, // simple counter from 0.
                                                         MPIBufs& bufs)> visitor);
 
         // Access a buffer by direction and neighbor offsets.
-        virtual MPIBuf& getBuf(MPIBufs::BufDir bd, const IdxTuple& neighbor_offsets);
+        virtual MPIBuf& get_buf(MPIBufs::BufDir bd, const IdxTuple& neighbor_offsets);
     };
 
     // A collection of solution meta-data whose ownership is shared between
@@ -601,7 +601,7 @@ namespace yask {
         int _outer_posn = -1;   // -1 => not set.
 
         // MPI neighbor info.
-        MPIInfoPtr _mpiInfo;
+        MPIInfoPtr _mpi_info;
     };
     typedef std::shared_ptr<KernelState> KernelStatePtr;
 
@@ -623,8 +623,8 @@ namespace yask {
     assert(opts);                                                       \
     pfx auto* dims = state->_dims.get();                                \
     assert(dims);                                                       \
-    pfx auto* mpiInfo = state->_mpiInfo.get();                          \
-    assert(mpiInfo);                                                    \
+    pfx auto* mpi_info = state->_mpi_info.get();                          \
+    assert(mpi_info);                                                    \
     const auto& step_dim = dims->_step_dim;                             \
     const auto& inner_dim = dims->_inner_dim;                           \
     const auto& domain_dims = dims->_domain_dims;                       \
@@ -675,8 +675,8 @@ namespace yask {
         const KernelEnvPtr& get_env() const { return _state->_env; }
         DimsPtr& get_dims() { return _state->_dims; }
         const DimsPtr& get_dims() const { return _state->_dims; }
-        MPIInfoPtr& get_mpi_info() { return _state->_mpiInfo; }
-        const MPIInfoPtr& get_mpi_info() const { return _state->_mpiInfo; }
+        MPIInfoPtr& get_mpi_info() { return _state->_mpi_info; }
+        const MPIInfoPtr& get_mpi_info() const { return _state->_mpi_info; }
         bool use_stage_tuners() const { return _state->_use_stage_tuners; }
         yask_output_ptr get_debug_output() const {
             return _state->_env->get_debug_output();

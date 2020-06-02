@@ -29,7 +29,7 @@ using namespace std;
 namespace yask {
 
     // Make a new var.
-    YkVarPtr StencilContext::newVar(const std::string& name,
+    YkVarPtr StencilContext::new_var(const std::string& name,
                                       const VarDimNames& gdims,
                                       const VarDimSizes* sizes) {
         STATE_VARS(this);
@@ -46,7 +46,7 @@ namespace yask {
 
         // First, try to make a var that matches the layout in
         // the stencil.
-        VarBasePtr gp = newStencilVar(name, gdims);
+        VarBasePtr gp = new_stencil_var(name, gdims);
 
         // No match.
         if (!gp) {
@@ -54,7 +54,7 @@ namespace yask {
             // Tuple of dims.
             IdxTuple dtup;
             for (auto& d : gdims)
-                dtup.addDimBack(d, 0);
+                dtup.add_dim_back(d, 0);
 
 #if ALLOW_NEW_VARS
             // Allow new var types.
@@ -62,12 +62,12 @@ namespace yask {
             // Check dims.
             int ndims = gdims.size();
             bool step_used = false;
-            set<string> seenDims;
+            set<string> seen_dims;
             for (int i = 0; i < ndims; i++) {
                 auto& gdim = gdims[i];
 
                 // Already used?
-                if (seenDims.count(gdim)) {
+                if (seen_dims.count(gdim)) {
                     THROW_YASK_EXCEPTION("Error: cannot create var '" + name +
                                          "' because dimension '" + gdim +
                                          "' is used more than once");
@@ -93,7 +93,7 @@ namespace yask {
 
                 // New misc dim?
                 else {
-                    misc_dims.addDimBack(gdim, 0);
+                    misc_dims.add_dim_back(gdim, 0);
                 }
             }
 
@@ -107,13 +107,13 @@ namespace yask {
             // Failed.
             if (!gp)
                 FORMAT_AND_THROW_YASK_EXCEPTION("Error: cannot create new var '" << name <<
-                                                "' with dimensions '" << dtup.makeDimStr() <<
+                                                "' with dimensions '" << dtup.make_dim_str() <<
                                                 "'; only up to " << MAX_DIMS <<
                                                 " dimensions supported");
 #else
             // Don't allow new var types.
             FORMAT_AND_THROW_YASK_EXCEPTION("Error: cannot create new var '" << name <<
-                                            "' with dimensions '" << dtup.makeDimStr() <<
+                                            "' with dimensions '" << dtup.make_dim_str() <<
                                             "'; this list of dimensions is not in any existing var");
 #endif
         }
@@ -128,7 +128,7 @@ namespace yask {
         YkVarPtr ygp = make_shared<YkVarImpl>(gp);
 
         // Add to context.
-        addVar(ygp, false, false);     // mark as non-orig, non-output var.
+        add_var(ygp, false, false);     // mark as non-orig, non-output var.
 
         // Set sizes as provided.
         if (got_sizes) {

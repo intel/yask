@@ -40,7 +40,7 @@ namespace yask {
         if (prep_req && !is_prepared())                                 \
             THROW_YASK_EXCEPTION("Error: '" #api_name                   \
                                  "()' called before calling 'prepare_solution()'"); \
-        dims->checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok); \
+        dims->check_dim_type(dim, #api_name, step_ok, domain_ok, misc_ok); \
         return expr;                                                    \
     }
     GET_SOLN_API(get_num_ranks, opts->_num_ranks[dim], false, true, false, false)
@@ -60,7 +60,7 @@ namespace yask {
         STATE_VARS(this);                                               \
         TRACE_MSG("solution '" << get_name() << "'."                    \
                    #api_name "('" << dim << "', " << n << ")");         \
-        dims->checkDimType(dim, #api_name, step_ok, domain_ok, misc_ok); \
+        dims->check_dim_type(dim, #api_name, step_ok, domain_ok, misc_ok); \
         expr;                                                           \
         update_var_info(false);                                        \
         if (reset_prep) set_prepared(false);                           \
@@ -116,8 +116,8 @@ namespace yask {
         reset_auto_tuner(true, false);
 
         // Report ranks.
-        DEBUG_MSG("\nNum MPI ranks:            " << env->get_num_ranks() <<
-                  "\nThis MPI rank index:      " << env->get_rank_index());
+        DEBUG_MSG("\n_num MPI ranks:            " << env->get_num_ranks() <<
+                  "\n_this MPI rank index:      " << env->get_rank_index());
 
         // report threads.
         {
@@ -125,7 +125,7 @@ namespace yask {
             int rt, bt;
             int at = get_num_comp_threads(rt, bt);
             DEBUG_MSG("Num OpenMP threads avail: " << opts->max_threads <<
-                      "\nNum OpenMP threads used:  " << at <<
+                      "\n_num OpenMP threads used:  " << at <<
                       "\n  Num threads per region: " << rt <<
                       "\n  Num threads per block:  " << bt);
         }
@@ -141,17 +141,17 @@ namespace yask {
                           [&](idx_t start, idx_t stop, idx_t thread_num) { });
 
         // Some var stats.
-        DEBUG_MSG("\nNum vars: " << varPtrs.size() <<
-                  "\nNum vars to be updated: " << outputVarPtrs.size());
+        DEBUG_MSG("\n_num vars: " << var_ptrs.size() <<
+                  "\n_num vars to be updated: " << output_var_ptrs.size());
 
         // Set up data based on MPI rank, including local or global sizes,
         // var positions.
-        setupRank();
+        setup_rank();
 
         // Adjust all settings before setting MPI buffers or sizing vars.
         // Prints adjusted settings.
         // TODO: print settings again after auto-tuning.
-        opts->adjustSettings(this);
+        opts->adjust_settings(this);
 
         // Set offsets in vars and find WF extensions
         // based on the vars' halos. Force setting
@@ -163,26 +163,26 @@ namespace yask {
         find_bounding_boxes();
 
         // Copy current settings to stages.  Needed here because settings may
-        // have been changed via APIs or from call to setupRank() since last
+        // have been changed via APIs or from call to setup_rank() since last
         // call to prepare_solution().  This will wipe out any previous
         // auto-tuning.
-        for (auto& sp : stStages)
-            sp->getLocalSettings() = *opts;
+        for (auto& sp : st_stages)
+            sp->get_local_settings() = *opts;
 
         // Alloc vars, scratch vars, MPI bufs.
         // This is the order in which preferred NUMA nodes (e.g., HBW mem)
         // will be used.
         // We free the scratch and MPI data first to give vars preference.
-        YaskTimer allocTimer;
-        allocTimer.start();
-        freeScratchData();
-        freeMpiData();
-        allocVarData();
-        allocScratchData();
-        allocMpiData();
-        allocTimer.stop();
+        YaskTimer alloc_timer;
+        alloc_timer.start();
+        free_scratch_data();
+        free_mpi_data();
+        alloc_var_data();
+        alloc_scratch_data();
+        alloc_mpi_data();
+        alloc_timer.stop();
         DEBUG_MSG("Allocation done in " <<
-                  makeNumStr(allocTimer.get_elapsed_secs()) << " secs.");
+                  make_num_str(alloc_timer.get_elapsed_secs()) << " secs.");
 
         init_stats();
 
@@ -219,17 +219,17 @@ namespace yask {
 
         // Print detailed info only if temporal tiling enabled.
         if (wf_steps > 0 || tb_steps > 0) {
-            DEBUG_MSG(" wave-front-angles:         " << wf_angles.makeDimValStr() << endl <<
+            DEBUG_MSG(" wave-front-angles:         " << wf_angles.make_dim_val_str() << endl <<
                       " num-wave-front-shifts:     " << num_wf_shifts << endl <<
-                      " wave-front-shift-amounts:  " << wf_shift_pts.makeDimValStr() << endl <<
-                      " left-wave-front-exts:      " << left_wf_exts.makeDimValStr() << endl <<
-                      " right-wave-front-exts:     " << right_wf_exts.makeDimValStr() << endl <<
+                      " wave-front-shift-amounts:  " << wf_shift_pts.make_dim_val_str() << endl <<
+                      " left-wave-front-exts:      " << left_wf_exts.make_dim_val_str() << endl <<
+                      " right-wave-front-exts:     " << right_wf_exts.make_dim_val_str() << endl <<
                       " ext-local-domain:          " << ext_bb.make_range_string(domain_dims) << endl <<
-                      " temporal-block-angles:     " << tb_angles.makeDimValStr() << endl <<
+                      " temporal-block-angles:     " << tb_angles.make_dim_val_str() << endl <<
                       " num-temporal-block-shifts: " << num_tb_shifts << endl <<
-                      " temporal-block-long-base:  " << tb_widths.makeDimValStr(" * ") << endl <<
-                      " temporal-block-short-base: " << tb_tops.makeDimValStr(" * ") << endl <<
-                      " mini-block-angles:         " << mb_angles.makeDimValStr());
+                      " temporal-block-long-base:  " << tb_widths.make_dim_val_str(" * ") << endl <<
+                      " temporal-block-short-base: " << tb_tops.make_dim_val_str(" * ") << endl <<
+                      " mini-block-angles:         " << mb_angles.make_dim_val_str());
         }
     }
 
@@ -238,62 +238,62 @@ namespace yask {
 
         // Calc and report total allocation and domain sizes.
         rank_nbytes = get_num_bytes();
-        tot_nbytes = sumOverRanks(rank_nbytes, env->comm);
+        tot_nbytes = sum_over_ranks(rank_nbytes, env->comm);
         rank_domain_pts = rank_bb.bb_num_points;
-        tot_domain_pts = sumOverRanks(rank_domain_pts, env->comm);
-        DEBUG_MSG("\nDomain size in this rank (points):          " << makeNumStr(rank_domain_pts) <<
-                  "\nTotal allocation in this rank:              " << makeByteStr(rank_nbytes) <<
-                  "\nOverall problem size in " << env->num_ranks << " rank(s) (points): " <<
-                  makeNumStr(tot_domain_pts) <<
-                  "\nTotal overall allocation in " << env->num_ranks << " rank(s):      " <<
-                  makeByteStr(tot_nbytes));
+        tot_domain_pts = sum_over_ranks(rank_domain_pts, env->comm);
+        DEBUG_MSG("\n_domain size in this rank (points):          " << make_num_str(rank_domain_pts) <<
+                  "\n_total allocation in this rank:              " << make_byte_str(rank_nbytes) <<
+                  "\n_overall problem size in " << env->num_ranks << " rank(s) (points): " <<
+                  make_num_str(tot_domain_pts) <<
+                  "\n_total overall allocation in " << env->num_ranks << " rank(s):      " <<
+                  make_byte_str(tot_nbytes));
 
         // Report some sizes and settings.
-        DEBUG_MSG("\nWork-unit sizes in points (from smallest to largest):\n"
-                  " vector-size:           " << dims->_fold_pts.makeDimValStr(" * ") << endl <<
-                  " cluster-size:          " << dims->_cluster_pts.makeDimValStr(" * ") << endl <<
-                  " sub-block-size:        " << opts->_sub_block_sizes.removeDim(step_posn).makeDimValStr(" * ") << endl <<
-                  " mini-block-size:       " << opts->_mini_block_sizes.makeDimValStr(" * ") << endl <<
-                  " block-size:            " << opts->_block_sizes.makeDimValStr(" * ") << endl <<
-                  " region-size:           " << opts->_region_sizes.makeDimValStr(" * ") << endl <<
-                  " local-domain-size:     " << opts->_rank_sizes.removeDim(step_posn).makeDimValStr(" * ") << endl <<
-                  " global-domain-size:    " << opts->_global_sizes.removeDim(step_posn).makeDimValStr(" * "));
+        DEBUG_MSG("\n_work-unit sizes in points (from smallest to largest):\n"
+                  " vector-size:           " << dims->_fold_pts.make_dim_val_str(" * ") << endl <<
+                  " cluster-size:          " << dims->_cluster_pts.make_dim_val_str(" * ") << endl <<
+                  " sub-block-size:        " << opts->_sub_block_sizes.remove_dim(step_posn).make_dim_val_str(" * ") << endl <<
+                  " mini-block-size:       " << opts->_mini_block_sizes.make_dim_val_str(" * ") << endl <<
+                  " block-size:            " << opts->_block_sizes.make_dim_val_str(" * ") << endl <<
+                  " region-size:           " << opts->_region_sizes.make_dim_val_str(" * ") << endl <<
+                  " local-domain-size:     " << opts->_rank_sizes.remove_dim(step_posn).make_dim_val_str(" * ") << endl <<
+                  " global-domain-size:    " << opts->_global_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
 #ifdef SHOW_GROUPS
-        DEBUG_MSG(" sub-block-group-size:  " << opts->_sub_block_group_sizes.makeDimValStr(" * ") << endl <<
-                  " block-group-size:      " << opts->_block_group_sizes.makeDimValStr(" * "));
+        DEBUG_MSG(" sub-block-group-size:  " << opts->_sub_block_group_sizes.make_dim_val_str(" * ") << endl <<
+                  " block-group-size:      " << opts->_block_group_sizes.make_dim_val_str(" * "));
 #endif
-        DEBUG_MSG("\nOther settings:\n"
+        DEBUG_MSG("\n_other settings:\n"
                   " yask-version:          " << yask_get_version_string() << endl <<
                   " target:                " << get_target() << endl <<
                   " stencil-name:          " << get_name() << endl <<
                   " stencil-description:   " << get_description() << endl <<
-                  " element-size:          " << makeByteStr(get_element_bytes()) << endl <<
+                  " element-size:          " << make_byte_str(get_element_bytes()) << endl <<
                   " local-domain:          " << rank_bb.make_range_string(domain_dims));
 #ifdef USE_MPI
-        DEBUG_MSG(" num-ranks:             " << opts->_num_ranks.makeDimValStr(" * ") << endl <<
-                  " rank-indices:          " << opts->_rank_indices.makeDimValStr() << endl <<
-                  " local-domain-offsets:  " << rank_domain_offsets.makeDimValStr(dims->_domain_dims));
+        DEBUG_MSG(" num-ranks:             " << opts->_num_ranks.make_dim_val_str(" * ") << endl <<
+                  " rank-indices:          " << opts->_rank_indices.make_dim_val_str() << endl <<
+                  " local-domain-offsets:  " << rank_domain_offsets.make_dim_val_str(dims->_domain_dims));
         if (opts->overlap_comms)
             DEBUG_MSG(" mpi-interior:          " << mpi_interior.make_range_string(domain_dims));
 #endif
         DEBUG_MSG( " vector-len:            " << VLEN << endl <<
-                   " extra-padding:         " << opts->_extra_pad_sizes.removeDim(step_posn).makeDimValStr() << endl <<
-                   " minimum-padding:       " << opts->_min_pad_sizes.removeDim(step_posn).makeDimValStr() << endl <<
+                   " extra-padding:         " << opts->_extra_pad_sizes.remove_dim(step_posn).make_dim_val_str() << endl <<
+                   " minimum-padding:       " << opts->_min_pad_sizes.remove_dim(step_posn).make_dim_val_str() << endl <<
                    " allow-addl-padding:    " << opts->_allow_addl_pad << endl <<
                    " L1-prefetch-distance:  " << PFD_L1 << endl <<
                    " L2-prefetch-distance:  " << PFD_L2 << endl <<
-                   " max-halos:             " << max_halos.makeDimValStr());
+                   " max-halos:             " << max_halos.make_dim_val_str());
         print_temporal_tiling_info();
 
         // Info about eqs, stages and bundles.
         DEBUG_MSG("\n"
-                  "Num stages:             " << stStages.size() << endl <<
-                  "Num stencil bundles:    " << stBundles.size() << endl <<
+                  "Num stages:             " << st_stages.size() << endl <<
+                  "Num stencil bundles:    " << st_bundles.size() << endl <<
                   "Num stencil equations:  " << NUM_STENCIL_EQS);
 
         // Info on work in stages.
-        DEBUG_MSG("\nBreakdown of work stats in this rank:");
-        for (auto& sp : stStages)
+        DEBUG_MSG("\n_breakdown of work stats in this rank:");
+        for (auto& sp : st_stages)
             sp->init_work_stats();
     }
 
@@ -307,10 +307,10 @@ namespace yask {
 
         // Release any MPI data.
         env->global_barrier();
-        mpiData.clear();
+        mpi_data.clear();
 
         // Release var data.
-        for (auto gp : varPtrs) {
+        for (auto gp : var_ptrs) {
             if (!gp)
                 continue;
             gp->release_storage();
@@ -324,10 +324,10 @@ namespace yask {
         auto sp = dynamic_pointer_cast<StencilContext>(source);
         assert(sp);
 
-        for (auto gp : varPtrs) {
+        for (auto gp : var_ptrs) {
             auto gname = gp->get_name();
-            auto si = sp->varMap.find(gname);
-            if (si != sp->varMap.end()) {
+            auto si = sp->var_map.find(gname);
+            if (si != sp->var_map.end()) {
                 auto sgp = si->second;
                 gp->fuse_vars(sgp);
             }
@@ -358,27 +358,27 @@ namespace yask {
     }
 
     // Add a new var to the containers.
-    void StencilContext::addVar(YkVarPtr gp, bool is_orig, bool is_output) {
+    void StencilContext::add_var(YkVarPtr gp, bool is_orig, bool is_output) {
         STATE_VARS(this);
         assert(gp);
         auto& gname = gp->get_name();
-        if (varMap.count(gname))
+        if (var_map.count(gname))
             THROW_YASK_EXCEPTION("Error: var '" + gname + "' already exists");
 
         // Add to list and map.
-        varPtrs.push_back(gp);
-        varMap[gname] = gp;
+        var_ptrs.push_back(gp);
+        var_map[gname] = gp;
 
         // Add to orig list and map if 'is_orig'.
         if (is_orig) {
-            origVarPtrs.push_back(gp);
-            origVarMap[gname] = gp;
+            orig_var_ptrs.push_back(gp);
+            orig_var_map[gname] = gp;
         }
 
         // Add to output list and map if 'is_output'.
         if (is_output) {
-            outputVarPtrs.push_back(gp);
-            outputVarMap[gname] = gp;
+            output_var_ptrs.push_back(gp);
+            output_var_map[gname] = gp;
         }
     }
 
@@ -450,7 +450,7 @@ namespace yask {
         double tptime = 0.;
         double optime = 0.;
         idx_t psteps = 0;
-        for (auto& sp : stStages) {
+        for (auto& sp : st_stages) {
 
             // steps in this stage.
             idx_t ns = sp->steps_done;
@@ -500,79 +500,79 @@ namespace yask {
         }
 
         if (steps_done > 0) {
-            DEBUG_MSG("\nWork stats:\n"
-                      " num-steps-done:                   " << makeNumStr(steps_done) << endl <<
-                      " num-reads-per-step:               " << makeNumStr(double(p->nreads) / steps_done) << endl <<
-                      " num-writes-per-step:              " << makeNumStr(double(p->nwrites) / steps_done) << endl <<
-                      " num-est-FP-ops-per-step:          " << makeNumStr(double(p->nfpops) / steps_done) << endl <<
-                      " num-points-per-step:              " << makeNumStr(tot_domain_pts));
+            DEBUG_MSG("\n_work stats:\n"
+                      " num-steps-done:                   " << make_num_str(steps_done) << endl <<
+                      " num-reads-per-step:               " << make_num_str(double(p->nreads) / steps_done) << endl <<
+                      " num-writes-per-step:              " << make_num_str(double(p->nwrites) / steps_done) << endl <<
+                      " num-est-FP-ops-per-step:          " << make_num_str(double(p->nfpops) / steps_done) << endl <<
+                      " num-points-per-step:              " << make_num_str(tot_domain_pts));
             if (psteps != steps_done) {
                 DEBUG_MSG(" Work breakdown by stage(s):");
-                for (auto& sp : stStages) {
+                for (auto& sp : st_stages) {
                     idx_t ns = sp->steps_done;
                     idx_t nreads = sp->tot_reads_per_step;
                     idx_t nwrites = sp->tot_writes_per_step;
                     idx_t nfpops = sp->tot_fpops_per_step;
                     string pfx = "  '" + sp->get_name() + "' ";
                     DEBUG_MSG(pfx << "num-steps-done:           " << ns << endl <<
-                              pfx << "num-reads-per-step:       " << makeNumStr(nreads) << endl <<
-                              pfx << "num-writes-per-step:      " << makeNumStr(nwrites) << endl <<
-                              pfx << "num-est-FP-ops-per-step:  " << makeNumStr(nfpops));
+                              pfx << "num-reads-per-step:       " << make_num_str(nreads) << endl <<
+                              pfx << "num-writes-per-step:      " << make_num_str(nwrites) << endl <<
+                              pfx << "num-est-FP-ops-per-step:  " << make_num_str(nfpops));
                 }
             }
-            DEBUG_MSG("\nTime stats:\n"
-                      " elapsed-time (sec):               " << makeNumStr(rtime) << endl <<
+            DEBUG_MSG("\n_time stats:\n"
+                      " elapsed-time (sec):               " << make_num_str(rtime) << endl <<
                       " Time breakdown by activity type:\n"
-                      "  compute time (sec):                " << makeNumStr(ctime) <<
+                      "  compute time (sec):                " << make_num_str(ctime) <<
                       print_pct(ctime, rtime) << endl <<
-                      "  halo exchange time (sec):          " << makeNumStr(htime) <<
+                      "  halo exchange time (sec):          " << make_num_str(htime) <<
                       print_pct(htime, rtime) << endl <<
-                      "  other time (sec):                  " << makeNumStr(otime) <<
+                      "  other time (sec):                  " << make_num_str(otime) <<
                       print_pct(otime, rtime));
             if (psteps != steps_done) {
                 DEBUG_MSG(" Compute-time breakdown by stage(s):");
-                for (auto& sp : stStages) {
+                for (auto& sp : st_stages) {
                     auto& ps = sp->stats;
                     double ptime = ps.run_time;
                     string pfx = "  '" + sp->get_name() + "' ";
-                    DEBUG_MSG(pfx << "time (sec):       " << makeNumStr(ptime) <<
+                    DEBUG_MSG(pfx << "time (sec):       " << make_num_str(ptime) <<
                               print_pct(ptime, ctime));
                 }
-                DEBUG_MSG("  other (sec):                       " << makeNumStr(optime) <<
+                DEBUG_MSG("  other (sec):                       " << make_num_str(optime) <<
                           print_pct(optime, ctime));
             }
 #ifdef USE_MPI
             double ohtime = max(htime - wtime - ttime, 0.);
             DEBUG_MSG(" Compute-time breakdown by halo area:\n"
-                      "  rank-exterior compute (sec):       " << makeNumStr(etime) <<
+                      "  rank-exterior compute (sec):       " << make_num_str(etime) <<
                       print_pct(etime, ctime) << endl <<
-                      "  rank-interior compute (sec):       " << makeNumStr(itime) <<
+                      "  rank-interior compute (sec):       " << make_num_str(itime) <<
                       print_pct(itime, ctime) << endl <<
                       " Halo-time breakdown:\n"
-                      "  MPI waits (sec):                   " << makeNumStr(wtime) <<
+                      "  MPI waits (sec):                   " << make_num_str(wtime) <<
                       print_pct(wtime, htime) << endl <<
-                      "  MPI tests (sec):                   " << makeNumStr(ttime) <<
+                      "  MPI tests (sec):                   " << make_num_str(ttime) <<
                       print_pct(ttime, htime) << endl <<
-                      "  packing, unpacking, etc. (sec):    " << makeNumStr(ohtime) <<
+                      "  packing, unpacking, etc. (sec):    " << make_num_str(ohtime) <<
                       print_pct(ohtime, htime));
 #endif
 
             // Note that rates are reported with base-10 suffixes per common convention, not base-2.
             // See https://www.speedguide.net/articles/bits-bytes-and-bandwidth-reference-guide-115.
-            DEBUG_MSG("\nRate stats:\n"
-                      " throughput (num-reads/sec):       " << makeNumStr(p->reads_ps) << endl <<
-                      " throughput (num-writes/sec):      " << makeNumStr(p->writes_ps) << endl <<
-                      " throughput (est-FLOPS):           " << makeNumStr(p->flops) << endl <<
-                      " throughput (num-points/sec):      " << makeNumStr(p->pts_ps));
+            DEBUG_MSG("\n_rate stats:\n"
+                      " throughput (num-reads/sec):       " << make_num_str(p->reads_ps) << endl <<
+                      " throughput (num-writes/sec):      " << make_num_str(p->writes_ps) << endl <<
+                      " throughput (est-FLOPS):           " << make_num_str(p->flops) << endl <<
+                      " throughput (num-points/sec):      " << make_num_str(p->pts_ps));
             if (psteps != steps_done) {
                 DEBUG_MSG(" Rate breakdown by stage(s):");
-                for (auto& sp : stStages) {
+                for (auto& sp : st_stages) {
                     auto& ps = sp->stats;
                     string pfx = "  '" + sp->get_name() + "' ";
-                    DEBUG_MSG(pfx << "throughput (num-reads/sec):   " << makeNumStr(ps.reads_ps) << endl <<
-                              pfx << "throughput (num-writes/sec):  " << makeNumStr(ps.writes_ps) << endl <<
-                              pfx << "throughput (est-FLOPS):       " << makeNumStr(ps.flops) << endl <<
-                              pfx << "throughput (num-points/sec):  " << makeNumStr(ps.pts_ps));
+                    DEBUG_MSG(pfx << "throughput (num-reads/sec):   " << make_num_str(ps.reads_ps) << endl <<
+                              pfx << "throughput (num-writes/sec):  " << make_num_str(ps.writes_ps) << endl <<
+                              pfx << "throughput (est-FLOPS):       " << make_num_str(ps.flops) << endl <<
+                              pfx << "throughput (num-points/sec):  " << make_num_str(ps.pts_ps));
 
                 }
             }
@@ -593,7 +593,7 @@ namespace yask {
         wait_time.clear();
         test_time.clear();
         steps_done = 0;
-        for (auto& sp : stStages) {
+        for (auto& sp : st_stages) {
             sp->timer.clear();
             sp->steps_done = 0;
         }

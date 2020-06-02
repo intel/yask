@@ -52,28 +52,28 @@ namespace yask {
         // Based on rank bounding box, not extended
         // BB because we don't use wave-fronts in the ref code.
         IdxTuple begin(stencil_dims);
-        begin.setVals(rank_bb.bb_begin_tuple(domain_dims), false); // 'false' because dims aren't same.
+        begin.set_vals(rank_bb.bb_begin_tuple(domain_dims), false); // 'false' because dims aren't same.
         begin[step_dim] = begin_t;
         IdxTuple end(stencil_dims);
-        end.setVals(rank_bb.bb_end_tuple(domain_dims), false);
+        end.set_vals(rank_bb.bb_end_tuple(domain_dims), false);
         end[step_dim] = end_t;
 
-        TRACE_MSG("run_ref: [" << begin.makeDimValStr() << " ... " <<
-                  end.makeDimValStr() << ")");
+        TRACE_MSG("run_ref: [" << begin.make_dim_val_str() << " ... " <<
+                  end.make_dim_val_str() << ")");
 
         // Force sub-sizes to whole rank size so that scratch
         // vars will be large enough. Turn off any temporal blocking.
-        opts->_region_sizes.setValsSame(0);
-        opts->_block_sizes.setValsSame(0);
-        opts->_mini_block_sizes.setValsSame(0);
-        opts->_sub_block_sizes.setValsSame(0);
-        opts->adjustSettings();
+        opts->_region_sizes.set_vals_same(0);
+        opts->_block_sizes.set_vals_same(0);
+        opts->_mini_block_sizes.set_vals_same(0);
+        opts->_sub_block_sizes.set_vals_same(0);
+        opts->adjust_settings();
         update_var_info(true);
 
         // Copy these settings to stages and realloc scratch vars.
-        for (auto& sp : stStages)
-            sp->getLocalSettings() = *opts;
-        allocScratchData();
+        for (auto& sp : st_stages)
+            sp->get_local_settings() = *opts;
+        alloc_scratch_data();
 
         // Use only one set of scratch vars.
         int scratch_var_idx = 0;
@@ -114,7 +114,7 @@ namespace yask {
 
             // Loop thru bundles. We ignore stages here
             // because staging is an optional optimizations.
-            for (auto* asg : stBundles) {
+            for (auto* asg : st_bundles) {
 
                 // Scan through n-D space.
                 TRACE_MSG("run_ref: step " << start_t <<
@@ -140,7 +140,7 @@ namespace yask {
                     // Indices needed for the generated misc loops.  Will normally be a
                     // copy of rank_idxs except when updating scratch-vars.
                     ScanIndices misc_idxs = sg->adjust_span(scratch_var_idx, rank_idxs);
-                    misc_idxs.stride.setFromConst(1); // ensure unit stride.
+                    misc_idxs.stride.set_from_const(1); // ensure unit stride.
 
                     // Define misc-loop function.  Since stride is always 1, we
                     // ignore misc_stop.  If point is in sub-domain for this
@@ -155,8 +155,8 @@ namespace yask {
                     // Scan through n-D space.
                     TRACE_MSG("run_ref: step " << start_t <<
                               " in bundle '" << sg->get_name() << "': [" <<
-                              misc_idxs.begin.makeValStr() <<
-                              " ... " << misc_idxs.end.makeValStr() << ")");
+                              misc_idxs.begin.make_val_str() <<
+                              " ... " << misc_idxs.end.make_val_str() << ")");
 #include "yask_misc_loops.hpp"
 #undef misc_fn
                 } // needed bundles.
@@ -211,19 +211,19 @@ namespace yask {
         // Based on overall bounding box, which includes
         // any needed extensions for wave-fronts.
         IdxTuple begin(stencil_dims);
-        begin.setVals(ext_bb.bb_begin_tuple(domain_dims), false);
+        begin.set_vals(ext_bb.bb_begin_tuple(domain_dims), false);
         begin[step_posn] = begin_t;
         IdxTuple end(stencil_dims);
-        end.setVals(ext_bb.bb_end_tuple(domain_dims), false);
+        end.set_vals(ext_bb.bb_end_tuple(domain_dims), false);
         end[step_posn] = end_t;
         IdxTuple stride(stencil_dims);
-        stride.setVals(opts->_region_sizes, false); // stride by region sizes.
+        stride.set_vals(opts->_region_sizes, false); // stride by region sizes.
         stride[step_posn] = stride_t;
 
         TRACE_MSG("run_solution: [" <<
-                  begin.makeDimValStr() << " ... " <<
-                  end.makeDimValStr() << ") by " <<
-                  stride.makeDimValStr());
+                  begin.make_dim_val_str() << " ... " <<
+                  end.make_dim_val_str() << ") by " <<
+                  stride.make_dim_val_str());
         if (!is_prepared())
             THROW_YASK_EXCEPTION("Error: run_solution() called without calling prepare_solution() first");
         if (ext_bb.bb_size < 1) {
@@ -234,7 +234,7 @@ namespace yask {
 #ifdef MODEL_CACHE
         if (env.my_rank != env.msg_rank)
             cache_model.disable();
-        if (cache_model.isEnabled())
+        if (cache_model.is_enabled())
             os << "Modeling cache...\n";
 #endif
 
@@ -281,9 +281,9 @@ namespace yask {
         }
         TRACE_MSG("run_solution: after adjustment for " << num_wf_shifts <<
                   " wave-front shift(s): [" <<
-                  begin.makeDimValStr() << " ... " <<
-                  end.makeDimValStr() << ") by " <<
-                  stride.makeDimValStr());
+                  begin.make_dim_val_str() << " ... " <<
+                  end.make_dim_val_str() << ") by " <<
+                  stride.make_dim_val_str());
 
         // At this point, 'begin' and 'end' should describe the *max* range
         // needed in the domain for this rank for the first time step.  At
@@ -331,7 +331,7 @@ namespace yask {
             if (wf_steps == 0) {
 
                 // Loop thru stages.
-                for (auto& bp : stStages) {
+                for (auto& bp : st_stages) {
 
                     // Check step.
                     if (check_step_conds && !bp->is_in_valid_step(start_t)) {
@@ -521,7 +521,7 @@ namespace yask {
 
             // Count steps for each stage to properly account for
             // step conditions when using temporal tiling.
-            for (auto& bp : stStages) {
+            for (auto& bp : st_stages) {
                 idx_t num_stage_steps = 0;
 
                 if (!check_step_conds)
@@ -550,9 +550,9 @@ namespace yask {
 #ifdef MODEL_CACHE
         // Print cache stats, then disable.
         // Thus, cache is only modeled for first call.
-        if (cache_model.isEnabled()) {
+        if (cache_model.is_enabled()) {
             os << "Done modeling cache...\n";
-            cache_model.dumpStats();
+            cache_model.dump_stats();
             cache_model.disable();
         }
 #endif
@@ -576,10 +576,10 @@ namespace yask {
                                      const ScanIndices& rank_idxs) {
         STATE_VARS(this);
         TRACE_MSG("calc_region: region [" <<
-                  rank_idxs.start.makeValStr() << " ... " <<
-                  rank_idxs.stop.makeValStr() << ") within rank [" <<
-                  rank_idxs.begin.makeValStr() << " ... " <<
-                  rank_idxs.end.makeValStr() << ")" );
+                  rank_idxs.start.make_val_str() << " ... " <<
+                  rank_idxs.stop.make_val_str() << ") within rank [" <<
+                  rank_idxs.begin.make_val_str() << " ... " <<
+                  rank_idxs.end.make_val_str() << ")" );
 
         // Track time (use "else" to avoid double-counting).
         if (!do_mpi_interior && (do_mpi_left || do_mpi_right))
@@ -589,7 +589,7 @@ namespace yask {
 
         // Init region begin & end from rank start & stop indices.
         ScanIndices region_idxs(*dims, true, &rank_domain_offsets);
-        region_idxs.initFromOuter(rank_idxs);
+        region_idxs.init_from_outer(rank_idxs);
 
         // Time range.
         // When doing WF rank tiling, this loop will stride through
@@ -624,7 +624,7 @@ namespace yask {
             if (tb_steps == 0) {
 
                 // Stages to evaluate at this time step.
-                for (auto& bp : stStages) {
+                for (auto& bp : st_stages) {
 
                     // Not a selected stage?
                     if (sel_bp && sel_bp != bp)
@@ -642,7 +642,7 @@ namespace yask {
                     }
 
                     // Strides within a region are based on stage block sizes.
-                    auto& settings = bp->getActiveSettings();
+                    auto& settings = bp->get_active_settings();
                     region_idxs.stride = settings._block_sizes;
                     region_idxs.stride[step_posn] = stride_t;
 
@@ -746,7 +746,7 @@ namespace yask {
                 // steps than TB steps.  TODO: consider moving this inside
                 // calc_block().
                 for (idx_t t = start_t; t != stop_t; t += step_dir) {
-                    for (auto& bp : stStages) {
+                    for (auto& bp : st_stages) {
 
                         // Check step.
                         if (check_step_conds && !bp->is_in_valid_step(t))
@@ -761,11 +761,11 @@ namespace yask {
 
         if (!do_mpi_interior && (do_mpi_left || do_mpi_right)) {
             double ext_delta = ext_time.stop();
-            TRACE_MSG("secs spent in this region for rank-exterior blocks: " << makeNumStr(ext_delta));
+            TRACE_MSG("secs spent in this region for rank-exterior blocks: " << make_num_str(ext_delta));
         }
         else {
             double int_delta = int_time.stop();
-            TRACE_MSG("secs spent in this region for rank-interior blocks: " << makeNumStr(int_delta));
+            TRACE_MSG("secs spent in this region for rank-interior blocks: " << make_num_str(int_delta));
         }
 
     } // calc_region.
@@ -785,11 +785,11 @@ namespace yask {
         auto* bp = sel_bp.get();
         int region_thread_idx = omp_get_thread_num();
         TRACE_MSG("calc_block: phase " << phase << ", block [" <<
-                  region_idxs.start.makeValStr() << " ... " <<
-                  region_idxs.stop.makeValStr() <<
+                  region_idxs.start.make_val_str() << " ... " <<
+                  region_idxs.stop.make_val_str() <<
                   ") within region [" <<
-                  region_idxs.begin.makeValStr() << " ... " <<
-                  region_idxs.end.makeValStr() <<
+                  region_idxs.begin.make_val_str() << " ... " <<
+                  region_idxs.end.make_val_str() <<
                   ") by region thread " << region_thread_idx);
 
 #ifdef OVERLAP_WITH_BLOCKS
@@ -832,7 +832,7 @@ namespace yask {
 
         // Init block begin & end from region start & stop indices.
         ScanIndices block_idxs(*dims, true);
-        block_idxs.initFromOuter(region_idxs);
+        block_idxs.init_from_outer(region_idxs);
 
         // Time range.
         // When not doing TB, there is only one step.
@@ -862,7 +862,7 @@ namespace yask {
             block_idxs.stop[step_posn] = end_t;
 
             // Strides within a block are based on stage mini-block sizes.
-            auto& settings = bp->getActiveSettings();
+            auto& settings = bp->get_active_settings();
             block_idxs.stride = settings._mini_block_sizes;
             block_idxs.stride[step_posn] = stride_t;
 
@@ -931,10 +931,10 @@ namespace yask {
             }
             TRACE_MSG("calc_block: phase " << phase <<
                       ", adjusted block [" <<
-                      adj_block_idxs.begin.makeValStr() << " ... " <<
-                      adj_block_idxs.end.makeValStr() <<
+                      adj_block_idxs.begin.make_val_str() << " ... " <<
+                      adj_block_idxs.end.make_val_str() <<
                       ") with mini-block stride " <<
-                      adj_block_idxs.stride.makeValStr());
+                      adj_block_idxs.stride.make_val_str());
 
             // Loop thru shapes.
             for (idx_t shape = 0; shape < nshapes; shape++) {
@@ -986,12 +986,12 @@ namespace yask {
         TRACE_MSG("calc_mini_block: phase " << phase <<
                   ", shape " << shape <<
                   ", mini-block [" <<
-                  adj_block_idxs.start.makeValStr() << " ... " <<
-                  adj_block_idxs.stop.makeValStr() << ") within base-block [" <<
-                  base_block_idxs.begin.makeValStr() << " ... " <<
-                  base_block_idxs.end.makeValStr() << ") within base-region [" <<
-                  base_region_idxs.begin.makeValStr() << " ... " <<
-                  base_region_idxs.end.makeValStr() <<
+                  adj_block_idxs.start.make_val_str() << " ... " <<
+                  adj_block_idxs.stop.make_val_str() << ") within base-block [" <<
+                  base_block_idxs.begin.make_val_str() << " ... " <<
+                  base_block_idxs.end.make_val_str() << ") within base-region [" <<
+                  base_region_idxs.begin.make_val_str() << " ... " <<
+                  base_region_idxs.end.make_val_str() <<
                   ") by region thread " << region_thread_idx);
 
         // Promote forward progress in MPI when calc'ing interior
@@ -1004,7 +1004,7 @@ namespace yask {
 
         // Init mini-block begin & end from blk start & stop indices.
         ScanIndices mini_block_idxs(*dims, true);
-        mini_block_idxs.initFromOuter(adj_block_idxs);
+        mini_block_idxs.init_from_outer(adj_block_idxs);
 
         // Time range.
         // No more temporal blocks below mini-blocks, so we always stride
@@ -1038,7 +1038,7 @@ namespace yask {
             mini_block_idxs.stop[step_posn] = stop_t;
 
             // Stages to evaluate at this time step.
-            for (auto& bp : stStages) {
+            for (auto& bp : st_stages) {
 
                 // Not a selected stage?
                 if (sel_bp && sel_bp != bp)
@@ -1064,7 +1064,7 @@ namespace yask {
 
                 // Strides within a mini-blk are based on sub-blk sizes.
                 // This will get overridden later if thread binding is enabled.
-                auto& settings = bp->getActiveSettings();
+                auto& settings = bp->get_active_settings();
                 mini_block_idxs.stride = settings._sub_block_sizes;
                 mini_block_idxs.stride[step_posn] = stride_t;
 
@@ -1099,12 +1099,12 @@ namespace yask {
 
                     // Update offsets of scratch vars based on the current
                     // mini-block location.
-                    if (scratchVecs.size())
+                    if (scratch_vecs.size())
                         update_scratch_var_info(region_thread_idx, mini_block_idxs.begin);
 
                     // Call calc_mini_block() for each non-scratch bundle.
                     for (auto* sb : *bp)
-                        if (sb->getBB().bb_num_points)
+                        if (sb->get_bb().bb_num_points)
                             sb->calc_mini_block(region_thread_idx, settings, mini_block_idxs);
 
                     // Make sure streaming stores are visible for later loads.
@@ -1159,7 +1159,7 @@ namespace yask {
 
                 // Trim to extended BB of stage. This will also trim
                 // to the extended BB of the rank.
-                auto& pbb = bp.get()->getBB();
+                auto& pbb = bp.get()->get_bb();
                 rstart = max(rstart, pbb.bb_begin[j]);
                 rstop = min(rstop, pbb.bb_end[j]);
 
@@ -1292,10 +1292,10 @@ namespace yask {
             idxs.end[i] = rstop;
         }
         TRACE_MSG("shift_region: updated span: [" <<
-                  idxs.begin.makeValStr() << " ... " <<
-                  idxs.end.makeValStr() << ") within region base [" <<
-                  base_start.makeValStr() << " ... " <<
-                  base_stop.makeValStr() << ") shifted " <<
+                  idxs.begin.make_val_str() << " ... " <<
+                  idxs.end.make_val_str() << ") within region base [" <<
+                  base_start.make_val_str() << " ... " <<
+                  base_stop.make_val_str() << ") shifted " <<
                   shift_num << " time(s) is " <<
                   (ok ? "not " : "") << "empty");
         return ok;
@@ -1323,7 +1323,7 @@ namespace yask {
                                           const BridgeMask& bridge_mask,
                                           ScanIndices& idxs) {
         STATE_VARS(this);
-        auto nstages = stStages.size();
+        auto nstages = st_stages.size();
         bool ok = true;
 
         // Loop thru dims, breaking out if any dim has no work.
@@ -1457,17 +1457,17 @@ namespace yask {
         TRACE_MSG("shift_mini_block: phase " << phase << "/" << nphases <<
                   ", shape " << shape << "/" << nshapes <<
                   ", updated span: [" <<
-                  idxs.begin.makeValStr() << " ... " <<
-                  idxs.end.makeValStr() << ") from original mini-block [" <<
-                  mb_base_start.makeValStr() << " ... " <<
-                  mb_base_stop.makeValStr() << ") shifted " <<
+                  idxs.begin.make_val_str() << " ... " <<
+                  idxs.end.make_val_str() << ") from original mini-block [" <<
+                  mb_base_start.make_val_str() << " ... " <<
+                  mb_base_stop.make_val_str() << ") shifted " <<
                   mb_shift_num << " time(s) within adj-block base [" <<
-                  adj_block_base_start.makeValStr() << " ... " <<
-                  adj_block_base_stop.makeValStr() << ") and actual block base [" <<
-                  block_base_start.makeValStr() << " ... " <<
-                  block_base_stop.makeValStr() << ") and region base [" <<
-                  region_base_start.makeValStr() << " ... " <<
-                  region_base_stop.makeValStr() << ") is " <<
+                  adj_block_base_start.make_val_str() << " ... " <<
+                  adj_block_base_stop.make_val_str() << ") and actual block base [" <<
+                  block_base_start.make_val_str() << " ... " <<
+                  block_base_stop.make_val_str() << ") and region base [" <<
+                  region_base_start.make_val_str() << " ... " <<
+                  region_base_stop.make_val_str() << ") is " <<
                   (ok ? "not " : "") << "empty");
         return ok;
     }
@@ -1482,7 +1482,7 @@ namespace yask {
         STATE_VARS(this);
 
         // Loop thru vecs of scratch vars.
-        for (auto* sv : scratchVecs) {
+        for (auto* sv : scratch_vecs) {
             assert(sv);
 
             // Get ptr to the scratch var for this thread.
@@ -1494,8 +1494,8 @@ namespace yask {
             // i: index for stencil dims, j: index for domain dims.
             DOMAIN_VAR_LOOP(i, j) {
 
-                auto& dim = stencil_dims.getDim(i);
-                auto& dname = dim.getName();
+                auto& dim = stencil_dims.get_dim(i);
+                auto& dname = dim._get_name();
 
                 // Is this dim used in this var?
                 int posn = gb.get_dim_posn(dname);
@@ -1525,19 +1525,19 @@ namespace yask {
 
     // Compare vars in contexts.
     // Return number of mis-compares.
-    idx_t StencilContext::compareData(const StencilContext& ref) const {
+    idx_t StencilContext::compare_data(const StencilContext& ref) const {
         STATE_VARS_CONST(this);
 
         DEBUG_MSG("Comparing var(s) in '" << name << "' to '" << ref.name << "'...");
-        if (varPtrs.size() != ref.varPtrs.size()) {
+        if (var_ptrs.size() != ref.var_ptrs.size()) {
             TRACE_MSG("** number of vars not equal");
             return 1;
         }
         idx_t errs = 0;
-        for (size_t gi = 0; gi < varPtrs.size(); gi++) {
-            TRACE_MSG("Var '" << ref.varPtrs[gi]->get_name() << "'...");
-            auto& gb = varPtrs[gi]->gb();
-            auto* rgbp = ref.varPtrs[gi]->gbp();
+        for (size_t gi = 0; gi < var_ptrs.size(); gi++) {
+            TRACE_MSG("Var '" << ref.var_ptrs[gi]->get_name() << "'...");
+            auto& gb = var_ptrs[gi]->gb();
+            auto* rgbp = ref.var_ptrs[gi]->gbp();
             errs += gb.compare(rgbp);
         }
 
@@ -1558,7 +1558,7 @@ namespace yask {
 
         // Loop thru MPI data.
         int num_tests = 0;
-        for (auto& mdi : mpiData) {
+        for (auto& mdi : mpi_data) {
             auto& gname = mdi.first;
             auto& var_mpi_data = mdi.second;
             MPI_Request* var_recv_reqs = var_mpi_data.recv_reqs.data();
@@ -1598,7 +1598,7 @@ namespace yask {
         }
         auto ttime = test_time.stop();
         TRACE_MSG("poke_halo_exchange: secs spent in " << num_tests <<
-                  " MPI test(s): " << makeNumStr(ttime));
+                  " MPI test(s): " << make_num_str(ttime));
 #endif
     }
 
@@ -1627,12 +1627,12 @@ namespace yask {
         // swapped in same order on all ranks. (If we order vars by
         // pointer, pointer values will not generally be the same on each
         // rank.)
-        VarPtrMap varsToSwap;
-        map<YkVarPtr, idx_t> firstStepsToSwap;
-        map<YkVarPtr, idx_t> lastStepsToSwap;
+        VarPtrMap vars_to_swap;
+        map<YkVarPtr, idx_t> first_steps_to_swap;
+        map<YkVarPtr, idx_t> last_steps_to_swap;
 
         // Loop thru all vars.
-        for (auto& gp : varPtrs) {
+        for (auto& gp : var_ptrs) {
             auto& gb = gp->gb();
 
             // Don't swap scratch vars.
@@ -1641,7 +1641,7 @@ namespace yask {
 
             // Only need to swap vars that have any MPI buffers.
             auto& gname = gp->get_name();
-            if (mpiData.count(gname) == 0)
+            if (mpi_data.count(gname) == 0)
                 continue;
 
             // Check all allocated step indices.
@@ -1659,22 +1659,22 @@ namespace yask {
                     continue;
 
                 // Swap this var.
-                varsToSwap[gname] = gp;
+                vars_to_swap[gname] = gp;
 
                 // Update first step.
-                if (firstStepsToSwap.count(gp) == 0 || t < firstStepsToSwap[gp])
-                    firstStepsToSwap[gp] = t;
+                if (first_steps_to_swap.count(gp) == 0 || t < first_steps_to_swap[gp])
+                    first_steps_to_swap[gp] = t;
 
                 // Update last step.
-                if (lastStepsToSwap.count(gp) == 0 || t > lastStepsToSwap[gp])
-                    lastStepsToSwap[gp] = t;
+                if (last_steps_to_swap.count(gp) == 0 || t > last_steps_to_swap[gp])
+                    last_steps_to_swap[gp] = t;
 
             } // steps.
         } // vars.
         TRACE_MSG("exchange_halos: need to exchange halos for " <<
-                  varsToSwap.size() << " var(s)");
-        assert(varsToSwap.size() == firstStepsToSwap.size());
-        assert(varsToSwap.size() == lastStepsToSwap.size());
+                  vars_to_swap.size() << " var(s)");
+        assert(vars_to_swap.size() == first_steps_to_swap.size());
+        assert(vars_to_swap.size() == last_steps_to_swap.size());
 
         // Sequence of things to do for each neighbor.
         enum halo_steps { halo_irecv, halo_pack_isend, halo_unpack, halo_final };
@@ -1682,7 +1682,7 @@ namespace yask {
 
         // Flags indicate what part of vars were most recently calc'd.
         // These determine what exchange steps need to be done now.
-        if (varsToSwap.size()) {
+        if (vars_to_swap.size()) {
             if (do_mpi_left || do_mpi_right) {
                 steps_to_do.push_back(halo_irecv);
                 steps_to_do.push_back(halo_pack_isend);
@@ -1711,38 +1711,38 @@ namespace yask {
             // Loop thru all vars to swap.
             // Use 'gi' as an MPI tag.
             int gi = 0;
-            for (auto gtsi : varsToSwap) {
+            for (auto gtsi : vars_to_swap) {
                 gi++;
                 auto& gname = gtsi.first;
                 auto& gp = gtsi.second;
                 auto& gb = gp->gb();
-                auto& var_mpi_data = mpiData.at(gname);
+                auto& var_mpi_data = mpi_data.at(gname);
                 MPI_Request* var_recv_reqs = var_mpi_data.recv_reqs.data();
                 MPI_Request* var_send_reqs = var_mpi_data.send_reqs.data();
 
                 // Loop thru all this rank's neighbors.
-                var_mpi_data.visitNeighbors
+                var_mpi_data.visit_neighbors
                     ([&](const IdxTuple& offsets, // NeighborOffset.
                          int neighbor_rank,
                          int ni, // unique neighbor index.
                          MPIBufs& bufs) {
-                        auto& sendBuf = bufs.bufs[MPIBufs::bufSend];
-                        auto& recvBuf = bufs.bufs[MPIBufs::bufRecv];
+                        auto& send_buf = bufs.bufs[MPIBufs::buf_send];
+                        auto& recv_buf = bufs.bufs[MPIBufs::buf_recv];
                         TRACE_MSG("exchange_halos:   with rank " << neighbor_rank << " at relative position " <<
-                                  offsets.subElements(1).makeDimValOffsetStr());
+                                  offsets.sub_elements(1).make_dim_val_offset_str());
 
                         // Are we using MPI shm w/this neighbor?
-                        bool using_shm = opts->use_shm && mpiInfo->shm_ranks.at(ni) != MPI_PROC_NULL;
+                        bool using_shm = opts->use_shm && mpi_info->shm_ranks.at(ni) != MPI_PROC_NULL;
 
                         // Submit async request to receive data from neighbor.
                         if (halo_step == halo_irecv) {
-                            auto nbytes = recvBuf.get_bytes();
+                            auto nbytes = recv_buf.get_bytes();
                             if (nbytes) {
                                 if (using_shm)
                                     TRACE_MSG("exchange_halos:    no receive req due to shm");
                                 else {
-                                    void* buf = (void*)recvBuf._elems;
-                                    TRACE_MSG("exchange_halos:    requesting up to " << makeByteStr(nbytes));
+                                    void* buf = (void*)recv_buf._elems;
+                                    TRACE_MSG("exchange_halos:    requesting up to " << make_byte_str(nbytes));
                                     auto& r = var_recv_reqs[ni];
                                     MPI_Irecv(buf, nbytes, MPI_BYTE,
                                               neighbor_rank, int(gi),
@@ -1756,39 +1756,39 @@ namespace yask {
 
                         // Pack data into send buffer, then send to neighbor.
                         else if (halo_step == halo_pack_isend) {
-                            auto nbytes = sendBuf.get_bytes();
+                            auto nbytes = send_buf.get_bytes();
                             if (nbytes) {
 
                                 // Vec ok?
                                 // Domain sizes must be ok, and buffer size must be ok
                                 // as calculated when buffers were created.
-                                bool send_vec_ok = allow_vec_exchange && sendBuf.vec_copy_ok;
+                                bool send_vec_ok = allow_vec_exchange && send_buf.vec_copy_ok;
 
                                 // Get first and last ranges.
-                                IdxTuple first = sendBuf.begin_pt;
-                                IdxTuple last = sendBuf.last_pt;
+                                IdxTuple first = send_buf.begin_pt;
+                                IdxTuple last = send_buf.last_pt;
 
-                                // The code in allocMpiData() pre-calculated the first and
+                                // The code in alloc_mpi_data() pre-calculated the first and
                                 // last points of each buffer, except in the step dim, where
                                 // the max range was set. Update actual range now.
                                 if (gp->is_dim_used(step_dim)) {
-                                    first.setVal(step_dim, firstStepsToSwap[gp]);
-                                    last.setVal(step_dim, lastStepsToSwap[gp]);
+                                    first.set_val(step_dim, first_steps_to_swap[gp]);
+                                    last.set_val(step_dim, last_steps_to_swap[gp]);
                                 }
 
                                 // Wait until buffer is avail.
                                 if (using_shm) {
                                     TRACE_MSG("exchange_halos:    waiting to write to shm buffer");
                                     wait_time.start();
-                                    sendBuf.wait_for_ok_to_write();
+                                    send_buf.wait_for_ok_to_write();
                                     wait_delta += wait_time.stop();
                                 }
 
                                 // Copy (pack) data from var to buffer.
-                                void* buf = (void*)sendBuf._elems;
+                                void* buf = (void*)send_buf._elems;
                                 idx_t nelems = 0;
-                                TRACE_MSG("exchange_halos:    packing [" << first.makeDimValStr() <<
-                                          " ... " << last.makeDimValStr() << "] " <<
+                                TRACE_MSG("exchange_halos:    packing [" << first.make_dim_val_str() <<
+                                          " ... " << last.make_dim_val_str() << "] " <<
                                           (send_vec_ok ? "with" : "without") <<
                                           " vector copy into " << buf);
                                 if (send_vec_ok)
@@ -1799,13 +1799,13 @@ namespace yask {
 
                                 if (using_shm) {
                                     TRACE_MSG("exchange_halos:    no send req due to shm");
-                                    sendBuf.mark_write_done();
+                                    send_buf.mark_write_done();
                                 }
                                 else {
 
                                     // Send packed buffer to neighbor.
-                                    assert(nbytes <= sendBuf.get_bytes());
-                                    TRACE_MSG("exchange_halos:    sending " << makeByteStr(nbytes));
+                                    assert(nbytes <= send_buf.get_bytes());
+                                    TRACE_MSG("exchange_halos:    sending " << make_byte_str(nbytes));
                                     auto& r = var_send_reqs[ni];
                                     MPI_Isend(buf, nbytes, MPI_BYTE,
                                               neighbor_rank, int(gi), env->comm, &r);
@@ -1818,14 +1818,14 @@ namespace yask {
 
                         // Wait for data from neighbor, then unpack it.
                         else if (halo_step == halo_unpack) {
-                            auto nbytes = recvBuf.get_bytes();
+                            auto nbytes = recv_buf.get_bytes();
                             if (nbytes) {
 
                                 // Wait until buffer is avail.
                                 if (using_shm) {
                                     TRACE_MSG("exchange_halos:    waiting to read from shm buffer");
                                     wait_time.start();
-                                    recvBuf.wait_for_ok_to_read();
+                                    recv_buf.wait_for_ok_to_read();
                                     wait_delta += wait_time.stop();
                                 }
                                 else {
@@ -1833,7 +1833,7 @@ namespace yask {
                                     // Wait for data from neighbor before unpacking it.
                                     auto& r = var_recv_reqs[ni];
                                     if (r != MPI_REQUEST_NULL) {
-                                        TRACE_MSG("   waiting for receipt of " << makeByteStr(nbytes));
+                                        TRACE_MSG("   waiting for receipt of " << make_byte_str(nbytes));
                                         wait_time.start();
                                         MPI_Wait(&r, MPI_STATUS_IGNORE);
                                         wait_delta += wait_time.stop();
@@ -1842,33 +1842,33 @@ namespace yask {
                                 }
 
                                 // Vec ok?
-                                bool recv_vec_ok = allow_vec_exchange && recvBuf.vec_copy_ok;
+                                bool recv_vec_ok = allow_vec_exchange && recv_buf.vec_copy_ok;
 
                                 // Get first and last ranges.
-                                IdxTuple first = recvBuf.begin_pt;
-                                IdxTuple last = recvBuf.last_pt;
+                                IdxTuple first = recv_buf.begin_pt;
+                                IdxTuple last = recv_buf.last_pt;
 
                                 // Set step val as above.
                                 if (gp->is_dim_used(step_dim)) {
-                                    first.setVal(step_dim, firstStepsToSwap[gp]);
-                                    last.setVal(step_dim, lastStepsToSwap[gp]);
+                                    first.set_val(step_dim, first_steps_to_swap[gp]);
+                                    last.set_val(step_dim, last_steps_to_swap[gp]);
                                 }
 
                                 // Copy data from buffer to var.
-                                void* buf = (void*)recvBuf._elems;
+                                void* buf = (void*)recv_buf._elems;
                                 idx_t nelems = 0;
-                                TRACE_MSG("exchange_halos:    got data; unpacking into [" << first.makeDimValStr() <<
-                                          " ... " << last.makeDimValStr() << "] " <<
+                                TRACE_MSG("exchange_halos:    got data; unpacking into [" << first.make_dim_val_str() <<
+                                          " ... " << last.make_dim_val_str() << "] " <<
                                           (recv_vec_ok ? "with" : "without") <<
                                           " vector copy from " << buf);
                                 if (recv_vec_ok)
                                     nelems = gp->set_vecs_in_slice(buf, first, last);
                                 else
                                     nelems = gp->set_elements_in_slice(buf, first, last);
-                                assert(nelems <= recvBuf.get_size());
+                                assert(nelems <= recv_buf.get_size());
 
                                 if (using_shm)
-                                    recvBuf.mark_read_done();
+                                    recv_buf.mark_read_done();
                             }
                             else
                                 TRACE_MSG("exchange_halos:    0B to wait for");
@@ -1876,7 +1876,7 @@ namespace yask {
 
                         // Final steps.
                         else if (halo_step == halo_final) {
-                            auto nbytes = sendBuf.get_bytes();
+                            auto nbytes = send_buf.get_bytes();
                             if (nbytes) {
 
                                 if (using_shm)
@@ -1891,7 +1891,7 @@ namespace yask {
                                     // doing another one.
                                     auto& r = var_send_reqs[ni];
                                     if (r != MPI_REQUEST_NULL) {
-                                        TRACE_MSG("   waiting to finish send of " << makeByteStr(nbytes));
+                                        TRACE_MSG("   waiting to finish send of " << make_byte_str(nbytes));
                                         wait_time.start();
                                         MPI_Wait(&var_send_reqs[ni], MPI_STATUS_IGNORE);
                                         wait_delta += wait_time.stop();
@@ -1901,7 +1901,7 @@ namespace yask {
                             }
 
                             // Mark vars as up-to-date when done.
-                            for (idx_t si = firstStepsToSwap[gp]; si <= lastStepsToSwap[gp]; si++) {
+                            for (idx_t si = first_steps_to_swap[gp]; si <= last_steps_to_swap[gp]; si++) {
                                 if (gb.is_dirty(si)) {
                                     gb.set_dirty(false, si);
                                     TRACE_MSG("exchange_halos: var '" << gname <<
@@ -1920,8 +1920,8 @@ namespace yask {
         TRACE_MSG("exchange_halos: " << num_send_reqs << " MPI send request(s) issued");
 
         auto mpi_call_time = halo_time.stop();
-        TRACE_MSG("exchange_halos: secs spent in MPI waits: " << makeNumStr(wait_delta));
-        TRACE_MSG("exchange_halos: secs spent in this call: " << makeNumStr(mpi_call_time));
+        TRACE_MSG("exchange_halos: secs spent in MPI waits: " << make_num_str(wait_delta));
+        TRACE_MSG("exchange_halos: secs spent in this call: " << make_num_str(mpi_call_time));
 #endif
     }
 
@@ -1934,7 +1934,7 @@ namespace yask {
         map<YkVarPtr, set<idx_t>> vars_done;
 
         // Stages.
-        for (auto& bp : stStages) {
+        for (auto& bp : st_stages) {
 
             // Not a selected stage?
             if (sel_bp && sel_bp != bp)
@@ -1955,7 +1955,7 @@ namespace yask {
 
                     // Output vars for this bundle.  NB: don't need to mark
                     // scratch vars as dirty because they are never exchanged.
-                    for (auto gp : sb->outputVarPtrs) {
+                    for (auto gp : sb->output_var_ptrs) {
                         auto& gb = gp->gb();
 
                         // Update if not already done.
@@ -1977,7 +1977,7 @@ namespace yask {
     void StencilContext::reset_locks() {
 
         // MPI buffer locks.
-        for (auto& mdi : mpiData) {
+        for (auto& mdi : mpi_data) {
             auto& md = mdi.second;
             md.reset_locks();
         }

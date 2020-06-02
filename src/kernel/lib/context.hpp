@@ -52,20 +52,20 @@ namespace yask {
 
         // Make Tuples.
         IdxTuple bb_begin_tuple(const IdxTuple& ddims) const {
-            return bb_begin.makeTuple(ddims);
+            return bb_begin.make_tuple(ddims);
         }
         IdxTuple bb_end_tuple(const IdxTuple& ddims) const {
-            return bb_end.makeTuple(ddims);
+            return bb_end.make_tuple(ddims);
         }
         IdxTuple bb_len_tuple(const IdxTuple& ddims) const {
-            return bb_len.makeTuple(ddims);
+            return bb_len.make_tuple(ddims);
         }
         std::string make_range_string(const IdxTuple& ddims) const {
-            return bb_begin_tuple(ddims).makeDimValStr() +
-                " ... " + bb_end_tuple(ddims).subElements(1).makeDimValStr();
+            return bb_begin_tuple(ddims).make_dim_val_str() +
+                " ... " + bb_end_tuple(ddims).sub_elements(1).make_dim_val_str();
         }
         std::string make_len_string(const IdxTuple& ddims) const {
-            return bb_len_tuple(ddims).makeDimValStr(" * ");
+            return bb_len_tuple(ddims).make_dim_val_str(" * ");
         }
 
         // Calc values and set valid to true.
@@ -78,8 +78,8 @@ namespace yask {
         // Is point in BB?
         // 'pt' must have same dims as BB.
         bool is_in_bb(const IdxTuple& pt) const {
-            assert(pt.getNumDims() == bb_begin.getNumDims());
-            for (int i = 0; i < pt.getNumDims(); i++) {
+            assert(pt._get_num_dims() == bb_begin._get_num_dims());
+            for (int i = 0; i < pt._get_num_dims(); i++) {
                 if (pt[i] < bb_begin[i])
                     return false;
                 if (pt[i] >= bb_end[i])
@@ -88,8 +88,8 @@ namespace yask {
             return true;
         }
         bool is_in_bb(const Indices& pt) const {
-            assert(pt.getNumDims() == bb_begin.getNumDims());
-            for (int i = 0; i < pt.getNumDims(); i++) {
+            assert(pt._get_num_dims() == bb_begin._get_num_dims());
+            for (int i = 0; i < pt._get_num_dims(); i++) {
                 if (pt[i] < bb_begin[i])
                     return false;
                 if (pt[i] >= bb_end[i])
@@ -244,27 +244,27 @@ namespace yask {
 
         // List of all non-scratch stencil bundles in the order in which
         // they should be evaluated within a step.
-        StencilBundleList stBundles;
+        StencilBundleList st_bundles;
 
         // List of all non-scratch stencil-stages in the order in
         // which they should be evaluated within a step.
-        StageList stStages;
+        StageList st_stages;
 
         // All non-scratch vars, including those created by APIs.
-        VarPtrs varPtrs;
-        VarPtrMap varMap;
+        VarPtrs var_ptrs;
+        VarPtrMap var_map;
 
         // Only vars defined by the YASK compiler.
-        VarPtrs origVarPtrs;
-        VarPtrMap origVarMap;
+        VarPtrs orig_var_ptrs;
+        VarPtrMap orig_var_map;
 
         // Only vars defined by the YASK compiler that are updated by the stencils.
-        VarPtrs outputVarPtrs;
-        VarPtrMap outputVarMap;
+        VarPtrs output_var_ptrs;
+        VarPtrMap output_var_map;
 
         // Scratch-var vectors.
         // Each vector contains a var for each thread.
-        ScratchVecs scratchVecs;
+        ScratchVecs scratch_vecs;
 
         // Some calculated sizes for this rank and overall.
         Indices rank_domain_offsets;       // Domain index offsets for this rank.
@@ -316,7 +316,7 @@ namespace yask {
 
         // MPI buffers for each var.
         // Map key: var name.
-        std::map<std::string, MPIData> mpiData;
+        std::map<std::string, MPIData> mpi_data;
 
         // Constructor.
         StencilContext(KernelEnvPtr& env,
@@ -348,34 +348,34 @@ namespace yask {
         void clear_timers();
 
         // Misc accessors.
-        AutoTuner& getAT() { return _at; }
+        AutoTuner& get_at() { return _at; }
 
         // Add a new var to the containers.
-        virtual void addVar(YkVarPtr gp, bool is_orig, bool is_output);
-        virtual void addScratch(VarPtrs& scratch_vec) {
-            scratchVecs.push_back(&scratch_vec);
+        virtual void add_var(YkVarPtr gp, bool is_orig, bool is_output);
+        virtual void add_scratch(VarPtrs& scratch_vec) {
+            scratch_vecs.push_back(&scratch_vec);
         }
 
         // Set vars related to this rank's role in global problem.
         // Allocate MPI buffers as needed.
-        virtual void setupRank();
+        virtual void setup_rank();
 
         // Allocate var memory for any vars that do not
         // already have storage.
-        virtual void allocVarData();
+        virtual void alloc_var_data();
 
         // Determine sizes of MPI buffers and allocate MPI buffer memory.
         // Dealloc any existing MPI buffers first.
-        virtual void allocMpiData();
-        virtual void freeMpiData() {
-            mpiData.clear();
+        virtual void alloc_mpi_data();
+        virtual void free_mpi_data() {
+            mpi_data.clear();
         }
 
         // Alloc scratch-var memory.
         // Dealloc any existing scratch-vars first.
-        virtual void allocScratchData();
-        virtual void freeScratchData() {
-            makeScratchVars(0);
+        virtual void alloc_scratch_data();
+        virtual void free_scratch_data() {
+            make_scratch_vars(0);
         }
 
         // Allocate vars, params, MPI bufs, etc.
@@ -418,11 +418,11 @@ namespace yask {
         // TODO: add MPI buffers.
         virtual size_t get_num_bytes() {
             size_t sz = 0;
-            for (auto gp : varPtrs) {
+            for (auto gp : var_ptrs) {
                 if (gp)
                     sz += gp->get_num_storage_bytes() + _data_buf_pad;
             }
-            for (auto gps : scratchVecs)
+            for (auto gps : scratch_vecs)
                 if (gps)
                     for (auto gp : *gps)
                         if (gp)
@@ -430,32 +430,32 @@ namespace yask {
             return sz;
         }
 
-        // Init all vars & params by calling realInitFn.
-        virtual void initValues(std::function<void (YkVarPtr gp,
-                                                    real_t seed)> realInitFn);
+        // Init all vars & params by calling real_init_fn.
+        virtual void init_values(std::function<void (YkVarPtr gp,
+                                                    real_t seed)> real_init_fn);
 
         // Init all vars & params to same value within vars,
         // but different for each var.
-        virtual void initSame() {
-            initValues([&](YkVarPtr gp, real_t seed){ gp->set_all_elements_same(seed); });
+        virtual void init_same() {
+            init_values([&](YkVarPtr gp, real_t seed){ gp->set_all_elements_same(seed); });
         }
 
         // Init all vars & params to different values within vars,
         // and different for each var.
-        virtual void initDiff() {
-            initValues([&](YkVarPtr gp, real_t seed){ gp->set_all_elements_in_seq(seed); });
+        virtual void init_diff() {
+            init_values([&](YkVarPtr gp, real_t seed){ gp->set_all_elements_in_seq(seed); });
         }
 
         // Init all vars & params.
-        // By default it uses the initSame initialization routine.
-        virtual void initData() {
-            initDiff();         // Safer than initSame() to avoid NaNs due to div-by-zero.
+        // By default it uses the init_same initialization routine.
+        virtual void init_data() {
+            init_diff();         // Safer than init_same() to avoid NaNs due to div-by-zero.
         }
 
         // Compare vars in contexts for validation.
         // Params should not be written to, so they are not compared.
         // Return number of mis-compares.
-        virtual idx_t compareData(const StencilContext& ref) const;
+        virtual idx_t compare_data(const StencilContext& ref) const;
 
         // Reference stencil calculations.
         void run_ref(idx_t first_step_index,
@@ -522,16 +522,16 @@ namespace yask {
         void find_bounding_boxes();
 
         // Make new scratch vars.
-        virtual void makeScratchVars (int num_threads) =0;
+        virtual void make_scratch_vars (int num_threads) =0;
 
         // Make a new var iff its dims match any in the stencil.
         // Returns pointer to the new var or nullptr if no match.
-        virtual VarBasePtr newStencilVar (const std::string & name,
+        virtual VarBasePtr new_stencil_var (const std::string & name,
                                             const VarDimNames & dims) =0;
 
         // Make a new var with 'name' and 'dims'.
         // Set sizes if 'sizes' is non-null.
-        virtual YkVarPtr newVar(const std::string& name,
+        virtual YkVarPtr new_var(const std::string& name,
                                   const VarDimNames& dims,
                                   const VarDimSizes* sizes);
 
@@ -554,25 +554,25 @@ namespace yask {
         }
 
         virtual int get_num_vars() const {
-            return int(varPtrs.size());
+            return int(var_ptrs.size());
         }
 
         virtual yk_var_ptr get_var(const std::string& name) {
-            auto i = varMap.find(name);
-            if (i != varMap.end())
+            auto i = var_map.find(name);
+            if (i != var_map.end())
                 return i->second;
             return nullptr;
         }
         virtual std::vector<yk_var_ptr> get_vars() {
             std::vector<yk_var_ptr> vars;
             for (int i = 0; i < get_num_vars(); i++)
-                vars.push_back(varPtrs.at(i));
+                vars.push_back(var_ptrs.at(i));
             return vars;
         }
         virtual yk_var_ptr
         new_var(const std::string& name,
                  const VarDimNames& dims) {
-            return newVar(name, dims, NULL);
+            return new_var(name, dims, NULL);
         }
         virtual yk_var_ptr
         new_var(const std::string& name,
@@ -584,7 +584,7 @@ namespace yask {
         new_fixed_size_var(const std::string& name,
                              const VarDimNames& dims,
                              const VarDimSizes& dim_sizes) {
-            return newVar(name, dims, &dim_sizes);
+            return new_var(name, dims, &dim_sizes);
         }
         virtual yk_var_ptr
         new_fixed_size_var(const std::string& name,
@@ -601,15 +601,15 @@ namespace yask {
         }
         virtual int get_num_domain_dims() const {
             STATE_VARS_CONST(this);
-            return dims->_domain_dims.getNumDims();
+            return dims->_domain_dims._get_num_dims();
         }
         virtual std::vector<std::string> get_domain_dim_names() const {
             STATE_VARS_CONST(this);
-            return domain_dims.getDimNames();
+            return domain_dims.get_dim_names();
         }
         virtual std::vector<std::string> get_misc_dim_names() const {
             STATE_VARS_CONST(this);
-            return misc_dims.getDimNames();
+            return misc_dims.get_dim_names();
         }
 
         virtual idx_t get_first_rank_domain_index(const std::string& dim) const;

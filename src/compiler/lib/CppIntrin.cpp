@@ -27,49 +27,49 @@ IN THE SOFTWARE.
 
 #include "CppIntrin.hpp"
 
-// Try to use align instruction(s) to construct nelemsTarget elements
+// Try to use align instruction(s) to construct nelems_target elements
 // per instruction.
-void CppIntrinPrintHelper::tryAlign(ostream& os,
-                                    const string& pvName,
-                                    size_t nelemsTarget,
+void CppIntrinPrintHelper::try_align(ostream& os,
+                                    const string& pv_name,
+                                    size_t nelems_target,
                                     const VecElemList& elems,
-                                    set<size_t>& doneElems,
-                                    const VarPointSet& alignedVecs,
-                                    bool maskAllowed) {
+                                    set<size_t>& done_elems,
+                                    const VarPointSet& aligned_vecs,
+                                    bool mask_allowed) {
     size_t nelems = elems.size();
 
     // Find case(s) that can use valignd.
     // Try all possible combinations of 2 aligned vectors, including
     // each vector paired w/itself.
-    for (auto mi = alignedVecs.begin(); mi != alignedVecs.end(); mi++) {
+    for (auto mi = aligned_vecs.begin(); mi != aligned_vecs.end(); mi++) {
         auto& mv1 = *mi;
-        for (auto mj = alignedVecs.begin(); mj != alignedVecs.end(); mj++) {
+        for (auto mj = aligned_vecs.begin(); mj != aligned_vecs.end(); mj++) {
             auto& mv2 = *mj;
 
             // Look up existing input vars.
             // All should be ready before this function is called.
-            assert(_vecVars.count(mv1));
-            string mv1Name = _vecVars[mv1];
-            assert(_vecVars.count(mv2));
-            string mv2Name = _vecVars[mv2];
+            assert(_vec_vars.count(mv1));
+            string mv1_name = _vec_vars[mv1];
+            assert(_vec_vars.count(mv2));
+            string mv2_name = _vec_vars[mv2];
 
             // Try all possible shift amounts.
             for (size_t count = 1;
-                 doneElems.size() < nelems && count < nelems; count++) {
+                 done_elems.size() < nelems && count < nelems; count++) {
 #ifdef DEBUG_SHIFT
-                cout << " //** Checking shift of " << mv1Name <<
-                    " and " << mv2Name << " by " << count << " elements." << endl;
+                cout << " //** Checking shift of " << mv1_name <<
+                    " and " << mv2_name << " by " << count << " elements." << endl;
 #endif
 
                 // Check each position i in output to see if it's correct.
                 size_t nused1 = 0, nused2 = 0;
-                set<size_t> foundElems;
+                set<size_t> found_elems;
                 unsigned mask = 0;
                 for (size_t i = 0; i < nelems; i++) {
                     size_t p = i + count;
 
                     // Ignore elements that are already constructed.
-                    if (doneElems.count(i))
+                    if (done_elems.count(i))
                         continue;
 
                     // From 1st vector?
@@ -84,10 +84,10 @@ void CppIntrinPrintHelper::tryAlign(ostream& os,
                             if (ve._offset == p) {
                                 nused1++;
                                 mask |= (1 << i); // set proper bit.
-                                foundElems.insert(i); // remember bit.
+                                found_elems.insert(i); // remember bit.
 #ifdef DEBUG_SHIFT
-                                cout << " // ** " << pvName << "[" << i << "] = " <<
-                                    mv1Name << "[" << p << "]" << endl;
+                                cout << " // ** " << pv_name << "[" << i << "] = " <<
+                                    mv1_name << "[" << p << "]" << endl;
 #endif
                             }
                         }
@@ -104,10 +104,10 @@ void CppIntrinPrintHelper::tryAlign(ostream& os,
                             if (ve._offset == p) {
                                 nused2++;
                                 mask |= (1 << i); // set proper bit.
-                                foundElems.insert(i); // remember bit.
+                                found_elems.insert(i); // remember bit.
 #ifdef DEBUG_SHIFT
-                                cout << " // ** " << pvName << "[" << i << "] = " <<
-                                    mv2Name << "[" << p << "]" << endl;
+                                cout << " // ** " << pv_name << "[" << i << "] = " <<
+                                    mv2_name << "[" << p << "]" << endl;
 #endif
                             }
                         }
@@ -116,61 +116,61 @@ void CppIntrinPrintHelper::tryAlign(ostream& os,
 
                 // Now, nused1 is the number of elements that can be shifted from mv1,
                 // and  nused2 is the number of elements that can be shifted from mv2.
-                assert(nused1 + nused2 == foundElems.size());
+                assert(nused1 + nused2 == found_elems.size());
 
                 // Have we found the target number of bits?
-                if (foundElems.size() == nelemsTarget) {
+                if (found_elems.size() == nelems_target) {
 
                     // We don't need to use the mask if no elements are already done.
-                    bool needMask = doneElems.size() > 0;
+                    bool need_mask = done_elems.size() > 0;
 
                     // If we can't use masking, must stop here.
-                    if (needMask && !maskAllowed)
+                    if (need_mask && !mask_allowed)
                         return;
 
                     // 2-var shift.
                     if (nused1 && nused2) {
-                        os << " // Get " << nused1 << " element(s) from " << mv1Name <<
-                            " and " << nused2 << " from " << mv2Name << "." << endl;
-                        os << _linePrefix << "real_vec_align";
-                        if (needMask)
+                        os << " // Get " << nused1 << " element(s) from " << mv1_name <<
+                            " and " << nused2 << " from " << mv2_name << "." << endl;
+                        os << _line_prefix << "real_vec_align";
+                        if (need_mask)
                             os << "_masked";
-                        os << "<" << count << ">(" << pvName <<
-                            ", " << mv1Name << ", " << mv2Name;
-                        if (needMask)
-                            printMask(os, mask);
-                        os << ")" << _lineSuffix;
+                        os << "<" << count << ">(" << pv_name <<
+                            ", " << mv1_name << ", " << mv2_name;
+                        if (need_mask)
+                            print_mask(os, mask);
+                        os << ")" << _line_suffix;
                     }
 
                     // 1-var shift (rotate).
                     else if (nused1) {
-                        os << " // Get " << nused1 << " element(s) from " << mv1Name <<
+                        os << " // Get " << nused1 << " element(s) from " << mv1_name <<
                             "." << endl;
-                        os << _linePrefix << "real_vec_align";
-                        if (needMask)
+                        os << _line_prefix << "real_vec_align";
+                        if (need_mask)
                             os << "_masked";
-                        os << "<" << count << ">(" << pvName << ", " << mv1Name << ", " << mv1Name;
-                        if (needMask)
-                            printMask(os, mask);
-                        os << ")" << _lineSuffix;
+                        os << "<" << count << ">(" << pv_name << ", " << mv1_name << ", " << mv1_name;
+                        if (need_mask)
+                            print_mask(os, mask);
+                        os << ")" << _line_suffix;
                     }
                     else {
                         assert(nused2);
-                        os << " // Get " << nused2 << " element(s) from " << mv2Name <<
+                        os << " // Get " << nused2 << " element(s) from " << mv2_name <<
                             "." << endl;
-                        os << _linePrefix << "real_vec_align";
-                        if (needMask)
+                        os << _line_prefix << "real_vec_align";
+                        if (need_mask)
                             os << "_masked";
-                        os << "<" << count << ">(" << pvName << ", " << mv2Name << ", " << mv2Name;
-                        if (needMask)
-                            printMask(os, mask);
-                        os << ")" << _lineSuffix;
+                        os << "<" << count << ">(" << pv_name << ", " << mv2_name << ", " << mv2_name;
+                        if (need_mask)
+                            print_mask(os, mask);
+                        os << ")" << _line_suffix;
                     }
 
                     // Done w/the found elems.
-                    for (auto fei = foundElems.begin(); fei != foundElems.end(); fei++) {
+                    for (auto fei = found_elems.begin(); fei != found_elems.end(); fei++) {
                         size_t fe = *fei;
-                        doneElems.insert(fe);
+                        done_elems.insert(fe);
                     }
 
                 } // found.
@@ -179,29 +179,29 @@ void CppIntrinPrintHelper::tryAlign(ostream& os,
     } // all combos of 2 aligned vecs.
 }
 
-// Try to use 1-var permute instruction(s) to construct nelemsTarget elements
+// Try to use 1-var permute instruction(s) to construct nelems_target elements
 // per instruction.
-void CppIntrinPrintHelper::tryPerm1(ostream& os,
-                                    const string& pvName,
-                                    size_t nelemsTarget,
+void CppIntrinPrintHelper::try_perm1(ostream& os,
+                                    const string& pv_name,
+                                    size_t nelems_target,
                                     const VecElemList& elems,
-                                    set<size_t>& doneElems,
-                                    const VarPointSet& alignedVecs) {
+                                    set<size_t>& done_elems,
+                                    const VarPointSet& aligned_vecs) {
     size_t nelems = elems.size();
 
     // Try a permute of each aligned vector.
-    for (auto mi = alignedVecs.begin(); mi != alignedVecs.end(); mi++) {
+    for (auto mi = aligned_vecs.begin(); mi != aligned_vecs.end(); mi++) {
         auto mv = *mi;
 
         // Look up existing input var.
-        assert(_vecVars.count(mv));
-        string mvName = _vecVars[mv];
+        assert(_vec_vars.count(mv));
+        string mv_name = _vec_vars[mv];
 
         // Create the permute control and mask vars.
-        string nameS, ctrlS;
+        string name_s, ctrl_s;
         unsigned mask = 0;
-        bool needNA = false;
-        set<size_t> foundElems;
+        bool need_na = false;
+        set<size_t> found_elems;
 
         // Loop through each element in the unaligned vector.
         for (size_t i = 0; i < nelems; i++) {
@@ -211,105 +211,105 @@ void CppIntrinPrintHelper::tryPerm1(ostream& os,
 
             // String separators.
             if (i > 0) {
-                nameS += "_";
-                ctrlS += ", ";
+                name_s += "_";
+                ctrl_s += ", ";
             }
 
             // Is i needed (not done) AND does i come from this mem vec?
             // If so, we want to permute it from the correct offset.
-            if (doneElems.count(i) == 0 && ve._vec == mv) {
-                int alignedElem = ve._offset; // get this element.
+            if (done_elems.count(i) == 0 && ve._vec == mv) {
+                int aligned_elem = ve._offset; // get this element.
 
-                nameS += to_string(alignedElem);
-                ctrlS += to_string(alignedElem);
+                name_s += to_string(aligned_elem);
+                ctrl_s += to_string(aligned_elem);
                 mask |= (1 << i); // set proper bit.
-                foundElems.insert(i); // remember element index.
+                found_elems.insert(i); // remember element index.
             }
 
             // Not from this mem vec.
             else {
-                nameS += "NA";
-                ctrlS += "NA";
-                needNA = true;
+                name_s += "NA";
+                ctrl_s += "NA";
+                need_na = true;
             }
         }
 
         // Have we found the target number of bits?
-        if (foundElems.size() == nelemsTarget) {
+        if (found_elems.size() == nelems_target) {
 
             // We don't need to use the mask if no elements are already done.
-            bool needMask = doneElems.size() > 0;
+            bool need_mask = done_elems.size() > 0;
 
-            ctrlS = "{ .ci = { " + ctrlS + " } }"; // assignment to 'i' array.
+            ctrl_s = "{ .ci = { " + ctrl_s + " } }"; // assignment to 'i' array.
 
             // Create NA var if needed (this is just for clarity).
-            if (needNA)
-                makeNA(os, _linePrefix, _lineSuffix);
+            if (need_na)
+                make_na(os, _line_prefix, _line_suffix);
 
             // Create control if needed.
-            if (definedCtrls.count(nameS) == 0) {
-                definedCtrls.insert(nameS);
-                os << _linePrefix << "const " << getVarType() <<
-                    "_data ctrl_data_" << nameS << " = " << ctrlS << _lineSuffix;
-                os << _linePrefix << "const " << getVarType() <<
-                    " ctrl_" << nameS << "(ctrl_data_" << nameS << ")" << _lineSuffix;
+            if (defined_ctrls.count(name_s) == 0) {
+                defined_ctrls.insert(name_s);
+                os << _line_prefix << "const " << get_var_type() <<
+                    "_data ctrl_data_" << name_s << " = " << ctrl_s << _line_suffix;
+                os << _line_prefix << "const " << get_var_type() <<
+                    " ctrl_" << name_s << "(ctrl_data_" << name_s << ")" << _line_suffix;
             }
 
             // Permute command.
-            os << _linePrefix << "real_vec_permute";
-            if (needMask)
+            os << _line_prefix << "real_vec_permute";
+            if (need_mask)
                 os << "_masked";
-            os << "(" << pvName << ", ctrl_" << nameS << ", " << mvName;
-            if (needMask)
-                printMask(os, mask);
-            os << ")" << _lineSuffix;
+            os << "(" << pv_name << ", ctrl_" << name_s << ", " << mv_name;
+            if (need_mask)
+                print_mask(os, mask);
+            os << ")" << _line_suffix;
 
             // Done w/the found elems.
-            for (auto fei = foundElems.begin(); fei != foundElems.end(); fei++) {
+            for (auto fei = found_elems.begin(); fei != found_elems.end(); fei++) {
                 size_t fe = *fei;
-                doneElems.insert(fe);
+                done_elems.insert(fe);
             }
         } // found.
     } // aligned vectors.
 }
 
-// Try to use 2-var permute instruction(s) to construct nelemsTarget elements
+// Try to use 2-var permute instruction(s) to construct nelems_target elements
 // per instruction.
-void CppIntrinPrintHelper::tryPerm2(ostream& os,
-                                    const string& pvName,
-                                    size_t nelemsTarget,
+void CppIntrinPrintHelper::try_perm2(ostream& os,
+                                    const string& pv_name,
+                                    size_t nelems_target,
                                     const VecElemList& elems,
-                                    set<size_t>& doneElems,
-                                    const VarPointSet& alignedVecs) {
+                                    set<size_t>& done_elems,
+                                    const VarPointSet& aligned_vecs) {
     size_t nelems = elems.size();
 
     // There is no source-preserving mask version of permutex2var, so
     // we bail if any elements have already been found.
-    if (doneElems.size() > 0)
+    if (done_elems.size() > 0)
         return;
 
     // Find case(s) that can use perm2.  Try all possible combinations
     // of 2 aligned vectors, but NOT including each vector paired
     // w/itself. (For that, we can use perm1.)
-    for (auto mi = alignedVecs.begin(); mi != alignedVecs.end(); mi++) {
+    for (auto mi = aligned_vecs.begin(); mi != aligned_vecs.end(); mi++) {
         auto& mv1 = *mi;
-        for (auto mj = alignedVecs.begin(); mj != alignedVecs.end(); mj++) {
+        for (auto mj = aligned_vecs.begin(); mj != aligned_vecs.end(); mj++) {
             auto& mv2 = *mj;
 
             if (mv1 == mv2) continue;
 
             // Look up existing input vars.
             // All should be ready before this function is called.
-            assert(_vecVars.count(mv1));
-            string mv1Name = _vecVars[mv1];
-            assert(_vecVars.count(mv2));
-            string mv2Name = _vecVars[mv2];
+            assert(_vec_vars.count(mv1));
+            string mv1_name = _vec_vars[mv1];
+            assert(_vec_vars.count(mv2));
+            string mv2_name = _vec_vars[mv2];
 
             // Create the permute control vars: one for 1,2 order, and one for 2,1.
-            string nameS12, ctrlS12;
-            string nameS21, ctrlS21;
-            bool needNA = false;
-            set<size_t> foundElems;
+            string name_s12, ctrl_s12;
+            string name_s21, ctrl_s21;
+            bool need_na = false;
+            set<size_t> found_elems;
 
             // Loop through each element in the unaligned vector.
             for (size_t i = 0; i < nelems; i++) {
@@ -319,80 +319,80 @@ void CppIntrinPrintHelper::tryPerm2(ostream& os,
 
                 // String separators.
                 if (i > 0) {
-                    nameS12 += "_";
-                    ctrlS12 += ", ";
-                    nameS21 += "_";
-                    ctrlS21 += ", ";
+                    name_s12 += "_";
+                    ctrl_s12 += ", ";
+                    name_s21 += "_";
+                    ctrl_s21 += ", ";
                 }
 
                 // Is i needed (not done) AND does i come from one of the mem vecs?
                 // If so, we want to permute it from the correct offset.
-                if (doneElems.count(i) == 0 &&
+                if (done_elems.count(i) == 0 &&
                     (ve._vec == mv1 || ve._vec == mv2)) {
-                    bool useA = (ve._vec == mv1); // first vec?
-                    char alignedVec12 = useA ? 'A' : 'B';
-                    char alignedVec21 = !useA ? 'A' : 'B';
-                    int alignedElem = ve._offset; // get this element.
+                    bool use_a = (ve._vec == mv1); // first vec?
+                    char aligned_vec12 = use_a ? 'A' : 'B';
+                    char aligned_vec21 = !use_a ? 'A' : 'B';
+                    int aligned_elem = ve._offset; // get this element.
 
-                    nameS12 += alignedVec12 + to_string(alignedElem);
-                    nameS21 += alignedVec21 + to_string(alignedElem);
-                    if (!useA)
-                        ctrlS12 += "ctrl_sel_bit |"; // set selector bit for vec B.
+                    name_s12 += aligned_vec12 + to_string(aligned_elem);
+                    name_s21 += aligned_vec21 + to_string(aligned_elem);
+                    if (!use_a)
+                        ctrl_s12 += "ctrl_sel_bit |"; // set selector bit for vec B.
                     else
-                        ctrlS21 += "ctrl_sel_bit |"; // set selector bit for vec B.
-                    ctrlS12 += to_string(alignedElem);
-                    ctrlS21 += to_string(alignedElem);
-                    foundElems.insert(i); // remember element index.
+                        ctrl_s21 += "ctrl_sel_bit |"; // set selector bit for vec B.
+                    ctrl_s12 += to_string(aligned_elem);
+                    ctrl_s21 += to_string(aligned_elem);
+                    found_elems.insert(i); // remember element index.
                 }
 
                 // Not from either mem vec.
                 else {
-                    nameS12 += "NA";
-                    ctrlS12 += "NA";
-                    nameS21 += "NA";
-                    ctrlS21 += "NA";
-                    needNA = true;
+                    name_s12 += "NA";
+                    ctrl_s12 += "NA";
+                    name_s21 += "NA";
+                    ctrl_s21 += "NA";
+                    need_na = true;
                 }
             }
 
             // Have we found the target number of bits?
-            if (foundElems.size() == nelemsTarget) {
-                assert(doneElems.size() == 0);
+            if (found_elems.size() == nelems_target) {
+                assert(done_elems.size() == 0);
 
                 // Create NA var if needed (this is just for clarity).
-                if (needNA)
-                    makeNA(os, _linePrefix, _lineSuffix);
+                if (need_na)
+                    make_na(os, _line_prefix, _line_suffix);
 
                 // Var names.
-                ctrlS12 = "{ .ci = { " + ctrlS12 + " } }";
-                ctrlS21 = "{ .ci = { " + ctrlS21 + " } }";
+                ctrl_s12 = "{ .ci = { " + ctrl_s12 + " } }";
+                ctrl_s21 = "{ .ci = { " + ctrl_s21 + " } }";
 
                 // Select 1,2 or 2,1 depending on whether ctrl var already exists.
-                bool use12 = definedCtrls.count(nameS21) == 0;
-                string nameS = use12 ? nameS12 : nameS21;
-                string ctrlS = use12 ? ctrlS12 : ctrlS21;
+                bool use12 = defined_ctrls.count(name_s21) == 0;
+                string name_s = use12 ? name_s12 : name_s21;
+                string ctrl_s = use12 ? ctrl_s12 : ctrl_s21;
 
                 // Create control if needed.
-                if (definedCtrls.count(nameS) == 0) {
-                    definedCtrls.insert(nameS);
-                    os << _linePrefix << "const " << getVarType() <<
-                        "_data ctrl_data_" << nameS << " = " << ctrlS << _lineSuffix;
-                    os << _linePrefix << "const " << getVarType() <<
-                        " ctrl_" << nameS << "(ctrl_data_" << nameS << ")" << _lineSuffix;
+                if (defined_ctrls.count(name_s) == 0) {
+                    defined_ctrls.insert(name_s);
+                    os << _line_prefix << "const " << get_var_type() <<
+                        "_data ctrl_data_" << name_s << " = " << ctrl_s << _line_suffix;
+                    os << _line_prefix << "const " << get_var_type() <<
+                        " ctrl_" << name_s << "(ctrl_data_" << name_s << ")" << _line_suffix;
                 }
 
                 // Permute command.
-                os << _linePrefix << "real_vec_permute2(" << pvName << ", ctrl_" << nameS << ", ";
+                os << _line_prefix << "real_vec_permute2(" << pv_name << ", ctrl_" << name_s << ", ";
                 if (use12)
-                    os << mv1Name << ", " << mv2Name;
+                    os << mv1_name << ", " << mv2_name;
                 else
-                    os << mv2Name << ", " << mv1Name;
-                os << ")" << _lineSuffix;
+                    os << mv2_name << ", " << mv1_name;
+                os << ")" << _line_suffix;
 
                 // Done w/the found elems.
-                for (auto fei = foundElems.begin(); fei != foundElems.end(); fei++) {
+                for (auto fei = found_elems.begin(); fei != found_elems.end(); fei++) {
                     size_t fe = *fei;
-                    doneElems.insert(fe);
+                    done_elems.insert(fe);
                 }
 
                 // Since there is no mask, we have to quit after one instruction.
@@ -405,24 +405,24 @@ void CppIntrinPrintHelper::tryPerm2(ostream& os,
 }
 
 
-// Print construction for one unaligned vector pvName at gp.
-void CppIntrinPrintHelper::printUnalignedVecCtor(ostream& os,
+// Print construction for one unaligned vector pv_name at gp.
+void CppIntrinPrintHelper::print_unaligned_vec_ctor(ostream& os,
                                                  const VarPoint& gp,
-                                                 const string& pvName) {
+                                                 const string& pv_name) {
 
     // Create an explanatory comment by printing the straightforward
     // code in a comment.
-    printUnalignedVecSimple(os, gp, pvName, " // ");
+    print_unaligned_vec_simple(os, gp, pv_name, " // ");
 
     // List of elements for this vec block.
-    auto& elems = _vv._vblk2elemLists[gp];
+    auto& elems = _vv._vblk2elem_lists[gp];
     size_t nelems = elems.size();
 
     // Set of elements in gp that have been constructed.
-    set<size_t> doneElems;
+    set<size_t> done_elems;
 
     // Set of aligned vec blocks that overlap with this unaligned vec block.
-    const auto& alignedVecs = _vv._vblk2avblks[gp];
+    const auto& aligned_vecs = _vv._vblk2avblks[gp];
 
     // Brute-force, greedy algorithm:
     // Want to construct this vector as efficiently as possible.
@@ -430,21 +430,21 @@ void CppIntrinPrintHelper::printUnalignedVecCtor(ostream& os,
     // For each target number of elements (most to least), try various strategies.
 
     // Loop through decreasing numbers of elements.
-    for (size_t nelemsTarget = nelems;
-         doneElems.size() < nelems && nelemsTarget > 0;
-         nelemsTarget--) {
+    for (size_t nelems_target = nelems;
+         done_elems.size() < nelems && nelems_target > 0;
+         nelems_target--) {
 
-        tryStrategies(os, pvName,
-                      nelemsTarget, elems, doneElems, alignedVecs);
+        try_strategies(os, pv_name,
+                      nelems_target, elems, done_elems, aligned_vecs);
 
     } // decreasing number of target elements for next attempt.
 
     // Check that all elements are done and add any missing ones.
-    size_t ndone = doneElems.size();
+    size_t ndone = done_elems.size();
     if (ndone != nelems) {
         os << " // Note: could not create the following " << (nelems-ndone) <<
             " out of " << nelems <<
             " elements for unaligned vector with intrinsics." << endl;
-        printUnalignedVecSimple(os, gp, pvName, _linePrefix, &doneElems);
+        print_unaligned_vec_simple(os, gp, pv_name, _line_prefix, &done_elems);
     }
 }

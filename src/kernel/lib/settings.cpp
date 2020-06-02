@@ -29,7 +29,7 @@ using namespace std;
 namespace yask {
 
     // Check whether dim is of allowed type.
-    void Dims::checkDimType(const std::string& dim,
+    void Dims::check_dim_type(const std::string& dim,
                             const std::string& fn_name,
                             bool step_ok,
                             bool domain_ok,
@@ -59,7 +59,7 @@ namespace yask {
     yk_env_ptr yk_factory::new_env(MPI_Comm comm) const {
         auto ep = make_shared<KernelEnv>();
         assert(ep);
-        ep->initEnv(0, 0, comm);
+        ep->init_env(0, 0, comm);
         return ep;
     }
     yk_env_ptr yk_factory::new_env() const {
@@ -71,7 +71,7 @@ namespace yask {
     bool KernelEnv::_debug_lock_init_done = false;
 
     // Init MPI, OMP.
-    void KernelEnv::initEnv(int* argc, char*** argv, MPI_Comm existing_comm)
+    void KernelEnv::init_env(int* argc, char*** argv, MPI_Comm existing_comm)
     {
         // MPI init.
         my_rank = 0;
@@ -145,16 +145,16 @@ namespace yask {
 
     // Apply a function to each neighbor rank.
     // Does NOT visit self.
-    void MPIInfo::visitNeighbors(std::function<void
+    void MPIInfo::visit_neighbors(std::function<void
                                  (const IdxTuple& neigh_offsets, // NeighborOffset vals.
                                   int neigh_rank, // MPI rank.
                                   int neigh_index)> visitor) {
 
-        // TODO: convert to use visitAllPoints().
+        // TODO: convert to use visit_all_points().
         for (int i = 0; i < neighborhood_size; i++) {
             auto neigh_offsets = neighborhood_sizes.unlayout(i);
             int neigh_rank = my_neighbors.at(i);
-            assert(i == getNeighborIndex(neigh_offsets));
+            assert(i == get_neighbor_index(neigh_offsets));
 
             if (i != my_neighbor_index)
                 visitor(neigh_offsets, neigh_rank, i);
@@ -199,13 +199,13 @@ namespace yask {
 
     // Apply a function to each neighbor rank.
     // Does NOT visit self or non-existent neighbors.
-    void MPIData::visitNeighbors(std::function<void
+    void MPIData::visit_neighbors(std::function<void
                                  (const IdxTuple& neigh_offsets, // NeighborOffset.
                                   int neigh_rank,
                                   int neigh_index,
                                   MPIBufs& bufs)> visitor) {
 
-        _mpiInfo->visitNeighbors
+        _mpi_info->visit_neighbors
             ([&](const IdxTuple& neigh_offsets, int neigh_rank, int i) {
 
                  if (neigh_rank != MPI_PROC_NULL)
@@ -214,10 +214,10 @@ namespace yask {
     }
 
     // Access a buffer by direction and neighbor offsets.
-    MPIBuf& MPIData::getBuf(MPIBufs::BufDir bd, const IdxTuple& offsets) {
-        assert(int(bd) < int(MPIBufs::nBufDirs));
-        auto i = _mpiInfo->getNeighborIndex(offsets); // 1D index.
-        assert(i < _mpiInfo->neighborhood_size);
+    MPIBuf& MPIData::get_buf(MPIBufs::BufDir bd, const IdxTuple& offsets) {
+        assert(int(bd) < int(MPIBufs::n_buf_dirs));
+        auto i = _mpi_info->get_neighbor_index(offsets); // 1D index.
+        assert(i < _mpi_info->neighborhood_size);
         return bufs[i].bufs[bd];
     }
 
@@ -239,45 +239,45 @@ namespace yask {
 
         // Use both step and domain dims for all size tuples.
         _global_sizes = dims->_stencil_dims;
-        _global_sizes.setValsSame(0); // 0 => calc from rank.
+        _global_sizes.set_vals_same(0); // 0 => calc from rank.
 
         _rank_sizes = dims->_stencil_dims;
-        _rank_sizes.setValsSame(0); // 0 => calc from global.
+        _rank_sizes.set_vals_same(0); // 0 => calc from global.
 
         _region_sizes = dims->_stencil_dims;
-        _region_sizes.setValsSame(0);   // 0 => rank size.
+        _region_sizes.set_vals_same(0);   // 0 => rank size.
 
         _block_group_sizes = dims->_stencil_dims;
-        _block_group_sizes.setValsSame(0); // 0 => min size.
+        _block_group_sizes.set_vals_same(0); // 0 => min size.
 
         _block_sizes = dims->_stencil_dims;
-        _block_sizes.setValsSame(def_blk_size);
-        _block_sizes.setVal(step_dim, 0); // 0 => default.
+        _block_sizes.set_vals_same(def_blk_size);
+        _block_sizes.set_val(step_dim, 0); // 0 => default.
 
         _mini_block_group_sizes = dims->_stencil_dims;
-        _mini_block_group_sizes.setValsSame(0); // 0 => min size.
+        _mini_block_group_sizes.set_vals_same(0); // 0 => min size.
 
         _mini_block_sizes = dims->_stencil_dims;
-        _mini_block_sizes.setValsSame(0);            // 0 => calc from block.
+        _mini_block_sizes.set_vals_same(0);            // 0 => calc from block.
 
         _sub_block_group_sizes = dims->_stencil_dims;
-        _sub_block_group_sizes.setValsSame(0); // 0 => min size.
+        _sub_block_group_sizes.set_vals_same(0); // 0 => min size.
 
         _sub_block_sizes = dims->_stencil_dims;
-        _sub_block_sizes.setValsSame(0);            // 0 => calc from mini-block.
+        _sub_block_sizes.set_vals_same(0);            // 0 => calc from mini-block.
 
         _min_pad_sizes = dims->_stencil_dims;
-        _min_pad_sizes.setValsSame(0);
+        _min_pad_sizes.set_vals_same(0);
 
         _extra_pad_sizes = dims->_stencil_dims;
-        _extra_pad_sizes.setValsSame(0);
+        _extra_pad_sizes.set_vals_same(0);
 
         // Use only domain dims for MPI tuples.
         _num_ranks = dims->_domain_dims;
-        _num_ranks.setValsSame(0); // 0 => set using heuristic.
+        _num_ranks.set_vals_same(0); // 0 => set using heuristic.
 
         _rank_indices = dims->_domain_dims;
-        _rank_indices.setValsSame(0);
+        _rank_indices.set_vals_same(0);
     }
 
     // Add options to set one domain var to a cmd-line parser.
@@ -291,7 +291,7 @@ namespace yask {
         vector<idx_t*> multi_vars;
         string multi_help;
         for (auto& dim : var) {
-            auto& dname = dim.getName();
+            auto& dname = dim._get_name();
             if (!allow_step && _dims->_step_dim == dname)
                 continue;
             idx_t* dp = var.lookup(dname); // use lookup() to get non-const ptr.
@@ -444,18 +444,18 @@ namespace yask {
 
     // Print usage message.
     void KernelSettings::print_usage(ostream& os,
-                                     CommandLineParser& appParser,
-                                     const string& pgmName,
-                                     const string& appNotes,
-                                     const vector<string>& appExamples)
+                                     CommandLineParser& app_parser,
+                                     const string& pgm_name,
+                                     const string& app_notes,
+                                     const vector<string>& app_examples)
     {
-        os << "Usage: " << pgmName << " [options]\n"
+        os << "Usage: " << pgm_name << " [options]\n"
             "Options:\n";
-        appParser.print_help(os);
-        CommandLineParser solnParser;
-        add_options(solnParser);
-        solnParser.print_help(os);
-        os << "\nTerms for the various levels of tiling from smallest to largest:\n"
+        app_parser.print_help(os);
+        CommandLineParser soln_parser;
+        add_options(soln_parser);
+        soln_parser.print_help(os);
+        os << "\n_terms for the various levels of tiling from smallest to largest:\n"
             " A 'point' is a single floating-point (FP) element.\n"
             "  This binary uses " << REAL_BYTES << "-byte FP elements.\n"
             " A 'vector' is composed of points.\n"
@@ -492,7 +492,7 @@ namespace yask {
             "   This binary has NOT been compiled with MPI support,\n"
             "   so the global-domain is equivalent to the single local-domain.\n" <<
 #endif
-            "\nGuidelines for setting tiling sizes:\n"
+            "\n_guidelines for setting tiling sizes:\n"
             " The vector and vector-cluster sizes are set at compile-time, so\n"
             "  there are no run-time options to set them.\n"
             " Set sub-block sizes to specify a unit of work done by each nested OpenMP thread.\n"
@@ -540,7 +540,7 @@ namespace yask {
             " Setting 'group' sizes controls only the order of tiles.\n"
             "  These are advanced settings that are not commonly used.\n"
 #endif
-            "\nControlling OpenMP threading:\n"
+            "\n_controlling OpenMP threading:\n"
             " Using '-max_threads 0' =>\n"
             "  max_threads is set to OpenMP's default number of threads.\n"
             " The -thread_divisor option is a convenience to control the number of\n"
@@ -552,29 +552,29 @@ namespace yask {
             "  Num threads per sub-block = 1.\n"
             "  Num threads used for halo exchange is same as num per region.\n" <<
 #ifdef USE_MPI
-            "\nControlling MPI scaling:\n"
+            "\n_controlling MPI scaling:\n"
             "  To 'strong-scale' a given overall-problem size, use multiple MPI ranks\n"
             "   and keep the global-domain sizes constant.\n"
             "  To 'weak-scale' to a larger overall-problem size, use multiple MPI ranks\n"
             "   and keep the local-domain sizes constant.\n" <<
 #endif
-            appNotes;
+            app_notes;
 
         // Make example knobs.
         string ex1, ex2;
         DOMAIN_VAR_LOOP(i, j) {
-            auto& dname = _dims->_domain_dims.getDimName(j);
+            auto& dname = _dims->_domain_dims.get_dim_name(j);
             ex1 += " -g" + dname + " " + to_string(i * 128);
             ex2 += " -nr" + dname + " " + to_string(i + 1);
         }
         os <<
-            "\nExamples:\n"
-            " " << pgmName << " -g 768  # global-domain size in all dims.\n"
-            " " << pgmName << ex1 << "  # global-domain size in each dim.\n"
-            " " << pgmName << " -l 2048 -r 512 -rt 10  # local-domain size and temporal rank tiling.\n"
-            " " << pgmName << " -g 512" << ex2 << "  # number of ranks in each dim.\n";
-        for (auto ae : appExamples)
-            os << " " << pgmName << " " << ae << endl;
+            "\n_examples:\n"
+            " " << pgm_name << " -g 768  # global-domain size in all dims.\n"
+            " " << pgm_name << ex1 << "  # global-domain size in each dim.\n"
+            " " << pgm_name << " -l 2048 -r 512 -rt 10  # local-domain size and temporal rank tiling.\n"
+            " " << pgm_name << " -g 512" << ex2 << "  # number of ranks in each dim.\n";
+        for (auto ae : app_examples)
+            os << " " << pgm_name << " " << ae << endl;
         os << flush;
     }
 
@@ -584,14 +584,14 @@ namespace yask {
     // Output info to 'os' using '*_name' and dim names.
     // Does not process 'step_dim'.
     // Return product of number of inner subsets.
-    idx_t  KernelSettings::findNumSubsets(ostream& os,
+    idx_t  KernelSettings::find_num_subsets(ostream& os,
                                           IdxTuple& inner_sizes, const string& inner_name,
                                           const IdxTuple& outer_sizes, const string& outer_name,
                                           const IdxTuple& mults, const std::string& step_dim) {
 
         idx_t prod = 1;
         for (auto& dim : inner_sizes) {
-            auto& dname = dim.getName();
+            auto& dname = dim._get_name();
             if (dname == step_dim)
                 continue;
             idx_t* dptr = inner_sizes.lookup(dname); // use lookup() to get non-const ptr.
@@ -625,7 +625,7 @@ namespace yask {
     // Make sure all user-provided settings are valid and finish setting up some
     // other vars before allocating memory.
     // Called from prepare_solution(), during auto-tuning, etc.
-    void KernelSettings::adjustSettings(KernelStateBase* ksb) {
+    void KernelSettings::adjust_settings(KernelStateBase* ksb) {
         yask_output_ptr op = ksb ? ksb->get_debug_output() : nullop;
         ostream& os = op->get_ostream();
 
@@ -635,7 +635,7 @@ namespace yask {
         auto& bt = _block_sizes[step_dim];
         auto& mbt = _mini_block_sizes[step_dim];
         auto& cluster_pts = _dims->_cluster_pts;
-        int nddims = _dims->_domain_dims.getNumDims();
+        int nddims = _dims->_domain_dims._get_num_dims();
 
         // Fix up step-dim sizes.
         rt = max(rt, idx_t(0));
@@ -651,8 +651,8 @@ namespace yask {
         // Temporal region size will be increase to
         // current temporal block size if needed.
         // Default region size (if 0) will be size of rank-domain.
-        os << "\nRegions:" << endl;
-        auto nr = findNumSubsets(os, _region_sizes, "region",
+        os << "\n_regions:" << endl;
+        auto nr = find_num_subsets(os, _region_sizes, "region",
                                  _rank_sizes, "local-domain",
                                  cluster_pts, step_dim);
         os << " num-regions-per-local-domain-per-step: " << nr << endl;
@@ -664,8 +664,8 @@ namespace yask {
         // Determine num blocks.
         // Also fix up block sizes as needed.
         // Default block size (if 0) will be size of region.
-        os << "\nBlocks:" << endl;
-        auto nb = findNumSubsets(os, _block_sizes, "block",
+        os << "\n_blocks:" << endl;
+        auto nb = find_num_subsets(os, _block_sizes, "block",
                                  _region_sizes, "region",
                                  cluster_pts, step_dim);
         os << " num-blocks-per-region-per-step: " << nb << endl;
@@ -677,8 +677,8 @@ namespace yask {
 
         // Determine num mini-blocks.
         // Also fix up mini-block sizes as needed.
-        os << "\nMini-blocks:" << endl;
-        auto nmb = findNumSubsets(os, _mini_block_sizes, "mini-block",
+        os << "\n_mini-blocks:" << endl;
+        auto nmb = find_num_subsets(os, _mini_block_sizes, "mini-block",
                                   _block_sizes, "block",
                                   cluster_pts, step_dim);
         os << " num-mini-blocks-per-block-per-step: " << nmb << endl;
@@ -691,7 +691,7 @@ namespace yask {
 
         // Adjust defaults for sub-blocks to be slab if
         // we are using more than one block thread.
-        // Otherwise, findNumSubsets() would set default
+        // Otherwise, find_num_subsets() would set default
         // to entire block.
         if (num_block_threads > 1 && _sub_block_sizes.sum() == 0) {
 
@@ -703,7 +703,7 @@ namespace yask {
             DOMAIN_VAR_LOOP(i, j) {
 
                 // Don't pick inner dim.
-                auto& dname = _dims->_domain_dims.getDimName(j);
+                auto& dname = _dims->_domain_dims.get_dim_name(j);
                 if (dname == inner_dim)
                     continue;
 
@@ -737,8 +737,8 @@ namespace yask {
 
         // Determine num sub-blocks.
         // Also fix up sub-block sizes as needed.
-        os << "\nSub-blocks:" << endl;
-        auto nsb = findNumSubsets(os, _sub_block_sizes, "sub-block",
+        os << "\n_sub-blocks:" << endl;
+        auto nsb = find_num_subsets(os, _sub_block_sizes, "sub-block",
                                   _mini_block_sizes, "mini-block",
                                   cluster_pts, step_dim);
         os << " num-sub-blocks-per-mini-block-per-step: " << nsb << endl;
@@ -752,7 +752,7 @@ namespace yask {
             DOMAIN_VAR_LOOP(i, j) {
 
                 // Don't pick inner dim.
-                auto& dname = _dims->_domain_dims.getDimName(j);
+                auto& dname = _dims->_domain_dims.get_dim_name(j);
                 if (dname == inner_dim)
                     continue;
 
@@ -768,7 +768,7 @@ namespace yask {
                 }
             }
             os << " Note: only the sub-block size in the '" <<
-                _dims->_stencil_dims.getDimName(_bind_posn) << "' dimension may be used at run-time\n"
+                _dims->_stencil_dims.get_dim_name(_bind_posn) << "' dimension may be used at run-time\n"
                 "  because block-thread binding is enabled on " << num_block_threads << " block threads.\n";
         }
 
@@ -777,7 +777,7 @@ namespace yask {
         // their own loops.
 
         // Adjust defaults for groups to be min size.
-        // Otherwise, findNumBlockGroupsInRegion() would set default
+        // Otherwise, find_num_block_groups_in_region() would set default
         // to entire region.
         DOMAIN_VAR_LOOP(i, j) {
             if (_block_group_sizes[i] == 0)
@@ -789,37 +789,37 @@ namespace yask {
         }
 
 #ifdef SHOW_GROUPS
-        os << "\nGroups (only affect ordering):" << endl;
+        os << "\n_groups (only affect ordering):" << endl;
 
         // Show num block-groups.
         // TODO: only print this if block-grouping is enabled.
-        auto nbg = findNumSubsets(os, _block_group_sizes, "block-group",
+        auto nbg = find_num_subsets(os, _block_group_sizes, "block-group",
                                   _region_sizes, "region",
                                   _block_sizes, step_dim);
         os << " num-block-groups-per-region-per-step: " << nbg << endl;
-        auto nb_g = findNumSubsets(os, _block_sizes, "block",
+        auto nb_g = find_num_subsets(os, _block_sizes, "block",
                                    _block_group_sizes, "block-group",
                                    cluster_pts, step_dim);
         os << " num-blocks-per-block-group-per-step: " << nb_g << endl;
 
         // Show num mini-block-groups.
         // TODO: only print this if mini-block-grouping is enabled.
-        auto nmbg = findNumSubsets(os, _mini_block_group_sizes, "mini-block-group",
+        auto nmbg = find_num_subsets(os, _mini_block_group_sizes, "mini-block-group",
                                    _block_sizes, "block",
                                    _mini_block_sizes, step_dim);
         os << " num-mini-block-groups-per-block-per-step: " << nmbg << endl;
-        auto nmb_g = findNumSubsets(os, _mini_block_sizes, "mini-block",
+        auto nmb_g = find_num_subsets(os, _mini_block_sizes, "mini-block",
                                     _mini_block_group_sizes, "mini-block-group",
                                     cluster_pts, step_dim);
         os << " num-mini-blocks-per-block-group-per-step: " << nmb_g << endl;
 
         // Show num sub-block-groups.
         // TODO: only print this if sub-block-grouping is enabled.
-        auto nsbg = findNumSubsets(os, _sub_block_group_sizes, "sub-block-group",
+        auto nsbg = find_num_subsets(os, _sub_block_group_sizes, "sub-block-group",
                                    _mini_block_sizes, "mini-block",
                                    _sub_block_sizes, step_dim);
         os << " num-sub-block-groups-per-mini-block-per-step: " << nsbg << endl;
-        auto nsb_g = findNumSubsets(os, _sub_block_sizes, "sub-block",
+        auto nsb_g = find_num_subsets(os, _sub_block_sizes, "sub-block",
                                     _sub_block_group_sizes, "sub-block-group",
                                     _dims->_cluster_pts, step_dim);
         os << " num-sub-blocks-per-sub-block-group-per-step: " << nsb_g << endl;
@@ -843,14 +843,14 @@ namespace yask {
         _state->_dims = ksettings->_dims;
 
        // Create MPI Info object.
-        _state->_mpiInfo = make_shared<MPIInfo>(ksettings->_dims);
+        _state->_mpi_info = make_shared<MPIInfo>(ksettings->_dims);
 
         // Set vars after above inits.
         STATE_VARS(this);
 
         // Find index posns in stencil dims.
         DOMAIN_VAR_LOOP(i, j) {
-            auto& dname = stencil_dims.getDimName(i);
+            auto& dname = stencil_dims.get_dim_name(i);
             if (state->_outer_posn < 0)
                 state->_outer_posn = i;
             if (dname == dims->_inner_dim)

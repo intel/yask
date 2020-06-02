@@ -58,28 +58,28 @@ namespace yask {
         Indices() : _ndims(0) { }
         Indices(int ndims) : _ndims(ndims) { } // NB: _idxs remain uninit!
         Indices(const IdxTuple& src) {
-            setFromTuple(src);
+            set_from_tuple(src);
         }
         Indices(const VarIndices& src) {
-            setFromVec(src);
+            set_from_vec(src);
         }
         Indices(const std::initializer_list<idx_t>& src) {
-            setFromInitList(src);
+            set_from_init_list(src);
         }
         Indices(const idx_t src[], int ndims) {
-            setFromArray(src, ndims);
+            set_from_array(src, ndims);
         }
         Indices(idx_t src, int ndims) {
-            setFromConst(src, ndims);
+            set_from_const(src, ndims);
         }
 
         // Default copy ctor, copy operator should be okay.
 
         // Access size.
-        inline int getNumDims() const {
+        inline int _get_num_dims() const {
             return _ndims;
         }
-        inline void setNumDims(int n) {
+        inline void set_num_dims(int n) {
             _ndims = n;
         }
 
@@ -97,24 +97,24 @@ namespace yask {
 
         // Write to an IdxTuple.
         // The 'tgt' must have the same number of dims.
-        void setTupleVals(IdxTuple& tgt) const {
+        void set_tuple_vals(IdxTuple& tgt) const {
             assert(tgt.size() == size_t(_ndims));
             for (int i = 0; i < _ndims; i++)
                 if (size_t(i) < tgt.size())
-                    tgt.setVal(i, _idxs[i]);
+                    tgt.set_val(i, _idxs[i]);
         }
 
         // Read from an IdxTuple.
-        void setFromTuple(const IdxTuple& src) {
+        void set_from_tuple(const IdxTuple& src) {
             assert(src.size() <= +max_idxs);
             int n = int(src.size());
             for (int i = 0; i < n; i++)
-                _idxs[i] = src.getVal(i);
+                _idxs[i] = src.get_val(i);
             _ndims = n;
         }
 
         // Other inits.
-        void setFromVec(const VarIndices& src) {
+        void set_from_vec(const VarIndices& src) {
             assert(src.size() <= +max_idxs);
             int n = int(src.size());
             for (int i = 0; i < n; i++)
@@ -123,7 +123,7 @@ namespace yask {
         }
 
         // default n => don't change _ndims.
-        void setFromArray(const idx_t src[], int n = -1) {
+        void set_from_array(const idx_t src[], int n = -1) {
             if (n < 0)
                 n = _ndims;
             assert(n <= +max_idxs);
@@ -131,7 +131,7 @@ namespace yask {
                 _idxs[i] = src[i];
             _ndims = n;
         }
-        void setFromInitList(const std::initializer_list<idx_t>& src) {
+        void set_from_init_list(const std::initializer_list<idx_t>& src) {
             assert(src.size() <= +max_idxs);
             int i = 0;
             for (auto idx : src)
@@ -140,7 +140,7 @@ namespace yask {
         }
 
         // default n => don't change _ndims.
-        void setFromConst(idx_t val, int n = -1) {
+        void set_from_const(idx_t val, int n = -1) {
             if (n < 0)
                 n = _ndims;
             assert(n <= +max_idxs);
@@ -148,8 +148,8 @@ namespace yask {
                 _idxs[i] = val;
             _ndims = n;
         }
-        void setValsSame(idx_t val) {
-            setFromConst(val);
+        void set_vals_same(idx_t val) {
+            set_from_const(val);
         }
 
         // Some comparisons.
@@ -193,7 +193,7 @@ namespace yask {
 
         // Generic element-wise operator.
         // Returns a new object.
-        inline Indices combineElements(std::function<void (idx_t& lhs, idx_t rhs)> func,
+        inline Indices combine_elements(std::function<void (idx_t& lhs, idx_t rhs)> func,
                                        const Indices& other) const {
             Indices res(*this);
 
@@ -211,34 +211,34 @@ namespace yask {
         // Some element-wise operators.
         // These all return a new set of Indices rather
         // than modifying this object.
-        inline Indices addElements(const Indices& other) const {
-            return combineElements([&](idx_t& lhs, idx_t rhs) { lhs += rhs; },
+        inline Indices add_elements(const Indices& other) const {
+            return combine_elements([&](idx_t& lhs, idx_t rhs) { lhs += rhs; },
                                    other);
         }
-        inline Indices subElements(const Indices& other) const {
-            return combineElements([&](idx_t& lhs, idx_t rhs) { lhs -= rhs; },
+        inline Indices sub_elements(const Indices& other) const {
+            return combine_elements([&](idx_t& lhs, idx_t rhs) { lhs -= rhs; },
                                    other);
         }
-        inline Indices mulElements(const Indices& other) const {
-            return combineElements([&](idx_t& lhs, idx_t rhs) { lhs *= rhs; },
+        inline Indices mul_elements(const Indices& other) const {
+            return combine_elements([&](idx_t& lhs, idx_t rhs) { lhs *= rhs; },
                                    other);
         }
-        inline Indices divElements(const Indices& other) const {
-            return combineElements([&](idx_t& lhs, idx_t rhs) { lhs /= rhs; },
+        inline Indices div_elements(const Indices& other) const {
+            return combine_elements([&](idx_t& lhs, idx_t rhs) { lhs /= rhs; },
                                    other);
         }
-        inline Indices minElements(const Indices& other) const {
-            return combineElements([&](idx_t& lhs, idx_t rhs) { lhs = std::min(lhs, rhs); },
+        inline Indices min_elements(const Indices& other) const {
+            return combine_elements([&](idx_t& lhs, idx_t rhs) { lhs = std::min(lhs, rhs); },
                                    other);
         }
-        inline Indices maxElements(const Indices& other) const {
-            return combineElements([&](idx_t& lhs, idx_t rhs) { lhs = std::max(lhs, rhs); },
+        inline Indices max_elements(const Indices& other) const {
+            return combine_elements([&](idx_t& lhs, idx_t rhs) { lhs = std::max(lhs, rhs); },
                                    other);
         }
 
         // Generic element-wise operator with RHS const.
         // Returns a new object.
-        inline Indices mapElements(std::function<void (idx_t& lhs, idx_t rhs)> func,
+        inline Indices map_elements(std::function<void (idx_t& lhs, idx_t rhs)> func,
                                    idx_t crhs) const {
             Indices res(*this);
 
@@ -254,28 +254,28 @@ namespace yask {
         }
 
         // Operate on all elements.
-        Indices addConst(idx_t crhs) const {
-            return mapElements([&](idx_t& lhs, idx_t rhs) { lhs += rhs; },
+        Indices add_const(idx_t crhs) const {
+            return map_elements([&](idx_t& lhs, idx_t rhs) { lhs += rhs; },
                                crhs);
         }
-        Indices subConst(idx_t crhs) const {
-            return mapElements([&](idx_t& lhs, idx_t rhs) { lhs -= rhs; },
+        Indices sub_const(idx_t crhs) const {
+            return map_elements([&](idx_t& lhs, idx_t rhs) { lhs -= rhs; },
                                crhs);
         }
-        Indices mulConst(idx_t crhs) const {
-            return mapElements([&](idx_t& lhs, idx_t rhs) { lhs *= rhs; },
+        Indices mul_const(idx_t crhs) const {
+            return map_elements([&](idx_t& lhs, idx_t rhs) { lhs *= rhs; },
                                crhs);
         }
-        Indices divConst(idx_t crhs) const {
-            return mapElements([&](idx_t& lhs, idx_t rhs) { lhs /= rhs; },
+        Indices div_const(idx_t crhs) const {
+            return map_elements([&](idx_t& lhs, idx_t rhs) { lhs /= rhs; },
                                crhs);
         }
-        Indices minConst(idx_t crhs) const {
-            return mapElements([&](idx_t& lhs, idx_t rhs) { lhs = std::min(lhs, rhs); },
+        Indices min_const(idx_t crhs) const {
+            return map_elements([&](idx_t& lhs, idx_t rhs) { lhs = std::min(lhs, rhs); },
                                crhs);
         }
-        Indices maxConst(idx_t crhs) const {
-            return mapElements([&](idx_t& lhs, idx_t rhs) { lhs = std::max(lhs, rhs); },
+        Indices max_const(idx_t crhs) const {
+            return map_elements([&](idx_t& lhs, idx_t rhs) { lhs = std::max(lhs, rhs); },
                                crhs);
         }
 
@@ -294,65 +294,65 @@ namespace yask {
         }
 
         // Make a Tuple w/given names.
-        IdxTuple makeTuple(const VarDimNames& names) const {
+        IdxTuple make_tuple(const VarDimNames& names) const {
             assert((int)names.size() == _ndims);
 
             // Make a Tuple from names.
             IdxTuple tmp;
             for (int i = 0; i < int(names.size()); i++)
-                tmp.addDimBack(names[i], _idxs[i]);
+                tmp.add_dim_back(names[i], _idxs[i]);
             return tmp;
         }
 
         // Make a Tuple w/o useful names.
-        IdxTuple makeTuple() const {
+        IdxTuple make_tuple() const {
             IdxTuple tmp;
             for (int i = 0; i < _ndims; i++)
-                tmp.addDimBack(std::string("d") + std::to_string(i), _idxs[i]);
+                tmp.add_dim_back(std::string("d") + std::to_string(i), _idxs[i]);
             return tmp;
         }
 
         // Make a Tuple w/names from another Tuple.
-        IdxTuple makeTuple(const IdxTuple& names) const {
-            auto tmp = names.getDimNames();
-            return makeTuple(tmp);
+        IdxTuple make_tuple(const IdxTuple& names) const {
+            auto tmp = names.get_dim_names();
+            return make_tuple(tmp);
         }
 
         // Make string like "x=4, y=8".
-        std::string makeDimValStr(const VarDimNames& names,
+        std::string make_dim_val_str(const VarDimNames& names,
                                   std::string separator=", ",
                                   std::string infix="=",
                                   std::string prefix="",
                                   std::string suffix="") const {
-            auto tmp = makeTuple(names);
-            return tmp.makeDimValStr(separator, infix, prefix, suffix);
+            auto tmp = make_tuple(names);
+            return tmp.make_dim_val_str(separator, infix, prefix, suffix);
         }
-        std::string makeDimValStr(const IdxTuple& names, // ignore values.
+        std::string make_dim_val_str(const IdxTuple& names, // ignore values.
                                   std::string separator=", ",
                                   std::string infix="=",
                                   std::string prefix="",
                                   std::string suffix="") const {
-            auto tmp = makeTuple(names);
-            return tmp.makeDimValStr(separator, infix, prefix, suffix);
+            auto tmp = make_tuple(names);
+            return tmp.make_dim_val_str(separator, infix, prefix, suffix);
         }
 
         // Make string like "4, 3, 2".
-        std::string makeValStr(std::string separator=", ",
+        std::string make_val_str(std::string separator=", ",
                                std::string prefix="",
                                std::string suffix="") const {
 
             // Make a Tuple w/o useful names.
-            auto tmp = makeTuple();
-            return tmp.makeValStr(separator, prefix, suffix);
+            auto tmp = make_tuple();
+            return tmp.make_val_str(separator, prefix, suffix);
         }
     };
 
     // Define OMP reductions on Indices.
 #pragma omp declare reduction(min_idxs : Indices : \
-                              omp_out = omp_out.minElements(omp_in) )   \
+                              omp_out = omp_out.min_elements(omp_in) )   \
     initializer (omp_priv = omp_orig)
 #pragma omp declare reduction(max_idxs : Indices : \
-                              omp_out = omp_out.maxElements(omp_in) )   \
+                              omp_out = omp_out.max_elements(omp_in) )   \
     initializer (omp_priv = omp_orig)
 
     // Layout base class.
@@ -362,7 +362,7 @@ namespace yask {
     protected:
         Indices _sizes;   // Size of each dimension.
         Layout(int n, const Indices& sizes) :
-            _sizes(sizes) { _sizes.setNumDims(n); }
+            _sizes(sizes) { _sizes.set_num_dims(n); }
 
     public:
         Layout(int nsizes) :
@@ -373,12 +373,12 @@ namespace yask {
         void set_sizes(const Indices& sizes) { _sizes = sizes; }
         inline idx_t get_size(int i) const {
             assert(i >= 0);
-            assert(i < _sizes.getNumDims());
+            assert(i < _sizes._get_num_dims());
             return _sizes[i];
         }
         void set_size(int i, idx_t size) {
             assert(i >= 0);
-            assert(i < _sizes.getNumDims());
+            assert(i < _sizes._get_num_dims());
             _sizes[i] = size;
         }
 
@@ -461,7 +461,7 @@ namespace yask {
             ScanIndices(dims, use_vec_align) {
             if (ofs) {
                 DOMAIN_VAR_LOOP(i, j) {
-                    assert(ofs->getNumDims() == ndims - 1);
+                    assert(ofs->_get_num_dims() == ndims - 1);
                     align_ofs[i] = (*ofs)[j];
                 }
             }
@@ -470,8 +470,8 @@ namespace yask {
             ScanIndices(dims, use_vec_align) {
             if (ofs) {
                 DOMAIN_VAR_LOOP(i, j) {
-                    assert(ofs->getNumDims() == ndims - 1);
-                    align_ofs[i] = ofs->getVal(j);
+                    assert(ofs->_get_num_dims() == ndims - 1);
+                    align_ofs[i] = ofs->get_val(j);
                 }
             }
         }
@@ -491,7 +491,7 @@ namespace yask {
         // begin    (this)     end
         //   |------------------|
         // start               stop  (may be sub-dividied later)
-        void initFromOuter(const ScanIndices& outer) {
+        void init_from_outer(const ScanIndices& outer) {
 
             // Begin & end set from start & stop of outer loop.
             begin = start = outer.start;

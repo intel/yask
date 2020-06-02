@@ -35,22 +35,22 @@ namespace yask {
     // Base class for a visitor that applies an optimization.
     class OptVisitor : public ExprVisitor {
     protected:
-        int _numChanges;
+        int _num_changes;
         string _name;
 
     public:
         OptVisitor(const string& name) :
-            _numChanges(0), _name(name) {}
+            _num_changes(0), _name(name) {}
         virtual ~OptVisitor() {}
 
-        virtual int getNumChanges() const {
-            return _numChanges;
+        virtual int get_num_changes() const {
+            return _num_changes;
         }
-        virtual void setNumChanges(int n) {
-            _numChanges = n;
+        virtual void set_num_changes(int n) {
+            _num_changes = n;
         }
 
-        virtual const string& getName() const {
+        virtual const string& _get_name() const {
             return _name;
         }
     };
@@ -64,8 +64,8 @@ namespace yask {
             OptVisitor("commutative recombination") {}
         virtual ~CombineVisitor() {}
 
-        virtual int getNumChanges() const override {
-            return _numChanges;
+        virtual int get_num_changes() const override {
+            return _num_changes;
         }
 
         virtual string visit(CommutativeExpr* ce) override;
@@ -77,12 +77,12 @@ namespace yask {
     // example: a+b+c * b+d+a => c+(a+b) * d+(a+b) w/expr a+b combined.
     class CseVisitor : public OptVisitor {
     protected:
-        set<numExprPtr> _seen;
+        set<num_expr_ptr> _seen;
 
         // If 'ep' has already been seen, just return true.
         // Else if 'ep' has a match, change pointer to that match, return true.
         // Else, return false.
-        virtual bool findMatchTo(numExprPtr& ep);
+        virtual bool find_match_to(num_expr_ptr& ep);
 
     public:
         CseVisitor()  :
@@ -94,32 +94,32 @@ namespace yask {
         //   - Redirect child pointer to matching node if one exists,
         //     otherwise, visit child.
         virtual string visit(UnaryNumExpr* ue) {
-            auto& rhs = ue->getRhs();
-            if (!findMatchTo(rhs))
+            auto& rhs = ue->_get_rhs();
+            if (!find_match_to(rhs))
                 rhs->accept(this);
             return "";
         }
         virtual string visit(BinaryNumExpr* be) {
-            auto& lhs = be->getLhs();
-            if (!findMatchTo(lhs))
+            auto& lhs = be->_get_lhs();
+            if (!find_match_to(lhs))
                 lhs->accept(this);
-            auto& rhs = be->getRhs();
-            if (!findMatchTo(rhs))
+            auto& rhs = be->_get_rhs();
+            if (!find_match_to(rhs))
                 rhs->accept(this);
             return "";
         }
         virtual string visit(CommutativeExpr* ce) {
-            auto& ops = ce->getOps();
+            auto& ops = ce->get_ops();
             for (auto& ep : ops) {
-                if (!findMatchTo(ep))
+                if (!find_match_to(ep))
                     ep->accept(this);
             }
             return "";
         }
         virtual string visit(FuncExpr* fe) {
-            auto& ops = fe->getOps();
+            auto& ops = fe->get_ops();
             for (auto& ep : ops) {
-                if (!findMatchTo(ep))
+                if (!find_match_to(ep))
                     ep->accept(this);
             }
             return "";
@@ -127,8 +127,8 @@ namespace yask {
         virtual string visit(EqualsExpr* ee) {
 
             // Only process RHS.
-            auto& rhs = ee->getRhs();
-            if (!findMatchTo(rhs))
+            auto& rhs = ee->_get_rhs();
+            if (!find_match_to(rhs))
                 rhs->accept(this);
             return "";
         }
@@ -158,9 +158,9 @@ namespace yask {
         int _visits;
 
         // Visits are considered unique by address, not semantic equivalence.
-        virtual bool alreadyVisited(Expr* ep) {
+        virtual bool already_visited(Expr* ep) {
 #if DEBUG_TRACKING >= 1
-            cout << " //** tracking '" << ep->makeStr() << "'@" << ep << endl;
+            cout << " //** tracking '" << ep->make_str() << "'@" << ep << endl;
 #endif
             bool seen = _counts.count(ep) > 0;
 
@@ -176,11 +176,11 @@ namespace yask {
         TrackingVisitor() : _visits(0) {}
         virtual ~TrackingVisitor() {}
 
-        virtual int getNumVisits() const {
+        virtual int get_num_visits() const {
             return _visits;
         }
 
-        virtual int getCount(Expr* ep) const {
+        virtual int get_count(Expr* ep) const {
             auto it = _counts.find(ep);
             if (it == _counts.end()) return 0;
             return it->second;
@@ -201,7 +201,7 @@ namespace yask {
     // Doesn't count things in condition exprs.
     class CounterVisitor : public TrackingVisitor {
     protected:
-        int _numOps=0, _numNodes=0, _numReads=0, _numWrites=0, _numPaired=0;
+        int _num_ops=0, _num_nodes=0, _num_reads=0, _num_writes=0, _num_paired=0;
 
     public:
         CounterVisitor() {}
@@ -209,101 +209,101 @@ namespace yask {
 
         virtual CounterVisitor& operator+=(const CounterVisitor& rhs) {
             TrackingVisitor::operator+=(rhs);
-            _numOps += rhs._numOps;
-            _numNodes += rhs._numNodes;
-            _numReads += rhs._numReads;
-            _numWrites += rhs._numWrites;
-            _numPaired += rhs._numPaired;
+            _num_ops += rhs._num_ops;
+            _num_nodes += rhs._num_nodes;
+            _num_reads += rhs._num_reads;
+            _num_writes += rhs._num_writes;
+            _num_paired += rhs._num_paired;
             return *this;
         }
 
-        virtual void printStats(ostream& os, const string& descr = "") const {
+        virtual void print_stats(ostream& os, const string& descr = "") const {
             os << " Expression stats";
             if (descr.length())
                 os << " " << descr;
             os << ":" << endl <<
-                "  " << getNumNodes() << " node(s)." << endl <<
-                "  " << getNumPairs() << " node pair(s)." << endl <<
-                "  " << getNumReads() << " var read(s)." << endl <<
-                "  " << getNumWrites() << " var write(s)." << endl <<
-                "  " << getNumOps() << " FP math operation(s)." << endl;
+                "  " << _get_num_nodes() << " node(s)." << endl <<
+                "  " << get_num_pairs() << " node pair(s)." << endl <<
+                "  " << get_num_reads() << " var read(s)." << endl <<
+                "  " << get_num_writes() << " var write(s)." << endl <<
+                "  " << get_num_ops() << " FP math operation(s)." << endl;
         }
 
-        int getNumNodes() const { return _numNodes; }
-        int getNumReads() const { return _numReads; }
-        int getNumWrites() const { return _numWrites; }
-        int getNumOps() const { return _numOps; }
-        int getNumPairs() const { return _numPaired / 2; }
+        int _get_num_nodes() const { return _num_nodes; }
+        int get_num_reads() const { return _num_reads; }
+        int get_num_writes() const { return _num_writes; }
+        int get_num_ops() const { return _num_ops; }
+        int get_num_pairs() const { return _num_paired / 2; }
 
         // Leaf nodes.
         virtual string visit(ConstExpr* ce) {
-            if (alreadyVisited(ce)) return "";
-            _numNodes++;
+            if (already_visited(ce)) return "";
+            _num_nodes++;
             return "";
         }
         virtual string visit(CodeExpr* ce) {
-            if (alreadyVisited(ce)) return "";
-            _numNodes++;
+            if (already_visited(ce)) return "";
+            _num_nodes++;
             return "";
         }
         virtual string visit(VarPoint* gp) {
-            if (alreadyVisited(gp)) return "";
-            _numNodes++;
-            _numReads++;
+            if (already_visited(gp)) return "";
+            _num_nodes++;
+            _num_reads++;
             return "";
         }
 
         // Unary: Count as one op if num type and visit operand.
         virtual string visit(UnaryNumExpr* ue) {
-            if (alreadyVisited(ue)) return "";
-            _numNodes++;
-            _numOps++;
-            ue->getRhs()->accept(this);
+            if (already_visited(ue)) return "";
+            _num_nodes++;
+            _num_ops++;
+            ue->_get_rhs()->accept(this);
             return "";
         }
         virtual string visit(UnaryBoolExpr* ue) {
-            if (alreadyVisited(ue)) return "";
-            _numNodes++;
-            ue->getRhs()->accept(this);
+            if (already_visited(ue)) return "";
+            _num_nodes++;
+            ue->_get_rhs()->accept(this);
             return "";
         }
         virtual string visit(UnaryNum2BoolExpr* ue) {
-            if (alreadyVisited(ue)) return "";
-            _numNodes++;
-            ue->getRhs()->accept(this);
+            if (already_visited(ue)) return "";
+            _num_nodes++;
+            ue->_get_rhs()->accept(this);
             return "";
         }
 
         // Binary: Count as one op if numerical and visit operands.
         virtual string visit(BinaryNumExpr* be) {
-            if (alreadyVisited(be)) return "";
-            _numNodes++;
-            _numOps++;
-            be->getLhs()->accept(this);
-            be->getRhs()->accept(this);
+            if (already_visited(be)) return "";
+            _num_nodes++;
+            _num_ops++;
+            be->_get_lhs()->accept(this);
+            be->_get_rhs()->accept(this);
             return "";
         }
         virtual string visit(BinaryBoolExpr* be) {
-            if (alreadyVisited(be)) return "";
-            _numNodes++;
-            be->getLhs()->accept(this);
-            be->getRhs()->accept(this);
+            if (already_visited(be)) return "";
+            _num_nodes++;
+            be->_get_lhs()->accept(this);
+            be->_get_rhs()->accept(this);
             return "";
         }
         virtual string visit(BinaryNum2BoolExpr* be) {
-            if (alreadyVisited(be)) return "";
-            _numNodes++;
-            be->getLhs()->accept(this);
-            be->getRhs()->accept(this);
+            if (already_visited(be)) return "";
+            _num_nodes++;
+            be->_get_lhs()->accept(this);
+            be->_get_rhs()->accept(this);
             return "";
         }
 
         // Commutative: count as one op between each operand and visit operands.
         virtual string visit(CommutativeExpr* ce) {
-            if (alreadyVisited(ce)) return "";
-            _numNodes++;
-            auto& ops = ce->getOps();
-            _numOps += ops.size() - 1;
+            if (already_visited(ce)) return "";
+            _num_nodes++;
+            auto& ops = ce->get_ops();
+            _num_ops += ops.size() - 1;
             for (auto& ep : ops)
                 ep->accept(this);
             return "";
@@ -311,12 +311,12 @@ namespace yask {
 
         // Function: count as one op and visit operands.
         virtual string visit(FuncExpr* fe) {
-            if (alreadyVisited(fe)) return "";
-            _numNodes++;
-            _numOps++;
-            if (fe->getPair())
-                _numPaired++;
-            auto& ops = fe->getOps();
+            if (already_visited(fe)) return "";
+            _num_nodes++;
+            _num_ops++;
+            if (fe->get_pair())
+                _num_paired++;
+            auto& ops = fe->get_ops();
             for (auto& ep : ops)
                 ep->accept(this);
             return "";
@@ -325,9 +325,9 @@ namespace yask {
         // Equality: assume LHS is a write; don't visit it, and don't count
         // equality as a node. Also, don't visit condition or count as nodes.
         virtual string visit(EqualsExpr* ee) {
-            if (alreadyVisited(ee)) return "";
-            _numWrites++;
-            ee->getRhs()->accept(this);
+            if (already_visited(ee)) return "";
+            _num_writes++;
+            ee->_get_rhs()->accept(this);
             return "";
         }
     };

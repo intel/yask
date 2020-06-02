@@ -43,7 +43,7 @@ namespace yask {
     // for numbers above 9 (at least up to 99).
 
     // Format: "major.minor.patch".
-    const string version = "3.05.02";
+    const string version = "3.05.03";
 
     string yask_get_version_string() {
         return version;
@@ -54,33 +54,33 @@ namespace yask {
     // machine parsing.
     bool is_suffix_print_enabled = true;
     
-    // Return num with SI multiplier and "iB" suffix,
+    // Return num with SI multiplier and "i_b" suffix,
     // e.g., 412KiB.
-    string makeByteStr(size_t nbytes)
+    string make_byte_str(size_t nbytes)
     {
         if (!is_suffix_print_enabled)
             return to_string(nbytes);
         
         ostringstream os;
         double num = double(nbytes);
-        const double oneK = 1024;
-        const double oneM = oneK * oneK;
-        const double oneG = oneK * oneM;
-        const double oneT = oneK * oneG;
-        const double oneP = oneK * oneT;
-        const double oneE = oneK * oneP;
-        if (num > oneE)
-            os << (num / oneE) << "Ei";
-        else if (num > oneP)
-            os << (num / oneP) << "Pi";
-        else if (num > oneT)
-            os << (num / oneT) << "Ti";
-        else if (num > oneG)
-            os << (num / oneG) << "Gi";
-        else if (num > oneM)
-            os << (num / oneM) << "Mi";
-        else if (num > oneK)
-            os << (num / oneK) << "Ki";
+        const double one_k = 1024;
+        const double one_m = one_k * one_k;
+        const double one_g = one_k * one_m;
+        const double one_t = one_k * one_g;
+        const double one_p = one_k * one_t;
+        const double one_e = one_k * one_p;
+        if (num > one_e)
+            os << (num / one_e) << "Ei";
+        else if (num > one_p)
+            os << (num / one_p) << "Pi";
+        else if (num > one_t)
+            os << (num / one_t) << "Ti";
+        else if (num > one_g)
+            os << (num / one_g) << "Gi";
+        else if (num > one_m)
+            os << (num / one_m) << "Mi";
+        else if (num > one_k)
+            os << (num / one_k) << "Ki";
         else
             os << num;
         os << "B";
@@ -89,23 +89,23 @@ namespace yask {
 
     // Return num with SI multiplier, e.g. "3.14M".
     // Use this one for rates, etc.
-    string makeNumStr(idx_t num) {
+    string make_num_str(idx_t num) {
         if (!is_suffix_print_enabled || (num >= 0 && num < 1000))
             return to_string(num);
-        return makeNumStr(double(num));
+        return make_num_str(double(num));
     }
-    string makeNumStr(double num)
+    string make_num_str(double num)
     {
         if (!is_suffix_print_enabled)
             return to_string(num);
 
         ostringstream os;
-        const double oneK = 1e3;
-        const double oneM = 1e6;
-        const double oneG = 1e9;
-        const double oneT = 1e12;
-        const double oneP = 1e15;
-        const double oneE = 1e18;
+        const double one_k = 1e3;
+        const double one_m = 1e6;
+        const double one_g = 1e9;
+        const double one_t = 1e12;
+        const double one_p = 1e15;
+        const double one_e = 1e18;
         const double onem = 1e-3;
         const double oneu = 1e-6;
         const double onen = 1e-9;
@@ -115,18 +115,18 @@ namespace yask {
 #endif
         if (num == 0.)
             os << num;
-        else if (num > oneE)
-            os << (num / oneE) << "E";
-        else if (num > oneP)
-            os << (num / oneP) << "P";
-        else if (num > oneT)
-            os << (num / oneT) << "T";
-        else if (num > oneG)
-            os << (num / oneG) << "G";
-        else if (num > oneM)
-            os << (num / oneM) << "M";
-        else if (num > oneK)
-            os << (num / oneK) << "K"; // NB: official SI symbol is "k".
+        else if (num > one_e)
+            os << (num / one_e) << "E";
+        else if (num > one_p)
+            os << (num / one_p) << "P";
+        else if (num > one_t)
+            os << (num / one_t) << "T";
+        else if (num > one_g)
+            os << (num / one_g) << "G";
+        else if (num > one_m)
+            os << (num / one_m) << "M";
+        else if (num > one_k)
+            os << (num / one_k) << "K"; // NB: official SI symbol is "k".
 #ifdef USE_PICO
         else if (num < onep)
             os << (num / onef) << "f";

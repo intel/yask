@@ -240,7 +240,7 @@ namespace fsg {
                 stress_update(ic16,ic26,ic36,ic46,ic56,ic66,u_z,u_x,u_y,v_z,v_x,v_y,w_z,w_x,w_y);
 
             // define the value at t+1.
-            if(hasBoundaryCondition()) {
+            if(has_boundary_condition()) {
                 auto not_at_bc = bc->is_not_at_boundary();
                 s(t+1, x, y, z, sxx_idx) EQUALS next_sxx IF_DOMAIN not_at_bc;
                 s(t+1, x, y, z, syy_idx) EQUALS next_syy IF_DOMAIN not_at_bc;
@@ -277,7 +277,7 @@ namespace fsg {
             define_vel<BL, F, B, B>(t, x, y, z, v, V_BL_V, s, S_BL_YY, S_BR_XY, S_TL_YZ);
             define_vel<BR, F, F, F>(t, x, y, z, v, V_BR_V, s, S_BR_YY, S_BL_XY, S_TR_YZ);
 
-            if(hasBoundaryCondition())
+            if(has_boundary_condition())
                 fsg_bc.velocity(t,x,y,z);
 
             //// Define stresses components.
@@ -290,7 +290,7 @@ namespace fsg {
             define_str<TL, B, B, B>(t, x, y, z, S_TL_XX, S_TL_YY, S_TL_ZZ, S_TL_XY, S_TL_XZ, S_TL_YZ,
                                     V_TL_U, V_TL_V, V_TL_W, V_TR_U, V_TR_V, V_TR_W, V_BL_U, V_BL_V, V_BL_W);
 
-            if(hasBoundaryCondition())
+            if(has_boundary_condition())
                 fsg_bc.stress(t,x,y,z);
         }
     };

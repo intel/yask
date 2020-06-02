@@ -150,7 +150,7 @@ public:
         yc_number_node_ptr next_v = v(t, x, y, z, vidx) + ((stx + sty + stz) * delta_t * lrho);
 
         // define the value at t+1.
-        if (hasBoundaryCondition()) {
+        if (has_boundary_condition()) {
             yc_bool_node_ptr not_at_bc = bc->is_not_at_boundary();
             v(t+1, x, y, z, vidx) EQUALS next_v IF_DOMAIN not_at_bc;
         } else

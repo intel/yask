@@ -45,63 +45,63 @@ namespace yask {
 
     // Find the dimensions to be used based on the vars in
     // the solution and the settings from the cmd-line or API.
-    void Dimensions::setDims(Vars& vars,
+    void Dimensions::set_dims(Vars& vars,
                              CompilerSettings& settings,
                              int vlen,                  // SIMD len based on CPU arch.
                              bool is_folding_efficient, // heuristic based on CPU arch.
                              ostream& os)
     {
-        _domainDims.clear();
-        _stencilDims.clear();
+        _domain_dims.clear();
+        _stencil_dims.clear();
         _scalar.clear();
         _fold.clear();
-        _foldGT1.clear();
-        _clusterPts.clear();
-        _clusterMults.clear();
-        _miscDims.clear();
+        _fold_gt1.clear();
+        _cluster_pts.clear();
+        _cluster_mults.clear();
+        _misc_dims.clear();
 
         // Get dims from settings.
-        if (settings._stepDim.length()) {
-            addStepDim(settings._stepDim);
-            os << "Explicit step dimension: " << _stepDim << endl;
+        if (settings._step_dim.length()) {
+            add_step_dim(settings._step_dim);
+            os << "Explicit step dimension: " << _step_dim << endl;
         }
-        for (auto& dname : settings._domainDims)
-            addDomainDim(dname);
-        if (_domainDims.size())
-            os << "Explicit domain dimension(s): " << _domainDims.makeDimStr() << endl;
+        for (auto& dname : settings._domain_dims)
+            add_domain_dim(dname);
+        if (_domain_dims.size())
+            os << "Explicit domain dimension(s): " << _domain_dims.make_dim_str() << endl;
 
         // Get dims from vars.
         for (auto& gp : vars) {
-            auto& gname = gp->getName();
-            os << "Var: " << gp->getDescr() << endl;
+            auto& gname = gp->_get_name();
+            os << "Var: " << gp->get_descr() << endl;
 
             // Dimensions in this var.
-            for (auto dim : gp->getDims()) {
-                auto& dname = dim->getName();
-                auto type = dim->getType();
+            for (auto dim : gp->get_dims()) {
+                auto& dname = dim->_get_name();
+                auto type = dim->get_type();
 
                 switch (type) {
 
                 case STEP_INDEX:
-                    if (_stepDim.length() && _stepDim != dname) {
-                        THROW_YASK_EXCEPTION("Error: step dimensions '" + _stepDim +
+                    if (_step_dim.length() && _step_dim != dname) {
+                        THROW_YASK_EXCEPTION("Error: step dimensions '" + _step_dim +
                                              "' and '" + dname + "' found; only one allowed");
                     }
-                    addStepDim(dname);
+                    add_step_dim(dname);
 
                     // Scratch vars cannot use step dim.
-                    if (gp->isScratch())
+                    if (gp->is_scratch())
                         THROW_YASK_EXCEPTION("Error: scratch var '" + gname +
                                              "' cannot use step dimension '" +
                                              dname + "'.\n");
                     break;
 
                 case DOMAIN_INDEX:
-                    addDomainDim(dname);
+                    add_domain_dim(dname);
                     break;
 
                 case MISC_INDEX:
-                    _miscDims.addDimBack(dname, 0);
+                    _misc_dims.add_dim_back(dname, 0);
                     break;
 
                 default:
@@ -109,29 +109,29 @@ namespace yask {
                 }
             }
         }
-        if (_stepDim.length() == 0) {
+        if (_step_dim.length() == 0) {
             THROW_YASK_EXCEPTION("Error: no step dimension defined");
         }
-        if (!_domainDims.getNumDims()) {
+        if (!_domain_dims._get_num_dims()) {
             THROW_YASK_EXCEPTION("Error: no domain dimension(s) defined");
         }
 
         // Set specific positional dims.
-        _outerDim = _domainDims.getDimName(0);
-        _innerDim = _domainDims.getDimName(_domainDims.getNumDims() - 1);
-        string _nearInnerDim = _domainDims.getNumDims() >= 2 ?
-            _domainDims.getDimName(_domainDims.getNumDims() - 2) : _outerDim;
+        _outer_dim = _domain_dims.get_dim_name(0);
+        _inner_dim = _domain_dims.get_dim_name(_domain_dims._get_num_dims() - 1);
+        string _near_inner_dim = _domain_dims._get_num_dims() >= 2 ?
+            _domain_dims.get_dim_name(_domain_dims._get_num_dims() - 2) : _outer_dim;
 
-        os << "Step dimension: " << _stepDim << endl;
-        os << "Domain dimension(s): " << _domainDims.makeDimStr() << endl;
+        os << "Step dimension: " << _step_dim << endl;
+        os << "Domain dimension(s): " << _domain_dims.make_dim_str() << endl;
 
         // Extract domain fold lengths based on cmd-line options.
-        IntTuple foldOpts;
-        for (auto& dim : _domainDims) {
-            auto& dname = dim.getName();
+        IntTuple fold_opts;
+        for (auto& dim : _domain_dims) {
+            auto& dname = dim._get_name();
 
             // Was folding specified for this dim?
-            auto* p = settings._foldOptions.lookup(dname);
+            auto* p = settings._fold_options.lookup(dname);
             if (!p)
                 continue;
             int sz = *p;
@@ -139,26 +139,26 @@ namespace yask {
                 continue;
             
             // Set size.
-            _fold.setVal(dname, sz);
-            foldOpts.addDimBack(dname, sz);
+            _fold.set_val(dname, sz);
+            fold_opts.add_dim_back(dname, sz);
         }
         os << " Number of SIMD elements: " << vlen << endl;
-        if (foldOpts.getNumDims())
+        if (fold_opts._get_num_dims())
             os << " Requested vector-fold dimension(s) and point-size(s): " <<
-                _fold.makeDimValStr(" * ") << endl;
+                _fold.make_dim_val_str(" * ") << endl;
         else
             os << " No explicitly-requested vector-folding.\n";
 
         // If needed, adjust folding to exactly cover vlen unless vlen is 1.
         // If vlen is 1, we will allow any folding.
         if (vlen > 1 && _fold.product() != vlen) {
-            if (foldOpts.getNumDims())
+            if (fold_opts._get_num_dims())
                 os << "Notice: adjusting requested fold to achieve SIMD length of " <<
                     vlen << ".\n";
 
             // If 1D, there is only one option.
-            if (_domainDims.getNumDims() == 1)
-                _fold[_innerDim] = vlen;
+            if (_domain_dims._get_num_dims() == 1)
+                _fold[_inner_dim] = vlen;
 
             // If 2D+, adjust folding.
             else {
@@ -170,10 +170,10 @@ namespace yask {
 
                 // If specified dims are within vlen, try to use
                 // specified inner-dim.
-                if (foldOpts.product() < vlen) {
+                if (fold_opts.product() < vlen) {
 
                     // Inner-dim fold-size requested and a factor of vlen?
-                    auto* p = foldOpts.lookup(_innerDim);
+                    auto* p = fold_opts.lookup(_inner_dim);
                     if (p && (vlen % *p == 0))
                         inner_sz = *p;
                 }
@@ -182,42 +182,42 @@ namespace yask {
                 int upper_sz = vlen / inner_sz;
 
                 // Tuple for non-inner dims.
-                IntTuple innerFolds;
+                IntTuple inner_folds;
                 
                 // If we only want 1D folding, just set one to
                 // needed value.
                 if (!is_folding_efficient)
-                    innerFolds.addDimBack(_nearInnerDim, upper_sz);
+                    inner_folds.add_dim_back(_near_inner_dim, upper_sz);
 
                 // Else, make a tuple of hints to use for setting non-inner
                 // sizes.
                 else {
-                    IntTuple innerOpts;
-                    for (auto& dim : _domainDims) {
-                        auto& dname = dim.getName();
-                        if (dname == _innerDim)
+                    IntTuple inner_opts;
+                    for (auto& dim : _domain_dims) {
+                        auto& dname = dim._get_name();
+                        if (dname == _inner_dim)
                             continue;
-                        auto* p = foldOpts.lookup(dname);
+                        auto* p = fold_opts.lookup(dname);
                         int sz = p ? *p : 0; // 0 => not specified.
-                        innerOpts.addDimFront(dname, sz); // favor more inner ones.
+                        inner_opts.add_dim_front(dname, sz); // favor more inner ones.
                     }
-                    assert(innerOpts.getNumDims() == _domainDims.getNumDims() - 1);
+                    assert(inner_opts._get_num_dims() == _domain_dims._get_num_dims() - 1);
 
                     // Get final size of non-inner dims.
-                    innerFolds = innerOpts.get_compact_factors(upper_sz);
+                    inner_folds = inner_opts.get_compact_factors(upper_sz);
                 }
 
                 // Put them into the fold.
-                for (auto& dim : _domainDims) {
-                    auto& dname = dim.getName();
-                    if (dname == _innerDim)
+                for (auto& dim : _domain_dims) {
+                    auto& dname = dim._get_name();
+                    if (dname == _inner_dim)
                         _fold[dname] = inner_sz;
-                    else if (innerFolds.lookup(dname))
-                        _fold[dname] = innerFolds[dname];
+                    else if (inner_folds.lookup(dname))
+                        _fold[dname] = inner_folds[dname];
                     else
                         _fold[dname] = 1;
                 }
-                assert(_fold.getNumDims() == _domainDims.getNumDims());
+                assert(_fold._get_num_dims() == _domain_dims._get_num_dims());
             }            
 
             // Check it.
@@ -226,67 +226,67 @@ namespace yask {
                                      to_string(vlen));
         }
 
-        // Set foldGT1.
+        // Set fold_gt1.
         for (auto i : _fold) {
-            auto& dname = i.getName();
-            auto& val = i.getVal();
+            auto& dname = i._get_name();
+            auto& val = i.get_val();
             if (val > 1)
-                _foldGT1.addDimBack(dname, val);
+                _fold_gt1.add_dim_back(dname, val);
         }
         os << " Vector-fold dimension(s) and point-size(s): " <<
-            _fold.makeDimValStr(" * ") << endl;
+            _fold.make_dim_val_str(" * ") << endl;
 
         // Layout used inside each folded vector.
-        _fold.setFirstInner(settings._firstInner);
-        _foldGT1.setFirstInner(settings._firstInner);
+        _fold.set_first_inner(settings._first_inner);
+        _fold_gt1.set_first_inner(settings._first_inner);
 
         // Checks for unaligned loads.
-        if (settings._allowUnalignedLoads) {
-            if (_foldGT1.size() > 1) {
+        if (settings._allow_unaligned_loads) {
+            if (_fold_gt1.size() > 1) {
                 FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to allow "
                                                 "unaligned loads when there are " <<
-                                                _foldGT1.size() <<
+                                                _fold_gt1.size() <<
                                                 " dimensions in the vector-fold that are > 1");
             }
-            else if (_foldGT1.size() > 0)
+            else if (_fold_gt1.size() > 0)
                 cout << "Notice: memory layout MUST have unit-stride in " <<
-                    _foldGT1.makeDimStr() << " dimension!" << endl;
+                    _fold_gt1.make_dim_str() << " dimension!" << endl;
         }
 
         // Create final cluster lengths based on cmd-line options.
-        for (auto& dim : settings._clusterOptions) {
-            auto& dname = dim.getName();
-            int mult = dim.getVal();
+        for (auto& dim : settings._cluster_options) {
+            auto& dname = dim._get_name();
+            int mult = dim.get_val();
 
             // Nothing to do for mult < 2.
             if (mult <= 1)
                 continue;
 
             // Does it exist anywhere?
-            if (!_domainDims.lookup(dname)) {
+            if (!_domain_dims.lookup(dname)) {
                 os << "Warning: cluster-multiplier in '" << dname <<
                     "' dim ignored because it's not a domain dim.\n";
                 continue;
             }
 
             // Set the size.
-            _clusterMults.addDimBack(dname, mult);
+            _cluster_mults.add_dim_back(dname, mult);
         }
-        _clusterPts = _fold.multElements(_clusterMults);
+        _cluster_pts = _fold.mult_elements(_cluster_mults);
 
         os << " Cluster dimension(s) and multiplier(s): " <<
-            _clusterMults.makeDimValStr(" * ") << endl;
+            _cluster_mults.make_dim_val_str(" * ") << endl;
         os << " Cluster dimension(s) and point-size(s): " <<
-            _clusterPts.makeDimValStr(" * ") << endl;
-        if (_miscDims.getNumDims())
-            os << "Misc dimension(s): " << _miscDims.makeDimStr() << endl;
+            _cluster_pts.make_dim_val_str(" * ") << endl;
+        if (_misc_dims._get_num_dims())
+            os << "Misc dimension(s): " << _misc_dims.make_dim_str() << endl;
         else
             os << "No misc dimensions used\n";
     }
 
     // Make string like "+(4/VLEN_X)" or "-(2/VLEN_Y)" or "" if ofs==zero.
     // given signed offset and direction.
-    string Dimensions::makeNormStr(int ofs, string dname) const {
+    string Dimensions::make_norm_str(int ofs, string dname) const {
 
         if (ofs == 0)
             return "";
@@ -304,7 +304,7 @@ namespace yask {
                 res += "-(" + to_string(-ofs);
 
             // add divisor.
-            string cap_dname = PrinterBase::allCaps(dname);
+            string cap_dname = PrinterBase::all_caps(dname);
             res += " / VLEN_" + cap_dname + ")";
         }
 
@@ -316,10 +316,10 @@ namespace yask {
     }
 
     // Make string like "t+1" or "t-1".
-    string Dimensions::makeStepStr(int offset) const {
+    string Dimensions::make_step_str(int offset) const {
         IntTuple step;
-        step.addDimBack(_stepDim, offset);
-        return step.makeDimValOffsetStr();
+        step.add_dim_back(_step_dim, offset);
+        return step.make_dim_val_offset_str();
     }
 
 } // namespace yask.

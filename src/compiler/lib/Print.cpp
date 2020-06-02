@@ -37,16 +37,16 @@ namespace yask {
     // 'ex' is used as key to save name of temp var and to write a comment.
     // If 'comment' is set, use it for the comment.
     // Return stream to continue w/RHS.
-    ostream& PrintVisitorBase::makeNextTempVar(string& res, Expr* ex, string comment) {
-        res = _ph.makeVarName();
+    ostream& PrintVisitorBase::make_next_temp_var(string& res, Expr* ex, string comment) {
+        res = _ph.make_var_name();
         if (ex) {
-            _tempVars[ex] = res;
+            _temp_vars[ex] = res;
             if (comment.length() == 0)
-                comment = ex->makeStr();
+                comment = ex->make_str();
         }
         if (comment.length())
             _os << endl << " // " << res << " = " << comment << "." << endl;
-        _os << _ph.getLinePrefix() << _ph.getVarType() << " " << res << " = ";
+        _os << _ph.get_line_prefix() << _ph.get_var_type() << " " << res << " = ";
         return _os;
     }
 
@@ -55,96 +55,96 @@ namespace yask {
     // A var read.
     // Uses the PrintHelper to format.
     string PrintVisitorTopDown::visit(VarPoint* gp) {
-        _numCommon += _ph.getNumCommon(gp);
-        return _ph.readFromPoint(_os, *gp);
+        _num_common += _ph.get_num_common(gp);
+        return _ph.read_from_point(_os, *gp);
     }
 
     // An index expression.
     string PrintVisitorTopDown::visit(IndexExpr* ie) {
-        _numCommon += _ph.getNumCommon(ie);
-        return ie->format(_varMap);
+        _num_common += _ph.get_num_common(ie);
+        return ie->format(_var_map);
     }
 
     // A constant.
     // Uses the PrintHelper to format.
     string PrintVisitorTopDown::visit(ConstExpr* ce) {
-        _numCommon += _ph.getNumCommon(ce);
-        return _ph.addConstExpr(_os, ce->getNumVal());
+        _num_common += _ph.get_num_common(ce);
+        return _ph.add_const_expr(_os, ce->get_num_val());
     }
 
     // Some hand-written code.
     // Uses the PrintHelper to format.
     string PrintVisitorTopDown::visit(CodeExpr* ce) {
-        _numCommon += _ph.getNumCommon(ce);
-        return _ph.addCodeExpr(_os, ce->getCode());
+        _num_common += _ph.get_num_common(ce);
+        return _ph.add_code_expr(_os, ce->get_code());
     }
 
     // Generic unary operators.
     string PrintVisitorTopDown::visit(UnaryNumExpr* ue) {
-        _numCommon += _ph.getNumCommon(ue);
-        return ue->getOpStr() + ue->getRhs()->accept(this);
+        _num_common += _ph.get_num_common(ue);
+        return ue->get_op_str() + ue->_get_rhs()->accept(this);
     }
     string PrintVisitorTopDown::visit(UnaryBoolExpr* ue) {
-        _numCommon += _ph.getNumCommon(ue);
-        return ue->getOpStr() + ue->getRhs()->accept(this);
+        _num_common += _ph.get_num_common(ue);
+        return ue->get_op_str() + ue->_get_rhs()->accept(this);
     }
     string PrintVisitorTopDown::visit(UnaryNum2BoolExpr* ue) {
-        _numCommon += _ph.getNumCommon(ue);
-        return ue->getOpStr() + ue->getRhs()->accept(this);
+        _num_common += _ph.get_num_common(ue);
+        return ue->get_op_str() + ue->_get_rhs()->accept(this);
     }
 
     // Generic binary operators.
     string PrintVisitorTopDown::visit(BinaryNumExpr* be) {
-        _numCommon += _ph.getNumCommon(be);
-        return "(" + be->getLhs()->accept(this) +
-            " " + be->getOpStr() + " " +
-            be->getRhs()->accept(this) + ")";
+        _num_common += _ph.get_num_common(be);
+        return "(" + be->_get_lhs()->accept(this) +
+            " " + be->get_op_str() + " " +
+            be->_get_rhs()->accept(this) + ")";
     }
     string PrintVisitorTopDown::visit(BinaryBoolExpr* be) {
-        _numCommon += _ph.getNumCommon(be);
-        return "(" + be->getLhs()->accept(this) +
-            " " + be->getOpStr() + " " +
-            be->getRhs()->accept(this) + ")";
+        _num_common += _ph.get_num_common(be);
+        return "(" + be->_get_lhs()->accept(this) +
+            " " + be->get_op_str() + " " +
+            be->_get_rhs()->accept(this) + ")";
     }
     string PrintVisitorTopDown::visit(BinaryNum2BoolExpr* be) {
-        _numCommon += _ph.getNumCommon(be);
-        return "(" + be->getLhs()->accept(this) +
-            " " + be->getOpStr() + " " +
-            be->getRhs()->accept(this) + ")";
+        _num_common += _ph.get_num_common(be);
+        return "(" + be->_get_lhs()->accept(this) +
+            " " + be->get_op_str() + " " +
+            be->_get_rhs()->accept(this) + ")";
     }
 
     // A commutative operator.
     string PrintVisitorTopDown::visit(CommutativeExpr* ce) {
-        _numCommon += _ph.getNumCommon(ce);
+        _num_common += _ph.get_num_common(ce);
         string res = "(";
-        auto& ops = ce->getOps();
-        int opNum = 0;
+        auto& ops = ce->get_ops();
+        int op_num = 0;
         for (auto ep : ops) {
-            if (opNum > 0)
-                res += " " + ce->getOpStr() + " ";
+            if (op_num > 0)
+                res += " " + ce->get_op_str() + " ";
             res += ep->accept(this);
-            opNum++;
+            op_num++;
         }
         return res + ")";
     }
 
     // A function call.
     string PrintVisitorTopDown::visit(FuncExpr* fe) {
-        _numCommon += _ph.getNumCommon(fe);
+        _num_common += _ph.get_num_common(fe);
 
         // Special case: increment common node count
         // for pairs.
-        if (fe->getPair())
-            _numCommon++;
+        if (fe->get_pair())
+            _num_common++;
 
-        string res = _funcPrefix + fe->getOpStr() + "(";
-        auto& ops = fe->getOps();
-        int opNum = 0;
+        string res = _func_prefix + fe->get_op_str() + "(";
+        auto& ops = fe->get_ops();
+        int op_num = 0;
         for (auto ep : ops) {
-            if (opNum > 0)
+            if (op_num > 0)
                 res += ", ";
             res += ep->accept(this);
-            opNum++;
+            op_num++;
         }
         return res + ")";
     }
@@ -153,26 +153,26 @@ namespace yask {
     string PrintVisitorTopDown::visit(EqualsExpr* ee) {
 
         // Get RHS.
-        string rhs = ee->getRhs()->accept(this);
+        string rhs = ee->_get_rhs()->accept(this);
 
         // Write statement with embedded rhs.
-        varPointPtr gpp = ee->getLhs();
-        _os << _ph.getLinePrefix() << _ph.writeToPoint(_os, *gpp, rhs);
+        var_point_ptr gpp = ee->_get_lhs();
+        _os << _ph.get_line_prefix() << _ph.write_to_point(_os, *gpp, rhs);
 
         // Null ptr => no condition.
-        if (ee->getCond()) {
-            string cond = ee->getCond()->accept(this);
+        if (ee->_get_cond()) {
+            string cond = ee->_get_cond()->accept(this);
 
             // pseudo-code format.
             _os << " IF_DOMAIN (" << cond << ")";
         }
-        if (ee->getStepCond()) {
-            string cond = ee->getStepCond()->accept(this);
+        if (ee->_get_step_cond()) {
+            string cond = ee->_get_step_cond()->accept(this);
 
             // pseudo-code format.
             _os << " IF_STEP (" << cond << ")";
         }
-        _os << _ph.getLineSuffix();
+        _os << _ph.get_line_suffix();
 
         // note: no need to update num-common.
         return "";              // EQUALS doesn't return a value.
@@ -186,35 +186,35 @@ namespace yask {
     // TODO: the current code causes all nodes in an expr above a certain
     // point to avoid top-down printing because it looks at the original expr,
     // not the new one with temp vars. Fix this.
-    string PrintVisitorBottomUp::trySimplePrint(Expr* ex, bool force) {
+    string PrintVisitorBottomUp::try_simple_print(Expr* ex, bool force) {
         string res;
 
         // How many nodes in ex?
-        int exprSize = ex->getNumNodes();
-        bool tooBig = exprSize > getSettings()._maxExprSize;
-        bool tooSmall = exprSize < getSettings()._minExprSize;
+        int expr_size = ex->_get_num_nodes();
+        bool too_big = expr_size > get_settings()._max_expr_size;
+        bool too_small = expr_size < get_settings()._min_expr_size;
 
         // Determine whether this expr has already been evaluated
         // and a variable holds its result.
-        auto p = _tempVars.find(ex);
-        if (p != _tempVars.end()) {
+        auto p = _temp_vars.find(ex);
+        if (p != _temp_vars.end()) {
 
             // if so, just use the existing var.
             res = p->second;
         }
 
-        // Consider top down if forcing or expr <= maxExprSize.
-        else if (force || !tooBig) {
+        // Consider top down if forcing or expr <= max_expr_size.
+        else if (force || !too_big) {
 
             // use a top-down printer to render the expr.
-            PrintVisitorTopDown* topDown = newPrintVisitorTopDown();
-            string td_res = ex->accept(topDown);
+            PrintVisitorTopDown* top_down = new_print_visitor_top_down();
+            string td_res = ex->accept(top_down);
 
             // were there any common subexprs found?
-            int numCommon = topDown->getNumCommon();
+            int num_common = top_down->get_num_common();
 
             // if no common subexprs, use the top-down expression.
-            if (numCommon == 0)
+            if (num_common == 0)
                 res = td_res;
 
             // if common subexprs exist, and top-down is forced, use the
@@ -222,16 +222,16 @@ namespace yask {
             // sharing, also assign the result to a temp var so it can be used
             // later.
             else if (force) {
-                if (tooSmall)
+                if (too_small)
                     res = td_res;
                 else
-                    makeNextTempVar(res, ex) << td_res << _ph.getLineSuffix();
+                    make_next_temp_var(res, ex) << td_res << _ph.get_line_suffix();
             }
 
             // otherwise, there are common subexprs, and top-down is not forced,
             // so don't do top-down.
 
-            delete topDown;
+            delete top_down;
         }
 
         if (force) assert(res.length());
@@ -240,22 +240,22 @@ namespace yask {
 
     // A var point: just set expr.
     string PrintVisitorBottomUp::visit(VarPoint* gp) {
-        return trySimplePrint(gp, true);
+        return try_simple_print(gp, true);
     }
 
     // A var index.
     string PrintVisitorBottomUp::visit(IndexExpr* ie) {
-        return trySimplePrint(ie, true);
+        return try_simple_print(ie, true);
     }
 
     // A constant: just set expr.
     string PrintVisitorBottomUp::visit(ConstExpr* ce) {
-        return trySimplePrint(ce, true);
+        return try_simple_print(ce, true);
     }
 
     // Code: just set expr.
     string PrintVisitorBottomUp::visit(CodeExpr* ce) {
-        return trySimplePrint(ce, true);
+        return try_simple_print(ce, true);
     }
 
     // A numerical unary operator.
@@ -264,7 +264,7 @@ namespace yask {
         // Try top-down on whole expression.
         // Example: '-a' creates no immediate output,
         // and '-(a)' is returned.
-        string res = trySimplePrint(ue, false);
+        string res = try_simple_print(ue, false);
         if (res.length())
             return res;
 
@@ -273,8 +273,8 @@ namespace yask {
         // temp1 = a * b;
         // temp2 = -temp1;
         // with 'temp2' returned.
-        string rhs = ue->getRhs()->accept(this);
-        makeNextTempVar(res, ue) << ue->getOpStr() << rhs << _ph.getLineSuffix();
+        string rhs = ue->_get_rhs()->accept(this);
+        make_next_temp_var(res, ue) << ue->get_op_str() << rhs << _ph.get_line_suffix();
         return res;
     }
 
@@ -284,7 +284,7 @@ namespace yask {
         // Try top-down on whole expression.
         // Example: 'a/b' creates no immediate output,
         // and 'a/b' is returned.
-        string res = trySimplePrint(be, false);
+        string res = try_simple_print(be, false);
         if (res.length())
             return res;
 
@@ -294,9 +294,9 @@ namespace yask {
         // temp2 = b * c;
         // temp3 = temp1 / temp2;
         // with 'temp3' returned.
-        string lhs = be->getLhs()->accept(this);
-        string rhs = be->getRhs()->accept(this);
-        makeNextTempVar(res, be) << lhs << ' ' << be->getOpStr() << ' ' << rhs << _ph.getLineSuffix();
+        string lhs = be->_get_lhs()->accept(this);
+        string rhs = be->_get_rhs()->accept(this);
+        make_next_temp_var(res, be) << lhs << ' ' << be->get_op_str() << ' ' << rhs << _ph.get_line_suffix();
         return res;
     }
 
@@ -305,13 +305,13 @@ namespace yask {
     // TODO: investigate whether there is any potential
     // benefit in doing this.
     string PrintVisitorBottomUp::visit(UnaryBoolExpr* ue) {
-        return trySimplePrint(ue, true);
+        return try_simple_print(ue, true);
     }
     string PrintVisitorBottomUp::visit(BinaryBoolExpr* be) {
-        return trySimplePrint(be, true);
+        return try_simple_print(be, true);
     }
     string PrintVisitorBottomUp::visit(BinaryNum2BoolExpr* be) {
-        return trySimplePrint(be, true);
+        return try_simple_print(be, true);
     }
 
     // Function call.
@@ -319,56 +319,56 @@ namespace yask {
         string res;
 
         // If this is a paired function, handle it specially.
-        auto* paired = fe->getPair();
+        auto* paired = fe->get_pair();
         if (paired) {
 
             // Do we already have this result?
-            if (_tempVars.count(fe)) {
+            if (_temp_vars.count(fe)) {
                 
                 // Just use existing result.
-                res = _tempVars.at(fe);
+                res = _temp_vars.at(fe);
             }
 
             // No result yet.
             else {
 
-                _os << endl << " // Combining " << fe->getOpStr() << " and " << paired->getOpStr() <<
+                _os << endl << " // Combining " << fe->get_op_str() << " and " << paired->get_op_str() <<
                     "...\n";
 
                 // First, eval all the args.
                 string args;
-                auto& ops = fe->getOps();
+                auto& ops = fe->get_ops();
                 for (auto ep : ops)
                     args += ", " + ep->accept(this);
 
                 // Make 2 temp vars.
                 string res2;
-                makeNextTempVar(res, fe) << "0" << _ph.getLineSuffix();
-                makeNextTempVar(res2, paired) << "0" << _ph.getLineSuffix();
+                make_next_temp_var(res, fe) << "0" << _ph.get_line_suffix();
+                make_next_temp_var(res2, paired) << "0" << _ph.get_line_suffix();
 
                 // Call function to set both.
-                _os << _ph.getLinePrefix() << 
-                    _funcPrefix << fe->getOpStr() << "_and_" << paired->getOpStr() << 
+                _os << _ph.get_line_prefix() << 
+                    _func_prefix << fe->get_op_str() << "_and_" << paired->get_op_str() << 
                     "(" << res << ", " << res2 << args <<
-                    ")" << _ph.getLineSuffix();
+                    ")" << _ph.get_line_suffix();
             }
         }
 
         // If not paired, handle normally.
         else {
-            res = trySimplePrint(fe, false);
+            res = try_simple_print(fe, false);
             if (res.length())
                 return res;
 
             string args;
-            auto& ops = fe->getOps();
+            auto& ops = fe->get_ops();
             for (auto ep : ops) {
                 if (args.length())
                     args += ", ";
                 args += ep->accept(this);
             }
-            makeNextTempVar(res, fe) << _funcPrefix << fe->getOpStr() <<
-                "(" << args << ")" << _ph.getLineSuffix();
+            make_next_temp_var(res, fe) << _func_prefix << fe->get_op_str() <<
+                "(" << args << ")" << _ph.get_line_suffix();
         }
         return res;
     }
@@ -379,7 +379,7 @@ namespace yask {
         // Try top-down on whole expression.
         // Example: 'a*b' creates no immediate output,
         // and 'a*b' is returned.
-        string res = trySimplePrint(ce, false);
+        string res = try_simple_print(ce, false);
         if (res.length())
             return res;
 
@@ -389,20 +389,20 @@ namespace yask {
         // temp2 = temp1 + c;
         // temp3 = temp2 = d;
         // with 'temp3' returned.
-        auto& ops = ce->getOps();
+        auto& ops = ce->get_ops();
         assert(ops.size() > 1);
-        string lhs, exStr;
-        int opNum = 0;
+        string lhs, ex_str;
+        int op_num = 0;
         for (auto ep : ops) {
-            opNum++;
+            op_num++;
 
             // eval the operand.
-            string opStr = ep->accept(this);
+            string op_str = ep->accept(this);
 
             // first operand; just save as LHS for next iteration.
-            if (opNum == 1) {
-                lhs = opStr;
-                exStr = ep->makeStr();
+            if (op_num == 1) {
+                lhs = op_str;
+                ex_str = ep->make_str();
             }
 
             // subsequent operands.
@@ -411,15 +411,15 @@ namespace yask {
             else {
 
                 // Use whole expression only for the last step.
-                Expr* ex = (opNum == (int)ops.size()) ? ce : NULL;
+                Expr* ex = (op_num == (int)ops.size()) ? ce : NULL;
 
                 // Add RHS to partial-result comment.
-                exStr += ' ' + ce->getOpStr() + ' ' + ep->makeStr();
+                ex_str += ' ' + ce->get_op_str() + ' ' + ep->make_str();
 
                 // Output this step.
                 string tmp;
-                makeNextTempVar(tmp, ex, exStr) << lhs << ' ' << ce->getOpStr() << ' ' <<
-                    opStr << _ph.getLineSuffix();
+                make_next_temp_var(tmp, ex, ex_str) << lhs << ' ' << ce->get_op_str() << ' ' <<
+                    op_str << _ph.get_line_suffix();
                 lhs = tmp; // result returned and/or used in next iteration.
             }
         }
@@ -433,31 +433,31 @@ namespace yask {
         // We always assign the RHS to the var.
 
         // Eval RHS.
-        Expr* rp = ee->getRhs().get();
+        Expr* rp = ee->_get_rhs().get();
         string rhs = rp->accept(this);
 
         // Assign RHS to a temp var.
         string tmp;
-        makeNextTempVar(tmp, rp) << rhs << _ph.getLineSuffix();
+        make_next_temp_var(tmp, rp) << rhs << _ph.get_line_suffix();
 
         // Comment about update.
-        varPointPtr gpp = ee->getLhs();
-        _os << "\n // Update value at " << gpp->makeStr();
+        var_point_ptr gpp = ee->_get_lhs();
+        _os << "\n // Update value at " << gpp->make_str();
 
         // Comment about condition.
         // Null ptr => no condition.
-        if (ee->getCond()) {
-            string cond = ee->getCond()->makeStr();
+        if (ee->_get_cond()) {
+            string cond = ee->_get_cond()->make_str();
             _os << " IF_DOMAIN (" << cond << ")";
         }
-        if (ee->getStepCond()) {
-            string cond = ee->getStepCond()->makeStr();
+        if (ee->_get_step_cond()) {
+            string cond = ee->_get_step_cond()->make_str();
             _os << " IF_STEP (" << cond << ")";
         }
         _os << ".\n";
 
         // Write RHS expr to var.
-        _os << _ph.getLinePrefix() << _ph.writeToPoint(_os, *gpp, tmp) << _ph.getLineSuffix();
+        _os << _ph.get_line_prefix() << _ph.write_to_point(_os, *gpp, tmp) << _ph.get_line_suffix();
 
         return "";              // EQUALS doesn't return a value.
     }
@@ -466,18 +466,18 @@ namespace yask {
 
     // Only want to visit the RHS of an equality.
     string POVRayPrintVisitor::visit(EqualsExpr* ee) {
-        return ee->getRhs()->accept(this);
+        return ee->_get_rhs()->accept(this);
     }
 
     // A point: output it.
     string POVRayPrintVisitor::visit(VarPoint* gp) {
-        _numPts++;
+        _num_pts++;
 
         // Pick a color based on its distance.
-        size_t ci = gp->getArgOffsets().max();
+        size_t ci = gp->get_arg_offsets().max();
         ci %= _colors.size();
 
-        _os << "point(" + _colors[ci] + ", " << gp->getArgOffsets().makeValStr() << ")" << endl;
+        _os << "point(" + _colors[ci] + ", " << gp->get_arg_offsets().make_val_str() << ")" << endl;
         return "";
     }
 
@@ -485,7 +485,7 @@ namespace yask {
 
     // A var access.
     string DOTPrintVisitor::visit(VarPoint* gp) {
-        string label = getLabel(gp);
+        string label = get_label(gp);
         if (label.size())
             _os << label << " [ shape = box ];" << endl;
         return "";
@@ -494,7 +494,7 @@ namespace yask {
     // A constant.
     // TODO: don't share node.
     string DOTPrintVisitor::visit(ConstExpr* ce) {
-        string label = getLabel(ce);
+        string label = get_label(ce);
         if (label.size())
             _os << label << endl;
         return "";
@@ -502,7 +502,7 @@ namespace yask {
 
     // Some hand-written code.
     string DOTPrintVisitor::visit(CodeExpr* ce) {
-        string label = getLabel(ce);
+        string label = get_label(ce);
         if (label.size())
             _os << label << endl;
         return "";
@@ -510,35 +510,35 @@ namespace yask {
 
     // Generic numeric unary operators.
     string DOTPrintVisitor::visit(UnaryNumExpr* ue) {
-        string label = getLabel(ue);
+        string label = get_label(ue);
         if (label.size()) {
-            _os << label << " [ label = \"" << ue->getOpStr() << "\" ];" << endl;
-            _os << getLabel(ue, false) << " -> " << getLabel(ue->getRhs(), false) << ";" << endl;
-            ue->getRhs()->accept(this);
+            _os << label << " [ label = \"" << ue->get_op_str() << "\" ];" << endl;
+            _os << get_label(ue, false) << " -> " << get_label(ue->_get_rhs(), false) << ";" << endl;
+            ue->_get_rhs()->accept(this);
         }
         return "";
     }
 
     // Generic numeric binary operators.
     string DOTPrintVisitor::visit(BinaryNumExpr* be) {
-        string label = getLabel(be);
+        string label = get_label(be);
         if (label.size()) {
-            _os << label << " [ label = \"" << be->getOpStr() << "\" ];" << endl;
-            _os << getLabel(be, false) << " -> " << getLabel(be->getLhs(), false) << ";" << endl <<
-                getLabel(be, false) << " -> " << getLabel(be->getRhs(), false) << ";" << endl;
-            be->getLhs()->accept(this);
-            be->getRhs()->accept(this);
+            _os << label << " [ label = \"" << be->get_op_str() << "\" ];" << endl;
+            _os << get_label(be, false) << " -> " << get_label(be->_get_lhs(), false) << ";" << endl <<
+                get_label(be, false) << " -> " << get_label(be->_get_rhs(), false) << ";" << endl;
+            be->_get_lhs()->accept(this);
+            be->_get_rhs()->accept(this);
         }
         return "";
     }
 
     // A commutative operator.
     string DOTPrintVisitor::visit(CommutativeExpr* ce) {
-        string label = getLabel(ce);
+        string label = get_label(ce);
         if (label.size()) {
-            _os << label << " [ label = \"" << ce->getOpStr() << "\" ];" << endl;
-            for (auto ep : ce->getOps()) {
-                _os << getLabel(ce, false) << " -> " << getLabel(ep, false) << ";" << endl;
+            _os << label << " [ label = \"" << ce->get_op_str() << "\" ];" << endl;
+            for (auto ep : ce->get_ops()) {
+                _os << get_label(ce, false) << " -> " << get_label(ep, false) << ";" << endl;
                 ep->accept(this);
             }
         }
@@ -547,11 +547,11 @@ namespace yask {
 
     // A function call.
     string DOTPrintVisitor::visit(FuncExpr* fe) {
-        string label = getLabel(fe);
+        string label = get_label(fe);
         if (label.size()) {
-            _os << label << " [ label = \"" << fe->getOpStr() << "\" ];" << endl;
-            for (auto ep : fe->getOps()) {
-                _os << getLabel(fe, false) << " -> " << getLabel(ep, false) << ";" << endl;
+            _os << label << " [ label = \"" << fe->get_op_str() << "\" ];" << endl;
+            for (auto ep : fe->get_ops()) {
+                _os << get_label(fe, false) << " -> " << get_label(ep, false) << ";" << endl;
                 ep->accept(this);
             }
         }
@@ -560,18 +560,18 @@ namespace yask {
 
     // An equals operator.
     string DOTPrintVisitor::visit(EqualsExpr* ee) {
-        string label = getLabel(ee);
+        string label = get_label(ee);
         if (label.size()) {
             _os << label << " [ label = \"EQUALS\" ];" << endl;
-            _os << getLabel(ee, false) << " -> " << getLabel(ee->getLhs(), false)  << ";" << endl <<
-                getLabel(ee, false) << " -> " << getLabel(ee->getRhs(), false) << ";" << endl;
-            ee->getLhs()->accept(this);
-            ee->getRhs()->accept(this);
+            _os << get_label(ee, false) << " -> " << get_label(ee->_get_lhs(), false)  << ";" << endl <<
+                get_label(ee, false) << " -> " << get_label(ee->_get_rhs(), false) << ";" << endl;
+            ee->_get_lhs()->accept(this);
+            ee->_get_rhs()->accept(this);
 
             // Null ptr => no condition.
-            if (ee->getCond()) {
-                _os << getLabel(ee, false) << " -> " << getLabel(ee->getCond(), false)  << ";" << endl;
-                ee->getCond()->accept(this);
+            if (ee->_get_cond()) {
+                _os << get_label(ee, false) << " -> " << get_label(ee->_get_cond(), false)  << ";" << endl;
+                ee->_get_cond()->accept(this);
             }
         }
         return "";
@@ -579,37 +579,37 @@ namespace yask {
 
     // A var access.
     string SimpleDOTPrintVisitor::visit(VarPoint* gp) {
-        string label = getLabel(gp);
+        string label = get_label(gp);
         if (label.size()) {
             _os << label << " [ shape = box ];" << endl;
-            _varsSeen.insert(label);
+            _vars_seen.insert(label);
         }
         return "";
     }
 
     // Generic numeric unary operators.
     string SimpleDOTPrintVisitor::visit(UnaryNumExpr* ue) {
-        ue->getRhs()->accept(this);
+        ue->_get_rhs()->accept(this);
         return "";
     }
 
     // Generic numeric binary operators.
     string SimpleDOTPrintVisitor::visit(BinaryNumExpr* be) {
-        be->getLhs()->accept(this);
-        be->getRhs()->accept(this);
+        be->_get_lhs()->accept(this);
+        be->_get_rhs()->accept(this);
         return "";
     }
 
     // A commutative operator.
     string SimpleDOTPrintVisitor::visit(CommutativeExpr* ce) {
-        for (auto& ep : ce->getOps())
+        for (auto& ep : ce->get_ops())
             ep->accept(this);
         return "";
     }
 
     // A function call.
     string SimpleDOTPrintVisitor::visit(FuncExpr* fe) {
-        for (auto& ep : fe->getOps())
+        for (auto& ep : fe->get_ops())
             ep->accept(this);
         return "";
     }
@@ -618,17 +618,17 @@ namespace yask {
     string SimpleDOTPrintVisitor::visit(EqualsExpr* ee) {
 
         // LHS is source.
-        ee->getLhs()->accept(this);
-        string label = getLabel(ee, false);
-        for (auto g : _varsSeen)
+        ee->_get_lhs()->accept(this);
+        string label = get_label(ee, false);
+        for (auto g : _vars_seen)
             label = g;              // really should only be one.
-        _varsSeen.clear();
+        _vars_seen.clear();
 
         // RHS nodes are target.
-        ee->getRhs()->accept(this);
-        for (auto g : _varsSeen)
+        ee->_get_rhs()->accept(this);
+        for (auto g : _vars_seen)
             _os << label << " -> " << g  << ";" << endl;
-        _varsSeen.clear();
+        _vars_seen.clear();
 
         // Ignoring conditions.
         return "";
@@ -641,36 +641,36 @@ namespace yask {
     // Print out a stencil in human-readable form, for debug or documentation.
     void PseudoPrinter::print(ostream& os) {
 
-        os << "Stencil '" << _stencil.getName() << "' pseudo-code:" << endl;
+        os << "Stencil '" << _stencil._get_name() << "' pseudo-code:" << endl;
 
-        // Loop through all eqBundles.
-        for (auto& eq : _eqBundles.getAll()) {
+        // Loop through all eq_bundles.
+        for (auto& eq : _eq_bundles.get_all()) {
 
-            string egName = eq->getName();
-            os << endl << " ////// Equation bundle '" << egName <<
+            string eg_name = eq->_get_name();
+            os << endl << " ////// Equation bundle '" << eg_name <<
                 "' //////" << endl;
 
             CounterVisitor cv;
-            eq->visitEqs(&cv);
+            eq->visit_eqs(&cv);
             PrintHelper ph(_settings, _dims, &cv, "temp", "real", " ", ".\n");
 
             if (eq->cond.get()) {
-                string condStr = eq->cond->makeStr();
+                string cond_str = eq->cond->make_str();
                 os << endl << " // Valid under the following domain condition:" << endl <<
-                    ph.getLinePrefix() << "IF_DOMAIN " << condStr << ph.getLineSuffix();
+                    ph.get_line_prefix() << "IF_DOMAIN " << cond_str << ph.get_line_suffix();
             }
             if (eq->step_cond.get()) {
-                string condStr = eq->step_cond->makeStr();
+                string cond_str = eq->step_cond->make_str();
                 os << endl << " // Valid under the following step condition:" << endl <<
-                    ph.getLinePrefix() << "IF_STEP " << condStr << ph.getLineSuffix();
+                    ph.get_line_prefix() << "IF_STEP " << cond_str << ph.get_line_suffix();
             }
 
             if (!_long) {
                 PrintVisitorTopDown pv1(os, ph);
-                eq->visitEqs(&pv1);
+                eq->visit_eqs(&pv1);
             } else {
                 PrintVisitorBottomUp pv2(os, ph);
-                eq->visitEqs(&pv2);
+                eq->visit_eqs(&pv2);
             }
         }
     }
@@ -680,17 +680,17 @@ namespace yask {
     // Print out a stencil in DOT form
     void DOTPrinter::print(ostream& os) {
 
-        DOTPrintVisitor* pv = _isSimple ?
+        DOTPrintVisitor* pv = _is_simple ?
             new SimpleDOTPrintVisitor(os) :
             new DOTPrintVisitor(os);
 
-        os << "digraph \"Stencil " << _stencil.getName() << "\" {\n"
+        os << "digraph \"Stencil " << _stencil._get_name() << "\" {\n"
             "rankdir=LR; ranksep=1.5;\n";
 
-        // Loop through all eqBundles.
-        for (auto& eq : _eqBundles.getAll()) {
-            os << "subgraph \"Equation-bundle " << eq->getName() << "\" {" << endl;
-            eq->visitEqs(pv);
+        // Loop through all eq_bundles.
+        for (auto& eq : _eq_bundles.get_all()) {
+            os << "subgraph \"Equation-bundle " << eq->_get_name() << "\" {" << endl;
+            eq->visit_eqs(pv);
             os << "}" << endl;
         }
         os << "}" << endl;
@@ -710,13 +710,13 @@ namespace yask {
             "  look_at <0, 0, 0>" << endl <<
             "}" << endl;
 
-        // Loop through all eqBundles.
-        for (auto& eq : _eqBundles.getAll()) {
+        // Loop through all eq_bundles.
+        for (auto& eq : _eq_bundles.get_all()) {
 
             // TODO: separate mutiple vars.
             POVRayPrintVisitor pv(os);
-            eq->visitEqs(&pv);
-            os << " // " << pv.getNumPoints() << " stencil points" << endl;
+            eq->visit_eqs(&pv);
+            os << " // " << pv.get_num_points() << " stencil points" << endl;
         }
     }
 

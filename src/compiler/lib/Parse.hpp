@@ -49,16 +49,16 @@ namespace yask {
 
         // For strings like "x,y", call the lambda function for
         // each element.
-        virtual void parseList(const string& argStr,
+        virtual void parse_list(const string& arg_str,
                                function<void (const string& key)> handle)
         {
-            if (argStr.length() == 0)
+            if (arg_str.length() == 0)
                 return;
 
             // split by commas.
             vector<string> args;
             string arg;
-            for (char c1 : argStr) {
+            for (char c1 : arg_str) {
                 if (c1 == ',') {
                     args.push_back(arg);
                     arg = "";
@@ -68,30 +68,30 @@ namespace yask {
             args.push_back(arg);
 
             // process each element.
-            for (auto pStr : args) {
+            for (auto p_str : args) {
 
                 // call handler.
-                handle(pStr);
+                handle(p_str);
             }
         }
 
         // For strings like "x=4,y=2", call the lambda function for
         // each key, value pair.
-        virtual void parseKeyValuePairs(const string& argStr,
+        virtual void parse_key_value_pairs(const string& arg_str,
                                         function<void (const string& key,
                                                        const string& value)> handle)
         {
-            parseList
-                (argStr,
-                 [&](const string& pStr) { 
+            parse_list
+                (arg_str,
+                 [&](const string& p_str) { 
             
                      // split by equal sign.
-                     size_t ep = pStr.find("=");
+                     size_t ep = p_str.find("=");
                      if (ep == string::npos) {
-                         THROW_YASK_EXCEPTION("Error: no equal sign in '" + pStr + "'");
+                         THROW_YASK_EXCEPTION("Error: no equal sign in '" + p_str + "'");
                      }
-                     string key = pStr.substr(0, ep);
-                     string value = pStr.substr(ep+1);
+                     string key = p_str.substr(0, ep);
+                     string value = p_str.substr(ep+1);
 
                      // call handler.
                      handle(key, value);

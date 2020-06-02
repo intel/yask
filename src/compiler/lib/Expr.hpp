@@ -62,19 +62,19 @@ namespace yask {
 
     // Forward-decls of expressions.
     class Expr;
-    typedef shared_ptr<Expr> exprPtr;
+    typedef shared_ptr<Expr> expr_ptr;
     class NumExpr;
-    typedef shared_ptr<NumExpr> numExprPtr;
-    typedef vector<numExprPtr> numExprPtrVec;
+    typedef shared_ptr<NumExpr> num_expr_ptr;
+    typedef vector<num_expr_ptr> num_expr_ptr_vec;
     class VarPoint;
-    typedef shared_ptr<VarPoint> varPointPtr;
+    typedef shared_ptr<VarPoint> var_point_ptr;
     class IndexExpr;
-    typedef shared_ptr<IndexExpr> indexExprPtr;
-    typedef vector<indexExprPtr> indexExprPtrVec;
+    typedef shared_ptr<IndexExpr> index_expr_ptr;
+    typedef vector<index_expr_ptr> index_expr_ptr_vec;
     class BoolExpr;
-    typedef shared_ptr<BoolExpr> boolExprPtr;
+    typedef shared_ptr<BoolExpr> bool_expr_ptr;
     class EqualsExpr;
-    typedef shared_ptr<EqualsExpr> equalsExprPtr;
+    typedef shared_ptr<EqualsExpr> equals_expr_ptr;
 
     // More forward-decls.
     class ExprVisitor;
@@ -103,58 +103,58 @@ namespace yask {
         // check for expression equivalency.
         // Does *not* check value equivalency except for
         // constants.
-        virtual bool isSame(const Expr* other) const =0;
-        virtual bool isSame(const exprPtr& other) const {
-            return isSame(other.get());
+        virtual bool is_same(const Expr* other) const =0;
+        virtual bool is_same(const expr_ptr& other) const {
+            return is_same(other.get());
         }
 
         // Make pair if possible.
         // Return whether pair made.
-        virtual bool makePair(Expr* other) {
+        virtual bool make_pair(Expr* other) {
             return false;
         }
-        virtual bool makePair(exprPtr other) {
-            return makePair(other.get());
+        virtual bool make_pair(expr_ptr other) {
+            return make_pair(other.get());
         }
 
         // Return a formatted expr.
-        virtual string makeStr(const VarMap* varMap = 0) const;
-        virtual string makeQuotedStr(string quote = "'",
-                                     const VarMap* varMap = 0) const {
-            return quote + makeStr(varMap) + quote;
+        virtual string make_str(const VarMap* var_map = 0) const;
+        virtual string make_quoted_str(string quote = "'",
+                                     const VarMap* var_map = 0) const {
+            return quote + make_str(var_map) + quote;
         }
-        virtual string getDescr() const {
-            return makeQuotedStr();
+        virtual string get_descr() const {
+            return make_quoted_str();
         }
 
         // Count and return number of nodes at and below this.
-        virtual int getNumNodes() const;
+        virtual int _get_num_nodes() const;
 
         // Use addr of this as a unique ID for this object.
-        virtual size_t getId() const {
+        virtual size_t get_id() const {
             return size_t(this);
         }
-        virtual string getIdStr() const {
+        virtual string get_id_str() const {
             return to_string(idx_t(this));
         }
-        virtual string getQuotedId() const {
+        virtual string get_quoted_id() const {
             return "\"" + to_string(idx_t(this)) + "\"";
         }
 
         // APIs.
         virtual string format_simple() const {
-            return makeStr();
+            return make_str();
         }
         virtual int get_num_nodes() const {
-            return getNumNodes();
+            return _get_num_nodes();
         }
     };
 
     // Convert pointer to the given ptr type or die trying.
-    template<typename T> shared_ptr<T> castExpr(exprPtr ep, const string& descrip) {
+    template<typename T> shared_ptr<T> cast_expr(expr_ptr ep, const string& descrip) {
         auto tp = dynamic_pointer_cast<T>(ep);
         if (!tp) {
-            THROW_YASK_EXCEPTION("Error: expression '" + ep->makeStr() +
+            THROW_YASK_EXCEPTION("Error: expression '" + ep->make_str() +
                                  "' is not a " + descrip);
         }
         return tp;
@@ -162,15 +162,15 @@ namespace yask {
 
     // Compare 2 expr pointers and return whether the expressions are
     // equivalent.
-    bool areExprsSame(const Expr* e1, const Expr* e2);
-    inline bool areExprsSame(const exprPtr e1, const Expr* e2) {
-        return areExprsSame(e1.get(), e2);
+    bool are_exprs_same(const Expr* e1, const Expr* e2);
+    inline bool are_exprs_same(const expr_ptr e1, const Expr* e2) {
+        return are_exprs_same(e1.get(), e2);
     }
-    inline bool areExprsSame(const Expr* e1, const exprPtr e2) {
-        return areExprsSame(e1, e2.get());
+    inline bool are_exprs_same(const Expr* e1, const expr_ptr e2) {
+        return are_exprs_same(e1, e2.get());
     }
-    inline bool areExprsSame(const exprPtr e1, const exprPtr e2) {
-        return areExprsSame(e1.get(), e2.get());
+    inline bool are_exprs_same(const expr_ptr e1, const expr_ptr e2) {
+        return are_exprs_same(e1.get(), e2.get());
     }
 
     // Real or int value.
@@ -179,24 +179,24 @@ namespace yask {
     public:
 
         // Return 'true' if this is a compile-time constant.
-        virtual bool isConstVal() const {
+        virtual bool is_const_val() const {
             return false;
         }
 
         // Get the current value.
         // Exit with error if not known.
-        virtual double getNumVal() const {
-            THROW_YASK_EXCEPTION("Error: cannot evaluate '" + makeStr() +
+        virtual double get_num_val() const {
+            THROW_YASK_EXCEPTION("Error: cannot evaluate '" + make_str() +
                 "' for a known numerical value");
         }
 
         // Get the value as an integer.
         // Exits with error if not an integer.
-        virtual int getIntVal() const {
-            double val = getNumVal();
+        virtual int get_int_val() const {
+            double val = get_num_val();
             int ival = int(val);
             if (val != double(ival)) {
-                THROW_YASK_EXCEPTION("Error: '" + makeStr() +
+                THROW_YASK_EXCEPTION("Error: '" + make_str() +
                     "' does not evaluate to an integer");
             }
             return ival;
@@ -205,14 +205,14 @@ namespace yask {
         // Return 'true' and set offset if this expr is of the form 'dim',
         // 'dim+const', or 'dim-const'.
         // TODO: make this more robust.
-        virtual bool isOffsetFrom(string dim, int& offset) {
+        virtual bool is_offset_from(string dim, int& offset) {
             return false;
         }
 
         // Create a deep copy of this expression.
         // For this to work properly, each derived type
         // should also implement a deep-copy copy ctor.
-        virtual numExprPtr clone() const =0;
+        virtual num_expr_ptr clone() const =0;
         virtual yc_number_node_ptr clone_ast() const {
             return clone();
         }
@@ -232,46 +232,46 @@ namespace yask {
     class IndexExpr : public NumExpr,
                       public virtual yc_index_node {
     protected:
-        string _dimName;
+        string _dim_name;
         IndexType _type;
 
     public:
         IndexExpr(string dim, IndexType type) :
-            _dimName(dim), _type(type) { }
+            _dim_name(dim), _type(type) { }
         virtual ~IndexExpr() { }
 
-        const string& getName() const { return _dimName; }
-        IndexType getType() const { return _type; }
-        string format(const VarMap* varMap = 0) const {
+        const string& _get_name() const { return _dim_name; }
+        IndexType get_type() const { return _type; }
+        string format(const VarMap* var_map = 0) const {
             switch (_type) {
             case FIRST_INDEX:
-                return "FIRST_INDEX(" + _dimName + ")";
+                return "FIRST_INDEX(" + _dim_name + ")";
             case LAST_INDEX:
-                return "LAST_INDEX(" + _dimName + ")";
+                return "LAST_INDEX(" + _dim_name + ")";
             default:
-                if (varMap && varMap->count(_dimName))
-                    return varMap->at(_dimName);
+                if (var_map && var_map->count(_dim_name))
+                    return var_map->at(_dim_name);
                 else
-                    return _dimName;
+                    return _dim_name;
             }
         }
         virtual string accept(ExprVisitor* ev);
 
         // Simple offset?
-        virtual bool isOffsetFrom(string dim, int& offset);
+        virtual bool is_offset_from(string dim, int& offset);
 
         // Check for equivalency.
-        virtual bool isSame(const Expr* other) const {
+        virtual bool is_same(const Expr* other) const {
             auto p = dynamic_cast<const IndexExpr*>(other);
-            return p && _dimName == p->_dimName && _type == p->_type;
+            return p && _dim_name == p->_dim_name && _type == p->_type;
         }
 
         // Create a deep copy of this expression.
-        virtual numExprPtr clone() const { return make_shared<IndexExpr>(*this); }
+        virtual num_expr_ptr clone() const { return make_shared<IndexExpr>(*this); }
 
         // APIs.
         virtual const string& get_name() const {
-            return _dimName;
+            return _dim_name;
         }
     };
 
@@ -282,15 +282,15 @@ namespace yask {
 
         // Get the current value.
         // Exit with error if not known.
-        virtual bool getBoolVal() const {
-            THROW_YASK_EXCEPTION("Error: cannot evaluate '" + makeStr() +
+        virtual bool get_bool_val() const {
+            THROW_YASK_EXCEPTION("Error: cannot evaluate '" + make_str() +
                                  "' for a known boolean value");
         }
 
         // Create a deep copy of this expression.
         // For this to work properly, each derived type
         // should also implement a copy ctor.
-        virtual boolExprPtr clone() const =0;
+        virtual bool_expr_ptr clone() const =0;
         virtual yc_bool_node_ptr clone_ast() const {
             return clone();
         }
@@ -314,19 +314,19 @@ namespace yask {
         ConstExpr(const ConstExpr& src) : _f(src._f) { }
         virtual ~ConstExpr() { }
 
-        virtual bool isConstVal() const { return true; }
-        double getNumVal() const { return _f; }
+        virtual bool is_const_val() const { return true; }
+        double get_num_val() const { return _f; }
 
         virtual string accept(ExprVisitor* ev);
 
         // Check for equivalency.
-        virtual bool isSame(const Expr* other) const {
+        virtual bool is_same(const Expr* other) const {
             auto p = dynamic_cast<const ConstExpr*>(other);
             return p && _f == p->_f;
         }
 
         // Create a deep copy of this expression.
-        virtual numExprPtr clone() const { return make_shared<ConstExpr>(*this); }
+        virtual num_expr_ptr clone() const { return make_shared<ConstExpr>(*this); }
 
         // APIs.
         virtual void set_value(double val) { _f = val; }
@@ -346,20 +346,20 @@ namespace yask {
             _code(src._code) { }
         virtual ~CodeExpr() { }
 
-        const string& getCode() const {
+        const string& get_code() const {
             return _code;
         }
 
         virtual string accept(ExprVisitor* ev);
 
         // Check for equivalency.
-        virtual bool isSame(const Expr* other) const {
+        virtual bool is_same(const Expr* other) const {
             auto p = dynamic_cast<const CodeExpr*>(other);
             return p && _code == p->_code;
         }
 
         // Create a deep copy of this expression.
-        virtual numExprPtr clone() const { return make_shared<CodeExpr>(*this); }
+        virtual num_expr_ptr clone() const { return make_shared<CodeExpr>(*this); }
     };
 
     // Base class for any generic unary operator.
@@ -370,53 +370,53 @@ namespace yask {
     class UnaryExpr : public BaseT {
     protected:
         ArgT _rhs;
-        string _opStr;
+        string _op_str;
 
     public:
-        UnaryExpr(const string& opStr, ArgT rhs) :
+        UnaryExpr(const string& op_str, ArgT rhs) :
             _rhs(rhs),
-            _opStr(opStr) { }
+            _op_str(op_str) { }
         UnaryExpr(const UnaryExpr& src) :
             _rhs(src._rhs->clone()),
-            _opStr(src._opStr) { }
+            _op_str(src._op_str) { }
 
-        ArgT& getRhs() { return _rhs; }
-        const ArgT& getRhs() const { return _rhs; }
-        const string& getOpStr() const { return _opStr; }
+        ArgT& _get_rhs() { return _rhs; }
+        const ArgT& _get_rhs() const { return _rhs; }
+        const string& get_op_str() const { return _op_str; }
 
         virtual string accept(ExprVisitor* ev);
 
         // Check for equivalency.
-        virtual bool isSame(const Expr* other) const {
+        virtual bool is_same(const Expr* other) const {
             auto p = dynamic_cast<const UnaryExpr*>(other);
-            return p && _opStr == p->_opStr &&
-                _rhs && _rhs->isSame(p->_rhs.get());
+            return p && _op_str == p->_op_str &&
+                _rhs && _rhs->is_same(p->_rhs.get());
         }
     };
 
     // Various types of unary operators depending on input and output types.
-    typedef UnaryExpr<NumExpr, numExprPtr, yc_number_node_ptr> UnaryNumExpr;
-    typedef UnaryExpr<BoolExpr, numExprPtr, yc_number_node_ptr> UnaryNum2BoolExpr;
-    typedef UnaryExpr<BoolExpr, boolExprPtr, yc_bool_node_ptr> UnaryBoolExpr;
+    typedef UnaryExpr<NumExpr, num_expr_ptr, yc_number_node_ptr> UnaryNumExpr;
+    typedef UnaryExpr<BoolExpr, num_expr_ptr, yc_number_node_ptr> UnaryNum2BoolExpr;
+    typedef UnaryExpr<BoolExpr, bool_expr_ptr, yc_bool_node_ptr> UnaryBoolExpr;
 
     // Negate operator.
     class NegExpr : public UnaryNumExpr,
                     public virtual yc_negate_node {
     public:
-        NegExpr(numExprPtr rhs) :
-            UnaryNumExpr(opStr(), rhs) { }
+        NegExpr(num_expr_ptr rhs) :
+            UnaryNumExpr(op_str(), rhs) { }
         NegExpr(const NegExpr& src) :
             UnaryExpr(src) { }
 
-        static string opStr() { return "-"; }
-        virtual bool isConstVal() const {
-            return _rhs->isConstVal();
+        static string op_str() { return "-"; }
+        virtual bool is_const_val() const {
+            return _rhs->is_const_val();
         }
-        virtual double getNumVal() const {
-            double rhs = _rhs->getNumVal();
+        virtual double get_num_val() const {
+            double rhs = _rhs->get_num_val();
             return -rhs;
         }
-        virtual numExprPtr clone() const {
+        virtual num_expr_ptr clone() const {
             return make_shared<NegExpr>(*this);
         }
 
@@ -430,21 +430,21 @@ namespace yask {
     class NotExpr : public UnaryBoolExpr,
                     public virtual yc_not_node {
     public:
-        NotExpr(boolExprPtr rhs) :
-            UnaryBoolExpr(opStr(), rhs) { }
+        NotExpr(bool_expr_ptr rhs) :
+            UnaryBoolExpr(op_str(), rhs) { }
         NotExpr(const NotExpr& src) :
             UnaryBoolExpr(src) { }
 
-        static string opStr() { return "!"; }
-        virtual bool getBoolVal() const {
-            bool rhs = _rhs->getBoolVal();
+        static string op_str() { return "!"; }
+        virtual bool get_bool_val() const {
+            bool rhs = _rhs->get_bool_val();
             return !rhs;
         }
-        virtual boolExprPtr clone() const {
+        virtual bool_expr_ptr clone() const {
             return make_shared<NotExpr>(*this);
         }
         virtual yc_bool_node_ptr get_rhs() {
-            return getRhs();
+            return _get_rhs();
         }
     };
 
@@ -459,64 +459,64 @@ namespace yask {
         ArgT _lhs;              // RHS in BaseT which must be a UnaryExpr.
 
     public:
-        BinaryExpr(ArgT lhs, const string& opStr, ArgT rhs) :
-            BaseT(opStr, rhs),
+        BinaryExpr(ArgT lhs, const string& op_str, ArgT rhs) :
+            BaseT(op_str, rhs),
             _lhs(lhs) { }
         BinaryExpr(const BinaryExpr& src) :
-            BaseT(src._opStr, src._rhs->clone()),
+            BaseT(src._op_str, src._rhs->clone()),
             _lhs(src._lhs->clone()) { }
 
-        ArgT& getLhs() { return _lhs; }
-        const ArgT& getLhs() const { return _lhs; }
+        ArgT& _get_lhs() { return _lhs; }
+        const ArgT& _get_lhs() const { return _lhs; }
         virtual string accept(ExprVisitor* ev);
 
         // Check for equivalency.
-        virtual bool isSame(const Expr* other) const {
+        virtual bool is_same(const Expr* other) const {
             auto p = dynamic_cast<const BinaryExpr*>(other);
-            return p && BaseT::_opStr == p->_opStr &&
-                _lhs->isSame(p->_lhs.get()) &&
-                BaseT::_rhs->isSame(p->_rhs.get());
+            return p && BaseT::_op_str == p->_op_str &&
+                _lhs->is_same(p->_lhs.get()) &&
+                BaseT::_rhs->is_same(p->_rhs.get());
         }
 
         // APIs.
         virtual ArgApiT get_lhs() {
-            return getLhs();
+            return _get_lhs();
         }
         virtual ArgApiT get_rhs() {
-            return BaseT::getRhs();
+            return BaseT::_get_rhs();
         }
     };
 
     // Various types of binary operators depending on input and output types.
     typedef BinaryExpr<UnaryNumExpr, yc_binary_number_node,
-                       numExprPtr, yc_number_node_ptr> BinaryNumExpr; // fn(num, num) -> num.
+                       num_expr_ptr, yc_number_node_ptr> BinaryNumExpr; // fn(num, num) -> num.
     typedef BinaryExpr<UnaryBoolExpr, yc_binary_bool_node,
-                       boolExprPtr, yc_bool_node_ptr> BinaryBoolExpr; // fn(bool, bool) -> bool.
+                       bool_expr_ptr, yc_bool_node_ptr> BinaryBoolExpr; // fn(bool, bool) -> bool.
     typedef BinaryExpr<UnaryNum2BoolExpr, yc_binary_comparison_node,
-                       numExprPtr, yc_number_node_ptr> BinaryNum2BoolExpr; // fn(num, num) -> bool.
+                       num_expr_ptr, yc_number_node_ptr> BinaryNum2BoolExpr; // fn(num, num) -> bool.
 
     // Numerical binary operators.
     // TODO: redo this with a template.
-#define BIN_NUM_EXPR(type, implType, opstr, oper)       \
+#define BIN_NUM_EXPR(type, impl_type, opstr, oper)       \
     class type : public BinaryNumExpr,                  \
-                 public virtual implType {              \
+                 public virtual impl_type {              \
     public:                                             \
-        type(numExprPtr lhs, numExprPtr rhs) :          \
-            BinaryNumExpr(lhs, opStr(), rhs) { }        \
+        type(num_expr_ptr lhs, num_expr_ptr rhs) :          \
+            BinaryNumExpr(lhs, op_str(), rhs) { }        \
         type(const type& src) :                         \
             BinaryNumExpr(src) { }                      \
-        static string opStr() { return opstr; }         \
-        virtual bool isOffsetFrom(string dim, int& offset); \
-        virtual bool isConstVal() const {               \
-            return _lhs->isConstVal() &&                \
-                _rhs->isConstVal();                     \
+        static string op_str() { return opstr; }         \
+        virtual bool is_offset_from(string dim, int& offset); \
+        virtual bool is_const_val() const {               \
+            return _lhs->is_const_val() &&                \
+                _rhs->is_const_val();                     \
         }                                               \
-        virtual double getNumVal() const {              \
-            double lhs = _lhs->getNumVal();             \
-            double rhs = _rhs->getNumVal();             \
+        virtual double get_num_val() const {              \
+            double lhs = _lhs->get_num_val();             \
+            double rhs = _rhs->get_num_val();             \
             return oper;                                \
         }                                               \
-        virtual numExprPtr clone() const {              \
+        virtual num_expr_ptr clone() const {              \
             return make_shared<type>(*this);            \
         }                                               \
     }
@@ -532,28 +532,28 @@ namespace yask {
 
 // Boolean binary operators with numerical inputs.
 // TODO: redo this with a template.
-#define BIN_NUM2BOOL_EXPR(type, implType, opstr, oper)  \
+#define BIN_NUM2BOOL_EXPR(type, impl_type, opstr, oper)  \
     class type : public BinaryNum2BoolExpr,             \
-                 public virtual implType {              \
+                 public virtual impl_type {              \
     public:                                             \
-    type(numExprPtr lhs, numExprPtr rhs) :              \
-        BinaryNum2BoolExpr(lhs, opStr(), rhs) { }       \
+    type(num_expr_ptr lhs, num_expr_ptr rhs) :              \
+        BinaryNum2BoolExpr(lhs, op_str(), rhs) { }       \
     type(const type& src) :                             \
         BinaryNum2BoolExpr(src) { }                     \
-    static string opStr() { return opstr; }             \
-    virtual bool getBoolVal() const {                   \
-        double lhs = _lhs->getNumVal();                 \
-        double rhs = _rhs->getNumVal();                 \
+    static string op_str() { return opstr; }             \
+    virtual bool get_bool_val() const {                   \
+        double lhs = _lhs->get_num_val();                 \
+        double rhs = _rhs->get_num_val();                 \
         return oper;                                    \
     }                                                   \
-    virtual boolExprPtr clone() const {                 \
+    virtual bool_expr_ptr clone() const {                 \
         return make_shared<type>(*this);                \
     }                                                   \
     virtual yc_number_node_ptr get_lhs() {              \
-        return getLhs();                                \
+        return _get_lhs();                                \
     }                                                   \
     virtual yc_number_node_ptr get_rhs() {              \
-        return getRhs();                                \
+        return _get_rhs();                                \
     }                                                   \
     }
     BIN_NUM2BOOL_EXPR(IsEqualExpr, yc_equals_node, "==", lhs == rhs);
@@ -566,28 +566,28 @@ namespace yask {
 
     // Boolean binary operators with boolean inputs.
     // TODO: redo this with a template.
-#define BIN_BOOL_EXPR(type, implType, opstr, oper)      \
+#define BIN_BOOL_EXPR(type, impl_type, opstr, oper)      \
     class type : public BinaryBoolExpr, \
-                 public virtual implType {              \
+                 public virtual impl_type {              \
     public:                                             \
-    type(boolExprPtr lhs, boolExprPtr rhs) :            \
-        BinaryBoolExpr(lhs, opStr(), rhs) { }           \
+    type(bool_expr_ptr lhs, bool_expr_ptr rhs) :            \
+        BinaryBoolExpr(lhs, op_str(), rhs) { }           \
     type(const type& src) :                             \
         BinaryBoolExpr(src) { }                         \
-    static string opStr() { return opstr; }             \
-    virtual bool getBoolVal() const {                   \
-        bool lhs = _lhs->getBoolVal();                  \
-        bool rhs = _rhs->getBoolVal();                  \
+    static string op_str() { return opstr; }             \
+    virtual bool get_bool_val() const {                   \
+        bool lhs = _lhs->get_bool_val();                  \
+        bool rhs = _rhs->get_bool_val();                  \
         return oper;                                    \
     }                                                   \
-    virtual boolExprPtr clone() const {                 \
+    virtual bool_expr_ptr clone() const {                 \
         return make_shared<type>(*this);                \
     }                                                   \
     virtual yc_bool_node_ptr get_lhs() {                \
-        return getLhs();                                \
+        return _get_lhs();                                \
     }                                                   \
     virtual yc_bool_node_ptr get_rhs() {                \
-        return getRhs();                                \
+        return _get_rhs();                                \
     }                                                   \
     }
     BIN_BOOL_EXPR(AndExpr, yc_and_node, "&&", lhs && rhs);
@@ -600,65 +600,65 @@ namespace yask {
     class CommutativeExpr : public NumExpr,
                             public virtual yc_commutative_number_node {
     protected:
-        numExprPtrVec _ops;
-        string _opStr;
+        num_expr_ptr_vec _ops;
+        string _op_str;
 
     public:
-        CommutativeExpr(const string& opStr) :
-            _opStr(opStr) {
+        CommutativeExpr(const string& op_str) :
+            _op_str(op_str) {
         }
-        CommutativeExpr(numExprPtr lhs, const string& opStr, numExprPtr rhs) :
-            _opStr(opStr) {
+        CommutativeExpr(num_expr_ptr lhs, const string& op_str, num_expr_ptr rhs) :
+            _op_str(op_str) {
             _ops.push_back(lhs->clone());
             _ops.push_back(rhs->clone());
         }
         CommutativeExpr(const CommutativeExpr& src) :
-            _opStr(src._opStr) {
+            _op_str(src._op_str) {
             for(auto op : src._ops)
                 _ops.push_back(op->clone());
         }
         virtual ~CommutativeExpr() { }
 
         // Accessors.
-        numExprPtrVec& getOps() { return _ops; }
-        const numExprPtrVec& getOps() const { return _ops; }
-        const string& getOpStr() const { return _opStr; }
+        num_expr_ptr_vec& get_ops() { return _ops; }
+        const num_expr_ptr_vec& get_ops() const { return _ops; }
+        const string& get_op_str() const { return _op_str; }
 
         // Clone and add an operand.
-        virtual void appendOp(numExprPtr op) {
+        virtual void append_op(num_expr_ptr op) {
             _ops.push_back(op->clone());
         }
 
         // If op is another CommutativeExpr with the
         // same operator, add its operands to this.
         // Otherwise, just add the whole node.
-        // Example: if 'this' is 'A+B', 'mergeExpr(C+D)'
-        // returns 'A+B+C+D', and 'mergeExpr(E*F)'
+        // Example: if 'this' is 'A+B', 'merge_expr(C+D)'
+        // returns 'A+B+C+D', and 'merge_expr(E*F)'
         // returns 'A+B+(E*F)'.
-        virtual void mergeExpr(numExprPtr op) {
+        virtual void merge_expr(num_expr_ptr op) {
             auto opp = dynamic_pointer_cast<CommutativeExpr>(op);
-            if (opp && opp->getOpStr() == _opStr) {
+            if (opp && opp->get_op_str() == _op_str) {
                 for(auto op2 : opp->_ops)
-                    appendOp(op2);
+                    append_op(op2);
             }
             else
-                appendOp(op);
+                append_op(op);
         }
 
         // Swap the contents w/another.
         virtual void swap(CommutativeExpr* ce) {
             _ops.swap(ce->_ops);
-            _opStr.swap(ce->_opStr);
+            _op_str.swap(ce->_op_str);
         }
 
         virtual string accept(ExprVisitor* ev);
 
         // Check for equivalency.
-        virtual bool isSame(const Expr* other) const;
+        virtual bool is_same(const Expr* other) const;
 
-        virtual bool isConstVal() const {
+        virtual bool is_const_val() const {
             for(auto op : _ops) {
-                if (!op->isConstVal())
+                if (!op->is_const_val())
                     return false;
             }
             return true;
@@ -677,34 +677,34 @@ namespace yask {
         virtual void add_operand(yc_number_node_ptr node) {
             auto p = dynamic_pointer_cast<NumExpr>(node);
             assert(p);
-            appendOp(p);
+            append_op(p);
         }
     };
 
     // Commutative operators.
     // TODO: redo this with a template.
-#define COMM_EXPR(type, implType, opstr, baseVal, oper)                 \
-    class type : public CommutativeExpr, public virtual implType  {     \
+#define COMM_EXPR(type, impl_type, opstr, base_val, oper)                 \
+    class type : public CommutativeExpr, public virtual impl_type  {     \
     public:                                                             \
     type()  :                                                           \
-        CommutativeExpr(opStr()) { }                                    \
-    type(numExprPtr lhs, numExprPtr rhs) :                              \
-        CommutativeExpr(lhs, opStr(), rhs) { }                          \
+        CommutativeExpr(op_str()) { }                                    \
+    type(num_expr_ptr lhs, num_expr_ptr rhs) :                              \
+        CommutativeExpr(lhs, op_str(), rhs) { }                          \
     type(const type& src) :                                             \
         CommutativeExpr(src) { }                                        \
     virtual ~type() { }                                                 \
-    static string opStr() { return opstr; }                             \
-    virtual bool isOffsetFrom(string dim, int& offset);                 \
-    virtual double getNumVal() const {                                  \
-        double val = baseVal;                                           \
+    static string op_str() { return opstr; }                             \
+    virtual bool is_offset_from(string dim, int& offset);                 \
+    virtual double get_num_val() const {                                  \
+        double val = base_val;                                           \
         for(auto op : _ops) {                                           \
             double lhs = val;                                           \
-            double rhs = op->getNumVal();                               \
+            double rhs = op->get_num_val();                               \
             val = oper;                                                 \
         }                                                               \
         return val;                                                     \
     }                                                                   \
-    virtual numExprPtr clone() const { return make_shared<type>(*this); } \
+    virtual num_expr_ptr clone() const { return make_shared<type>(*this); } \
     };
     COMM_EXPR(MultExpr, yc_multiply_node, "*", 1.0, lhs * rhs)
     COMM_EXPR(AddExpr, yc_add_node, "+", 0.0, lhs + rhs)
@@ -715,20 +715,20 @@ namespace yask {
     // TODO: add APIs.
     class FuncExpr : public NumExpr {
     protected:
-        string _opStr;          // name of function.
-        numExprPtrVec _ops;     // args to function.
+        string _op_str;          // name of function.
+        num_expr_ptr_vec _ops;     // args to function.
 
         // Special handler for pairable functions like sincos().
         FuncExpr* _paired = nullptr;     // ptr to counterpart.
 
     public:
-        FuncExpr(const string& opStr, const std::initializer_list< const numExprPtr > & ops) :
-            _opStr(opStr) {
+        FuncExpr(const string& op_str, const std::initializer_list< const num_expr_ptr > & ops) :
+            _op_str(op_str) {
             for (auto& op : ops)
                 _ops.push_back(op->clone());
         }
         FuncExpr(const FuncExpr& src) :
-            _opStr(src._opStr, {}) {
+            _op_str(src._op_str, {}) {
 
             // Deep copy.
             for (auto& op : src._ops)
@@ -736,26 +736,26 @@ namespace yask {
         }
 
         // Accessors.
-        numExprPtrVec& getOps() { return _ops; }
-        const numExprPtrVec& getOps() const { return _ops; }
-        const string& getOpStr() const { return _opStr; }
+        num_expr_ptr_vec& get_ops() { return _ops; }
+        const num_expr_ptr_vec& get_ops() const { return _ops; }
+        const string& get_op_str() const { return _op_str; }
 
         virtual string accept(ExprVisitor* ev);
 
         // Check for equivalency.
-        virtual bool isSame(const Expr* other) const;
+        virtual bool is_same(const Expr* other) const;
 
-        virtual bool makePair(Expr* other);
-        virtual FuncExpr* getPair() { return _paired; }
+        virtual bool make_pair(Expr* other);
+        virtual FuncExpr* get_pair() { return _paired; }
 
-        virtual bool isConstVal() const {
+        virtual bool is_const_val() const {
             for(auto op : _ops) {
-                if (!op->isConstVal())
+                if (!op->is_const_val())
                     return false;
             }
             return true;
         }
-        virtual numExprPtr clone() const {
+        virtual num_expr_ptr clone() const {
             return make_shared<FuncExpr>(*this);
         }
 
@@ -779,7 +779,7 @@ namespace yask {
     public:
 
         // What kind of vectorization can be done on this point.
-        // Set via Eqs::analyzeVec().
+        // Set via Eqs::analyze_vec().
         enum VecType { VEC_UNSET,
                        VEC_FULL, // vectorizable in all folded dims.
                        VEC_PARTIAL, // vectorizable in some folded dims.
@@ -787,7 +787,7 @@ namespace yask {
         };
 
         // Analysis of this point for accesses via loops through the inner dim.
-        // Set via Eqs::analyzeLoop().
+        // Set via Eqs::analyze_loop().
         enum LoopType { LOOP_UNSET,
                         LOOP_INVARIANT, // not dependent on inner dim.
                         LOOP_OFFSET,    // only dep on inner dim +/- const in inner-dim posn.
@@ -799,93 +799,93 @@ namespace yask {
 
         // Index exprs for each dim, e.g.,
         // "3, x-5, y*2, z+4" for dims "n, x, y, z".
-        numExprPtrVec _args;
+        num_expr_ptr_vec _args;
 
         // Vars below are calculated from above.
         
         // Simple offset for each expr that is dim +/- offset, e.g.,
         // "x=-5, z=4" from above example.
         // Includes zero offsets.
-        // Set in ctor and modified via setArgOffset/Const().
+        // Set in ctor and modified via set_arg_offset/Const().
         IntTuple _offsets;
 
         // Simple value for each expr that is a const, e.g.,
         // "n=3" from above example.
-        // Set in ctor and modified via setArgOffset/Const().
+        // Set in ctor and modified via set_arg_offset/Const().
         IntTuple _consts;
 
-        VecType _vecType = VEC_UNSET; // allowed vectorization.
-        LoopType _loopType = LOOP_UNSET; // analysis for looping.
+        VecType _vec_type = VEC_UNSET; // allowed vectorization.
+        LoopType _loop_type = LOOP_UNSET; // analysis for looping.
 
         // Cache the string repr.
-        string _defStr;
-        void _updateStr() {
-            _defStr = _makeStr();
+        string _def_str;
+        void _update_str() {
+            _def_str = _make_str();
         }
-        string _makeStr(const VarMap* varMap = 0) const;
+        string _make_str(const VarMap* var_map = 0) const;
 
     public:
 
         // Construct a point given a var and an arg for each dim.
-        VarPoint(Var* var, const numExprPtrVec& args);
+        VarPoint(Var* var, const num_expr_ptr_vec& args);
 
         // Dtor.
         virtual ~VarPoint() {}
 
         // Get parent var info.
-        const Var* getVar() const { return _var; }
-        Var* getVar() { return _var; }
-        virtual const string& getVarName() const;
-        virtual bool isVarFoldable() const;
-        virtual const indexExprPtrVec& getDims() const;
+        const Var* _get_var() const { return _var; }
+        Var* _get_var() { return _var; }
+        virtual const string& get_var_name() const;
+        virtual bool is_var_foldable() const;
+        virtual const index_expr_ptr_vec& get_dims() const;
 
         // Accessors.
-        virtual const numExprPtrVec& getArgs() const { return _args; }
-        virtual const IntTuple& getArgOffsets() const { return _offsets; }
-        virtual const IntTuple& getArgConsts() const { return _consts; }
-        virtual VecType getVecType() const {
-            assert(_vecType != VEC_UNSET);
-            return _vecType;
+        virtual const num_expr_ptr_vec& get_args() const { return _args; }
+        virtual const IntTuple& get_arg_offsets() const { return _offsets; }
+        virtual const IntTuple& get_arg_consts() const { return _consts; }
+        virtual VecType get_vec_type() const {
+            assert(_vec_type != VEC_UNSET);
+            return _vec_type;
         }
-        virtual void setVecType(VecType vt) {
-            _vecType = vt;
+        virtual void set_vec_type(VecType vt) {
+            _vec_type = vt;
         }
-        virtual LoopType getLoopType() const {
-            assert(_loopType != LOOP_UNSET);
-            return _loopType;
+        virtual LoopType get_loop_type() const {
+            assert(_loop_type != LOOP_UNSET);
+            return _loop_type;
         }
-        virtual void setLoopType(LoopType vt) {
-            _loopType = vt;
+        virtual void set_loop_type(LoopType vt) {
+            _loop_type = vt;
         }
 
         // Get arg for 'dim' or return null if none.
-        virtual const numExprPtr getArg(const string& dim) const;
+        virtual const num_expr_ptr get_arg(const string& dim) const;
         
         // Set given arg to given offset; ignore if not in step or domain var dims.
-        virtual void setArgOffset(const IntScalar& offset);
+        virtual void set_arg_offset(const IntScalar& offset);
 
         // Set given args to be given offsets.
-        virtual void setArgOffsets(const IntTuple& offsets) {
+        virtual void set_arg_offsets(const IntTuple& offsets) {
             for (auto ofs : offsets)
-                setArgOffset(ofs);
+                set_arg_offset(ofs);
         }
 
         // Set given arg to given const.
-        virtual void setArgConst(const IntScalar& val);
+        virtual void set_arg_const(const IntScalar& val);
 
         // Some comparisons.
         bool operator==(const VarPoint& rhs) const {
-            return _defStr == rhs._defStr;
+            return _def_str == rhs._def_str;
         }
         bool operator<(const VarPoint& rhs) const {
-            return _defStr < rhs._defStr;
+            return _def_str < rhs._def_str;
         }
 
         // Take ev to each value.
         virtual string accept(ExprVisitor* ev);
 
         // Check for equivalency.
-        virtual bool isSame(const Expr* other) const {
+        virtual bool is_same(const Expr* other) const {
             auto p = dynamic_cast<const VarPoint*>(other);
             return p && *this == *p;
         }
@@ -893,47 +893,47 @@ namespace yask {
         // Check for same logical var.
         // A logical var is defined by the var itself
         // and any const indices.
-        virtual bool isSameLogicalVar(const VarPoint& rhs) const {
+        virtual bool is_same_logical_var(const VarPoint& rhs) const {
             return _var == rhs._var && _consts == rhs._consts;
         }
 
         // String w/name and parens around args, e.g., 'u(x, y+2)'.
-        // Apply substitutions to indices using 'varMap' if provided.
-        virtual string makeStr(const VarMap* varMap = 0) const {
-            if (varMap)
-                return _makeStr(varMap);
-            return _defStr;
+        // Apply substitutions to indices using 'var_map' if provided.
+        virtual string make_str(const VarMap* var_map = 0) const {
+            if (var_map)
+                return _make_str(var_map);
+            return _def_str;
         }
 
         // String w/name and parens around const args, e.g., 'u(n=4)'.
-        // Apply substitutions to indices using 'varMap' if provided.
-        virtual string makeLogicalVarStr(const VarMap* varMap = 0) const;
+        // Apply substitutions to indices using 'var_map' if provided.
+        virtual string make_logical_var_str(const VarMap* var_map = 0) const;
 
         // String w/just comma-sep args, e.g., 'x, y+2'.
-        // Apply substitutions to indices using 'varMap' if provided.
-        virtual string makeArgStr(const VarMap* varMap = 0) const;
+        // Apply substitutions to indices using 'var_map' if provided.
+        virtual string make_arg_str(const VarMap* var_map = 0) const;
 
         // String v/vec-normalized args, e.g., 'x, y+(2/VLEN_Y)'.
         // This object has numerators; 'fold' object has denominators.
-        // Apply substitutions to indices using 'varMap' if provided.
-        virtual string makeNormArgStr(const Dimensions& dims,
-                                      const VarMap* varMap = 0) const;
+        // Apply substitutions to indices using 'var_map' if provided.
+        virtual string make_norm_arg_str(const Dimensions& dims,
+                                      const VarMap* var_map = 0) const;
 
         // Make string like "x+(4/VLEN_X)" from original arg "x+4" in 'dname' dim.
         // This object has numerators; 'fold' object has denominators.
-        // Apply substitutions to indices using 'varMap' if provided.
-        virtual string makeNormArgStr(const string& dname,
+        // Apply substitutions to indices using 'var_map' if provided.
+        virtual string make_norm_arg_str(const string& dname,
                                       const Dimensions& dims,
-                                      const VarMap* varMap = 0) const;
+                                      const VarMap* var_map = 0) const;
 
         // Make string like "g->_wrap_step(t+1)" from original arg "t+1"
         // if var uses step dim, "0" otherwise.
-        virtual string makeStepArgStr(const string& varPtr, const Dimensions& dims) const;
+        virtual string make_step_arg_str(const string& var_ptr, const Dimensions& dims) const;
 
         // Create a deep copy of this expression,
         // except pointed-to var is not copied.
-        virtual numExprPtr clone() const { return make_shared<VarPoint>(*this); }
-        virtual varPointPtr cloneVarPoint() const { return make_shared<VarPoint>(*this); }
+        virtual num_expr_ptr clone() const { return make_shared<VarPoint>(*this); }
+        virtual var_point_ptr clone_var_point() const { return make_shared<VarPoint>(*this); }
 
         // APIs.
         virtual yc_var* get_var();
@@ -946,18 +946,18 @@ namespace yask {
     class EqualsExpr : public Expr,
                        public virtual yc_equation_node {
     protected:
-        varPointPtr _lhs;
-        numExprPtr _rhs;
-        boolExprPtr _cond;
-        boolExprPtr _step_cond;
+        var_point_ptr _lhs;
+        num_expr_ptr _rhs;
+        bool_expr_ptr _cond;
+        bool_expr_ptr _step_cond;
 
     public:
-        EqualsExpr(varPointPtr lhs, numExprPtr rhs,
-                   boolExprPtr cond = nullptr,
-                   boolExprPtr step_cond = nullptr) :
+        EqualsExpr(var_point_ptr lhs, num_expr_ptr rhs,
+                   bool_expr_ptr cond = nullptr,
+                   bool_expr_ptr step_cond = nullptr) :
             _lhs(lhs), _rhs(rhs), _cond(cond), _step_cond(step_cond) { }
         EqualsExpr(const EqualsExpr& src) :
-            _lhs(src._lhs->cloneVarPoint()),
+            _lhs(src._lhs->clone_var_point()),
             _rhs(src._rhs->clone()) {
             if (src._cond)
                 _cond = src._cond->clone();
@@ -969,36 +969,36 @@ namespace yask {
                 _step_cond = nullptr;
         }
 
-        varPointPtr& getLhs() { return _lhs; }
-        const varPointPtr& getLhs() const { return _lhs; }
-        numExprPtr& getRhs() { return _rhs; }
-        const numExprPtr& getRhs() const { return _rhs; }
-        boolExprPtr& getCond() { return _cond; }
-        const boolExprPtr& getCond() const { return _cond; }
-        void setCond(boolExprPtr cond) { _cond = cond; }
-        boolExprPtr& getStepCond() { return _step_cond; }
-        const boolExprPtr& getStepCond() const { return _step_cond; }
-        void setStepCond(boolExprPtr step_cond) { _step_cond = step_cond; }
+        var_point_ptr& _get_lhs() { return _lhs; }
+        const var_point_ptr& _get_lhs() const { return _lhs; }
+        num_expr_ptr& _get_rhs() { return _rhs; }
+        const num_expr_ptr& _get_rhs() const { return _rhs; }
+        bool_expr_ptr& _get_cond() { return _cond; }
+        const bool_expr_ptr& _get_cond() const { return _cond; }
+        void _set_cond(bool_expr_ptr cond) { _cond = cond; }
+        bool_expr_ptr& _get_step_cond() { return _step_cond; }
+        const bool_expr_ptr& _get_step_cond() const { return _step_cond; }
+        void _set_step_cond(bool_expr_ptr step_cond) { _step_cond = step_cond; }
         virtual string accept(ExprVisitor* ev);
-        static string exprOpStr() { return "EQUALS"; }
-        static string condOpStr() { return "IF_DOMAIN"; }
-        static string stepCondOpStr() { return "IF_STEP"; }
+        static string expr_op_str() { return "EQUALS"; }
+        static string cond_op_str() { return "IF_DOMAIN"; }
+        static string step_cond_op_str() { return "IF_STEP"; }
 
         // Get pointer to var on LHS or NULL if not set.
-        virtual Var* getVar() {
+        virtual Var* _get_var() {
             if (_lhs.get())
-                return _lhs->getVar();
+                return _lhs->_get_var();
             return NULL;
         }
 
         // LHS is scratch var.
-        virtual bool isScratch();
+        virtual bool is_scratch();
 
         // Check for equivalency.
-        virtual bool isSame(const Expr* other) const;
+        virtual bool is_same(const Expr* other) const;
 
         // Create a deep copy of this expression.
-        virtual equalsExprPtr clone() const { return make_shared<EqualsExpr>(*this); }
+        virtual equals_expr_ptr clone() const { return make_shared<EqualsExpr>(*this); }
         virtual yc_equation_node_ptr clone_ast() const {
             return clone();
         }
@@ -1027,7 +1027,7 @@ namespace yask {
     };
 
     typedef set<VarPoint> VarPointSet;
-    typedef set<varPointPtr> varPointPtrSet;
+    typedef set<var_point_ptr> var_point_ptr_set;
     typedef vector<VarPoint> VarPointVec;
 
 } // namespace yask.
@@ -1038,7 +1038,7 @@ namespace std {
 
     template <> struct hash<VarPoint> {
         size_t operator()(const VarPoint& k) const {
-            return hash<string>{}(k.makeStr());
+            return hash<string>{}(k.make_str());
         }
     };
 }

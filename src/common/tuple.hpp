@@ -62,14 +62,14 @@ namespace yask {
 
         // A shared global pool for names.
         // Using a list so addrs won't change.
-        static std::list<std::string> _allNames;
+        static std::list<std::string> _all_names;
 
         // Look up names in the pool.
         // Should only need to do this when we're adding a new dim.
-        static const std::string* _getPoolPtr(const std::string& name);
+        static const std::string* _get_pool_ptr(const std::string& name);
 
         // Name and value for this object.
-        const std::string* _namep = 0; // Ptr from the _allNames pool.
+        const std::string* _namep = 0; // Ptr from the _all_names pool.
         T _val = 0;
 
         Scalar(const std::string* namep, const T& val) {
@@ -80,7 +80,7 @@ namespace yask {
     public:
         Scalar(const std::string& name, const T& val) {
             assert(name.length() > 0);
-            _namep = _getPoolPtr(name);
+            _namep = _get_pool_ptr(name);
             _val = val;
         }
         Scalar(const std::string& name) : Scalar(name, 0) { }
@@ -88,19 +88,19 @@ namespace yask {
 
         // Access name.
         // (Changing it is not allowed.)
-        const std::string& getName() const {
+        const std::string& _get_name() const {
             return *_namep;
         }
-        const std::string* getNamePtr() const {
+        const std::string* get_name_ptr() const {
             return _namep;
         }
 
         // Access value.
-        const T& getVal() const { return _val; }
-        T& getVal() { return _val; }
-        const T* getValPtr() const { return &_val; }
-        T* getValPtr() { return &_val; }
-        void setVal(const T& val) { _val = val; }
+        const T& get_val() const { return _val; }
+        T& get_val() { return _val; }
+        const T* get_val_ptr() const { return &_val; }
+        T* get_val_ptr() { return &_val; }
+        void set_val(const T& val) { _val = val; }
 
         // Comparison ops.
         // Compare name pointers and actual names in case there
@@ -136,32 +136,32 @@ namespace yask {
         std::vector<Scalar<T>> _q;
 
         // First-inner vars control ordering. Example: dims x, y, z.
-        // If _firstInner == true, x is unit stride (col major).
-        // If _firstInner == false, z is unit stride (row major).
-        // This setting affects [un]layout() and visitAllPoints().
-        bool _firstInner = true; // whether first dim is used for inner loop.
+        // If _first_inner == true, x is unit stride (col major).
+        // If _first_inner == false, z is unit stride (row major).
+        // This setting affects [un]layout() and visit_all_points().
+        bool _first_inner = true; // whether first dim is used for inner loop.
 
     public:
         Tuple() {}
         ~Tuple() {}             // NOT a virtual class!
 
         // first-inner (first dim is unit stride) accessors.
-        bool isFirstInner() const { return _firstInner; }
-        void setFirstInner(bool fi) { _firstInner = fi; }
+        bool is_first_inner() const { return _first_inner; }
+        void set_first_inner(bool fi) { _first_inner = fi; }
 
         // Query number of dims.
         size_t size() const {
             return _q.size();
         }
-        int getNumDims() const {
+        int _get_num_dims() const {
             return int(_q.size());
         }
 
         // Return all dim names.
-        const std::vector<std::string> getDimNames() const;
+        const std::vector<std::string> get_dim_names() const;
 
         // Get iteratable contents.
-        const std::vector<Scalar<T>>& getDims() const {
+        const std::vector<Scalar<T>>& get_dims() const {
             return _q;
         }
         typename std::vector<Scalar<T>>::const_iterator begin() const {
@@ -182,55 +182,55 @@ namespace yask {
         // Lookup by dim posn.
         // No non-const version because name shouldn't be modified
         // outside of this class.
-        const Scalar<T>* getDimPtr(int i) const {
+        const Scalar<T>* get_dim_ptr(int i) const {
             return (i >= 0 && i < int(_q.size())) ?
                 &_q.at(i) : NULL;
         }
 
         // Return dim name at index (must exist).
-        const std::string& getDimName(int i) const {
-            auto* p = getDimPtr(i);
+        const std::string& get_dim_name(int i) const {
+            auto* p = get_dim_ptr(i);
             assert(p);
-            return p->getName();
+            return p->_get_name();
         }
 
         // Return pointer to value or null if it doesn't exist.
         // Lookup by dim posn.
         const T* lookup(int i) const {
             return (i >= 0 && i < int(_q.size())) ?
-                _q.at(i).getValPtr() : NULL;
+                _q.at(i).get_val_ptr() : NULL;
         }
         T* lookup(int i) {
             return (i >= 0 && i < int(_q.size())) ?
-                _q.at(i).getValPtr() : NULL;
+                _q.at(i).get_val_ptr() : NULL;
         }
 
         // Return scalar pair at index (must exist).
-        const Scalar<T>& getDim(int i) const {
-            auto* p = getDimPtr(i);
+        const Scalar<T>& get_dim(int i) const {
+            auto* p = get_dim_ptr(i);
             assert(p);
             return *p;
         }
         const Scalar<T>& operator()(int i) const {
-            return getDim(i);
+            return get_dim(i);
         }
 
         // Lookup and return value by dim posn (must exist).
-        const T& getVal(int i) const {
+        const T& get_val(int i) const {
             auto* p = lookup(i);
             assert(p);
             return *p;
         }
-        T& getVal(int i) {
+        T& get_val(int i) {
             auto* p = lookup(i);
             assert(p);
             return *p;
         }
         const T& operator[](int i) const {
-            return getVal(i);
+            return get_val(i);
         }
         T& operator[](int i) {
-            return getVal(i);
+            return get_val(i);
         }
 
         ////// Methods to get things by name.
@@ -242,21 +242,21 @@ namespace yask {
             // First check pointers.
             for (size_t i = 0; i < _q.size(); i++) {
                 auto& s = _q[i];
-                if (s.getNamePtr() == &dim)
+                if (s.get_name_ptr() == &dim)
                     return int(i);
             }
 
             // Then check full strings.
             for (size_t i = 0; i < _q.size(); i++) {
                 auto& s = _q[i];
-                if (s.getName() == dim)
+                if (s._get_name() == dim)
                     return int(i);
             }
             return -1;
         }
 
         // Return scalar pair by name (must exist).
-        const Scalar<T>& getDim(const std::string& dim) const {
+        const Scalar<T>& get_dim(const std::string& dim) const {
             int i = lookup_posn(dim);
             assert(i >= 0);
             return _q.at(i);
@@ -274,44 +274,44 @@ namespace yask {
         }
 
         // Lookup and return value by dim name (must exist).
-        const T& getVal(const std::string& dim) const {
+        const T& get_val(const std::string& dim) const {
             auto* p = lookup(dim);
             assert(p);
             return *p;
         }
-        T& getVal(const std::string& dim) {
+        T& get_val(const std::string& dim) {
             auto* p = lookup(dim);
             assert(p);
             return *p;
         }
         const T& operator[](const std::string& dim) const {
-            return getVal(dim);
+            return get_val(dim);
         }
         T& operator[](const std::string& dim) {
-            return getVal(dim);
+            return get_val(dim);
         }
 
         ////// Other methods.
 
         // Add dimension to tuple (or update if it exists).
-        void addDimBack(const std::string& dim, const T& val);
-        void addDimBack(const Scalar<T>& sc) {
-            addDimBack(sc.getName(), sc.getVal());
+        void add_dim_back(const std::string& dim, const T& val);
+        void add_dim_back(const Scalar<T>& sc) {
+            add_dim_back(sc._get_name(), sc.get_val());
         }
-        void addDimFront(const std::string& dim, const T& val);
-        void addDimFront(const Scalar<T>& sc) {
-            addDimFront(sc.getName(), sc.getVal());
+        void add_dim_front(const std::string& dim, const T& val);
+        void add_dim_front(const Scalar<T>& sc) {
+            add_dim_front(sc._get_name(), sc.get_val());
         }
 
         // Set value by dim posn (posn i must exist).
-        void setVal(int i, const T& val) {
+        void set_val(int i, const T& val) {
             T* p = lookup(i);
             assert(p);
             *p = val;
         }
 
         // Set value by dim name (dim must already exist).
-        void setVal(const std::string& dim, const T& val) {
+        void set_val(const std::string& dim, const T& val) {
             T* p = lookup(dim);
             assert(p);
             *p = val;
@@ -321,67 +321,67 @@ namespace yask {
         // existing names.  If there are more values in 'vals' than 'this',
         // extra values are ignored.  If there are fewer values in 'vals'
         // than 'this', only the number of values supplied will be updated.
-        void setVals(int numVals, const T vals[]) {
-            int end = std::min(numVals, int(_q.size()));
+        void set_vals(int num_vals, const T vals[]) {
+            int end = std::min(num_vals, int(_q.size()));
             for (int i = 0; i < end; i++)
-                setVal(i, vals[i]);
+                set_val(i, vals[i]);
         }
-        void setVals(const std::vector<T>& vals) {
+        void set_vals(const std::vector<T>& vals) {
             int end = int(std::min(vals.size(), _q.size()));
             for (int i = 0; i < end; i++)
-                setVal(i, vals.at(i));
+                set_val(i, vals.at(i));
         }
-        void setVals(const std::deque<T>& vals) {
+        void set_vals(const std::deque<T>& vals) {
             int end = int(std::min(vals.size(), _q.size()));
             for (int i = 0; i < end; i++)
-                setVal(i, vals.at(i));
+                set_val(i, vals.at(i));
         }
 
         // Set all values to the same value.
-        void setValsSame(const T& val) {
+        void set_vals_same(const T& val) {
             for (auto& i : _q)
-                i.setVal(val);
+                i.set_val(val);
         }
 
         // Set values from 'src' Tuple, leaving non-matching ones in this
         // unchanged. Add dimensions in 'src' that are not in 'this' iff
-        // addMissing==true.
+        // add_missing==true.
         // Different than the copy operator because this method does
         // not change the order of *this or remove any existing dims.
-        void setVals(const Tuple& src, bool addMissing);
+        void set_vals(const Tuple& src, bool add_missing);
 
         // This version is similar to vprintf.
         // 'args' must have been initialized with va_start
         // and must contain values of of type T2.
         template<typename T2>
-        void setVals(int numVals, va_list args) {
-            assert(size() == numVals);
+        void set_vals(int num_vals, va_list args) {
+            assert(size() == num_vals);
 
             // process the var args.
-            for (int i = 0; i < numVals; i++) {
+            for (int i = 0; i < num_vals; i++) {
                 T2 n = va_arg(args, T2);
-                setVal(i, T(n));
+                set_val(i, T(n));
             }
         }
         template<typename T2>
-        void setVals(int numVals, ...) {
+        void set_vals(int num_vals, ...) {
 
             // pass the var args.
             va_list args;
-            va_start(args, numVals);
-            setVals<T2>(numVals, args);
+            va_start(args, num_vals);
+            set_vals<T2>(num_vals, args);
             va_end(args);
         }
 
         // Copy 'this', then add dims and values from 'rhs' that are NOT
         // in 'this'. Return resulting union.
-        // Similar to setVals(rhs, true), but does not change existing
+        // Similar to set_vals(rhs, true), but does not change existing
         // values and makes a new Tuple.
-        Tuple makeUnionWith(const Tuple& rhs) const;
+        Tuple make_union_with(const Tuple& rhs) const;
 
         // Check whether dims are the same.
-        // Don't have to be in same order unless 'sameOrder' is true.
-        bool areDimsSame(const Tuple& rhs, bool sameOrder = false) const;
+        // Don't have to be in same order unless 'same_order' is true.
+        bool are_dims_same(const Tuple& rhs, bool same_order = false) const;
 
         // Equality is true if all dimensions and values are same.
         // Dimensions must be in same order.
@@ -406,26 +406,26 @@ namespace yask {
             return !((*this) < rhs);
         }
 
-        // Convert nD 'offsets' to 1D offset using values in 'this' as sizes of nD space.
-        // If 'strictRhs', RHS dims must be same and in same order as this;
+        // Convert n_d 'offsets' to 1D offset using values in 'this' as sizes of n_d space.
+        // If 'strict_rhs', RHS dims must be same and in same order as this;
         // else, only matching ones are considered and missing offsets are zero (0).
-        // If '_firstInner', first dim varies most quickly; else last dim does.
-        size_t layout(const Tuple& offsets, bool strictRhs=true) const;
+        // If '_first_inner', first dim varies most quickly; else last dim does.
+        size_t layout(const Tuple& offsets, bool strict_rhs=true) const;
 
-        // Convert 1D 'offset' to nD offsets using values in 'this' as sizes of nD space.
+        // Convert 1D 'offset' to n_d offsets using values in 'this' as sizes of n_d space.
         Tuple unlayout(size_t offset) const;
 
         // Create a new Tuple with the given dimension removed.
         // if dim is found, new Tuple will have one fewer dim than 'this'.
         // If dim is not found, it will be a copy of 'this'.
-        Tuple removeDim(const std::string& dim) const {
+        Tuple remove_dim(const std::string& dim) const {
             auto p = lookup_posn(dim);
-            Tuple newt = removeDim(p);
+            Tuple newt = remove_dim(p);
             return newt;
         }
 
         // Create a new Tuple with the given dimension removed.
-        Tuple removeDim(int posn) const;
+        Tuple remove_dim(int posn) const;
 
         // reductions.
         // Apply function over all elements, returning one value.
@@ -433,7 +433,7 @@ namespace yask {
             T result = 0;
             int n = 0;
             for (auto i : _q) {
-                auto& tval = i.getVal();
+                auto& tval = i.get_val();
                 result = (n == 0) ? tval : reducer(result, tval);
                 n++;
             }
@@ -455,16 +455,16 @@ namespace yask {
 
         // pair-wise functions.
         // Apply function to each pair, creating a new Tuple.
-        // if strictRhs==true, RHS elements must be same as this;
+        // if strict_rhs==true, RHS elements must be same as this;
         // else, only matching ones are considered.
-        Tuple combineElements(std::function<T (T lhs, T rhs)> combiner,
+        Tuple combine_elements(std::function<T (T lhs, T rhs)> combiner,
                               const Tuple& rhs,
-                              bool strictRhs=true) const {
+                              bool strict_rhs=true) const {
             Tuple newt = *this;
-            if (strictRhs) {
-                assert(areDimsSame(rhs, true));
+            if (strict_rhs) {
+                assert(are_dims_same(rhs, true));
                 for (size_t i = 0; i < _q.size(); i++) {
-                    auto& tval = _q[i].getVal();
+                    auto& tval = _q[i].get_val();
                     auto& rval = rhs[i];
                     T newv = combiner(tval, rval);
                     newt[i] = newv;
@@ -472,103 +472,103 @@ namespace yask {
             }
             else {
                 for (auto& i : _q) {
-                    auto& tdim = i.getName();
-                    auto& tval = i.getVal();
+                    auto& tdim = i._get_name();
+                    auto& tval = i.get_val();
                     auto* rp = rhs.lookup(tdim);
                     if (rp) {
                         T newv = combiner(tval, *rp);
-                        newt.setVal(tdim, newv);
+                        newt.set_val(tdim, newv);
                     }
                 }
             }
             return newt;
         }
-        Tuple addElements(const Tuple& rhs, bool strictRhs=true) const {
-            return combineElements([&](T lhs, T rhs){ return lhs + rhs; },
-                                   rhs, strictRhs);
+        Tuple add_elements(const Tuple& rhs, bool strict_rhs=true) const {
+            return combine_elements([&](T lhs, T rhs){ return lhs + rhs; },
+                                   rhs, strict_rhs);
         }
-        Tuple subElements(const Tuple& rhs, bool strictRhs=true) const {
-            return combineElements([&](T lhs, T rhs){ return lhs - rhs; },
-                                   rhs, strictRhs);
+        Tuple sub_elements(const Tuple& rhs, bool strict_rhs=true) const {
+            return combine_elements([&](T lhs, T rhs){ return lhs - rhs; },
+                                   rhs, strict_rhs);
         }
-        Tuple multElements(const Tuple& rhs, bool strictRhs=true) const {
-            return combineElements([&](T lhs, T rhs){ return lhs * rhs; },
-                                   rhs, strictRhs);
+        Tuple mult_elements(const Tuple& rhs, bool strict_rhs=true) const {
+            return combine_elements([&](T lhs, T rhs){ return lhs * rhs; },
+                                   rhs, strict_rhs);
         }
-        Tuple maxElements(const Tuple& rhs, bool strictRhs=true) const {
-            return combineElements([&](T lhs, T rhs){ return std::max(lhs, rhs); },
-                                   rhs, strictRhs);
+        Tuple max_elements(const Tuple& rhs, bool strict_rhs=true) const {
+            return combine_elements([&](T lhs, T rhs){ return std::max(lhs, rhs); },
+                                   rhs, strict_rhs);
         }
-        Tuple minElements(const Tuple& rhs, bool strictRhs=true) const {
-            return combineElements([&](T lhs, T rhs){ return std::min(lhs, rhs); },
-                                   rhs, strictRhs);
+        Tuple min_elements(const Tuple& rhs, bool strict_rhs=true) const {
+            return combine_elements([&](T lhs, T rhs){ return std::min(lhs, rhs); },
+                                   rhs, strict_rhs);
         }
 
         // Apply func to each element, creating a new Tuple.
-        Tuple mapElements(std::function<T (T lhs, T rhs)> func,
+        Tuple map_elements(std::function<T (T lhs, T rhs)> func,
                                  T rhs) const {
             Tuple newt = *this;
             for (size_t i = 0; i < _q.size(); i++) {
-                auto& tval = _q[i].getVal();
+                auto& tval = _q[i].get_val();
                 T newv = func(tval, rhs);
                 newt[i] = newv;
             }
             return newt;
         }
-        Tuple mapElements(std::function<T (T in)> func) const {
+        Tuple map_elements(std::function<T (T in)> func) const {
             Tuple newt = *this;
             for (size_t i = 0; i < _q.size(); i++) {
-                auto& tval = _q[i].getVal();
+                auto& tval = _q[i].get_val();
                 T newv = func(tval);
                 newt[i] = newv;
             }
             return newt;
         }
-        Tuple addElements(T rhs) const {
-            return mapElements([&](T lhs, T rhs){ return lhs + rhs; },
+        Tuple add_elements(T rhs) const {
+            return map_elements([&](T lhs, T rhs){ return lhs + rhs; },
                                rhs);
         }
-        Tuple subElements(T rhs) const {
-            return mapElements([&](T lhs, T rhs){ return lhs - rhs; },
+        Tuple sub_elements(T rhs) const {
+            return map_elements([&](T lhs, T rhs){ return lhs - rhs; },
                                rhs);
         }
-        Tuple multElements(T rhs) const {
-            return mapElements([&](T lhs, T rhs){ return lhs * rhs; },
+        Tuple mult_elements(T rhs) const {
+            return map_elements([&](T lhs, T rhs){ return lhs * rhs; },
                                rhs);
         }
-        Tuple maxElements(T rhs) const {
-            return mapElements([&](T lhs, T rhs){ return std::max(lhs, rhs); },
+        Tuple max_elements(T rhs) const {
+            return map_elements([&](T lhs, T rhs){ return std::max(lhs, rhs); },
                                rhs);
         }
-        Tuple minElements(T rhs) const {
-            return mapElements([&](T lhs, T rhs){ return std::min(lhs, rhs); },
+        Tuple min_elements(T rhs) const {
+            return map_elements([&](T lhs, T rhs){ return std::min(lhs, rhs); },
                                rhs);
         }
-        Tuple negElements() const {
-            return mapElements([&](T in){ return -in; });
+        Tuple neg_elements() const {
+            return map_elements([&](T in){ return -in; });
         }
-        Tuple absElements() const {
-            return mapElements([&](T in){ return T(llabs(in)); });
+        Tuple abs_elements() const {
+            return map_elements([&](T in){ return T(llabs(in)); });
         }
 
         // make string like "4x3x2" or "4, 3, 2".
-        std::string makeValStr(std::string separator=", ",
+        std::string make_val_str(std::string separator=", ",
                                        std::string prefix="",
                                       std::string suffix="") const;
 
         // make string like "x, y, z" or "int x, int y, int z".
-        std::string makeDimStr(std::string separator=", ",
+        std::string make_dim_str(std::string separator=", ",
                                        std::string prefix="",
                                       std::string suffix="") const;
 
         // make string like "x=4, y=3, z=2".
-        std::string makeDimValStr(std::string separator=", ",
+        std::string make_dim_val_str(std::string separator=", ",
                                           std::string infix="=",
                                           std::string prefix="",
                                   std::string suffix="") const;
 
         // make string like "x+4, y, z-2".
-        std::string makeDimValOffsetStr(std::string separator=", ",
+        std::string make_dim_val_offset_str(std::string separator=", ",
                                                 std::string prefix="",
                                                std::string suffix="") const;
 
@@ -582,9 +582,9 @@ namespace yask {
         // 'idx' parameter contains sequentially-numbered index.
         // Visitation order is with first dimension in unit stride, i.e., a conceptual
         // "outer loop" iterates through last dimension, ..., and an "inner loop" iterates
-        // through first dimension. If '_firstInner' is false, it is done the opposite way.
+        // through first dimension. If '_first_inner' is false, it is done the opposite way.
         // Visitor should return 'true' to keep going or 'false' to stop.
-        void visitAllPoints(std::function<bool (const Tuple&,
+        void visit_all_points(std::function<bool (const Tuple&,
                                                 size_t idx)> visitor) const {
 
             // Init lambda fn arg with *this to get dim names.
@@ -597,17 +597,17 @@ namespace yask {
 
             // Call recursive version.
             // Set begin/step dims depending on nesting.
-            else if (_firstInner)
-                _visitAllPoints(visitor, size()-1, -1, tp);
+            else if (_first_inner)
+                _visit_all_points(visitor, size()-1, -1, tp);
             else
-                _visitAllPoints(visitor, 0, 1, tp);
+                _visit_all_points(visitor, 0, 1, tp);
         }
 
         // Call the 'visitor' lambda function at every point in the space defined by 'this'.
         // 'idx' parameter contains sequentially-numbered index.
         // Visitation order is not predictable.
         // Visitor return value only stops visit on one thread.
-        void visitAllPointsInParallel(std::function<bool (const Tuple&,
+        void visit_all_points_in_parallel(std::function<bool (const Tuple&,
                                                           size_t idx)> visitor) const {
 
             // 0-D?
@@ -619,32 +619,32 @@ namespace yask {
             // Call order-independent version.
             // Set begin/end/step dims depending on nesting.
             // TODO: set this depending on dim sizes.
-            else if (_firstInner)
-                _visitAllPointsInPar(visitor, size()-1, -1);
+            else if (_first_inner)
+                _visit_all_points_in_par(visitor, size()-1, -1);
             else
-                _visitAllPointsInPar(visitor, 0, 1);
+                _visit_all_points_in_par(visitor, 0, 1);
         }
 
     protected:
 
         // Visit elements recursively.
-        bool _visitAllPoints(std::function<bool (const Tuple&, size_t idx)> visitor,
-                             int curDimNum, int step, Tuple& tp) const {
-            auto& sc = _q.at(curDimNum);
-            auto dsize = sc.getVal();
-            int lastDimNum = (step > 0) ? size()-1 : 0;
+        bool _visit_all_points(std::function<bool (const Tuple&, size_t idx)> visitor,
+                             int cur_dim_num, int step, Tuple& tp) const {
+            auto& sc = _q.at(cur_dim_num);
+            auto dsize = sc.get_val();
+            int last_dim_num = (step > 0) ? size()-1 : 0;
 
             // If no more dims, iterate along current dimension and call
             // visitor.
-            if (curDimNum == lastDimNum) {
+            if (cur_dim_num == last_dim_num) {
 
                 // Get unique index to first position.
-                tp.setVal(curDimNum, 0);
+                tp.set_val(cur_dim_num, 0);
                 size_t idx0 = layout(tp);
 
                 // Loop through points.
                 for (T i = 0; i < dsize; i++) {
-                    tp.setVal(curDimNum, i);
+                    tp.set_val(cur_dim_num, i);
                     bool ok = visitor(tp, idx0 + i);
 
                     // Leave if visitor returns false.
@@ -657,10 +657,10 @@ namespace yask {
             // next/prev dimension.
             else {
                 for (T i = 0; i < dsize; i++) {
-                    tp.setVal(curDimNum, i);
+                    tp.set_val(cur_dim_num, i);
 
                     // Recurse.
-                    bool ok = _visitAllPoints(visitor, curDimNum + step, step, tp);
+                    bool ok = _visit_all_points(visitor, cur_dim_num + step, step, tp);
 
                     // Leave if visitor returns false.
                     if (!ok)
@@ -670,16 +670,16 @@ namespace yask {
             return true;
         }
 
-        // First call from public visitAllPointsInParallel(visitor).
-        bool _visitAllPointsInPar(std::function<bool (const Tuple&, size_t idx)> visitor,
-                                  int curDimNum, int step) const {
+        // First call from public visit_all_points_in_parallel(visitor).
+        bool _visit_all_points_in_par(std::function<bool (const Tuple&, size_t idx)> visitor,
+                                  int cur_dim_num, int step) const {
 #ifdef _OPENMP
-            auto nd = getNumDims();
+            auto nd = _get_num_dims();
 
             // If one dim, parallelize across it.
             if (nd == 1) {
-                assert(curDimNum == 0);
-                auto dsize = getVal(curDimNum);
+                assert(cur_dim_num == 0);
+                auto dsize = get_val(cur_dim_num);
                 Tuple tp(*this);
 
                 // Loop through points.
@@ -688,7 +688,7 @@ namespace yask {
                 // TODO: convert to yask_parallel_for().
 #pragma omp parallel for firstprivate(tp)
                 for (T i = 0; i < dsize; i++) {
-                    tp.setVal(curDimNum, i);
+                    tp.set_val(cur_dim_num, i);
                     visitor(tp, i);
                 }
             }
@@ -702,8 +702,8 @@ namespace yask {
                 T ne = product();
 
                 // Number of elements in last dim.
-                int lastDimNum = (step > 0) ? nd-1 : 0;
-                T nel = getVal(lastDimNum);
+                int last_dim_num = (step > 0) ? nd-1 : 0;
+                T nel = get_val(last_dim_num);
 
                 // Parallel loop over elements w/stride = size of
                 // last dim.
@@ -714,7 +714,7 @@ namespace yask {
                                       Tuple tp = unlayout(start);
                                       
                                       // Visit points in last dim.
-                                      _visitAllPoints(visitor, lastDimNum, step, tp);
+                                      _visit_all_points(visitor, last_dim_num, step, tp);
                                   });
             }
             return true;
@@ -722,7 +722,7 @@ namespace yask {
 
             // Call recursive version to handle all dims.
             Tuple tp(*this);
-            return _visitAllPoints(visitor, curDimNum, step, tp);
+            return _visit_all_points(visitor, cur_dim_num, step, tp);
 #endif
         }
             
@@ -745,8 +745,8 @@ namespace std {
     public :
         size_t operator()(const yask::Tuple<T> &x ) const {
             size_t h = 0;
-            for (int i = 0; i < x.getNumDims(); i++) {
-                h ^= size_t(i) ^ std::hash<T>()(x.getVal(i)) ^ std::hash<std::string>()(x.getDimName(i));
+            for (int i = 0; i < x._get_num_dims(); i++) {
+                h ^= size_t(i) ^ std::hash<T>()(x.get_val(i)) ^ std::hash<std::string>()(x.get_dim_name(i));
             }
             return h;
         }

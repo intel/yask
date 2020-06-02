@@ -106,7 +106,7 @@ public:
         yc_solution_base(name), bc(_bc)
     { }
 
-    bool hasBoundaryCondition()
+    bool has_boundary_condition()
     {
         return bc != NULL;
     }
@@ -312,7 +312,7 @@ public:
         auto next_v = v(t, x, y, z) + ((stx + sty + stz) * delta_t * lrho);
 
         // define the value at t+1.
-        if ( hasBoundaryCondition() ) {
+        if ( has_boundary_condition() ) {
             yc_bool_node_ptr not_at_bc = bc->is_not_at_boundary();
             v(t+1, x, y, z) EQUALS next_v IF_DOMAIN not_at_bc;
         } else

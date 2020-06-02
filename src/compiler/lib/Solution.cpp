@@ -35,52 +35,52 @@ namespace yask {
     void StencilSolution::_free(bool free_printer) {
         if (free_printer && _printer)
             delete _printer;
-        if (_eqBundles)
-            delete _eqBundles;
-        if (_eqStages)
-            delete _eqStages;
-        if (_clusterEqBundles)
-            delete _clusterEqBundles;
+        if (_eq_bundles)
+            delete _eq_bundles;
+        if (_eq_stages)
+            delete _eq_stages;
+        if (_cluster_eq_bundles)
+            delete _cluster_eq_bundles;
     }
     
     // Stencil-solution APIs.
-    yc_var_ptr StencilSolution::newVar(const std::string& name,
-                                         bool isScratch,
+    yc_var_ptr StencilSolution::new_var(const std::string& name,
+                                         bool is_scratch,
                                          const std::vector<yc_index_node_ptr>& dims) {
 
         // Make new var and add to solution.
         // TODO: fix this mem leak--make smart ptr.
 
         // Copy pointers to concrete type.
-        indexExprPtrVec dims2;
+        index_expr_ptr_vec dims2;
         for (auto d : dims) {
             auto d2 = dynamic_pointer_cast<IndexExpr>(d);
             assert(d2);
             dims2.push_back(d2);
         }
 
-        auto* gp = new Var(name, isScratch, this, dims2);
+        auto* gp = new Var(name, is_scratch, this, dims2);
         assert(gp);
         return gp;
     }
 
     void StencilSolution::set_fold_len(const yc_index_node_ptr dim,
                                        int len) {
-        auto& fold = _settings._foldOptions;
-        fold.addDimBack(dim->get_name(), len);
+        auto& fold = _settings._fold_options;
+        fold.add_dim_back(dim->get_name(), len);
     }
     void StencilSolution::set_cluster_mult(const yc_index_node_ptr dim,
                                            int mult) {
-        auto& cluster = _settings._clusterOptions;
-        cluster.addDimBack(dim->get_name(), mult);
+        auto& cluster = _settings._cluster_options;
+        cluster.add_dim_back(dim->get_name(), mult);
     }
     int StencilSolution::get_prefetch_dist(int level) {
         if (level < 1 || level > 2)
             THROW_YASK_EXCEPTION("Error: cache-level " +
                                  to_string(level) +
                                  " is not 1 or 2.");
-        if (_settings._prefetchDists.count(level))
-            return _settings._prefetchDists.at(level);
+        if (_settings._prefetch_dists.count(level))
+            return _settings._prefetch_dists.at(level);
         else if (is_target_set()) {
             auto target = get_target();
 
@@ -113,7 +113,7 @@ namespace yask {
             THROW_YASK_EXCEPTION("Error: prefetch-distance " +
                                  to_string(distance) +
                                  " is not positive.");
-        _settings._prefetchDists[level] = distance;
+        _settings._prefetch_dists[level] = distance;
     }
     yc_solution_base::soln_map& yc_solution_base::get_registry() {
         static yc_solution_base::soln_map* rp = 0;
@@ -163,46 +163,46 @@ namespace yask {
 
         // Find all the stencil dimensions from the vars.
         // Create the final folds and clusters from the cmd-line options.
-        _dims.setDims(_vars, _settings, vlen, is_folding_efficient, *_dos);
+        _dims.set_dims(_vars, _settings, vlen, is_folding_efficient, *_dos);
 
         // Determine which vars can be folded.
-        _vars.setFolding(_dims);
+        _vars.set_folding(_dims);
 
         // Determine which var points can be vectorized and analyze inner-loop accesses.
-        _eqs.analyzeVec(_dims);
-        _eqs.analyzeLoop(_dims);
+        _eqs.analyze_vec(_dims);
+        _eqs.analyze_loop(_dims);
 
         // Find dependencies between equations.
-        _eqs.analyzeEqs(_settings, _dims, *_dos);
+        _eqs.analyze_eqs(_settings, _dims, *_dos);
 
         // Update access stats for the vars.
-        _eqs.updateVarStats();
+        _eqs.update_var_stats();
 
         // Create equation bundles based on dependencies and/or target strings.
         // This process may alter the halos in scratch vars.
-        _eqBundles->set_basename_default(_settings._eq_bundle_basename_default);
-        _eqBundles->set_dims(_dims);
-        _eqBundles->makeEqBundles(_eqs, _settings, *_dos);
+        _eq_bundles->set_basename_default(_settings._eq_bundle_basename_default);
+        _eq_bundles->set_dims(_dims);
+        _eq_bundles->make_eq_bundles(_eqs, _settings, *_dos);
 
         // Optimize bundles.
-        _eqBundles->optimizeEqBundles(_settings, "scalar & vector", false, *_dos);
+        _eq_bundles->optimize_eq_bundles(_settings, "scalar & vector", false, *_dos);
         
         // Separate bundles into stages.
-        _eqStages->makeStages(*_eqBundles, *_dos);
+        _eq_stages->make_stages(*_eq_bundles, *_dos);
 
         // Compute halos.
-        _eqStages->calcHalos(*_eqBundles);
+        _eq_stages->calc_halos(*_eq_bundles);
 
         // Make a copy of each equation at each cluster offset.
         // We will use these for inter-cluster optimizations and code generation.
         // NB: these cluster bundles do not maintain dependencies, so cannot be used
         // for sorting, making stages, etc.
-        *_dos << "\nConstructing cluster of equations containing " <<
-            _dims._clusterMults.product() << " vector(s)...\n";
-        *_clusterEqBundles = *_eqBundles;
-        _clusterEqBundles->replicateEqsInCluster(_dims);
-        if (_settings._doOptCluster)
-            _clusterEqBundles->optimizeEqBundles(_settings, "cluster", true, *_dos);
+        *_dos << "\n_constructing cluster of equations containing " <<
+            _dims._cluster_mults.product() << " vector(s)...\n";
+        *_cluster_eq_bundles = *_eq_bundles;
+        _cluster_eq_bundles->replicate_eqs_in_cluster(_dims);
+        if (_settings._do_opt_cluster)
+            _cluster_eq_bundles->optimize_eq_bundles(_settings, "cluster", true, *_dos);
     }
 
     // Set format.
@@ -224,33 +224,33 @@ namespace yask {
 
         // Ensure all intermediate data is clean.
         _free(true);
-        _eqBundles = new EqBundles;
-        _eqStages = new EqStages;
-        _clusterEqBundles = new EqBundles;
+        _eq_bundles = new EqBundles;
+        _eq_stages = new EqStages;
+        _cluster_eq_bundles = new EqBundles;
         
         // Create the appropriate printer object based on the format.
         // Most args to the printers just set references to data.
         // Data itself will be created in analyze_solution().
         if (target == "intel64")
-            _printer = new YASKCppPrinter(*this, *_eqBundles, *_eqStages, *_clusterEqBundles);
+            _printer = new YASKCppPrinter(*this, *_eq_bundles, *_eq_stages, *_cluster_eq_bundles);
         else if (target == "knc")
-            _printer = new YASKKncPrinter(*this, *_eqBundles, *_eqStages, *_clusterEqBundles);
+            _printer = new YASKKncPrinter(*this, *_eq_bundles, *_eq_stages, *_cluster_eq_bundles);
         else if (target == "avx" || target == "avx2")
-            _printer = new YASKAvx256Printer(*this, *_eqBundles, *_eqStages, *_clusterEqBundles);
+            _printer = new YASKAvx256Printer(*this, *_eq_bundles, *_eq_stages, *_cluster_eq_bundles);
         else if (target == "avx512" || target == "knl")
-            _printer = new YASKAvx512Printer(*this, *_eqBundles, *_eqStages, *_clusterEqBundles);
+            _printer = new YASKAvx512Printer(*this, *_eq_bundles, *_eq_stages, *_cluster_eq_bundles);
         else if (target == "avx512lo")
-            _printer = new YASKAvx512Printer(*this, *_eqBundles, *_eqStages, *_clusterEqBundles, true);
+            _printer = new YASKAvx512Printer(*this, *_eq_bundles, *_eq_stages, *_cluster_eq_bundles, true);
         else if (target == "dot")
-            _printer = new DOTPrinter(*this, *_clusterEqBundles, false);
+            _printer = new DOTPrinter(*this, *_cluster_eq_bundles, false);
         else if (target == "dot-lite")
-            _printer = new DOTPrinter(*this, *_clusterEqBundles, true);
+            _printer = new DOTPrinter(*this, *_cluster_eq_bundles, true);
         else if (target == "pseudo")
-            _printer = new PseudoPrinter(*this, *_clusterEqBundles, false);
+            _printer = new PseudoPrinter(*this, *_cluster_eq_bundles, false);
         else if (target == "pseudo-long")
-            _printer = new PseudoPrinter(*this, *_clusterEqBundles, true);
+            _printer = new PseudoPrinter(*this, *_cluster_eq_bundles, true);
         else if (target == "pov-ray") // undocumented.
-            _printer = new POVRayPrinter(*this, *_clusterEqBundles);
+            _printer = new POVRayPrinter(*this, *_cluster_eq_bundles);
         else {
             _printer = 0;
             target = "";
@@ -281,7 +281,7 @@ namespace yask {
             hook(*this, output);
         
         // Create the output.
-        *_dos << "\nGenerating '" << target << "' output...\n";
+        *_dos << "\n_generating '" << target << "' output...\n";
         _printer->print(output->get_ostream());
     }
 

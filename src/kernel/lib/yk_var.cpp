@@ -33,36 +33,36 @@ namespace yask {
     // Ctor.
     // Important: _data is NOT yet constructed.
     YkVarBase::YkVarBase(KernelStateBase& stateb,
-                         const VarDimNames& dimNames) :
+                         const VarDimNames& dim_names) :
         KernelStateBase(stateb) {
         STATE_VARS(this);
 
         // Init indices.
-        int n = int(dimNames.size());
-        _domains.setFromConst(0, n);
-        _req_left_pads.setFromConst(0, n);
-        _req_right_pads.setFromConst(0, n);
-        _req_left_epads.setFromConst(0, n);
-        _req_right_epads.setFromConst(0, n);
-        _actl_left_pads.setFromConst(0, n);
-        _actl_right_pads.setFromConst(0, n);
-        _left_halos.setFromConst(0, n);
-        _right_halos.setFromConst(0, n);
-        _left_wf_exts.setFromConst(0, n);
-        _right_wf_exts.setFromConst(0, n);
-        _rank_offsets.setFromConst(0, n);
-        _local_offsets.setFromConst(0, n);
-        _allocs.setFromConst(0, n);
-        _soln_vec_lens.setFromConst(1, n);
-        _var_vec_lens.setFromConst(1, n);
-        _vec_left_pads.setFromConst(0, n);
-        _vec_allocs.setFromConst(0, n);
-        _vec_local_offsets.setFromConst(0, n);
+        int n = int(dim_names.size());
+        _domains.set_from_const(0, n);
+        _req_left_pads.set_from_const(0, n);
+        _req_right_pads.set_from_const(0, n);
+        _req_left_epads.set_from_const(0, n);
+        _req_right_epads.set_from_const(0, n);
+        _actl_left_pads.set_from_const(0, n);
+        _actl_right_pads.set_from_const(0, n);
+        _left_halos.set_from_const(0, n);
+        _right_halos.set_from_const(0, n);
+        _left_wf_exts.set_from_const(0, n);
+        _right_wf_exts.set_from_const(0, n);
+        _rank_offsets.set_from_const(0, n);
+        _local_offsets.set_from_const(0, n);
+        _allocs.set_from_const(0, n);
+        _soln_vec_lens.set_from_const(1, n);
+        _var_vec_lens.set_from_const(1, n);
+        _vec_left_pads.set_from_const(0, n);
+        _vec_allocs.set_from_const(0, n);
+        _vec_local_offsets.set_from_const(0, n);
 
         // Set masks.
-        for (size_t i = 0; i < dimNames.size(); i++) {
+        for (size_t i = 0; i < dim_names.size(); i++) {
             idx_t mbit = 1LL << i;
-            auto& dname = dimNames[i];
+            auto& dname = dim_names[i];
             if (dname == step_dim)
                 _step_dim_mask |= mbit;
             else if (domain_dims.lookup(dname))
@@ -74,14 +74,14 @@ namespace yask {
 
     // Convenience function to format indices like
     // "x=5, y=3".
-    std::string YkVarBase::makeIndexString(const Indices& idxs,
+    std::string YkVarBase::make_index_string(const Indices& idxs,
                                             std::string separator,
                                             std::string infix,
                                             std::string prefix,
                                             std::string suffix) const {
         IdxTuple tmp = get_allocs(); // get dims.
-        idxs.setTupleVals(tmp);      // set vals from idxs.
-        return tmp.makeDimValStr(separator, infix, prefix, suffix);
+        idxs.set_tuple_vals(tmp);      // set vals from idxs.
+        return tmp.make_dim_val_str(separator, infix, prefix, suffix);
     }
 
     // Does this var cover the N-D domain?
@@ -90,7 +90,7 @@ namespace yask {
 
         // Check problem dims.
         for (auto& d : domain_dims) {
-            auto& dname = d.getName();
+            auto& dname = d._get_name();
             if (!is_dim_used(dname))
                 return false;
         }
@@ -153,16 +153,16 @@ namespace yask {
                 (void*)this;
             if (long_info) {
                 oss << " for ";
-                if (_domains.getNumDims())
-                    oss << makeIndexString(_allocs, " * ") << " FP elem(s)"
-                        " at rank-offsets " << makeIndexString(_rank_offsets) <<
-                        ", local-offsets " << makeIndexString(_local_offsets) <<
-                        ", left-halos " << makeIndexString(_left_halos) <<
-                        ", right-halos " << makeIndexString(_right_halos) <<
-                        ", left-pads " << makeIndexString(_actl_left_pads) <<
-                        ", right-pads " << makeIndexString(_actl_right_pads) <<
-                        ", left-wf-exts " << makeIndexString(_left_wf_exts) <<
-                        ", right-wf-exts " << makeIndexString(_right_wf_exts) <<
+                if (_domains._get_num_dims())
+                    oss << make_index_string(_allocs, " * ") << " FP elem(s)"
+                        " at rank-offsets " << make_index_string(_rank_offsets) <<
+                        ", local-offsets " << make_index_string(_local_offsets) <<
+                        ", left-halos " << make_index_string(_left_halos) <<
+                        ", right-halos " << make_index_string(_right_halos) <<
+                        ", left-pads " << make_index_string(_actl_left_pads) <<
+                        ", right-pads " << make_index_string(_actl_right_pads) <<
+                        ", left-wf-exts " << make_index_string(_left_wf_exts) <<
+                        ", right-wf-exts " << make_index_string(_right_wf_exts) <<
                         ", and ";
                 oss << _dirty_steps.size() << " dirty flag(s)";
             }
@@ -172,11 +172,11 @@ namespace yask {
     // Determine required padding from halos.
     // Does not include user-specified min padding or
     // final rounding for left pad.
-    Indices YkVarBase::getReqdPad(const Indices& halos, const Indices& wf_exts) const {
+    Indices YkVarBase::get_reqd_pad(const Indices& halos, const Indices& wf_exts) const {
         STATE_VARS(this);
 
         // Start with halos plus WF exts.
-        Indices mp = halos.addElements(wf_exts);
+        Indices mp = halos.add_elements(wf_exts);
 
         // For any var, reads will be expanded to full vec-len during
         // computation.  For scratch vars, halo area must be written to.
@@ -232,8 +232,8 @@ namespace yask {
         }
 
         // Increase padding as needed and calculate new allocs.
-        Indices new_left_pads = getReqdPad(_left_halos, _left_wf_exts);
-        Indices new_right_pads = getReqdPad(_right_halos, _right_wf_exts);
+        Indices new_left_pads = get_reqd_pad(_left_halos, _left_wf_exts);
+        Indices new_right_pads = get_reqd_pad(_right_halos, _right_wf_exts);
         IdxTuple new_allocs(old_allocs);
         for (int i = 0; i < get_num_dims(); i++) {
             idx_t mbit = 1LL << i;
@@ -303,8 +303,8 @@ namespace yask {
         if (p && old_allocs != new_allocs) {
             THROW_YASK_EXCEPTION("Error: attempt to change allocation size of var '" +
                 get_name() + "' from " +
-                makeIndexString(old_allocs, " * ") + " to " +
-                makeIndexString(new_allocs, " * ") +
+                make_index_string(old_allocs, " * ") + " to " +
+                make_index_string(new_allocs, " * ") +
                 " after storage has been allocated");
         }
 
@@ -350,7 +350,7 @@ namespace yask {
     }
 
     // Check whether dim is used and of allowed type.
-    void YkVarBase::checkDimType(const std::string& dim,
+    void YkVarBase::check_dim_type(const std::string& dim,
                                   const std::string& fn_name,
                                   bool step_ok,
                                   bool domain_ok,
@@ -359,14 +359,14 @@ namespace yask {
         if (!is_dim_used(dim))
             THROW_YASK_EXCEPTION("Error in " + fn_name + "(): dimension '" +
                                  dim + "' not found in " + make_info_string());
-        dims->checkDimType(dim, fn_name, step_ok, domain_ok, misc_ok);
+        dims->check_dim_type(dim, fn_name, step_ok, domain_ok, misc_ok);
     }
 
     // Check for equality.
     // Return number of mismatches greater than epsilon.
     idx_t YkVarBase::compare(const YkVarBase* ref,
                               real_t epsilon,
-                              int maxPrint) const {
+                              int max_print) const {
         STATE_VARS(this);
         if (!ref) {
             DEBUG_MSG("** mismatch: no reference var.");
@@ -387,14 +387,14 @@ namespace yask {
         // This will loop over the entire allocation.
         // We use this as a handy way to get offsets,
         // but not all will be used.
-        allocs.visitAllPointsInParallel
+        allocs.visit_all_points_in_parallel
             ([&](const IdxTuple& pt, size_t idx) {
 
                 // Adjust alloc indices to overall indices.
                 IdxTuple opt(pt);
                 bool ok = true;
-                for (int i = 0; ok && i < pt.getNumDims(); i++) {
-                    auto val = pt.getVal(i);
+                for (int i = 0; ok && i < pt._get_num_dims(); i++) {
+                    auto val = pt.get_val(i);
                     idx_t mbit = 1LL << i;
 
                     // Convert to API index.
@@ -404,7 +404,7 @@ namespace yask {
 
                     // Don't compare points outside the domain.
                     // TODO: check points in outermost halo.
-                    auto& dname = pt.getDimName(i);
+                    auto& dname = pt.get_dim_name(i);
                     if (domain_dims.lookup(dname)) {
                         auto first_ok = _rank_offsets[i];
                         auto last_ok = first_ok + _domains[i] - 1;
@@ -416,16 +416,16 @@ namespace yask {
                     return true; // stop processing this point, but keep going.
 
                 idx_t asi = get_alloc_step_index(pt);
-                auto te = readElem(opt, asi, __LINE__);
-                auto re = ref->readElem(opt, asi, __LINE__);
+                auto te = read_elem(opt, asi, __LINE__);
+                auto re = ref->read_elem(opt, asi, __LINE__);
                 if (!within_tolerance(te, re, epsilon)) {
 #pragma omp critical
                     {
                         errs++;
-                        if (errs <= maxPrint) {
-                            if (errs < maxPrint)
+                        if (errs <= max_print) {
+                            if (errs < max_print)
                                 DEBUG_MSG("** mismatch at " << get_name() <<
-                                          "(" << opt.makeDimValStr() << "): " <<
+                                          "(" << opt.make_dim_val_str() << "): " <<
                                           te << " != " << re);
                             else
                                 DEBUG_MSG("** Additional errors not printed for var '" <<
@@ -443,7 +443,7 @@ namespace yask {
     // Side-effect: If clipped_indices is not NULL,
     // 1) set them to in-range if out-of-range, and
     // 2) normalize them if 'normalize' is 'true'.
-    bool YkVarBase::checkIndices(const Indices& indices,
+    bool YkVarBase::check_indices(const Indices& indices,
                                   const string& fn,    // name for error msg.
                                   bool strict_indices, // die if out-of-range.
                                   bool check_step,     // check step index.
@@ -452,9 +452,9 @@ namespace yask {
         STATE_VARS(this);
         bool all_ok = true;
         auto n = get_num_dims();
-        if (indices.getNumDims() != n) {
+        if (indices._get_num_dims() != n) {
             FORMAT_AND_THROW_YASK_EXCEPTION("Error: '" << fn << "' called with " <<
-                                            indices.getNumDims() <<
+                                            indices._get_num_dims() <<
                                             " indices instead of " << n);
         }
         if (clipped_indices)
@@ -546,17 +546,17 @@ namespace yask {
     IdxTuple YkVarBase::get_slice_range(const Indices& first_indices,
                                          const Indices& last_indices) const {
         // Find ranges.
-        Indices numElems = last_indices.addConst(1).subElements(first_indices);
-        IdxTuple numElemsTuple = get_allocs();
-        numElems.setTupleVals(numElemsTuple);
-        numElemsTuple.setFirstInner(_is_col_major);
+        Indices num_elems = last_indices.add_const(1).sub_elements(first_indices);
+        IdxTuple num_elems_tuple = get_allocs();
+        num_elems.set_tuple_vals(num_elems_tuple);
+        num_elems_tuple.set_first_inner(_is_col_major);
 
-        return numElemsTuple;
+        return num_elems_tuple;
     }
 
     // Print one element like
     // "message: myvar[x=4, y=7] = 3.14 at line 35".
-    void YkVarBase::printElem(const std::string& msg,
+    void YkVarBase::print_elem(const std::string& msg,
                                const Indices& idxs,
                                real_t eval,
                                int line) const {
@@ -565,7 +565,7 @@ namespace yask {
         if (msg.length())
             str = msg + ": ";
         str += get_name() + "[" +
-            makeIndexString(idxs) + "] = " + to_string(eval);
+            make_index_string(idxs) + "] = " + to_string(eval);
         if (line)
             str += " at line " + to_string(line);
         TRACE_MEM_MSG(str);
@@ -573,34 +573,34 @@ namespace yask {
 
     // Print one vector.
     // Indices must be normalized and rank-relative.
-    void YkVarBase::printVecNorm(const std::string& msg,
+    void YkVarBase::print_vec_norm(const std::string& msg,
                                           const Indices& idxs,
                                           const real_vec_t& val,
                                           int line) const {
         STATE_VARS_CONST(this);
 
         // Convert to elem indices.
-        Indices eidxs = idxs.mulElements(_var_vec_lens);
+        Indices eidxs = idxs.mul_elements(_var_vec_lens);
 
         // Add offsets, i.e., convert to overall indices.
-        eidxs = eidxs.addElements(_rank_offsets);
+        eidxs = eidxs.add_elements(_rank_offsets);
 
         IdxTuple idxs2 = get_allocs(); // get dims.
-        eidxs.setTupleVals(idxs2);      // set vals from eidxs.
+        eidxs.set_tuple_vals(idxs2);      // set vals from eidxs.
 
         // Visit every point in fold.
         IdxTuple folds = dims->_fold_pts;
-        folds.visitAllPoints([&](const IdxTuple& fofs,
+        folds.visit_all_points([&](const IdxTuple& fofs,
                                  size_t idx) {
 
                 // Get element from vec val.
                 real_t ev = val[idx];
 
                 // Add fold offsets to elem indices for printing.
-                IdxTuple pt2 = idxs2.addElements(fofs, false);
+                IdxTuple pt2 = idxs2.add_elements(fofs, false);
                 Indices pt3(pt2);
 
-                printElem(msg, pt3, ev, line);
+                print_elem(msg, pt3, ev, line);
                 return true; // keep visiting.
             });
     }

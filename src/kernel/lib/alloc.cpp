@@ -65,30 +65,30 @@ namespace yask {
 
             // Alloc data depending on magic key.
             shared_ptr<char> p;
-            string msg = "Allocating " + makeByteStr(nb) +
+            string msg = "Allocating " + make_byte_str(nb) +
                 " for " + to_string(ng) + " " + type + "(s) ";
             if (mem_key == _shmem_key) {
                 msg += "using MPI shm";
                 DEBUG_MSG(msg << "...");
-                p = shared_shm_alloc<char>(nb, &env->shm_comm, &mpiInfo->halo_win);
+                p = shared_shm_alloc<char>(nb, &env->shm_comm, &mpi_info->halo_win);
 
                 // Get pointer for each neighbor rank.
 #ifdef USE_MPI
-                int ns = int(mpiInfo->neighborhood_size);
+                int ns = int(mpi_info->neighborhood_size);
                 for (int ni = 0; ni < ns; ni++) {
-                    int nr = mpiInfo->my_neighbors.at(ni);
+                    int nr = mpi_info->my_neighbors.at(ni);
                     if (nr == MPI_PROC_NULL)
                         continue;
-                    int sr = mpiInfo->shm_ranks.at(ni);
+                    int sr = mpi_info->shm_ranks.at(ni);
                     MPI_Aint sz;
                     int dispunit;
                     void* baseptr;
-                    MPI_Win_shared_query(mpiInfo->halo_win, sr, &sz,
+                    MPI_Win_shared_query(mpi_info->halo_win, sr, &sz,
                                          &dispunit, &baseptr);
-                    mpiInfo->halo_buf_ptrs.at(ni) = baseptr;
-                    mpiInfo->halo_buf_sizes.at(ni) = sz;
+                    mpi_info->halo_buf_ptrs.at(ni) = baseptr;
+                    mpi_info->halo_buf_sizes.at(ni) = sz;
                     TRACE_MSG("MPI shm halo buffer for rank " << nr << " is at " <<
-                              baseptr << " for " << makeByteStr(sz));
+                              baseptr << " for " << make_byte_str(sz));
                 }
 #endif
             }
@@ -120,25 +120,25 @@ namespace yask {
     }
 
     // Allocate memory for vars that do not already have storage.
-    void StencilContext::allocVarData() {
+    void StencilContext::alloc_var_data() {
         STATE_VARS(this);
 
         // Allocate I/O vars before read-only vars.
-        VarPtrs sortedVarPtrs;
+        VarPtrs sorted_var_ptrs;
         VarPtrSet done;
-        for (auto op : outputVarPtrs) {
-            sortedVarPtrs.push_back(op);
+        for (auto op : output_var_ptrs) {
+            sorted_var_ptrs.push_back(op);
             done.insert(op);
         }
-        for (auto gp : varPtrs) {
+        for (auto gp : var_ptrs) {
             if (!done.count(gp))
-                sortedVarPtrs.push_back(gp);
+                sorted_var_ptrs.push_back(gp);
         }
 	done.clear();
 
 #ifdef USE_PMEM
         os << "PMEM var-allocation priority:" << endl;
-        for (auto sp : sortedVarPtrs) {
+        for (auto sp : sorted_var_ptrs) {
             os << " '" << sp->get_name() << "'";
             if (done.find(sp)!=done.end())
                 os << " (output)";
@@ -154,21 +154,21 @@ namespace yask {
         map <int, shared_ptr<char>> _var_data_buf;
 
 #ifdef USE_PMEM
-        auto preferredNUMASize = opts->_numa_pref_max * 1024*1024*(size_t)1024;
+        auto preferred_numasize = opts->_numa_pref_max * 1024*1024*(size_t)1024;
 #endif
 
         // Pass 0: assign PMEM node when preferred NUMA node is not enough.
         // Pass 1: count required size for each NUMA node, allocate chunk of memory at end.
         // Pass 2: distribute parts of already-allocated memory chunk.
         for (int pass = 0; pass < 3; pass++) {
-            TRACE_MSG("allocVarData pass " << pass << " for " <<
-                      varPtrs.size() << " var(s)");
+            TRACE_MSG("alloc_var_data pass " << pass << " for " <<
+                      var_ptrs.size() << " var(s)");
 
             // Count bytes needed and number of vars for each NUMA node.
             map <int, size_t> npbytes, nvars;
 
             // Vars.
-            for (auto gp : sortedVarPtrs) {
+            for (auto gp : sorted_var_ptrs) {
                 if (!gp)
                     continue;
                 auto& gname = gp->get_name();
@@ -195,7 +195,7 @@ namespace yask {
 
                     if (pass == 0) {
 #ifdef USE_PMEM
-                        if (preferredNUMASize < npbytes[numa_pref])
+                        if (preferred_numasize < npbytes[numa_pref])
                             if (getnode() == -1) {
                                 os << "Warning: cannot get numa_node information for PMEM allocation;"
                                     " using default numa_pref " << endl;
@@ -209,7 +209,7 @@ namespace yask {
                     }
 
                     if (pass == 1)
-                        TRACE_MSG(" var '" << gname << "' needs " << makeByteStr(nbytes) <<
+                        TRACE_MSG(" var '" << gname << "' needs " << make_byte_str(nbytes) <<
                                   " on NUMA node " << numa_pref);
                 }
 
@@ -233,12 +233,12 @@ namespace yask {
 
     // Determine the size and shape of all MPI buffers.
     // Create buffers and allocate them.
-    void StencilContext::allocMpiData() {
+    void StencilContext::alloc_mpi_data() {
         STATE_VARS(this);
 
         // Remove any old MPI data.
         env->global_barrier();
-        freeMpiData();
+        free_mpi_data();
 
         // Init interior.
         mpi_interior = ext_bb;
@@ -252,7 +252,7 @@ namespace yask {
 
         // Need to determine the size and shape of all MPI buffers.
         // Loop thru all neighbors of this rank.
-        mpiInfo->visitNeighbors
+        mpi_info->visit_neighbors
             ([&](const IdxTuple& neigh_offsets, int neigh_rank, int neigh_idx) {
                 if (neigh_rank == MPI_PROC_NULL)
                     return; // from lambda fn.
@@ -261,8 +261,8 @@ namespace yask {
                 // Both my rank and neighbor rank must have *all* domain sizes
                 // of vector multiples.
                 bool vec_ok = allow_vec_exchange &&
-                    mpiInfo->has_all_vlen_mults[mpiInfo->my_neighbor_index] &&
-                    mpiInfo->has_all_vlen_mults[neigh_idx];
+                    mpi_info->has_all_vlen_mults[mpi_info->my_neighbor_index] &&
+                    mpi_info->has_all_vlen_mults[neigh_idx];
 
                 // Determine size of MPI buffers between neigh_rank and my
                 // rank for each var and create those that are needed.  It
@@ -273,7 +273,7 @@ namespace yask {
                 // by considering my rank's right side data and vice-versa.
                 // Thus, all ranks must have consistent data that contribute
                 // to these calculations.
-                for (auto& gp : origVarPtrs) {
+                for (auto& gp : orig_var_ptrs) {
                     auto& gb = gp->gb();
                     auto& gname = gp->get_name();
                     bool var_vec_ok = vec_ok;
@@ -290,7 +290,7 @@ namespace yask {
                         maxdist = NUM_STENCIL_DIMS - 1;
 
                     // Manhattan dist. of current neighbor.
-                    int mandist = mpiInfo->man_dists.at(neigh_idx);
+                    int mandist = mpi_info->man_dists.at(neigh_idx);
 
                     // Check distance.
                     if (mandist > maxdist) {
@@ -308,7 +308,7 @@ namespace yask {
                     IdxTuple first_inner_idx, last_inner_idx;
                     IdxTuple first_outer_idx, last_outer_idx;
                     for (auto& dim : domain_dims) {
-                        auto& dname = dim.getName();
+                        auto& dname = dim._get_name();
 
                         // Only consider domain dims that are used in this var.
                         if (gp->is_dim_used(dname)) {
@@ -323,14 +323,14 @@ namespace yask {
                             // sync'd. Critical for temporal tiling.
                             idx_t fidx = gp->get_first_rank_domain_index(dname);
                             idx_t lidx = gp->get_last_rank_domain_index(dname);
-                            first_inner_idx.addDimBack(dname, fidx);
-                            last_inner_idx.addDimBack(dname, lidx);
+                            first_inner_idx.add_dim_back(dname, fidx);
+                            last_inner_idx.add_dim_back(dname, lidx);
                             if (opts->is_first_rank(dname))
                                 fidx -= lhalo; // extend into left halo.
                             if (opts->is_last_rank(dname))
                                 lidx += rhalo; // extend into right halo.
-                            first_outer_idx.addDimBack(dname, fidx);
-                            last_outer_idx.addDimBack(dname, lidx);
+                            first_outer_idx.add_dim_back(dname, fidx);
+                            last_outer_idx.add_dim_back(dname, lidx);
 
                             // Determine if it is possible to round the
                             // outer indices to vec-multiples. This will
@@ -362,11 +362,11 @@ namespace yask {
                                 auto ext = wf_shift_pts[dname];
 
                                 // My halo on my left.
-                                my_halo_sizes.addDimBack(dname, lhalo + ext);
+                                my_halo_sizes.add_dim_back(dname, lhalo + ext);
 
                                 // Neighbor halo on their right.
                                 // Assume my right is same as their right.
-                                neigh_halo_sizes.addDimBack(dname, rhalo + ext);
+                                neigh_halo_sizes.add_dim_back(dname, rhalo + ext);
 
                                 // Flag that this var has a neighbor to left or right.
                                 found_delta = true;
@@ -379,11 +379,11 @@ namespace yask {
                                 auto ext = wf_shift_pts[dname];
 
                                 // My halo on my right.
-                                my_halo_sizes.addDimBack(dname, rhalo + ext);
+                                my_halo_sizes.add_dim_back(dname, rhalo + ext);
 
                                 // Neighbor halo on their left.
                                 // Assume my left is same as their left.
-                                neigh_halo_sizes.addDimBack(dname, lhalo + ext);
+                                neigh_halo_sizes.add_dim_back(dname, lhalo + ext);
 
                                 // Flag that this var has a neighbor to left or right.
                                 found_delta = true;
@@ -391,8 +391,8 @@ namespace yask {
 
                             // Neighbor in-line in this dim.
                             else {
-                                my_halo_sizes.addDimBack(dname, 0);
-                                neigh_halo_sizes.addDimBack(dname, 0);
+                                my_halo_sizes.add_dim_back(dname, 0);
+                                neigh_halo_sizes.add_dim_back(dname, 0);
                             }
 
                         } // domain dims in this var.
@@ -416,31 +416,31 @@ namespace yask {
                     // TODO: add a heuristic to avoid increasing by a large factor.
                     if (var_vec_ok) {
                         for (auto& dim : domain_dims) {
-                            auto& dname = dim.getName();
+                            auto& dname = dim._get_name();
                             if (gp->is_dim_used(dname)) {
                                 auto vlen = gp->_get_var_vec_len(dname);
 
                                 // First index rounded down.
                                 auto fidx = first_outer_idx[dname];
                                 fidx = round_down_flr(fidx, vlen);
-                                first_outer_idx.setVal(dname, fidx);
+                                first_outer_idx.set_val(dname, fidx);
 
                                 // Last index rounded up.
                                 // Need +1 and then -1 trick because it's last, not end.
                                 auto lidx = last_outer_idx[dname];
                                 lidx = round_up_flr(lidx + 1, vlen) - 1;
-                                last_outer_idx.setVal(dname, lidx);
+                                last_outer_idx.set_val(dname, lidx);
 
                                 // sizes rounded up.
-                                my_halo_sizes.setVal(dname, ROUND_UP(my_halo_sizes[dname], vlen));
-                                neigh_halo_sizes.setVal(dname, ROUND_UP(neigh_halo_sizes[dname], vlen));
+                                my_halo_sizes.set_val(dname, ROUND_UP(my_halo_sizes[dname], vlen));
+                                neigh_halo_sizes.set_val(dname, ROUND_UP(neigh_halo_sizes[dname], vlen));
 
                             } // domain dims in this var.
                         } // domain dims.
                     }
 
                     // Make a buffer in both directions (send & receive).
-                    for (int bd = 0; bd < MPIBufs::nBufDirs; bd++) {
+                    for (int bd = 0; bd < MPIBufs::n_buf_dirs; bd++) {
 
                         // Begin/end vars to indicate what part
                         // of main var to read from or write to based on
@@ -450,8 +450,8 @@ namespace yask {
 
                         // Adjust along domain dims in this var.
                         DOMAIN_VAR_LOOP(i, j) {
-                            auto& dim = domain_dims.getDim(j);
-                            auto& dname = dim.getName();
+                            auto& dim = domain_dims.get_dim(j);
+                            auto& dname = dim._get_name();
                             if (gp->is_dim_used(dname)) {
 
                                 // Init range to whole rank domain (including
@@ -470,7 +470,7 @@ namespace yask {
                                 // this rank's domain to be put into neighbor's
                                 // halo. So, use neighbor's halo sizes when
                                 // calculating buffer size.
-                                if (bd == MPIBufs::bufSend) {
+                                if (bd == MPIBufs::buf_send) {
 
                                     // Neighbor is to the left.
                                     if (neigh_ofs == idx_t(MPIInfo::rank_prev)) {
@@ -508,7 +508,7 @@ namespace yask {
 
                                 // Region to write to, i.e., into this rank's halo.
                                 // So, use my halo sizes when calculating buffer sizes.
-                                else if (bd == MPIBufs::bufRecv) {
+                                else if (bd == MPIBufs::buf_recv) {
 
                                     // Neighbor is to the left.
                                     if (neigh_ofs == idx_t(MPIInfo::rank_prev)) {
@@ -581,9 +581,9 @@ namespace yask {
 
                         // Unique name for buffer based on var name, direction, and ranks.
                         string bname = gname;
-                        if (bd == MPIBufs::bufSend)
+                        if (bd == MPIBufs::buf_send)
                             bname += "_send_halo_from_" + to_string(me) + "_to_" + to_string(neigh_rank);
-                        else if (bd == MPIBufs::bufRecv)
+                        else if (bd == MPIBufs::buf_recv)
                             bname += "_recv_halo_from_" + to_string(neigh_rank) + "_to_" + to_string(me);
 
                         // Does buffer have non-zero size?
@@ -597,13 +597,13 @@ namespace yask {
                         // should be set for each dim in this var.
 
                         // Compute last from end.
-                        IdxTuple copy_last = copy_end.subElements(1);
+                        IdxTuple copy_last = copy_end.sub_elements(1);
 
                         // Make MPI data entry for this var.
-                        auto gbp = mpiData.emplace(gname, state->_mpiInfo);
+                        auto gbp = mpi_data.emplace(gname, state->_mpi_info);
                         auto& gbi = gbp.first; // iterator from pair returned by emplace().
                         auto& gbv = gbi->second; // value from iterator.
-                        auto& buf = gbv.getBuf(MPIBufs::BufDir(bd), neigh_offsets);
+                        auto& buf = gbv.get_buf(MPIBufs::BufDir(bd), neigh_offsets);
 
                         // Config buffer for this var.
                         // (But don't allocate storage yet.)
@@ -615,10 +615,10 @@ namespace yask {
 
                         TRACE_MSG("MPI buffer '" << buf.name <<
                                   "' configured for rank at relative offsets " <<
-                                  neigh_offsets.subElements(1).makeDimValStr() << " with " <<
-                                  buf.num_pts.makeDimValStr(" * ") << " = " << buf.get_size() <<
-                                  " element(s) at [" << buf.begin_pt.makeDimValStr() <<
-                                  " ... " << buf.last_pt.makeDimValStr() <<
+                                  neigh_offsets.sub_elements(1).make_dim_val_str() << " with " <<
+                                  buf.num_pts.make_dim_val_str(" * ") << " = " << buf.get_size() <<
+                                  " element(s) at [" << buf.begin_pt.make_dim_val_str() <<
+                                  " ... " << buf.last_pt.make_dim_val_str() <<
                                   "] with vector-copy " <<
                                   (buf.vec_copy_ok ? "enabled" : "disabled"));
                         num_exchanges[bd]++;
@@ -627,10 +627,10 @@ namespace yask {
                     } // send, recv.
                 } // vars.
             });   // neighbors.
-        TRACE_MSG("number of MPI send buffers on this rank: " << num_exchanges[int(MPIBufs::bufSend)]);
-        TRACE_MSG("number of elements in send buffers: " << makeNumStr(num_elems[int(MPIBufs::bufSend)]));
-        TRACE_MSG("number of MPI recv buffers on this rank: " << num_exchanges[int(MPIBufs::bufRecv)]);
-        TRACE_MSG("number of elements in recv buffers: " << makeNumStr(num_elems[int(MPIBufs::bufRecv)]));
+        TRACE_MSG("number of MPI send buffers on this rank: " << num_exchanges[int(MPIBufs::buf_send)]);
+        TRACE_MSG("number of elements in send buffers: " << make_num_str(num_elems[int(MPIBufs::buf_send)]));
+        TRACE_MSG("number of MPI recv buffers on this rank: " << num_exchanges[int(MPIBufs::buf_recv)]);
+        TRACE_MSG("number of elements in recv buffers: " << make_num_str(num_elems[int(MPIBufs::buf_recv)]));
 
         // Finalize interior BB if there are multiple ranks and overlap enabled.
         if (env->num_ranks > 1 && opts->overlap_comms) {
@@ -652,7 +652,7 @@ namespace yask {
         map<string, vector<vector<size_t>>> sb_ofs;
         bool do_shm = false;
         auto my_shm_rank = env->my_shm_rank;
-        assert(my_shm_rank == mpiInfo->shm_ranks.at(mpiInfo->my_neighbor_index));
+        assert(my_shm_rank == mpi_info->shm_ranks.at(mpi_info->my_neighbor_index));
 
         // Make sure pad is big enough for shm locks.
         assert(_data_buf_pad >= sizeof(SimpleLock));
@@ -662,21 +662,21 @@ namespace yask {
         // Pass 1: distribute parts of already-allocated memory chunk.
         // Pass 2: set pointers to shm of other ranks.
         for (int pass = 0; pass < 3; pass++) {
-            TRACE_MSG("allocMpiData pass " << pass << " for " <<
-                      mpiData.size() << " MPI buffer set(s)");
+            TRACE_MSG("alloc_mpi_data pass " << pass << " for " <<
+                      mpi_data.size() << " MPI buffer set(s)");
 
             // Count bytes needed and number of buffers for each NUMA node.
             map <int, size_t> npbytes, nbufs;
 
             // Vars. Use the map to ensure same order in all ranks.
-            for (auto gi : varMap) {
+            for (auto gi : var_map) {
                 auto& gname = gi.first;
                 auto& gp = gi.second;
 
                 // Are there MPI bufs for this var?
-                if (mpiData.count(gname) == 0)
+                if (mpi_data.count(gname) == 0)
                     continue;
-                auto& var_mpi_data = mpiData.at(gname);
+                auto& var_mpi_data = mpi_data.at(gname);
 
                 // Resize table.
                 if (pass == 0) {
@@ -687,7 +687,7 @@ namespace yask {
                 }
 
                 // Visit buffers for each neighbor for this var.
-                var_mpi_data.visitNeighbors
+                var_mpi_data.visit_neighbors
                     ([&](const IdxTuple& roffsets,
                          int nrank,
                          int nidx,
@@ -698,7 +698,7 @@ namespace yask {
                         int numa_pref = opts->_numa_pref;
 
                         // If neighbor can use MPI shm, set key, etc.
-                        auto nshm_rank = mpiInfo->shm_ranks.at(nidx);
+                        auto nshm_rank = mpi_info->shm_ranks.at(nidx);
                         if (nshm_rank != MPI_PROC_NULL) {
                             do_shm = true;
                             numa_pref = _shmem_key;
@@ -706,13 +706,13 @@ namespace yask {
                         }
 
                         // Send and recv.
-                        for (int bd = 0; bd < MPIBufs::nBufDirs; bd++) {
-                            auto& buf = var_mpi_data.getBuf(MPIBufs::BufDir(bd), roffsets);
+                        for (int bd = 0; bd < MPIBufs::n_buf_dirs; bd++) {
+                            auto& buf = var_mpi_data.get_buf(MPIBufs::BufDir(bd), roffsets);
                             if (buf.get_size() == 0)
                                 continue;
 
                             // Don't use my mem for the recv buf if using shm.
-                            bool use_mine = !(bd == MPIBufs::bufRecv && nshm_rank != MPI_PROC_NULL);
+                            bool use_mine = !(bd == MPIBufs::buf_recv && nshm_rank != MPI_PROC_NULL);
 
                             // Set storage if buffer has been allocated in pass 0.
                             if (pass == 1 && use_mine) {
@@ -721,7 +721,7 @@ namespace yask {
                                 assert(base);
                                 auto* rp = buf.set_storage(base, ofs);
                                 TRACE_MSG("  MPI buf '" << buf.name << "' at " << rp <<
-                                          " for " << makeByteStr(buf.get_bytes()));
+                                          " for " << make_byte_str(buf.get_bytes()));
 
                                 // Write test values & init lock.
                                 *((int*)rp) = me;
@@ -729,19 +729,19 @@ namespace yask {
                                 buf.shm_lock_init();
 
                                 // Save offset.
-                                if (nshm_rank != MPI_PROC_NULL && bd == MPIBufs::bufSend)
+                                if (nshm_rank != MPI_PROC_NULL && bd == MPIBufs::buf_send)
                                     sb_ofs[gname].at(my_shm_rank).at(nshm_rank) = ofs;
                             }
 
                             // Using shm from another rank.
                             else if (pass == 2 && !use_mine) {
-                                char* base = (char*)mpiInfo->halo_buf_ptrs[nidx];
-                                auto sz = mpiInfo->halo_buf_sizes[nidx];
+                                char* base = (char*)mpi_info->halo_buf_ptrs[nidx];
+                                auto sz = mpi_info->halo_buf_sizes[nidx];
                                 auto ofs = sb_ofs[gname].at(nshm_rank).at(my_shm_rank);
                                 assert(sz >= ofs + buf.get_bytes() + YASK_PAD_BYTES);
                                 auto* rp = buf.set_storage(base, ofs);
                                 TRACE_MSG("  MPI shm buf '" << buf.name << "' at " << rp <<
-                                          " for " << makeByteStr(buf.get_bytes()));
+                                          " for " << make_byte_str(buf.get_bytes()));
 
                                 // Check values written by owner rank.
                                 assert(*((int*)rp) == nrank);
@@ -758,7 +758,7 @@ namespace yask {
                                 nbufs[numa_pref]++;
                                 if (pass == 0)
                                     TRACE_MSG("  MPI buf '" << buf.name << "' needs " <<
-                                              makeByteStr(sbytes) <<
+                                              make_byte_str(sbytes) <<
                                               " (mem-key = " << numa_pref << ")");
                             }
                         } // snd/rcv.
@@ -792,11 +792,11 @@ namespace yask {
 
     // Allocate memory for scratch vars based on number of threads and
     // block sizes.
-    void StencilContext::allocScratchData() {
+    void StencilContext::alloc_scratch_data() {
         STATE_VARS(this);
 
         // Remove any old scratch data.
-        freeScratchData();
+        free_scratch_data();
 
         // Base ptrs for all alloc'd data.
         // This pointer will be shared by the ones in the var
@@ -811,14 +811,14 @@ namespace yask {
         // Delete any existing scratch vars.
         // Create new scratch vars, but without any
         // data allocated.
-        makeScratchVars(rthreads);
+        make_scratch_vars(rthreads);
 
         // Find the max mini-block size across all stages.
         // They can be different across stages when stage-specific
         // auto-tuning has been used.
         IdxTuple mblksize(domain_dims);
-        for (auto& sp : stStages) {
-            auto& psettings = sp->getActiveSettings();
+        for (auto& sp : st_stages) {
+            auto& psettings = sp->get_active_settings();
             DOMAIN_VAR_LOOP(i, j) {
 
                 auto sz = round_up_flr(psettings._mini_block_sizes[i],
@@ -826,20 +826,20 @@ namespace yask {
                 mblksize[j] = max(mblksize[j], sz);
             }
         }
-        TRACE_MSG("allocScratchData: max mini-block size across stage(s) is " <<
-                  mblksize.makeDimValStr(" * "));
+        TRACE_MSG("alloc_scratch_data: max mini-block size across stage(s) is " <<
+                  mblksize.make_dim_val_str(" * "));
 
         // Pass 0: count required size, allocate chunk of memory at end.
         // Pass 1: distribute parts of already-allocated memory chunk.
         for (int pass = 0; pass < 2; pass++) {
-            TRACE_MSG("allocScratchData pass " << pass << " for " <<
-                      scratchVecs.size() << " set(s) of scratch vars");
+            TRACE_MSG("alloc_scratch_data pass " << pass << " for " <<
+                      scratch_vecs.size() << " set(s) of scratch vars");
 
             // Count bytes needed and number of vars for each NUMA node.
             map <int, size_t> npbytes, nvars;
 
             // Loop through each scratch var vector.
-            for (auto* sgv : scratchVecs) {
+            for (auto* sgv : scratch_vecs) {
                 assert(sgv);
 
                 // Loop through each scratch var in this vector.
@@ -854,7 +854,7 @@ namespace yask {
 
                     // Loop through each domain dim.
                     for (auto& dim : domain_dims) {
-                        auto& dname = dim.getName();
+                        auto& dname = dim._get_name();
 
                         if (gp->is_dim_used(dname)) {
 
@@ -888,7 +888,7 @@ namespace yask {
                     nvars[numa_pref]++;
                     if (pass == 0)
                         TRACE_MSG(" scratch var '" << gname << "' for thread " <<
-                                  thr_num << " needs " << makeByteStr(nbytes) <<
+                                  thr_num << " needs " << make_byte_str(nbytes) <<
                                   " on NUMA node " << numa_pref);
                     thr_num++;
                 } // scratch vars.

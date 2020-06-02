@@ -186,24 +186,24 @@ int main() {
 
     // TODO: better to have exception test for the methods below
     // StencilContext::calc_region
-    // StencilContext::addVar
-    // StencilContext::setupRank
+    // StencilContext::add_var
+    // StencilContext::setup_rank
     // StencilContext::prepare_solution
-    // StencilContext::newVar
+    // StencilContext::new_var
     // YkVarBase::get_dim_posn
     // YkVarBase::resize
-    // YkVarBase::checkDimType
+    // YkVarBase::check_dim_type
     // YkVarBase::share_storage
-    // YkVarBase::checkIndices
+    // YkVarBase::check_indices
     // YkVarBase::get_element
     // YkVarBase::get_elements_in_slice
     // YkVarBase::_share_data
     // YkVarBase::get_vecs_in_slice
     // real_vec_permute2
-    // Dims::checkDimType
-    // KernelEnv::initEnv
-    // alignedAlloc
-    // assertEqualityOverRanks
+    // Dims::check_dim_type
+    // KernelEnv::init_env
+    // yask_aligned_alloc
+    // assert_equality_over_ranks
     // CommandLineParser::OptionBase::_idx_val
 
 

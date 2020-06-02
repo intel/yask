@@ -26,7 +26,7 @@ IN THE SOFTWARE.
 // Implement various example symmetric 3D stencil shapes that read and
 // write from only one 3D variable.
 // All these stencils compute the average of the points read similar to the
-// heat-dissipation kernels in the miniGhost benchmark.
+// heat-dissipation kernels in the mini_ghost benchmark.
 
 // YASK stencil solution(s) in this file will be integrated into the YASK compiler utility.
 #include "yask_compiler_api.hpp"
@@ -51,7 +51,7 @@ namespace {
 
         // Add additional points to expression v.
         // Returns number of points added.
-        virtual int addPoints(yc_number_node_ptr& v) =0;
+        virtual int add_points(yc_number_node_ptr& v) =0;
 
     public:
         AvePtsStencil(const string& name, int radius) :
@@ -64,7 +64,7 @@ namespace {
             yc_number_node_ptr v = A(t, x, y, z);
 
             // Add additional points from derived class.
-            int pts = 1 + addPoints(v);
+            int pts = 1 + add_points(v);
 
             // Average.
             if (pts > 1)
@@ -80,7 +80,7 @@ namespace {
     protected:
 
         // Add additional points to expression v.
-        virtual int addPoints(yc_number_node_ptr& v)
+        virtual int add_points(yc_number_node_ptr& v)
         {
             int pts = 0;
             for (int r = 1; r <= get_radius(); r++) {
@@ -119,10 +119,10 @@ namespace {
     protected:
 
         // Add additional points to v.
-        virtual int addPoints(yc_number_node_ptr& v)
+        virtual int add_points(yc_number_node_ptr& v)
         {
             // Get points from axes.
-            int pts = AxisStencil::addPoints(v);
+            int pts = AxisStencil::add_points(v);
 
             // Add points from diagonals.
             for (int r = 1; r <= get_radius(); r++) {
@@ -167,10 +167,10 @@ namespace {
     protected:
 
         // Add additional points to v.
-        virtual int addPoints(yc_number_node_ptr& v)
+        virtual int add_points(yc_number_node_ptr& v)
         {
             // Get points from axes and diagonals.
-            int pts = DiagStencil::addPoints(v);
+            int pts = DiagStencil::add_points(v);
 
             // Add remaining points on planes.
             for (int r = 1; r <= get_radius(); r++) {
@@ -229,10 +229,10 @@ namespace {
     protected:
 
         // Add additional points to v.
-        virtual int addPoints(yc_number_node_ptr& v)
+        virtual int add_points(yc_number_node_ptr& v)
         {
             // Get points from planes.
-            int pts = PlaneStencil::addPoints(v);
+            int pts = PlaneStencil::add_points(v);
 
             // Add points from rest of cube.
             for (int rx = 1; rx <= get_radius(); rx++)

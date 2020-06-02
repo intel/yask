@@ -67,14 +67,14 @@ namespace yask {
         // Each dim in 'orig' must be a multiple of corresponding vec len.
         void normalize_indices(const Indices& orig, Indices& norm) const {
             STATE_VARS(this);
-            assert(orig.getNumDims() == nsdims);
-            assert(norm.getNumDims() == nsdims);
+            assert(orig._get_num_dims() == nsdims);
+            assert(norm._get_num_dims() == nsdims);
 
             // i: index for stencil dims, j: index for domain dims.
             DOMAIN_VAR_LOOP(i, j) {
 
                 // Divide indices by fold lengths as needed by
-                // read/writeVecNorm().  Use idiv_flr() instead of '/'
+                // read/write_vec_norm().  Use idiv_flr() instead of '/'
                 // because begin/end vars may be negative (if in halo).
                 norm[i] = idiv_flr<idx_t>(orig[i], fold_pts[j]);
 
@@ -86,15 +86,15 @@ namespace yask {
     public:
 
         // Vars that are written to by these stencils.
-        VarPtrs outputVarPtrs;
+        VarPtrs output_var_ptrs;
 
         // Vars that are read by these stencils (not necessarify
         // read-only, i.e., a var can be input and output).
-        VarPtrs inputVarPtrs;
+        VarPtrs input_var_ptrs;
 
         // Vectors of scratch vars that are written to/read from.
-        ScratchVecs outputScratchVecs;
-        ScratchVecs inputScratchVecs;
+        ScratchVecs output_scratch_vecs;
+        ScratchVecs input_scratch_vecs;
 
         // ctor, dtor.
         StencilBundleBase(StencilContext* context) :
@@ -116,8 +116,8 @@ namespace yask {
         void set_scratch(bool is_scratch) { _is_scratch = is_scratch; }
 
         // Access to BBs.
-        BoundingBox& getBB() { return _bundle_bb; }
-        BBList& getBBs() { return _bb_list; }
+        BoundingBox& get_bb() { return _bundle_bb; }
+        BBList& get_bbs() { return _bb_list; }
 
         // Add dependency.
         virtual void add_dep(StencilBundleBase* eg) {
@@ -334,13 +334,13 @@ namespace yask {
         }
 
         // Accessors.
-        BoundingBox& getBB() { return _stage_bb; }
-        AutoTuner& getAT() { return _at; }
-        KernelSettings& getLocalSettings() { return _stage_opts; }
+        BoundingBox& get_bb() { return _stage_bb; }
+        AutoTuner& get_at() { return _at; }
+        KernelSettings& get_local_settings() { return _stage_opts; }
 
         // If using separate stage tuners, return local settings.
         // Otherwise, return one in context.
-        KernelSettings& getActiveSettings() {
+        KernelSettings& get_active_settings() {
             STATE_VARS(this);
             return use_stage_tuners() ? _stage_opts : *opts;
         }

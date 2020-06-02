@@ -31,11 +31,11 @@ namespace yask {
     // Ctor. No allocation is done. See notes on default_alloc().
     GenericVarBase::GenericVarBase(KernelStateBase& state,
                                    const string& name,
-                                   const VarDimNames& dimNames) :
+                                   const VarDimNames& dim_names) :
         KernelStateBase(state),
         _name(name) {
-        for (auto& dn : dimNames)
-            _var_dims.addDimBack(dn, 1);
+        for (auto& dn : dim_names)
+            _var_dims.add_dim_back(dn, 1);
     }
 
     // Template implementations.
@@ -45,17 +45,17 @@ namespace yask {
     string GenericVarTyped<T>::make_info_string(const string& elem_name) const {
         stringstream oss;
         oss << "'" << _name << "' ";
-        if (_var_dims.getNumDims() == 0)
+        if (_var_dims._get_num_dims() == 0)
             oss << "scalar";
         else
-            oss << _var_dims.getNumDims() << "-D var (" <<
-                _var_dims.makeDimValStr(" * ") << ")";
+            oss << _var_dims._get_num_dims() << "-D var (" <<
+                _var_dims.make_dim_val_str(" * ") << ")";
         if (_elems)
             oss << " with storage at " << _elems << " containing ";
         else
             oss << " with storage not yet allocated for ";
-        oss << makeByteStr(get_num_bytes()) <<
-            " (" << makeNumStr(get_num_elems()) << " " <<
+        oss << make_byte_str(get_num_bytes()) <<
+            " (" << make_num_str(get_num_elems()) << " " <<
             elem_name << " element(s) of " <<
             get_elem_bytes() << " byte(s) each)";
         return oss.str();
@@ -109,7 +109,7 @@ namespace yask {
         string loc = (numa_pref >= 0) ?
             "preferring NUMA node " + to_string(numa_pref) :
             "on default NUMA node";
-        DEBUG_MSG("Allocating " << makeByteStr(sz) <<
+        DEBUG_MSG("Allocating " << make_byte_str(sz) <<
                   " for var '" << _name << "' " << loc << "...");
         auto base = shared_numa_alloc<char>(sz, numa_pref);
 

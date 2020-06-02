@@ -47,7 +47,7 @@ namespace yask {
         }
 
         // Make args.
-        numExprPtrVec args;
+        num_expr_ptr_vec args;
         for (size_t i = 0; i < _dims.size(); i++) {
             auto p = dynamic_pointer_cast<NumExpr>(index_exprs.at(i));
             assert(p);
@@ -55,7 +55,7 @@ namespace yask {
         }
 
         // Create a point from the args.
-        varPointPtr gpp = make_shared<VarPoint>(this, args);
+        var_point_ptr gpp = make_shared<VarPoint>(this, args);
         return gpp;
     }
 
@@ -71,54 +71,54 @@ namespace yask {
 
         // Check dim types.
         // Make default args w/just index.
-        numExprPtrVec args;
+        num_expr_ptr_vec args;
         for (size_t i = 0; i < _dims.size(); i++) {
             auto dim = _dims.at(i);
-            if (dim->getType() == MISC_INDEX) {
+            if (dim->get_type() == MISC_INDEX) {
                 FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to create a relative var point in " <<
                                                 _dims.size() << "D var '" << _name <<
                                                 "' containing non-step or non-domain dim '" <<
-                                                dim->getName() << "'");
+                                                dim->_get_name() << "'");
             }
             auto ie = dim->clone();
             args.push_back(ie);
         }
 
         // Create a point from the args.
-        varPointPtr gpp = make_shared<VarPoint>(this, args);
+        var_point_ptr gpp = make_shared<VarPoint>(this, args);
 
         // Set the offsets, which creates a new
         // expression for each index.
         for (size_t i = 0; i < _dims.size(); i++) {
             auto dim = _dims.at(i);
-            IntScalar ofs(dim->getName(), dim_offsets.at(i));
-            gpp->setArgOffset(ofs);
+            IntScalar ofs(dim->_get_name(), dim_offsets.at(i));
+            gpp->set_arg_offset(ofs);
         }
         return gpp;
     }
 
     vector<string> Var::get_dim_names() const {
         vector<string> ret;
-        for (auto dn : getDims())
-            ret.push_back(dn->getName());
+        for (auto dn : get_dims())
+            ret.push_back(dn->_get_name());
         return ret;
     }
 
     // Ctor for Var.
     Var::Var(string name,
-                     bool isScratch,
+                     bool is_scratch,
                      StencilSolution* soln,
-                     const indexExprPtrVec& dims) :
+                     const index_expr_ptr_vec& dims) :
         _name(name),       // TODO: validate that name is legal C++ var.
-        _isScratch(isScratch),
+        _is_scratch(is_scratch),
         _soln(soln)
     {
         assert(soln);
 
         // Name already used?
-        auto& vars = soln->getVars();
+        auto& vars = soln->_get_vars();
         for (auto gp : vars) {
-            if (gp->getName() == name)
+            if (gp->_get_name() == name)
                 THROW_YASK_EXCEPTION("Error: var name '" + name + "' already used");
         }
 
@@ -130,31 +130,31 @@ namespace yask {
     }
 
     // Determine whether var can be folded.
-    void Var::setFolding(const Dimensions& dims) {
+    void Var::set_folding(const Dimensions& dims) {
 
-        _numFoldableDims = 0;
+        _num_foldable_dims = 0;
 
         // Never fold scalars, even if there is no vectorization.
         if (get_num_dims() == 0) {
-            _isFoldable = false;
+            _is_foldable = false;
             return;
         }
 
         // Find the number of folded dims used in this var.
-        for (auto fdim : dims._foldGT1) {
-            auto& fdname = fdim.getName();
+        for (auto fdim : dims._fold_gt1) {
+            auto& fdname = fdim._get_name();
 
             // Search for dim in var.
             bool found = false;
             for (auto gdim : _dims) {
-                auto& gdname = gdim->getName();
+                auto& gdname = gdim->_get_name();
                 if (fdname == gdname) {
                     found = true;
                     break;
                 }
             }
             if (found)
-                _numFoldableDims++;
+                _num_foldable_dims++;
         }
 
         // Can fold if ALL fold dims >1 are used in this var.
@@ -162,24 +162,24 @@ namespace yask {
         // NB: this will always be true if there is no vectorization, i.e.,
         // both are zero.  We do this because the compiler expects stencils
         // to be vectorizable.
-        _isFoldable = _numFoldableDims == int(dims._foldGT1.size());
+        _is_foldable = _num_foldable_dims == int(dims._fold_gt1.size());
     }
     
     // Determine whether halo sizes are equal.
-    bool Var::isHaloSame(const Var& other) const {
+    bool Var::is_halo_same(const Var& other) const {
 
         // Same dims?
-        if (!areDimsSame(other))
+        if (!are_dims_same(other))
             return false;
 
         // Same halos?
         for (auto& dim : _dims) {
-            auto& dname = dim->getName();
-            auto dtype = dim->getType();
+            auto& dname = dim->_get_name();
+            auto dtype = dim->get_type();
             if (dtype == DOMAIN_INDEX) {
                 for (bool left : { false, true }) {
-                    int sz = getHaloSize(dname, left);
-                    int osz = other.getHaloSize(dname, left);
+                    int sz = get_halo_size(dname, left);
+                    int osz = other.get_halo_size(dname, left);
                     if (sz != osz)
                         return false;
                 }
@@ -190,8 +190,8 @@ namespace yask {
 
     // Update halos based on halo in 'other' var.
     // This var's halos can only be increased.
-    void Var::updateHalo(const Var& other) {
-        assert(areDimsSame(other));
+    void Var::update_halo(const Var& other) {
+        assert(are_dims_same(other));
 
         // Loop thru other var's halo values.
         for (auto& hi : other._halos) {
@@ -204,8 +204,8 @@ namespace yask {
                     auto& step = i1.first;
                     const IntTuple& ohalos = i1.second;
                     for (auto& dim : ohalos) {
-                        auto& dname = dim.getName();
-                        auto& val = dim.getVal();
+                        auto& dname = dim._get_name();
+                        auto& val = dim.get_val();
                         
                         // Any existing value?
                         auto& halos = _halos[pname][left][step];
@@ -213,7 +213,7 @@ namespace yask {
 
                         // If not, add this one.
                         if (!p)
-                            halos.addDimBack(dname, val);
+                            halos.add_dim_back(dname, val);
 
                         // Keep larger value.
                         else if (val > *p)
@@ -224,35 +224,35 @@ namespace yask {
                 }
             }
         }
-        updateL1Dist(other._l1Dist);
+        update_l1_dist(other._l1_dist);
     }
 
     // Update halos based on each value in 'offsets' in some
     // read or write to this var.
     // This var's halos can only be increased.
-    void Var::updateHalo(const string& stageName, const IntTuple& offsets) {
+    void Var::update_halo(const string& stage_name, const IntTuple& offsets) {
 
         // Find step value or use 0 if none.
-        int stepVal = 0;
-        auto stepDim = getStepDim();
-        if (stepDim) {
-            auto* p = offsets.lookup(stepDim->getName());
+        int step_val = 0;
+        auto step_dim = get_step_dim();
+        if (step_dim) {
+            auto* p = offsets.lookup(step_dim->_get_name());
             if (p)
-                stepVal = *p;
+                step_val = *p;
         }
 
         // Manhattan dist of halo.
-        int l1Dist = 0;
+        int l1_dist = 0;
 
         // Update halo vals.
         for (auto& dim : offsets) {
-            auto& dname = dim.getName();
-            int val = dim.getVal();
+            auto& dname = dim._get_name();
+            int val = dim.get_val();
             bool left = val <= 0;
-            auto& halos = _halos[stageName][left][stepVal];
+            auto& halos = _halos[stage_name][left][step_val];
 
             // Don't keep halo in step dim.
-            if (stepDim && dname == stepDim->getName())
+            if (step_dim && dname == step_dim->_get_name())
                 continue;
 
             // Store abs value (neg values are on "left").
@@ -260,14 +260,14 @@ namespace yask {
 
             // Track num dims.
             if (val > 0)
-                l1Dist++;
+                l1_dist++;
             
             // Any existing value?
             auto* p = halos.lookup(dname);
 
             // If not, add this one.
             if (!p)
-                halos.addDimBack(dname, val);
+                halos.add_dim_back(dname, val);
 
             // Keep larger value.
             else if (val > *p)
@@ -277,47 +277,47 @@ namespace yask {
         }
 
         // Update L1.
-        updateL1Dist(l1Dist);
+        update_l1_dist(l1_dist);
     }
 
     // Update const indices based on 'indices'.
-    void Var::updateConstIndices(const IntTuple& indices) {
+    void Var::update_const_indices(const IntTuple& indices) {
 
         for (auto& dim : indices) {
-            auto& dname = dim.getName();
-            int val = dim.getVal();
+            auto& dname = dim._get_name();
+            int val = dim.get_val();
 
             // Update min.
-            auto* minp = _minIndices.lookup(dname);
+            auto* minp = _min_indices.lookup(dname);
             if (!minp)
-                _minIndices.addDimBack(dname, val);
+                _min_indices.add_dim_back(dname, val);
             else if (val < *minp)
                 *minp = val;
 
             // Update max.
-            auto* maxp = _maxIndices.lookup(dname);
+            auto* maxp = _max_indices.lookup(dname);
             if (!maxp)
-                _maxIndices.addDimBack(dname, val);
+                _max_indices.add_dim_back(dname, val);
             else if (val > *maxp)
                 *maxp = val;
         }
     }
 
     // Determine how many values in step-dim are needed.
-    int Var::getStepDimSize() const
+    int Var::get_step_dim_size() const
     {
         // Specified by API.
-        if (_stepAlloc > 0)
-            return _stepAlloc;
+        if (_step_alloc > 0)
+            return _step_alloc;
 
         // No step-dim index used.
-        auto stepDim = getStepDim();
-        if (!stepDim)
+        auto step_dim = get_step_dim();
+        if (!step_dim)
             return 1;
 
         // Specified on cmd line.
-        if (_soln->getSettings()._stepAlloc > 0)
-            return _soln->getSettings()._stepAlloc;
+        if (_soln->get_settings()._step_alloc > 0)
+            return _soln->get_settings()._step_alloc;
         
         // No info stored?
         if (_halos.size() == 0)
@@ -350,7 +350,7 @@ namespace yask {
                     // Any existing value?
                     if (halo.size()) {
 #ifdef DEBUG_HALOS
-                        cout << "** var " << _name << " has halo " << halo.makeDimValStr() <<
+                        cout << "** var " << _name << " has halo " << halo.make_dim_val_str() <<
                             " at ofs " << ofs << " in stage " << pname << endl;
 #endif
 
@@ -404,12 +404,12 @@ namespace yask {
     }
 
     // Description of this var.
-    string Var::getDescr() const {
+    string Var::get_descr() const {
         string d = _name + "(";
         int i = 0;
-        for (auto dn : getDims()) {
+        for (auto dn : get_dims()) {
             if (i++) d += ", ";
-            d += dn->getName();
+            d += dn->_get_name();
         }
         d += ")";
         return d;
