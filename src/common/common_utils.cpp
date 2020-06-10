@@ -43,7 +43,7 @@ namespace yask {
     // for numbers above 9 (at least up to 99).
 
     // Format: "major.minor.patch".
-    const string version = "3.05.03";
+    const string version = "3.05.04";
 
     string yask_get_version_string() {
         return version;
@@ -54,7 +54,7 @@ namespace yask {
     // machine parsing.
     bool is_suffix_print_enabled = true;
     
-    // Return num with SI multiplier and "i_b" suffix,
+    // Return num with SI multiplier and "iB" suffix,
     // e.g., 412KiB.
     string make_byte_str(size_t nbytes)
     {
@@ -63,24 +63,24 @@ namespace yask {
         
         ostringstream os;
         double num = double(nbytes);
-        const double one_k = 1024;
-        const double one_m = one_k * one_k;
-        const double one_g = one_k * one_m;
-        const double one_t = one_k * one_g;
-        const double one_p = one_k * one_t;
-        const double one_e = one_k * one_p;
-        if (num > one_e)
-            os << (num / one_e) << "Ei";
-        else if (num > one_p)
-            os << (num / one_p) << "Pi";
-        else if (num > one_t)
-            os << (num / one_t) << "Ti";
-        else if (num > one_g)
-            os << (num / one_g) << "Gi";
-        else if (num > one_m)
-            os << (num / one_m) << "Mi";
-        else if (num > one_k)
-            os << (num / one_k) << "Ki";
+        const double one_ki = 1024;
+        const double one_mi = one_ki * one_ki;
+        const double one_gi = one_ki * one_mi;
+        const double one_ti = one_ki * one_gi;
+        const double one_pi = one_ki * one_ti;
+        const double one_ei = one_ki * one_pi;
+        if (num > one_ei)
+            os << (num / one_ei) << "Ei";
+        else if (num > one_pi)
+            os << (num / one_pi) << "Pi";
+        else if (num > one_ti)
+            os << (num / one_ti) << "Ti";
+        else if (num > one_gi)
+            os << (num / one_gi) << "Gi";
+        else if (num > one_mi)
+            os << (num / one_mi) << "Mi";
+        else if (num > one_ki)
+            os << (num / one_ki) << "Ki";
         else
             os << num;
         os << "B";

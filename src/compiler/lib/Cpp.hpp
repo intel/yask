@@ -27,8 +27,7 @@ IN THE SOFTWARE.
 
 // See CppIntrin.hpp for explicit intrinsic generation.
 
-#ifndef CPP_HPP
-#define CPP_HPP
+#pragma once
 
 #include "Vec.hpp"
 #include "Var.hpp"
@@ -332,4 +331,3 @@ namespace yask {
 
 } // namespace yask.
 
-#endif
