@@ -25,8 +25,7 @@ IN THE SOFTWARE.
 
 // Support for vector code generation using SIMD instrinsics.
 
-#ifndef CPPINTRIN_HPP
-#define CPPINTRIN_HPP
+#pragma once
 
 #include "Cpp.hpp"
 
@@ -270,4 +269,3 @@ namespace yask {
 
 } // namespace yask.
 
-#endif

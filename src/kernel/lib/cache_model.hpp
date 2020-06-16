@@ -26,6 +26,8 @@ IN THE SOFTWARE.
 // Purpose: implement a simple,infinite-size cache model to check
 // prefetch and/or eviction coverage.
 
+#pragma once
+
 #include <map>
 
 namespace yask {

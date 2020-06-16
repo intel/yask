@@ -25,8 +25,7 @@ IN THE SOFTWARE.
 
 //////////// Generic expression-visitor class /////////////
 
-#ifndef VISITOR_HPP
-#define VISITOR_HPP
+#pragma once
 
 #include "Expr.hpp"
 
@@ -120,4 +119,3 @@ namespace yask {
 
 } // namespace yask.
 
-#endif

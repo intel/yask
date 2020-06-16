@@ -25,8 +25,7 @@ IN THE SOFTWARE.
 
 //////////// Basic vector classes /////////////
 
-#ifndef VEC_HPP
-#define VEC_HPP
+#pragma once
 
 #include "Print.hpp"
 
@@ -291,4 +290,3 @@ namespace yask {
 
 } // namespace yask.
 
-#endif

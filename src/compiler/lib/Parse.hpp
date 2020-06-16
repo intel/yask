@@ -25,8 +25,7 @@ IN THE SOFTWARE.
 
 ///////// String-parsing support for cmd-line options.
 
-#ifndef PARSE_HPP
-#define PARSE_HPP
+#pragma once
 
 #include <cmath>
 #include <iostream>
@@ -101,4 +100,3 @@ namespace yask {
 
 } // namespace yask.
 
-#endif

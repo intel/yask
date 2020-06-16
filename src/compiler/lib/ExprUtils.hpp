@@ -25,8 +25,7 @@ IN THE SOFTWARE.
 
 //////////// Expression utilities /////////////
 
-#ifndef EXPR_UTILS_HPP
-#define EXPR_UTILS_HPP
+#pragma once
 
 #include "Visitor.hpp"
 
@@ -334,4 +333,3 @@ namespace yask {
    
 } // namespace yask.
 
-#endif

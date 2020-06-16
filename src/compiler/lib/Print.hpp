@@ -25,8 +25,7 @@ IN THE SOFTWARE.
 
 //////////// Generic expression-printer classes /////////////
 
-#ifndef PRINT_HPP
-#define PRINT_HPP
+#pragma once
 
 #include "ExprUtils.hpp"
 #include "Eqs.hpp"
@@ -506,4 +505,3 @@ namespace yask {
 
 } // namespace yask.
 
-#endif
