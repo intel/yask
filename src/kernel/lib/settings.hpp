@@ -623,8 +623,8 @@ namespace yask {
     assert(opts);                                                       \
     pfx auto* dims = state->_dims.get();                                \
     assert(dims);                                                       \
-    pfx auto* mpi_info = state->_mpi_info.get();                          \
-    assert(mpi_info);                                                    \
+    pfx auto* mpi_info = state->_mpi_info.get();                        \
+    assert(mpi_info);                                                   \
     const auto& step_dim = dims->_step_dim;                             \
     const auto& inner_dim = dims->_inner_dim;                           \
     const auto& domain_dims = dims->_domain_dims;                       \

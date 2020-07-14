@@ -75,7 +75,8 @@ namespace yask {
             sp->get_local_settings() = *opts;
         alloc_scratch_data();
 
-        // Use only one set of scratch vars.
+        // Use only one set of scratch vars, i.e.,
+        // we don't have one for each thread.
         int scratch_var_idx = 0;
 
         // Indices to loop through.
@@ -142,23 +143,12 @@ namespace yask {
                     ScanIndices misc_idxs = sg->adjust_span(scratch_var_idx, rank_idxs);
                     misc_idxs.stride.set_from_const(1); // ensure unit stride.
 
-                    // Define misc-loop function.  Since stride is always 1, we
-                    // ignore misc_stop.  If point is in sub-domain for this
-                    // bundle, then evaluate the reference scalar code.
-                    // TODO: fix domain of scratch vars.
-#define MISC_FN(misc_idxs) \
-                    do {                                                \
-                        if (sg->is_in_valid_domain(misc_idxs.start))    \
-                            sg->calc_scalar(scratch_var_idx, misc_idxs.start); \
-                    } while(0)
-
                     // Scan through n-D space.
                     TRACE_MSG("run_ref: step " << start_t <<
                               " in bundle '" << sg->get_name() << "': [" <<
                               misc_idxs.begin.make_val_str() <<
                               " ... " << misc_idxs.end.make_val_str() << ")");
-#include "yask_misc_loops.hpp"
-#undef misc_fn
+                    sg->calc_in_domain(scratch_var_idx, misc_idxs);
                 } // needed bundles.
 
                 // Mark vars that [may] have been written to.
@@ -1293,7 +1283,11 @@ namespace yask {
         }
         TRACE_MSG("shift_region: updated span: [" <<
                   idxs.begin.make_val_str() << " ... " <<
-                  idxs.end.make_val_str() << ") within region base [" <<
+                  idxs.end.make_val_str() << ") " <<
+                  (do_mpi_interior ? "for MPI interior" :
+                   do_mpi_left ? "for MPI exterior left" :
+                   do_mpi_right ? "for MPI exterior right" : "") <<
+                  " within region base [" <<
                   base_start.make_val_str() << " ... " <<
                   base_stop.make_val_str() << ") shifted " <<
                   shift_num << " time(s) is " <<

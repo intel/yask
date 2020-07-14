@@ -24,7 +24,7 @@ IN THE SOFTWARE.
 *****************************************************************************/
 
 // Test the YASK vars.
-// This must be compiled with a kernel lib containing 'x', 'y', and 'z' dims.
+// This must be compiled with a kernel containing 'x', 'y', and 'z' dims.
 
 // enable assert().
 #define DEBUG

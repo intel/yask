@@ -805,6 +805,8 @@ namespace {
         virtual void define() {
             A(t+1, x) EQUALS cos(A(t, x)) - 2 * sin(A(t, x));
             B(t+1, x) EQUALS pow(def_1d(B, t, x, 0, 1), 1.0/2.5);
+
+            // 'C' depends on 'A', creating a 2nd stage.
             C(t+1, x) EQUALS atan(def_1d(A, t+1, x, 1, 0) + cbrt(C(t, x+1)));
         }
     };

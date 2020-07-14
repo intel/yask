@@ -30,15 +30,99 @@ IN THE SOFTWARE.
 
 namespace yask {
 
+    // Forward decls.
+    class GenericVarBase;
+    template <typename T>
+    class GenericVarTyped;
+    template <typename T, typename LayoutFn>
+    class GenericVar;
+    
+    // Core elements of a generic n-D var of elements of type T.
+    // This class defines the type and memory layout.
+    // The LayoutFn class must provide a 1:1 transform between
+    // n-D and 1-D indices.
+    // A trivially-copyable type for offloading.
+    template <typename T, typename LayoutFn>
+    class GenericVarCore {
+        friend class GenericVarBase;
+        friend class GenericVarTyped<T>;
+        friend class GenericVar<T, LayoutFn>;
+
+    protected:
+        // Sizes and index transform functions.
+        // Sizes are copies of GenericVarBase::_var_dims.
+        LayoutFn _layout;
+        static_assert(std::is_trivially_copyable<LayoutFn>::value,
+                      "Needed for OpenMP offload");
+
+        // Start of actual data, which may be offset from GenericVarBase::_base.
+        T* _elems = 0;
+
+    public:
+
+        // Get number of dims.
+        ALWAYS_INLINE idx_t get_num_dims() const {
+            return _layout.get_num_sizes();
+        }
+ 
+        // Get 1D index using layout.
+        // Basically a wrapper around _layout.layout(), but with range checking for debug.
+        ALWAYS_INLINE idx_t get_index(const Indices& idxs, bool check=true) const {
+            #ifdef CHECK
+            if (check) {
+
+                // Make sure all indices are in bounds.
+                for (int i = 0; size_t(i) < _layout.get_num_sizes(); i++) {
+                    idx_t j = idxs[i];
+                    assert(j >= 0);
+                    assert(j < _layout.get_size(i));
+                }
+            }
+
+            // Strictly, _elems doesn't need to be valid when 'get_index()' is called
+            // because we're not accessing data. But we will make this restriction.
+            assert(_elems);
+            #endif
+
+            idx_t ai = _layout.layout(idxs);
+
+            #ifdef CHECK
+            if (check)
+
+                // Make sure all final 1D index is in bounds.
+                assert(ai < _layout.get_num_elements());
+            #endif
+            return ai;
+        }
+
+        // Return pointer to given element.
+        ALWAYS_INLINE const T* get_ptr(const Indices& pt, bool check=true) const {
+            idx_t ai = get_index(pt, check);
+            return &_elems[ai];
+        }
+        ALWAYS_INLINE T* get_ptr(const Indices& pt, bool check=true) {
+            idx_t ai = get_index(pt, check);
+            return &_elems[ai];
+        }
+
+        // Return ref to given element.
+        ALWAYS_INLINE const T& operator()(const Indices& pt, bool check=true) const {
+            idx_t ai = get_index(pt, check);
+            return _elems[ai];
+        }
+        ALWAYS_INLINE T& operator()(const Indices& pt, bool check=true) {
+            idx_t ai = get_index(pt, check);
+            return _elems[ai];
+        }
+    };
+    
     // A base class for a generic n-D var.
     // This class does not define a type or memory layout.
-    // This class hierarchy is not virtual.
+    // This class is pure virtual.
     class GenericVarBase :
         public KernelStateBase {
 
     protected:
-        // Start of actual data, which is some offset from _base on host.
-        void* _elems = 0;
 
         // Name for var.
         std::string _name;
@@ -61,6 +145,11 @@ namespace yask {
         GenericVarBase(KernelStateBase& state,
                        const std::string& name,
                        const VarDimNames& dim_names);
+        // Dtor.
+        virtual ~GenericVarBase() { }
+
+        // Direct access to modifiable storage ptr.
+        virtual void** get_elem_ptr() =0;
 
     public:
 
@@ -114,6 +203,10 @@ namespace yask {
             return _var_dims.get_val(n);
         }
 
+        // Modify dim sizes.
+        virtual void set_dim_size(int n, idx_t size) =0;
+        virtual void set_dim_sizes(const Indices& sizes) =0;
+        
         // Return 'true' if dimensions are same names
         // and sizes, 'false' otherwise.
         bool are_dims_and_sizes_same(const GenericVarBase& src) const {
@@ -121,16 +214,30 @@ namespace yask {
         }
 
         // Direct access to data.
-        void* get_storage() {
-            return (void*)_elems;
-        }
-        const void* get_storage() const {
-            return (void*)_elems;
-        }
+        virtual const void* get_storage() const =0;
+        virtual void* get_storage() =0;
+
+        // Free any old storage.
+        // Set pointer to storage.
+        // 'base' should provide get_num_bytes() bytes at offset bytes.
+        virtual void set_storage(std::shared_ptr<char>& base, size_t offset) =0;
+
+        // Release storage.
+        virtual void release_storage() =0;
+
+        // Perform default allocation.
+        // For other options,
+        // programmer should call get_num_elems() or get_num_bytes() and
+        // then provide allocated memory via set_storage().
+        virtual void default_alloc() =0;
+
+        // Get size in bytes.
+        virtual size_t get_num_bytes() const =0;
     };
 
     // A base class for a generic n-D var of elements of arithmetic type T.
     // This class defines the type but does not define the memory layout.
+    // This class is pure virtual because its base is pure virtual.
     template <typename T>
     class GenericVarTyped : public GenericVarBase {
 
@@ -151,23 +258,20 @@ namespace yask {
         }
 
         // Get size in bytes.
-        size_t get_num_bytes() const {
+        size_t get_num_bytes() const override {
             return sizeof(T) * get_num_elems();
         }
 
         // Free any old storage.
         // Set pointer to storage.
         // 'base' should provide get_num_bytes() bytes at offset bytes.
-        void set_storage(std::shared_ptr<char>& base, size_t offset);
+        void set_storage(std::shared_ptr<char>& base, size_t offset) override;
 
         // Release storage.
-        void release_storage();
+        void release_storage() override;
 
         // Perform default allocation.
-        // For other options,
-        // programmer should call get_num_elems() or get_num_bytes() and
-        // then provide allocated memory via set_storage().
-        void default_alloc();
+        void default_alloc() override;
 
         // Print some descriptive info.
         std::string make_info_string(const std::string& elem_name) const;
@@ -180,43 +284,51 @@ namespace yask {
     };
 
     // A generic n-D var of elements of type T.
-    // This class defines the type and memory layout.
-    // The LayoutFn class must provide a 1:1 transform between
-    // n-D and 1-D indices.
+    // A pointer to a GenericVarCore obj must be given at construction.
+    // The GenericVar does NOT own the GenericVarCore obj.
     template <typename T, typename LayoutFn>
     class GenericVar :
         public GenericVarTyped<T> {
 
     protected:
+        typedef GenericVarCore<T, LayoutFn> _core_t;
+        _core_t* _corep;
+        static_assert(std::is_trivially_copyable<_core_t>::value,
+                      "Needed for OpenMP offload");
 
-        // Sizes and index transform functions.
-        LayoutFn _layout;
-
-        // Both _var_dims and _layout hold sizes unless this is a
+        // Both _var_dims and _core._layout hold sizes unless this is a
         // scalar. (For a scalar, _var_dims is empty.)
         // These functions keep them in sync.
         void _sync_dims_with_layout() {
-            Indices idxs(_layout.get_sizes());
+            Indices idxs(_corep->_layout.get_sizes());
             idxs.set_tuple_vals(GenericVarBase::_var_dims);
         }
         void _sync_layout_with_dims() {
             STATE_VARS(this);
             Indices idxs(GenericVarBase::_var_dims);
-            _layout.set_sizes(idxs);
+            _corep->_layout.set_sizes(idxs);
+        }
+
+        // Direct access to storage ptr.
+        void** get_elem_ptr() override {
+            T** p = &(_corep->_elems);
+            return (void**)p;
         }
 
     public:
 
         // Construct an unallocated var.
         GenericVar(KernelStateBase& state,
+                   _core_t* corep,
                    std::string name,
                    const VarDimNames& dim_names) :
-            GenericVarTyped<T>(state, name, dim_names) {
+            GenericVarTyped<T>(state, name, dim_names),
+            _corep(corep) {
 
-            // '_var_dims' was set in GenericVar construction.
+            // '_var_dims' was set in GenericVarBase construction.
             // Need to sync '_layout' w/it.
             _sync_layout_with_dims();
-            assert(int(dim_names.size()) == _layout.get_num_sizes());
+            assert(int(dim_names.size()) == _corep->_layout.get_num_sizes());
         }
 
         ~GenericVar() {
@@ -225,12 +337,20 @@ namespace yask {
             GenericVarTyped<T>::release_storage();
         }
 
+        // Direct access to data.
+        const void* get_storage() const override {
+            return (void*)_corep->_elems;
+        }
+        void* get_storage() override {
+            return (void*)_corep->_elems;
+        }
+
         // Modify dim sizes.
-        void set_dim_size(int n, idx_t size) {
+        void set_dim_size(int n, idx_t size) override {
             GenericVarBase::_var_dims.set_val(n, size);
             _sync_layout_with_dims();
         }
-        void set_dim_sizes(const Indices& sizes) {
+        void set_dim_sizes(const Indices& sizes) override {
             auto& vd = GenericVarBase::_var_dims;
             for (int i = 0; size_t(i) < vd.size(); i++)
                 vd.set_val(i, sizes[i]);
@@ -239,28 +359,12 @@ namespace yask {
 
         // Access all dim sizes.
         inline const Indices& get_dim_sizes() const {
-            return _layout.get_sizes();
+            return _corep->_layout.get_sizes();
         }
 
         // Get 1D index using layout.
         ALWAYS_INLINE idx_t get_index(const Indices& idxs, bool check=true) const {
-            #ifdef CHECK
-            if (check) {
-                for (int i = 0; size_t(i) < this->_var_dims.size(); i++) {
-                    idx_t j = idxs[i];
-                    assert(j >= 0);
-                    assert(j < this->_var_dims.get_val(i));
-                }
-            }
-            #endif
-
-            idx_t ai = _layout.layout(idxs);
-
-            #ifdef CHECK
-            if (check)
-                assert(ai < this->get_num_elems());
-            #endif
-            return ai;
+            return _corep->get_index(idxs, check);
         }
         ALWAYS_INLINE idx_t get_index(const IdxTuple& pt, bool check=true) const {
             assert(GenericVarBase::_var_dims.are_dims_same(pt));
@@ -270,32 +374,24 @@ namespace yask {
 
         // Pointer to given element.
         ALWAYS_INLINE const T* get_ptr(const Indices& pt, bool check=true) const {
-            idx_t ai = get_index(pt, check);
-            return &((T*)GenericVarBase::_elems)[ai];
+            return _corep->get_ptr(pt, check);
         }
         ALWAYS_INLINE T* get_ptr(const Indices& pt, bool check=true) {
-            idx_t ai = get_index(pt, check);
-            return &((T*)GenericVarBase::_elems)[ai];
+            return _corep->get_ptr(pt, check);
         }
 
-        // Return const ref to given element.
+        // Return ref to given element.
         ALWAYS_INLINE const T& operator()(const Indices& pt, bool check=true) const {
-            idx_t ai = get_index(pt, check);
-            return ((T*)GenericVarBase::_elems)[ai];
+            return _corep->get_ptr(pt, check);
         }
         ALWAYS_INLINE const T& operator()(const IdxTuple& pt, bool check=true) const {
-            idx_t ai = get_index(pt, check);
-            return ((T*)GenericVarBase::_elems)[ai];
+            return _corep->get_ptr(pt, check);
         }
-
-        // Non-const access to given element.
         ALWAYS_INLINE T& operator()(const Indices& pt, bool check=true) {
-            idx_t ai = get_index(pt, check);
-            return ((T*)GenericVarBase::_elems)[ai];
+            return _corep->get_ptr(pt, check);
         }
         ALWAYS_INLINE T& operator()(const IdxTuple& pt, bool check=true) {
-            idx_t ai = get_index(pt, check);
-            return ((T*)GenericVarBase::_elems)[ai];
+            return _corep->get_ptr(pt, check);
         }
 
     };

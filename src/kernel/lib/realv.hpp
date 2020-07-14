@@ -173,7 +173,6 @@ namespace yask {
         #endif
     };
 
-
     // Type for a vector block.
     struct real_vec_t {
 
@@ -946,11 +945,11 @@ namespace yask {
 
     // Compare two real_vec_t's.
     inline bool within_tolerance(const real_vec_t& val, const real_vec_t& ref,
-                                 const real_vec_t& epsilon) {
+                                 const real_t epsilon) {
         if (val == ref)
             return true;
         for (int j = 0; j < VLEN; j++) {
-            if (!within_tolerance(val.u.r[j], ref.u.r[j], epsilon.u.r[j]))
+            if (!within_tolerance(val.u.r[j], ref.u.r[j], epsilon))
                 return false;
         }
         return true;

@@ -346,6 +346,8 @@ namespace yask {
             return tmp.make_val_str(separator, prefix, suffix);
         }
     };
+    static_assert(std::is_trivially_copyable<Indices>::value,
+                  "Needed for OpenMP offload");
 
     // Define OMP reductions on Indices.
 #pragma omp declare reduction(min_idxs : Indices : \
@@ -387,6 +389,8 @@ namespace yask {
             return _sizes.product();
         }
     };
+    static_assert(std::is_trivially_copyable<Layout>::value,
+                  "Needed for OpenMP offload");
 
     // 0-D <-> 1-D layout class.
     // (Trivial layout.)

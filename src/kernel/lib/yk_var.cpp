@@ -32,13 +32,10 @@ namespace yask {
 
     // Ctor.
     // Important: _data is NOT yet constructed.
-    YkVarBase::YkVarBase(KernelStateBase& stateb,
-                         const VarDimNames& dim_names) :
-        KernelStateBase(stateb) {
-        STATE_VARS(this);
+    YkVarBaseCore::YkVarBaseCore(int ndims) {
 
         // Init indices.
-        int n = int(dim_names.size());
+        int n = ndims;
         _domains.set_from_const(0, n);
         _req_left_pads.set_from_const(0, n);
         _req_right_pads.set_from_const(0, n);
@@ -58,18 +55,6 @@ namespace yask {
         _vec_left_pads.set_from_const(0, n);
         _vec_allocs.set_from_const(0, n);
         _vec_local_offsets.set_from_const(0, n);
-
-        // Set masks.
-        for (size_t i = 0; i < dim_names.size(); i++) {
-            idx_t mbit = 1LL << i;
-            auto& dname = dim_names[i];
-            if (dname == step_dim)
-                _step_dim_mask |= mbit;
-            else if (domain_dims.lookup(dname))
-                _domain_dim_mask |= mbit;
-            else
-                _misc_dim_mask |= mbit;
-        }
     }
 
     // Convenience function to format indices like
@@ -144,6 +129,9 @@ namespace yask {
         return posn;
     }
 
+    #define IDX_STR(v) make_index_string(_corep->v)
+    #define IDX_STR2(v, sep) make_index_string(_corep->v, sep)
+    
     string YkVarBase::make_info_string(bool long_info) const {
             std::stringstream oss;
             if (is_scratch()) oss << "scratch ";
@@ -153,16 +141,16 @@ namespace yask {
                 (void*)this;
             if (long_info) {
                 oss << " for ";
-                if (_domains._get_num_dims())
-                    oss << make_index_string(_allocs, " * ") << " FP elem(s)"
-                        " at rank-offsets " << make_index_string(_rank_offsets) <<
-                        ", local-offsets " << make_index_string(_local_offsets) <<
-                        ", left-halos " << make_index_string(_left_halos) <<
-                        ", right-halos " << make_index_string(_right_halos) <<
-                        ", left-pads " << make_index_string(_actl_left_pads) <<
-                        ", right-pads " << make_index_string(_actl_right_pads) <<
-                        ", left-wf-exts " << make_index_string(_left_wf_exts) <<
-                        ", right-wf-exts " << make_index_string(_right_wf_exts) <<
+                if (_corep->_domains._get_num_dims())
+                    oss << IDX_STR2(_allocs, " * ") << " FP elem(s)"
+                        " at rank-offsets " << IDX_STR(_rank_offsets) <<
+                        ", local-offsets " << IDX_STR(_local_offsets) <<
+                        ", left-halos " << IDX_STR(_left_halos) <<
+                        ", right-halos " << IDX_STR(_right_halos) <<
+                        ", left-pads " << IDX_STR(_actl_left_pads) <<
+                        ", right-pads " << IDX_STR(_actl_right_pads) <<
+                        ", left-wf-exts " << IDX_STR(_left_wf_exts) <<
+                        ", right-wf-exts " << IDX_STR(_right_wf_exts) <<
                         ", and ";
                 oss << _dirty_steps.size() << " dirty flag(s)";
             }
@@ -190,7 +178,7 @@ namespace yask {
         // where this var is not vectorized.
         for (int i = 0; i < get_num_dims(); i++) {
             if (mp[i])
-                mp[i] += _soln_vec_lens[i] - 1;
+                mp[i] += _corep->_soln_vec_lens[i] - 1;
         }
         return mp;
     }
@@ -213,43 +201,43 @@ namespace yask {
 
         // Check settings.
         for (int i = 0; i < get_num_dims(); i++) {
-            if (_left_halos[i] < 0)
+            if (_corep->_left_halos[i] < 0)
                 THROW_YASK_EXCEPTION("Error: negative left halo in var '" + get_name() + "'");
-            if (_right_halos[i] < 0)
+            if (_corep->_right_halos[i] < 0)
                 THROW_YASK_EXCEPTION("Error: negative right halo in var '" + get_name() + "'");
-            if (_left_wf_exts[i] < 0)
+            if (_corep->_left_wf_exts[i] < 0)
                 THROW_YASK_EXCEPTION("Error: negative left wave-front ext in var '" + get_name() + "'");
-            if (_right_wf_exts[i] < 0)
+            if (_corep->_right_wf_exts[i] < 0)
                 THROW_YASK_EXCEPTION("Error: negative right wave-front ext in var '" + get_name() + "'");
-            if (_req_left_pads[i] < 0)
+            if (_corep->_req_left_pads[i] < 0)
                 THROW_YASK_EXCEPTION("Error: negative left padding in var '" + get_name() + "'");
-            if (_req_right_pads[i] < 0)
+            if (_corep->_req_right_pads[i] < 0)
                 THROW_YASK_EXCEPTION("Error: negative right padding in var '" + get_name() + "'");
-             if (_req_left_epads[i] < 0)
+             if (_corep->_req_left_epads[i] < 0)
                 THROW_YASK_EXCEPTION("Error: negative left extra padding in var '" + get_name() + "'");
-            if (_req_right_epads[i] < 0)
+            if (_corep->_req_right_epads[i] < 0)
                 THROW_YASK_EXCEPTION("Error: negative right extra padding in var '" + get_name() + "'");
         }
 
         // Increase padding as needed and calculate new allocs.
-        Indices new_left_pads = get_reqd_pad(_left_halos, _left_wf_exts);
-        Indices new_right_pads = get_reqd_pad(_right_halos, _right_wf_exts);
+        Indices new_left_pads = get_reqd_pad(_corep->_left_halos, _corep->_left_wf_exts);
+        Indices new_right_pads = get_reqd_pad(_corep->_right_halos, _corep->_right_wf_exts);
         IdxTuple new_allocs(old_allocs);
         for (int i = 0; i < get_num_dims(); i++) {
             idx_t mbit = 1LL << i;
 
             // New allocation in each dim.
-            new_allocs[i] = _domains[i];
+            new_allocs[i] = _corep->_domains[i];
 
             // Adjust padding only for domain dims.
-            if (_domain_dim_mask & mbit) {
+            if (_corep->_domain_dim_mask & mbit) {
 
                 // Get max of existing pad & new required pad if allocated.
                 // This will avoid throwing an exception due to decreasing
                 // requested padding after allocation.
                 if (p) {
-                    new_left_pads[i] = max(new_left_pads[i], _actl_left_pads[i]);
-                    new_right_pads[i] = max(new_right_pads[i], _actl_right_pads[i]);
+                    new_left_pads[i] = max(new_left_pads[i], _corep->_actl_left_pads[i]);
+                    new_right_pads[i] = max(new_right_pads[i], _corep->_actl_right_pads[i]);
                 }
 
                 // If storage not yet allocated, increase to requested pad.
@@ -258,44 +246,49 @@ namespace yask {
                 // will avoid throwing an exception due to increasing
                 // requested padding after allocation.
                 if (!p) {
-                    new_left_pads[i] = max(new_left_pads[i], _left_halos[i] + _req_left_epads[i]);
-                    new_right_pads[i] = max(new_right_pads[i], _right_halos[i] + _req_right_epads[i]);
-                    new_left_pads[i] = max(new_left_pads[i], _req_left_pads[i]);
-                    new_right_pads[i] = max(new_right_pads[i], _req_right_pads[i]);
+                    new_left_pads[i] = max(new_left_pads[i],
+                                           _corep->_left_halos[i] + _corep->_req_left_epads[i]);
+                    new_right_pads[i] = max(new_right_pads[i],
+                                            _corep->_right_halos[i] + _corep->_req_right_epads[i]);
+                    new_left_pads[i] = max(new_left_pads[i],
+                                           _corep->_req_left_pads[i]);
+                    new_right_pads[i] = max(new_right_pads[i],
+                                            _corep->_req_right_pads[i]);
                 }
 
                 // Round left pad up to vec len.
-                new_left_pads[i] = ROUND_UP(new_left_pads[i], _var_vec_lens[i]);
+                new_left_pads[i] = ROUND_UP(new_left_pads[i], _corep->_var_vec_lens[i]);
 
                 // Round domain + right pad up to soln vec len by extending right pad.
                 // Using soln vec len to allow reading a non-vec var in this dim
                 // while calculating a vec var. (The var vec-len is always 1 or the same
                 // as the soln vec-len in a given dim.)
-                idx_t dprp = ROUND_UP(_domains[i] + new_right_pads[i], _soln_vec_lens[i]);
-                new_right_pads[i] = dprp - _domains[i];
+                idx_t dprp = ROUND_UP(_corep->_domains[i] + new_right_pads[i],
+                                      _corep->_soln_vec_lens[i]);
+                new_right_pads[i] = dprp - _corep->_domains[i];
 
                 // Make inner dim an odd number of vecs.
                 // This reportedly helps avoid some uarch aliasing.
                 if (!p &&
                     opts->_allow_addl_pad &&
                     get_dim_name(i) == inner_dim &&
-                    (new_allocs[i] / _var_vec_lens[i]) % 2 == 0) {
-                    new_right_pads[i] += _var_vec_lens[i];
+                    (new_allocs[i] / _corep->_var_vec_lens[i]) % 2 == 0) {
+                    new_right_pads[i] += _corep->_var_vec_lens[i];
                 }
 
                 // New allocation in each dim.
                 new_allocs[i] += new_left_pads[i] + new_right_pads[i];
-                assert(new_allocs[i] == new_left_pads[i] + _domains[i] + new_right_pads[i]);
+                assert(new_allocs[i] == new_left_pads[i] + _corep->_domains[i] + new_right_pads[i]);
 
                 // Since the left pad and domain + right pad were rounded up,
                 // the sum should also be a vec mult.
-                assert(new_allocs[i] % _var_vec_lens[i] == 0);
+                assert(new_allocs[i] % _corep->_var_vec_lens[i] == 0);
             }
 
             // Non-domain dims.
             else {
-                assert(new_allocs[i] == _domains[i]);
-                assert(_var_vec_lens[i] == 1);
+                assert(new_allocs[i] == _corep->_domains[i]);
+                assert(_corep->_var_vec_lens[i] == 1);
             }
         }
 
@@ -309,23 +302,23 @@ namespace yask {
         }
 
         // Do the resize and calculate number of dirty bits needed.
-        _allocs = new_allocs;
-        _actl_left_pads = new_left_pads;
-        _actl_right_pads = new_right_pads;
+        _corep->_allocs = new_allocs;
+        _corep->_actl_left_pads = new_left_pads;
+        _corep->_actl_right_pads = new_right_pads;
         size_t new_dirty = 1;      // default if no step dim.
         for (int i = 0; i < get_num_dims(); i++) {
             idx_t mbit = 1LL << i;
 
             // Calc vec-len values.
-            _vec_left_pads[i] = new_left_pads[i] / _var_vec_lens[i];
-            _vec_allocs[i] = _allocs[i] / _var_vec_lens[i];
+            _corep->_vec_left_pads[i] = new_left_pads[i] / _corep->_var_vec_lens[i];
+            _corep->_vec_allocs[i] = _corep->_allocs[i] / _corep->_var_vec_lens[i];
 
             // Actual resize of underlying var.
-            set_dim_size(i, _vec_allocs[i]);
+            set_dim_size(i, _corep->_vec_allocs[i]);
 
             // Number of dirty bits is number of steps.
-            if (_step_dim_mask & mbit)
-                new_dirty = _allocs[i];
+            if (_corep->_step_dim_mask & mbit)
+                new_dirty = _corep->_allocs[i];
         }
 
         // Resize dirty flags, too.
@@ -370,14 +363,14 @@ namespace yask {
         STATE_VARS(this);
         if (!ref) {
             DEBUG_MSG("** mismatch: no reference var.");
-            return _allocs.product(); // total number of elements.
+            return _corep->_allocs.product(); // total number of elements.
         }
 
         // Dims & sizes same?
         if (!are_dims_and_sizes_same(*ref)) {
             DEBUG_MSG("** mismatch due to incompatible vars: " <<
                       make_info_string() << " and " << ref->make_info_string());
-            return _allocs.product(); // total number of elements.
+            return _corep->_allocs.product(); // total number of elements.
         }
 
         // Compare each element.
@@ -399,15 +392,15 @@ namespace yask {
 
                     // Convert to API index.
                     opt[i] = val;
-                    if (!(_step_dim_mask & mbit))
-                        opt[i] += _rank_offsets[i] + _local_offsets[i];
+                    if (!(_corep->_step_dim_mask & mbit))
+                        opt[i] += _corep->_rank_offsets[i] + _corep->_local_offsets[i];
 
                     // Don't compare points outside the domain.
                     // TODO: check points in outermost halo.
                     auto& dname = pt.get_dim_name(i);
                     if (domain_dims.lookup(dname)) {
-                        auto first_ok = _rank_offsets[i];
-                        auto last_ok = first_ok + _domains[i] - 1;
+                        auto first_ok = _corep->_rank_offsets[i];
+                        auto last_ok = first_ok + _corep->_domains[i] - 1;
                         if (opt[i] < first_ok || opt[i] > last_ok)
                             ok = false;
                     }
@@ -461,7 +454,7 @@ namespace yask {
             *clipped_indices = indices;
         for (int i = 0; i < n; i++) {
             idx_t mbit = 1LL << i;
-            bool is_step_dim = _step_dim_mask & mbit;
+            bool is_step_dim = _corep->_step_dim_mask & mbit;
             idx_t idx = indices[i];
             bool ok = false;
             auto& dname = get_dim_name(i);
@@ -502,9 +495,9 @@ namespace yask {
 
             // Normalize?
             if (clipped_indices && normalize) {
-                if (_domain_dim_mask & mbit) {
-                    (*clipped_indices)[i] -= _rank_offsets[i]; // rank-local.
-                    (*clipped_indices)[i] = idiv_flr((*clipped_indices)[i], _var_vec_lens[i]);
+                if (_corep->_domain_dim_mask & mbit) {
+                    (*clipped_indices)[i] -= _corep->_rank_offsets[i]; // rank-local.
+                    (*clipped_indices)[i] = idiv_flr((*clipped_indices)[i], _corep->_var_vec_lens[i]);
                 }
             }
         } // var dims.
@@ -518,11 +511,11 @@ namespace yask {
 
             // If 't' is before first step, pull offset back.
             if (t < get_first_local_index(step_posn))
-                _local_offsets[step_posn] = t;
+                _corep->_local_offsets[step_posn] = t;
 
             // If 't' is after last step, push offset out.
             else if (t > get_last_local_index(step_posn))
-                _local_offsets[step_posn] = t - _domains[step_posn] + 1;
+                _corep->_local_offsets[step_posn] = t - _corep->_domains[step_posn] + 1;
 
             TRACE_MSG("update_valid_step(" << t << "): valid step(s) in '" <<
                       get_name() << "' are now [" << get_first_local_index(step_posn) <<
@@ -580,10 +573,10 @@ namespace yask {
         STATE_VARS_CONST(this);
 
         // Convert to elem indices.
-        Indices eidxs = idxs.mul_elements(_var_vec_lens);
+        Indices eidxs = idxs.mul_elements(_corep->_var_vec_lens);
 
         // Add offsets, i.e., convert to overall indices.
-        eidxs = eidxs.add_elements(_rank_offsets);
+        eidxs = eidxs.add_elements(_corep->_rank_offsets);
 
         IdxTuple idxs2 = get_allocs(); // get dims.
         eidxs.set_tuple_vals(idxs2);      // set vals from eidxs.

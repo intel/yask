@@ -43,6 +43,7 @@ namespace yask {
     // Make some descriptive info.
     template <typename T>
     string GenericVarTyped<T>::make_info_string(const string& elem_name) const {
+        const void* _elems = get_storage();
         stringstream oss;
         oss << "'" << _name << "' ";
         if (_var_dims._get_num_dims() == 0)
@@ -67,6 +68,7 @@ namespace yask {
     template <typename T>
     void GenericVarTyped<T>::set_storage(shared_ptr<char>& base, size_t offset) {
         STATE_VARS(this);
+        void** _elems = get_elem_ptr();
 
         // Release any old data if last owner.
         release_storage();
@@ -79,9 +81,7 @@ namespace yask {
         // Set plain pointer to new data.
         if (base.get()) {
             char* p = _base.get() + offset;
-            _elems = (void*)p;
-        } else {
-            _elems = 0;
+            *_elems = (void*)p;
         }
     }
 
@@ -89,9 +89,10 @@ namespace yask {
     template <typename T>
     void GenericVarTyped<T>::release_storage() {
         STATE_VARS(this);
+        void** _elems = get_elem_ptr();
 
         _base.reset();
-        _elems = 0;
+        *_elems = 0;
     }
 
     // Perform default allocation.  For other options, programmer should
@@ -115,10 +116,11 @@ namespace yask {
 
         // Set as storage for this var.
         set_storage(base, 0);
-    }
+   }
 
     template <typename T>
     void GenericVarTyped<T>::set_elems_same(T val) {
+        void* _elems = get_storage();
         if (_elems) {
             yask_parallel_for(0, get_num_elems(), 1,
                               [&](idx_t start, idx_t stop, idx_t thread_num) {
@@ -129,6 +131,7 @@ namespace yask {
 
     template <typename T>
     void GenericVarTyped<T>::set_elems_in_seq(T seed) {
+        void* _elems = get_storage();
         if (_elems) {
             const idx_t wrap = 71; // TODO: avoid multiple of any dim size.
             yask_parallel_for(0, get_num_elems(), 1,

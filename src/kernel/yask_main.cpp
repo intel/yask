@@ -29,10 +29,6 @@ IN THE SOFTWARE.
 using namespace std;
 using namespace yask;
 
-// Auto-generated stencil code that extends base types.
-#define DEFINE_CONTEXT
-#include YSTR2(YK_CODE_FILE)
-
 // Add some command-line options for this application in addition to the
 // default ones provided by YASK.
 struct MySettings {
@@ -566,7 +562,7 @@ int main(int argc, char** argv)
             os << "  Done in " << make_num_str(rstats->get_elapsed_secs()) << " secs.\n" << flush;
 #endif
             // check for equality.
-            os << "\n_checking results...\n";
+            os << "\n_checking results...\n" << flush;
             idx_t errs = context->compare_data(*ref_context);
             auto ri = kenv->get_rank_index();
 
@@ -576,12 +572,12 @@ int main(int argc, char** argv)
             for (int r = 0; r < kenv->get_num_ranks(); r++) {
                 kenv->global_barrier();
                 if (r == ri) {
-                    if( errs == 0 )
-                        os << "TEST PASSED on rank " << ri << ".\n" << flush;
-                    else {
 
-                        // Use 'cerr' to print on all ranks in case rank printing to 'os'
-                        // passed and other(s) failed.
+                    // Use 'cerr' to print on all ranks in case rank printing to 'os'
+                    // passed and other(s) failed.
+                    if( errs == 0 )
+                        cerr << "TEST PASSED on rank " << ri << ".\n" << flush;
+                    else {
                         cerr << "TEST FAILED on rank " << ri << ": " << errs << " mismatch(es).\n";
                         if (REAL_BYTES < 8)
                             cerr << " Small differences are not uncommon for low-precision FP; "

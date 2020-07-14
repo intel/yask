@@ -725,7 +725,8 @@ namespace yask {
 
                                 // Write test values & init lock.
                                 *((int*)rp) = me;
-                                *((char*)rp + buf.get_bytes() - 1) = 'Z';
+                                if (buf.get_bytes() > sizeof(int)) // Room to mark end?
+                                    *((char*)rp + buf.get_bytes() - 1) = 'Z';
                                 buf.shm_lock_init();
 
                                 // Save offset.
@@ -745,7 +746,8 @@ namespace yask {
 
                                 // Check values written by owner rank.
                                 assert(*((int*)rp) == nrank);
-                                assert(*((char*)rp + buf.get_bytes() - 1) == 'Z');
+                                if (buf.get_bytes() > sizeof(int)) // Room to mark end?
+                                    assert(*((char*)rp + buf.get_bytes() - 1) == 'Z');
                                 assert(!buf.is_ok_to_read());
                             }
 

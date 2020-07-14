@@ -68,9 +68,9 @@ namespace yask {
         virtual string get_var_ptr(const VarPoint& gp) {
             const auto* var = gp._get_var();
             string gname = var->_get_name();
-            string expr = "(static_cast<_context_type::" + gname + "_type*>(_context_data->";
+            string expr = "(static_cast<_context_data_t::" + gname + "_type*>(_context_data->";
             if (var->is_scratch())
-                expr += gname + "_list[region_thread_idx]";
+                expr += gname + "_list[scratch_var_idx]";
             else
                 expr += gname + "_ptr";
             expr += ".get()->gbp()))";

@@ -509,7 +509,7 @@ namespace yask {
         os << "\n // Make new scratch vars.\n"
             " virtual void make_scratch_vars(int num_threads) override {\n" <<
             scratch_code <<
-            " } // new_scratch_vars\n";
+            " } // make_scratch_vars\n";
 
         os << "}; // " << _context_base << endl;
     }
@@ -526,11 +526,14 @@ namespace yask {
             string egs_name = "StencilBundle_" + eg_name;
 
             os << endl << " ////// Stencil " << eg_desc << " //////\n" <<
-                "\n class " << egs_name << " : public StencilBundleBase {\n"
-                " protected:\n"
-                " typedef " << _context_base << " _context_type;\n"
-                " _context_type* _context_data = 0;\n"
-                " public:\n";
+                "\n struct " << egs_name << " {\n"
+                "  typedef " << _context_base << " _context_data_t;\n"
+                "  _context_data_t* _context_data = 0;\n"
+                "  std::string _name;\n"
+                "  int _scalar_fp_ops;\n"
+                "  int _scalar_points_read;\n"
+                "  int _scalar_points_written;\n"
+                "  bool _is_scratch;\n";
 
             // Stats for this eq_bundle.
             CounterVisitor stats;
@@ -542,8 +545,7 @@ namespace yask {
 
             // Stencil-bundle ctor.
             {
-                os << " " << egs_name << "(" << _context_base << "* context) :\n"
-                    " StencilBundleBase(context),\n"
+                os << " " << egs_name << "(_context_data_t* context, StencilBundleBase* sbb) :\n"
                     " _context_data(context) {\n"
                     " _name = \"" << eg_name << "\";\n"
                     " _scalar_fp_ops = " << stats.get_num_ops() << ";\n"
@@ -552,12 +554,14 @@ namespace yask {
                     " _is_scratch = " << (eq->is_scratch() ? "true" : "false") << ";\n";
 
                 // I/O vars.
-                os << "\n // The following var(s) are read by " << egs_name << endl;
+                os << "\n // The following var(s) are read by " << egs_name << ".\n";
                 for (auto gp : eq->get_input_vars()) {
                     if (gp->is_scratch())
-                        os << "  input_scratch_vecs.push_back(&_context_data->" << gp->_get_name() << "_list);\n";
+                        os << "  sbb->input_scratch_vecs.push_back(&_context_data->" <<
+                            gp->_get_name() << "_list);\n";
                     else
-                        os << "  input_var_ptrs.push_back(_context_data->" << gp->_get_name() << "_ptr);\n";
+                        os << "  sbb->input_var_ptrs.push_back(_context_data->" <<
+                            gp->_get_name() << "_ptr);\n";
                 }
                 os << "\n // The following var(s) are written by " << egs_name;
                 if (eq->step_expr)
@@ -565,9 +569,11 @@ namespace yask {
                 os << ".\n";
                 for (auto gp : eq->get_output_vars()) {
                     if (gp->is_scratch())
-                        os << "  output_scratch_vecs.push_back(&_context_data->" << gp->_get_name() << "_list);\n";
+                        os << "  sbb->output_scratch_vecs.push_back(&_context_data->" <<
+                            gp->_get_name() << "_list);\n";
                     else
-                        os << "  output_var_ptrs.push_back(_context_data->" << gp->_get_name() << "_ptr);\n";
+                        os << "  sbb->output_var_ptrs.push_back(_context_data->" <<
+                            gp->_get_name() << "_ptr);\n";
                 }
                 os << " } // Ctor." << endl;
             }
@@ -577,7 +583,7 @@ namespace yask {
                 os << "\n // Determine whether " << egs_name << " is valid at the domain indices " <<
                     _dims._stencil_dims.make_dim_str() << ".\n"
                     " // Return true if indices are within the valid sub-domain or false otherwise.\n"
-                    " virtual bool is_in_valid_domain(const Indices& idxs) const final {\n";
+                    " inline bool is_in_valid_domain(const Indices& idxs) const {\n";
                 print_indices(os);
                 if (eq->cond)
                     os << " return " << eq->cond->make_str() << ";\n";
@@ -586,12 +592,12 @@ namespace yask {
                 os << " }\n";
 
                 os << "\n // Return whether there is a sub-domain expression.\n"
-                    " virtual bool is_sub_domain_expr() const {\n"
+                    " inline bool is_sub_domain_expr() const {\n"
                     "  return " << (eq->cond ? "true" : "false") <<
                     ";\n }\n";
 
                 os << "\n // Return human-readable description of sub-domain.\n"
-                    " virtual std::string get_domain_description() const {\n";
+                    " inline std::string get_domain_description() const {\n";
                 if (eq->cond)
                     os << " return \"" << eq->cond->make_str() << "\";\n";
                 else
@@ -604,7 +610,7 @@ namespace yask {
                 os << endl << " // Determine whether " << egs_name <<
                     " is valid at the step input_step_index.\n" <<
                     " // Return true if valid or false otherwise.\n"
-                    " virtual bool is_in_valid_step(idx_t input_step_index) const final {\n";
+                    " inline bool is_in_valid_step(idx_t input_step_index) const {\n";
                 if (eq->step_cond) {
                     os << " idx_t " << _dims._step_dim << " = input_step_index;\n"
                         "\n // " << eq->step_cond->make_str() << "\n";
@@ -624,12 +630,12 @@ namespace yask {
                 os << " }\n";
 
                 os << "\n // Return whether there is a step-condition expression.\n"
-                    " virtual bool is_step_cond_expr() const {\n"
+                    " inline bool is_step_cond_expr() const {\n"
                     "  return " << (eq->step_cond ? "true" : "false") <<
                     ";\n }\n";
 
                 os << "\n // Return human-readable description of step condition.\n"
-                    " virtual std::string get_step_cond_description() const {\n";
+                    " inline std::string get_step_cond_description() const {\n";
                 if (eq->step_cond)
                     os << " return \"" << eq->step_cond->make_str() << "\";\n";
                 else
@@ -647,8 +653,8 @@ namespace yask {
                 else
                     os << "// Return 'false' because this bundle does not update"
                         " vars with the step dimension.\n";
-                os << " virtual bool get_output_step_index(idx_t input_step_index,"
-                    " idx_t& output_step_index) const final {\n";
+                os << " inline bool get_output_step_index(idx_t input_step_index,"
+                    " idx_t& output_step_index) const {\n";
                 if (eq->step_expr) {
                     os << " idx_t " << _dims._step_dim << " = input_step_index;\n"
                         " output_step_index = " << eq->step_expr->make_str() << ";\n"
@@ -667,7 +673,7 @@ namespace yask {
                     _dims._stencil_dims.make_dim_str() << ".\n"
                     " // There are approximately " << stats.get_num_ops() <<
                     " FP operation(s) per invocation.\n"
-                    " virtual void calc_scalar(int region_thread_idx, const Indices& idxs) {\n";
+                    " inline void calc_scalar(int scratch_var_idx, const Indices& idxs) {\n";
                     print_indices(os);
 
                 // C++ scalar print assistant.
@@ -739,7 +745,7 @@ namespace yask {
                     " aligned vector-block(s).\n"
                     " // There are approximately " << (stats.get_num_ops() * num_results) <<
                     " FP operation(s) per iteration.\n" <<
-                    " void " << funcstr << "(int region_thread_idx, int block_thread_idx,"
+                    " inline void " << funcstr << "(int scratch_var_idx, int block_thread_idx,"
                     " const Indices& idxs, idx_t " << istop;
                 if (!do_cluster)
                     os << ", idx_t write_mask";
@@ -803,7 +809,7 @@ namespace yask {
                 delete vp;
             }
 
-            os << "}; // " << egs_name << ".\n"; // end of class.
+            os << "}; // " << egs_name << ".\n"; // end of struct.
 
         } // stencil eq_bundles.
     }
@@ -827,7 +833,8 @@ namespace yask {
         os << endl << " // Stencil equation-bundles." << endl;
         for (auto& eg : _eq_bundles.get_all()) {
             string eg_name = eg->_get_name();
-            os << " StencilBundle_" << eg_name << " " << eg_name << ";" << endl;
+            os << " StencilBundleTempl<StencilBundle_" << eg_name << ", " <<
+                _context_base << "> " << eg_name << ";" << endl;
         }
 
         // Ctor.
