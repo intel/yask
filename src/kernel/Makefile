@@ -446,7 +446,7 @@ RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_ORDER)) { \
 # 'omp' modifier creates an outer OpenMP loop so that each block is assigned
 # to a top-level OpenMP thread.
 REGION_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar region_idxs \
-				-ompConstruct '$(omp_par_for) schedule($(omp_region_schedule)) proc_bind(spread)'
+				-ompMod '$(omp_par_for) schedule($(omp_region_schedule)) proc_bind(spread)'
 REGION_LOOP_ORDER	?=	1 .. N-1
 REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) omp loop($(REGION_LOOP_ORDER)) { \
 				 $(REGION_LOOP_INNER_MODS) \
@@ -469,7 +469,7 @@ BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_ORDER)) { \
 # sub-block is assigned to a nested OpenMP thread. The OpenMP construct is
 # not used when running with '-bind_block_threads'.
 MINI_BLOCK_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar adj_mb_idxs \
-				-ompConstruct '$(omp_for) schedule($(omp_block_schedule)) nowait'
+				-ompMod '$(omp_for) schedule($(omp_block_schedule)) nowait'
 MINI_BLOCK_LOOP_ORDER	?=	1 .. N-1
 MINI_BLOCK_LOOP_CODE	?=	$(MINI_BLOCK_LOOP_OUTER_MODS) omp loop($(MINI_BLOCK_LOOP_ORDER)) { \
 				 $(MINI_BLOCK_LOOP_INNER_MODS) call(CALC_SUB_BLOCK); }
@@ -485,7 +485,7 @@ SUB_BLOCK_LOOP_CODE	?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop($(SUB_BLOCK_LOOP_ORDER)
 
 # General-purpose parallel loop.
 MISC_LOOP_OPTS		?=	-ndims $(NSDIMS) -inVar misc_idxs \
-				-ompConstruct '$(omp_par_for) schedule($(omp_misc_schedule)) proc_bind(spread)'
+				-ompMod '$(omp_par_for) schedule($(omp_misc_schedule)) proc_bind(spread)'
 MISC_LOOP_ORDER		?=	1 .. N-1
 MISC_LOOP_CODE		?=	$(MISC_LOOP_OUTER_MODS) omp loop($(MISC_LOOP_ORDER)) { \
 				$(MISC_LOOP_INNER_MODS) call(MISC_FN); }

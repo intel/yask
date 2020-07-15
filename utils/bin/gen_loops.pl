@@ -677,6 +677,13 @@ sub getArgs($$) {
     return @args;
 }
 
+# Generate a pragma w/given text.
+sub pragma($) {
+    my $codeString = shift;
+    return (length($codeString) > 0) ?
+        "_Pragma(\"$codeString\")" : "";
+}
+
 # Process the loop-code string.
 # This is where most of the work is done.
 sub processCode($) {
@@ -706,7 +713,13 @@ sub processCode($) {
     # Front matter.
     push @code,
         "#ifndef OMP_PRAGMA",
-        "#define OMP_PRAGMA _Pragma(\"$OPT{ompConstruct}\")",
+        "#define OMP_PRAGMA ".pragma($OPT{ompMod}),
+        "#endif",
+        "#ifndef INNER_PRAGMA",
+        "#define INNER_PRAGMA ".pragma($OPT{innerMod}),
+        "#endif",
+        "#ifndef SIMD_PRAGMA",
+        "#define SIMD_PRAGMA ".pragma($OPT{simdMod}),
         "#endif",
         "// 'ScanIndices $inputVar' must be set before the following code.",
         "{";
@@ -727,7 +740,7 @@ sub processCode($) {
         # generate simd in next loop.
         elsif (lc $tok eq 'simd') {
 
-            push @loopPrefix, '_Pragma("simd")';
+            push @loopPrefix, ' OMP_SIMD';
             $features |= $bSimd;
             print "info: generating SIMD in following loop.\n";
         }
@@ -851,7 +864,7 @@ sub processCode($) {
 
                 # beginning of loop.
                 push @code, $comment;
-                push @code, $OPT{innerMod};
+                push @code, " INNER_PRAGMA";
                 beginLoop(\@code, \@loopDims, \@loopPrefix, 
                           $beginVal, $endVal, $features, \@loopStack);
 
@@ -956,8 +969,9 @@ sub main() {
         [ "inVar=s", "Name of input index vars.", 'scanVars'],
         [ "comArgs=s", "Common arguments to all calls.", ''],
         [ "callPrefix=s", "Common prefix for function call(s).", ''],
-        [ "ompConstruct=s", "Pragma to use before 'omp' loop(s).", "omp parallel for"],
-        [ "innerMod=s", "Code to insert before inner loops.", ''],
+        [ "ompMod=s", "Set OMP_PRAGMA to insert before 'omp' loop(s).", "omp parallel for"],
+        [ "simdMod=s", "Set SIMD_PRAGMA to insert before 'simd' loop(s).", "omp simd"],
+        [ "innerMod=s", "Set INNER_PRAGMA to insert before inner loop(s).", ''],
         [ "output=s", "Name of output file.", 'loops.h'],
         );
     my($command_line) = process_command_line(\%OPT, \@KNOBS);
@@ -974,7 +988,8 @@ sub main() {
             "Inner loops should contain call statements that generate calls to calculation functions.\n",
             "A loop statement with more than one argument will generate a single collapsed loop.\n",
             "Optional loop modifiers:\n",
-            "  omp:             generate an OpenMP for loop (distribute work across SW threads).*\n",
+            "  omp:             add OMP_PRAGMA to loop (distribute work across SW threads).*\n",
+            "  simd:            add SIMD_PRAMA to loop (distribute work across SIMD HW).*\n",
             "  grouped:         generate grouped scan within a collapsed loop.\n",
             "  serpentine:      generate reverse scan when enclosing loop dimension is odd.*\n",
             "  square_wave:     generate 2D square-wave scan for two innermost dimensions of a collapsed loop.*\n",
