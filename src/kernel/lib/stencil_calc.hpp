@@ -288,7 +288,7 @@ namespace yask {
 
         // Calculate results for an arbitrary tile for points in the valid domain.
         // Scratch vars, if any are used, are indexed via 'scratch_var_idx'.
-        // This is used for reference calculations.
+        // This is very slow and used for reference calculations.
         void
         calc_in_domain(int scratch_var_idx, const ScanIndices& misc_idxs) override {
 
@@ -306,7 +306,7 @@ namespace yask {
         }
         
         // Calculate results for one sub-block using pure scalar code.
-        // This is used for debug.
+        // This is very slow and used for debug.
         void
         calc_sub_block_scalar(int region_thread_idx,
                               int block_thread_idx,
@@ -332,7 +332,8 @@ namespace yask {
             // Define misc-loop function.
             // Since stride is always 1, we ignore misc_idxs.stop.
             #define MISC_FN(pt_idxs)                                    \
-                _bundle.calc_scalar(region_thread_idx, pt_idxs.start)
+                FORCE_INLINE                                            \
+                    _bundle.calc_scalar(region_thread_idx, pt_idxs.start)
 
             // Scan through n-D space.
             // Disable OpenMP here.
@@ -614,6 +615,7 @@ namespace yask {
                 // Define the function called from the generated loops to simply
                 // call the loop-of-clusters functions.
                 #define CALC_INNER_LOOP(loop_idxs)                      \
+                    FORCE_INLINE                                        \
                     calc_loop_of_clusters(region_thread_idx, block_thread_idx, loop_idxs)
 
                 // Include automatically-generated loop code that calls
@@ -692,8 +694,9 @@ namespace yask {
                         }                                               \
                     }                                                   \
                     if (ok)                                             \
-                        calc_loop_of_vectors(region_thread_idx, block_thread_idx, \
-                                             loop_idxs, mask);
+                        FORCE_INLINE                                    \
+                            calc_loop_of_vectors(region_thread_idx, block_thread_idx, \
+                                                 loop_idxs, mask);
 
                 // Include automatically-generated loop code that calls
                 // CALC_INNER_LOOP().
@@ -797,8 +800,9 @@ namespace yask {
             idx_t stop_inner = loop_idxs.stop[inner_posn];
 
             // Call code from stencil compiler.
-            _bundle.calc_loop_of_clusters(region_thread_idx, block_thread_idx,
-                                          start_idxs, stop_inner);
+            FORCE_INLINE                                                \
+                _bundle.calc_loop_of_clusters(region_thread_idx, block_thread_idx,
+                                              start_idxs, stop_inner);
         }
 
         // Calculate a series of vector results within an inner loop.
@@ -834,8 +838,9 @@ namespace yask {
             idx_t stop_inner = loop_idxs.stop[inner_posn];
 
             // Call code from stencil compiler.
-            _bundle.calc_loop_of_vectors(region_thread_idx, block_thread_idx,
-                                         start_idxs, stop_inner, write_mask);
+            FORCE_INLINE                                                \
+                _bundle.calc_loop_of_vectors(region_thread_idx, block_thread_idx,
+                                             start_idxs, stop_inner, write_mask);
         }
         
         // Calculate results within a sub-block.
@@ -856,7 +861,7 @@ namespace yask {
 
     };
 
-     // A collection of independent stencil bundles.
+    // A collection of independent stencil bundles.
     // "Independent" implies that they may be evaluated
     // in any order.
     class Stage :
