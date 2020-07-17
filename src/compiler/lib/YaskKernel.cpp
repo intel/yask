@@ -337,14 +337,14 @@ namespace yask {
                 " typedef " << ctype << " " << core_t << ";\n";
         } // vars.
 
-        // Type with ptrs to core data.
+        // Type with data needed in kernels.
         {
         os << "\n // Data needed in kernel(s).\n"
             " // Will create one for each region thread.\n"
             "struct " << _core_t << " {\n";
 
-        os << "\n // Copy of context info.\n"
-            " Indices rank_domain_offsets;\n";
+        os << "\n // Copies of context info.\n"
+            " Indices global_sizes, rank_sizes, rank_domain_offsets;\n";
         
         os << "\n // Pointer(s) to var core data.\n";
         for (auto gp : _vars) {
@@ -939,9 +939,12 @@ namespace yask {
         {
             os << "\n // Set the core pointers.\n"
                 " void set_cores(int num_threads) override {\n"
+                " STATE_VARS(this);\n"
                 "  _core_list.resize(num_threads);\n"
                 "  assert(_core_list.data());\n"
                 "  for (int i = 0; i < num_threads; i++) {\n"
+                "   _core_list[i].global_sizes.set_from_tuple(get_settings()->_global_sizes);\n"
+                "   _core_list[i].rank_sizes.set_from_tuple(get_settings()->_rank_sizes);\n"
                 "   _core_list[i].rank_domain_offsets = rank_domain_offsets;\n"
                 "   " << core_code <<
                 "  }\n";

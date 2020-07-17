@@ -158,6 +158,9 @@ namespace yask {
         // the size of all solution vars.
         update_var_info(true);
 
+        // Set core data needed in kernels.
+        set_cores(rthreads);
+        
         // Determine bounding-boxes for all bundles.
         // This must be done after finding WF extensions.
         find_bounding_boxes();
