@@ -185,7 +185,7 @@ struct MySettings {
 
             if (help) {
                 string app_notes =
-                    "\n_validation is very slow and uses 2x memory,\n"
+                    "\nValidation is very slow and uses 2x memory,\n"
                     " so run with very small sizes and number of time-steps.\n"
                     " If validation fails, it may be due to rounding error;\n"
                     " try building with 8-byte reals.\n";
@@ -566,7 +566,7 @@ int main(int argc, char** argv)
             os << "  Done in " << make_num_str(rstats->get_elapsed_secs()) << " secs.\n" << flush;
 #endif
             // check for equality.
-            os << "\n_checking results...\n";
+            os << "\nChecking results...\n";
             idx_t errs = context->compare_data(*ref_context);
             auto ri = kenv->get_rank_index();
 
@@ -594,7 +594,7 @@ int main(int argc, char** argv)
             ref_soln->end_solution();
         }
         else
-            os << "\n_results NOT VERIFIED.\n";
+            os << "\nResults NOT VERIFIED.\n";
         ksoln->end_solution();
 
         os << "Stencil '" << ksoln->get_name() << "'.\n";

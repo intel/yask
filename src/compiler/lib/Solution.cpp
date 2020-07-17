@@ -197,7 +197,7 @@ namespace yask {
         // We will use these for inter-cluster optimizations and code generation.
         // NB: these cluster bundles do not maintain dependencies, so cannot be used
         // for sorting, making stages, etc.
-        *_dos << "\n_constructing cluster of equations containing " <<
+        *_dos << "\nConstructing cluster of equations containing " <<
             _dims._cluster_mults.product() << " vector(s)...\n";
         *_cluster_eq_bundles = *_eq_bundles;
         _cluster_eq_bundles->replicate_eqs_in_cluster(_dims);
@@ -281,7 +281,7 @@ namespace yask {
             hook(*this, output);
         
         // Create the output.
-        *_dos << "\n_generating '" << target << "' output...\n";
+        *_dos << "\nGenerating '" << target << "' output...\n";
         _printer->print(output->get_ostream());
     }
 

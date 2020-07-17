@@ -181,7 +181,7 @@ namespace yask {
         //auto& step_cond_pts = pt_vis.get_step_cond_pts();
 
         // 1. Check each eq internally.
-        os << "\n_processing " << get_num() << " stencil equation(s)...\n";
+        os << "\nProcessing " << get_num() << " stencil equation(s)...\n";
         for (auto eq1 : get_all()) {
             auto* eq1p = eq1.get();
             assert(out_vars.count(eq1p));
@@ -1302,7 +1302,7 @@ namespace yask {
                                   const CompilerSettings& settings,
                                   ostream& os)
     {
-        os << "\n_partitioning " << all_eqs.get_num() << " equation(s) into bundles...\n";
+        os << "\nPartitioning " << all_eqs.get_num() << " equation(s) into bundles...\n";
         //auto& step_dim = _dims->_step_dim;
 
         // Add scratch equations.
@@ -1582,7 +1582,7 @@ namespace yask {
     void EqStages::make_stages(EqBundles& all_bundles,
                                   ostream& os)
     {
-        os << "\n_partitioning " << all_bundles.get_num() << " bundle(s) into stages...\n";
+        os << "\nPartitioning " << all_bundles.get_num() << " bundle(s) into stages...\n";
 
         for (auto bp : all_bundles.get_all())
             add_bundle_to_stage(all_bundles, bp);
