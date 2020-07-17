@@ -158,13 +158,6 @@ namespace yask {
         // the size of all solution vars.
         update_var_info(true);
 
-        // Set core data needed in kernels.
-        set_cores(rthreads);
-        
-        // Determine bounding-boxes for all bundles.
-        // This must be done after finding WF extensions.
-        find_bounding_boxes();
-
         // Copy current settings to stages.  Needed here because settings may
         // have been changed via APIs or from call to setup_rank() since last
         // call to prepare_solution().  This will wipe out any previous
@@ -180,12 +173,21 @@ namespace yask {
         alloc_timer.start();
         free_scratch_data();
         free_mpi_data();
-        alloc_var_data();
+        alloc_var_data(); // Does nothing if already done.
         alloc_scratch_data();
         alloc_mpi_data();
         alloc_timer.stop();
         DEBUG_MSG("Allocation done in " <<
                   make_num_str(alloc_timer.get_elapsed_secs()) << " secs.");
+
+        // Set core data needed in kernels.  This must be done after calling
+        // alloc_scratch_data() because the scratch vars must exist.
+        set_cores(rthreads);
+        
+        // Determine bounding-boxes for all bundles.  This must be done
+        // after finding WF extensions.  And, this must be done after
+        // set_cores() because is_in_valid_domain() needs the core data.
+        find_bounding_boxes();
 
         init_stats();
 

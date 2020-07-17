@@ -338,6 +338,7 @@ namespace yask {
         } // vars.
 
         // Type with data needed in kernels.
+        // TODO: make one core for non-thread-specific data and one for thread data.
         {
         os << "\n // Data needed in kernel(s).\n"
             " // Will create one for each region thread.\n"
@@ -791,9 +792,9 @@ namespace yask {
                     " " + var_list + ".push_back(" + var_ptr + ");\n"
                     " }\n";
 
-                // Core init.
+                // Core init from 'i'th scratch var.
                 core_code += " _core_list[i]." + core_ptr + " = static_cast<" + core_t + "*>"
-                    "(" + var_list + ".at(i)->get_corep());\n";
+                    "(" + var_list + ".at(i)->corep());\n";
             }
 
             // Make new vars via API.

@@ -364,6 +364,7 @@ endif
 # compiler-specific settings.
 
 # Clang (LLVM-based) compiler.
+# Includes clang-based Intel compiler (-qnextgen).
 ifeq ($(call MACRO_DEF,$(YK_CXX) $(EXTRA_YK_CXXFLAGS),__clang__),1)
  YK_CXXFLAGS	+=	$(CXX_ISA)
  YK_CXXFLAGS	+=	-Wno-unused-variable 

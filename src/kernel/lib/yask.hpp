@@ -89,16 +89,7 @@ typedef int MPI_Request;
 #include <sys/syscall.h>
 #endif
 
-// Conditional inlining
-#if defined(USE_ALWAYS_INLINE) && !defined(CHECK)
-#define ALWAYS_INLINE __attribute__((always_inline)) inline
-#define FORCE_INLINE _Pragma("forceinline")
-#else
-#define ALWAYS_INLINE inline
-#define FORCE_INLINE
-#endif
-
-// Additional type for unsigned indices.
+// Type for unsigned indices.
 typedef std::uint64_t uidx_t;
 
 // Common utilities.
@@ -111,6 +102,17 @@ typedef std::uint64_t uidx_t;
 #include "combo.hpp"
 
 // Simple macros and stubs.
+
+// Conditional inlining
+#if !defined(NO_INLINE) && !defined(CHECK)
+#define ALWAYS_INLINE __attribute__((always_inline)) inline
+#define FORCE_INLINE _Pragma("forceinline")
+#define FORCE_INLINE_RECURSIVE _Pragma("forceinline recursive")
+#else
+#define ALWAYS_INLINE inline
+#define FORCE_INLINE
+#define FORCE_INLINE_RECURSIVE
+#endif
 
 #ifndef NO_VEC
 #define _NO_VECTOR _Pragma("novector")

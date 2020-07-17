@@ -792,8 +792,8 @@ namespace yask {
 #endif
     }
 
-    // Allocate memory for scratch vars based on number of threads and
-    // block sizes.
+    // Delete and re-create all the scratch vars.  Delete and re-allocate
+    // memory for scratch vars based on number of threads and block sizes.
     void StencilContext::alloc_scratch_data() {
         STATE_VARS(this);
 
