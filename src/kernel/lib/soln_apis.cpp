@@ -116,8 +116,8 @@ namespace yask {
         reset_auto_tuner(true, false);
 
         // Report ranks.
-        DEBUG_MSG("\n_num MPI ranks:            " << env->get_num_ranks() <<
-                  "\n_this MPI rank index:      " << env->get_rank_index());
+        DEBUG_MSG("\nNum MPI ranks:            " << env->get_num_ranks() <<
+                  "\nThis MPI rank index:      " << env->get_rank_index());
 
         // report threads.
         {
@@ -125,7 +125,7 @@ namespace yask {
             int rt, bt;
             int at = get_num_comp_threads(rt, bt);
             DEBUG_MSG("Num OpenMP threads avail: " << opts->max_threads <<
-                      "\n_num OpenMP threads used:  " << at <<
+                      "\nNum OpenMP threads used:  " << at <<
                       "\n  Num threads per region: " << rt <<
                       "\n  Num threads per block:  " << bt);
         }
@@ -141,8 +141,8 @@ namespace yask {
                           [&](idx_t start, idx_t stop, idx_t thread_num) { });
 
         // Some var stats.
-        DEBUG_MSG("\n_num vars: " << var_ptrs.size() <<
-                  "\n_num vars to be updated: " << output_var_ptrs.size());
+        DEBUG_MSG("\nNum vars: " << var_ptrs.size() <<
+                  "\nNum vars to be updated: " << output_var_ptrs.size());
 
         // Set up data based on MPI rank, including local or global sizes,
         // var positions.
@@ -241,15 +241,15 @@ namespace yask {
         tot_nbytes = sum_over_ranks(rank_nbytes, env->comm);
         rank_domain_pts = rank_bb.bb_num_points;
         tot_domain_pts = sum_over_ranks(rank_domain_pts, env->comm);
-        DEBUG_MSG("\n_domain size in this rank (points):          " << make_num_str(rank_domain_pts) <<
-                  "\n_total allocation in this rank:              " << make_byte_str(rank_nbytes) <<
-                  "\n_overall problem size in " << env->num_ranks << " rank(s) (points): " <<
+        DEBUG_MSG("\nDomain size in this rank (points):          " << make_num_str(rank_domain_pts) <<
+                  "\nTotal allocation in this rank:              " << make_byte_str(rank_nbytes) <<
+                  "\nOverall problem size in " << env->num_ranks << " rank(s) (points): " <<
                   make_num_str(tot_domain_pts) <<
-                  "\n_total overall allocation in " << env->num_ranks << " rank(s):      " <<
+                  "\nTotal overall allocation in " << env->num_ranks << " rank(s):      " <<
                   make_byte_str(tot_nbytes));
 
         // Report some sizes and settings.
-        DEBUG_MSG("\n_work-unit sizes in points (from smallest to largest):\n"
+        DEBUG_MSG("\nWork-unit sizes in points (from smallest to largest):\n"
                   " vector-size:           " << dims->_fold_pts.make_dim_val_str(" * ") << endl <<
                   " cluster-size:          " << dims->_cluster_pts.make_dim_val_str(" * ") << endl <<
                   " sub-block-size:        " << opts->_sub_block_sizes.remove_dim(step_posn).make_dim_val_str(" * ") << endl <<
@@ -262,7 +262,7 @@ namespace yask {
         DEBUG_MSG(" sub-block-group-size:  " << opts->_sub_block_group_sizes.make_dim_val_str(" * ") << endl <<
                   " block-group-size:      " << opts->_block_group_sizes.make_dim_val_str(" * "));
 #endif
-        DEBUG_MSG("\n_other settings:\n"
+        DEBUG_MSG("\nOther settings:\n"
                   " yask-version:          " << yask_get_version_string() << endl <<
                   " target:                " << get_target() << endl <<
                   " stencil-name:          " << get_name() << endl <<
@@ -292,7 +292,7 @@ namespace yask {
                   "Num stencil equations:  " << NUM_STENCIL_EQS);
 
         // Info on work in stages.
-        DEBUG_MSG("\n_breakdown of work stats in this rank:");
+        DEBUG_MSG("\nBreakdown of work stats in this rank:");
         for (auto& sp : st_stages)
             sp->init_work_stats();
     }
@@ -500,7 +500,7 @@ namespace yask {
         }
 
         if (steps_done > 0) {
-            DEBUG_MSG("\n_work stats:\n"
+            DEBUG_MSG("\nWork stats:\n"
                       " num-steps-done:                   " << make_num_str(steps_done) << endl <<
                       " num-reads-per-step:               " << make_num_str(double(p->nreads) / steps_done) << endl <<
                       " num-writes-per-step:              " << make_num_str(double(p->nwrites) / steps_done) << endl <<
@@ -520,7 +520,7 @@ namespace yask {
                               pfx << "num-est-FP-ops-per-step:  " << make_num_str(nfpops));
                 }
             }
-            DEBUG_MSG("\n_time stats:\n"
+            DEBUG_MSG("\nTime stats:\n"
                       " elapsed-time (sec):               " << make_num_str(rtime) << endl <<
                       " Time breakdown by activity type:\n"
                       "  compute time (sec):                " << make_num_str(ctime) <<
@@ -559,7 +559,7 @@ namespace yask {
 
             // Note that rates are reported with base-10 suffixes per common convention, not base-2.
             // See https://www.speedguide.net/articles/bits-bytes-and-bandwidth-reference-guide-115.
-            DEBUG_MSG("\n_rate stats:\n"
+            DEBUG_MSG("\nRate stats:\n"
                       " throughput (num-reads/sec):       " << make_num_str(p->reads_ps) << endl <<
                       " throughput (num-writes/sec):      " << make_num_str(p->writes_ps) << endl <<
                       " throughput (est-FLOPS):           " << make_num_str(p->flops) << endl <<
