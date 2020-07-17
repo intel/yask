@@ -401,7 +401,9 @@ namespace yask {
                 os << "\n // Determine whether " << egs_name << " is valid at the domain indices " <<
                     _dims._stencil_dims.make_dim_str() << ".\n"
                     " // Return true if indices are within the valid sub-domain or false otherwise.\n"
-                    " ALWAYS_INLINE bool is_in_valid_domain(const Indices& idxs) const {\n";
+                    " ALWAYS_INLINE bool is_in_valid_domain(const Indices& idxs) const {"
+                    " assert(_core_list);\n"
+                    " auto& core_data = _core_list[0];\n";
                 print_indices(os);
                 if (eq->cond)
                     os << " return " << eq->cond->make_str() << ";\n";
@@ -428,7 +430,9 @@ namespace yask {
                 os << endl << " // Determine whether " << egs_name <<
                     " is valid at the step input_step_index.\n" <<
                     " // Return true if valid or false otherwise.\n"
-                    " ALWAYS_INLINE bool is_in_valid_step(idx_t input_step_index) const {\n";
+                    " ALWAYS_INLINE bool is_in_valid_step(idx_t input_step_index) const {"
+                    " assert(_core_list);\n"
+                    " auto& core_data = _core_list[0];\n";
                 if (eq->step_cond) {
                     os << " idx_t " << _dims._step_dim << " = input_step_index;\n"
                         "\n // " << eq->step_cond->make_str() << "\n";
