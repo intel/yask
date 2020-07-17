@@ -481,11 +481,21 @@ int main(int argc, char** argv)
                 " mid-throughput (est-FLOPS):       " << make_num_str(mid_trial->flops) << endl <<
                 " mid-throughput (num-points/sec):  " << make_num_str(mid_trial->pts_ps) << endl <<
                 div_line <<
-                "Notes:\n"
-                " The 50th-percentile trial is the same as the median trial\n"
-                "  when there is an odd number of trials. When there is an even\n"
-                "  number of trials, the nearest-rank method is used. An odd\n"
-                "  number of trials is recommended.\n"
+                "Notes:\n";
+            if (trial_stats.size() == 1)
+                os << " Since there was only one trial, the best trial and the\n"
+                    "  50th-percentile trial are the one and only trial.\n";
+            else {
+                if (trial_stats.size() % 2)
+                    os << " Since there was an odd number of trials, the\n"
+                        "  50th-percentile trial is the trial with the median performance:\n";
+                else
+                    os << " Since there was an even number of trials, the\n"
+                        "  50th-percentile trial is chosen with the nearest-rank method:\n";
+                os << "  the trial with performance ranked " << (r50+1) << " out of " <<
+                    trial_stats.size() << ".\n";
+            }
+            os <<
                 " Num-reads/sec, num-writes/sec, and FLOPS are metrics based on\n"
                 "  stencil specifications and can vary due to differences in\n"
                 "  implementations and optimizations.\n"

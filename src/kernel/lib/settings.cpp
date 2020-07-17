@@ -455,7 +455,7 @@ namespace yask {
         CommandLineParser soln_parser;
         add_options(soln_parser);
         soln_parser.print_help(os);
-        os << "\n_terms for the various levels of tiling from smallest to largest:\n"
+        os << "\nTerms for the various levels of tiling from smallest to largest:\n"
             " A 'point' is a single floating-point (FP) element.\n"
             "  This binary uses " << REAL_BYTES << "-byte FP elements.\n"
             " A 'vector' is composed of points.\n"
@@ -492,7 +492,7 @@ namespace yask {
             "   This binary has NOT been compiled with MPI support,\n"
             "   so the global-domain is equivalent to the single local-domain.\n" <<
 #endif
-            "\n_guidelines for setting tiling sizes:\n"
+            "\nGuidelines for setting tiling sizes:\n"
             " The vector and vector-cluster sizes are set at compile-time, so\n"
             "  there are no run-time options to set them.\n"
             " Set sub-block sizes to specify a unit of work done by each nested OpenMP thread.\n"
@@ -540,7 +540,7 @@ namespace yask {
             " Setting 'group' sizes controls only the order of tiles.\n"
             "  These are advanced settings that are not commonly used.\n"
 #endif
-            "\n_controlling OpenMP threading:\n"
+            "\nControlling OpenMP threading:\n"
             " Using '-max_threads 0' =>\n"
             "  max_threads is set to OpenMP's default number of threads.\n"
             " The -thread_divisor option is a convenience to control the number of\n"
@@ -552,7 +552,7 @@ namespace yask {
             "  Num threads per sub-block = 1.\n"
             "  Num threads used for halo exchange is same as num per region.\n" <<
 #ifdef USE_MPI
-            "\n_controlling MPI scaling:\n"
+            "\nControlling MPI scaling:\n"
             "  To 'strong-scale' a given overall-problem size, use multiple MPI ranks\n"
             "   and keep the global-domain sizes constant.\n"
             "  To 'weak-scale' to a larger overall-problem size, use multiple MPI ranks\n"
@@ -568,7 +568,7 @@ namespace yask {
             ex2 += " -nr" + dname + " " + to_string(i + 1);
         }
         os <<
-            "\n_examples:\n"
+            "\nExamples:\n"
             " " << pgm_name << " -g 768  # global-domain size in all dims.\n"
             " " << pgm_name << ex1 << "  # global-domain size in each dim.\n"
             " " << pgm_name << " -l 2048 -r 512 -rt 10  # local-domain size and temporal rank tiling.\n"
@@ -651,7 +651,7 @@ namespace yask {
         // Temporal region size will be increase to
         // current temporal block size if needed.
         // Default region size (if 0) will be size of rank-domain.
-        os << "\n_regions:" << endl;
+        os << "\nRegions:" << endl;
         auto nr = find_num_subsets(os, _region_sizes, "region",
                                  _rank_sizes, "local-domain",
                                  cluster_pts, step_dim);
@@ -664,7 +664,7 @@ namespace yask {
         // Determine num blocks.
         // Also fix up block sizes as needed.
         // Default block size (if 0) will be size of region.
-        os << "\n_blocks:" << endl;
+        os << "\nBlocks:" << endl;
         auto nb = find_num_subsets(os, _block_sizes, "block",
                                  _region_sizes, "region",
                                  cluster_pts, step_dim);
@@ -677,7 +677,7 @@ namespace yask {
 
         // Determine num mini-blocks.
         // Also fix up mini-block sizes as needed.
-        os << "\n_mini-blocks:" << endl;
+        os << "\nMini-blocks:" << endl;
         auto nmb = find_num_subsets(os, _mini_block_sizes, "mini-block",
                                   _block_sizes, "block",
                                   cluster_pts, step_dim);
@@ -737,7 +737,7 @@ namespace yask {
 
         // Determine num sub-blocks.
         // Also fix up sub-block sizes as needed.
-        os << "\n_sub-blocks:" << endl;
+        os << "\nSub-blocks:" << endl;
         auto nsb = find_num_subsets(os, _sub_block_sizes, "sub-block",
                                   _mini_block_sizes, "mini-block",
                                   cluster_pts, step_dim);
@@ -789,7 +789,7 @@ namespace yask {
         }
 
 #ifdef SHOW_GROUPS
-        os << "\n_groups (only affect ordering):" << endl;
+        os << "\nGroups (only affect ordering):" << endl;
 
         // Show num block-groups.
         // TODO: only print this if block-grouping is enabled.

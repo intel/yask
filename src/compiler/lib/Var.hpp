@@ -92,6 +92,14 @@ namespace yask {
 
         // Access dims.
         virtual const index_expr_ptr_vec& get_dims() const { return _dims; }
+        IntTuple get_dims_tuple() const {
+            IntTuple gdims;
+            for (const auto& dim : _dims) {
+                const auto& dname = dim->_get_name();
+                gdims.add_dim_back(dname, 0);
+            }
+            return gdims;
+        }
 
         // Step dim or null if none.
         virtual const index_expr_ptr get_step_dim() const {

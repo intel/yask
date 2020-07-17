@@ -521,11 +521,18 @@ namespace yask {
         // Set the bounding-box around all stencil bundles.
         void find_bounding_boxes();
 
+        // Set the core pointers.
+        // 'num_threads' is the number of scratch var instances.
+        // Implemented by the YASK compiler-generated code.
+        virtual void set_cores (int num_threads) =0;
+            
         // Make new scratch vars.
+        // Implemented by the YASK compiler-generated code.
         virtual void make_scratch_vars (int num_threads) =0;
-
+        
         // Make a new var iff its dims match any in the stencil.
         // Returns pointer to the new var or nullptr if no match.
+        // Implemented by the YASK compiler-generated code.
         virtual VarBasePtr new_stencil_var (const std::string & name,
                                             const VarDimNames & dims) =0;
 

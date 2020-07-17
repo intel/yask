@@ -815,6 +815,9 @@ namespace yask {
         // data allocated.
         make_scratch_vars(rthreads);
 
+        // Set core data needed in kernels.
+        set_cores(rthreads);
+        
         // Find the max mini-block size across all stages.
         // They can be different across stages when stage-specific
         // auto-tuning has been used.

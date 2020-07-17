@@ -545,14 +545,6 @@ namespace yask {
         virtual GenericVarBase* get_gvbp() =0;
         virtual const GenericVarBase* get_gvbp() const =0;
 
-        // Accessors to core.
-        YkVarBaseCore* get_corep() {
-            return _corep;
-        }
-        const YkVarBaseCore* get_corep() const {
-            return _corep;
-        }
-        
         // Ctor.
         // Important: *corep exists but is NOT yet constructed.
         YkVarBase(KernelStateBase& stateb,
@@ -582,6 +574,14 @@ namespace yask {
 
     public:
 
+        // Accessors to core.
+        YkVarBaseCore* get_corep() {
+            return _corep;
+        }
+        const YkVarBaseCore* get_corep() const {
+            return _corep;
+        }
+        
         // Wrappers to GenericVar.
         const IdxTuple& get_dim_tuple() const {
             return get_gvbp()->get_dim_tuple();
@@ -818,13 +818,16 @@ namespace yask {
     template <typename LayoutFn, bool _use_step_idx>
     class YkElemVar final : public YkVarBase {
 
+    public:
+        // Type for core data.
+        typedef YkElemVarCore<LayoutFn, _use_step_idx> core_t;
+
     protected:
 
         // Core data.
         // This also contains the storage core: _core._data.
-        typedef YkElemVarCore<LayoutFn, _use_step_idx> _core_t;
-        _core_t _core;
-        static_assert(std::is_trivially_copyable<_core_t>::value,
+        core_t _core;
+        static_assert(std::is_trivially_copyable<core_t>::value,
                       "Needed for OpenMP offload");
 
         // Storage meta-data.
@@ -862,6 +865,10 @@ namespace yask {
 
             resize();
         }
+
+        // Accessors for core data.
+        core_t& get_core() { return _core; }
+        const core_t& get_core() const { return _core; }
 
         // Make a human-readable description.
         virtual std::string _make_info_string() const override final {
@@ -930,13 +937,16 @@ namespace yask {
     template <typename LayoutFn, bool _use_step_idx, idx_t... _templ_vec_lens>
     class YkVecVar final : public YkVarBase {
 
+    public:
+        // Type for core data.
+        typedef YkVecVarCore<LayoutFn, _use_step_idx, _templ_vec_lens...> core_t;
+        
     protected:
 
         // Core data.
         // This also contains the storage core.
-        typedef YkVecVarCore<LayoutFn, _use_step_idx, _templ_vec_lens...> _core_t;
-        _core_t _core;
-        static_assert(std::is_trivially_copyable<_core_t>::value,
+        core_t _core;
+        static_assert(std::is_trivially_copyable<core_t>::value,
                       "Needed for OpenMP offload");
 
         // Storage meta-data.
@@ -994,6 +1004,10 @@ namespace yask {
 
             resize();
         }
+
+        // Accessors for core data.
+        core_t& get_core() { return _core; }
+        const core_t& get_core() const { return _core; }
 
         // Make a human-readable description.
         std::string _make_info_string() const override final {

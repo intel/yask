@@ -68,12 +68,7 @@ namespace yask {
         virtual string get_var_ptr(const VarPoint& gp) {
             const auto* var = gp._get_var();
             string gname = var->_get_name();
-            string expr = "(static_cast<_context_data_t::" + gname + "_type*>(_context_data->";
-            if (var->is_scratch())
-                expr += gname + "_list[scratch_var_idx]";
-            else
-                expr += gname + "_ptr";
-            expr += ".get()->gbp()))";
+            string expr = "core_data.var_" + gname + "_core_p";
             return expr;
         }
         
@@ -262,7 +257,7 @@ namespace yask {
         virtual string get_var_ptr(VarPoint& gp) {
             return _cvph.get_var_ptr(gp);
         }
-};
+    };
 
     // Outputs the loop-invariant variables for an inner loop.
     class CppLoopVarPrintVisitor : public PrintVisitorBase {
@@ -285,7 +280,8 @@ namespace yask {
     protected:
         EqStages& _eq_stages; // stages of bundles w/o inter-dependencies.
         EqBundles& _cluster_eq_bundles;  // eq-bundles for scalar and vector.
-        string _context, _context_base, _context_hook; // class names;
+        string _context, _context_hook; // class names;
+        string _core_t; // core struct name;
 
         // Print an expression as a one-line C++ comment.
         void add_comment(ostream& os, EqBundle& eq);
@@ -308,7 +304,6 @@ namespace yask {
         virtual void print_eq_bundles(ostream& os);
         virtual void print_context(ostream& os);
 
-
     public:
         YASKCppPrinter(StencilSolution& stencil,
                        EqBundles& eq_bundles,
@@ -319,9 +314,10 @@ namespace yask {
             _cluster_eq_bundles(cluster_eq_bundles)
         {
             // name of C++ struct.
-            _context = "StencilContext_" + _stencil._get_name();
-            _context_base = _context + "_data";
-            _context_hook = _context + "_hook";
+            string sname = _stencil._get_name();
+            _context = sname + "_context_t";
+            _context_hook = sname + "_hook_t";
+            _core_t = sname + "_core_t";
         }
         virtual ~YASKCppPrinter() { }
 

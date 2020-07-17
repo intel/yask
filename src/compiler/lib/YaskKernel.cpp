@@ -31,7 +31,7 @@ namespace yask {
 
     // Print extraction of indices.
     void YASKCppPrinter::print_indices(ostream& os) const {
-        os << endl << " // Extract individual indices.\n";
+        os << "\n // Extract index for each dim.\n";
         int i = 0;
         for (auto& dim : _dims._stencil_dims) {
             auto& dname = dim._get_name();
@@ -52,8 +52,9 @@ namespace yask {
     // Print YASK code in new stencil context class.
     void YASKCppPrinter::print(ostream& os) {
 
+        string sname = _stencil._get_name();
         os << "// Automatically-generated code; do not edit.\n"
-            "\n////// YASK implementation of the '" << _stencil._get_name() <<
+            "\n////// YASK implementation of the '" << sname <<
             "' stencil //////\n";
 
         // Macros.
@@ -83,8 +84,9 @@ namespace yask {
     // in favor of consts or templates.
     void YASKCppPrinter::print_macros(ostream& os) {
 
+        string sname = _stencil._get_name();
         os << "// Stencil solution:\n"
-            "#define YASK_STENCIL_NAME \"" << _stencil._get_name() << "\"\n"
+            "#define YASK_STENCIL_NAME \"" << sname << "\"\n"
             "#define YASK_STENCIL_CONTEXT " << _context << endl;
 
         os << "\n// target:\n"
@@ -183,42 +185,27 @@ namespace yask {
         }
     }
 
-    // Print YASK data class.
+    #define VAR_DECLS(gp) \
+        int ndims = gp->get_num_dims();         \
+        auto gdims = gp->get_dims_tuple();      \
+        string var = gp->_get_name();           \
+        string vprefix = "var_" + var;          \
+        string base_t = vprefix + "_base_t";        \
+        string ptr_t = vprefix + "_base_ptr_t";     \
+        string core_t = vprefix + "_core_t";        \
+        string base_ptr = vprefix + "_base_p";      \
+        string core_ptr = vprefix + "_core_p";      \
+        string var_ptr = vprefix + "_p";            \
+        string var_list = vprefix + "_list";        \
+        string var_dim_names = vprefix + "_dim_names"
+    
+    // Print YASK var types and core-data class.
     void YASKCppPrinter::print_data(ostream& os) {
 
-        // get stats.
-        CounterVisitor cve;
-        _eq_bundles.visit_eqs(&cve);
-
-        os << "\n ////// Stencil-specific data //////" << endl <<
-            "class " << _context_base << " : public StencilContext {\n"
-            "public:\n";
-
-        // APIs.
-        os << "\n virtual std::string get_target() const override {\n"
-            "  return \"" << _settings._target << "\";\n"
-            " }\n"
-            "\n virtual int get_element_bytes() const override {\n"
-            "  return " << _settings._elem_bytes << ";\n"
-            " }\n";
-
-        // Save data for ctor and new-var method.
-        string ctor_code, ctor_list, new_var_code, scratch_code;
-        set<string> new_var_dims;
-
-        // Vars.
-        os << "\n ///// Var(s)." << endl;
+        // Var types.
+        os << "\n ///// Stencil var type(s)." << endl;
         for (auto gp : _vars) {
-            string var = gp->_get_name();
-            int ndims = gp->get_num_dims();
-
-            // Tuple version of dims.
-            IntTuple gdims;
-            for (int dn = 0; dn < ndims; dn++) {
-                auto& dim = gp->get_dims()[dn];
-                auto& dname = dim->_get_name();
-                gdims.add_dim_back(dname, 0);
-            }
+            VAR_DECLS(gp);
 
             os << "\n // The ";
             if (ndims)
@@ -245,275 +232,129 @@ namespace yask {
 
             // Use vector-folded layout if possible.
             bool folded = gp->is_foldable();
-            string gtype = folded ? "YkVecVar" : "YkElemVar";
+            string vtype = folded ? "YkVecVar" : "YkElemVar";
+            string ctype = vtype + "Core";
 
+            // Create the template params.
             // Type-name in kernel is 'VAR_TYPE<LAYOUT, WRAP_1ST_IDX, VEC_LENGTHS...>'.
-            string type_name = gtype + "<Layout_";
-            int step_posn = 0;
-            int inner_posn = 0;
-            vector<int> vlens;
-            vector<int> misc_posns;
+            {
+                string templ = "<Layout_";
+                int step_posn = 0;
+                int inner_posn = 0;
+                vector<int> vlens;
+                vector<int> misc_posns;
 
-            // 1-D or more.
-            if (ndims) {
-                for (int dn = 0; dn < ndims; dn++) {
-                    auto& dim = gp->get_dims()[dn];
-                    auto& dname = dim->_get_name();
-                    auto dtype = dim->get_type();
-                    bool defer = false; // add dim later.
+                // 1-D or more.
+                if (ndims) {
+                    for (int dn = 0; dn < ndims; dn++) {
+                        auto& dim = gp->get_dims()[dn];
+                        auto& dname = dim->_get_name();
+                        auto dtype = dim->get_type();
+                        bool defer = false; // add dim later.
 
-                    // Step dim?
-                    // If this exists, it will get placed near to the end,
-                    // just before the inner & misc dims.
-                    if (dtype == STEP_INDEX) {
-                        assert(dname == _dims._step_dim);
-                        if (dn > 0) {
-                            THROW_YASK_EXCEPTION("Error: cannot create var '" + var +
-                                                 "' with dimensions '" + gdims.make_dim_str() +
-                                                 "' because '" + dname + "' must be first dimension");
+                        // Step dim?
+                        // If this exists, it will get placed near to the end,
+                        // just before the inner & misc dims.
+                        if (dtype == STEP_INDEX) {
+                            assert(dname == _dims._step_dim);
+                            if (dn > 0) {
+                                THROW_YASK_EXCEPTION("Error: cannot create var '" + var +
+                                                     "' with dimensions '" + gdims.make_dim_str() +
+                                                     "' because '" + dname + "' must be first dimension");
+                            }
+                            if (folded) {
+                                step_posn = dn + 1;
+                                defer = true;
+                            }
                         }
+
+                        // Inner domain dim?
+                        // If this exists, it will get placed at or near the end.
+                        else if (dname == _dims._inner_dim) {
+                            assert(dtype == DOMAIN_INDEX);
+                            if (folded) {
+                                inner_posn = dn + 1;
+                                defer = true;
+                            }
+                        }
+
+                        // Misc dims? Placed after the inner domain dim if requested.
+                        else if (dtype == MISC_INDEX) {
+                            if (folded && _settings._inner_misc) {
+                                misc_posns.push_back(dn + 1);
+                                defer = true;
+                            }
+                        }
+
+                        // Add index position to layout.
+                        if (!defer) {
+                            int other_posn = dn + 1;
+                            templ += to_string(other_posn);
+                        }
+
+                        // Add vector len to list.
                         if (folded) {
-                            step_posn = dn + 1;
-                            defer = true;
+                            auto* p = _dims._fold.lookup(dname);
+                            int dval = p ? *p : 1;
+                            vlens.push_back(dval);
                         }
                     }
 
-                    // Inner domain dim?
-                    // If this exists, it will get placed at or near the end.
-                    else if (dname == _dims._inner_dim) {
-                        assert(dtype == DOMAIN_INDEX);
-                        if (folded) {
-                            inner_posn = dn + 1;
-                            defer = true;
-                        }
-                    }
-
-                    // Misc dims? Placed after the inner domain dim if requested.
-                    else if (dtype == MISC_INDEX) {
-                        if (folded && _settings._inner_misc) {
-                            misc_posns.push_back(dn + 1);
-                            defer = true;
-                        }
-                    }
-
-                    // Add index position to layout.
-                    if (!defer) {
-                        int other_posn = dn + 1;
-                        type_name += to_string(other_posn);
-                    }
-
-                    // Add vector len to list.
-                    if (folded) {
-                        auto* p = _dims._fold.lookup(dname);
-                        int dval = p ? *p : 1;
-                        vlens.push_back(dval);
-                    }
+                    // Add deferred posns at end.
+                    if (step_posn)
+                        templ += to_string(step_posn);
+                    if (inner_posn)
+                        templ += to_string(inner_posn);
+                    for (auto mp : misc_posns)
+                        templ += to_string(mp);
                 }
 
-                // Add deferred posns at end.
+                // Scalar.
+                else
+                    templ += "0d"; // Trivial scalar layout.
+
+                // Add step-dim flag.
                 if (step_posn)
-                    type_name += to_string(step_posn);
-                if (inner_posn)
-                    type_name += to_string(inner_posn);
-                for (auto mp : misc_posns)
-                    type_name += to_string(mp);
-            }
-
-            // Scalar.
-            else
-                type_name += "0d"; // Trivial scalar layout.
-
-            // Add step-dim flag.
-            if (step_posn)
-                type_name += ", true";
-            else
-                type_name += ", false";
-
-            // Add vec lens.
-            if (folded) {
-                for (auto i : vlens)
-                    type_name += ", " + to_string(i);
-            }
-
-            type_name += ">";
-
-            // Typedef.
-            string type_def = var + "_type";
-            string ptr_type_def = var + "_ptr_type";
-            os << " typedef " << type_name << " " << type_def << ";\n" <<
-                " typedef std::shared_ptr<" << type_def << "> " << ptr_type_def << ";\n"
-                " VarDimNames " + var + "_dim_names;\n";
-
-            ctor_code += "\n // Var '" + var + "'.\n";
-            ctor_code += " " + var + "_dim_names = {" +
-                gdims.make_dim_str(", ", "\"", "\"") + "};\n";
-            string gbp = var + "_base_ptr";
-            string init_code = " " + var + "_ptr_type " + gbp + " = std::make_shared<" + type_def +
-                ">(*this, \"" + var + "\", " + var + "_dim_names);\n"
-                " assert(" + gbp + ");\n"
-                " " + var + "_ptr = std::make_shared<YkVarImpl>(" + gbp + ");\n"
-                " assert(" + var + "_ptr->gbp());\n";
-
-            // Vars.
-            if (gp->is_scratch()) {
-
-                // Collection of scratch vars.
-                os << " VarPtrs " << var << "_list;\n";
-                ctor_code += " add_scratch(" + var + "_list);\n";
-            }
-            else {
-
-                // Var ptr declaration.
-                // Default ctor gives null ptr.
-                os << " YkVarPtr " << var << "_ptr;\n";
-            }
-
-            // Alloc-setting code.
-            bool got_domain = false;
-            for (auto& dim : gp->get_dims()) {
-                auto& dname = dim->_get_name();
-                auto dtype = dim->get_type();
-
-                // domain dimension.
-                if (dtype == DOMAIN_INDEX) {
-                    got_domain = true;
-
-                    // Halos for this dimension.
-                    for (bool left : { true, false }) {
-                        string bstr = left ? "_left_halo_" : "_right_halo_";
-                        string hvar = var + bstr + dname;
-                        int hval = _settings._halo_size > 0 ?
-                            _settings._halo_size : gp->get_halo_size(dname, left);
-                        os << " const idx_t " << hvar << " = " << hval <<
-                            "; // default halo size in '" << dname << "' dimension.\n";
-                        init_code += " " + var + "_ptr->set" + bstr + "size(\"" + dname +
-                            "\", " + hvar + ");\n";
-                    }
-                }
-
-                // non-domain dimension.
-                else {
-                    string avar = var + "_alloc_" + dname;
-                    string ovar = var + "_ofs_" + dname;
-                    int aval = 1;
-                    int oval = 0;
-                    if (dtype == STEP_INDEX) {
-                        aval = gp->get_step_dim_size();
-                        init_code += " " + var + "_base_ptr->_set_dynamic_step_alloc(" +
-                            (gp->is_dynamic_step_alloc() ? "true" : "false") +
-                            ");\n";
-                    } else {
-                        auto* minp = gp->get_min_indices().lookup(dname);
-                        auto* maxp = gp->get_max_indices().lookup(dname);
-                        if (minp && maxp) {
-                            aval = *maxp - *minp + 1;
-                            oval = *minp;
-                        }
-                    }
-                    os << " const idx_t " << avar << " = " << aval <<
-                        "; // default allocation in '" << dname << "' dimension.\n";
-                    init_code += " " + var + "_ptr->_set_alloc_size(\"" + dname +
-                        "\", " + avar + ");\n";
-                    if (oval) {
-                        os << " const idx_t " << ovar << " = " << oval <<
-                            "; // first index in '" << dname << "' dimension.\n";
-                        init_code += " " + var + "_ptr->_set_local_offset(\"" + dname +
-                            "\", " + ovar + ");\n";
-                    }
-                }
-            } // dims.
-
-            // L1 dist.
-            if (got_domain) {
-                auto l1var = var + "_l1_norm";
-                os << " const int " << l1var << " = " << gp->get_l1_dist() <<
-                    "; // Max L1-norm of MPI neighbor for halo exchanges.\n";
-                init_code += " " + var + "_ptr->set_halo_exchange_l1_norm(" +
-                    l1var + ");\n";
-            }
-            
-            // Allow dynamic misc alloc setting if not interleaved.
-            init_code += " " + var + "_base_ptr->_set_dynamic_misc_alloc(" +
-                (_settings._inner_misc ? "false" : "true") +
-                ");\n";
-
-            // If not scratch, init vars in ctor.
-            if (!gp->is_scratch()) {
-
-                // Var init.
-                ctor_code += init_code;
-                ctor_code += " add_var(" + var + "_ptr, true, ";
-                if (_eq_bundles.get_output_vars().count(gp))
-                    ctor_code += "true /* is an output var */";
+                    templ += ", true";
                 else
-                    ctor_code += "false /* is not an output var */";
-                ctor_code += ");\n";
+                    templ += ", false";
+
+                // Add vec lens.
+                if (folded) {
+                    for (auto i : vlens)
+                        templ += ", " + to_string(i);
+                }
+                templ += ">";
+
+                // Add templates to types.
+                vtype += templ;
+                ctype += templ;
             }
 
-            // For scratch, make code for one vec element.
-            else {
-                scratch_code += " " + var + "_list.clear();\n"
-                    " for (int i = 0; i < num_threads; i++) {\n"
-                    " YkVarPtr " + var + "_ptr;\n" +
-                    init_code +
-                    " " + var + "_base_ptr->set_scratch(true);\n" +
-                    " " + var + "_list.push_back(" + var + "_ptr);\n"
-                    " }\n";
-            }
-
-            // Make new vars via API.
-            string new_var_key = gdims.make_dim_str();
-            if (!new_var_dims.count(new_var_key)) {
-                new_var_dims.insert(new_var_key);
-                bool first_var = new_var_code.length() == 0;
-                if (gdims._get_num_dims())
-                    new_var_code += "\n // Vars with '" + new_var_key + "' dim(s).\n";
-                else
-                    new_var_code += "\n // Scalar vars.\n";
-                if (!first_var)
-                    new_var_code += " else";
-                new_var_code += " if (dims == " + var + "_dim_names)\n"
-                    " gp = std::make_shared<" + type_def + ">(*this, name, dims);\n";
-            }
-
+            // Typedefs.
+            os << " typedef " << vtype << " " << base_t << ";\n" <<
+                " typedef std::shared_ptr<" << base_t << "> " << ptr_t << ";\n" <<
+                " typedef " << ctype << " " << core_t << ";\n";
         } // vars.
 
-        // Ctor.
+        // Type with ptrs to core data.
         {
-            os << "\n // Constructor.\n" <<
-                " " << _context_base << "(KernelEnvPtr env, KernelSettingsPtr settings) :"
-                " StencilContext(env, settings)" << ctor_list <<
-                " {\n  name = \"" << _stencil._get_name() << "\";\n"
-                " long_name = \"" << _stencil.get_long_name() << "\";\n";
+        os << "\n // Data needed in kernel(s).\n"
+            " // Will create one for each region thread.\n"
+            "struct " << _core_t << " {\n";
 
-            os << "\n // Create vars (but do not allocate data in them).\n" <<
-                ctor_code <<
-                "\n // Update vars with context info.\n"
-                " update_var_info(false);\n";
-
-            // end of ctor.
-            os << " } // ctor" << endl;
+        os << "\n // Copy of context info.\n"
+            " Indices rank_domain_offsets;\n";
+        
+        os << "\n // Pointer(s) to var core data.\n";
+        for (auto gp : _vars) {
+            VAR_DECLS(gp);
+            os << " " << core_t << "* " << core_ptr << ";\n";
         }
-
-        // New-var method.
-        os << "\n // Make a new var iff its dims match any in the stencil.\n"
-            " // Returns pointer to the new var or nullptr if no match.\n"
-            " virtual VarBasePtr new_stencil_var(const std::string& name,"
-            " const VarDimNames& dims) override {\n"
-            " VarBasePtr gp;\n" <<
-            new_var_code <<
-            " return gp;\n"
-            " } // new_stencil_var\n";
-
-        // Scratch-vars method.
-        os << "\n // Make new scratch vars.\n"
-            " virtual void make_scratch_vars(int num_threads) override {\n" <<
-            scratch_code <<
-            " } // make_scratch_vars\n";
-
-        os << "}; // " << _context_base << endl;
+        os << "}; // " << _core_t << endl;
+        }
     }
-
+        
     // Print YASK equation bundles.
     void YASKCppPrinter::print_eq_bundles(ostream& os) {
 
@@ -527,8 +368,8 @@ namespace yask {
 
             os << endl << " ////// Stencil " << eg_desc << " //////\n" <<
                 "\n struct " << egs_name << " {\n"
-                "  typedef " << _context_base << " _context_data_t;\n"
-                "  _context_data_t* _context_data = 0;\n"
+                "  typedef " << _core_t << " _core_t;\n"
+                "  _core_t* _core_list = 0;\n"
                 "  std::string _name;\n"
                 "  int _scalar_fp_ops;\n"
                 "  int _scalar_points_read;\n"
@@ -545,36 +386,13 @@ namespace yask {
 
             // Stencil-bundle ctor.
             {
-                os << " " << egs_name << "(_context_data_t* context, StencilBundleBase* sbb) :\n"
-                    " _context_data(context) {\n"
+                os << " " << egs_name << "() {\n"
                     " _name = \"" << eg_name << "\";\n"
                     " _scalar_fp_ops = " << stats.get_num_ops() << ";\n"
                     " _scalar_points_read = " << stats.get_num_reads() << ";\n"
                     " _scalar_points_written = " << stats.get_num_writes() << ";\n"
                     " _is_scratch = " << (eq->is_scratch() ? "true" : "false") << ";\n";
 
-                // I/O vars.
-                os << "\n // The following var(s) are read by " << egs_name << ".\n";
-                for (auto gp : eq->get_input_vars()) {
-                    if (gp->is_scratch())
-                        os << "  sbb->input_scratch_vecs.push_back(&_context_data->" <<
-                            gp->_get_name() << "_list);\n";
-                    else
-                        os << "  sbb->input_var_ptrs.push_back(_context_data->" <<
-                            gp->_get_name() << "_ptr);\n";
-                }
-                os << "\n // The following var(s) are written by " << egs_name;
-                if (eq->step_expr)
-                    os << " at " << eq->step_expr->make_quoted_str();
-                os << ".\n";
-                for (auto gp : eq->get_output_vars()) {
-                    if (gp->is_scratch())
-                        os << "  sbb->output_scratch_vecs.push_back(&_context_data->" <<
-                            gp->_get_name() << "_list);\n";
-                    else
-                        os << "  sbb->output_var_ptrs.push_back(_context_data->" <<
-                            gp->_get_name() << "_ptr);\n";
-                }
                 os << " } // Ctor." << endl;
             }
 
@@ -673,8 +491,10 @@ namespace yask {
                     _dims._stencil_dims.make_dim_str() << ".\n"
                     " // There are approximately " << stats.get_num_ops() <<
                     " FP operation(s) per invocation.\n"
-                    " ALWAYS_INLINE void calc_scalar(int scratch_var_idx, const Indices& idxs) {\n";
-                    print_indices(os);
+                    " ALWAYS_INLINE void calc_scalar(int core_idx, const Indices& idxs) {\n"
+                    " assert(_core_list);\n"
+                    " auto& core_data = _core_list[core_idx];\n";
+                print_indices(os);
 
                 // C++ scalar print assistant.
                 CounterVisitor cv;
@@ -745,11 +565,13 @@ namespace yask {
                     " aligned vector-block(s).\n"
                     " // There are approximately " << (stats.get_num_ops() * num_results) <<
                     " FP operation(s) per iteration.\n" <<
-                    " ALWAYS_INLINE void " << funcstr << "(int scratch_var_idx, int block_thread_idx,"
+                    " ALWAYS_INLINE void " << funcstr << "(int core_idx, int block_thread_idx,"
                     " const Indices& idxs, idx_t " << istop;
                 if (!do_cluster)
                     os << ", idx_t write_mask";
-                os << ") {\n";
+                os << ") {\n"
+                    " assert(_core_list);\n"
+                    " auto& core_data = _core_list[core_idx];\n";
                 print_indices(os);
                 os << " idx_t " << istart << " = " << idim << ";\n";
                 os << " idx_t " << istep << " = " << nvecs << "; // number of vectors per iter.\n";
@@ -814,7 +636,7 @@ namespace yask {
         } // stencil eq_bundles.
     }
 
-    // Print final YASK context.
+    // Print derived YASK context.
     void YASKCppPrinter::print_context(ostream& os) {
 
         os << "\n ////// User-provided code //////" << endl <<
@@ -827,83 +649,314 @@ namespace yask {
             "};\n";
         
         os << "\n ////// Overall stencil-specific context //////" << endl <<
-            "struct " << _context << " : public " << _context_base << " {" << endl;
+            "class " << _context << " : public StencilContext {\n"
+            " protected:\n";
+
+        // Save code to be added later.
+        string ctor_code, new_var_code, scratch_code, core_code;
+        set<string> new_var_dims;
+
+        // Vars.
+        os << "\n ///// Var(s)." << endl;
+        for (auto gp : _vars) {
+            VAR_DECLS(gp);
+
+            string header = "\n // Var '" + var + "'.\n";
+            os << header;
+            ctor_code += header;
+
+            os << " VarDimNames " << var_dim_names << ";\n";
+            ctor_code += " " + var_dim_names + " = {" +
+                gdims.make_dim_str(", ", "\"", "\"") + "};\n";
+
+            // Code to create a local base ptr and set pre-defined generic ptr.
+            string init_code =
+                " " + ptr_t + " " + base_ptr + " = std::make_shared<" + base_t + ">"
+                "(*this, \"" + var + "\", " + var_dim_names + ");\n"
+                " assert(" + base_ptr + ");\n"
+                " " + var_ptr + " = std::make_shared<YkVarImpl>(" + base_ptr + ");\n"
+                " assert(" + var_ptr + "->gbp());\n";
+
+            if (!gp->is_scratch()) {
+
+                // Var ptr declaration.
+                // Default ctor gives null ptr.
+                os << " YkVarPtr " << var_ptr << ";\n";
+            }
+            else {
+
+                // List of scratch vars, one for each thread.
+                os << " VarPtrs " << var_list << ";\n";
+                ctor_code += " add_scratch(" + var_list + ");\n";
+            }
+
+            // Alloc-setting code.
+            bool got_domain = false;
+            for (auto& dim : gp->get_dims()) {
+                auto& dname = dim->_get_name();
+                auto dtype = dim->get_type();
+
+                // domain dimension.
+                if (dtype == DOMAIN_INDEX) {
+                    got_domain = true;
+
+                    // Halos for this dimension.
+                    for (bool left : { true, false }) {
+                        string bstr = left ? "_left_halo_" : "_right_halo_";
+                        string hvar = var + bstr + dname;
+                        int hval = _settings._halo_size > 0 ?
+                            _settings._halo_size : gp->get_halo_size(dname, left);
+                        os << " const idx_t " << hvar << " = " << hval <<
+                            "; // default halo size in '" << dname << "' dimension.\n";
+                        init_code += " " + var_ptr + "->set" + bstr + "size(\"" + dname +
+                            "\", " + hvar + ");\n";
+                    }
+                }
+
+                // non-domain dimension.
+                else {
+                    string avar = var + "_alloc_" + dname;
+                    string ovar = var + "_ofs_" + dname;
+                    int aval = 1;
+                    int oval = 0;
+                    if (dtype == STEP_INDEX) {
+                        aval = gp->get_step_dim_size();
+                        init_code += " " + base_ptr + "->_set_dynamic_step_alloc(" +
+                            (gp->is_dynamic_step_alloc() ? "true" : "false") +
+                            ");\n";
+                    } else {
+                        auto* minp = gp->get_min_indices().lookup(dname);
+                        auto* maxp = gp->get_max_indices().lookup(dname);
+                        if (minp && maxp) {
+                            aval = *maxp - *minp + 1;
+                            oval = *minp;
+                        }
+                    }
+                    os << " const idx_t " << avar << " = " << aval <<
+                        "; // default allocation in '" << dname << "' dimension.\n";
+                    init_code += " " + var_ptr + "->_set_alloc_size(\"" + dname +
+                        "\", " + avar + ");\n";
+                    if (oval) {
+                        os << " const idx_t " << ovar << " = " << oval <<
+                            "; // first index in '" << dname << "' dimension.\n";
+                        init_code += " " + var_ptr + "->_set_local_offset(\"" + dname +
+                            "\", " + ovar + ");\n";
+                    }
+                }
+            } // dims.
+
+            // L1 dist.
+            if (got_domain) {
+                auto l1var = var + "_l1_norm";
+                os << " const int " << l1var << " = " << gp->get_l1_dist() <<
+                    "; // Max L1-norm of MPI neighbor for halo exchanges.\n";
+                init_code += " " + var_ptr + "->set_halo_exchange_l1_norm(" +
+                    l1var + ");\n";
+            }
+            
+            // Allow dynamic misc alloc setting if not interleaved.
+            init_code += " " + base_ptr + "->_set_dynamic_misc_alloc(" +
+                (_settings._inner_misc ? "false" : "true") +
+                ");\n";
+
+            // If not scratch, init vars in ctor.
+            if (!gp->is_scratch()) {
+
+                // Var init.
+                ctor_code += init_code;
+                ctor_code += " add_var(" + var_ptr + ", true, ";
+                if (_eq_bundles.get_output_vars().count(gp))
+                    ctor_code += "true /* is an output var */";
+                else
+                    ctor_code += "false /* is not an output var */";
+                ctor_code += ");\n";
+
+                // Core init.
+                core_code += " _core_list[i]." + core_ptr + " = static_cast<" + core_t + "*>"
+                    "(" + var_ptr + "->corep());\n";
+            }
+
+            // For scratch, make code to fill vector.
+            else {
+                scratch_code +=
+                    " " + var_list + ".clear();\n"
+                    " for (int i = 0; i < num_threads; i++) {\n"
+                    " YkVarPtr " + var_ptr + ";\n" +
+                    init_code +
+                    " " + base_ptr + "->set_scratch(true);\n" +
+                    " " + var_list + ".push_back(" + var_ptr + ");\n"
+                    " }\n";
+
+                // Core init.
+                core_code += " _core_list[i]." + core_ptr + " = static_cast<" + core_t + "*>"
+                    "(" + var_list + ".at(i)->get_corep());\n";
+            }
+
+            // Make new vars via API.
+            string new_var_key = gdims.make_dim_str();
+            if (!new_var_dims.count(new_var_key)) {
+                new_var_dims.insert(new_var_key);
+                bool first_var = new_var_code.length() == 0;
+                if (gdims._get_num_dims())
+                    new_var_code += "\n // Vars with '" + new_var_key + "' dim(s).\n";
+                else
+                    new_var_code += "\n // Scalar vars.\n";
+                if (!first_var)
+                    new_var_code += " else";
+                new_var_code += " if (dims == " + var_dim_names + ")\n"
+                    " gp = std::make_shared<" + base_t + ">(*this, name, dims);\n";
+            }
+        } // vars.
+
+        os << "\n // Core data for each thread.\n"
+            " std::vector<" << _core_t << "> _core_list;\n";
 
         // Stencil eq_bundle objects.
         os << endl << " // Stencil equation-bundles." << endl;
         for (auto& eg : _eq_bundles.get_all()) {
             string eg_name = eg->_get_name();
             os << " StencilBundleTempl<StencilBundle_" << eg_name << ", " <<
-                _context_base << "> " << eg_name << ";" << endl;
+                _core_t << "> " << eg_name << ";" << endl;
         }
+
+        os << "\n public:\n";
 
         // Ctor.
-        os << "\n // Constructor.\n" <<
-            " " << _context << "(KernelEnvPtr env, KernelSettingsPtr settings) : " <<
-            _context_base << "(env, settings)";
-        for (auto& eg : _eq_bundles.get_all()) {
-            string eg_name = eg->_get_name();
-            os << ",\n  " << eg_name << "(this)";
-        }
-        os << " {\n";
-
-        // Push eq-bundle pointers to list.
-        os << "\n // Stencil bundles.\n";
-        for (auto& eg : _eq_bundles.get_all()) {
-            string eg_name = eg->_get_name();
-
-            // Only want non-scratch bundles in st_bundles.
-            // Each scratch bundles will be added to its
-            // parent bundle.
-            if (!eg->is_scratch())
-                os << "  st_bundles.push_back(&" << eg_name << ");\n";
-
-            // Add scratch-bundle deps in proper order.
-            auto& sdeps = _eq_bundles.get_scratch_deps(eg);
-            for (auto& eg2 : _eq_bundles.get_all()) {
-                if (sdeps.count(eg2)) {
-                    string eg2_name = eg2->_get_name();
-                    os << "  " << eg_name <<
-                        ".add_scratch_child(&" << eg2_name << ");\n";
-                }
-            }
-
-        } // eq-bundles.
-
-        // Deps.
-        os << "\n // Stencil bundle inter-dependencies.\n";
-        for (auto& eg : _eq_bundles.get_all()) {
-            string eg_name = eg->_get_name();
-
-            // Add deps between bundles.
-            for (auto& dep : _eq_bundles.get_deps(eg)) {
-                string dep_name = dep->_get_name();
-                os << "  " << eg_name <<
-                    ".add_dep(&" << dep_name << ");\n";
-            }
-        } // bundles.
-
-        // Stages.
-        os << "\n // Stencil stages.\n";
-        for (auto& bp : _eq_stages.get_all()) {
-            if (bp->is_scratch())
-                continue;
-            string bp_name = bp->_get_name();
-            os << "  auto " << bp_name << " = std::make_shared<Stage>(this, \"" <<
-                bp_name << "\");\n";
-            for (auto& eg : bp->get_bundles()) {
-                if (eg->is_scratch())
-                    continue;
+        {
+            os << "\n // Constructor.\n" <<
+                " " << _context << "(KernelEnvPtr env, KernelSettingsPtr settings) : " <<
+                " StencilContext(env, settings)";
+            for (auto& eg : _eq_bundles.get_all()) {
                 string eg_name = eg->_get_name();
-                os << "  " << bp_name << "->push_back(&" << eg_name << ");\n";
+                os << ",\n  " << eg_name << "(this)";
             }
-            os << "  st_stages.push_back(" << bp_name << ");\n";
+            os << " {\n"
+                " name = \"" << _stencil._get_name() << "\";\n"
+                " long_name = \"" << _stencil.get_long_name() << "\";\n";
+
+            os << "\n // Create vars (but do not allocate data in them).\n" <<
+                ctor_code <<
+                "\n // Update vars with context info.\n"
+                " update_var_info(false);\n";
+
+            // Push eq-bundle pointers to list.
+            for (auto& eg : _eq_bundles.get_all()) {
+                string eg_name = eg->_get_name();
+
+                os << "\n // Configure '" << eg_name << "'.\n";
+
+                // Only want non-scratch bundles in st_bundles.
+                // Each scratch bundles will be added to its
+                // parent bundle.
+                if (!eg->is_scratch())
+                    os << "  st_bundles.push_back(&" << eg_name << ");\n";
+
+                // Add scratch-bundle deps in proper order.
+                auto& sdeps = _eq_bundles.get_scratch_deps(eg);
+                for (auto& eg2 : _eq_bundles.get_all()) {
+                    if (sdeps.count(eg2)) {
+                        string eg2_name = eg2->_get_name();
+                        os << "  " << eg_name <<
+                            ".add_scratch_child(&" << eg2_name << ");\n";
+                    }
+                }
+
+                // Add deps between bundles.
+                for (auto& dep : _eq_bundles.get_deps(eg)) {
+                    string dep_name = dep->_get_name();
+                    os << "  " << eg_name <<
+                        ".add_dep(&" << dep_name << ");\n";
+                }
+
+                // Populate the var lists in the StencilBundleBase objs.
+                // I/O vars.
+                os << "\n // The following var(s) are read by '" << eg_name << "'.\n";
+                for (auto gp : eg->get_input_vars()) {
+                    VAR_DECLS(gp);
+                    if (gp->is_scratch())
+                        os << "  " << eg_name << ".input_scratch_vecs.push_back(&" << var_list << ");\n";
+                    else
+                        os << "  " << eg_name << ".input_var_ptrs.push_back(" << var_ptr << ");\n";
+                }
+                os << "\n // The following var(s) are written by '" << eg_name << "'";
+                if (eg->step_expr)
+                    os << " at " << eg->step_expr->make_quoted_str();
+                os << ".\n";
+                for (auto gp : eg->get_output_vars()) {
+                    VAR_DECLS(gp);
+                    if (gp->is_scratch())
+                        os << "  " << eg_name << ".output_scratch_vecs.push_back(&" << var_list << ");\n";
+                    else
+                        os << "  " << eg_name << ".output_var_ptrs.push_back(" << var_ptr << ");\n";
+                }
+            } // bundles.
+
+            // Stages.
+            os << "\n // Create stencil stage(s).\n";
+            for (auto& bp : _eq_stages.get_all()) {
+                if (bp->is_scratch())
+                    continue;
+                string bp_name = bp->_get_name();
+                os << "  auto " << bp_name << " = std::make_shared<Stage>(this, \"" <<
+                    bp_name << "\");\n";
+                for (auto& eg : bp->get_bundles()) {
+                    if (eg->is_scratch())
+                        continue;
+                    string eg_name = eg->_get_name();
+                    os << "  " << bp_name << "->push_back(&" << eg_name << ");\n";
+                }
+                os << "  st_stages.push_back(" << bp_name << ");\n";
+            }
+                
+            os << "\n // Call code provided by user.\n" <<
+                _context_hook << "::call_after_new_solution(*this);\n";
+
+            // end of ctor.
+            os << " } // ctor" << endl;
         }
 
-        os << "\n // Call code provided by user.\n" <<
-            _context_hook << "::call_after_new_solution(*this);\n";
+        // New-var method.
+        os << "\n // Make a new var iff its dims match any in the stencil.\n"
+            " // Returns pointer to the new var or nullptr if no match.\n"
+            " VarBasePtr new_stencil_var(const std::string& name,"
+            " const VarDimNames& dims) override {\n"
+            " VarBasePtr gp;\n" <<
+            new_var_code <<
+            " return gp;\n"
+            " } // new_stencil_var\n";
 
-        os << " } // Ctor.\n";
+        // Scratch-vars method.
+        os << "\n // Make new scratch vars for each thread.\n"
+            " void make_scratch_vars(int num_threads) override {\n" <<
+            scratch_code <<
+            " } // make_scratch_vars\n";
+
+        // Core-setting method.
+        {
+            os << "\n // Set the core pointers.\n"
+                " void set_cores(int num_threads) override {\n"
+                "  _core_list.resize(num_threads);\n"
+                "  assert(_core_list.data());\n"
+                "  for (int i = 0; i < num_threads; i++) {\n"
+                "   _core_list[i].rank_domain_offsets = rank_domain_offsets;\n"
+                "   " << core_code <<
+                "  }\n";
+
+            // Set _core_list in each bundle.
+            for (auto& eg : _eq_bundles.get_all()) {
+                string eg_name = eg->_get_name();
+                os << " " << eg_name << ".set_core_list(_core_list.data());\n";
+            }
+            os << " } // set_cores\n";
+        }
+            
+        // APIs.
+        os << "\n virtual std::string get_target() const override {\n"
+            "  return \"" << _settings._target << "\";\n"
+            " }\n"
+            "\n virtual int get_element_bytes() const override {\n"
+            "  return " << _settings._elem_bytes << ";\n"
+            " }\n";
 
         // Dims creator.
         os << "\n  // Create Dims object.\n"

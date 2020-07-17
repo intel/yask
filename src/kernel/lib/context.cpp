@@ -75,19 +75,19 @@ namespace yask {
             sp->get_local_settings() = *opts;
         alloc_scratch_data();
 
-        // Use only one set of scratch vars, i.e.,
-        // we don't have one for each thread.
-        int scratch_var_idx = 0;
-
         // Indices to loop through.
         // Init from begin & end tuples.
         ScanIndices rank_idxs(*dims, false, &rank_domain_offsets);
         rank_idxs.begin = begin;
         rank_idxs.end = end;
 
-        // Set offsets in scratch vars.
-        // Requires scratch vars to be allocated for whole
-        // rank instead of smaller var size.
+        // Use only one set of scratch vars, i.e.,
+        // we don't have one for each thread.
+        int scratch_var_idx = 0;
+
+        // Set offsets in scratch vars.  For this reference run, scratch
+        // vars are allocated for the whole rank instead of smaller var
+        // size.
         update_scratch_var_info(scratch_var_idx, rank_idxs.begin);
 
         // Initial halo exchange.
