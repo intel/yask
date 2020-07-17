@@ -89,10 +89,6 @@ namespace yask {
         if (!v_map)
             v_map = &_vec2elem_map;
 
-        // Determine type to avoid virtual call.
-        bool folded = gp.is_var_foldable();
-        string gtype = folded ? "YkVecVar" : "YkElemVar";
-
         // Get/set local vars.
         string var_ptr = get_local_var(os, get_var_ptr(gp), _var_ptr_restrict_type);
         string step_arg_var = get_local_var(os, gp.make_step_arg_str(var_ptr, _dims),
@@ -101,7 +97,7 @@ namespace yask {
         // Assume that broadcast will be handled automatically by
         // operator overloading in kernel code.
         // Specify that any indices should use element vars.
-        string str = var_ptr + "->" + gtype + "::read_elem(";
+        string str = var_ptr + "->read_elem(";
         string args = gp.make_arg_str(v_map);
         str += "{" + args + "}, " + step_arg_var + ",__LINE__)";
         return str;
