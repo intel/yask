@@ -319,7 +319,7 @@ namespace yask {
             _cluster_eq_bundles(cluster_eq_bundles)
         {
             // name of C++ struct.
-            string sname = _stencil._get_name();
+            string sname = "stencil_" + _stencil._get_name();
             _context = sname + "_context_t";
             _context_hook = sname + "_hook_t";
             _core_t = sname + "_core_t";
