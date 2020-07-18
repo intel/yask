@@ -209,7 +209,9 @@ namespace yask {
 
     // A template that is instantiated with the stencil-compiler
     // output class.
-    template <typename StencilBundleImpl, typename StencilCoreData>
+    template <typename StencilBundleImpl,
+              typename StencilCoreData,
+              typename StencilThreadCoreData>
     class StencilBundleTempl:
         public StencilBundleBase {
 
@@ -225,9 +227,12 @@ namespace yask {
         // Dtor.
         virtual ~StencilBundleTempl() { }
 
-        // Set pointer to list of core data.
-        void set_core_list(StencilCoreData* core_list) {
-            _bundle._core_list = core_list;
+        // Set pointer to core data.
+        void set_core(StencilCoreData* core_p) {
+            _bundle._core_p = core_p;
+        }
+        void set_thread_core_list(StencilThreadCoreData* core_list) {
+            _bundle._thread_core_list = core_list;
         }
         
         // Get name of this bundle.

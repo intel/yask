@@ -696,7 +696,7 @@ namespace yask {
             string ename = dname + _elem_suffix;
             string cap_dname = PrinterBase::all_caps(dname);
             os << " idx_t " << ename <<
-                " = core_data.rank_domain_offsets[" << i << "] + (" <<
+                " = _core_p->rank_domain_offsets[" << i << "] + (" <<
                 dname << " * VLEN_" << cap_dname << ");\n";
             _vec2elem_map[dname] = ename;
             i++;

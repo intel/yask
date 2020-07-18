@@ -68,7 +68,12 @@ namespace yask {
         virtual string get_var_ptr(const VarPoint& gp) {
             const auto* var = gp._get_var();
             string gname = var->_get_name();
-            string expr = "core_data.var_" + gname + "_core_p";
+            string expr;
+            if (var->is_scratch())
+                expr = "thread_core_data.";
+            else
+                expr = "_core_p->";
+            expr += "var_" + gname + "_core_p";
             return expr;
         }
         
@@ -281,7 +286,7 @@ namespace yask {
         EqStages& _eq_stages; // stages of bundles w/o inter-dependencies.
         EqBundles& _cluster_eq_bundles;  // eq-bundles for scalar and vector.
         string _context, _context_hook; // class names;
-        string _core_t; // core struct name;
+        string _core_t, _thread_core_t; // core struct names;
 
         // Print an expression as a one-line C++ comment.
         void add_comment(ostream& os, EqBundle& eq);
@@ -318,6 +323,7 @@ namespace yask {
             _context = sname + "_context_t";
             _context_hook = sname + "_hook_t";
             _core_t = sname + "_core_t";
+            _thread_core_t = sname + "_thread_core_t";
         }
         virtual ~YASKCppPrinter() { }
 
