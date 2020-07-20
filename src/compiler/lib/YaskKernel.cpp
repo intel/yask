@@ -605,10 +605,7 @@ namespace yask {
 
                 // Start forced-inline code.
                 os << "\n // Force inlining if possible.\n"
-                    "#if !defined(DEBUG) && defined(__INTEL_COMPILER)\n"
-                    "#pragma forceinline recursive\n"
-                    "#endif\n"
-                    " {\n";
+                    "FORCE_INLINE_RECURSIVE {\n";
 
                 // Print time-invariants.
                 os << "\n // Invariants within a step.\n";
@@ -627,7 +624,7 @@ namespace yask {
                 os << "\n // Inner loop.\n";
                 if (_dims._fold.product() == 1)
                     os << " // Specifying SIMD here because there is no explicit vectorization.\n"
-                        "#pragma omp simd\n";
+                        " _SIMD";
                 os << " for (idx_t " << idim << " = " << istart << "; " <<
                     idim << " < " << istop << "; " <<
                     idim << " += " << istep << ", " <<
