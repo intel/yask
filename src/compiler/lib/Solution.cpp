@@ -239,7 +239,7 @@ namespace yask {
             _printer = new YASKAvx256Printer(*this, *_eq_bundles, *_eq_stages, *_cluster_eq_bundles);
         else if (target == "avx512" || target == "knl")
             _printer = new YASKAvx512Printer(*this, *_eq_bundles, *_eq_stages, *_cluster_eq_bundles);
-        else if (target == "avx512lo")
+        else if (target == "avx512-ymm")
             _printer = new YASKAvx512Printer(*this, *_eq_bundles, *_eq_stages, *_cluster_eq_bundles, true);
         else if (target == "dot")
             _printer = new DOTPrinter(*this, *_cluster_eq_bundles, false);

@@ -64,9 +64,9 @@ ifneq ($(filter $(arch),avx snb ivb),)
   TARGET		:=	avx
 else ifneq ($(filter $(arch),avx2 hsw bdw),)
   TARGET		:=	avx2
-else ifneq ($(filter $(arch),avx512lo),)
-  TARGET		:=	avx512lo
-else ifneq ($(filter $(arch),avx512 avx512hi avx512f skx skl clx),)
+else ifneq ($(filter $(arch),avx512-ymm avx512lo),)
+  TARGET		:=	avx512-ymm
+else ifneq ($(filter $(arch),avx512 avx512-zmm avx512hi avx512f skx skl clx icx),)
   TARGET		:=	avx512
 else ifneq ($(filter $(arch),knl),)
   TARGET		:=	knl

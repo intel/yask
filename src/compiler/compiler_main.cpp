@@ -95,7 +95,7 @@ void usage(const string& cmd,
         "      avx         YASK stencil classes for CORE AVX ISA (256-bit HW SIMD vectors).\n"
         "      avx2        YASK stencil classes for CORE AVX2 ISA (256-bit HW SIMD vectors).\n"
         "      avx512      YASK stencil classes for CORE AVX-512 ISA (512-bit HW SIMD vectors).\n"
-        "      avx512lo    YASK stencil classes for CORE AVX-512 ISA (256-bit HW SIMD vectors).\n"
+        "      avx512-ymm  YASK stencil classes for CORE AVX-512 ISA (256-bit HW SIMD vectors).\n"
         "      knc         YASK stencil classes for Knights-Corner ISA (512-bit HW SIMD vectors).\n"
         "      knl         YASK stencil classes for Knights-Landing (MIC) AVX-512 ISA (512-bit HW SIMD vectors).\n"
         "      intel64     YASK stencil classes for generic C++ (no explicit HW SIMD vectors).\n"

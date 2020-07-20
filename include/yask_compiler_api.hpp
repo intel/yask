@@ -182,7 +182,7 @@ namespace yask {
             avx     | YASK kernel for CORE AVX ISA.
             avx2    | YASK kernel for CORE AVX2 ISA.
             avx512  | YASK kernel for CORE AVX-512 ISA.
-            avx512lo| YASK kernel for CORE AVX-512 ISA with 256-bit SIMD.
+            avx512-ymm | YASK kernel for CORE AVX-512 ISA with 256-bit SIMD.
             knl     | YASK kernel for MIC AVX-512 ISA.
             knc     | YASK kernel for Knights Corner ISA.
             dot     | DOT-language description.
