@@ -658,7 +658,7 @@ namespace yask {
     // Container for multiple equation stages.
     class EqStages : public DepGroup<EqStage> {
     protected:
-        string _base_name = "stencil_stage";
+        string _base_name = "stage";
 
         // Bundle index.
         int _idx = 0;

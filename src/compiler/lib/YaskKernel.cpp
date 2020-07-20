@@ -357,12 +357,15 @@ namespace yask {
             os << "\n // Per-thread data needed in kernel(s).\n"
                 "struct " << _thread_core_t << " {\n";
 
-            os << "\n // Pointer(s) to scratch-var core data.\n";
-            for (auto gp : _vars) {
-                VAR_DECLS(gp);
-                if (gp->is_scratch())
-                    os << " " << core_t << "* " << core_ptr << ";\n";
-            }
+            if (_vars.size()) {
+                os << "\n // Pointer(s) to scratch-var core data.\n";
+                for (auto gp : _vars) {
+                    VAR_DECLS(gp);
+                    if (gp->is_scratch())
+                        os << " " << core_t << "* " << core_ptr << ";\n";
+                }
+            } else
+                os << "\n // No per-thread data needed for this stencil.\n";
             os << "}; // " << _core_t << endl;
         }
     }
@@ -376,7 +379,7 @@ namespace yask {
             auto& eq = _eq_bundles.get_all().at(ei);
             string eg_name = eq->_get_name();
             string eg_desc = eq->get_descr();
-            string egs_name = "StencilBundle_" + eg_name;
+            string egs_name = _stencil_prefix + eg_name;
 
             os << endl << " ////// Stencil " << eg_desc << " //////\n" <<
                 "\n struct " << egs_name << " {\n"
@@ -838,7 +841,7 @@ namespace yask {
         os << endl << " // Stencil equation-bundles." << endl;
         for (auto& eg : _eq_bundles.get_all()) {
             string eg_name = eg->_get_name();
-            os << " StencilBundleTempl<StencilBundle_" << eg_name << ", " <<
+            os << " StencilBundleTempl<" << _stencil_prefix << eg_name << ", " <<
                 _core_t << ", " << _thread_core_t << "> " << eg_name << ";" << endl;
         }
 

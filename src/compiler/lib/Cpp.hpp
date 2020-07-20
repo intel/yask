@@ -285,6 +285,7 @@ namespace yask {
     protected:
         EqStages& _eq_stages; // stages of bundles w/o inter-dependencies.
         EqBundles& _cluster_eq_bundles;  // eq-bundles for scalar and vector.
+        string _stencil_prefix;
         string _context, _context_hook; // class names;
         string _core_t, _thread_core_t; // core struct names;
 
@@ -319,11 +320,11 @@ namespace yask {
             _cluster_eq_bundles(cluster_eq_bundles)
         {
             // name of C++ struct.
-            string sname = "stencil_" + _stencil._get_name();
-            _context = sname + "_context_t";
-            _context_hook = sname + "_hook_t";
-            _core_t = sname + "_core_t";
-            _thread_core_t = sname + "_thread_core_t";
+            _stencil_prefix = "stencil_" + _stencil._get_name() + "_";
+            _context = _stencil_prefix + "context_t";
+            _context_hook = _stencil_prefix + "hook_t";
+            _core_t = _stencil_prefix + "core_t";
+            _thread_core_t = _stencil_prefix + "thread_core_t";
         }
         virtual ~YASKCppPrinter() { }
 
