@@ -62,7 +62,7 @@ IN THE SOFTWARE.
 // First/last index macros.
 // These are relative to global problem, not rank.
 #define FIRST_INDEX(dim) (0)
-#define LAST_INDEX(dim) (_core_p->global_sizes[STENCIL_DIM_IDX_ ## dim] - 1)
+#define LAST_INDEX(dim) (_core_p->_common_core._global_sizes[STENCIL_DIM_IDX_ ## dim] - 1)
 
 // Macros for 1D<->n_d transforms.
 #include "yask_layout_macros.hpp"

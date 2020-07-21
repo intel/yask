@@ -159,11 +159,11 @@ namespace yask {
         update_var_info(true);
 
         // Set core data needed in kernels.
-        set_cores();
+        set_core();
         
         // Determine bounding-boxes for all bundles.  This must be done
         // after finding WF extensions.  And, this must be done after
-        // set_cores() because is_in_valid_domain() needs the core data.
+        // set_core() because is_in_valid_domain() needs the core data.
         find_bounding_boxes();
 
         // Copy current settings to stages.  Needed here because settings may

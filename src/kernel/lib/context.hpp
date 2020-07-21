@@ -523,11 +523,9 @@ namespace yask {
 
         // Set data needed by the kernels.
         // Implemented by the YASK compiler-generated code.
-        virtual void set_cores() =0;
+        virtual void set_core() =0;
             
         // Make new scratch vars.
-        // 'num_threads' must be the same value that
-        // was passed to 'set_cores()'.
         // Implemented by the YASK compiler-generated code.
         virtual void make_scratch_vars(int num_threads) =0;
         

@@ -342,9 +342,9 @@ namespace yask {
             os << "\n // Data needed in kernel(s).\n"
                 "struct " << _core_t << " {\n";
 
-            os << "\n // Copies of context info.\n"
-                " Indices global_sizes, rank_sizes, rank_domain_offsets;\n";
-        
+            os << "\n // Common core data.\n"
+                " StencilCoreData _common_core;\n";
+
             os << "\n // Pointer(s) to var core data.\n";
             for (auto gp : _vars) {
                 VAR_DECLS(gp);
@@ -952,13 +952,11 @@ namespace yask {
         // Core-setting method.
         {
             os << "\n // Set the core pointers of the non-scratch vars and copy some other info.\n"
-                " void set_cores() override {\n"
+                " void set_core() override {\n"
                 "  STATE_VARS(this);\n"
-                "   _core_data.global_sizes.set_from_tuple(get_settings()->_global_sizes);\n"
-                "   _core_data.rank_sizes.set_from_tuple(get_settings()->_rank_sizes);\n"
-                "   _core_data.rank_domain_offsets = rank_domain_offsets;\n" <<
+                "  _core_data._common_core.set_core(this);\n" <<
                 core_code <<
-                " } // set_cores\n";
+                " } // set_core\n";
         }
 
         // Scratch-vars method.

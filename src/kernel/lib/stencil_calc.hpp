@@ -31,6 +31,22 @@ namespace yask {
     // and a stage of bundles.
     // A stencil context contains one or more stages.
 
+    // Common data needed in the kernel(s).
+    struct StencilCoreData {
+
+        // Copies of context info.
+        Indices _global_sizes;
+        Indices _rank_sizes;
+        Indices _rank_domain_offsets;
+
+        void set_core(const StencilContext *cxt) {
+            STATE_VARS_CONST(cxt);
+            _global_sizes.set_from_tuple(opts->_global_sizes);
+            _rank_sizes.set_from_tuple(opts->_rank_sizes);
+            _rank_domain_offsets = cxt->rank_domain_offsets;
+         }
+    };
+
     // A pure-virtual class base for a stencil bundle.
     class StencilBundleBase :
         public ContextLinker {
