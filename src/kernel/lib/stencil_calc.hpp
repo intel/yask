@@ -699,9 +699,9 @@ namespace yask {
                 norm_sb_fvidxs.align.set_from_const(1); // one vector.
 
                 // Perform the calculations around the outside of this block.
-                calc_vectors(cp, region_thread_idx, block_thread_idx,
-                             norm_sb_idxs, norm_sb_fcidxs, norm_sb_fvidxs,
-                             peel_masks, rem_masks, inner_posn);
+                calc_outer_vectors(cp, region_thread_idx, block_thread_idx,
+                                   norm_sb_idxs, norm_sb_fcidxs, norm_sb_fvidxs,
+                                   peel_masks, rem_masks, inner_posn);
             }
 
             // Use scalar code for anything not done above.  This should only be
@@ -772,7 +772,7 @@ namespace yask {
         } // calc_sub_block_vec.
 
         // Calculate a block of clusters.
-        ALWAYS_INLINE void
+        void
         calc_clusters(StencilCoreDataT* corep,
                       int region_thread_idx,
                       int block_thread_idx,
@@ -788,7 +788,9 @@ namespace yask {
 
             // Include automatically-generated loop code that calls
             // CALC_INNER_LOOP().
-            #include "yask_sub_block_loops.hpp"
+            FORCE_INLINE_RECURSIVE {
+                #include "yask_sub_block_loops.hpp"
+            }
             #undef CALC_INNER_LOOP
         }
 
@@ -835,25 +837,51 @@ namespace yask {
             idx_t stop_inner = loop_idxs.stop[inner_posn];
 
             // Call code from stencil compiler.
-            FORCE_INLINE                                                \
+            FORCE_INLINE
                 _bundle.calc_loop_of_clusters(corep, region_thread_idx, block_thread_idx,
                                               start_idxs, stop_inner);
         }
 
         // Calculate a block of vectors.
-        ALWAYS_INLINE void
-        calc_vectors(StencilCoreDataT* corep,
-                     int region_thread_idx,
-                     int block_thread_idx,
-                     ScanIndices& norm_sb_idxs,
-                     ScanIndices& norm_sb_fcidxs,
-                     ScanIndices& norm_sb_fvidxs,
-                     Indices& peel_masks,
-                     Indices& rem_masks,
-                     int inner_posn) {
+        void
+        calc_outer_vectors(StencilCoreDataT* corep,
+                           int region_thread_idx,
+                           int block_thread_idx,
+                           ScanIndices& norm_sb_idxs,
+                           ScanIndices& norm_sb_fcidxs,
+                           ScanIndices& norm_sb_fvidxs,
+                           Indices& peel_masks,
+                           Indices& rem_masks,
+                           int inner_posn) {
 
-            // Define the function called from the generated loops to
-            // determine whether a loop of vectors is within the peel
+            // Define the function called from the generated loops.
+            #define CALC_INNER_LOOP(loop_idxs)                          \
+                calc_loop_of_outer_vectors(corep, region_thread_idx, block_thread_idx, \
+                    loop_idxs, norm_sb_idxs, norm_sb_fcidxs, norm_sb_fvidxs, \
+                    peel_masks, rem_masks, inner_posn);
+
+            // Include automatically-generated loop code that calls
+            // CALC_INNER_LOOP().
+            FORCE_INLINE_RECURSIVE {
+                #include "yask_sub_block_loops.hpp"
+            }
+            #undef CALC_INNER_LOOP
+        }
+            
+        // Calculate a loop of vectors.
+        ALWAYS_INLINE void
+        calc_loop_of_outer_vectors(StencilCoreDataT* corep,
+                                   int region_thread_idx,
+                                   int block_thread_idx,
+                                   ScanIndices& loop_idxs,
+                                   ScanIndices& norm_sb_idxs,
+                                   ScanIndices& norm_sb_fcidxs,
+                                   ScanIndices& norm_sb_fvidxs,
+                                   Indices& peel_masks,
+                                   Indices& rem_masks,
+                                   int inner_posn) {
+
+            // Determine whether a loop of vectors is within the peel
             // range (before the cluster) and/or remainder range (after
             // the clusters)--setting the 'ok' flag. In other words, the
             // vectors should be used only outside of the inner block of
@@ -861,83 +889,63 @@ namespace yask {
             // w/appropriate mask.  See the mask diagrams above that
             // show how the masks are ANDed together.  Since stride is
             // always 1, we ignore loop_idxs.stop.
-            #define CALC_INNER_LOOP(loop_idxs)                          \
-                bool ok = false;                                        \
-                idx_t mask = idx_t(-1);                                 \
-                DOMAIN_VAR_LOOP(i, j) {                                 \
-                    auto iidx = loop_idxs.start[i];                     \
-                    if (i != inner_posn &&                              \
-                        (iidx < norm_sb_fcidxs.begin[i] ||              \
-                         iidx >= norm_sb_fcidxs.end[i])) {              \
-                        ok = true;                                      \
-                        if (iidx < norm_sb_fvidxs.begin[i])             \
-                            mask &= peel_masks[i];                      \
-                        if (iidx >= norm_sb_fvidxs.end[i])              \
-                            mask &= rem_masks[i];                       \
-                    }                                                   \
-                }                                                       \
-                if (ok)                                                 \
-                    FORCE_INLINE                                        \
-                        calc_loop_of_vectors(corep, region_thread_idx, block_thread_idx, \
-                                             loop_idxs, mask, inner_posn);
+            bool ok = false;
+            idx_t mask = idx_t(-1);
+            DOMAIN_VAR_LOOP(i, j) {
+                auto iidx = loop_idxs.start[i];
 
-            // Include automatically-generated loop code that calls
-            // CALC_INNER_LOOP().
-            #include "yask_sub_block_loops.hpp"
-            #undef CALC_INNER_LOOP
-        }
+                // Is inner loop outside of full clusters?
+                if (i != inner_posn &&
+                    (iidx < norm_sb_fcidxs.begin[i] || iidx >= norm_sb_fcidxs.end[i])) {
+                    ok = true;
 
-        // Calculate a series of vector results within an inner loop.
-        // This is a simple wrapper around the YASK compiler-generated
-        // code that reformats the indices.
-        // The 'loop_idxs' must specify a range only in the inner dim.
-        // Indices must be rank-relative.
-        // Indices must be normalized, i.e., already divided by VLEN_*.
-        // Each vector write is masked by 'write_mask'.
-        ALWAYS_INLINE void
-        calc_loop_of_vectors(StencilCoreDataT* corep,
-                             int region_thread_idx,
-                             int block_thread_idx,
-                             const ScanIndices& loop_idxs,
-                             idx_t write_mask,
-                             int inner_posn) {
-            #ifdef TRACE
-            {
-                STATE_VARS(this);
-                TRACE_MSG("calc_loop_of_vectors: local vector-indices [" <<
-                          loop_idxs.start.make_val_str() <<
-                          " ... " << loop_idxs.stop.make_val_str() <<
-                          ") w/write-mask = 0x" << hex << write_mask << dec <<
-                          " by region thread " << region_thread_idx <<
-                          " and block thread " << block_thread_idx);
-            }
-            #endif
-
-            #ifdef CHECK
-            {
-                STATE_VARS(this);
-                // Check that only the inner dim has a range greater than one vector.
-                for (int i = 0; i < nsdims; i++) {
-                    if (i != step_posn && i != inner_posn)
-                        assert(loop_idxs.start[i] + 1 >= loop_idxs.stop[i]);
+                    // Is inner loop outside of full vectors?
+                    // If so, apply mask to left or right.
+                    if (iidx < norm_sb_fvidxs.begin[i])
+                        mask &= peel_masks[i];
+                    if (iidx >= norm_sb_fvidxs.end[i])
+                        mask &= rem_masks[i];
                 }
             }
-            #endif
 
-            // Need all starting indices.
-            const Indices& start_idxs = loop_idxs.start;
+            // Continue only if outside of at least one dim.
+            if (ok) {
+                #ifdef TRACE
+                {
+                    STATE_VARS(this);
+                    TRACE_MSG("calc_loop_of_outer_vectors: local vector-indices [" <<
+                              loop_idxs.start.make_val_str() <<
+                              " ... " << loop_idxs.stop.make_val_str() <<
+                              ") w/write-mask = 0x" << hex << mask << dec <<
+                              " by region thread " << region_thread_idx <<
+                              " and block thread " << block_thread_idx);
+                }
+                #endif
+                #ifdef CHECK
+                {
+                    STATE_VARS(this);
+                    // Check that only the inner dim has a range greater than one vector.
+                    for (int i = 0; i < nsdims; i++) {
+                        if (i != step_posn && i != inner_posn)
+                            assert(loop_idxs.start[i] + 1 >= loop_idxs.stop[i]);
+                    }
+                }
+                #endif
 
-            // Need stop for inner loop only.
-            idx_t stop_inner = loop_idxs.stop[inner_posn];
+                // Need all starting indices.
+                const Indices& start_idxs = loop_idxs.start;
 
-            // Call code from stencil compiler.
-            FORCE_INLINE                                                \
-                _bundle.calc_loop_of_vectors(corep, region_thread_idx, block_thread_idx,
-                                             start_idxs, stop_inner, write_mask);
+                // Need stop for inner loop only.
+                idx_t stop_inner = loop_idxs.stop[inner_posn];
+
+                // Call code from stencil compiler.
+                FORCE_INLINE
+                    _bundle.calc_loop_of_vectors(corep, region_thread_idx, block_thread_idx,
+                                                 start_idxs, stop_inner, mask);
+            }
         }
-        
-    };
-
+    }; // StencilBundleBase.
+    
     // A collection of independent stencil bundles.
     // "Independent" implies that they may be evaluated
     // in any order.
