@@ -342,14 +342,17 @@ namespace yask {
             os << "\n // Per-thread data needed in kernel(s).\n"
                 "struct " << _thread_core_t << " {\n";
 
-            if (_vars.size()) {
-                os << "\n // Pointer(s) to scratch-var core data.\n";
-                for (auto gp : _vars) {
-                    VAR_DECLS(gp);
-                    if (gp->is_scratch())
-                        os << " synced_ptr<" << core_t << "> " << core_ptr << ";\n";
+            bool found = false;
+            for (auto gp : _vars) {
+                VAR_DECLS(gp);
+                if (gp->is_scratch()) {
+                    if (!found)
+                        os << "\n // Pointer(s) to scratch-var core data.\n";
+                    os << " synced_ptr<" << core_t << "> " << core_ptr << ";\n";
+                    found = true;
                 }
-            } else
+            }
+            if (!found)
                 os << "\n // No per-thread data needed for this stencil.\n";
             os << "}; // " << _thread_core_t << endl;
         }
