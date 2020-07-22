@@ -170,6 +170,23 @@ namespace yask {
     typedef std::vector<StagePtr> StageList;
     typedef std::vector<bool> BridgeMask;
 
+    // Common data needed in the kernel(s).
+    struct CommonCoreData {
+
+        // Copies of context info.
+        Indices _global_sizes;
+        Indices _rank_sizes;
+        Indices _rank_domain_offsets;
+
+        void set_core(const StencilContext *cxt);
+    };
+
+    // Base of core data needed in the kernel(s).
+    // Other data is added via inheritance by the YASK compiler.
+    struct StencilCoreBase {
+        CommonCoreData _common_core;
+    };
+
     // Data and hierarchical sizes.
     // This is a pure-virtual class that must be implemented
     // for a specific problem.
@@ -329,6 +346,9 @@ namespace yask {
             if (steps_done)
                 get_stats();
         }
+
+        // Access core data.
+        virtual StencilCoreBase* corep() =0;
 
         // Ready?
         bool is_prepared() const {

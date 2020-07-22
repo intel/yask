@@ -33,6 +33,14 @@ namespace yask {
 
     ///// Top-level methods for evaluating reference and optimized stencils.
 
+    // Set the core vars.
+    void CommonCoreData::set_core(const StencilContext *cxt) {
+        STATE_VARS_CONST(cxt);
+        _global_sizes.set_from_tuple(opts->_global_sizes);
+        _rank_sizes.set_from_tuple(opts->_rank_sizes);
+        _rank_domain_offsets = cxt->rank_domain_offsets;
+    }
+    
     // Eval stencil bundle(s) over var(s) using reference scalar code.
     void StencilContext::run_ref(idx_t first_step_index,
                                  idx_t last_step_index) {

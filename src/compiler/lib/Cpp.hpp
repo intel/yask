@@ -72,8 +72,8 @@ namespace yask {
             if (var->is_scratch())
                 expr = "thread_core_data.";
             else
-                expr = "_core_p->";
-            expr += "var_" + gname + "_core_p";
+                expr = "core_data->";
+            expr += "var_" + gname + "_core_p.get()";
             return expr;
         }
         

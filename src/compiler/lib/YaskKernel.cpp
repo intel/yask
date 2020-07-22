@@ -339,21 +339,6 @@ namespace yask {
 
         // Types with data needed in kernels.
         {
-            os << "\n // Data needed in kernel(s).\n"
-                "struct " << _core_t << " {\n";
-
-            os << "\n // Common core data.\n"
-                " StencilCoreData _common_core;\n";
-
-            os << "\n // Pointer(s) to var core data.\n";
-            for (auto gp : _vars) {
-                VAR_DECLS(gp);
-                if (!gp->is_scratch())
-                    os << " " << core_t << "* " << core_ptr << ";\n";
-            }
-            os << "}; // " << _core_t << endl;
-        }
-        {
             os << "\n // Per-thread data needed in kernel(s).\n"
                 "struct " << _thread_core_t << " {\n";
 
@@ -362,11 +347,25 @@ namespace yask {
                 for (auto gp : _vars) {
                     VAR_DECLS(gp);
                     if (gp->is_scratch())
-                        os << " " << core_t << "* " << core_ptr << ";\n";
+                        os << " synced_ptr<" << core_t << "> " << core_ptr << ";\n";
                 }
             } else
                 os << "\n // No per-thread data needed for this stencil.\n";
-            os << "}; // " << _core_t << endl;
+            os << "}; // " << _thread_core_t << endl;
+        }
+        {
+            os << "\n // Data needed in kernel(s).\n"
+                "struct " << _core_t << " : public StencilCoreBase {\n";
+
+            os << "\n // Pointer(s) to var core data.\n";
+            for (auto gp : _vars) {
+                VAR_DECLS(gp);
+                if (!gp->is_scratch())
+                    os << " synced_ptr<" << core_t << "> " << core_ptr << ";\n";
+            }
+            os << "\n // List of pointer(s) to per-thread data.\n"
+                " synced_ptr<" << _thread_core_t << "> _thread_core_list;\n"
+                "}; // " << _core_t << endl;
         }
     }
         
@@ -383,10 +382,6 @@ namespace yask {
 
             os << endl << " ////// Stencil " << eg_desc << " //////\n" <<
                 "\n struct " << egs_name << " {\n"
-                "  typedef " << _core_t << " _core_t;\n"
-                "  _core_t* _core_p = 0;\n"
-                "  typedef " << _thread_core_t << " _thread_core_t;\n"
-                "  _thread_core_t* _thread_core_list = 0;\n"
                 "  std::string _name;\n"
                 "  int _scalar_fp_ops;\n"
                 "  int _scalar_points_read;\n"
@@ -410,7 +405,7 @@ namespace yask {
                     " _scalar_points_written = " << stats.get_num_writes() << ";\n"
                     " _is_scratch = " << (eq->is_scratch() ? "true" : "false") << ";\n";
 
-                os << " } // Ctor." << endl;
+                os << " } // Ctor.\n";
             }
 
             // Domain condition.
@@ -418,8 +413,9 @@ namespace yask {
                 os << "\n // Determine whether " << egs_name << " is valid at the domain indices " <<
                     _dims._stencil_dims.make_dim_str() << ".\n"
                     " // Return true if indices are within the valid sub-domain or false otherwise.\n"
-                    " ALWAYS_INLINE bool is_in_valid_domain(const Indices& idxs) const {"
-                    " assert(_core_p);\n";
+                    " ALWAYS_INLINE static bool is_in_valid_domain(const " <<
+                    _core_t << "* core_data, const Indices& idxs) {"
+                    " assert(core_data);\n";
                 print_indices(os);
                 if (eq->cond)
                     os << " return " << eq->cond->make_str() << ";\n";
@@ -428,7 +424,7 @@ namespace yask {
                 os << " }\n";
 
                 os << "\n // Return whether there is a sub-domain expression.\n"
-                    " ALWAYS_INLINE bool is_sub_domain_expr() const {\n"
+                    " ALWAYS_INLINE static bool is_sub_domain_expr() {\n"
                     "  return " << (eq->cond ? "true" : "false") <<
                     ";\n }\n";
 
@@ -446,8 +442,9 @@ namespace yask {
                 os << endl << " // Determine whether " << egs_name <<
                     " is valid at the step input_step_index.\n" <<
                     " // Return true if valid or false otherwise.\n"
-                    " ALWAYS_INLINE bool is_in_valid_step(idx_t input_step_index) const {"
-                    " assert(_core_p);\n";
+                    " ALWAYS_INLINE static bool is_in_valid_step(const " <<
+                    _core_t << "* core_data, idx_t input_step_index) {"
+                    " assert(core_data);\n";
                 if (eq->step_cond) {
                     os << " idx_t " << _dims._step_dim << " = input_step_index;\n"
                         "\n // " << eq->step_cond->make_str() << "\n";
@@ -467,7 +464,7 @@ namespace yask {
                 os << " }\n";
 
                 os << "\n // Return whether there is a step-condition expression.\n"
-                    " ALWAYS_INLINE bool is_step_cond_expr() const {\n"
+                    " ALWAYS_INLINE static bool is_step_cond_expr() {\n"
                     "  return " << (eq->step_cond ? "true" : "false") <<
                     ";\n }\n";
 
@@ -490,8 +487,8 @@ namespace yask {
                 else
                     os << "// Return 'false' because this bundle does not update"
                         " vars with the step dimension.\n";
-                os << " ALWAYS_INLINE bool get_output_step_index(idx_t input_step_index,"
-                    " idx_t& output_step_index) const {\n";
+                os << " ALWAYS_INLINE static bool get_output_step_index(idx_t input_step_index,"
+                    " idx_t& output_step_index) {\n";
                 if (eq->step_expr) {
                     os << " idx_t " << _dims._step_dim << " = input_step_index;\n"
                         " output_step_index = " << eq->step_expr->make_str() << ";\n"
@@ -510,10 +507,11 @@ namespace yask {
                     _dims._stencil_dims.make_dim_str() << ".\n"
                     " // There are approximately " << stats.get_num_ops() <<
                     " FP operation(s) per invocation.\n"
-                    " ALWAYS_INLINE void calc_scalar(int core_idx, const Indices& idxs) {\n"
-                    " assert(_core_p);\n"
-                    " assert(_thread_core_list);\n"
-                    " auto& thread_core_data = _thread_core_list[core_idx];\n";
+                    " ALWAYS_INLINE static void calc_scalar(" <<
+                    _core_t << "* core_data, int core_idx, const Indices& idxs) {\n"
+                    " assert(core_data);\n"
+                    " assert(core_data->_thread_core_list.get());\n"
+                    " auto& thread_core_data = core_data->_thread_core_list[core_idx];\n";
                 print_indices(os);
 
                 // C++ scalar print assistant.
@@ -585,14 +583,15 @@ namespace yask {
                     " aligned vector-block(s).\n"
                     " // There are approximately " << (stats.get_num_ops() * num_results) <<
                     " FP operation(s) per iteration.\n" <<
-                    " ALWAYS_INLINE void " << funcstr << "(int core_idx, int block_thread_idx,"
+                    " ALWAYS_INLINE static void " << funcstr << "(" <<
+                    _core_t << "* core_data, int core_idx, int block_thread_idx,"
                     " const Indices& idxs, idx_t " << istop;
                 if (!do_cluster)
                     os << ", idx_t write_mask";
                 os << ") {\n"
-                    " assert(_core_p);\n"
-                    " assert(_thread_core_list);\n"
-                    " auto& thread_core_data = _thread_core_list[core_idx];\n";
+                    " assert(core_data);\n"
+                    " assert(core_data->_thread_core_list.get());\n"
+                    " auto& thread_core_data = core_data->_thread_core_list[core_idx];\n";
                 print_indices(os);
                 os << " idx_t " << istart << " = " << idim << ";\n";
                 os << " idx_t " << istep << " = " << nvecs << "; // number of vectors per iter.\n";
@@ -797,21 +796,20 @@ namespace yask {
             // For scratch, make code to fill vector.
             else {
                 scratch_code +=
-                    " " + var_list + ".clear();\n"
+                    " " + var_list + ".resize(num_threads);\n"
                     " for (int i = 0; i < num_threads; i++) {\n" +
 
                     // Make scratch var for 'i'th thread.
                     " YkVarPtr " + var_ptr + ";\n" +
                     init_code +
                     " " + base_ptr + "->set_scratch(true);\n" +
-                    " " + var_list + ".push_back(" + var_ptr + ");\n" +
+                    " " + var_list + "[i] = " + var_ptr + ";\n" +
 
                     // Init core ptr for this var.
-                    " _thread_core_list[i]." + core_ptr +
-                    " = static_cast<" + core_t + "*>(" + var_ptr + "->corep());\n"
+                    " auto* cp = static_cast<" + core_t + "*>(" + var_ptr + "->corep());\n"
+                    " _core_data._thread_core_list[i]." + core_ptr + ".sync(state, cp);\n"
 
                     " }\n";
-
             }
 
             // Make new vars via API.
@@ -839,7 +837,7 @@ namespace yask {
         for (auto& eg : _eq_bundles.get_all()) {
             string eg_name = eg->_get_name();
             os << " StencilBundleTempl<" << _stencil_prefix << eg_name << ", " <<
-                _core_t << ", " << _thread_core_t << "> " << eg_name << ";" << endl;
+                _core_t << "> " << eg_name << ";" << endl;
         }
 
         os << "\n public:\n";
@@ -866,8 +864,7 @@ namespace yask {
             for (auto& eg : _eq_bundles.get_all()) {
                 string eg_name = eg->_get_name();
 
-                os << "\n // Configure '" << eg_name << "'.\n"
-                    " " << eg_name << ".set_core(&_core_data);\n";
+                os << "\n // Configure '" << eg_name << "'.\n";
 
                 // Only want non-scratch bundles in st_bundles.
                 // Each scratch bundles will be added to its
@@ -949,29 +946,29 @@ namespace yask {
             " return gp;\n"
             " } // new_stencil_var\n";
 
-        // Core-setting method.
+        // Core methods.
         {
             os << "\n // Set the core pointers of the non-scratch vars and copy some other info.\n"
                 " void set_core() override {\n"
                 "  STATE_VARS(this);\n"
                 "  _core_data._common_core.set_core(this);\n" <<
                 core_code <<
-                " } // set_core\n";
+                " }\n";
+            os << "\n // Access the core data.\n"
+                " StencilCoreBase* corep() override {\n"
+                "  return &_core_data;\n"
+                " }\n";
         }
 
         // Scratch-vars method.
-        os << "\n // Make new scratch vars for each thread.\n"
+        os << "\n // Make new scratch vars for each thread and sync offload core ptr.\n"
+            " // NB: does not allocate data for vars.\n"
             " void make_scratch_vars(int num_threads) override {\n"
             " STATE_VARS(this);\n"
-            "  _thread_core_list.resize(num_threads);\n" <<
-            scratch_code;
-
-            // Set _thread_core_list in each bundle.
-            for (auto& eg : _eq_bundles.get_all()) {
-                string eg_name = eg->_get_name();
-                os << " " << eg_name << ".set_thread_core_list(_thread_core_list.data());\n";
-            }
-        os << " } // make_scratch_vars\n";
+            "  _thread_core_list.resize(num_threads);\n"
+            "  _core_data._thread_core_list.sync(_thread_core_list.data());\n" <<
+            scratch_code <<
+            " } // make_scratch_vars\n";
             
         // APIs.
         os << "\n virtual std::string get_target() const override {\n"

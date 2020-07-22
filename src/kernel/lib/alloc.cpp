@@ -813,6 +813,7 @@ namespace yask {
         // Delete any existing scratch vars.
         // Create new scratch vars, but without any
         // data allocated.
+        // Update core pointers in generated bundles.
         make_scratch_vars(rthreads);
 
         // Find the max mini-block size across all stages.

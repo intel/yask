@@ -365,13 +365,14 @@ endif
 
 # Clang (LLVM-based) compiler.
 # Includes clang-based Intel compiler (-qnextgen).
+# TODO: add separate settings for Intel nextgen.
 ifeq ($(call MACRO_DEF,$(YK_CXX) $(EXTRA_YK_CXXFLAGS),__clang__),1)
  YK_CXXFLAGS	+=	$(CXX_ISA)
  YK_CXXFLAGS	+=	-Wno-unused-variable 
  MACROS		+=	NO_VEC
  MACROS		+=	NO_SVML
 
-# Intel compiler (and not clang-based).
+# Intel compiler (not clang-based).
 else ifeq ($(call MACRO_DEF,$(YK_CXX) $(EXTRA_YK_CXXFLAGS),__INTEL_COMPILER),1)
 
  YK_CXXFLAGS	+=	$(ICC_ISA)
@@ -753,7 +754,7 @@ yc-and-yk-test: $(YK_EXEC) $(YK_SCRIPT)
 # Run the YASK kernel test without implicity using the YASK compiler.
 yk-test-no-yc: kernel-no-yc $(YK_SCRIPT)
 	$(MAKE) ranks=1 yk-tests
-	if (( $(ranks) > 1 )); then $(MAKE) yk-tests; fi
+	if (( $(ranks) > 1 )); then $(MAKE) yk-tests yk-mpi-tests; fi
 
 # Run the kernel API tests for C++ and Python with and w/o expected exceptions.
 api-tests:
@@ -771,8 +772,15 @@ api-tests:
 STENCIL_TEST := yc-and-yk-test real_bytes=8 allow_new_var_types=0 check=1 trace=1
 stencil-tests:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_empty step_dim=t domain_dims=d1,d2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_empty_2d
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_1d fold=x=4
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stages_1d fold=x=4
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_func_1d fold=x=4
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_step_cond_1d fold=x=4
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_boundary_1d fold=x=4
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_scratch_1d fold=x=4
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_scratch_boundary_1d fold=x=4
+
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_empty_2d
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_2d fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_2d fold=x=2,y=2 mpi=0 ranks=1
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_2d arch=intel64 fold=x=3,y=2 domain_dims=y,x
@@ -780,19 +788,14 @@ stencil-tests:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_partial_3d fold=x=2,z=2 domain_dims=x,z,y
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stream_3d radius=5
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_reverse_2d radius=1
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_func_1d fold=x=4
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stages_1d fold=x=4
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stages_2d fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stages_3d fold=y=2,x=2 domain_dims=x,z,y
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_misc_2d fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_misc_2d fold=x=2,y=2 EXTRA_YC_FLAGS=-interleave-misc
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_step_cond_1d fold=x=4
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_boundary_1d fold=x=4
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_boundary_2d fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_boundary_3d fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_scratch_1d fold=x=4
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_scratch_3d fold=x=2,z=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_scratch_boundary_1d fold=x=4
+
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=iso3dfd radius=3 fold=x=2,y=2 domain_dims=z,x,y
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=iso3dfd_sponge radius=3 fold=x=2,z=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=3axis fold=x=2,y=2 cluster=x=2
@@ -807,6 +810,7 @@ stencil-tests:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=fsg_abc fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=fsg_merged fold=x=2,y=2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=tti fold=x=2,y=2
+
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_4d fold=w=2,x=2
 
 all-tests:
@@ -815,8 +819,8 @@ all-tests:
 	$(MAKE) api-tests
 
 all:
-	$(MAKE) kernel
-	$(MAKE) api
+	$(MAKE) kernel stencil=test_3d
+	$(MAKE) api stencil=test_3d
 	$(MAKE) all-tests
 
 # Remove intermediate files.
