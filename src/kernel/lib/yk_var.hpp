@@ -49,6 +49,7 @@ namespace yask {
     // Rank offset is not necessarily a vector multiple.
     // Local offset must be a vector multiple.
 
+    ///// Yk*Var*Core types /////
     
     // Core data that is needed for computations using a var.
     // A trivially-copyable type for offloading.
@@ -116,7 +117,8 @@ namespace yask {
             return res;
         }
 
-    };
+    }; // YkVarBaseCore.
+    
     static_assert(std::is_trivially_copyable<YkVarBaseCore>::value,
                   "Needed for OpenMP offload");
 
@@ -217,7 +219,7 @@ namespace yask {
             #endif
         }
 
-    };
+    }; // YkElemVarCore.
 
     // Core data for YASK var of real vectors.
     template <typename LayoutFn, bool _use_step_idx, idx_t... _templ_vec_lens>
@@ -466,7 +468,9 @@ namespace yask {
             #endif
         }
 
-    };
+    }; // YkVecVarCore.
+
+    ///// Yk*Var* types /////
 
     // Base class implementing all yk_var functionality. Used for
     // vars that contain either individual elements or vectors.
@@ -560,6 +564,9 @@ namespace yask {
         virtual GenericVarBase* get_gvbp() =0;
         virtual const GenericVarBase* get_gvbp() const =0;
 
+        // Sync core on device.
+        virtual void sync_core() =0;
+        
         // Ctor.
         // Important: *corep exists but is NOT yet constructed.
         YkVarBase(KernelStateBase& stateb,
@@ -857,6 +864,14 @@ namespace yask {
             return &_data;
         }
 
+        // Sync core on device.
+        void sync_core() override {
+            STATE_VARS(this);
+            auto* var_cp = &_core;
+            OFFLOAD_PRAGMA_TRACED(state, omp target update to(var_cp[0:1]));
+            _data.sync_data_ptr();
+        }
+        
     public:
         YkElemVar(KernelStateBase& stateb,
                   std::string name,
@@ -865,6 +880,7 @@ namespace yask {
             _core(int(dim_names.size())),
             _data(stateb, &_core._data, name, dim_names) {
             STATE_VARS(this);
+            TRACE_MSG("creating element-var '" + get_name() + "'");
             _has_step_dim = _use_step_idx;
 
             // Init vec sizes.
@@ -878,9 +894,22 @@ namespace yask {
                 _core._soln_vec_lens[i] = dval;
             }
 
+            // Create core on offload device.
+            auto* var_cp = &_core;
+            OFFLOAD_PRAGMA_TRACED(state, omp target enter data map (alloc: var_cp[0:1]));
+             
             resize();
         }
 
+        // Dtor.
+        virtual ~YkElemVar() {
+            STATE_VARS(this);
+
+            // Release core from device.
+            auto* var_cp = &_core;
+            OFFLOAD_PRAGMA_TRACED(state, omp target exit data map (release: var_cp));
+        }
+        
         // Make a human-readable description.
         virtual std::string _make_info_string() const override final {
             return _data.make_info_string("FP");
@@ -972,7 +1001,15 @@ namespace yask {
             return &_data;
         }
 
-    public:
+         // Sync core on device.
+        void sync_core() override {
+            STATE_VARS(this);
+            auto* var_cp = &_core;
+            OFFLOAD_PRAGMA_TRACED(state, omp target update to(var_cp[0:1]));
+            _data.sync_data_ptr();
+        }
+        
+   public:
         YkVecVar(KernelStateBase& stateb,
                  const std::string& name,
                  const VarDimNames& dim_names) :
@@ -980,7 +1017,8 @@ namespace yask {
             _core(int(dim_names.size())),
             _data(stateb, &_core._data, name, dim_names) {
             STATE_VARS(this);
-            _has_step_dim = _use_step_idx;
+            TRACE_MSG("creating vector-var '" + get_name() + "'");
+           _has_step_dim = _use_step_idx;
 
             // Template vec lengths.
             const int nvls = sizeof...(_templ_vec_lens);
@@ -1013,9 +1051,22 @@ namespace yask {
                 _core._vec_fold_posns[i] = j;
             }
 
+            // Create core on offload device.
+            auto* var_cp = &_core;
+            OFFLOAD_PRAGMA_TRACED(state, omp target enter data map (alloc: var_cp[0:1]));
+
             resize();
         }
 
+        // Dtor.
+        virtual ~YkVecVar() {
+            STATE_VARS(this);
+
+            // Release core from device.
+            auto* var_cp = &_core;
+            OFFLOAD_PRAGMA_TRACED(state, omp target exit data map (release: var_cp));
+        }
+        
         // Make a human-readable description.
         std::string _make_info_string() const override final {
             return _data.make_info_string("SIMD FP");

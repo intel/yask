@@ -228,10 +228,10 @@ YK_SCRIPT	:=	$(BIN_OUT_DIR)/yask.sh
 YK_LIB		:=	$(LIB_OUT_DIR)/lib$(YK_EXT_BASE)$(SO_SUFFIX)
 YK_PY_LIB	:=	$(PY_OUT_DIR)/_$(YK_PY_MOD_BASE)$(SO_SUFFIX)
 YK_PY_MOD	:=	$(PY_OUT_DIR)/$(YK_PY_MOD_BASE).py
-YK_SRC_NAMES	:=	utils
+YK_COMM_SRC_NAMES :=
 YK_EXT_SRC_NAMES :=	factory soln_apis context stencil_calc setup alloc \
-			generic_var yk_var yk_var_apis new_var settings auto_tuner
-YK_OBJS		:=	$(addprefix $(YK_OBJ_DIR)/,$(addsuffix .o,$(YK_SRC_NAMES) $(COMM_SRC_NAMES)))
+			generic_var yk_var yk_var_apis new_var settings auto_tuner utils
+YK_OBJS		:=	$(addprefix $(YK_OBJ_DIR)/,$(addsuffix .o,$(YK_COMM_SRC_NAMES) $(COMM_SRC_NAMES)))
 YK_EXT_OBJS	:=	$(addprefix $(YK_EXT_OBJ_DIR)/,$(addsuffix .o,$(YK_EXT_SRC_NAMES)))
 YK_CODE_FILE	:=	$(YK_GEN_DIR)/yask_stencil_code.hpp
 YK_GEN_HEADERS	:=	$(addprefix $(YK_GEN_DIR)/, \
@@ -361,19 +361,23 @@ ifeq ($(vtune),1)
  YK_VTUNE_CMD	:=	echo "*** VTune command:" vtune -c hpc-performance $(YK_SCRIPT) $(YK_SCRIPT_OPTS) "[options]"
 endif
 
-# compiler-specific settings.
+# Compiler-specific settings.
+
+# Create a compiler invocation to test for macro settings.
+# Remove '-fopenmp*' because icpx tries to create '/dev/null.i'.
+YK_CXX_TEST 	:= 	$(filter-out -fopenmp%,$(YK_CXX) $(YK_CXXFLAGS) $(YK_CXXOPT) $(OMPFLAGS) $(EXTRA_YK_CXXFLAGS))
 
 # Clang (LLVM-based) compiler.
 # Includes clang-based Intel compiler (-qnextgen).
 # TODO: add separate settings for Intel nextgen.
-ifeq ($(call MACRO_DEF,$(YK_CXX) $(EXTRA_YK_CXXFLAGS),__clang__),1)
+ifeq ($(call MACRO_DEF,$(YK_CXX_TEST),__clang__),1)
  YK_CXXFLAGS	+=	$(CXX_ISA)
- YK_CXXFLAGS	+=	-Wno-unused-variable 
+ YK_CXXFLAGS	+=	-Wno-unused-variable
  MACROS		+=	NO_VEC
  MACROS		+=	NO_SVML
 
 # Intel compiler (not clang-based).
-else ifeq ($(call MACRO_DEF,$(YK_CXX) $(EXTRA_YK_CXXFLAGS),__INTEL_COMPILER),1)
+else ifeq ($(call MACRO_DEF,$(YK_CXX_TEST),__INTEL_COMPILER),1)
 
  YK_CXXFLAGS	+=	$(ICC_ISA)
  YK_CXXFLAGS	+=	-debug extended -restrict -ansi-alias -fno-alias
@@ -395,7 +399,7 @@ else ifeq ($(call MACRO_DEF,$(YK_CXX) $(EXTRA_YK_CXXFLAGS),__INTEL_COMPILER),1)
  endif
 
 # Gnu-compatible compiler (but not Intel or Clang).
-else ifeq ($(call MACRO_DEF,$(YK_CXX) $(EXTRA_YK_CXXFLAGS),__GNUC__),1)
+else ifeq ($(call MACRO_DEF,$(YK_CXX_TEST),__GNUC__),1)
  YK_CXXFLAGS	+=	$(CXX_ISA)
  YK_CXXFLAGS	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
  SWIG_CXXFLAGS	+=	$(SWIG_GCCFLAGS)

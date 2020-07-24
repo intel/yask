@@ -655,8 +655,8 @@ namespace yask {
     public:
         KernelStateBase(KernelStatePtr& state) :
             _state(state) {}
-        KernelStateBase(KernelEnvPtr& env,
-                        KernelSettingsPtr& settings);
+        KernelStateBase(KernelEnvPtr& kenv,
+                        KernelSettingsPtr& ksettings);
         KernelStateBase(KernelStateBase* p) :
             _state(p->_state) { }
 

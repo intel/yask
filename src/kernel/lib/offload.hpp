@@ -28,25 +28,112 @@ IN THE SOFTWARE.
 
 #pragma once
 
+#ifdef USE_OFFLOAD
+#define OFFLOAD_MSG(msg) std::cout << "YASK: omp: " << msg << "\n" << std::flush
+#define OFFLOAD_PRAGMA(...) do {                \
+        _Pragma(#__VA_ARGS__)                   \
+            } while(0)
+#define OFFLOAD_TRACED(state, ...) do {         \
+        TRACE_MSG1(state, #__VA_ARGS__);        \
+        __VA_ARGS__;                            \
+    } while(0)
+#define OFFLOAD_PRAGMA_TRACED(state, ...) do {               \
+        TRACE_MSG1(state, "omp: #pragma " #__VA_ARGS__);     \
+        _Pragma(#__VA_ARGS__)                                \
+            } while(0)
+#define OFFLOAD_MAP_ALLOC(p, nbytes) do {                       \
+        char* cp = static_cast<char*>(p);                       \
+        size_t nb = size_t(nbytes);                             \
+        OFFLOAD_MSG("#pragma omp target enter data map(alloc: " <<        \
+                     (void*)cp << "[0:" << nb << "])");                 \
+        _Pragma("omp target enter data map(alloc: cp[0:nb])")           \
+            OFFLOAD_MSG("YASK: " << nb << " bytes allocated");  \
+            } while(0)
+#define OFFLOAD_MAP_FREE(p) do {                                \
+        char* cp = static_cast<char*>(p);                       \
+        OFFLOAD_MSG("#pragma omp target exit data map(release: " <<   \
+                     (void*)cp << ")");                             \
+        _Pragma("omp target exit data map(release: cp)")        \
+            } while(0)
+#else
+#define OFFLOAD_PRAGMA(...) ((void)0)
+#define OFFLOAD_TRACED(state, ...) ((void)0)
+#define OFFLOAD_PRAGMA_TRACED(state, ...) ((void)0)
+#define OFFLOAD_MAP_ALLOC(p, nbytes)
+#define OFFLOAD_MAP_FREE(p)
+#endif
+
 namespace yask {
 
     // Type to track and sync pointers on target device.
     template <typename T>
     class synced_ptr {
     private:
-        T* _p = 0;                  // ptr to sync.
+        T* _p = 0;                  // ptr to data.
 
         // Additional data when offloading.
         #ifdef USE_OFFLOAD
         T* _hp = 0;                 // latest sync'd ptr on host.
 
         // Additional data when printing debug info.
-        #ifdef CHECK
+        #ifdef TRACE
         T* _dp = 0;                 // ptr on device.
         int _devn = 0;              // device num.
         #endif
         #endif
 
+    protected:
+        // Sync this pointer.
+        // To properly sync pointer on device, '*this' and '*_p' must
+        // already be mapped to device mem.
+        // If 'force' is 'true', always sync; otherwise sync only
+        // if it appears not to have been done since changed.
+        // Returns 'true' if updated.
+        bool _sync(bool force) {
+            #ifdef USE_OFFLOAD
+            if (force || _hp != _p) {
+
+                // Value on host; converted to target ptr in 'omp target'.
+                T* p = _p;
+
+                // With tracing.
+                #ifdef TRACE
+
+                // Temp vars to capture device data.
+                T* dp;
+                int devn;
+
+                // Set pointer on device and copy back to host.
+                #pragma omp target map(from: dp,devn)
+                {
+                    _p = p;
+                    dp = p;
+                    devn = omp_get_device_num();
+                }
+
+                // Update values;
+                _devn = devn;
+                _dp = dp;
+
+                // Without tracing.
+                #else
+
+                // Set pointer on device.
+                #pragma omp target
+                {
+                    _p = p;
+                }
+            
+                #endif
+
+                // Update copy of last-updated pointer.
+                _hp = p;
+                return true;
+            }
+            #endif
+            return false;
+        }
+        
     public:
         synced_ptr(T* p) : _p(p) { }
         synced_ptr() : synced_ptr<T>(0) { }
@@ -67,7 +154,7 @@ namespace yask {
         T& operator[](int i) { return _p[i]; }
         const T& operator[](int i) const { return _p[i]; }
 
-        #ifdef CHECK
+        #if defined(USE_OFFLOAD) && defined(TRACE)
         const T& get_dev_ptr() const { return _dp; }
         int get_dev_num() const { return _devn; }
         #endif
@@ -75,75 +162,22 @@ namespace yask {
         // Set pointer value.
         void operator=(T* p) { _p = p; }
 
-        // Sync this pointer.
-        // To properly sync pointer on device, '*this' and '*_p' must
-        // already be mapped to device mem.
-        // Returns whether sync was needed.
-        bool sync(bool force = false) {
-            #ifdef USE_OFFLOAD
-            if (force || _hp != _p) {
-
-                // Value on host; converted to target ptr in 'omp target'.
-                T* p = _p;
-
-                // With checking.
-                #ifdef CHECK
-
-                // Temp vars to capture device data.
-                T* dp;
-                int devn;
-
-                // Set pointer on device and copy back to host.
-                #pragma omp target map(from: dp,devn)
-                {
-                    _p = p;
-                    dp = p;
-                    devn = omp_get_device_num();
-                }
-
-                // Update values;
-                _devn = devn;
-                _dp = dp;
-
-                // Without checking.
-                #else
-
-                // Set pointer on device.
-                #pragma omp target
-                {
-                    _p = p;
-                }
-            
-                #endif
-
-                // Update copy of last-updated pointer.
-                _hp = p;
-                return true;
-            }
-            #endif
-            return false;
-        }
-
         // Sync and print trace message using settings in KernelState.
-        bool sync(const KernelState* state, bool force = false) {
-            bool done = sync(force);
-            #if defined(USE_OFFLOAD) && defined(CHECK)
+        bool sync(const KernelState* state) {
+            bool done = _sync(true);
+            #if defined(USE_OFFLOAD) && defined(TRACE)
             if (done)
-                TRACE_MSG1(state, "host ptr to " << _hp << " [re]set to " << _dp << " on device " << _devn);
+                TRACE_MSG1(state, "omp: host ptr to " << _hp << " set to " << _dp << " on device " << _devn);
             else
-                TRACE_MSG1(state, "host ptr to " << _hp << " already set to " << _dp << " on device " << _devn);
+                TRACE_MSG1(state, "omp: host ptr to " << _hp << " already set to " << _dp << " on device " << _devn);
             #endif
             return done;
         }
     
         // Set to given value and sync.
-        bool sync(T* p, bool force = false) {
+        bool set_and_sync(const KernelState* state, T* p) {
             _p = p;
-            return sync(force);
-        }
-        bool sync(const KernelState* state, T* p, bool force = false) {
-            _p = p;
-            return sync(state, force);
+            return sync(state);
         }
         
     };

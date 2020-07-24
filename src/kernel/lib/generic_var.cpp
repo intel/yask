@@ -64,40 +64,45 @@ namespace yask {
 
     // Free any old storage.
     // Set pointer to storage.
-    // 'base' should provide get_num_bytes() bytes at offset bytes.
+    // 'base' should provide get_num_bytes() bytes starting at offset bytes.
+    // When offloading, the memory should also be mapped to the device.
     template <typename T>
     void GenericVarTyped<T>::set_storage(shared_ptr<char>& base, size_t offset) {
         STATE_VARS(this);
-        void** _elems = get_elem_ptr();
+        auto* _elemsp = get_elems();
 
         // Release any old data if last owner.
         release_storage();
 
         // Share ownership of base.
-        // This ensures that last var to use a shared allocation
-        // will trigger dealloc.
+        // This ensures that the shared-ptr alloc won't trigger
+        // a free until the last var using it is done w/it.
         _base = base;
 
         // Set plain pointer to new data.
-        if (base.get()) {
-            char* p = _base.get() + offset;
-            *_elems = (void*)p;
-        }
+        char* p = base.get() ? base.get() + offset : 0;
+
+        // Set ptr and sync offload pointer in core.
+        *_elemsp = (T*)p;
+        sync_data_ptr();
     }
 
     // Release storage.
     template <typename T>
     void GenericVarTyped<T>::release_storage() {
         STATE_VARS(this);
-        void** _elems = get_elem_ptr();
+        auto* _elemsp = get_elems();
 
         _base.reset();
-        *_elems = 0;
+
+        // Set ptr and sync offload pointer in core.
+        char* p = 0;
+        _elemsp->set_and_sync(state, (T*)p);
     }
 
-    // Perform default allocation.  For other options, programmer should
-    // call get_num_elems() or get_num_bytes() and then provide allocated
-    // memory via set_storage().
+    // Perform default allocation.  For other options, call get_num_elems()
+    // or get_num_bytes() and then provide allocated memory via
+    // set_storage().
     template <typename T>
     void GenericVarTyped<T>::default_alloc() {
         STATE_VARS(this);
@@ -113,6 +118,7 @@ namespace yask {
         DEBUG_MSG("Allocating " << make_byte_str(sz) <<
                   " for var '" << _name << "' " << loc << "...");
         auto base = shared_numa_alloc<char>(sz, numa_pref);
+        TRACE_MSG("got memory at " << static_cast<void*>(base.get()));
 
         // Set as storage for this var.
         set_storage(base, 0);

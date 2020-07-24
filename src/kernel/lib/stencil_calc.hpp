@@ -916,7 +916,7 @@ namespace yask {
                     TRACE_MSG("calc_loop_of_outer_vectors: local vector-indices [" <<
                               loop_idxs.start.make_val_str() <<
                               " ... " << loop_idxs.stop.make_val_str() <<
-                              ") w/write-mask = 0x" << hex << mask << dec <<
+                              ") w/write-mask = 0x" << std::hex << mask << std::dec <<
                               " by region thread " << region_thread_idx <<
                               " and block thread " << block_thread_idx);
                 }

@@ -629,8 +629,7 @@ namespace yask {
                         " _SIMD";
                 os << " for (idx_t " << idim << " = " << istart << "; " <<
                     idim << " < " << istop << "; " <<
-                    idim << " += " << istep << ", " <<
-                    vp->get_elem_index(idim) << " += " << iestep << ") {\n";
+                    idim << " += " << istep << ") {\n";
 
                 // Generate loop body using vars stored in print helper.
                 // Visit all expressions to cover the whole vector/cluster.
@@ -641,7 +640,8 @@ namespace yask {
                 vp->print_prefetches(os, true);
 
                 // End of loop.
-                os << " } // '" << idim << "' loop.\n";
+                os << " " << vp->get_elem_index(idim) << " += " << iestep << ";\n";
+                os << " } // Inner ('" << idim << "') loop.\n";
 
                 // End forced-inline code.
                 os << " } // Forced-inline block.\n";
@@ -792,8 +792,9 @@ namespace yask {
                 ctor_code += ");\n";
 
                 // Core init for this var.
-                core_code += "  _core_data." + core_ptr + " = static_cast<" + core_t + "*>"
-                    "(" + var_ptr + "->corep());\n";
+                core_code +=
+                    "  auto* " + core_ptr + " = static_cast<" + core_t + "*>(" + var_ptr + "->corep());\n"
+                    "  cxt_cd->" + core_ptr + ".set_and_sync(state, " + core_ptr + ");\n";
             }
 
             // For scratch, make code to fill vector.
@@ -810,7 +811,7 @@ namespace yask {
 
                     // Init core ptr for this var.
                     " auto* cp = static_cast<" + core_t + "*>(" + var_ptr + "->corep());\n"
-                    " _core_data._thread_core_list[i]." + core_ptr + ".sync(state, cp);\n"
+                    " _core_data._thread_core_list[i]." + core_ptr + ".set_and_sync(state, cp);\n"
 
                     " }\n";
             }
@@ -848,13 +849,14 @@ namespace yask {
         // Ctor.
         {
             os << "\n // Constructor.\n" <<
-                " " << _context << "(KernelEnvPtr env, KernelSettingsPtr settings) : " <<
-                " StencilContext(env, settings)";
+                " " << _context << "(KernelEnvPtr kenv, KernelSettingsPtr ksettings) : " <<
+                " StencilContext(kenv, ksettings)";
             for (auto& eg : _eq_bundles.get_all()) {
                 string eg_name = eg->_get_name();
                 os << ",\n  " << eg_name << "(this)";
             }
             os << " {\n"
+                " STATE_VARS(this);\n"
                 " name = \"" << _stencil._get_name() << "\";\n"
                 " long_name = \"" << _stencil.get_long_name() << "\";\n";
 
@@ -931,6 +933,10 @@ namespace yask {
                 }
                 os << "  st_stages.push_back(" << bp_name << ");\n";
             }
+
+            os << "\n // Alloc core on offload device.\n"
+                "  auto* cxt_cd = &_core_data;\n"
+                "  OFFLOAD_PRAGMA_TRACED(state, omp target enter data map(alloc: cxt_cd[0:1]));\n";
                 
             os << "\n // Call code provided by user.\n" <<
                 _context_hook << "::call_after_new_solution(*this);\n";
@@ -938,6 +944,16 @@ namespace yask {
             // end of ctor.
             os << " } // ctor" << endl;
         }
+
+        // Dtor.
+        os << "\n // Dtor.\n"
+            " virtual ~" << _context << "() {\n"
+            "  STATE_VARS(this);\n"
+            "  auto* cxt_cd = &_core_data;\n"
+            "  OFFLOAD_PRAGMA_TRACED(state, omp target exit data map(release: cxt_cd));\n" <<
+            "  auto* tcl = _thread_core_list.data();\n"
+            "  OFFLOAD_PRAGMA_TRACED(state, omp target exit data map(release: tcl) if(tcl));\n"
+             " }\n";
 
         // New-var method.
         os << "\n // Make a new var iff its dims match any in the stencil.\n"
@@ -954,7 +970,9 @@ namespace yask {
             os << "\n // Set the core pointers of the non-scratch vars and copy some other info.\n"
                 " void set_core() override {\n"
                 "  STATE_VARS(this);\n"
-                "  _core_data._common_core.set_core(this);\n" <<
+                "  auto* cxt_cd = &_core_data;\n"
+                "  cxt_cd->_common_core.set_core(this);\n"
+                "  OFFLOAD_PRAGMA_TRACED(state, omp target update to(cxt_cd[0:1]));\n" <<
                 core_code <<
                 " }\n";
             os << "\n // Access the core data.\n"
@@ -965,11 +983,20 @@ namespace yask {
 
         // Scratch-vars method.
         os << "\n // Make new scratch vars for each thread and sync offload core ptr.\n"
-            " // NB: does not allocate data for vars.\n"
+            " // Does not allocate data for vars.\n"
+            " // Must call set_core() before this.\n"
             " void make_scratch_vars(int num_threads) override {\n"
             " STATE_VARS(this);\n"
+            " TRACE_MSG(\"make_scratch_vars(\" << num_threads << \")\");\n"
+            "\n  // Release old device data for thread array.\n"
+            "  auto* tcl = _thread_core_list.data();\n"
+            "  OFFLOAD_PRAGMA_TRACED(state, omp target exit data map(release: tcl) if(tcl));\n"
+          "\n  // Make new array.\n"
             "  _thread_core_list.resize(num_threads);\n"
-            "  _core_data._thread_core_list.sync(_thread_core_list.data());\n" <<
+            "  tcl = _thread_core_list.data();\n"
+            "  OFFLOAD_PRAGMA_TRACED(state, omp target enter data map(alloc: tcl[0:num_threads]) if(tcl));\n"
+            "  _core_data._thread_core_list.set_and_sync(state, tcl);\n"
+            "\n  // Create scratch var(s) and set core ptr(s).\n" <<
             scratch_code <<
             " } // make_scratch_vars\n";
             

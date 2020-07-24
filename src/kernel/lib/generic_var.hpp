@@ -56,7 +56,7 @@ namespace yask {
                       "Needed for OpenMP offload");
 
         // Start of actual data, which may be offset from GenericVarBase::_base.
-        T* _elems = 0;
+        synced_ptr<T> _elems = 0;
 
     public:
 
@@ -81,7 +81,7 @@ namespace yask {
 
             // Strictly, _elems doesn't need to be valid when 'get_index()' is called
             // because we're not accessing data. But we will make this restriction.
-            assert(_elems);
+            assert(_elems.get());
             #endif
 
             idx_t ai = _layout.layout(idxs);
@@ -114,7 +114,7 @@ namespace yask {
             idx_t ai = get_index(pt, check);
             return _elems[ai];
         }
-    };
+    }; //GenericVarCore.
     
     // A base class for a generic n-D var.
     // This class does not define a type or memory layout.
@@ -147,9 +147,6 @@ namespace yask {
                        const VarDimNames& dim_names);
         // Dtor.
         virtual ~GenericVarBase() { }
-
-        // Direct access to modifiable storage ptr.
-        virtual void** get_elem_ptr() =0;
 
     public:
 
@@ -250,6 +247,9 @@ namespace yask {
                         const VarDimNames& dim_names) :
             GenericVarBase(state, name, dim_names) { }
 
+        // Direct access to storage ptr.
+        virtual synced_ptr<T>* get_elems() =0;
+
     public:
 
         // Get size of one element.
@@ -269,6 +269,12 @@ namespace yask {
 
         // Release storage.
         void release_storage() override;
+
+        // Sync pointer to data.
+        void sync_data_ptr() {
+            STATE_VARS(this);
+            get_elems()->sync(state);
+        }
 
         // Perform default allocation.
         void default_alloc() override;
@@ -310,9 +316,9 @@ namespace yask {
         }
 
         // Direct access to storage ptr.
-        void** get_elem_ptr() override {
-            T** p = &(_corep->_elems);
-            return (void**)p;
+        synced_ptr<T>* get_elems() override {
+            auto* p = &(_corep->_elems);
+            return p;
         }
 
     public:

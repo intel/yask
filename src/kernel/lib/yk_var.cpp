@@ -213,7 +213,7 @@ namespace yask {
                 THROW_YASK_EXCEPTION("Error: negative left padding in var '" + get_name() + "'");
             if (_corep->_req_right_pads[i] < 0)
                 THROW_YASK_EXCEPTION("Error: negative right padding in var '" + get_name() + "'");
-             if (_corep->_req_left_epads[i] < 0)
+            if (_corep->_req_left_epads[i] < 0)
                 THROW_YASK_EXCEPTION("Error: negative left extra padding in var '" + get_name() + "'");
             if (_corep->_req_right_epads[i] < 0)
                 THROW_YASK_EXCEPTION("Error: negative right extra padding in var '" + get_name() + "'");
@@ -340,6 +340,10 @@ namespace yask {
                 TRACE_MSG("resize: FROM " << old_info << " TO " << new_info);
         }
 #endif
+
+        // Copy changes to device.
+        // TODO: do this only when needed.
+        sync_core();
     }
 
     // Check whether dim is used and of allowed type.

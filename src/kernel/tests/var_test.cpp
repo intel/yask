@@ -37,17 +37,19 @@ using namespace yask;
 #define DEFINE_CONTEXT
 #include "yask_stencil_code.hpp"
 
-int main(int argc, char** argv) {
+int main(int argc, char* argv[]) {
 
     // Bootstrap factory from kernel API.
     yk_factory kfac;
 
     // Set up the environment (e.g., OpenMP & MPI).
     auto kenv = kfac.new_env();
+    kenv->set_trace_enabled(true);
 
     // Object containing data and parameters for stencil eval.
     // TODO: do everything through API without cast to StencilContext.
     auto ksoln = kfac.new_solution(kenv);
+    ksoln->apply_command_line_options(argc, argv);
     auto context = dynamic_pointer_cast<StencilContext>(ksoln);
     assert(context.get());
     ostream& os = kenv->get_debug_output()->get_ostream();
@@ -68,12 +70,11 @@ int main(int argc, char** argv) {
     {
         os << "0-D test...\n";
         VarDimNames gdims;
-        string name = "test var";
-        auto gb0 = make_shared<YkElemVar<Layout_0d, false>>(*context, name, gdims);
+        auto gb0 = make_shared<YkElemVar<Layout_0d, false>>(*context, "v1", gdims);
         YkVarPtr g0 = make_shared<YkVarImpl>(gb0);
         g0->alloc_storage();
         os << gb0->make_info_string() << endl;
-        auto gb1 = make_shared<YkElemVar<Layout_0d, false>>(*context, name, gdims);
+        auto gb1 = make_shared<YkElemVar<Layout_0d, false>>(*context, "v2", gdims);
         YkVarPtr g1 = make_shared<YkVarImpl>(gb1);
         g1->alloc_storage();
         os << gb1->make_info_string() << endl;
@@ -91,10 +92,9 @@ int main(int argc, char** argv) {
     {
         os << "3-D test...\n";
         VarDimNames gdims = {"x", "y", "z"};
-        string name = "test var";
-        auto gb3 = make_shared<YkElemVar<Layout_321, false>>(*context, name, gdims);
+        auto gb3 = make_shared<YkElemVar<Layout_321, false>>(*context, "v3", gdims);
         YkVarPtr g3 = make_shared<YkVarImpl>(gb3);
-        auto gb3f = make_shared<YkVecVar<Layout_123, false, VLEN_X, VLEN_Y, VLEN_Z>>(*context, name, gdims);
+        auto gb3f = make_shared<YkVecVar<Layout_123, false, VLEN_X, VLEN_Y, VLEN_Z>>(*context, "v4", gdims);
         YkVarPtr g3f = make_shared<YkVarImpl>(gb3f);
         int i = 0;
         int min_pad = 3;

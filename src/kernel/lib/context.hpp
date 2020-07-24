@@ -336,8 +336,8 @@ namespace yask {
         std::map<std::string, MPIData> mpi_data;
 
         // Constructor.
-        StencilContext(KernelEnvPtr& env,
-                       KernelSettingsPtr& settings);
+        StencilContext(KernelEnvPtr& kenv,
+                       KernelSettingsPtr& ksettings);
 
         // Destructor.
         virtual ~StencilContext() {

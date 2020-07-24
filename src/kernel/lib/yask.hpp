@@ -184,35 +184,32 @@ typedef std::uint64_t uidx_t;
 
 // 'state' is a pointer to a KernelState.
 #define DEBUG_MSG1(state, msg) do {                            \
-    if (state->_env->_debug.get()) {                           \
-        auto& os = state->_env->_debug.get()->get_ostream();   \
-        DEBUG_MSG0(os, msg);                                   \
-    } } while(0)
+        assert(state);                                         \
+        assert(state->_env);                                   \
+        if (state->_env->_debug.get()) {                       \
+            auto& os = state->_env->_debug.get()->get_ostream();        \
+            DEBUG_MSG0(os, msg);                                        \
+        } } while(0)
 
-// Macro for debug message when 'state' is defined.
+// Macro for debug message when 'state' ptr is defined.
 #define DEBUG_MSG(msg) DEBUG_MSG1(state, msg)
 
 // Macro for trace message.
 // Enabled only if compiled with TRACE macro and run with -trace option.
 #ifdef TRACE
 
-// 'os is an ostream.
-#define TRACE_MSG0(os, msg) do {                            \
-        if (state->_env->_trace) {                          \
-            DEBUG_MSG0(os, "YASK: " << msg);                \
-        } } while(0)
-
 // 'state' is a pointer to a KernelState.
 #define TRACE_MSG1(state, msg) do {                         \
+        assert(state);                                      \
+        assert(state->_env);                                \
         if (state->_env->_trace) {                          \
             DEBUG_MSG1(state, "YASK: " << msg);             \
         } } while(0)
 #else
-#define TRACE_MSG0(os, msg) ((void)0)
 #define TRACE_MSG1(state, msg) ((void)0)
 #endif
 
-// Macro for trace message when 'state' is defined.
+// Macro for trace message when 'state' ptr is defined.
 #define TRACE_MSG(msg) TRACE_MSG1(state, msg)
 
 // Macro for mem-trace when 'state' is defined.
@@ -246,5 +243,5 @@ extern yask::Cache cache_model;
 // Other utilities.
 #include "utils.hpp"
 #include "tuple.hpp"
-
+#include "alloc.hpp"
 
