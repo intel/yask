@@ -361,6 +361,9 @@ ifeq ($(vtune),1)
  YK_VTUNE_CMD	:=	echo "*** VTune command:" vtune -c hpc-performance $(YK_SCRIPT) $(YK_SCRIPT_OPTS) "[options]"
 endif
 
+# Options to make shared objs.
+YK_SO_OPTS	:=	-shared -fPIC
+
 # Compiler-specific settings.
 
 # Create a compiler invocation to test for macro settings.
@@ -532,7 +535,7 @@ kernel: $(YK_EXEC) $(YK_SCRIPT) $(MAKE_REPORT_FILE)
 
 $(YK_LIB): $(YK_OBJS) $(YK_EXT_OBJS)
 	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^ $(YK_LIBS)
+	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $(YK_SO_OPTS) -o $@ $^ $(YK_LIBS)
 	@ls -l $@
 
 $(YK_EXEC): yask_main.cpp $(YK_LIB)
@@ -633,7 +636,7 @@ $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_OUT_DIR)/yask_kernel_api_wr
 
 $(YK_PY_LIB): $(YK_OBJS)  $(YK_EXT_OBJS) $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.o
 	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -shared -o $@ $^ $(YK_LIBS)
+	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $(YK_SO_OPTS) -o $@ $^ $(YK_LIBS)
 	@ls -l $@
 
 # Simple tests.
