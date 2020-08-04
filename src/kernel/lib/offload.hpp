@@ -68,11 +68,11 @@ IN THE SOFTWARE.
             } while(0)
 
 #else
-#define OFFLOAD_PRAGMA(...) ((void)0)
-#define OFFLOAD_TRACED(state, ...) ((void)0)
-#define OFFLOAD_PRAGMA_TRACED(state, ...) ((void)0)
-#define OFFLOAD_MAP_ALLOC(p, nbytes)
-#define OFFLOAD_MAP_FREE(p)
+#define OFFLOAD_MAP_ALLOC(p, nbytes) ((void)0)
+#define OFFLOAD_MAP_FREE(p) ((void)0)
+#define OFFLOAD_MAP_ALLOC2(state, p, num) ((void)0)
+#define OFFLOAD_UPDATE2(state, p, num) ((void)0)
+#define OFFLOAD_MAP_FREE2(state, p) ((void)0)
 #endif
 
 namespace yask {
