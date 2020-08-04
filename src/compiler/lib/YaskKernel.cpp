@@ -936,7 +936,7 @@ namespace yask {
 
             os << "\n // Alloc core on offload device.\n"
                 "  auto* cxt_cd = &_core_data;\n"
-                "  OFFLOAD_PRAGMA_TRACED(state, omp target enter data map(alloc: cxt_cd[0:1]));\n";
+                "  OFFLOAD_MAP_ALLOC2(state, cxt_cd, 1);\n";
                 
             os << "\n // Call code provided by user.\n" <<
                 _context_hook << "::call_after_new_solution(*this);\n";
@@ -950,10 +950,10 @@ namespace yask {
             " virtual ~" << _context << "() {\n"
             "  STATE_VARS(this);\n"
             "  auto* cxt_cd = &_core_data;\n"
-            "  OFFLOAD_PRAGMA_TRACED(state, omp target exit data map(release: cxt_cd));\n" <<
+            "  OFFLOAD_MAP_FREE2(state, cxt_cd);\n" <<
             "  auto* tcl = _thread_core_list.data();\n"
-            "  OFFLOAD_PRAGMA_TRACED(state, omp target exit data map(release: tcl) if(tcl));\n"
-             " }\n";
+            "  if (tcl) OFFLOAD_MAP_FREE2(state, tcl);\n"
+            " }\n";
 
         // New-var method.
         os << "\n // Make a new var iff its dims match any in the stencil.\n"
@@ -972,7 +972,7 @@ namespace yask {
                 "  STATE_VARS(this);\n"
                 "  auto* cxt_cd = &_core_data;\n"
                 "  cxt_cd->_common_core.set_core(this);\n"
-                "  OFFLOAD_PRAGMA_TRACED(state, omp target update to(cxt_cd[0:1]));\n" <<
+                "  OFFLOAD_UPDATE2(state, cxt_cd, 1);\n" <<
                 core_code <<
                 " }\n";
             os << "\n // Access the core data.\n"
@@ -990,11 +990,11 @@ namespace yask {
             " TRACE_MSG(\"make_scratch_vars(\" << num_threads << \")\");\n"
             "\n  // Release old device data for thread array.\n"
             "  auto* tcl = _thread_core_list.data();\n"
-            "  OFFLOAD_PRAGMA_TRACED(state, omp target exit data map(release: tcl) if(tcl));\n"
+            "  if (tcl) OFFLOAD_MAP_FREE2(state, tcl);\n"
           "\n  // Make new array.\n"
             "  _thread_core_list.resize(num_threads);\n"
             "  tcl = _thread_core_list.data();\n"
-            "  OFFLOAD_PRAGMA_TRACED(state, omp target enter data map(alloc: tcl[0:num_threads]) if(tcl));\n"
+            "  if (tcl) OFFLOAD_MAP_ALLOC2(state, tcl, num_threads);\n"
             "  _core_data._thread_core_list.set_and_sync(state, tcl);\n"
             "\n  // Create scratch var(s) and set core ptr(s).\n" <<
             scratch_code <<

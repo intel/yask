@@ -158,7 +158,8 @@ typedef std::uint64_t uidx_t;
 // Stringizing hacks for the C preprocessor.
 #define YSTR1(s) #s
 #define YSTR2(s) YSTR1(s)
-
+#define YPRAGMA(x) _Pragma(#x)
+    
 // Default alloc settings.
 #define CACHELINE_BYTES  (64)
 #define YASK_PAD (3) // cache-lines between data buffers.

@@ -27,7 +27,7 @@ IN THE SOFTWARE.
 // This must be compiled with a kernel containing 'x', 'y', and 'z' dims.
 
 // enable assert().
-#define DEBUG
+#define CHECK
 
 #include "yask_stencil.hpp"
 using namespace std;
@@ -37,7 +37,7 @@ using namespace yask;
 #define DEFINE_CONTEXT
 #include "yask_stencil_code.hpp"
 
-int main(int argc, char* argv[]) {
+void run_tests(int argc, char* argv[]) {
 
     // Bootstrap factory from kernel API.
     yk_factory kfac;
@@ -137,7 +137,10 @@ int main(int argc, char* argv[]) {
                 return true;
             });
     }
+}
 
-    os << "End of YASK var test.\n";
+int main(int argc, char* argv[]) {
+    run_tests(argc, argv);
+    cout << "End of YASK var test.\n";
     return 0;
 }

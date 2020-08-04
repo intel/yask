@@ -29,32 +29,44 @@ IN THE SOFTWARE.
 #pragma once
 
 #ifdef USE_OFFLOAD
-#define OFFLOAD_MSG(msg) std::cout << "YASK: omp: " << msg << "\n" << std::flush
-#define OFFLOAD_PRAGMA(...) do {                \
-        _Pragma(#__VA_ARGS__)                   \
-            } while(0)
-#define OFFLOAD_TRACED(state, ...) do {         \
-        TRACE_MSG1(state, #__VA_ARGS__);        \
-        __VA_ARGS__;                            \
-    } while(0)
-#define OFFLOAD_PRAGMA_TRACED(state, ...) do {               \
-        TRACE_MSG1(state, "omp: #pragma " #__VA_ARGS__);     \
-        _Pragma(#__VA_ARGS__)                                \
-            } while(0)
-#define OFFLOAD_MAP_ALLOC(p, nbytes) do {                       \
-        char* cp = static_cast<char*>(p);                       \
-        size_t nb = size_t(nbytes);                             \
+
+// Tracing directly to 'cout' when 'state' is not avail.
+#ifdef TRACE
+#define OFFLOAD_MSG(msg) DEBUG_MSG0(std::cout, "YASK: " << msg)
+#else
+#define OFFLOAD_MSG(msg) ((void)0)
+#endif
+#define OFFLOAD_MAP_ALLOC(p, num) do {                          \
+        auto nb = sizeof(*p) * num;                                     \
         OFFLOAD_MSG("#pragma omp target enter data map(alloc: " <<        \
-                     (void*)cp << "[0:" << nb << "])");                 \
-        _Pragma("omp target enter data map(alloc: cp[0:nb])")           \
-            OFFLOAD_MSG("YASK: " << nb << " bytes allocated");  \
+                    (void*)p << "[0:" << num << "]); " << nb << " bytes"); \
+        YPRAGMA(omp target enter data map(alloc: p[0:num]))           \
+            OFFLOAD_MSG(nb << " device bytes allocated");      \
             } while(0)
 #define OFFLOAD_MAP_FREE(p) do {                                \
-        char* cp = static_cast<char*>(p);                       \
         OFFLOAD_MSG("#pragma omp target exit data map(release: " <<   \
-                     (void*)cp << ")");                             \
-        _Pragma("omp target exit data map(release: cp)")        \
+                     (void*)p << ")");                             \
+        YPRAGMA(omp target exit data map(release: p))           \
             } while(0)
+
+// Conditional tracing using 'state'.
+#define OFFLOAD_MAP_ALLOC2(state, p, num) do {               \
+        auto nb = sizeof(*p) * num;                                     \
+        TRACE_MSG1(state, "#pragma omp target enter data map(alloc: " << \
+                   (void*)p << "[0:" << num << "]); " << nb << " bytes"); \
+        YPRAGMA(omp target enter data map(alloc: p[0:num]))           \
+            TRACE_MSG1(state, nb << " device bytes allocated"); \
+            } while(0)
+#define OFFLOAD_UPDATE2(state, p, num) do {                  \
+         TRACE_MSG1(state, "#pragma omp target update to(" << \
+                    (void*)p << "[0:" << num << "])");          \
+         YPRAGMA(omp target update to(p[0:num]))              \
+            } while(0)
+#define OFFLOAD_MAP_FREE2(state, p) do {                                \
+        TRACE_MSG1(state, "#pragma omp target exit data map(release: " << (void*)p << ")"); \
+        YPRAGMA(omp target exit data map(release: p))                  \
+            } while(0)
+
 #else
 #define OFFLOAD_PRAGMA(...) ((void)0)
 #define OFFLOAD_TRACED(state, ...) ((void)0)
@@ -77,7 +89,8 @@ namespace yask {
 
         // Additional data when printing debug info.
         #ifdef TRACE
-        T* _dp = 0;                 // ptr on device.
+        T* _dp = 0;                 // val of ptr on device.
+        T** _dpp = 0;                // loc of ptr on device.
         int _devn = 0;              // device num.
         #endif
         #endif
@@ -98,22 +111,26 @@ namespace yask {
 
                 // With tracing.
                 #ifdef TRACE
+                T** pp = &_p;
 
                 // Temp vars to capture device data.
                 T* dp;
+                T** dpp;
                 int devn;
 
                 // Set pointer on device and copy back to host.
-                #pragma omp target map(from: dp,devn)
+                #pragma omp target map(from: dp,dpp,devn)
                 {
                     _p = p;
                     dp = p;
+                    dpp = pp;
                     devn = omp_get_device_num();
                 }
 
                 // Update values;
                 _devn = devn;
                 _dp = dp;
+                _dpp = dpp;
 
                 // Without tracing.
                 #else
@@ -166,10 +183,10 @@ namespace yask {
         bool sync(const KernelState* state) {
             bool done = _sync(true);
             #if defined(USE_OFFLOAD) && defined(TRACE)
-            if (done)
-                TRACE_MSG1(state, "omp: host ptr to " << _hp << " set to " << _dp << " on device " << _devn);
-            else
-                TRACE_MSG1(state, "omp: host ptr to " << _hp << " already set to " << _dp << " on device " << _devn);
+            TRACE_MSG1(state, "omp: ptr to " << _hp << " on host at " << (void*)&_hp <<
+                       (done ? "" : "already") << " set to " << _dp <<
+                       " on device " << _devn << " at " << (void*)_dpp <<
+                       ((_dpp == 0) ? " *******" : ""));
             #endif
             return done;
         }

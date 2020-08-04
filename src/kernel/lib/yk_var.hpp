@@ -868,7 +868,7 @@ namespace yask {
         void sync_core() override {
             STATE_VARS(this);
             auto* var_cp = &_core;
-            OFFLOAD_PRAGMA_TRACED(state, omp target update to(var_cp[0:1]));
+            OFFLOAD_UPDATE2(state, var_cp, 1);
             _data.sync_data_ptr();
         }
         
@@ -896,7 +896,7 @@ namespace yask {
 
             // Create core on offload device.
             auto* var_cp = &_core;
-            OFFLOAD_PRAGMA_TRACED(state, omp target enter data map (alloc: var_cp[0:1]));
+            OFFLOAD_MAP_ALLOC2(state, var_cp, 1);
              
             resize();
         }
@@ -907,7 +907,7 @@ namespace yask {
 
             // Release core from device.
             auto* var_cp = &_core;
-            OFFLOAD_PRAGMA_TRACED(state, omp target exit data map (release: var_cp));
+            OFFLOAD_MAP_FREE2(state, var_cp);
         }
         
         // Make a human-readable description.
@@ -1005,7 +1005,7 @@ namespace yask {
         void sync_core() override {
             STATE_VARS(this);
             auto* var_cp = &_core;
-            OFFLOAD_PRAGMA_TRACED(state, omp target update to(var_cp[0:1]));
+            OFFLOAD_UPDATE2(state, var_cp, 1);
             _data.sync_data_ptr();
         }
         
@@ -1053,7 +1053,7 @@ namespace yask {
 
             // Create core on offload device.
             auto* var_cp = &_core;
-            OFFLOAD_PRAGMA_TRACED(state, omp target enter data map (alloc: var_cp[0:1]));
+            OFFLOAD_MAP_ALLOC2(state, var_cp, 1);
 
             resize();
         }
@@ -1064,7 +1064,7 @@ namespace yask {
 
             // Release core from device.
             auto* var_cp = &_core;
-            OFFLOAD_PRAGMA_TRACED(state, omp target exit data map (release: var_cp));
+            OFFLOAD_MAP_FREE2(state, var_cp);
         }
         
         // Make a human-readable description.

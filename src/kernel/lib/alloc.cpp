@@ -55,7 +55,8 @@ namespace yask {
                                  " aligned to " + make_byte_str(align));
 
         // Map alloc to device.
-        OFFLOAD_MAP_ALLOC(p, nbytes);
+        char* cp = static_cast<char*>(p);
+        OFFLOAD_MAP_ALLOC(cp, nbytes);
 
         // Return as a char* as required for shared_ptr ctor.
         return static_cast<char*>(p);
@@ -193,7 +194,8 @@ namespace yask {
                                             CACHELINE_BYTES << "-byte aligned");
 
         // Map alloc to device.
-        OFFLOAD_MAP_ALLOC(p, nbytes);
+        char* cp = static_cast<char*>(p);
+        OFFLOAD_MAP_ALLOC(cp, nbytes);
 
         // Return as a char* as required for shared_ptr ctor.
         return static_cast<char*>(p);
@@ -258,7 +260,8 @@ namespace yask {
                                             CACHELINE_BYTES << "-byte aligned");
 
         // Map alloc to device.
-        OFFLOAD_MAP_ALLOC(p, nbytes);
+        char* cp = static_cast<char*>(p);
+        OFFLOAD_MAP_ALLOC(cp, nbytes);
 
         // Return as a char* as required for shared_ptr ctor.
         return static_cast<char*>(p);
