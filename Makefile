@@ -30,7 +30,7 @@
 #   The 'stencil' and 'arch' vars are most important and should always be specified.
 #
 # stencil: sets stencil problem to be solved.
-#   For a list of current stencils, see src/kernel/Makefile or run the following:
+#   For a list of current stencils, run the following:
 #   % make compiler
 #   % bin/yask_compiler.exe -h
 #   You can also create your own stencil; see the documentation.
@@ -234,15 +234,15 @@ all-tests: compiler-api
 	$(MAKE) combo-test
 	$(YK_MAKE) $@
 	$(MAKE) combo-api-tests
+	$(MAKE) clean
+	@echo "All YASK tests have been run"
 
 all:
 	$(MAKE) realclean
 	$(MAKE) tags
 	$(MAKE) default
-	$(MAKE) all-tests
-	$(MAKE) clean
-	$(MAKE) default
 	$(MAKE) api-all
+	$(MAKE) all-tests
 
 docs: api-docs
 
