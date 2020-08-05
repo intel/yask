@@ -50,7 +50,7 @@ namespace yask {
 
     // Make sure rank_val is same over all ranks.
     extern void assert_equality_over_ranks(idx_t rank_val, MPI_Comm comm,
-                                        const std::string& descr);
+                                           const std::string& descr);
 
     // A class for a simple producer-consumer memory lock on one item.
     class SimpleLock {
@@ -141,6 +141,7 @@ namespace yask {
     };
 
     // A class for maintaining elapsed time.
+    // NOT a virtual class.
     class YaskTimer {
 
         /* struct timespec {
@@ -155,7 +156,7 @@ namespace yask {
         typedef struct timespec TimeSpec;
 
         YaskTimer() { clear(); }
-        virtual ~YaskTimer() { }
+        ~YaskTimer() { }
 
         // Reset elapsed time to zero.
         void clear() {
