@@ -356,14 +356,18 @@ namespace yask {
                           ("overlap_comms",
                            "Overlap MPI communication with calculation of interior elements whenever possible.",
                            overlap_comms));
-        parser.add_option(new CommandLineParser::BoolOption
-                          ("use_shm",
-                           "Use shared memory for MPI halo-exchange buffers between ranks on the same node when possible.",
-                           use_shm));
         parser.add_option(new CommandLineParser::IdxOption
                           ("min_exterior",
-                           "Minimum width of MPI exterior section to compute before starting MPI communication.",
+                           "Minimum width of exterior section to compute before starting MPI communication. "
+                           "Applicable only when overlap_comms is enabled.",
                            _min_exterior));
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("use_shm",
+                           "Directly use shared memory for halo-exchange buffers "
+                           "between ranks on the same node when possible. "
+                           "Otherwise, use the same non-blocking MPI send and receive calls "
+                           "that are used between nodes.",
+                           use_shm));
 #endif
         parser.add_option(new CommandLineParser::BoolOption
                           ("force_scalar",
@@ -403,14 +407,13 @@ namespace yask {
                            "This option is ignored if there are fewer than two block threads.",
                            bind_block_threads));
 #ifdef USE_NUMA
-        stringstream msg;
-        msg << "Preferred NUMA node on which to allocate data for "
-            "vars and MPI buffers. Alternatively, use special values " <<
-            yask_numa_local << " for explicit local-node allocation, " <<
-            yask_numa_interleave << " for interleaving pages across all nodes, or " <<
-            yask_numa_none << " for no NUMA policy.";
         parser.add_option(new CommandLineParser::IntOption
-                          ("numa_pref", msg.str(),
+                          ("numa_pref", 
+                           "Preferred NUMA node on which to allocate data for "
+                           "vars and MPI buffers. Alternatively, use special values " +
+                           to_string(yask_numa_local) + " for explicit local-node allocation, " +
+                           to_string(yask_numa_interleave) + " for interleaving pages across all nodes, or " +
+                           to_string(yask_numa_none) + " for no NUMA policy.",
                            _numa_pref));
 #endif
 #ifdef USE_PMEM
@@ -421,8 +424,10 @@ namespace yask {
 #endif
         parser.add_option(new CommandLineParser::BoolOption
                           ("auto_tune",
-                           "Adjust block sizes *during* normal operation to tune for performance. "
-                           "May cause varying performance between steps.",
+                           "Adjust block sizes *during* normal operation to tune for performance: "
+                           "Each step will use a different block size until an optimal size is found. "
+                           "Will likely cause varying performance between steps, "
+                           "so this is not recommended for benchmarking.",
                            _do_auto_tune));
         parser.add_option(new CommandLineParser::DoubleOption
                           ("auto_tune_min_secs",
@@ -436,8 +441,9 @@ namespace yask {
                            _tune_mini_blks));
         parser.add_option(new CommandLineParser::BoolOption
                           ("auto_tune_each_stage",
-                           "Apply the auto-tuner separately to each stage when "
-                           "those stages are applied in separate passes across the entire var, "
+                           "Apply the auto-tuner separately to each stage. "
+                           "Will only be used if stages are applied in separate "
+                           "passes across the entire var, "
                            "i.e., when no temporal tiling is used.",
                            _allow_stage_tuners));
     }
