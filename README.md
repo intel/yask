@@ -41,7 +41,7 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
        or later is required.
      * Building a YASK kernel with clang or the "nextgen" Intel(R) C++
        compiler is possible; however,
-       SIMD operations for functions such as sin() is not supported.
+       SIMD operations for functions such as sin() are not supported.
      * Building a YASK kernel with the Gnu C++ compiler is possible.
        Limited testing with g++ 8.2.0 shows the "iso3dfd" kernel
        runs about 30% slower compared to the same kernel built with
