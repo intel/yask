@@ -423,6 +423,8 @@ namespace yask {
         STATE_VARS(this);
 
         // Allocate I/O vars before read-only vars, and user vars last.
+        // This ordering plays well with NUMA allocation policies where
+        // closer (faster) memory is used first.
         VarPtrs sorted_var_ptrs;
         VarPtrSet done;
         for (auto gp : output_var_ptrs) {
@@ -430,12 +432,16 @@ namespace yask {
             done.insert(gp);
         }
         for (auto gp : orig_var_ptrs) {
-            if (!done.count(gp))
+            if (!done.count(gp)) {
                 sorted_var_ptrs.push_back(gp);
+                done.insert(gp);
+            }
         }
         for (auto gp : all_var_ptrs) {
-            if (!done.count(gp))
+            if (!done.count(gp)) {
                 sorted_var_ptrs.push_back(gp);
+                done.insert(gp);
+            }
         }
 	done.clear();
 
@@ -1097,6 +1103,9 @@ namespace yask {
 
     // Delete and re-create all the scratch vars.  Delete and re-allocate
     // memory for scratch vars based on number of threads and block sizes.
+    // This destroy-everything-and-start-over approach allows for the
+    // number of threads and/or block sizes to be changed.
+    // TODO: be smarter about what to redo.
     void StencilContext::alloc_scratch_data() {
         STATE_VARS(this);
 
