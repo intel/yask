@@ -268,14 +268,14 @@ namespace yask {
         StageList st_stages;
 
         // All non-scratch vars, including those created by APIs.
-        VarPtrs var_ptrs;
-        VarPtrMap var_map;
+        VarPtrs all_var_ptrs;
+        VarPtrMap all_var_map;
 
-        // Only vars defined by the YASK compiler.
+        // Only non-scratch vars defined by the YASK compiler.
         VarPtrs orig_var_ptrs;
         VarPtrMap orig_var_map;
 
-        // Only vars defined by the YASK compiler that are updated by the stencils.
+        // Only non-scratch vars defined by the YASK compiler that are updated by the stencils.
         VarPtrs output_var_ptrs;
         VarPtrMap output_var_map;
 
@@ -433,12 +433,18 @@ namespace yask {
         virtual void update_scratch_var_info(int region_thread_idx,
                                               const Indices& idxs);
 
+        // Copy non-scratch vars to device.
+        void copy_vars_to_device();
+
+        // Copy non-scratch output vars from device.
+        void copy_vars_from_device();
+        
         // Get total memory allocation required by vars.
         // Does not include MPI buffers.
         // TODO: add MPI buffers.
         virtual size_t get_num_bytes() {
             size_t sz = 0;
-            for (auto gp : var_ptrs) {
+            for (auto gp : all_var_ptrs) {
                 if (gp)
                     sz += gp->get_num_storage_bytes() + _data_buf_pad;
             }
@@ -580,19 +586,19 @@ namespace yask {
         }
 
         virtual int get_num_vars() const {
-            return int(var_ptrs.size());
+            return int(all_var_ptrs.size());
         }
 
         virtual yk_var_ptr get_var(const std::string& name) {
-            auto i = var_map.find(name);
-            if (i != var_map.end())
+            auto i = all_var_map.find(name);
+            if (i != all_var_map.end())
                 return i->second;
             return nullptr;
         }
         virtual std::vector<yk_var_ptr> get_vars() {
             std::vector<yk_var_ptr> vars;
-            for (int i = 0; i < get_num_vars(); i++)
-                vars.push_back(var_ptrs.at(i));
+            for (auto& vp : all_var_ptrs)
+                vars.push_back(vp);
             return vars;
         }
         virtual yk_var_ptr

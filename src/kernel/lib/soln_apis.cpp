@@ -141,8 +141,9 @@ namespace yask {
                           [&](idx_t start, idx_t stop, idx_t thread_num) { });
 
         // Some var stats.
-        DEBUG_MSG("\nNum vars: " << var_ptrs.size() <<
-                  "\nNum vars to be updated: " << output_var_ptrs.size());
+        DEBUG_MSG("\nNum vars: " << all_var_ptrs.size() <<
+                  "\nNum vars to be updated: " << output_var_ptrs.size() <<
+                  "\nNum vars created via APIs: " << (all_var_ptrs.size() - orig_var_ptrs.size()));
 
         // Set up data based on MPI rank, including local or global sizes,
         // var positions.
@@ -173,10 +174,10 @@ namespace yask {
         for (auto& sp : st_stages)
             sp->get_local_settings() = *opts;
 
-        // Alloc vars, scratch vars, MPI bufs.
+        // Free the scratch and MPI data first to give vars preference.
+        // Alloc vars (if needed), scratch vars, MPI bufs.
         // This is the order in which preferred NUMA nodes (e.g., HBW mem)
         // will be used.
-        // We free the scratch and MPI data first to give vars preference.
         YaskTimer alloc_timer;
         alloc_timer.start();
         free_scratch_data();
@@ -314,7 +315,7 @@ namespace yask {
         mpi_data.clear();
 
         // Release var data.
-        for (auto gp : var_ptrs) {
+        for (auto gp : all_var_ptrs) {
             if (!gp)
                 continue;
             gp->release_storage();
@@ -328,10 +329,10 @@ namespace yask {
         auto sp = dynamic_pointer_cast<StencilContext>(source);
         assert(sp);
 
-        for (auto gp : var_ptrs) {
+        for (auto gp : all_var_ptrs) {
             auto gname = gp->get_name();
-            auto si = sp->var_map.find(gname);
-            if (si != sp->var_map.end()) {
+            auto si = sp->all_var_map.find(gname);
+            if (si != sp->all_var_map.end()) {
                 auto sgp = si->second;
                 gp->fuse_vars(sgp);
             }
@@ -359,31 +360,6 @@ namespace yask {
 
         // Parse cmd-line options, which sets values in settings.
         return parser.parse_args("YASK", args);
-    }
-
-    // Add a new var to the containers.
-    void StencilContext::add_var(YkVarPtr gp, bool is_orig, bool is_output) {
-        STATE_VARS(this);
-        assert(gp);
-        auto& gname = gp->get_name();
-        if (var_map.count(gname))
-            THROW_YASK_EXCEPTION("Error: var '" + gname + "' already exists");
-
-        // Add to list and map.
-        var_ptrs.push_back(gp);
-        var_map[gname] = gp;
-
-        // Add to orig list and map if 'is_orig'.
-        if (is_orig) {
-            orig_var_ptrs.push_back(gp);
-            orig_var_map[gname] = gp;
-        }
-
-        // Add to output list and map if 'is_output'.
-        if (is_output) {
-            output_var_ptrs.push_back(gp);
-            output_var_map[gname] = gp;
-        }
     }
 
     static string print_pct(double ntime, double dtime) {

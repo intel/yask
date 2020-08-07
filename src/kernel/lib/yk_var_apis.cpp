@@ -246,6 +246,7 @@ namespace yask {
             nup++;
 
             // Set appropriate dirty flag.
+            // FIXME: does not keep dirty flags consistent across ranks!
             gb().set_dirty_using_alloc_index(true, asi);
         }
         TRACE_MSG("set_element(" << val << ", {" <<
@@ -275,6 +276,7 @@ namespace yask {
             nup++;
 
             // Set appropriate dirty flag.
+            // FIXME: does not keep dirty flags consistent across ranks!
             gb().set_dirty_using_alloc_index(true, asi);
         }
         TRACE_MSG("add_to_element(" << val << ", {" <<
@@ -361,6 +363,7 @@ namespace yask {
             });
 
         // Set appropriate dirty flag(s).
+        // FIXME: does not keep dirty flags consistent across ranks!
         set_dirty_in_slice(first, last);
 
         auto nup = num_elems_tuple.product();
@@ -403,6 +406,7 @@ namespace yask {
             });
 
         // Set appropriate dirty flag(s).
+        // FIXME: does not keep dirty flags consistent across ranks!
         set_dirty_in_slice(first_indices, last_indices);
 
         auto nup = num_elems_tuple.product();

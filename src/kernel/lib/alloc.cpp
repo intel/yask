@@ -422,14 +422,18 @@ namespace yask {
     void StencilContext::alloc_var_data() {
         STATE_VARS(this);
 
-        // Allocate I/O vars before read-only vars.
+        // Allocate I/O vars before read-only vars, and user vars last.
         VarPtrs sorted_var_ptrs;
         VarPtrSet done;
-        for (auto op : output_var_ptrs) {
-            sorted_var_ptrs.push_back(op);
-            done.insert(op);
+        for (auto gp : output_var_ptrs) {
+            sorted_var_ptrs.push_back(gp);
+            done.insert(gp);
         }
-        for (auto gp : var_ptrs) {
+        for (auto gp : orig_var_ptrs) {
+            if (!done.count(gp))
+                sorted_var_ptrs.push_back(gp);
+        }
+        for (auto gp : all_var_ptrs) {
             if (!done.count(gp))
                 sorted_var_ptrs.push_back(gp);
         }
@@ -461,7 +465,7 @@ namespace yask {
         // Pass 2: distribute parts of already-allocated memory chunk.
         for (int pass = 0; pass < 3; pass++) {
             TRACE_MSG("alloc_var_data pass " << pass << " for " <<
-                      var_ptrs.size() << " var(s)");
+                      all_var_ptrs.size() << " var(s)");
 
             // Count bytes needed and number of vars for each NUMA node.
             map <int, size_t> npbytes, nvars;
@@ -968,7 +972,7 @@ namespace yask {
             map <int, size_t> npbytes, nbufs;
 
             // Vars. Use the map to ensure same order in all ranks.
-            for (auto gi : var_map) {
+            for (auto gi : all_var_map) {
                 auto& gname = gi.first;
                 auto& gp = gi.second;
 

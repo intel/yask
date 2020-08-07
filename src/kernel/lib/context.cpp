@@ -226,141 +226,231 @@ namespace yask {
             THROW_YASK_EXCEPTION("Error: run_solution() called without calling prepare_solution() first");
         if (ext_bb.bb_size < 1) {
             TRACE_MSG("nothing to do in solution");
-            return;
         }
+        else {
 
-#ifdef MODEL_CACHE
-        if (env.my_rank != env.msg_rank)
-            cache_model.disable();
-        if (cache_model.is_enabled())
-            os << "Modeling cache...\n";
-#endif
+            // Copy vars to device, if any.
+            copy_vars_to_device();
 
-        // Adjust end points for overlapping regions due to wavefront angle.
-        // For each subsequent time step in a region, the spatial location
-        // of each block evaluation is shifted by the angle for each
-        // stage. So, the total shift in a region is the angle * num
-        // stages * num timesteps. This assumes all stages
-        // are inter-dependent to find maximum extension. Actual required
-        // size may be less, but this will just result in some calls to
-        // calc_region() that do nothing.
-        //
-        // Conceptually (showing 2 ranks in t and x dims):
-        // -----------------------------  t = rt ------------------------------
-        //   \   | \     \     \|  \   |    .    |   / |  \     \     \|  \   |
-        //    \  |  \     \     |   \  |    .    |  / \|   \     \     |   \  |
-        //     \ |r0 \  r1 \ r2 |\ r3\ |    .    | /r0 | r1 \  r2 \ r3 |\ r4\ |
-        //      \|    \     \   | \   \|         |/    |\    \     \   | \   \|
-        // ------------------------------ t = 0 -------------------------------
-        //       |   rank 0     |      |         |     |   rank 1      |      |
-        // x = begin[x]       end[x] end[x]  begin[x] begin[x]       end[x] end[x]
-        //     (rank)        (rank) (ext)     (ext)    (rank)       (rank) (adj)
-        //
-        //                      |XXXXXX|         |XXXXX|  <- redundant calculations.
-        // XXXXXX|  <- areas outside of outer ranks not calculated ->  |XXXXXXX
-        //
-        if (wf_steps > 0) {
-            DOMAIN_VAR_LOOP(i, j) {
+            #ifdef MODEL_CACHE
+            if (env.my_rank != env.msg_rank)
+                cache_model.disable();
+            if (cache_model.is_enabled())
+                os << "Modeling cache...\n";
+            #endif
 
-                // The end should be adjusted only if an extension doesn't
-                // exist.  Extentions exist between ranks, so additional
-                // adjustments are only needed at the end of the right-most
-                // rank in each dim.  See "(adj)" in diagram above.
-                if (right_wf_exts[j] == 0)
-                    end[i] += wf_shift_pts[j];
+            // Adjust end points for overlapping regions due to wavefront angle.
+            // For each subsequent time step in a region, the spatial location
+            // of each block evaluation is shifted by the angle for each
+            // stage. So, the total shift in a region is the angle * num
+            // stages * num timesteps. This assumes all stages
+            // are inter-dependent to find maximum extension. Actual required
+            // size may be less, but this will just result in some calls to
+            // calc_region() that do nothing.
+            //
+            // Conceptually (showing 2 ranks in t and x dims):
+            // -----------------------------  t = rt ------------------------------
+            //   \   | \     \     \|  \   |    .    |   / |  \     \     \|  \   |
+            //    \  |  \     \     |   \  |    .    |  / \|   \     \     |   \  |
+            //     \ |r0 \  r1 \ r2 |\ r3\ |    .    | /r0 | r1 \  r2 \ r3 |\ r4\ |
+            //      \|    \     \   | \   \|         |/    |\    \     \   | \   \|
+            // ------------------------------ t = 0 -------------------------------
+            //       |   rank 0     |      |         |     |   rank 1      |      |
+            // x = begin[x]       end[x] end[x]  begin[x] begin[x]       end[x] end[x]
+            //     (rank)        (rank) (ext)     (ext)    (rank)       (rank) (adj)
+            //
+            //                      |XXXXXX|         |XXXXX|  <- redundant calculations.
+            // XXXXXX|  <- areas outside of outer ranks not calculated ->  |XXXXXXX
+            //
+            if (wf_steps > 0) {
+                DOMAIN_VAR_LOOP(i, j) {
+
+                    // The end should be adjusted only if an extension doesn't
+                    // exist.  Extentions exist between ranks, so additional
+                    // adjustments are only needed at the end of the right-most
+                    // rank in each dim.  See "(adj)" in diagram above.
+                    if (right_wf_exts[j] == 0)
+                        end[i] += wf_shift_pts[j];
+                }
             }
-        }
 
-        // If original region covered entire rank in a dim, set
-        // stride size to ensure only one stride is taken.
-        DOMAIN_VAR_LOOP(i, j) {
-            if (opts->_region_sizes[i] >= opts->_rank_sizes[i])
-                stride[i] = end[i] - begin[i];
-        }
-        TRACE_MSG("run_solution: after adjustment for " << num_wf_shifts <<
-                  " wave-front shift(s): [" <<
-                  begin.make_dim_val_str() << " ... " <<
-                  end.make_dim_val_str() << ") by " <<
-                  stride.make_dim_val_str());
+            // If original region covered entire rank in a dim, set
+            // stride size to ensure only one stride is taken.
+            DOMAIN_VAR_LOOP(i, j) {
+                if (opts->_region_sizes[i] >= opts->_rank_sizes[i])
+                    stride[i] = end[i] - begin[i];
+            }
+            TRACE_MSG("run_solution: after adjustment for " << num_wf_shifts <<
+                      " wave-front shift(s): [" <<
+                      begin.make_dim_val_str() << " ... " <<
+                      end.make_dim_val_str() << ") by " <<
+                      stride.make_dim_val_str());
 
-        // At this point, 'begin' and 'end' should describe the *max* range
-        // needed in the domain for this rank for the first time step.  At
-        // any subsequent time step, this max may be shifted for temporal
-        // wavefronts or blocking. Also, for each time step, the *actual*
-        // range will be adjusted as needed before any actual stencil
-        // calculations are made.
+            // At this point, 'begin' and 'end' should describe the *max* range
+            // needed in the domain for this rank for the first time step.  At
+            // any subsequent time step, this max may be shifted for temporal
+            // wavefronts or blocking. Also, for each time step, the *actual*
+            // range will be adjusted as needed before any actual stencil
+            // calculations are made.
 
-        // Indices needed for the 'rank' loops.
-        ScanIndices rank_idxs(*dims, true, &rank_domain_offsets);
-        rank_idxs.begin = begin;
-        rank_idxs.end = end;
-        rank_idxs.stride = stride;
+            // Indices needed for the 'rank' loops.
+            ScanIndices rank_idxs(*dims, true, &rank_domain_offsets);
+            rank_idxs.begin = begin;
+            rank_idxs.end = end;
+            rank_idxs.stride = stride;
 
-        // Make sure threads are set properly for a region.
-        set_region_threads();
+            // Make sure threads are set properly for a region.
+            set_region_threads();
 
-        // Initial halo exchange.
-        exchange_halos();
+            // Initial halo exchange.
+            exchange_halos();
 
-        // Number of iterations to get from begin_t to end_t-1,
-        // jumping by stride_t.
-        const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(stride_t));
-        for (idx_t index_t = 0; index_t < num_t; index_t++)
-        {
-            // This value of index_t steps from start_t to stop_t-1.
-            const idx_t start_t = begin_t + (index_t * stride_t);
-            const idx_t stop_t = (stride_t > 0) ?
-                min(start_t + stride_t, end_t) :
-                max(start_t + stride_t, end_t);
-            idx_t this_num_t = abs(stop_t - start_t);
+            // Number of iterations to get from begin_t to end_t-1,
+            // jumping by stride_t.
+            const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(stride_t));
+            for (idx_t index_t = 0; index_t < num_t; index_t++)
+            {
+                // This value of index_t steps from start_t to stop_t-1.
+                const idx_t start_t = begin_t + (index_t * stride_t);
+                const idx_t stop_t = (stride_t > 0) ?
+                    min(start_t + stride_t, end_t) :
+                    max(start_t + stride_t, end_t);
+                idx_t this_num_t = abs(stop_t - start_t);
 
-            // Set indices that will pass through generated code.
-            rank_idxs.index[step_posn] = index_t;
-            rank_idxs.start[step_posn] = start_t;
-            rank_idxs.stop[step_posn] = stop_t;
-            rank_idxs.stride[step_posn] = stride_t;
+                // Set indices that will pass through generated code.
+                rank_idxs.index[step_posn] = index_t;
+                rank_idxs.start[step_posn] = start_t;
+                rank_idxs.stop[step_posn] = stop_t;
+                rank_idxs.stride[step_posn] = stride_t;
 
-            // Start timer for auto-tuner.
-            _at.timer.start();
+                // Start timer for auto-tuner.
+                _at.timer.start();
 
-            // If no wave-fronts (default), loop through stages here, and do
-            // only one stage at a time in calc_region(). This is similar to
-            // loop in calc_rank_ref(), but with stages instead of bundles.
-            if (wf_steps == 0) {
+                // If no wave-fronts (default), loop through stages here, and do
+                // only one stage at a time in calc_region(). This is similar to
+                // loop in calc_rank_ref(), but with stages instead of bundles.
+                if (wf_steps == 0) {
 
-                // Loop thru stages.
-                for (auto& bp : st_stages) {
+                    // Loop thru stages.
+                    for (auto& bp : st_stages) {
 
-                    // Check step.
-                    if (check_step_conds && !bp->is_in_valid_step(start_t)) {
+                        // Check step.
+                        if (check_step_conds && !bp->is_in_valid_step(start_t)) {
+                            TRACE_MSG("run_solution: step " << start_t <<
+                                      " not valid for stage '" <<
+                                      bp->get_name() << "'");
+                            continue;
+                        }
+
+                        // Do MPI-external passes?
+                        if (mpi_interior.bb_valid) {
+                            do_mpi_interior = false;
+
+                            // Old overlap method calculates full blocks in exterior
+                            // and then in interior. Only works without WF tiling.
+                            // Also, if blocks are too big, then the interior is
+                            // too small. For now, keeping code for perf comparison.
+                            #ifdef OVERLAP_WITH_BLOCKS
+                            mpi_exterior_dim = -1; // indicate block method.
+
+                            // Overlap comms and computation at a block granularity.
+                            // Set both left and right exterior flags.
+                            do_mpi_left = do_mpi_right = true;
+
+                            // Include automatically-generated loop code that calls
+                            // calc_region(bp) for each region.
+                            TRACE_MSG("run_solution: step " << start_t <<
+                                      " for stage '" << bp->get_name() << "' in MPI exterior");
+                            #include "yask_rank_loops.hpp"
+
+                            #else
+                            mpi_exterior_dim = 0;
+
+                            // Overlap comms and computation by restricting
+                            // region boundaries.  Make an external pass for
+                            // each side of each domain dim, e.g., 'left x',
+                            // 'right x', 'left y', ...
+                            DOMAIN_VAR_LOOP(i, j) {
+                                for (bool is_left : { true, false }) {
+
+                                    // Skip if no halo to calculate in this
+                                    // section.
+                                    if (!does_exterior_exist(j, is_left))
+                                        continue;
+
+                                    // Set the proper flags to indicate what
+                                    // section we're working on.
+                                    do_mpi_left = is_left;
+                                    do_mpi_right = !is_left;
+                                    mpi_exterior_dim = j;
+
+                                    // Include automatically-generated loop
+                                    // code that calls calc_region(bp) for
+                                    // each region. The region will be trimmed
+                                    // to the active MPI exterior section.
+                                    TRACE_MSG("run_solution: step " << start_t <<
+                                              " for stage '" << bp->get_name() <<
+                                              "' in MPI exterior dim " << j <<
+                                              " on the " << (is_left ? "left" : "right"));
+                                    #include "yask_rank_loops.hpp"
+                                } // left/right.
+                            } // domain dims.
+                            #endif
+
+                            // Mark vars that [may] have been written to by
+                            // this stage. Mark vars as dirty even if not
+                            // actually written by this rank, perhaps due to
+                            // sub-domains or asymmetrical stencils. This is
+                            // needed because neighbors will not know what vars
+                            // are actually dirty, and all ranks must have the
+                            // same information about which vars are possibly
+                            // dirty.  TODO: make this smarter to save unneeded
+                            // MPI exchanges.
+                            update_vars(bp, start_t, stop_t, true);
+
+                            // Do the appropriate steps for halo exchange of exterior.
+                            // TODO: exchange halo for each dim as soon as it's done.
+                            do_mpi_left = do_mpi_right = true;
+                            exchange_halos();
+
+                            // Do interior only in next pass.
+                            do_mpi_left = do_mpi_right = false;
+                            do_mpi_interior = true;
+                        } // Overlapping.
+
+                        // Include automatically-generated loop code that calls
+                        // calc_region(bp) for each region. If overlapping
+                        // comms, this will be just the interior.  If not, it
+                        // will cover the whole rank.
                         TRACE_MSG("run_solution: step " << start_t <<
-                                  " not valid for stage '" <<
-                                  bp->get_name() << "'");
-                        continue;
-                    }
+                                  " for stage '" << bp->get_name() << "'");
+                        #include "yask_rank_loops.hpp"
+
+                        // Mark as dirty only if we did exterior.
+                        bool mark_dirty = do_mpi_left || do_mpi_right;
+                        update_vars(bp, start_t, stop_t, mark_dirty);
+
+                        // Do the appropriate steps for halo exchange depending
+                        // on 'do_mpi_*' flags.
+                        exchange_halos();
+
+                        // Set the overlap flags back to default.
+                        do_mpi_interior = do_mpi_left = do_mpi_right = true;
+
+                    } // stages.
+                } // No WF tiling.
+
+                // If doing wave-fronts, must loop through all stages in
+                // calc_region().
+                else {
+
+                    // Null ptr => Eval all stages each time
+                    // calc_region() is called.
+                    StagePtr bp;
 
                     // Do MPI-external passes?
                     if (mpi_interior.bb_valid) {
                         do_mpi_interior = false;
-
-                        // Old overlap method calculates full blocks in exterior
-                        // and then in interior. Only works without WF tiling.
-                        // Also, if blocks are too big, then the interior is
-                        // too small. For now, keeping code for perf comparison.
-#ifdef OVERLAP_WITH_BLOCKS
-                        mpi_exterior_dim = -1; // indicate block method.
-
-                        // Overlap comms and computation at a block granularity.
-                        // Set both left and right exterior flags.
-                        do_mpi_left = do_mpi_right = true;
-
-                        // Include automatically-generated loop code that calls
-                        // calc_region(bp) for each region.
-                        TRACE_MSG("run_solution: step " << start_t <<
-                                  " for stage '" << bp->get_name() << "' in MPI exterior");
-#include "yask_rank_loops.hpp"
-
-#else
                         mpi_exterior_dim = 0;
 
                         // Overlap comms and computation by restricting
@@ -385,24 +475,15 @@ namespace yask {
                                 // code that calls calc_region(bp) for
                                 // each region. The region will be trimmed
                                 // to the active MPI exterior section.
-                                TRACE_MSG("run_solution: step " << start_t <<
-                                          " for stage '" << bp->get_name() <<
-                                          "' in MPI exterior dim " << j <<
+                                TRACE_MSG("run_solution: steps [" << start_t <<
+                                          " ... " << stop_t <<
+                                          ") in MPI exterior dim " << j <<
                                           " on the " << (is_left ? "left" : "right"));
-#include "yask_rank_loops.hpp"
+                                #include "yask_rank_loops.hpp"
                             } // left/right.
                         } // domain dims.
-#endif
 
-                        // Mark vars that [may] have been written to by
-                        // this stage. Mark vars as dirty even if not
-                        // actually written by this rank, perhaps due to
-                        // sub-domains or asymmetrical stencils. This is
-                        // needed because neighbors will not know what vars
-                        // are actually dirty, and all ranks must have the
-                        // same information about which vars are possibly
-                        // dirty.  TODO: make this smarter to save unneeded
-                        // MPI exchanges.
+                        // Mark vars dirty for all stages.
                         update_vars(bp, start_t, stop_t, true);
 
                         // Do the appropriate steps for halo exchange of exterior.
@@ -419,9 +500,9 @@ namespace yask {
                     // calc_region(bp) for each region. If overlapping
                     // comms, this will be just the interior.  If not, it
                     // will cover the whole rank.
-                    TRACE_MSG("run_solution: step " << start_t <<
-                              " for stage '" << bp->get_name() << "'");
-#include "yask_rank_loops.hpp"
+                    TRACE_MSG("run_solution: steps [" << start_t <<
+                              " ... " << stop_t << ")");
+                    #include "yask_rank_loops.hpp"
 
                     // Mark as dirty only if we did exterior.
                     bool mark_dirty = do_mpi_left || do_mpi_right;
@@ -434,127 +515,54 @@ namespace yask {
                     // Set the overlap flags back to default.
                     do_mpi_interior = do_mpi_left = do_mpi_right = true;
 
-                } // stages.
-            } // No WF tiling.
+                } // With WF tiling.
 
-            // If doing wave-fronts, must loop through all stages in
-            // calc_region().
-            else {
+                // Overall steps.
+                steps_done += this_num_t;
 
-                // Null ptr => Eval all stages each time
-                // calc_region() is called.
-                StagePtr bp;
+                // Count steps for each stage to properly account for
+                // step conditions when using temporal tiling.
+                for (auto& bp : st_stages) {
+                    idx_t num_stage_steps = 0;
 
-                // Do MPI-external passes?
-                if (mpi_interior.bb_valid) {
-                    do_mpi_interior = false;
-                    mpi_exterior_dim = 0;
+                    if (!check_step_conds)
+                        num_stage_steps = this_num_t;
+                    else {
 
-                    // Overlap comms and computation by restricting
-                    // region boundaries.  Make an external pass for
-                    // each side of each domain dim, e.g., 'left x',
-                    // 'right x', 'left y', ...
-                    DOMAIN_VAR_LOOP(i, j) {
-                        for (bool is_left : { true, false }) {
+                        // Loop through each step.
+                        assert(abs(step_dir) == 1);
+                        for (idx_t t = start_t; t != stop_t; t += step_dir) {
 
-                            // Skip if no halo to calculate in this
-                            // section.
-                            if (!does_exterior_exist(j, is_left))
-                                continue;
-
-                            // Set the proper flags to indicate what
-                            // section we're working on.
-                            do_mpi_left = is_left;
-                            do_mpi_right = !is_left;
-                            mpi_exterior_dim = j;
-
-                            // Include automatically-generated loop
-                            // code that calls calc_region(bp) for
-                            // each region. The region will be trimmed
-                            // to the active MPI exterior section.
-                            TRACE_MSG("run_solution: steps [" << start_t <<
-                                      " ... " << stop_t <<
-                                      ") in MPI exterior dim " << j <<
-                                      " on the " << (is_left ? "left" : "right"));
-#include "yask_rank_loops.hpp"
-                        } // left/right.
-                    } // domain dims.
-
-                    // Mark vars dirty for all stages.
-                    update_vars(bp, start_t, stop_t, true);
-
-                    // Do the appropriate steps for halo exchange of exterior.
-                    // TODO: exchange halo for each dim as soon as it's done.
-                    do_mpi_left = do_mpi_right = true;
-                    exchange_halos();
-
-                    // Do interior only in next pass.
-                    do_mpi_left = do_mpi_right = false;
-                    do_mpi_interior = true;
-                } // Overlapping.
-
-                // Include automatically-generated loop code that calls
-                // calc_region(bp) for each region. If overlapping
-                // comms, this will be just the interior.  If not, it
-                // will cover the whole rank.
-                TRACE_MSG("run_solution: steps [" << start_t <<
-                          " ... " << stop_t << ")");
-#include "yask_rank_loops.hpp"
-
-                // Mark as dirty only if we did exterior.
-                bool mark_dirty = do_mpi_left || do_mpi_right;
-                update_vars(bp, start_t, stop_t, mark_dirty);
-
-                // Do the appropriate steps for halo exchange depending
-                // on 'do_mpi_*' flags.
-                exchange_halos();
-
-                // Set the overlap flags back to default.
-                do_mpi_interior = do_mpi_left = do_mpi_right = true;
-
-            } // With WF tiling.
-
-            // Overall steps.
-            steps_done += this_num_t;
-
-            // Count steps for each stage to properly account for
-            // step conditions when using temporal tiling.
-            for (auto& bp : st_stages) {
-                idx_t num_stage_steps = 0;
-
-                if (!check_step_conds)
-                    num_stage_steps = this_num_t;
-                else {
-
-                    // Loop through each step.
-                    assert(abs(step_dir) == 1);
-                    for (idx_t t = start_t; t != stop_t; t += step_dir) {
-
-                        // Check step cond for this t.
-                        if (bp->is_in_valid_step(t))
-                            num_stage_steps++;
+                            // Check step cond for this t.
+                            if (bp->is_in_valid_step(t))
+                                num_stage_steps++;
+                        }
                     }
+
+                    // Count steps for this stage.
+                    bp->add_steps(num_stage_steps);
                 }
 
-                // Count steps for this stage.
-                bp->add_steps(num_stage_steps);
+                // Call the auto-tuner to evaluate these steps.
+                eval_auto_tuner(this_num_t);
+
+            } // step loop.
+
+            #ifdef MODEL_CACHE
+            // Print cache stats, then disable.
+            // Thus, cache is only modeled for first call.
+            if (cache_model.is_enabled()) {
+                os << "Done modeling cache...\n";
+                cache_model.dump_stats();
+                cache_model.disable();
             }
+            #endif
 
-            // Call the auto-tuner to evaluate these steps.
-            eval_auto_tuner(this_num_t);
+            // Copy vars from device, if any.
+            copy_vars_from_device();
 
-        } // step loop.
-
-#ifdef MODEL_CACHE
-        // Print cache stats, then disable.
-        // Thus, cache is only modeled for first call.
-        if (cache_model.is_enabled()) {
-            os << "Done modeling cache...\n";
-            cache_model.dump_stats();
-            cache_model.disable();
-        }
-#endif
-
+        } // Something to do.
+        
         // Stop vtune collection & timer.
         VTUNE_PAUSE;
         run_time.stop();
@@ -1525,21 +1533,21 @@ namespace yask {
         }
     }
 
-    // Compare vars in contexts.
+    // Compare output vars in contexts.
     // Return number of mis-compares.
     idx_t StencilContext::compare_data(const StencilContext& ref) const {
         STATE_VARS_CONST(this);
 
         DEBUG_MSG("Comparing var(s) in '" << name << "' to '" << ref.name << "'...");
-        if (var_ptrs.size() != ref.var_ptrs.size()) {
-            TRACE_MSG("** number of vars not equal");
+        if (output_var_ptrs.size() != ref.output_var_ptrs.size()) {
+            TRACE_MSG("** number of output vars not equal");
             return 1;
         }
         idx_t errs = 0;
-        for (size_t gi = 0; gi < var_ptrs.size(); gi++) {
-            TRACE_MSG("Var '" << ref.var_ptrs[gi]->get_name() << "'...");
-            auto& gb = var_ptrs[gi]->gb();
-            auto* rgbp = ref.var_ptrs[gi]->gbp();
+        for (size_t gi = 0; gi < output_var_ptrs.size(); gi++) {
+            auto& gb = output_var_ptrs[gi]->gb();
+            auto* rgbp = ref.output_var_ptrs[gi]->gbp();
+            TRACE_MSG("Var '" << gb.get_name() << "'...");
             errs += gb.compare(rgbp);
         }
 
@@ -1633,15 +1641,15 @@ namespace yask {
         map<YkVarPtr, idx_t> first_steps_to_swap;
         map<YkVarPtr, idx_t> last_steps_to_swap;
 
-        // Loop thru all vars.
-        for (auto& gp : var_ptrs) {
+        // Loop thru all vars in stencil.
+        for (auto& gp : orig_var_ptrs) {
             auto& gb = gp->gb();
 
             // Don't swap scratch vars.
             if (gb.is_scratch())
                 continue;
 
-            // Only need to swap vars that have any MPI buffers.
+            // Only need to swap data in vars that have any MPI buffers.
             auto& gname = gp->get_name();
             if (mpi_data.count(gname) == 0)
                 continue;

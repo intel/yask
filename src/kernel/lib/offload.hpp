@@ -57,10 +57,15 @@ IN THE SOFTWARE.
         YPRAGMA(omp target enter data map(alloc: p[0:num]))           \
             TRACE_MSG1(state, nb << " device bytes allocated"); \
             } while(0)
-#define OFFLOAD_UPDATE2(state, p, num) do {                  \
+#define OFFLOAD_UPDATE_TO2(state, p, num) do {                \
          TRACE_MSG1(state, "#pragma omp target update to(" << \
                     (void*)p << "[0:" << num << "])");          \
          YPRAGMA(omp target update to(p[0:num]))              \
+            } while(0)
+#define OFFLOAD_UPDATE_FROM2(state, p, num) do {                \
+         TRACE_MSG1(state, "#pragma omp target update from(" << \
+                    (void*)p << "[0:" << num << "])");          \
+         YPRAGMA(omp target update from(p[0:num]))              \
             } while(0)
 #define OFFLOAD_MAP_FREE2(state, p) do {                                \
         TRACE_MSG1(state, "#pragma omp target exit data map(release: " << (void*)p << ")"); \
@@ -71,7 +76,8 @@ IN THE SOFTWARE.
 #define OFFLOAD_MAP_ALLOC(p, nbytes) ((void)0)
 #define OFFLOAD_MAP_FREE(p) ((void)0)
 #define OFFLOAD_MAP_ALLOC2(state, p, num) ((void)0)
-#define OFFLOAD_UPDATE2(state, p, num) ((void)0)
+#define OFFLOAD_UPDATE_TO2(state, p, num) ((void)0)
+#define OFFLOAD_UPDATE_FROM2(state, p, num) ((void)0)
 #define OFFLOAD_MAP_FREE2(state, p) ((void)0)
 #endif
 

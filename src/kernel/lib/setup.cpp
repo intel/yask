@@ -456,7 +456,7 @@ namespace yask {
             auto& dname = dim._get_name();
 
             // Each non-scratch var.
-            for (auto gp : var_ptrs) {
+            for (auto gp : all_var_ptrs) {
                 assert(gp);
                 if (!gp->is_dim_used(dname))
                     continue;
@@ -755,7 +755,7 @@ namespace yask {
         DEBUG_MSG("Initializing vars...");
         YaskTimer itimer;
         itimer.start();
-        for (auto gp : var_ptrs) {
+        for (auto gp : orig_var_ptrs) {
             real_init_fn(gp, seed);
             seed += 0.01;
         }
@@ -1162,4 +1162,51 @@ namespace yask {
         bb_valid = true;
     }
 
+    // Add a new non-scratch var to the containers.
+    void StencilContext::add_var(YkVarPtr gp, bool is_orig, bool is_output) {
+        STATE_VARS(this);
+        assert(gp);
+        auto& gname = gp->get_name();
+        if (all_var_map.count(gname))
+            THROW_YASK_EXCEPTION("Error: var '" + gname + "' already exists");
+
+        // Add to list and map.
+        all_var_ptrs.push_back(gp);
+        all_var_map[gname] = gp;
+
+        // Add to orig list and map if 'is_orig'.
+        if (is_orig) {
+            orig_var_ptrs.push_back(gp);
+            orig_var_map[gname] = gp;
+        }
+
+        // Add to output list and map if 'is_output'.
+        if (is_output) {
+            output_var_ptrs.push_back(gp);
+            output_var_map[gname] = gp;
+        }
+    }
+
+    // Copy vars from host to device.
+    // TODO: copy only when needed.
+    void StencilContext::copy_vars_to_device() {
+        #if USE_OFFLOAD
+        for (auto gp : orig_var_ptrs) {
+            assert(gp);
+            gp->gb().copy_data_to_device();
+        }
+        #endif
+    }
+    
+    // Copy output vars from device to host.
+    // TODO: copy only when needed.
+    void StencilContext::copy_vars_from_device() {
+        #if USE_OFFLOAD
+        for (auto gp : output_var_ptrs) {
+            assert(gp);
+            gp->gb().copy_data_from_device();
+        }
+        #endif
+    }
+    
 } // namespace yask.

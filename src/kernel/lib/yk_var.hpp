@@ -90,16 +90,16 @@ namespace yask {
         YkVarBaseCore(int ndims);
         
         // Index math.
-        idx_t get_first_local_index(idx_t posn) const {
+        ALWAYS_INLINE idx_t get_first_local_index(idx_t posn) const {
             return _rank_offsets[posn] + _local_offsets[posn] - _actl_left_pads[posn];
         }
-        idx_t get_last_local_index(idx_t posn) const {
+        ALWAYS_INLINE idx_t get_last_local_index(idx_t posn) const {
             return _rank_offsets[posn] + _local_offsets[posn] + _domains[posn] + _actl_right_pads[posn] - 1;
         }
 
         // Adjust logical time index to 0-based index
         // using temporal allocation size.
-        inline idx_t _wrap_step(idx_t t) const {
+        ALWAYS_INLINE idx_t _wrap_step(idx_t t) const {
 
             // Index wraps in tdim.
             // Examples based on tdim == 2:
@@ -754,6 +754,22 @@ namespace yask {
                               real_t epsilon = EPSILON,
                               int max_print = 20) const;
 
+        // Copy data to/from device.
+        void copy_data_to_device() {
+            STATE_VARS(this);
+            void* vp = get_storage();
+            char* cp = static_cast<char*>(vp);
+            auto nb = get_num_bytes();
+            OFFLOAD_UPDATE_TO2(state, cp, nb);
+        }
+        void copy_data_from_device() {
+            STATE_VARS(this);
+            void* vp = get_storage();
+            char* cp = static_cast<char*>(vp);
+            auto nb = get_num_bytes();
+            OFFLOAD_UPDATE_FROM2(state, cp, nb);
+        }
+
         // Set elements.
         virtual void set_all_elements_in_seq(double seed) =0;
         virtual void set_all_elements_same(double seed) =0;
@@ -854,6 +870,7 @@ namespace yask {
 
         // Storage meta-data.
         // Owned here via composition.
+        // This contains a pointer to _core._data.
         GenericVar<real_t, LayoutFn> _data;
 
         // Accessors to GenericVar.
@@ -865,10 +882,11 @@ namespace yask {
         }
 
         // Sync core on device.
+        // Does NOT sync underlying data.
         void sync_core() override {
             STATE_VARS(this);
             auto* var_cp = &_core;
-            OFFLOAD_UPDATE2(state, var_cp, 1);
+            OFFLOAD_UPDATE_TO2(state, var_cp, 1);
             _data.sync_data_ptr();
         }
         
@@ -991,7 +1009,8 @@ namespace yask {
 
         // Storage meta-data.
         // Owned here via composition.
-        GenericVar<real_vec_t, LayoutFn> _data;
+         // This contains a pointer to _core._data.
+       GenericVar<real_vec_t, LayoutFn> _data;
 
         // Accessors to GenericVar.
         virtual GenericVarBase* get_gvbp() override final {
@@ -1001,11 +1020,12 @@ namespace yask {
             return &_data;
         }
 
-         // Sync core on device.
+        // Sync core on device.
+        // Does NOT sync underlying data.
         void sync_core() override {
             STATE_VARS(this);
             auto* var_cp = &_core;
-            OFFLOAD_UPDATE2(state, var_cp, 1);
+            OFFLOAD_UPDATE_TO2(state, var_cp, 1);
             _data.sync_data_ptr();
         }
         

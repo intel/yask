@@ -972,7 +972,7 @@ namespace yask {
                 "  STATE_VARS(this);\n"
                 "  auto* cxt_cd = &_core_data;\n"
                 "  cxt_cd->_common_core.set_core(this);\n"
-                "  OFFLOAD_UPDATE2(state, cxt_cd, 1);\n" <<
+                "  OFFLOAD_UPDATE_TO2(state, cxt_cd, 1);\n" <<
                 core_code <<
                 " }\n";
             os << "\n // Access the core data.\n"
