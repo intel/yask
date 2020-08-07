@@ -33,15 +33,16 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
        large shared-memory (shm) regions, so you may have to
        use the `-no-use_shm` option with these versions.
        This issue was resolved in MPI version 2019u3.
-     * There is an issue in the Intel C++ compiler 2019.1.0 that causes
+     * There was an issue in the Intel(R) C++ compiler 2019.1.0 that caused
        an internal error when building YASK kernels.
-       This has been fixed in 19.1.1.x.
-       You may also use 2019.0.x to work around this.
-     * If you are using g++ version 8.x or later, Intel(R) C++ version 2019
-       or later is required.
+       This has been fixed in 19.1.1.x and later versions.
+     * If you are using the Intel(R) C++ compiler with g++ version 8.x or later, 
+       Intel(R) C++ version 2019 or later is required.
      * Building a YASK kernel with clang or the "nextgen" Intel(R) C++
        compiler is possible; however,
-       SIMD operations for functions such as sin() are not supported.
+       SIMD operations for functions such as sin() are not supported in the nextgen
+       compiler at this time. Also, the Python interface may not work with
+       the nextgen compiler.
      * Building a YASK kernel with the Gnu C++ compiler is possible.
        Limited testing with g++ 8.2.0 shows the "iso3dfd" kernel
        runs about 30% slower compared to the same kernel built with
