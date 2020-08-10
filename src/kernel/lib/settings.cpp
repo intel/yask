@@ -408,7 +408,7 @@ namespace yask {
                            bind_block_threads));
 #ifdef USE_NUMA
         parser.add_option(new CommandLineParser::IntOption
-                          ("numa_pref", 
+                          ("numa_pref",
                            "Preferred NUMA node on which to allocate data for "
                            "vars and MPI buffers. Alternatively, use special values " +
                            to_string(yask_numa_local) + " for explicit local-node allocation, " +
@@ -418,8 +418,10 @@ namespace yask {
 #endif
 #ifdef USE_PMEM
         parser.add_option(new CommandLineParser::IntOption
-                          ("numa_pref_max",
-                           "Maximum GiB to allocate on preferred NUMA node before allocating on pmem device.",
+                          ("pmem_threshold",
+                           "First allocate up to this many GiB for vars using system memory, "
+                           "then allocate memory for remaining vars from a PMEM (persistent memory) device "
+                           "named '/mnt/pmemX', where 'X' corresponds to the NUMA node of the YASK process.",
                            _numa_pref_max));
 #endif
         parser.add_option(new CommandLineParser::BoolOption

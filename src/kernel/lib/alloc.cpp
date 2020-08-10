@@ -71,39 +71,6 @@ namespace yask {
         }
     }
     
-#ifdef USE_PMEM
-    static int pmem_tmpfile(const char *dir, size_t size, int *fd, void **addr)
-    {
-        static char tmpl[] = "/appdirect_mem_xxxxxx";
-        int err = 0;
-
-        char fullname[strlen(dir) + sizeof (tmpl)];
-        (void) strcpy(fullname, dir);
-        (void) strcat(fullname, tmpl);
-
-        if ((*fd = mkstemp(fullname)) < 0) {
-            perror("mkstemp()");
-            err = MEMKIND_ERROR_RUNTIME;
-            THROW_YASK_EXCEPTION("Error: MEMKIND_ERROR_RUNTIME - mkstemp()\n");
-        }
-
-        (void) unlink(dir);
-
-        if (ftruncate(*fd, size) != 0) {
-            err = MEMKIND_ERROR_RUNTIME;
-            THROW_YASK_EXCEPTION("Error: MEMKIND_ERROR_RUNTIME - ftruncate()\n");
-        }
-
-        *addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *fd, 0);
-        if (*addr == MAP_FAILED) {
-            err = MEMKIND_ERROR_RUNTIME;
-            THROW_YASK_EXCEPTION("Error: MEMKIND_ERROR_RUNTIME - mmap()\n");
-        }
-
-        return err;
-    }
-#endif
-
     // NUMA allocation.
     // 'numa_pref' == yask_numa_none: use default aligned alloc.
     // 'numa_pref' >= 0: preferred NUMA node.
@@ -231,28 +198,74 @@ namespace yask {
         }
     }
 
+    // Get the current NUMA node.
+    static int getnode() {
+        #ifdef SYS_getcpu
+        int node, status;
+        status = syscall(SYS_getcpu, NULL, &node, NULL);
+        return (status == -1) ? status : node;
+        #else
+        return -1; // unavailable
+        #endif
+    }
+
+    #ifdef USE_PMEM
+    // Make a temp file for PMEM in 'dir'.
+    static int pmem_tmpfile(const char *dir, size_t size, int *fd, void **addr)
+    {
+        static char tmpl[] = "/appdirect_mem_xxxxxx";
+        int err = 0;
+
+        char fullname[strlen(dir) + sizeof (tmpl) + 1];
+        (void) strcpy(fullname, dir);
+        (void) strcat(fullname, tmpl);
+
+        if ((*fd = mkstemp(fullname)) < 0) {
+            perror("mkstemp()");
+            err = MEMKIND_ERROR_RUNTIME;
+            THROW_YASK_EXCEPTION(string("Error: MEMKIND_ERROR_RUNTIME - mkstemp('") +
+                                 fullname + "')");
+        }
+
+        (void) unlink(dir);
+
+        if (ftruncate(*fd, size) != 0) {
+            err = MEMKIND_ERROR_RUNTIME;
+            THROW_YASK_EXCEPTION("Error: MEMKIND_ERROR_RUNTIME - ftruncate()\n");
+        }
+
+        *addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *fd, 0);
+        if (*addr == MAP_FAILED) {
+            err = MEMKIND_ERROR_RUNTIME;
+            THROW_YASK_EXCEPTION("Error: MEMKIND_ERROR_RUNTIME - mmap()\n");
+        }
+
+        return err;
+    }
+    #endif
+    
     // PMEM allocation.
-    char* pmem_alloc(std::size_t nbytes, int dev_num) {
+    char* pmem_alloc(std::size_t nbytes, int dev) {
 
         void *p = 0;
 
         // Allocate into pmem.
 #ifdef USE_PMEM
+
         int err = 0;
         int fd;
-        // 'X' of pmem_x should be matched with the NUMA node.
+        // 'X' of pmemX should be matched with the NUMA node.
         string pmem_name("/mnt/pmem");
-        pmem_name += to_string(dev_num);
+        pmem_name += to_string(dev);
         err = pmem_tmpfile(pmem_name.c_str(), nbytes, &fd, &p);
         if (err)
             THROW_YASK_EXCEPTION("Error: Unable to create temporary file for PMEM");
+        if (!p)
+            THROW_YASK_EXCEPTION("Error: cannot allocate " + make_byte_str(nbytes) +
+                                 " on '" + pmem_name + "'");
 #else
         THROW_YASK_EXCEPTION("Error: PMEM allocation is not enabled; build with pmem=1");
 #endif
-
-        if (!p)
-            THROW_YASK_EXCEPTION("Error: cannot allocate " + make_byte_str(nbytes) +
-                                 " on pmem dev " + to_string(dev_num));
 
         // Check alignment.
         if ((size_t(p) & (CACHELINE_BYTES - 1)) != 0)
@@ -330,22 +343,10 @@ namespace yask {
 
     ///// Memory-alloc functions in StencilContext /////
     
-#ifdef USE_PMEM
-    static inline int getnode() {
-        #ifdef SYS_getcpu
-        int node, status;
-        status = syscall(SYS_getcpu, NULL, &node, NULL);
-        return (status == -1) ? status : node;
-        #else
-        return -1; // unavailable
-        #endif
-    }
-#endif
-
     // Magic numbers for memory types in addition to those for NUMA.
     // TODO: get rid of magic-number scheme.
     constexpr int _shmem_key = 1000;
-    constexpr int _pmem_key = 2000; // leave space after this for pmem devices.
+    constexpr int _pmem_key = 2000;
 
     // Alloc 'nbytes' for each requested mem type.
     // Pointers are returned in 'data_buf'.
@@ -366,6 +367,7 @@ namespace yask {
             shared_ptr<char> p;
             string msg = "Allocating " + make_byte_str(nb) +
                 " for " + to_string(ng) + " " + type + "(s) ";
+
             if (mem_key == _shmem_key) {
                 msg += "using MPI shm";
                 DEBUG_MSG(msg << "...");
@@ -391,8 +393,15 @@ namespace yask {
                 }
 #endif
             }
-            else if (mem_key >= _pmem_key) {
-                auto dev_num = mem_key - _pmem_key;
+            else if (mem_key == _pmem_key) {
+
+                int dev_num = getnode();
+                if (dev_num == -1) {
+                    DEBUG_MSG("Warning: cannot get NUMA node information for PMEM allocation;"
+                              " using node zero (0)");
+                    dev_num = 0;
+                }
+
                 msg += "on PMEM device " + to_string(dev_num);
                 DEBUG_MSG(msg << "...");
                 p = shared_pmem_alloc<char>(nb, dev_num);
@@ -426,32 +435,32 @@ namespace yask {
         // This ordering plays well with NUMA allocation policies where
         // closer (faster) memory is used first.
         VarPtrs sorted_var_ptrs;
-        VarPtrSet done;
-        for (auto gp : output_var_ptrs) {
-            sorted_var_ptrs.push_back(gp);
-            done.insert(gp);
-        }
-        for (auto gp : orig_var_ptrs) {
-            if (!done.count(gp)) {
+        {
+            VarPtrSet done;
+            for (auto gp : output_var_ptrs) {
                 sorted_var_ptrs.push_back(gp);
                 done.insert(gp);
             }
-        }
-        for (auto gp : all_var_ptrs) {
-            if (!done.count(gp)) {
-                sorted_var_ptrs.push_back(gp);
-                done.insert(gp);
+            for (auto gp : orig_var_ptrs) {
+                if (!done.count(gp)) {
+                    sorted_var_ptrs.push_back(gp);
+                    done.insert(gp);
+                }
+            }
+            for (auto gp : all_var_ptrs) {
+                if (!done.count(gp)) {
+                    sorted_var_ptrs.push_back(gp);
+                    done.insert(gp);
+                }
             }
         }
-	done.clear();
 
 #ifdef USE_PMEM
-        os << "PMEM var-allocation priority:" << endl;
+        DEBUG_MSG("PMEM var-allocation priority order:");
         for (auto sp : sorted_var_ptrs) {
-            os << " '" << sp->get_name() << "'";
-            if (done.find(sp)!=done.end())
-                os << " (output)";
-            os << endl;
+            auto name = sp->get_name();
+            DEBUG_MSG(" '" << name << "'" <<
+                      (output_var_map.count(name) ? " (output var)" : ""));
         }
 #endif
 
@@ -459,22 +468,22 @@ namespace yask {
         // These pointers will be shared by the ones in the var
         // objects, which will take over ownership when these go
         // out of scope.
-        // Key is preferred numa node or -1 for local.
+        // Key is numa code.
         map <int, shared_ptr<char>> _var_data_buf;
 
 #ifdef USE_PMEM
-        auto preferred_numasize = opts->_numa_pref_max * 1024*1024*(size_t)1024;
+        auto max_sys_mem = (size_t)opts->_numa_pref_max * 1024*1024*1024;
 #endif
 
-        // Pass 0: assign PMEM node when preferred NUMA node is not enough.
-        // Pass 1: count required size for each NUMA node, allocate chunk of memory at end.
-        // Pass 2: distribute parts of already-allocated memory chunk.
-        for (int pass = 0; pass < 3; pass++) {
+        // Pass 0: count required size for each NUMA node, allocate chunk of memory at end.
+        // Pass 1: distribute parts of already-allocated memory chunk.
+        for (int pass = 0; pass < 2; pass++) {
             TRACE_MSG("alloc_var_data pass " << pass << " for " <<
                       all_var_ptrs.size() << " var(s)");
 
             // Count bytes needed and number of vars for each NUMA node.
             map <int, size_t> npbytes, nvars;
+            size_t sys_mem_used = 0;
 
             // Vars.
             for (auto gp : sorted_var_ptrs) {
@@ -483,58 +492,56 @@ namespace yask {
                 auto& gname = gp->get_name();
                 auto& gb = gp->gb();
 
+                // Bytes needed for this var.
+                size_t nbytes = gp->get_num_storage_bytes();
+
+                // NUMA policy for this var.
+                int numa_pref = gp->get_numa_preferred();
+                
                 // Var data.
                 // Don't alloc if already done.
                 if (!gp->is_storage_allocated()) {
-                    int numa_pref = gp->get_numa_preferred();
 
-                    // Set storage if buffer has been allocated in pass 1.
-                    if (pass == 2) {
+                    // Determine total amount to alloc.
+                    auto res_bytes = ROUND_UP(nbytes + _data_buf_pad, CACHELINE_BYTES);
+                    
+                    bool using_sys_mem = true;
+                    #ifdef USE_PMEM
+                    // If too much system memory would be used, switch to pmem.
+                    if (sys_mem_used + res_bytes > max_sys_mem) {
+                        numa_pref = _pmem_key;
+                        using_sys_mem = false;
+                    }
+                    #endif
+
+                    // Set storage if buffer has been allocated in pass 0.
+                    if (pass == 1) {
                         auto p = _var_data_buf[numa_pref];
                         assert(p);
+
+                        // Offset into buffer is running byte count in 'npbytes'.
                         gp->set_storage(p, npbytes[numa_pref]);
                         DEBUG_MSG(gb.make_info_string());
                     }
 
-                    // Determine padded size (also offset to next location).
-                    size_t nbytes = gp->get_num_storage_bytes();
-                    npbytes[numa_pref] += ROUND_UP(nbytes + _data_buf_pad,
-                                                   CACHELINE_BYTES);
+                    // Running totals.
+                    npbytes[numa_pref] += res_bytes;
+                    if (using_sys_mem)
+                        sys_mem_used += res_bytes;
                     nvars[numa_pref]++;
 
-                    if (pass == 0) {
-#ifdef USE_PMEM
-                        if (preferred_numasize < npbytes[numa_pref])
-                            if (getnode() == -1) {
-                                os << "Warning: cannot get numa_node information for PMEM allocation;"
-                                    " using default numa_pref " << endl;
-                            }
-                            else
-
-                                // TODO: change this behavior so that it doesn't actually
-                                // modify the NUMA pref of the var.
-                                gp->set_numa_preferred(_pmem_key + getnode());
-#endif
-                    }
-
-                    if (pass == 1)
+                    if (pass == 0)
                         TRACE_MSG(" var '" << gname << "' needs " << make_byte_str(nbytes) <<
                                   " on NUMA node " << numa_pref);
                 }
 
                 // Otherwise, just print existing var info.
-                else if (pass == 1)
+                else if (pass == 0)
                     DEBUG_MSG(gb.make_info_string());
             }
 
-            // Reset the counters
-            if (pass == 0) {
-                npbytes.clear();
-                nvars.clear();
-            }
-
-            // Alloc for each node.
-            if (pass == 1)
+            // Alloc for each "numa_pref" type.
+            if (pass == 0)
                 _alloc_data(npbytes, nvars, _var_data_buf, "var");
 
         } // var passes.
