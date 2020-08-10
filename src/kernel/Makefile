@@ -39,8 +39,10 @@ streaming_stores	?=	0
 omp_par			?=	omp parallel
 omp_par_for		?=	omp parallel for
 omp_for			?=	omp for
+omp_target_par_for	?=	omp target parallel for
 omp_region_schedule	?=	dynamic,1
 omp_block_schedule	?=	static,1
+omp_target_schedule	?=	static,1
 omp_misc_schedule	?=	guided
 trace			?=	0
 trace_mem		?=	0
@@ -50,6 +52,15 @@ check			?=	0
 # run-time option.  Including the "trace" code has a small impact on
 # binary size and performance, even if not used. Including the "trace_mem"
 # code has a large impact, even if not used.
+
+# Set 'arch' to 'intel64' when OpenMP offloading to avoid intrinsics.
+# TODO: update this when OpenMP offload intrinsics are available.
+# Also turn off MPI.
+# TODO: update when MPI allowed with OpenMP offload.
+ifeq ($(offload),1)
+ arch			:=	intel64
+ mpi			:= 	0
+endif
 
 # If 'arch' isn't set, determine default architecture by running kernel
 # script w/special knob.
@@ -138,12 +149,6 @@ else
 $(error Internal error: arch lists are not consistent)
 
 endif # arch-specific.
-
-# Run knobs
-ifeq ($(mpi),0)
- YK_SCRIPT_OPTS	+= -ranks 1
-endif
-YK_SCRIPT_OPTS	+= "-stencil" $(YK_STENCIL) "-arch" $(YK_ARCH)
 
 # Turn off prefetching at O0 or O1.
 ifneq ($(filter -O0 -O1,$(YK_CXXOPT)),)
@@ -263,8 +268,13 @@ GEN_LOOPS	:=	$(UTILS_BIN_DIR)/gen_loops.pl
 GEN_LAYOUTS	:=	$(UTILS_BIN_DIR)/gen_layouts.pl
 VIEW_ASM	:=	$(UTILS_BIN_DIR)/view_asm.pl
 
+# Run knobs
+YK_SCRIPT_OPTS	+= "-stencil" $(YK_STENCIL) "-arch" $(YK_ARCH)
+
 # Compiler and default flags.
-ifeq ($(mpi),1)
+ifeq ($(offload),1)
+ YK_CXX		:=	icpx
+else ifeq ($(mpi),1)
  YK_CXX		:=	mpiicc
 else
  YK_CXX		:=	icc
@@ -279,6 +289,15 @@ SWIG_CXXFLAGS	:= 	$(DBL_EPSILON_CXXFLAG)
 YK_LD		:=	$(YK_CXX)
 YK_LIBS		:=	-lrt
 YK_LFLAGS	:=	-Wl,-rpath=$(LIB_OUT_DIR) -L$(LIB_OUT_DIR) -l$(YK_EXT_BASE)
+
+# Add options for OpenMP offload.
+ifeq ($(offload),1)
+ MACROS		+=	USE_OFFLOAD
+ OMP_TARGET	:=	spir64
+ #OMP_TARGET	:=	x86_64
+ OMPFLAGS	+=	-fiopenmp -fopenmp-targets=$(OMP_TARGET)
+ CXX_PREFIX	:=
+endif
 
 # Add options for NUMA.
 ifeq ($(numa),1)
@@ -332,6 +351,8 @@ endif
 # MPI settings.
 ifeq ($(mpi),1)
  MACROS		+=	USE_MPI
+else
+ YK_SCRIPT_OPTS	+= -ranks 1
 endif
 
 # VTUNE settings.
@@ -488,8 +509,12 @@ MINI_BLOCK_LOOP_CODE	?=	$(MINI_BLOCK_LOOP_OUTER_MODS) omp loop($(MINI_BLOCK_LOOP
 # by the stencil compiler, so these loops stop at N-2.  The indexes in this
 # loop are 'normalized', i.e., vector units and rank-relative.
 SUB_BLOCK_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar norm_sb_idxs
+ifeq ($(offload),1)
+SUB_BLOCK_LOOP_OPTS	+=	-ompMod '$(omp_target_par_for) schedule($(omp_target_schedule))'
+SUB_BLOCK_LOOP_TYPE	:=	omp
+endif
 SUB_BLOCK_LOOP_ORDER	?=	1 .. N-2
-SUB_BLOCK_LOOP_CODE	?=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop($(SUB_BLOCK_LOOP_ORDER)) { \
+SUB_BLOCK_LOOP_CODE	?=	$(SUB_BLOCK_LOOP_OUTER_MODS) $(SUB_BLOCK_LOOP_TYPE) loop($(SUB_BLOCK_LOOP_ORDER)) { \
 				 $(SUB_BLOCK_LOOP_INNER_MODS) call(CALC_INNER_LOOP); }
 
 # General-purpose parallel loop.
@@ -776,52 +801,59 @@ api-tests:
 # These tests are focused on the kernel and not the compiler.
 # For testing both the kernel and compiler in various combinations,
 # run the tests from the top-level Makefile.
-STENCIL_TEST := yc-and-yk-test real_bytes=8 allow_new_var_types=0 check=1 trace=1
+ifeq ($(offload),1)
+STENCIL_TEST 	:=	yc-and-yk-test real_bytes=4 allow_new_var_types=0 check=0 trace=0
+fold		=
+else
+STENCIL_TEST 	:= 	yc-and-yk-test real_bytes=8 allow_new_var_types=0 check=1 trace=1
+fold		=	fold=$(1);
+endif
 stencil-tests:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_empty step_dim=t domain_dims=d1,d2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_1d fold=x=4
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stages_1d fold=x=4
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_func_1d fold=x=4
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_step_cond_1d fold=x=4
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_boundary_1d fold=x=4
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_scratch_1d fold=x=4
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_scratch_boundary_1d fold=x=4
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_1d $(call fold,x=4)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stages_1d $(call fold,x=4)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_func_1d $(call fold,x=4)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_step_cond_1d $(call fold,x=4)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_boundary_1d $(call fold,x=4)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_scratch_1d $(call fold,x=4)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_scratch_boundary_1d $(call fold,x=4)
 
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_empty_2d
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_2d fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_2d fold=x=2,y=2 mpi=0 ranks=1
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_2d arch=intel64 fold=x=3,y=2 domain_dims=y,x
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_3d fold=x=2,z=2 domain_dims=z,y,x
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_partial_3d fold=x=2,z=2 domain_dims=x,z,y
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stream_3d radius=5
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_2d $(call fold,x=2,y=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_2d $(call fold,x=2,y=2) mpi=0 ranks=1
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_2d arch=intel64 $(call fold,x=3,y=2) domain_dims=y,x
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_reverse_2d radius=1
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stages_2d fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stages_3d fold=y=2,x=2 domain_dims=x,z,y
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_misc_2d fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_misc_2d fold=x=2,y=2 EXTRA_YC_FLAGS=-interleave-misc
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_boundary_2d fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_boundary_3d fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_scratch_3d fold=x=2,z=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stages_2d $(call fold,x=2,y=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_misc_2d $(call fold,x=2,y=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_misc_2d $(call fold,x=2,y=2) EXTRA_YC_FLAGS=-interleave-misc
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_boundary_2d $(call fold,x=2,y=2)
 
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=iso3dfd radius=3 fold=x=2,y=2 domain_dims=z,x,y
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=iso3dfd_sponge radius=3 fold=x=2,z=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=3axis fold=x=2,y=2 cluster=x=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=3axis fold=x=2,y=2 cluster=z=2,y=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=3axis_with_diags fold=x=2,z=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=3plane fold=y=2,z=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=cube fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=ssg fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=ssg_merged fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=awp fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=awp_abc fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=fsg_abc fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=fsg_merged fold=x=2,y=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=tti fold=x=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_3d $(call fold,x=2,z=2) domain_dims=z,y,x
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stages_3d $(call fold,y=2,x=2) domain_dims=x,z,y
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_partial_3d $(call fold,x=2,z=2) domain_dims=x,z,y
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stream_3d radius=5
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_boundary_3d $(call fold,x=2,y=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_scratch_3d $(call fold,x=2,z=2)
 
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_4d fold=w=2,x=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=iso3dfd radius=3 $(call fold,x=2,y=2) domain_dims=z,x,y
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=iso3dfd_sponge radius=3 $(call fold,x=2,z=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=3axis $(call fold,x=2,y=2) cluster=x=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=3axis $(call fold,x=2,y=2) cluster=z=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=3axis_with_diags $(call fold,x=2,z=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=3plane $(call fold,y=2,z=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=cube $(call fold,x=2,y=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=ssg $(call fold,x=2,y=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=ssg_merged $(call fold,x=2,y=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=awp $(call fold,x=2,y=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=awp_abc $(call fold,x=2,y=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=fsg_abc $(call fold,x=2,y=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=fsg_merged $(call fold,x=2,y=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=tti $(call fold,x=2,y=2)
+
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_4d $(call fold,w=2,x=2)
 
 all-tests:
-	$(MAKE) clean; $(MAKE) cxx-yk-var-test stencil=test_3d fold=x=4,y=2
+	$(MAKE) clean; $(MAKE) cxx-yk-var-test stencil=test_3d
 	$(MAKE) stencil-tests
 	$(MAKE) api-tests
 

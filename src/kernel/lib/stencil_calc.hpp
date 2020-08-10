@@ -29,7 +29,7 @@ namespace yask {
 
     // Classes that support evaluation of one stencil bundle
     // and a stage of bundles.
-    // A stencil context contains one or more stages.
+    // A stencil solution contains one or more stages.
 
     // A pure-virtual class base for a stencil bundle.
     class StencilBundleBase :
@@ -316,6 +316,7 @@ namespace yask {
         }
         
         // Calculate results within a sub-block.
+        // Essentially a chooser between the scalar or vector version.
         void
         calc_sub_block(int region_thread_idx,
                        int block_thread_idx,
@@ -451,7 +452,7 @@ namespace yask {
                 /                // |
                /_______________ // /|
                |______________<---------- do_scalars_left
-               |               | //
+               | detail below  | //
                |_______________|//
                |______________<---------- do_scalars_right
 
@@ -498,14 +499,12 @@ namespace yask {
                 // setting vector indices and peel/rem masks.
                 if (fcbgn > ebgn || fcend < eend) {
 
-                    // Find range of full and/or partial vectors.
-                    // Note that fvend <= eend because we round
-                    // down to get whole vectors only.
-                    // Note that vend >= eend because we round
-                    // up to include partial vectors.
-                    // Similar but opposite for begin vars.
-                    // We make a vector mask to pick the
-                    // right elements.
+                    // Find range of full and/or partial vectors.  Note that
+                    // fvend <= eend because we round down to get whole
+                    // vectors only, and vend >= eend because we
+                    // round up to include partial vectors.  Similar but
+                    // opposite for begin vars.  We make a vector mask to
+                    // pick the right elements.
                     auto vpts = fold_pts[j];
                     auto fvbgn = round_up_flr(ebgn, vpts);
                     auto fvend = round_down_flr(eend, vpts);
@@ -667,6 +666,9 @@ namespace yask {
                           " ... " << sb_fcidxs.end.make_val_str() <<
                           ") by region thread " << region_thread_idx <<
                           " and block thread " << block_thread_idx);
+                #ifdef USE_OFFLOAD
+                THROW_YASK_EXCEPTION("Internal error: vector code not expected when offloading");
+                #else
 
                 // Keep a copy of the normalized cluster indices
                 // that were calculated above.
@@ -702,16 +704,20 @@ namespace yask {
                 calc_outer_vectors(cp, region_thread_idx, block_thread_idx,
                                    norm_sb_idxs, norm_sb_fcidxs, norm_sb_fvidxs,
                                    peel_masks, rem_masks, inner_posn);
-            }
+                #endif
+            } // do vectors.
 
             // Use scalar code for anything not done above.  This should only be
-            // called if vectorizing on the inner loop and sub-block size in
+            // called if vectorizing on the inner loop and the sub-block size in
             // that dim is not a multiple of the inner-dim vector len, so that
             // situation should be avoided.
             // Unfortunately, this is common when using "legacy" layouts, where
             // the inner dim is vectorized.
             // TODO: enable masking in the inner dim.
             if (do_scalars_left || do_scalars_right) {
+                #ifdef USE_OFFLOAD
+                THROW_YASK_EXCEPTION("Internal error: scalar remainder-code not expected when offloading");
+                #else
 
                 // Use the 'misc' loops. Indices for these loops will be scalar and
                 // global rather than normalized as in the cluster and vector loops.
@@ -767,11 +773,12 @@ namespace yask {
 
                 #undef OMP_PRAGMA
                 #undef MISC_FN
-
+                #endif
             } // do scalars.
         } // calc_sub_block_vec.
 
         // Calculate a block of clusters.
+        // This should be the hottest function for most stencils.
         void
         calc_clusters(StencilCoreDataT* corep,
                       int region_thread_idx,
@@ -842,7 +849,7 @@ namespace yask {
                                               start_idxs, stop_inner);
         }
 
-        // Calculate a block of vectors.
+        // Calculate a block of vectors outside of the cluster area.
         void
         calc_outer_vectors(StencilCoreDataT* corep,
                            int region_thread_idx,
@@ -868,7 +875,7 @@ namespace yask {
             #undef CALC_INNER_LOOP
         }
             
-        // Calculate a loop of vectors.
+        // Calculate a loop of vectors outside of the cluster area.
         ALWAYS_INLINE void
         calc_loop_of_outer_vectors(StencilCoreDataT* corep,
                                    int region_thread_idx,
