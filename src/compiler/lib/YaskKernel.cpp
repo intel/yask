@@ -131,6 +131,7 @@ namespace yask {
         }
         os << "namespace yask {\n"
             " constexpr idx_t fold_pts[]{ " << _dims._fold.make_val_str() << " };\n"
+            " constexpr idx_t cluster_pts[]{ " << _dims._cluster_pts.make_val_str() << " };\n"
             "}\n";
         os << "#define VLEN (" << _dims._fold.product() << ")" << endl;
         os << "#define FIRST_FOLD_INDEX_IS_UNIT_STRIDE (" <<

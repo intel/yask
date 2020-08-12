@@ -128,11 +128,11 @@ namespace yask {
                 // If binding threads to data, start threads within a block.
                 // Each of these threads will eventually work on a separate
                 // sub-block.  This is nested within an OMP region thread.
-                // If there is only one block per thread, nested OMP is
-                // disabled, and this OMP pragma does nothing.
-                _Pragma("omp parallel proc_bind(spread)") {
-                    int block_thread_idx = 0;
-                    if (nbt > 1) {
+                // If not binding or there is only one block per thread,
+                // this OMP pragma does nothing.
+                _Pragma("omp parallel proc_bind(spread) if(bind_threads)") {
+                    int block_thread_idx = -1;
+                    if (bind_threads) {
                         assert(omp_get_level() == 2);
                         assert(omp_get_num_threads() == nbt);
                         block_thread_idx = omp_get_thread_num();
@@ -178,13 +178,15 @@ namespace yask {
                     if (bind_threads) {
                         const idx_t idx_ofs = 0x1000; // to help keep pattern when idx is neg.
 
-                        // Disable the OpenMP construct in the mini-block loop.
                         #define CALC_SUB_BLOCK(mb_idxs)                 \
                             auto bind_elem_idx = mb_idxs.start[bind_posn]; \
                             auto bind_slab_idx = idiv_flr(bind_elem_idx + idx_ofs, bind_slab_pts); \
                             auto bind_thr = imod_flr<idx_t>(bind_slab_idx, nbt); \
                             if (block_thread_idx == bind_thr)           \
                                 sg->calc_sub_block(region_thread_idx, block_thread_idx, settings, mb_idxs)
+
+                        // Disable the OpenMP construct in the mini-block loop
+                        // because we're already in the parallel section.
                         #define OMP_PRAGMA
                         #include "yask_mini_block_loops.hpp"
                         #undef CALC_SUB_BLOCK
@@ -194,10 +196,10 @@ namespace yask {
                     // with a different thread for each sub-block using
                     // standard OpenMP scheduling.
                     else {
-#define CALC_SUB_BLOCK(mb_idxs)                                         \
-                        sg->calc_sub_block(region_thread_idx, block_thread_idx, settings, mb_idxs)
-#include "yask_mini_block_loops.hpp"
-#undef CALC_SUB_BLOCK
+                        #define CALC_SUB_BLOCK(mb_idxs)                 \
+                            sg->calc_sub_block(region_thread_idx, block_thread_idx, settings, mb_idxs)
+                        #include "yask_mini_block_loops.hpp"
+                        #undef CALC_SUB_BLOCK
                     }
 
                 } // OMP parallel when binding threads to data.
@@ -246,9 +248,10 @@ namespace yask {
                     idx_t lh = gp->get_left_halo_size(posn);
                     idx_t rh = gp->get_right_halo_size(posn);
 
-                    // Round up halos to fold sizes.
-                    lh = ROUND_UP(lh, fold_pts[j]);
-                    rh = ROUND_UP(rh, fold_pts[j]);
+                    // Round up halos to cluster sizes to avoid
+                    // calculating partial clusters.
+                    lh = ROUND_UP(lh, cluster_pts[j]);
+                    rh = ROUND_UP(rh, cluster_pts[j]);
 
                     // Adjust begin & end scan indices based on halos.
                     adj_idxs.begin[i] = idxs.begin[i] - lh;

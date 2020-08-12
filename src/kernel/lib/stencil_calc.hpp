@@ -322,8 +322,12 @@ namespace yask {
                        int block_thread_idx,
                        KernelSettings& settings,
                        const ScanIndices& mini_block_idxs) override {
+
+            // Set the block thread if not already set.
             if (block_thread_idx < 0)
                 block_thread_idx = omp_get_thread_num();
+
+            // Choose between scalar and vector impls.
             if (settings.force_scalar)
                 calc_sub_block_scalar(region_thread_idx, block_thread_idx,
                                       settings, mini_block_idxs);
@@ -359,12 +363,12 @@ namespace yask {
             misc_idxs.align.set_from_const(1);
 
             // Define misc-loop function.
-            // Since stride is always 1, we ignore misc_idxs.stop.
+            // Since stride is always 1, we ignore pt_idxs.stop.
             #define MISC_FN(pt_idxs)                                    \
                 FORCE_INLINE                                            \
                     _bundle.calc_scalar(cp, region_thread_idx, pt_idxs.start)
 
-            // Set OMP loop to offload or disable it.
+            // Set OMP loop to offload or disable OMP.
             #ifdef USE_OFFLOAD
             #define OMP_PRAGMA _Pragma("omp target parallel for")
             #else
@@ -672,7 +676,7 @@ namespace yask {
                           ") by region thread " << region_thread_idx <<
                           " and block thread " << block_thread_idx);
                 #ifdef USE_OFFLOAD
-                THROW_YASK_EXCEPTION("Internal error: vector code not expected when offloading");
+                THROW_YASK_EXCEPTION("Internal error: vector border-code not expected when offloading");
                 #else
 
                 // Keep a copy of the normalized cluster indices
@@ -818,6 +822,7 @@ namespace yask {
                               int block_thread_idx,
                               const ScanIndices& loop_idxs,
                               int inner_posn) {
+            #ifndef USE_OFFLOAD
             #ifdef TRACE
             {
                 STATE_VARS(this);
@@ -828,7 +833,6 @@ namespace yask {
                           " and block thread " << block_thread_idx);
             }
             #endif
-
             #ifdef CHECK
             {
                 STATE_VARS(this);
@@ -840,6 +844,7 @@ namespace yask {
                                loop_idxs.stop[i]);
                 }
             }
+            #endif
             #endif
 
             // Need all starting indices.

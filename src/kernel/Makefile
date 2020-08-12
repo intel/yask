@@ -158,11 +158,6 @@ ifneq ($(filter -O0 -O1,$(YK_CXXOPT)),)
  pfd_l2		:=	0
 endif
 
-# Turn on checking at O0.
-ifneq ($(filter -O0,$(YK_CXXOPT)),)
- check		:=	1
-endif
-
 # Common settings.
 YASK_BASE	?=	$(abspath ../..)
 include $(YASK_BASE)/src/common/common.mk
@@ -297,7 +292,7 @@ ifeq ($(offload),1)
  MACROS		+=	USE_OFFLOAD
  OMP_TARGET	:=	spir64
  #OMP_TARGET	:=	x86_64
- OMPFLAGS	+=	-fiopenmp -fopenmp-targets=$(OMP_TARGET)
+ OMPFLAGS	:=	-fiopenmp -fopenmp-targets=$(OMP_TARGET)
  CXX_PREFIX	:=
 endif
 
@@ -332,10 +327,11 @@ endif
 
 # Turn on debug macros.
 ifeq ($(trace_mem),1)
- MACROS		+=	CHECK TRACE TRACE_MEM
+ MACROS		+=	TRACE TRACE_MEM
 else ifeq ($(trace),1)
- MACROS		+=	CHECK TRACE
-else ifeq ($(check),1)
+ MACROS		+=	TRACE
+endif
+ifeq ($(check),1)
  MACROS		+=	CHECK
 endif
 
@@ -940,7 +936,7 @@ api-tests:
 # For testing both the kernel and compiler in various combinations,
 # run the tests from the top-level Makefile.
 ifeq ($(offload),1)
-STENCIL_TEST 	:=	yc-and-yk-test real_bytes=8 allow_new_var_types=0 check=0 trace=0
+STENCIL_TEST 	:=	yc-and-yk-test real_bytes=8 allow_new_var_types=0 check=0 trace=1
 SET_FOLD	=
 else
 STENCIL_TEST 	:= 	yc-and-yk-test real_bytes=8 allow_new_var_types=0 check=1 trace=1

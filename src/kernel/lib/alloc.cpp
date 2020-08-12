@@ -1143,12 +1143,13 @@ namespace yask {
             auto& psettings = sp->get_active_settings();
             DOMAIN_VAR_LOOP(i, j) {
 
+                // Round up to cluster size.
                 auto sz = round_up_flr(psettings._mini_block_sizes[i],
-                                       fold_pts[j]);
+                                       cluster_pts[j]);
                 mblksize[j] = max(mblksize[j], sz);
             }
         }
-        TRACE_MSG("alloc_scratch_data: max mini-block size across stage(s) is " <<
+        TRACE_MSG("alloc_scratch_data: max rounded-up mini-block size across stage(s) is " <<
                   mblksize.make_dim_val_str(" * "));
 
         // Pass 0: count required size, allocate chunk of memory at end.
