@@ -54,10 +54,9 @@ namespace {
         virtual yc_number_node_ptr def_1d(yc_var_proxy& V, const yc_number_node_ptr& t0, const yc_number_node_ptr& x0,
                                           int left_ext, int right_ext) {
             yc_number_node_ptr v;
-            int n = 0;
-            for (int i = -get_radius() - left_ext; i <= get_radius() + right_ext; i++, n++)
+            for (int i = -get_radius() - left_ext; i <= get_radius() + right_ext; i++)
                 v += V(t0, x0+i);
-            return v / n;
+            return v;
         }
 
         // Define simple stencil from scratch or read-only var 'V' centered
@@ -65,10 +64,9 @@ namespace {
         virtual yc_number_node_ptr def_no_t_1d(yc_var_proxy& V, const yc_number_node_ptr& x0,
                                                int left_ext, int right_ext) {
             yc_number_node_ptr v;
-            int n = 0;
-            for (int i = -get_radius() - left_ext; i <= get_radius() + right_ext; i++, n++)
+            for (int i = -get_radius() - left_ext; i <= get_radius() + right_ext; i++)
                 v += V(x0+i);
-            return v / n;
+            return v;
         }
 
         // Define simple stencil from var 'V' at 't0' centered around 'x0', 'y0'.
@@ -80,13 +78,10 @@ namespace {
                                           const yc_number_node_ptr& y0,
                                           int y_left_ext, int y_right_ext) {
             yc_number_node_ptr v;
-            int n = 0;
             for (int i : { -get_radius() - x_left_ext, 0, get_radius() + x_right_ext })
-                for (int j : { -get_radius() - y_left_ext, 0, get_radius() + y_right_ext }) {
+                for (int j : { -get_radius() - y_left_ext, 0, get_radius() + y_right_ext })
                     v += V(t0, x0+i, y0+j);
-                    n++;
-                }
-            return v / n;
+            return v;
         }    
 
         // Define simple stencil from scratch or read-only var 'V' at 't0'
@@ -98,13 +93,10 @@ namespace {
                                                const yc_number_node_ptr& y0,
                                                int y_left_ext, int y_right_ext) {
             yc_number_node_ptr v;
-            int n = 0;
             for (int i : { -get_radius() - x_left_ext, 0, get_radius() + x_right_ext })
-                for (int j : { -get_radius() - y_left_ext, 0, get_radius() + y_right_ext }) {
+                for (int j : { -get_radius() - y_left_ext, 0, get_radius() + y_right_ext })
                     v += V(x0+i, y0+j);
-                    n++;
-                }
-            return v / n;
+            return v;
         }    
 
         // Define simple stencil from var 'V' at 't0' centered around 'x0', 'y0', 'z0'.
@@ -118,14 +110,11 @@ namespace {
                                           const yc_number_node_ptr& z0,
                                           int z_left_ext, int z_right_ext) {
             yc_number_node_ptr v;
-            int n = 0;
             for (int i : { -get_radius() - x_left_ext, 0, get_radius() + x_right_ext })
                 for (int j : { -get_radius() - y_left_ext, 0, get_radius() + y_right_ext })
-                    for (int k : { -get_radius() - z_left_ext, 0, get_radius() + z_right_ext }) {
+                    for (int k : { -get_radius() - z_left_ext, 0, get_radius() + z_right_ext })
                         v += V(t0, x0+i, y0+j, z0+k);
-                        n++;
-                    }
-            return v / n;
+            return v;
         }
 
         // Define simple stencil from scratch or read-only var 'V' centered
@@ -139,14 +128,11 @@ namespace {
                                                const yc_number_node_ptr& z0,
                                                int z_left_ext, int z_right_ext) {
             yc_number_node_ptr v;
-            int n = 0;
             for (int i : { -get_radius() - x_left_ext, 0, get_radius() + x_right_ext })
                 for (int j : { -get_radius() - y_left_ext, 0, get_radius() + y_right_ext })
-                    for (int k : { -get_radius() - z_left_ext, 0, get_radius() + z_right_ext }) {
+                    for (int k : { -get_radius() - z_left_ext, 0, get_radius() + z_right_ext })
                         v += V(x0+i, y0+j, z0+k);
-                        n++;
-                    }
-            return v / n;
+            return v;
         }    
 
         // Define simple stencil from var 'V' at 't0' centered around 'w0', 'x0', 'y0', 'z0'.
@@ -162,15 +148,12 @@ namespace {
                                           const yc_number_node_ptr& z0,
                                           int z_left_ext, int z_right_ext) {
             yc_number_node_ptr v;
-            int n = 0;
             for (int h : { -get_radius() - w_left_ext, 0, get_radius() + w_right_ext })
                 for (int i : { -get_radius() - x_left_ext, 0, get_radius() + x_right_ext })
                     for (int j : { -get_radius() - y_left_ext, 0, get_radius() + y_right_ext })
-                        for (int k : { -get_radius() - z_left_ext, 0, get_radius() + z_right_ext }) {
+                        for (int k : { -get_radius() - z_left_ext, 0, get_radius() + z_right_ext })
                             v += V(t0, w0+h, x0+i, y0+j, z0+k);
-                            n++;
-                        }
-            return v / n;
+            return v;
         }    
 
     public:
@@ -816,6 +799,25 @@ namespace {
     // '-stencil' commmand-line option or the 'stencil=' build option.
     static TestFuncStencil1 TestFuncStencil1_instance;
 
+    // A stencil that no vars and no stencil equation.
+    // Kernel must be built with domain_dims and step_dim options.
+    class TestEmptyStencil0: public TestBase {
+
+    protected:
+
+    public:
+
+        TestEmptyStencil0(int radius=1) :
+            TestBase("test_empty", radius) { }
+
+        virtual void define() { }
+    };
+
+    // Create an object of type 'TestEmptyStencil0',
+    // making it available in the YASK compiler utility via the
+    // '-stencil' commmand-line option or the 'stencil=' build option.
+    static TestEmptyStencil0 TestEmptyStencil0_instance;
+
     // A stencil that has vars but no stencil equation.
     class TestEmptyStencil2 : public TestBase {
 
@@ -836,24 +838,5 @@ namespace {
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
     static TestEmptyStencil2 TestEmptyStencil2_instance;
-
-    // A stencil that no vars and no stencil equation.
-    // Kernel must be built with domain_dims and step_dim options.
-    class TestEmptyStencil0: public TestBase {
-
-    protected:
-
-    public:
-
-        TestEmptyStencil0(int radius=1) :
-            TestBase("test_empty", radius) { }
-
-        virtual void define() { }
-    };
-
-    // Create an object of type 'TestEmptyStencil0',
-    // making it available in the YASK compiler utility via the
-    // '-stencil' commmand-line option or the 'stencil=' build option.
-    static TestEmptyStencil0 TestEmptyStencil0_instance;
 
 } // namespace.

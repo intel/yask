@@ -159,7 +159,7 @@ namespace yask {
         // by the stencil compiler.
         
         // Get name of this bundle.
-        virtual const std::string&
+        virtual const std::string
         get_name() const =0;
 
         // Get estimated number of FP ops done for one scalar eval.
@@ -236,7 +236,7 @@ namespace yask {
         virtual ~StencilBundleTempl() { }
 
         // Get name of this bundle.
-        const std::string& get_name() const override {
+        const std::string get_name() const override {
             return _bundle._name;
         }
 
@@ -345,6 +345,7 @@ namespace yask {
                       " ... " << mini_block_idxs.stop.make_val_str() <<
                       ") by region thread " << region_thread_idx <<
                       " and block thread " << block_thread_idx);
+
             auto* cp = _corep();
 
             // Init sub-block begin & end from block start & stop indices.
@@ -363,11 +364,15 @@ namespace yask {
                 FORCE_INLINE                                            \
                     _bundle.calc_scalar(cp, region_thread_idx, pt_idxs.start)
 
-            // Scan through n-D space.
-            // Disable OpenMP here.
+            // Set OMP loop to offload or disable it.
+            #ifdef USE_OFFLOAD
+            #define OMP_PRAGMA _Pragma("omp target parallel for")
+            #else
             #define OMP_PRAGMA
+            #endif
+            
+            // Scan through n-D space.
             #include "yask_misc_loops.hpp"
-            #undef OMP_PRAGMA
             #undef MISC_FN
         }
 
@@ -733,7 +738,6 @@ namespace yask {
                 // masks, and call vector code.
                 #define MISC_FN(pt_idxs)                                \
                     _bundle.calc_scalar(cp, region_thread_idx, pt_idxs.start)
-                #define OMP_PRAGMA
                 
                 // Left slab: compute scalars from beginning of sub-block to
                 // beginning of first full vector (or end of sub-block if less).
@@ -750,6 +754,7 @@ namespace yask {
                               " and block thread " << block_thread_idx);
 
                     // Scan through n-D space.
+                    #define OMP_PRAGMA
                     #include "yask_misc_loops.hpp"
                 }
 
@@ -768,10 +773,10 @@ namespace yask {
                               " and block thread " << block_thread_idx);
 
                     // Scan through n-D space.
+                    #define OMP_PRAGMA
                     #include "yask_misc_loops.hpp"
                 }
 
-                #undef OMP_PRAGMA
                 #undef MISC_FN
                 #endif
             } // do scalars.

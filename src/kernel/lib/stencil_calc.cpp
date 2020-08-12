@@ -179,16 +179,15 @@ namespace yask {
                         const idx_t idx_ofs = 0x1000; // to help keep pattern when idx is neg.
 
                         // Disable the OpenMP construct in the mini-block loop.
-#define CALC_SUB_BLOCK(mb_idxs)                                        \
-                        auto bind_elem_idx = mb_idxs.start[bind_posn];  \
-                        auto bind_slab_idx = idiv_flr(bind_elem_idx + idx_ofs, bind_slab_pts); \
-                        auto bind_thr = imod_flr<idx_t>(bind_slab_idx, nbt); \
-                        if (block_thread_idx == bind_thr)               \
-                            sg->calc_sub_block(region_thread_idx, block_thread_idx, settings, mb_idxs)
-#define OMP_PRAGMA
-#include "yask_mini_block_loops.hpp"
-#undef OMP_PRAGMA
-#undef CALC_SUB_BLOCK
+                        #define CALC_SUB_BLOCK(mb_idxs)                 \
+                            auto bind_elem_idx = mb_idxs.start[bind_posn]; \
+                            auto bind_slab_idx = idiv_flr(bind_elem_idx + idx_ofs, bind_slab_pts); \
+                            auto bind_thr = imod_flr<idx_t>(bind_slab_idx, nbt); \
+                            if (block_thread_idx == bind_thr)           \
+                                sg->calc_sub_block(region_thread_idx, block_thread_idx, settings, mb_idxs)
+                        #define OMP_PRAGMA
+                        #include "yask_mini_block_loops.hpp"
+                        #undef CALC_SUB_BLOCK
                     }
 
                     // If not binding threads to data, call calc_sub_block()

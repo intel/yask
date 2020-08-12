@@ -145,8 +145,6 @@ namespace yask {
         const real_t* get_elem_ptr(const Indices& idxs,
                                    idx_t alloc_step_idx,
                                    bool check_bounds=true) const {
-            TRACE_MEM_MSG(_data.get_name() << "." << "YkElemVarCore::get_elem_ptr(" <<
-                          idxs.make_val_str(get_num_dims()) << ")");
             const auto n = _data.get_num_dims();
             Indices adj_idxs(n);
 
@@ -170,11 +168,6 @@ namespace yask {
                 }
             }
 
-            #ifdef TRACE_MEM
-            if (check_bounds)
-                TRACE_MEM_MSG(" => " << _data.get_index(adj_idxs));
-            #endif
-
             // Get pointer via layout in _data.
             return _data.get_ptr(adj_idxs, check_bounds);
         }
@@ -195,14 +188,9 @@ namespace yask {
         // Indices are relative to overall problem domain.
         ALWAYS_INLINE
         real_t read_elem(const Indices& idxs,
-                         idx_t alloc_step_idx,
-                         int line) const {
+                         idx_t alloc_step_idx) const {
             const real_t* ep = get_elem_ptr(idxs, alloc_step_idx);
-            real_t e = *ep;
-            #ifdef TRACE_MEM
-            print_elem("read_elem", idxs, e, line);
-            #endif
-            return e;
+            return *ep;
         }
 
         // Write one element.
@@ -210,13 +198,9 @@ namespace yask {
         ALWAYS_INLINE
         void write_elem(real_t val,
                         const Indices& idxs,
-                        idx_t alloc_step_idx,
-                        int line) {
+                        idx_t alloc_step_idx) {
             real_t* ep = get_elem_ptr(idxs, alloc_step_idx);
             *ep = val;
-            #ifdef TRACE_MEM
-            print_elem("write_elem", idxs, val, line);
-            #endif
         }
 
     }; // YkElemVarCore.
@@ -244,11 +228,6 @@ namespace yask {
         const real_t* get_elem_ptr(const Indices& idxs,
                                    idx_t alloc_step_idx,
                                    bool check_bounds=true) const {
-
-            // FIXME: memory tracing is broken, because it doesn't work
-            // from the core structs. Not yet determined best way to re-enable.
-            TRACE_MEM_MSG(_data.get_name() << "." << "YkVecVar::get_elem_ptr(" <<
-                          idxs.make_val_str(get_num_dims()) << ")");
 
             // Use template vec lengths instead of run-time values for
             // efficiency.
@@ -314,10 +293,6 @@ namespace yask {
             assert(i == i2);
             #endif
 
-            if (check_bounds)
-                TRACE_MEM_MSG(" => " << _data.get_index(vec_idxs) <<
-                              "[" << i << "]");
-
             // Get pointer to vector.
             const real_vec_t* vp = _data.get_ptr(vec_idxs, check_bounds);
 
@@ -342,14 +317,9 @@ namespace yask {
         // Indices are relative to overall problem domain.
         ALWAYS_INLINE
         real_t read_elem(const Indices& idxs,
-                         idx_t alloc_step_idx,
-                         int line) const {
+                         idx_t alloc_step_idx) const {
             const real_t* ep = get_elem_ptr(idxs, alloc_step_idx);
-            real_t e = *ep;
-            #ifdef TRACE_MEM
-            print_elem("read_elem", idxs, e, line);
-            #endif
-            return e;
+            return *ep;
         }
 
         // Write one element.
@@ -357,13 +327,9 @@ namespace yask {
         ALWAYS_INLINE
         void write_elem(real_t val,
                         const Indices& idxs,
-                        idx_t alloc_step_idx,
-                        int line) {
+                        idx_t alloc_step_idx) {
             real_t* ep = get_elem_ptr(idxs, alloc_step_idx);
             *ep = val;
-            #ifdef TRACE_MEM
-            print_elem("write_elem", idxs, val, line);
-            #endif
         }
 
         // Get a pointer to given vector.
@@ -374,8 +340,6 @@ namespace yask {
         const real_vec_t* get_vec_ptr_norm(const Indices& vec_idxs,
                                            idx_t alloc_step_idx,
                                            bool check_bounds=true) const {
-            TRACE_MEM_MSG(_data.get_name() << "." << "YkVecVar::get_vec_ptr_norm(" <<
-                          vec_idxs.make_val_str(get_num_dims()) << ")");
 
             static constexpr int nvls = sizeof...(_templ_vec_lens);
             #ifdef DEBUG_LAYOUT
@@ -402,7 +366,6 @@ namespace yask {
                     adj_idxs[i] = vec_idxs[i] + _vec_left_pads[i] - _vec_local_offsets[i];
                 }
             }
-            TRACE_MEM_MSG(" => " << _data.get_index(adj_idxs, check_bounds));
 
             // Get ptr via layout in _data.
             return _data.get_ptr(adj_idxs, check_bounds);
@@ -424,14 +387,9 @@ namespace yask {
         // 'alloc_step_idx' is pre-calculated or 0 if not used.
         ALWAYS_INLINE
         real_vec_t read_vec_norm(const Indices& vec_idxs,
-                                 idx_t alloc_step_idx,
-                                 int line) const {
+                                 idx_t alloc_step_idx) const {
             const real_vec_t* vp = get_vec_ptr_norm(vec_idxs, alloc_step_idx);
-            real_vec_t v = *vp;
-            #ifdef TRACE_MEM
-            print_vec_norm("read_vec_norm", vec_idxs, v, line);
-            #endif
-            return v;
+            return *vp;
         }
 
         // Write one vector.
@@ -440,13 +398,9 @@ namespace yask {
         ALWAYS_INLINE
         void write_vec_norm(real_vec_t val,
                             const Indices& vec_idxs,
-                            idx_t alloc_step_idx,
-                            int line) {
+                            idx_t alloc_step_idx) {
             real_vec_t* vp = get_vec_ptr_norm(vec_idxs, alloc_step_idx);
             *vp = val;
-            #ifdef TRACE_MEM
-            print_vec_norm("write_vec_norm", vec_idxs, val, line);
-            #endif
         }
 
         // Prefetch one vector.
@@ -457,10 +411,6 @@ namespace yask {
         void prefetch_vec_norm(const Indices& vec_idxs,
                                idx_t alloc_step_idx,
                                int line) const {
-            STATE_VARS_CONST(this);
-            TRACE_MEM_MSG("prefetch_vec_norm<" << level << ">(" <<
-                          make_index_string(vec_idxs.mul_elements(_var_vec_lens)) << ")");
-
             auto p = get_vec_ptr_norm(vec_idxs, alloc_step_idx, false);
             prefetch<level>(p);
             #ifdef MODEL_CACHE
@@ -748,6 +698,19 @@ namespace yask {
         virtual std::string _make_info_string() const =0;
         virtual std::string make_info_string(bool long_info = false) const;
 
+        // Print one element.
+        virtual void print_elem(const std::string& msg,
+                                const Indices& idxs,
+                                real_t e,
+                                int line) const;
+
+        // Print one vector.
+        // Indices must be normalized and rank-relative.
+        virtual void print_vec_norm(const std::string& msg,
+                                    const Indices& idxs,
+                                    const real_vec_t& val,
+                                    int line) const;
+
         // Check for equality.
         // Return number of mismatches greater than epsilon.
         virtual idx_t compare(const YkVarBase* ref,
@@ -833,19 +796,6 @@ namespace yask {
             print_elem("add_to_elem", idxs, *ep, line);
             #endif
         }
-
-        // Print one element.
-        virtual void print_elem(const std::string& msg,
-                                const Indices& idxs,
-                                real_t e,
-                                int line) const;
-
-        // Print one vector.
-        // Indices must be normalized and rank-relative.
-        virtual void print_vec_norm(const std::string& msg,
-                                    const Indices& idxs,
-                                    const real_vec_t& val,
-                                    int line) const;
 
     };
     typedef std::shared_ptr<YkVarBase> VarBasePtr;
@@ -962,8 +912,12 @@ namespace yask {
         real_t read_elem(const Indices& idxs,
                          idx_t alloc_step_idx,
                          int line) const override final {
-            return _core.read_elem(idxs, alloc_step_idx, line);
-        }
+            real_t e = _core.read_elem(idxs, alloc_step_idx);
+            #ifdef TRACE_MEM
+            print_elem("read_elem", idxs, e, line);
+            #endif
+            return e;
+       }
 
         // Write one element.
         // Indices are relative to overall problem domain.
@@ -971,7 +925,10 @@ namespace yask {
                         const Indices& idxs,
                         idx_t alloc_step_idx,
                         int line) override final {
-            _core.write_elem(val, idxs, alloc_step_idx, line);
+            _core.write_elem(val, idxs, alloc_step_idx);
+            #ifdef TRACE_MEM
+            print_elem("write_elem", idxs, val, line);
+            #endif
         }
 
         // Non-vectorized fall-back versions.
@@ -1130,7 +1087,11 @@ namespace yask {
         real_t read_elem(const Indices& idxs,
                          idx_t alloc_step_idx,
                          int line) const override final {
-            return _core.read_elem(idxs, alloc_step_idx, line);
+            auto val = _core.read_elem(idxs, alloc_step_idx);
+            #ifdef TRACE_MEM
+            print_elem("read_elem", idxs, val, line);
+            #endif
+            return val;
         }
 
         // Write one element.
@@ -1139,8 +1100,11 @@ namespace yask {
                         const Indices& idxs,
                         idx_t alloc_step_idx,
                         int line) override final {
-            _core.write_elem(val, idxs, alloc_step_idx, line);
-        }
+            _core.write_elem(val, idxs, alloc_step_idx);
+             #ifdef TRACE_MEM
+            print_elem("write_elem", idxs, val, line);
+            #endif
+       }
 
         // Get a pointer to given vector.
         // Indices must be normalized and rank-relative.
@@ -1165,7 +1129,11 @@ namespace yask {
         real_vec_t read_vec_norm(const Indices& vec_idxs,
                                  idx_t alloc_step_idx,
                                  int line) const {
-            return _core.read_vec_norm(vec_idxs, alloc_step_idx, line);
+            auto v = _core.read_vec_norm(vec_idxs, alloc_step_idx);
+            #ifdef TRACE_MEM
+            print_vec_norm("read_vec_norm", vec_idxs, v, line);
+            #endif
+            return v;
         }
 
         // Write one vector.
@@ -1175,9 +1143,11 @@ namespace yask {
                             const Indices& vec_idxs,
                             idx_t alloc_step_idx,
                             int line) {
-
-            return _core.write_vec_norm(val, vec_idxs, alloc_step_idx, line);
-        }
+            _core.write_vec_norm(val, vec_idxs, alloc_step_idx);
+            #ifdef TRACE_MEM
+            print_vec_norm("write_vec_norm", vec_idxs, val, line);
+            #endif
+       }
 
         // Vectorized version of set/get_elements_in_slice().
         // Indices must be vec-normalized and rank-relative.

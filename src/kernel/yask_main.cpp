@@ -318,8 +318,9 @@ int main(int argc, char** argv)
             THROW_YASK_EXCEPTION("Exiting because there are no points in the domain");
 
         // init data in vars and params.
+        double seed = opts.validate ? 1.0 : 0.1;
         if (opts.do_warmup || !opts.validate)
-            context->init_data();
+            context->init_diff(seed);
 
         // Invoke auto-tuner.
         if (opts.do_pre_auto_tune)
@@ -424,7 +425,7 @@ int main(int argc, char** argv)
 
             // init data before each trial for comparison if validating.
             if (opts.validate)
-                context->init_data();
+                context->init_diff(seed);
 
             // Warn if tuning.
             if (ksoln->is_auto_tuner_enabled())
@@ -548,14 +549,14 @@ int main(int argc, char** argv)
             ref_soln->prepare_solution();
 
             // init to same value used in context.
-            ref_context->init_data();
+            ref_context->init_diff(seed);
 
 #ifdef CHECK_INIT
 
             // Debug code to determine if data compares immediately after init matches.
             os << endl << div_line <<
                 "Reinitializing data for minimal validation...\n" << flush;
-            context->init_data();
+            context->init_diff(seed);
 #else
 
             // Ref trial.

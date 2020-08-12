@@ -139,7 +139,7 @@ namespace yask {
     void GenericVarTyped<T>::set_elems_in_seq(T seed) {
         void* _elems = get_storage();
         if (_elems) {
-            const idx_t wrap = 71; // TODO: avoid multiple of any dim size.
+            const idx_t wrap = 31; // TODO: avoid multiple of any dim size.
             yask_parallel_for(0, get_num_elems(), 1,
                               [&](idx_t start, idx_t stop, idx_t thread_num) {
                                   ((T*)_elems)[start] = seed * T(start % wrap + 1);

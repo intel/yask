@@ -44,6 +44,7 @@ omp_region_schedule	?=	dynamic,1
 omp_block_schedule	?=	static,1
 omp_target_schedule	?=	static,1
 omp_misc_schedule	?=	guided
+offload			?=	0
 trace			?=	0
 trace_mem		?=	0
 check			?=	0
@@ -60,6 +61,7 @@ check			?=	0
 ifeq ($(offload),1)
  arch			:=	intel64
  mpi			:= 	0
+ YK_ARCH		:=	offload
 endif
 
 # If 'arch' isn't set, determine default architecture by running kernel
@@ -90,14 +92,14 @@ else
 endif
 
 # Specify YK_STENCIL and/or YK_ARCH on 'make' cmd-line to name binaries differently.
-YK_STENCIL	:=	$(stencil)
-YK_ARCH		:=	$(arch)
+YK_STENCIL	?=	$(stencil)
+YK_ARCH		?=	$(arch)
 
 # Specify YC_STENCIL on 'make' cmd-line to pass different stencil name to YASK compiler.
-YC_STENCIL	:=	$(stencil)
+YC_STENCIL	?=	$(stencil)
 
 # Specify YC_TARGET on 'make' cmd-line to override target for YASK compiler.
-YC_TARGET	:=	$(TARGET)
+YC_TARGET	?=	$(TARGET)
 
 # Default compiler settings based on target.
 ifeq ($(TARGET),knc)
@@ -396,7 +398,7 @@ YK_CXX_TEST 	:= 	$(filter-out -fopenmp%,$(YK_CXX) $(YK_CXXFLAGS) $(YK_CXXOPT) $(
 # TODO: add separate settings for Intel nextgen.
 ifeq ($(call MACRO_DEF,$(YK_CXX_TEST),__clang__),1)
  YK_CXXFLAGS	+=	$(CXX_ISA)
- YK_CXXFLAGS	+=	-Wno-unused-variable
+ YK_CXXFLAGS	+=	-Wno-unused-variable -fno-color-diagnostics
  MACROS		+=	NO_VEC
  MACROS		+=	NO_SVML
 
@@ -664,68 +666,6 @@ $(YK_PY_LIB): $(YK_OBJS)  $(YK_EXT_OBJS) $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $(YK_SO_OPTS) -o $@ $^ $(YK_LIBS)
 	@ls -l $@
 
-# Simple tests.
-
-$(YK_VAR_TEST_EXEC): $(YK_TEST_SRC_DIR)/var_test.cpp $(YK_LIB)
-	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
-	@ls -l $@
-
-#### API tests.
-
-# Build C++ kernel tests.
-$(YK_API_TEST_EXEC): $(YK_TEST_SRC_DIR)/yask_kernel_api_test.cpp $(YK_LIB)
-	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
-	@ls -l $@
-
-# Run C++ tests.
-cxx-yk-var-test: $(YK_VAR_TEST_EXEC)
-	@echo '*** Running the C++ YASK var test...'
-	$(RUN_PREFIX) $<
-
-cxx-yk-api-test: $(YK_API_TEST_EXEC)
-	@echo '*** Running the C++ YASK kernel API test...'
-	$(RUN_PREFIX) $<
-
-# Run Python kernel API test.
-py-yk-api-test: $(YK_TEST_SRC_DIR)/yask_kernel_api_test.py $(YK_PY_LIB)
-	@echo '*** Running the Python YASK kernel API test...'
-	$(RUN_PYTHON) $<
-
-# Build C++ kernel tests with exceptions.
-$(YK_API_TEST_EXEC_WITH_EXCEPTION): $(YK_TEST_SRC_DIR)/yask_kernel_api_exception_test.cpp $(YK_LIB)
-	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
-	@ls -l $@
-
-# Run C++ tests with exceptions.
-cxx-yk-api-test-with-exception: $(YK_API_TEST_EXEC_WITH_EXCEPTION)
-	@echo '*** Running the C++ YASK kernel API test with exception...'
-	$(RUN_PREFIX) $<
-
-# Run Python kernel API test with exceptions.
-py-yk-api-test-with-exception: $(YK_TEST_SRC_DIR)/yask_kernel_api_exception_test.py $(YK_PY_LIB)
-	@echo '*** Running the Python YASK kernel API test with exception...'
-	$(RUN_PYTHON) $<
-
-### API tests for the compiler.
-# These targets run the tests in the compiler directory,
-# then they move the output files into the correct location
-# for the kernel.
-
-# Run Python compiler API test to create stencil-code file.
-py-yc-api-test:
-	$(MAKE) -C $(YC_SRC_DIR) $@
-	$(MKDIR) $(YK_GEN_DIR)
-	mv $(YC_SRC_DIR)/yc-api-test-py.hpp $(YK_CODE_FILE)
-
-# Run C++ compiler API test to create stencil-code file.
-cxx-yc-api-test:
-	$(MAKE) -C $(YC_SRC_DIR) $@
-	$(MKDIR) $(YK_GEN_DIR)
-	mv $(YC_SRC_DIR)/yc-api-test-cxx.hpp $(YK_CODE_FILE)
-
 ######## Misc targets
 
 # Generate the code file using the built-in compiler.
@@ -747,120 +687,6 @@ api-no-yc:
 
 py-api-no-yc:
 	$(MAKE) $(NO_YC_MAKE_FLAGS) py-api
-
-# Default number of ranks for running tests.
-# 4 is good because it tests in-plane diagonal exchanges for 2D and 3D tests.
-# 8 would test all exchanges for 3D tests.
-ranks	:=	4
-
-# Validation runs for each binary.
-DEF_TEST_ARGS := -ranks $(ranks) -stencil $(YK_STENCIL) -arch $(YK_ARCH) -v \
-	-trial_steps 2 -max_threads 6 -block_threads 2 \
-	-ep 0 -mp 0 -no-allow_addl_padding
-
-val0	:=	$(DEF_TEST_ARGS) -l 48 -r 32 -b 24 -rt 0 $(EXTRA_TEST_ARGS)
-val1	:=	$(DEF_TEST_ARGS) -l 48 -r 32 -b 24 -mb 16 -rt 1 $(EXTRA_TEST_ARGS)
-val2	:=	$(DEF_TEST_ARGS) -l 63 -r 32 -b 24 -mb 16 -rt 2 $(EXTRA_TEST_ARGS)
-val3	:=	$(DEF_TEST_ARGS) -l 63 -r 48 -b 24 -mb 16 -bt 2 $(EXTRA_TEST_ARGS)
-val4a	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -bind_block_threads $(EXTRA_TEST_ARGS)
-val4b	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -use_shm -overlap_comms $(EXTRA_TEST_ARGS)
-val4c	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -no-use_shm -no-overlap_comms $(EXTRA_TEST_ARGS)
-
-# Run the kernel binary using several combos of sizes and ranks.
-yk-tests:
-	$(YK_SCRIPT) $(val0)
-	$(YK_SCRIPT) $(val1)
-	$(YK_SCRIPT) $(val2)
-	$(YK_SCRIPT) $(val3)
-	$(YK_SCRIPT) $(val4a)
-
-yk-mpi-tests:
-	$(YK_SCRIPT) $(val4b)
-	$(YK_SCRIPT) $(val4c)
-
-# Run the default YASK compiler and kernel.
-yc-and-yk-test: $(YK_EXEC) $(YK_SCRIPT)
-	$(MAKE) ranks=1 yk-tests
-	if (( $(ranks) > 1 )); then $(MAKE) yk-tests yk-mpi-tests; fi
-
-# Run the YASK kernel test without implicity using the YASK compiler.
-yk-test-no-yc: kernel-no-yc $(YK_SCRIPT)
-	$(MAKE) ranks=1 yk-tests
-	if (( $(ranks) > 1 )); then $(MAKE) yk-tests yk-mpi-tests; fi
-
-# Run the kernel API tests for C++ and Python with and w/o expected exceptions.
-api-tests:
-	$(MAKE) clean; $(MAKE) cxx-yk-api-test real_bytes=8 stencil=iso3dfd
-	$(MAKE) clean; $(MAKE) py-yk-api-test stencil=iso3dfd
-	$(MAKE) clean; $(MAKE) cxx-yk-api-test-with-exception real_bytes=8 stencil=iso3dfd
-	$(MAKE) clean; $(MAKE) py-yk-api-test-with-exception stencil=iso3dfd
-
-# Run several stencils using built-in validation.
-# NB: set arch var as applicable.
-# NB: save some compile time by using YK_CXXOPT=-O2 or -O1.
-# These tests are focused on the kernel and not the compiler.
-# For testing both the kernel and compiler in various combinations,
-# run the tests from the top-level Makefile.
-ifeq ($(offload),1)
-STENCIL_TEST 	:=	yc-and-yk-test real_bytes=4 allow_new_var_types=0 check=0 trace=0
-fold		=
-else
-STENCIL_TEST 	:= 	yc-and-yk-test real_bytes=8 allow_new_var_types=0 check=1 trace=1
-fold		=	fold=$(1);
-endif
-stencil-tests:
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_empty step_dim=t domain_dims=d1,d2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_1d $(call fold,x=4)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stages_1d $(call fold,x=4)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_func_1d $(call fold,x=4)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_step_cond_1d $(call fold,x=4)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_boundary_1d $(call fold,x=4)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_scratch_1d $(call fold,x=4)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_scratch_boundary_1d $(call fold,x=4)
-
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_empty_2d
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_2d $(call fold,x=2,y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_2d $(call fold,x=2,y=2) mpi=0 ranks=1
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_2d arch=intel64 $(call fold,x=3,y=2) domain_dims=y,x
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_reverse_2d radius=1
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stages_2d $(call fold,x=2,y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_misc_2d $(call fold,x=2,y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_misc_2d $(call fold,x=2,y=2) EXTRA_YC_FLAGS=-interleave-misc
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_boundary_2d $(call fold,x=2,y=2)
-
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_3d $(call fold,x=2,z=2) domain_dims=z,y,x
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stages_3d $(call fold,y=2,x=2) domain_dims=x,z,y
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_partial_3d $(call fold,x=2,z=2) domain_dims=x,z,y
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stream_3d radius=5
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_boundary_3d $(call fold,x=2,y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_scratch_3d $(call fold,x=2,z=2)
-
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=iso3dfd radius=3 $(call fold,x=2,y=2) domain_dims=z,x,y
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=iso3dfd_sponge radius=3 $(call fold,x=2,z=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=3axis $(call fold,x=2,y=2) cluster=x=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=3axis $(call fold,x=2,y=2) cluster=z=2,y=2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=3axis_with_diags $(call fold,x=2,z=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=3plane $(call fold,y=2,z=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=cube $(call fold,x=2,y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=ssg $(call fold,x=2,y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=ssg_merged $(call fold,x=2,y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=awp $(call fold,x=2,y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=awp_abc $(call fold,x=2,y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=fsg_abc $(call fold,x=2,y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=fsg_merged $(call fold,x=2,y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=tti $(call fold,x=2,y=2)
-
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_4d $(call fold,w=2,x=2)
-
-all-tests:
-	$(MAKE) clean; $(MAKE) cxx-yk-var-test stencil=test_3d
-	$(MAKE) stencil-tests
-	$(MAKE) api-tests
-
-all:
-	$(MAKE) kernel stencil=test_3d
-	$(MAKE) api stencil=test_3d
-	$(MAKE) all-tests
 
 # Remove intermediate files.
 # Should not trigger remake of stencil compiler.
@@ -944,6 +770,7 @@ echo-settings:
 	echo arch=$(arch); \
 	echo cluster=$(cluster); \
 	echo fold=$(fold); \
+	echo offload=$(offload); \
 	echo omp_block_schedule=$(omp_block_schedule); \
 	echo omp_misc_schedule=$(omp_misc_schedule); \
 	echo omp_region_schedule=$(omp_region_schedule); \
@@ -976,7 +803,6 @@ help:
 	echo " $(MAKE) clean; $(MAKE) -j stencil=awp EXTRA_YK_CXXFLAGS='-qopt-report -Fa'"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis EXTRA_YK_CXXFLAGS='-qnextgen' # Use next-gen Intel compiler"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=clang++ mpi=0 # Use clang w/o MPI"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=clang++ EXTRA_YK_CXXFLAGS='-fno-color-diagnostics' mpi=0 # Use clang w/o color output"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=mpiCC OMPI_CXX=clang++ # Use clang w/MPI"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=awp vtune=1 # Add VTune start/stop instrumentation"; \
 	echo " "
@@ -993,3 +819,201 @@ help:
 	echo " $(MAKE) -j all   # Normal full API and stencil tests"; \
 	echo " $(MAKE) -j all YK_CXX=g++ mpi=0 ranks=1   # Test g++ w/o MPI"; \
 	echo " $(MAKE) -j all YK_CXXOPT=-O1 ranks=4   # Test on 4 ranks"
+
+
+########### Tests
+# TODO: convert all testing to a separate test framework.
+
+# Simple tests.
+
+$(YK_VAR_TEST_EXEC): $(YK_TEST_SRC_DIR)/var_test.cpp $(YK_LIB)
+	$(MKDIR) $(dir $@)
+	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+	@ls -l $@
+
+#### API tests.
+
+# Build C++ kernel tests.
+$(YK_API_TEST_EXEC): $(YK_TEST_SRC_DIR)/yask_kernel_api_test.cpp $(YK_LIB)
+	$(MKDIR) $(dir $@)
+	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+	@ls -l $@
+
+# Run C++ tests.
+cxx-yk-var-test: $(YK_VAR_TEST_EXEC)
+	@echo '*** Running the C++ YASK var test...'
+	$(RUN_PREFIX) $<
+
+cxx-yk-api-test: $(YK_API_TEST_EXEC)
+	@echo '*** Running the C++ YASK kernel API test...'
+	$(RUN_PREFIX) $<
+
+# Run Python kernel API test.
+py-yk-api-test: $(YK_TEST_SRC_DIR)/yask_kernel_api_test.py $(YK_PY_LIB)
+	@echo '*** Running the Python YASK kernel API test...'
+	$(RUN_PYTHON) $<
+
+# Build C++ kernel tests with exceptions.
+$(YK_API_TEST_EXEC_WITH_EXCEPTION): $(YK_TEST_SRC_DIR)/yask_kernel_api_exception_test.cpp $(YK_LIB)
+	$(MKDIR) $(dir $@)
+	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+	@ls -l $@
+
+# Run C++ tests with exceptions.
+cxx-yk-api-test-with-exception: $(YK_API_TEST_EXEC_WITH_EXCEPTION)
+	@echo '*** Running the C++ YASK kernel API test with exception...'
+	$(RUN_PREFIX) $<
+
+# Run Python kernel API test with exceptions.
+py-yk-api-test-with-exception: $(YK_TEST_SRC_DIR)/yask_kernel_api_exception_test.py $(YK_PY_LIB)
+	@echo '*** Running the Python YASK kernel API test with exception...'
+	$(RUN_PYTHON) $<
+
+### API tests for the compiler.
+# These targets run the tests in the compiler directory,
+# then they move the output files into the correct location
+# for the kernel.
+
+# Run Python compiler API test to create stencil-code file.
+py-yc-api-test:
+	$(MAKE) -C $(YC_SRC_DIR) $@
+	$(MKDIR) $(YK_GEN_DIR)
+	mv $(YC_SRC_DIR)/yc-api-test-py.hpp $(YK_CODE_FILE)
+
+# Run C++ compiler API test to create stencil-code file.
+cxx-yc-api-test:
+	$(MAKE) -C $(YC_SRC_DIR) $@
+	$(MKDIR) $(YK_GEN_DIR)
+	mv $(YC_SRC_DIR)/yc-api-test-cxx.hpp $(YK_CODE_FILE)
+
+# Default number of ranks for running tests.
+# 4 is good because it tests in-plane diagonal exchanges for 2D and 3D tests.
+# 8 would test all exchanges for 3D tests.
+ranks	:=	4
+
+# Validation runs for each binary.
+DEF_TEST_ARGS := -ranks $(ranks) -stencil $(YK_STENCIL) -arch $(YK_ARCH) -v \
+	-trial_steps 2 -max_threads 6 -block_threads 2 \
+	-ep 0 -mp 0 -no-allow_addl_padding
+
+val0	:=	$(DEF_TEST_ARGS) -l 48 -r 32 -b 24 -rt 0 $(EXTRA_TEST_ARGS)
+val1	:=	$(DEF_TEST_ARGS) -l 48 -r 32 -b 24 -mb 16 -rt 1 $(EXTRA_TEST_ARGS)
+val2	:=	$(DEF_TEST_ARGS) -l 63 -r 32 -b 24 -mb 16 -rt 2 $(EXTRA_TEST_ARGS)
+val3	:=	$(DEF_TEST_ARGS) -l 63 -r 48 -b 24 -mb 16 -bt 2 $(EXTRA_TEST_ARGS)
+val4a	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -bind_block_threads $(EXTRA_TEST_ARGS)
+val4b	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -use_shm -overlap_comms $(EXTRA_TEST_ARGS)
+val4c	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -no-use_shm -no-overlap_comms $(EXTRA_TEST_ARGS)
+
+# Run the kernel binary using several combos of sizes and ranks.
+yk-tests:
+	$(YK_SCRIPT) $(val0)
+	$(YK_SCRIPT) $(val1)
+	$(YK_SCRIPT) $(val2)
+	$(YK_SCRIPT) $(val3)
+	$(YK_SCRIPT) $(val4a)
+
+yk-mpi-tests:
+	$(YK_SCRIPT) $(val4b)
+	$(YK_SCRIPT) $(val4c)
+
+# Run the default YASK compiler and kernel.
+yc-and-yk-test: $(YK_EXEC) $(YK_SCRIPT)
+	$(MAKE) ranks=1 yk-tests
+	if (( $(ranks) > 1 )); then $(MAKE) yk-tests yk-mpi-tests; fi
+
+# Run the YASK kernel test without implicity using the YASK compiler.
+yk-test-no-yc: kernel-no-yc $(YK_SCRIPT)
+	$(MAKE) ranks=1 yk-tests
+	if (( $(ranks) > 1 )); then $(MAKE) yk-tests yk-mpi-tests; fi
+
+# Run the kernel API tests for C++ and Python with and w/o expected exceptions.
+api-tests:
+	$(MAKE) clean; $(MAKE) cxx-yk-api-test real_bytes=8 stencil=iso3dfd
+	$(MAKE) clean; $(MAKE) py-yk-api-test stencil=iso3dfd
+	$(MAKE) clean; $(MAKE) cxx-yk-api-test-with-exception real_bytes=8 stencil=iso3dfd
+	$(MAKE) clean; $(MAKE) py-yk-api-test-with-exception stencil=iso3dfd
+
+# Run several stencils using built-in validation.
+# NB: set arch var as applicable.
+# NB: save some compile time by using YK_CXXOPT=-O2 or -O1.
+# These tests are focused on the kernel and not the compiler.
+# For testing both the kernel and compiler in various combinations,
+# run the tests from the top-level Makefile.
+ifeq ($(offload),1)
+STENCIL_TEST 	:=	yc-and-yk-test real_bytes=8 allow_new_var_types=0 check=0 trace=0
+SET_FOLD	=
+else
+STENCIL_TEST 	:= 	yc-and-yk-test real_bytes=8 allow_new_var_types=0 check=1 trace=1
+SET_FOLD	=	fold=$(1);
+endif
+
+1d-tests:
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_1d $(call SET_FOLD,x=4)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stages_1d $(call SET_FOLD,x=4)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_func_1d $(call SET_FOLD,x=4)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_step_cond_1d $(call SET_FOLD,x=4)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_boundary_1d $(call SET_FOLD,x=4)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_scratch_1d $(call SET_FOLD,x=4)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_scratch_boundary_1d $(call SET_FOLD,x=4)
+
+2d-tests:
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_empty_2d
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_2d $(call SET_FOLD,x=2,y=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_2d $(call SET_FOLD,x=2,y=2) mpi=0 ranks=1
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_2d arch=intel64 $(call SET_FOLD,x=3,y=2) domain_dims=y,x
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_reverse_2d radius=1
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stages_2d $(call SET_FOLD,x=2,y=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_misc_2d $(call SET_FOLD,x=2,y=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_misc_2d $(call SET_FOLD,x=2,y=2) EXTRA_YC_FLAGS=-interleave-misc
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_boundary_2d $(call SET_FOLD,x=2,y=2)
+
+3d-tests:
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_3d $(call SET_FOLD,x=2,z=2) domain_dims=z,y,x
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stages_3d $(call SET_FOLD,y=2,x=2) domain_dims=x,z,y
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_partial_3d $(call SET_FOLD,x=2,z=2) domain_dims=x,z,y
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stream_3d radius=5
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_boundary_3d $(call SET_FOLD,x=2,y=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_scratch_3d $(call SET_FOLD,x=2,z=2)
+
+# 3D tests w/specific shapes.
+3d-tests2:
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=3axis $(call SET_FOLD,x=2,y=2) cluster=x=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=3axis $(call SET_FOLD,x=2,y=2) cluster=z=2,y=2
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=3axis_with_diags $(call SET_FOLD,x=2,z=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=3plane $(call SET_FOLD,y=2,z=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=cube $(call SET_FOLD,x=2,y=2)
+
+# 3D tests w/actual seismic stencils.
+3d-tests3:
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=iso3dfd radius=3 $(call SET_FOLD,x=2,y=2) domain_dims=z,x,y
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=iso3dfd_sponge radius=3 $(call SET_FOLD,x=2,z=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=ssg $(call SET_FOLD,x=2,y=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=ssg_merged $(call SET_FOLD,x=2,y=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=awp $(call SET_FOLD,x=2,y=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=awp_abc $(call SET_FOLD,x=2,y=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=fsg_abc $(call SET_FOLD,x=2,y=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=fsg_merged $(call SET_FOLD,x=2,y=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=tti $(call SET_FOLD,x=2,y=2)
+
+4d-tests:
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_4d $(call SET_FOLD,w=2,x=2)
+
+stencil-tests:
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_empty step_dim=t domain_dims=d1,d2
+	$(MAKE) 1d-tests
+	$(MAKE) 2d-tests
+	$(MAKE) 3d-tests
+	$(MAKE) 3d-tests2
+	$(MAKE) 3d-tests3
+	$(MAKE) 4d-tests
+
+all-tests:
+	$(MAKE) clean; $(MAKE) cxx-yk-var-test stencil=test_3d $(call SET_FOLD,x=2,y=2)
+	$(MAKE) stencil-tests
+	$(MAKE) api-tests
+
+all:
+	$(MAKE) kernel stencil=test_3d
+	$(MAKE) api stencil=test_3d
+	$(MAKE) all-tests
+

@@ -457,25 +457,20 @@ namespace yask {
         }
 
         // Init all vars & params by calling real_init_fn.
-        virtual void init_values(std::function<void (YkVarPtr gp,
-                                                    real_t seed)> real_init_fn);
+        virtual void init_values(real_t seed0,
+                                 std::function<void (YkVarPtr gp,
+                                                     real_t seed)> real_init_fn);
 
         // Init all vars & params to same value within vars,
         // but different for each var.
-        virtual void init_same() {
-            init_values([&](YkVarPtr gp, real_t seed){ gp->set_all_elements_same(seed); });
+        virtual void init_same(real_t seed0) {
+            init_values(seed0, [&](YkVarPtr gp, real_t seed){ gp->set_all_elements_same(seed); });
         }
 
         // Init all vars & params to different values within vars,
         // and different for each var.
-        virtual void init_diff() {
-            init_values([&](YkVarPtr gp, real_t seed){ gp->set_all_elements_in_seq(seed); });
-        }
-
-        // Init all vars & params.
-        // By default it uses the init_same initialization routine.
-        virtual void init_data() {
-            init_diff();         // Safer than init_same() to avoid NaNs due to div-by-zero.
+        virtual void init_diff(real_t seed0) {
+            init_values(seed0, [&](YkVarPtr gp, real_t seed){ gp->set_all_elements_in_seq(seed); });
         }
 
         // Compare vars in contexts for validation.

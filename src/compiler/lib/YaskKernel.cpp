@@ -383,33 +383,21 @@ namespace yask {
             string eg_desc = eq->get_descr();
             string egs_name = _stencil_prefix + eg_name;
 
-            os << endl << " ////// Stencil " << eg_desc << " //////\n" <<
-                "\n struct " << egs_name << " {\n"
-                "  std::string _name;\n"
-                "  int _scalar_fp_ops;\n"
-                "  int _scalar_points_read;\n"
-                "  int _scalar_points_written;\n"
-                "  bool _is_scratch;\n";
-
             // Stats for this eq_bundle.
             CounterVisitor stats;
             eq->visit_eqs(&stats);
 
+            os << endl << " ////// Stencil " << eg_desc << " //////\n" <<
+                "\n struct " << egs_name << " {\n"
+                "  const char* _name = \"" << eg_name << "\";\n"
+                "  const int _scalar_fp_ops = " << stats.get_num_ops() << ";\n"
+                "  const int _scalar_points_read = " << stats.get_num_reads() << ";\n"
+                "  const int _scalar_points_written = " << stats.get_num_writes() << ";\n"
+                "  const bool _is_scratch = " << (eq->is_scratch() ? "true" : "false") << ";\n";
+
             // Example computation.
             os << endl << " // " << stats.get_num_ops() << " FP operation(s) per point:" << endl;
             add_comment(os, *eq);
-
-            // Stencil-bundle ctor.
-            {
-                os << " " << egs_name << "() {\n"
-                    " _name = \"" << eg_name << "\";\n"
-                    " _scalar_fp_ops = " << stats.get_num_ops() << ";\n"
-                    " _scalar_points_read = " << stats.get_num_reads() << ";\n"
-                    " _scalar_points_written = " << stats.get_num_writes() << ";\n"
-                    " _is_scratch = " << (eq->is_scratch() ? "true" : "false") << ";\n";
-
-                os << " } // Ctor.\n";
-            }
 
             // Domain condition.
             {

@@ -747,17 +747,18 @@ namespace yask {
     } // update_tb_info().
 
     // Init all vars & params by calling init_fn.
-    void StencilContext::init_values(function<void (YkVarPtr gp,
-                                                   real_t seed)> real_init_fn) {
+    void StencilContext::init_values(real_t seed0,
+                                     function<void (YkVarPtr gp,
+                                                    real_t seed)> real_init_fn) {
         STATE_VARS(this);
 
-        real_t seed = 0.1;
+        real_t seed = seed0;
         DEBUG_MSG("Initializing vars...");
         YaskTimer itimer;
         itimer.start();
         for (auto gp : orig_var_ptrs) {
             real_init_fn(gp, seed);
-            seed += 0.01;
+            seed += seed0;
         }
         itimer.stop();
         DEBUG_MSG("Var initialization done in " <<

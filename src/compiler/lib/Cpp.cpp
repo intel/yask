@@ -63,7 +63,7 @@ namespace yask {
         if (opt_arg.length())
             res += opt_arg + ", ";
         string args = gp.make_arg_str();
-        res += "{" + args + "}, " + step_arg_var + ", __LINE__)";
+        res += "{" + args + "}, " + step_arg_var + ")";
         return res;
     }
 
@@ -99,7 +99,7 @@ namespace yask {
         // Specify that any indices should use element vars.
         string str = var_ptr + "->read_elem(";
         string args = gp.make_arg_str(v_map);
-        str += "{" + args + "}, " + step_arg_var + ",__LINE__)";
+        str += "{" + args + "}, " + step_arg_var + ")";
         return str;
     }
 
@@ -602,7 +602,7 @@ namespace yask {
     string CppVecPrintHelper::print_aligned_vec_read(ostream& os, const VarPoint& gp) {
 
         print_point_comment(os, gp, "Read aligned");
-        auto rvn = print_vec_point_call(os, gp, "read_vec_norm", "", "__LINE__", true);
+        auto rvn = print_vec_point_call(os, gp, "read_vec_norm", "", "", true);
 
         // Read memory.
         string mv_name = make_var_name();
@@ -631,8 +631,8 @@ namespace yask {
     string CppVecPrintHelper::print_aligned_vec_write(ostream& os, const VarPoint& gp,
                                                    const string& val) {
         print_point_comment(os, gp, "Write aligned");
-        auto vn = print_vec_point_call(os, gp, "write_vec_norm_masked", val, "write_mask, __LINE__", true);
-        // without mask: auto vn = print_vec_point_call(os, gp, "write_vec_norm", val, "__LINE__", true);
+        auto vn = print_vec_point_call(os, gp, "write_vec_norm_masked", val, "write_mask", true);
+        // without mask: auto vn = print_vec_point_call(os, gp, "write_vec_norm", val, "", true);
 
         // Write temp var to memory.
         os << vn;
