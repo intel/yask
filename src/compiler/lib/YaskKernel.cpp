@@ -639,7 +639,9 @@ namespace yask {
                 delete vp;
             }
 
-            os << "}; // " << egs_name << ".\n"; // end of struct.
+            os << "}; // " << egs_name << ".\n" // end of struct.
+                " static_assert(std::is_trivially_copyable<" << egs_name << ">::value,"
+                "\"Needed for OpenMP offload\");\n";
 
         } // stencil eq_bundles.
     }

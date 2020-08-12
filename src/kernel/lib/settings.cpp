@@ -832,6 +832,7 @@ namespace yask {
                                     _dims->_cluster_pts, step_dim);
         os << " num-sub-blocks-per-sub-block-group-per-step: " << nsb_g << endl;
 #endif
+        os << endl;
     }
 
     // Ctor.

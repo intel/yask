@@ -24,6 +24,7 @@ IN THE SOFTWARE.
 *****************************************************************************/
 
 // Tests for various YASK DSL features.
+// Most tests use whole-number calculations for more robust error-checking.
 
 // YASK stencil solution(s) in this file will be integrated into the YASK compiler utility.
 #include "yask_compiler_api.hpp"
@@ -47,7 +48,8 @@ namespace {
         yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
 
         // Define some stencils in different dimensions.
-        // These will be asymmetrical if any of the '*_ext' params are not 0;
+        // The size is based on the 'radius' option.
+        // These will be asymmetrical if any of the '*_ext' params are not the same;
     
         // Define simple stencil from var 'V' at 't0' centered around 'x0'.
         // Extend given radius left and/or right w/'*_ext'.
@@ -427,7 +429,7 @@ namespace {
     static TestReverseStencil TestReverseStencil_instance;
 
     // Test dependent equations.
-    // These will create 2 stages that will be applied in sequence
+    // These will create >= 2 stages that will be applied in sequence
     // for each time-step.
     class TestDepStencil1 : public TestBase {
 
@@ -538,7 +540,7 @@ namespace {
         // Define equation to apply to all points in 'A' var.
         virtual void define() {
 
-            // Define values in scratch var 'B'.
+            // Define values in scratch var 'B' based on 'A'.
             B(x) EQUALS def_1d(A, t, x, 1, 0);
 
             // Set 'A' from scratch var values.
@@ -550,6 +552,44 @@ namespace {
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
     static TestScratchStencil1 TestScratchStencil1_instance;
+
+    class TestScratchStencil2 : public TestBase {
+
+    protected:
+
+        // Vars.
+        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y }); // time-varying var.
+
+        // Temporary storage.
+        yc_var_proxy t1 = yc_var_proxy("t1", get_soln(), { x, y }, true);
+        yc_var_proxy t2 = yc_var_proxy("t2", get_soln(), { x, y }, true);
+
+    public:
+
+        TestScratchStencil2(int radius=2) :
+            TestBase("test_scratch_2d", radius) { }
+
+        // Define equation to apply to all points in 'A' var.
+        virtual void define() {
+
+            // Set scratch var.
+            t1(x, y) EQUALS def_2d(A, t, x, 0, 1, y, 2, 1);
+
+            // Set one scratch var from other scratch var.
+            //t2(x, y) EQUALS t1(x-1, y+1);
+            t2(x, y) EQUALS t1(x, y+1);
+
+            // Update A from scratch vars.
+            A(t+1, x, y) EQUALS A(t, x, y) +
+                def_no_t_2d(t1, x, 2, 0, y, 1, 0) +
+                def_no_t_2d(t2, x, 1, 0, y, 0, 1);
+        }
+    };
+
+    // Create an object of type 'TestScratchStencil2',
+    // making it available in the YASK compiler utility via the
+    // '-stencil' commmand-line option or the 'stencil=' build option.
+    static TestScratchStencil2 TestScratchStencil2_instance;
 
     class TestScratchStencil3 : public TestBase {
 
@@ -771,6 +811,8 @@ namespace {
     static TestScratchBoundaryStencil1 TestScratchBoundaryStencil1_instance;
 
     // A stencil that uses svml math functions.
+    // This stencil is an exception to the whole-number calculations
+    // used in most test stencils.
     class TestFuncStencil1 : public TestBase {
 
     protected:

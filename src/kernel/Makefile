@@ -965,6 +965,7 @@ endif
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stages_2d $(call SET_FOLD,x=2,y=2)
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_misc_2d $(call SET_FOLD,x=2,y=2)
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_misc_2d $(call SET_FOLD,x=2,y=2) EXTRA_YC_FLAGS=-interleave-misc
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_scratch_2d $(call SET_FOLD,x=2,y=2)
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_boundary_2d $(call SET_FOLD,x=2,y=2)
 
 3d-tests:
