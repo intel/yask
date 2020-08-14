@@ -49,16 +49,17 @@ fi
 # Default arch.
 cpu_flags=`grep -m1 '^flags' /proc/cpuinfo`
 if [[ $cpu_flags =~ avx512dq ]]; then
-    arch=avx512
+    def_arch=avx512
 elif [[ $cpu_flags =~ avx512pf ]]; then
-    arch=knl
+    def_arch=knl
 elif [[ $cpu_flags =~ avx2 ]]; then
-    arch=avx2
+    def_arch=avx2
 elif [[ $cpu_flags =~ avx ]]; then
-    arch=avx
+    def_arch=avx
 else
-    arch=intel64
+    def_arch=intel64
 fi
+arch=$def_arch
 
 # Default ranks.
 nranks=1
@@ -81,7 +82,7 @@ bindir=`dirname $0`
 function show_stencils {
     echo "Available stencil.arch combos in '$bindir' directory:"
     find $bindir -name 'yask_kernel.*.*.exe' | sed -e 's/.*yask_kernel\./ -stencil /' -e 's/\./ -arch /' -e 's/.exe//'
-    echo "The default -arch argument for this host is '$arch'."
+    echo "The default -arch argument for this host is '$def_arch'."
     exit 1
 }
 
@@ -111,7 +112,7 @@ while true; do
         echo "  -arch <arch>"
         echo "     Specify the architecture-name part of the kernel executable."
         echo "     Overrides the default architecture determined from /proc/cpuinfo flags."
-        echo "     The default <arch> for this host is '$arch'."
+        echo "     The default <arch> for this host is '$def_arch'."
         echo "     Should correspond to arch=<arch> used during compilation."
         echo "  -host <hostname>|-mic <N>"
         echo "     Specify host to run executable on."
@@ -142,7 +143,7 @@ while true; do
         echo "     Default is based on stencil, arch, host-name, and time-stamp."
         echo "     Use '/dev/null' to avoid making a log."
         echo "  -show_arch"
-        echo "     Print the architecture string and exit."
+        echo "     Print the default architecture string and exit."
         echo "  <env-var=value>"
         echo "     Set environment variable <env-var> to <value>."
         echo "     Repeat as necessary to set multiple vars."
@@ -158,7 +159,7 @@ while true; do
         shift
 
     elif [[ "$1" == "-show_arch" ]]; then
-        echo $arch
+        echo $def_arch
         exit 0
 
     elif [[ "$1" == "-stencil" && -n ${2+set} ]]; then
