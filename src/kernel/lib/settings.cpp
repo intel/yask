@@ -338,15 +338,15 @@ namespace yask {
         _add_domain_option(parser, "mb", "Mini-block size", _mini_block_sizes);
         _add_domain_option(parser, "sb", "Sub-block size", _sub_block_sizes);
 #ifdef SHOW_GROUPS
-        _add_domain_option(parser, "bg", "Block-group size", _block_group_sizes);
-        _add_domain_option(parser, "mbg", "Mini-block-group size", _mini_block_group_sizes);
-        _add_domain_option(parser, "sbg", "Sub-block-group size", _sub_block_group_sizes);
+        _add_domain_option(parser, "bg", "[Advanced] Block-group size", _block_group_sizes);
+        _add_domain_option(parser, "mbg", "[Advanced] Mini-block-group size", _mini_block_group_sizes);
+        _add_domain_option(parser, "sbg", "[Advanced] Sub-block-group size", _sub_block_group_sizes);
 #endif
-        _add_domain_option(parser, "mp", "Minimum var-padding size (including halo)", _min_pad_sizes);
-        _add_domain_option(parser, "ep", "Extra var-padding size (beyond halo)", _extra_pad_sizes);
+        _add_domain_option(parser, "mp", "[Advanced] Minimum var-padding size (including halo)", _min_pad_sizes);
+        _add_domain_option(parser, "ep", "[Advanced] Extra var-padding size (beyond halo)", _extra_pad_sizes);
         parser.add_option(new CommandLineParser::BoolOption
                           ("allow_addl_padding",
-                           "Allow automatic extension of padding beyond what is needed for"
+                           "[Advanced] Allow automatic extension of padding beyond what is needed for"
                            " vector alignment for additional performance reasons",
                            _allow_addl_pad));
 #ifdef USE_MPI
@@ -358,7 +358,8 @@ namespace yask {
                            overlap_comms));
         parser.add_option(new CommandLineParser::IdxOption
                           ("min_exterior",
-                           "Minimum width of exterior section to compute before starting MPI communication. "
+                           "[Advanced] Minimum width of exterior section to"
+                           " compute before starting MPI communication. "
                            "Applicable only when overlap_comms is enabled.",
                            _min_exterior));
         parser.add_option(new CommandLineParser::BoolOption
@@ -371,7 +372,7 @@ namespace yask {
 #endif
         parser.add_option(new CommandLineParser::BoolOption
                           ("force_scalar",
-                           "Evaluate every var point with scalar stencil operations (for debug).",
+                           "[Advanced] Evaluate every var point with scalar stencil operations (for debug).",
                            force_scalar));
         parser.add_option(new CommandLineParser::IntOption
                           ("max_threads",
@@ -398,7 +399,7 @@ namespace yask {
                            num_block_threads));
         parser.add_option(new CommandLineParser::BoolOption
                           ("bind_block_threads",
-                           "Divide mini-blocks into sub-blocks of slabs along the first valid dimension "
+                           "[Advanced] Divide mini-blocks into sub-blocks of slabs along the first valid dimension "
                            "(usually the outer-domain dimension), ignoring other sub-block sizes. "
                            "Assign each slab to a block thread based on its global index in that dimension. "
                            "This setting may increase cache locality when using multiple "
@@ -409,7 +410,7 @@ namespace yask {
 #ifdef USE_NUMA
         parser.add_option(new CommandLineParser::IntOption
                           ("numa_pref",
-                           "Preferred NUMA node on which to allocate data for "
+                           "[Advanced] Preferred NUMA node on which to allocate data for "
                            "vars and MPI buffers. Alternatively, use special values " +
                            to_string(yask_numa_local) + " for explicit local-node allocation, " +
                            to_string(yask_numa_interleave) + " for interleaving pages across all nodes, or " +
@@ -419,7 +420,7 @@ namespace yask {
 #ifdef USE_PMEM
         parser.add_option(new CommandLineParser::IntOption
                           ("pmem_threshold",
-                           "First allocate up to this many GiB for vars using system memory, "
+                           "[Advanced] First allocate up to this many GiB for vars using system memory, "
                            "then allocate memory for remaining vars from a PMEM (persistent memory) device "
                            "named '/mnt/pmemX', where 'X' corresponds to the NUMA node of the YASK process.",
                            _numa_pref_max));
@@ -433,17 +434,17 @@ namespace yask {
                            _do_auto_tune));
         parser.add_option(new CommandLineParser::DoubleOption
                           ("auto_tune_min_secs",
-                           "Minimum seconds to run trial during auto-tuning for trial settings to be "
-                           "considered better than the existing best.",
+                           "[Advanced] Minimum seconds to run new trial during auto-tuning "
+                           "for trial to be considered better than the existing best.",
                            _tuner_min_secs));
         parser.add_option(new CommandLineParser::BoolOption
                           ("auto_tune_mini_blocks",
-                           "Apply the auto-tuner to mini-block sizes instead of block sizes. "
+                           "[Advanced] Apply the auto-tuner to mini-block sizes instead of block sizes. "
                            "Particularly useful when using temporal block tiling.",
                            _tune_mini_blks));
         parser.add_option(new CommandLineParser::BoolOption
                           ("auto_tune_each_stage",
-                           "Apply the auto-tuner separately to each stage. "
+                           "[Advanced] Apply the auto-tuner separately to each stage. "
                            "Will only be used if stages are applied in separate "
                            "passes across the entire var, "
                            "i.e., when no temporal tiling is used.",
