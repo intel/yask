@@ -662,8 +662,8 @@ namespace yask {
         // Default region size (if 0) will be size of rank-domain.
         os << "\nRegions:" << endl;
         auto nr = find_num_subsets(os, _region_sizes, "region",
-                                 _rank_sizes, "local-domain",
-                                 cluster_pts, step_dim);
+                                   _rank_sizes, "local-domain",
+                                   cluster_pts, step_dim);
         os << " num-regions-per-local-domain-per-step: " << nr << endl;
         os << " Since the region size in the '" << step_dim <<
             "' dim is " << rt << ", temporal wave-front rank tiling is ";
@@ -829,8 +829,8 @@ namespace yask {
                                    _sub_block_sizes, step_dim);
         os << " num-sub-block-groups-per-mini-block-per-step: " << nsbg << endl;
         auto nsb_g = find_num_subsets(os, _sub_block_sizes, "sub-block",
-                                    _sub_block_group_sizes, "sub-block-group",
-                                    _dims->_cluster_pts, step_dim);
+                                      _sub_block_group_sizes, "sub-block-group",
+                                      cluster_pts, step_dim);
         os << " num-sub-blocks-per-sub-block-group-per-step: " << nsb_g << endl;
 #endif
         os << endl;

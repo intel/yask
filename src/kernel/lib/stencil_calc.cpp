@@ -248,10 +248,11 @@ namespace yask {
                     idx_t lh = gp->get_left_halo_size(posn);
                     idx_t rh = gp->get_right_halo_size(posn);
 
-                    // Round up halos to cluster sizes to avoid
-                    // calculating partial clusters.
-                    lh = ROUND_UP(lh, cluster_pts[j]);
-                    rh = ROUND_UP(rh, cluster_pts[j]);
+                    // Round up halos to vector sizes.
+                    // TODO: consider cluster sizes, but need to make changes
+                    // elsewhere in code.
+                    lh = ROUND_UP(lh, fold_pts[j]);
+                    rh = ROUND_UP(rh, fold_pts[j]);
 
                     // Adjust begin & end scan indices based on halos.
                     adj_idxs.begin[i] = idxs.begin[i] - lh;

@@ -885,7 +885,11 @@ cxx-yc-api-test:
 # Default number of ranks for running tests.
 # 4 is good because it tests in-plane diagonal exchanges for 2D and 3D tests.
 # 8 would test all exchanges for 3D tests.
+ifdef ($(offload),1)
+ranks	:=	1
+else
 ranks	:=	4
+endif
 
 # Validation runs for each binary.
 DEF_TEST_ARGS := -ranks $(ranks) -stencil $(YK_STENCIL) -arch $(YK_ARCH) -v \

@@ -87,7 +87,7 @@ namespace yask {
 
     // APIs to set vars.
 #define COMMA ,
-#define SET_VAR_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
+    #define SET_VAR_API(api_name, expr, need_resize, step_ok, domain_ok, misc_ok) \
     void YkVarImpl::api_name(const string& dim, idx_t n) {             \
         STATE_VARS(gbp());                                              \
         TRACE_MSG("var '" << get_name() << "'."                        \
@@ -96,42 +96,47 @@ namespace yask {
         int posn = gb().get_dim_posn(dim, true, #api_name);              \
         idx_t mbit = 1LL << posn;                                       \
         expr;                                                           \
+        if (need_resize) resize();                                      \
+        else sync_core();                                               \
     }                                                                   \
     void YkVarImpl::api_name(int posn, idx_t n) {                      \
         STATE_VARS(gbp());                                              \
+        TRACE_MSG("var '" << get_name() << "'."                        \
+                  #api_name "('" << posn << "', " << n << ")");         \
         idx_t mbit = 1LL << posn;                                       \
-        int dim = posn;                                                 \
         expr;                                                           \
+        if (need_resize) resize();                                      \
+        else sync_core();                                               \
     }
 
-    // These are the internal, unchecked access functions that allow
-    // changes prohibited thru the APIs.
-    SET_VAR_API(_set_rank_offset, corep()->_rank_offsets[posn] = n, true, true, true)
-    SET_VAR_API(_set_local_offset, corep()->_local_offsets[posn] = n;
-                 assert(imod_flr(n, corep()->_var_vec_lens[posn]) == 0);
-                 corep()->_vec_local_offsets[posn] = n / corep()->_var_vec_lens[posn], true, true, true)
-    SET_VAR_API(_set_domain_size, corep()->_domains[posn] = n; resize(), true, true, true)
-    SET_VAR_API(_set_left_pad_size, corep()->_actl_left_pads[posn] = n; resize(), true, true, true)
-    SET_VAR_API(_set_right_pad_size, corep()->_actl_right_pads[posn] = n; resize(), true, true, true)
-    SET_VAR_API(_set_left_wf_ext, corep()->_left_wf_exts[posn] = n; resize(), true, true, true)
-    SET_VAR_API(_set_right_wf_ext, corep()->_right_wf_exts[posn] = n; resize(), true, true, true)
-    SET_VAR_API(_set_alloc_size, corep()->_domains[posn] = n; resize(), true, true, true)
+// These are the internal, unchecked access functions that allow
+// changes prohibited thru the APIs.
+SET_VAR_API(_set_rank_offset, corep()->_rank_offsets[posn] = n, false, true, true, true)
+SET_VAR_API(_set_local_offset, corep()->_local_offsets[posn] = n;
+            assert(imod_flr(n, corep()->_var_vec_lens[posn]) == 0);
+            corep()->_vec_local_offsets[posn] = n / corep()->_var_vec_lens[posn], false, true, true, true)
+SET_VAR_API(_set_domain_size, corep()->_domains[posn] = n, true, true, true, true)
+SET_VAR_API(_set_left_pad_size, corep()->_actl_left_pads[posn] = n, true, true, true, true)
+SET_VAR_API(_set_right_pad_size, corep()->_actl_right_pads[posn] = n, true, true, true, true)
+SET_VAR_API(_set_left_wf_ext, corep()->_left_wf_exts[posn] = n, true, true, true, true)
+SET_VAR_API(_set_right_wf_ext, corep()->_right_wf_exts[posn] = n, true, true, true, true)
+SET_VAR_API(_set_alloc_size, corep()->_domains[posn] = n, true, true, true, true)
 
-    // These are the safer ones used in the APIs.
-    SET_VAR_API(set_left_halo_size, corep()->_left_halos[posn] = n; resize(), false, true, false)
-    SET_VAR_API(set_right_halo_size, corep()->_right_halos[posn] = n; resize(), false, true, false)
-    SET_VAR_API(set_halo_size, corep()->_left_halos[posn] = corep()->_right_halos[posn] = n; resize(), false, true, false)
-    SET_VAR_API(set_alloc_size, corep()->_domains[posn] = n; resize(),
-                gb()._is_dynamic_step_alloc, gb()._fixed_size, gb()._is_dynamic_misc_alloc)
-    SET_VAR_API(set_left_min_pad_size, corep()->_req_left_pads[posn] = n; resize(), false, true, false)
-    SET_VAR_API(set_right_min_pad_size, corep()->_req_right_pads[posn] = n; resize(), false, true, false)
-    SET_VAR_API(set_min_pad_size, corep()->_req_left_pads[posn] = corep()->_req_right_pads[posn] = n; resize(),
-                 false, true, false)
-    SET_VAR_API(set_left_extra_pad_size, corep()->_req_left_epads[posn] = n; resize(), false, true, false)
-    SET_VAR_API(set_right_extra_pad_size, corep()->_req_right_epads[posn] = n; resize(), false, true, false)
-    SET_VAR_API(set_extra_pad_size, corep()->_req_left_epads[posn] = corep()->_req_right_epads[posn] = n; resize(),
-                false, true, false)
-    SET_VAR_API(set_first_misc_index, corep()->_local_offsets[posn] = n, false, false, gb()._is_user_var)
+// These are the safer ones used in the APIs.
+SET_VAR_API(set_left_halo_size, corep()->_left_halos[posn] = n, true, false, true, false)
+SET_VAR_API(set_right_halo_size, corep()->_right_halos[posn] = n, true, false, true, false)
+SET_VAR_API(set_halo_size, corep()->_left_halos[posn] = corep()->_right_halos[posn] = n, true, false, true, false)
+SET_VAR_API(set_alloc_size, corep()->_domains[posn] = n, true,
+            gb()._is_dynamic_step_alloc, gb()._fixed_size, gb()._is_dynamic_misc_alloc)
+SET_VAR_API(set_left_min_pad_size, corep()->_req_left_pads[posn] = n, true, false, true, false)
+SET_VAR_API(set_right_min_pad_size, corep()->_req_right_pads[posn] = n, true, false, true, false)
+SET_VAR_API(set_min_pad_size, corep()->_req_left_pads[posn] = corep()->_req_right_pads[posn] = n, true,
+            false, true, false)
+SET_VAR_API(set_left_extra_pad_size, corep()->_req_left_epads[posn] = n, true, false, true, false)
+SET_VAR_API(set_right_extra_pad_size, corep()->_req_right_epads[posn] = n, true, false, true, false)
+SET_VAR_API(set_extra_pad_size, corep()->_req_left_epads[posn] = corep()->_req_right_epads[posn] = n, true,
+            false, true, false)
+SET_VAR_API(set_first_misc_index, corep()->_local_offsets[posn] = n, false, false, false, gb()._is_user_var)
 #undef COMMA
 #undef SET_VAR_API
 

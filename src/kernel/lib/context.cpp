@@ -798,7 +798,7 @@ namespace yask {
                   region_idxs.end.make_val_str() <<
                   ") by region thread " << region_thread_idx);
 
-#ifdef OVERLAP_WITH_BLOCKS
+        #ifdef OVERLAP_WITH_BLOCKS
         // If we are not calculating some of the blocks, determine
         // whether this block is *completely* inside the interior.
         // A block even partially in the exterior is not considered
@@ -834,7 +834,7 @@ namespace yask {
                 }
             }
         }
-#endif
+        #endif
 
         // Init block begin & end from region start & stop indices.
         ScanIndices block_idxs(*dims, true);
@@ -886,7 +886,7 @@ namespace yask {
 
             // Include automatically-generated loop code that
             // calls calc_mini_block() for each mini-block in this block.
-#include "yask_block_loops.hpp"
+            #include "yask_block_loops.hpp"
         } // no TB.
 
         // If TB is active, loop thru each required shape.
@@ -965,7 +965,7 @@ namespace yask {
                 // Include automatically-generated loop code that calls
                 // calc_mini_block() for each mini-block in this block.
                 StagePtr bp; // null.
-#include "yask_block_loops.hpp"
+                #include "yask_block_loops.hpp"
 
             } // shape loop.
         } // TB.

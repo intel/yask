@@ -978,7 +978,7 @@ namespace yask {
         }
 
         // Sync core on device.
-        // Does NOT sync underlying data.
+        // Does NOT sync data.
         void sync_core() override {
             STATE_VARS(this);
             auto* var_cp = &_core;
@@ -1316,6 +1316,9 @@ namespace yask {
         }
         void resize() {
             gb().resize();
+        }
+        void sync_core() {
+            gb().sync_core();
         }
 
         // APIs.

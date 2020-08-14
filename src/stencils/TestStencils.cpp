@@ -576,7 +576,6 @@ namespace {
             t1(x, y) EQUALS def_2d(A, t, x, 0, 1, y, 2, 1);
 
             // Set one scratch var from other scratch var.
-            //t2(x, y) EQUALS t1(x-1, y+1);
             t2(x, y) EQUALS t1(x, y+1);
 
             // Update A from scratch vars.

@@ -383,7 +383,7 @@ namespace yask {
 
         // This will loop over the entire allocation.
         // We use this as a handy way to get offsets,
-        // but not all will be used.
+        // but not all points will be used.
         allocs.visit_all_points_in_parallel
             ([&](const IdxTuple& pt, size_t idx) {
 
