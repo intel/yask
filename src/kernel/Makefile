@@ -36,6 +36,7 @@ pmem			?=	0
 real_bytes		?=	4
 allow_new_var_types	?=	1
 streaming_stores	?=	0
+omp			?=	1
 omp_par			?=	omp parallel
 omp_par_for		?=	omp parallel for
 omp_for			?=	omp for
@@ -278,7 +279,6 @@ else
 endif
 YK_CXXFLAGS	:=	-g -std=c++11 -Wall
 YK_CXXFLAGS	+=	$(addprefix -I,$(YK_INC_DIRS) $(YK_GEN_DIR))
-OMPFLAGS	+=	-fopenmp
 YK_CXXOPT	?=	-O3
 SWIG_CXXFLAGS	:= 	$(DBL_EPSILON_CXXFLAG)
 
@@ -294,6 +294,10 @@ ifeq ($(offload),1)
  #OMP_TARGET	:=	x86_64
  OMPFLAGS	:=	-fiopenmp -fopenmp-targets=$(OMP_TARGET)
  CXX_PREFIX	:=
+else ifeq ($(omp),1)
+ OMPFLAGS	:=	-fopenmp
+else
+ OMPFLAGS	:=
 endif
 
 # Add options for NUMA.
@@ -436,10 +440,10 @@ endif # compiler.
 # This is currently not operative! TODO: re-enable cache model.
 ifeq ($(model_cache),1)
  MACROS		+=	MODEL_CACHE=1
- OMPFLAGS	:=	-qopenmp-stubs
+ OMPFLAGS	:=
 else ifeq ($(model_cache),2)
  MACROS		+=	MODEL_CACHE=2
- OMPFLAGS	:=	-qopenmp-stubs
+ OMPFLAGS	:=
 endif
 
 # Add in final flags and user-added flags.
@@ -507,6 +511,7 @@ MINI_BLOCK_LOOP_CODE	?=	$(MINI_BLOCK_LOOP_OUTER_MODS) omp loop($(MINI_BLOCK_LOOP
 # by the stencil compiler, so these loops stop at N-2.  The indexes in this
 # loop are 'normalized', i.e., vector units and rank-relative.
 SUB_BLOCK_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar norm_sb_idxs
+SUB_BLOCK_LOOP_TYPE	:=
 ifeq ($(offload),1)
 SUB_BLOCK_LOOP_OPTS	+=	-ompMod '$(omp_target_par_for) schedule($(omp_target_schedule))'
 SUB_BLOCK_LOOP_TYPE	:=	omp
@@ -797,7 +802,8 @@ help:
 	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis fold='x=1,y=2,z=4' cluster='x=2'"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis radius=4 real_bytes=8 # DP FP"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=awp EXTRA_YK_CXXFLAGS='-qopt-report -Fa'"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis EXTRA_YK_CXXFLAGS='-qnextgen' # Use next-gen Intel compiler"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=g++ # Use gnu compiler"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=icpx # Use next-gen Intel compiler"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=clang++ mpi=0 # Use clang w/o MPI"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=mpiCC OMPI_CXX=clang++ # Use clang w/MPI"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=awp vtune=1 # Add VTune start/stop instrumentation"; \
@@ -807,9 +813,9 @@ help:
 	echo " $(MAKE) clean; $(MAKE) -j stencil=awp yk-api"; \
 	echo " "
 	@echo "Example debug builds of kernel cmd-line tool:"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' check=1 # No optimization, OpenMP or MPI; internal checking"; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=avx stencil=test_2d mpi=0 OMPFLAGS='-qopenmp-stubs' YK_CXXOPT='-O0' trace=1 # Enable tracing; run with '-trace' to get trace"; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' mpi=0 YK_CXX=g++ OMPFLAGS='' YK_CXXOPT='-O0' trace_mem=1 # Trace all mem accesses with '-trace'"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 omp=0 YK_CXXOPT='-O0' check=1 # No optimization, OpenMP, or MPI; use internal checking"; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=avx stencil=test_2d YK_CXXOPT='-O0' trace=1 # Enable tracing; run with '-trace' to get trace"; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' YK_CXXOPT='-O0' trace_mem=1 # Trace all mem accesses with '-trace'"; \
 	echo " "
 	@echo "Example builds with test runs:"; \
 	echo " $(MAKE) -j all   # Normal full API and stencil tests"; \
@@ -817,17 +823,23 @@ help:
 	echo " $(MAKE) -j all YK_CXXOPT=-O1 ranks=4   # Test on 4 ranks"
 
 
-########### Tests
+#################################
+########### Tests ###############
+#################################
 # TODO: convert all testing to a separate test framework.
 
-# Simple tests.
+### Unit tests.
 
 $(YK_VAR_TEST_EXEC): $(YK_TEST_SRC_DIR)/var_test.cpp $(YK_LIB)
 	$(MKDIR) $(dir $@)
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
 	@ls -l $@
 
-#### API tests.
+cxx-yk-var-test: $(YK_VAR_TEST_EXEC)
+	@echo '*** Running the C++ YASK var test...'
+	$(RUN_PREFIX) $<
+
+### API tests.
 
 # Build C++ kernel tests.
 $(YK_API_TEST_EXEC): $(YK_TEST_SRC_DIR)/yask_kernel_api_test.cpp $(YK_LIB)
@@ -836,10 +848,6 @@ $(YK_API_TEST_EXEC): $(YK_TEST_SRC_DIR)/yask_kernel_api_test.cpp $(YK_LIB)
 	@ls -l $@
 
 # Run C++ tests.
-cxx-yk-var-test: $(YK_VAR_TEST_EXEC)
-	@echo '*** Running the C++ YASK var test...'
-	$(RUN_PREFIX) $<
-
 cxx-yk-api-test: $(YK_API_TEST_EXEC)
 	@echo '*** Running the C++ YASK kernel API test...'
 	$(RUN_PREFIX) $<
@@ -885,7 +893,7 @@ cxx-yc-api-test:
 # Default number of ranks for running tests.
 # 4 is good because it tests in-plane diagonal exchanges for 2D and 3D tests.
 # 8 would test all exchanges for 3D tests.
-ifdef ($(offload),1)
+ifneq ($(mpi),1)
 ranks	:=	1
 else
 ranks	:=	4

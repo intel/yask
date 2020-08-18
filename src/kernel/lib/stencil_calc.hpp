@@ -323,10 +323,6 @@ namespace yask {
                        KernelSettings& settings,
                        const ScanIndices& mini_block_idxs) override {
 
-            // Set the block thread if not already set.
-            if (block_thread_idx < 0)
-                block_thread_idx = omp_get_thread_num();
-
             // Choose between scalar and vector impls.
             if (settings.force_scalar)
                 calc_sub_block_scalar(region_thread_idx, block_thread_idx,
