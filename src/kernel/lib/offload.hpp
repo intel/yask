@@ -37,48 +37,56 @@ IN THE SOFTWARE.
 #define OFFLOAD_MSG(msg) ((void)0)
 #endif
 #define OFFLOAD_MAP_ALLOC(p, num) do {                          \
-        auto nb = sizeof(*p) * num;                                     \
+        auto _nb = sizeof(*p) * num;                                     \
         OFFLOAD_MSG("#pragma omp target enter data map(alloc: " <<        \
-                    (void*)p << "[0:" << num << "]); " << nb << " bytes"); \
+                    (void*)p << "[0:" << num << "]); " << _nb << " bytes"); \
         YPRAGMA(omp target enter data map(alloc: p[0:num]))           \
-            OFFLOAD_MSG(nb << " device bytes allocated");      \
+            OFFLOAD_MSG(_nb << " device bytes allocated");      \
             } while(0)
-#define OFFLOAD_MAP_FREE(p) do {                                \
-        OFFLOAD_MSG("#pragma omp target exit data map(release: " <<   \
-                     (void*)p << ")");                             \
-        YPRAGMA(omp target exit data map(release: p))           \
+#define OFFLOAD_MAP_FREE(p, num) do {                                   \
+        auto _nb = sizeof(*p) * num;                                     \
+        OFFLOAD_MSG("#pragma omp target exit data map(release: " <<     \
+                    (void*)p << "[0:" << num << "]); " << _nb << " bytes"); \
+        YPRAGMA(omp target exit data map(release: p[0:num]))            \
+            OFFLOAD_MSG(_nb << " device bytes released");      \
             } while(0)
 
 // Conditional tracing using 'state'.
 #define OFFLOAD_MAP_ALLOC2(state, p, num) do {               \
-        auto nb = sizeof(*p) * num;                                     \
+        auto _nb = sizeof(*p) * num;                                     \
         TRACE_MSG1(state, "#pragma omp target enter data map(alloc: " << \
-                   (void*)p << "[0:" << num << "]); " << nb << " bytes"); \
+                   (void*)p << "[0:" << num << "]); " << _nb << " bytes"); \
         YPRAGMA(omp target enter data map(alloc: p[0:num]))           \
-            TRACE_MSG1(state, nb << " device bytes allocated"); \
+            TRACE_MSG1(state, _nb << " device bytes allocated"); \
             } while(0)
 #define OFFLOAD_UPDATE_TO2(state, p, num) do {                \
+        auto _nb = sizeof(*p) * num;                           \
          TRACE_MSG1(state, "#pragma omp target update to(" << \
                     (void*)p << "[0:" << num << "])");          \
          YPRAGMA(omp target update to(p[0:num]))              \
+            TRACE_MSG1(state, _nb << " bytes updated to device"); \
             } while(0)
 #define OFFLOAD_UPDATE_FROM2(state, p, num) do {                \
+        auto _nb = sizeof(*p) * num;                             \
          TRACE_MSG1(state, "#pragma omp target update from(" << \
                     (void*)p << "[0:" << num << "])");          \
          YPRAGMA(omp target update from(p[0:num]))              \
+            TRACE_MSG1(state, _nb << " bytes updated from device"); \
             } while(0)
-#define OFFLOAD_MAP_FREE2(state, p) do {                                \
+#define OFFLOAD_MAP_FREE2(state, p, num) do {                           \
+        auto _nb = sizeof(*p) * num;                                     \
         TRACE_MSG1(state, "#pragma omp target exit data map(release: " << (void*)p << ")"); \
         YPRAGMA(omp target exit data map(release: p))                  \
+            TRACE_MSG1(state, _nb << " device bytes released"); \
             } while(0)
 
 #else
 #define OFFLOAD_MAP_ALLOC(p, nbytes) ((void)0)
-#define OFFLOAD_MAP_FREE(p) ((void)0)
+#define OFFLOAD_MAP_FREE(p, nbytes) ((void)0)
 #define OFFLOAD_MAP_ALLOC2(state, p, num) ((void)0)
 #define OFFLOAD_UPDATE_TO2(state, p, num) ((void)0)
 #define OFFLOAD_UPDATE_FROM2(state, p, num) ((void)0)
-#define OFFLOAD_MAP_FREE2(state, p) ((void)0)
+#define OFFLOAD_MAP_FREE2(state, p, num) ((void)0)
 #endif
 
 namespace yask {

@@ -875,7 +875,7 @@ namespace yask {
 
             // Release core from device.
             auto* var_cp = &_core;
-            OFFLOAD_MAP_FREE2(state, var_cp);
+            OFFLOAD_MAP_FREE2(state, var_cp, 1);
         }
         
         // Make a human-readable description.
@@ -1041,7 +1041,7 @@ namespace yask {
 
             // Release core from device.
             auto* var_cp = &_core;
-            OFFLOAD_MAP_FREE2(state, var_cp);
+            OFFLOAD_MAP_FREE2(state, var_cp, 1);
         }
         
         // Make a human-readable description.

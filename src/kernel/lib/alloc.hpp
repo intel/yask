@@ -76,9 +76,9 @@ namespace yask {
 
     // Alloc aligned data as a shared ptr.
     template<typename T>
-    std::shared_ptr<T> shared_aligned_alloc(size_t sz) {
-        auto _base = std::shared_ptr<T>(yask_aligned_alloc(sz),
-                                        AlignedDeleter(sz));
+    std::shared_ptr<T> shared_aligned_alloc(size_t nbytes) {
+        auto _base = std::shared_ptr<T>(yask_aligned_alloc(nbytes),
+                                        AlignedDeleter(nbytes));
         return _base;
     }
 
@@ -100,9 +100,9 @@ namespace yask {
 
     // Allocate NUMA memory from preferred node.
     template<typename T>
-    std::shared_ptr<T> shared_numa_alloc(size_t sz, int numa_pref) {
-        auto _base = std::shared_ptr<T>(numa_alloc(sz, numa_pref),
-                                        NumaDeleter(sz, numa_pref));
+    std::shared_ptr<T> shared_numa_alloc(size_t nbytes, int numa_pref) {
+        auto _base = std::shared_ptr<T>(numa_alloc(nbytes, numa_pref),
+                                        NumaDeleter(nbytes, numa_pref));
         return _base;
     }
 
@@ -122,9 +122,9 @@ namespace yask {
 
     // Allocate PMEM memory from given device.
     template<typename T>
-    std::shared_ptr<T> shared_pmem_alloc(size_t sz, int dev) {
-        auto _base = std::shared_ptr<T>(pmem_alloc(sz, dev),
-                                        PmemDeleter(sz));
+    std::shared_ptr<T> shared_pmem_alloc(size_t nbytes, int dev) {
+        auto _base = std::shared_ptr<T>(pmem_alloc(nbytes, dev),
+                                        PmemDeleter(nbytes));
         return _base;
     }
 
@@ -150,10 +150,10 @@ namespace yask {
 
     // Allocate MPI shm memory.
     template<typename T>
-    std::shared_ptr<T> shared_shm_alloc(size_t sz,
+    std::shared_ptr<T> shared_shm_alloc(size_t nbytes,
                                         const MPI_Comm* shm_comm, MPI_Win* shm_win) {
-        auto _base = std::shared_ptr<T>(shm_alloc(sz, shm_comm, shm_win),
-                                        ShmDeleter(sz, shm_comm, shm_win));
+        auto _base = std::shared_ptr<T>(shm_alloc(nbytes, shm_comm, shm_win),
+                                        ShmDeleter(nbytes, shm_comm, shm_win));
         return _base;
     }
 

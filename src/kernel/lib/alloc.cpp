@@ -65,7 +65,7 @@ namespace yask {
     // Reverse yask_aligned_alloc().
     void AlignedDeleter::operator()(char* p) {
         if (p) {
-            OFFLOAD_MAP_FREE(p);
+            OFFLOAD_MAP_FREE(p, _nbytes);
             free(p);
             p = NULL;
         }
@@ -172,7 +172,7 @@ namespace yask {
     void NumaDeleter::operator()(char* p) {
 
         if (p)
-            OFFLOAD_MAP_FREE(p);
+            OFFLOAD_MAP_FREE(p, _nbytes);
 
         if (p && _numa_pref == yask_numa_none) {
             free(p);
@@ -283,7 +283,7 @@ namespace yask {
     // Reverse pmem_alloc().
     void PmemDeleter::operator()(char* p) {
         if (p) {
-            OFFLOAD_MAP_FREE(p);
+            OFFLOAD_MAP_FREE(p, _nbytes);
             munmap(p, _nbytes);
             p = NULL;
         }

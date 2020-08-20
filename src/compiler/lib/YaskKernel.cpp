@@ -941,9 +941,10 @@ namespace yask {
             " virtual ~" << _context << "() {\n"
             "  STATE_VARS(this);\n"
             "  auto* cxt_cd = &_core_data;\n"
-            "  OFFLOAD_MAP_FREE2(state, cxt_cd);\n" <<
+            "  OFFLOAD_MAP_FREE2(state, cxt_cd, 1);\n" <<
             "  auto* tcl = _thread_core_list.data();\n"
-            "  if (tcl) OFFLOAD_MAP_FREE2(state, tcl);\n"
+            "  auto nt = _thread_core_list.size();\n"
+            "  if (tcl) OFFLOAD_MAP_FREE2(state, tcl, nt);\n"
             " }\n";
 
         // New-var method.
@@ -981,7 +982,8 @@ namespace yask {
             " TRACE_MSG(\"make_scratch_vars(\" << num_threads << \")\");\n"
             "\n  // Release old device data for thread array.\n"
             "  auto* tcl = _thread_core_list.data();\n"
-            "  if (tcl) OFFLOAD_MAP_FREE2(state, tcl);\n"
+            "  auto nt = _thread_core_list.size();\n"
+            "  if (tcl) OFFLOAD_MAP_FREE2(state, tcl, nt);\n"
           "\n  // Make new array.\n"
             "  _thread_core_list.resize(num_threads);\n"
             "  tcl = _thread_core_list.data();\n"
