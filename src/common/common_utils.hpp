@@ -125,21 +125,22 @@ namespace yask {
         if (end <= begin)
             return;
         
-#ifndef _OPENMP
-        // Canonical loop.
+        #ifndef _OPENMP
+        // Canonical sequential loop.
         for (idx_t i = 0; i < end; i += stride) {
             idx_t stop = std::min(i + stride, end);
             idx_t tn = omp_get_thread_num();
             visitor(i, stop, tn);
         }
-#else
-        // Non-nested.
+
+        #else
+        // Non-nested parallel.
         if (omp_get_max_active_levels() < 2 ||
             !yask_num_threads[0] || !yask_num_threads[1]) {
 
             if (yask_num_threads[0])
                 omp_set_num_threads(yask_num_threads[0]);
-#pragma omp parallel for schedule(static)
+            #pragma omp parallel for schedule(static)
             for (idx_t i = 0; i < end; i += stride) {
                 idx_t stop = std::min(i + stride, end);
                 idx_t tn = omp_get_thread_num();
@@ -147,7 +148,7 @@ namespace yask {
             }
         }
 
-        // Nested.
+        // Nested parallel.
         else {
 
             // Number of outer threads.
@@ -161,7 +162,7 @@ namespace yask {
             idx_t niters_per_thr = CEIL_DIV(niter, nthr);
 
             // Outer parallel loop.
-#pragma omp parallel for schedule(static)
+            #pragma omp parallel for schedule(static)
             for (idx_t n = 0; n < nthr; n++) {
 
                 // Calculate begin and end points for this thread.
@@ -173,7 +174,7 @@ namespace yask {
                 omp_set_num_threads(tnthr);
 
                 // Inner parallel loop over elements.
-#pragma omp parallel for schedule(static)
+                #pragma omp parallel for schedule(static)
                 for (idx_t i = tbegin; i < tend; i += stride) {
                     idx_t stop = std::min(i + stride, end);
                     idx_t thread_num = n * tnthr + omp_get_thread_num();
@@ -181,7 +182,7 @@ namespace yask {
                 }
             }
         }
-#endif        
+        #endif        
     }
 
     // Set that retains order of things added.

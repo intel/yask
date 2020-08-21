@@ -64,6 +64,7 @@ namespace yask {
         // TODO: if >1 BB, check limits of outer one first to save time.
 
         // Set number of threads in this block.
+        // This will be the number of sub-blocks done in parallel.
         int nbt = _context->set_block_threads();
 
         // Thread-binding info.
@@ -129,48 +130,52 @@ namespace yask {
                 // copy of 'mb_idxs' except when updating scratch-vars.
                 ScanIndices adj_mb_idxs = sg->adjust_span(region_thread_idx, mb_idxs);
 
-                // If binding threads to data, start threads within a block.
-                // Each of these threads will eventually work on a separate
-                // sub-block.  This is nested within an OMP region thread.
+                // If binding threads to data.
                 if (bind_threads) {
+
+                    // Tweak settings for adjusted indices.  This sets
+                    // up the sub-blocks as multiple slabs perpendicular
+                    // to the binding dim within the mini-block.
+                    DOMAIN_VAR_LOOP(i, j) {
+
+                        // If this is the binding dim, set stride size
+                        // and alignment granularity to the slab
+                        // width. Setting the alignment keeps slabs
+                        // aligned between stages.
+                        if (i == bind_posn) {
+                            adj_mb_idxs.stride[i] = bind_slab_pts;
+                            adj_mb_idxs.align[i] = bind_slab_pts;
+                        }
+
+                        // If this is not the binding dim, set stride
+                        // size to full width.  For now, this is the
+                        // only option for mini-block shapes when
+                        // binding.  TODO: consider other options.
+                        else
+                            adj_mb_idxs.stride[i] = adj_mb_idxs.end[i] - adj_mb_idxs.begin[i];
+                    }
+
+                    TRACE_MSG("calc_mini_block('" << get_name() << "'): " <<
+                              " for reqd bundle '" << sg->get_name() << "': [" <<
+                              adj_mb_idxs.begin.make_val_str() << " ... " <<
+                              adj_mb_idxs.end.make_val_str() << ") by " <<
+                              adj_mb_idxs.stride.make_val_str() <<
+                              " by region thread " << region_thread_idx <<
+                              " with " << nbt << " block thread(s) bound to data");
+
+                    // Start threads within a block.  Each of these threads
+                    // will eventually work on a separate sub-block.  This
+                    // is nested within an OMP region thread.
                     _Pragma("omp parallel proc_bind(spread)") {
                         assert(omp_get_level() == 2);
                         assert(omp_get_num_threads() == nbt);
                         int block_thread_idx = omp_get_thread_num();
 
-                        // Tweak settings for adjusted indices.
-                        DOMAIN_VAR_LOOP(i, j) {
-
-                            // If this is the binding dim, set stride size
-                            // and alignment granularity to the slab
-                            // width. Setting the alignment keeps slabs
-                            // aligned between stages.
-                            if (i == bind_posn) {
-                                adj_mb_idxs.stride[i] = bind_slab_pts;
-                                adj_mb_idxs.align[i] = bind_slab_pts;
-                            }
-
-                            // If not binding dim, set stride size to full width.
-                            // For now, this is the only option for mini-block
-                            // shapes when binding.
-                            // TODO: consider other options.
-                            else
-                                adj_mb_idxs.stride[i] = adj_mb_idxs.end[i] - adj_mb_idxs.begin[i];
-                        }
-
-                        TRACE_MSG("calc_mini_block('" << get_name() << "'): " <<
-                                  " for reqd bundle '" << sg->get_name() << "': [" <<
-                                  adj_mb_idxs.begin.make_val_str() << " ... " <<
-                                  adj_mb_idxs.end.make_val_str() << ") by " <<
-                                  adj_mb_idxs.stride.make_val_str() <<
-                                  " by region thread " << region_thread_idx <<
-                                  " and block thread " << block_thread_idx <<
-                                  " bound to data");
-
                         // Run the mini-block loops on all block threads and
                         // call calc_sub_block() only by the designated
                         // thread for the given slab index in the binding
-                        // dim.
+                        // dim. This is an explicit replacement for "normal"
+                        // OpenMP scheduling.
                         const idx_t idx_ofs = 0x1000; // to help keep pattern when idx is neg.
 
                         #define CALC_SUB_BLOCK(mb_idxs)                 \
@@ -207,7 +212,7 @@ namespace yask {
                               adj_mb_idxs.end.make_val_str() << ") by " <<
                               adj_mb_idxs.stride.make_val_str() <<
                               " by region thread " << region_thread_idx <<
-                              " without block threads bound to data");
+                              " with " << nbt << " block thread(s) NOT bound to data");
                     
                     // Call calc_sub_block() with a different thread for
                     // each sub-block using standard OpenMP scheduling.

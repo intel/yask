@@ -1127,7 +1127,8 @@ namespace yask {
 
         // Make sure the right number of threads are set so we
         // have the right number of scratch vars.
-        int rthreads = set_region_threads();
+        int rthreads, bthreads;
+        get_num_comp_threads(rthreads, bthreads);
 
         // Delete any existing scratch vars.
         // Create new scratch vars, but without any

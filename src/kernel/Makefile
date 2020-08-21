@@ -37,9 +37,7 @@ real_bytes		?=	4
 allow_new_var_types	?=	1
 streaming_stores	?=	0
 omp			?=	1
-omp_par			?=	omp parallel
 omp_par_for		?=	omp parallel for
-omp_for			?=	omp for
 omp_target_par_for	?=	omp target parallel for
 omp_region_schedule	?=	dynamic,1
 omp_block_schedule	?=	static,1
@@ -497,11 +495,11 @@ BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_ORDER)) { \
 					bridge_mask, rank_idxs, region_idxs, block_idxs)); }
 
 # Mini-Block loops break up a mini-block into sub-blocks. The 'omp' modifier
-# creates a *nested* OpenMP loop (but not a parallem region) so that each
-# sub-block is assigned to a nested OpenMP thread. The OpenMP construct is
-# not used when running with '-bind_block_threads'.
+# creates a nested OpenMP loop so that each sub-block is assigned to a
+# nested OpenMP thread. The OpenMP construct is not used when running with
+# '-bind_block_threads'.
 MINI_BLOCK_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar adj_mb_idxs \
-				-ompMod '$(omp_for) schedule($(omp_block_schedule)) nowait'
+				-ompMod '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(spread)'
 MINI_BLOCK_LOOP_ORDER	?=	1 .. N-1
 MINI_BLOCK_LOOP_CODE	?=	$(MINI_BLOCK_LOOP_OUTER_MODS) omp loop($(MINI_BLOCK_LOOP_ORDER)) { \
 				 $(MINI_BLOCK_LOOP_INNER_MODS) call(CALC_SUB_BLOCK); }

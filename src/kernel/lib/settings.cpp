@@ -878,10 +878,12 @@ namespace yask {
         // Get max number of threads.
         int mt = max(opts->max_threads, 1);
 
-        // Reset number of OMP threads to max allowed and disable nesting.
+        // Set num threads to use for inner and outer loops.
+        yask_num_threads[0] = mt;
+        yask_num_threads[1] = 0;
+
+        // Reset number of OMP threads to max allowed.
         omp_set_num_threads(mt);
-        omp_set_nested(0);
-        omp_set_max_active_levels(1);
         return mt;
     }
 
@@ -915,8 +917,7 @@ namespace yask {
     }
 
     // Set number of threads to use for a region.
-    // Enable nested OMP if there are >1 block threads,
-    // disable otherwise.
+    // Enable nested OMP.
     // Return number of threads.
     // Do nothing and return 0 if not properly initialized.
     int KernelStateBase::set_region_threads() {
@@ -927,26 +928,15 @@ namespace yask {
         int ol = omp_get_level();
         assert(ol == 0);
 
-        // Limit outer nesting to allow num_block_threads per nested
-        // block loop.
+        // Enable nested OMP.
+        omp_set_nested(1);
+        omp_set_max_active_levels(yask_max_levels + 1); // Add 1 for offload.
+         
+        // Set num threads to use for inner and outer loops.
         yask_num_threads[0] = rt;
+        yask_num_threads[1] = bt;
 
-        if (bt > 1) {
-            omp_set_nested(1);
-            omp_set_max_active_levels(2);
-            int mal = omp_get_max_active_levels();
-            assert (mal == 2);
-            yask_num_threads[1] = bt;
-        }
-        else {
-            assert(bt == 1);
-            omp_set_nested(0);
-            omp_set_max_active_levels(1);
-            int mal = omp_get_max_active_levels();
-            assert (mal == 1);
-            yask_num_threads[1] = 0;
-        }
-
+        // Set num threads for a region.
         omp_set_num_threads(rt);
         return rt;
     }
@@ -962,12 +952,10 @@ namespace yask {
         // Must call within top parallel region.
         int ol = omp_get_level();
         assert(ol == 1);
+        int mal = omp_get_max_active_levels();
+        assert (mal >= 2);
 
-        if (bt > 1) {
-            int mal = omp_get_max_active_levels();
-            assert (mal == 2);
-            omp_set_num_threads(bt);
-        }
+        omp_set_num_threads(bt);
         return bt;
     }
 
