@@ -62,20 +62,21 @@ IN THE SOFTWARE.
 #define OFFLOAD_UPDATE_TO2(state, p, num) do {                \
         auto _nb = sizeof(*p) * num;                           \
          TRACE_MSG1(state, "#pragma omp target update to(" << \
-                    (void*)p << "[0:" << num << "])");          \
+                   (void*)p << "[0:" << num << "]); " << _nb << " bytes"); \
          YPRAGMA(omp target update to(p[0:num]))              \
             TRACE_MSG1(state, _nb << " bytes updated to device"); \
             } while(0)
 #define OFFLOAD_UPDATE_FROM2(state, p, num) do {                \
         auto _nb = sizeof(*p) * num;                             \
          TRACE_MSG1(state, "#pragma omp target update from(" << \
-                    (void*)p << "[0:" << num << "])");          \
+                  (void*)p << "[0:" << num << "]); " << _nb << " bytes"); \
          YPRAGMA(omp target update from(p[0:num]))              \
             TRACE_MSG1(state, _nb << " bytes updated from device"); \
             } while(0)
 #define OFFLOAD_MAP_FREE2(state, p, num) do {                           \
         auto _nb = sizeof(*p) * num;                                     \
-        TRACE_MSG1(state, "#pragma omp target exit data map(delete: " << (void*)p << ")"); \
+        TRACE_MSG1(state, "#pragma omp target exit data map(delete: " << \
+                  (void*)p << "[0:" << num << "]); " << _nb << " bytes"); \
         YPRAGMA(omp target exit data map(delete: p))                  \
             TRACE_MSG1(state, _nb << " device bytes freed"); \
             } while(0)
