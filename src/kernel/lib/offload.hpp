@@ -77,7 +77,7 @@ IN THE SOFTWARE.
         auto _nb = sizeof(*p) * num;                                     \
         TRACE_MSG1(state, "#pragma omp target exit data map(delete: " << \
                   (void*)p << "[0:" << num << "]); " << _nb << " bytes"); \
-        YPRAGMA(omp target exit data map(delete: p))                  \
+        YPRAGMA(omp target exit data map(delete: p[0:num]))                 \
             TRACE_MSG1(state, _nb << " device bytes freed"); \
             } while(0)
 

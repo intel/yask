@@ -944,7 +944,7 @@ namespace yask {
             "  OFFLOAD_MAP_FREE2(state, cxt_cd, 1);\n" <<
             "  auto* tcl = _thread_core_list.data();\n"
             "  auto nt = _thread_core_list.size();\n"
-            "  if (tcl) OFFLOAD_MAP_FREE2(state, tcl, nt);\n"
+            "  if (tcl && nt) OFFLOAD_MAP_FREE2(state, tcl, nt);\n"
             " }\n";
 
         // New-var method.
@@ -982,12 +982,12 @@ namespace yask {
             " TRACE_MSG(\"make_scratch_vars(\" << num_threads << \")\");\n"
             "\n  // Release old device data for thread array.\n"
             "  auto* tcl = _thread_core_list.data();\n"
-            "  auto nt = _thread_core_list.size();\n"
-            "  if (tcl) OFFLOAD_MAP_FREE2(state, tcl, nt);\n"
+            "  auto old_nt = _thread_core_list.size();\n"
+            "  if (tcl && old_nt) OFFLOAD_MAP_FREE2(state, tcl, old_nt);\n"
           "\n  // Make new array.\n"
             "  _thread_core_list.resize(num_threads);\n"
             "  tcl = _thread_core_list.data();\n"
-            "  if (tcl) OFFLOAD_MAP_ALLOC2(state, tcl, num_threads);\n"
+            "  if (tcl && num_threads) OFFLOAD_MAP_ALLOC2(state, tcl, num_threads);\n"
             "  _core_data._thread_core_list.set_and_sync(state, tcl);\n"
             "\n  // Create scratch var(s) and set core ptr(s).\n" <<
             scratch_code <<
