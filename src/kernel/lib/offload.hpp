@@ -45,10 +45,10 @@ IN THE SOFTWARE.
             } while(0)
 #define OFFLOAD_MAP_FREE(p, num) do {                                   \
         auto _nb = sizeof(*p) * num;                                     \
-        OFFLOAD_MSG("#pragma omp target exit data map(release: " <<     \
+        OFFLOAD_MSG("#pragma omp target exit data map(delete: " <<     \
                     (void*)p << "[0:" << num << "]); " << _nb << " bytes"); \
-        YPRAGMA(omp target exit data map(release: p[0:num]))            \
-            OFFLOAD_MSG(_nb << " device bytes released");      \
+        YPRAGMA(omp target exit data map(delete: p[0:num]))            \
+            OFFLOAD_MSG(_nb << " device bytes freed");      \
             } while(0)
 
 // Conditional tracing using 'state'.
@@ -75,9 +75,9 @@ IN THE SOFTWARE.
             } while(0)
 #define OFFLOAD_MAP_FREE2(state, p, num) do {                           \
         auto _nb = sizeof(*p) * num;                                     \
-        TRACE_MSG1(state, "#pragma omp target exit data map(release: " << (void*)p << ")"); \
-        YPRAGMA(omp target exit data map(release: p))                  \
-            TRACE_MSG1(state, _nb << " device bytes released"); \
+        TRACE_MSG1(state, "#pragma omp target exit data map(delete: " << (void*)p << ")"); \
+        YPRAGMA(omp target exit data map(delete: p))                  \
+            TRACE_MSG1(state, _nb << " device bytes freed"); \
             } while(0)
 
 #else
