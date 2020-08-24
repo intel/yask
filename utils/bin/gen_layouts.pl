@@ -44,7 +44,8 @@ use File::Basename;
 use lib dirname($0)."/lib";
 use lib dirname($0)."/../lib";
 
-print "// Automatically generated; do not edit.\n\n" if $opt ne '-p';
+print "// Automatically generated; do not edit.\n".
+  "#pragma once\n" if $opt ne '-p';
 
 # permute items in a list.
 # args: block of code to run on each permutation and list to permute.

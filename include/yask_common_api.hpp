@@ -31,6 +31,10 @@ IN THE SOFTWARE.
 
 #pragma once
 
+#include <cstdint>
+#include <cinttypes>
+#include <climits>
+#include <type_traits>
 #include <string>
 #include <vector>
 #include <map>

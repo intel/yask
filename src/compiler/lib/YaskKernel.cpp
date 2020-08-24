@@ -58,12 +58,14 @@ namespace yask {
             "' stencil //////\n";
 
         // Macros.
-        os << "\n#ifdef DEFINE_MACROS\n";
+        os << "\n#if defined(DEFINE_MACROS) && !defined(MACROS_DONE)\n"
+            "#define MACROS_DONE\n";
         print_macros(os);
         os << "\n#endif // DEFINE_MACROS\n";
 
         // Stencil-context code.
-        os << "\n#ifdef DEFINE_CONTEXT\n"
+        os << "\n#if defined(DEFINE_CONTEXT) && !defined(CONTEXT_DONE)\n"
+            "#define CONTEXT_DONE\n"
             "namespace yask {" << endl;
 
         // First, create a class to hold the data (vars).

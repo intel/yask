@@ -939,7 +939,8 @@ sub processCode($) {
         " * ".scalar(@dims)."-D var-scanning code.\n",
         " * Generated automatically from the following pseudo-code:\n",
         " *\n",
-        " * N = ",$#dims,";\n";
+        " * N = ",$#dims,";\n",
+        "#pragma once\n";
 
     # format input to show in the header.
     my $cmd2 = "echo '$codeString'";
