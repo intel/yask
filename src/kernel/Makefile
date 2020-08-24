@@ -902,25 +902,25 @@ DEF_TEST_ARGS := -ranks $(ranks) -stencil $(YK_STENCIL) -arch $(YK_ARCH) -v \
 	-trial_steps 2 -max_threads 6 -block_threads 2 \
 	-ep 0 -mp 0 -no-allow_addl_padding
 
-val0	:=	$(DEF_TEST_ARGS) -l 48 -r 32 -b 24 -rt 0 $(EXTRA_TEST_ARGS)
-val1	:=	$(DEF_TEST_ARGS) -l 48 -r 32 -b 24 -mb 16 -rt 1 $(EXTRA_TEST_ARGS)
-val2	:=	$(DEF_TEST_ARGS) -l 63 -r 32 -b 24 -mb 16 -rt 2 $(EXTRA_TEST_ARGS)
-val3	:=	$(DEF_TEST_ARGS) -l 63 -r 48 -b 24 -mb 16 -bt 2 $(EXTRA_TEST_ARGS)
-val4a	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -bind_block_threads $(EXTRA_TEST_ARGS)
-val4b	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -use_shm -overlap_comms $(EXTRA_TEST_ARGS)
-val4c	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -no-use_shm -no-overlap_comms $(EXTRA_TEST_ARGS)
+test_args0	:=	$(DEF_TEST_ARGS) -l 48 -r 32 -b 24 -rt 0 $(EXTRA_TEST_ARGS)
+test_args1	:=	$(DEF_TEST_ARGS) -l 48 -r 32 -b 24 -mb 16 -rt 1 $(EXTRA_TEST_ARGS)
+test_args2	:=	$(DEF_TEST_ARGS) -l 63 -r 32 -b 24 -mb 16 -rt 2 $(EXTRA_TEST_ARGS)
+test_args3	:=	$(DEF_TEST_ARGS) -l 63 -r 48 -b 24 -mb 16 -bt 2 $(EXTRA_TEST_ARGS)
+test_args4a	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -bind_block_threads $(EXTRA_TEST_ARGS)
+test_args4b	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -use_shm -overlap_comms $(EXTRA_TEST_ARGS)
+test_args4c	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -no-use_shm -no-overlap_comms $(EXTRA_TEST_ARGS)
 
 # Run the kernel binary using several combos of sizes and ranks.
 yk-tests:
-	$(YK_SCRIPT) $(val0)
-	$(YK_SCRIPT) $(val1)
-	$(YK_SCRIPT) $(val2)
-	$(YK_SCRIPT) $(val3)
-	$(YK_SCRIPT) $(val4a)
+	$(YK_SCRIPT) $(test_args0)
+	$(YK_SCRIPT) $(test_args1)
+	$(YK_SCRIPT) $(test_args2)
+	$(YK_SCRIPT) $(test_args3)
+	$(YK_SCRIPT) $(test_args4a)
 
 yk-mpi-tests:
-	$(YK_SCRIPT) $(val4b)
-	$(YK_SCRIPT) $(val4c)
+	$(YK_SCRIPT) $(test_args4b)
+	$(YK_SCRIPT) $(test_args4c)
 
 # Run the default YASK compiler and kernel.
 yc-and-yk-test: $(YK_EXEC) $(YK_SCRIPT)
@@ -969,6 +969,7 @@ endif
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_scratch_boundary_1d $(call SET_FOLD,x=4)
 
 2d-tests:
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_empty step_dim=t domain_dims=d1,d2
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_empty_2d
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_2d $(call SET_FOLD,x=2 y=2)
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_2d $(call SET_FOLD,x=2 y=2) $(call SET_CLUSTER,y=2)
@@ -1001,11 +1002,12 @@ endif
 # 3D tests w/actual seismic stencils.
 3d-tests3:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=iso3dfd radius=3 $(call SET_FOLD,x=2 y=2) domain_dims=z,x,y
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=iso3dfd_sponge radius=3 $(call SET_FOLD,x=2 z=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=iso3dfd_sponge radius=6 $(call SET_FOLD,x=2 z=2)
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=ssg $(call SET_FOLD,x=2 y=2)
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=ssg_merged $(call SET_FOLD,x=2 y=2)
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=awp $(call SET_FOLD,x=2 y=2)
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=awp_abc $(call SET_FOLD,x=2 y=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=fsg $(call SET_FOLD,x=2 y=2)
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=fsg_abc $(call SET_FOLD,x=2 y=2)
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=fsg_merged $(call SET_FOLD,x=2 y=2)
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=tti $(call SET_FOLD,x=2 y=2)
@@ -1014,7 +1016,6 @@ endif
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_4d $(call SET_FOLD,w=2 x=2)
 
 stencil-tests:
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_empty step_dim=t domain_dims=d1,d2
 	$(MAKE) 1d-tests
 	$(MAKE) 2d-tests
 	$(MAKE) 3d-tests
