@@ -52,6 +52,7 @@ else
   RUN_PREFIX	:=	env I_MPI_DEBUG=+5 I_MPI_PRINT_VERSION=1 OMP_DISPLAY_ENV=VERBOSE KMP_VERSION=1
   PYTHON	:=	python
 endif
+SHELL		:=	/bin/bash
 
 # Common source.
 COMM_DIR	:=	$(SRC_DIR)/common
