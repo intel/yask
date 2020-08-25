@@ -55,12 +55,13 @@ check			?=	0
 
 # Set 'arch' to 'intel64' when OpenMP offloading to avoid intrinsics.
 # TODO: update this when OpenMP offload intrinsics are available.
-# Also turn off MPI.
-# TODO: update when MPI allowed with OpenMP offload.
+# Also turn off MPI and prefetching for now.
 ifeq ($(offload),1)
+ YK_ARCH		:=	offload
  arch			:=	intel64
  mpi			:= 	0
- YK_ARCH		:=	offload
+ pfd_l1			:=	0
+ pfd_l2			:=	0
 endif
 
 # If 'arch' isn't set, determine default architecture by running kernel
