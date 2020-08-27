@@ -23,17 +23,99 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// This file contains implementations of StencilContext and
-// StencilBundleBase methods specific to the preparation steps.
+// This file contains implementations of configuration-related methods
+// from several classes.
 
 #include "yask_stencil.hpp"
 using namespace std;
 
 namespace yask {
 
-    // Stop collecting VTune data when a factory is defined.
-    // Even better to use -start-paused option.
+    // Init MPI, OMP.
+    void KernelEnv::init_env(int* argc, char*** argv, MPI_Comm existing_comm)
+    {
+        // MPI init.
+        my_rank = 0;
+        num_ranks = 1;
+
+#ifdef USE_MPI
+        int is_init = false;
+        MPI_Initialized(&is_init);
+
+        // No MPI communicator provided.
+        if (existing_comm == MPI_COMM_NULL ||
+            existing_comm == MPI_COMM_WORLD) {
+            if (!is_init) {
+                int provided = 0;
+                MPI_Init_thread(argc, argv, MPI_THREAD_MULTIPLE, &provided);
+                if (provided < MPI_THREAD_SERIALIZED) {
+                    THROW_YASK_EXCEPTION("error: MPI_THREAD_SERIALIZED or MPI_THREAD_MULTIPLE not provided");
+                }
+                is_init = true;
+            }
+            comm = MPI_COMM_WORLD;
+        }
+
+        // MPI communicator provided.
+        else {
+            if (!is_init)
+                THROW_YASK_EXCEPTION("error: YASK environment created with"
+                                     " an existing MPI communicator, but MPI is not initialized");
+            comm = existing_comm;
+        }
+
+        // Get some info on this communicator.
+        MPI_Comm_rank(comm, &my_rank);
+        MPI_Comm_group(comm, &group);
+        MPI_Comm_size(comm, &num_ranks);
+        if (num_ranks < 1)
+            THROW_YASK_EXCEPTION("error: MPI_Comm_size() returns less than one rank");
+
+        // Create a shm communicator.
+        MPI_Comm_split_type(comm, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &shm_comm);
+        MPI_Comm_rank(shm_comm, &my_shm_rank);
+        MPI_Comm_group(shm_comm, &shm_group);
+        MPI_Comm_size(shm_comm, &num_shm_ranks);
+
+#else
+        comm = MPI_COMM_NULL;
+#endif
+
+        // Turn off denormals unless the USE_DENORMALS macro is set.
+#ifndef USE_DENORMALS
+        // Enable FTZ
+        _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
+
+        //Enable DAZ
+        _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
+#endif
+
+        // Set env vars needed by OMP.
+        // TODO: make this visible to the user.
+        int ret = setenv("OMP_PLACES", "cores", 0); // default placement for outer loop.
+        assert(ret == 0);
+        ret = setenv("KMP_HOT_TEAMS_MODE", "1", 0); // more efficient nesting.
+        assert(ret == 0);
+        ret = setenv("KMP_HOT_TEAMS_MAX_LEVEL", "2", 0); // 2-level nesting.
+
+        // Check initial value of OMP max threads.
+        // Side effect: causes OMP to dump debug info if env var set.
+        int mt = omp_get_max_threads();
+        if (!max_threads)
+            max_threads = mt;
+
+        #ifdef USE_OFFLOAD
+        _omp_hostn = omp_get_initial_device();
+        _omp_devn = omp_get_default_device();
+        #endif
+    }
+
+    // Bootstrap factory ctor.
     yk_factory::yk_factory() {
+
+        // Stop collecting VTune data when a factory is defined,
+        // so we can start it again when starting a kernel.
+        // Even better to use -start-paused option.
         VTUNE_PAUSE;
     }
 
@@ -1187,27 +1269,4 @@ namespace yask {
             output_var_map[gname] = gp;
         }
     }
-
-    // Copy vars from host to device.
-    // TODO: copy only when needed.
-    void StencilContext::copy_vars_to_device() {
-        #if USE_OFFLOAD
-        for (auto gp : orig_var_ptrs) {
-            assert(gp);
-            gp->gb().copy_data_to_device();
-        }
-        #endif
-    }
-    
-    // Copy output vars from device to host.
-    // TODO: copy only when needed.
-    void StencilContext::copy_vars_from_device() {
-        #if USE_OFFLOAD
-        for (auto gp : output_var_ptrs) {
-            assert(gp);
-            gp->gb().copy_data_from_device();
-        }
-        #endif
-    }
-    
 } // namespace yask.

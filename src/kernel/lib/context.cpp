@@ -1993,4 +1993,26 @@ namespace yask {
         }
     }
 
+    // Copy vars from host to device.
+    // TODO: copy only when needed.
+    void StencilContext::copy_vars_to_device() {
+        #if USE_OFFLOAD
+        for (auto gp : orig_var_ptrs) {
+            assert(gp);
+            gp->gb().copy_data_to_device();
+        }
+        #endif
+    }
+    
+    // Copy output vars from device to host.
+    // TODO: copy only when needed.
+    void StencilContext::copy_vars_from_device() {
+        #if USE_OFFLOAD
+        for (auto gp : output_var_ptrs) {
+            assert(gp);
+            gp->gb().copy_data_from_device();
+        }
+        #endif
+    }
+    
 } // namespace yask.

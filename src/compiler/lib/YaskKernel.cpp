@@ -965,7 +965,7 @@ namespace yask {
                 " void set_core() override {\n"
                 "  auto* cxt_cd = &_core_data;\n"
                 "  cxt_cd->_common_core.set_core(this);\n"
-                "  OFFLOAD_UPDATE_TO(cxt_cd, 1);\n" <<
+                "  offload_copy_to_device(cxt_cd, 1);\n" <<
                 core_code <<
                 " }\n";
             os << "\n // Access the core data.\n"

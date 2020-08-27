@@ -220,38 +220,69 @@ namespace yask {
     }
 
     // Unmap 'hostp' on offload device.
+    // Automatically looks up dev ptr.
     // Free space for 'num' 'T' objects on offload device.
     template <typename T>
     void offload_map_free(T* hostp, size_t num) {
         void* devp = synced_ptr<T>::get_dev_ptr(hostp);
         offload_map_free(devp, hostp, num);
     }
-    
-    #define OFFLOAD_UPDATE_TO(p, num) do {                      \
-            auto _nb = sizeof(*p) * num;                                \
-            TRACE_MSG("#pragma omp target update to(" <<        \
-                       (void*)p << "[0:" << num << "]); " << _nb << " bytes"); \
-            YPRAGMA(omp target update to(p[0:num]))                     \
-                TRACE_MSG(_nb << " bytes updated to device");   \
-        } while(0)
-    #define OFFLOAD_UPDATE_FROM(p, num) do {                    \
-            auto _nb = sizeof(*p) * num;                                \
-            TRACE_MSG("#pragma omp target update from(" <<      \
-                       (void*)p << "[0:" << num << "]); " << _nb << " bytes"); \
-            YPRAGMA(omp target update from(p[0:num]))                   \
-                TRACE_MSG(_nb << " bytes updated from device"); \
-        } while(0)
+
+    // Copy data to device.
+    template <typename T>
+    void offload_copy_to_device(void* devp, T* hostp, size_t num) {
+        assert(hostp);
+        assert(devp);
+        auto nb = sizeof(T) * num;
+        auto devn = KernelEnv::_omp_devn;
+        TRACE_MSG("copying " << make_byte_str(nb) << " to OMP dev " << devn);
+        assert(omp_target_is_present(hostp, devn));
+        auto res = omp_target_memcpy(devp, hostp, // dst, src.
+                                     nb, 0, 0,
+                                     devn, KernelEnv::_omp_hostn);
+        TRACE_MSG("done copying to OMP dev");
+    }
+    template <typename T>
+    void offload_copy_to_device(T* hostp, size_t num) {
+        void* devp = synced_ptr<T>::get_dev_ptr(hostp);
+        offload_copy_to_device(devp, hostp, num);
+    }
+
+    // Copy data from device.
+    template <typename T>
+    void offload_copy_from_device(void* devp, T* hostp, size_t num) {
+        assert(hostp);
+        assert(devp);
+        auto nb = sizeof(T) * num;
+        auto devn = KernelEnv::_omp_devn;
+        TRACE_MSG("copying " << make_byte_str(nb) << " from OMP dev " << devn);
+        assert(omp_target_is_present(hostp, devn));
+        auto res = omp_target_memcpy(hostp, devp, // dst, src.
+                                     nb, 0, 0,
+                                     KernelEnv::_omp_hostn, devn);
+        TRACE_MSG("done copying from OMP dev");
+    }
+    template <typename T>
+    void offload_copy_from_device(T* hostp, size_t num) {
+        void* devp = synced_ptr<T>::get_dev_ptr(hostp);
+        offload_copy_from_device(devp, hostp, num);
+    }
 
     #else
     template <typename T>
-    void* offload_map_alloc(T* hostp, size_t num) { return NULL; }
+    void* offload_map_alloc(T* hostp, size_t num) { return hostp; }
     template <typename T>
     void offload_map_free(void* devp, T* hostp, size_t num) { }
     template <typename T>
     void offload_map_free(T* hostp, size_t num) { }
-
-    #define OFFLOAD_UPDATE_TO(p, num) ((void)0)
-    #define OFFLOAD_UPDATE_FROM(p, num) ((void)0)
+    template <typename T>
+    void offload_copy_to_device(void* devp, T* hostp, size_t num) { }
+    template <typename T>
+    void offload_copy_to_device(T* hostp, size_t num) { }
+    template <typename T>
+    void offload_copy_from_device(void* devp, T* hostp, size_t num) { }
+    template <typename T>
+    void offload_copy_from_device(T* hostp, size_t num) { }
 
     #endif
 

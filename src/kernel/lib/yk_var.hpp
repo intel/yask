@@ -723,14 +723,14 @@ namespace yask {
             void* vp = get_storage();
             char* cp = static_cast<char*>(vp);
             auto nb = get_num_bytes();
-            OFFLOAD_UPDATE_TO(cp, nb);
+            offload_copy_to_device(cp, nb);
         }
         void copy_data_from_device() {
             STATE_VARS(this);
             void* vp = get_storage();
             char* cp = static_cast<char*>(vp);
             auto nb = get_num_bytes();
-            OFFLOAD_UPDATE_FROM(cp, nb);
+            offload_copy_from_device(cp, nb);
         }
 
         // Set elements.
@@ -837,7 +837,7 @@ namespace yask {
         void sync_core() override {
             STATE_VARS(this);
             auto* var_cp = &_core;
-            OFFLOAD_UPDATE_TO(var_cp, 1);
+            offload_copy_to_device(_core_devp, var_cp, 1);
             _data.sync_data_ptr();
         }
         
@@ -984,7 +984,7 @@ namespace yask {
         void sync_core() override {
             STATE_VARS(this);
             auto* var_cp = &_core;
-            OFFLOAD_UPDATE_TO(var_cp, 1);
+            offload_copy_to_device(_core_devp, var_cp, 1);
             _data.sync_data_ptr();
         }
         
