@@ -271,10 +271,10 @@ int main(int argc, char** argv)
         // Parse custom options once just to get vars needed for env.
         MySettings opts1(nullptr);
         opts1.parse(argc, argv);
+        yk_env::set_trace_enabled(opts1.do_trace);
         
         // Set up the environment (mostly MPI).
         auto kenv = kfac.new_env();
-        kenv->set_trace_enabled(opts1.do_trace);
         if (opts1.msg_rank == kenv->get_rank_index())
             yk_env::set_debug_output(yof.new_stdout_output());
         else

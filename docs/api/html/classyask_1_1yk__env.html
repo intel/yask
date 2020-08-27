@@ -68,6 +68,7 @@ $(function() {
 <div class="header">
   <div class="summary">
 <a href="#pub-methods">Public Member Functions</a> &#124;
+<a href="#pub-static-methods">Static Public Member Functions</a> &#124;
 <a href="classyask_1_1yk__env-members.html">List of all members</a>  </div>
   <div class="headertitle">
 <div class="title">yask::yk_env Class Reference<span class="mlabels"><span class="mlabel">abstract</span></span><div class="ingroups"><a class="el" href="group__yk.html">YASK Kernel</a></div></div>  </div>
@@ -81,15 +82,6 @@ $(function() {
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
-<tr class="memitem:a313519caed64266832618f0b00e8f45f"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__env.html#a313519caed64266832618f0b00e8f45f">set_debug_output</a> (<a class="el" href="group__yask.html#ga605185252a3f3f917593c83b7dde4b66">yask_output_ptr</a> debug)=0</td></tr>
-<tr class="memdesc:a313519caed64266832618f0b00e8f45f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set object to receive debug output.  <a href="#a313519caed64266832618f0b00e8f45f">More...</a><br /></td></tr>
-<tr class="separator:a313519caed64266832618f0b00e8f45f"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:abc475dee318fbe26cad93cc205c90de4"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga605185252a3f3f917593c83b7dde4b66">yask_output_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__env.html#abc475dee318fbe26cad93cc205c90de4">get_debug_output</a> () const =0</td></tr>
-<tr class="memdesc:abc475dee318fbe26cad93cc205c90de4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get object to receive debug output.  <a href="#abc475dee318fbe26cad93cc205c90de4">More...</a><br /></td></tr>
-<tr class="separator:abc475dee318fbe26cad93cc205c90de4"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a1705f55210c095cec5d8347bacd24c57"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__env.html#a1705f55210c095cec5d8347bacd24c57">set_trace_enabled</a> (bool enable)=0</td></tr>
-<tr class="memdesc:a1705f55210c095cec5d8347bacd24c57"><td class="mdescLeft">&#160;</td><td class="mdescRight">Enable or disable additional debug tracing.  <a href="#a1705f55210c095cec5d8347bacd24c57">More...</a><br /></td></tr>
-<tr class="separator:a1705f55210c095cec5d8347bacd24c57"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:add8b12cd6d10f964665a41acedbb9b14"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__env.html#add8b12cd6d10f964665a41acedbb9b14">get_num_ranks</a> () const =0</td></tr>
 <tr class="memdesc:add8b12cd6d10f964665a41acedbb9b14"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get number of MPI ranks.  <a href="#add8b12cd6d10f964665a41acedbb9b14">More...</a><br /></td></tr>
 <tr class="separator:add8b12cd6d10f964665a41acedbb9b14"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -99,13 +91,28 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a2384185b4d346418a62db1310a3dddca"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__env.html#a2384185b4d346418a62db1310a3dddca">global_barrier</a> () const =0</td></tr>
 <tr class="memdesc:a2384185b4d346418a62db1310a3dddca"><td class="mdescLeft">&#160;</td><td class="mdescRight">Wait until all ranks have reached this element.  <a href="#a2384185b4d346418a62db1310a3dddca">More...</a><br /></td></tr>
 <tr class="separator:a2384185b4d346418a62db1310a3dddca"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-static-methods"></a>
+Static Public Member Functions</h2></td></tr>
+<tr class="memitem:aa5cf0e8d885f4d9ebde6539d5246cda1"><td class="memItemLeft" align="right" valign="top">static void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__env.html#aa5cf0e8d885f4d9ebde6539d5246cda1">set_debug_output</a> (<a class="el" href="group__yask.html#ga605185252a3f3f917593c83b7dde4b66">yask_output_ptr</a> debug)</td></tr>
+<tr class="memdesc:aa5cf0e8d885f4d9ebde6539d5246cda1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set object to receive debug output.  <a href="#aa5cf0e8d885f4d9ebde6539d5246cda1">More...</a><br /></td></tr>
+<tr class="separator:aa5cf0e8d885f4d9ebde6539d5246cda1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a69eac2bb8a841f6259697a7dcc8cf386"><td class="memItemLeft" align="right" valign="top">static <a class="el" href="group__yask.html#ga605185252a3f3f917593c83b7dde4b66">yask_output_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__env.html#a69eac2bb8a841f6259697a7dcc8cf386">get_debug_output</a> ()</td></tr>
+<tr class="memdesc:a69eac2bb8a841f6259697a7dcc8cf386"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get object to receive debug output.  <a href="#a69eac2bb8a841f6259697a7dcc8cf386">More...</a><br /></td></tr>
+<tr class="separator:a69eac2bb8a841f6259697a7dcc8cf386"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac6b39c25ae59e27dcdb405a9fe24e763"><td class="memItemLeft" align="right" valign="top">static void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__env.html#ac6b39c25ae59e27dcdb405a9fe24e763">set_trace_enabled</a> (bool enable)</td></tr>
+<tr class="memdesc:ac6b39c25ae59e27dcdb405a9fe24e763"><td class="mdescLeft">&#160;</td><td class="mdescRight">Enable or disable additional debug tracing.  <a href="#ac6b39c25ae59e27dcdb405a9fe24e763">More...</a><br /></td></tr>
+<tr class="separator:ac6b39c25ae59e27dcdb405a9fe24e763"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:abe162669b192b8c650ee7dbfbd62bb7d"><td class="memItemLeft" align="right" valign="top">static bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__env.html#abe162669b192b8c650ee7dbfbd62bb7d">is_trace_enabled</a> ()</td></tr>
+<tr class="memdesc:abe162669b192b8c650ee7dbfbd62bb7d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get whether tracing is enabled.  <a href="#abe162669b192b8c650ee7dbfbd62bb7d">More...</a><br /></td></tr>
+<tr class="separator:abe162669b192b8c650ee7dbfbd62bb7d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Kernel environment. </p>
 <p>Created via <a class="el" href="classyask_1_1yk__factory.html#afccc05b0095d99f89b7164b603b53d00" title="Create an object to hold environment information.">yk_factory::new_env()</a>. </p>
 </div><h2 class="groupheader">Member Function Documentation</h2>
-<a id="a313519caed64266832618f0b00e8f45f"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a313519caed64266832618f0b00e8f45f">&#9670;&nbsp;</a></span>set_debug_output()</h2>
+<a id="aa5cf0e8d885f4d9ebde6539d5246cda1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa5cf0e8d885f4d9ebde6539d5246cda1">&#9670;&nbsp;</a></span>set_debug_output()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -114,7 +121,7 @@ Public Member Functions</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">virtual void yask::yk_env::set_debug_output </td>
+          <td class="memname">static void yask::yk_env::set_debug_output </td>
           <td>(</td>
           <td class="paramtype"><a class="el" href="group__yask.html#ga605185252a3f3f917593c83b7dde4b66">yask_output_ptr</a>&#160;</td>
           <td class="paramname"><em>debug</em></td><td>)</td>
@@ -123,12 +130,16 @@ Public Member Functions</h2></td></tr>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
 
 <p>Set object to receive debug output. </p>
+<p>This is a static method, implying the following:</p><ul>
+<li>This setting may be changed before creating a <code><a class="el" href="classyask_1_1yk__env.html" title="Kernel environment.">yk_env</a></code> object.</li>
+<li>Calling this method applies settings globally. </li>
+</ul>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[out]</td><td class="paramname">debug</td><td>Pointer to object to receive debug output. See <a class="el" href="classyask_1_1yask__output__factory.html">yask_output_factory</a>. </td></tr>
@@ -138,8 +149,8 @@ Public Member Functions</h2></td></tr>
 
 </div>
 </div>
-<a id="abc475dee318fbe26cad93cc205c90de4"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#abc475dee318fbe26cad93cc205c90de4">&#9670;&nbsp;</a></span>get_debug_output()</h2>
+<a id="a69eac2bb8a841f6259697a7dcc8cf386"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a69eac2bb8a841f6259697a7dcc8cf386">&#9670;&nbsp;</a></span>get_debug_output()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -148,26 +159,29 @@ Public Member Functions</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">virtual <a class="el" href="group__yask.html#ga605185252a3f3f917593c83b7dde4b66">yask_output_ptr</a> yask::yk_env::get_debug_output </td>
+          <td class="memname">static <a class="el" href="group__yask.html#ga605185252a3f3f917593c83b7dde4b66">yask_output_ptr</a> yask::yk_env::get_debug_output </td>
           <td>(</td>
           <td class="paramname"></td><td>)</td>
-          <td> const</td>
+          <td></td>
         </tr>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
 
 <p>Get object to receive debug output. </p>
-<p>Returns pointer to <a class="el" href="classyask_1_1yask__output.html">yask_output</a> set via set_debug_output or pointer to a <a class="el" href="classyask_1_1yask__stdout__output.html">yask_stdout_output</a> if not set. </p>
+<p>This is a static method, implying the following:</p><ul>
+<li>This method may be called before creating a <code><a class="el" href="classyask_1_1yk__env.html" title="Kernel environment.">yk_env</a></code> object.</li>
+</ul>
+<dl class="section return"><dt>Returns</dt><dd>Pointer to <a class="el" href="classyask_1_1yask__output.html">yask_output</a> set via set_debug_output or pointer to a <a class="el" href="classyask_1_1yask__stdout__output.html">yask_stdout_output</a> if not set. </dd></dl>
 
 </div>
 </div>
-<a id="a1705f55210c095cec5d8347bacd24c57"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a1705f55210c095cec5d8347bacd24c57">&#9670;&nbsp;</a></span>set_trace_enabled()</h2>
+<a id="ac6b39c25ae59e27dcdb405a9fe24e763"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac6b39c25ae59e27dcdb405a9fe24e763">&#9670;&nbsp;</a></span>set_trace_enabled()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -176,7 +190,7 @@ Public Member Functions</h2></td></tr>
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">virtual void yask::yk_env::set_trace_enabled </td>
+          <td class="memname">static void yask::yk_env::set_trace_enabled </td>
           <td>(</td>
           <td class="paramtype">bool&#160;</td>
           <td class="paramname"><em>enable</em></td><td>)</td>
@@ -185,13 +199,48 @@ Public Member Functions</h2></td></tr>
       </table>
   </td>
   <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
   </tr>
 </table>
 </div><div class="memdoc">
 
 <p>Enable or disable additional debug tracing. </p>
+<p>This is a static method, implying the following:</p><ul>
+<li>This setting may be changed before creating a <code><a class="el" href="classyask_1_1yk__env.html" title="Kernel environment.">yk_env</a></code> object.</li>
+<li>Calling this method applies settings globally.</li>
+</ul>
 <p>Must also compile with general tracing and/or memory-access tracing enabled. </p>
+
+</div>
+</div>
+<a id="abe162669b192b8c650ee7dbfbd62bb7d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abe162669b192b8c650ee7dbfbd62bb7d">&#9670;&nbsp;</a></span>is_trace_enabled()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static bool yask::yk_env::is_trace_enabled </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get whether tracing is enabled. </p>
+<p>This is a static method, implying the following:</p><ul>
+<li>This method may be called before creating a <code><a class="el" href="classyask_1_1yk__env.html" title="Kernel environment.">yk_env</a></code> object.</li>
+</ul>
+<dl class="section return"><dt>Returns</dt><dd>Whether tracing is enabled. </dd></dl>
 
 </div>
 </div>

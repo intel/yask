@@ -44,7 +44,6 @@ namespace yask {
         // Additional data when printing debug info.
         #ifdef TRACE
         T** _dpp = 0;               // loc of ptr on device.
-        int _devn = 0;              // device num.
         #endif
         #endif
 
@@ -61,6 +60,9 @@ namespace yask {
 
                 // Value on host; converted to target ptr in 'omp target'.
                 T* p = _p;
+                auto devn = KernelEnv::_omp_devn;
+                if (p)
+                    assert(omp_target_is_present(p, devn));
 
                 // Temp var to capture device data.
                 T* dp;
@@ -71,26 +73,23 @@ namespace yask {
 
                 // Temp vars to capture device data.
                 T** dpp;
-                int devn;
 
                 // Set pointer on device and copy back to host.
-                #pragma omp target device(KernelEnv::_omp_devn) map(from: dp,dpp,devn)
+                #pragma omp target device(devn) map(from: dp,dpp)
                 {
                     _p = p;
                     dp = p;
                     dpp = pp;
-                    devn = omp_get_device_num();
                 }
 
                 // Update values.
-                _devn = devn;
                 _dpp = dpp;
 
                 // Without tracing.
                 #else
 
                 // Set pointer on device and copy back to host.
-                #pragma omp target device(KernelEnv::_omp_devn) map(from: dp)
+                #pragma omp target device(devn) map(from: dp)
                 {
                     _p = p;
                     dp = p;
@@ -138,9 +137,10 @@ namespace yask {
         bool sync() {
             bool done = _sync(true);
             #if defined(USE_OFFLOAD) && defined(TRACE)
+            auto devn = KernelEnv::_omp_devn;
             TRACE_MSG("omp: ptr to " << _hp << " on host at " << (void*)&_hp <<
                        (done ? "" : "already") << " set to " << _dp <<
-                       " on device " << _devn << " at " << (void*)_dpp <<
+                       " on device " << devn << " at " << (void*)_dpp <<
                        ((_dpp == 0) ? " *******" : ""));
             #endif
             return done;
@@ -155,12 +155,17 @@ namespace yask {
         // Get device ptr from any host ptr.
         static T* get_dev_ptr(T* hostp) {
             #ifdef USE_OFFLOAD
+            auto devn = KernelEnv::_omp_devn;
+            if (hostp)
+                assert(omp_target_is_present(hostp, devn));
+            else
+                return NULL;
 
             // Temp var to capture device data.
             T* dp = 0;
-                
+
             // Get pointer on device.
-            #pragma omp target device(KernelEnv::_omp_devn) map(from: dp)
+            #pragma omp target device(devn) map(from: dp)
             {
                 dp = hostp;
             }
@@ -180,6 +185,7 @@ namespace yask {
     // Return device ptr.
     template <typename T>
     void* offload_map_alloc(T* hostp, size_t num) {
+        assert(hostp);
         auto nb = sizeof(T) * num;
         auto devn = KernelEnv::_omp_devn;
         TRACE_MSG("allocating " << make_byte_str(nb) << " on OMP dev " << devn);
@@ -190,6 +196,7 @@ namespace yask {
         auto res = omp_target_associate_ptr(hostp, devp, nb, 0, devn);
         if (res)
             THROW_YASK_EXCEPTION("error: cannot map OMP device ptr");
+        assert(omp_target_is_present(hostp, devn));
         TRACE_MSG("done allocating and mapping");
         return devp;
     }
@@ -198,9 +205,12 @@ namespace yask {
     // Free space for 'num' 'T' objects on offload device.
     template <typename T>
     void offload_map_free(void* devp, T* hostp, size_t num) {
+        assert(hostp);
+        assert(devp);
         auto nb = sizeof(T) * num;
         auto devn = KernelEnv::_omp_devn;
         TRACE_MSG("unmapping " << (void*)hostp << " from " << devp << " on OMP dev " << devn);
+        assert(omp_target_is_present(hostp, devn));
         auto res = omp_target_disassociate_ptr(hostp, devn);
         if (res)
             THROW_YASK_EXCEPTION("error: cannot unmap OMP device ptr");

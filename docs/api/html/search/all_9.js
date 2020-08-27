@@ -13,5 +13,6 @@ var searchData=
   ['is_5ffolding_5fset',['is_folding_set',['../classyask_1_1yc__solution.html#abaefa9675e9551ec10b9eee0016a0822',1,'yask::yc_solution']]],
   ['is_5fstorage_5fallocated',['is_storage_allocated',['../classyask_1_1yk__var.html#a3b09855a3cfa7e43c32fc43a24503340',1,'yask::yk_var']]],
   ['is_5fstorage_5flayout_5fidentical',['is_storage_layout_identical',['../classyask_1_1yk__var.html#a3611ad6d130cb5ee7e030e6ad0c24f5b',1,'yask::yk_var']]],
-  ['is_5ftarget_5fset',['is_target_set',['../classyask_1_1yc__solution.html#abc13ff80f75eac42bb7300c24246f78c',1,'yask::yc_solution']]]
+  ['is_5ftarget_5fset',['is_target_set',['../classyask_1_1yc__solution.html#abc13ff80f75eac42bb7300c24246f78c',1,'yask::yc_solution']]],
+  ['is_5ftrace_5fenabled',['is_trace_enabled',['../classyask_1_1yk__env.html#abe162669b192b8c650ee7dbfbd62bb7d',1,'yask::yk_env']]]
 ];

@@ -817,6 +817,7 @@ namespace yask {
         core_t _core;
         static_assert(std::is_trivially_copyable<core_t>::value,
                       "Needed for OpenMP offload");
+        void* _core_devp = 0;   // Ptr to core on device.
 
         // Storage meta-data.
         // Owned here via composition.
@@ -831,8 +832,8 @@ namespace yask {
             return &_data;
         }
 
-        // Sync core on device.
-        // Does NOT sync underlying data.
+        // Sync core meta-data on device.
+        // Does NOT sync underlying var data.
         void sync_core() override {
             STATE_VARS(this);
             auto* var_cp = &_core;
@@ -864,7 +865,7 @@ namespace yask {
 
             // Create core on offload device.
             auto* var_cp = &_core;
-            offload_map_alloc(var_cp, 1);
+            _core_devp = offload_map_alloc(var_cp, 1);
              
             resize();
         }
@@ -875,7 +876,7 @@ namespace yask {
 
             // Release core from device.
             auto* var_cp = &_core;
-            offload_map_free(env, var_cp, 1);
+            offload_map_free(_core_devp, var_cp, 1);
         }
         
         // Make a human-readable description.
@@ -963,6 +964,7 @@ namespace yask {
         core_t _core;
         static_assert(std::is_trivially_copyable<core_t>::value,
                       "Needed for OpenMP offload");
+        void* _core_devp = 0;   // Ptr to core on device.
 
         // Storage meta-data.
         // Owned here via composition.
@@ -1030,7 +1032,7 @@ namespace yask {
 
             // Create core on offload device.
             auto* var_cp = &_core;
-            offload_map_alloc(var_cp, 1);
+            _core_devp = offload_map_alloc(var_cp, 1);
 
             resize();
         }
@@ -1041,7 +1043,7 @@ namespace yask {
 
             // Release core from device.
             auto* var_cp = &_core;
-            offload_map_free(env, var_cp, 1);
+            offload_map_free(_core_devp, var_cp, 1);
         }
         
         // Make a human-readable description.

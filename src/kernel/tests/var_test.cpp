@@ -41,10 +41,12 @@ void run_tests(int argc, char* argv[]) {
 
     // Bootstrap factory from kernel API.
     yk_factory kfac;
+    yask_output_factory yof;
 
     // Set up the environment (e.g., OpenMP & MPI).
+    yk_env::set_trace_enabled(true);
+    yk_env::set_debug_output(yof.new_stdout_output());
     auto kenv = kfac.new_env();
-    kenv->set_trace_enabled(true);
 
     // Object containing data and parameters for stencil eval.
     // TODO: do everything through API without cast to StencilContext.
@@ -63,6 +65,7 @@ void run_tests(int argc, char* argv[]) {
     // Set domain size.
     int i = 0;
     for (auto dname : ksoln->get_domain_dim_names()) {
+
         ksoln->set_rank_domain_size(dname, 9 + i++);
     }
 
