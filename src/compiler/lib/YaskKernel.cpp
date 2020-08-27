@@ -787,7 +787,7 @@ namespace yask {
                 // Core init for this var.
                 core_code +=
                     "  auto* " + core_ptr + " = static_cast<" + core_t + "*>(" + var_ptr + "->corep());\n"
-                    "  cxt_cd->" + core_ptr + ".set_and_sync(state, " + core_ptr + ");\n";
+                    "  cxt_cd->" + core_ptr + ".set_and_sync(" + core_ptr + ");\n";
             }
 
             // For scratch, make code to fill vector.
@@ -804,7 +804,7 @@ namespace yask {
 
                     // Init core ptr for this var.
                     " auto* cp = static_cast<" + core_t + "*>(" + var_ptr + "->corep());\n"
-                    " _core_data._thread_core_list[i]." + core_ptr + ".set_and_sync(state, cp);\n"
+                    " _core_data._thread_core_list[i]." + core_ptr + ".set_and_sync(cp);\n"
 
                     " }\n";
             }
@@ -929,7 +929,7 @@ namespace yask {
 
             os << "\n // Alloc core on offload device.\n"
                 "  auto* cxt_cd = &_core_data;\n"
-                "  OFFLOAD_MAP_ALLOC2(state, cxt_cd, 1);\n";
+                "  offload_map_alloc(cxt_cd, 1);\n";
                 
             os << "\n // Call code provided by user.\n" <<
                 _context_hook << "::call_after_new_solution(*this);\n";
@@ -943,10 +943,10 @@ namespace yask {
             " virtual ~" << _context << "() {\n"
             "  STATE_VARS(this);\n"
             "  auto* cxt_cd = &_core_data;\n"
-            "  OFFLOAD_MAP_FREE2(state, cxt_cd, 1);\n" <<
+            "  offload_map_free(cxt_cd, 1);\n" <<
             "  auto* tcl = _thread_core_list.data();\n"
             "  auto nt = _thread_core_list.size();\n"
-            "  if (tcl && nt) OFFLOAD_MAP_FREE2(state, tcl, nt);\n"
+            "  if (tcl && nt) offload_map_free(tcl, nt);\n"
             " }\n";
 
         // New-var method.
@@ -963,10 +963,9 @@ namespace yask {
         {
             os << "\n // Set the core pointers of the non-scratch vars and copy some other info.\n"
                 " void set_core() override {\n"
-                "  STATE_VARS(this);\n"
                 "  auto* cxt_cd = &_core_data;\n"
                 "  cxt_cd->_common_core.set_core(this);\n"
-                "  OFFLOAD_UPDATE_TO2(state, cxt_cd, 1);\n" <<
+                "  OFFLOAD_UPDATE_TO(cxt_cd, 1);\n" <<
                 core_code <<
                 " }\n";
             os << "\n // Access the core data.\n"
@@ -985,12 +984,12 @@ namespace yask {
             "\n  // Release old device data for thread array.\n"
             "  auto* tcl = _thread_core_list.data();\n"
             "  auto old_nt = _thread_core_list.size();\n"
-            "  if (tcl && old_nt) OFFLOAD_MAP_FREE2(state, tcl, old_nt);\n"
+            "  if (tcl && old_nt) offload_map_free(tcl, old_nt);\n"
           "\n  // Make new array.\n"
             "  _thread_core_list.resize(num_threads);\n"
             "  tcl = _thread_core_list.data();\n"
-            "  if (tcl && num_threads) OFFLOAD_MAP_ALLOC2(state, tcl, num_threads);\n"
-            "  _core_data._thread_core_list.set_and_sync(state, tcl);\n"
+            "  if (tcl && num_threads) offload_map_alloc(tcl, num_threads);\n"
+            "  _core_data._thread_core_list.set_and_sync(tcl);\n"
             "\n  // Create scratch var(s) and set core ptr(s).\n" <<
             scratch_code <<
             " } // make_scratch_vars\n";

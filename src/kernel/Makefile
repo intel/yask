@@ -1008,10 +1008,10 @@ endif
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=ssg_merged $(call SET_FOLD,x=2 y=2)
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=awp $(call SET_FOLD,x=2 y=2)
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=awp_abc $(call SET_FOLD,x=2 y=2)
+	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=tti $(call SET_FOLD,x=2 y=2)
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=fsg $(call SET_FOLD,x=2 y=2)
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=fsg_abc $(call SET_FOLD,x=2 y=2)
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=fsg_merged $(call SET_FOLD,x=2 y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=tti $(call SET_FOLD,x=2 y=2)
 
 4d-tests:
 	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_4d $(call SET_FOLD,w=2 x=2)
@@ -1024,8 +1024,11 @@ stencil-tests:
 	$(MAKE) 3d-tests3
 	$(MAKE) 4d-tests
 
-all-tests:
+unit-tests:
 	$(MAKE) clean; $(MAKE) cxx-yk-var-test stencil=test_3d $(call SET_FOLD,x=2 y=2)
+
+all-tests:
+	$(MAKE) unit-tests
 	$(MAKE) stencil-tests
 	$(MAKE) api-tests
 

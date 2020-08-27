@@ -137,16 +137,16 @@ struct MySettings {
                            num_trials));
         parser.add_option(new CommandLineParser::IntOption
                           ("t",
-                           "Alias for '-num_trials'; for backward-compatibility.",
+                           "[Deprecated] Use '-num_trials'.",
                            num_trials));
         parser.add_option(new CommandLineParser::IntOption
                           ("trial_steps",
                            "Number of steps to run each performance trial. "
-                           "If zero, the 'trial_time' value is used.",
+                           "If zero, the 'trial_time' value is used to determine the number of steps to run.",
                            trial_steps));
         parser.add_option(new CommandLineParser::IntOption
                           ("dt",
-                           "Alias for '-trial_steps'; for backward-compatibility.",
+                           "[Deprecated] Use '-trial_steps'.",
                            trial_steps));
         parser.add_option(new CommandLineParser::IntOption
                           ("trial_time",
@@ -276,9 +276,9 @@ int main(int argc, char** argv)
         auto kenv = kfac.new_env();
         kenv->set_trace_enabled(opts1.do_trace);
         if (opts1.msg_rank == kenv->get_rank_index())
-            kenv->set_debug_output(yof.new_stdout_output());
+            yk_env::set_debug_output(yof.new_stdout_output());
         else
-            kenv->set_debug_output(yof.new_null_output());
+            yk_env::set_debug_output(yof.new_null_output());
         auto ep = dynamic_pointer_cast<KernelEnv>(kenv);
         auto num_ranks = kenv->get_num_ranks();
         auto& os = kenv->get_debug_output()->get_ostream();

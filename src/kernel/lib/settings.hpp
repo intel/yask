@@ -50,12 +50,16 @@ namespace yask {
 
     public:
 
-        // Output stream for messages.
-        yask_output_ptr _debug;
+        // Output stream for debug & trace messages.
+        static yask_output_ptr _debug;
 
         // Is tracing enabled?
-        bool _trace = false;
+        static bool _trace;
 
+        // OMP offload devices.
+        static int _omp_hostn;
+        static int _omp_devn;
+        
         // MPI vars.
         MPI_Comm comm = MPI_COMM_NULL; // global communicator.
         MPI_Group group = MPI_GROUP_NULL;
@@ -103,18 +107,6 @@ namespace yask {
         }
         virtual void global_barrier() const {
             MPI_Barrier(comm);
-        }
-        virtual yask_output_ptr get_debug_output() const {
-            return _debug;
-        }
-        virtual void set_debug_output(yask_output_ptr debug) {
-            _debug = debug;
-        }
-        virtual bool is_trace_enabled() const {
-            return _trace;
-        }
-        virtual void set_trace_enabled(bool enable) {
-            _trace = enable;
         }
     };
     typedef std::shared_ptr<KernelEnv> KernelEnvPtr;

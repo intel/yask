@@ -43,7 +43,7 @@ namespace yask {
     // for numbers above 9 (at least up to 99).
 
     // Format: "major.minor.patch".
-    const string version = "3.06.00";
+    const string version = "4.00.00";
 
     string yask_get_version_string() {
         return version;

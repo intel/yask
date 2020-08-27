@@ -66,10 +66,30 @@ namespace yask {
         return new_env(MPI_COMM_NULL);
     }
 
-    // KernelEnv global lock objects.
+    // Debug & trace.
     omp_lock_t KernelEnv::_debug_lock;
     bool KernelEnv::_debug_lock_init_done = false;
+    yask_output_ptr KernelEnv::_debug;
+    bool KernelEnv::_trace = false;
 
+    // OMP offload devices.
+    int KernelEnv::_omp_hostn = 0;
+    int KernelEnv::_omp_devn = 0;
+
+    // Debug APIs.
+    yask_output_ptr yk_env::get_debug_output() {
+        return KernelEnv::_debug;
+    }
+    void yk_env::set_debug_output(yask_output_ptr debug) {
+        KernelEnv::_debug = debug;
+    }
+    void yk_env::set_trace_enabled(bool enable) {
+        KernelEnv::_trace = enable;
+    }
+    bool yk_env::is_trace_enabled() {
+        return KernelEnv::_trace;
+    }
+    
     // Init MPI, OMP.
     void KernelEnv::init_env(int* argc, char*** argv, MPI_Comm existing_comm)
     {
@@ -141,6 +161,11 @@ namespace yask {
         // Side effect: causes OMP to dump debug info if env var set.
         if (!max_threads)
             max_threads = omp_get_max_threads();
+
+        #ifdef USE_OFFLOAD
+        _omp_hostn = omp_get_initial_device();
+        _omp_devn = omp_get_default_device();
+        #endif
     }
 
     // Apply a function to each neighbor rank.

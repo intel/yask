@@ -272,8 +272,7 @@ namespace yask {
 
         // Sync pointer to data.
         void sync_data_ptr() {
-            STATE_VARS(this);
-            get_elems()->sync(state);
+            get_elems()->sync();
         }
 
         // Perform default allocation.

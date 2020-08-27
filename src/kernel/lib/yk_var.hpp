@@ -723,14 +723,14 @@ namespace yask {
             void* vp = get_storage();
             char* cp = static_cast<char*>(vp);
             auto nb = get_num_bytes();
-            OFFLOAD_UPDATE_TO2(state, cp, nb);
+            OFFLOAD_UPDATE_TO(cp, nb);
         }
         void copy_data_from_device() {
             STATE_VARS(this);
             void* vp = get_storage();
             char* cp = static_cast<char*>(vp);
             auto nb = get_num_bytes();
-            OFFLOAD_UPDATE_FROM2(state, cp, nb);
+            OFFLOAD_UPDATE_FROM(cp, nb);
         }
 
         // Set elements.
@@ -836,7 +836,7 @@ namespace yask {
         void sync_core() override {
             STATE_VARS(this);
             auto* var_cp = &_core;
-            OFFLOAD_UPDATE_TO2(state, var_cp, 1);
+            OFFLOAD_UPDATE_TO(var_cp, 1);
             _data.sync_data_ptr();
         }
         
@@ -864,7 +864,7 @@ namespace yask {
 
             // Create core on offload device.
             auto* var_cp = &_core;
-            OFFLOAD_MAP_ALLOC2(state, var_cp, 1);
+            offload_map_alloc(var_cp, 1);
              
             resize();
         }
@@ -875,7 +875,7 @@ namespace yask {
 
             // Release core from device.
             auto* var_cp = &_core;
-            OFFLOAD_MAP_FREE2(state, var_cp, 1);
+            offload_map_free(env, var_cp, 1);
         }
         
         // Make a human-readable description.
@@ -982,7 +982,7 @@ namespace yask {
         void sync_core() override {
             STATE_VARS(this);
             auto* var_cp = &_core;
-            OFFLOAD_UPDATE_TO2(state, var_cp, 1);
+            OFFLOAD_UPDATE_TO(var_cp, 1);
             _data.sync_data_ptr();
         }
         
@@ -1030,7 +1030,7 @@ namespace yask {
 
             // Create core on offload device.
             auto* var_cp = &_core;
-            OFFLOAD_MAP_ALLOC2(state, var_cp, 1);
+            offload_map_alloc(var_cp, 1);
 
             resize();
         }
@@ -1041,7 +1041,7 @@ namespace yask {
 
             // Release core from device.
             auto* var_cp = &_core;
-            OFFLOAD_MAP_FREE2(state, var_cp, 1);
+            offload_map_free(env, var_cp, 1);
         }
         
         // Make a human-readable description.

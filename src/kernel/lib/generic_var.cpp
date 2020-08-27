@@ -97,7 +97,7 @@ namespace yask {
 
         // Set ptr and sync offload pointer in core.
         char* p = 0;
-        _elemsp->set_and_sync(state, (T*)p);
+        _elemsp->set_and_sync((T*)p);
     }
 
     // Perform default allocation.  For other options, call get_num_elems()

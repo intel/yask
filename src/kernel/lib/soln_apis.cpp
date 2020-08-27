@@ -128,6 +128,11 @@ namespace yask {
                       "\nNum OpenMP threads used:  " << at <<
                       "\n  Num threads per region: " << rt <<
                       "\n  Num threads per block:  " << bt);
+            #ifdef USE_OFFLOAD
+            DEBUG_MSG("Num OpenMP devices:       " << omp_get_num_devices() <<
+                      "\nOpenMP offload device:    " << KernelEnv::_omp_devn <<
+                      "\nOpenMP host device:       " << KernelEnv::_omp_hostn);
+            #endif
         }
 
         // Set the number of threads for a region. The number of threads

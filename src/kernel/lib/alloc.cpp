@@ -32,6 +32,14 @@ namespace yask {
 
     ////// Allocators and deleters //////
 
+    // Free device mem.
+    void DeleterBase::free_dev_mem(char* hostp) {
+        if (hostp && _devp) {
+            offload_map_free(_devp, hostp, _nbytes);
+            _devp = NULL;
+        }
+    }
+
     // Aligned allocation.
     char* yask_aligned_alloc(std::size_t nbytes) {
 
@@ -43,32 +51,26 @@ namespace yask {
         void *p = 0;
 
         // Some envs have posix_memalign(), some have aligned_alloc().
-#if _POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600
+        #if _POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600
         int ret = posix_memalign(&p, align, nbytes);
         if (ret) p = 0;
-#else
+        #else
         p = aligned_alloc(align, nbytes);
-#endif
+        #endif
 
         if (!p)
             THROW_YASK_EXCEPTION("error: cannot allocate " + make_byte_str(nbytes) +
                                  " aligned to " + make_byte_str(align));
 
-        // Map alloc to device.
-        char* cp = static_cast<char*>(p);
-        OFFLOAD_MAP_ALLOC(cp, nbytes);
-
         // Return as a char* as required for shared_ptr ctor.
         return static_cast<char*>(p);
     }
 
-    // Reverse yask_aligned_alloc().
+    // Reverse yask_aligned_alloc() and optional device alloc.
     void AlignedDeleter::operator()(char* p) {
-        if (p) {
-            OFFLOAD_MAP_FREE(p, _nbytes);
+        free_dev_mem(p);
+        if (p)
             free(p);
-            p = NULL;
-        }
     }
     
     // NUMA allocation.
@@ -83,11 +85,11 @@ namespace yask {
         if (numa_pref == yask_numa_none)
             return yask_aligned_alloc(nbytes);
 
-#ifdef USE_NUMA
+        #ifdef USE_NUMA
 
         // Should we use the numa policy library?
-#ifdef USE_NUMA_POLICY_LIB
-#pragma omp single
+        #ifdef USE_NUMA_POLICY_LIB
+        #pragma omp single
         else if (numa_available() != -1) {
             numa_set_bind_policy(0);
             if (numa_pref >= 0 && numa_pref <= numa_max_node())
@@ -100,7 +102,7 @@ namespace yask {
             THROW_YASK_EXCEPTION("Error: explicit NUMA policy allocation is not available");
 
         // Use mmap/mbind explicitly.
-#else
+        #else
         else if (get_mempolicy(NULL, NULL, 0, 0, 0) == 0) {
 
             // Set mmap flags.
@@ -130,11 +132,11 @@ namespace yask {
                     // Use local node.
                     // MPOL_LOCAL was defined in Linux 3.8, so use
                     // MPOL_DEFAULT as backup on old systems.
-#ifdef MPOL_LOCAL
+                    #ifdef MPOL_LOCAL
                     mbind(p, nbytes, MPOL_LOCAL, 0, 0, 0);
-#else
+                    #else
                     mbind(p, nbytes, MPOL_DEFAULT, 0, 0, 0);
-#endif
+                    #endif
                 }
             }
             else
@@ -144,11 +146,11 @@ namespace yask {
         else
             THROW_YASK_EXCEPTION("Error: explicit NUMA policy allocation is not available");
 
-#endif // not USE_NUMA_POLICY_LIB.
+        #endif // not USE_NUMA_POLICY_LIB.
 
-#else
+        #else
         THROW_YASK_EXCEPTION("Error: NUMA allocation is not enabled; build with numa=1");
-#endif // USE_NUMA.
+        #endif // USE_NUMA.
 
         // Should not get here w/null p; throw exception.
         if (!p)
@@ -160,38 +162,32 @@ namespace yask {
             FORMAT_AND_THROW_YASK_EXCEPTION("Error: NUMA-allocated " << p << " is not " <<
                                             CACHELINE_BYTES << "-byte aligned");
 
-        // Map alloc to device.
-        char* cp = static_cast<char*>(p);
-        OFFLOAD_MAP_ALLOC(cp, nbytes);
-
         // Return as a char* as required for shared_ptr ctor.
         return static_cast<char*>(p);
     }
 
     // Reverse numa_alloc().
     void NumaDeleter::operator()(char* p) {
-
-        if (p)
-            OFFLOAD_MAP_FREE(p, _nbytes);
+        free_dev_mem(p);
 
         if (p && _numa_pref == yask_numa_none) {
             free(p);
             p = NULL;
         }
 
-#ifdef USE_NUMA
-#ifdef USE_NUMA_POLICY_LIB
+        #ifdef USE_NUMA
+        #ifdef USE_NUMA_POLICY_LIB
         if (p && numa_available() != -1) {
             numa_free(p, _nbytes);
             p = NULL;
         }
-#else
+        #else
         if (p && get_mempolicy(NULL, NULL, 0, 0, 0) == 0) {
             munmap(p, _nbytes);
             p = NULL;
         }
-#endif
-#endif
+        #endif
+        #endif
         if (p) {
             free(p);
             p = NULL;
@@ -250,7 +246,7 @@ namespace yask {
         void *p = 0;
 
         // Allocate into pmem.
-#ifdef USE_PMEM
+        #ifdef USE_PMEM
 
         int err = 0;
         int fd;
@@ -263,18 +259,14 @@ namespace yask {
         if (!p)
             THROW_YASK_EXCEPTION("Error: cannot allocate " + make_byte_str(nbytes) +
                                  " on '" + pmem_name + "'");
-#else
+        #else
         THROW_YASK_EXCEPTION("Error: PMEM allocation is not enabled; build with pmem=1");
-#endif
+        #endif
 
         // Check alignment.
         if ((size_t(p) & (CACHELINE_BYTES - 1)) != 0)
             FORMAT_AND_THROW_YASK_EXCEPTION("Error: PMEM-allocated " << p << " is not " <<
                                             CACHELINE_BYTES << "-byte aligned");
-
-        // Map alloc to device.
-        char* cp = static_cast<char*>(p);
-        OFFLOAD_MAP_ALLOC(cp, nbytes);
 
         // Return as a char* as required for shared_ptr ctor.
         return static_cast<char*>(p);
@@ -282,21 +274,19 @@ namespace yask {
 
     // Reverse pmem_alloc().
     void PmemDeleter::operator()(char* p) {
-        if (p) {
-            OFFLOAD_MAP_FREE(p, _nbytes);
+        free_dev_mem(p);
+        if (p)
             munmap(p, _nbytes);
-            p = NULL;
-        }
     }
 
     // MPI shm allocation.
     char* shm_alloc(std::size_t nbytes,
-                   const MPI_Comm* shm_comm, MPI_Win* shm_win) {
+                    const MPI_Comm* shm_comm, MPI_Win* shm_win) {
 
         void *p = 0;
 
         // Allocate using MPI shm.
-#ifdef USE_MPI
+        #ifdef USE_MPI
         assert(shm_comm);
         assert(shm_win);
         MPI_Info win_info;
@@ -305,9 +295,9 @@ namespace yask {
         MPI_Win_allocate_shared(nbytes, 1, win_info, *shm_comm, &p, shm_win);
         MPI_Info_free(&win_info);
         MPI_Win_lock_all(0, *shm_win);
-#else
+        #else
         THROW_YASK_EXCEPTION("Error: MPI shm allocation is not enabled; build with mpi=1");
-#endif
+        #endif
 
         if (!p)
             THROW_YASK_EXCEPTION("Error: cannot allocate " + make_byte_str(nbytes) +
@@ -329,16 +319,17 @@ namespace yask {
 
     // Reverse shm_alloc().
     void ShmDeleter::operator()(char* p) {
+        free_dev_mem(p);
 
-#ifdef USE_MPI
+        #ifdef USE_MPI
         assert(_shm_comm);
         assert(_shm_win);
         MPI_Win_unlock_all(*_shm_win);
         MPI_Win_free(_shm_win);
         p = NULL;
-#else
+        #else
         THROW_YASK_EXCEPTION("Error: MPI shm deallocation is not enabled; build with mpi=1");
-#endif
+        #endif
     }
 
     ///// Memory-alloc functions in StencilContext /////
@@ -374,7 +365,7 @@ namespace yask {
                 p = shared_shm_alloc<char>(nb, &env->shm_comm, &mpi_info->halo_win);
 
                 // Get pointer for each neighbor rank.
-#ifdef USE_MPI
+                #ifdef USE_MPI
                 int ns = int(mpi_info->neighborhood_size);
                 for (int ni = 0; ni < ns; ni++) {
                     int nr = mpi_info->my_neighbors.at(ni);
@@ -391,7 +382,7 @@ namespace yask {
                     TRACE_MSG("MPI shm halo buffer for rank " << nr << " is at " <<
                               baseptr << " for " << make_byte_str(sz));
                 }
-#endif
+                #endif
             }
             else if (mem_key == _pmem_key) {
 
@@ -455,14 +446,14 @@ namespace yask {
             }
         }
 
-#ifdef USE_PMEM
+        #ifdef USE_PMEM
         DEBUG_MSG("PMEM var-allocation priority order:");
         for (auto sp : sorted_var_ptrs) {
             auto name = sp->get_name();
             DEBUG_MSG(" '" << name << "'" <<
                       (output_var_map.count(name) ? " (output var)" : ""));
         }
-#endif
+        #endif
 
         // Base ptrs for all default-alloc'd data.
         // These pointers will be shared by the ones in the var
@@ -471,9 +462,9 @@ namespace yask {
         // Key is numa code.
         map <int, shared_ptr<char>> _var_data_buf;
 
-#ifdef USE_PMEM
+        #ifdef USE_PMEM
         auto max_sys_mem = (size_t)opts->_numa_pref_max * 1024*1024*1024;
-#endif
+        #endif
 
         // Pass 0: count required size for each NUMA node, allocate chunk of memory at end.
         // Pass 1: distribute parts of already-allocated memory chunk.
@@ -560,7 +551,7 @@ namespace yask {
         mpi_interior = ext_bb;
         mpi_interior.bb_valid = false;
 
-#ifdef USE_MPI
+        #ifdef USE_MPI
 
         map<int, int> num_exchanges; // send/recv => count.
         map<int, idx_t> num_elems; // send/recv => count.
@@ -570,379 +561,379 @@ namespace yask {
         // Loop thru all neighbors of this rank.
         mpi_info->visit_neighbors
             ([&](const IdxTuple& neigh_offsets, int neigh_rank, int neigh_idx) {
-                if (neigh_rank == MPI_PROC_NULL)
-                    return; // from lambda fn.
-
-                // Is vectorized exchange allowed based on domain sizes?
-                // Both my rank and neighbor rank must have *all* domain sizes
-                // of vector multiples.
-                bool vec_ok = allow_vec_exchange &&
-                    mpi_info->has_all_vlen_mults[mpi_info->my_neighbor_index] &&
-                    mpi_info->has_all_vlen_mults[neigh_idx];
-
-                // Determine size of MPI buffers between neigh_rank and my
-                // rank for each var and create those that are needed.  It
-                // is critical that the number, size, and shape of my
-                // send/receive buffers match those of the receive/send
-                // buffers of my neighbors.  Important: Current algorithm
-                // assumes my left neighbor's buffer sizes can be calculated
-                // by considering my rank's right side data and vice-versa.
-                // Thus, all ranks must have consistent data that contribute
-                // to these calculations.
-                for (auto& gp : orig_var_ptrs) {
-                    auto& gb = gp->gb();
-                    auto& gname = gp->get_name();
-                    bool var_vec_ok = vec_ok;
-
-
-                    // Get calculated max dist needed for this var.
-                    int maxdist = gp->get_halo_exchange_l1_norm();
-
-                    // Always use max dist with WF. Do this because edge
-                    // and/or corner values may be needed in WF extensions
-                    // even it not needed w/o WFs.
-                    // TODO: determine if max is always needed.
-                    if (wf_steps > 0)
-                        maxdist = NUM_STENCIL_DIMS - 1;
-
-                    // Manhattan dist. of current neighbor.
-                    int mandist = mpi_info->man_dists.at(neigh_idx);
-
-                    // Check distance.
-                    if (mandist > maxdist) {
-                        TRACE_MSG("no halo exchange needed with rank " << neigh_rank <<
-                                  " (L1-norm = " << mandist <<
-                                  ") for var '" << gname <<
-                                  "' (max L1-norm = " << maxdist << ")");
-                        continue; // to next var.
-                    }
-
-                    // Lookup first & last domain indices and calc exchange sizes
-                    // for this var.
-                    bool found_delta = false;
-                    IdxTuple my_halo_sizes, neigh_halo_sizes;
-                    IdxTuple first_inner_idx, last_inner_idx;
-                    IdxTuple first_outer_idx, last_outer_idx;
-                    for (auto& dim : domain_dims) {
-                        auto& dname = dim._get_name();
-
-                        // Only consider domain dims that are used in this var.
-                        if (gp->is_dim_used(dname)) {
-                            auto vlen = gp->_get_var_vec_len(dname);
-                            auto lhalo = gp->get_left_halo_size(dname);
-                            auto rhalo = gp->get_right_halo_size(dname);
-
-                            // Get domain indices for this var.  If there
-                            // are no more ranks in the given direction,
-                            // extend the "outer" index to include the halo
-                            // in that direction to make sure all data are
-                            // sync'd. Critical for temporal tiling.
-                            idx_t fidx = gp->get_first_rank_domain_index(dname);
-                            idx_t lidx = gp->get_last_rank_domain_index(dname);
-                            first_inner_idx.add_dim_back(dname, fidx);
-                            last_inner_idx.add_dim_back(dname, lidx);
-                            if (opts->is_first_rank(dname))
-                                fidx -= lhalo; // extend into left halo.
-                            if (opts->is_last_rank(dname))
-                                lidx += rhalo; // extend into right halo.
-                            first_outer_idx.add_dim_back(dname, fidx);
-                            last_outer_idx.add_dim_back(dname, lidx);
-
-                            // Determine if it is possible to round the
-                            // outer indices to vec-multiples. This will
-                            // be required to allow full vec exchanges for
-                            // this var. We won't do the actual rounding
-                            // yet, because we need to see if it's safe
-                            // in all dims.
-                            // Need +1 and then -1 trick for last.
-                            fidx = round_down_flr(fidx, vlen);
-                            lidx = round_up_flr(lidx + 1, vlen) - 1;
-                            if (fidx < gp->get_first_rank_alloc_index(dname))
-                                var_vec_ok = false;
-                            if (lidx > gp->get_last_rank_alloc_index(dname))
-                                var_vec_ok = false;
-
-                            // Determine size of exchange in this dim. This
-                            // will be the actual halo size plus any
-                            // wave-front shifts. In the current
-                            // implementation, we need the wave-front shifts
-                            // regardless of whether there is a halo on a
-                            // given var. This is because each
-                            // stencil-bundle gets shifted by the WF angles
-                            // at each step in the WF.
-
-                            // Neighbor is to the left in this dim.
-                            if (neigh_offsets[dname] == MPIInfo::rank_prev) {
-
-                                // Number of points to be added for WFs.
-                                auto ext = wf_shift_pts[dname];
-
-                                // My halo on my left.
-                                my_halo_sizes.add_dim_back(dname, lhalo + ext);
-
-                                // Neighbor halo on their right.
-                                // Assume my right is same as their right.
-                                neigh_halo_sizes.add_dim_back(dname, rhalo + ext);
-
-                                // Flag that this var has a neighbor to left or right.
-                                found_delta = true;
-                            }
-
-                            // Neighbor is to the right in this dim.
-                            else if (neigh_offsets[dname] == MPIInfo::rank_next) {
-
-                                // Number of points to be added for WFs.
-                                auto ext = wf_shift_pts[dname];
-
-                                // My halo on my right.
-                                my_halo_sizes.add_dim_back(dname, rhalo + ext);
-
-                                // Neighbor halo on their left.
-                                // Assume my left is same as their left.
-                                neigh_halo_sizes.add_dim_back(dname, lhalo + ext);
-
-                                // Flag that this var has a neighbor to left or right.
-                                found_delta = true;
-                            }
-
-                            // Neighbor in-line in this dim.
-                            else {
-                                my_halo_sizes.add_dim_back(dname, 0);
-                                neigh_halo_sizes.add_dim_back(dname, 0);
-                            }
-
-                        } // domain dims in this var.
-                    } // domain dims.
-
-                    // Is buffer needed?
-                    // Example: if this var is 2D in y-z, but only neighbors are in
-                    // x-dim, we don't need any exchange.
-                    if (!found_delta) {
-                        TRACE_MSG("no halo exchange needed for var '" << gname <<
-                                  "' with rank " << neigh_rank <<
-                                  " because the neighbor is not in a direction"
-                                  " corresponding to a var dim");
-                        continue; // to next var.
-                    }
-
-                    // Round halo sizes if vectorized exchanges allowed.
-                    // Both self and neighbor must be vec-multiples
-                    // and outer indices must be vec-mults or extendable
-                    // to be so.
-                    // TODO: add a heuristic to avoid increasing by a large factor.
-                    if (var_vec_ok) {
-                        for (auto& dim : domain_dims) {
-                            auto& dname = dim._get_name();
-                            if (gp->is_dim_used(dname)) {
-                                auto vlen = gp->_get_var_vec_len(dname);
-
-                                // First index rounded down.
-                                auto fidx = first_outer_idx[dname];
-                                fidx = round_down_flr(fidx, vlen);
-                                first_outer_idx.set_val(dname, fidx);
-
-                                // Last index rounded up.
-                                // Need +1 and then -1 trick because it's last, not end.
-                                auto lidx = last_outer_idx[dname];
-                                lidx = round_up_flr(lidx + 1, vlen) - 1;
-                                last_outer_idx.set_val(dname, lidx);
-
-                                // sizes rounded up.
-                                my_halo_sizes.set_val(dname, ROUND_UP(my_halo_sizes[dname], vlen));
-                                neigh_halo_sizes.set_val(dname, ROUND_UP(neigh_halo_sizes[dname], vlen));
-
-                            } // domain dims in this var.
-                        } // domain dims.
-                    }
-
-                    // Make a buffer in both directions (send & receive).
-                    for (int bd = 0; bd < MPIBufs::n_buf_dirs; bd++) {
-
-                        // Begin/end vars to indicate what part
-                        // of main var to read from or write to based on
-                        // the current neighbor being processed.
-                        IdxTuple copy_begin = gb.get_allocs();
-                        IdxTuple copy_end = gb.get_allocs(); // one past last!
-
-                        // Adjust along domain dims in this var.
-                        DOMAIN_VAR_LOOP(i, j) {
-                            auto& dim = domain_dims.get_dim(j);
-                            auto& dname = dim._get_name();
-                            if (gp->is_dim_used(dname)) {
-
-                                // Init range to whole rank domain (including
-                                // outer halos).  These may be changed below
-                                // depending on the neighbor's direction.
-                                copy_begin[dname] = first_outer_idx[dname];
-                                copy_end[dname] = last_outer_idx[dname] + 1; // end = last + 1.
-
-                                // Neighbor direction in this dim.
-                                auto neigh_ofs = neigh_offsets[dname];
-
-                                // Min MPI exterior options.
-                                idx_t min_ext = opts->_min_exterior;
-
-                                // Region to read from, i.e., data from inside
-                                // this rank's domain to be put into neighbor's
-                                // halo. So, use neighbor's halo sizes when
-                                // calculating buffer size.
-                                if (bd == MPIBufs::buf_send) {
-
-                                    // Neighbor is to the left.
-                                    if (neigh_ofs == idx_t(MPIInfo::rank_prev)) {
-
-                                        // Only read slice as wide as halo from beginning.
-                                        copy_begin[dname] = first_inner_idx[dname];
-                                        copy_end[dname] = first_inner_idx[dname] + neigh_halo_sizes[dname];
-
-                                        // Adjust LHS of interior.
-                                        idx_t ext_end = ROUND_UP(first_inner_idx[dname] +
-                                                                 max(min_ext, neigh_halo_sizes[dname]),
-                                                                 dims->_fold_pts[dname]);
-                                        mpi_interior.bb_begin[j] =
-                                            max(mpi_interior.bb_begin[j], ext_end);
-                                    }
-
-                                    // Neighbor is to the right.
-                                    else if (neigh_ofs == idx_t(MPIInfo::rank_next)) {
-
-                                        // Only read slice as wide as halo before end.
-                                        copy_begin[dname] = last_inner_idx[dname] + 1 - neigh_halo_sizes[dname];
-                                        copy_end[dname] = last_inner_idx[dname] + 1;
-
-                                        // Adjust RHS of interior.
-                                        idx_t ext_begin = ROUND_DOWN(last_inner_idx[dname] + 1 -
-                                                                     max(min_ext, neigh_halo_sizes[dname]),
-                                                                     dims->_fold_pts[dname]);
-                                        mpi_interior.bb_end[j] =
-                                            min(mpi_interior.bb_end[j], ext_begin);
-                                    }
-
-                                    // Else, this neighbor is in same posn as I am in this dim,
-                                    // so we leave the default begin/end settings.
-                                }
-
-                                // Region to write to, i.e., into this rank's halo.
-                                // So, use my halo sizes when calculating buffer sizes.
-                                else if (bd == MPIBufs::buf_recv) {
-
-                                    // Neighbor is to the left.
-                                    if (neigh_ofs == idx_t(MPIInfo::rank_prev)) {
-
-                                        // Only read slice as wide as halo before beginning.
-                                        copy_begin[dname] = first_inner_idx[dname] - my_halo_sizes[dname];
-                                        copy_end[dname] = first_inner_idx[dname];
-                                    }
-
-                                    // Neighbor is to the right.
-                                    else if (neigh_ofs == idx_t(MPIInfo::rank_next)) {
-
-                                        // Only read slice as wide as halo after end.
-                                        copy_begin[dname] = last_inner_idx[dname] + 1;
-                                        copy_end[dname] = last_inner_idx[dname] + 1 + my_halo_sizes[dname];
-                                    }
-
-                                    // Else, this neighbor is in same posn as I am in this dim,
-                                    // so we leave the default begin/end settings.
-                                }
-                            } // domain dims in this var.
-                        } // domain dims.
-
-                        // Sizes of buffer in all dims of this var.
-                        // Also, set begin/end value for non-domain dims.
-                        IdxTuple buf_sizes = gb.get_allocs();
-                        bool buf_vec_ok = var_vec_ok;
-                        for (auto& dname : gp->get_dim_names()) {
-                            idx_t dsize = 1;
-
-                            // domain dim?
-                            if (domain_dims.lookup(dname)) {
-                                dsize = copy_end[dname] - copy_begin[dname];
-
-                                // Check whether alignment and size are multiple of vlen.
-                                auto vlen = gp->_get_var_vec_len(dname);
-                                if (dsize % vlen != 0)
-                                    buf_vec_ok = false;
-                                if (imod_flr(copy_begin[dname], vlen) != 0)
-                                    buf_vec_ok = false;
-                            }
-
-                            // step dim?
-                            // Enable copy over entire allocated range.
-                            // May only copy one step when not using WFs.
-                            else if (dname == step_dim) {
-
-                                // Use 0..N as a place-holder range.
-                                // The actual values will be supplied during
-                                // halo exchange.
-                                dsize = gp->get_alloc_size(dname);
-                                copy_begin[dname] = 0;
-                                copy_end[dname] = dsize;
-                            }
-
-                            // misc?
-                            // Copy over entire range.
-                            // TODO: make dirty flags for misc dims in vars.
-                            else {
-                                dsize = gp->get_alloc_size(dname);
-                                copy_begin[dname] = gp->get_first_misc_index(dname);
-                                copy_end[dname] = gp->get_last_misc_index(dname) + 1;
-                                assert(copy_end[dname] - copy_begin[dname] == dsize);
-                            }
-
-                            // Save computed size.
-                            buf_sizes[dname] = dsize;
-
-                        } // all dims in this var.
-
-                        // Unique name for buffer based on var name, direction, and ranks.
-                        string bname = gname;
-                        if (bd == MPIBufs::buf_send)
-                            bname += "_send_halo_from_" + to_string(me) + "_to_" + to_string(neigh_rank);
-                        else if (bd == MPIBufs::buf_recv)
-                            bname += "_recv_halo_from_" + to_string(neigh_rank) + "_to_" + to_string(me);
-
-                        // Does buffer have non-zero size?
-                        if (buf_sizes.size() == 0 || buf_sizes.product() == 0) {
-                            TRACE_MSG("MPI buffer '" << bname <<
-                                      "' not needed because there is no data to exchange");
-                            continue;
-                        }
-
-                        // At this point, buf_sizes, copy_begin, and copy_end
-                        // should be set for each dim in this var.
-
-                        // Compute last from end.
-                        IdxTuple copy_last = copy_end.sub_elements(1);
-
-                        // Make MPI data entry for this var.
-                        auto gbp = mpi_data.emplace(gname, state->_mpi_info);
-                        auto& gbi = gbp.first; // iterator from pair returned by emplace().
-                        auto& gbv = gbi->second; // value from iterator.
-                        auto& buf = gbv.get_buf(MPIBufs::BufDir(bd), neigh_offsets);
-
-                        // Config buffer for this var.
-                        // (But don't allocate storage yet.)
-                        buf.begin_pt = copy_begin;
-                        buf.last_pt = copy_last;
-                        buf.num_pts = buf_sizes;
-                        buf.name = bname;
-                        buf.vec_copy_ok = buf_vec_ok;
-
-                        TRACE_MSG("MPI buffer '" << buf.name <<
-                                  "' configured for rank at relative offsets " <<
-                                  neigh_offsets.sub_elements(1).make_dim_val_str() << " with " <<
-                                  buf.num_pts.make_dim_val_str(" * ") << " = " << buf.get_size() <<
-                                  " element(s) at [" << buf.begin_pt.make_dim_val_str() <<
-                                  " ... " << buf.last_pt.make_dim_val_str() <<
-                                  "] with vector-copy " <<
-                                  (buf.vec_copy_ok ? "enabled" : "disabled"));
-                        num_exchanges[bd]++;
-                        num_elems[bd] += buf.get_size();
-
-                    } // send, recv.
-                } // vars.
-            });   // neighbors.
+                 if (neigh_rank == MPI_PROC_NULL)
+                     return; // from lambda fn.
+
+                 // Is vectorized exchange allowed based on domain sizes?
+                 // Both my rank and neighbor rank must have *all* domain sizes
+                 // of vector multiples.
+                 bool vec_ok = allow_vec_exchange &&
+                     mpi_info->has_all_vlen_mults[mpi_info->my_neighbor_index] &&
+                     mpi_info->has_all_vlen_mults[neigh_idx];
+
+                 // Determine size of MPI buffers between neigh_rank and my
+                 // rank for each var and create those that are needed.  It
+                 // is critical that the number, size, and shape of my
+                 // send/receive buffers match those of the receive/send
+                 // buffers of my neighbors.  Important: Current algorithm
+                 // assumes my left neighbor's buffer sizes can be calculated
+                 // by considering my rank's right side data and vice-versa.
+                 // Thus, all ranks must have consistent data that contribute
+                 // to these calculations.
+                 for (auto& gp : orig_var_ptrs) {
+                     auto& gb = gp->gb();
+                     auto& gname = gp->get_name();
+                     bool var_vec_ok = vec_ok;
+
+
+                     // Get calculated max dist needed for this var.
+                     int maxdist = gp->get_halo_exchange_l1_norm();
+
+                     // Always use max dist with WF. Do this because edge
+                     // and/or corner values may be needed in WF extensions
+                     // even it not needed w/o WFs.
+                     // TODO: determine if max is always needed.
+                     if (wf_steps > 0)
+                         maxdist = NUM_STENCIL_DIMS - 1;
+
+                     // Manhattan dist. of current neighbor.
+                     int mandist = mpi_info->man_dists.at(neigh_idx);
+
+                     // Check distance.
+                     if (mandist > maxdist) {
+                         TRACE_MSG("no halo exchange needed with rank " << neigh_rank <<
+                                   " (L1-norm = " << mandist <<
+                                   ") for var '" << gname <<
+                                   "' (max L1-norm = " << maxdist << ")");
+                         continue; // to next var.
+                     }
+
+                     // Lookup first & last domain indices and calc exchange sizes
+                     // for this var.
+                     bool found_delta = false;
+                     IdxTuple my_halo_sizes, neigh_halo_sizes;
+                     IdxTuple first_inner_idx, last_inner_idx;
+                     IdxTuple first_outer_idx, last_outer_idx;
+                     for (auto& dim : domain_dims) {
+                         auto& dname = dim._get_name();
+
+                         // Only consider domain dims that are used in this var.
+                         if (gp->is_dim_used(dname)) {
+                             auto vlen = gp->_get_var_vec_len(dname);
+                             auto lhalo = gp->get_left_halo_size(dname);
+                             auto rhalo = gp->get_right_halo_size(dname);
+
+                             // Get domain indices for this var.  If there
+                             // are no more ranks in the given direction,
+                             // extend the "outer" index to include the halo
+                             // in that direction to make sure all data are
+                             // sync'd. Critical for temporal tiling.
+                             idx_t fidx = gp->get_first_rank_domain_index(dname);
+                             idx_t lidx = gp->get_last_rank_domain_index(dname);
+                             first_inner_idx.add_dim_back(dname, fidx);
+                             last_inner_idx.add_dim_back(dname, lidx);
+                             if (opts->is_first_rank(dname))
+                                 fidx -= lhalo; // extend into left halo.
+                             if (opts->is_last_rank(dname))
+                                 lidx += rhalo; // extend into right halo.
+                             first_outer_idx.add_dim_back(dname, fidx);
+                             last_outer_idx.add_dim_back(dname, lidx);
+
+                             // Determine if it is possible to round the
+                             // outer indices to vec-multiples. This will
+                             // be required to allow full vec exchanges for
+                             // this var. We won't do the actual rounding
+                             // yet, because we need to see if it's safe
+                             // in all dims.
+                             // Need +1 and then -1 trick for last.
+                             fidx = round_down_flr(fidx, vlen);
+                             lidx = round_up_flr(lidx + 1, vlen) - 1;
+                             if (fidx < gp->get_first_rank_alloc_index(dname))
+                                 var_vec_ok = false;
+                             if (lidx > gp->get_last_rank_alloc_index(dname))
+                                 var_vec_ok = false;
+
+                             // Determine size of exchange in this dim. This
+                             // will be the actual halo size plus any
+                             // wave-front shifts. In the current
+                             // implementation, we need the wave-front shifts
+                             // regardless of whether there is a halo on a
+                             // given var. This is because each
+                             // stencil-bundle gets shifted by the WF angles
+                             // at each step in the WF.
+
+                             // Neighbor is to the left in this dim.
+                             if (neigh_offsets[dname] == MPIInfo::rank_prev) {
+
+                                 // Number of points to be added for WFs.
+                                 auto ext = wf_shift_pts[dname];
+
+                                 // My halo on my left.
+                                 my_halo_sizes.add_dim_back(dname, lhalo + ext);
+
+                                 // Neighbor halo on their right.
+                                 // Assume my right is same as their right.
+                                 neigh_halo_sizes.add_dim_back(dname, rhalo + ext);
+
+                                 // Flag that this var has a neighbor to left or right.
+                                 found_delta = true;
+                             }
+
+                             // Neighbor is to the right in this dim.
+                             else if (neigh_offsets[dname] == MPIInfo::rank_next) {
+
+                                 // Number of points to be added for WFs.
+                                 auto ext = wf_shift_pts[dname];
+
+                                 // My halo on my right.
+                                 my_halo_sizes.add_dim_back(dname, rhalo + ext);
+
+                                 // Neighbor halo on their left.
+                                 // Assume my left is same as their left.
+                                 neigh_halo_sizes.add_dim_back(dname, lhalo + ext);
+
+                                 // Flag that this var has a neighbor to left or right.
+                                 found_delta = true;
+                             }
+
+                             // Neighbor in-line in this dim.
+                             else {
+                                 my_halo_sizes.add_dim_back(dname, 0);
+                                 neigh_halo_sizes.add_dim_back(dname, 0);
+                             }
+
+                         } // domain dims in this var.
+                     } // domain dims.
+
+                     // Is buffer needed?
+                     // Example: if this var is 2D in y-z, but only neighbors are in
+                     // x-dim, we don't need any exchange.
+                     if (!found_delta) {
+                         TRACE_MSG("no halo exchange needed for var '" << gname <<
+                                   "' with rank " << neigh_rank <<
+                                   " because the neighbor is not in a direction"
+                                   " corresponding to a var dim");
+                         continue; // to next var.
+                     }
+
+                     // Round halo sizes if vectorized exchanges allowed.
+                     // Both self and neighbor must be vec-multiples
+                     // and outer indices must be vec-mults or extendable
+                     // to be so.
+                     // TODO: add a heuristic to avoid increasing by a large factor.
+                     if (var_vec_ok) {
+                         for (auto& dim : domain_dims) {
+                             auto& dname = dim._get_name();
+                             if (gp->is_dim_used(dname)) {
+                                 auto vlen = gp->_get_var_vec_len(dname);
+
+                                 // First index rounded down.
+                                 auto fidx = first_outer_idx[dname];
+                                 fidx = round_down_flr(fidx, vlen);
+                                 first_outer_idx.set_val(dname, fidx);
+
+                                 // Last index rounded up.
+                                 // Need +1 and then -1 trick because it's last, not end.
+                                 auto lidx = last_outer_idx[dname];
+                                 lidx = round_up_flr(lidx + 1, vlen) - 1;
+                                 last_outer_idx.set_val(dname, lidx);
+
+                                 // sizes rounded up.
+                                 my_halo_sizes.set_val(dname, ROUND_UP(my_halo_sizes[dname], vlen));
+                                 neigh_halo_sizes.set_val(dname, ROUND_UP(neigh_halo_sizes[dname], vlen));
+
+                             } // domain dims in this var.
+                         } // domain dims.
+                     }
+
+                     // Make a buffer in both directions (send & receive).
+                     for (int bd = 0; bd < MPIBufs::n_buf_dirs; bd++) {
+
+                         // Begin/end vars to indicate what part
+                         // of main var to read from or write to based on
+                         // the current neighbor being processed.
+                         IdxTuple copy_begin = gb.get_allocs();
+                         IdxTuple copy_end = gb.get_allocs(); // one past last!
+
+                         // Adjust along domain dims in this var.
+                         DOMAIN_VAR_LOOP(i, j) {
+                             auto& dim = domain_dims.get_dim(j);
+                             auto& dname = dim._get_name();
+                             if (gp->is_dim_used(dname)) {
+
+                                 // Init range to whole rank domain (including
+                                 // outer halos).  These may be changed below
+                                 // depending on the neighbor's direction.
+                                 copy_begin[dname] = first_outer_idx[dname];
+                                 copy_end[dname] = last_outer_idx[dname] + 1; // end = last + 1.
+
+                                 // Neighbor direction in this dim.
+                                 auto neigh_ofs = neigh_offsets[dname];
+
+                                 // Min MPI exterior options.
+                                 idx_t min_ext = opts->_min_exterior;
+
+                                 // Region to read from, i.e., data from inside
+                                 // this rank's domain to be put into neighbor's
+                                 // halo. So, use neighbor's halo sizes when
+                                 // calculating buffer size.
+                                 if (bd == MPIBufs::buf_send) {
+
+                                     // Neighbor is to the left.
+                                     if (neigh_ofs == idx_t(MPIInfo::rank_prev)) {
+
+                                         // Only read slice as wide as halo from beginning.
+                                         copy_begin[dname] = first_inner_idx[dname];
+                                         copy_end[dname] = first_inner_idx[dname] + neigh_halo_sizes[dname];
+
+                                         // Adjust LHS of interior.
+                                         idx_t ext_end = ROUND_UP(first_inner_idx[dname] +
+                                                                  max(min_ext, neigh_halo_sizes[dname]),
+                                                                  dims->_fold_pts[dname]);
+                                         mpi_interior.bb_begin[j] =
+                                             max(mpi_interior.bb_begin[j], ext_end);
+                                     }
+
+                                     // Neighbor is to the right.
+                                     else if (neigh_ofs == idx_t(MPIInfo::rank_next)) {
+
+                                         // Only read slice as wide as halo before end.
+                                         copy_begin[dname] = last_inner_idx[dname] + 1 - neigh_halo_sizes[dname];
+                                         copy_end[dname] = last_inner_idx[dname] + 1;
+
+                                         // Adjust RHS of interior.
+                                         idx_t ext_begin = ROUND_DOWN(last_inner_idx[dname] + 1 -
+                                                                      max(min_ext, neigh_halo_sizes[dname]),
+                                                                      dims->_fold_pts[dname]);
+                                         mpi_interior.bb_end[j] =
+                                             min(mpi_interior.bb_end[j], ext_begin);
+                                     }
+
+                                     // Else, this neighbor is in same posn as I am in this dim,
+                                     // so we leave the default begin/end settings.
+                                 }
+
+                                 // Region to write to, i.e., into this rank's halo.
+                                 // So, use my halo sizes when calculating buffer sizes.
+                                 else if (bd == MPIBufs::buf_recv) {
+
+                                     // Neighbor is to the left.
+                                     if (neigh_ofs == idx_t(MPIInfo::rank_prev)) {
+
+                                         // Only read slice as wide as halo before beginning.
+                                         copy_begin[dname] = first_inner_idx[dname] - my_halo_sizes[dname];
+                                         copy_end[dname] = first_inner_idx[dname];
+                                     }
+
+                                     // Neighbor is to the right.
+                                     else if (neigh_ofs == idx_t(MPIInfo::rank_next)) {
+
+                                         // Only read slice as wide as halo after end.
+                                         copy_begin[dname] = last_inner_idx[dname] + 1;
+                                         copy_end[dname] = last_inner_idx[dname] + 1 + my_halo_sizes[dname];
+                                     }
+
+                                     // Else, this neighbor is in same posn as I am in this dim,
+                                     // so we leave the default begin/end settings.
+                                 }
+                             } // domain dims in this var.
+                         } // domain dims.
+
+                         // Sizes of buffer in all dims of this var.
+                         // Also, set begin/end value for non-domain dims.
+                         IdxTuple buf_sizes = gb.get_allocs();
+                         bool buf_vec_ok = var_vec_ok;
+                         for (auto& dname : gp->get_dim_names()) {
+                             idx_t dsize = 1;
+
+                             // domain dim?
+                             if (domain_dims.lookup(dname)) {
+                                 dsize = copy_end[dname] - copy_begin[dname];
+
+                                 // Check whether alignment and size are multiple of vlen.
+                                 auto vlen = gp->_get_var_vec_len(dname);
+                                 if (dsize % vlen != 0)
+                                     buf_vec_ok = false;
+                                 if (imod_flr(copy_begin[dname], vlen) != 0)
+                                     buf_vec_ok = false;
+                             }
+
+                             // step dim?
+                             // Enable copy over entire allocated range.
+                             // May only copy one step when not using WFs.
+                             else if (dname == step_dim) {
+
+                                 // Use 0..N as a place-holder range.
+                                 // The actual values will be supplied during
+                                 // halo exchange.
+                                 dsize = gp->get_alloc_size(dname);
+                                 copy_begin[dname] = 0;
+                                 copy_end[dname] = dsize;
+                             }
+
+                             // misc?
+                             // Copy over entire range.
+                             // TODO: make dirty flags for misc dims in vars.
+                             else {
+                                 dsize = gp->get_alloc_size(dname);
+                                 copy_begin[dname] = gp->get_first_misc_index(dname);
+                                 copy_end[dname] = gp->get_last_misc_index(dname) + 1;
+                                 assert(copy_end[dname] - copy_begin[dname] == dsize);
+                             }
+
+                             // Save computed size.
+                             buf_sizes[dname] = dsize;
+
+                         } // all dims in this var.
+
+                         // Unique name for buffer based on var name, direction, and ranks.
+                         string bname = gname;
+                         if (bd == MPIBufs::buf_send)
+                             bname += "_send_halo_from_" + to_string(me) + "_to_" + to_string(neigh_rank);
+                         else if (bd == MPIBufs::buf_recv)
+                             bname += "_recv_halo_from_" + to_string(neigh_rank) + "_to_" + to_string(me);
+
+                         // Does buffer have non-zero size?
+                         if (buf_sizes.size() == 0 || buf_sizes.product() == 0) {
+                             TRACE_MSG("MPI buffer '" << bname <<
+                                       "' not needed because there is no data to exchange");
+                             continue;
+                         }
+
+                         // At this point, buf_sizes, copy_begin, and copy_end
+                         // should be set for each dim in this var.
+
+                         // Compute last from end.
+                         IdxTuple copy_last = copy_end.sub_elements(1);
+
+                         // Make MPI data entry for this var.
+                         auto gbp = mpi_data.emplace(gname, state->_mpi_info);
+                         auto& gbi = gbp.first; // iterator from pair returned by emplace().
+                         auto& gbv = gbi->second; // value from iterator.
+                         auto& buf = gbv.get_buf(MPIBufs::BufDir(bd), neigh_offsets);
+
+                         // Config buffer for this var.
+                         // (But don't allocate storage yet.)
+                         buf.begin_pt = copy_begin;
+                         buf.last_pt = copy_last;
+                         buf.num_pts = buf_sizes;
+                         buf.name = bname;
+                         buf.vec_copy_ok = buf_vec_ok;
+
+                         TRACE_MSG("MPI buffer '" << buf.name <<
+                                   "' configured for rank at relative offsets " <<
+                                   neigh_offsets.sub_elements(1).make_dim_val_str() << " with " <<
+                                   buf.num_pts.make_dim_val_str(" * ") << " = " << buf.get_size() <<
+                                   " element(s) at [" << buf.begin_pt.make_dim_val_str() <<
+                                   " ... " << buf.last_pt.make_dim_val_str() <<
+                                   "] with vector-copy " <<
+                                   (buf.vec_copy_ok ? "enabled" : "disabled"));
+                         num_exchanges[bd]++;
+                         num_elems[bd] += buf.get_size();
+
+                     } // send, recv.
+                 } // vars.
+             });   // neighbors.
         TRACE_MSG("number of MPI send buffers on this rank: " << num_exchanges[int(MPIBufs::buf_send)]);
         TRACE_MSG("number of elements in send buffers: " << make_num_str(num_elems[int(MPIBufs::buf_send)]));
         TRACE_MSG("number of MPI recv buffers on this rank: " << num_exchanges[int(MPIBufs::buf_recv)]);
@@ -1009,78 +1000,78 @@ namespace yask {
                          int nidx,
                          MPIBufs& bufs) {
 
-                        // Default is global numa pref setting for MPI
-                        // buffer, not possible override for this var.
-                        int numa_pref = opts->_numa_pref;
+                         // Default is global numa pref setting for MPI
+                         // buffer, not possible override for this var.
+                         int numa_pref = opts->_numa_pref;
 
-                        // If neighbor can use MPI shm, set key, etc.
-                        auto nshm_rank = mpi_info->shm_ranks.at(nidx);
-                        if (nshm_rank != MPI_PROC_NULL) {
-                            do_shm = true;
-                            numa_pref = _shmem_key;
-                            assert(nshm_rank < env->num_shm_ranks);
-                        }
+                         // If neighbor can use MPI shm, set key, etc.
+                         auto nshm_rank = mpi_info->shm_ranks.at(nidx);
+                         if (nshm_rank != MPI_PROC_NULL) {
+                             do_shm = true;
+                             numa_pref = _shmem_key;
+                             assert(nshm_rank < env->num_shm_ranks);
+                         }
 
-                        // Send and recv.
-                        for (int bd = 0; bd < MPIBufs::n_buf_dirs; bd++) {
-                            auto& buf = var_mpi_data.get_buf(MPIBufs::BufDir(bd), roffsets);
-                            if (buf.get_size() == 0)
-                                continue;
+                         // Send and recv.
+                         for (int bd = 0; bd < MPIBufs::n_buf_dirs; bd++) {
+                             auto& buf = var_mpi_data.get_buf(MPIBufs::BufDir(bd), roffsets);
+                             if (buf.get_size() == 0)
+                                 continue;
 
-                            // Don't use my mem for the recv buf if using shm.
-                            bool use_mine = !(bd == MPIBufs::buf_recv && nshm_rank != MPI_PROC_NULL);
+                             // Don't use my mem for the recv buf if using shm.
+                             bool use_mine = !(bd == MPIBufs::buf_recv && nshm_rank != MPI_PROC_NULL);
 
-                            // Set storage if buffer has been allocated in pass 0.
-                            if (pass == 1 && use_mine) {
-                                auto base = _mpi_data_buf[numa_pref];
-                                auto ofs = npbytes[numa_pref];
-                                assert(base);
-                                auto* rp = buf.set_storage(base, ofs);
-                                TRACE_MSG("  MPI buf '" << buf.name << "' at " << rp <<
-                                          " for " << make_byte_str(buf.get_bytes()));
+                             // Set storage if buffer has been allocated in pass 0.
+                             if (pass == 1 && use_mine) {
+                                 auto base = _mpi_data_buf[numa_pref];
+                                 auto ofs = npbytes[numa_pref];
+                                 assert(base);
+                                 auto* rp = buf.set_storage(base, ofs);
+                                 TRACE_MSG("  MPI buf '" << buf.name << "' at " << rp <<
+                                           " for " << make_byte_str(buf.get_bytes()));
 
-                                // Write test values & init lock.
-                                *((int*)rp) = me;
-                                if (buf.get_bytes() > sizeof(int)) // Room to mark end?
-                                    *((char*)rp + buf.get_bytes() - 1) = 'Z';
-                                buf.shm_lock_init();
+                                 // Write test values & init lock.
+                                 *((int*)rp) = me;
+                                 if (buf.get_bytes() > sizeof(int)) // Room to mark end?
+                                     *((char*)rp + buf.get_bytes() - 1) = 'Z';
+                                 buf.shm_lock_init();
 
-                                // Save offset.
-                                if (nshm_rank != MPI_PROC_NULL && bd == MPIBufs::buf_send)
-                                    sb_ofs[gname].at(my_shm_rank).at(nshm_rank) = ofs;
-                            }
+                                 // Save offset.
+                                 if (nshm_rank != MPI_PROC_NULL && bd == MPIBufs::buf_send)
+                                     sb_ofs[gname].at(my_shm_rank).at(nshm_rank) = ofs;
+                             }
 
-                            // Using shm from another rank.
-                            else if (pass == 2 && !use_mine) {
-                                char* base = (char*)mpi_info->halo_buf_ptrs[nidx];
-                                auto sz = mpi_info->halo_buf_sizes[nidx];
-                                auto ofs = sb_ofs[gname].at(nshm_rank).at(my_shm_rank);
-                                assert(sz >= ofs + buf.get_bytes() + YASK_PAD_BYTES);
-                                auto* rp = buf.set_storage(base, ofs);
-                                TRACE_MSG("  MPI shm buf '" << buf.name << "' at " << rp <<
-                                          " for " << make_byte_str(buf.get_bytes()));
+                             // Using shm from another rank.
+                             else if (pass == 2 && !use_mine) {
+                                 char* base = (char*)mpi_info->halo_buf_ptrs[nidx];
+                                 auto sz = mpi_info->halo_buf_sizes[nidx];
+                                 auto ofs = sb_ofs[gname].at(nshm_rank).at(my_shm_rank);
+                                 assert(sz >= ofs + buf.get_bytes() + YASK_PAD_BYTES);
+                                 auto* rp = buf.set_storage(base, ofs);
+                                 TRACE_MSG("  MPI shm buf '" << buf.name << "' at " << rp <<
+                                           " for " << make_byte_str(buf.get_bytes()));
 
-                                // Check values written by owner rank.
-                                assert(*((int*)rp) == nrank);
-                                if (buf.get_bytes() > sizeof(int)) // Room to mark end?
-                                    assert(*((char*)rp + buf.get_bytes() - 1) == 'Z');
-                                assert(!buf.is_ok_to_read());
-                            }
+                                 // Check values written by owner rank.
+                                 assert(*((int*)rp) == nrank);
+                                 if (buf.get_bytes() > sizeof(int)) // Room to mark end?
+                                     assert(*((char*)rp + buf.get_bytes() - 1) == 'Z');
+                                 assert(!buf.is_ok_to_read());
+                             }
 
-                            // Determine padded size (also offset to next location)
-                            // in my mem.
-                            if (use_mine) {
-                                auto sbytes = buf.get_bytes();
-                                npbytes[numa_pref] += ROUND_UP(sbytes + _data_buf_pad,
-                                                               CACHELINE_BYTES);
-                                nbufs[numa_pref]++;
-                                if (pass == 0)
-                                    TRACE_MSG("  MPI buf '" << buf.name << "' needs " <<
-                                              make_byte_str(sbytes) <<
-                                              " (mem-key = " << numa_pref << ")");
-                            }
-                        } // snd/rcv.
-                    } );  // neighbors.
+                             // Determine padded size (also offset to next location)
+                             // in my mem.
+                             if (use_mine) {
+                                 auto sbytes = buf.get_bytes();
+                                 npbytes[numa_pref] += ROUND_UP(sbytes + _data_buf_pad,
+                                                                CACHELINE_BYTES);
+                                 nbufs[numa_pref]++;
+                                 if (pass == 0)
+                                     TRACE_MSG("  MPI buf '" << buf.name << "' needs " <<
+                                               make_byte_str(sbytes) <<
+                                               " (mem-key = " << numa_pref << ")");
+                             }
+                         } // snd/rcv.
+                     } );  // neighbors.
 
                 // Share offsets between ranks.
                 if (pass == 1 && do_shm) {
@@ -1105,7 +1096,7 @@ namespace yask {
             MPI_Barrier(env->shm_comm);
         } // MPI passes.
 
-#endif
+        #endif
     }
 
     // Delete and re-create all the scratch vars.  Delete and re-allocate

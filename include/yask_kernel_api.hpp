@@ -169,25 +169,47 @@ namespace yask {
         virtual ~yk_env() {}
 
         /// Set object to receive debug output.
-        virtual void
+        /**
+           This is a static method, implying the following:
+           - This setting may be changed before creating a `yk_env` object.
+           - Calling this method applies settings globally.
+         */
+        static void
         set_debug_output(yask_output_ptr debug
                          /**< [out] Pointer to object to receive debug output.
-                            See \ref yask_output_factory. */ ) =0;
+                            See \ref yask_output_factory. */ );
 
         /// Get object to receive debug output.
         /**
-           Returns pointer to \ref yask_output set via set_debug_output
+           This is a static method, implying the following:
+           - This method may be called before creating a `yk_env` object.
+
+           @returns Pointer to \ref yask_output set via set_debug_output
            or pointer to a \ref yask_stdout_output if not set.
         */
-        virtual yask_output_ptr
-        get_debug_output() const =0;
+        static yask_output_ptr
+        get_debug_output();
 
         /// Enable or disable additional debug tracing.
         /**
+           This is a static method, implying the following:
+           - This setting may be changed before creating a `yk_env` object.
+           - Calling this method applies settings globally.
+
            Must also compile with general tracing and/or memory-access tracing enabled.
         */
-        virtual void
-        set_trace_enabled(bool enable) =0;
+        static void
+        set_trace_enabled(bool enable);
+
+        /// Get whether tracing is enabled.
+        /**
+           This is a static method, implying the following:
+           - This method may be called before creating a `yk_env` object.
+
+           @returns Whether tracing is enabled.
+        */
+        static bool
+        is_trace_enabled();
 
         /// Get number of MPI ranks.
         /**

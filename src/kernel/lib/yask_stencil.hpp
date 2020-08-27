@@ -74,6 +74,7 @@ IN THE SOFTWARE.
 #include "indices.hpp"
 #include "settings.hpp"
 #include "offload.hpp"
+#include "alloc.hpp"
 #include "generic_var.hpp"
 #include "yk_var.hpp"
 #include "auto_tuner.hpp"
