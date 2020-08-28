@@ -34,11 +34,11 @@ namespace yask {
     template <typename T>
     class synced_ptr {
     private:
-        T* _p = 0;                  // ptr to data.
+        T* _p = 0;                  // ptr to data; used on host and device.
 
         // Additional data when offloading.
         #ifdef USE_OFFLOAD
-        T* _hp = 0;                 // latest sync'd ptr on host.
+        T* _hp = 0;                 // copy of latest sync'd ptr on host.
         T* _dp = 0;                 // val of ptr on device.
 
         // Additional data when printing debug info.
@@ -102,9 +102,6 @@ namespace yask {
                 _hp = p;
                 return true;
             }
-            #else
-            _hp = _p;
-            _dp = _p;
             #endif
             return false;
         }
@@ -128,8 +125,13 @@ namespace yask {
         const T& operator[](long i) const { return _p[i]; }
         T& operator[](int i) { return _p[i]; }
         const T& operator[](int i) const { return _p[i]; }
-        const T* get_dev_ptr() const { return _dp; }
 
+        #ifdef USE_OFFLOAD
+        const T* get_dev_ptr() const { return _dp; }
+        #else
+        const T* get_dev_ptr() const { return _p; }
+        #endif
+        
         // Set pointer value.
         void operator=(T* p) { _p = p; }
 
