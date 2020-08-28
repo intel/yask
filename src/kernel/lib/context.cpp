@@ -522,7 +522,9 @@ namespace yask {
                     bp->add_steps(num_stage_steps);
                 }
 
-                // Call the auto-tuner to evaluate these steps.
+                // Call the auto-tuner to evaluate these steps and change
+                // settings.
+                // FIXME: will not work properly with temporal conditions.
                 eval_auto_tuner(this_num_t);
 
             } // step loop.
@@ -1499,9 +1501,9 @@ namespace yask {
     // Call MPI_Test() on all unfinished requests to promote MPI progress.
     // TODO: replace with more direct and less intrusive techniques.
     void StencilContext::poke_halo_exchange() {
-        STATE_VARS(this);
 
-        #ifdef USE_MPI
+        #if defined(USE_MPI) && !defined(NO_HALO_EXCHANGE)
+        STATE_VARS(this);
         if (!enable_halo_exchange || env->num_ranks < 2)
             return;
 
@@ -1557,7 +1559,7 @@ namespace yask {
     // Exchange dirty halo data for all vars and all steps.
     void StencilContext::exchange_halos() {
 
-        #ifdef USE_MPI
+        #if defined(USE_MPI) && !defined(NO_HALO_EXCHANGE)
         STATE_VARS(this);
         if (!enable_halo_exchange || env->num_ranks < 2)
             return;
@@ -1941,9 +1943,11 @@ namespace yask {
     // TODO: copy only when needed.
     void StencilContext::copy_vars_to_device() {
         #if USE_OFFLOAD
-        for (auto gp : orig_var_ptrs) {
-            assert(gp);
-            gp->gb().copy_data_to_device();
+        if (do_device_copies) {
+            for (auto gp : orig_var_ptrs) {
+                assert(gp);
+                gp->gb().copy_data_to_device();
+            }
         }
         #endif
     }
@@ -1952,9 +1956,11 @@ namespace yask {
     // TODO: copy only when needed.
     void StencilContext::copy_vars_from_device() {
         #if USE_OFFLOAD
-        for (auto gp : output_var_ptrs) {
-            assert(gp);
-            gp->gb().copy_data_from_device();
+        if (do_device_copies) {
+            for (auto gp : output_var_ptrs) {
+                assert(gp);
+                gp->gb().copy_data_from_device();
+            }
         }
         #endif
     }

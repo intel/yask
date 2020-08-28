@@ -317,14 +317,18 @@ int main(int argc, char** argv)
         if (context->rank_bb.bb_num_points < 1)
             THROW_YASK_EXCEPTION("Exiting because there are no points in the domain");
 
-        // init data in vars and params.
+        // Init data in vars and params.
         double seed = opts.validate ? 1.0 : 0.1;
         if (opts.do_warmup || !opts.validate)
             context->init_diff(seed);
 
+        // Handle device updates manually.
+        context->copy_vars_to_device();
+
         // Invoke auto-tuner.
         if (opts.do_pre_auto_tune)
             ksoln->run_auto_tuner_now();
+        context->do_device_copies = false;
 
         // Enable/disable further auto-tuning.
         ksoln->reset_auto_tuner(copts->_do_auto_tune);
@@ -424,8 +428,10 @@ int main(int argc, char** argv)
                 "Trial number:                      " << (tr + 1) << endl << flush;
 
             // init data before each trial for comparison if validating.
-            if (opts.validate)
+            if (opts.validate) {
                 context->init_diff(seed);
+                context->copy_vars_to_device();
+            }
 
             // Warn if tuning.
             if (ksoln->is_auto_tuner_enabled())
@@ -443,6 +449,9 @@ int main(int argc, char** argv)
             ksoln->run_solution(first_t, last_t);
             kenv->global_barrier();
 
+            if (opts.validate)
+                context->copy_vars_from_device();
+            
             // Calc and report perf.
             auto tstats = context->get_stats();
             auto stats = dynamic_pointer_cast<Stats>(tstats);

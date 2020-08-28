@@ -322,14 +322,13 @@ namespace yask {
 #else
         bool allow_vec_exchange = true; // allow vectorized halo exchange.
 #endif
-#ifdef NO_HALO_EXCHANGE
-        bool enable_halo_exchange = false;
-#else
         bool enable_halo_exchange = true;
-#endif
 
         // Clear this to ignore step conditions.
         bool check_step_conds = true;
+
+        // Clear this to skip data transfer to/from device.
+        bool do_device_copies = true;
 
         // MPI buffers for each var.
         // Map key: var name.

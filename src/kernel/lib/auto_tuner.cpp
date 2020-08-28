@@ -90,6 +90,7 @@ namespace yask {
         at_timer.start();
 
         // Temporarily disable halo exchange to tune intra-rank.
+        // Will not produce valid results.
         enable_halo_exchange = false;
 
         // Temporarily ignore step conditions to force eval of conditional
@@ -97,6 +98,9 @@ namespace yask {
         // AAABAAAB sequence, perf may be [very] different if run as
         // ABABAB..., esp. w/temporal tiling.  TODO: work around this.
         check_step_conds = false;
+
+        // Temporarily disable device copies.
+        do_device_copies = false;
 
         // Init tuners.
         reset_auto_tuner(true, verbose);
@@ -125,10 +129,9 @@ namespace yask {
         env->global_barrier();
 
         // reenable normal operation.
-#ifndef NO_HALO_EXCHANGE
         enable_halo_exchange = true;
-#endif
         check_step_conds = true;
+        do_device_copies = true;
 
         // Report results.
         at_timer.stop();
