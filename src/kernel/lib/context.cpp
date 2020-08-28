@@ -33,7 +33,7 @@ namespace yask {
 
     ///// Top-level methods for evaluating reference and optimized stencils.
 
-    // Set the core vars.
+    // Set the core vars that are needed for running kernels.
     void CommonCoreData::set_core(const StencilContext *cxt) {
         STATE_VARS_CONST(cxt);
         _global_sizes.set_from_tuple(opts->_global_sizes);
@@ -685,7 +685,7 @@ namespace yask {
                         // Loops through x from begin_rx to end_rx-1;
                         // similar for y and z.  This code typically
                         // contains the outer OpenMP loop(s).
-#include "yask_region_loops.hpp"
+                        #include "yask_region_loops.hpp"
                     }
 
                     // Need to shift for next stage and/or time.
@@ -743,7 +743,7 @@ namespace yask {
                     // Call calc_block() on every block concurrently.  Only
                     // the shapes corresponding to the current 'phase' will
                     // be calculated.
-#include "yask_region_loops.hpp"
+                    #include "yask_region_loops.hpp"
                 }
 
                 // Loop thru stages that were evaluated in
@@ -1488,7 +1488,7 @@ namespace yask {
     // assigned to each mini-block.  This move is accomplished by changing
     // the vars' local offsets.
     void StencilContext::update_scratch_var_info(int thread_idx,
-                                                  const Indices& idxs) {
+                                                 const Indices& idxs) {
         STATE_VARS(this);
 
         // Loop thru vecs of scratch vars.
@@ -1559,7 +1559,7 @@ namespace yask {
     void StencilContext::poke_halo_exchange() {
         STATE_VARS(this);
 
-#ifdef USE_MPI
+        #ifdef USE_MPI
         if (!enable_halo_exchange || env->num_ranks < 2)
             return;
 
@@ -1575,15 +1575,15 @@ namespace yask {
             MPI_Request* var_send_reqs = var_mpi_data.send_reqs.data();
 
             int flag;
-#if 1
+            #if 1
             int indices[max(var_mpi_data.recv_reqs.size(), var_mpi_data.send_reqs.size())];
             MPI_Testsome(int(var_mpi_data.recv_reqs.size()), var_recv_reqs, &flag, indices, MPI_STATUS_IGNORE);
             MPI_Testsome(int(var_mpi_data.send_reqs.size()), var_send_reqs, &flag, indices, MPI_STATUS_IGNORE);
-#elif 0
+            #elif 0
             int index;
             MPI_Testany(int(var_mpi_data.recv_reqs.size()), var_recv_reqs, &index, &flag, MPI_STATUS_IGNORE);
             MPI_Testany(int(var_mpi_data.send_reqs.size()), var_send_reqs, &index, &flag, MPI_STATUS_IGNORE);
-#else
+            #else
             for (size_t i = 0; i < var_mpi_data.recv_reqs.size(); i++) {
                 auto& r = var_recv_reqs[i];
                 if (r != MPI_REQUEST_NULL) {
@@ -1604,18 +1604,18 @@ namespace yask {
                         r = MPI_REQUEST_NULL;
                 }
             }
-#endif
+            #endif
         }
         auto ttime = test_time.stop();
         TRACE_MSG("poke_halo_exchange: secs spent in " << num_tests <<
                   " MPI test(s): " << make_num_str(ttime));
-#endif
+        #endif
     }
 
     // Exchange dirty halo data for all vars and all steps.
     void StencilContext::exchange_halos() {
 
-#ifdef USE_MPI
+        #ifdef USE_MPI
         STATE_VARS(this);
         if (!enable_halo_exchange || env->num_ranks < 2)
             return;
@@ -1736,191 +1736,191 @@ namespace yask {
                          int neighbor_rank,
                          int ni, // unique neighbor index.
                          MPIBufs& bufs) {
-                        auto& send_buf = bufs.bufs[MPIBufs::buf_send];
-                        auto& recv_buf = bufs.bufs[MPIBufs::buf_recv];
-                        TRACE_MSG("exchange_halos:   with rank " << neighbor_rank << " at relative position " <<
-                                  offsets.sub_elements(1).make_dim_val_offset_str());
+                         auto& send_buf = bufs.bufs[MPIBufs::buf_send];
+                         auto& recv_buf = bufs.bufs[MPIBufs::buf_recv];
+                         TRACE_MSG("exchange_halos:   with rank " << neighbor_rank << " at relative position " <<
+                                   offsets.sub_elements(1).make_dim_val_offset_str());
 
-                        // Are we using MPI shm w/this neighbor?
-                        bool using_shm = opts->use_shm && mpi_info->shm_ranks.at(ni) != MPI_PROC_NULL;
+                         // Are we using MPI shm w/this neighbor?
+                         bool using_shm = opts->use_shm && mpi_info->shm_ranks.at(ni) != MPI_PROC_NULL;
 
-                        // Submit async request to receive data from neighbor.
-                        if (halo_step == halo_irecv) {
-                            auto nbytes = recv_buf.get_bytes();
-                            if (nbytes) {
-                                if (using_shm)
-                                    TRACE_MSG("exchange_halos:    no receive req due to shm");
-                                else {
-                                    void* buf = (void*)recv_buf._elems;
-                                    TRACE_MSG("exchange_halos:    requesting up to " << make_byte_str(nbytes));
-                                    auto& r = var_recv_reqs[ni];
-                                    MPI_Irecv(buf, nbytes, MPI_BYTE,
-                                              neighbor_rank, int(gi),
-                                              env->comm, &r);
-                                    num_recv_reqs++;
-                                }
-                            }
-                            else
-                                TRACE_MSG("exchange_halos:    0B to request");
-                        }
+                         // Submit async request to receive data from neighbor.
+                         if (halo_step == halo_irecv) {
+                             auto nbytes = recv_buf.get_bytes();
+                             if (nbytes) {
+                                 if (using_shm)
+                                     TRACE_MSG("exchange_halos:    no receive req due to shm");
+                                 else {
+                                     void* buf = (void*)recv_buf._elems;
+                                     TRACE_MSG("exchange_halos:    requesting up to " << make_byte_str(nbytes));
+                                     auto& r = var_recv_reqs[ni];
+                                     MPI_Irecv(buf, nbytes, MPI_BYTE,
+                                               neighbor_rank, int(gi),
+                                               env->comm, &r);
+                                     num_recv_reqs++;
+                                 }
+                             }
+                             else
+                                 TRACE_MSG("exchange_halos:    0B to request");
+                         }
 
-                        // Pack data into send buffer, then send to neighbor.
-                        else if (halo_step == halo_pack_isend) {
-                            auto nbytes = send_buf.get_bytes();
-                            if (nbytes) {
+                         // Pack data into send buffer, then send to neighbor.
+                         else if (halo_step == halo_pack_isend) {
+                             auto nbytes = send_buf.get_bytes();
+                             if (nbytes) {
 
-                                // Vec ok?
-                                // Domain sizes must be ok, and buffer size must be ok
-                                // as calculated when buffers were created.
-                                bool send_vec_ok = allow_vec_exchange && send_buf.vec_copy_ok;
+                                 // Vec ok?
+                                 // Domain sizes must be ok, and buffer size must be ok
+                                 // as calculated when buffers were created.
+                                 bool send_vec_ok = allow_vec_exchange && send_buf.vec_copy_ok;
 
-                                // Get first and last ranges.
-                                IdxTuple first = send_buf.begin_pt;
-                                IdxTuple last = send_buf.last_pt;
+                                 // Get first and last ranges.
+                                 IdxTuple first = send_buf.begin_pt;
+                                 IdxTuple last = send_buf.last_pt;
 
-                                // The code in alloc_mpi_data() pre-calculated the first and
-                                // last points of each buffer, except in the step dim, where
-                                // the max range was set. Update actual range now.
-                                if (gp->is_dim_used(step_dim)) {
-                                    first.set_val(step_dim, first_steps_to_swap[gp]);
-                                    last.set_val(step_dim, last_steps_to_swap[gp]);
-                                }
+                                 // The code in alloc_mpi_data() pre-calculated the first and
+                                 // last points of each buffer, except in the step dim, where
+                                 // the max range was set. Update actual range now.
+                                 if (gp->is_dim_used(step_dim)) {
+                                     first.set_val(step_dim, first_steps_to_swap[gp]);
+                                     last.set_val(step_dim, last_steps_to_swap[gp]);
+                                 }
 
-                                // Wait until buffer is avail.
-                                if (using_shm) {
-                                    TRACE_MSG("exchange_halos:    waiting to write to shm buffer");
-                                    wait_time.start();
-                                    send_buf.wait_for_ok_to_write();
-                                    wait_delta += wait_time.stop();
-                                }
+                                 // Wait until buffer is avail.
+                                 if (using_shm) {
+                                     TRACE_MSG("exchange_halos:    waiting to write to shm buffer");
+                                     wait_time.start();
+                                     send_buf.wait_for_ok_to_write();
+                                     wait_delta += wait_time.stop();
+                                 }
 
-                                // Copy (pack) data from var to buffer.
-                                void* buf = (void*)send_buf._elems;
-                                idx_t nelems = 0;
-                                TRACE_MSG("exchange_halos:    packing [" << first.make_dim_val_str() <<
-                                          " ... " << last.make_dim_val_str() << "] " <<
-                                          (send_vec_ok ? "with" : "without") <<
-                                          " vector copy into " << buf);
-                                if (send_vec_ok)
-                                    nelems = gp->get_vecs_in_slice(buf, first, last);
-                                else
-                                    nelems = gp->get_elements_in_slice(buf, first, last);
-                                idx_t nbytes = nelems * get_element_bytes();
+                                 // Copy (pack) data from var to buffer.
+                                 void* buf = (void*)send_buf._elems;
+                                 idx_t nelems = 0;
+                                 TRACE_MSG("exchange_halos:    packing [" << first.make_dim_val_str() <<
+                                           " ... " << last.make_dim_val_str() << "] " <<
+                                           (send_vec_ok ? "with" : "without") <<
+                                           " vector copy into " << buf);
+                                 if (send_vec_ok)
+                                     nelems = gp->get_vecs_in_slice(buf, first, last);
+                                 else
+                                     nelems = gp->get_elements_in_slice(buf, first, last);
+                                 idx_t nbytes = nelems * get_element_bytes();
 
-                                if (using_shm) {
-                                    TRACE_MSG("exchange_halos:    no send req due to shm");
-                                    send_buf.mark_write_done();
-                                }
-                                else {
+                                 if (using_shm) {
+                                     TRACE_MSG("exchange_halos:    no send req due to shm");
+                                     send_buf.mark_write_done();
+                                 }
+                                 else {
 
-                                    // Send packed buffer to neighbor.
-                                    assert(nbytes <= send_buf.get_bytes());
-                                    TRACE_MSG("exchange_halos:    sending " << make_byte_str(nbytes));
-                                    auto& r = var_send_reqs[ni];
-                                    MPI_Isend(buf, nbytes, MPI_BYTE,
-                                              neighbor_rank, int(gi), env->comm, &r);
-                                    num_send_reqs++;
-                                }
-                            }
-                            else
-                                TRACE_MSG("   0B to send");
-                        }
+                                     // Send packed buffer to neighbor.
+                                     assert(nbytes <= send_buf.get_bytes());
+                                     TRACE_MSG("exchange_halos:    sending " << make_byte_str(nbytes));
+                                     auto& r = var_send_reqs[ni];
+                                     MPI_Isend(buf, nbytes, MPI_BYTE,
+                                               neighbor_rank, int(gi), env->comm, &r);
+                                     num_send_reqs++;
+                                 }
+                             }
+                             else
+                                 TRACE_MSG("   0B to send");
+                         }
 
-                        // Wait for data from neighbor, then unpack it.
-                        else if (halo_step == halo_unpack) {
-                            auto nbytes = recv_buf.get_bytes();
-                            if (nbytes) {
+                         // Wait for data from neighbor, then unpack it.
+                         else if (halo_step == halo_unpack) {
+                             auto nbytes = recv_buf.get_bytes();
+                             if (nbytes) {
 
-                                // Wait until buffer is avail.
-                                if (using_shm) {
-                                    TRACE_MSG("exchange_halos:    waiting to read from shm buffer");
-                                    wait_time.start();
-                                    recv_buf.wait_for_ok_to_read();
-                                    wait_delta += wait_time.stop();
-                                }
-                                else {
+                                 // Wait until buffer is avail.
+                                 if (using_shm) {
+                                     TRACE_MSG("exchange_halos:    waiting to read from shm buffer");
+                                     wait_time.start();
+                                     recv_buf.wait_for_ok_to_read();
+                                     wait_delta += wait_time.stop();
+                                 }
+                                 else {
 
-                                    // Wait for data from neighbor before unpacking it.
-                                    auto& r = var_recv_reqs[ni];
-                                    if (r != MPI_REQUEST_NULL) {
-                                        TRACE_MSG("   waiting for receipt of " << make_byte_str(nbytes));
-                                        wait_time.start();
-                                        MPI_Wait(&r, MPI_STATUS_IGNORE);
-                                        wait_delta += wait_time.stop();
-                                    }
-                                    r = MPI_REQUEST_NULL;
-                                }
+                                     // Wait for data from neighbor before unpacking it.
+                                     auto& r = var_recv_reqs[ni];
+                                     if (r != MPI_REQUEST_NULL) {
+                                         TRACE_MSG("   waiting for receipt of " << make_byte_str(nbytes));
+                                         wait_time.start();
+                                         MPI_Wait(&r, MPI_STATUS_IGNORE);
+                                         wait_delta += wait_time.stop();
+                                     }
+                                     r = MPI_REQUEST_NULL;
+                                 }
 
-                                // Vec ok?
-                                bool recv_vec_ok = allow_vec_exchange && recv_buf.vec_copy_ok;
+                                 // Vec ok?
+                                 bool recv_vec_ok = allow_vec_exchange && recv_buf.vec_copy_ok;
 
-                                // Get first and last ranges.
-                                IdxTuple first = recv_buf.begin_pt;
-                                IdxTuple last = recv_buf.last_pt;
+                                 // Get first and last ranges.
+                                 IdxTuple first = recv_buf.begin_pt;
+                                 IdxTuple last = recv_buf.last_pt;
 
-                                // Set step val as above.
-                                if (gp->is_dim_used(step_dim)) {
-                                    first.set_val(step_dim, first_steps_to_swap[gp]);
-                                    last.set_val(step_dim, last_steps_to_swap[gp]);
-                                }
+                                 // Set step val as above.
+                                 if (gp->is_dim_used(step_dim)) {
+                                     first.set_val(step_dim, first_steps_to_swap[gp]);
+                                     last.set_val(step_dim, last_steps_to_swap[gp]);
+                                 }
 
-                                // Copy data from buffer to var.
-                                void* buf = (void*)recv_buf._elems;
-                                idx_t nelems = 0;
-                                TRACE_MSG("exchange_halos:    got data; unpacking into [" << first.make_dim_val_str() <<
-                                          " ... " << last.make_dim_val_str() << "] " <<
-                                          (recv_vec_ok ? "with" : "without") <<
-                                          " vector copy from " << buf);
-                                if (recv_vec_ok)
-                                    nelems = gp->set_vecs_in_slice(buf, first, last);
-                                else
-                                    nelems = gp->set_elements_in_slice(buf, first, last);
-                                assert(nelems <= recv_buf.get_size());
+                                 // Copy data from buffer to var.
+                                 void* buf = (void*)recv_buf._elems;
+                                 idx_t nelems = 0;
+                                 TRACE_MSG("exchange_halos:    got data; unpacking into [" << first.make_dim_val_str() <<
+                                           " ... " << last.make_dim_val_str() << "] " <<
+                                           (recv_vec_ok ? "with" : "without") <<
+                                           " vector copy from " << buf);
+                                 if (recv_vec_ok)
+                                     nelems = gp->set_vecs_in_slice(buf, first, last);
+                                 else
+                                     nelems = gp->set_elements_in_slice(buf, first, last);
+                                 assert(nelems <= recv_buf.get_size());
 
-                                if (using_shm)
-                                    recv_buf.mark_read_done();
-                            }
-                            else
-                                TRACE_MSG("exchange_halos:    0B to wait for");
-                        }
+                                 if (using_shm)
+                                     recv_buf.mark_read_done();
+                             }
+                             else
+                                 TRACE_MSG("exchange_halos:    0B to wait for");
+                         }
 
-                        // Final steps.
-                        else if (halo_step == halo_final) {
-                            auto nbytes = send_buf.get_bytes();
-                            if (nbytes) {
+                         // Final steps.
+                         else if (halo_step == halo_final) {
+                             auto nbytes = send_buf.get_bytes();
+                             if (nbytes) {
 
-                                if (using_shm)
-                                    TRACE_MSG("exchange_halos:    no send wait due to shm");
-                                else {
+                                 if (using_shm)
+                                     TRACE_MSG("exchange_halos:    no send wait due to shm");
+                                 else {
 
-                                    // Wait for send to finish.
-                                    // TODO: consider using MPI_WaitAll.
-                                    // TODO: strictly, we don't have to wait on the
-                                    // send to finish until we want to reuse this buffer,
-                                    // so we could wait on the *previous* send right before
-                                    // doing another one.
-                                    auto& r = var_send_reqs[ni];
-                                    if (r != MPI_REQUEST_NULL) {
-                                        TRACE_MSG("   waiting to finish send of " << make_byte_str(nbytes));
-                                        wait_time.start();
-                                        MPI_Wait(&var_send_reqs[ni], MPI_STATUS_IGNORE);
-                                        wait_delta += wait_time.stop();
-                                    }
-                                    r = MPI_REQUEST_NULL;
-                                }
-                            }
+                                     // Wait for send to finish.
+                                     // TODO: consider using MPI_WaitAll.
+                                     // TODO: strictly, we don't have to wait on the
+                                     // send to finish until we want to reuse this buffer,
+                                     // so we could wait on the *previous* send right before
+                                     // doing another one.
+                                     auto& r = var_send_reqs[ni];
+                                     if (r != MPI_REQUEST_NULL) {
+                                         TRACE_MSG("   waiting to finish send of " << make_byte_str(nbytes));
+                                         wait_time.start();
+                                         MPI_Wait(&var_send_reqs[ni], MPI_STATUS_IGNORE);
+                                         wait_delta += wait_time.stop();
+                                     }
+                                     r = MPI_REQUEST_NULL;
+                                 }
+                             }
 
-                            // Mark vars as up-to-date when done.
-                            for (idx_t si = first_steps_to_swap[gp]; si <= last_steps_to_swap[gp]; si++) {
-                                if (gb.is_dirty(si)) {
-                                    gb.set_dirty(false, si);
-                                    TRACE_MSG("exchange_halos: var '" << gname <<
-                                              "' marked as clean at step-index " << si);
-                                }
-                            }
-                        }
+                             // Mark vars as up-to-date when done.
+                             for (idx_t si = first_steps_to_swap[gp]; si <= last_steps_to_swap[gp]; si++) {
+                                 if (gb.is_dirty(si)) {
+                                     gb.set_dirty(false, si);
+                                     TRACE_MSG("exchange_halos: var '" << gname <<
+                                               "' marked as clean at step-index " << si);
+                                 }
+                             }
+                         }
 
-                    }); // visit neighbors.
+                     }); // visit neighbors.
 
             } // vars.
 
@@ -1932,13 +1932,15 @@ namespace yask {
         auto mpi_call_time = halo_time.stop();
         TRACE_MSG("exchange_halos: secs spent in MPI waits: " << make_num_str(wait_delta));
         TRACE_MSG("exchange_halos: secs spent in this call: " << make_num_str(mpi_call_time));
-#endif
+        #endif
     }
 
     // Update data in vars that have been written to by stage 'sel_bp'.
+    // Set the last "valid step" and mark vars as "dirty", i.e., needing
+    // halo exchange.
     void StencilContext::update_vars(const StagePtr& sel_bp,
-                                      idx_t start, idx_t stop,
-                                      bool mark_dirty) {
+                                     idx_t start, idx_t stop,
+                                     bool mark_dirty) {
         STATE_VARS(this);
         idx_t stride = (start > stop) ? -1 : 1;
         map<YkVarPtr, set<idx_t>> vars_done;
@@ -1957,7 +1959,7 @@ namespace yask {
                 for (auto* sb : *bp) {
 
                     // Get output step for this bundle, if any.
-                    // For many stencils, this will be t+1 or
+                    // For most stencils, this will be t+1 or
                     // t-1 if striding backward.
                     idx_t t_out = 0;
                     if (!sb->get_output_step_index(t, t_out))
