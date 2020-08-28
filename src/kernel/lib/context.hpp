@@ -240,9 +240,9 @@ namespace yask {
         bool do_mpi_interior = true;
         bool do_mpi_left = true;        // left exterior in given dim.
         bool do_mpi_right = true;        // right exterior in given dim.
-        idx_t mpi_exterior_dim = -1;      // which domain dim in left/right.
+        idx_t mpi_exterior_dim = 0;      // which domain dim in left/right.
 
-        // Is overlap currently enabled?
+        // Is overlapping-comms mode currently enabled?
         inline bool is_overlap_active() const {
             bool active = !do_mpi_interior || !do_mpi_left || !do_mpi_right;
             if (active) {

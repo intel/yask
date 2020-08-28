@@ -42,6 +42,7 @@ namespace yask {
     }
     
     // Eval stencil bundle(s) over var(s) using reference scalar code.
+    // Does NOT offload computations.
     void StencilContext::run_ref(idx_t first_step_index,
                                  idx_t last_step_index) {
         STATE_VARS(this);
@@ -346,26 +347,6 @@ namespace yask {
                         if (mpi_interior.bb_valid) {
                             do_mpi_interior = false;
 
-                            // Old overlap method calculates full blocks in exterior
-                            // and then in interior. Only works without WF tiling.
-                            // Also, if blocks are too big, then the interior is
-                            // too small. For now, keeping code for perf comparison.
-                            #ifdef OVERLAP_WITH_BLOCKS
-                            mpi_exterior_dim = -1; // indicate block method.
-
-                            // Overlap comms and computation at a block granularity.
-                            // Set both left and right exterior flags.
-                            do_mpi_left = do_mpi_right = true;
-
-                            // Include automatically-generated loop code that calls
-                            // calc_region(bp) for each region.
-                            TRACE_MSG("run_solution: step " << start_t <<
-                                      " for stage '" << bp->get_name() << "' in MPI exterior");
-                            #include "yask_rank_loops.hpp"
-
-                            #else
-                            mpi_exterior_dim = 0;
-
                             // Overlap comms and computation by restricting
                             // region boundaries.  Make an external pass for
                             // each side of each domain dim, e.g., 'left x',
@@ -395,7 +376,6 @@ namespace yask {
                                     #include "yask_rank_loops.hpp"
                                 } // left/right.
                             } // domain dims.
-                            #endif
 
                             // Mark vars that [may] have been written to by
                             // this stage. Mark vars as dirty even if not
@@ -451,7 +431,6 @@ namespace yask {
                     // Do MPI-external passes?
                     if (mpi_interior.bb_valid) {
                         do_mpi_interior = false;
-                        mpi_exterior_dim = 0;
 
                         // Overlap comms and computation by restricting
                         // region boundaries.  Make an external pass for
@@ -797,44 +776,6 @@ namespace yask {
                   region_idxs.begin.make_val_str() << " ... " <<
                   region_idxs.end.make_val_str() <<
                   ") by region thread " << region_thread_idx);
-
-        #ifdef OVERLAP_WITH_BLOCKS
-        // If we are not calculating some of the blocks, determine
-        // whether this block is *completely* inside the interior.
-        // A block even partially in the exterior is not considered
-        // "inside".
-        if (is_overlap_active()) {
-
-            // Starting point and ending point must be in BB.
-            bool inside = true;
-            DOMAIN_VAR_LOOP(i, j) {
-
-                // Starting before beginning of interior?
-                if (region_idxs.start[i] < mpi_interior.bb_begin[j])
-                    inside = false;
-
-                // Stopping after ending of interior?
-                if (region_idxs.stop[i] > mpi_interior.bb_end[j])
-                    inside = false;
-            }
-            if (do_mpi_interior) {
-                if (inside)
-                    TRACE_MSG(" calculating because block is interior");
-                else {
-                    TRACE_MSG(" *not* calculating because block is exterior");
-                    return;
-                }
-            }
-            if (do_mpi_left || do_mpi_right) {
-                if (!inside)
-                    TRACE_MSG(" calculating because block is exterior");
-                else {
-                    TRACE_MSG(" *not* calculating because block is interior");
-                    return;
-                }
-            }
-        }
-        #endif
 
         // Init block begin & end from region start & stop indices.
         ScanIndices block_idxs(*dims, true);
@@ -1183,9 +1124,8 @@ namespace yask {
                 if (rstop > dend && right_wf_exts[j])
                     rstop = min(rstop, dend + right_wf_exts[j] - shift_amt);
 
-                // Trim region based on current MPI section if
-                // using overlapping but not whole-block method.
-                if (is_overlap_active() && mpi_exterior_dim >= 0) {
+                // Trim region based on current MPI section if overlapping.
+                if (is_overlap_active()) {
 
                     // Interior boundaries.
                     idx_t int_begin = mpi_interior.bb_begin[j];
@@ -1301,8 +1241,10 @@ namespace yask {
                   idxs.begin.make_val_str() << " ... " <<
                   idxs.end.make_val_str() << ") " <<
                   (do_mpi_interior ? "for MPI interior" :
-                   do_mpi_left ? "for MPI exterior left" :
-                   do_mpi_right ? "for MPI exterior right" : "") <<
+                   do_mpi_left ? ("for MPI exterior left dim " +
+                                  to_string(mpi_exterior_dim)) :
+                   do_mpi_right ? ("for MPI exterior right dim " +
+                                   to_string(mpi_exterior_dim)): "") <<
                   " within region base [" <<
                   base_start.make_val_str() << " ... " <<
                   base_stop.make_val_str() << ") shifted " <<
