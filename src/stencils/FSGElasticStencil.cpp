@@ -314,7 +314,7 @@ namespace fsg {
                          kernel_soln.set_block_size("y", 12);
                          kernel_soln.set_block_size("z", 24);
                      }
-                     else {
+                     else if (isa == "avx2") {
                          kernel_soln.set_block_size("x", 48);
                          kernel_soln.set_block_size("y", 4);
                          kernel_soln.set_block_size("z", 128);

@@ -160,7 +160,7 @@ public:
                      kernel_soln.set_block_size("y", 16);
                      kernel_soln.set_block_size("z", 80);
                  }
-                 else {
+                 else if (isa == "avx2") {
                      kernel_soln.set_block_size("x", 64);
                      kernel_soln.set_block_size("y", 16);
                      kernel_soln.set_block_size("z", 96);

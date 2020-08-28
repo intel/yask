@@ -525,7 +525,7 @@ namespace {
                         soln->set_prefetch_dist(1, 1);
                         soln->set_prefetch_dist(2, 0);
                     }
-                    else {
+                    else if (target == "avx2") {
                         soln->set_prefetch_dist(1, 1);
                         soln->set_prefetch_dist(2, 2);
                     }
@@ -554,7 +554,7 @@ namespace {
                          kernel_soln.set_block_size("y", 8);
                          kernel_soln.set_block_size("z", 108);
                      }
-                     else {
+                     else if (isa == "avx2") {
                          kernel_soln.set_block_size("x", 64);
                          kernel_soln.set_block_size("y", 8);
                          kernel_soln.set_block_size("z", 64);
