@@ -38,11 +38,11 @@ allow_new_var_types	?=	1
 streaming_stores	?=	0
 omp			?=	1
 omp_par_for		?=	omp parallel for
-omp_target_par_for	?=	omp target parallel for
 omp_region_schedule	?=	dynamic,1
 omp_block_schedule	?=	static,1
-omp_target_schedule	?=	static,1
 omp_misc_schedule	?=	guided
+omp_target_par_for	?=	omp target parallel for device(KernelEnv::_omp_devn)
+omp_target_schedule	?=	static,1
 offload			?=	0
 trace			?=	0
 trace_mem		?=	0
@@ -393,8 +393,8 @@ YK_SO_OPTS	:=	-shared -fPIC
 YK_CXX_TEST 	:= 	$(filter-out -fopenmp%,$(YK_CXX) $(YK_CXXFLAGS) $(YK_CXXOPT) $(OMPFLAGS) $(EXTRA_YK_CXXFLAGS))
 
 # Clang (LLVM-based) compiler.
-# Includes clang-based Intel compiler (-qnextgen).
-# TODO: add separate settings for Intel nextgen.
+# Includes clang-based Intel compiler (icpx).
+# TODO: add separate settings for Intel icpx.
 ifeq ($(call MACRO_DEF,$(YK_CXX_TEST),__clang__),1)
  YK_CXXFLAGS	+=	$(CXX_ISA)
  YK_CXXFLAGS	+=	-Wno-unused-variable -fno-color-diagnostics

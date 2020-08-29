@@ -29,6 +29,7 @@ using namespace std;
 // Auto-generated stencil code that extends base types.
 #define DEFINE_CONTEXT
 #include YSTR2(YK_CODE_FILE)
+#undef DEFINE_CONTEXT
 
 namespace yask {
 

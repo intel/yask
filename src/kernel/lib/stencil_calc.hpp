@@ -366,7 +366,7 @@ namespace yask {
 
             // Set OMP loop to offload or disable OMP.
             #ifdef USE_OFFLOAD
-            #define OMP_PRAGMA _Pragma("omp target parallel for device(KernelEnv::_omp_devn)")
+            #define OMP_PRAGMA _Pragma("omp target parallel for device(KernelEnv::_omp_devn) schedule(static,1)")
             #else
             #define OMP_PRAGMA
             #endif
