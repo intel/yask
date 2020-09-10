@@ -71,13 +71,18 @@ namespace {
             double d2 = delta_xyz * delta_xyz;
         
             // Spatial FD coefficients for 2nd derivative.
-            auto coeff = get_center_fd_coefficients(2, get_radius());
-            size_t c0i = get_radius();      // index of center sample.
+            vector<double> coeff;
+            size_t rad = get_radius();
+            if (rad > 0)
+                coeff = get_center_fd_coefficients(2, get_radius());
+            else
+                coeff.push_back(1.0);
 
             for (size_t i = 0; i < coeff.size(); i++) {
 
                 // Need 3 copies of center sample for x, y, and z FDs.
-                if (i == c0i)
+                // Center coeff is at index 'rad'.
+                if (i == rad)
                     coeff[i] *= 3.0;
 
                 // Divide each by delta_xyz^2.
@@ -86,7 +91,7 @@ namespace {
 
             // Calculate FDx + FDy + FDz.
             // Start with center value multiplied by coeff 0.
-            auto fd_sum = p(t, x, y, z) * coeff[c0i];
+            auto fd_sum = p(t, x, y, z) * coeff[rad];
 
             // Add values from x, y, and z axes multiplied by the
             // coeff for the given radius.
@@ -106,7 +111,7 @@ namespace {
                            p(t, x, y, z-r) +
                            p(t, x, y, z+r)
 
-                           ) * coeff[c0i + r]; // R & L coeffs are identical.
+                           ) * coeff[rad + r]; // R & L coeffs are identical.
             }
 
             // Wave equation is:
