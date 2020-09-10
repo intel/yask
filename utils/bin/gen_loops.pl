@@ -712,6 +712,7 @@ sub processCode($) {
 
     # Front matter.
     push @code,
+        "// These macros must be re-defined for each generated loop-nest.",
         "#ifndef OMP_PRAGMA",
         "#define OMP_PRAGMA ".pragma($OPT{ompMod}),
         "#endif",
@@ -917,6 +918,8 @@ sub processCode($) {
     push @code,
         "}",
         "#undef OMP_PRAGMA",
+        "#undef INNER_PRAGMA",
+        "#undef SIMD_PRAGMA",
         "// End of generated code.";
     
     # indent program avail?
