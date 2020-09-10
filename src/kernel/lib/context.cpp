@@ -231,7 +231,8 @@ namespace yask {
         else {
 
             // Copy vars to device, if any.
-            copy_vars_to_device();
+            if (do_device_copies)
+                copy_vars_to_device();
 
             #ifdef MODEL_CACHE
             if (env.my_rank != env.msg_rank)
@@ -540,7 +541,8 @@ namespace yask {
             #endif
 
             // Copy vars from device, if any.
-            copy_vars_from_device();
+            if (do_device_copies)
+                copy_vars_from_device();
 
         } // Something to do.
         
@@ -1943,11 +1945,9 @@ namespace yask {
     // TODO: copy only when needed.
     void StencilContext::copy_vars_to_device() {
         #if USE_OFFLOAD
-        if (do_device_copies) {
-            for (auto gp : orig_var_ptrs) {
-                assert(gp);
-                gp->gb().copy_data_to_device();
-            }
+        for (auto gp : orig_var_ptrs) {
+            assert(gp);
+            gp->gb().copy_data_to_device();
         }
         #endif
     }
@@ -1956,11 +1956,9 @@ namespace yask {
     // TODO: copy only when needed.
     void StencilContext::copy_vars_from_device() {
         #if USE_OFFLOAD
-        if (do_device_copies) {
-            for (auto gp : output_var_ptrs) {
-                assert(gp);
-                gp->gb().copy_data_from_device();
-            }
+        for (auto gp : output_var_ptrs) {
+            assert(gp);
+            gp->gb().copy_data_from_device();
         }
         #endif
     }
