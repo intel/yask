@@ -130,7 +130,12 @@ namespace yask {
     #endif
 
     // Macro for looping through an aligned real_vec_t.
-    #if defined(CHECK) || (VLEN==1)
+    #if VLEN==1
+    #define REAL_VEC_LOOP(i)                    \
+        constexpr int i=0;
+    #define REAL_VEC_LOOP_UNALIGNED(i)          \
+        constexpr int i=0;
+    #elif defined(CHECK)
     #define REAL_VEC_LOOP(i)                    \
         for (int i=0; i<VLEN; i++)
     #define REAL_VEC_LOOP_UNALIGNED(i)          \
@@ -287,7 +292,7 @@ namespace yask {
             return res;
         }
 
-        // unary plus.
+        // unary plus (no-op).
         ALWAYS_INLINE real_vec_t operator+() const {
 	  return *this;
         }
@@ -824,7 +829,7 @@ namespace yask {
         #if defined(NO_INTRINSICS) || !defined(USE_AVX512)
         // must make a temp copy in case &res == &a.
         real_vec_t tmp = a;
-        for (int i = 0; i < VLEN; i++)
+        REAL_VEC_LOOP_UNALIGNED(i)
             res.u.r[i] = tmp.u.r[ctrl.u.ci[i]];
         #else
         res.u.mi = INAMEI(permutexvar)(ctrl.u.mi, a.u.mi);
@@ -854,7 +859,7 @@ namespace yask {
         #if defined(NO_INTRINSICS) || !defined(USE_AVX512)
         // must make a temp copy in case &res == &a.
         real_vec_t tmp = a;
-        for (int i = 0; i < VLEN; i++) {
+        REAL_VEC_LOOP_UNALIGNED(i) {
             if ((k1 >> i) & 1)
                 res.u.r[i] = tmp.u.r[ctrl.u.ci[i]];
         }
@@ -886,7 +891,7 @@ namespace yask {
         #if defined(NO_INTRINSICS) || !defined(USE_AVX512)
         // must make temp copies in case &res == &a or &b.
         real_vec_t tmpa = a, tmpb = b;
-        for (int i = 0; i < VLEN; i++) {
+        REAL_VEC_LOOP_UNALIGNED(i) {
             int sel = ctrl.u.ci[i] & ctrl_sel_bit; // 0 => a, 1 => b.
             int idx = ctrl.u.ci[i] & ctrl_idx_mask; // index.
             res.u.r[i] = sel ? tmpb.u.r[idx] : tmpa.u.r[idx];

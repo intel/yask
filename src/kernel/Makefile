@@ -42,6 +42,7 @@ omp_region_schedule	?=	dynamic,1
 omp_block_schedule	?=	static,1
 omp_misc_schedule	?=	guided
 omp_target_par_for	?=	omp target parallel for device(KernelEnv::_omp_devn)
+#omp_target_par_for	?=	omp target teams distribute parallel for device(KernelEnv::_omp_devn)
 omp_target_schedule	?=	static,1
 offload			?=	0
 trace			?=	0
