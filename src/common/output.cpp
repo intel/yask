@@ -140,6 +140,5 @@ namespace yask {
         assert(p.get());
         return p;
     }
-
 }
 

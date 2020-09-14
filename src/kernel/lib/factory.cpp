@@ -35,11 +35,24 @@ namespace yask {
 
     // APIs.
     // See yask_kernel_api.hpp.
+    yk_env_ptr yk_factory::new_env(MPI_Comm comm) const {
+        auto ep = make_shared<KernelEnv>();
+        assert(ep);
+        ep->init_env(0, 0, comm);
+        TRACE_MSG("YASK env object created with MPI communicator" << comm);
+        return ep;
+    }
+    yk_env_ptr yk_factory::new_env() const {
+        return new_env(MPI_COMM_NULL);
+    }
     std::string yk_factory::get_version_string() {
         return yask_get_version_string();
     }
+
+    // Compiling new_solution() triggers compilation of the stencil kernels.
     yk_solution_ptr yk_factory::new_solution(yk_env_ptr env,
                                              const yk_solution_ptr source) const {
+        TRACE_MSG("creating new YASK solution...");
         auto ep = dynamic_pointer_cast<KernelEnv>(env);
         assert(ep);
         auto dp = YASK_STENCIL_CONTEXT::new_dims(); // create Dims.

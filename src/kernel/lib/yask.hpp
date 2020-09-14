@@ -186,7 +186,8 @@ typedef std::uint64_t uidx_t;
         if (dbg) {                                                      \
             auto& os = dbg->get_ostream();                              \
             DEBUG_MSG0(os, msg);                                        \
-        } } while(0)
+        } else DEBUG_MSG0(std::cout, msg);                              \
+    } while(0)
 
 // Macro for trace message.
 // Enabled only if compiled with TRACE macro and run with -trace option.

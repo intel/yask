@@ -26,9 +26,6 @@ IN THE SOFTWARE.
 // Test the YASK vars.
 // This must be compiled with a kernel containing 'x', 'y', and 'z' dims.
 
-// enable assert().
-#define CHECK
-
 #include "yask_stencil.hpp"
 using namespace std;
 using namespace yask;
@@ -39,13 +36,13 @@ using namespace yask;
 
 void run_tests(int argc, char* argv[]) {
 
-    // Bootstrap factory from kernel API.
+    // Bootstrap objects from kernel API.
     yk_factory kfac;
     yask_output_factory yof;
 
     // Set up the environment (e.g., OpenMP & MPI).
-    yk_env::set_trace_enabled(true);
     yk_env::set_debug_output(yof.new_stdout_output());
+    yk_env::set_trace_enabled(true);
     auto kenv = kfac.new_env();
 
     // Object containing data and parameters for stencil eval.

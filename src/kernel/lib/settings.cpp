@@ -29,6 +29,7 @@ using namespace std;
 namespace yask {
 
     // Check whether dim is of allowed type.
+    // Throw exception if not.
     void Dims::check_dim_type(const std::string& dim,
                             const std::string& fn_name,
                             bool step_ok,
@@ -52,18 +53,6 @@ namespace yask {
             THROW_YASK_EXCEPTION("Error in " + fn_name + "(): dimension '" +
                                  dim + "' is a misc dimension, which is not allowed");
         }
-    }
-
-    // APIs.
-    // See yask_kernel_api.hpp.
-    yk_env_ptr yk_factory::new_env(MPI_Comm comm) const {
-        auto ep = make_shared<KernelEnv>();
-        assert(ep);
-        ep->init_env(0, 0, comm);
-        return ep;
-    }
-    yk_env_ptr yk_factory::new_env() const {
-        return new_env(MPI_COMM_NULL);
     }
 
     // Debug & trace.
@@ -420,7 +409,7 @@ namespace yask {
             " A 'vector' is composed of points.\n"
             "  A 'folded vector' contains points in more than one dimension.\n"
             "  The size of a vector is typically that of a SIMD register.\n"
-            " A 'vector-cluster' is composed of vectors.\n"
+            " A 'cluster' is composed of vectors.\n"
             "  This is the unit of work done in each inner-most loop iteration.\n"
             " A 'sub-block' is composed of vector-clusters.\n"
             "  If the number of block-threads is greater than one,\n"
@@ -452,7 +441,7 @@ namespace yask {
             "   so the global-domain is equivalent to the single local-domain.\n" <<
 #endif
             "\nGuidelines for setting tiling sizes:\n"
-            " The vector and vector-cluster sizes are set at compile-time, so\n"
+            " The vector and cluster sizes are set at compile-time, so\n"
             "  there are no run-time options to set them.\n"
             " Set sub-block sizes to specify a unit of work done by each nested OpenMP thread.\n"
             "  Multiple sub-blocks are intended to allow sharing of caches\n"
@@ -496,7 +485,7 @@ namespace yask {
             "  A global-domain size of 0 in a given domain dimension =>\n"
             "   global-domain size is the sum of local-domain sizes in that dimension.\n"
 #ifdef SHOW_GROUPS
-            " Setting 'group' sizes controls only the order of tiles.\n"
+            " Setting 'group' sizes controls only the order of tile evaluation.\n"
             "  These are advanced settings that are not commonly used.\n"
 #endif
             "\nControlling OpenMP threading:\n"
@@ -543,7 +532,7 @@ namespace yask {
     // Output info to 'os' using '*_name' and dim names.
     // Does not process 'step_dim'.
     // Return product of number of inner subsets.
-    idx_t  KernelSettings::find_num_subsets(ostream& os,
+    idx_t KernelSettings::find_num_subsets(ostream& os,
                                           IdxTuple& inner_sizes, const string& inner_name,
                                           const IdxTuple& outer_sizes, const string& outer_name,
                                           const IdxTuple& mults, const std::string& step_dim) {

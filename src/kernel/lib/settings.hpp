@@ -75,10 +75,7 @@ namespace yask {
         // OMP vars.
         int max_threads=0;      // initial value from OMP.
 
-        KernelEnv() {
-            yask_output_factory yof;
-            set_debug_output(yof.new_stdout_output());
-        }
+        KernelEnv() { }
         virtual ~KernelEnv() { }
 
         // Init MPI, OMP, etc.

@@ -828,6 +828,19 @@ help:
 #################################
 # TODO: convert all testing to a separate test framework.
 
+empty		:=
+space		:=	$(empty) $(empty)
+comma		:=	,
+ifeq ($(offload),1)
+TEST_MAKE 	:=	$(MAKE) real_bytes=8 allow_new_var_types=0 check=0 trace=1
+SET_FOLD	=
+SET_CLUSTER	=
+else
+TEST_MAKE 	:=	$(MAKE) real_bytes=8 allow_new_var_types=0 check=1 trace=1
+SET_FOLD	=	fold=$(subst $(space),$(comma),$(1))
+SET_CLUSTER	=	cluster=$(subst $(space),$(comma),$(1))
+endif
+
 ### Unit tests.
 
 $(YK_VAR_TEST_EXEC): $(YK_TEST_SRC_DIR)/var_test.cpp $(YK_LIB)
@@ -835,9 +848,10 @@ $(YK_VAR_TEST_EXEC): $(YK_TEST_SRC_DIR)/var_test.cpp $(YK_LIB)
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
 	@ls -l $@
 
-cxx-yk-var-test: $(YK_VAR_TEST_EXEC)
+cxx-yk-var-test:
+	$(TEST_MAKE) $(YK_VAR_TEST_EXEC)
 	@echo '*** Running the C++ YASK var test...'
-	$(RUN_PREFIX) $<
+	$(RUN_PREFIX) $(YK_VAR_TEST_EXEC)
 
 ### API tests.
 
@@ -947,75 +961,64 @@ api-tests:
 # These tests are focused on the kernel and not the compiler.
 # For testing both the kernel and compiler in various combinations,
 # run the tests from the top-level Makefile.
-empty		:=
-space		:=	$(empty) $(empty)
-comma		:=	,
-ifeq ($(offload),1)
-STENCIL_TEST 	:=	yc-and-yk-test real_bytes=8 allow_new_var_types=0 check=0 trace=1
-SET_FOLD	=
-SET_CLUSTER	=
-else
-STENCIL_TEST 	:= 	yc-and-yk-test real_bytes=8 allow_new_var_types=0 check=1 trace=1
-SET_FOLD	=	fold=$(subst $(space),$(comma),$(1))
-SET_CLUSTER	=	cluster=$(subst $(space),$(comma),$(1))
-endif
+STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 
 1d-tests:
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_1d $(call SET_FOLD,x=4)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_1d $(call SET_FOLD,x=4) $(call SET_CLUSTER,x=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stages_1d $(call SET_FOLD,x=4)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_func_1d $(call SET_FOLD,x=4)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_step_cond_1d $(call SET_FOLD,x=4)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_boundary_1d $(call SET_FOLD,x=4)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_scratch_1d $(call SET_FOLD,x=4)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_scratch_boundary_1d $(call SET_FOLD,x=4)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_1d $(call SET_FOLD,x=4)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_1d $(call SET_FOLD,x=4) $(call SET_CLUSTER,x=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stages_1d $(call SET_FOLD,x=4)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_func_1d $(call SET_FOLD,x=4)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_step_cond_1d $(call SET_FOLD,x=4)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_1d $(call SET_FOLD,x=4)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_1d $(call SET_FOLD,x=4)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_boundary_1d $(call SET_FOLD,x=4)
 
 2d-tests:
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_empty step_dim=t domain_dims=d1,d2
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_empty_2d
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_2d $(call SET_FOLD,x=2 y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_2d $(call SET_FOLD,x=2 y=2) $(call SET_CLUSTER,y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_2d $(call SET_FOLD,x=2 y=2) mpi=0 ranks=1
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_2d arch=intel64 $(call SET_FOLD,x=3 y=2) domain_dims=y,x
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_reverse_2d radius=1
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stages_2d $(call SET_FOLD,x=2 y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_misc_2d $(call SET_FOLD,x=2 y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_misc_2d EXTRA_YC_FLAGS=-interleave-misc
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_scratch_2d $(call SET_FOLD,x=2 y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_boundary_2d $(call SET_FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_empty step_dim=t domain_dims=d1,d2
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_empty_2d
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d $(call SET_FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d $(call SET_FOLD,x=2 y=2) $(call SET_CLUSTER,y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d $(call SET_FOLD,x=2 y=2) mpi=0 ranks=1
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d arch=intel64 $(call SET_FOLD,x=3 y=2) domain_dims=y,x
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_reverse_2d radius=1
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stages_2d $(call SET_FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d $(call SET_FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d EXTRA_YC_FLAGS=-interleave-misc
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_2d $(call SET_FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_2d $(call SET_FOLD,x=2 y=2)
 
 3d-tests:
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_3d $(call SET_FOLD,x=2 y=2 z=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_3d $(call SET_FOLD,x=2 z=2) domain_dims=z,y,x
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stages_3d $(call SET_FOLD,y=2 x=2) domain_dims=x,z,y
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_partial_3d $(call SET_FOLD,x=2 z=2) domain_dims=x,z,y
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_stream_3d radius=5
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_boundary_3d $(call SET_FOLD,x=2 y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_scratch_3d $(call SET_FOLD,x=2 z=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d $(call SET_FOLD,x=2 y=2 z=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d $(call SET_FOLD,x=2 z=2) domain_dims=z,y,x
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stages_3d $(call SET_FOLD,y=2 x=2) domain_dims=x,z,y
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_partial_3d $(call SET_FOLD,x=2 z=2) domain_dims=x,z,y
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stream_3d radius=5
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_3d $(call SET_FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_3d $(call SET_FOLD,x=2 z=2)
 
 # 3D tests w/specific shapes.
 3d-tests2:
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=3axis $(call SET_FOLD,x=2 y=2) $(call SET_CLUSTER,x=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=3axis $(call SET_FOLD,x=2 y=2) $(call SET_CLUSTER,z=2 y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=3axis_with_diags $(call SET_FOLD,x=2 z=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=3plane $(call SET_FOLD,y=2 z=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=cube $(call SET_FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=3axis $(call SET_FOLD,x=2 y=2) $(call SET_CLUSTER,x=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=3axis $(call SET_FOLD,x=2 y=2) $(call SET_CLUSTER,z=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=3axis_with_diags $(call SET_FOLD,x=2 z=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=3plane $(call SET_FOLD,y=2 z=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=cube $(call SET_FOLD,x=2 y=2)
 
 # 3D tests w/actual seismic stencils.
 3d-tests3:
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=iso3dfd radius=3 $(call SET_FOLD,x=2 y=2) domain_dims=z,x,y
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=iso3dfd_sponge radius=6 $(call SET_FOLD,x=2 z=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=ssg $(call SET_FOLD,x=2 y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=ssg_merged $(call SET_FOLD,x=2 y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=awp $(call SET_FOLD,x=2 y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=awp_abc $(call SET_FOLD,x=2 y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=tti $(call SET_FOLD,x=2 y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=fsg $(call SET_FOLD,x=2 y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=fsg_abc $(call SET_FOLD,x=2 y=2)
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=fsg_merged $(call SET_FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=iso3dfd radius=3 $(call SET_FOLD,x=2 y=2) domain_dims=z,x,y
+	$(MAKE) clean; $(STENCIL_TEST) stencil=iso3dfd_sponge radius=6 $(call SET_FOLD,x=2 z=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=ssg $(call SET_FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=ssg_merged $(call SET_FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=awp $(call SET_FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=awp_abc $(call SET_FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=tti $(call SET_FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=fsg $(call SET_FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=fsg_abc $(call SET_FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=fsg_merged $(call SET_FOLD,x=2 y=2)
 
 4d-tests:
-	$(MAKE) clean; $(MAKE) $(STENCIL_TEST) stencil=test_4d $(call SET_FOLD,w=2 x=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_4d $(call SET_FOLD,w=2 x=2)
 
 stencil-tests:
 	$(MAKE) 1d-tests
