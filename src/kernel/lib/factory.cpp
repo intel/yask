@@ -39,7 +39,7 @@ namespace yask {
         auto ep = make_shared<KernelEnv>();
         assert(ep);
         ep->init_env(0, 0, comm);
-        TRACE_MSG("YASK env object created with MPI communicator" << comm);
+        TRACE_MSG("YASK env object created with MPI communicator " << comm);
         return ep;
     }
     yk_env_ptr yk_factory::new_env() const {
