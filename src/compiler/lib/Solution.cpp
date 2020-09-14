@@ -219,8 +219,11 @@ namespace yask {
         else if (target == "hsw" || target == "bdw")
             target = "avx2";
         else if (target == "avx512f" || target == "skx" ||
-                 target == "skl" || target == "clx")
+                 target == "skl" || target == "clx" ||
+                 target == "avx512-zmm" || target == "avx512hi")
             target = "avx512";
+        else if (target == "avx512lo")
+            target = "avx512-ymm";
 
         // Ensure all intermediate data is clean.
         _free(true);
