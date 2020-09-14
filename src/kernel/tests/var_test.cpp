@@ -62,19 +62,19 @@ void run_tests(int argc, char* argv[]) {
     // Set domain size.
     int i = 0;
     for (auto dname : ksoln->get_domain_dim_names()) {
-
-        ksoln->set_rank_domain_size(dname, 9 + i++);
+        ksoln->set_rank_domain_size(dname, 19 + i * 3);
+        i++;
     }
 
     // 0D test.
     {
         os << "0-D test...\n";
         VarDimNames gdims;
-        auto gb0 = make_shared<YkElemVar<Layout_0d, false>>(*context, "v1", gdims);
+        auto gb0 = make_shared<YkElemVar<Layout_0d, false>>(*context, "var1", gdims);
         YkVarPtr g0 = make_shared<YkVarImpl>(gb0);
         g0->alloc_storage();
         os << gb0->make_info_string() << endl;
-        auto gb1 = make_shared<YkElemVar<Layout_0d, false>>(*context, "v2", gdims);
+        auto gb1 = make_shared<YkElemVar<Layout_0d, false>>(*context, "var2", gdims);
         YkVarPtr g1 = make_shared<YkVarImpl>(gb1);
         g1->alloc_storage();
         os << gb1->make_info_string() << endl;
@@ -86,15 +86,16 @@ void run_tests(int argc, char* argv[]) {
         auto v0 = g0->get_element({});
         auto v1 = g1->get_element({});
         assert(v0 == v1);
+        os << "Exiting 0-D test\n";
     }
 
     // 3D test.
     {
         os << "3-D test...\n";
         VarDimNames gdims = {"x", "y", "z"};
-        auto gb3 = make_shared<YkElemVar<Layout_321, false>>(*context, "v3", gdims);
+        auto gb3 = make_shared<YkElemVar<Layout_321, false>>(*context, "var3", gdims);
         YkVarPtr g3 = make_shared<YkVarImpl>(gb3);
-        auto gb3f = make_shared<YkVecVar<Layout_123, false, VLEN_X, VLEN_Y, VLEN_Z>>(*context, "v4", gdims);
+        auto gb3f = make_shared<YkVecVar<Layout_123, false, VLEN_X, VLEN_Y, VLEN_Z>>(*context, "var4", gdims);
         YkVarPtr g3f = make_shared<YkVarImpl>(gb3f);
         int i = 0;
         int min_pad = 3;
@@ -106,9 +107,7 @@ void run_tests(int argc, char* argv[]) {
             i++;
         }
         g3->alloc_storage();
-        os << gb3->make_info_string() << endl;
         g3f->alloc_storage();
-        os << gb3f->make_info_string() << endl;
 
         os << "Copying seq of vals\n";
         gb3->set_all_elements_in_seq(1.0);
@@ -136,6 +135,7 @@ void run_tests(int argc, char* argv[]) {
                 assert(val == valf);
                 return true;
             });
+        os << "Exiting 3-D test\n";
     }
 }
 
