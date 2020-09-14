@@ -24,12 +24,37 @@ IN THE SOFTWARE.
 *****************************************************************************/
 
 // This file contains declarations and code needed for OpenMP offload.
-// Active when USE_OFFLOAD macro is set.
+// Active when USE_OFFLOAD macro is set, otherwise stubs are provided.
 
 #pragma once
 
 namespace yask {
 
+    // Get device ptr from any host ptr.
+    template <typename T>
+    T* get_dev_ptr(T* hostp) {
+        #ifdef USE_OFFLOAD
+        auto devn = KernelEnv::_omp_devn;
+        if (hostp)
+            assert(omp_target_is_present(hostp, devn));
+        else
+            return NULL;
+
+        // Temp var to capture device ptr.
+        T* dp = 0;
+
+        // Get pointer on device.
+        #pragma omp target data device(devn) use_device_ptr(hostp)
+        {
+            dp = hostp;
+        }
+        return dp;
+
+        #else
+        return hostp;
+        #endif
+    }
+    
     // Type to track and sync pointers on target device.
     template <typename T>
     class synced_ptr {
@@ -64,14 +89,16 @@ namespace yask {
                 if (p)
                     assert(omp_target_is_present(p, devn));
 
-                // Temp var to capture device data.
+                // Temp var to capture device ptr.
                 T* dp;
                 
                 // With tracing.
                 #ifdef TRACE
+
+                // Addr of host ptr.
                 T** pp = &_p;
 
-                // Temp vars to capture device data.
+                // Temp var to capture addr of dev ptr.
                 T** dpp;
 
                 // Set pointer on device and copy back to host.
@@ -141,9 +168,9 @@ namespace yask {
             #if defined(USE_OFFLOAD) && defined(TRACE)
             auto devn = KernelEnv::_omp_devn;
             TRACE_MSG("omp: ptr to " << _hp << " on host at " << (void*)&_hp <<
-                       (done ? "" : "already") << " set to " << _dp <<
-                       " on device " << devn << " at " << (void*)_dpp <<
-                       ((_dpp == 0) ? " *******" : ""));
+                      (done ? "" : "already") << " set to " << _dp <<
+                      " on device " << devn << " at " << (void*)_dpp <<
+                      ((_dpp == 0) ? " *******" : ""));
             #endif
             return done;
         }
@@ -154,30 +181,6 @@ namespace yask {
             return sync();
         }
 
-        // Get device ptr from any host ptr.
-        static T* get_dev_ptr(T* hostp) {
-            #ifdef USE_OFFLOAD
-            auto devn = KernelEnv::_omp_devn;
-            if (hostp)
-                assert(omp_target_is_present(hostp, devn));
-            else
-                return NULL;
-
-            // Temp var to capture device data.
-            T* dp = 0;
-
-            // Get pointer on device.
-            #pragma omp target device(devn) map(from: dp)
-            {
-                dp = hostp;
-            }
-            return dp;
-
-            #else
-            return hostp;
-            #endif
-        }
-        
     };
     
     #ifdef USE_OFFLOAD
@@ -199,6 +202,7 @@ namespace yask {
         if (res)
             THROW_YASK_EXCEPTION("error: cannot map OMP device ptr");
         assert(omp_target_is_present(hostp, devn));
+        assert(get_dev_ptr(hostp) == devp);
         TRACE_MSG("done allocating and mapping");
         return devp;
     }
@@ -226,7 +230,7 @@ namespace yask {
     // Free space for 'num' 'T' objects on offload device.
     template <typename T>
     void offload_map_free(T* hostp, size_t num) {
-        void* devp = synced_ptr<T>::get_dev_ptr(hostp);
+        void* devp = get_dev_ptr(hostp);
         offload_map_free(devp, hostp, num);
     }
 
@@ -246,7 +250,7 @@ namespace yask {
     }
     template <typename T>
     void offload_copy_to_device(T* hostp, size_t num) {
-        void* devp = synced_ptr<T>::get_dev_ptr(hostp);
+        void* devp = get_dev_ptr(hostp);
         offload_copy_to_device(devp, hostp, num);
     }
 
@@ -266,11 +270,13 @@ namespace yask {
     }
     template <typename T>
     void offload_copy_from_device(T* hostp, size_t num) {
-        void* devp = synced_ptr<T>::get_dev_ptr(hostp);
+        void* devp = get_dev_ptr(hostp);
         offload_copy_from_device(devp, hostp, num);
     }
 
     #else
+
+    // Stub functions when not offloading.
     template <typename T>
     void* offload_map_alloc(T* hostp, size_t num) { return hostp; }
     template <typename T>
