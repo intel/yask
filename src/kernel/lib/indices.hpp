@@ -98,7 +98,7 @@ namespace yask {
         // Write to an IdxTuple.
         // The 'tgt' must have the same number of dims.
         void set_tuple_vals(IdxTuple& tgt) const {
-            assert(tgt.size() == size_t(_ndims));
+            host_assert(tgt.size() == size_t(_ndims));
             for (int i = 0; i < _ndims; i++)
                 if (size_t(i) < tgt.size())
                     tgt.set_val(i, _idxs[i]);
@@ -106,7 +106,7 @@ namespace yask {
 
         // Read from an IdxTuple.
         void set_from_tuple(const IdxTuple& src) {
-            assert(src.size() <= +max_idxs);
+            host_assert(src.size() <= +max_idxs);
             int n = int(src.size());
             for (int i = 0; i < n; i++)
                 _idxs[i] = src.get_val(i);
@@ -115,7 +115,7 @@ namespace yask {
 
         // Other inits.
         void set_from_vec(const VarIndices& src) {
-            assert(src.size() <= +max_idxs);
+            host_assert(src.size() <= +max_idxs);
             int n = int(src.size());
             for (int i = 0; i < n; i++)
                 _idxs[i] = src[i];
@@ -305,7 +305,7 @@ namespace yask {
         // Make a Tuple w/given names.
         ALWAYS_INLINE
         IdxTuple make_tuple(const VarDimNames& names) const {
-            assert((int)names.size() == _ndims);
+            host_assert((int)names.size() == _ndims);
 
             // Make a Tuple from names.
             IdxTuple tmp;
@@ -472,12 +472,30 @@ namespace yask {
         //                                       start   stop  (index = 2)
 
         // Ctor.
-        ScanIndices(const Dims& dims, bool use_vec_align);
+        ScanIndices(const Dims& dims, bool use_vec_align) :
+            ndims(NUM_STENCIL_DIMS),
+            begin(idx_t(0), ndims),
+            end(idx_t(0), ndims),
+            stride(idx_t(1), ndims),
+            align(idx_t(1), ndims),
+            align_ofs(idx_t(0), ndims),
+            group_size(idx_t(1), ndims),
+            num_indices(idx_t(1), ndims),
+            start(idx_t(0), ndims),
+            stop(idx_t(0), ndims),
+            index(idx_t(0), ndims) {
+            
+            // Set alignment to vector lengths.
+            // i: index for stencil dims, j: index for domain dims.
+            if (use_vec_align)
+                DOMAIN_VAR_LOOP(i, j)
+                    align[i] = fold_pts[j];
+        }
         ScanIndices(const Dims& dims, bool use_vec_align, Indices* ofs) :
             ScanIndices(dims, use_vec_align) {
             if (ofs) {
                 DOMAIN_VAR_LOOP(i, j) {
-                    assert(ofs->_get_num_dims() == ndims - 1);
+                    host_assert(ofs->_get_num_dims() == ndims - 1);
                     align_ofs[i] = (*ofs)[j];
                 }
             }
@@ -486,7 +504,7 @@ namespace yask {
             ScanIndices(dims, use_vec_align) {
             if (ofs) {
                 DOMAIN_VAR_LOOP(i, j) {
-                    assert(ofs->_get_num_dims() == ndims - 1);
+                    host_assert(ofs->_get_num_dims() == ndims - 1);
                     align_ofs[i] = ofs->get_val(j);
                 }
             }

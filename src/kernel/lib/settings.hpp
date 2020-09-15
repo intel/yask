@@ -145,7 +145,7 @@ namespace yask {
         // Get linear index into a vector given 'fold_ofs', which are
         // element offsets that must be *exactly* those in _vec_fold_pts.
         idx_t get_elem_index_in_vec(const Indices& fold_ofs) const {
-            assert(fold_ofs._get_num_dims() == NUM_VEC_FOLD_DIMS);
+            host_assert(fold_ofs._get_num_dims() == NUM_VEC_FOLD_DIMS);
 
             // Use compiler-generated fold macro.
             idx_t i = VEC_FOLD_LAYOUT(fold_ofs);
@@ -153,7 +153,7 @@ namespace yask {
 #ifdef DEBUG_LAYOUT
             // Use compiler-generated fold layout class.
             idx_t j = _vec_fold_layout.layout(fold_ofs);
-            assert(i == j);
+            host_assert(i == j);
 #endif
 
             return i;
@@ -162,7 +162,7 @@ namespace yask {
         // Get linear index into a vector given 'elem_ofs', which are
         // element offsets that may include other dimensions.
         idx_t get_elem_index_in_vec(const IdxTuple& elem_ofs) const {
-            assert(_vec_fold_pts._get_num_dims() == NUM_VEC_FOLD_DIMS);
+            host_assert(_vec_fold_pts._get_num_dims() == NUM_VEC_FOLD_DIMS);
             if (NUM_VEC_FOLD_DIMS == 0)
                 return 0;
 
@@ -178,7 +178,7 @@ namespace yask {
             // Use fold layout to find element index.
 #ifdef DEBUG_LAYOUT
             idx_t i2 = _vec_fold_pts.layout(fold_ofs, false);
-            assert(i == i2);
+            host_assert(i == i2);
 #endif
             return i;
         }
@@ -187,7 +187,7 @@ namespace yask {
 
     // Utility to determine number of points in a "sizes" var.
     inline idx_t get_num_domain_points(const IdxTuple& sizes) {
-        assert(sizes._get_num_dims() == NUM_STENCIL_DIMS);
+        host_assert(sizes._get_num_dims() == NUM_STENCIL_DIMS);
         idx_t pts = 1;
         DOMAIN_VAR_LOOP(i, j)
             pts *= sizes[i];
@@ -392,8 +392,8 @@ namespace yask {
         // Input 'offsets': tuple of NeighborOffset vals.
         virtual idx_t get_neighbor_index(const IdxTuple& offsets) const {
             idx_t i = neighborhood_sizes.layout(offsets); // 1D index.
-            assert(i >= 0);
-            assert(i < neighborhood_size);
+            host_assert(i >= 0);
+            host_assert(i < neighborhood_size);
             return i;
         }
 
@@ -603,28 +603,28 @@ namespace yask {
     // functions with side-effects.
 #define STATE_VARS0(_ksbp, pfx)                                         \
     pfx auto* ksbp = _ksbp;                                             \
-    assert(ksbp);                                                       \
+    host_assert(ksbp);                                                       \
     pfx auto* state = ksbp->get_state().get();                          \
-    assert(state);                                                      \
+    host_assert(state);                                                      \
     pfx auto* env = state->_env.get();                                  \
-    assert(env);                                                        \
+    host_assert(env);                                                        \
     pfx auto* opts = state->_opts.get();                                \
-    assert(opts);                                                       \
+    host_assert(opts);                                                       \
     pfx auto* dims = state->_dims.get();                                \
-    assert(dims);                                                       \
+    host_assert(dims);                                                       \
     pfx auto* mpi_info = state->_mpi_info.get();                        \
-    assert(mpi_info);                                                   \
+    host_assert(mpi_info);                                                   \
     const auto& step_dim = dims->_step_dim;                             \
     const auto& inner_dim = dims->_inner_dim;                           \
     const auto& domain_dims = dims->_domain_dims;                       \
     constexpr int nddims = NUM_DOMAIN_DIMS;                             \
-    assert(nddims == domain_dims.size());                               \
+    host_assert(nddims == domain_dims.size());                               \
     const auto& stencil_dims = dims->_stencil_dims;                     \
     constexpr int nsdims = NUM_STENCIL_DIMS;                            \
-    assert(nsdims == stencil_dims.size());                              \
+    host_assert(nsdims == stencil_dims.size());                              \
     auto& misc_dims = dims->_misc_dims;                                 \
     constexpr int step_posn = 0;                                        \
-    assert(step_posn == +Indices::step_posn);                           \
+    host_assert(step_posn == +Indices::step_posn);                           \
     constexpr int outer_posn = 1;                                       \
     const int inner_posn = state->_inner_posn
 #define STATE_VARS(_ksbp) STATE_VARS0(_ksbp,)
@@ -651,11 +651,11 @@ namespace yask {
 
         // Access to state.
         ALWAYS_INLINE KernelStatePtr& get_state() {
-            assert(_state);
+            host_assert(_state);
             return _state;
         }
         ALWAYS_INLINE const KernelStatePtr& get_state() const {
-            assert(_state);
+            host_assert(_state);
             return _state;
         }
         KernelSettingsPtr& get_settings() { return _state->_opts; }

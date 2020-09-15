@@ -784,11 +784,11 @@ namespace yask {
         _state = make_shared<KernelState>();
 
         // Share passed ptrs.
-        assert(kenv);
+        host_assert(kenv);
         _state->_env = kenv;
-        assert(ksettings);
+        host_assert(ksettings);
         _state->_opts = ksettings;
-        assert(ksettings->_dims);
+        host_assert(ksettings->_dims);
         _state->_dims = ksettings->_dims;
 
        // Create MPI Info object.
@@ -805,7 +805,7 @@ namespace yask {
             if (dname == dims->_inner_dim)
                 state->_inner_posn = i;
         }
-        assert(outer_posn == state->_outer_posn);
+        host_assert(outer_posn == state->_outer_posn);
     }
 
     // Set number of threads w/o using thread-divisor.

@@ -829,14 +829,14 @@ namespace yask {
                           " and block thread " << block_thread_idx);
             }
             #endif
-            #if defined(CHECK) && !defined(USE_OFFLOAD)
+            #ifdef CHECK
             {
                 STATE_VARS(this);
 
                 // Check that only the inner dim has a range greater than one cluster.
                 DOMAIN_VAR_LOOP(i, j) {
                     if (i != inner_posn)
-                        assert(loop_idxs.start[i] + dims->_cluster_mults[j] >=
+                        host_assert(loop_idxs.start[i] + dims->_cluster_mults[j] >=
                                loop_idxs.stop[i]);
                 }
             }

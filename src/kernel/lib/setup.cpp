@@ -119,29 +119,6 @@ namespace yask {
         VTUNE_PAUSE;
     }
 
-    // ScanIndices ctor.
-    ScanIndices::ScanIndices(const Dims& dims, bool use_vec_align) :
-        ndims(NUM_STENCIL_DIMS),
-        begin(idx_t(0), ndims),
-        end(idx_t(0), ndims),
-        stride(idx_t(1), ndims),
-        align(idx_t(1), ndims),
-        align_ofs(idx_t(0), ndims),
-        group_size(idx_t(1), ndims),
-        num_indices(idx_t(1), ndims),
-        start(idx_t(0), ndims),
-        stop(idx_t(0), ndims),
-        index(idx_t(0), ndims) {
-
-        // i: index for stencil dims, j: index for domain dims.
-        DOMAIN_VAR_LOOP(i, j) {
-
-            // Set alignment to vector lengths.
-            if (use_vec_align)
-                align[i] = fold_pts[j];
-        }
-    }
-
     // Context ctor.
     StencilContext::StencilContext(KernelEnvPtr& kenv,
                                    KernelSettingsPtr& ksettings) :

@@ -409,7 +409,7 @@ namespace yask {
                     " // Return true if indices are within the valid sub-domain or false otherwise.\n"
                     " ALWAYS_INLINE static bool is_in_valid_domain(const " <<
                     _core_t << "* core_data, const Indices& idxs) {"
-                    " assert(core_data);\n";
+                    " host_assert(core_data);\n";
                 print_indices(os);
                 if (eq->cond)
                     os << " return " << eq->cond->make_str() << ";\n";
@@ -438,7 +438,7 @@ namespace yask {
                     " // Return true if valid or false otherwise.\n"
                     " ALWAYS_INLINE static bool is_in_valid_step(const " <<
                     _core_t << "* core_data, idx_t input_step_index) {"
-                    " assert(core_data);\n";
+                    " host_assert(core_data);\n";
                 if (eq->step_cond) {
                     os << " idx_t " << _dims._step_dim << " = input_step_index;\n"
                         "\n // " << eq->step_cond->make_str() << "\n";
@@ -503,8 +503,8 @@ namespace yask {
                     " FP operation(s) per invocation.\n"
                     " ALWAYS_INLINE static void calc_scalar(" <<
                     _core_t << "* core_data, int core_idx, const Indices& idxs) {\n"
-                    " assert(core_data);\n"
-                    " assert(core_data->_thread_core_list.get());\n"
+                    " host_assert(core_data);\n"
+                    " host_assert(core_data->_thread_core_list.get());\n"
                     " auto& thread_core_data = core_data->_thread_core_list[core_idx];\n";
                 print_indices(os);
 
@@ -583,8 +583,8 @@ namespace yask {
                 if (!do_cluster)
                     os << ", idx_t write_mask";
                 os << ") {\n"
-                    " assert(core_data);\n"
-                    " assert(core_data->_thread_core_list.get());\n"
+                    " host_assert(core_data);\n"
+                    " host_assert(core_data->_thread_core_list.get());\n"
                     " auto& thread_core_data = core_data->_thread_core_list[core_idx];\n";
                 print_indices(os);
                 os << " idx_t " << istart << " = " << idim << ";\n";
@@ -686,9 +686,9 @@ namespace yask {
             string init_code =
                 " " + ptr_t + " " + base_ptr + " = std::make_shared<" + base_t + ">"
                 "(*this, \"" + var + "\", " + var_dim_names + ");\n"
-                " assert(" + base_ptr + ");\n"
+                " host_assert(" + base_ptr + ");\n"
                 " " + var_ptr + " = std::make_shared<YkVarImpl>(" + base_ptr + ");\n"
-                " assert(" + var_ptr + "->gbp());\n";
+                " host_assert(" + var_ptr + "->gbp());\n";
 
             if (!gp->is_scratch()) {
 
