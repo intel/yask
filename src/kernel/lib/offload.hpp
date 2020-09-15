@@ -80,10 +80,14 @@ namespace yask {
         // Returns 'true' if updated.
         void _sync() {
             #ifdef USE_OFFLOAD
+            auto devn = KernelEnv::_omp_devn;
+            TRACE_MSG("omp: sync'ing ptr to " << _p << " on host at " << (void*)&_p << "...");
+
+            // Make sure the pointer itself is in mapped mem.
+            assert(omp_target_is_present(&_p, devn));
 
             // Value on host; converted to target ptr in 'omp target'.
             T* p = _p;
-            auto devn = KernelEnv::_omp_devn;
             if (p)
                 assert(omp_target_is_present(p, devn));
 
@@ -109,6 +113,9 @@ namespace yask {
 
             // Update values.
             _dpp = dpp;
+            TRACE_MSG("omp: sync'd ptr to " << _p << " on host at " << (void*)&_p <<
+                      " -> " << _dp << " on device " << devn << " at " << (void*)_dpp <<
+                      ((_dpp == 0) ? " *******" : ""));
 
             // Without tracing.
             #else
@@ -119,7 +126,6 @@ namespace yask {
                 _p = p;
                 dp = p;
             }
-            
             #endif
 
             // Update values.
@@ -157,21 +163,14 @@ namespace yask {
         void operator=(T* p) { _p = p; }
 
         // Sync pointer on device.
-        void sync() {
-            TRACE_MSG("omp: sync'ing ptr to " << _p << " on host at " << (void*)&_p << "...");
+        inline void sync() {
             _sync();
-            #if defined(USE_OFFLOAD) && defined(TRACE)
-            auto devn = KernelEnv::_omp_devn;
-            TRACE_MSG("omp: sync'd ptr to " << _p << " on host at " << (void*)&_p <<
-                      " -> " << _dp << " on device " << devn << " at " << (void*)_dpp <<
-                      ((_dpp == 0) ? " *******" : ""));
-            #endif
         }
     
         // Set to given value and sync.
-        void set_and_sync(T* p) {
+        inline void set_and_sync(T* p) {
             _p = p;
-            sync();
+            _sync();
         }
 
     };

@@ -72,7 +72,7 @@ namespace yask {
         auto* _elemsp = get_elems();
 
         // Release any old data if last owner.
-        release_storage();
+        release_storage(true);
 
         // Share ownership of base.
         // This ensures that the shared-ptr alloc won't trigger
@@ -89,15 +89,17 @@ namespace yask {
 
     // Release storage.
     template <typename T>
-    void GenericVarTyped<T>::release_storage() {
+    void GenericVarTyped<T>::release_storage(bool reset_ptr) {
         STATE_VARS(this);
         auto* _elemsp = get_elems();
 
         _base.reset();
 
         // Set ptr and sync offload pointer in core.
-        char* p = 0;
-        _elemsp->set_and_sync((T*)p);
+        if (reset_ptr) {
+            char* p = 0;
+            _elemsp->set_and_sync((T*)p);
+        }
     }
 
     // Perform default allocation.  For other options, call get_num_elems()

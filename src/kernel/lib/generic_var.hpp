@@ -220,7 +220,7 @@ namespace yask {
         virtual void set_storage(std::shared_ptr<char>& base, size_t offset) =0;
 
         // Release storage.
-        virtual void release_storage() =0;
+        virtual void release_storage(bool reset_ptr) =0;
 
         // Perform default allocation.
         // For other options,
@@ -268,7 +268,7 @@ namespace yask {
         void set_storage(std::shared_ptr<char>& base, size_t offset) override;
 
         // Release storage.
-        void release_storage() override;
+        void release_storage(bool reset_ptr) override;
 
         // Sync pointer to data.
         void sync_data_ptr() {
@@ -339,7 +339,7 @@ namespace yask {
         ~GenericVar() {
 
             // Release data.
-            GenericVarTyped<T>::release_storage();
+            GenericVarTyped<T>::release_storage(false);
         }
 
         // Direct access to data.

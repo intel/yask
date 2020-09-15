@@ -583,7 +583,7 @@ namespace yask {
             get_gvbp()->default_alloc();
         };
         void release_storage() {
-            get_gvbp()->release_storage();
+            get_gvbp()->release_storage(true);
         };
         void* get_storage() {
             return get_gvbp()->get_storage();
