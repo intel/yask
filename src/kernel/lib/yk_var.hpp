@@ -151,7 +151,7 @@ namespace yask {
             // Special handling for step index.
             auto sp = +Indices::step_posn;
             if (_use_step_idx) {
-                assert(alloc_step_idx == _wrap_step(idxs[sp]));
+                host_assert(alloc_step_idx == _wrap_step(idxs[sp]));
                 adj_idxs[sp] = alloc_step_idx;
             }
 
@@ -163,7 +163,7 @@ namespace yask {
                     // This gives a positive 0-based local element index.
                     idx_t ai = idxs[i] + _actl_left_pads[i] -
                         (_rank_offsets[i] + _local_offsets[i]);
-                    assert(ai >= 0);
+                    host_assert(ai >= 0);
                     adj_idxs[i] = uidx_t(ai);
                 }
             }
@@ -236,13 +236,13 @@ namespace yask {
             Indices vec_idxs(nvls), elem_ofs(nvls);
             #ifdef DEBUG_LAYOUT
             const auto nd = get_num_dims();
-            assert(nd == nvls);
+            host_assert(nd == nvls);
             #endif
 
             // Special handling for step index.
             auto sp = +Indices::step_posn;
             if (_use_step_idx) {
-                assert(alloc_step_idx == _wrap_step(idxs[sp]));
+                host_assert(alloc_step_idx == _wrap_step(idxs[sp]));
                 vec_idxs[sp] = alloc_step_idx;
                 elem_ofs[sp] = 0;
             }
@@ -258,7 +258,7 @@ namespace yask {
                         // This gives a positive 0-based local element index.
                         idx_t ai = idxs[i] + _actl_left_pads[i] -
                             (_rank_offsets[i] + _local_offsets[i]);
-                        assert(ai >= 0);
+                        host_assert(ai >= 0);
                         uidx_t adj_idx = uidx_t(ai);
 
                         // Get vector index and offset.
@@ -266,8 +266,8 @@ namespace yask {
                         // emit code for preserving sign when using shifts.
                         vec_idxs[i] = idx_t(adj_idx / vls[i]);
                         elem_ofs[i] = idx_t(adj_idx % vls[i]);
-                        assert(vec_idxs[i] == idx_t(adj_idx / _var_vec_lens[i]));
-                        assert(elem_ofs[i] == idx_t(adj_idx % _var_vec_lens[i]));
+                        host_assert(vec_idxs[i] == idx_t(adj_idx / _var_vec_lens[i]));
+                        host_assert(elem_ofs[i] == idx_t(adj_idx % _var_vec_lens[i]));
                     }
                 }
 
@@ -290,7 +290,7 @@ namespace yask {
             IdxTuple eofs = get_allocs(); // get dims for this var.
             elem_ofs.set_tuple_vals(eofs);  // set vals from elem_ofs.
             auto i2 = dims->get_elem_index_in_vec(eofs);
-            assert(i == i2);
+            host_assert(i == i2);
             #endif
 
             // Get pointer to vector.
@@ -344,14 +344,14 @@ namespace yask {
             static constexpr int nvls = sizeof...(_templ_vec_lens);
             #ifdef DEBUG_LAYOUT
             const auto nd = get_num_dims();
-            assert(nd == nvls);
+            host_assert(nd == nvls);
             #endif
             Indices adj_idxs(nvls);
 
             // Special handling for step index.
             auto sp = +Indices::step_posn;
             if (_use_step_idx) {
-                assert(alloc_step_idx == _wrap_step(vec_idxs[sp]));
+                host_assert(alloc_step_idx == _wrap_step(vec_idxs[sp]));
                 adj_idxs[sp] = alloc_step_idx;
             }
 

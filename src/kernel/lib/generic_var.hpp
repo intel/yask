@@ -74,14 +74,14 @@ namespace yask {
                 // Make sure all indices are in bounds.
                 for (int i = 0; size_t(i) < _layout.get_num_sizes(); i++) {
                     idx_t j = idxs[i];
-                    assert(j >= 0);
-                    assert(j < _layout.get_size(i));
+                    host_assert(j >= 0);
+                    host_assert(j < _layout.get_size(i));
                 }
             }
 
             // Strictly, _elems doesn't need to be valid when 'get_index()' is called
             // because we're not accessing data. But we will make this restriction.
-            assert(_elems.get());
+            host_assert(_elems.get());
             #endif
 
             idx_t ai = _layout.layout(idxs);
@@ -90,7 +90,7 @@ namespace yask {
             if (check)
 
                 // Make sure all final 1D index is in bounds.
-                assert(ai < _layout.get_num_elements());
+                host_assert(ai < _layout.get_num_elements());
             #endif
             return ai;
         }

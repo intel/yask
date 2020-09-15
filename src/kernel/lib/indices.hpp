@@ -85,13 +85,13 @@ namespace yask {
 
         // Access indices.
         ALWAYS_INLINE idx_t& operator[](int i) {
-            assert(i >= 0);
-            assert(i < _ndims);
+            host_assert(i >= 0);
+            host_assert(i < _ndims);
             return _idxs[i];
         }
         ALWAYS_INLINE const idx_t& operator[](int i) const {
-            assert(i >= 0);
-            assert(i < _ndims);
+            host_assert(i >= 0);
+            host_assert(i < _ndims);
             return _idxs[i];
         }
 
@@ -126,13 +126,13 @@ namespace yask {
         void set_from_array(const idx_t src[], int n = -1) {
             if (n < 0)
                 n = _ndims;
-            assert(n <= +max_idxs);
+            host_assert(n <= +max_idxs);
             for (int i = 0; i < n; i++)
                 _idxs[i] = src[i];
             _ndims = n;
         }
         void set_from_init_list(const std::initializer_list<idx_t>& src) {
-            assert(src.size() <= +max_idxs);
+            host_assert(src.size() <= +max_idxs);
             int i = 0;
             for (auto idx : src)
                 _idxs[i++] = idx;
@@ -143,7 +143,7 @@ namespace yask {
         void set_from_const(idx_t val, int n = -1) {
             if (n < 0)
                 n = _ndims;
-            assert(n <= +max_idxs);
+            host_assert(n <= +max_idxs);
             for (int i = 0; i < n; i++)
                 _idxs[i] = val;
             _ndims = n;
@@ -386,13 +386,13 @@ namespace yask {
         ALWAYS_INLINE const Indices& get_sizes() const { return _sizes; }
         void set_sizes(const Indices& sizes) { _sizes = sizes; }
         ALWAYS_INLINE idx_t get_size(int i) const {
-            assert(i >= 0);
-            assert(i < _sizes._get_num_dims());
+            host_assert(i >= 0);
+            host_assert(i < _sizes._get_num_dims());
             return _sizes[i];
         }
         void set_size(int i, idx_t size) {
-            assert(i >= 0);
-            assert(i < _sizes._get_num_dims());
+            host_assert(i >= 0);
+            host_assert(i < _sizes._get_num_dims());
             _sizes[i] = size;
         }
 

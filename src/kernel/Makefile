@@ -832,14 +832,13 @@ empty		:=
 space		:=	$(empty) $(empty)
 comma		:=	,
 ifeq ($(offload),1)
-TEST_MAKE 	:=	$(MAKE) real_bytes=8 allow_new_var_types=0 check=0 trace=1
 SET_FOLD	=
 SET_CLUSTER	=
 else
-TEST_MAKE 	:=	$(MAKE) real_bytes=8 allow_new_var_types=0 check=1 trace=1
 SET_FOLD	=	fold=$(subst $(space),$(comma),$(1))
 SET_CLUSTER	=	cluster=$(subst $(space),$(comma),$(1))
 endif
+TEST_MAKE 	:=	$(MAKE) real_bytes=8 allow_new_var_types=0 check=1 trace=1
 
 ### Unit tests.
 
@@ -862,9 +861,10 @@ $(YK_API_TEST_EXEC): $(YK_TEST_SRC_DIR)/yask_kernel_api_test.cpp $(YK_LIB)
 	@ls -l $@
 
 # Run C++ tests.
-cxx-yk-api-test: $(YK_API_TEST_EXEC)
+cxx-yk-api-test:
+	$(TEST_MAKE) $(YK_API_TEST_EXEC)
 	@echo '*** Running the C++ YASK kernel API test...'
-	$(RUN_PREFIX) $<
+	$(RUN_PREFIX) $(YK_API_TEST_EXEC)
 
 # Run Python kernel API test.
 py-yk-api-test: $(YK_TEST_SRC_DIR)/yask_kernel_api_test.py $(YK_PY_LIB)

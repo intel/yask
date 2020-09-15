@@ -63,7 +63,6 @@ namespace yask {
 
         // Additional data when offloading.
         #ifdef USE_OFFLOAD
-        T* _hp = 0;                 // copy of latest sync'd ptr on host.
         T* _dp = 0;                 // val of ptr on device.
 
         // Additional data when printing debug info.
@@ -79,58 +78,53 @@ namespace yask {
         // If 'force' is 'true', always sync; otherwise sync only
         // if it appears not to have been done since changed.
         // Returns 'true' if updated.
-        bool _sync(bool force) {
+        void _sync() {
             #ifdef USE_OFFLOAD
-            if (force || _hp != _p) {
 
-                // Value on host; converted to target ptr in 'omp target'.
-                T* p = _p;
-                auto devn = KernelEnv::_omp_devn;
-                if (p)
-                    assert(omp_target_is_present(p, devn));
+            // Value on host; converted to target ptr in 'omp target'.
+            T* p = _p;
+            auto devn = KernelEnv::_omp_devn;
+            if (p)
+                assert(omp_target_is_present(p, devn));
 
-                // Temp var to capture device ptr.
-                T* dp;
+            // Temp var to capture device ptr.
+            T* dp;
                 
-                // With tracing.
-                #ifdef TRACE
+            // With tracing.
+            #ifdef TRACE
 
-                // Addr of host ptr.
-                T** pp = &_p;
+            // Addr of host ptr.
+            T** pp = &_p;
 
-                // Temp var to capture addr of dev ptr.
-                T** dpp;
+            // Temp var to capture addr of dev ptr.
+            T** dpp;
 
-                // Set pointer on device and copy back to host.
-                #pragma omp target device(devn) map(from: dp,dpp)
-                {
-                    _p = p;
-                    dp = p;
-                    dpp = pp;
-                }
-
-                // Update values.
-                _dpp = dpp;
-
-                // Without tracing.
-                #else
-
-                // Set pointer on device and copy back to host.
-                #pragma omp target device(devn) map(from: dp)
-                {
-                    _p = p;
-                    dp = p;
-                }
-            
-                #endif
-
-                // Update values.
-                _dp = dp;
-                _hp = p;
-                return true;
+            // Set pointer on device and copy back to host.
+            #pragma omp target device(devn) map(from: dp,dpp)
+            {
+                _p = p;
+                dp = p;
+                dpp = pp;
             }
+
+            // Update values.
+            _dpp = dpp;
+
+            // Without tracing.
+            #else
+
+            // Set pointer on device and copy back to host.
+            #pragma omp target device(devn) map(from: dp)
+            {
+                _p = p;
+                dp = p;
+            }
+            
             #endif
-            return false;
+
+            // Update values.
+            _dp = dp;
+            #endif
         }
         
     public:
@@ -163,22 +157,21 @@ namespace yask {
         void operator=(T* p) { _p = p; }
 
         // Sync pointer on device.
-        bool sync() {
-            bool done = _sync(true);
+        void sync() {
+            TRACE_MSG("omp: sync'ing ptr to " << _p << " on host at " << (void*)&_p << "...");
+            _sync();
             #if defined(USE_OFFLOAD) && defined(TRACE)
             auto devn = KernelEnv::_omp_devn;
-            TRACE_MSG("omp: ptr to " << _hp << " on host at " << (void*)&_hp <<
-                      (done ? "" : "already") << " set to " << _dp <<
-                      " on device " << devn << " at " << (void*)_dpp <<
+            TRACE_MSG("omp: sync'd ptr to " << _p << " on host at " << (void*)&_p <<
+                      " -> " << _dp << " on device " << devn << " at " << (void*)_dpp <<
                       ((_dpp == 0) ? " *******" : ""));
             #endif
-            return done;
         }
     
         // Set to given value and sync.
-        bool set_and_sync(T* p) {
+        void set_and_sync(T* p) {
             _p = p;
-            return sync();
+            sync();
         }
 
     };

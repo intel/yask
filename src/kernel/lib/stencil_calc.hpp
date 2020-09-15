@@ -829,7 +829,7 @@ namespace yask {
                           " and block thread " << block_thread_idx);
             }
             #endif
-            #ifdef CHECK
+            #if defined(CHECK) && !defined(USE_OFFLOAD)
             {
                 STATE_VARS(this);
 
@@ -923,6 +923,7 @@ namespace yask {
 
             // Continue only if outside of at least one dim.
             if (ok) {
+                #ifndef USE_OFFLOAD
                 #ifdef TRACE
                 {
                     STATE_VARS(this);
@@ -943,6 +944,7 @@ namespace yask {
                             assert(loop_idxs.start[i] + 1 >= loop_idxs.stop[i]);
                     }
                 }
+                #endif
                 #endif
 
                 // Need all starting indices.

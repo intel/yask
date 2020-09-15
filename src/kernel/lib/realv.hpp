@@ -270,13 +270,13 @@ namespace yask {
 
         // access a real_t linearly.
         ALWAYS_INLINE real_t& operator[](idx_t l) {
-            assert(l >= 0);
-            assert(l < VLEN);
+            host_assert(l >= 0);
+            host_assert(l < VLEN);
             return u.r[l];
         }
         ALWAYS_INLINE const real_t& operator[](idx_t l) const {
-            assert(l >= 0);
-            assert(l < VLEN);
+            host_assert(l >= 0);
+            host_assert(l < VLEN);
             return u.r[l];
         }
 
@@ -709,8 +709,8 @@ namespace yask {
         std::cout << " b: ";
         b.print_reals(std::cout);
         #endif
-        assert(count >= 0);
-        assert(count <= VLEN);
+        host_assert(count >= 0);
+        host_assert(count <= VLEN);
         if (count == 0)
             res.u = b.u;
         else if (count == VLEN)

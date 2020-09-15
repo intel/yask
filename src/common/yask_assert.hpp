@@ -24,12 +24,33 @@ IN THE SOFTWARE.
 *****************************************************************************/
 #pragma once
 
+// Stringizing hacks for the C preprocessor.
+#define YSTR1(s) #s
+#define YSTR2(s) YSTR1(s)
+#define YPRAGMA(x) _Pragma(#x)
+    
 // Control assert() by turning on with CHECK instead of turning off with
 // NDEBUG. This makes it off by default.
 #ifdef CHECK
+
+// Temporarily replace assert() with printf() when offloading, but
+// this doesn't cause program to halt.
+// Also define host_assert() to be a stub.
+#ifdef USE_OFFLOAD
+#define assert(expr)                                                    \
+    ((expr) ?                                                           \
+     ((void)0) :                                                        \
+     ((void)printf("YASK: ***** assertion '%s' failed at %s:%i\n",      \
+                   YSTR1(expr), __FILE__, __LINE__)))
+#define host_assert(expr) ((void)0)
+#else
 #include <cassert>
+#define host_assert(expr) assert(expr)
+#endif
+
 #else
 #define assert(expr) ((void)0)
+#define host_assert(expr) ((void)0)
 #define NDEBUG
 #endif
 
