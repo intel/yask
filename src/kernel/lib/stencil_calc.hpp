@@ -783,7 +783,8 @@ namespace yask {
         } // calc_sub_block_vec.
 
         // Calculate a block of clusters.
-        // This should be the hottest function for most stencils.
+        // This should be the hottest function for most stencils--
+        // all functions called from this one should be inlined.
         void
         calc_clusters(StencilCoreDataT* corep,
                       int region_thread_idx,

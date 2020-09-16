@@ -67,6 +67,12 @@ namespace yask {
 
     // Debug APIs.
     yask_output_ptr yk_env::get_debug_output() {
+        if (!KernelEnv::_debug.get()) {
+            yask_output_factory ofac;
+            auto so = ofac.new_stdout_output();
+            set_debug_output(so);
+        }
+        assert(KernelEnv::_debug.get());
         return KernelEnv::_debug;
     }
     void yk_env::set_debug_output(yask_output_ptr debug) {

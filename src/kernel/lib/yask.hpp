@@ -177,11 +177,9 @@ typedef std::uint64_t uidx_t;
     } while(0)
 
 #define DEBUG_MSG(msg) do {                                             \
-        auto* dbg = KernelEnv::_debug.get();                            \
-        if (dbg) {                                                      \
-            auto& os = dbg->get_ostream();                              \
-            DEBUG_MSG0(os, msg);                                        \
-        } else DEBUG_MSG0(std::cout, msg);                              \
+        auto dbg = yk_env::get_debug_output();                          \
+        auto& os = dbg.get()->get_ostream();                            \
+        DEBUG_MSG0(os, msg);                                            \
     } while(0)
 
 // Macro for trace message.

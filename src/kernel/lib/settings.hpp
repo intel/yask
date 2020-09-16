@@ -41,6 +41,8 @@ namespace yask {
     typedef std::vector<VarPtrs*> ScratchVecs;
 
     // Environmental settings.
+    // Several member vars are static because they are considered global
+    // and set/get can be called w/o an obj.
     class KernelEnv :
         public virtual yk_env {
 

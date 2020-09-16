@@ -862,7 +862,7 @@ $(YK_API_TEST_EXEC): $(YK_TEST_SRC_DIR)/yask_kernel_api_test.cpp $(YK_LIB)
 
 # Run C++ tests.
 cxx-yk-api-test:
-	$(TEST_MAKE) $(YK_API_TEST_EXEC) stencil=test_3d
+	$(TEST_MAKE) $(YK_API_TEST_EXEC) stencil=test_3d allow_new_var_types=1
 	@echo '*** Running the C++ YASK kernel API test...'
 	$(RUN_PREFIX) $(YK_API_TEST_EXEC)
 
