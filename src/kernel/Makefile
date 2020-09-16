@@ -840,6 +840,18 @@ SET_CLUSTER	=	cluster=$(subst $(space),$(comma),$(1))
 endif
 TEST_MAKE 	:=	$(MAKE) real_bytes=8 allow_new_var_types=0 check=1 trace=1
 
+# Default number of ranks for running tests.
+# 4 is good because it tests in-plane diagonal exchanges for 2D and 3D tests.
+# 8 would test all exchanges for 3D tests.
+ifneq ($(mpi),1)
+ranks	:=	1
+else
+ranks	:=	4
+endif
+
+# Default max test number to run.
+last_test	:=	99
+
 ### Unit tests.
 
 $(YK_VAR_TEST_EXEC): $(YK_TEST_SRC_DIR)/var_test.cpp $(YK_LIB)
@@ -904,15 +916,6 @@ cxx-yc-api-test:
 	$(MKDIR) $(YK_GEN_DIR)
 	mv $(YC_SRC_DIR)/yc-api-test-cxx.hpp $(YK_CODE_FILE)
 
-# Default number of ranks for running tests.
-# 4 is good because it tests in-plane diagonal exchanges for 2D and 3D tests.
-# 8 would test all exchanges for 3D tests.
-ifneq ($(mpi),1)
-ranks	:=	1
-else
-ranks	:=	4
-endif
-
 # Validation runs for each binary.
 DEF_TEST_ARGS := -ranks $(ranks) -stencil $(YK_STENCIL) -arch $(YK_ARCH) -v \
 	-trial_steps 2 -max_threads 6 -block_threads 2 \
@@ -922,23 +925,25 @@ test_args0	:=	$(DEF_TEST_ARGS) -l 48 -r 32 -b 24 -rt 0 $(EXTRA_TEST_ARGS)
 test_args1	:=	$(DEF_TEST_ARGS) -l 48 -r 32 -b 24 -mb 16 -rt 1 $(EXTRA_TEST_ARGS)
 test_args2	:=	$(DEF_TEST_ARGS) -l 63 -r 32 -b 24 -mb 16 -rt 2 $(EXTRA_TEST_ARGS)
 test_args3	:=	$(DEF_TEST_ARGS) -l 63 -r 48 -b 24 -mb 16 -bt 2 $(EXTRA_TEST_ARGS)
-test_args4a	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -bind_block_threads $(EXTRA_TEST_ARGS)
-test_args4b	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -use_shm -overlap_comms $(EXTRA_TEST_ARGS)
-test_args4c	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -no-use_shm -no-overlap_comms $(EXTRA_TEST_ARGS)
+test_args4	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -bind_block_threads $(EXTRA_TEST_ARGS)
+test_args5	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -use_shm -overlap_comms $(EXTRA_TEST_ARGS)
+test_args6	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -no-use_shm -no-overlap_comms $(EXTRA_TEST_ARGS)
 
 # Run the kernel binary using several combos of sizes and ranks.
 yk-tests:
 	$(YK_SCRIPT) $(test_args0)
-	$(YK_SCRIPT) $(test_args1)
-	$(YK_SCRIPT) $(test_args2)
-	$(YK_SCRIPT) $(test_args3)
-	$(YK_SCRIPT) $(test_args4a)
+	if (( $(last_test) >= 1 )); then $(YK_SCRIPT) $(test_args1); fi
+	if (( $(last_test) >= 2 )); then $(YK_SCRIPT) $(test_args2); fi
+	if (( $(last_test) >= 3 )); then $(YK_SCRIPT) $(test_args3); fi
+	if (( $(last_test) >= 4 )); then $(YK_SCRIPT) $(test_args4); fi
 
+# These are only run w/>1 rank.
 yk-mpi-tests:
-	$(YK_SCRIPT) $(test_args4b)
-	$(YK_SCRIPT) $(test_args4c)
+	if (( $(last_test) >= 5 )); then $(YK_SCRIPT) $(test_args5); fi
+	if (( $(last_test) >= 6 )); then $(YK_SCRIPT) $(test_args6); fi
 
 # Run the default YASK compiler and kernel.
+# First run on 1 ranks, then multiple ranks if ranks>1.
 yc-and-yk-test: $(YK_EXEC) $(YK_SCRIPT)
 	$(MAKE) ranks=1 yk-tests
 	if (( $(ranks) > 1 )); then $(MAKE) yk-tests yk-mpi-tests; fi
