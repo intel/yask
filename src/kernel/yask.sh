@@ -38,8 +38,8 @@ done
 
 # Default env vars to print debug info.
 envs="OMP_DISPLAY_ENV=VERBOSE"
-envs="$envs KMP_VERSION=1"
-envs="$envs I_MPI_PRINT_VERSION=1 I_MPI_DEBUG=5"
+envs+=" KMP_VERSION=1"
+envs+=" I_MPI_PRINT_VERSION=1 I_MPI_DEBUG=5"
 
 # On Cygwin, need to put lib dir in path to load .dll's.
 if [[ `uname -o` == "Cygwin" ]]; then
@@ -102,8 +102,7 @@ while true; do
         echo "     Run this script without any options to see the available stencils."
         echo " "
         echo "Some options are generic (parsed by the driver script and applied to any stencil),"
-        echo " and some options are parsed by the stencil executable determined by the -stencil."
-        echo " and -arch parameters."
+        echo " and some options are parsed by the stencil executable determined by <stencil> and <arch>."
         echo " "
         echo "Generic (script) options:"
         echo "  -h"
@@ -122,6 +121,8 @@ while true; do
         echo "       -host "`hostname`"-mic<N>"
         echo "  -sh_prefix <command>"
         echo "     Run sub-shell under <command>, e.g., a custom ssh command."
+        echo "  -exe <path>"
+        echo "     Specify <path> as YASK executable instead of one based on <stencil> and <arch>."
         echo "  -exe_prefix <command>"
         echo "     Run YASK executable under <command>, e.g., 'numactl -N 0'."
         echo "  -pre_cmd <command(s)>"
@@ -189,6 +190,11 @@ while true; do
 
     elif [[ "$1" == "-post_cmd" && -n ${2+set} ]]; then
         post_cmd=$2
+        shift
+        shift
+
+    elif [[ "$1" == "-exe" && -n ${2+set} ]]; then
+        exe=$2
         shift
         shift
 
@@ -270,7 +276,7 @@ echo $invo > $logfile
 # If the executable is built by overriding YK_TAG, YK_EXT_BASE, and/or
 # YK_EXEC, this will fail.
 tag=$stencil.$arch
-exe="$bindir/yask_kernel.$tag.exe"
+: ${exe:="$bindir/yask_kernel.$tag.exe"}
 make_report="$bindir/../build/yask_kernel.$tag.make-report.txt"
 yc_report="$bindir/../build/yask_kernel.$tag.yask_compiler-report.txt"
 
