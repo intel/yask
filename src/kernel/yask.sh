@@ -326,6 +326,7 @@ cmds="cd $dir; ulimit -s unlimited; $config_cmds; ldd $exe; date; $pre_cmd; env 
 if [[ -n "$post_cmd" ]]; then
     cmds+="; $post_cmd"
 fi
+cmds+="; date"
 
 echo "===================" | tee -a $logfile
 
@@ -336,7 +337,6 @@ else
     echo "Running shell under '$sh_prefix'..."
     $sh_prefix "sh -c -x '$cmds'" 2>&1 | tee -a $logfile
 fi
-date
 echo "===================" | tee -a $logfile
 
 # Exit if just getting help.
