@@ -28,6 +28,12 @@ IN THE SOFTWARE.
 
 #pragma once
 
+#ifdef USE_OFFLOAD
+#ifndef _OPENMP
+#error Offload enabled without OpenMP enabled
+#endif
+#endif
+
 namespace yask {
 
     // Get device ptr from any host ptr.
