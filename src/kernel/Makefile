@@ -577,6 +577,8 @@ $(YK_SCRIPT): ./yask.sh
 	chmod a+rx $@
 	@ls -l $@
 
+scripts: $(YK_SCRIPT)
+
 $(MAKE_REPORT_FILE): $(YK_LIB)
 	$(MKDIR) $(dir $@)
 	@echo MAKEFLAGS="\"$(MAKEFLAGS)"\" > $@ 2>&1
