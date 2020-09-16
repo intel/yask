@@ -183,6 +183,7 @@ int main() {
     soln->run_solution(0);
     cout << "Running the solution for 10 more steps...\n";
     soln->run_solution(1, 10);
+    soln->end_solution();
 
     // TODO: better to have exception test for the methods below
     // StencilContext::calc_region
