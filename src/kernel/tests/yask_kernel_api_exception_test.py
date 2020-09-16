@@ -119,6 +119,8 @@ if __name__ == "__main__":
     print("Running the solution for 1 step...")
     soln.run_solution(0)
 
+    soln.end_solution()
+    soln.get_stats()
     print("Debug output captured:\n" + debug_output.get_string())
 
     if num_exception != 2:

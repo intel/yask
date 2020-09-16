@@ -318,5 +318,8 @@ if __name__ == "__main__":
     for var in soln.get_vars() :
         read_var(var, 11)
 
+    soln.end_solution()
+    soln.get_stats()
+
     #print("Debug output captured:\n" + debug_output.get_string())
     print("End of YASK Python kernel API test.")

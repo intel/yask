@@ -246,7 +246,7 @@ int main() {
         soln->run_solution(1, 10);
 
         soln->end_solution();
-
+        soln->get_stats();
         os << "End of YASK kernel API test.\n";
         return 0;
     }
