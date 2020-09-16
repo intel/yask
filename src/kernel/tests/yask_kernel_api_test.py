@@ -163,7 +163,7 @@ if __name__ == "__main__":
     # Create solution.
     soln = kfac.new_solution(env)
     #debug_output = ofac.new_string_output()
-    #soln.set_debug_output(debug_output)
+    #env.set_debug_output(debug_output)
     name = soln.get_name()
 
     # NB: At this point, the vars' meta-data exists, but the vars have no

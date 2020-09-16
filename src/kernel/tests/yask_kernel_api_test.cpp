@@ -58,7 +58,7 @@ int main() {
         if (rank_num < env->get_num_ranks() - 1) {
             yask_output_factory ofac;
             auto null_out = ofac.new_null_output();
-            soln->set_debug_output(null_out);
+            yk_env::set_debug_output(null_out);
             osp = &null_out->get_ostream();
             cout << "Suppressing output on rank " << rank_num << ".\n";
         }

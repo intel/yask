@@ -75,16 +75,6 @@ namespace yask {
     public:
         virtual ~yk_solution() {}
 
-        /// Set object to receive debug output.
-        /**
-           Just a shortcut for setting the debug output in the \ref yk_env
-           used to create the solution.
-        */
-        virtual void
-        set_debug_output(yask_output_ptr debug
-                         /**< [out] Pointer to object to receive debug output.
-                            See \ref yask_output_factory. */ ) =0;
-
         /// Get the name of the solution.
         /**
            @returns String containing the solution name provided during stencil compilation.
@@ -545,6 +535,8 @@ namespace yask {
         /**
            @note Side effect: resets all statistics, so each call
            returns only the elapsed time and counts since the previous call.
+           @note Side effect: outputs stats in human-readable format
+           to current debug output object.
            @returns Pointer to statistics object.
         */
         virtual yk_stats_ptr
@@ -971,6 +963,10 @@ namespace yask {
         */
         virtual bool
         get_step_wrap() const =0;
+
+        /// ***[Deprecated]*** Use yk_env::set_debug_output().
+        virtual void
+        set_debug_output(yask_output_ptr debug) =0;
 
         /// **[Deprecated]** Use get_num_vars().
         inline int
