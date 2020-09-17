@@ -827,7 +827,7 @@ namespace yask {
 
         os << "\n // Core data used in kernel(s).\n"
             " " << _core_t << " _core_data;\n" <<
-            " std::vector<" << _thread_core_t << "> _thread_core_list;\n";
+            " std::vector<" << _thread_core_t << "> _thread_cores;\n";
 
         // Stencil eq_bundle objects.
         os << endl << " // Stencil equation-bundles." << endl;
@@ -944,8 +944,8 @@ namespace yask {
             "  STATE_VARS(this);\n"
             "  auto* cxt_cd = &_core_data;\n"
             "  offload_map_free(cxt_cd, 1);\n" <<
-            "  auto* tcl = _thread_core_list.data();\n"
-            "  auto nt = _thread_core_list.size();\n"
+            "  auto* tcl = _thread_cores.data();\n"
+            "  auto nt = _thread_cores.size();\n"
             "  if (tcl && nt) offload_map_free(tcl, nt);\n"
             " }\n";
 
@@ -982,13 +982,14 @@ namespace yask {
             " STATE_VARS(this);\n"
             " TRACE_MSG(\"make_scratch_vars(\" << num_threads << \")\");\n"
             "\n  // Release old device data for thread array.\n"
-            "  auto* tcl = _thread_core_list.data();\n"
-            "  auto old_nt = _thread_core_list.size();\n"
+            "  auto* tcl = _thread_cores.data();\n"
+            "  auto old_nt = _thread_cores.size();\n"
             "  if (tcl && old_nt) offload_map_free(tcl, old_nt);\n"
           "\n  // Make new array.\n"
-            "  _thread_core_list.resize(num_threads);\n"
-            "  tcl = _thread_core_list.data();\n"
-            "  if (tcl && num_threads) offload_map_alloc(tcl, num_threads);\n"
+            "  _thread_cores.resize(num_threads);\n"
+            "  tcl = num_threads ? _thread_cores.data() : 0;\n"
+            "  if (tcl)\n"
+            "    offload_map_alloc(tcl, num_threads);\n"
             "  _core_data._thread_core_list.set_and_sync(tcl);\n"
             "\n  // Create scratch var(s) and set core ptr(s).\n" <<
             scratch_code <<
