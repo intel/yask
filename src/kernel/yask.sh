@@ -43,7 +43,7 @@ envs+=" I_MPI_PRINT_VERSION=1 I_MPI_DEBUG=5"
 
 # On Cygwin, need to put lib dir in path to load .dll's.
 if [[ `uname -o` == "Cygwin" ]]; then
-	envs="$envs PATH='$PATH':"`dirname $0`/../lib
+	envs+=" PATH='$PATH':"`dirname $0`/../lib
 fi
 
 # Default arch.
@@ -72,13 +72,13 @@ if command -v numactl >/dev/null; then
 fi
 
 # Other defaults.
-pre_cmd=true
+pre_cmd=":"
 post_cmd=""
 helping=0
 opts=""
+bindir=`dirname $0`
 
 # Display stencils in this dir and exit.
-bindir=`dirname $0`
 function show_stencils {
     echo "Available stencil.arch combos in '$bindir' directory:"
     find $bindir -name 'yask_kernel.*.*.exe' | sed -e 's/.*yask_kernel\./ -stencil /' -e 's/\./ -arch /' -e 's/.exe//'
@@ -102,7 +102,7 @@ while true; do
         echo "     Run this script without any options to see the available stencils."
         echo " "
         echo "Some options are generic (parsed by the driver script and applied to any stencil),"
-        echo " and some options are parsed by the stencil executable determined by <stencil> and <arch>."
+        echo " and some options are parsed by the stencil executable determined by stencil and arch."
         echo " "
         echo "Generic (script) options:"
         echo "  -h"
@@ -121,8 +121,10 @@ while true; do
         echo "       -host "`hostname`"-mic<N>"
         echo "  -sh_prefix <command>"
         echo "     Run sub-shell under <command>, e.g., a custom ssh command."
-        echo "  -exe <path>"
-        echo "     Specify <path> as YASK executable instead of one based on <stencil> and <arch>."
+        echo "  -exe <path/file>"
+        echo "     Specify <path/file> as YASK executable instead of one in the same path as"
+        echo "     this script with a name based on stencil and arch."
+        echo "     <path>/../lib will also be prepended to the LD_LIBRARY_PATH env var."
         echo "  -exe_prefix <command>"
         echo "     Run YASK executable under <command>, e.g., 'numactl -N 0'."
         echo "  -pre_cmd <command(s)>"
@@ -139,9 +141,9 @@ while true; do
         if [[ -n "$nranks" ]]; then
             echo "     The default <N> for this host is '$nranks'."
         fi
-        echo "  -log <file>"
-        echo "     Write copy of output to <file>."
-        echo "     Default is based on stencil, arch, host-name, and time-stamp."
+        echo "  -log <path/file>"
+        echo "     Write copy of output to <path/file>."
+        echo "     Default is based on stencil, arch, hostname, and time-stamp."
         echo "     Use '/dev/null' to avoid making a log."
         echo "  -show_arch"
         echo "     Print the default architecture string and exit."
@@ -195,6 +197,7 @@ while true; do
 
     elif [[ "$1" == "-exe" && -n ${2+set} ]]; then
         exe=$2
+        bindir=`dirname $exe`
         shift
         shift
 
@@ -225,7 +228,7 @@ while true; do
         shift
 
     elif [[ "$1" =~ ^[A-Za-z0-9_]+= ]]; then
-        envs="$envs $1"
+        envs+=" $1"
         shift
 
     elif [[ "$1" == "--" ]]; then
@@ -253,7 +256,7 @@ fi
 
 # Simplified MPI in x-dim only.
 if [[ -n "$nranks" && $nranks > 1 ]]; then
-    true ${mpi_cmd="mpirun -np $nranks"}
+    : ${mpi_cmd="mpirun -np $nranks"}
 fi
 
 # Bail on errors past this point, but only errors
@@ -267,7 +270,7 @@ exe_host=${host:-`hostname`}
 dump="head -v -n -0"
 
 # Init log file.
-true ${logfile=logs/yask.$stencil.$arch.$exe_host.`date +%Y-%m-%d_%H-%M`_p$$.log}
+: ${logfile:=logs/yask.$stencil.$arch.$exe_host.`date +%Y-%m-%d_%H-%M`_p$$.log}
 echo "Writing log to '$logfile'."
 mkdir -p `dirname $logfile`
 echo $invo > $logfile
@@ -310,7 +313,7 @@ fi
 # Setup to run on specified host.
 if [[ -n "$host" ]]; then
     sh_prefix="ssh $host $sh_prefix"
-    envs="$envs PATH=$PATH LD_LIBRARY_PATH=./lib:$LD_LIBRARY_PATH$libpath"
+    envs+=" PATH=$PATH LD_LIBRARY_PATH=$bindir/../lib:$LD_LIBRARY_PATH$libpath"
 
     nm=1
     while true; do
@@ -320,7 +323,7 @@ if [[ -n "$host" ]]; then
         sleep $(( nm++ * 60 ))
     done
 else
-    envs="$envs LD_LIBRARY_PATH=./lib:$LD_LIBRARY_PATH$libpath"
+    envs+=" LD_LIBRARY_PATH=$bindir/../lib:$LD_LIBRARY_PATH$libpath"
 fi
 
 # Commands to capture some important system status and config info for benchmark documentation.
