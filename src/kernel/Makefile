@@ -273,9 +273,9 @@ YK_SCRIPT_OPTS	+= "-stencil" $(YK_STENCIL) "-arch" $(YK_ARCH)
 ifeq ($(offload),1)
  YK_CXX		:=	icpx
 else ifeq ($(mpi),1)
- YK_CXX		:=	mpiicc
+ YK_CXX		:=	mpiicpc
 else
- YK_CXX		:=	icc
+ YK_CXX		:=	icpc
 endif
 YK_CXXFLAGS	:=	-g -std=c++11 -Wall
 YK_CXXFLAGS	+=	$(addprefix -I,$(YK_INC_DIRS) $(YK_GEN_DIR))
@@ -805,7 +805,7 @@ help:
 	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis radius=4 real_bytes=8 # DP FP"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=awp EXTRA_YK_CXXFLAGS='-qopt-report -Fa'"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=g++ # Use gnu compiler"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=icpx # Use next-gen Intel compiler"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=icpx mpi=0 # Use next-gen Intel compiler w/o MPI"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=clang++ mpi=0 # Use clang w/o MPI"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=mpiCC OMPI_CXX=clang++ # Use clang w/MPI"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=awp vtune=1 # Add VTune start/stop instrumentation"; \
