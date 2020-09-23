@@ -93,9 +93,6 @@ typedef std::function&lt; void(<a class="el" href="classyask_1_1yk__solution.htm
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
-<tr class="memitem:aa315469b5836e531425836f4fc5eff1c"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#aa315469b5836e531425836f4fc5eff1c">set_debug_output</a> (<a class="el" href="group__yask.html#ga605185252a3f3f917593c83b7dde4b66">yask_output_ptr</a> debug)=0</td></tr>
-<tr class="memdesc:aa315469b5836e531425836f4fc5eff1c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set object to receive debug output.  <a href="#aa315469b5836e531425836f4fc5eff1c">More...</a><br /></td></tr>
-<tr class="separator:aa315469b5836e531425836f4fc5eff1c"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aaafc0aa636a3d306e29771d5440c4aa4"><td class="memItemLeft" align="right" valign="top">virtual const std::string &amp;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#aaafc0aa636a3d306e29771d5440c4aa4">get_name</a> () const =0</td></tr>
 <tr class="memdesc:aaafc0aa636a3d306e29771d5440c4aa4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the name of the solution.  <a href="#aaafc0aa636a3d306e29771d5440c4aa4">More...</a><br /></td></tr>
 <tr class="separator:aaafc0aa636a3d306e29771d5440c4aa4"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -246,6 +243,10 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:ad9cf6be2225ae2273b921b85dd8c7ac5"><td class="memItemLeft" align="right" valign="top">virtual bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ad9cf6be2225ae2273b921b85dd8c7ac5">get_step_wrap</a> () const =0</td></tr>
 <tr class="memdesc:ad9cf6be2225ae2273b921b85dd8c7ac5"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Get whether invalid step indices alias to valid ones.  <a href="#ad9cf6be2225ae2273b921b85dd8c7ac5">More...</a><br /></td></tr>
 <tr class="separator:ad9cf6be2225ae2273b921b85dd8c7ac5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa315469b5836e531425836f4fc5eff1c"><td class="memItemLeft" align="right" valign="top"><a id="aa315469b5836e531425836f4fc5eff1c"></a>
+virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#aa315469b5836e531425836f4fc5eff1c">set_debug_output</a> (<a class="el" href="group__yask.html#ga605185252a3f3f917593c83b7dde4b66">yask_output_ptr</a> debug)=0</td></tr>
+<tr class="memdesc:aa315469b5836e531425836f4fc5eff1c"><td class="mdescLeft">&#160;</td><td class="mdescRight"><em><b>[Deprecated]</b></em> Use <a class="el" href="classyask_1_1yk__env.html#aa5cf0e8d885f4d9ebde6539d5246cda1" title="Set object to receive debug output.">yk_env::set_debug_output()</a>. <br /></td></tr>
+<tr class="separator:aa315469b5836e531425836f4fc5eff1c"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ab36a4f206704861958ac280e774f7e03"><td class="memItemLeft" align="right" valign="top"><a id="ab36a4f206704861958ac280e774f7e03"></a>
 int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ab36a4f206704861958ac280e774f7e03">get_num_grids</a> () const</td></tr>
 <tr class="memdesc:ab36a4f206704861958ac280e774f7e03"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yk__solution.html#a9e0947f98bcea19c6400bcdf95ddf585" title="Get the number of vars in the solution.">get_num_vars()</a>. <br /></td></tr>
@@ -284,41 +285,6 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 <p>Objects of this type contain all the vars and equations that comprise a solution.</p>
 <p>Created via <a class="el" href="classyask_1_1yk__factory.html#a755b1bfc0dd9bfddfe80d924a188b350" title="Create a stencil solution.">yk_factory::new_solution()</a>. </p>
 </div><h2 class="groupheader">Member Function Documentation</h2>
-<a id="aa315469b5836e531425836f4fc5eff1c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aa315469b5836e531425836f4fc5eff1c">&#9670;&nbsp;</a></span>set_debug_output()</h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">virtual void yask::yk_solution::set_debug_output </td>
-          <td>(</td>
-          <td class="paramtype"><a class="el" href="group__yask.html#ga605185252a3f3f917593c83b7dde4b66">yask_output_ptr</a>&#160;</td>
-          <td class="paramname"><em>debug</em></td><td>)</td>
-          <td></td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-
-<p>Set object to receive debug output. </p>
-<p>Just a shortcut for setting the debug output in the <a class="el" href="classyask_1_1yk__env.html">yk_env</a> used to create the solution. </p>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramdir">[out]</td><td class="paramname">debug</td><td>Pointer to object to receive debug output. See <a class="el" href="classyask_1_1yask__output__factory.html">yask_output_factory</a>. </td></tr>
-  </table>
-  </dd>
-</dl>
-
-</div>
-</div>
 <a id="aaafc0aa636a3d306e29771d5440c4aa4"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#aaafc0aa636a3d306e29771d5440c4aa4">&#9670;&nbsp;</a></span>get_name()</h2>
 
@@ -1400,7 +1366,9 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 </div><div class="memdoc">
 
 <p>Get performance statistics associated with preceding calls to <a class="el" href="classyask_1_1yk__solution.html#a14cc5625fc524fe8eb8d3cedc66778aa" title="Run the stencil solution for the specified steps.">run_solution()</a>. </p>
-<dl class="section note"><dt>Note</dt><dd>Side effect: resets all statistics, so each call returns only the elapsed time and counts since the previous call. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Side effect: resets all statistics, so each call returns only the elapsed time and counts since the previous call. </dd>
+<dd>
+Side effect: outputs stats in human-readable format to current debug output object. </dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>Pointer to statistics object. </dd></dl>
 
 </div>
@@ -1642,7 +1610,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[in]</td><td class="paramname">enable</td><td>If _true_, start or restart the auto-tuner search. If _false_, disable the auto-tuner from running. </td></tr>
-    <tr><td class="paramdir">[in]</td><td class="paramname">verbose</td><td>If _true_, print progress information to the debug object set via <a class="el" href="classyask_1_1yk__solution.html#aa315469b5836e531425836f4fc5eff1c" title="Set object to receive debug output.">set_debug_output()</a>. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">verbose</td><td>If _true_, print progress information to the debug object set via <a class="el" href="classyask_1_1yk__solution.html#aa315469b5836e531425836f4fc5eff1c" title="[Deprecated] Use yk_env::set_debug_output().">set_debug_output()</a>. </td></tr>
   </table>
   </dd>
 </dl>
@@ -1677,7 +1645,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 <p>Executes a search algorithm to find [locally] optimum values for some of the settings. Under normal operation, an auto-tuner is invoked during calls to <a class="el" href="classyask_1_1yk__solution.html#a14cc5625fc524fe8eb8d3cedc66778aa" title="Run the stencil solution for the specified steps.">run_solution()</a>. See <a class="el" href="classyask_1_1yk__solution.html#a932fad2ede1aecef168189c0aa972b0b" title="[Advanced] Restart or disable the auto-tuner on this rank.">reset_auto_tuner()</a> for more information. This function causes the stencil solution to be run immediately until the auto-tuner converges on all ranks. It is useful for benchmarking, where performance is to be timed for a given number of steps after the best settings are found. This function should be called only <em>after</em> calling <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a>. This call must be made on each rank. </p><dl class="section warning"><dt>Warning</dt><dd>Modifies the contents of the vars by calling <a class="el" href="classyask_1_1yk__solution.html#a14cc5625fc524fe8eb8d3cedc66778aa" title="Run the stencil solution for the specified steps.">run_solution()</a> an arbitrary number of times, but without halo exchange. (See <a class="el" href="classyask_1_1yk__solution.html#a14cc5625fc524fe8eb8d3cedc66778aa" title="Run the stencil solution for the specified steps.">run_solution()</a> for other restrictions and warnings.) Thus, var data should be set <em>after</em> calling this function when used in a production or test setting where correct results are expected. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">verbose</td><td>If _true_, print progress information to the debug object set via <a class="el" href="classyask_1_1yk__solution.html#aa315469b5836e531425836f4fc5eff1c" title="Set object to receive debug output.">set_debug_output()</a>. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">verbose</td><td>If _true_, print progress information to the debug object set via <a class="el" href="classyask_1_1yk__solution.html#aa315469b5836e531425836f4fc5eff1c" title="[Deprecated] Use yk_env::set_debug_output().">set_debug_output()</a>. </td></tr>
   </table>
   </dd>
 </dl>
