@@ -801,14 +801,13 @@ help:
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd arch=knl # Explicit arch target"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd radius=4 YK_STENCIL=iso3dfd_r4 # Specify binary stencil name"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis fold='x=1,y=2,z=4' cluster='x=2'"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis radius=4 real_bytes=8 # DP FP"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=awp EXTRA_YK_CXXFLAGS='-qopt-report -Fa'"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=g++ # Use gnu compiler"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=icpx mpi=0 # Use next-gen Intel compiler w/o MPI"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=clang++ mpi=0 # Use clang w/o MPI"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=3axis YK_CXX=mpiCC OMPI_CXX=clang++ # Use clang w/MPI"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg fold='x=1,y=2,z=4' cluster='x=2'"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg radius=4 real_bytes=8 # Use 8-byte (double) floats"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=awp vtune=1 # Add VTune start/stop instrumentation"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=awp EXTRA_YK_CXXFLAGS='-qopt-report -Fa' # Emit opt-report and asm file"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg YK_CXX=icpx mpi=0 OMPFLAGS=-fiopenmp # Use next-gen Intel compiler w/o MPI"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg YK_CXX='mpiicpc -cxx=icpx' OMPFLAGS=-fiopenmp # Use next-gen Intel compiler w/MPI"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg YK_CXX=g++ # Use gnu compiler"; \
 	echo " "
 	@echo "Example performance builds of kernel API for C++ and Python apps:"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd yk-api"; \
@@ -817,9 +816,9 @@ help:
 	@echo "Example debug builds of kernel cmd-line tool:"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 omp=0 YK_CXXOPT='-O0' check=1 # No optimization, OpenMP, or MPI; use internal checking"; \
 	echo " $(MAKE) clean; $(MAKE) -j arch=avx stencil=test_2d YK_CXXOPT='-O0' trace=1 # Enable tracing; run with '-trace' to get trace"; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=3axis radius=0 fold='x=1,y=1,z=1' YK_CXXOPT='-O0' trace_mem=1 # Trace all mem accesses with '-trace'"; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=ssg radius=0 fold='x=1,y=1,z=1' YK_CXXOPT='-O0' trace_mem=1 # Trace all mem accesses with '-trace'"; \
 	echo " "
-	@echo "Example builds with test runs:"; \
+	@echo "Example regression tests (run these before any git push or pull request):"; \
 	echo " $(MAKE) -j all   # Normal full API and stencil tests"; \
 	echo " $(MAKE) -j all YK_CXX=g++ mpi=0 ranks=1   # Test g++ w/o MPI"; \
 	echo " $(MAKE) -j all YK_CXXOPT=-O1 ranks=4   # Test on 4 ranks"
@@ -851,7 +850,8 @@ else
 ranks	:=	4
 endif
 
-# Default max test number to run.
+# Default min & max test number to run.
+first_test	:=	0
 last_test	:=	99
 
 ### Unit tests.
@@ -923,29 +923,32 @@ DEF_TEST_ARGS := -ranks $(ranks) -stencil $(YK_STENCIL) -arch $(YK_ARCH) -v \
 	-trial_steps 2 -max_threads 6 -block_threads 2 \
 	-ep 0 -mp 0 -no-allow_addl_padding
 
+# Test args for 1 and >1 ranks.
 test_args0	:=	$(DEF_TEST_ARGS) -l 48 -r 32 -b 24 -rt 0 $(EXTRA_TEST_ARGS)
 test_args1	:=	$(DEF_TEST_ARGS) -l 48 -r 32 -b 24 -mb 16 -rt 1 $(EXTRA_TEST_ARGS)
 test_args2	:=	$(DEF_TEST_ARGS) -l 63 -r 32 -b 24 -mb 16 -rt 2 $(EXTRA_TEST_ARGS)
 test_args3	:=	$(DEF_TEST_ARGS) -l 63 -r 48 -b 24 -mb 16 -bt 2 $(EXTRA_TEST_ARGS)
 test_args4	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -bind_block_threads $(EXTRA_TEST_ARGS)
-test_args5	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -use_shm -overlap_comms $(EXTRA_TEST_ARGS)
-test_args6	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -no-use_shm -no-overlap_comms $(EXTRA_TEST_ARGS)
+
+# Test args for >1 ranks only.
+test_args10	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -use_shm -no-overlap_comms $(EXTRA_TEST_ARGS)
+test_args11	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -no-use_shm -overlap_comms $(EXTRA_TEST_ARGS)
 
 # Run the kernel binary using several combos of sizes and ranks.
 yk-tests:
-	$(YK_SCRIPT) $(test_args0)
-	if (( $(last_test) >= 1 )); then $(YK_SCRIPT) $(test_args1); fi
-	if (( $(last_test) >= 2 )); then $(YK_SCRIPT) $(test_args2); fi
-	if (( $(last_test) >= 3 )); then $(YK_SCRIPT) $(test_args3); fi
-	if (( $(last_test) >= 4 )); then $(YK_SCRIPT) $(test_args4); fi
+	if (( $(first_test) <= 0 && $(last_test) >= 0 )); then $(YK_SCRIPT) $(test_args0); fi
+	if (( $(first_test) <= 1 && $(last_test) >= 1 )); then $(YK_SCRIPT) $(test_args1); fi
+	if (( $(first_test) <= 2 && $(last_test) >= 2 )); then $(YK_SCRIPT) $(test_args2); fi
+	if (( $(first_test) <= 3 && $(last_test) >= 3 )); then $(YK_SCRIPT) $(test_args3); fi
+	if (( $(first_test) <= 4 && $(last_test) >= 4 )); then $(YK_SCRIPT) $(test_args4); fi
 
 # These are only run w/>1 rank.
 yk-mpi-tests:
-	if (( $(last_test) >= 5 )); then $(YK_SCRIPT) $(test_args5); fi
-	if (( $(last_test) >= 6 )); then $(YK_SCRIPT) $(test_args6); fi
+	if (( $(first_test) <= 10 && $(last_test) >= 10 )); then $(YK_SCRIPT) $(test_args10); fi
+	if (( $(first_test) <= 11 && $(last_test) >= 11 )); then $(YK_SCRIPT) $(test_args11); fi
 
 # Run the default YASK compiler and kernel.
-# First run on 1 ranks, then multiple ranks if ranks>1.
+# First run on 1 rank, then multiple ranks if ranks>1.
 yc-and-yk-test: $(YK_EXEC) $(YK_SCRIPT)
 	$(MAKE) ranks=1 yk-tests
 	if (( $(ranks) > 1 )); then $(MAKE) yk-tests yk-mpi-tests; fi
@@ -1043,6 +1046,8 @@ all-tests:
 	$(MAKE) stencil-tests
 	$(MAKE) api-tests
 
+# First, build a kernel and an API lib w/o any validation just to test the build env.
+# Then, build and run all the tests.
 all:
 	$(MAKE) kernel stencil=test_3d
 	$(MAKE) api stencil=test_3d
