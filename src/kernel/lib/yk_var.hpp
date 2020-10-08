@@ -492,15 +492,15 @@ namespace yask {
         // Make sure indices are in range.
         // Optionally fix them to be in range and return in 'fixed_indices'.
         // If 'normalize', make rank-relative, divide by vlen and return in 'fixed_indices'.
-        virtual bool check_indices(const Indices& indices,
-                                   const std::string& fn,    // name for error msg.
-                                   bool strict_indices, // die if out-of-range.
-                                   bool check_step,     // check step index.
-                                   bool normalize,      // div by vec lens.
-                                   Indices* fixed_indices = NULL) const;
+        bool check_indices(const Indices& indices,
+                           const std::string& fn,    // name for error msg.
+                           bool strict_indices, // die if out-of-range.
+                           bool check_step,     // check step index.
+                           bool normalize,      // div by vec lens.
+                           Indices* fixed_indices = NULL) const;
 
         // Resize or fail if already allocated.
-        virtual void resize();
+        void resize();
 
         // Set dirty flags in range.
         void set_dirty_in_slice(const Indices& first_indices,
@@ -1149,10 +1149,10 @@ namespace yask {
             #ifdef TRACE_MEM
             print_vec_norm("write_vec_norm", vec_idxs, val, line);
             #endif
-       }
+        }
 
-        // Vectorized version of set/get_elements_in_slice().
-        // Indices must be vec-normalized and rank-relative.
+        // Vectorized version of set_elements_in_slice().
+        // Input indices are global and element granularity (not rank-local or normalized).
         virtual idx_t set_vecs_in_slice(const void* buffer_ptr,
                                         const Indices& first_indices,
                                         const Indices& last_indices) override {
@@ -1191,14 +1191,18 @@ namespace yask {
 
                 // Visit points in slice.
                 num_vecs_tuple.visit_all_points_in_parallel
-                    ([&](const IdxTuple& ofs,
-                         size_t idx) {
+                    ([&](const IdxTuple& ofs, size_t idx) {
                          Indices pt = firstv.add_elements(ofs);
+
+                         // Read vec from buffer at proper index.
                          real_vec_t val = ((real_vec_t*)buffer_ptr)[idx + iofs];
 
+                         // Write to var.
                          write_vec_norm(val, pt, ti, __LINE__);
                          return true;    // keep going.
                      });
+
+                // Skip to next step in buffer.
                 iofs += num_vecs_tuple.product();
             }
 
@@ -1208,6 +1212,8 @@ namespace yask {
             return num_vecs_tuple.product() * VLEN;
         }
 
+        // Vectorized version of get_elements_in_slice().
+        // Input indices are global and element granularity (not rank-local or normalized).
         virtual idx_t get_vecs_in_slice(void* buffer_ptr,
                                         const Indices& first_indices,
                                         const Indices& last_indices) const override final {
@@ -1249,14 +1255,18 @@ namespace yask {
 
                 // Visit points in slice.
                 num_vecs_tuple.visit_all_points_in_parallel
-                    ([&](const IdxTuple& ofs,
-                         size_t idx) {
+                    ([&](const IdxTuple& ofs, size_t idx) {
                          Indices pt = firstv.add_elements(ofs);
 
+                         // Read vec from var.
                          real_vec_t val = read_vec_norm(pt, ti, __LINE__);
+
+                         // Write to buffer at proper index.
                          ((real_vec_t*)buffer_ptr)[idx + iofs] = val;
                          return true;    // keep going.
                      });
+
+                // Skip to next step in buffer.
                 iofs += num_vecs_tuple.product();
             }
             assert(iofs * VLEN == n);

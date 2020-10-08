@@ -66,7 +66,7 @@ namespace yask {
 
         // Loop through all points in the vector fold.
         _dims._fold.visit_all_points([&](const IntTuple& vec_point,
-                                       size_t pelem){
+                                         size_t pelem){
 
                 // Final offset in each dim is offset of var point plus
                 // fold offset.

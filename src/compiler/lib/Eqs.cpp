@@ -904,7 +904,7 @@ namespace yask {
 
         // Loop thru points in cluster.
         dims._cluster_mults.visit_all_points([&](const IntTuple& cluster_index,
-                                              size_t idx) {
+                                                 size_t idx) {
 
                 // Don't need copy of one at origin.
                 if (cluster_index.sum() > 0) {

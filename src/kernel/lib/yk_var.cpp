@@ -438,14 +438,17 @@ namespace yask {
 
     // Make sure indices are in range.
     // Side-effect: If clipped_indices is not NULL,
+    // 0) copy indices to *clipped_indices, and
     // 1) set them to in-range if out-of-range, and
-    // 2) normalize them if 'normalize' is 'true'.
+    // 2) convert to rank-local and normalize them if 'normalize' is 'true'.
     bool YkVarBase::check_indices(const Indices& indices,
                                   const string& fn,    // name for error msg.
                                   bool strict_indices, // die if out-of-range.
                                   bool check_step,     // check step index.
                                   bool normalize,      // div by vec lens.
                                   Indices* clipped_indices) const {
+        if (normalize)
+            assert(clipped_indices != 0);
         STATE_VARS(this);
         bool all_ok = true;
         auto n = get_num_dims();
@@ -541,7 +544,7 @@ namespace yask {
 
     // Make tuple needed for slicing.
     IdxTuple YkVarBase::get_slice_range(const Indices& first_indices,
-                                         const Indices& last_indices) const {
+                                        const Indices& last_indices) const {
         // Find ranges.
         Indices num_elems = last_indices.add_const(1).sub_elements(first_indices);
         IdxTuple num_elems_tuple = get_allocs();

@@ -1813,7 +1813,8 @@ namespace yask {
                                  // Copy data from buffer to var.
                                  void* buf = (void*)recv_buf._elems;
                                  idx_t nelems = 0;
-                                 TRACE_MSG("exchange_halos:    got data; unpacking into [" << first.make_dim_val_str() <<
+                                 TRACE_MSG("exchange_halos:    got data; unpacking into [" <<
+                                           first.make_dim_val_str() <<
                                            " ... " << last.make_dim_val_str() << "] " <<
                                            (recv_vec_ok ? "with" : "without") <<
                                            " vector copy from " << buf);
@@ -1874,7 +1875,6 @@ namespace yask {
 
         TRACE_MSG("exchange_halos: " << num_recv_reqs << " MPI receive request(s) issued");
         TRACE_MSG("exchange_halos: " << num_send_reqs << " MPI send request(s) issued");
-
         auto mpi_call_time = halo_time.stop();
         TRACE_MSG("exchange_halos: secs spent in MPI waits: " << make_num_str(wait_delta));
         TRACE_MSG("exchange_halos: secs spent in this call: " << make_num_str(mpi_call_time));

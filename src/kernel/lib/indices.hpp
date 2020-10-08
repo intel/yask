@@ -425,6 +425,8 @@ namespace yask {
             return j;
         }
     };
+    static_assert(std::is_trivially_copyable<Layout_0d>::value,
+                  "Needed for OpenMP offload");
 
     // Auto-generated layout algorithms for >0 dims.
 #include "yask_layouts.hpp"

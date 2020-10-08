@@ -93,23 +93,25 @@ void ttest(bool first_inner) {
         if (d > 0) t2.add_dim_back("x", 3);
         if (d > 1) t2.add_dim_back("y", 4);
         if (d > 2) t2.add_dim_back("z", 3);
+        auto n = t2.product();
 
         os << d << "-d sequential visit test...\n";
         j = 0;
+        size_t sumk = 0;
         t2.visit_all_points
             ([&](const IntTuple& ofs, size_t k) {
 
-                auto i = t2.layout(ofs);
-                os << " offset at " << ofs.make_dim_val_str() << " = " << i << endl;
-
-                if (first_inner) {
-                    assert(i == j);
-                    assert(i == k);
-                }
-                j++;
-                return true;
-            });
-        assert(int(j) == t2.product());
+                 assert(int(k) < n);
+                 auto i = t2.layout(ofs);
+                 os << " offset at " << ofs.make_dim_val_str() << " = " << i << endl;
+                 assert(i == j);
+                 assert(i == k);
+                 j++;
+                 sumk += k;
+                 return true; // continue.
+             });
+        assert(int(j) == n);
+        assert(int(sumk) == n * (n-1) / 2);
 
         os << d << "-d parallel visit test...\n";
         omp_set_nested(1);
@@ -117,21 +119,23 @@ void ttest(bool first_inner) {
         yask_num_threads[0] = 4;
         yask_num_threads[1] = 2;
         j = 0;
+        sumk = 0;
         t2.visit_all_points_in_parallel
             ([&](const IntTuple& ofs, size_t k) {
 
-                auto i = t2.layout(ofs);
-#pragma omp critical
-                {
-                    os << " offset at " << ofs.make_dim_val_str() << " = " << i << endl;
-                    j++;
-                }
-
-                if (first_inner)
-                    assert(i == k);
-                return true;
-            });
-        assert(int(j) == t2.product());
+                 assert(int(k) < n);
+                 auto i = t2.layout(ofs);
+                 #pragma omp critical
+                 {
+                     os << " offset at " << ofs.make_dim_val_str() << " = " << i << endl;
+                     j++;
+                     sumk += k;
+                 }
+                 assert(i == k);
+                 return true;
+             });
+        assert(int(j) == n);
+        assert(int(sumk) == n * (n-1) / 2);
     }
 }
 

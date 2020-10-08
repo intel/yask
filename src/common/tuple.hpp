@@ -585,7 +585,7 @@ namespace yask {
         // through first dimension. If '_first_inner' is false, it is done the opposite way.
         // Visitor should return 'true' to keep going or 'false' to stop.
         void visit_all_points(std::function<bool (const Tuple&,
-                                                size_t idx)> visitor) const {
+                                                  size_t idx)> visitor) const {
 
             // Init lambda fn arg with *this to get dim names.
             // Values will get set during scan.
@@ -595,7 +595,7 @@ namespace yask {
             if (!_q.size())
                 visitor(tp, 0);
 
-            // Call recursive version.
+            // Call protected version.
             // Set begin/step dims depending on nesting.
             else if (_first_inner)
                 _visit_all_points(visitor, size()-1, -1, tp);
@@ -608,7 +608,7 @@ namespace yask {
         // Visitation order is not predictable.
         // Visitor return value only stops visit on one thread.
         void visit_all_points_in_parallel(std::function<bool (const Tuple&,
-                                                          size_t idx)> visitor) const {
+                                                              size_t idx)> visitor) const {
 
             // 0-D?
             if (!_q.size()) {
@@ -618,7 +618,6 @@ namespace yask {
 
             // Call order-independent version.
             // Set begin/end/step dims depending on nesting.
-            // TODO: set this depending on dim sizes.
             else if (_first_inner)
                 _visit_all_points_in_par(visitor, size()-1, -1);
             else
@@ -628,8 +627,9 @@ namespace yask {
     protected:
 
         // Visit elements recursively.
+        // Start w/'cur_dim_num' dim and 'step' +/-1 until last dim reached.
         bool _visit_all_points(std::function<bool (const Tuple&, size_t idx)> visitor,
-                             int cur_dim_num, int step, Tuple& tp) const {
+                               int cur_dim_num, int step, Tuple& tp) const {
             auto& sc = _q.at(cur_dim_num);
             auto dsize = sc.get_val();
             int last_dim_num = (step > 0) ? size()-1 : 0;
@@ -672,7 +672,7 @@ namespace yask {
 
         // First call from public visit_all_points_in_parallel(visitor).
         bool _visit_all_points_in_par(std::function<bool (const Tuple&, size_t idx)> visitor,
-                                  int cur_dim_num, int step) const {
+                                      int cur_dim_num, int step) const {
 #ifdef _OPENMP
             auto nd = _get_num_dims();
 
@@ -746,7 +746,9 @@ namespace std {
         size_t operator()(const yask::Tuple<T> &x ) const {
             size_t h = 0;
             for (int i = 0; i < x._get_num_dims(); i++) {
-                h ^= size_t(i) ^ std::hash<T>()(x.get_val(i)) ^ std::hash<std::string>()(x.get_dim_name(i));
+                h ^= size_t(i) ^
+                    std::hash<T>()(x.get_val(i)) ^
+                    std::hash<std::string>()(x.get_dim_name(i));
             }
             return h;
         }
