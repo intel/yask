@@ -372,7 +372,7 @@ namespace yask {
             return _corep->get_index(idxs, check);
         }
         ALWAYS_INLINE idx_t get_index(const IdxTuple& pt, bool check=true) const {
-            assert(GenericVarBase::_var_dims.are_dims_same(pt));
+            host_assert(GenericVarBase::_var_dims.are_dims_same(pt));
             Indices idxs(pt);
             return get_index(idxs, check);
         }

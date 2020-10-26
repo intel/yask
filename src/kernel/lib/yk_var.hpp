@@ -141,7 +141,6 @@ namespace yask {
         // Get a pointer to given element.
         // 'alloc_step_idx' must be within allocation bounds and consistent
         // with 'idxs[step_posn]'.
-        ALWAYS_INLINE
         const real_t* get_elem_ptr(const Indices& idxs,
                                    idx_t alloc_step_idx,
                                    bool check_bounds=true) const {
@@ -224,7 +223,6 @@ namespace yask {
             _vec_fold_posns(idx_t(0), ndims) { }
          
         // Get a pointer to given element.
-        ALWAYS_INLINE
         const real_t* get_elem_ptr(const Indices& idxs,
                                    idx_t alloc_step_idx,
                                    bool check_bounds=true) const {

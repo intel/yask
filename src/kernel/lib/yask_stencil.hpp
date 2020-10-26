@@ -42,7 +42,7 @@ IN THE SOFTWARE.
 // Step index must be at index zero.
 #define _DOMAIN_VAR_LOOP(i, j)                                  \
     for (int i = 1, j = 0; j < NUM_DOMAIN_DIMS; i++, j++)
-#if (defined CHECK) || (defined TRACE)
+#ifdef CHECK
 #define DOMAIN_VAR_LOOP(i, j) _DOMAIN_VAR_LOOP(i, j)
 #else
 #define DOMAIN_VAR_LOOP(i, j) _UNROLL _DOMAIN_VAR_LOOP(i, j)

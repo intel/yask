@@ -361,8 +361,7 @@ namespace yask {
             // Define misc-loop function.
             // Since stride is always 1, we ignore pt_idxs.stop.
             #define MISC_FN(pt_idxs)                                    \
-                FORCE_INLINE                                            \
-                    _bundle.calc_scalar(cp, region_thread_idx, pt_idxs.start)
+                _bundle.calc_scalar(cp, region_thread_idx, pt_idxs.start)
 
             // Set OMP loop to offload or disable OMP.
             #ifdef USE_OFFLOAD
@@ -795,9 +794,8 @@ namespace yask {
             // Define the function called from the generated loops to simply
             // call the loop-of-clusters function.
             #define CALC_INNER_LOOP(loop_idxs)                          \
-                FORCE_INLINE                                            \
-                    calc_loop_of_clusters(corep, region_thread_idx, block_thread_idx, \
-                                          loop_idxs, inner_posn)
+                calc_loop_of_clusters(corep, region_thread_idx, block_thread_idx, \
+                                      loop_idxs, inner_posn)
 
             // Include automatically-generated loop code that calls
             // CALC_INNER_LOOP().
@@ -813,7 +811,7 @@ namespace yask {
         // The 'loop_idxs' must specify a range only in the inner dim.
         // Indices must be rank-relative.
         // Indices must be normalized, i.e., already divided by VLEN_*.
-        ALWAYS_INLINE void
+        void
         calc_loop_of_clusters(StencilCoreDataT* corep,
                               int region_thread_idx,
                               int block_thread_idx,
@@ -851,9 +849,8 @@ namespace yask {
             idx_t stop_inner = loop_idxs.stop[inner_posn];
 
             // Call code from stencil compiler.
-            FORCE_INLINE
-                _bundle.calc_loop_of_clusters(corep, region_thread_idx, block_thread_idx,
-                                              start_idxs, stop_inner);
+            _bundle.calc_loop_of_clusters(corep, region_thread_idx, block_thread_idx,
+                                          start_idxs, stop_inner);
         }
 
         // Calculate a block of vectors outside of the cluster area.
@@ -883,7 +880,7 @@ namespace yask {
         }
             
         // Calculate a loop of vectors outside of the cluster area.
-        ALWAYS_INLINE void
+        void
         calc_loop_of_outer_vectors(StencilCoreDataT* corep,
                                    int region_thread_idx,
                                    int block_thread_idx,
@@ -955,9 +952,8 @@ namespace yask {
                 idx_t stop_inner = loop_idxs.stop[inner_posn];
 
                 // Call code from stencil compiler.
-                FORCE_INLINE
-                    _bundle.calc_loop_of_vectors(corep, region_thread_idx, block_thread_idx,
-                                                 start_idxs, stop_inner, mask);
+                _bundle.calc_loop_of_vectors(corep, region_thread_idx, block_thread_idx,
+                                             start_idxs, stop_inner, mask);
             }
         }
     }; // StencilBundleBase.

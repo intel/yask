@@ -501,7 +501,7 @@ namespace yask {
                     _dims._stencil_dims.make_dim_str() << ".\n"
                     " // There are approximately " << stats.get_num_ops() <<
                     " FP operation(s) per invocation.\n"
-                    " ALWAYS_INLINE static void calc_scalar(" <<
+                    " static void calc_scalar(" <<
                     _core_t << "* core_data, int core_idx, const Indices& idxs) {\n"
                     " host_assert(core_data);\n"
                     " host_assert(core_data->_thread_core_list.get());\n"
@@ -577,7 +577,7 @@ namespace yask {
                     " aligned vector-block(s).\n"
                     " // There are approximately " << (stats.get_num_ops() * num_results) <<
                     " FP operation(s) per iteration.\n" <<
-                    " ALWAYS_INLINE static void " << funcstr << "(" <<
+                    " static void " << funcstr << "(" <<
                     _core_t << "* core_data, int core_idx, int block_thread_idx,"
                     " const Indices& idxs, idx_t " << istop;
                 if (!do_cluster)
@@ -595,10 +595,6 @@ namespace yask {
                 CppVecPrintHelper* vp = new_cpp_vec_print_helper(vv, cv);
                 vp->set_use_masked_writes(!do_cluster);
                 vp->print_elem_indices(os);
-
-                // Start forced-inline code.
-                os << "\n // Force inlining if possible.\n"
-                    "FORCE_INLINE_RECURSIVE {\n";
 
                 // Print time-invariants.
                 os << "\n // Invariants within a step.\n";
@@ -633,9 +629,6 @@ namespace yask {
                 // End of loop.
                 os << " " << vp->get_elem_index(idim) << " += " << iestep << ";\n";
                 os << " } // Inner ('" << idim << "') loop.\n";
-
-                // End forced-inline code.
-                os << " } // Forced-inline block.\n";
 
                 // End of function.
                 os << "} // " << funcstr << ".\n";
