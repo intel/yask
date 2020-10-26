@@ -277,9 +277,10 @@ else ifeq ($(mpi),1)
 else
  YK_CXX		:=	icpc
 endif
-YK_CXXFLAGS	:=	-g -std=c++11 -Wall
-YK_CXXFLAGS	+=	$(addprefix -I,$(YK_INC_DIRS) $(YK_GEN_DIR))
 YK_CXXOPT	?=	-O3
+YK_CXXDBG	?=	-g
+YK_CXXFLAGS	:=	-std=c++11 -Wall $(YK_CXXOPT) $(YK_CXXDBG)
+YK_CXXFLAGS	+=	$(addprefix -I,$(YK_INC_DIRS) $(YK_GEN_DIR))
 SWIG_CXXFLAGS	:= 	$(DBL_EPSILON_CXXFLAG)
 
 # Linker.
@@ -363,7 +364,9 @@ ifeq ($(vtune),1)
  VTUNE_GENERIC_DIR	:=	/opt/intel/vtune_profiler
  YK_CXXFLAGS	+=	-I$(VTUNE_GENERIC_DIR)/include
  YK_LIBS	+=	-L$(VTUNE_GENERIC_DIR)/lib64
- ifneq ($(VTUNE_PROFILER_2020_DIR),)
+ ifneq ($(VTUNE_PROFILER_2021_DIR),)
+  VTUNE_DIR	:=	$(VTUNE_PROFILER_2021_DIR)
+ else ifneq ($(VTUNE_PROFILER_2020_DIR),)
   VTUNE_DIR	:=	$(VTUNE_PROFILER_2020_DIR)
  else ifneq ($(VTUNE_AMPLIFIER_2020_DIR),)
   VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_2020_DIR)
@@ -381,7 +384,7 @@ ifeq ($(vtune),1)
   YK_LIBS	+=	-L$(VTUNE_DIR)/lib64
  endif
  YK_LIBS	+=	-littnotify
- YK_VTUNE_CMD	:=	echo "*** VTune command:" vtune -c hpc-performance $(YK_SCRIPT) $(YK_SCRIPT_OPTS) "[options]"
+ YK_VTUNE_CMD	:=	echo "*** VTune command:" vtune -c hpc-performance -start-paused $(YK_SCRIPT) $(YK_SCRIPT_OPTS) "[options]"
 endif
 
 # Options to make shared objs.
@@ -391,7 +394,7 @@ YK_SO_OPTS	:=	-shared -fPIC
 
 # Create a compiler invocation to test for macro settings.
 # Remove '-fopenmp*' because icpx tries to create '/dev/null.i'.
-YK_CXX_TEST 	:= 	$(filter-out -fopenmp%,$(YK_CXX) $(YK_CXXFLAGS) $(YK_CXXOPT) $(OMPFLAGS) $(EXTRA_YK_CXXFLAGS))
+YK_CXX_TEST 	:= 	$(filter-out -fopenmp%,$(YK_CXX) $(YK_CXXFLAGS) $(OMPFLAGS) $(EXTRA_YK_CXXFLAGS))
 
 # Clang (LLVM-based) compiler.
 # Includes clang-based Intel compiler (icpx).
@@ -447,7 +450,7 @@ else ifeq ($(model_cache),2)
 endif
 
 # Add in final flags and user-added flags.
-YK_CXXFLAGS	+=	$(YK_CXXOPT) $(OMPFLAGS) $(addprefix -D,$(MACROS) $(EXTRA_MACROS)) $(EXTRA_YK_CXXFLAGS)
+YK_CXXFLAGS	+=	$(OMPFLAGS) $(addprefix -D,$(MACROS) $(EXTRA_MACROS)) $(EXTRA_YK_CXXFLAGS)
 YK_LIBS		+=	$(EXTRA_YK_LIBS)
 
 # Number of stencil/var dims extracted from YASK compiler output.
@@ -765,6 +768,7 @@ echo-settings:
 	echo YK_ARCH=$(YK_ARCH); \
 	echo YK_BASE=$(YK_BASE); \
 	echo YK_CXX=$(YK_CXX); \
+	echo YK_CXXDBG=$(YK_CXXDBG); \
 	echo YK_CXXFLAGS="\"$(YK_CXXFLAGS)\""; \
 	echo YK_CXXOPT=$(YK_CXXOPT); \
 	echo YK_EXT_TAG=$(YK_EXT_TAG); \
@@ -839,7 +843,8 @@ else
 SET_FOLD	=	fold=$(subst $(space),$(comma),$(1))
 SET_CLUSTER	=	cluster=$(subst $(space),$(comma),$(1))
 endif
-TEST_MAKE 	:=	$(MAKE) real_bytes=8 allow_new_var_types=0 check=1 trace=1
+TEST_ARGS	:=	real_bytes=8 allow_new_var_types=0 check=1 trace=1
+TEST_MAKE 	:=	$(MAKE) $(TEST_ARGS)
 
 # Default number of ranks for running tests.
 # 4 is good because it tests in-plane diagonal exchanges for 2D and 3D tests.

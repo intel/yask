@@ -65,6 +65,9 @@
 # allow_new_grid_types: Whether to allow grid types not defined in the stencil
 #   to be created via new_grid() and new_fixed_size_grid().
 
+# Common defaults.
+offload			?=	0
+
 # Common settings.
 YASK_BASE	:=	$(abspath .)
 include $(YASK_BASE)/src/common/common.mk
@@ -188,15 +191,23 @@ py-yc-api-and-cxx-yk-api-test:
 # When the built-in stencil examples aren't being used,
 # "stencil=api_test" in the commands below is simply used to
 # create file names.
-combo-api-tests:
+yc-combo-api-tests:
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd yc-and-cxx-yk-api-test
 	$(MAKE) clean; $(MAKE) stencil=iso3dfd yc-and-py-yk-api-test
+
+cxx-yc-combo-api-tests:
 	$(MAKE) clean; $(MAKE) stencil=api_test cxx-yc-api-and-yk-test
-	$(MAKE) clean; $(MAKE) stencil=api_test py-yc-api-and-yk-test
 	$(MAKE) clean; $(MAKE) stencil=api_test cxx-yc-api-and-cxx-yk-api-test
-	$(MAKE) clean; $(MAKE) stencil=api_test py-yc-api-and-py-yk-api-test
 	$(MAKE) clean; $(MAKE) stencil=api_test cxx-yc-api-and-py-yk-api-test
+
+py-yc-combo-api-tests:
+	$(MAKE) clean; $(MAKE) stencil=api_test py-yc-api-and-yk-test
+	$(MAKE) clean; $(MAKE) stencil=api_test py-yc-api-and-py-yk-api-test
 	$(MAKE) clean; $(MAKE) stencil=api_test py-yc-api-and-cxx-yk-api-test
+
+combo-api-tests:
+	$(MAKE) yc-combo-api-tests
+	if (( $(offload) == 0 )); then $(MAKE) cxx-yc-combo-api-tests py-yc-combo-api-tests; fi
 
 ######## Misc targets
 
