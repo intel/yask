@@ -32,10 +32,12 @@ use Carp;
 # Special keys.
 my $linux_key = "Linux kernel";
 my $nodes_key = "MPI node(s)";
+my $val_key = "validation results";
 our @special_log_keys =
   (
    $linux_key,
    $nodes_key,
+   $val_key,
    );
 
 # Values to get from log file.
@@ -101,7 +103,6 @@ our @log_keys =
   );
 
 our @all_log_keys = ( @log_keys, @special_log_keys );
-
 
 our $oneKi = 1024;
 our $oneMi = $oneKi * $oneKi;
@@ -213,10 +214,20 @@ sub getResultsFromLine($$) {
   $line =~ s/target.ISA/target/g;
   
   # special cases for manual parsing...
-  # TODO: catch output of auto-tuner and update relevant results.
 
+  # Validation.
+  if ($line =~ /did not pass internal validation test/i) {
+    $results->{$val_key} = 'failed';
+  }
+  elsif ($line =~ /passed internal validation test/i) {
+    $results->{$val_key} = 'passed';
+  }
+  elsif ($line =~ /Results NOT VERIFIED/i) {
+    $results->{$val_key} = 'not checked';
+  }
+  
   # Output of 'uname -a'
-  if ($line =~ /^\s*Linux\s/) {
+  elsif ($line =~ /^\s*Linux\s/) {
     my @w = split ' ', $line;
     $results->{$linux_key} = $w[2]; # 'Linux' hostname kernel ...
   }
@@ -261,7 +272,7 @@ sub getResultsFromLine($$) {
 
       # match to short key?
       return if !exists $proc_keys{$sk};
-      
+
       # look for exact key.
       for my $m (keys %{$proc_keys{$sk}}) {
 

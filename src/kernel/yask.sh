@@ -372,5 +372,12 @@ if [[ `grep -c 'YASK DONE' $logfile` == 0 ]]; then
     exit 1
 fi
 
+# Print a message if test passed on at least one rank.
+# (Script would have exited above if any rank failed.)
+if [[ `grep -c 'TEST PASSED' $logfile` > 0 ]]; then
+    echo $exe_str passed internal validation test. | tee -a $logfile
+fi
+
+# Print a final message, which will print if not validated or passed validation.
 echo $exe_str ran successfully. | tee -a $logfile
 exit 0
