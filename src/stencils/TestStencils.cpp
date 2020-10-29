@@ -436,8 +436,9 @@ namespace {
     protected:
 
         // Vars.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x }); // time-varying var.
-        yc_var_proxy B = yc_var_proxy("B", get_soln(), { t, x }); // time-varying var.
+        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x });
+        yc_var_proxy B = yc_var_proxy("B", get_soln(), { t, x });
+        yc_var_proxy C = yc_var_proxy("C", get_soln(), { t, x });
 
     public:
 
@@ -447,11 +448,12 @@ namespace {
         // Define equation to apply to all points in 'A' and 'B' vars.
         virtual void define() {
 
-            // Define A(t+1) from A(t) & stencil at B(t).
-            A(t+1, x) EQUALS A(t, x) - def_1d(B, t, x, 0, 1);
+            // Define A(t+1) and B(t+1).
+            A(t+1, x) EQUALS -2 * A(t, x);
+            B(t+1, x) EQUALS def_1d(B, t, x, 0, 1);
 
-            // Define B(t+1) from B(t) & stencil at A(t+1).
-            B(t+1, x) EQUALS B(t, x) - def_1d(A, t+1, x, 3, 2);
+            // 'C' depends on 'A', creating a 2nd stage.
+            C(t+1, x) EQUALS def_1d(A, t+1, x, 1, 0) + C(t, x+1);
         }
     };
 
@@ -809,8 +811,8 @@ namespace {
     // '-stencil' commmand-line option or the 'stencil=' build option.
     static TestScratchBoundaryStencil1 TestScratchBoundaryStencil1_instance;
 
-    // A stencil that uses svml math functions.
-    // This stencil is an exception to the whole-number calculations
+    // A stencil that uses math functions.
+    // This stencil is an exception to the integer-result calculations
     // used in most test stencils.
     class TestFuncStencil1 : public TestBase {
 
@@ -827,10 +829,12 @@ namespace {
             TestBase("test_func_1d", radius) { }
 
         virtual void define() {
+
+            // Define 'A(t+1)' and 'B(t+1)' based on values at 't'.
             A(t+1, x) EQUALS cos(A(t, x)) - 2 * sin(A(t, x));
             B(t+1, x) EQUALS pow(def_1d(B, t, x, 0, 1), 1.0/2.5);
 
-            // 'C' depends on 'A', creating a 2nd stage.
+            // 'C(t+1)' depends on 'A(t+1)', creating a 2nd stage.
             C(t+1, x) EQUALS atan(def_1d(A, t+1, x, 1, 0) + cbrt(C(t, x+1)));
         }
     };
