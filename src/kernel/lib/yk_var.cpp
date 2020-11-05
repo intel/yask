@@ -380,6 +380,7 @@ namespace yask {
         // Compare each element.
         idx_t errs = 0;
         auto allocs = get_allocs();
+        set<string> err_msgs;
 
         // This will loop over the entire allocation.
         // We use this as a handy way to get offsets,
@@ -416,22 +417,24 @@ namespace yask {
                 auto te = read_elem(opt, asi, __LINE__);
                 auto re = ref->read_elem(opt, asi, __LINE__);
                 if (!within_tolerance(te, re, epsilon)) {
-#pragma omp critical
+                    #pragma omp critical
                     {
                         errs++;
-                        if (errs <= max_print) {
-                            if (errs < max_print)
-                                DEBUG_MSG("** mismatch at " << get_name() <<
-                                          "(" << opt.make_dim_val_str() << "): " <<
-                                          te << " != " << re);
-                            else
-                                DEBUG_MSG("** Additional errors not printed for var '" <<
-                                          get_name() << "'");
+                        if (errs < max_print) {
+                            err_msgs.insert(get_name() +
+                                            "(" + opt.make_dim_val_str() +
+                                            "): got " + to_string(te) +
+                                            "; expected " + to_string(re));
                         }
                     }
                 }
                 return true;    // keep visiting.
             });
+
+        for (auto& msg : err_msgs)
+            DEBUG_MSG("** mismatch at " << msg);
+        if (errs > max_print)
+            DEBUG_MSG("** Additional errors not printed for var '" << get_name() << "'");
         TRACE_MSG("detailed compare returned " << errs);
         return errs;
     }

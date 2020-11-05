@@ -566,7 +566,7 @@ namespace yask {
         STATE_VARS(this);
         TRACE_MSG("calc_region: region [" <<
                   rank_idxs.start.make_val_str() << " ... " <<
-                  rank_idxs.stop.make_val_str() << ") within rank [" <<
+                  rank_idxs.stop.make_val_str() << ") within possibly-adjusted rank [" <<
                   rank_idxs.begin.make_val_str() << " ... " <<
                   rank_idxs.end.make_val_str() << ")" );
 
