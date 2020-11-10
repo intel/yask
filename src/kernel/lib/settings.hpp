@@ -61,7 +61,7 @@ namespace yask {
         // OMP offload devices.
         static int _omp_hostn;
         static int _omp_devn;
-        
+
         // MPI vars.
         MPI_Comm comm = MPI_COMM_NULL; // global communicator.
         MPI_Group group = MPI_GROUP_NULL;

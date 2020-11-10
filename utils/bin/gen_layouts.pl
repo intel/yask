@@ -173,17 +173,17 @@ END
  public:
   Layout_$name() { }
   Layout_$name(const Indices& sizes) : ${basename}(sizes) { }
-  inline int get_num_sizes() const {
+  static constexpr int get_num_sizes() {
     return $n;
   }
 
   // Return 1-D offset from $n-D 'j' indices.
-  inline idx_t layout(const Indices& j) const {
+  ALWAYS_INLINE idx_t layout(const Indices& j) const {
     return $layout;
   }
 
   // Return $n index(indices) based on 1-D 'ai' input.
-  inline Indices unlayout(idx_t ai) const {
+  ALWAYS_INLINE Indices unlayout(idx_t ai) const {
     Indices j(_sizes);
     $unlayout;
     return j;

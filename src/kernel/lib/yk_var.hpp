@@ -144,7 +144,7 @@ namespace yask {
         const real_t* get_elem_ptr(const Indices& idxs,
                                    idx_t alloc_step_idx,
                                    bool check_bounds=true) const {
-            const auto n = _data.get_num_dims();
+            constexpr auto n = LayoutFn::get_num_sizes();
             Indices adj_idxs(n);
 
             // Special handling for step index.
@@ -229,12 +229,14 @@ namespace yask {
 
             // Use template vec lengths instead of run-time values for
             // efficiency.
-            static constexpr int nvls = sizeof...(_templ_vec_lens);
-            static constexpr uidx_t vls[nvls] { _templ_vec_lens... };
+            constexpr int nvls = sizeof...(_templ_vec_lens);
+            constexpr uidx_t vls[nvls] { _templ_vec_lens... };
             Indices vec_idxs(nvls), elem_ofs(nvls);
             #ifdef DEBUG_LAYOUT
             const auto nd = get_num_dims();
             host_assert(nd == nvls);
+            constexpr auto ns = LayoutFn::get_num_sizes();
+            host_assert(ns == nvls);
             #endif
 
             // Special handling for step index.
@@ -339,7 +341,7 @@ namespace yask {
                                            idx_t alloc_step_idx,
                                            bool check_bounds=true) const {
 
-            static constexpr int nvls = sizeof...(_templ_vec_lens);
+            constexpr int nvls = sizeof...(_templ_vec_lens);
             #ifdef DEBUG_LAYOUT
             const auto nd = get_num_dims();
             host_assert(nd == nvls);

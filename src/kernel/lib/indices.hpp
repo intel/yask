@@ -410,7 +410,7 @@ namespace yask {
     public:
         Layout_0d() : Layout(0) { }
         Layout_0d(const Indices& sizes) : Layout(0, sizes) { }
-        ALWAYS_INLINE int get_num_sizes() const {
+        static constexpr int get_num_sizes() {
             return 0;
         }
 
