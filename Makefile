@@ -83,10 +83,6 @@ include $(YASK_BASE)/src/common/common.mk
 YK_MAKE		:=	$(MAKE) $(YASK_MFLAGS) -C src/kernel YASK_OUTPUT_DIR=$(YASK_OUT_BASE)
 YC_MAKE		:=	$(MAKE) $(YASK_MFLAGS) -C src/compiler YASK_OUTPUT_DIR=$(YASK_OUT_BASE)
 
-# Misc dirs & files.
-TUPLE_TEST_EXEC :=	$(BIN_OUT_DIR)/yask_tuple_test.exe
-COMBO_TEST_EXEC :=	$(BIN_OUT_DIR)/yask_combo_test.exe
-
 # Compiler and default flags--used only for targets in this Makefile.
 # For compiler, use YC_CXX*.
 # For kernel, use YK_CXX*.
@@ -138,6 +134,51 @@ docs/api/html/index.html: include/*.hpp include/*/*.hpp docs/api/*.*
 	doxygen -v
 	find docs/api/html -type f | xargs -r rm
 	cd docs/api; doxygen doxygen_config.txt
+
+######## Misc targets
+
+code-stats:
+	$(YK_MAKE) $@
+
+docs: api-docs
+
+tags:
+	rm -f TAGS ; find src include -name '*.[ch]pp' | xargs etags -C -a
+
+# Remove intermediate files.
+# Should not trigger remake of stencil compiler, so does not invoke clean in compiler dir.
+# Make this target before rebuilding YASK with any new parameters.
+clean:
+	$(YK_MAKE) $@
+
+# Remove executables, generated documentation, etc. (not logs).
+# Use 'find *' instead of 'find .' to avoid searching in '.git'.
+realclean: clean
+	rm -rf $(LIB_OUT_DIR) $(BIN_OUT_DIR) $(BUILD_OUT_DIR)
+	rm -fv TAGS '*~'
+	- find * -name '*~' -print -delete
+	- find * -name '*.optrpt' -print -delete
+	- find * -name __pycache__ -print -delete
+	$(YC_MAKE) $@
+	$(YK_MAKE) $@
+	- find $(PY_OUT_DIR) -mindepth 1 '!' -name __init__.py -print -delete
+	- rmdir -v --ignore-fail-on-non-empty $(PY_OUT_DIR)
+	- rmdir -v --ignore-fail-on-non-empty $(YASK_OUT_BASE)
+
+help:
+	@ $(YC_MAKE) $@
+	@ $(YK_MAKE) $@
+	@ echo " "
+	@ echo "'setenv CXX_PREFIX ccache' or 'export CXX_PREFIX=ccache' to use ccache."
+
+#################################
+########### Tests ###############
+#################################
+# TODO: convert all testing to a separate test framework.
+
+# Test dirs & files.
+TUPLE_TEST_EXEC :=	$(BIN_OUT_DIR)/yask_tuple_test.exe
+COMBO_TEST_EXEC :=	$(BIN_OUT_DIR)/yask_combo_test.exe
 
 #### API tests.
 
@@ -207,17 +248,14 @@ py-yc-combo-api-tests:
 
 combo-api-tests:
 	$(MAKE) yc-combo-api-tests
-	if (( $(offload) == 0 )); then $(MAKE) cxx-yc-combo-api-tests py-yc-combo-api-tests; fi
-
-######## Misc targets
+	if (( $(offload) == 0 )); then \
+	  $(MAKE) cxx-yc-combo-api-tests && \
+	  $(MAKE) py-yc-combo-api-tests; fi
 
 # NB: set arch var if applicable.
 # NB: save some test time by using YK_CXXOPT=-O2.
 
 yc-and-yk-test:
-	$(YK_MAKE) $@
-
-code-stats:
 	$(YK_MAKE) $@
 
 $(TUPLE_TEST_EXEC): $(COMM_DIR)/tests/tuple_test.cpp $(COMM_DIR)/*.*pp
@@ -240,9 +278,11 @@ api-tests: compiler-api
 	$(MAKE) combo-api-tests
 	$(YK_MAKE) $@
 
-all-tests: compiler-api
+unit-tests:
 	$(MAKE) tuple-test
 	$(MAKE) combo-test
+
+all-tests: compiler-api unit-tests
 	$(YK_MAKE) $@
 	$(MAKE) combo-api-tests
 	$(MAKE) clean
@@ -254,34 +294,3 @@ all:
 	$(MAKE) default
 	$(MAKE) api-all
 	$(MAKE) all-tests
-
-docs: api-docs
-
-tags:
-	rm -f TAGS ; find src include -name '*.[ch]pp' | xargs etags -C -a
-
-# Remove intermediate files.
-# Should not trigger remake of stencil compiler, so does not invoke clean in compiler dir.
-# Make this target before rebuilding YASK with any new parameters.
-clean:
-	$(YK_MAKE) $@
-
-# Remove executables, generated documentation, etc. (not logs).
-# Use 'find *' instead of 'find .' to avoid searching in '.git'.
-realclean: clean
-	rm -rf $(LIB_OUT_DIR) $(BIN_OUT_DIR) $(BUILD_OUT_DIR)
-	rm -fv TAGS '*~'
-	- find * -name '*~' -print -delete
-	- find * -name '*.optrpt' -print -delete
-	- find * -name __pycache__ -print -delete
-	$(YC_MAKE) $@
-	$(YK_MAKE) $@
-	- find $(PY_OUT_DIR) -mindepth 1 '!' -name __init__.py -print -delete
-	- rmdir -v --ignore-fail-on-non-empty $(PY_OUT_DIR)
-	- rmdir -v --ignore-fail-on-non-empty $(YASK_OUT_BASE)
-
-help:
-	@ $(YC_MAKE) $@
-	@ $(YK_MAKE) $@
-	@ echo " "
-	@ echo "'setenv CXX_PREFIX ccache' or 'export CXX_PREFIX=ccache' to use ccache."

@@ -867,7 +867,7 @@ $(YK_VAR_TEST_EXEC): $(YK_TEST_SRC_DIR)/var_test.cpp $(YK_LIB)
 	@ls -l $@
 
 cxx-yk-var-test:
-	$(TEST_MAKE) $(YK_VAR_TEST_EXEC) stencil=test_3d
+	$(TEST_MAKE) $(YK_VAR_TEST_EXEC)
 	@echo '*** Running the C++ YASK var test...'
 	$(RUN_PREFIX) $(YK_VAR_TEST_EXEC)
 
@@ -879,9 +879,9 @@ $(YK_API_TEST_EXEC): $(YK_TEST_SRC_DIR)/yask_kernel_api_test.cpp $(YK_LIB)
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
 	@ls -l $@
 
-# Run C++ tests.
+# Build and run C++ tests.
 cxx-yk-api-test:
-	$(TEST_MAKE) $(YK_API_TEST_EXEC) stencil=test_3d allow_new_var_types=1
+	$(TEST_MAKE) $(YK_API_TEST_EXEC) allow_new_var_types=1
 	@echo '*** Running the C++ YASK kernel API test...'
 	$(RUN_PREFIX) $(YK_API_TEST_EXEC)
 
