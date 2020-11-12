@@ -101,6 +101,27 @@ typedef std::uint64_t uidx_t;
 
 // Simple macros and stubs.
 
+// OMP offload (cannot be in offload.hpp because it's needed earlier).
+#ifdef USE_OFFLOAD
+#ifndef _OPENMP
+#error Offload enabled without OpenMP enabled
+#endif
+
+#ifdef USE_OFFLOAD_USM
+#pragma omp requires unified_shared_memory
+#else
+#define USE_OFFLOAD_NO_USM
+#endif
+
+#define OMP_DECL_TARGET _Pragma("omp declare target")
+#define OMP_END_DECL_TARGET _Pragma("omp end declare target")
+
+#else
+#define OMP_DECL_TARGET
+#define OMP_END_DECL_TARGET
+
+#endif
+
 // Conditional inlining
 #if !defined(NO_INLINE) && !defined(CHECK)
 #define ALWAYS_INLINE __attribute__((always_inline)) inline

@@ -31,6 +31,17 @@ namespace yask {
     typedef std::vector<idx_t> VarDimSizes;
     typedef std::vector<std::string> VarDimNames;
 
+    OMP_DECL_TARGET
+    
+    // Max number of indices that can be held.
+    // Note use of "+max_idxs" in code below to avoid compiler
+    // trying to take a reference to it, resulting in an undefined
+    // symbol (sometimes).
+    constexpr int max_idxs = MAX_DIMS;
+
+    // Step dim is always in [0] of an Indices type (if it is used).
+    constexpr int step_posn = 0;
+
     // A class to hold up to a given number of sizes or indices efficiently.
     // Similar to a Tuple, but less overhead and doesn't keep names.
     // This class is NOT virtual.
@@ -40,17 +51,8 @@ namespace yask {
 
     public:
 
-        // Max number of indices that can be held.
-        // Note use of "+max_idxs" in code below to avoid compiler
-        // trying to take a reference to it, resulting in an undefined
-        // symbol (sometimes).
-        static constexpr int max_idxs = MAX_DIMS;
-
-        // Step dim is always in [0] of an Indices type (if it is used).
-        static constexpr int step_posn = 0;
-
     protected:
-        idx_t _idxs[max_idxs];
+        idx_t _idxs[+max_idxs];
         int _ndims;
 
     public:
@@ -202,7 +204,7 @@ namespace yask {
             for (int i = 0; i < _ndims; i++)
 #else
             // Use all to allow unroll and avoid jumps.
-            _UNROLL for (int i = 0; i < max_idxs; i++)
+            _UNROLL for (int i = 0; i < +max_idxs; i++)
 #endif
                 func(res._idxs[i], other._idxs[i]);
             return res;
@@ -248,7 +250,7 @@ namespace yask {
             for (int i = 0; i < _ndims; i++)
 #else
             // Use all to allow unroll and avoid jumps.
-            _UNROLL for (int i = 0; i < max_idxs; i++)
+            _UNROLL for (int i = 0; i < +max_idxs; i++)
 #endif
                 func(res._idxs[i], crhs);
             return res;
@@ -362,12 +364,12 @@ namespace yask {
                   "Needed for OpenMP offload");
 
     // Define OMP reductions on Indices.
-#pragma omp declare reduction(min_idxs : Indices : \
-                              omp_out = omp_out.min_elements(omp_in) )   \
-    initializer (omp_priv = omp_orig)
-#pragma omp declare reduction(max_idxs : Indices : \
-                              omp_out = omp_out.max_elements(omp_in) )   \
-    initializer (omp_priv = omp_orig)
+    #pragma omp declare reduction(min_idxs : Indices :                  \
+                                  omp_out = omp_out.min_elements(omp_in) ) \
+        initializer (omp_priv = omp_orig)
+    #pragma omp declare reduction(max_idxs : Indices :                  \
+                                  omp_out = omp_out.max_elements(omp_in) ) \
+        initializer (omp_priv = omp_orig)
 
     // Layout base class.
     // This class hierarchy is NOT virtual.
@@ -429,7 +431,7 @@ namespace yask {
                   "Needed for OpenMP offload");
 
     // Auto-generated layout algorithms for >0 dims.
-#include "yask_layouts.hpp"
+    #include "yask_layouts.hpp"
 
     // Forward defns.
     struct Dims;
@@ -541,5 +543,6 @@ namespace yask {
             // Leave others alone.
         }
     };
+    OMP_END_DECL_TARGET
 
 } // yask namespace.

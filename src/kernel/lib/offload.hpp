@@ -28,18 +28,12 @@ IN THE SOFTWARE.
 
 #pragma once
 
-#ifdef USE_OFFLOAD
-#ifndef _OPENMP
-#error Offload enabled without OpenMP enabled
-#endif
-#endif
-
 namespace yask {
 
     // Get device ptr from any host ptr.
     template <typename T>
     T* get_dev_ptr(T* hostp) {
-        #ifdef USE_OFFLOAD
+        #ifdef USE_OFFLOAD_NO_USM
         auto devn = KernelEnv::_omp_devn;
         if (hostp)
             assert(omp_target_is_present(hostp, devn));
@@ -67,8 +61,8 @@ namespace yask {
     private:
         T* _p = 0;                  // ptr to data; used on host and device.
 
-        // Additional data when offloading.
-        #ifdef USE_OFFLOAD
+        // Additional data when offloading without unified addresses.
+        #ifdef USE_OFFLOAD_NO_USM
         T* _dp = 0;                 // val of ptr on device.
 
         // Additional data when printing debug info.
@@ -85,7 +79,7 @@ namespace yask {
         // if it appears not to have been done since changed.
         // Returns 'true' if updated.
         void _sync() {
-            #ifdef USE_OFFLOAD
+            #ifdef USE_OFFLOAD_NO_USM
             auto devn = KernelEnv::_omp_devn;
             TRACE_MSG("omp: sync'ing ptr to " << _p << " on host at " << (void*)&_p << "...");
 
@@ -159,7 +153,7 @@ namespace yask {
         T& operator[](int i) { return _p[i]; }
         const T& operator[](int i) const { return _p[i]; }
 
-        #ifdef USE_OFFLOAD
+        #ifdef USE_OFFLOAD_NO_USM
         const T* get_dev_ptr() const { return _dp; }
         #else
         const T* get_dev_ptr() const { return _p; }
@@ -181,7 +175,7 @@ namespace yask {
 
     };
     
-    #ifdef USE_OFFLOAD
+    #ifdef USE_OFFLOAD_NO_USM
 
     // Allocate space for 'num' 'T' objects on offload device.
     // Map 'hostp' to allocated mem.
@@ -274,7 +268,7 @@ namespace yask {
 
     #else
 
-    // Stub functions when not offloading.
+    // Stub functions when not offloading or when using USM.
     template <typename T>
     void* offload_map_alloc(T* hostp, size_t num) { return hostp; }
     template <typename T>

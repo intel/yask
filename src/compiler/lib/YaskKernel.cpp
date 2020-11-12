@@ -132,8 +132,10 @@ namespace yask {
             os << "#define VLEN_" << uc_dim << " (" << dim.get_val() << ")" << endl;
         }
         os << "namespace yask {\n"
+            " OMP_DECL_TARGET\n"
             " constexpr idx_t fold_pts[]{ " << _dims._fold.make_val_str() << " };\n"
             " constexpr idx_t cluster_pts[]{ " << _dims._cluster_pts.make_val_str() << " };\n"
+            " OMP_END_DECL_TARGET\n"
             "}\n";
         os << "#define VLEN (" << _dims._fold.product() << ")" << endl;
         os << "#define FIRST_FOLD_INDEX_IS_UNIT_STRIDE (" <<
@@ -399,9 +401,11 @@ namespace yask {
                 "  const bool _is_scratch = " << (eq->is_scratch() ? "true" : "false") << ";\n";
 
             // Example computation.
-            os << endl << " // " << stats.get_num_ops() << " FP operation(s) per point:" << endl;
+            os << endl << " // " << stats.get_num_ops() << " FP operation(s) per point:\n";
             add_comment(os, *eq);
 
+            os << " OMP_DECL_TARGET\n";
+            
             // Domain condition.
             {
                 os << "\n // Determine whether " << egs_name << " is valid at the domain indices " <<
@@ -634,6 +638,7 @@ namespace yask {
                 os << "} // " << funcstr << ".\n";
                 delete vp;
             }
+            os << " OMP_END_DECL_TARGET\n";
 
             os << "}; // " << egs_name << ".\n" // end of struct.
                 " static_assert(std::is_trivially_copyable<" << egs_name << ">::value,"

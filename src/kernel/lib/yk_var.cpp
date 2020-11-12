@@ -538,8 +538,8 @@ namespace yask {
     void YkVarBase::set_dirty_in_slice(const Indices& first_indices,
                                         const Indices& last_indices) {
         if (_has_step_dim) {
-            for (idx_t i = first_indices[+Indices::step_posn];
-                 i <= last_indices[+Indices::step_posn]; i++)
+            for (idx_t i = first_indices[+step_posn];
+                 i <= last_indices[+step_posn]; i++)
                 set_dirty(true, i);
         } else
             set_dirty_using_alloc_index(true, 0);

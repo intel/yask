@@ -364,8 +364,9 @@ namespace yask {
                 _bundle.calc_scalar(cp, region_thread_idx, pt_idxs.start)
 
             // Set OMP loop to offload or disable OMP.
-            #ifdef USE_OFFLOAD_FOR_SCALAR
-            #define OMP_PRAGMA _Pragma("omp target parallel for device(KernelEnv::_omp_devn) schedule(static,1)")
+            #ifdef USE_OFFLOAD
+            #define OMP_PRAGMA \
+                _Pragma("omp target parallel for device(KernelEnv::_omp_devn) schedule(static,1)")
             #else
             #define OMP_PRAGMA
             #endif
@@ -670,8 +671,8 @@ namespace yask {
                           " ... " << sb_fcidxs.end.make_val_str() <<
                           ") by region thread " << region_thread_idx <<
                           " and block thread " << block_thread_idx);
-                #ifdef USE_OFFLOAD
-                THROW_YASK_EXCEPTION("Internal error: vector border-code not expected when offloading");
+                #if VLEN == 1
+                THROW_YASK_EXCEPTION("Internal error: vector border-code not expected when VLEN==1");
                 #else
 
                 // Keep a copy of the normalized cluster indices
@@ -719,8 +720,8 @@ namespace yask {
             // the inner dim is vectorized.
             // TODO: enable masking in the inner dim.
             if (do_scalars_left || do_scalars_right) {
-                #ifdef USE_OFFLOAD
-                THROW_YASK_EXCEPTION("Internal error: scalar remainder-code not expected when offloading");
+                #if VLEN == 1
+                THROW_YASK_EXCEPTION("Internal error: scalar remainder-code not expected when VLEN==1");
                 #else
 
                 // Use the 'misc' loops. Indices for these loops will be scalar and
@@ -811,6 +812,7 @@ namespace yask {
         // The 'loop_idxs' must specify a range only in the inner dim.
         // Indices must be rank-relative.
         // Indices must be normalized, i.e., already divided by VLEN_*.
+        OMP_DECL_TARGET
         void
         calc_loop_of_clusters(StencilCoreDataT* corep,
                               int region_thread_idx,
@@ -852,6 +854,7 @@ namespace yask {
             _bundle.calc_loop_of_clusters(corep, region_thread_idx, block_thread_idx,
                                           start_idxs, stop_inner);
         }
+        OMP_END_DECL_TARGET
 
         // Calculate a block of vectors outside of the cluster area.
         void
@@ -956,6 +959,7 @@ namespace yask {
                                              start_idxs, stop_inner, mask);
             }
         }
+         
     }; // StencilBundleBase.
     
     // A collection of independent stencil bundles.

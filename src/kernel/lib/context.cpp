@@ -1944,7 +1944,7 @@ namespace yask {
     // Copy vars from host to device.
     // TODO: copy only when needed.
     void StencilContext::copy_vars_to_device() {
-        #if USE_OFFLOAD
+        #ifdef USE_OFFLOAD_NO_USM
         for (auto gp : orig_var_ptrs) {
             assert(gp);
             gp->gb().copy_data_to_device();
@@ -1955,7 +1955,7 @@ namespace yask {
     // Copy output vars from device to host.
     // TODO: copy only when needed.
     void StencilContext::copy_vars_from_device() {
-        #if USE_OFFLOAD
+        #ifdef USE_OFFLOAD_NO_USM
         for (auto gp : output_var_ptrs) {
             assert(gp);
             gp->gb().copy_data_from_device();

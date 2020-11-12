@@ -45,6 +45,7 @@ omp_target_par_for	?=	omp target parallel for device(KernelEnv::_omp_devn)
 #omp_target_par_for	?=	omp target teams distribute parallel for device(KernelEnv::_omp_devn)
 omp_target_schedule	?=	static,1
 offload			?=	0
+offload_usm		?=	0
 trace			?=	0
 trace_mem		?=	0
 check			?=	0
@@ -53,6 +54,11 @@ check			?=	0
 # run-time option.  Including the "trace" code has a small impact on
 # binary size and performance, even if not used. Including the "trace_mem"
 # code has a large impact, even if not used.
+
+# Enable offload if offload with unified shared mem is enabled.
+ifeq ($(offload_usm),1)
+ offload		:=	1
+endif
 
 # Set 'arch' to 'intel64' when OpenMP offloading to avoid intrinsics.
 # TODO: update this when OpenMP offload intrinsics are available.
@@ -299,6 +305,9 @@ else ifeq ($(omp),1)
  OMPFLAGS	:=	-fopenmp
 else
  OMPFLAGS	:=
+endif
+ifeq ($(offload_usm),1)
+ MACROS		+=	USE_OFFLOAD_USM
 endif
 
 # Add options for NUMA.
@@ -778,6 +787,7 @@ echo-settings:
 	echo cluster=$(cluster); \
 	echo fold=$(fold); \
 	echo offload=$(offload); \
+	echo offload_usm=$(offload_usm); \
 	echo omp_block_schedule=$(omp_block_schedule); \
 	echo omp_misc_schedule=$(omp_misc_schedule); \
 	echo omp_region_schedule=$(omp_region_schedule); \
@@ -859,6 +869,10 @@ endif
 first_test	:=	0
 last_test	:=	99
 
+# Default threads.
+max_threads	:=	6
+block_threads	:=	2
+
 ### Unit tests.
 
 $(YK_VAR_TEST_EXEC): $(YK_TEST_SRC_DIR)/var_test.cpp $(YK_LIB)
@@ -925,7 +939,7 @@ cxx-yc-api-test:
 
 # Validation runs for each binary.
 DEF_TEST_ARGS := -ranks $(ranks) -stencil $(YK_STENCIL) -arch $(YK_ARCH) -v \
-	-trial_steps 2 -max_threads 6 -block_threads 2 \
+	-trial_steps 2 -max_threads $(max_threads) -block_threads $(block_threads) \
 	-ep 0 -mp 0 -no-allow_addl_padding
 
 # Test args for 1 and >1 ranks.

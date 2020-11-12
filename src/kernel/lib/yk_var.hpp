@@ -50,6 +50,7 @@ namespace yask {
     // Local offset must be a vector multiple.
 
     ///// Yk*Var*Core types /////
+    OMP_DECL_TARGET
     
     // Core data that is needed for computations using a var.
     // A trivially-copyable type for offloading.
@@ -113,7 +114,7 @@ namespace yask {
 
             // Avoid discontinuity in dividing negative numbers
             // by using floored-mod.
-            idx_t res = imod_flr(t, _domains[+Indices::step_posn]);
+            idx_t res = imod_flr(t, _domains[+step_posn]);
             return res;
         }
 
@@ -148,7 +149,7 @@ namespace yask {
             Indices adj_idxs(n);
 
             // Special handling for step index.
-            auto sp = +Indices::step_posn;
+            auto sp = +step_posn;
             if (_use_step_idx) {
                 host_assert(alloc_step_idx == _wrap_step(idxs[sp]));
                 adj_idxs[sp] = alloc_step_idx;
@@ -240,7 +241,7 @@ namespace yask {
             #endif
 
             // Special handling for step index.
-            auto sp = +Indices::step_posn;
+            auto sp = +step_posn;
             if (_use_step_idx) {
                 host_assert(alloc_step_idx == _wrap_step(idxs[sp]));
                 vec_idxs[sp] = alloc_step_idx;
@@ -349,7 +350,7 @@ namespace yask {
             Indices adj_idxs(nvls);
 
             // Special handling for step index.
-            auto sp = +Indices::step_posn;
+            auto sp = +step_posn;
             if (_use_step_idx) {
                 host_assert(alloc_step_idx == _wrap_step(vec_idxs[sp]));
                 adj_idxs[sp] = alloc_step_idx;
@@ -419,6 +420,7 @@ namespace yask {
         }
 
     }; // YkVecVarCore.
+    OMP_END_DECL_TARGET
 
     ///// Yk*Var* types /////
 
@@ -434,7 +436,7 @@ namespace yask {
         YkVarBaseCore* _corep = 0;
         
         // Whether step dim is used.
-        // If true, will always be in Indices::step_posn.
+        // If true, will always be in step_posn.
         bool _has_step_dim = false;
 
         // Whether certain dims can be changed.
@@ -613,11 +615,11 @@ namespace yask {
         void update_valid_step(idx_t t);
         inline void update_valid_step(const Indices& indices) {
             if (_has_step_dim)
-                update_valid_step(indices[+Indices::step_posn]);
+                update_valid_step(indices[+step_posn]);
         }
         inline void init_valid_steps() {
             if (_has_step_dim)
-                _corep->_local_offsets[+Indices::step_posn] = 0;
+                _corep->_local_offsets[+step_posn] = 0;
         }
 
         // Halo-exchange flag accessors.
@@ -684,7 +686,7 @@ namespace yask {
         // Convert logical step index to index in allocated range.
         // If this var doesn't use the step dim, returns 0.
         inline idx_t get_alloc_step_index(const Indices& indices) const {
-            return _has_step_dim ? _wrap_step(indices[+Indices::step_posn]) : 0;
+            return _has_step_dim ? _wrap_step(indices[+step_posn]) : 0;
         }
 
         // Get var dims with allocations in number of reals.
@@ -1171,7 +1173,7 @@ namespace yask {
                       make_index_string(lastv) << "]");
 
             // Do step loop explicitly.
-            auto sp = +Indices::step_posn;
+            auto sp = +step_posn;
             idx_t first_t = 0, last_t = 0;
             if (_has_step_dim) {
                 first_t = firstv[sp];
@@ -1235,7 +1237,7 @@ namespace yask {
             auto n = num_vecs_tuple.product() * VLEN;
 
             // Do step loop explicitly.
-            auto sp = +Indices::step_posn;
+            auto sp = +step_posn;
             idx_t first_t = 0, last_t = 0;
             if (_has_step_dim) {
                 first_t = firstv[sp];
@@ -1375,14 +1377,14 @@ namespace yask {
             if (!gb()._has_step_dim)
                 THROW_YASK_EXCEPTION("Error: 'get_first_valid_step_index()' called on var '" +
                                      get_name() + "' that does not use the step dimension");
-            return corep()->_local_offsets[+Indices::step_posn];
+            return corep()->_local_offsets[+step_posn];
         }
         virtual idx_t get_last_valid_step_index() const {
             if (!gb()._has_step_dim)
                 THROW_YASK_EXCEPTION("Error: 'get_last_valid_step_index()' called on var '" +
                                      get_name() + "' that does not use the step dimension");
-            return corep()->_local_offsets[+Indices::step_posn] +
-                corep()->_domains[+Indices::step_posn] - 1;
+            return corep()->_local_offsets[+step_posn] +
+                corep()->_domains[+step_posn] - 1;
         }
         virtual int
         get_halo_exchange_l1_norm() const {
