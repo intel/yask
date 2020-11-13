@@ -55,8 +55,9 @@ namespace {
         // Extend given radius left and/or right w/'*_ext'.
         virtual yc_number_node_ptr def_1d(yc_var_proxy& V, const yc_number_node_ptr& t0, const yc_number_node_ptr& x0,
                                           int left_ext, int right_ext) {
+            auto r = get_radius();
             yc_number_node_ptr v;
-            for (int i = -get_radius() - left_ext; i <= get_radius() + right_ext; i++)
+            for (int i = -r - left_ext; i <= r + right_ext; i++)
                 v += V(t0, x0+i);
             return v;
         }
@@ -65,8 +66,9 @@ namespace {
         // around 'x0'.  Similar to 'def_1d()', but doesn't use step var.
         virtual yc_number_node_ptr def_no_t_1d(yc_var_proxy& V, const yc_number_node_ptr& x0,
                                                int left_ext, int right_ext) {
+            auto r = get_radius();
             yc_number_node_ptr v;
-            for (int i = -get_radius() - left_ext; i <= get_radius() + right_ext; i++)
+            for (int i = -r - left_ext; i <= r + right_ext; i++)
                 v += V(x0+i);
             return v;
         }
@@ -79,9 +81,10 @@ namespace {
                                           int x_left_ext, int x_right_ext,
                                           const yc_number_node_ptr& y0,
                                           int y_left_ext, int y_right_ext) {
+            auto r = get_radius();
             yc_number_node_ptr v;
-            for (int i : { -get_radius() - x_left_ext, 0, get_radius() + x_right_ext })
-                for (int j : { -get_radius() - y_left_ext, 0, get_radius() + y_right_ext })
+            for (int i : { -r - x_left_ext, 0, r + x_right_ext })
+                for (int j : { -r - y_left_ext, 0, r + y_right_ext })
                     v += V(t0, x0+i, y0+j);
             return v;
         }    
@@ -94,9 +97,10 @@ namespace {
                                                int x_left_ext, int x_right_ext,
                                                const yc_number_node_ptr& y0,
                                                int y_left_ext, int y_right_ext) {
+            auto r = get_radius();
             yc_number_node_ptr v;
-            for (int i : { -get_radius() - x_left_ext, 0, get_radius() + x_right_ext })
-                for (int j : { -get_radius() - y_left_ext, 0, get_radius() + y_right_ext })
+            for (int i : { -r - x_left_ext, 0, r + x_right_ext })
+                for (int j : { -r - y_left_ext, 0, r + y_right_ext })
                     v += V(x0+i, y0+j);
             return v;
         }    
@@ -111,10 +115,11 @@ namespace {
                                           int y_left_ext, int y_right_ext,
                                           const yc_number_node_ptr& z0,
                                           int z_left_ext, int z_right_ext) {
-            yc_number_node_ptr v;
-            for (int i : { -get_radius() - x_left_ext, 0, get_radius() + x_right_ext })
-                for (int j : { -get_radius() - y_left_ext, 0, get_radius() + y_right_ext })
-                    for (int k : { -get_radius() - z_left_ext, 0, get_radius() + z_right_ext })
+            auto r = get_radius();
+            yc_number_node_ptr v = V(t0, x0, y0, z0);
+            for (int i : { -r - x_left_ext, r + x_right_ext })
+                for (int j : { -r - y_left_ext, r + y_right_ext })
+                    for (int k : { -r - z_left_ext, r + z_right_ext })
                         v += V(t0, x0+i, y0+j, z0+k);
             return v;
         }
@@ -129,10 +134,11 @@ namespace {
                                                int y_left_ext, int y_right_ext,
                                                const yc_number_node_ptr& z0,
                                                int z_left_ext, int z_right_ext) {
-            yc_number_node_ptr v;
-            for (int i : { -get_radius() - x_left_ext, 0, get_radius() + x_right_ext })
-                for (int j : { -get_radius() - y_left_ext, 0, get_radius() + y_right_ext })
-                    for (int k : { -get_radius() - z_left_ext, 0, get_radius() + z_right_ext })
+            auto r = get_radius();
+            yc_number_node_ptr v = V(x0, y0, z0);
+            for (int i : { -r - x_left_ext, r + x_right_ext })
+                for (int j : { -r - y_left_ext, r + y_right_ext })
+                    for (int k : { -r - z_left_ext, r + z_right_ext })
                         v += V(x0+i, y0+j, z0+k);
             return v;
         }    
@@ -149,11 +155,12 @@ namespace {
                                           int y_left_ext, int y_right_ext,
                                           const yc_number_node_ptr& z0,
                                           int z_left_ext, int z_right_ext) {
-            yc_number_node_ptr v;
-            for (int h : { -get_radius() - w_left_ext, 0, get_radius() + w_right_ext })
-                for (int i : { -get_radius() - x_left_ext, 0, get_radius() + x_right_ext })
-                    for (int j : { -get_radius() - y_left_ext, 0, get_radius() + y_right_ext })
-                        for (int k : { -get_radius() - z_left_ext, 0, get_radius() + z_right_ext })
+            auto r = get_radius();
+            yc_number_node_ptr v = V(t0, w0, x0, y0, z0);
+            for (int h : { -r - w_left_ext, r + w_right_ext })
+                for (int i : { -r - x_left_ext, r + x_right_ext })
+                    for (int j : { -r - y_left_ext, r + y_right_ext })
+                        for (int k : { -r - z_left_ext, r + z_right_ext })
                             v += V(t0, w0+h, x0+i, y0+j, z0+k);
             return v;
         }    
@@ -337,15 +344,16 @@ namespace {
 
             // Define the value at t+1 using asymmetric stencil
             // with various pos & neg indices in misc dims.
+            auto r = get_radius();
             yc_number_node_ptr v = A(t, x, 0, y, -1, 2) + 1.0;
-            for (int r = 1; r <= get_radius(); r++)
-                v += A(t, x + r, 3, y, 0, 1);
-            for (int r = 1; r <= get_radius() + 1; r++)
-                v += A(t, x - r, 4, y, 2, 1);
-            for (int r = 1; r <= get_radius() + 2; r++)
-                v += A(t, x, -2, y + r, 2, 0);
-            for (int r = 1; r <= get_radius() + 3; r++)
-                v += A(t, x, 0, y - r, 0, -1);
+            for (int i = 1; i <= r; i++)
+                v += A(t, x + i, 3, y, 0, 1);
+            for (int i = 1; i <= r + 1; i++)
+                v += A(t, x - i, 4, y, 2, 1);
+            for (int i = 1; i <= r + 2; i++)
+                v += A(t, x, -2, y + i, 2, 0);
+            for (int i = 1; i <= r + 3; i++)
+                v += A(t, x, 0, y - i, 0, -1);
             A(t+1, x, 1, y, 2, 3) EQUALS v;
         }
     };
