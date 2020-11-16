@@ -144,7 +144,7 @@ while true; do
         echo "  -log <path/filename>"
         echo "     Write copy of output to <path/filename>."
         echo "     Default <path> is 'logs'."
-        echo "     Default <filename> is based on stencil, arch, hostname, and time-stamp."
+        echo "     Default <filename> is based on stencil, arch, hostname, time-stamp, and process ID."
         echo "     Use '/dev/null' to avoid making a log."
         echo "  -log_path <path>"
         echo "     Additional path to prepend to <path/filename>."
