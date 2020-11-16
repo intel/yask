@@ -605,28 +605,28 @@ namespace yask {
     // functions with side-effects.
 #define STATE_VARS0(_ksbp, pfx)                                         \
     pfx auto* ksbp = _ksbp;                                             \
-    host_assert(ksbp);                                                       \
+    host_assert(ksbp);                                                  \
     pfx auto* state = ksbp->get_state().get();                          \
-    host_assert(state);                                                      \
+    host_assert(state);                                                 \
     pfx auto* env = state->_env.get();                                  \
-    host_assert(env);                                                        \
+    host_assert(env);                                                   \
     pfx auto* opts = state->_opts.get();                                \
-    host_assert(opts);                                                       \
+    host_assert(opts);                                                  \
     pfx auto* dims = state->_dims.get();                                \
-    host_assert(dims);                                                       \
+    host_assert(dims);                                                  \
     pfx auto* mpi_info = state->_mpi_info.get();                        \
-    host_assert(mpi_info);                                                   \
+    host_assert(mpi_info);                                              \
     const auto& step_dim = dims->_step_dim;                             \
     const auto& inner_dim = dims->_inner_dim;                           \
     const auto& domain_dims = dims->_domain_dims;                       \
     constexpr int nddims = NUM_DOMAIN_DIMS;                             \
-    host_assert(nddims == domain_dims.size());                               \
+    host_assert(nddims == domain_dims.size());                          \
     const auto& stencil_dims = dims->_stencil_dims;                     \
     constexpr int nsdims = NUM_STENCIL_DIMS;                            \
-    host_assert(nsdims == stencil_dims.size());                              \
+    host_assert(nsdims == stencil_dims.size());                         \
     auto& misc_dims = dims->_misc_dims;                                 \
     constexpr int step_posn = 0;                                        \
-    host_assert(step_posn == +Indices::step_posn);                           \
+    host_assert(step_posn == +step_posn);                               \
     constexpr int outer_posn = 1;                                       \
     const int inner_posn = state->_inner_posn
 #define STATE_VARS(_ksbp) STATE_VARS0(_ksbp,)

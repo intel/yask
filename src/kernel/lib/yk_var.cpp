@@ -594,7 +594,7 @@ namespace yask {
         // Visit every point in fold.
         IdxTuple folds = dims->_fold_pts;
         folds.visit_all_points([&](const IdxTuple& fofs,
-                                 size_t idx) {
+                                   size_t idx) {
 
                 // Get element from vec val.
                 real_t ev = val[idx];
