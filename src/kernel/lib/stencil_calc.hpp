@@ -323,22 +323,22 @@ namespace yask {
                        KernelSettings& settings,
                        const ScanIndices& mini_block_idxs) override {
 
-            // Choose between scalar and vector impls.
+            // Choose between scalar debug and optimized impls.
             if (settings.force_scalar)
-                calc_sub_block_scalar(region_thread_idx, block_thread_idx,
+                calc_sub_block_dbg(region_thread_idx, block_thread_idx,
                                       settings, mini_block_idxs);
             else
-                calc_sub_block_vec(region_thread_idx, block_thread_idx,
+                calc_sub_block_opt(region_thread_idx, block_thread_idx,
                                    settings, mini_block_idxs);
         }
 
         // Calculate results for one sub-block using pure scalar code.
         // This is very slow and used for debug.
         void
-        calc_sub_block_scalar(int region_thread_idx,
-                              int block_thread_idx,
-                              KernelSettings& settings,
-                              const ScanIndices& mini_block_idxs) {
+        calc_sub_block_dbg(int region_thread_idx,
+                           int block_thread_idx,
+                           KernelSettings& settings,
+                           const ScanIndices& mini_block_idxs) {
             STATE_VARS(this);
             TRACE_MSG("calc_sub_block_scalar for bundle '" << get_name() << "': [" <<
                       mini_block_idxs.start.make_val_str() <<
@@ -381,7 +381,7 @@ namespace yask {
         // into full vector-clusters, full vectors, and sub-vectors
         // and finally evaluated by the YASK-compiler-generated loops.
         void
-        calc_sub_block_vec(int region_thread_idx,
+        calc_sub_block_opt(int region_thread_idx,
                            int block_thread_idx,
                            KernelSettings& settings,
                            const ScanIndices& mini_block_idxs) {
