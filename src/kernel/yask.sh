@@ -126,7 +126,7 @@ while true; do
         echo "     this script with a name based on stencil and arch."
         echo "     <path>/../lib will also be prepended to the LD_LIBRARY_PATH env var."
         echo "  -exe_prefix <command>"
-        echo "     Run YASK executable under <command>, e.g., 'numactl -N 0'."
+        echo "     Run YASK executable as an argument to <command>, e.g., 'numactl -N 0'."
         echo "  -pre_cmd <command(s)>"
         echo "     One or more commands to run before YASK executable."
         echo "  -post_cmd <command(s)>"
@@ -141,10 +141,14 @@ while true; do
         if [[ -n "$nranks" ]]; then
             echo "     The default <N> for this host is '$nranks'."
         fi
-        echo "  -log <path/file>"
-        echo "     Write copy of output to <path/file>."
-        echo "     Default is based on stencil, arch, hostname, and time-stamp."
+        echo "  -log <path/filename>"
+        echo "     Write copy of output to <path/filename>."
+        echo "     Default <path> is 'logs'."
+        echo "     Default <filename> is based on stencil, arch, hostname, and time-stamp."
         echo "     Use '/dev/null' to avoid making a log."
+        echo "  -log_path <path>"
+        echo "     Additional path to prepend to <path/filename>."
+        echo "     Default is the empty string."
         echo "  -show_arch"
         echo "     Print the default architecture string and exit."
         echo "  <env-var=value>"
@@ -211,6 +215,11 @@ while true; do
         shift
         shift
 
+    elif [[ "$1" == "-log_path" && -n ${2+set} ]]; then
+        logpath=$2
+        shift
+        shift
+
     elif [[ "$1" == "-host" && -n ${2+set} ]]; then
         host=$2
         shift
@@ -271,6 +280,9 @@ dump="head -v -n -0"
 
 # Init log file.
 : ${logfile:=logs/yask.$stencil.$arch.$exe_host.`date +%Y-%m-%d_%H-%M`_p$$.log}
+if [[ -n "$logpath" ]]; then
+    logfile="$logpath/$logfile"
+fi
 echo "Writing log to '$logfile'."
 mkdir -p `dirname $logfile`
 echo $invo > $logfile
