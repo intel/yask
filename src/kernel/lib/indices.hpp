@@ -202,11 +202,12 @@ namespace yask {
 #if EXACT_INDICES
             // Use just the used elements.
             for (int i = 0; i < _ndims; i++)
+                func(res._idxs[i], other._idxs[i]);
 #else
             // Use all to allow unroll and avoid jumps.
             _UNROLL for (int i = 0; i < +max_idxs; i++)
-#endif
                 func(res._idxs[i], other._idxs[i]);
+#endif
             return res;
         }
 
@@ -223,10 +224,6 @@ namespace yask {
         }
         ALWAYS_INLINE Indices mul_elements(const Indices& other) const {
             return combine_elements([&](idx_t& lhs, idx_t rhs) { lhs *= rhs; },
-                                   other);
-        }
-        ALWAYS_INLINE Indices div_elements(const Indices& other) const {
-            return combine_elements([&](idx_t& lhs, idx_t rhs) { lhs /= rhs; },
                                    other);
         }
         ALWAYS_INLINE Indices min_elements(const Indices& other) const {
