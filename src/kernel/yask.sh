@@ -26,7 +26,7 @@
 # Purpose: run stencil kernel in specified environment.
 
 # Create invocation string w/proper quoting.
-invo="Invocation: $0"
+invo="Script invocation: $0"
 whitespace="[[:space:]]"
 for i in "$@"
 do
@@ -77,6 +77,8 @@ post_cmd=""
 helping=0
 opts=""
 bindir=`dirname $0`
+logdir="./logs"
+tmplog="/tmp/yask-p$$"
 
 # Display stencils in this dir and exit.
 function show_stencils {
@@ -121,10 +123,10 @@ while true; do
         echo "       -host "`hostname`"-mic<N>"
         echo "  -sh_prefix <command>"
         echo "     Run sub-shell under <command>, e.g., a custom ssh command."
-        echo "  -exe <path/file>"
-        echo "     Specify <path/file> as YASK executable instead of one in the same path as"
+        echo "  -exe <dir/file>"
+        echo "     Specify <dir/file> as YASK executable instead of one in the same directory as"
         echo "     this script with a name based on stencil and arch."
-        echo "     <path>/../lib will also be prepended to the LD_LIBRARY_PATH env var."
+        echo "     <dir>/../lib will also be prepended to the LD_LIBRARY_PATH env var."
         echo "  -exe_prefix <command>"
         echo "     Run YASK executable as an argument to <command>, e.g., 'numactl -N 0'."
         echo "  -pre_cmd <command(s)>"
@@ -141,14 +143,13 @@ while true; do
         if [[ -n "$nranks" ]]; then
             echo "     The default <N> for this host is '$nranks'."
         fi
-        echo "  -log <path/filename>"
-        echo "     Write copy of output to <path/filename>."
-        echo "     Default <path> is 'logs'."
+        echo "  -log <filename>"
+        echo "     Write copy of output to <filename>."
         echo "     Default <filename> is based on stencil, arch, hostname, time-stamp, and process ID."
-        echo "     Use '/dev/null' to avoid making a log."
-        echo "  -log_path <path>"
-        echo "     Additional path to prepend to <path/filename>."
-        echo "     Default is the empty string."
+        echo "     Set to empty string ('') to avoid making a log."
+        echo "  -log_dir <dir>"
+        echo "     Directory name to prepend to log <filename>."
+        echo "     Default is '$logdir'."
         echo "  -show_arch"
         echo "     Print the default architecture string and exit."
         echo "  <env-var=value>"
@@ -212,11 +213,14 @@ while true; do
 
     elif [[ "$1" == "-log" && -n ${2+set} ]]; then
         logfile=$2
+        if [[ -z "$logfile" ]]; then
+            logfile=$tmplog
+        fi
         shift
         shift
 
-    elif [[ "$1" == "-log_path" && -n ${2+set} ]]; then
-        logpath=$2
+    elif [[ "$1" == "-log_dir" && -n ${2+set} ]]; then
+        logdir=$2
         shift
         shift
 
@@ -279,9 +283,9 @@ exe_host=${host:-`hostname`}
 dump="head -v -n -0"
 
 # Init log file.
-: ${logfile:=logs/yask.$stencil.$arch.$exe_host.`date +%Y-%m-%d_%H-%M`_p$$.log}
-if [[ -n "$logpath" ]]; then
-    logfile="$logpath/$logfile"
+: ${logfile:=yask.$stencil.$arch.$exe_host.`date +%Y-%m-%d_%H-%M`_p$$.log}
+if [[ -n "$logdir" ]]; then
+    logfile="$logdir/$logfile"
 fi
 echo "Writing log to '$logfile'."
 mkdir -p `dirname $logfile`
@@ -342,8 +346,8 @@ fi
 config_cmds="sleep 1; uptime; lscpu; cpuinfo -A; sed '/^$/q' /proc/cpuinfo; cpupower frequency-info; uname -a; $dump /etc/system-release; $dump /proc/cmdline; $dump /proc/meminfo; free -gt; numactl -H; ulimit -a"
 
 # Command sequence to be run in a shell.
-# Captures
-cmds="cd $dir; ulimit -s unlimited; $config_cmds; ldd $exe; date; $pre_cmd; env $envs $mpi_cmd $exe_prefix $exe $opts"
+exe_str="$mpi_cmd $exe_prefix $exe $opts"
+cmds="cd $dir; ulimit -s unlimited; $config_cmds; ldd $exe; date; $pre_cmd; env $envs $exe_str"
 if [[ -n "$post_cmd" ]]; then
     cmds+="; $post_cmd"
 fi
@@ -365,23 +369,30 @@ if [[ $helping == 1 ]]; then
     exit 0
 fi
 
-echo $invo
-echo "Log saved in '$logfile'."
-echo "Run 'utils/bin/yask_log_to_csv.pl $logfile' to output in CSV format."
+function finish {
+    if [[ "$logfile" == $tmplog ]]; then
+        rm $tmplog
+    else
+        echo "Log saved in '$logfile'."
+        echo "Run 'utils/bin/yask_log_to_csv.pl $logfile' to output in CSV format."
+    fi
+    exit $1
+}
 
-# A summary of the command to print.
-exe_str="'$mpi_cmd $exe_prefix $exe $opts'"
+# Print invocation again.
+echo $invo
+exe_str="'$exe_str'"
 
 # Return a non-zero exit condition if test failed.
 if [[ `grep -c 'TEST FAILED' $logfile` > 0 ]]; then
     echo $exe_str did not pass internal validation test. | tee -a $logfile
-    exit 1
+    finish 1
 fi
 
 # Return a non-zero exit condition if executable didn't exit cleanly.
 if [[ `grep -c 'YASK DONE' $logfile` == 0 ]]; then
     echo $exe_str did not exit cleanly. | tee -a $logfile
-    exit 1
+    finish 1
 fi
 
 # Print a message if test passed on at least one rank.
@@ -392,4 +403,5 @@ fi
 
 # Print a final message, which will print if not validated or passed validation.
 echo $exe_str ran successfully. | tee -a $logfile
-exit 0
+finish 0
+

@@ -64,7 +64,7 @@ our @log_keys =
    'stencil name',
    'stencil description',
    'element size',
-   'invocation',
+   'script invocation',
    'binary invocation',
    'num MPI ranks',
    'num ranks',
@@ -207,6 +207,7 @@ sub getResultsFromLine($$) {
   }
 
   # Substitutions to handle old formats.
+  $line =~ s/^Invocation/Script invocation/g;
   $line =~ s/overall.problem/global-domain/g;
   $line =~ s/rank.domain/local-domain/g;
   $line =~ s/grid/var/g;

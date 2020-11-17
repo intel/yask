@@ -42,7 +42,7 @@ LIB_OUT_DIR	:=	$(YASK_OUT_BASE)/lib
 BIN_OUT_DIR	:=	$(YASK_OUT_BASE)/bin
 BUILD_OUT_DIR	:=	$(YASK_OUT_BASE)/build
 PY_OUT_DIR	:=	$(YASK_OUT_BASE)/yask
-TEST_LOG_OUT_DIR :=	$(YASK_OUT_BASE)/test_output
+TEST_LOG_OUT_DIR :=	$(YASK_OUT_BASE)/logs/tests
 
 # OS-specific
 ifeq ($(shell uname -o),Cygwin)
