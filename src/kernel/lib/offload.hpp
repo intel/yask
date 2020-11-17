@@ -48,6 +48,8 @@ namespace yask {
         {
             dp = hostp;
         }
+        TRACE_MSG("host ptr == " << (void*)hostp <<
+                  "; dev ptr == " << (void*)dp);
         return dp;
 
         #else
@@ -100,22 +102,26 @@ namespace yask {
             // Addr of host ptr.
             T** pp = &_p;
 
-            // Temp var to capture addr of dev ptr.
-            T** dpp;
+            // Temp vars for dev ptr.
+            #ifdef CHECK
+            T** dpp1 = yask::get_dev_ptr(pp);
+            #endif
+            T** dpp2 = 0;
 
             // Set pointer on device and copy back to host.
-            #pragma omp target device(devn) map(from: dp,dpp)
+            #pragma omp target device(devn) map(from: dp,dpp2)
             {
                 _p = p;
                 dp = p;
-                dpp = pp;
+                dpp2 = pp;
             }
 
             // Update values.
-            _dpp = dpp;
+            _dpp = dpp2;
             TRACE_MSG("omp: sync'd ptr to " << _p << " on host at " << (void*)&_p <<
                       " -> " << _dp << " on device " << devn << " at " << (void*)_dpp <<
                       ((_dpp == 0) ? " *******" : ""));
+            assert(dpp1 == dpp2);
 
             // Without tracing.
             #else
