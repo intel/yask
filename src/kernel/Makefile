@@ -938,7 +938,7 @@ cxx-yc-api-test:
 	mv $(YC_SRC_DIR)/yc-api-test-cxx.hpp $(YK_CODE_FILE)
 
 # Validation runs for each binary.
-DEF_TEST_ARGS := -log_path $(TEST_LOG_OUT_DIR) \
+DEF_TEST_ARGS := -log_dir $(TEST_LOG_OUT_DIR) \
 	-ranks $(ranks) -stencil $(YK_STENCIL) -arch $(YK_ARCH) -v \
 	-trial_steps 2 -max_threads $(max_threads) -block_threads $(block_threads) \
 	-ep 0 -mp 0 -no-allow_addl_padding
