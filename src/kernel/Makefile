@@ -257,8 +257,9 @@ YK_GEN_HEADERS	:=	$(addprefix $(YK_GEN_DIR)/, \
 YK_INC_DIRS	:=	$(INC_DIRS) $(YK_LIB_SRC_DIR) $(COMM_DIR) $(COEFF_DIR)
 YK_INC_GLOB	:=	$(addsuffix /*.hpp,$(YK_INC_DIRS))
 YK_API_TEST_EXEC :=	$(BIN_OUT_DIR)/$(YK_BASE)_api_test.exe
-YK_VAR_TEST_EXEC :=	$(BIN_OUT_DIR)/$(YK_BASE)_var_test.exe
 YK_API_TEST_EXEC_WITH_EXCEPTION :=	$(BIN_OUT_DIR)/$(YK_BASE)_api_exception_test.exe
+YK_VAR_TEST_EXEC :=	$(BIN_OUT_DIR)/$(YK_BASE)_var_test.exe
+YK_OMP_TEST_EXEC :=	$(BIN_OUT_DIR)/$(YK_BASE)_openmp_test.exe
 MAKE_REPORT_FILE :=	$(BUILD_OUT_DIR)/$(YK_EXT_BASE).make-report.txt
 YC_REPORT_FILE :=	$(BUILD_OUT_DIR)/$(YK_EXT_BASE).yask_compiler-report.txt
 
@@ -875,12 +876,24 @@ block_threads	:=	2
 
 ### Unit tests.
 
+$(YK_OMP_TEST_EXEC): $(YK_TEST_SRC_DIR)/openmp_test.cpp
+	$(MKDIR) $(dir $@)
+	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $< -o $@
+	@ls -l $@
+
+cxx-yk-omp-test:
+	rm -f $(YK_OMP_TEST_EXEC)
+	$(TEST_MAKE) $(YK_OMP_TEST_EXEC)
+	@echo '*** Running the C++ YASK OpenMP test...'
+	$(RUN_PREFIX) $(YK_OMP_TEST_EXEC) $(max_threads)
+
 $(YK_VAR_TEST_EXEC): $(YK_TEST_SRC_DIR)/var_test.cpp $(YK_LIB)
 	$(MKDIR) $(dir $@)
 	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
 	@ls -l $@
 
 cxx-yk-var-test:
+	rm -f $(YK_OMP_VAR_EXEC)
 	$(TEST_MAKE) $(YK_VAR_TEST_EXEC)
 	@echo '*** Running the C++ YASK var test...'
 	$(RUN_PREFIX) $(YK_VAR_TEST_EXEC)
@@ -1059,6 +1072,7 @@ stencil-tests:
 	$(MAKE) 4d-tests
 
 unit-tests:
+	$(MAKE) cxx-yk-omp-test
 	$(MAKE) clean; $(MAKE) cxx-yk-var-test stencil=test_3d $(call SET_FOLD,x=2 y=2)
 
 all-tests:
