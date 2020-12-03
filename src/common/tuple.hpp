@@ -427,9 +427,12 @@ namespace yask {
         // Create a new Tuple with the given dimension removed.
         Tuple remove_dim(int posn) const;
 
-        // reductions.
-        // Apply function over all elements, returning one value.
-        T reduce(std::function<T (T lhs, T rhs)> reducer) const {
+        // Reductions.
+        // Apply 'reducer' to first pair of elements.
+        // Then, apply 'reducer' result of that and next element.
+        // Repeat for all elements.
+        // Returns final value or 0 if no elements.
+        inline T reduce(std::function<T (T lhs, T rhs)> reducer) const {
             T result = 0;
             int n = 0;
             for (auto i : _q) {
@@ -439,12 +442,10 @@ namespace yask {
             }
             return result;
         }
+
+        // These reducers return 0 if no elements.
         T sum() const {
             return reduce([&](T lhs, T rhs){ return lhs + rhs; });
-        }
-        T product() const {
-            return _q.size() ?
-                reduce([&](T lhs, T rhs){ return lhs * rhs; }) : 1;
         }
         T max() const {
             return reduce([&](T lhs, T rhs){ return std::max(lhs, rhs); });
@@ -453,13 +454,19 @@ namespace yask {
             return reduce([&](T lhs, T rhs){ return std::min(lhs, rhs); });
         }
 
-        // pair-wise functions.
+        // These reducers return 1 if no elements.
+        T product() const {
+            return _q.size() ?
+                reduce([&](T lhs, T rhs){ return lhs * rhs; }) : 1;
+        }
+
+        // Pair-wise functions.
         // Apply function to each pair, creating a new Tuple.
-        // if strict_rhs==true, RHS elements must be same as this;
-        // else, only matching ones are considered.
-        Tuple combine_elements(std::function<T (T lhs, T rhs)> combiner,
-                              const Tuple& rhs,
-                              bool strict_rhs=true) const {
+        // if strict_rhs==true, RHS size and element names must be same as this;
+        // else, only matching ones (by name) are considered.
+        inline Tuple combine_elements(std::function<T (T lhs, T rhs)> combiner,
+                                      const Tuple& rhs,
+                                      bool strict_rhs=true) const {
             Tuple newt = *this;
             if (strict_rhs) {
                 assert(are_dims_same(rhs, true));
@@ -485,28 +492,28 @@ namespace yask {
         }
         Tuple add_elements(const Tuple& rhs, bool strict_rhs=true) const {
             return combine_elements([&](T lhs, T rhs){ return lhs + rhs; },
-                                   rhs, strict_rhs);
+                                    rhs, strict_rhs);
         }
         Tuple sub_elements(const Tuple& rhs, bool strict_rhs=true) const {
             return combine_elements([&](T lhs, T rhs){ return lhs - rhs; },
-                                   rhs, strict_rhs);
+                                    rhs, strict_rhs);
         }
         Tuple mult_elements(const Tuple& rhs, bool strict_rhs=true) const {
             return combine_elements([&](T lhs, T rhs){ return lhs * rhs; },
-                                   rhs, strict_rhs);
+                                    rhs, strict_rhs);
         }
         Tuple max_elements(const Tuple& rhs, bool strict_rhs=true) const {
             return combine_elements([&](T lhs, T rhs){ return std::max(lhs, rhs); },
-                                   rhs, strict_rhs);
+                                    rhs, strict_rhs);
         }
         Tuple min_elements(const Tuple& rhs, bool strict_rhs=true) const {
             return combine_elements([&](T lhs, T rhs){ return std::min(lhs, rhs); },
-                                   rhs, strict_rhs);
+                                    rhs, strict_rhs);
         }
 
-        // Apply func to each element, creating a new Tuple.
+        // Apply 'func' to each element and 'rhs', creating a new Tuple.
         Tuple map_elements(std::function<T (T lhs, T rhs)> func,
-                                 T rhs) const {
+                           T rhs) const {
             Tuple newt = *this;
             for (size_t i = 0; i < _q.size(); i++) {
                 auto& tval = _q[i].get_val();
@@ -515,6 +522,7 @@ namespace yask {
             }
             return newt;
         }
+        // Apply 'func' to each element, creating a new Tuple.
         Tuple map_elements(std::function<T (T in)> func) const {
             Tuple newt = *this;
             for (size_t i = 0; i < _q.size(); i++) {
@@ -526,23 +534,23 @@ namespace yask {
         }
         Tuple add_elements(T rhs) const {
             return map_elements([&](T lhs, T rhs){ return lhs + rhs; },
-                               rhs);
+                                rhs);
         }
         Tuple sub_elements(T rhs) const {
             return map_elements([&](T lhs, T rhs){ return lhs - rhs; },
-                               rhs);
+                                rhs);
         }
         Tuple mult_elements(T rhs) const {
             return map_elements([&](T lhs, T rhs){ return lhs * rhs; },
-                               rhs);
+                                rhs);
         }
         Tuple max_elements(T rhs) const {
             return map_elements([&](T lhs, T rhs){ return std::max(lhs, rhs); },
-                               rhs);
+                                rhs);
         }
         Tuple min_elements(T rhs) const {
             return map_elements([&](T lhs, T rhs){ return std::min(lhs, rhs); },
-                               rhs);
+                                rhs);
         }
         Tuple neg_elements() const {
             return map_elements([&](T in){ return -in; });
@@ -553,24 +561,24 @@ namespace yask {
 
         // make string like "4x3x2" or "4, 3, 2".
         std::string make_val_str(std::string separator=", ",
-                                       std::string prefix="",
-                                      std::string suffix="") const;
+                                 std::string prefix="",
+                                 std::string suffix="") const;
 
         // make string like "x, y, z" or "int x, int y, int z".
         std::string make_dim_str(std::string separator=", ",
-                                       std::string prefix="",
-                                      std::string suffix="") const;
+                                 std::string prefix="",
+                                 std::string suffix="") const;
 
         // make string like "x=4, y=3, z=2".
         std::string make_dim_val_str(std::string separator=", ",
-                                          std::string infix="=",
-                                          std::string prefix="",
-                                  std::string suffix="") const;
+                                     std::string infix="=",
+                                     std::string prefix="",
+                                     std::string suffix="") const;
 
         // make string like "x+4, y, z-2".
         std::string make_dim_val_offset_str(std::string separator=", ",
-                                                std::string prefix="",
-                                               std::string suffix="") const;
+                                            std::string prefix="",
+                                            std::string suffix="") const;
 
         // Return a "compact" set of K factors of N,
         // a set of factors with largest factor as small as possible,
@@ -578,152 +586,134 @@ namespace yask {
         // Any non-zero numbers in 'this' will be kept if possible.
         Tuple get_compact_factors(idx_t N) const;
 
-        // Call the 'visitor' lambda function at every point in the space defined by 'this'.
-        // 'idx' parameter contains sequentially-numbered index.
-        // Visitation order is with first dimension in unit stride, i.e., a conceptual
-        // "outer loop" iterates through last dimension, ..., and an "inner loop" iterates
-        // through first dimension. If '_first_inner' is false, it is done the opposite way.
-        // Visitor should return 'true' to keep going or 'false' to stop.
-        void visit_all_points(std::function<bool (const Tuple&,
+        // Advance Tuple 'tp' containing indices in the space defined by
+        // 'this' to the next logical index.
+        // Input 'tp' must contain valid indices, i.e., each value must
+        // be between 0 and N-1, where N is the value in the corresponding
+        // dim in 'this'.
+        // If 'tp' is at last index, "wraps-around" to all zeros.
+        inline void next_index(Tuple& tp) const {
+            const int nd = _get_num_dims();
+            const int inner_dim_num = _first_inner ? 0 : nd-1;
+            const int dim_step = _first_inner ? 1 : -1;
+
+            // Increment inner dim.
+            tp[inner_dim_num]++;
+
+            // Wrap around indices as needed.
+            // First test is redundant, but keeps us from entering loop most times.
+            if (tp[inner_dim_num] >= get_val(inner_dim_num)) {
+                for (int j = 0, k = inner_dim_num; j < nd; j++, k += dim_step) {
+                        
+                    // If too far in dim 'k', set idx to 0 and increment idx in next dim.
+                    if (tp[k] >= get_val(k)) {
+                        tp[k] = 0;
+                        int nxt_dim = k + dim_step;
+                        auto* p = tp.lookup(nxt_dim);
+                        if (p)
+                            (*p)++;
+                    }
+                    else
+                        break;
+                }
+            }
+        }
+        
+        // Call the 'visitor' lambda function at every point sequentially in
+        // the space defined by 'this'.  'idx' parameter contains
+        // sequentially-numbered index.  Visitation order is with first
+        // dimension in unit stride, i.e., a conceptual "outer loop"
+        // iterates through last dimension, ..., and an "inner loop"
+        // iterates through first dimension. If '_first_inner' is false, it
+        // is done the opposite way.  Visitor should return 'true' to keep
+        // going or 'false' to stop.  Returns 'false' if any visitor
+        // returned 'false' and visitation was stopped; otherwise 'true'.
+        bool visit_all_points(std::function<bool (const Tuple&,
                                                   size_t idx)> visitor) const {
-
-            // Init lambda fn arg with *this to get dim names.
-            // Values will get set during scan.
             Tuple tp(*this);
+            tp.set_vals_same(0);
 
-            // 0-D?
-            if (!_q.size())
-                visitor(tp, 0);
+            // Total number of points to visit.
+            idx_t ne = product();
 
-            // Call protected version.
-            // Set begin/step dims depending on nesting.
-            else if (_first_inner)
-                _visit_all_points(visitor, size()-1, -1, tp);
-            else
-                _visit_all_points(visitor, 0, 1, tp);
+            // 1 point?
+            if (ne <= 1) {
+                bool ok = visitor(tp, 0);
+                return ok;
+            }
+
+            // Visit each point in sequential order.
+            for (T i = 0; i < ne; i++) {
+
+                // Call visitor.
+                bool ok = visitor(tp, i);
+                if (!ok)
+                    return false;
+
+                // Jump to next index.
+                next_index(tp);
+            }
+            return true;
         }
 
         // Call the 'visitor' lambda function at every point in the space defined by 'this'.
         // 'idx' parameter contains sequentially-numbered index.
         // Visitation order is not predictable.
-        // Visitor return value only stops visit on one thread.
+        // Visitation concurrency is not predicable.
+        // Visitor return value is ignored.
         void visit_all_points_in_parallel(std::function<bool (const Tuple&,
                                                               size_t idx)> visitor) const {
+            // Total number of points to visit.
+            idx_t ne = product();
 
-            // 0-D?
-            if (!_q.size()) {
+            // 1 point?
+            if (ne <= 1) {
                 Tuple tp(*this);
+                tp.set_vals_same(0);
                 visitor(tp, 0);
+                return;
             }
 
-            // Call order-independent version.
-            // Set begin/end/step dims depending on nesting.
-            else if (_first_inner)
-                _visit_all_points_in_par(visitor, size()-1, -1);
-            else
-                _visit_all_points_in_par(visitor, 0, 1);
-        }
+            #ifdef _OPENMP
 
-    protected:
+            // Num threads to be started.
+            idx_t nthr = yask_get_num_threads();
 
-        // Visit elements recursively.
-        // Start w/'cur_dim_num' dim and 'step' +/-1 until last dim reached.
-        bool _visit_all_points(std::function<bool (const Tuple&, size_t idx)> visitor,
-                               int cur_dim_num, int step, Tuple& tp) const {
-            auto& sc = _q.at(cur_dim_num);
-            auto dsize = sc.get_val();
-            int last_dim_num = (step > 0) ? size()-1 : 0;
+            // Start sequential visits in parallel.
+            // (Not guaranteed that each tnum will be unique in every OMP
+            // impl, so don't rely on it.)
+            yask_parallel_for
+                (0, nthr, 1,
+                 [&](idx_t n, idx_t np1, idx_t tnum) {
 
-            // If no more dims, iterate along current dimension and call
-            // visitor.
-            if (cur_dim_num == last_dim_num) {
+                     // Start and stop indices for this thread.
+                     idx_t start = div_equally_cumu_size_n(ne, nthr, n - 1);
+                     idx_t stop = div_equally_cumu_size_n(ne, nthr, n);
+                     assert(stop >= start);
+                     if (stop <= start)
+                         return; // from lambda.
 
-                // Get unique index to first position.
-                tp.set_val(cur_dim_num, 0);
-                size_t idx0 = layout(tp);
+                     // Make tuple for this thread.
+                     Tuple tp = *this;
+                     
+                     // Convert 1st linear index to n-dimensional tuple.
+                     tp = unlayout(start);
+                     
+                     // Visit each point in sequential order.
+                     for (T i = start; i < stop; i++) {
+                         
+                         // Call visitor.
+                         visitor(tp, i);
+                         
+                         // Jump to next index.
+                         next_index(tp);
+                     }
+                 });
 
-                // Loop through points.
-                for (T i = 0; i < dsize; i++) {
-                    tp.set_val(cur_dim_num, i);
-                    bool ok = visitor(tp, idx0 + i);
-
-                    // Leave if visitor returns false.
-                    if (!ok)
-                        return false;
-                }
-            }
-
-            // Else, iterate along current dimension and recurse to
-            // next/prev dimension.
-            else {
-                for (T i = 0; i < dsize; i++) {
-                    tp.set_val(cur_dim_num, i);
-
-                    // Recurse.
-                    bool ok = _visit_all_points(visitor, cur_dim_num + step, step, tp);
-
-                    // Leave if visitor returns false.
-                    if (!ok)
-                        return false;
-                }
-            }
-            return true;
-        }
-
-        // First call from public visit_all_points_in_parallel(visitor).
-        bool _visit_all_points_in_par(std::function<bool (const Tuple&, size_t idx)> visitor,
-                                      int cur_dim_num, int step) const {
-#ifdef _OPENMP
-            auto nd = _get_num_dims();
-
-            // If one dim, parallelize across it.
-            if (nd == 1) {
-                assert(cur_dim_num == 0);
-                auto dsize = get_val(cur_dim_num);
-                Tuple tp(*this);
-
-                // Loop through points.
-                // Each thread gets its own copy of 'tp', which
-                // gets updated with the loop index.
-                // TODO: convert to yask_parallel_for().
-#pragma omp parallel for firstprivate(tp)
-                for (T i = 0; i < dsize; i++) {
-                    tp.set_val(cur_dim_num, i);
-                    visitor(tp, i);
-                }
-            }
-
-            // If >1 dim, parallelize over outer dims only,
-            // streaming across inner dim in each thread.
-            // This is to maximize HW prefetch benefit.
-            else {
-
-                // Total number of elements to visit.
-                T ne = product();
-
-                // Number of elements in last dim.
-                int last_dim_num = (step > 0) ? nd-1 : 0;
-                T nel = get_val(last_dim_num);
-
-                // Parallel loop over elements w/stride = size of
-                // last dim.
-                yask_parallel_for(0, ne, nel,
-                                  [&](idx_t start, idx_t stop, idx_t thread_num) {
-                                      
-                                      // Convert linear index to n-dimensional tuple.
-                                      Tuple tp = unlayout(start);
-                                      
-                                      // Visit points in last dim.
-                                      _visit_all_points(visitor, last_dim_num, step, tp);
-                                  });
-            }
-            return true;
-#else
-
-            // Call recursive version to handle all dims.
-            Tuple tp(*this);
-            return _visit_all_points(visitor, cur_dim_num, step, tp);
-#endif
+            #else
+            // No OMP; use sequential version.
+            visit_all_points(visitor);
+            #endif
         }
             
     }; // Tuple.

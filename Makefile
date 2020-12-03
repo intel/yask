@@ -87,7 +87,8 @@ YC_MAKE		:=	$(MAKE) $(YASK_MFLAGS) -C src/compiler YASK_OUTPUT_DIR=$(YASK_OUT_BA
 # For compiler, use YC_CXX*.
 # For kernel, use YK_CXX*.
 CXX		:=	g++
-CXXFLAGS 	:=	-g -std=c++11 -Wall -O2
+CXXOPT		:=	-O2
+CXXFLAGS 	:=	-g -std=c++11 -Wall $(CXXOPT)
 CXXFLAGS	+=	$(addprefix -I,$(INC_DIR) $(COMM_DIR))
 CXXFLAGS	+=	-fopenmp
 

@@ -313,7 +313,7 @@ namespace yask {
             return tmp;
         }
 
-        // Make a Tuple w/o useful names.
+        // Make a Tuple w/o useful names using values in 'this'.
         ALWAYS_INLINE
         IdxTuple make_tuple() const {
             IdxTuple tmp;
@@ -322,7 +322,7 @@ namespace yask {
             return tmp;
         }
 
-        // Make a Tuple w/names from another Tuple.
+        // Make a Tuple w/names from another Tuple using values in 'this'.
         ALWAYS_INLINE
         IdxTuple make_tuple(const IdxTuple& names) const {
             auto tmp = names.get_dim_names();

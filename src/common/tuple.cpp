@@ -25,6 +25,8 @@ IN THE SOFTWARE.
 
 ///////// Tuple implementation.
 
+// See tuple.hpp for method documentation.
+
 #include "yask_common_api.hpp"
 #include "tuple.hpp"
 
@@ -145,6 +147,7 @@ namespace yask {
         return true;
     }
 
+    // Returns true only if all dims and values are same.
     template <typename T>
     bool Tuple<T>::operator==(const Tuple& rhs) const {
 
@@ -160,6 +163,8 @@ namespace yask {
         return true;
     }
 
+    // Not necessarily a meaningful less-than operator, but
+    // works for ordering sets, map keys, etc.
     template <typename T>
     bool Tuple<T>::operator<(const Tuple& rhs) const {
         if (size() < rhs.size()) return true;
