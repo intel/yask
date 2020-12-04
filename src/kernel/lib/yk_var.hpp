@@ -446,9 +446,6 @@ namespace yask {
         // Max L1 dist of halo accesses to this var.
         int _l1_dist = 0;
 
-        // Data layout for slice APIs.
-        bool _is_col_major = false;
-
         // Whether to resize this var based on solution parameters.
         bool _fixed_size = false;
 
@@ -508,9 +505,11 @@ namespace yask {
         void set_dirty_in_slice(const Indices& first_indices,
                                 const Indices& last_indices);
 
-        // Make tuple needed for slicing.
-        IdxTuple get_slice_range(const Indices& first_indices,
-                                 const Indices& last_indices) const;
+        // Find sizes needed for slicing.
+        inline Indices get_slice_range(const Indices& first_indices,
+                                       const Indices& last_indices) const {
+            return last_indices.add_const(1).sub_elements(first_indices);
+        }
 
         // Accessors to GenericVar.
         virtual GenericVarBase* get_gvbp() =0;
@@ -1166,9 +1165,10 @@ namespace yask {
             check_indices(last_indices, "set_vecs_in_slice", true, false, true, &lastv);
 
             // Find range.
-            IdxTuple num_vecs_tuple = get_slice_range(firstv, lastv);
+            auto num_vecs = get_slice_range(firstv, lastv);
             TRACE_MSG("set_vecs_in_slice: setting " <<
-                      num_vecs_tuple.make_dim_val_str(" * ") << " vecs at [" <<
+                      num_vecs.make_dim_val_str(domain_dims, " * ") <<
+                      " vecs at [" <<
                       make_index_string(firstv) << " ... " <<
                       make_index_string(lastv) << "]");
 
@@ -1178,7 +1178,7 @@ namespace yask {
             if (_has_step_dim) {
                 first_t = firstv[sp];
                 last_t = lastv[sp];
-                num_vecs_tuple[sp] = 1; // Do one at a time.
+                num_vecs[sp] = 1; // Do one at a time.
             }
             idx_t iofs = 0;
             for (idx_t t = first_t; t <= last_t; t++) {
@@ -1192,9 +1192,10 @@ namespace yask {
                 }
 
                 // Visit points in slice.
-                num_vecs_tuple.visit_all_points_in_parallel
-                    ([&](const IdxTuple& ofs, size_t idx) {
-                         Indices pt = firstv.add_elements(ofs);
+                num_vecs.visit_all_points_in_parallel
+                    (false,
+                     [&](const Indices& ofs, size_t idx) {
+                         auto pt = firstv.add_elements(ofs);
 
                          // Read vec from buffer at proper index.
                          real_vec_t val = ((real_vec_t*)buffer_ptr)[idx + iofs];
@@ -1205,13 +1206,13 @@ namespace yask {
                      });
 
                 // Skip to next step in buffer.
-                iofs += num_vecs_tuple.product();
+                iofs += num_vecs.product();
             }
 
             // Set appropriate dirty flag(s).
             set_dirty_in_slice(first_indices, last_indices);
 
-            return num_vecs_tuple.product() * VLEN;
+            return num_vecs.product() * VLEN;
         }
 
         // Vectorized version of get_elements_in_slice().
@@ -1229,12 +1230,13 @@ namespace yask {
             check_indices(last_indices, "get_vecs_in_slice", true, true, true, &lastv);
 
             // Find range.
-            IdxTuple num_vecs_tuple = get_slice_range(firstv, lastv);
+            auto num_vecs = get_slice_range(firstv, lastv);
             TRACE_MSG("get_vecs_in_slice: getting " <<
-                      num_vecs_tuple.make_dim_val_str(" * ") << " vecs at " <<
+                      num_vecs.make_dim_val_str(domain_dims, " * ") <<
+                      " vecs at " <<
                       make_index_string(firstv) << " ... " <<
                       make_index_string(lastv));
-            auto n = num_vecs_tuple.product() * VLEN;
+            auto n = num_vecs.product() * VLEN;
 
             // Do step loop explicitly.
             auto sp = +step_posn;
@@ -1242,7 +1244,7 @@ namespace yask {
             if (_has_step_dim) {
                 first_t = firstv[sp];
                 last_t = lastv[sp];
-                num_vecs_tuple[sp] = 1; // Do one at a time.
+                num_vecs[sp] = 1; // Do one at a time.
             }
             idx_t iofs = 0;
             for (idx_t t = first_t; t <= last_t; t++) {
@@ -1256,8 +1258,9 @@ namespace yask {
                 }
 
                 // Visit points in slice.
-                num_vecs_tuple.visit_all_points_in_parallel
-                    ([&](const IdxTuple& ofs, size_t idx) {
+                num_vecs.visit_all_points_in_parallel
+                    (false,
+                     [&](const Indices& ofs, size_t idx) {
                          Indices pt = firstv.add_elements(ofs);
 
                          // Read vec from var.
@@ -1269,7 +1272,7 @@ namespace yask {
                      });
 
                 // Skip to next step in buffer.
-                iofs += num_vecs_tuple.product();
+                iofs += num_vecs.product();
             }
             assert(iofs * VLEN == n);
 

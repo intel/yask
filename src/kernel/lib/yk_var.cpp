@@ -545,18 +545,6 @@ namespace yask {
             set_dirty_using_alloc_index(true, 0);
     }
 
-    // Make tuple needed for slicing.
-    IdxTuple YkVarBase::get_slice_range(const Indices& first_indices,
-                                        const Indices& last_indices) const {
-        // Find ranges.
-        Indices num_elems = last_indices.add_const(1).sub_elements(first_indices);
-        IdxTuple num_elems_tuple = get_allocs();
-        num_elems.set_tuple_vals(num_elems_tuple);
-        num_elems_tuple.set_first_inner(_is_col_major);
-
-        return num_elems_tuple;
-    }
-
     // Print one element like
     // "message: myvar[x=4, y=7] = 3.14 at line 35".
     void YkVarBase::print_elem(const std::string& msg,

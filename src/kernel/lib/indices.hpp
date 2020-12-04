@@ -302,7 +302,7 @@ namespace yask {
         // Convert 1D 'offset' to N-d offsets using values in 'this' as sizes of N-d space.
         // If 'first_inner", '(*this)[0]' is innermost dim (fortran-like),
         // else '(*this)[_ndims-1]' is innermost dim (C-like).
-        Indices unlayout(size_t offset, bool first_inner) const {
+        Indices unlayout(bool first_inner, size_t offset) const {
             Indices res(*this);
             size_t prev_size = 1;
 
@@ -336,7 +336,7 @@ namespace yask {
         // dim in 'this'.
         // If 'idxs' is at last index, "wraps-around" to all zeros.
         // See 'unlayout()' for description of 'first_inner'.
-        inline void next_index(Indices& idxs, bool first_inner) const {
+        inline void next_index(bool first_inner, Indices& idxs) const {
             const int inner_dim = first_inner ? 0 : _ndims-1;
             const int dim_step = first_inner ? 1 : -1;
 
@@ -389,11 +389,69 @@ namespace yask {
                     return false;
 
                 // Jump to next index.
-                next_index(idxs, first_inner);
+                next_index(first_inner, idxs);
             }
             return true;
         }
-        
+
+        // Same as visit_all_points(), except ranges of points are visited
+        // concurrently, and return value from 'visitor' is ignored.
+        void visit_all_points_in_parallel(bool first_inner,
+                                          std::function<bool (const Indices& idxs,
+                                                              size_t idx)> visitor) const {
+            // Total number of points to visit.
+            idx_t ne = product();
+
+            // 1 point?
+            if (ne <= 1) {
+                Indices idxs(*this);
+                idxs.set_vals_same(0);
+                visitor(idxs, 0);
+                return;
+            }
+
+            #ifdef _OPENMP
+
+            // Num threads to be started.
+            idx_t nthr = yask_get_num_threads();
+
+            // Start sequential visits in parallel.
+            // (Not guaranteed that each tnum will be unique in every OMP
+            // impl, so don't rely on it.)
+            yask_parallel_for
+                (0, nthr, 1,
+                 [&](idx_t n, idx_t np1, idx_t tnum) {
+
+                     // Start and stop indices for this thread.
+                     idx_t start = div_equally_cumu_size_n(ne, nthr, n - 1);
+                     idx_t stop = div_equally_cumu_size_n(ne, nthr, n);
+                     assert(stop >= start);
+                     if (stop <= start)
+                         return; // from lambda.
+
+                     // Make Indices for this thread.
+                     Indices idxs(*this);
+                     
+                     // Convert 1st linear index to n-dimensional indices.
+                     idxs = unlayout(first_inner, start);
+                     
+                     // Visit each point in sequential order.
+                     for (idx_t i = start; i < stop; i++) {
+                         
+                         // Call visitor.
+                         visitor(idxs, i);
+                         
+                         // Jump to next index.
+                         next_index(first_inner, idxs);
+                     }
+                 });
+
+            #else
+            // No OMP; use sequential version.
+            visit_all_points(first_inner, visitor);
+            #endif
+        }
+
         // Make a Tuple w/given names.
         ALWAYS_INLINE
         IdxTuple make_tuple(const VarDimNames& names) const {

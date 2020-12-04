@@ -306,12 +306,13 @@ SET_VAR_API(set_first_misc_index, corep()->_local_offsets[posn] = n, false, fals
         check_indices(last_indices, "get_elements_in_slice", true, true, false);
 
         // Find range.
-        IdxTuple num_elems_tuple = get_slice_range(first_indices, last_indices);
+        auto num_elems = get_slice_range(first_indices, last_indices);
 
         // Visit points in slice.
-        num_elems_tuple.visit_all_points_in_parallel
-            ([&](const IdxTuple& ofs, size_t idx) {
-                Indices pt = first_indices.add_elements(ofs);
+        num_elems.visit_all_points_in_parallel
+            (false,
+             [&](const Indices& ofs, size_t idx) {
+                 auto pt = first_indices.add_elements(ofs);
 
                 // TODO: move this outside of loop for const step index.
                 idx_t asi = get_alloc_step_index(pt);
@@ -320,7 +321,7 @@ SET_VAR_API(set_first_misc_index, corep()->_local_offsets[posn] = n, false, fals
                 ((real_t*)buffer_ptr)[idx] = val;
                 return true;    // keep going.
             });
-        auto nup = num_elems_tuple.product();
+        auto nup = num_elems.product();
         TRACE_MSG("get_elements_in_slice(" << buffer_ptr << ", {" <<
                   make_index_string(first_indices) << "}, {" <<
                   make_index_string(last_indices) << "}) on '" <<
@@ -352,26 +353,27 @@ SET_VAR_API(set_first_misc_index, corep()->_local_offsets[posn] = n, false, fals
                      strict_indices, false, false, &last);
 
         // Find range.
-        IdxTuple num_elems_tuple = get_slice_range(first, last);
+        auto num_elems = get_slice_range(first, last);
 
         // Visit points in slice.
         // TODO: optimize by setting vectors when possible.
-        num_elems_tuple.visit_all_points_in_parallel([&](const IdxTuple& ofs,
-                                                   size_t idx) {
-                Indices pt = first.add_elements(ofs);
+        num_elems.visit_all_points_in_parallel
+            (false,
+             [&](const Indices& ofs, size_t idx) {
+                 auto pt = first.add_elements(ofs);
 
-                // TODO: move this outside of loop for const step index.
-                idx_t asi = get_alloc_step_index(pt);
-
-                write_elem(real_t(val), pt, asi, __LINE__);
-                return true;    // keep going.
-            });
+                 // TODO: move this outside of loop for const step index.
+                 idx_t asi = get_alloc_step_index(pt);
+                 
+                 write_elem(real_t(val), pt, asi, __LINE__);
+                 return true;    // keep going.
+             });
 
         // Set appropriate dirty flag(s).
         // FIXME: does not keep dirty flags consistent across ranks!
         set_dirty_in_slice(first, last);
 
-        auto nup = num_elems_tuple.product();
+        auto nup = num_elems.product();
         TRACE_MSG("set_elements_in_slice_same(" << val << ", {" <<
                   make_index_string(first_indices) << "}, {" <<
                   make_index_string(last_indices) <<  "}, " <<
@@ -394,27 +396,27 @@ SET_VAR_API(set_first_misc_index, corep()->_local_offsets[posn] = n, false, fals
         check_indices(last_indices, "set_elements_in_slice", true, false, false);
 
         // Find range.
-        IdxTuple num_elems_tuple = get_slice_range(first_indices, last_indices);
+        auto num_elems = get_slice_range(first_indices, last_indices);
 
         // Visit points in slice.
-        num_elems_tuple.visit_all_points_in_parallel
-            ([&](const IdxTuple& ofs,
-                 size_t idx) {
-                Indices pt = first_indices.add_elements(ofs);
+        num_elems.visit_all_points_in_parallel
+            (false,
+             [&](const Indices& ofs, size_t idx) {
+                 auto pt = first_indices.add_elements(ofs);
 
-                // TODO: move this outside of loop for const step index.
-                idx_t asi = get_alloc_step_index(pt);
-
-                real_t val = ((real_t*)buffer_ptr)[idx];
-                write_elem(val, pt, asi, __LINE__);
-                return true;    // keep going.
-            });
+                 // TODO: move this outside of loop for const step index.
+                 idx_t asi = get_alloc_step_index(pt);
+                 
+                 real_t val = ((real_t*)buffer_ptr)[idx];
+                 write_elem(val, pt, asi, __LINE__);
+                 return true;    // keep going.
+             });
 
         // Set appropriate dirty flag(s).
         // FIXME: does not keep dirty flags consistent across ranks!
         set_dirty_in_slice(first_indices, last_indices);
 
-        auto nup = num_elems_tuple.product();
+        auto nup = num_elems.product();
         TRACE_MSG("set_elements_in_slice(" << buffer_ptr << ", {" <<
                   make_index_string(first_indices) << "}, {" <<
                   make_index_string(last_indices) <<  "}) on '" <<
