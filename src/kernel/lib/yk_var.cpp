@@ -64,9 +64,8 @@ namespace yask {
                                             std::string infix,
                                             std::string prefix,
                                             std::string suffix) const {
-        IdxTuple tmp = get_allocs(); // get dims.
-        idxs.set_tuple_vals(tmp);      // set vals from idxs.
-        return tmp.make_dim_val_str(separator, infix, prefix, suffix);
+        auto& tmp = get_dim_tuple();
+        return idxs.make_dim_val_str(tmp, separator, infix, prefix, suffix);
     }
 
     // Does this var cover the N-D domain?
@@ -576,7 +575,7 @@ namespace yask {
         // Add offsets, i.e., convert to overall indices.
         eidxs = eidxs.add_elements(_corep->_rank_offsets);
 
-        IdxTuple idxs2 = get_allocs(); // get dims for this var.
+        IdxTuple idxs2 = get_dim_tuple();
         eidxs.set_tuple_vals(idxs2);      // set vals from eidxs.
         // TODO: is above correct for vars that aren't domain dims?
         Indices idxs3(idxs2);

@@ -288,7 +288,7 @@ namespace yask {
 
             #ifdef DEBUG_LAYOUT
             // Compare to more explicit offset extraction.
-            IdxTuple eofs = get_allocs(); // get dims for this var.
+            IdxTuple eofs = get_dim_tuple();
             elem_ofs.set_tuple_vals(eofs);  // set vals from elem_ofs.
             auto i2 = dims->get_elem_index_in_vec(eofs);
             host_assert(i == i2);

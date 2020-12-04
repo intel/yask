@@ -752,8 +752,8 @@ namespace yask {
                          // Begin/end vars to indicate what part
                          // of main var to read from or write to based on
                          // the current neighbor being processed.
-                         IdxTuple copy_begin = gb.get_allocs();
-                         IdxTuple copy_end = gb.get_allocs(); // one past last!
+                         IdxTuple copy_begin = gb.get_dim_tuple();
+                         IdxTuple copy_end = gb.get_dim_tuple(); // will set to one past last!
 
                          // Adjust along domain dims in this var.
                          DOMAIN_VAR_LOOP(i, j) {
@@ -841,7 +841,7 @@ namespace yask {
 
                          // Sizes of buffer in all dims of this var.
                          // Also, set begin/end value for non-domain dims.
-                         IdxTuple buf_sizes = gb.get_allocs();
+                         IdxTuple buf_sizes = gb.get_dim_tuple();
                          bool buf_vec_ok = var_vec_ok;
                          for (auto& dname : gp->get_dim_names()) {
                              idx_t dsize = 1;

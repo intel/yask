@@ -453,7 +453,6 @@ namespace yask {
         }
 
         // Make a Tuple w/given names.
-        ALWAYS_INLINE
         IdxTuple make_tuple(const VarDimNames& names) const {
             host_assert((int)names.size() == _ndims);
 
@@ -465,7 +464,6 @@ namespace yask {
         }
 
         // Make a Tuple w/o useful names using values in 'this'.
-        ALWAYS_INLINE
         IdxTuple make_tuple() const {
             IdxTuple tmp;
             for (int i = 0; i < _ndims; i++)
@@ -474,7 +472,6 @@ namespace yask {
         }
 
         // Make a Tuple w/names from another Tuple using values in 'this'.
-        ALWAYS_INLINE
         IdxTuple make_tuple(const IdxTuple& names) const {
             auto tmp = names.get_dim_names();
             return make_tuple(tmp);
