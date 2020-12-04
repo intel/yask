@@ -582,10 +582,11 @@ namespace yask {
                         idx_t mbit = 0x1 << (dims->_fold_pts.product() - 1);
 
                         // Visit points in a vec-fold to set bits for this dim's
-                        // masks per the diagram above.  TODO: make this more
-                        // efficient.
-                        dims->_fold_pts.visit_all_points
-                            ([&](const IdxTuple& pt, size_t idx) {
+                        // masks per the diagram above.
+                        bool first_inner = dims->_fold_pts.is_first_inner();
+                        dims->_fold_sizes.visit_all_points
+                            (first_inner,
+                             [&](const Indices& pt, size_t idx) {
 
                                  // Shift masks to next posn.
                                  pmask >>= 1;
@@ -602,8 +603,6 @@ namespace yask {
                                  pi = fvend + pt[j];
                                  if (pi < eend)
                                      rmask |= mbit;
-
-                                 // Keep visiting.
                                  return true;
                              });
 

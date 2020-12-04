@@ -959,11 +959,10 @@ namespace yask {
         // Struct w/padding to avoid false sharing.
         struct BBL_t {
             BBList bbl;
-            char pad[CACHELINE_BYTES];
+            char pad[CACHELINE_BYTES - sizeof(BBList)];
         };
 
         // List of full BBs for each thread.
-        // TODO: remove false sharing.
         vector<BBL_t> bb_lists(nthreads);
 
         // Run rect-finding code on each thread.
@@ -985,19 +984,18 @@ namespace yask {
 
                  // Construct len of slice in all dims.
                  Indices islice_len = islice_end.sub_elements(islice_begin);
-                 auto slice_len = islice_len.make_tuple(domain_dims);
 
                  // Visit all points in slice, looking for a new
                  // valid beginning point, 'ib*pt'.
                  Indices ibspt(stencil_dims); // in stencil dims.
                  ibspt[step_posn] = 0;
                  Indices ibdpt(domain_dims);  // in domain dims.
-                 slice_len.visit_all_points
-                     ([&](const IdxTuple& ofs, size_t idx) {
+                 islice_len.visit_all_points
+                     (false,
+                      [&](const Indices& iofs, size_t idx) {
 
                           // Find global point from 'ofs' in domain
                           // and stencil dims.
-                          Indices iofs(ofs);
                           ibdpt = islice_begin.add_elements(iofs); // domain indices.
                           DOMAIN_VAR_LOOP(i, j)
                               ibspt[i] = ibdpt[j];            // stencil indices.
@@ -1020,7 +1018,6 @@ namespace yask {
                               // Scan from 'ib*pt' to end of this slice
                               // looking for end of rect.
                               auto iscan_len = islice_end.sub_elements(ibdpt);
-                              auto scan_len = iscan_len.make_tuple(domain_dims);
 
                               // End point to be found, 'ie*pt'.
                               Indices iespt(stencil_dims); // stencil dims.
@@ -1032,17 +1029,20 @@ namespace yask {
                               while (do_scan) {
                                   do_scan = false;
 
-                                  TRACE_MSG("scanning " << scan_len.make_dim_val_str(" * ") <<
-                                            " starting at " << ibdpt.make_dim_val_str(domain_dims));
-                                  scan_len.visit_all_points
-                                      ([&](const IdxTuple& eofs, size_t eidx) {
+                                  TRACE_MSG("scanning " <<
+                                            iscan_len.make_dim_val_str(domain_dims, " * ") <<
+                                            " starting at " <<
+                                            ibdpt.make_dim_val_str(domain_dims) <<
+                                            " in thread " << thread_num);
+                                  iscan_len.visit_all_points
+                                      (false,
+                                       [&](const Indices& ieofs, size_t eidx) {
 
-                                           // Make sure scan_len range is observed.
+                                           // Make sure iscan_len range is observed.
                                            DOMAIN_VAR_LOOP(i, j)
-                                               assert(eofs[j] < scan_len[j]);
+                                               assert(ieofs[j] < iscan_len[j]);
 
                                            // Find global point from 'eofs'.
-                                           Indices ieofs(eofs);
                                            iedpt = ibdpt.add_elements(ieofs); // domain tuple.
                                            DOMAIN_VAR_LOOP(i, j)
                                                iespt[i] = iedpt[j];            // stencil tuple.
@@ -1069,7 +1069,7 @@ namespace yask {
 
                                                    // Beyond starting point in this dim?
                                                    if (iedpt[j] > ibdpt[j]) {
-                                                       scan_len[j] = iedpt[j] - ibdpt[j];
+                                                       iscan_len[j] = iedpt[j] - ibdpt[j];
 
                                                        // restart scan for
                                                        // remaining dims.
@@ -1087,11 +1087,11 @@ namespace yask {
                                            return true; // keep looking for invalid point.
                                        }); // Looking for invalid point.
                               } // while scan is adjusted.
-                              TRACE_MSG("found BB " << scan_len.make_dim_val_str(" * ") <<
-                                        " starting at " << ibdpt.make_dim_val_str(domain_dims));
-                              iscan_len.set_from_tuple(scan_len);
+                              TRACE_MSG("found BB " << iscan_len.make_dim_val_str(domain_dims, " * ") <<
+                                        " starting at " << ibdpt.make_dim_val_str(domain_dims) <<
+                                        " in thread " << thread_num);
 
-                              // 'scan_len' now contains sizes of the new BB.
+                              // 'iscan_len' now contains sizes of the new BB.
                               BoundingBox new_bb;
                               new_bb.bb_begin = ibdpt;
                               new_bb.bb_end = ibdpt.add_elements(iscan_len);

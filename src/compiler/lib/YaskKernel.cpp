@@ -1029,6 +1029,7 @@ namespace yask {
             auto& dval = dim.get_val();
             os << "    p->_fold_pts.add_dim_back(\"" << dname << "\", " << dval << ");\n";
         }
+        os << "    p->_fold_sizes.set_from_tuple(p->_fold_pts);\n";
         for (auto& dim : _dims._fold_gt1) {
             auto& dname = dim._get_name();
             auto& dval = dim.get_val();

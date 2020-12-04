@@ -92,15 +92,15 @@ namespace yask {
                                   int neigh_rank, // MPI rank.
                                   int neigh_index)> visitor) {
 
-        // TODO: convert to use visit_all_points().
-        for (int i = 0; i < neighborhood_size; i++) {
-            auto neigh_offsets = neighborhood_sizes.unlayout(i);
-            int neigh_rank = my_neighbors.at(i);
-            assert(i == get_neighbor_index(neigh_offsets));
+        neighborhood_sizes.visit_all_points
+            ([&](const IdxTuple& neigh_offsets, size_t i) {
+                 int neigh_rank = my_neighbors.at(i);
+                 assert(i == get_neighbor_index(neigh_offsets));
 
-            if (i != my_neighbor_index)
-                visitor(neigh_offsets, neigh_rank, i);
-        }
+                 if (i != my_neighbor_index)
+                     visitor(neigh_offsets, neigh_rank, i);
+                 return true; // from lambda;
+             });
     }
 
     // Set pointer to storage.

@@ -131,6 +131,9 @@ namespace yask {
         IdxTuple _cluster_pts;  // all domain dims.
         IdxTuple _cluster_mults; // all domain dims.
 
+        // Just sizes.
+        Indices _fold_sizes;    // all domain dims.
+
         // Direction of step.
         // This is a heuristic value used only for stepping the
         // perf-measuring utility and the auto-tuner.
@@ -373,7 +376,7 @@ namespace yask {
             // Max neighbors.
             neighborhood_sizes = dims->_domain_dims; // copy dims from domain.
             neighborhood_sizes.set_vals_same(num_offsets); // set sizes in each domain dim.
-            neighborhood_size = neighborhood_sizes.product(); // neighbors in all dims.
+            neighborhood_size = neighborhood_sizes.product(); // num neighbors in all dims.
 
             // Myself.
             IdxTuple noffsets(neighborhood_sizes);

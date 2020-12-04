@@ -136,8 +136,8 @@ namespace yask {
         std::vector<Scalar<T>> _q;
 
         // First-inner vars control ordering. Example: dims x, y, z.
-        // If _first_inner == true, x is unit stride (col major).
-        // If _first_inner == false, z is unit stride (row major).
+        // If _first_inner == true, x is unit stride (col major, like fortran).
+        // If _first_inner == false, z is unit stride (row major, like C).
         // This setting affects [un]layout() and visit_all_points().
         bool _first_inner = true; // whether first dim is used for inner loop.
 
@@ -406,13 +406,13 @@ namespace yask {
             return !((*this) < rhs);
         }
 
-        // Convert n_d 'offsets' to 1D offset using values in 'this' as sizes of n_d space.
+        // Convert N-d 'offsets' to 1D offset using values in 'this' as sizes of N-d space.
         // If 'strict_rhs', RHS dims must be same and in same order as this;
         // else, only matching ones are considered and missing offsets are zero (0).
         // If '_first_inner', first dim varies most quickly; else last dim does.
         size_t layout(const Tuple& offsets, bool strict_rhs=true) const;
 
-        // Convert 1D 'offset' to n_d offsets using values in 'this' as sizes of n_d space.
+        // Convert 1D 'offset' to N-d offsets using values in 'this' as sizes of N-d space.
         Tuple unlayout(size_t offset) const;
 
         // Create a new Tuple with the given dimension removed.
@@ -594,16 +594,16 @@ namespace yask {
         // If 'tp' is at last index, "wraps-around" to all zeros.
         inline void next_index(Tuple& tp) const {
             const int nd = _get_num_dims();
-            const int inner_dim_num = _first_inner ? 0 : nd-1;
+            const int inner_dim = _first_inner ? 0 : nd-1;
             const int dim_step = _first_inner ? 1 : -1;
 
             // Increment inner dim.
-            tp[inner_dim_num]++;
+            tp[inner_dim]++;
 
             // Wrap around indices as needed.
             // First test is redundant, but keeps us from entering loop most times.
-            if (tp[inner_dim_num] >= get_val(inner_dim_num)) {
-                for (int j = 0, k = inner_dim_num; j < nd; j++, k += dim_step) {
+            if (tp[inner_dim] >= get_val(inner_dim)) {
+                for (int j = 0, k = inner_dim; j < nd; j++, k += dim_step) {
                         
                     // If too far in dim 'k', set idx to 0 and increment idx in next dim.
                     if (tp[k] >= get_val(k)) {
@@ -628,6 +628,8 @@ namespace yask {
         // is done the opposite way.  Visitor should return 'true' to keep
         // going or 'false' to stop.  Returns 'false' if any visitor
         // returned 'false' and visitation was stopped; otherwise 'true'.
+        // Example:
+        // sizes_tuple.visit_all_points([&](const Tuple<int>& pt, size_t idx) { ... });
         bool visit_all_points(std::function<bool (const Tuple&,
                                                   size_t idx)> visitor) const {
             Tuple tp(*this);

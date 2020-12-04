@@ -574,12 +574,12 @@ namespace yask {
         TRACE_MEM_MSG(str);
     }
 
-    // Print one vector.
+    // Print each elem in one vector.
     // Indices must be normalized and rank-relative.
     void YkVarBase::print_vec_norm(const std::string& msg,
-                                          const Indices& idxs,
-                                          const real_vec_t& val,
-                                          int line) const {
+                                   const Indices& idxs,
+                                   const real_vec_t& val,
+                                   int line) const {
         STATE_VARS_CONST(this);
 
         // Convert to elem indices.
@@ -588,24 +588,27 @@ namespace yask {
         // Add offsets, i.e., convert to overall indices.
         eidxs = eidxs.add_elements(_corep->_rank_offsets);
 
-        IdxTuple idxs2 = get_allocs(); // get dims.
+        IdxTuple idxs2 = get_allocs(); // get dims for this var.
         eidxs.set_tuple_vals(idxs2);      // set vals from eidxs.
+        // TODO: is above correct for vars that aren't domain dims?
+        Indices idxs3(idxs2);
 
         // Visit every point in fold.
-        IdxTuple folds = dims->_fold_pts;
-        folds.visit_all_points([&](const IdxTuple& fofs,
-                                   size_t idx) {
+        auto& folds = dims->_fold_sizes;
+        bool first_inner = dims->_fold_pts.is_first_inner();
+        folds.visit_all_points
+            (first_inner,
+             [&](const Indices& fofs, size_t idx) {
 
-                // Get element from vec val.
-                real_t ev = val[idx];
+                 // Get element from vec val.
+                 real_t ev = val[idx];
 
-                // Add fold offsets to elem indices for printing.
-                IdxTuple pt2 = idxs2.add_elements(fofs, false);
-                Indices pt3(pt2);
+                 // Add fold offsets to elem indices for printing.
+                 auto pt3 = idxs3.add_elements(fofs);
 
-                print_elem(msg, pt3, ev, line);
-                return true; // keep visiting.
-            });
+                 print_elem(msg, pt3, ev, line);
+                 return true; // keep visiting.
+             });
     }
 
 } // namespace.

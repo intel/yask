@@ -45,15 +45,14 @@ namespace yask {
     // A class to hold up to a given number of sizes or indices efficiently.
     // Similar to a Tuple, but less overhead and doesn't keep names.
     // This class is NOT virtual.
-    // TODO: make this a template with _ndims as a parameter.
     // TODO: ultimately, combine with Tuple w/o loss of efficiency.
     class Indices {
 
     public:
 
     protected:
-        idx_t _idxs[+max_idxs];
-        int _ndims;
+        idx_t _idxs[+max_idxs]; // Index values.
+        int _ndims;             // Number of indices used.
 
     public:
         // Ctors.
@@ -109,10 +108,9 @@ namespace yask {
         // Read from an IdxTuple.
         void set_from_tuple(const IdxTuple& src) {
             host_assert(src.size() <= +max_idxs);
-            int n = int(src.size());
-            for (int i = 0; i < n; i++)
+            _ndims = int(src.size());
+            for (int i = 0; i < _ndims; i++)
                 _idxs[i] = src.get_val(i);
-            _ndims = n;
         }
 
         // Other inits.
@@ -301,6 +299,101 @@ namespace yask {
             return res;
         }
 
+        // Convert 1D 'offset' to N-d offsets using values in 'this' as sizes of N-d space.
+        // If 'first_inner", '(*this)[0]' is innermost dim (fortran-like),
+        // else '(*this)[_ndims-1]' is innermost dim (C-like).
+        Indices unlayout(size_t offset, bool first_inner) const {
+            Indices res(*this);
+            size_t prev_size = 1;
+
+            // Loop thru dims.
+            int start_dim = first_inner ? 0 : _ndims-1;
+            int stop_dim = first_inner ? _ndims : -1;
+            int step_dim = first_inner ? 1 : -1;
+            for (int di = start_dim; di != stop_dim; di += step_dim) {
+                size_t dsize = size_t(_idxs[di]);
+                assert (dsize >= 0);
+
+                // Div offset by product of previous dims.
+                size_t dofs = offset / prev_size;
+
+                // Wrap within size of this dim.
+                dofs %= dsize;
+
+                // Save in result.
+                res[di] = dofs;
+
+                prev_size *= dsize;
+                assert(prev_size <= size_t(product()));
+            }
+            return res;
+        }
+
+        // Advance 'idxs' containing indices in the N-d space defined by
+        // 'this' to the next logical index.
+        // Input 'idxs' must contain valid indices, i.e., each value must
+        // be between 0 and N-1, where N is the value in the corresponding
+        // dim in 'this'.
+        // If 'idxs' is at last index, "wraps-around" to all zeros.
+        // See 'unlayout()' for description of 'first_inner'.
+        inline void next_index(Indices& idxs, bool first_inner) const {
+            const int inner_dim = first_inner ? 0 : _ndims-1;
+            const int dim_step = first_inner ? 1 : -1;
+
+            // Increment inner dim.
+            idxs[inner_dim]++;
+
+            // Wrap around indices as needed.
+            // First test is redundant, but keeps us from entering loop most times.
+            if (idxs[inner_dim] >= _idxs[inner_dim]) {
+                for (int j = 0, k = inner_dim; j < _ndims; j++, k += dim_step) {
+                        
+                    // If too far in dim 'k', set idx to 0 and increment idx in next dim.
+                    if (idxs[k] >= _idxs[k]) {
+                        idxs[k] = 0;
+                        int nxt_dim = k + dim_step;
+                        if (nxt_dim >= 0 && nxt_dim < _ndims)
+                            idxs[nxt_dim]++;
+                    }
+                    else
+                        break;
+                }
+            }
+        }
+
+        // Call the 'visitor' lambda function at every point sequentially in
+        // the N-d space defined by 'this'. At each call, 'idxs' contains
+        // next point in N-d space, and 'idx' contains sequentially-numbered
+        // 1-d index.
+        // Stops and returns 'false' if/when visitor returns 'false'.
+        // See 'unlayout()' for description of 'first_inner'.
+        bool visit_all_points(bool first_inner,
+                              std::function<bool (const Indices& idxs,
+                                                  size_t idx)> visitor) const {
+            Indices idxs(*this);
+            idxs.set_vals_same(0);
+
+            // Total number of points to visit.
+            idx_t ne = product();
+
+            // 1 point?
+            if (ne <= 1)
+                return visitor(idxs, 0);
+
+            // Visit each point in sequential order.
+            for (idx_t i = 0; i < ne; i++) {
+
+                // Call visitor.
+                bool ok = visitor(idxs, i);
+                if (!ok)
+                    return false;
+
+                // Jump to next index.
+                next_index(idxs, first_inner);
+            }
+            return true;
+        }
+        
         // Make a Tuple w/given names.
         ALWAYS_INLINE
         IdxTuple make_tuple(const VarDimNames& names) const {
@@ -338,7 +431,7 @@ namespace yask {
             auto tmp = make_tuple(names);
             return tmp.make_dim_val_str(separator, infix, prefix, suffix);
         }
-        std::string make_dim_val_str(const IdxTuple& names, // ignore values.
+        std::string make_dim_val_str(const IdxTuple& names, // ignore values in 'names'.
                                   std::string separator=", ",
                                   std::string infix="=",
                                   std::string prefix="",

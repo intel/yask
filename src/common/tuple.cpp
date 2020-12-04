@@ -241,9 +241,9 @@ namespace yask {
 
         // Loop thru dims.
         int start_dim = _first_inner ? 0 : size()-1;
-        int end_dim = _first_inner ? size() : -1;
+        int stop_dim = _first_inner ? size() : -1;
         int step_dim = _first_inner ? 1 : -1;
-        for (int di = start_dim; di != end_dim; di += step_dim) {
+        for (int di = start_dim; di != stop_dim; di += step_dim) {
             auto& i = _q.at(di);
             //auto& dim = i._get_name();
             size_t dsize = size_t(i.get_val());
