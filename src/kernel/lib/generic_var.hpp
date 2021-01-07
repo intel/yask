@@ -139,7 +139,7 @@ namespace yask {
         const static int _numa_unset = -999;
         int _numa_pref = _numa_unset; // use default from _opts.
 
-        // Names and lengths of var dimensions.
+        // Names and sizes of dims in this var.
         IdxTuple _var_dims;
 
         // Ctor. No allocation is done. See notes on default_alloc().

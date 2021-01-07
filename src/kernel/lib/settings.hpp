@@ -163,30 +163,6 @@ namespace yask {
 
             return i;
         }
-
-        // Get linear index into a vector given 'elem_ofs', which are
-        // element offsets that may include other dimensions.
-        idx_t get_elem_index_in_vec(const IdxTuple& elem_ofs) const {
-            host_assert(_vec_fold_pts._get_num_dims() == NUM_VEC_FOLD_DIMS);
-            if (NUM_VEC_FOLD_DIMS == 0)
-                return 0;
-
-            // Get required offsets into an Indices obj.
-            IdxTuple fold_ofs(_vec_fold_pts);
-            fold_ofs.set_vals_same(0);
-            fold_ofs.set_vals(elem_ofs, false); // copy only fold offsets.
-            Indices fofs(fold_ofs);
-
-            // Call version that requires vec-fold offsets only.
-            idx_t i = get_elem_index_in_vec(fofs);
-
-            // Use fold layout to find element index.
-#ifdef DEBUG_LAYOUT
-            idx_t i2 = _vec_fold_pts.layout(fold_ofs, false);
-            host_assert(i == i2);
-#endif
-            return i;
-        }
     };
     typedef std::shared_ptr<Dims> DimsPtr;
 

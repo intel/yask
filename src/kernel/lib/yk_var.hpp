@@ -234,8 +234,6 @@ namespace yask {
             constexpr uidx_t vls[nvls] { _templ_vec_lens... };
             Indices vec_idxs(nvls), elem_ofs(nvls);
             #ifdef DEBUG_LAYOUT
-            const auto nd = get_num_dims();
-            host_assert(nd == nvls);
             constexpr auto ns = LayoutFn::get_num_sizes();
             host_assert(ns == nvls);
             #endif
@@ -286,14 +284,6 @@ namespace yask {
             //auto i = dims->get_elem_index_in_vec(fold_ofs);
             idx_t i = VEC_FOLD_LAYOUT(fold_ofs);
 
-            #ifdef DEBUG_LAYOUT
-            // Compare to more explicit offset extraction.
-            IdxTuple eofs = get_dim_tuple();
-            elem_ofs.set_tuple_vals(eofs);  // set vals from elem_ofs.
-            auto i2 = dims->get_elem_index_in_vec(eofs);
-            host_assert(i == i2);
-            #endif
-
             // Get pointer to vector.
             const real_vec_t* vp = _data.get_ptr(vec_idxs, check_bounds);
 
@@ -343,10 +333,6 @@ namespace yask {
                                            bool check_bounds=true) const {
 
             constexpr int nvls = sizeof...(_templ_vec_lens);
-            #ifdef DEBUG_LAYOUT
-            const auto nd = get_num_dims();
-            host_assert(nd == nvls);
-            #endif
             Indices adj_idxs(nvls);
 
             // Special handling for step index.

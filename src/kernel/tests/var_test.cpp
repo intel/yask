@@ -26,6 +26,9 @@ IN THE SOFTWARE.
 // Test the YASK vars.
 // This must be compiled with a kernel containing 'x', 'y', and 'z' dims.
 
+// Enable extra checking.
+#define DEBUG_LAYOUT
+
 #include "yask_stencil.hpp"
 using namespace std;
 using namespace yask;

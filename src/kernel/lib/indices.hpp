@@ -195,6 +195,7 @@ namespace yask {
         // Returns a new object.
         ALWAYS_INLINE Indices combine_elements(std::function<void (idx_t& lhs, idx_t rhs)> func,
                                        const Indices& other) const {
+            assert(_ndims == other._ndims);
             Indices res(*this);
 
 #if EXACT_INDICES
@@ -300,8 +301,8 @@ namespace yask {
         }
 
         // Convert 1D 'offset' to N-d offsets using values in 'this' as sizes of N-d space.
-        // If 'first_inner", '(*this)[0]' is innermost dim (fortran-like),
-        // else '(*this)[_ndims-1]' is innermost dim (C-like).
+        // If 'first_inner' is 'true', '(*this)[0]' is innermost dim (fortran-like);
+        // if 'first_inner' is 'false', '(*this)[_ndims-1]' is innermost dim (C-like).
         Indices unlayout(bool first_inner, size_t offset) const {
             Indices res(*this);
             size_t prev_size = 1;

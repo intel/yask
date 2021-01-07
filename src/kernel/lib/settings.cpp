@@ -886,6 +886,7 @@ namespace yask {
         return rt;
     }
 
+    
     // Set number of threads for a block.
     // Must be called from within a top-level OMP parallel region.
     // Return number of threads.
@@ -895,10 +896,12 @@ namespace yask {
         int at = get_num_comp_threads(rt, bt);
 
         // Must call within top parallel region.
+        #ifdef _OPENMP
         int ol = omp_get_level();
         assert(ol == 1);
         int mal = omp_get_max_active_levels();
         assert (mal >= 2);
+        #endif
 
         omp_set_num_threads(bt);
         return bt;
