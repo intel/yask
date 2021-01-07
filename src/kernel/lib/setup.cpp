@@ -991,10 +991,10 @@ namespace yask {
                  ibspt[step_posn] = 0;
                  Indices ibdpt(domain_dims);  // in domain dims.
                  islice_len.visit_all_points
-                     (false,
+                     (true,
                       [&](const Indices& iofs, size_t idx) {
 
-                          // Find global point from 'ofs' in domain
+                          // Find global point from 'iofs' in domain
                           // and stencil dims.
                           ibdpt = islice_begin.add_elements(iofs); // domain indices.
                           DOMAIN_VAR_LOOP(i, j)
@@ -1035,14 +1035,14 @@ namespace yask {
                                             ibdpt.make_dim_val_str(domain_dims) <<
                                             " in thread " << thread_num);
                                   iscan_len.visit_all_points
-                                      (false,
+                                      (true,
                                        [&](const Indices& ieofs, size_t eidx) {
 
                                            // Make sure iscan_len range is observed.
                                            DOMAIN_VAR_LOOP(i, j)
                                                assert(ieofs[j] < iscan_len[j]);
 
-                                           // Find global point from 'eofs'.
+                                           // Find global point from 'ieofs'.
                                            iedpt = ibdpt.add_elements(ieofs); // domain tuple.
                                            DOMAIN_VAR_LOOP(i, j)
                                                iespt[i] = iedpt[j];            // stencil tuple.
