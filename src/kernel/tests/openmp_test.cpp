@@ -86,6 +86,7 @@ int main(int argc, char* argv[]) {
 
     #ifdef USE_OFFLOAD
     int ndev = omp_get_num_devices();
+    assert(ndev > 0);
     int hostn = omp_get_initial_device();
     int devn = omp_get_default_device();
     cout << ndev << " OMP device(s)\n"
@@ -96,6 +97,9 @@ int main(int argc, char* argv[]) {
     int MOLUE = 42;
     #pragma omp target data device(devn) map(MOLUE)
     { }
+
+    #else
+    cout << "NOT testing on offload device.\n";
     #endif
 
     long n = 1171; // Array size.
@@ -118,9 +122,12 @@ int main(int argc, char* argv[]) {
             // alloc buffers on target and copy to it.
             #ifdef USE_OFFLOAD
             devp[k] = omp_target_alloc(bsz, devn);
-            omp_target_associate_ptr(p[k], devp[k], bsz, 0, devn);
+            assert(devp[k]);
+            int res = omp_target_associate_ptr(p[k], devp[k], bsz, 0, devn);
+            assert(res == 0);
             assert(omp_target_is_present(p[k], devn));
-            omp_target_memcpy(devp[k], p[k], bsz, 0, 0, devn, hostn);
+            res = omp_target_memcpy(devp[k], p[k], bsz, 0, 0, devn, hostn);
+            assert(res == 0);
 
             // invalidate local copy.
             memset(p[k], 0x55, bsz);
