@@ -59,11 +59,11 @@ struct MySettings {
     public:
 
         ValOption(MySettings& as) :
-                OptionBase("v",
-                           "Minimal validation: shortcut for '-validate -no-pre_auto_tune -no-auto_tune"
-                           " -no-warmup -t 1 -trial_steps 1 -l " + to_string(_lsz) +
-                           " -b " + to_string(_bsz) + "'."),
-                _as(as) { }
+            OptionBase("v",
+                       "Minimal validation: shortcut for '-validate -no-pre_auto_tune -no-auto_tune"
+                       " -no-warmup -t 1 -trial_steps 1 -l " + to_string(_lsz) +
+                       " -b " + to_string(_bsz) + "'."),
+            _as(as) { }
 
         // Set multiple vars.
         virtual bool check_arg(const std::vector<std::string>& args,
@@ -220,9 +220,9 @@ struct MySettings {
             "Stencil name: " YASK_STENCIL_NAME << endl;
 
         // Echo invocation parameters for record-keeping.
-#ifdef DEF_ARGS
+        #ifdef DEF_ARGS
         os << "Default arguments: " DEF_ARGS << endl;
-#endif
+        #endif
         os << "Binary invocation:";
         for (int argi = 0; argi < argc; argi++)
             os << " " << argv[argi];
@@ -543,7 +543,7 @@ int main(int argc, char** argv)
             // TODO: re-enable the region and block settings below;
             // requires allowing consistent init of different-sized vars
             // in kernel code.
-#if 0
+            #if 0
             auto sdim = ref_soln->get_step_dim_name();
             ref_soln->set_region_size(sdim, 0);
             ref_soln->set_block_size(sdim, 0);
@@ -551,7 +551,7 @@ int main(int argc, char** argv)
                 ref_soln->set_region_size(ddim, 0);
                 ref_soln->set_block_size(ddim, 0);
             }
-#endif
+            #endif
 
             // Override allocations and prep solution as with ref soln.
             alloc_steps(ref_soln, my_ref_opts);
@@ -560,13 +560,13 @@ int main(int argc, char** argv)
             // init to same value used in context.
             ref_context->init_diff(seed);
 
-#ifdef CHECK_INIT
+            #ifdef CHECK_INIT
 
             // Debug code to determine if data compares immediately after init matches.
             os << endl << div_line <<
                 "Reinitializing data for minimal validation...\n" << flush;
             context->init_diff(seed);
-#else
+            #else
 
             // Ref trial.
             // Do same number as last perf run.
@@ -580,7 +580,7 @@ int main(int argc, char** argv)
             auto rstats = ref_context->get_stats();
             ref_context->set_debug_output(dbg_out);
             os << "  Done in " << make_num_str(rstats->get_elapsed_secs()) << " secs.\n" << flush;
-#endif
+            #endif
             // check for equality.
             os << "\nChecking results...\n";
             idx_t errs = context->compare_data(*ref_context);
