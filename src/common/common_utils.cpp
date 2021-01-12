@@ -42,8 +42,8 @@ namespace yask {
     // fields to allow proper alphanumeric sorting
     // for numbers above 9 (at least up to 99).
 
-    // Format: "major.minor.patch".
-    const string version = "4.00.00";
+    // Format: "major.minor.patch [alpha|beta]".
+    const string version = "4.00.00 alpha";
 
     string yask_get_version_string() {
         return version;
