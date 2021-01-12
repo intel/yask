@@ -25,6 +25,10 @@
 # YASK_BASE should be set before including this.
 # YASK_BASE and all the dirs based on it should be set with full (not relative) paths.
 
+# Name strings.
+TIMESTAMP	:=	$(shell date '+%Y-%m-%d_%H-%M')
+HOSTNAME	:= 	$(shell hostname)
+
 # Set YASK_OUTPUT_DIR to change where all output files go.
 YASK_OUTPUT_DIR	?=	$(YASK_BASE)
 
@@ -42,7 +46,7 @@ LIB_OUT_DIR	:=	$(YASK_OUT_BASE)/lib
 BIN_OUT_DIR	:=	$(YASK_OUT_BASE)/bin
 BUILD_OUT_DIR	:=	$(YASK_OUT_BASE)/build
 PY_OUT_DIR	:=	$(YASK_OUT_BASE)/yask
-TEST_LOG_OUT_DIR :=	$(YASK_OUT_BASE)/logs/tests
+TEST_LOG_OUT_DIR :=	$(YASK_OUT_BASE)/logs/tests.$(HOSTNAME).$(TIMESTAMP)
 
 # OS-specific
 ifeq ($(shell uname -o),Cygwin)

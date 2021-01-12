@@ -722,7 +722,6 @@ realclean: clean
 	rm -fv $(BUILD_OUT_DIR)/*report.txt
 	- find . -name '*.pyc' -print -delete
 	- find . -name '*~' -print -delete
-	rm -rf $(TEST_LOG_OUT_DIR)
 
 echo-settings:
 	@echo "Build environment for" $(YK_EXEC) on `date`; \
