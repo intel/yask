@@ -26,7 +26,7 @@
 # YASK_BASE and all the dirs based on it should be set with full (not relative) paths.
 
 # Name strings.
-TIMESTAMP	:=	$(shell date '+%Y-%m-%d_%H-%M')
+TIMESTAMP	:=	$(shell date '+%Y-%m-%d')
 HOSTNAME	:= 	$(shell hostname)
 
 # Set YASK_OUTPUT_DIR to change where all output files go.
