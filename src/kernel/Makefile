@@ -238,7 +238,7 @@ YK_LIB		:=	$(LIB_OUT_DIR)/lib$(YK_EXT_BASE)$(SO_SUFFIX)
 YK_PY_LIB	:=	$(PY_OUT_DIR)/_$(YK_PY_MOD_BASE)$(SO_SUFFIX)
 YK_PY_MOD	:=	$(PY_OUT_DIR)/$(YK_PY_MOD_BASE).py
 YK_COMM_SRC_NAMES :=
-YK_EXT_SRC_NAMES :=	factory soln_apis context stencil_calc setup alloc \
+YK_EXT_SRC_NAMES :=	factory soln_apis context halo stencil_calc setup alloc \
 			generic_var yk_var yk_var_apis new_var settings auto_tuner utils
 YK_OBJS		:=	$(addprefix $(YK_OBJ_DIR)/,$(addsuffix .o,$(YK_COMM_SRC_NAMES) $(COMM_SRC_NAMES)))
 YK_EXT_OBJS	:=	$(addprefix $(YK_EXT_OBJ_DIR)/,$(addsuffix .o,$(YK_EXT_SRC_NAMES)))
