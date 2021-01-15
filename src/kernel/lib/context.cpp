@@ -1308,7 +1308,6 @@ namespace yask {
             // Starting point of the *next* block.  This is used to create
             // bridge shapes between blocks.  Initially, the beginning of
             // the next block is the end of this block.
-            // TODO: split these parts more evenly when not full triangles.
             idx_t next_blk_start = block_base_stop[i];
 
             // Adjust these based on current shift.  Adjust by pts in one TB

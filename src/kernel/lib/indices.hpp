@@ -45,6 +45,7 @@ namespace yask {
     // A class to hold up to a given number of sizes or indices efficiently.
     // Similar to a Tuple, but less overhead and doesn't keep names.
     // This class is NOT virtual.
+    // TODO: add a template parameter for max indices.
     // TODO: ultimately, combine with Tuple w/o loss of efficiency.
     class Indices {
 
@@ -141,20 +142,25 @@ namespace yask {
 
         // default n => don't change _ndims.
         void set_from_const(idx_t val, int n = -1) {
-            if (n < 0)
-                n = _ndims;
-            host_assert(n <= +max_idxs);
-            for (int i = 0; i < n; i++)
+            if (n >= 0)
+                _ndims = n;
+            host_assert(_ndims <= +max_idxs);
+
+            #if EXACT_INDICES
+            // Use just the used elements.
+            for (int i = 0; i < _ndims; i++)
                 _idxs[i] = val;
-            _ndims = n;
+            #else
+            // Use all to allow unroll and avoid jumps.
+            _UNROLL for (int i = 0; i < +max_idxs; i++)
+                _idxs[i] = val;
+            #endif
         }
         void set_vals_same(idx_t val) {
             set_from_const(val);
         }
 
         // Some comparisons.
-        // These assume all the indices are valid or
-        // initialized to the same value.
         bool operator==(const Indices& rhs) const {
             if (_ndims != rhs._ndims)
                 return false;
@@ -194,19 +200,19 @@ namespace yask {
         // Generic element-wise operator.
         // Returns a new object.
         ALWAYS_INLINE Indices combine_elements(std::function<void (idx_t& lhs, idx_t rhs)> func,
-                                       const Indices& other) const {
+                                               const Indices& other) const {
             assert(_ndims == other._ndims);
             Indices res(*this);
 
-#if EXACT_INDICES
+            #if EXACT_INDICES
             // Use just the used elements.
             for (int i = 0; i < _ndims; i++)
                 func(res._idxs[i], other._idxs[i]);
-#else
+            #else
             // Use all to allow unroll and avoid jumps.
             _UNROLL for (int i = 0; i < +max_idxs; i++)
                 func(res._idxs[i], other._idxs[i]);
-#endif
+            #endif
             return res;
         }
 
@@ -215,40 +221,52 @@ namespace yask {
         // than modifying this object.
         ALWAYS_INLINE Indices add_elements(const Indices& other) const {
             return combine_elements([&](idx_t& lhs, idx_t rhs) { lhs += rhs; },
-                                   other);
+                                    other);
         }
         ALWAYS_INLINE Indices sub_elements(const Indices& other) const {
             return combine_elements([&](idx_t& lhs, idx_t rhs) { lhs -= rhs; },
-                                   other);
+                                    other);
         }
         ALWAYS_INLINE Indices mul_elements(const Indices& other) const {
             return combine_elements([&](idx_t& lhs, idx_t rhs) { lhs *= rhs; },
-                                   other);
+                                    other);
         }
         ALWAYS_INLINE Indices min_elements(const Indices& other) const {
             return combine_elements([&](idx_t& lhs, idx_t rhs) { lhs = std::min(lhs, rhs); },
-                                   other);
+                                    other);
         }
         ALWAYS_INLINE Indices max_elements(const Indices& other) const {
             return combine_elements([&](idx_t& lhs, idx_t rhs) { lhs = std::max(lhs, rhs); },
-                                   other);
+                                    other);
         }
 
+        // Divide done differently to avoid div-by-zero when EXACT_INDICES
+        // not defined.
+        ALWAYS_INLINE Indices div_elements(const Indices& other) const {
+            assert(_ndims == other._ndims);
+            Indices res(*this);
+
+            for (int i = 0; i < _ndims; i++)
+                res._idxs[i] = _idxs[i] / other._idxs[i];
+            return res;
+        }
+        
         // Generic element-wise operator with RHS const.
         // Returns a new object.
         ALWAYS_INLINE
         Indices map_elements(std::function<void (idx_t& lhs, idx_t rhs)> func,
-                                   idx_t crhs) const {
+                             idx_t crhs) const {
             Indices res(*this);
 
-#if EXACT_INDICES
+            #if EXACT_INDICES
             // Use just the used elements.
             for (int i = 0; i < _ndims; i++)
-#else
+                func(res._idxs[i], crhs);
+            #else
             // Use all to allow unroll and avoid jumps.
             _UNROLL for (int i = 0; i < +max_idxs; i++)
-#endif
                 func(res._idxs[i], crhs);
+            #endif
             return res;
         }
 
@@ -256,32 +274,32 @@ namespace yask {
         ALWAYS_INLINE
         Indices add_const(idx_t crhs) const {
             return map_elements([&](idx_t& lhs, idx_t rhs) { lhs += rhs; },
-                               crhs);
+                                crhs);
         }
         ALWAYS_INLINE
         Indices sub_const(idx_t crhs) const {
             return map_elements([&](idx_t& lhs, idx_t rhs) { lhs -= rhs; },
-                               crhs);
+                                crhs);
         }
         ALWAYS_INLINE
         Indices mul_const(idx_t crhs) const {
             return map_elements([&](idx_t& lhs, idx_t rhs) { lhs *= rhs; },
-                               crhs);
+                                crhs);
         }
         ALWAYS_INLINE
         Indices div_const(idx_t crhs) const {
             return map_elements([&](idx_t& lhs, idx_t rhs) { lhs /= rhs; },
-                               crhs);
+                                crhs);
         }
         ALWAYS_INLINE
         Indices min_const(idx_t crhs) const {
             return map_elements([&](idx_t& lhs, idx_t rhs) { lhs = std::min(lhs, rhs); },
-                               crhs);
+                                crhs);
         }
         ALWAYS_INLINE
         Indices max_const(idx_t crhs) const {
             return map_elements([&](idx_t& lhs, idx_t rhs) { lhs = std::max(lhs, rhs); },
-                               crhs);
+                                crhs);
         }
 
         // Reduce over all elements.
@@ -453,7 +471,7 @@ namespace yask {
             #endif
         }
 
-        // Make a Tuple w/given names.
+        // Make a Tuple w/given names using values in 'this'.
         IdxTuple make_tuple(const VarDimNames& names) const {
             host_assert((int)names.size() == _ndims);
 
@@ -464,7 +482,7 @@ namespace yask {
             return tmp;
         }
 
-        // Make a Tuple w/o useful names using values in 'this'.
+        // Make a Tuple w/names 'd0', 'd1', etc. using values in 'this'.
         IdxTuple make_tuple() const {
             IdxTuple tmp;
             for (int i = 0; i < _ndims; i++)
@@ -480,26 +498,26 @@ namespace yask {
 
         // Make string like "x=4, y=8".
         std::string make_dim_val_str(const VarDimNames& names,
-                                  std::string separator=", ",
-                                  std::string infix="=",
-                                  std::string prefix="",
-                                  std::string suffix="") const {
+                                     std::string separator=", ",
+                                     std::string infix="=",
+                                     std::string prefix="",
+                                     std::string suffix="") const {
             auto tmp = make_tuple(names);
             return tmp.make_dim_val_str(separator, infix, prefix, suffix);
         }
         std::string make_dim_val_str(const IdxTuple& names, // ignore values in 'names'.
-                                  std::string separator=", ",
-                                  std::string infix="=",
-                                  std::string prefix="",
-                                  std::string suffix="") const {
+                                     std::string separator=", ",
+                                     std::string infix="=",
+                                     std::string prefix="",
+                                     std::string suffix="") const {
             auto tmp = make_tuple(names);
             return tmp.make_dim_val_str(separator, infix, prefix, suffix);
         }
 
         // Make string like "4, 3, 2".
         std::string make_val_str(std::string separator=", ",
-                               std::string prefix="",
-                               std::string suffix="") const {
+                                 std::string prefix="",
+                                 std::string suffix="") const {
 
             // Make a Tuple w/o useful names.
             auto tmp = make_tuple();
