@@ -340,7 +340,7 @@ namespace yask {
                            KernelSettings& settings,
                            const ScanIndices& mini_block_idxs) {
             STATE_VARS(this);
-            TRACE_MSG("calc_sub_block_scalar for bundle '" << get_name() << "': [" <<
+            TRACE_MSG("calc_sub_block_dbg for bundle '" << get_name() << "': [" <<
                       mini_block_idxs.start.make_val_str() <<
                       " ... " << mini_block_idxs.stop.make_val_str() <<
                       ") by region thread " << region_thread_idx <<
@@ -386,7 +386,7 @@ namespace yask {
                            KernelSettings& settings,
                            const ScanIndices& mini_block_idxs) {
             STATE_VARS(this);
-            TRACE_MSG("calc_sub_block_vec for bundle '" << get_name() << "': [" <<
+            TRACE_MSG("calc_sub_block_opt for bundle '" << get_name() << "': [" <<
                       mini_block_idxs.start.make_val_str() <<
                       " ... " << mini_block_idxs.stop.make_val_str() <<
                       ") by region thread " << region_thread_idx <<
@@ -639,7 +639,7 @@ namespace yask {
             // Full rectilinear polytope of aligned clusters: use optimized
             // code for full clusters w/o masking.
             if (do_clusters) {
-                TRACE_MSG("calc_sub_block_vec:  using cluster code for rank-indices [" <<
+                TRACE_MSG("calc_sub_block_opt:  using cluster code for rank-indices [" <<
                           sb_fcidxs.begin.make_val_str() <<
                           " ... " << sb_fcidxs.end.make_val_str() <<
                           ") by region thread " << region_thread_idx <<
@@ -662,7 +662,7 @@ namespace yask {
             // An alternative way to do this would be to do the left and
             // right slabs in each domain dim separately.
             if (do_vectors) {
-                TRACE_MSG("calc_sub_block_vec:  using vector code for local indices [" <<
+                TRACE_MSG("calc_sub_block_opt:  using vector code for local indices [" <<
                           sb_vidxs.begin.make_val_str() <<
                           " ... " << sb_vidxs.end.make_val_str() <<
                           ") *not* within full vector-clusters at [" <<
@@ -745,7 +745,7 @@ namespace yask {
                     int j = i - 1;
                     misc_idxs.begin[i] = sb_idxs.begin[i];
                     misc_idxs.end[i] = scalar_left_end;
-                    TRACE_MSG("calc_sub_block_vec:  using scalar code "
+                    TRACE_MSG("calc_sub_block_opt:  using scalar code "
                               "for left slab global indices [" <<
                               misc_idxs.begin.make_val_str() << " ... " <<
                               misc_idxs.end.make_val_str() <<
@@ -764,7 +764,7 @@ namespace yask {
                     int j = i - 1;
                     misc_idxs.begin[i] = scalar_right_begin;
                     misc_idxs.end[i] = sb_idxs.end[i];
-                    TRACE_MSG("calc_sub_block_vec:  using scalar code "
+                    TRACE_MSG("calc_sub_block_opt:  using scalar code "
                               "for right slab global indices [" <<
                               misc_idxs.begin.make_val_str() << " ... " <<
                               misc_idxs.end.make_val_str() <<
@@ -779,7 +779,7 @@ namespace yask {
                 #undef MISC_FN
                 #endif
             } // do scalars.
-        } // calc_sub_block_vec.
+        } // calc_sub_block_opt.
 
         // Calculate a block of clusters.
         // This should be the hottest function for most stencils--
