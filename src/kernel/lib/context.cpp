@@ -265,7 +265,7 @@ namespace yask {
             // XXXXXX|  <- areas outside of outer ranks not calculated ->  |XXXXXXX
             //
             if (wf_steps > 0) {
-                DOMAIN_VAR_LOOP(i, j) {
+                DOMAIN_VAR_LOOP_FAST(i, j) {
 
                     // The end should be adjusted only if an extension doesn't
                     // exist.  Extentions exist between ranks, so additional
@@ -278,7 +278,7 @@ namespace yask {
 
             // If original region covered entire rank in a dim, set
             // stride size to ensure only one stride is taken.
-            DOMAIN_VAR_LOOP(i, j) {
+            DOMAIN_VAR_LOOP_FAST(i, j) {
                 if (opts->_region_sizes[i] >= opts->_rank_sizes[i])
                     stride[i] = end[i] - begin[i];
             }
@@ -646,7 +646,7 @@ namespace yask {
                                            region_shift_num, bp,
                                            region_idxs);
 
-                    DOMAIN_VAR_LOOP(i, j) {
+                    DOMAIN_VAR_LOOP_FAST(i, j) {
 
                         // If there is only one blk in a region, make sure
                         // this blk fills this whole region.
@@ -707,7 +707,7 @@ namespace yask {
                 // Trimming will be done at the mini-block level.
                 assert(ok);
 
-                DOMAIN_VAR_LOOP(i, j) {
+                DOMAIN_VAR_LOOP_FAST(i, j) {
 
                     // If original blk covered entire region, reset stride.
                     if (settings._block_sizes[i] >= settings._region_sizes[i])
@@ -862,7 +862,7 @@ namespace yask {
             // Increase range of block to cover all phases and
             // shapes.
             ScanIndices adj_block_idxs = block_idxs;
-            DOMAIN_VAR_LOOP(i, j) {
+            DOMAIN_VAR_LOOP_FAST(i, j) {
 
                 // TB shapes can extend to the right only.  They can
                 // cover a range as big as this block's base plus the
@@ -895,7 +895,7 @@ namespace yask {
                 auto dims_to_bridge = n_choose_k_set(nddims, phase, shape);
 
                 // Set bits for selected dims.
-                DOMAIN_VAR_LOOP(i, j)
+                DOMAIN_VAR_LOOP_FAST(i, j)
                     bridge_mask.at(j) = false;
                 for (int i = 0; i < phase; i++) {
                     auto dim = dims_to_bridge[i];

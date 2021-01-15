@@ -656,13 +656,13 @@ namespace yask {
             // Set alignment to vector lengths.
             // i: index for stencil dims, j: index for domain dims.
             if (use_vec_align)
-                DOMAIN_VAR_LOOP(i, j)
+                DOMAIN_VAR_LOOP_FAST(i, j)
                     align[i] = fold_pts[j];
         }
         ScanIndices(const Dims& dims, bool use_vec_align, Indices* ofs) :
             ScanIndices(dims, use_vec_align) {
             if (ofs) {
-                DOMAIN_VAR_LOOP(i, j) {
+                DOMAIN_VAR_LOOP_FAST(i, j) {
                     host_assert(ofs->_get_num_dims() == ndims - 1);
                     align_ofs[i] = (*ofs)[j];
                 }
@@ -671,7 +671,7 @@ namespace yask {
         ScanIndices(const Dims& dims, bool use_vec_align, IdxTuple* ofs) :
             ScanIndices(dims, use_vec_align) {
             if (ofs) {
-                DOMAIN_VAR_LOOP(i, j) {
+                DOMAIN_VAR_LOOP_FAST(i, j) {
                     host_assert(ofs->_get_num_dims() == ndims - 1);
                     align_ofs[i] = ofs->get_val(j);
                 }

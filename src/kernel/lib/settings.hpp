@@ -170,7 +170,7 @@ namespace yask {
     inline idx_t get_num_domain_points(const IdxTuple& sizes) {
         host_assert(sizes._get_num_dims() == NUM_STENCIL_DIMS);
         idx_t pts = 1;
-        DOMAIN_VAR_LOOP(i, j)
+        DOMAIN_VAR_LOOP_FAST(i, j)
             pts *= sizes[i];
         return pts;
     }

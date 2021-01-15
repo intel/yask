@@ -64,7 +64,7 @@ namespace yask {
             assert(norm._get_num_dims() == nsdims);
 
             // i: index for stencil dims, j: index for domain dims.
-            DOMAIN_VAR_LOOP(i, j) {
+            DOMAIN_VAR_LOOP_FAST(i, j) {
 
                 // Divide indices by fold lengths as needed by
                 // read/write_vec_norm().  Use idiv_flr() instead of '/'
@@ -475,7 +475,7 @@ namespace yask {
             // Adjust indices to be rank-relative.
             // Determine the subset of this sub-block that is
             // clusters, vectors, and partial vectors.
-            _DOMAIN_VAR_LOOP(i, j) {
+            DOMAIN_VAR_LOOP_FAST(i, j) {
 
                 // Rank offset.
                 auto rofs = _context->rank_domain_offsets[j];
@@ -647,7 +647,7 @@ namespace yask {
 
                 // Stride sizes are based on cluster lengths (in vector units).
                 // The stride in the inner loop is hard-coded in the generated code.
-                DOMAIN_VAR_LOOP(i, j) {
+                DOMAIN_VAR_LOOP_FAST(i, j) {
                     norm_sb_idxs.stride[i] = dims->_cluster_mults[j]; // N vecs.
                 }
 
@@ -834,7 +834,7 @@ namespace yask {
                 STATE_VARS(this);
 
                 // Check that only the inner dim has a range greater than one cluster.
-                DOMAIN_VAR_LOOP(i, j) {
+                DOMAIN_VAR_LOOP_FAST(i, j) {
                     if (i != inner_posn)
                         host_assert(loop_idxs.start[i] + dims->_cluster_mults[j] >=
                                loop_idxs.stop[i]);
@@ -904,7 +904,7 @@ namespace yask {
             // always 1, we ignore loop_idxs.stop.
             bool ok = false;
             idx_t mask = idx_t(-1);
-            DOMAIN_VAR_LOOP(i, j) {
+            DOMAIN_VAR_LOOP_FAST(i, j) {
                 auto iidx = loop_idxs.start[i];
 
                 // Is inner loop outside of full clusters?

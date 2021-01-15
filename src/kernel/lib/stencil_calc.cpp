@@ -89,7 +89,7 @@ namespace yask {
             // Trim the mini-block indices based on the bounding box(es)
             // for this bundle.
             ScanIndices mb_idxs(mini_block_idxs);
-            DOMAIN_VAR_LOOP(i, j) {
+            DOMAIN_VAR_LOOP_FAST(i, j) {
 
                 // Begin point.
                 auto bbegin = max(mini_block_idxs.begin[i], bb.bb_begin[j]);
@@ -136,7 +136,7 @@ namespace yask {
                     // Tweak settings for adjusted indices.  This sets
                     // up the sub-blocks as multiple slabs perpendicular
                     // to the binding dim within the mini-block.
-                    DOMAIN_VAR_LOOP(i, j) {
+                    DOMAIN_VAR_LOOP_FAST(i, j) {
 
                         // If this is the binding dim, set stride size
                         // and alignment granularity to the slab
@@ -198,7 +198,7 @@ namespace yask {
                 else {
 
                     // Tweak settings for adjusted indices.
-                    DOMAIN_VAR_LOOP(i, j) {
+                    DOMAIN_VAR_LOOP_FAST(i, j) {
 
                         // If original [or auto-tuned] sub-block covers
                         // entire mini-block, set stride size to full width.
@@ -254,7 +254,7 @@ namespace yask {
             assert(gb.is_scratch());
 
             // i: index for stencil dims, j: index for domain dims.
-            DOMAIN_VAR_LOOP(i, j) {
+            DOMAIN_VAR_LOOP_FAST(i, j) {
                 auto& dim = dims->_stencil_dims.get_dim(i);
                 auto& dname = dim._get_name();
 
