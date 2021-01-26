@@ -239,9 +239,9 @@ namespace yask {
                                  // Wait until buffer is avail if sharing one.
                                  if (using_shm) {
                                      TRACE_MSG("exchange_halos:    waiting to write to shm buffer");
-                                     wait_time.start();
+                                     halo_wait_time.start();
                                      send_buf.wait_for_ok_to_write();
-                                     wait_delta += wait_time.stop();
+                                     wait_delta += halo_wait_time.stop();
                                  }
 
                                  // Copy (pack) data from var to buffer.
@@ -252,15 +252,19 @@ namespace yask {
                                            " vector copy into " << buf <<
                                            (use_offload ? " on device" : " on host"));
                                  idx_t nelems = 0;
+                                 halo_pack_time.start();
                                  if (send_vec_ok)
                                      nelems = gb.get_vecs_in_slice(buf, first, last, use_offload);
                                  else
                                      nelems = gb.get_elements_in_slice(buf, first, last, use_offload);
+                                 halo_pack_time.stop();
                                  idx_t nbytes = nelems * get_element_bytes();
 
                                  if (use_offload) {
                                      TRACE_MSG("exchange_halos:    copying buffer from device");
+                                     halo_copy_time.start();
                                      offload_copy_from_device(buf, nbytes);
+                                     halo_copy_time.stop();
                                  }
 
                                  if (using_shm) {
@@ -290,9 +294,9 @@ namespace yask {
                                  // Wait until data in buffer is avail.
                                  if (using_shm) {
                                      TRACE_MSG("exchange_halos:    waiting for data in shm buffer");
-                                     wait_time.start();
+                                     halo_wait_time.start();
                                      recv_buf.wait_for_ok_to_read();
-                                     wait_delta += wait_time.stop();
+                                     wait_delta += halo_wait_time.stop();
                                  }
                                  else {
 
@@ -301,9 +305,9 @@ namespace yask {
                                      if (r != MPI_REQUEST_NULL) {
                                          TRACE_MSG("exchange_halos:    waiting for receipt of " <<
                                                    make_byte_str(nbytes));
-                                         wait_time.start();
+                                         halo_wait_time.start();
                                          MPI_Wait(&r, MPI_STATUS_IGNORE);
-                                         wait_delta += wait_time.stop();
+                                         wait_delta += halo_wait_time.stop();
                                      }
                                      r = MPI_REQUEST_NULL;
                                  }
@@ -324,7 +328,9 @@ namespace yask {
                                  void* buf = (void*)recv_buf._elems;
                                  if (use_offload) {
                                      TRACE_MSG("exchange_halos:    copying buffer to device");
+                                     halo_copy_time.start();
                                      offload_copy_to_device(buf, nbytes);
+                                     halo_copy_time.stop();
                                  }
 
                                  // Copy data from buffer to var.
@@ -335,10 +341,12 @@ namespace yask {
                                            " vector copy from " << buf <<
                                            (use_offload ? " on device" : " on host"));
                                  idx_t nelems = 0;
+                                 halo_unpack_time.start();
                                  if (recv_vec_ok)
                                      nelems = gp->set_vecs_in_slice(buf, first, last, use_offload);
                                  else
                                      nelems = gp->set_elements_in_slice(buf, first, last, use_offload);
+                                 halo_unpack_time.stop();
                                  assert(nelems <= recv_buf.get_size());
 
                                  if (using_shm)
@@ -366,9 +374,9 @@ namespace yask {
                                      auto& r = var_send_reqs[ni];
                                      if (r != MPI_REQUEST_NULL) {
                                          TRACE_MSG("   waiting to finish send of " << make_byte_str(nbytes));
-                                         wait_time.start();
+                                         halo_wait_time.start();
                                          MPI_Wait(&var_send_reqs[ni], MPI_STATUS_IGNORE);
-                                         wait_delta += wait_time.stop();
+                                         wait_delta += halo_wait_time.stop();
                                      }
                                      r = MPI_REQUEST_NULL;
                                  }
@@ -407,7 +415,7 @@ namespace yask {
         if (!enable_halo_exchange || env->num_ranks < 2)
             return;
 
-        test_time.start();
+        halo_test_time.start();
         TRACE_MSG("poke_halo_exchange");
 
         // Loop thru MPI data.
@@ -450,7 +458,7 @@ namespace yask {
             }
             #endif
         }
-        auto ttime = test_time.stop();
+        auto ttime = halo_test_time.stop();
         TRACE_MSG("poke_halo_exchange: secs spent in " << num_tests <<
                   " MPI test(s): " << make_num_str(ttime));
         #endif

@@ -395,8 +395,11 @@ namespace yask {
         // Measured outside parallel region.
         double hetime = min(halo_time.get_elapsed_secs(), rtime);
 
-        // 'wait_time' is part of 'halo_time'.
-        double wtime = min(wait_time.get_elapsed_secs(), hetime);
+        // These are part of 'halo_time'.
+        double hwtime = min(halo_wait_time.get_elapsed_secs(), hetime);
+        double hptime = min(halo_pack_time.get_elapsed_secs(), hetime - hwtime);
+        double hutime = min(halo_unpack_time.get_elapsed_secs(), hetime - hwtime - hptime);
+        double hctime = min(halo_copy_time.get_elapsed_secs(), hetime - hwtime - hptime - hutime);
 
         // Exterior and interior parts. Measured outside parallel region.
         // Does not include 'halo_time'.
@@ -404,8 +407,8 @@ namespace yask {
         double itime = int_time.get_elapsed_secs();
 
         // 'test_time' is part of 'int_time', but only on region thread 0.
-        // It's not part of 'halo_time'.
-        double ttime = test_time.get_elapsed_secs() / rthr; // ave.
+        // It's not part of 'halo_time', since it's done outside of 'halo_exchange'.
+        double ttime = halo_test_time.get_elapsed_secs() / rthr; // ave.
 
         // Remove average test time from interior time.
         itime -= ttime;
@@ -414,7 +417,7 @@ namespace yask {
         // Compute time.
         double ctime = etime + itime;
 
-        // All halo time.
+        // All halo-related time.
         double htime = hetime + ttime;
 
         // Other.
@@ -529,21 +532,30 @@ namespace yask {
                 DEBUG_MSG("  other (sec):                       " << make_num_str(optime) <<
                           print_pct(optime, ctime));
             }
-#ifdef USE_MPI
-            double ohtime = max(htime - wtime - ttime, 0.);
+
+            #ifdef USE_MPI
+            double hotime = max(hetime - hwtime - hptime - hutime - hctime, 0.);
             DEBUG_MSG(" Compute-time breakdown by halo area:\n"
-                      "  rank-exterior compute (sec):       " << make_num_str(etime) <<
+                      "  rank-exterior compute (sec):         " << make_num_str(etime) <<
                       print_pct(etime, ctime) << endl <<
-                      "  rank-interior compute (sec):       " << make_num_str(itime) <<
+                      "  rank-interior compute (sec):         " << make_num_str(itime) <<
                       print_pct(itime, ctime) << endl <<
                       " Halo-time breakdown:\n"
-                      "  MPI waits (sec):                   " << make_num_str(wtime) <<
-                      print_pct(wtime, htime) << endl <<
-                      "  MPI tests (sec):                   " << make_num_str(ttime) <<
+                      "  MPI waits (sec):                     " << make_num_str(hwtime) <<
+                      print_pct(hwtime, htime) << endl <<
+                      "  MPI tests (sec):                     " << make_num_str(ttime) <<
                       print_pct(ttime, htime) << endl <<
-                      "  packing, unpacking, etc. (sec):    " << make_num_str(ohtime) <<
-                      print_pct(ohtime, htime));
-#endif
+                      "  buffer packing (sec):                " << make_num_str(hptime) <<
+                      print_pct(hptime, htime) << endl <<
+                      "  buffer unpacking (sec):              " << make_num_str(hutime) <<
+                      print_pct(hutime, htime) << endl <<
+                      #ifdef USE_OFFLOAD
+                      "  buffer copying to/from device (sec): " << make_num_str(hctime) <<
+                      print_pct(hctime, htime) << endl <<
+                      #endif
+                      "  other halo time (sec):               " << make_num_str(hotime) <<
+                      print_pct(hotime, htime));
+            #endif
 
             // Note that rates are reported with base-10 suffixes per common convention, not base-2.
             // See https://www.speedguide.net/articles/bits-bytes-and-bandwidth-reference-guide-115.
@@ -578,8 +590,11 @@ namespace yask {
         ext_time.clear();
         int_time.clear();
         halo_time.clear();
-        wait_time.clear();
-        test_time.clear();
+        halo_pack_time.clear();
+        halo_unpack_time.clear();
+        halo_copy_time.clear();
+        halo_wait_time.clear();
+        halo_test_time.clear();
         steps_done = 0;
         for (auto& sp : st_stages) {
             sp->timer.clear();

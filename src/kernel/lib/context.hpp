@@ -292,9 +292,12 @@ namespace yask {
         YaskTimer run_time;     // time in run_solution(), including halo exchange.
         YaskTimer ext_time;     // time in exterior stencil calculation.
         YaskTimer int_time;     // time in interior stencil calculation.
-        YaskTimer halo_time;     // time spent just doing halo exchange, including MPI waits.
-        YaskTimer wait_time;     // time spent just doing MPI waits.
-        YaskTimer test_time;     // time spent just doing MPI tests.
+        YaskTimer halo_time;    // time spent in halo exchange.
+        YaskTimer halo_pack_time;     // time spent on packing in halo exchange.
+        YaskTimer halo_unpack_time; // time spent on unpacking in halo exchange.
+        YaskTimer halo_copy_time;   // time spent on copying buffers in halo exchange.
+        YaskTimer halo_wait_time;     // time spent on MPI waits in halo exchange.
+        YaskTimer halo_test_time;     // time spent on MPI tests for halo exchange.
         idx_t steps_done = 0;   // number of steps that have been run.
 
         // Maximum halos, skewing angles, and work extensions over all vars
