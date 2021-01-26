@@ -59,8 +59,11 @@ namespace yask {
         static bool _trace;
 
         // OMP offload devices.
+        static bool _use_offload;
+        #ifdef USE_OFFLOAD
         static int _omp_hostn;
         static int _omp_devn;
+        #endif
 
         // MPI vars.
         MPI_Comm comm = MPI_COMM_NULL; // global communicator.
@@ -209,7 +212,7 @@ namespace yask {
         IdxTuple _rank_indices;    // my rank index in each dim.
         bool find_loc = true;      // whether my rank index needs to be calculated.
         bool overlap_comms = true; // overlap comms with computation.
-        bool use_shm = true;      // use shared memory if possible.
+        bool use_shm = !KernelEnv::_use_offload;      // use shared memory if possible.
         idx_t _min_exterior = 0;   // minimum size of MPI exterior to calculate.
 
         // OpenMP settings.

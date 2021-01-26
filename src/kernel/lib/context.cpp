@@ -48,6 +48,10 @@ namespace yask {
         STATE_VARS(this);
         run_time.start();
 
+        // Disable offload.
+        bool save_offload = KernelEnv::_use_offload;
+        KernelEnv::_use_offload = false;
+
         // Determine step dir from order of first/last.
         idx_t step_dir = (last_step_index >= first_step_index) ? 1 : -1;
 
@@ -176,6 +180,10 @@ namespace yask {
         exchange_halos();
 
         run_time.stop();
+
+        // Restore offload setting.
+        KernelEnv::_use_offload = save_offload;
+
     } // run_ref.
 
     // Eval stage(s) over var(s) using optimized code.

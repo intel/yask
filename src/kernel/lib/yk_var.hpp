@@ -27,28 +27,56 @@ IN THE SOFTWARE.
 
 namespace yask {
 
-    // Underlying storage using GenericVars.
-    typedef GenericVarTyped<real_t> RealElemVar;
-    typedef GenericVarTyped<real_vec_t> RealVecVar;
+    /*
+     Rank and local offsets in domain dim:
+    
+       | ... |        +------+       |
+       |  global ofs  |      |       |
+       |<------------>| var  |       |
+       |     |  loc   |domain|       |
+       |rank |  ofs   |      |       |
+       | ofs |<------>|      |       |
+       |<--->|        +------+       |
+       ^     ^        ^              ^
+       |     |        |              last rank-domain index
+       |     |        0 index in underlying storage.
+       |     first rank-domain index
+       first overall-domain index
+      
+       Rank offset is not necessarily a vector multiple.
+       Local offset must be a vector multiple.
 
-    // Rank and local offsets in domain dim:
-    //
-    // | ... |        +------+       |
-    // |  global ofs  |      |       |
-    // |<------------>| var  |       |
-    // |     |  loc   |domain|       |
-    // |rank |  ofs   |      |       |
-    // | ofs |<------>|      |       |
-    // |<--->|        +------+       |
-    // ^     ^        ^              ^
-    // |     |        |              last rank-domain index
-    // |     |        0 index in underlying storage.
-    // |     first rank-domain index
-    // first overall-domain index
-    //
-    // Rank offset is not necessarily a vector multiple.
-    // Local offset must be a vector multiple.
+     OOD:                                                        yk_var (API)
+                                                                    ^
+                                                                    |
+                YkVarBaseCore <---ptr------- YkVarBase <--sh_ptr-- YkVarImpl
+                  ^    ^                      ^   ^  |
+                  |    |                      |   |  +------------+
+       YkElemVarCore  YkVecVarCore     YkElemVar  YkVecVar        |
+         |     ^           ^    |          |        |             |
+         |     |           |    |          |        |             |
+         |     |           +------ptr----- | -------+             |
+         |     +--------------------ptr----+                      |
+         |                      |                                 |
+       has-a                  has-a                               |
+         |                      |                                 |
+         v                      v                                 |
+    +> GenericVarCore<real_t>   GenericVarCore<real_vec_t> <-+    |
+    |     _elems ptr              _elems ptr                 |    |
+    |                                                        |    |
+    |                                                        |    |
+    |                    GenericVarBase <-------------ptr---------+
+    ptr                    ^      ^  _base ptr               |
+    |                      |      |                          ptr
+    |  GenericVarTyped<real_t>  GenericVarTyped<real_vec_t>  |
+    |    ^                        ^                          |
+    |    |                        |                          |
+    +- GenericVar<real_t>       GenericVar<real_vec_t> ------+
 
+       "Core" types are non-virtual and can be trivially copied, e.g.,
+       to an offload device; others are virtual and cannot.
+    */
+    
     ///// Yk*Var*Core types /////
     OMP_DECL_TARGET
     
@@ -412,6 +440,7 @@ namespace yask {
 
     // Base class implementing all yk_var functionality. Used for
     // vars that contain either individual elements or vectors.
+    // This class is pure virtual.
     class YkVarBase :
         public KernelStateBase {
         friend class YkVarImpl;
@@ -502,6 +531,8 @@ namespace yask {
         virtual const GenericVarBase* get_gvbp() const =0;
 
         // Sync core on device.
+        // Does NOT sync underlying var data; see
+        // copy_data_{to,from}_device().
         virtual void sync_core() =0;
         
         // Ctor.
@@ -585,7 +616,8 @@ namespace yask {
             return get_gvbp()->set_storage(base, offset);
         };
 
-        // Num dims.
+        // Num dims in this var.
+        // Not necessarily same as stencil problem.
         inline int get_num_dims() const {
             return _corep->_domains._get_num_dims();
         }
@@ -725,24 +757,29 @@ namespace yask {
         virtual void set_all_elements_same(double seed) =0;
 
         // Set/get_elements_in_slice().
-        virtual idx_t set_elements_in_slice_same(double val,
-                                                 const Indices& first_indices,
-                                                 const Indices& last_indices,
-                                                 bool strict_indices);
-        virtual idx_t set_elements_in_slice(const void* buffer_ptr,
-                                            const Indices& first_indices,
-                                            const Indices& last_indices);
-        virtual idx_t get_elements_in_slice(void* buffer_ptr,
-                                            const Indices& first_indices,
-                                            const Indices& last_indices) const;
+        idx_t set_elements_in_slice_same(double val,
+                                         const Indices& first_indices,
+                                         const Indices& last_indices,
+                                         bool strict_indices,
+                                         bool on_device);
+        idx_t set_elements_in_slice(const void* buffer_ptr,
+                                    const Indices& first_indices,
+                                    const Indices& last_indices,
+                                    bool on_device);
+        idx_t get_elements_in_slice(void* buffer_ptr,
+                                    const Indices& first_indices,
+                                    const Indices& last_indices,
+                                    bool on_device) const;
 
         // Possibly vectorized version of set/get_elements_in_slice().
         virtual idx_t set_vecs_in_slice(const void* buffer_ptr,
                                         const Indices& first_indices,
-                                        const Indices& last_indices) =0;
+                                        const Indices& last_indices,
+                                        bool on_device) =0;
         virtual idx_t get_vecs_in_slice(void* buffer_ptr,
                                         const Indices& first_indices,
-                                        const Indices& last_indices) const =0;
+                                        const Indices& last_indices,
+                                        bool on_device) const =0;
 
         // Get a pointer to one element.
         // Indices are relative to overall problem domain.
@@ -784,6 +821,124 @@ namespace yask {
             #endif
         }
 
+    protected:
+        // Templated method to visit points in a slice.
+        // Visitor should implement the following:
+        //  static const char* fname();  // name of calling function.
+        //  static void visit(YkVarBase* varp,  // 'this' ptr.
+        //                    real_t* p,  // copy of 'buffer_ptr'.
+        //                    idx_t pofs, // offset into buffer.
+        //                    const Indices& pt, // point in 'this' var.
+        //                    idx_t ti);  // precomputed step index.
+        template<typename Visitor>
+        idx_t _visit_elements_in_slice(bool strict_indices,
+                                       void* buffer_ptr,
+                                       const Indices& first_indices,
+                                       const Indices& last_indices,
+                                       bool on_device) {
+            STATE_VARS(this);
+            if (get_storage() == 0) {
+                if (strict_indices)
+                    THROW_YASK_EXCEPTION(std::string("Error: call to '") +
+                                         Visitor::fname() +
+                                         "' with no storage allocated for var '" +
+                                         get_name() + "'");
+                return 0;
+            }
+
+            TRACE_MSG(Visitor::fname() << ": " << make_info_string() << " [" <<
+                      make_index_string(first_indices) << " ... " <<
+                      make_index_string(last_indices) << "] with buffer at " <<
+                      buffer_ptr << " on " << (on_device ? "OMP device" : "host"));
+            check_indices(first_indices, Visitor::fname(), strict_indices, true, false);
+            check_indices(last_indices, Visitor::fname(), strict_indices, true, false);
+
+            // Find range.
+            auto range = get_slice_range(first_indices, last_indices);
+            auto ne = range.product();
+            TRACE_MSG(Visitor::fname() << ": " << ne << " element(s) in shape " <<
+                      make_index_string(range));
+            if (ne <= 0)
+                return 0;
+
+            // Iterate through step index in outer loop.
+            // This avoids calling _wrap_step(t) at every point.
+            const auto sp = +step_posn;
+            idx_t first_t = 0, last_t = 0;
+            if (_has_step_dim) {
+                first_t = first_indices[sp];
+                last_t = last_indices[sp];
+                range[sp] = 1; // Do one step per iter.
+            }
+
+            // Amount to advance pointer each step.
+            idx_t tsz = range.product();
+            idx_t tofs = 0;
+            TRACE_MSG(Visitor::fname() << ": " << tsz << " element(s) in shape " <<
+                      make_index_string(range) << " for each step");
+            
+            // Iterate through inner index in inner loop.
+            // This enables more optimization.
+            const auto ip = get_num_dims() - 1;
+            idx_t ni = range[ip];
+            range[ip] = 1; // Do whole range in each iter.
+            TRACE_MSG(Visitor::fname() << ": " << ni <<
+                      " element(s) for each starting-point in shape " <<
+                      make_index_string(range) << " for each inner loop");
+
+            // Make copy of first_indices to use as starting point
+            // of each step.
+            auto start_indices(first_indices);
+
+            // Outer loop through each step.
+            for (idx_t t = first_t; t <= last_t; t++) {
+
+                // Do only this one step in this iteration.
+                idx_t ti = 0;
+                if (_has_step_dim) {
+                    ti = _wrap_step(t);
+                    start_indices[sp] = t;
+                }
+  
+                // Visit points in slice on host in parallel.
+                if (!on_device) {
+                    range.visit_all_points_in_parallel
+                        (false,
+                         [&](const Indices& ofs, size_t idx) {
+                             auto pt = start_indices.add_elements(ofs);
+
+                             // Inner loop.
+                             for (idx_t i = 0; i < ni; i++) {
+                                 idx_t bofs = tofs + idx * ni + i;
+                                 #if 0
+                                 TRACE_MSG(Visitor::fname() << ": visting pt " <<
+                                           make_index_string(pt) << " w/buf ofs " << bofs);
+                                 #endif
+                             
+                                 // Call visitor.
+                                 Visitor::visit(this, (real_t*)buffer_ptr, bofs, pt, ti);
+                                 pt[ip]++;
+                             }
+
+                             return true;    // keep going.
+                         });
+                }
+        
+                // Visit points in slice on device.
+                else {
+                    THROW_YASK_EXCEPTION(std::string("Internal error: '") +
+                                         Visitor::fname() + "' for var '" +
+                                         get_name() + "' not implemented for offload device");
+                }
+
+                // Skip to next step in buffer.
+                tofs += tsz;
+
+            } // steps.
+            TRACE_MSG(Visitor::fname() << " returns " << ne);
+            return ne;
+        }
+        
     };
     typedef std::shared_ptr<YkVarBase> VarBasePtr;
 
@@ -820,7 +975,8 @@ namespace yask {
         }
 
         // Sync core meta-data on device.
-        // Does NOT sync underlying var data.
+        // Does NOT sync underlying var data; see
+        // copy_data_{to,from}_device().
         void sync_core() override {
             STATE_VARS(this);
             auto* var_cp = &_core;
@@ -905,7 +1061,7 @@ namespace yask {
             print_elem("read_elem", idxs, e, line);
             #endif
             return e;
-       }
+        }
 
         // Write one element.
         // Indices are relative to overall problem domain.
@@ -922,13 +1078,17 @@ namespace yask {
         // Non-vectorized fall-back versions.
         virtual idx_t set_vecs_in_slice(const void* buffer_ptr,
                                         const Indices& first_indices,
-                                        const Indices& last_indices) override {
-            return set_elements_in_slice(buffer_ptr, first_indices, last_indices);
+                                        const Indices& last_indices,
+                                        bool on_device) override {
+            return set_elements_in_slice(buffer_ptr,
+                                         first_indices, last_indices, on_device);
         }
         virtual idx_t get_vecs_in_slice(void* buffer_ptr,
                                         const Indices& first_indices,
-                                        const Indices& last_indices) const override {
-            return get_elements_in_slice(buffer_ptr, first_indices, last_indices);
+                                        const Indices& last_indices,
+                                        bool on_device) const override {
+            return get_elements_in_slice(buffer_ptr,
+                                         first_indices, last_indices, on_device);
         }
     };                          // YkElemVar.
 
@@ -955,8 +1115,8 @@ namespace yask {
 
         // Storage meta-data.
         // Owned here via composition.
-         // This contains a pointer to _core._data.
-       GenericVar<real_vec_t, LayoutFn> _data;
+        // This contains a pointer to _core._data.
+        GenericVar<real_vec_t, LayoutFn> _data;
 
         // Accessors to GenericVar.
         virtual GenericVarBase* get_gvbp() override final {
@@ -967,7 +1127,8 @@ namespace yask {
         }
 
         // Sync core on device.
-        // Does NOT sync data.
+        // Does NOT sync underlying var data; see
+        // copy_data_{to,from}_device().
         void sync_core() override {
             STATE_VARS(this);
             auto* var_cp = &_core;
@@ -1093,7 +1254,7 @@ namespace yask {
              #ifdef TRACE_MEM
             print_elem("write_elem", idxs, val, line);
             #endif
-       }
+        }
 
         // Get a pointer to given vector.
         // Indices must be normalized and rank-relative.
@@ -1138,130 +1299,210 @@ namespace yask {
             #endif
         }
 
-        // Vectorized version of set_elements_in_slice().
+    private:
+        // Template for get/set_vecs_in_slice.
         // Input indices are global and element granularity (not rank-local or normalized).
-        virtual idx_t set_vecs_in_slice(const void* buffer_ptr,
-                                        const Indices& first_indices,
-                                        const Indices& last_indices) override {
+        // This is similar to but simpler than _visit_elements_in_slice().
+        template<typename Visitor>
+        idx_t _copy_vecs_in_slice(void* buffer_ptr,
+                                  const Indices& first_indices,
+                                  const Indices& last_indices,
+                                  bool on_device) {
             STATE_VARS(this);
-            if (_data.get_storage() == 0)
-                return 0;
+            assert(_data.get_storage() != 0);
+
+            // Use the core for efficiency and to allow offload.
+            core_t* core_p = &_core;
+            
+            #ifdef USE_OFFLOAD
+            auto devn = KernelEnv::_omp_devn;
+            if (on_device) {
+
+                // 'buffer_ptr' and 'core_p' should exist on device.
+                assert(omp_target_is_present(buffer_ptr, devn));
+                assert(omp_target_is_present(core_p, devn));
+            }
+            #endif
+            
             Indices firstv, lastv;
-            check_indices(first_indices, "set_vecs_in_slice", true, false, true, &firstv);
-            check_indices(last_indices, "set_vecs_in_slice", true, false, true, &lastv);
+            check_indices(first_indices, "copy_vecs_in_slice", true, false, true, &firstv);
+            check_indices(last_indices, "copy_vecs_in_slice", true, false, true, &lastv);
 
             // Find range.
-            auto num_vecs = get_slice_range(firstv, lastv);
-            TRACE_MSG("set_vecs_in_slice: setting " <<
-                      num_vecs.make_dim_val_str(domain_dims, " * ") <<
-                      " vecs at [" <<
+            auto vec_range = get_slice_range(firstv, lastv);
+            auto nv = vec_range.product() * VLEN;
+            TRACE_MSG("copy_vecs_in_slice: " << nv << " vec(s) in " <<
+                      make_info_string() << " [" <<
                       make_index_string(firstv) << " ... " <<
-                      make_index_string(lastv) << "]");
+                      make_index_string(lastv) << "] with buffer at " <<
+                      buffer_ptr << " on " << (on_device ? "OMP device" : "host"));
+            if (nv < 1)
+                return 0;
 
-            // Do step loop explicitly.
+            // Iterate through step index in outer loop.
+            // This avoids calling _wrap_step(t) at every point.
             auto sp = +step_posn;
             idx_t first_t = 0, last_t = 0;
             if (_has_step_dim) {
                 first_t = firstv[sp];
                 last_t = lastv[sp];
-                num_vecs[sp] = 1; // Do one at a time.
+                vec_range[sp] = 1; // Do one step per iter.
             }
-            idx_t iofs = 0;
+
+            // Amount to advance pointer each step.
+            idx_t tsz = vec_range.product();
+            idx_t tofs = 0;
+
+            // Iterate through inner index in inner loop.
+            // This enables more optimization.
+            const auto ip = get_num_dims() - 1;
+            idx_t ni = vec_range[ip];
+            vec_range[ip] = 1; // Do whole range in each iter.
+
+            // Outer loop through each step.
             for (idx_t t = first_t; t <= last_t; t++) {
 
-                // Do only this one step in this iteration.
+                // Do only step 't' in this iteration.
                 idx_t ti = 0;
                 if (_has_step_dim) {
                     ti = _wrap_step(t);
                     firstv[sp] = t;
-                    lastv[sp] = t;
                 }
 
-                // Visit points in slice.
-                num_vecs.visit_all_points_in_parallel
+                if (on_device) {
+                    #ifdef USE_OFFLOAD
+                    auto nj = vec_range.product();
+                    Indices ofs(vec_range);
+                    ofs.set_vals_same(0);
+                    Indices pt(ofs);
+
+                    // TODO: move target parallel up to this level.
+                    for (idx_t j = 0; j < nj; j++) {
+                        pt = firstv.add_elements(ofs);
+
+                        #if 0
+                        TRACE_MSG("copy starting at " << pt.make_val_str() <<
+                                " and buf ofs " << (tofs + j * ni));
+                        #endif
+                        _Pragma("omp target teams distribute parallel for firstprivate(pt) device(devn)")
+                            for (idx_t i = 0; i < ni; i++) {
+                                idx_t bofs = tofs + j * ni + i;
+                                pt[ip] = firstv[ip] + ofs[ip] + i;
+                         
+                                // Do the copy operation specified in visitor.
+                                #if 0
+                                TRACE_MSG(" copying at " << pt.make_val_str() <<
+                                          " and buf ofs " << bofs << " on thread " <<
+                                          omp_get_thread_num());
+                                #endif
+                                Visitor::do_copy(core_p,
+                                                 ((real_vec_t*)buffer_ptr), bofs,
+                                                 pt, ti);
+                                //pt[ip]++;
+                            }
+                        
+                        // Jump to next index.
+                        vec_range.next_index(false, ofs);
+                    }
+                    #else
+                    THROW_YASK_EXCEPTION("internal error: call to _copy_vecs_in_slice on device"
+                                         " in non-offload build");
+                    #endif
+                }
+
+                // Visit starting points in range on host in parallel.
+                else {
+                vec_range.visit_all_points_in_parallel
                     (false,
                      [&](const Indices& ofs, size_t idx) {
                          auto pt = firstv.add_elements(ofs);
-
-                         // Read vec from buffer at proper index.
-                         real_vec_t val = ((real_vec_t*)buffer_ptr)[idx + iofs];
-
-                         // Write to var.
-                         write_vec_norm(val, pt, ti, __LINE__);
+                         
+                         // Inner loop.
+                         for (idx_t i = 0; i < ni; i++) {
+                             idx_t bofs = tofs + idx * ni + i;
+                             
+                             // Do the copy operation specified in visitor.
+                             Visitor::do_copy(core_p,
+                                              ((real_vec_t*)buffer_ptr), bofs,
+                                              pt, ti);
+                             pt[ip]++;
+                         }
                          return true;    // keep going.
                      });
+                }
 
                 // Skip to next step in buffer.
-                iofs += num_vecs.product();
-            }
+                tofs += tsz;
+                
+            } // time steps.
+
+            assert(tofs * VLEN == nv);
+            return nv;
+        }
+
+    public:
+        // Vectorized version of set_elements_in_slice().
+        // Input indices are global and element granularity (not rank-local or normalized).
+        virtual idx_t set_vecs_in_slice(const void* buffer_ptr,
+                                        const Indices& first_indices,
+                                        const Indices& last_indices,
+                                        bool on_device = false) override {
+
+            // Specialize do_copy() to copy from buffer to var.
+            // Could have used a lambda, but this avoids possible conversion to std::function.
+            struct SetVec {
+                ALWAYS_INLINE
+                static void do_copy(core_t* cp,
+                                    real_vec_t* p, idx_t pofs,
+                                    const Indices& pt, idx_t ti) {
+                    
+                    // Read vec from buffer.
+                    real_vec_t val = p[pofs];
+                    
+                    // Write to var.
+                    cp->write_vec_norm(val, pt, ti);
+                }
+            };
+
+            // Call the generic vec copier.
+            auto nset = _copy_vecs_in_slice<SetVec>((void*)buffer_ptr,
+                                                    first_indices, last_indices,
+                                                    on_device);
 
             // Set appropriate dirty flag(s).
             set_dirty_in_slice(first_indices, last_indices);
 
-            return num_vecs.product() * VLEN;
+            return nset;
         }
 
         // Vectorized version of get_elements_in_slice().
         // Input indices are global and element granularity (not rank-local or normalized).
         virtual idx_t get_vecs_in_slice(void* buffer_ptr,
                                         const Indices& first_indices,
-                                        const Indices& last_indices) const override final {
-            STATE_VARS(this);
-            if (_data.get_storage() == 0)
-                FORMAT_AND_THROW_YASK_EXCEPTION("Error: call to 'get_vecs_in_slice' with"
-                                                " no storage allocated for var '" <<
-                                                _data.get_name());
-            Indices firstv, lastv;
-            check_indices(first_indices, "get_vecs_in_slice", true, true, true, &firstv);
-            check_indices(last_indices, "get_vecs_in_slice", true, true, true, &lastv);
+                                        const Indices& last_indices,
+                                        bool on_device) const override final {
 
-            // Find range.
-            auto num_vecs = get_slice_range(firstv, lastv);
-            TRACE_MSG("get_vecs_in_slice: getting " <<
-                      num_vecs.make_dim_val_str(domain_dims, " * ") <<
-                      " vecs at " <<
-                      make_index_string(firstv) << " ... " <<
-                      make_index_string(lastv));
-            auto n = num_vecs.product() * VLEN;
+            // Specialize do_copy() to copy to buffer from var.
+            // Could have used a lambda, but this avoids possible conversion to std::function.
+            struct GetVec {
+                ALWAYS_INLINE
+                static void do_copy(core_t* cp,
+                                    real_vec_t* p, idx_t pofs,
+                                    const Indices& pt, idx_t ti) {
 
-            // Do step loop explicitly.
-            auto sp = +step_posn;
-            idx_t first_t = 0, last_t = 0;
-            if (_has_step_dim) {
-                first_t = firstv[sp];
-                last_t = lastv[sp];
-                num_vecs[sp] = 1; // Do one at a time.
-            }
-            idx_t iofs = 0;
-            for (idx_t t = first_t; t <= last_t; t++) {
+                    // Read vec from var.
+                    real_vec_t val = cp->read_vec_norm(pt, ti);
 
-                // Do only this one step in this iteration.
-                idx_t ti = 0;
-                if (_has_step_dim) {
-                    ti = _wrap_step(t);
-                    firstv[sp] = t;
-                    lastv[sp] = t;
+                    // Write to buffer at proper index.
+                    p[pofs] = val;
                 }
+            };
 
-                // Visit points in slice.
-                num_vecs.visit_all_points_in_parallel
-                    (false,
-                     [&](const Indices& ofs, size_t idx) {
-                         Indices pt = firstv.add_elements(ofs);
-
-                         // Read vec from var.
-                         real_vec_t val = read_vec_norm(pt, ti, __LINE__);
-
-                         // Write to buffer at proper index.
-                         ((real_vec_t*)buffer_ptr)[idx + iofs] = val;
-                         return true;    // keep going.
-                     });
-
-                // Skip to next step in buffer.
-                iofs += num_vecs.product();
-            }
-            assert(iofs * VLEN == n);
-
+            // Call the generic vec copier.
+            auto n = const_cast<YkVecVar*>(this)->
+                _copy_vecs_in_slice<GetVec>((void*)buffer_ptr,
+                                            first_indices, last_indices, on_device);
+            
             // Return number of writes.
             return n;
         }
@@ -1309,13 +1550,17 @@ namespace yask {
         }
         idx_t set_vecs_in_slice(const void* buffer_ptr,
                                 const Indices& first_indices,
-                                const Indices& last_indices) {
-            return gb().set_vecs_in_slice(buffer_ptr, first_indices, last_indices);
+                                const Indices& last_indices,
+                                bool on_device) {
+            return gb().set_vecs_in_slice(buffer_ptr,
+                                          first_indices, last_indices, on_device);
         }
         idx_t get_vecs_in_slice(void* buffer_ptr,
                                 const Indices& first_indices,
-                                const Indices& last_indices) const {
-            return gb().get_vecs_in_slice(buffer_ptr, first_indices, last_indices);
+                                const Indices& last_indices,
+                                bool on_device) const {
+            return gb().get_vecs_in_slice(buffer_ptr,
+                                          first_indices, last_indices, on_device);
         }
         void resize() {
             gb().resize();
@@ -1480,15 +1725,18 @@ namespace yask {
         }
         virtual idx_t get_elements_in_slice(void* buffer_ptr,
                                             const Indices& first_indices,
-                                            const Indices& last_indices) const {
-            return gb().get_elements_in_slice(buffer_ptr, first_indices, last_indices);
+                                            const Indices& last_indices,
+                                            bool on_device) const {
+            return gb().get_elements_in_slice(buffer_ptr,
+                                              first_indices, last_indices, on_device);
         }
         virtual idx_t get_elements_in_slice(void* buffer_ptr,
                                             const VarIndices& first_indices,
                                             const VarIndices& last_indices) const {
             const Indices first(first_indices);
             const Indices last(last_indices);
-            return get_elements_in_slice(buffer_ptr, first, last);
+            return get_elements_in_slice(buffer_ptr,
+                                         first, last, false);
         }
         virtual idx_t set_element(double val,
                                   const Indices& indices,
@@ -1527,8 +1775,11 @@ namespace yask {
         virtual idx_t set_elements_in_slice_same(double val,
                                                  const Indices& first_indices,
                                                  const Indices& last_indices,
-                                                 bool strict_indices) {
-            return gb().set_elements_in_slice_same(val, first_indices, last_indices, strict_indices);
+                                                 bool strict_indices,
+                                                 bool on_device) {
+            return gb().set_elements_in_slice_same(val,
+                                                   first_indices, last_indices,
+                                                   strict_indices, on_device);
         }
         virtual idx_t set_elements_in_slice_same(double val,
                                                  const VarIndices& first_indices,
@@ -1536,20 +1787,22 @@ namespace yask {
                                                  bool strict_indices) {
             const Indices first(first_indices);
             const Indices last(last_indices);
-            return set_elements_in_slice_same(val, first, last, strict_indices);
+            return set_elements_in_slice_same(val, first, last, strict_indices, false);
         }
 
         virtual idx_t set_elements_in_slice(const void* buffer_ptr,
                                             const Indices& first_indices,
-                                            const Indices& last_indices) {
-            return gb().set_elements_in_slice(buffer_ptr, first_indices, last_indices);
+                                            const Indices& last_indices,
+                                            bool on_device) {
+            return gb().set_elements_in_slice(buffer_ptr,
+                                              first_indices, last_indices, on_device);
         }
         virtual idx_t set_elements_in_slice(const void* buffer_ptr,
                                             const VarIndices& first_indices,
                                             const VarIndices& last_indices) {
             const Indices first(first_indices);
             const Indices last(last_indices);
-            return set_elements_in_slice(buffer_ptr, first, last);
+            return set_elements_in_slice(buffer_ptr, first, last, false);
         }
 
         virtual void alloc_storage() {

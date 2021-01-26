@@ -142,7 +142,7 @@ namespace yask {
 
         // Run a dummy nested OMP loop to make sure nested threading is
         // initialized.
-        yask_parallel_for(0, rthreads * 100, 1,
+        yask_parallel_for(0, rthreads * 10, 1,
                           [&](idx_t start, idx_t stop, idx_t thread_num) { });
 
         // Some var stats.
@@ -204,21 +204,24 @@ namespace yask {
     void StencilContext::print_warnings() const {
         STATE_VARS(this);
 #ifdef CHECK
-        DEBUG_MSG("*** WARNING: YASK compiled with CHECK; ignore performance results.");
+        DEBUG_MSG("*** WARNING: YASK compiled with CHECK; ignore performance.");
 #endif
 #if defined(NO_INTRINSICS) && (VLEN > 1)
-        DEBUG_MSG("*** WARNING: YASK compiled with NO_INTRINSICS; ignore performance results.");
+        DEBUG_MSG("*** WARNING: YASK compiled with NO_INTRINSICS; ignore performance.");
 #endif
 #ifdef MODEL_CACHE
-        DEBUG_MSG("*** WARNING: YASK compiled with MODEL_CACHE; ignore performance results.");
+        DEBUG_MSG("*** WARNING: YASK compiled with MODEL_CACHE; ignore performance.");
 #endif
 #ifdef TRACE_MEM
-        DEBUG_MSG("*** WARNING: YASK compiled with TRACE_MEM; ignore performance results.");
+        DEBUG_MSG("*** WARNING: YASK compiled with TRACE_MEM; ignore performance.");
 #endif
 #ifdef TRACE_INTRINSICS
-        DEBUG_MSG("*** WARNING: YASK compiled with TRACE_INTRINSICS; ignore performance results.");
+        DEBUG_MSG("*** WARNING: YASK compiled with TRACE_INTRINSICS; ignore performance.");
 #endif
         TRACE_MSG("***  WARNING: YASK run with -trace; ignore performance results");
+#ifdef NO_HALO_EXCHANGE
+        DEBUG_MSG("*** WARNING: YASK compiled with NO_HALO_EXCHANGE; ignore performance and results.");
+#endif
     }
 
     void StencilContext::print_temporal_tiling_info() const {

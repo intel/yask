@@ -62,8 +62,13 @@ namespace yask {
     bool KernelEnv::_trace = false;
 
     // OMP offload devices.
+    #ifdef USE_OFFLOAD
+    bool KernelEnv::_use_offload = true;
     int KernelEnv::_omp_hostn = 0;
     int KernelEnv::_omp_devn = 0;
+    #else
+    bool KernelEnv::_use_offload = false;
+    #endif
 
     // Debug APIs.
     yask_output_ptr yk_env::get_debug_output() {
@@ -317,7 +322,8 @@ namespace yask {
 #endif
         parser.add_option(new CommandLineParser::BoolOption
                           ("force_scalar",
-                           "[Advanced] Evaluate every var point with scalar stencil operations (for debug).",
+                           "[Advanced] Evaluate every var point with scalar stencil operations "
+                           "and exchange halos using only scalar packing and unpacking (for debug).",
                            force_scalar));
         parser.add_option(new CommandLineParser::IntOption
                           ("max_threads",

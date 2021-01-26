@@ -52,6 +52,7 @@ void run_tests(int argc, char* argv[]) {
     // TODO: do everything through API without cast to StencilContext.
     auto ksoln = kfac.new_solution(kenv);
     ksoln->apply_command_line_options(argc, argv);
+    auto ebytes = ksoln->get_element_bytes();
     auto context = dynamic_pointer_cast<StencilContext>(ksoln);
     assert(context.get());
     ostream& os = kenv->get_debug_output()->get_ostream();
@@ -65,7 +66,7 @@ void run_tests(int argc, char* argv[]) {
     // Set domain size.
     int i = 0;
     for (auto dname : ksoln->get_domain_dim_names()) {
-        ksoln->set_rank_domain_size(dname, 19 + i * 3);
+        ksoln->set_rank_domain_size(dname, 13 + i * 2);
         i++;
     }
 
@@ -73,6 +74,8 @@ void run_tests(int argc, char* argv[]) {
     {
         os << "0-D test...\n";
         VarDimNames gdims;
+
+        // Make two scalar vars.
         auto gb0 = make_shared<YkElemVar<Layout_0d, false>>(*context, "var1", gdims);
         YkVarPtr g0 = make_shared<YkVarImpl>(gb0);
         g0->alloc_storage();
@@ -96,12 +99,18 @@ void run_tests(int argc, char* argv[]) {
     {
         os << "3-D test...\n";
         VarDimNames gdims = {"x", "y", "z"};
+
+        // Make two 3D vars w/different layouts.
+        // An element-storage var.
         auto gb3 = make_shared<YkElemVar<Layout_321, false>>(*context, "var3", gdims);
         YkVarPtr g3 = make_shared<YkVarImpl>(gb3);
+
+        // A vec-storage var (folded).
         auto gb3f = make_shared<YkVecVar<Layout_123, false, VLEN_X, VLEN_Y, VLEN_Z>>(*context, "var4", gdims);
         YkVarPtr g3f = make_shared<YkVarImpl>(gb3f);
+
         int i = 0;
-        int min_pad = 3;
+        int min_pad = 1;
         for (auto dname : gdims) {
             g3->_set_domain_size(dname, ksoln->get_rank_domain_size(dname));
             g3->set_min_pad_size(dname, min_pad + i);
@@ -111,33 +120,124 @@ void run_tests(int argc, char* argv[]) {
         }
         g3->alloc_storage();
         g3f->alloc_storage();
-
-        os << "Copying seq of vals\n";
-        gb3->set_all_elements_in_seq(1.0);
         auto sizes = gb3->get_allocs();
-        sizes.visit_all_points_in_parallel([&](const IdxTuple& pt,
-                                           size_t idx) {
-                IdxTuple pt2 = pt;
-                for (auto dname : gdims)
-                    pt2[dname] += g3->get_first_rank_alloc_index(dname);
-                Indices ipt(pt2);
-                auto val = gb3->read_elem(ipt, 0, __LINE__);
-                gb3f->write_elem(val, ipt, 0, __LINE__);
-                return true;
-            });
-        os << "Checking seq of vals\n";
-        sizes.visit_all_points([&](const IdxTuple& pt,
-                                 size_t idx) {
-                IdxTuple pt2 = pt;
-                for (auto dname : gdims)
-                    pt2[dname] += g3->get_first_rank_alloc_index(dname);
-                Indices ipt(pt2);
-                ipt.add_const(-min_pad);
-                auto val = gb3->read_elem(ipt, 0, __LINE__);
-                auto valf = gb3f->read_elem(ipt, 0, __LINE__);
-                assert(val == valf);
-                return true;
-            });
+        auto sizesf = gb3f->get_allocs();
+
+        // gf3 may be larger because of folding.
+        assert(sizes <= sizesf);
+
+        os << "Setting vals in " << gb3->get_name() << endl;
+        gb3->set_all_elements_in_seq(1.0);
+
+        IdxTuple first, last;
+        for (auto dname : gdims) {
+            first.add_dim_back(dname, g3->get_first_rank_alloc_index(dname));
+            last.add_dim_back(dname, g3->get_last_rank_alloc_index(dname));
+        }
+        Indices firsti(first), lasti(last);
+
+        size_t sz = g3f->get_num_storage_bytes();
+        char* buf = new char[sz];
+        offload_map_alloc(buf, sz);
+                          
+        bool done = false;
+        for (int testn = 0; !done; testn++) {
+
+            // Fill w/bad values.
+            gb3f->set_all_elements_same(-1.0);
+            gb3f->copy_data_to_device();
+
+            os << testn << ". copying seq of vals to " << gb3f->get_name() << endl;
+            switch (testn) {
+
+            case 0: {
+                os << " element-by-element in parallel on host...\n";
+                sizes.visit_all_points_in_parallel
+                    ( [&](const IdxTuple& pt,
+                          size_t idx) {
+                          IdxTuple pt2 = pt;
+                          for (auto dname : gdims)
+                              pt2[dname] += first[dname];
+                          Indices ipt(pt2);
+                          auto val = gb3->read_elem(ipt, 0, __LINE__);
+                          gb3f->write_elem(val, ipt, 0, __LINE__);
+                          return true;
+                      });
+                break;
+            }
+
+            case 1: {
+                os << " by slice on host...\n";
+                auto n = gb3->get_elements_in_slice(buf, firsti, lasti, false);
+                assert(n);
+                gb3f->set_elements_in_slice(buf, firsti, lasti, false);
+                break;
+            }
+                
+                #ifdef USE_OFFLOAD
+            case 2: {
+                os << " by slice then copy to/from device...\n";
+                gb3->get_elements_in_slice(buf, firsti, lasti, false);
+                gb3f->set_elements_in_slice(buf, firsti, lasti, false);
+                gb3f->copy_data_to_device();
+                gb3f->set_all_elements_same(-2.0);
+                gb3f->copy_data_from_device();
+                break;
+            }
+            case 3: {
+                os << " by slice on device...\n";
+                assert(VLEN_X * VLEN_Y * VLEN_Z == 1);
+
+                // Copy from var to buffer on host.
+                gb3->get_elements_in_slice(buf, firsti, lasti, false);
+
+                // Copy buffer to dev.
+                offload_copy_to_device(buf, sz);
+
+                // Copy from buffer to var on dev.
+                gb3f->set_vecs_in_slice(buf, firsti, lasti, true);
+
+                // Copy var back to host.
+                gb3f->copy_data_from_device();
+                break;
+            }
+                #endif
+
+            default:
+                done = true;
+            }
+
+            if (!done) {
+                os << "Checking vals...\n";
+                idx_t nbad = 0;
+                idx_t max_bad = 50;
+                sizes.visit_all_points
+                    ([&](const IdxTuple& pt,
+                         size_t idx) {
+                         IdxTuple pt2 = pt;
+                         for (auto dname : gdims)
+                             pt2[dname] += first[dname];
+                         Indices ipt(pt2);
+                         ipt.add_const(-min_pad);
+                         auto val = gb3->read_elem(ipt, 0, __LINE__);
+                         auto valf = gb3f->read_elem(ipt, 0, __LINE__);
+                         if (val != valf) {
+                             if (nbad < max_bad)
+                                 os << "*** error: value at " << ipt.make_val_str() <<
+                                     " is " << valf << "; expected " << val << endl;
+                             else if (nbad == max_bad)
+                                 os << "Additional errors not printed.\n";
+                             nbad++;
+                         }
+                         return true;
+                     });
+                os << " done checking\n";
+                if (nbad)
+                    exit(1);
+            }
+        }
+        delete[] buf;
+        offload_map_free(buf, sz);
         os << "Exiting 3-D test\n";
     }
 }

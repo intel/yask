@@ -366,7 +366,7 @@ namespace yask {
             // Set OMP loop to offload or disable OMP.
             #ifdef USE_OFFLOAD
             #define OMP_PRAGMA \
-                _Pragma("omp target parallel for device(KernelEnv::_omp_devn) schedule(static,1)")
+                _Pragma("omp target teams distribute parallel for device(KernelEnv::_omp_devn) schedule(static,1)")
             #else
             #define OMP_PRAGMA
             #endif
@@ -475,7 +475,7 @@ namespace yask {
             // Adjust indices to be rank-relative.
             // Determine the subset of this sub-block that is
             // clusters, vectors, and partial vectors.
-            DOMAIN_VAR_LOOP_FAST(i, j) {
+            DOMAIN_VAR_LOOP(i, j) {
 
                 // Rank offset.
                 auto rofs = _context->rank_domain_offsets[j];

@@ -24,6 +24,7 @@ IN THE SOFTWARE.
 *****************************************************************************/
 
 // This file defines a union to use for optionally-folded vectors of floats or doubles.
+// It uses a macro scheme to generate intrinsic calls for various SIMD lengths and precisions.
 
 #pragma once
 
@@ -142,10 +143,10 @@ namespace yask {
         for (int i=0; i<VLEN; i++)
     #else
     #define REAL_VEC_LOOP(i)                    \
-        _VEC_ALIGNED _VEC_ALWAYS _SIMD          \
+        _SIMD _VEC_ALIGNED _VEC_ALWAYS          \
         for (int i=0; i<VLEN; i++)
     #define REAL_VEC_LOOP_UNALIGNED(i)          \
-        _VEC_UNALIGNED _VEC_ALWAYS _SIMD        \
+        _SIMD _VEC_UNALIGNED _VEC_ALWAYS        \
         for (int i=0; i<VLEN; i++)
     #endif
 

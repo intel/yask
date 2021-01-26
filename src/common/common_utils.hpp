@@ -298,6 +298,22 @@ namespace yask {
         #endif        
     }
 
+    // Sequential version of yask_parallel_for().
+    inline void yask_for(idx_t begin, idx_t end, idx_t stride,
+                         std::function<void (idx_t start, idx_t stop,
+                                             idx_t thread_num)> visitor) {
+        if (end <= begin)
+            return;
+
+        // Canonical sequential loop.
+        for (idx_t i = begin; i < end; i += stride) {
+            idx_t stop = std::min(i + stride, end);
+            idx_t tn = omp_get_thread_num();
+            visitor(i, stop, tn);
+        }
+    }
+    
+
     // Set that retains order of things added.
     // Or, vector that allows insertion if element doesn't exist.
     template <typename T>

@@ -567,7 +567,7 @@ namespace yask {
                  // Is vectorized exchange allowed based on domain sizes?
                  // Both my rank and neighbor rank must have *all* domain sizes
                  // of vector multiples.
-                 bool vec_ok = allow_vec_exchange &&
+                 bool vec_ok = !opts->force_scalar && allow_vec_exchange &&
                      mpi_info->has_all_vlen_mults[mpi_info->my_neighbor_index] &&
                      mpi_info->has_all_vlen_mults[neigh_idx];
 
@@ -1018,7 +1018,8 @@ namespace yask {
                              if (buf.get_size() == 0)
                                  continue;
 
-                             // Don't use my mem for the recv buf if using shm.
+                             // Don't use my mem for the recv buf if using shm;
+                             // instead, we will share the neighbor's send buf.
                              bool use_mine = !(bd == MPIBufs::buf_recv && nshm_rank != MPI_PROC_NULL);
 
                              // Set storage if buffer has been allocated in pass 0.
@@ -1051,7 +1052,7 @@ namespace yask {
                                  TRACE_MSG("  MPI shm buf '" << buf.name << "' at " << rp <<
                                            " for " << make_byte_str(buf.get_bytes()));
 
-                                 // Check values written by owner rank.
+                                 // Check values written by owner rank in pass 1.
                                  assert(*((int*)rp) == nrank);
                                  if (buf.get_bytes() > sizeof(int)) // Room to mark end?
                                      assert(*((char*)rp + buf.get_bytes() - 1) == 'Z');

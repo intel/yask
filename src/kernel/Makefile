@@ -41,8 +41,8 @@ omp_par_for		?=	omp parallel for
 omp_region_schedule	?=	dynamic,1
 omp_block_schedule	?=	static,1
 omp_misc_schedule	?=	guided
-omp_target_par_for	?=	omp target parallel for device(KernelEnv::_omp_devn)
-#omp_target_par_for	?=	omp target teams distribute parallel for device(KernelEnv::_omp_devn)
+#omp_target_par_for	?=	omp target parallel for device(KernelEnv::_omp_devn)
+omp_target_par_for	?=	omp target teams distribute parallel for device(KernelEnv::_omp_devn)
 omp_target_schedule	?=	static,1
 offload			?=	0
 offload_usm		?=	0
@@ -62,11 +62,9 @@ endif
 
 # Set 'arch' to 'intel64' when OpenMP offloading to avoid intrinsics.
 # TODO: update this when OpenMP offload intrinsics are available.
-# Also turn off MPI and prefetching for now.
 ifeq ($(offload),1)
  YK_ARCH		:=	offload
  arch			:=	intel64
- mpi			:= 	0
  pfd_l1			:=	0
  pfd_l2			:=	0
 endif
@@ -159,12 +157,6 @@ $(error Internal error: arch lists are not consistent)
 
 endif # arch-specific.
 
-# Turn off prefetching at O0 or O1.
-ifneq ($(filter -O0 -O1,$(YK_CXXOPT)),)
- pfd_l1		:=	0
- pfd_l2		:=	0
-endif
-
 # Common settings.
 YASK_BASE	?=	$(abspath ../..)
 include $(YASK_BASE)/src/common/common.mk
@@ -172,6 +164,12 @@ include $(YASK_BASE)/src/common/common.mk
 # The remainder of this file specifies how to build and test the kernel.
 # Vars starting with 'YC_' apply to the stencil compiler.
 # Vars starting with 'YK_' apply to the stencil kernel.
+
+# Turn off prefetching at O0.
+ifneq ($(filter -O0,$(YK_CXXOPT)),)
+ pfd_l1		:=	0
+ pfd_l2		:=	0
+endif
 
 # Flags passed to stencil compiler.
 YC_FLAGS	:=	-stencil $(YC_STENCIL) -target $(YC_TARGET) -elem-bytes $(real_bytes)
@@ -274,42 +272,22 @@ GEN_LAYOUTS	:=	$(UTILS_BIN_DIR)/gen_layouts.pl
 VIEW_ASM	:=	$(UTILS_BIN_DIR)/view_asm.pl
 
 # Run knobs
-YK_SCRIPT_OPTS	+= "-stencil" $(YK_STENCIL) "-arch" $(YK_ARCH)
+YK_SCRIPT_FLAGS	+= "-stencil" $(YK_STENCIL) "-arch" $(YK_ARCH)
 
 # Compiler and default flags.
-ifeq ($(offload),1)
- YK_CXX		:=	icpx
-else ifeq ($(mpi),1)
- YK_CXX		:=	mpiicpc
-else
- YK_CXX		:=	icpc
-endif
+YK_CXX		:=	icpx
+MPI_CXX 	:=	mpiicpc
 YK_CXXOPT	?=	-O3
 YK_CXXDBG	?=	-g
 YK_CXXFLAGS	:=	-std=c++11 -Wall $(YK_CXXOPT) $(YK_CXXDBG)
 YK_CXXFLAGS	+=	$(addprefix -I,$(YK_INC_DIRS) $(YK_GEN_DIR))
 SWIG_CXXFLAGS	:= 	$(DBL_EPSILON_CXXFLAG)
+YK_SO_FLAGS	:=	-shared -fPIC
+OMPFLAG 	:=	-fopenmp
 
-# Linker.
-YK_LD		:=	$(YK_CXX)
+# Linker flags.
 YK_LIBS		:=	-lrt
 YK_LFLAGS	:=	-Wl,-rpath=$(LIB_OUT_DIR) -L$(LIB_OUT_DIR) -l$(YK_EXT_BASE)
-
-# Add options for OpenMP offload.
-ifeq ($(offload),1)
- MACROS		+=	USE_OFFLOAD
- OMP_TARGET	:=	spir64
- #OMP_TARGET	:=	x86_64
- OMPFLAGS	:=	-fiopenmp -fopenmp-targets=$(OMP_TARGET)
- CXX_PREFIX	:=
-else ifeq ($(omp),1)
- OMPFLAGS	:=	-fopenmp
-else
- OMPFLAGS	:=
-endif
-ifeq ($(offload_usm),1)
- MACROS		+=	USE_OFFLOAD_USM
-endif
 
 # Add options for NUMA.
 ifeq ($(numa),1)
@@ -331,7 +309,7 @@ ifneq ($(shell find /usr/include -name 'numaif.h' | wc -l),0)
  MACROS		+=	USE_NUMAIF_H
 endif
 
-endif
+endif # numa.
 
 # Add options for PMEM.
 ifeq ($(pmem),1)
@@ -361,13 +339,6 @@ ifneq ($(DEF_ARGS),)
  YK_CXXFLAGS	+=	-DDEF_ARGS='"$(DEF_ARGS)"'
 endif
 
-# MPI settings.
-ifeq ($(mpi),1)
- MACROS		+=	USE_MPI
-else
- YK_SCRIPT_OPTS	+= -ranks 1
-endif
-
 # VTUNE settings.
 ifeq ($(vtune),1)
  MACROS		+=	USE_VTUNE
@@ -394,33 +365,42 @@ ifeq ($(vtune),1)
   YK_LIBS	+=	-L$(VTUNE_DIR)/lib64
  endif
  YK_LIBS	+=	-littnotify
- YK_VTUNE_CMD	:=	echo "*** VTune command:" vtune -c hpc-performance -start-paused $(YK_SCRIPT) $(YK_SCRIPT_OPTS) "[options]"
+ YK_VTUNE_CMD	:=	echo "*** VTune command:" vtune -c hpc-performance -start-paused $(YK_SCRIPT) $(YK_SCRIPT_FLAGS) "[options]"
 endif
-
-# Options to make shared objs.
-YK_SO_OPTS	:=	-shared -fPIC
 
 # Compiler-specific settings.
 
 # Create a compiler invocation to test for macro settings.
-# Remove '-fopenmp*' because icpx tries to create '/dev/null.i'.
-YK_CXX_TEST 	:= 	$(filter-out -fopenmp%,$(YK_CXX) $(YK_CXXFLAGS) $(OMPFLAGS) $(EXTRA_YK_CXXFLAGS))
+# Use the flags defined so far.
+YK_CXX_TEST 	:= 	$(YK_CXX) $(YK_CXXFLAGS) $(EXTRA_YK_CXXFLAGS)
+cxx_is_intel_clang :=	$(call MACRO_DEF,$(YK_CXX_TEST),__INTEL_CLANG_COMPILER)
+cxx_is_clang	:=	$(call MACRO_DEF,$(YK_CXX_TEST),__clang__)
+cxx_is_intel	:=	$(call MACRO_DEF,$(YK_CXX_TEST),__INTEL_COMPILER)
+cxx_is_gnu	:= 	$(call MACRO_DEF,$(YK_CXX_TEST),__GNUC__)
 
-# Clang (LLVM-based) compiler.
-# Includes clang-based Intel compiler (icpx).
-# TODO: add separate settings for Intel icpx.
-ifeq ($(call MACRO_DEF,$(YK_CXX_TEST),__clang__),1)
+# Clang (LLVM-based) Intel compiler (icpx).
+ifeq ($(cxx_is_intel_clang),1)
  YK_CXXFLAGS	+=	$(CXX_ISA)
- YK_CXXFLAGS	+=	-Wno-unused-variable -fno-color-diagnostics
- MACROS		+=	NO_VEC
+ YK_CXXFLAGS	+=	-ansi-alias \
+			-fimf-precision=low -ffp-model=fast -fimf-domain-exclusion=none -fma
+ YK_CXXFLAGS	+=	-Wno-unknown-pragmas -Wno-unused-variable \
+			-Wno-unused-const-variable -fno-color-diagnostics
+ MACROS		+=	NO_VEC2 NO_SVML
+ OMPFLAG	:=	-fiopenmp
+
+# Clang compiler (not Intel version).
+else ifeq ($(cxx_is_clang),1)
+ YK_CXXFLAGS	+=	$(CXX_ISA)
+ YK_CXXFLAGS	+=	-Wno-unknown-pragmas -Wno-unused-variable \
+			-Wno-unused-const-variable -fno-color-diagnostics
  MACROS		+=	NO_SVML
 
-# Intel compiler (not clang-based).
-else ifeq ($(call MACRO_DEF,$(YK_CXX_TEST),__INTEL_COMPILER),1)
+# Classic Intel compiler (not clang-based).
+else ifeq ($(cxx_is_intel),1)
 
  YK_CXXFLAGS	+=	$(ICC_ISA)
- YK_CXXFLAGS	+=	-debug extended -restrict -ansi-alias -fno-alias
- YK_CXXFLAGS	+=	-fimf-use-svml=true -fimf-precision=low -fast-transcendentals \
+ YK_CXXFLAGS	+=	-debug extended -restrict -ansi-alias -fno-alias \
+			-fimf-use-svml=true -fimf-precision=low -fast-transcendentals \
 			-no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -ftz \
 			-fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
  YK_CXXFLAGS	+=	-no-diag-message-catalog
@@ -431,22 +411,47 @@ else ifeq ($(call MACRO_DEF,$(YK_CXX_TEST),__INTEL_COMPILER),1)
  #YK_CXXFLAGS	+=	-qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
  YK_CXX_VER_CMD :=	$(YK_CXX) -V
 
- # Use real 512-bit code.
- # (Commented out because it doesn't help performance, and it breaks Devito.)
- ifeq ($(TARGET),avx512)
-  #YK_CXXFLAGS	+=	-qopt-zmm-usage=high
- endif
-
 # Gnu-compatible compiler (but not Intel or Clang).
-else ifeq ($(call MACRO_DEF,$(YK_CXX_TEST),__GNUC__),1)
+else ifeq ($(cxx_is_gnu),1)
  YK_CXXFLAGS	+=	$(CXX_ISA)
  YK_CXXFLAGS	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
  SWIG_CXXFLAGS	+=	$(SWIG_GCCFLAGS)
  MACROS		+=	NO_SVML
 
-# NB: if none of the above tests is triggered, the ISA will not be specified.
+# Unknown compiler.
+# NB: the ISA will not be specified.
+else
+ MACROS		+=	NO_VEC NO_SVML NO_UNROLL
 
 endif # compiler.
+
+# Add options for OpenMP.
+ifeq ($(omp),1)
+ OMPFLAGS	:=	$(OMPFLAG)
+else
+ OMPFLAGS	:=
+endif
+ifeq ($(offload),1)
+ MACROS		+=	USE_OFFLOAD
+ OMP_TARGET	:=	spir64
+ #OMP_TARGET	:=	x86_64
+ OMPFLAGS	:=	$(OMPFLAG) -fopenmp-targets=$(OMP_TARGET)
+ CXX_PREFIX	:=
+endif
+ifeq ($(offload_usm),1)
+ MACROS		+=	USE_OFFLOAD_USM
+endif
+
+# Add options for MPI.
+# MPI settings.
+ifeq ($(mpi),1)
+ YK_CXXCMD	:=	$(MPI_CXX) -cxx=$(YK_CXX)
+ MACROS		+=	USE_MPI
+else
+ YK_CXXCMD	:=	$(YK_CXX)
+ YK_SCRIPT_FLAGS += -ranks 1
+endif
+YK_LD		:=	$(YK_CXXCMD)
 
 # Compile with model_cache=1 or 2 to check prefetching.
 # Turn off OpenMP when modeling a cache.
@@ -482,7 +487,7 @@ NVDIMS		:=	`awk '/NUM_STENCIL_AND_VAR_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
 # serpentine, square-wave) may *not* be used here when using temporal
 # wavefronts. The time loop may be found in
 # StencilEquations::run_solution().
-RANK_LOOP_OPTS		?=	-ndims $(NSDIMS) -inVar rank_idxs
+RANK_LOOP_FLAGS		?=	-ndims $(NSDIMS) -inVar rank_idxs
 RANK_LOOP_ORDER		?=	1 .. N-1
 RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_ORDER)) { \
 				 $(RANK_LOOP_INNER_MODS) call(calc_region(bp)); }
@@ -490,7 +495,7 @@ RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_ORDER)) { \
 # Region loops break up a region using OpenMP threading into blocks.  The
 # 'omp' modifier creates an outer OpenMP loop so that each block is assigned
 # to a top-level OpenMP thread.
-REGION_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar region_idxs \
+REGION_LOOP_FLAGS	?=	-ndims $(NSDIMS) -inVar region_idxs \
 				-ompMod '$(omp_par_for) schedule($(omp_region_schedule)) proc_bind(spread)'
 REGION_LOOP_ORDER	?=	1 .. N-1
 REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) omp loop($(REGION_LOOP_ORDER)) { \
@@ -501,7 +506,7 @@ REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) omp loop($(REGION_LOOP_ORDER)) { \
 # These are executed sequentially, so no OpenMP.
 # Like with rank loops, in order for temporal wavefronts to operate properly,
 # the scanning paths must have strictly incrementing indices. 
-BLOCK_LOOP_OPTS		?=	-ndims $(NSDIMS) -inVar adj_block_idxs
+BLOCK_LOOP_FLAGS		?=	-ndims $(NSDIMS) -inVar adj_block_idxs
 BLOCK_LOOP_ORDER	?=	1 .. N-1
 BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_ORDER)) { \
 				 $(BLOCK_LOOP_INNER_MODS) \
@@ -513,7 +518,7 @@ BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_ORDER)) { \
 # creates a nested OpenMP loop so that each sub-block is assigned to a
 # nested OpenMP thread. The OpenMP construct is not used when running with
 # '-bind_block_threads'.
-MINI_BLOCK_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar adj_mb_idxs \
+MINI_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -inVar adj_mb_idxs \
 				-ompMod '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(spread)'
 MINI_BLOCK_LOOP_ORDER	?=	1 .. N-1
 MINI_BLOCK_LOOP_CODE	?=	$(MINI_BLOCK_LOOP_OUTER_MODS) omp loop($(MINI_BLOCK_LOOP_ORDER)) { \
@@ -523,10 +528,10 @@ MINI_BLOCK_LOOP_CODE	?=	$(MINI_BLOCK_LOOP_OUTER_MODS) omp loop($(MINI_BLOCK_LOOP
 # loops are run by a single OMP thread.  The N-1 (inner) loop is generated
 # by the stencil compiler, so these loops stop at N-2.  The indexes in this
 # loop are 'normalized', i.e., vector units and rank-relative.
-SUB_BLOCK_LOOP_OPTS	?=	-ndims $(NSDIMS) -inVar norm_sb_idxs
+SUB_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -inVar norm_sb_idxs
 SUB_BLOCK_LOOP_TYPE	:=
 ifeq ($(offload),1)
-SUB_BLOCK_LOOP_OPTS	+=	-ompMod '$(omp_target_par_for) schedule($(omp_target_schedule))'
+SUB_BLOCK_LOOP_FLAGS	+=	-ompMod '$(omp_target_par_for) schedule($(omp_target_schedule))'
 SUB_BLOCK_LOOP_TYPE	:=	omp
 endif
 SUB_BLOCK_LOOP_ORDER	?=	1 .. N-2
@@ -534,7 +539,7 @@ SUB_BLOCK_LOOP_CODE	?=	$(SUB_BLOCK_LOOP_OUTER_MODS) $(SUB_BLOCK_LOOP_TYPE) loop(
 				 $(SUB_BLOCK_LOOP_INNER_MODS) call(CALC_INNER_LOOP); }
 
 # General-purpose parallel loop.
-MISC_LOOP_OPTS		?=	-ndims $(NSDIMS) -inVar misc_idxs \
+MISC_LOOP_FLAGS		?=	-ndims $(NSDIMS) -inVar misc_idxs \
 				-ompMod '$(omp_par_for) schedule($(omp_misc_schedule)) proc_bind(spread)'
 MISC_LOOP_ORDER		?=	1 .. N-1
 MISC_LOOP_CODE		?=	$(MISC_LOOP_OUTER_MODS) omp loop($(MISC_LOOP_ORDER)) { \
@@ -544,22 +549,22 @@ MISC_LOOP_CODE		?=	$(MISC_LOOP_OUTER_MODS) omp loop($(MISC_LOOP_ORDER)) { \
 
 $(YK_OBJ_DIR)/%.o: $(COMM_DIR)/%.cpp $(YK_INC_GLOB)
 	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
 $(YK_OBJ_DIR)/%.o: $(COEFF_DIR)/%.cpp $(YK_INC_GLOB)
 	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
 $(YK_OBJ_DIR)/%.o: $(YK_LIB_SRC_DIR)/%.cpp $(YK_INC_GLOB)
 	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
 $(YK_EXT_OBJ_DIR)/%.o: $(YK_LIB_SRC_DIR)/%.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
 	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
 ######## Primary targets.
@@ -571,12 +576,12 @@ default: kernel
 kernel: $(YK_EXEC) $(YK_SCRIPT) $(MAKE_REPORT_FILE)
 	@echo "*** Binary" $(YK_EXEC) "has been built."; \
 	echo "*** See" $(MAKE_REPORT_FILE) "for build information."; \
-	echo "*** Run command:" $(YK_SCRIPT) $(YK_SCRIPT_OPTS) "[options]"
+	echo "*** Run command:" $(YK_SCRIPT) $(YK_SCRIPT_FLAGS) "[options]"
 	@$(YK_VTUNE_CMD)
 
 $(YK_LIB): $(YK_OBJS) $(YK_EXT_OBJS)
 	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $(YK_SO_OPTS) -o $@ $^ $(YK_LIBS)
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $(YK_SO_FLAGS) -o $@ $^ $(YK_LIBS)
 	@ls -l $@
 
 $(YK_EXEC): yask_main.cpp $(YK_LIB)
@@ -600,27 +605,27 @@ $(MAKE_REPORT_FILE): $(YK_LIB)
 # Generated source files.
 $(YK_GEN_DIR)/yask_rank_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
-	$(PERL) $< -output $@ $(RANK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_RANK_LOOP_OPTS) "$(RANK_LOOP_CODE)"
+	$(PERL) $< -output $@ $(RANK_LOOP_FLAGS) $(EXTRA_LOOP_FLAGS) $(EXTRA_RANK_LOOP_FLAGS) "$(RANK_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_region_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
-	$(PERL) $< -output $@ $(REGION_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_REGION_LOOP_OPTS) "$(REGION_LOOP_CODE)"
+	$(PERL) $< -output $@ $(REGION_LOOP_FLAGS) $(EXTRA_LOOP_FLAGS) $(EXTRA_REGION_LOOP_FLAGS) "$(REGION_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
-	$(PERL) $< -output $@ $(BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_BLOCK_LOOP_OPTS) "$(BLOCK_LOOP_CODE)"
+	$(PERL) $< -output $@ $(BLOCK_LOOP_FLAGS) $(EXTRA_LOOP_FLAGS) $(EXTRA_BLOCK_LOOP_FLAGS) "$(BLOCK_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_mini_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
-	$(PERL) $< -output $@ $(MINI_BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_MINI_BLOCK_LOOP_OPTS) "$(MINI_BLOCK_LOOP_CODE)"
+	$(PERL) $< -output $@ $(MINI_BLOCK_LOOP_FLAGS) $(EXTRA_LOOP_FLAGS) $(EXTRA_MINI_BLOCK_LOOP_FLAGS) "$(MINI_BLOCK_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_sub_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
-	$(PERL) $< -output $@ $(SUB_BLOCK_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_SUB_BLOCK_LOOP_OPTS) "$(SUB_BLOCK_LOOP_CODE)"
+	$(PERL) $< -output $@ $(SUB_BLOCK_LOOP_FLAGS) $(EXTRA_LOOP_FLAGS) $(EXTRA_SUB_BLOCK_LOOP_FLAGS) "$(SUB_BLOCK_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_misc_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
-	$(PERL) $< -output $@ $(MISC_LOOP_OPTS) $(EXTRA_LOOP_OPTS) $(EXTRA_MISC_LOOP_OPTS) "$(MISC_LOOP_CODE)"
+	$(PERL) $< -output $@ $(MISC_LOOP_FLAGS) $(EXTRA_LOOP_FLAGS) $(EXTRA_MISC_LOOP_FLAGS) "$(MISC_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_layout_macros.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
@@ -674,12 +679,12 @@ $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i $(INC_DIR)/*
 
 $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.cpp
 	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) -x c++ $(SWIG_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) -x c++ $(SWIG_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
 	@ls -l $@
 
 $(YK_PY_LIB): $(YK_OBJS)  $(YK_EXT_OBJS) $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.o
 	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $(YK_SO_OPTS) -o $@ $^ $(YK_LIBS)
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $(YK_SO_FLAGS) -o $@ $^ $(YK_LIBS)
 	@ls -l $@
 
 ######## Misc targets
@@ -728,7 +733,7 @@ echo-settings:
 	echo TARGET=$(TARGET); \
 	echo BLOCK_LOOP_CODE="\"$(BLOCK_LOOP_CODE)\""; \
 	echo BLOCK_LOOP_INNER_MODS="\"$(BLOCK_LOOP_INNER_MODS)\""; \
-	echo BLOCK_LOOP_OPTS="\"$(BLOCK_LOOP_OPTS)\""; \
+	echo BLOCK_LOOP_FLAGS="\"$(BLOCK_LOOP_FLAGS)\""; \
 	echo BLOCK_LOOP_ORDER="\"$(BLOCK_LOOP_ORDER)\""; \
 	echo BLOCK_LOOP_OUTER_MODS="\"$(BLOCK_LOOP_OUTER_MODS)\""; \
 	echo BLOCK_LOOP_OUTER_VARS="\"$(BLOCK_LOOP_OUTER_VARS)\""; \
@@ -740,33 +745,33 @@ echo-settings:
 	echo MACROS="\"$(MACROS)\""; \
 	echo MINI_BLOCK_LOOP_CODE="\"$(MINI_BLOCK_LOOP_CODE)\""; \
 	echo MINI_BLOCK_LOOP_INNER_MODS="\"$(MINI_BLOCK_LOOP_INNER_MODS)\""; \
-	echo MINI_BLOCK_LOOP_OPTS="\"$(MINI_BLOCK_LOOP_OPTS)\""; \
+	echo MINI_BLOCK_LOOP_FLAGS="\"$(MINI_BLOCK_LOOP_FLAGS)\""; \
 	echo MINI_BLOCK_LOOP_ORDER="\"$(MINI_BLOCK_LOOP_ORDER)\""; \
 	echo MINI_BLOCK_LOOP_OUTER_MODS="\"$(MINI_BLOCK_LOOP_OUTER_MODS)\""; \
 	echo MINI_BLOCK_LOOP_OUTER_VARS="\"$(MINI_BLOCK_LOOP_OUTER_VARS)\""; \
 	echo MISC_LOOP_CODE="\"$(MISC_LOOP_CODE)\""; \
 	echo MISC_LOOP_INNER_MODS="\"$(MISC_LOOP_INNER_MODS)\""; \
-	echo MISC_LOOP_OPTS="\"$(MISC_LOOP_OPTS)\""; \
+	echo MISC_LOOP_FLAGS="\"$(MISC_LOOP_FLAGS)\""; \
 	echo MISC_LOOP_ORDER="\"$(MISC_LOOP_ORDER)\""; \
 	echo MISC_LOOP_OUTER_MODS="\"$(MISC_LOOP_OUTER_MODS)\""; \
 	echo MISC_LOOP_OUTER_VARS="\"$(MISC_LOOP_OUTER_VARS)\""; \
 	echo OMPFLAGS="\"$(OMPFLAGS)\""; \
 	echo RANK_LOOP_CODE="\"$(RANK_LOOP_CODE)\""; \
 	echo RANK_LOOP_INNER_MODS="\"$(RANK_LOOP_INNER_MODS)\""; \
-	echo RANK_LOOP_OPTS="\"$(RANK_LOOP_OPTS)\""; \
+	echo RANK_LOOP_FLAGS="\"$(RANK_LOOP_FLAGS)\""; \
 	echo RANK_LOOP_ORDER="\"$(RANK_LOOP_ORDER)\""; \
 	echo RANK_LOOP_OUTER_MODS="\"$(RANK_LOOP_OUTER_MODS)\""; \
 	echo RANK_LOOP_OUTER_VARS="\"$(RANK_LOOP_OUTER_VARS)\""; \
 	echo REGION_LOOP_CODE="\"$(REGION_LOOP_CODE)\""; \
 	echo REGION_LOOP_INNER_MODS="\"$(REGION_LOOP_INNER_MODS)\""; \
-	echo REGION_LOOP_OPTS="\"$(REGION_LOOP_OPTS)\""; \
+	echo REGION_LOOP_FLAGS="\"$(REGION_LOOP_FLAGS)\""; \
 	echo REGION_LOOP_ORDER="\"$(REGION_LOOP_ORDER)\""; \
 	echo REGION_LOOP_OUTER_MODS="\"$(REGION_LOOP_OUTER_MODS)\""; \
 	echo REGION_LOOP_OUTER_VARS="\"$(REGION_LOOP_OUTER_VARS)\""; \
 	echo SUB_BLOCK_LOOP_CODE="\"$(SUB_BLOCK_LOOP_CODE)\""; \
 	echo SUB_BLOCK_LOOP_INNER_MODS="\"$(SUB_BLOCK_LOOP_INNER_MODS)\""; \
 	echo SUB_BLOCK_LOOP_INNER_VARS="\"$(SUB_BLOCK_LOOP_INNER_VARS)\""; \
-	echo SUB_BLOCK_LOOP_OPTS="\"$(SUB_BLOCK_LOOP_OPTS)\""; \
+	echo SUB_BLOCK_LOOP_FLAGS="\"$(SUB_BLOCK_LOOP_FLAGS)\""; \
 	echo SUB_BLOCK_LOOP_ORDER="\"$(SUB_BLOCK_LOOP_ORDER)\""; \
 	echo SUB_BLOCK_LOOP_OUTER_MODS="\"$(SUB_BLOCK_LOOP_OUTER_MODS)\""; \
 	echo SUB_BLOCK_LOOP_OUTER_VARS="\"$(SUB_BLOCK_LOOP_OUTER_VARS)\""; \
@@ -777,6 +782,7 @@ echo-settings:
 	echo YK_ARCH=$(YK_ARCH); \
 	echo YK_BASE=$(YK_BASE); \
 	echo YK_CXX=$(YK_CXX); \
+	echo YK_CXXCMD=$(YK_CXXCMD); \
 	echo YK_CXXDBG=$(YK_CXXDBG); \
 	echo YK_CXXFLAGS="\"$(YK_CXXFLAGS)\""; \
 	echo YK_CXXOPT=$(YK_CXXOPT); \
@@ -811,31 +817,35 @@ code-stats: kernel
 
 # Print some usage info.
 help:
-	@echo "Example performance builds of kernel cmd-line tool:"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd arch=knl # Explicit arch target"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd radius=4 YK_STENCIL=iso3dfd_r4 # Specify binary stencil name"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg fold='x=1,y=2,z=4' cluster='x=2'"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg radius=4 real_bytes=8 # Use 8-byte (double) floats"; \
+	@echo "Example builds of kernel cmd-line tool:"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd # Build iso3dfd stencil with default settings"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd radius=4 # Specify stencil radius"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd radius=2 YK_STENCIL=iso3dfd_r2 # Specify binary stencil name"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd arch=knl # Specify arch target"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg fold='x=1,y=2,z=4' # Specify folding (data layout)"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg cluster='x=2' # Specify clustering (unrolling)"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg real_bytes=8 # Use 8-byte (double) floats"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg mpi=0 # No MPI support"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=awp vtune=1 # Add VTune start/stop instrumentation"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=awp EXTRA_YK_CXXFLAGS='-qopt-report -Fa' # Emit opt-report and asm file"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg YK_CXX=icpx mpi=0 OMPFLAGS=-fiopenmp # Use next-gen Intel compiler w/o MPI"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg YK_CXX='mpiicpc -cxx=icpx' OMPFLAGS=-fiopenmp # Use next-gen Intel compiler w/MPI"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=fsg YK_CXXOPT='-O2' # Use O2 optimization"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=fsg YK_CXX=icpc # Use classic Intel compiler"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg YK_CXX=g++ # Use gnu compiler"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg MPI_CXX=mpiCC # Specify MPI compiler"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=awp YK_CXX=icpc EXTRA_YK_CXXFLAGS='-qopt-report -Fa' # Emit opt-report and asm file"; \
 	echo " "
-	@echo "Example performance builds of kernel API for C++ and Python apps:"; \
+	@echo "Example builds of kernel API for C++ and Python apps:"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd yk-api"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=awp yk-api"; \
 	echo " "
 	@echo "Example debug builds of kernel cmd-line tool:"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 omp=0 YK_CXXOPT='-O0' check=1 # No optimization, OpenMP, or MPI; use internal checking"; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=avx stencil=test_2d YK_CXXOPT='-O0' trace=1 # Enable tracing; run with '-trace' to get trace"; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=avx2 stencil=test_2d YK_CXXOPT='-O0' trace=1 # Enable tracing; run with '-trace' to get trace"; \
 	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=ssg radius=0 fold='x=1,y=1,z=1' YK_CXXOPT='-O0' trace_mem=1 # Trace all mem accesses with '-trace'"; \
 	echo " "
 	@echo "Example regression tests (run these before any git push or pull request):"; \
 	echo " $(MAKE) -j all   # Normal full API and stencil tests"; \
-	echo " $(MAKE) -j all YK_CXX=g++ mpi=0 ranks=1   # Test g++ w/o MPI"; \
-	echo " $(MAKE) -j all YK_CXXOPT=-O1 ranks=4   # Test on 4 ranks"
+	echo " $(MAKE) -j all YK_CXXOPT=-O1  # Test at O1 optimization"; \
+	echo " $(MAKE) -j all YK_CXX=g++ mpi=0   # Test g++ w/o MPI"
 
 
 #################################
@@ -877,7 +887,7 @@ block_threads	:=	2
 
 $(YK_OMP_TEST_EXEC): $(YK_TEST_SRC_DIR)/openmp_test.cpp
 	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $< -o $@
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< -o $@
 	@ls -l $@
 
 cxx-yk-omp-test:
@@ -888,7 +898,7 @@ cxx-yk-omp-test:
 
 $(YK_VAR_TEST_EXEC): $(YK_TEST_SRC_DIR)/var_test.cpp $(YK_LIB)
 	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
 	@ls -l $@
 
 cxx-yk-var-test:
@@ -902,7 +912,7 @@ cxx-yk-var-test:
 # Build C++ kernel tests.
 $(YK_API_TEST_EXEC): $(YK_TEST_SRC_DIR)/yask_kernel_api_test.cpp $(YK_LIB)
 	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
 	@ls -l $@
 
 # Build and run C++ tests.
@@ -919,7 +929,7 @@ py-yk-api-test: $(YK_TEST_SRC_DIR)/yask_kernel_api_test.py $(YK_PY_LIB)
 # Build C++ kernel tests with exceptions.
 $(YK_API_TEST_EXEC_WITH_EXCEPTION): $(YK_TEST_SRC_DIR)/yask_kernel_api_exception_test.cpp $(YK_LIB)
 	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(YK_CXX) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
 	@ls -l $@
 
 # Run C++ tests with exceptions.
@@ -963,8 +973,12 @@ test_args3	:=	$(DEF_TEST_ARGS) -l 63 -r 48 -b 24 -mb 16 -bt 2 $(EXTRA_TEST_ARGS)
 test_args4	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -bind_block_threads $(EXTRA_TEST_ARGS)
 
 # Test args for >1 ranks only.
-test_args10	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -use_shm -no-overlap_comms $(EXTRA_TEST_ARGS)
-test_args11	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -no-use_shm -overlap_comms $(EXTRA_TEST_ARGS)
+test_args10	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -no-use_shm -overlap_comms $(EXTRA_TEST_ARGS)
+ifeq ($(offload),1)
+test_args11	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -no-use_shm -no-overlap_comms $(EXTRA_TEST_ARGS)
+else
+test_args11	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -use_shm -no-overlap_comms $(EXTRA_TEST_ARGS)
+endif
 
 # Run the kernel binary using several combos of sizes and ranks.
 yk-tests:

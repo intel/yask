@@ -91,6 +91,8 @@ RUN_PYTHON	:= 	$(RUN_PREFIX) \
 	env PYTHONPATH=$(LIB_DIR):$(LIB_OUT_DIR):$(YASK_DIR):$(PY_OUT_DIR):$(PYTHONPATH) $(PYTHON)
 
 # Function to check for pre-defined compiler macro.
+# Invokes compiler using 1st arg.
+# Returns '1' if 2nd arg is defined, '0' if not.
 # Ex: "ifeq ($(call MACRO_DEF,$(CXX),__clang__),1)"...
 MACRO_DEF	=	$(shell $(1) -x c++ /dev/null -dM -E | grep -m 1 -c $(2))
 

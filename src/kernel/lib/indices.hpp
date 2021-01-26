@@ -42,14 +42,15 @@ namespace yask {
     // Step dim is always in [0] of an Indices type (if it is used).
     constexpr int step_posn = 0;
 
+    OMP_END_DECL_TARGET
+
     // A class to hold up to a given number of sizes or indices efficiently.
     // Similar to a Tuple, but less overhead and doesn't keep names.
     // This class is NOT virtual.
     // TODO: add a template parameter for max indices.
     // TODO: ultimately, combine with Tuple w/o loss of efficiency.
     class Indices {
-
-    public:
+        OMP_DECL_TARGET
 
     protected:
         idx_t _idxs[+max_idxs]; // Index values.
@@ -395,8 +396,12 @@ namespace yask {
             // Total number of points to visit.
             idx_t ne = product();
 
+            // 0 points?
+            if (ne < 1)
+                return true;
+
             // 1 point?
-            if (ne <= 1)
+            else if (ne == 1)
                 return visitor(idxs, 0);
 
             // Visit each point in sequential order.
@@ -413,6 +418,9 @@ namespace yask {
             return true;
         }
 
+        // Methods below this point are not allowed in OMP target regions.
+        OMP_END_DECL_TARGET
+        
         // Same as visit_all_points(), except ranges of points are visited
         // concurrently, and return value from 'visitor' is ignored.
         void visit_all_points_in_parallel(bool first_inner,
@@ -421,8 +429,12 @@ namespace yask {
             // Total number of points to visit.
             idx_t ne = product();
 
+            // 0 points?
+            if (ne < 1)
+                return;
+
             // 1 point?
-            if (ne <= 1) {
+            else if (ne == 1) {
                 Indices idxs(*this);
                 idxs.set_vals_same(0);
                 visitor(idxs, 0);
@@ -434,7 +446,7 @@ namespace yask {
             // Num threads to be started.
             idx_t nthr = yask_get_num_threads();
 
-            // Start sequential visits in parallel.
+            // Start visits in parallel.
             // (Not guaranteed that each tnum will be unique in every OMP
             // impl, so don't rely on it.)
             yask_parallel_for
@@ -454,7 +466,7 @@ namespace yask {
                      // Convert 1st linear index to n-dimensional indices.
                      idxs = unlayout(first_inner, start);
                      
-                     // Visit each point in sequential order.
+                     // Visit each point in sequential order within this thread.
                      for (idx_t i = start; i < stop; i++) {
                          
                          // Call visitor.
@@ -534,6 +546,8 @@ namespace yask {
     #pragma omp declare reduction(max_idxs : Indices :                  \
                                   omp_out = omp_out.max_elements(omp_in) ) \
         initializer (omp_priv = omp_orig)
+
+    OMP_DECL_TARGET
 
     // Layout base class.
     // This class hierarchy is NOT virtual.

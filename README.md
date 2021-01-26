@@ -19,36 +19,27 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
 ### Supported Platforms and Processors:
 * 64-bit Linux.
 * Intel(R) Xeon(R) processors supporting the AVX, AVX2, or CORE_AVX512 instruction sets.
-* Intel(R) Xeon Phi(TM) x200-family processors supporting the MIC_AVX512 instruction set.
-* Intel(R) Xeon Phi(TM) x100-family coprocessors supporting the Knights-Corner instruction set (no longer tested).
+* Intel(R) Xeon Phi(TM) x200-family processors supporting the MIC_AVX512 instruction set (KNL).
 
 ### Pre-requisites:
 * Intel(R) Parallel Studio XE Cluster Edition for Linux
   for multi-socket and multi-node operation or
   Intel(R) Parallel Studio XE Composer Edition for C++ Linux
   for single-socket only
-  (2020.1.217, a.k.a. 19.1.1.217, or later recommended).
-     * There was an issue in Intel(R) MPI versions 2019u1 and 2019u2 that
-       caused the application to crash when allocating very
-       large shared-memory (shm) regions, so you may have to
-       use the `-no-use_shm` option with these versions.
-       This issue was resolved in MPI version 2019u3.
-     * There is an issue in the Intel C++ compiler 2019.1.0 that causes
-       an internal error when building YASK kernels.
-       This has been fixed in 19.1.1.x.
-       You may also use 2019.0.x to work around this.
+  (2021.1.2 or later recommended).
+     * The "nextgen" Intel(R) C++ compiler (icpx) is the default compiler;
+       however, SIMD operations for functions such as sin() is not supported at this time.
+       To use the classic Intel compiler, specify `YK_CXX=icpc` when running `make`.
      * If you are using g++ version 8.x or later, Intel(R) C++ version 2019
        or later is required.
-     * Building a YASK kernel with clang or the "nextgen" Intel(R) C++
-       compiler is possible; however,
-       SIMD operations for functions such as sin() is not supported.
-     * Building a YASK kernel with the Gnu C++ compiler is possible.
+     * Building a YASK kernel with the Gnu C++ compiler is also possible.
+       Specify `YK_CXX=g++ mpi=0` when running `make`.
        Limited testing with g++ 8.2.0 shows the "iso3dfd" kernel
        runs about 30% slower compared to the same kernel built with
        the Intel C++ compiler.
        Older Gnu C++ compilers can produce kernels that run
        many times slower.
-* Gnu C++ compiler, g++ (4.9.0 or later; 9.1.0 or later recommended).
+* Gnu C++ compiler, g++ (4.9.0 or later; 8.2.0 or later recommended).
   Even when using Intel compilers, they rely on functionality provided by a g++ installation.
 * Linux libraries `librt` and `libnuma`.
 * Perl (5.010 or later).
@@ -64,7 +55,7 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
       Reading the generated code is only necessary for debug or curiosity.
     * SWIG (3.0.12 or later; 4.0.0 or later recommended),
       http://www.swig.org, for creating the Python interface.
-    * Python 2 (2.7.5 or later) or 3 (3.6.1 or later),
+    * Python 2 (2.7.5 or later) or 3 (3.6.1 or later, recommended),
       https://www.python.org/downloads, for creating and using the Python interface.
     * Doxygen (1.8.11 or later),
       http://doxygen.org, for creating updated API documentation.

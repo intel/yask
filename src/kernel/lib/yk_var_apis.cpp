@@ -291,138 +291,121 @@ SET_VAR_API(set_first_misc_index, corep()->_local_offsets[posn] = n, false, fals
         return nup;
     }
 
+    // Read into buffer from *this.
     idx_t YkVarBase::get_elements_in_slice(void* buffer_ptr,
-                                            const Indices& first_indices,
-                                            const Indices& last_indices) const {
-        STATE_VARS(this);
-        TRACE_MSG("get_elements_in_slice(" << buffer_ptr << ", {" <<
-                  make_index_string(first_indices) << "}, {" <<
-                  make_index_string(last_indices) << "}) on " <<
-                  make_info_string());
-        if (get_storage() == 0)
-            THROW_YASK_EXCEPTION("Error: call to 'get_elements_in_slice' with no storage allocated for var '" +
-                                 get_name() + "'");
-        check_indices(first_indices, "get_elements_in_slice", true, true, false);
-        check_indices(last_indices, "get_elements_in_slice", true, true, false);
+                                           const Indices& first_indices,
+                                           const Indices& last_indices,
+                                           bool on_device) const {
+        // A specialized visitor.
+        struct GetElem {
+            static const char* fname() {
+                return "get_elements_in_slice";
+            }
 
-        // Find range.
-        auto num_elems = get_slice_range(first_indices, last_indices);
+            // Copy from the var to the buffer.
+            ALWAYS_INLINE
+            static void visit(YkVarBase* varp,
+                              real_t* p, idx_t pofs,
+                              const Indices& pt, idx_t ti) {
 
-        // Visit points in slice.
-        num_elems.visit_all_points_in_parallel
-            (false,
-             [&](const Indices& ofs, size_t idx) {
-                 auto pt = first_indices.add_elements(ofs);
+                // Read from var.
+                real_t val = varp->read_elem(pt, ti, __LINE__);
 
-                // TODO: move this outside of loop for const step index.
-                idx_t asi = get_alloc_step_index(pt);
+                // Write to buffer at proper index.
+                p[pofs] = val;
+            }
+        };
 
-                real_t val = read_elem(pt, asi, __LINE__);
-                ((real_t*)buffer_ptr)[idx] = val;
-                return true;    // keep going.
-            });
-        auto nup = num_elems.product();
-        TRACE_MSG("get_elements_in_slice(" << buffer_ptr << ", {" <<
-                  make_index_string(first_indices) << "}, {" <<
-                  make_index_string(last_indices) << "}) on '" <<
-                  get_name() + "' returns " << nup);
-        return nup;
+        // Call the generic visit.
+        auto n = const_cast<YkVarBase*>(this)->
+            _visit_elements_in_slice<GetElem>(true, (void*)buffer_ptr,
+                                              first_indices, last_indices, on_device);
+            
+        // Return number of writes.
+        return n;
     }
-    idx_t YkVarBase::set_elements_in_slice_same(double val,
-                                                 const Indices& first_indices,
-                                                 const Indices& last_indices,
-                                                 bool strict_indices) {
-        STATE_VARS(this);
-        TRACE_MSG("set_elements_in_slice_same(" << val << ", {" <<
-                  make_index_string(first_indices) << "}, {" <<
-                  make_index_string(last_indices) <<  "}, " <<
-                  strict_indices << ") on " <<
-                  make_info_string());
-        if (get_storage() == 0) {
-            if (strict_indices)
-                THROW_YASK_EXCEPTION("Error: call to 'set_elements_in_slice_same' with no storage allocated for var '" +
-                                     get_name() + "'");
-            return 0;
-        }
 
-        // 'Fixed' copy of indices.
-        Indices first, last;
-        check_indices(first_indices, "set_elements_in_slice_same",
-                     strict_indices, false, false, &first);
-        check_indices(last_indices, "set_elements_in_slice_same",
-                     strict_indices, false, false, &last);
-
-        // Find range.
-        auto num_elems = get_slice_range(first, last);
-
-        // Visit points in slice.
-        // TODO: optimize by setting vectors when possible.
-        num_elems.visit_all_points_in_parallel
-            (false,
-             [&](const Indices& ofs, size_t idx) {
-                 auto pt = first.add_elements(ofs);
-
-                 // TODO: move this outside of loop for const step index.
-                 idx_t asi = get_alloc_step_index(pt);
-                 
-                 write_elem(real_t(val), pt, asi, __LINE__);
-                 return true;    // keep going.
-             });
-
-        // Set appropriate dirty flag(s).
-        // FIXME: does not keep dirty flags consistent across ranks!
-        set_dirty_in_slice(first, last);
-
-        auto nup = num_elems.product();
-        TRACE_MSG("set_elements_in_slice_same(" << val << ", {" <<
-                  make_index_string(first_indices) << "}, {" <<
-                  make_index_string(last_indices) <<  "}, " <<
-                  strict_indices << ") on '" <<
-                  get_name() + "' returns " << nup);
-        return nup;
-    }
+    // Write to *this from buffer.
     idx_t YkVarBase::set_elements_in_slice(const void* buffer_ptr,
-                                            const Indices& first_indices,
-                                            const Indices& last_indices) {
-        STATE_VARS(this);
-        TRACE_MSG("set_elements_in_slice(" << buffer_ptr << ", {" <<
-                  make_index_string(first_indices) << "}, {" <<
-                  make_index_string(last_indices) <<  "}) on " <<
-                  make_info_string());
-        if (get_storage() == 0)
-            THROW_YASK_EXCEPTION("Error: call to 'set_elements_in_slice' with no storage allocated for var '" +
-                                 get_name() + "'");
-        check_indices(first_indices, "set_elements_in_slice", true, false, false);
-        check_indices(last_indices, "set_elements_in_slice", true, false, false);
+                                           const Indices& first_indices,
+                                           const Indices& last_indices,
+                                           bool on_device) {
+        // A specialized visitor.
+        struct SetElem {
+            static const char* fname() {
+                return "set_elements_in_slice";
+            }
 
-        // Find range.
-        auto num_elems = get_slice_range(first_indices, last_indices);
+            // Copy from the buffer to the var.
+            ALWAYS_INLINE
+            static void visit(YkVarBase* varp,
+                              real_t* p, idx_t pofs,
+                              const Indices& pt, idx_t ti) {
 
-        // Visit points in slice.
-        num_elems.visit_all_points_in_parallel
-            (false,
-             [&](const Indices& ofs, size_t idx) {
-                 auto pt = first_indices.add_elements(ofs);
+                // Read from buffer.
+                real_t val = p[pofs];
 
-                 // TODO: move this outside of loop for const step index.
-                 idx_t asi = get_alloc_step_index(pt);
-                 
-                 real_t val = ((real_t*)buffer_ptr)[idx];
-                 write_elem(val, pt, asi, __LINE__);
-                 return true;    // keep going.
-             });
+                // Write to var
+                varp->write_elem(val, pt, ti, __LINE__);
+            }
+        };
 
+        // Call the generic visit.
+        auto n = 
+            _visit_elements_in_slice<SetElem>(true, (void*)buffer_ptr,
+                                              first_indices, last_indices, on_device);
+            
         // Set appropriate dirty flag(s).
         // FIXME: does not keep dirty flags consistent across ranks!
         set_dirty_in_slice(first_indices, last_indices);
 
-        auto nup = num_elems.product();
-        TRACE_MSG("set_elements_in_slice(" << buffer_ptr << ", {" <<
-                  make_index_string(first_indices) << "}, {" <<
-                  make_index_string(last_indices) <<  "}) on '" <<
-                  get_name() + "' returns " << nup);
-        return nup;
+        // Return number of writes.
+        return n;
     }
 
+    // Write to *this from 'val'.
+    idx_t YkVarBase::set_elements_in_slice_same(double val,
+                                                const Indices& first_indices,
+                                                const Indices& last_indices,
+                                                bool strict_indices,
+                                                bool on_device) {
+        // A specialized visitor.
+        struct SetElem {
+            static const char* fname() {
+                return "set_elements_in_slice_same";
+            }
+
+            // Set the var.
+            ALWAYS_INLINE
+            static void visit(YkVarBase* varp,
+                              real_t* p, idx_t pofs,
+                              const Indices& pt, idx_t ti) {
+
+                // Get const value, ignoring offset.
+                real_t val = *p;
+
+                // Write to var
+                varp->write_elem(val, pt, ti, __LINE__);
+            }
+        };
+
+        // Set up pointer to val for visitor.
+        // Requires casting if real_t is a float.
+        real_t v = real_t(val);
+        auto* buffer_ptr = &v;
+        
+        // Call the generic visit.
+        auto n = 
+            _visit_elements_in_slice<SetElem>(strict_indices, (void*)buffer_ptr,
+                                              first_indices, last_indices, on_device);
+            
+        // Set appropriate dirty flag(s).
+        // FIXME: does not keep dirty flags consistent across ranks!
+        set_dirty_in_slice(first_indices, last_indices);
+
+        // Return number of writes.
+        return n;
+    }
+    
 } // namespace.
 

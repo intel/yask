@@ -31,6 +31,36 @@ using namespace std;
 
 namespace yask {
 
+    /*
+      Host halo exchange w/explicit shared memory (shm):
+      rank I                              rank J (neighbor of I)
+      ---------------------               ----------------------
+      var A ----------------> shared_buf ---------------> var A
+                 pack                          unpack
+
+      Host halo exchange w/o shm:
+      rank I                              rank J (neighbor of I)
+      ---------------------               ----------------------
+      var A ----> local_buf ------------> local_buf ----> var A
+             pack        MPI_isend   MPI_irecv     unpack
+             (implicit shm created by MPI lib not shown)
+
+      Device halo exchange w/o direct device copy and w/o shm:
+      rank I                              rank J (neighbor of I)
+      -----------------------             -----------------------
+      var A --> dev_local_buf             dev_local_buf --> var A
+            pack      | copy to host            ^     unpack
+                      V                         | copy to dev
+               host_local_buf ---------> host_local_buf
+                         MPI_isend   MPI_irecv
+
+      Device halo exchange w/o direct device copy and w/shm:
+      --not implemented [yet].
+
+      Device halo exchange w/direct device copy:
+      --not implemented [yet].
+    */
+    
     // Exchange dirty halo data for all vars and all steps.
     void StencilContext::exchange_halos() {
 
@@ -38,6 +68,7 @@ namespace yask {
         STATE_VARS(this);
         if (!enable_halo_exchange || env->num_ranks < 2)
             return;
+        auto& use_offload = KernelEnv::_use_offload;
 
         halo_time.start();
         double wait_delta = 0.;
@@ -191,9 +222,9 @@ namespace yask {
                                  // Vec ok?
                                  // Domain sizes must be ok, and buffer size must be ok
                                  // as calculated when buffers were created.
-                                 bool send_vec_ok = allow_vec_exchange && send_buf.vec_copy_ok;
+                                 bool send_vec_ok = send_buf.vec_copy_ok;
 
-                                 // Get first and last ranges.
+                                 // Get first and last indices to pack from.
                                  IdxTuple first = send_buf.begin_pt;
                                  IdxTuple last = send_buf.last_pt;
 
@@ -205,7 +236,7 @@ namespace yask {
                                      last.set_val(step_dim, last_steps_to_swap[gp]);
                                  }
 
-                                 // Wait until buffer is avail.
+                                 // Wait until buffer is avail if sharing one.
                                  if (using_shm) {
                                      TRACE_MSG("exchange_halos:    waiting to write to shm buffer");
                                      wait_time.start();
@@ -215,16 +246,22 @@ namespace yask {
 
                                  // Copy (pack) data from var to buffer.
                                  void* buf = (void*)send_buf._elems;
-                                 idx_t nelems = 0;
                                  TRACE_MSG("exchange_halos:    packing [" << first.make_dim_val_str() <<
                                            " ... " << last.make_dim_val_str() << "] " <<
                                            (send_vec_ok ? "with" : "without") <<
-                                           " vector copy into " << buf);
+                                           " vector copy into " << buf <<
+                                           (use_offload ? " on device" : " on host"));
+                                 idx_t nelems = 0;
                                  if (send_vec_ok)
-                                     nelems = gp->get_vecs_in_slice(buf, first, last);
+                                     nelems = gb.get_vecs_in_slice(buf, first, last, use_offload);
                                  else
-                                     nelems = gp->get_elements_in_slice(buf, first, last);
+                                     nelems = gb.get_elements_in_slice(buf, first, last, use_offload);
                                  idx_t nbytes = nelems * get_element_bytes();
+
+                                 if (use_offload) {
+                                     TRACE_MSG("exchange_halos:    copying buffer from device");
+                                     offload_copy_from_device(buf, nbytes);
+                                 }
 
                                  if (using_shm) {
                                      TRACE_MSG("exchange_halos:    no send req due to shm");
@@ -250,9 +287,9 @@ namespace yask {
                              auto nbytes = recv_buf.get_bytes();
                              if (nbytes) {
 
-                                 // Wait until buffer is avail.
+                                 // Wait until data in buffer is avail.
                                  if (using_shm) {
-                                     TRACE_MSG("exchange_halos:    waiting to read from shm buffer");
+                                     TRACE_MSG("exchange_halos:    waiting for data in shm buffer");
                                      wait_time.start();
                                      recv_buf.wait_for_ok_to_read();
                                      wait_delta += wait_time.stop();
@@ -262,7 +299,8 @@ namespace yask {
                                      // Wait for data from neighbor before unpacking it.
                                      auto& r = var_recv_reqs[ni];
                                      if (r != MPI_REQUEST_NULL) {
-                                         TRACE_MSG("   waiting for receipt of " << make_byte_str(nbytes));
+                                         TRACE_MSG("exchange_halos:    waiting for receipt of " <<
+                                                   make_byte_str(nbytes));
                                          wait_time.start();
                                          MPI_Wait(&r, MPI_STATUS_IGNORE);
                                          wait_delta += wait_time.stop();
@@ -271,7 +309,7 @@ namespace yask {
                                  }
 
                                  // Vec ok?
-                                 bool recv_vec_ok = allow_vec_exchange && recv_buf.vec_copy_ok;
+                                 bool recv_vec_ok = recv_buf.vec_copy_ok;
 
                                  // Get first and last ranges.
                                  IdxTuple first = recv_buf.begin_pt;
@@ -283,18 +321,24 @@ namespace yask {
                                      last.set_val(step_dim, last_steps_to_swap[gp]);
                                  }
 
-                                 // Copy data from buffer to var.
                                  void* buf = (void*)recv_buf._elems;
-                                 idx_t nelems = 0;
+                                 if (use_offload) {
+                                     TRACE_MSG("exchange_halos:    copying buffer to device");
+                                     offload_copy_to_device(buf, nbytes);
+                                 }
+
+                                 // Copy data from buffer to var.
                                  TRACE_MSG("exchange_halos:    got data; unpacking into [" <<
                                            first.make_dim_val_str() <<
                                            " ... " << last.make_dim_val_str() << "] " <<
                                            (recv_vec_ok ? "with" : "without") <<
-                                           " vector copy from " << buf);
+                                           " vector copy from " << buf <<
+                                           (use_offload ? " on device" : " on host"));
+                                 idx_t nelems = 0;
                                  if (recv_vec_ok)
-                                     nelems = gp->set_vecs_in_slice(buf, first, last);
+                                     nelems = gp->set_vecs_in_slice(buf, first, last, use_offload);
                                  else
-                                     nelems = gp->set_elements_in_slice(buf, first, last);
+                                     nelems = gp->set_elements_in_slice(buf, first, last, use_offload);
                                  assert(nelems <= recv_buf.get_size());
 
                                  if (using_shm)

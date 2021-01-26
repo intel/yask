@@ -135,15 +135,18 @@ typedef std::uint64_t uidx_t;
 
 #ifndef NO_VEC
 #define _NO_VECTOR _Pragma("novector")
-#define _VEC_ALIGNED _Pragma("vector aligned")
-#define _VEC_UNALIGNED _Pragma("vector unaligned")
 #define _VEC_ALWAYS _Pragma("vector always")
-#define _VEC_STREAMING _Pragma("vector nontemporal")
 #else
 #define _NO_VECTOR
+#define _VEC_ALWAYS
+#endif
+#ifndef NO_VEC2
+#define _VEC_ALIGNED _Pragma("vector aligned")
+#define _VEC_UNALIGNED _Pragma("vector unaligned")
+#define _VEC_STREAMING _Pragma("vector nontemporal")
+#else
 #define _VEC_ALIGNED
 #define _VEC_UNALIGNED
-#define _VEC_ALWAYS
 #define _VEC_STREAMING
 #endif
 
