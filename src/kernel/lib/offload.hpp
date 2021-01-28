@@ -45,7 +45,9 @@ namespace yask {
         // Temp var to capture device ptr.
         T* dp = 0;
 
-        // Get pointer on device via OMP offload map.
+        // Get pointer on device via OMP offload map.  The "target data"
+        // pragma maps variables to the device data environment, but doesn't
+        // execute on the device.
         #pragma omp target data device(devn) use_device_ptr(hostp)
         {
             dp = hostp;

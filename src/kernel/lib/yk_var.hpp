@@ -1382,7 +1382,7 @@ namespace yask {
                         TRACE_MSG("copy starting at " << pt.make_val_str() <<
                                 " and buf ofs " << (tofs + j * ni));
                         #endif
-                        _Pragma("omp target teams distribute parallel for firstprivate(pt) device(devn)")
+                        _Pragma("omp target parallel for firstprivate(pt) device(devn)")
                             for (idx_t i = 0; i < ni; i++) {
                                 idx_t bofs = tofs + j * ni + i;
                                 pt[ip] = firstv[ip] + ofs[ip] + i;

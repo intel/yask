@@ -118,7 +118,8 @@ namespace yask {
         _omp_hostn = omp_get_initial_device();
         _omp_devn = omp_get_default_device();
 
-        // Dummy OMP offload section to trigger JIT.
+        // Dummy OMP section to trigger JIT.
+        // This should be the first "omp target" pragma encountered.
         int dummy = 42;
         #pragma omp target data device(KernelEnv::_omp_devn) map(dummy)
         { }
