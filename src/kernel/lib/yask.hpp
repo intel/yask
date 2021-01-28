@@ -209,9 +209,19 @@ typedef std::uint64_t uidx_t;
 // Macro for trace message.
 // Enabled only if compiled with TRACE macro and run with -trace option.
 #ifdef TRACE
+# if defined __cplusplus ? __GNUC_PREREQ (2, 6) : __GNUC_PREREQ (2, 4)
+#   define __TRACE_FUNCTION	__PRETTY_FUNCTION__
+# else
+#  if defined __STDC_VERSION__ && __STDC_VERSION__ >= 199901L
+#   define __TRACE_FUNCTION	__func__
+#  else
+#   define __TRACE_FUNCTION	((__const char *) 0)
+#  endif
+# endif
 #define TRACE_MSG(msg) do {                              \
         if (KernelEnv::_trace) {                          \
-            DEBUG_MSG("YASK: " << msg);                   \
+            DEBUG_MSG("YASK: " << msg << " at " << __FILE__ << ":" << __LINE__ << \
+                      " in " << (__TRACE_FUNCTION ? __TRACE_FUNCTION : " unknown function" )); \
         } } while(0)
 #else
 #define TRACE_MSG(msg) ((void)0)
