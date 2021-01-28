@@ -86,12 +86,12 @@ int main(int argc, char* argv[]) {
 
     #ifdef USE_OFFLOAD
     int ndev = omp_get_num_devices();
-    assert(ndev > 0);
     int hostn = omp_get_initial_device();
     int devn = omp_get_default_device();
     cout << ndev << " OMP device(s)\n"
         " host: " << hostn << "\n"
         " dev: " << devn << endl << flush;
+    assert(ndev > 0);
 
     // Dummy OMP offload section to trigger JIT.
     int MOLUE = 42;

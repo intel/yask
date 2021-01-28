@@ -34,10 +34,8 @@ namespace yask {
 
     // Free device mem.
     void DeleterBase::free_dev_mem(char* hostp) {
-        if (hostp && _devp) {
-            offload_map_free(_devp, hostp, _nbytes);
-            _devp = NULL;
-        }
+        if (hostp)
+            offload_map_free(hostp, _nbytes);
     }
 
     // Aligned allocation.

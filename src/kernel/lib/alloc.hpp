@@ -64,11 +64,10 @@ namespace yask {
     // Generic deleter.
     struct DeleterBase {
         std::size_t _nbytes;
-        void* _devp;
 
         // Ctor saves size & device ptr.
-        DeleterBase(std::size_t nbytes, void* devp) :
-            _nbytes(nbytes), _devp(devp) { }
+        DeleterBase(std::size_t nbytes) :
+            _nbytes(nbytes) { }
 
         // Free device mem.
         void free_dev_mem(char* hostp);
@@ -78,8 +77,8 @@ namespace yask {
     extern char* yask_aligned_alloc(std::size_t nbytes);
     struct AlignedDeleter : public DeleterBase {
 
-        AlignedDeleter(std::size_t nbytes, void* devp) :
-            DeleterBase(nbytes, devp) { }
+        AlignedDeleter(std::size_t nbytes) :
+            DeleterBase(nbytes) { }
 
         // Free p.
         void operator()(char* p);
@@ -91,10 +90,10 @@ namespace yask {
         char* cp = yask_aligned_alloc(nbytes);
 
         // Map alloc to device.
-        void* dp = offload_map_alloc(cp, nbytes);
+        offload_map_alloc(cp, nbytes);
 
         // Make shared ptr.
-        auto _base = std::shared_ptr<T>(cp, AlignedDeleter(nbytes, dp));
+        auto _base = std::shared_ptr<T>(cp, AlignedDeleter(nbytes));
         return _base;
     }
 
@@ -104,8 +103,8 @@ namespace yask {
         int _numa_pref;
 
         // Ctor saves data needed for freeing.
-        NumaDeleter(std::size_t nbytes, void* devp, int numa_pref) :
-            DeleterBase(nbytes, devp),
+        NumaDeleter(std::size_t nbytes, int numa_pref) :
+            DeleterBase(nbytes),
             _numa_pref(numa_pref)
         { }
 
@@ -119,10 +118,10 @@ namespace yask {
         char* cp = numa_alloc(nbytes, numa_pref);
 
         // Map alloc to device.
-        void* dp = offload_map_alloc(cp, nbytes);
+        offload_map_alloc(cp, nbytes);
 
         // Make shared ptr.
-        auto _base = std::shared_ptr<T>(cp, NumaDeleter(nbytes, dp, numa_pref));
+        auto _base = std::shared_ptr<T>(cp, NumaDeleter(nbytes, numa_pref));
         return _base;
     }
 
@@ -131,8 +130,8 @@ namespace yask {
     struct PmemDeleter : public DeleterBase {
 
         // Ctor saves data needed for freeing.
-        PmemDeleter(std::size_t nbytes, void* devp) :
-            DeleterBase(nbytes, devp)
+        PmemDeleter(std::size_t nbytes) :
+            DeleterBase(nbytes)
         { }
 
         // Free p.
@@ -145,10 +144,10 @@ namespace yask {
         char* cp = pmem_alloc(nbytes, pmem_dev);
 
         // Map alloc to device.
-        void* dp = offload_map_alloc(cp, nbytes);
+        offload_map_alloc(cp, nbytes);
 
         // Make shared ptr.
-        auto _base = std::shared_ptr<T>(cp, PmemDeleter(nbytes, dp));
+        auto _base = std::shared_ptr<T>(cp, PmemDeleter(nbytes));
         return _base;
     }
 
@@ -160,9 +159,9 @@ namespace yask {
         MPI_Win* _shm_win;
 
         // Ctor saves data needed for freeing.
-        ShmDeleter(std::size_t nbytes, void* devp,
+        ShmDeleter(std::size_t nbytes,
                    const MPI_Comm* shm_comm, MPI_Win* shm_win):
-            DeleterBase(nbytes, devp),
+            DeleterBase(nbytes),
             _shm_comm(shm_comm),
             _shm_win(shm_win)
         { }
@@ -178,10 +177,10 @@ namespace yask {
         char* cp = shm_alloc(nbytes, shm_comm, shm_win);
 
         // Map alloc to device.
-        void* dp = offload_map_alloc(cp, nbytes);
+        offload_map_alloc(cp, nbytes);
 
         // Make shared ptr.
-        auto _base = std::shared_ptr<T>(cp, ShmDeleter(nbytes, dp, shm_comm, shm_win));
+        auto _base = std::shared_ptr<T>(cp, ShmDeleter(nbytes, shm_comm, shm_win));
         return _base;
     }
 

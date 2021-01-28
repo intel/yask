@@ -30,156 +30,33 @@ IN THE SOFTWARE.
 
 namespace yask {
 
-    // Get device ptr from any host ptr.
+    // Get device addr from any mapped host addr.
     template <typename T>
-    T* get_dev_ptr(T* hostp) {
+    T* get_dev_ptr(T* hostp, bool must_be_mapped = true) {
         #ifdef USE_OFFLOAD_NO_USM
-        if (KernelEnv::_use_offload) {
-            auto devn = KernelEnv::_omp_devn;
-            if (hostp)
-                assert(omp_target_is_present(hostp, devn));
-            else
-                return NULL;
+        if (!hostp)
+            return NULL;
+        auto devn = KernelEnv::_omp_devn;
+        bool is_present = omp_target_is_present(hostp, devn);
+        if (!is_present && !must_be_mapped)
+            return NULL;
+        assert(is_present);
 
-            // Temp var to capture device ptr.
-            T* dp = 0;
+        // Temp var to capture device ptr.
+        T* dp = 0;
 
-            // Get pointer on device.
-            #pragma omp target data device(devn) use_device_ptr(hostp)
-            {
-                dp = hostp;
-            }
-            TRACE_MSG("host ptr == " << (void*)hostp <<
-                      "; dev ptr == " << (void*)dp);
-            return dp;
+        // Get pointer on device via OMP offload map.
+        #pragma omp target data device(devn) use_device_ptr(hostp)
+        {
+            dp = hostp;
         }
+        TRACE_MSG("host addr == " << (void*)hostp <<
+                  "; dev addr == " << (void*)dp);
+        return dp;
         #endif
         return hostp;
     }
-    
-    // Type to track and sync pointers on target device.
-    template <typename T>
-    class synced_ptr {
-    private:
-        T* _p = 0;                  // ptr to data; used on host and device.
-
-        // Additional data when offloading without unified addresses.
-        #ifdef USE_OFFLOAD_NO_USM
-        T* _dp = 0;                 // val of ptr on device.
-        #endif
-
-    protected:
-        // Sync this pointer.
-        // To properly sync pointer on device, '*this' and '*_p' must
-        // already be mapped to device mem.
-        // If 'force' is 'true', always sync; otherwise sync only
-        // if it appears not to have been done since changed.
-        // Returns 'true' if updated.
-        void _sync() {
-            #ifdef USE_OFFLOAD_NO_USM
-            if (KernelEnv::_use_offload) {
-
-                auto devn = KernelEnv::_omp_devn;
-                TRACE_MSG("omp: sync'ing ptr to " << _p << " on host at " << (void*)&_p << "...");
-
-                // Make sure the pointer itself is in mapped mem.
-                assert(omp_target_is_present(&_p, devn));
-
-                // Value on host; converted to target ptr in 'omp target'.
-                T* p = _p;
-                if (p)
-                    assert(omp_target_is_present(p, devn));
-
-                // Temp var to capture device ptr.
-                T* dp;
-                
-                // With tracing.
-                #ifdef TRACE
-
-                // Addr of host ptr.
-                T** pp = &_p;
-
-                // Temp vars for dev ptr.
-                #ifdef CHECK
-                T** dpp1 = yask::get_dev_ptr(pp);
-                #endif
-                T** dpp2 = 0;
-
-                // Set pointer on device and copy back to host.
-                #pragma omp target device(devn) map(from: dp,dpp2)
-                {
-                    _p = p;
-                    dp = p;
-                    dpp2 = pp;
-                }
-
-                // Update values.
-                TRACE_MSG("omp: sync'd ptr to " << _p << " on host at " << (void*)&_p <<
-                          " -> " << _dp << " on device " << devn << " at " << (void*)dpp2 <<
-                          ((dpp2 == 0) ? " *******" : ""));
-                assert(dpp1 == dpp2);
-
-                // Without tracing.
-                #else
-
-                // Set pointer on device and copy back to host.
-                #pragma omp target device(devn) map(from: dp)
-                {
-                    _p = p;
-                    dp = p;
-                }
-                #endif
-
-                // Update values.
-                _dp = dp;
-            }
-            else
-                _dp = _p;
-            #endif
-        }
         
-    public:
-        synced_ptr(T* p) : _p(p) { }
-        synced_ptr() : synced_ptr<T>(0) { }
-
-        // Accessors.
-        T* get() { return _p; }
-        const T* get() const { return _p; }
-        operator T*() { return _p; }
-        operator const T*() { return _p; }
-        T* operator->() { return _p; }
-        const T* operator->() const { return _p; }
-        T& operator*() { return *_p; }
-        const T& operator*() const { return *_p; }
-        T& operator[](size_t i) { return _p[i]; }
-        const T& operator[](size_t i) const { return _p[i]; }
-        T& operator[](long i) { return _p[i]; }
-        const T& operator[](long i) const { return _p[i]; }
-        T& operator[](int i) { return _p[i]; }
-        const T& operator[](int i) const { return _p[i]; }
-
-        #ifdef USE_OFFLOAD_NO_USM
-        const T* get_dev_ptr() const { return _dp; }
-        #else
-        const T* get_dev_ptr() const { return _p; }
-        #endif
-        
-        // Set pointer value.
-        void operator=(T* p) { _p = p; }
-
-        // Sync pointer on device.
-        inline void sync() {
-            _sync();
-        }
-    
-        // Set to given value and sync.
-        inline void set_and_sync(T* p) {
-            _p = p;
-            _sync();
-        }
-
-    };
-    
     #ifdef USE_OFFLOAD_NO_USM
 
     // Allocate space for 'num' 'T' objects on offload device.
@@ -209,22 +86,24 @@ namespace yask {
 
     // Unmap 'hostp' from 'devp' on offload device.
     // Free space for 'num' 'T' objects on offload device.
+    // Not checking KernelEnv::_use_offload because this is often
+    // called from destructor which may be after _use_offload has
+    // been changed since offload_map_alloc() was called.
     template <typename T>
-    void offload_map_free(void* devp, T* hostp, size_t num) {
-        if (KernelEnv::_use_offload) {
-            assert(hostp);
-            assert(devp);
-            auto nb = sizeof(T) * num;
-            auto devn = KernelEnv::_omp_devn;
-            TRACE_MSG("unmapping " << (void*)hostp << " from " << devp << " on OMP dev " << devn);
-            assert(omp_target_is_present(hostp, devn));
-            auto res = omp_target_disassociate_ptr(hostp, devn);
-            if (res)
-                THROW_YASK_EXCEPTION("error: cannot unmap OMP device ptr");
-            TRACE_MSG("freeing " << make_byte_str(nb) << " on OMP dev " << devn);
-            omp_target_free(devp, devn);
-            TRACE_MSG("done unmapping and freeing");
-        }
+    void _offload_map_free(void* devp, T* hostp, size_t num) {
+        if (!devp || !hostp)
+            return;
+        auto nb = sizeof(T) * num;
+        auto devn = KernelEnv::_omp_devn;
+        TRACE_MSG("unmapping " << (void*)hostp << " from " << devp << " on OMP dev " << devn);
+        assert(omp_target_is_present(hostp, devn));
+        assert(get_dev_ptr(hostp) == devp);
+        auto res = omp_target_disassociate_ptr(hostp, devn);
+        if (res)
+            THROW_YASK_EXCEPTION("error: cannot unmap OMP device ptr");
+        TRACE_MSG("freeing " << make_byte_str(nb) << " on OMP dev " << devn);
+        omp_target_free(devp, devn);
+        TRACE_MSG("done unmapping and freeing");
     }
 
     // Unmap 'hostp' on offload device.
@@ -232,15 +111,13 @@ namespace yask {
     // Free space for 'num' 'T' objects on offload device.
     template <typename T>
     void offload_map_free(T* hostp, size_t num) {
-        if (KernelEnv::_use_offload) {
-            void* devp = get_dev_ptr(hostp);
-            offload_map_free(devp, hostp, num);
-        }
+        void* devp = get_dev_ptr(hostp, false);
+        _offload_map_free(devp, hostp, num);
     }
 
     // Copy data to device.
     template <typename T>
-    void offload_copy_to_device(void* devp, T* hostp, size_t num) {
+    void _offload_copy_to_device(void* devp, T* hostp, size_t num) {
         if (KernelEnv::_use_offload) {
             assert(hostp);
             assert(devp);
@@ -258,13 +135,13 @@ namespace yask {
     void offload_copy_to_device(T* hostp, size_t num) {
         if (KernelEnv::_use_offload) {
             void* devp = get_dev_ptr(hostp);
-            offload_copy_to_device(devp, hostp, num);
+            _offload_copy_to_device(devp, hostp, num);
         }
     }
 
     // Copy data from device.
     template <typename T>
-    void offload_copy_from_device(void* devp, T* hostp, size_t num) {
+    void _offload_copy_from_device(void* devp, T* hostp, size_t num) {
         if (KernelEnv::_use_offload) {
             assert(hostp);
             assert(devp);
@@ -282,7 +159,7 @@ namespace yask {
     void offload_copy_from_device(T* hostp, size_t num) {
         if (KernelEnv::_use_offload) {
             void* devp = get_dev_ptr(hostp);
-            offload_copy_from_device(devp, hostp, num);
+            _offload_copy_from_device(devp, hostp, num);
         }
     }
 
@@ -292,31 +169,119 @@ namespace yask {
     template <typename T>
     void* offload_map_alloc(T* hostp, size_t num) { return hostp; }
     template <typename T>
-    void offload_map_free(void* devp, T* hostp, size_t num) { }
+    void _offload_map_free(void* devp, T* hostp, size_t num) { }
     template <typename T>
     void offload_map_free(T* hostp, size_t num) { }
     template <typename T>
-    void offload_copy_to_device(void* devp, T* hostp, size_t num) { }
+    void _offload_copy_to_device(void* devp, T* hostp, size_t num) { }
     template <typename T>
     void offload_copy_to_device(T* hostp, size_t num) { }
     template <typename T>
-    void offload_copy_from_device(void* devp, T* hostp, size_t num) { }
+    void _offload_copy_from_device(void* devp, T* hostp, size_t num) { }
     template <typename T>
     void offload_copy_from_device(T* hostp, size_t num) { }
     #endif
 
     // Non-typed versions.
-    inline void offload_copy_to_device(void* devp, void* hostp, size_t nbytes) {
-        offload_copy_to_device(devp, (char*)hostp, nbytes);
+    inline void _offload_copy_to_device(void* devp, void* hostp, size_t nbytes) {
+        _offload_copy_to_device(devp, (char*)hostp, nbytes);
     }
     inline void offload_copy_to_device(void* hostp, size_t nbytes) {
         offload_copy_to_device((char*)hostp, nbytes);
     }
-    inline void offload_copy_from_device(void* devp, void* hostp, size_t nbytes) {
-        offload_copy_from_device(devp, (char*)hostp, nbytes);
+    inline void _offload_copy_from_device(void* devp, void* hostp, size_t nbytes) {
+        _offload_copy_from_device(devp, (char*)hostp, nbytes);
     }
     inline void offload_copy_from_device(void* hostp, size_t nbytes) {
         offload_copy_from_device((char*)hostp, nbytes);
     }
+
+    // Type to track and sync pointers on target device.
+    template <typename T>
+    class synced_ptr {
+    private:
+        T* _p = 0;                  // ptr to data; used on host and device.
+
+        // Additional data when offloading without unified addresses.
+        #ifdef USE_OFFLOAD_NO_USM
+        T* _dp = 0;                 // val of ptr on device.
+        #endif
+
+    protected:
+        // Sync this pointer.
+        // To properly sync pointer on device, '*this' and '*_p' must
+        // already be mapped to device mem.
+        void _sync() {
+            #ifdef USE_OFFLOAD_NO_USM
+            if (KernelEnv::_use_offload) {
+                auto devn = KernelEnv::_omp_devn;
+                TRACE_MSG("omp: sync'ing ptr to " << _p << " on host...");
+                
+                // Value of ptr on dev.
+                _dp = yask::get_dev_ptr(_p);
+
+                // Addr of ptr on host & dev.
+                T** pp = &_p;
+                T** dpp = yask::get_dev_ptr(pp);
+
+                // Set pointer on device to val of ptr on dev.
+                _offload_copy_to_device(dpp, &_dp, 1);
+
+                TRACE_MSG("omp: sync'd ptr to " << _p << " on host at " << (void*)pp <<
+                          " -> " << _dp << " on device " << devn << " at " << (void*)dpp <<
+                          ((dpp == 0) ? " *******" : ""));
+            }
+            else
+                _dp = _p;
+            #endif
+        }
+        
+    public:
+        synced_ptr(T* p) : _p(p) { }
+        synced_ptr() : synced_ptr<T>(0) { }
+
+        // Accessors.
+        T* get() { return _p; }
+        const T* get() const { return _p; }
+        operator T*() { return _p; }
+        operator const T*() { return _p; }
+        T* operator->() { return _p; }
+        const T* operator->() const { return _p; }
+        T& operator*() { return *_p; }
+        const T& operator*() const { return *_p; }
+        T& operator[](size_t i) { return _p[i]; }
+        const T& operator[](size_t i) const { return _p[i]; }
+        T& operator[](long i) { return _p[i]; }
+        const T& operator[](long i) const { return _p[i]; }
+        T& operator[](int i) { return _p[i]; }
+        const T& operator[](int i) const { return _p[i]; }
+
+        // Get pointer on device or NULL if not yet resolved.
+        #ifdef USE_OFFLOAD_NO_USM
+        const T* get_dev_ptr() const { return _dp; }
+
+        // Get pointer on host if not offloading or with USM.
+        #else
+        const T* get_dev_ptr() const { return _p; }
+        #endif
+        
+        // Set pointer value.
+        void operator=(T* p) {
+            _p = p;
+            _dp = 0;
+        }
+
+        // Sync pointer on device.
+        inline void sync() {
+            _sync();
+        }
+    
+        // Set to given value and sync.
+        inline void set_and_sync(T* p) {
+            operator=(p);
+            _sync();
+        }
+
+    };
     
 } // namespace yask.
