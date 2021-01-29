@@ -451,7 +451,6 @@ else
  YK_CXXCMD	:=	$(YK_CXX)
  YK_SCRIPT_FLAGS += -ranks 1
 endif
-YK_LD		:=	$(YK_CXXCMD)
 
 # Compile with model_cache=1 or 2 to check prefetching.
 # Turn off OpenMP when modeling a cache.
@@ -587,7 +586,7 @@ $(YK_LIB): $(YK_OBJS) $(YK_EXT_OBJS)
 
 $(YK_EXEC): yask_main.cpp $(YK_LIB)
 	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(YK_LD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
 	@ls -l $@
 
 $(YK_SCRIPT): ./yask.sh
@@ -888,7 +887,7 @@ block_threads	:=	2
 
 $(YK_OMP_TEST_EXEC): $(YK_TEST_SRC_DIR)/openmp_test.cpp
 	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< -o $@
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< -o $@ $(YK_LIBS)
 	@ls -l $@
 
 cxx-yk-omp-test:
@@ -899,7 +898,7 @@ cxx-yk-omp-test:
 
 $(YK_VAR_TEST_EXEC): $(YK_TEST_SRC_DIR)/var_test.cpp $(YK_LIB)
 	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
 	@ls -l $@
 
 cxx-yk-var-test:
@@ -913,7 +912,7 @@ cxx-yk-var-test:
 # Build C++ kernel tests.
 $(YK_API_TEST_EXEC): $(YK_TEST_SRC_DIR)/yask_kernel_api_test.cpp $(YK_LIB)
 	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
 	@ls -l $@
 
 # Build and run C++ tests.
@@ -930,7 +929,7 @@ py-yk-api-test: $(YK_TEST_SRC_DIR)/yask_kernel_api_test.py $(YK_PY_LIB)
 # Build C++ kernel tests with exceptions.
 $(YK_API_TEST_EXEC_WITH_EXCEPTION): $(YK_TEST_SRC_DIR)/yask_kernel_api_exception_test.cpp $(YK_LIB)
 	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
 	@ls -l $@
 
 # Run C++ tests with exceptions.
@@ -1087,7 +1086,7 @@ stencil-tests:
 	$(MAKE) 4d-tests
 
 unit-tests:
-	$(MAKE) cxx-yk-omp-test
+	$(MAKE) clean; $(MAKE) cxx-yk-omp-test
 	$(MAKE) clean; $(MAKE) cxx-yk-var-test stencil=test_3d $(call SET_FOLD,x=2 y=2)
 
 all-tests:
