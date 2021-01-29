@@ -30,14 +30,18 @@ IN THE SOFTWARE.
 
 namespace yask {
 
-    // Get device addr from any mapped host addr.
+    // Get device addr from any mapped host addr 'hostp'.
+    // If 'must_be_mapped' is true, assertion will fail if not mapped.
+    // If 'enable_trace' is true, host and device addrs will be printed when
+    // tracing. Make sure 'enable_trace' is false if called from 'TRACE_MSG'
+    // to avoid deadlock.
     template <typename T>
-    T* get_dev_ptr(T* hostp, bool must_be_mapped = true) {
+    T* get_dev_ptr(T* hostp, bool must_be_mapped = true, bool enable_trace = true) {
         #ifdef USE_OFFLOAD_NO_USM
         if (!hostp)
             return NULL;
         auto devn = KernelEnv::_omp_devn;
-        bool is_present = omp_target_is_present(hostp, devn);
+        bool is_present = omp_target_is_present((void*)hostp, devn);
         if (!is_present && !must_be_mapped)
             return NULL;
         assert(is_present);
@@ -52,8 +56,10 @@ namespace yask {
         {
             dp = hostp;
         }
-        TRACE_MSG("host addr == " << (void*)hostp <<
-                  "; dev addr == " << (void*)dp);
+        if (enable_trace) {
+            TRACE_MSG("host addr == " << (void*)hostp <<
+                      "; dev addr == " << (void*)dp);
+        }
         return dp;
         #endif
         return hostp;

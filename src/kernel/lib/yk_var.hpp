@@ -1374,13 +1374,13 @@ namespace yask {
                     ofs.set_vals_same(0);
                     Indices pt(ofs);
 
-                    // TODO: move target parallel up to this level.
+                    // TODO: move omp target up to this level.
                     for (idx_t j = 0; j < nj; j++) {
                         pt = firstv.add_elements(ofs);
 
-                        #if 0
-                        TRACE_MSG("copy starting at " << pt.make_val_str() <<
-                                " and buf ofs " << (tofs + j * ni));
+                        #ifdef DEBUG_COPY
+                        TRACE_MSG("copying " << ni << " vec(s) starting at " <<
+                                  pt.make_val_str() << " and buf ofs " << (tofs + j * ni));
                         #endif
                         _Pragma("omp target parallel for firstprivate(pt) device(devn)")
                             for (idx_t i = 0; i < ni; i++) {
@@ -1388,15 +1388,9 @@ namespace yask {
                                 pt[ip] = firstv[ip] + ofs[ip] + i;
                          
                                 // Do the copy operation specified in visitor.
-                                #if 0
-                                TRACE_MSG(" copying at " << pt.make_val_str() <<
-                                          " and buf ofs " << bofs << " on thread " <<
-                                          omp_get_thread_num());
-                                #endif
                                 Visitor::do_copy(core_p,
                                                  ((real_vec_t*)buffer_ptr), bofs,
                                                  pt, ti);
-                                //pt[ip]++;
                             }
                         
                         // Jump to next index.

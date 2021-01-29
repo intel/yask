@@ -136,8 +136,14 @@ namespace yask {
             if (is_scratch()) oss << "scratch ";
             if (is_user_var()) oss << "user-defined ";
             if (_fixed_size) oss << "fixed-size ";
-            oss << _make_info_string() << " and meta-data at " <<
-                (void*)this;
+            oss << _make_info_string() <<
+                ", meta-data at " << (void*)this <<
+                ", and core-data at " << (void*)_corep;
+            #ifdef USE_OFFLOAD
+            if (KernelEnv::_use_offload)
+                oss << " (" << (void*)get_dev_ptr(_corep, false, false) <<
+                    " on device)";
+            #endif
             if (long_info) {
                 oss << " for ";
                 if (_corep->_domains._get_num_dims())

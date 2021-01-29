@@ -209,19 +209,23 @@ typedef std::uint64_t uidx_t;
 // Macro for trace message.
 // Enabled only if compiled with TRACE macro and run with -trace option.
 #ifdef TRACE
+#ifdef TRACE_FULL_FN
 # if defined __cplusplus ? __GNUC_PREREQ (2, 6) : __GNUC_PREREQ (2, 4)
-#   define __TRACE_FUNCTION	__PRETTY_FUNCTION__
+#   define __TRACE_FN	__PRETTY_FUNCTION__
 # else
-#  if defined __STDC_VERSION__ && __STDC_VERSION__ >= 199901L
-#   define __TRACE_FUNCTION	__func__
-#  else
-#   define __TRACE_FUNCTION	((__const char *) 0)
-#  endif
+#   define __TRACE_FN	" unknown function"
 # endif
-#define TRACE_MSG(msg) do {                              \
-        if (KernelEnv::_trace) {                          \
-            DEBUG_MSG("YASK: " << msg << " at " << __FILE__ << ":" << __LINE__ << \
-                      " in " << (__TRACE_FUNCTION ? __TRACE_FUNCTION : " unknown function" )); \
+#else
+# define __TRACE_FN __func__
+#endif
+#define TRACE_MSG(msg) do {                                             \
+        if (KernelEnv::_trace) {                                        \
+            std::string fname(__FILE__);                                \
+            const auto last_slash_idx = fname.find_last_of("/");        \
+            if (std::string::npos != last_slash_idx)                    \
+                fname.erase(0, last_slash_idx + 1);                     \
+            DEBUG_MSG("YASK: " << msg << " at " << fname << ":" << __LINE__ << \
+                      " in " << __TRACE_FN);                            \
         } } while(0)
 #else
 #define TRACE_MSG(msg) ((void)0)

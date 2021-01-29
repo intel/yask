@@ -51,10 +51,17 @@ namespace yask {
         else
             oss << _var_dims._get_num_dims() << "-D var (" <<
                 _var_dims.make_dim_val_str(" * ") << ")";
-        if (_elems)
-            oss << " with storage at " << _elems << " containing ";
+        if (_elems) {
+            oss << " with storage at " << _elems;
+            #ifdef USE_OFFLOAD
+            if (KernelEnv::_use_offload)
+                oss << " (" << (void*)get_dev_ptr(_elems, false, false) <<
+                    " on device)";
+            #endif
+            oss << " containing ";
+        }
         else
-            oss << " with storage not yet allocated for ";
+            oss << " with storage not allocated for ";
         oss << make_byte_str(get_num_bytes()) <<
             " (" << make_num_str(get_num_elems()) << " " <<
             elem_name << " element(s) of " <<

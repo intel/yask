@@ -66,7 +66,7 @@ void run_tests(int argc, char* argv[]) {
     // Set domain size.
     int i = 0;
     for (auto dname : ksoln->get_domain_dim_names()) {
-        ksoln->set_rank_domain_size(dname, 13 + i * 2);
+        ksoln->set_rank_domain_size(dname, 3 + i * 2);
         i++;
     }
 
@@ -124,7 +124,7 @@ void run_tests(int argc, char* argv[]) {
         auto sizesf = gb3f->get_allocs();
 
         // gf3 may be larger because of folding.
-        assert(sizes <= sizesf);
+        assert(sizes.product() <= sizesf.product());
 
         os << "Setting vals in " << gb3->get_name() << endl;
         gb3->set_all_elements_in_seq(1.0);
@@ -177,13 +177,19 @@ void run_tests(int argc, char* argv[]) {
                 #ifdef USE_OFFLOAD
             case 2: {
                 os << " by slice then copy to/from device...\n";
+
+                // Same as test 1.
                 gb3->get_elements_in_slice(buf, firsti, lasti, false);
                 gb3f->set_elements_in_slice(buf, firsti, lasti, false);
+
+                // Copy data to device; invalidate host data; copy data back.
                 gb3f->copy_data_to_device();
                 gb3f->set_all_elements_same(-2.0);
                 gb3f->copy_data_from_device();
                 break;
             }
+                #if 0
+                // OMP sections across 2 modules not currently supported.
             case 3: {
                 os << " by slice on device...\n";
                 assert(VLEN_X * VLEN_Y * VLEN_Z == 1);
@@ -201,6 +207,8 @@ void run_tests(int argc, char* argv[]) {
                 gb3f->copy_data_from_device();
                 break;
             }
+                #endif
+                
                 #endif
 
             default:
