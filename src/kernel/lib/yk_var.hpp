@@ -1374,11 +1374,13 @@ namespace yask {
                     ofs.set_vals_same(0);
                     Indices pt(ofs);
 
+                    // Run outer loop on device serially.
                     _Pragma("omp target device(devn)")
                     for (idx_t j = 0; j < nj; j++) {
                         pt = firstv.add_elements(ofs);
 
-                        //_Pragma("omp parallel for firstprivate(pt)")
+                        // Run inner loop in parallel.
+                        _Pragma("omp parallel for firstprivate(pt)")
                             for (idx_t i = 0; i < ni; i++) {
                                 idx_t bofs = tofs + j * ni + i;
                                 pt[ip] = firstv[ip] + ofs[ip] + i;
