@@ -818,18 +818,19 @@ code-stats: kernel
 # Print some usage info.
 help:
 	@echo "Example builds of kernel cmd-line tool:"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd # Build iso3dfd stencil with default settings"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd radius=4 # Specify stencil radius"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd           # Build iso3dfd stencil with default settings"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg               # Build ssg stencil with default settings"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd radius=4  # Specify stencil radius"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd radius=2 YK_STENCIL=iso3dfd_r2 # Specify binary stencil name"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd arch=knl # Specify arch target"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd arch=knl  # Specify arch target"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg fold='x=1,y=2,z=4' # Specify folding (data layout)"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg cluster='x=2' # Specify clustering (unrolling)"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg real_bytes=8 # Use 8-byte (double) floats"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg mpi=0 # No MPI support"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=awp vtune=1 # Add VTune start/stop instrumentation"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg real_bytes=8  # Use 8-byte (double) floats"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg mpi=0         # No MPI support"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=awp vtune=1       # Add VTune start/stop instrumentation"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=fsg YK_CXXOPT='-O2' # Use O2 optimization"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=fsg YK_CXX=icpc # Use classic Intel compiler"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg YK_CXX=g++ # Use gnu compiler"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=fsg YK_CXX=icpc   # Use classic Intel compiler"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg YK_CXX=g++    # Use gnu compiler"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg MPI_CXX=mpiCC # Specify MPI compiler"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=awp YK_CXX=icpc EXTRA_YK_CXXFLAGS='-qopt-report -Fa' # Emit opt-report and asm file"; \
 	echo " "
@@ -839,13 +840,15 @@ help:
 	echo " "
 	@echo "Example debug builds of kernel cmd-line tool:"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd mpi=0 omp=0 YK_CXXOPT='-O0' check=1 # No optimization, OpenMP, or MPI; use internal checking"; \
-	echo " $(MAKE) clean; $(MAKE) -j arch=avx2 stencil=test_2d YK_CXXOPT='-O0' trace=1 # Enable tracing; run with '-trace' to get trace"; \
+	echo " $(MAKE) clean; $(MAKE) -j arch=avx2 stencil=test_2d YK_CXXOPT='-O0' trace=1   # Enable tracing; run with '-trace' to get trace"; \
 	echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=ssg radius=0 fold='x=1,y=1,z=1' YK_CXXOPT='-O0' trace_mem=1 # Trace all mem accesses with '-trace'"; \
 	echo " "
-	@echo "Example regression tests (run these before any git push or pull request):"; \
-	echo " $(MAKE) -j all   # Normal full API and stencil tests"; \
-	echo " $(MAKE) -j all YK_CXXOPT=-O1  # Test at O1 optimization"; \
-	echo " $(MAKE) -j all YK_CXX=g++ mpi=0   # Test g++ w/o MPI"
+	@echo "Example regression tests (run before any git push or pull request):"; \
+	echo " $(MAKE) -j all                   # Normal full API and stencil tests"; \
+	echo " $(MAKE) -j all ranks=8           # Test with 8 MPI ranks"; \
+	echo " $(MAKE) -j all YK_CXXOPT=-O1     # Test at O1 optimization"; \
+	echo " $(MAKE) -j all YK_CXX=g++ mpi=0  # Test g++ w/o MPI"; \
+	echo " $(MAKE) -j all YASK_OUTPUT_DIR=./test  # Test using alternate output dir"
 
 
 #################################

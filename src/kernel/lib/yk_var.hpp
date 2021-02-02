@@ -1370,29 +1370,23 @@ namespace yask {
                 if (on_device) {
                     #ifdef USE_OFFLOAD
                     auto nj = vec_range.product();
-                    Indices ofs(vec_range);
-                    ofs.set_vals_same(0);
-                    Indices pt(ofs);
 
-                    // Run outer loop on device serially.
-                    _Pragma("omp target device(devn)")
+                    // Run outer loop on device in parallel.
+                    _Pragma("omp target parallel for device(devn)")
                     for (idx_t j = 0; j < nj; j++) {
-                        pt = firstv.add_elements(ofs);
+                        Indices ofs = vec_range.unlayout(false, j);
+                        Indices pt = firstv.add_elements(ofs);
 
-                        // Run inner loop in parallel.
-                        _Pragma("omp parallel for firstprivate(pt)")
-                            for (idx_t i = 0; i < ni; i++) {
-                                idx_t bofs = tofs + j * ni + i;
-                                pt[ip] = firstv[ip] + ofs[ip] + i;
-                         
-                                // Do the copy operation specified in visitor.
-                                Visitor::do_copy(core_p,
-                                                 ((real_vec_t*)buffer_ptr), bofs,
-                                                 pt, ti);
-                            }
-                        
-                        // Jump to next index.
-                        vec_range.next_index(false, ofs);
+                        // Inner loop.
+                        for (idx_t i = 0; i < ni; i++) {
+                            pt[ip] = firstv[ip] + i;
+                            idx_t bofs = tofs + j * ni + i;
+                            
+                            // Do the copy operation specified in visitor.
+                            Visitor::do_copy(core_p,
+                                             ((real_vec_t*)buffer_ptr), bofs,
+                                             pt, ti);
+                        }
                     }
                     #else
                     THROW_YASK_EXCEPTION("internal error: call to _copy_vecs_in_slice on device"
@@ -1409,13 +1403,13 @@ namespace yask {
                          
                          // Inner loop.
                          for (idx_t i = 0; i < ni; i++) {
+                             pt[ip] = firstv[ip] + i;
                              idx_t bofs = tofs + idx * ni + i;
                              
                              // Do the copy operation specified in visitor.
                              Visitor::do_copy(core_p,
                                               ((real_vec_t*)buffer_ptr), bofs,
                                               pt, ti);
-                             pt[ip]++;
                          }
                          return true;    // keep going.
                      });
