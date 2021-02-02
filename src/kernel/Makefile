@@ -813,7 +813,7 @@ echo-settings:
 # won't rebuild if only '-Fa' is added.)
 code-stats: kernel
 	@echo "Code stats for stencil computation:"
-	$(PERL) $(VIEW_ASM) -p -l -f=calc_loop_of_clusters factory.s
+	$(PERL) $(VIEW_ASM) -p -l -f=calc_clusters factory.s
 
 # Print some usage info.
 help:

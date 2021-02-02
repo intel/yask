@@ -1374,15 +1374,11 @@ namespace yask {
                     ofs.set_vals_same(0);
                     Indices pt(ofs);
 
-                    // TODO: move omp target up to this level.
+                    _Pragma("omp target device(devn)")
                     for (idx_t j = 0; j < nj; j++) {
                         pt = firstv.add_elements(ofs);
 
-                        #ifdef DEBUG_COPY
-                        TRACE_MSG("copying " << ni << " vec(s) starting at " <<
-                                  pt.make_val_str() << " and buf ofs " << (tofs + j * ni));
-                        #endif
-                        _Pragma("omp target parallel for firstprivate(pt) device(devn)")
+                        //_Pragma("omp parallel for firstprivate(pt)")
                             for (idx_t i = 0; i < ni; i++) {
                                 idx_t bofs = tofs + j * ni + i;
                                 pt[ip] = firstv[ip] + ofs[ip] + i;

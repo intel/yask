@@ -31,7 +31,7 @@ namespace yask {
     typedef std::vector<idx_t> VarDimSizes;
     typedef std::vector<std::string> VarDimNames;
 
-    OMP_DECL_TARGET
+    OMP_DECL_TARGET;
     
     // Max number of indices that can be held.
     // Note use of "+max_idxs" in code below to avoid compiler
@@ -42,7 +42,7 @@ namespace yask {
     // Step dim is always in [0] of an Indices type (if it is used).
     constexpr int step_posn = 0;
 
-    OMP_END_DECL_TARGET
+    OMP_END_DECL_TARGET;
 
     // A class to hold up to a given number of sizes or indices efficiently.
     // Similar to a Tuple, but less overhead and doesn't keep names.
@@ -50,7 +50,7 @@ namespace yask {
     // TODO: add a template parameter for max indices.
     // TODO: ultimately, combine with Tuple w/o loss of efficiency.
     class Indices {
-        OMP_DECL_TARGET
+        OMP_DECL_TARGET;
 
     protected:
         idx_t _idxs[+max_idxs]; // Index values.
@@ -60,15 +60,6 @@ namespace yask {
         // Ctors.
         Indices() : _ndims(0) { }
         Indices(int ndims) : _ndims(ndims) { } // NB: _idxs remain uninit!
-        Indices(const IdxTuple& src) {
-            set_from_tuple(src);
-        }
-        Indices(const VarIndices& src) {
-            set_from_vec(src);
-        }
-        Indices(const std::initializer_list<idx_t>& src) {
-            set_from_init_list(src);
-        }
         Indices(const idx_t src[], int ndims) {
             set_from_array(src, ndims);
         }
@@ -96,32 +87,6 @@ namespace yask {
             host_assert(i >= 0);
             host_assert(i < _ndims);
             return _idxs[i];
-        }
-
-        // Write to an IdxTuple.
-        // The 'tgt' must have the same number of dims.
-        void set_tuple_vals(IdxTuple& tgt) const {
-            host_assert(tgt.size() == size_t(_ndims));
-            for (int i = 0; i < _ndims; i++)
-                if (size_t(i) < tgt.size())
-                    tgt.set_val(i, _idxs[i]);
-        }
-
-        // Read from an IdxTuple.
-        void set_from_tuple(const IdxTuple& src) {
-            host_assert(src.size() <= +max_idxs);
-            _ndims = int(src.size());
-            for (int i = 0; i < _ndims; i++)
-                _idxs[i] = src.get_val(i);
-        }
-
-        // Other inits.
-        void set_from_vec(const VarIndices& src) {
-            host_assert(src.size() <= +max_idxs);
-            int n = int(src.size());
-            for (int i = 0; i < n; i++)
-                _idxs[i] = src[i];
-            _ndims = n;
         }
 
         // default n => don't change _ndims.
@@ -198,21 +163,43 @@ namespace yask {
             return false;       // equal, so not greater than.
         }
 
+        // In-place math function types, i.e., 'lhs' is modified.
+        struct AddFunc {
+            ALWAYS_INLINE static void func(idx_t& lhs, idx_t rhs) { lhs += rhs; }
+        };
+        struct SubFunc {
+            ALWAYS_INLINE static void func(idx_t& lhs, idx_t rhs) { lhs -= rhs; }
+        };
+        struct MulFunc {
+            ALWAYS_INLINE static void func(idx_t& lhs, idx_t rhs) { lhs *= rhs; }
+        };
+        struct DivFunc {
+            ALWAYS_INLINE static void func(idx_t& lhs, idx_t rhs) { lhs /= rhs; }
+        };
+        struct MinFunc {
+            ALWAYS_INLINE static void func(idx_t& lhs, idx_t rhs) { lhs = std::min(lhs, rhs); }
+        };
+        struct MaxFunc {
+            ALWAYS_INLINE static void func(idx_t& lhs, idx_t rhs) { lhs = std::max(lhs, rhs); }
+        };
+        
         // Generic element-wise operator.
+        // Instantiated with one of the above structs.
         // Returns a new object.
-        ALWAYS_INLINE Indices combine_elements(std::function<void (idx_t& lhs, idx_t rhs)> func,
-                                               const Indices& other) const {
-            assert(_ndims == other._ndims);
+        template<typename T>
+        ALWAYS_INLINE
+        Indices combine_elements(const Indices& other) const {
+            host_assert(_ndims == other._ndims);
             Indices res(*this);
 
             #if EXACT_INDICES
             // Use just the used elements.
             for (int i = 0; i < _ndims; i++)
-                func(res._idxs[i], other._idxs[i]);
+                T::func(res._idxs[i], other._idxs[i]);
             #else
             // Use all to allow unroll and avoid jumps.
             _UNROLL for (int i = 0; i < +max_idxs; i++)
-                func(res._idxs[i], other._idxs[i]);
+                T::func(res._idxs[i], other._idxs[i]);
             #endif
             return res;
         }
@@ -221,30 +208,25 @@ namespace yask {
         // These all return a new set of Indices rather
         // than modifying this object.
         ALWAYS_INLINE Indices add_elements(const Indices& other) const {
-            return combine_elements([&](idx_t& lhs, idx_t rhs) { lhs += rhs; },
-                                    other);
+            return combine_elements<AddFunc>(other);
         }
         ALWAYS_INLINE Indices sub_elements(const Indices& other) const {
-            return combine_elements([&](idx_t& lhs, idx_t rhs) { lhs -= rhs; },
-                                    other);
+            return combine_elements<SubFunc>(other);
         }
         ALWAYS_INLINE Indices mul_elements(const Indices& other) const {
-            return combine_elements([&](idx_t& lhs, idx_t rhs) { lhs *= rhs; },
-                                    other);
+            return combine_elements<MulFunc>(other);
         }
         ALWAYS_INLINE Indices min_elements(const Indices& other) const {
-            return combine_elements([&](idx_t& lhs, idx_t rhs) { lhs = std::min(lhs, rhs); },
-                                    other);
+            return combine_elements<MinFunc>(other);
         }
         ALWAYS_INLINE Indices max_elements(const Indices& other) const {
-            return combine_elements([&](idx_t& lhs, idx_t rhs) { lhs = std::max(lhs, rhs); },
-                                    other);
+            return combine_elements<MaxFunc>(other);
         }
 
         // Divide done differently to avoid div-by-zero when EXACT_INDICES
         // not defined.
         ALWAYS_INLINE Indices div_elements(const Indices& other) const {
-            assert(_ndims == other._ndims);
+            host_assert(_ndims == other._ndims);
             Indices res(*this);
 
             for (int i = 0; i < _ndims; i++)
@@ -253,20 +235,21 @@ namespace yask {
         }
         
         // Generic element-wise operator with RHS const.
+        // Instantiated with one of the above structs.
         // Returns a new object.
+        template<typename T>
         ALWAYS_INLINE
-        Indices map_elements(std::function<void (idx_t& lhs, idx_t rhs)> func,
-                             idx_t crhs) const {
+        Indices map_elements(idx_t crhs) const {
             Indices res(*this);
 
             #if EXACT_INDICES
             // Use just the used elements.
             for (int i = 0; i < _ndims; i++)
-                func(res._idxs[i], crhs);
+                T::func(res._idxs[i], crhs);
             #else
             // Use all to allow unroll and avoid jumps.
             _UNROLL for (int i = 0; i < +max_idxs; i++)
-                func(res._idxs[i], crhs);
+                T::func(res._idxs[i], crhs);
             #endif
             return res;
         }
@@ -274,33 +257,27 @@ namespace yask {
         // Operate on all elements.
         ALWAYS_INLINE
         Indices add_const(idx_t crhs) const {
-            return map_elements([&](idx_t& lhs, idx_t rhs) { lhs += rhs; },
-                                crhs);
+            return map_elements<AddFunc>(crhs);
         }
         ALWAYS_INLINE
         Indices sub_const(idx_t crhs) const {
-            return map_elements([&](idx_t& lhs, idx_t rhs) { lhs -= rhs; },
-                                crhs);
+            return map_elements<SubFunc>(crhs);
         }
         ALWAYS_INLINE
         Indices mul_const(idx_t crhs) const {
-            return map_elements([&](idx_t& lhs, idx_t rhs) { lhs *= rhs; },
-                                crhs);
+            return map_elements<MulFunc>(crhs);
         }
         ALWAYS_INLINE
         Indices div_const(idx_t crhs) const {
-            return map_elements([&](idx_t& lhs, idx_t rhs) { lhs /= rhs; },
-                                crhs);
+            return map_elements<DivFunc>(crhs);
         }
         ALWAYS_INLINE
         Indices min_const(idx_t crhs) const {
-            return map_elements([&](idx_t& lhs, idx_t rhs) { lhs = std::min(lhs, rhs); },
-                                crhs);
+            return map_elements<MinFunc>(crhs);
         }
         ALWAYS_INLINE
         Indices max_const(idx_t crhs) const {
-            return map_elements([&](idx_t& lhs, idx_t rhs) { lhs = std::max(lhs, rhs); },
-                                crhs);
+            return map_elements<MaxFunc>(crhs);
         }
 
         // Reduce over all elements.
@@ -332,7 +309,7 @@ namespace yask {
             int step_dim = first_inner ? 1 : -1;
             for (int di = start_dim; di != stop_dim; di += step_dim) {
                 size_t dsize = size_t(_idxs[di]);
-                assert (dsize >= 0);
+                host_assert (dsize >= 0);
 
                 // Div offset by product of previous dims.
                 size_t dofs = offset / prev_size;
@@ -344,7 +321,7 @@ namespace yask {
                 res[di] = dofs;
 
                 prev_size *= dsize;
-                assert(prev_size <= size_t(product()));
+                host_assert(prev_size <= size_t(product()));
             }
             return res;
         }
@@ -379,6 +356,46 @@ namespace yask {
                         break;
                 }
             }
+        }
+
+        // Methods below this point are not allowed in OMP target regions.
+        OMP_END_DECL_TARGET;
+        
+        // More ctors.
+        Indices(const IdxTuple& src) {
+            set_from_tuple(src);
+        }
+        Indices(const VarIndices& src) {
+            set_from_vec(src);
+        }
+        Indices(const std::initializer_list<idx_t>& src) {
+            set_from_init_list(src);
+        }
+        
+        // Write to an IdxTuple.
+        // The 'tgt' must have the same number of dims.
+        void set_tuple_vals(IdxTuple& tgt) const {
+            host_assert(tgt.size() == size_t(_ndims));
+            for (int i = 0; i < _ndims; i++)
+                if (size_t(i) < tgt.size())
+                    tgt.set_val(i, _idxs[i]);
+        }
+
+        // Read from an IdxTuple.
+        void set_from_tuple(const IdxTuple& src) {
+            host_assert(src.size() <= +max_idxs);
+            _ndims = int(src.size());
+            for (int i = 0; i < _ndims; i++)
+                _idxs[i] = src.get_val(i);
+        }
+        
+        // Other inits.
+        void set_from_vec(const VarIndices& src) {
+            host_assert(src.size() <= +max_idxs);
+            int n = int(src.size());
+            for (int i = 0; i < n; i++)
+                _idxs[i] = src[i];
+            _ndims = n;
         }
 
         // Call the 'visitor' lambda function at every point sequentially in
@@ -418,9 +435,6 @@ namespace yask {
             return true;
         }
 
-        // Methods below this point are not allowed in OMP target regions.
-        OMP_END_DECL_TARGET
-        
         // Same as visit_all_points(), except ranges of points are visited
         // concurrently, and return value from 'visitor' is ignored.
         void visit_all_points_in_parallel(bool first_inner,

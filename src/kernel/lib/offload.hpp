@@ -276,7 +276,9 @@ namespace yask {
         // Set pointer value.
         void operator=(T* p) {
             _p = p;
+            #ifdef USE_OFFLOAD_NO_USM
             _dp = 0;
+            #endif
         }
 
         // Sync pointer on device.
