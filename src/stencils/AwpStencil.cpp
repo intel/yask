@@ -535,9 +535,6 @@ namespace {
                 // This code is run immediately after 'kernel_soln' is created.
                 soln->CALL_AFTER_NEW_SOLUTION
                     (
-                     // Add extra padding in all dimensions.
-                     kernel_soln.apply_command_line_options("-ep 1");
-                     
                      // Check target at kernel run-time.
                      auto isa = kernel_soln.get_target();
                      if (isa == "knl") {
@@ -550,9 +547,9 @@ namespace {
                          kernel_soln.set_block_size("z", 112);
                      }
                      else if (isa == "avx512") {
-                         kernel_soln.set_block_size("x", 64);
+                         kernel_soln.set_block_size("x", 116);
                          kernel_soln.set_block_size("y", 8);
-                         kernel_soln.set_block_size("z", 108);
+                         kernel_soln.set_block_size("z", 128);
                      }
                      else if (isa == "avx2") {
                          kernel_soln.set_block_size("x", 64);

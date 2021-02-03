@@ -365,7 +365,7 @@ ifeq ($(vtune),1)
   YK_LIBS	+=	-L$(VTUNE_DIR)/lib64
  endif
  YK_LIBS	+=	-littnotify
- YK_VTUNE_CMD	:=	echo "*** VTune command:" vtune -c hpc-performance -start-paused $(YK_SCRIPT) $(YK_SCRIPT_FLAGS) "[options]"
+ YK_VTUNE_CMD	:=	echo "*** Example VTune command:" vtune -c hpc-performance -r vtune.$(YK_TAG) -start-paused $(YK_SCRIPT) $(YK_SCRIPT_FLAGS) "[options]"
 endif
 
 # Compiler-specific settings.

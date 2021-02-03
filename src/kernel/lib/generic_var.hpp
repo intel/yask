@@ -90,7 +90,7 @@ namespace yask {
             #ifdef CHECK
             if (check)
 
-                // Make sure all final 1D index is in bounds.
+                // Make sure final 1D index is in bounds.
                 host_assert(ai < _layout.get_num_elements());
             #endif
             return ai;

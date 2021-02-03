@@ -342,6 +342,16 @@ else
     envs+=" LD_LIBRARY_PATH=$bindir/../lib:$LD_LIBRARY_PATH$libpath"
 fi
 
+# Thread reduction factor.
+tdiv=2  # Assume 2-way HT on.
+if command -v lscpu >/dev/null; then
+    nthr=`lscpu | awk '/Thread.s. per core:/ { print $4 }'`
+    if [[ -n "$nthr" ]]; then
+        tdiv=$nthr
+    fi
+fi
+opts="-thread_divisor $tdiv $opts"
+
 # Commands to capture some important system status and config info for benchmark documentation.
 config_cmds="sleep 1; uptime; lscpu; cpuinfo -A; sed '/^$/q' /proc/cpuinfo; cpupower frequency-info; uname -a; $dump /etc/system-release; $dump /proc/cmdline; $dump /proc/meminfo; free -gt; numactl -H; ulimit -a"
 

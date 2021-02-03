@@ -85,7 +85,7 @@ namespace yask {
     struct YkVarBaseCore {
 
         // The following indices have one value for each dim in the var.
-        // All values are in units of reals, not underlying elements, if different.
+        // All values are in units of reals, not underlying SIMD vectors, if different.
         // See diagram above for '_rank_offsets' and '_local_offsets'.
         // Comments show settings for domain dims | non-domain dims.
         Indices _domains;   // size of "interior" of var | alloc size.
