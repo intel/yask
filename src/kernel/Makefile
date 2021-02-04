@@ -1,6 +1,6 @@
 ##############################################################################
 ## YASK: Yet Another Stencil Kit
-## Copyright (c) 2014-2020, Intel Corporation
+## Copyright (c) 2014-2021, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -340,10 +340,10 @@ ifeq ($(vtune),1)
  YK_LIBS	+=	-L$(VTUNE_GENERIC_DIR)/lib64
  ifneq ($(VTUNE_PROFILER_2021_DIR),)
   VTUNE_DIR	:=	$(VTUNE_PROFILER_2021_DIR)
- else ifneq ($(VTUNE_PROFILER_2020_DIR),)
-  VTUNE_DIR	:=	$(VTUNE_PROFILER_2020_DIR)
- else ifneq ($(VTUNE_AMPLIFIER_2020_DIR),)
-  VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_2020_DIR)
+ else ifneq ($(VTUNE_PROFILER_2021_DIR),)
+  VTUNE_DIR	:=	$(VTUNE_PROFILER_2021_DIR)
+ else ifneq ($(VTUNE_AMPLIFIER_2021_DIR),)
+  VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_2021_DIR)
  else ifneq ($(VTUNE_AMPLIFIER_2019_DIR),)
   VTUNE_DIR	:=	$(VTUNE_AMPLIFIER_2019_DIR)
  else ifneq ($(VTUNE_AMPLIFIER_2018_DIR),)
