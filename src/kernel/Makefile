@@ -56,6 +56,7 @@ check			?=	0
 # code has a large impact, even if not used.
 
 # Enable offload if offload with unified shared mem is enabled.
+# FIXME: offload_usm is not currently enabled.
 ifeq ($(offload_usm),1)
  offload		:=	1
 endif
@@ -71,7 +72,6 @@ endif
 
 # If 'arch' isn't set, determine default architecture by running kernel
 # script w/special knob.
-# The "knc" arch must be set manually because it is always cross-compiled.
 # (Do not assume 'yask.sh' has been installed in $(BIN_OUT_DIR) yet.)
 arch			?=	$(shell $(BASH) ./yask.sh -show_arch)
 
@@ -88,12 +88,10 @@ else ifneq ($(filter $(arch),avx512 avx512-zmm avx512hi avx512f skx skl clx icx)
   TARGET		:=	avx512
 else ifneq ($(filter $(arch),knl),)
   TARGET		:=	knl
-else ifneq ($(filter $(arch),knc),)
-  TARGET		:=	knc
-else ifneq ($(filter $(arch),intel64 cpp),)
+lse ifneq ($(filter $(arch),intel64 cpp),)
   TARGET		:=	intel64
 else
-  $(error Target not recognized; use arch=avx512, avx512-ymm, avx2, avx, knl, knc, or intel64)
+  $(error Target not recognized; use arch=avx512, avx512-ymm, avx2, avx, knl, or intel64)
 endif
 
 # Specify YK_STENCIL and/or YK_ARCH on 'make' cmd-line to name binaries differently.
@@ -107,12 +105,7 @@ YC_STENCIL	?=	$(stencil)
 YC_TARGET	?=	$(TARGET)
 
 # Default compiler settings based on target.
-ifeq ($(TARGET),knc)
-
- ICC_ISA	?=	-mmic
- MACROS		+=	USE_INTRIN512
-
-else ifeq ($(TARGET),knl)
+ifeq ($(TARGET),knl)
 
  # NUMA_PREF=1 causes YASK to use MCDRAM on a node in "flat" memory mode. It
  # will fall-back to NUMA node 0 in "cache" memory mode. It will *NOT* do
@@ -153,7 +146,7 @@ else ifeq ($(TARGET),intel64)
 
 else
 
-$(error Internal error: arch lists are not consistent)
+$(error Internal error: arch lists in Makefile are not consistent)
 
 endif # arch-specific.
 

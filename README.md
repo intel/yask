@@ -68,6 +68,22 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
       for functional testing if you don't have native support for any given instruction set.
 
 ## Backward-compatibility notices
+### Version 4
+* Version 4.00.00 was a major release with a number of notices:
+  - Intel(R) Xeon Phi(TM) x100-family processors (KNC) are no longer supported.
+    (Intel(R) Xeon Phi(TM) x200-family processors (KNL) are still supported.)
+  - Only one thread per core is now used by default on most CPUs.  This is
+    done by passing "-thread_divisor 2" to the executable from `yask.sh` if
+    hyper-threading is enabled.  Consequently, the default number of threads
+    per block is now one.  This change was made based on observed
+    performance on Intel(R) Xeon(R) Scalable Processors.  Previous versions
+    used two threads per block by default and used both hyper-threads if
+    they were enabled.  To use two hyper-threads, you now must explicitly
+    specify "-thread_divisor 1 -block_threads 2".  These changes do not
+    apply to Intel(R) Xeon Phi(TM) x200-family processors (KNL), which
+    continue to use all four hyper-threads per core and eight SW threads per
+    block (because 2 cores share an L2 cache) by default.
+
 ### Version 3
 * Version 3.05.00 changed the default setting of `-use_shm` to `true`.
   Use `-no-use_shm` to disable shared-memory inter-rank communication.

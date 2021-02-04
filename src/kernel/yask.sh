@@ -115,14 +115,13 @@ while true; do
         echo "     Overrides the default architecture determined from /proc/cpuinfo flags."
         echo "     The default <arch> for this host is '$def_arch'."
         echo "     Should correspond to arch=<arch> used during compilation."
-        echo "  -host <hostname>|-mic <N>"
+        echo "  -host <hostname>"
         echo "     Specify host to run executable on."
-        echo "     'ssh <hostname>' will be pre-pended to the sh_prefix command."
-        echo "     If -mic <N> is given, it implies the following (which can be overridden):"
-        echo "       -arch 'knc'"
-        echo "       -host "`hostname`"-mic<N>"
+        echo "     Run sub-shell under 'ssh <hostname>'."
         echo "  -sh_prefix <command>"
         echo "     Run sub-shell under <command>, e.g., a custom ssh command."
+        echo "     If -host and -sh_prefix are both specified, run sub-shell under"
+        echo "     'ssh <hostname> <command>."
         echo "  -exe <dir/file>"
         echo "     Specify <dir/file> as YASK executable instead of one in the same directory as"
         echo "     this script with a name based on stencil and arch."
@@ -180,6 +179,11 @@ while true; do
         shift
         shift
 
+    elif [[ "$1" == "-host" && -n ${2+set} ]]; then
+        host=$2
+        shift
+        shift
+
     elif [[ "$1" == "-sh_prefix" && -n ${2+set} ]]; then
         sh_prefix=$2
         shift
@@ -221,17 +225,6 @@ while true; do
 
     elif [[ "$1" == "-log_dir" && -n ${2+set} ]]; then
         logdir=$2
-        shift
-        shift
-
-    elif [[ "$1" == "-host" && -n ${2+set} ]]; then
-        host=$2
-        shift
-        shift
-
-    elif [[ "$1" == "-mic" && -n ${2+set} ]]; then
-        arch="knc"
-        host=`hostname`-mic$2
         shift
         shift
 
@@ -313,18 +306,8 @@ if [[ -e $make_report ]]; then
     fi
 fi
 
-# Additional setup for KNC.
-if [[ $arch == "knc" && -n "$host" ]]; then
-    dir=/tmp/$USER
-    icc=`which icc`
-    iccdir=`dirname $icc`/../..
-    libpath=":$iccdir/compiler/lib/mic"
-    ssh $host "rm -rf $dir; mkdir -p $dir/bin"
-    scp $exe $host:$dir/bin
-else
-    dir=`pwd`
-    libpath=":$HOME/lib"
-fi
+dir=`pwd`
+libpath=":$HOME/lib"
 
 # Setup to run on specified host.
 if [[ -n "$host" ]]; then
@@ -344,7 +327,9 @@ fi
 
 # Thread reduction factor.
 tdiv=2  # Assume 2-way HT on.
-if command -v lscpu >/dev/null; then
+if [[ $arch == "knl" ]]; then
+    tdiv=1
+elif command -v lscpu >/dev/null; then
     nthr=`lscpu | awk '/Thread.s. per core:/ { print $4 }'`
     if [[ -n "$nthr" ]]; then
         tdiv=$nthr

@@ -85,13 +85,7 @@ namespace yask {
             auto target = get_target();
 
             // Defaults for various targets.
-            if (target == "knc") {
-                if (level == 1)
-                    return 1;
-                else
-                    return 2;
-            }
-            else if (target == "knl") {
+            if (target == "knl") {
                 if (level == 1)
                     return 1;
                 else
@@ -236,8 +230,6 @@ namespace yask {
         // Data itself will be created in analyze_solution().
         if (target == "intel64")
             _printer = new YASKCppPrinter(*this, *_eq_bundles, *_eq_stages, *_cluster_eq_bundles);
-        else if (target == "knc")
-            _printer = new YASKKncPrinter(*this, *_eq_bundles, *_eq_stages, *_cluster_eq_bundles);
         else if (target == "avx" || target == "avx2")
             _printer = new YASKAvx256Printer(*this, *_eq_bundles, *_eq_stages, *_cluster_eq_bundles);
         else if (target == "avx512" || target == "knl")

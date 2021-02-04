@@ -462,8 +462,6 @@ namespace yask {
             REAL_VEC_LOOP(i) (*to)[i] = u.r[i];
             #elif !defined(USE_STREAMING_STORE)
             INAME(store)((imem_t*)to, u.mr);
-            #elif defined(ARCH_KNC)
-            INAME(storenrngo)((imem_t*)to, u.mr);
             #else
             INAME(stream)((imem_t*)to, u.mr);
             #endif
@@ -764,10 +762,6 @@ namespace yask {
             real_vec_t* p = (real_vec_t*)(&r2[count]); // not usually aligned.
             res.u.mr = INAME(loadu)((imem_t const*)p);
 
-            // For DP on KNC, use 32-bit op w/2x count.
-            #elif REAL_BYTES == 8 && defined(ARCH_KNC) && defined(USE_INTRIN512)
-            res.u.mi = _mm512_alignr_epi32(a.u.mi, b.u.mi, count*2);
-
             // Everything else.
             #else
             res.u.mi = INAMEI(alignr)(a.u.mi, b.u.mi, count);
@@ -897,13 +891,6 @@ namespace yask {
             int idx = ctrl.u.ci[i] & ctrl_idx_mask; // index.
             res.u.r[i] = sel ? tmpb.u.r[idx] : tmpa.u.r[idx];
         }
-
-        #elif defined(ARCH_KNC)
-        yask_exception e;
-        std::stringstream err;
-        err << "error: 2-input permute not supported on KNC" << std::endl;
-        e.add_message(err.str());
-        throw e;
 
         #else
         res.u.mi = INAMEI(permutex2var)(a.u.mi, ctrl.u.mi, b.u.mi);
