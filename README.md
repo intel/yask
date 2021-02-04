@@ -1,11 +1,15 @@
 # YASK--Yet Another Stencil Kit
 
-* New YASK users may want to start with the [YASK tutorial](http://intel.github.io/yask/YASK-tutorial.pdf).
-* Users with existing YASK-based code may want to jump to the [backward-compatibility notices](#backward-compatibility-notices).
-* All YASK users will also be interested in the [API documentation](http://intel.github.io/yask/api/html/index.html).
+* New YASK users may want to start with
+the [YASK tutorial](http://intel.github.io/yask/YASK-tutorial.pdf).
+* Users with existing YASK-based code may want to jump to
+the [backward-compatibility notices](#backward-compatibility-notices).
+* All YASK users will also be interested in
+the [API documentation](http://intel.github.io/yask/api/html/index.html).
 
 ## Overview
-YASK is a framework to rapidly create high-performance stencil code including optimizations and features such as
+YASK is a framework to rapidly create high-performance stencil code
+including optimizations and features such as
 * Support for boundary layers and staggered-grid stencils.
 * Vector-folding to increase data reuse via non-traditional data layout.
 * Multi-level OpenMP parallelism to exploit multiple cores and threads.
@@ -14,7 +18,8 @@ YASK is a framework to rapidly create high-performance stencil code including op
 * Temporal tiling in multiple dimensions to further increase cache locality.
 * APIs for C++ and Python.
 
-YASK contains a domain-specific compiler to convert stencil-equation specifications to SIMD-optimized code for Intel(R) Xeon Phi(TM) and Intel(R) Xeon(R) processors.
+YASK contains a domain-specific compiler to convert stencil-equation specifications to
+SIMD-optimized code for Intel(R) Xeon Phi(TM) and Intel(R) Xeon(R) processors.
 
 ### Supported Platforms and Processors:
 * 64-bit Linux.
@@ -27,9 +32,11 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
   Intel(R) Parallel Studio XE Composer Edition for C++ Linux
   for single-socket only
   (2021.1.2 or later recommended).
-     * The "nextgen" Intel(R) C++ compiler (icpx) is the default compiler;
-       however, SIMD operations for functions such as sin() is not supported at this time.
+     * The Intel(R) [oneAPI](https://software.intel.com/content/www/us/en/develop/tools/oneapi.html)
+       C++ compiler (icpx) is the default compiler.
        To use the classic Intel compiler, specify `YK_CXX=icpc` when running `make`.
+       Note that SIMD operations for functions such as sin() are
+       not supported at this time with icpx.
      * If you are using g++ version 8.x or later, Intel(R) C++ version 2019
        or later is required.
      * Building a YASK kernel with the Gnu C++ compiler is also possible.
@@ -40,13 +47,14 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
        Older Gnu C++ compilers can produce kernels that run
        many times slower.
 * Gnu C++ compiler, g++ (4.9.0 or later; 8.2.0 or later recommended).
-  Even when using Intel compilers, they rely on functionality provided by a g++ installation.
+  Even when using Intel compilers, a g++ installation is required.
 * Linux libraries `librt` and `libnuma`.
+* Grep.
 * Perl (5.010 or later).
 * Awk.
 * Gnu make.
 * Bash shell.
-* Numactl utility.
+* Numactl utility if running on more than one CPU socket.
 * Optional utilities and their purposes:
     * The `indent` or `gindent` utility, used automatically during the build process
       to make the generated code easier for humans to read.
@@ -65,13 +73,17 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
       http://www.graphviz.org, for rendering stencil diagrams.
     * Intel(R) Software Development Emulator,
       https://software.intel.com/en-us/articles/intel-software-development-emulator,
-      for functional testing if you don't have native support for any given instruction set.
+      for functional testing if you don't have native support for the targeted instruction set.
 
 ## Backward-compatibility notices
 ### Version 4
 * Version 4.00.00 was a major release with a number of notices:
   - Intel(R) Xeon Phi(TM) x100-family processors (KNC) are no longer supported.
     (Intel(R) Xeon Phi(TM) x200-family processors (KNL) are still supported.)
+  - The default compiler for kernels is now the Intel(R) oneAPI C++ compiler, icpx.
+    If you want to use a different compiler, use `make YK_CXX=<compiler> ...`.
+    (The default compiler for the YASK compiler is still `g++`. This can
+    be changed with `make YC_CXX=<compiler> ...`.)
   - Only one thread per core is now used by default on most CPUs.  This is
     done by passing "-thread_divisor 2" to the executable from `yask.sh` if
     hyper-threading is enabled.  Consequently, the default number of threads
@@ -95,7 +107,7 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
   `yk_solution::apply_command_line_options()`. APIs to set the corresponding
   options are now in `yk_env`. This allows configuring the debug output
   before a `yk_solution` is created.
-* Version 3.00.00 was a major release with a number of backward-compatibility notices:
+* Version 3.00.00 was a major release with a number of notices:
   - The old (v1 and v2) internal DSL that used undocumented types such as
     `SolutionBase` and `GridValue` and undocumented macros such as
     `MAKE_GRID` was replaced with an expanded version of the documented YASK
@@ -129,30 +141,54 @@ YASK contains a domain-specific compiler to convert stencil-equation specificati
 sizes are specified. This did not affect the default folding sizes.
 * Version 2.21.02 simplified the example 3-D stencils (`3axis`, `3plane`, etc.)
 to calculate simple averages like those in the MiniGhost benchmark.
-This reduced the number of floating-point operations but not the number of points read for each stencil.
-* Version 2.20.00 added checking of the step-dimension index value in the `yk_grid::get_element()` and similar APIs.
+This reduced the number of floating-point operations but not the number of points read
+for each stencil.
+* Version 2.20.00 added checking of the step-dimension index value in the
+`yk_grid::get_element()` and similar APIs.
 Previously, invalid values silently "wrapped" around to valid values.
-Now, by default, the step index must be valid when reading, and the valid step indices are updated when writing.
+Now, by default, the step index must be valid when reading, and the valid step
+indices are updated when writing.
 The old behavior of silent index wrapping may be restored via `set_step_wrap(true)`.
-The default for all `strict_indices` API parameters is now `true` to catch more programming errors and
+The default for all `strict_indices` API parameters is now `true` to catch more
+programming errors and
 increase consistency of behavior between "set" and "get" APIs.
 Also, the advanced `share_storage()` APIs have been replaced with `fuse_grids()`.
 * Version 2.19.01 turned off multi-pass tuning by default. Enable with `-auto_tune_each_pass`.
-* Version 2.18.03 allowed the default radius to be stencil-specific and changed the names of example stencil "9axis" to "3axis_with_diags".
-* Version 2.18.00 added the ability to specify the global-domain size, and it will calculate the local-domain sizes from it.
+* Version 2.18.03 allowed the default radius to be stencil-specific and changed the names
+of example stencil "9axis" to "3axis_with_diags".
+* Version 2.18.00 added the ability to specify the global-domain size, and it will calculate
+the local-domain sizes from it.
 There is no longer a default local-domain size.
 Output changed terms "overall-problem" to "global-domain" and "rank-domain" to "local-domain".
-* Version 2.17.00 determined the host architecture in `make` and `bin/yask.sh` and number of MPI ranks in `bin/yask.sh`.
-This changed the old behavior of `make` defaulting to `snb` architecture and `bin/yask.sh` requiring `-arch` and `-ranks`.
+* Version 2.17.00 determined the host architecture in `make` and `bin/yask.sh` and
+number of MPI ranks in `bin/yask.sh`.
+This changed the old behavior of `make` defaulting to `snb` architecture and
+`bin/yask.sh` requiring `-arch` and `-ranks`.
 Those options are still available to override the host-based default.
-* Version 2.16.03 moved the position of the log-file name to the last column in the CSV output of `utils/bin/yask_log_to_csv.pl`.
+* Version 2.16.03 moved the position of the log-file name to the last column in the CSV
+output of `utils/bin/yask_log_to_csv.pl`.
 * Version 2.15.04 required a call to `yc_grid::set_dynamic_step_alloc(true)` to allow changing the
 allocation in the step (time) dimension at run-time for grid variables created at YASK compile-time.
 * Version 2.15.02 required all "misc" indices to be yask-compiler-time constants.
-* Version 2.14.05 changed the meaning of temporal sizes so that 0 means never do temporal blocking and 1 allows blocking within a single time-step for multi-pack solutions. The default setting is 0, which keeps the old behavior.
-* Version 2.13.06 changed the default behavior of the performance-test utility (`yask.sh`) to run trials for a given amount of time instead of a given number of steps. As of version 2.13.08, use the `-trial_time` option to specify the number of seconds to run. To force a specific number of trials as in previous versions, use the `-trial_steps` option.
-* Version 2.13.02 required some changes in perf statistics due to step (temporal) conditions. Both text output and `yk_stats` APIs affected.
-* Version 2.12.00 removed the long-deprecated `==` operator for asserting equality between a grid point and an equation. Use `EQUALS` instead.
-* Version 2.11.01 changed the plain-text format of some of the performance data in the test-utility output. Specifically, some leading spaces were added, SI multipliers for values < 1 were added, and the phrase "time in" no longer appears before each time breakdown. This may affect some user programs that parse the output to collect stats.
-* Version 2.10.00 changed the location of temporary files created during the build process. This will not affect most users, although you may need to manually remove old `src/compiler/gen` and `src/kernel/gen` directories.
-* Version 2.09.00 changed the location of stencils in the internal DSL from `.hpp` to `.cpp` files. See the notes in https://github.com/intel/yask/releases/tag/v2.09.00 if you have any new or modified code in `src/stencils`.
+* Version 2.14.05 changed the meaning of temporal sizes so that 0 means never do temporal
+blocking and 1 allows blocking within a single time-step for multi-pack solutions.
+The default setting is 0, which keeps the old behavior.
+* Version 2.13.06 changed the default behavior of the performance-test utility (`yask.sh`)
+to run trials for a given amount of time instead of a given number of steps.
+As of version 2.13.08, use the `-trial_time` option to specify the number of seconds to run.
+To force a specific number of trials as in previous versions, use the `-trial_steps` option.
+* Version 2.13.02 required some changes in perf statistics due to step (temporal) conditions.
+Both text output and `yk_stats` APIs affected.
+* Version 2.12.00 removed the long-deprecated `==` operator for asserting equality between
+a grid point and an equation. Use `EQUALS` instead.
+* Version 2.11.01 changed the plain-text format of some of the performance data in the
+test-utility output.
+Specifically, some leading spaces were added, SI multipliers for values < 1 were added,
+and the phrase "time in" no longer appears before each time breakdown.
+This may affect some user programs that parse the output to collect stats.
+* Version 2.10.00 changed the location of temporary files created during the build process.
+This will not affect most users, although you may need to manually remove old `src/compiler/gen`
+and `src/kernel/gen` directories.
+* Version 2.09.00 changed the location of stencils in the internal DSL from `.hpp` to `.cpp` files.
+See the notes in https://github.com/intel/yask/releases/tag/v2.09.00 if you have any new
+or modified code in `src/stencils`.
