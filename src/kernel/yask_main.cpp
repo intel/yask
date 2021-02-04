@@ -509,9 +509,9 @@ int main(int argc, char** argv)
                 " Num-reads/sec, num-writes/sec, and FLOPS are metrics based on\n"
                 "  stencil specifications and can vary due to differences in\n"
                 "  implementations and optimizations.\n"
-                " Num-points/sec is based on overall problem size and is\n"
-                "  a more reliable performance metric, esp. when comparing\n"
-                "  across implementations.\n";
+                " Num-points/sec is based only on the number of results computed\n"
+                "  and is a more reliable performance metric, esp. when comparing\n"
+                "  across architectures and/or implementations.\n";
             context->print_warnings();
         }
 
