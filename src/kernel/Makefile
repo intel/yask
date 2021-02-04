@@ -88,7 +88,7 @@ else ifneq ($(filter $(arch),avx512 avx512-zmm avx512hi avx512f skx skl clx icx)
   TARGET		:=	avx512
 else ifneq ($(filter $(arch),knl),)
   TARGET		:=	knl
-lse ifneq ($(filter $(arch),intel64 cpp),)
+else ifneq ($(filter $(arch),intel64 cpp),)
   TARGET		:=	intel64
 else
   $(error Target not recognized; use arch=avx512, avx512-ymm, avx2, avx, knl, or intel64)
