@@ -193,15 +193,15 @@ namespace {
                          kernel_soln.set_block_size("y", 256);
                          kernel_soln.set_block_size("z", 96);
                      }
-                     else if (isa == "avx512") {
-                         kernel_soln.set_block_size("x", 96);
-                         kernel_soln.set_block_size("y", 28);
-                         kernel_soln.set_block_size("z", 96);
-                     }
                      else if (isa == "avx2") {
                          kernel_soln.set_block_size("x", 48);
                          kernel_soln.set_block_size("y", 64);
                          kernel_soln.set_block_size("z", 112);
+                     }
+                     else {
+                         kernel_soln.set_block_size("x", 96);
+                         kernel_soln.set_block_size("y", 28);
+                         kernel_soln.set_block_size("z", 96);
                      }
                      );
             }

@@ -155,15 +155,15 @@ public:
                      kernel_soln.set_block_size("y", 16);
                      kernel_soln.set_block_size("z", 32);
                  }
-                 else if (isa == "avx512") {
-                     kernel_soln.set_block_size("x", 96);
-                     kernel_soln.set_block_size("y", 16);
-                     kernel_soln.set_block_size("z", 80);
-                 }
                  else if (isa == "avx2") {
                      kernel_soln.set_block_size("x", 64);
                      kernel_soln.set_block_size("y", 16);
                      kernel_soln.set_block_size("z", 96);
+                 }
+                 else {
+                     kernel_soln.set_block_size("x", 96);
+                     kernel_soln.set_block_size("y", 16);
+                     kernel_soln.set_block_size("z", 80);
                  }
                  );
         }

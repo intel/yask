@@ -309,15 +309,15 @@ namespace fsg {
                          kernel_soln.set_block_size("y", 16);
                          kernel_soln.set_block_size("z", 16);
                      }
-                     else if (isa == "avx512") {
-                         kernel_soln.set_block_size("x", 188);
-                         kernel_soln.set_block_size("y", 12);
-                         kernel_soln.set_block_size("z", 24);
-                     }
                      else if (isa == "avx2") {
                          kernel_soln.set_block_size("x", 48);
                          kernel_soln.set_block_size("y", 4);
                          kernel_soln.set_block_size("z", 128);
+                     }
+                     else {
+                         kernel_soln.set_block_size("x", 188);
+                         kernel_soln.set_block_size("y", 12);
+                         kernel_soln.set_block_size("z", 24);
                      }
                      );
             }
