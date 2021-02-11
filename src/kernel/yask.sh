@@ -62,12 +62,17 @@ fi
 arch=$def_arch
 
 # Default ranks.
+# Try numactl then lscpu.
 nranks=1
 if command -v numactl >/dev/null; then
-    cpubind=`numactl -s | grep -m1 '^cpubind:'`
-    if [[ -n "$cpubind" ]]; then
-        cbwords=( $cpubind )
-        nranks=$(( ${#cbwords[@]} - 1 ))
+    ncpubinds=`numactl -s | awk '/^cpubind:/ { print NF-1 }'`
+    if [[ -n "$ncpubinds" ]]; then
+        nranks=$ncpubinds
+    fi
+elif command -v lscpu >/dev/null; then
+    nnumas=`lscpu | awk -F: '/NUMA node.s.:/ { print $2 }'`
+    if [[ -n "$nnumas" ]]; then
+        nranks=$nnumas
     fi
 fi
 
@@ -325,17 +330,17 @@ else
     envs+=" LD_LIBRARY_PATH=$bindir/../lib:$LD_LIBRARY_PATH$libpath"
 fi
 
-# Thread reduction factor.
-tdiv=2  # Assume 2-way HT on.
-if [[ $arch == "knl" ]]; then
-    tdiv=1
-elif command -v lscpu >/dev/null; then
-    nthr=`lscpu | awk '/Thread.s. per core:/ { print $4 }'`
-    if [[ -n "$nthr" ]]; then
-        tdiv=$nthr
+# Set OMP threads to number of cores per rank if already specified and not KNL.
+if [[ "$opts" != *"-max_threads"* && $arch != "knl" ]]; then
+    if command -v lscpu >/dev/null; then
+        nsocks=`lscpu | awk -F: '/Socket.s.:/ { print $2 }'`
+        ncores=`lscpu | awk -F: '/Core.s. per socket:/ { print $2 }'`
+        if [[ -n "$nsocks" && -n "$ncores" ]]; then
+            mthrs=$(( $nsocks * $ncores / $nranks ))
+            opts="-max_threads $mthrs $opts"
+        fi
     fi
 fi
-opts="-thread_divisor $tdiv $opts"
 
 # Commands to capture some important system status and config info for benchmark documentation.
 config_cmds="sleep 1; uptime; lscpu; cpuinfo -A; sed '/^$/q' /proc/cpuinfo; cpupower frequency-info; uname -a; $dump /etc/system-release; $dump /proc/cmdline; $dump /proc/meminfo; free -gt; numactl -H; ulimit -a"

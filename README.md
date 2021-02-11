@@ -82,19 +82,26 @@ SIMD-optimized code for Intel(R) Xeon Phi(TM) and Intel(R) Xeon(R) processors.
     (Intel(R) Xeon Phi(TM) x200-family processors (KNL) are still supported.)
   - The default compiler for kernels is now the Intel(R) oneAPI C++ compiler, icpx.
     If you want to use a different compiler, use `make YK_CXX=<compiler> ...`.
-    (The default compiler for the YASK compiler is still `g++`. This can
-    be changed with `make YC_CXX=<compiler> ...`.)
-  - Only one thread per core is now used by default on most CPUs.  This is
-    done by passing "-thread_divisor 2" to the executable from `yask.sh` if
-    hyper-threading is enabled.  Consequently, the default number of threads
-    per block is now one.  This change was made based on observed
+    The default compiler for the YASK compiler is still `g++`. This can
+    be changed with `make YC_CXX=<compiler> ...`. (Note the difference:
+    use `YK` for "YASK kernel" and `YC` for "YASK compiler".)
+  - Only one thread per core is now used by default on most CPU models.
+    This is done in `yask.sh` by passing `max_threads <N>` to the executable,
+    where `<N>` is the number of cores on the node divided by the
+    number of MPI ranks.
+    Consequently, the default number of threads per block is now one
+    to use one core per block.
+    This change was made based on observed
     performance on Intel(R) Xeon(R) Scalable Processors.  Previous versions
     used two threads per block by default and used both hyper-threads if
-    they were enabled.  To use two hyper-threads, you now must explicitly
-    specify "-thread_divisor 1 -block_threads 2".  These changes do not
+    they were enabled.  To configure two hyper-threads to work cooperatively
+    on each block, you now must add the options
+    `-max_threads <N> -block_threads 2`, where `<N>` is the number
+    of logical CPUs per MPI rank.
+    These changes do not
     apply to Intel(R) Xeon Phi(TM) x200-family processors (KNL), which
     continue to use all four hyper-threads per core and eight SW threads per
-    block (because 2 cores share an L2 cache) by default.
+    block by default (because 2 cores share an L2 cache).
 
 ### Version 3
 * Version 3.05.00 changed the default setting of `-use_shm` to `true`.

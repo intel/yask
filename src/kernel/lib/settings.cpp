@@ -321,17 +321,15 @@ namespace yask {
                            force_scalar));
         parser.add_option(new CommandLineParser::IntOption
                           ("max_threads",
-                           "Max OpenMP threads to use. Overrides default number of OpenMP threads "
-                           "or the value set by OMP_NUM_THREADS.",
+                           "Maximum OpenMP threads to use. "
+                           "If set to zero (0), the default value from the OpenMP library is used.",
                            max_threads));
         parser.add_option(new CommandLineParser::IntOption
                           ("thread_divisor",
-                           "Divide the number of OpenMP threads by the argument value. "
-                           "If -max_threads is also used, divide the argument to that option by the "
-                           "argument to this one. If -max_threads is not used, "
-                           "divide the default number of OpenMP threads. "
-                           "In either case, use the resulting truncated value as the "
-                           "maximum number of OpenMP threads to use.",
+                           "Divide the maximum number of OpenMP threads by the specified value, "
+                           "discarding any remainder. "
+                           "The maximum number of OpenMP threads is determined by the -max_threads "
+                           "option or the default value from the OpenMP library. ",
                            thread_divisor));
         parser.add_option(new CommandLineParser::IntOption
                           ("block_threads",
@@ -348,7 +346,7 @@ namespace yask {
                            "(usually the outer-domain dimension), ignoring other sub-block sizes. "
                            "Assign each slab to a block thread based on its global index in that dimension. "
                            "This setting may increase cache locality when using multiple "
-                           "block-threads when scratch vars are used and/or "
+                           "block-threads, especially when scratch vars are used and/or "
                            "when temporal blocking is active. "
                            "This option is ignored if there are fewer than two block threads.",
                            bind_block_threads));
