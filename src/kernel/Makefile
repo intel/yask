@@ -272,7 +272,7 @@ YK_CXX		:=	icpx
 MPI_CXX 	:=	mpiicpc
 YK_CXXOPT	?=	-O3
 YK_CXXDBG	?=	-g
-YK_CXXFLAGS	:=	-std=c++11 -Wall $(YK_CXXOPT) $(YK_CXXDBG)
+YK_CXXFLAGS	:=	-std=c++11 -Wall $(YK_CXXDBG) $(YK_CXXOPT)
 YK_CXXFLAGS	+=	$(addprefix -I,$(YK_INC_DIRS) $(YK_GEN_DIR))
 SWIG_CXXFLAGS	:= 	$(DBL_EPSILON_CXXFLAG)
 YK_SO_FLAGS	:=	-shared -fPIC
