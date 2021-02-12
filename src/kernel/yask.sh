@@ -343,7 +343,10 @@ if [[ "$opts" != *"-max_threads"* && $arch != "knl" ]]; then
 fi
 
 # Commands to capture some important system status and config info for benchmark documentation.
-config_cmds="sleep 1; uptime; lscpu; cpuinfo -A; sed '/^$/q' /proc/cpuinfo; cpupower frequency-info; uname -a; $dump /etc/system-release; $dump /proc/cmdline; $dump /proc/meminfo; free -gt; numactl -H; ulimit -a"
+config_cmds="sleep 1; uptime; lscpu; cpuinfo -A; sed '/^$/q' /proc/cpuinfo; cpupower frequency-info; uname -a; $dump /etc/system-release; $dump /proc/cmdline; $dump /proc/meminfo; free -gt; numactl -H; ulimit -a; lspci -v; lshw"
+if [[ $arch == "offload" ]]; then
+    config_cmds+="; clinfo -l";
+fi
 
 # Command sequence to be run in a shell.
 exe_str="$mpi_cmd $exe_prefix $exe $opts"
