@@ -73,7 +73,7 @@ namespace yask {
             if (check) {
 
                 // Make sure all indices are in bounds.
-                for (int i = 0; size_t(i) < _layout.get_num_sizes(); i++) {
+                for (int i = 0; i < _layout.get_num_sizes(); i++) {
                     idx_t j = idxs[i];
                     host_assert(j >= 0);
                     host_assert(j < _layout.get_size(i));
@@ -81,8 +81,10 @@ namespace yask {
             }
 
             // Strictly, _elems doesn't need to be valid when 'get_index()' is called
-            // because we're not accessing data. But we will make this restriction.
-            host_assert(_elems.get());
+            // because we're not accessing data. But we will make this restriction
+            // when 'check' is 'true'.
+            if (check)
+                host_assert(_elems.get());
             #endif
 
             idx_t ai = _layout.layout(idxs);
@@ -115,6 +117,7 @@ namespace yask {
             idx_t ai = get_index(pt, check);
             return _elems[ai];
         }
+
     }; //GenericVarCore.
     OMP_END_DECL_TARGET
    
@@ -184,7 +187,7 @@ namespace yask {
 
         // Get number of dimensions.
         int get_num_dims() const {
-            return _var_dims._get_num_dims();
+            return _var_dims.get_num_dims();
         }
 
         // Get the nth dim name.
@@ -325,12 +328,14 @@ namespace yask {
     public:
 
         // Construct an unallocated var.
+        // Must supply a pointer to an existing _core_t.
         GenericVar(KernelStateBase& state,
                    _core_t* corep,
                    std::string name,
                    const VarDimNames& dim_names) :
             GenericVarTyped<T>(state, name, dim_names),
             _corep(corep) {
+            assert(_corep);
 
             // '_var_dims' was set in GenericVarBase construction.
             // Need to sync '_layout' w/it.
@@ -401,6 +406,33 @@ namespace yask {
             return _corep->get_ptr(pt, check);
         }
 
+        // Compute strides.
+        Indices get_strides() const {
+            auto nd = _corep->get_num_dims();
+            Indices strides(nd);
+            for (int d = 0; d < nd; d++) {
+
+                // For dim 'd', measure distance from index 0 to 1.
+                auto idxs = Indices(idx_t(0), nd);
+                auto i0 = get_index(idxs, false);
+                idxs[d] = 1;
+                auto i1 = get_index(idxs, false);
+                auto sd = i1 - i0;
+                strides[d] = sd;
+                assert(sd >= 0);
+
+                #ifdef CHECK
+                for (idx_t j : { 13, -17 }) {
+                    idxs[d] = j;
+                    auto i = get_index(idxs, false);
+                    assert(i - i0 == sd * j);
+                }
+                #endif
+            }
+            return strides;
+        }
+
+        
     };
 
 } // namespace yask.

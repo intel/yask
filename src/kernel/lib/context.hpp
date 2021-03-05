@@ -78,8 +78,8 @@ namespace yask {
         // Is point in BB?
         // 'pt' must have same dims as BB.
         bool is_in_bb(const IdxTuple& pt) const {
-            assert(pt._get_num_dims() == bb_begin._get_num_dims());
-            for (int i = 0; i < pt._get_num_dims(); i++) {
+            assert(pt.get_num_dims() == bb_begin.get_num_dims());
+            for (int i = 0; i < pt.get_num_dims(); i++) {
                 if (pt[i] < bb_begin[i])
                     return false;
                 if (pt[i] >= bb_end[i])
@@ -88,8 +88,8 @@ namespace yask {
             return true;
         }
         bool is_in_bb(const Indices& pt) const {
-            assert(pt._get_num_dims() == bb_begin._get_num_dims());
-            for (int i = 0; i < pt._get_num_dims(); i++) {
+            assert(pt.get_num_dims() == bb_begin.get_num_dims());
+            for (int i = 0; i < pt.get_num_dims(); i++) {
                 if (pt[i] < bb_begin[i])
                     return false;
                 if (pt[i] >= bb_end[i])
@@ -630,7 +630,7 @@ namespace yask {
         }
         virtual int get_num_domain_dims() const {
             STATE_VARS_CONST(this);
-            return dims->_domain_dims._get_num_dims();
+            return dims->_domain_dims.get_num_dims();
         }
         virtual std::vector<std::string> get_domain_dim_names() const {
             STATE_VARS_CONST(this);

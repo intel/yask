@@ -51,30 +51,31 @@ namespace yask {
                                                                     |
                 YkVarBaseCore <---ptr------- YkVarBase <--sh_ptr-- YkVarImpl
                   ^    ^                      ^   ^  |
-                  |    |                      |   |  +------------+
-       YkElemVarCore  YkVecVarCore     YkElemVar  YkVecVar        |
-         |     ^           ^    |          |        |             |
-         |     |           |    |          |        |             |
-         |     |           +------ptr----- | -------+             |
-         |     +--------------------ptr----+                      |
-         |                      |                                 |
-       has-a                  has-a                               |
-         |                      |                                 |
-         v                      v                                 |
-    +> GenericVarCore<real_t>   GenericVarCore<real_vec_t> <-+    |
-    |     _elems ptr              _elems ptr                 |    |
-    |                                                        |    |
-    |                                                        |    |
-    |                    GenericVarBase <-------------ptr---------+
-    ptr                    ^      ^  _base ptr               |
-    |                      |      |                          ptr
-    |  GenericVarTyped<real_t>  GenericVarTyped<real_vec_t>  |
-    |    ^                        ^                          |
-    |    |                        |                          |
-    +- GenericVar<real_t>       GenericVar<real_vec_t> ------+
+                  |    |                      |   |  +---------------+
+    YkElemVarCore<LF> YkVecVarCore<LF> YkElemVar  YkVecVar           |
+         |     ^           ^      |        |        |                |
+         |     |           |      |        |        |                |
+         |     |           +-------------- | --ptr--+                |
+         |     +----------------------ptr--+                         |
+         |                        |                                  |
+       has-a                    has-a                                |
+         |                        |                                  |
+         v                        v                                  |
+    +-> GenericVarCore<real_t,LF> GenericVarCore<real_vec_t,LF> <-+  |
+    |     _elems ptr                 _elems ptr                   |  |
+    |                                                             |  |
+    |                                                             |  |
+    |                    GenericVarBase <-------------ptr------------+
+    ptr                    ^      ^  _base ptr                    |
+    |                      |      |                               ptr
+    |  GenericVarTyped<real_t>  GenericVarTyped<real_vec_t>       |
+    |    ^                        ^                               |
+    |    |                        |                               |
+    +- GenericVar<real_t,LF>    GenericVar<real_vec_t,LF> --------+
 
        "Core" types are non-virtual and can be trivially copied, e.g.,
        to an offload device; others are virtual and cannot.
+       "LF" is a layout-function type.
     */
     
     ///// Yk*Var*Core types /////
@@ -88,7 +89,7 @@ namespace yask {
         // All values are in units of reals, not underlying SIMD vectors, if different.
         // See diagram above for '_rank_offsets' and '_local_offsets'.
         // Comments show settings for domain dims | non-domain dims.
-        Indices _domains;   // size of "interior" of var | alloc size.
+        Indices _domains;   // size of "interior" of var (i.e., not pads) | alloc size.
         Indices _req_left_epads, _req_right_epads; // requested extra space around halos | zero.
         Indices _req_left_pads, _req_right_pads; // requested extra space around domains | zero.
         Indices _actl_left_pads, _actl_right_pads; // actual extra space around domains | zero.
@@ -109,6 +110,7 @@ namespace yask {
         Indices _vec_left_pads; // _actl_left_pads / _var_vec_lens.
         Indices _vec_allocs; // _allocs / _var_vec_lens.
         Indices _vec_local_offsets; // _local_offsets / _var_vec_lens.
+        Indices _vec_strides; // num vecs between consecutive indices.
 
         // The following masks have one bit for each dim in the var.
         idx_t _step_dim_mask;
@@ -619,7 +621,7 @@ namespace yask {
         // Num dims in this var.
         // Not necessarily same as stencil problem.
         inline int get_num_dims() const {
-            return _corep->_domains._get_num_dims();
+            return _corep->_domains.get_num_dims();
         }
 
         // Dims same?
@@ -780,6 +782,9 @@ namespace yask {
                                         const Indices& first_indices,
                                         const Indices& last_indices,
                                         bool on_device) const =0;
+
+        // Get strides in underlying storage.
+        virtual Indices get_vec_strides() const =0;
 
         // Get a pointer to one element.
         // Indices are relative to overall problem domain.
@@ -1088,8 +1093,14 @@ namespace yask {
                                         bool on_device) const override {
             return get_elements_in_slice(buffer_ptr,
                                          first_indices, last_indices, on_device);
+       }
+
+        // Get strides in underlying storage.
+        virtual Indices get_vec_strides() const override {
+            return _data.get_strides();
         }
-    };                          // YkElemVar.
+
+   };                          // YkElemVar.
 
     // YASK var of real vectors.
     // Used for vars that contain all the folded dims.
@@ -1167,7 +1178,7 @@ namespace yask {
             }
 
             // Init var-dim positions of fold dims.
-            assert(dims->_vec_fold_pts._get_num_dims() == NUM_VEC_FOLD_DIMS);
+            assert(dims->_vec_fold_pts.get_num_dims() == NUM_VEC_FOLD_DIMS);
             for (int i = 0; i < NUM_VEC_FOLD_DIMS; i++) {
                 auto& fdim = dims->_vec_fold_pts.get_dim_name(i);
                 int j = get_dim_posn(fdim, true,
@@ -1490,6 +1501,12 @@ namespace yask {
             // Return number of writes.
             return n;
         }
+
+        // Get strides in underlying storage.
+        virtual Indices get_vec_strides() const override {
+            return _data.get_strides();
+        }
+
     };                          // YkVecVar.
 
     // Implementation of yk_var interface.  Class contains no real data,

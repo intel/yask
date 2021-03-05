@@ -70,7 +70,7 @@ namespace yask {
         // Default copy ctor, copy operator should be okay.
 
         // Access size.
-        ALWAYS_INLINE int _get_num_dims() const {
+        ALWAYS_INLINE int get_num_dims() const {
             return _ndims;
         }
         ALWAYS_INLINE void set_num_dims(int n) {
@@ -578,15 +578,17 @@ namespace yask {
 
         // Access sizes.
         ALWAYS_INLINE const Indices& get_sizes() const { return _sizes; }
-        void set_sizes(const Indices& sizes) { _sizes = sizes; }
+        void set_sizes(const Indices& sizes) {
+            _sizes = sizes;
+        }
         ALWAYS_INLINE idx_t get_size(int i) const {
             host_assert(i >= 0);
-            host_assert(i < _sizes._get_num_dims());
+            host_assert(i < _sizes.get_num_dims());
             return _sizes[i];
         }
         void set_size(int i, idx_t size) {
             host_assert(i >= 0);
-            host_assert(i < _sizes._get_num_dims());
+            host_assert(i < _sizes.get_num_dims());
             _sizes[i] = size;
         }
 
@@ -691,7 +693,7 @@ namespace yask {
             ScanIndices(dims, use_vec_align) {
             if (ofs) {
                 DOMAIN_VAR_LOOP_FAST(i, j) {
-                    host_assert(ofs->_get_num_dims() == ndims - 1);
+                    host_assert(ofs->get_num_dims() == ndims - 1);
                     align_ofs[i] = (*ofs)[j];
                 }
             }
@@ -700,7 +702,7 @@ namespace yask {
             ScanIndices(dims, use_vec_align) {
             if (ofs) {
                 DOMAIN_VAR_LOOP_FAST(i, j) {
-                    host_assert(ofs->_get_num_dims() == ndims - 1);
+                    host_assert(ofs->get_num_dims() == ndims - 1);
                     align_ofs[i] = ofs->get_val(j);
                 }
             }

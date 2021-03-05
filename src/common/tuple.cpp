@@ -270,7 +270,7 @@ namespace yask {
         // For some reason, copying *this and erasing
         // the element in newt._q causes an exception.
         Tuple newt;
-        for (int i = 0; i < _get_num_dims(); i++) {
+        for (int i = 0; i < get_num_dims(); i++) {
             if (i != posn)
                 newt.add_dim_back(get_dim_name(i), get_val(i));
         }
@@ -351,7 +351,7 @@ namespace yask {
     // Return a "compact" set of K factors of N.
     template <typename T>
     Tuple<T> Tuple<T>::get_compact_factors(idx_t N) const {
-        int K = _get_num_dims();
+        int K = get_num_dims();
         
         // Keep track of "best" result, where the best is most compact.
         Tuple best;

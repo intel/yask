@@ -587,7 +587,7 @@ namespace yask {
         auto& bt = _block_sizes[step_dim];
         auto& mbt = _mini_block_sizes[step_dim];
         auto& cluster_pts = _dims->_cluster_pts;
-        int nddims = _dims->_domain_dims._get_num_dims();
+        int nddims = _dims->_domain_dims.get_num_dims();
 
         // Fix up step-dim sizes.
         rt = max(rt, idx_t(0));

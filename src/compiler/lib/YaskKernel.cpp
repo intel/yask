@@ -124,7 +124,7 @@ namespace yask {
             "#define NUM_STENCIL_EQS " << _stencil.get_num_equations() << endl;
 
         // Vec/cluster lengths.
-        auto nvec = _dims._fold_gt1._get_num_dims();
+        auto nvec = _dims._fold_gt1.get_num_dims();
         os << "\n// One vector fold: " << _dims._fold.make_dim_val_str(" * ") << endl;
         for (auto& dim : _dims._fold) {
             auto& dname = dim._get_name();
@@ -605,6 +605,10 @@ namespace yask {
                 CppStepVarPrintVisitor svv(os, *vp);
                 vceq->visit_eqs(&svv);
 
+                // Print strides for each var.
+                for (auto gp : _vars)
+                    vp->print_strides(os, *gp);
+                
                 // Print loop-invariants.
                 os << "\n // Inner-loop invariants.\n";
                 CppLoopVarPrintVisitor lvv(os, *vp);
@@ -812,7 +816,7 @@ namespace yask {
             if (!new_var_dims.count(new_var_key)) {
                 new_var_dims.insert(new_var_key);
                 bool first_var = new_var_code.length() == 0;
-                if (gdims._get_num_dims())
+                if (gdims.get_num_dims())
                     new_var_code += "\n // Vars with '" + new_var_key + "' dim(s).\n";
                 else
                     new_var_code += "\n // Scalar vars.\n";
@@ -1005,7 +1009,7 @@ namespace yask {
         os << "\n  // Create Dims object.\n"
             "  static DimsPtr new_dims() {\n"
             "    auto p = std::make_shared<Dims>();\n";
-        for (int i = 0; i < _dims._fold_gt1._get_num_dims(); i++)
+        for (int i = 0; i < _dims._fold_gt1.get_num_dims(); i++)
             os << "    p->_vec_fold_layout.set_size(" << i << ", " <<
                 _dims._fold_gt1[i] << "); // '" <<
                 _dims._fold_gt1.get_dim_name(i) << "'\n";

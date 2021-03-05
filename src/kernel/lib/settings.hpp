@@ -153,7 +153,7 @@ namespace yask {
         // Get linear index into a vector given 'fold_ofs', which are
         // element offsets that must be *exactly* those in _vec_fold_pts.
         idx_t get_elem_index_in_vec(const Indices& fold_ofs) const {
-            host_assert(fold_ofs._get_num_dims() == NUM_VEC_FOLD_DIMS);
+            host_assert(fold_ofs.get_num_dims() == NUM_VEC_FOLD_DIMS);
 
             // Use compiler-generated fold macro.
             idx_t i = VEC_FOLD_LAYOUT(fold_ofs);
@@ -171,7 +171,7 @@ namespace yask {
 
     // Utility to determine number of points in a "sizes" var.
     inline idx_t get_num_domain_points(const IdxTuple& sizes) {
-        host_assert(sizes._get_num_dims() == NUM_STENCIL_DIMS);
+        host_assert(sizes.get_num_dims() == NUM_STENCIL_DIMS);
         idx_t pts = 1;
         DOMAIN_VAR_LOOP_FAST(i, j)
             pts *= sizes[i];

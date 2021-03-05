@@ -40,7 +40,7 @@ void ttest(bool first_inner) {
     t1.set_first_inner(first_inner);
     t1.add_dim_back("x", 3);
     t1.add_dim_back("y", 4);
-    assert(t1._get_num_dims() == 2);
+    assert(t1.get_num_dims() == 2);
     assert(t1[0] == 3);
     assert(t1[1] == 4);
     assert(t1["x"] == 3);

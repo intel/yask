@@ -60,8 +60,8 @@ namespace yask {
         // Each dim in 'orig' must be a multiple of corresponding vec len.
         void normalize_indices(const Indices& orig, Indices& norm) const {
             STATE_VARS(this);
-            assert(orig._get_num_dims() == nsdims);
-            assert(norm._get_num_dims() == nsdims);
+            assert(orig.get_num_dims() == nsdims);
+            assert(norm.get_num_dims() == nsdims);
 
             // i: index for stencil dims, j: index for domain dims.
             DOMAIN_VAR_LOOP_FAST(i, j) {

@@ -153,7 +153,7 @@ namespace yask {
         size_t size() const {
             return _q.size();
         }
-        int _get_num_dims() const {
+        int get_num_dims() const {
             return int(_q.size());
         }
 
@@ -593,7 +593,7 @@ namespace yask {
         // dim in 'this'.
         // If 'tp' is at last index, "wraps-around" to all zeros.
         inline void next_index(Tuple& tp) const {
-            const int nd = _get_num_dims();
+            const int nd = get_num_dims();
             const int inner_dim = _first_inner ? 0 : nd-1;
             const int dim_step = _first_inner ? 1 : -1;
 
@@ -737,7 +737,7 @@ namespace std {
     public :
         size_t operator()(const yask::Tuple<T> &x ) const {
             size_t h = 0;
-            for (int i = 0; i < x._get_num_dims(); i++) {
+            for (int i = 0; i < x.get_num_dims(); i++) {
                 h ^= size_t(i) ^
                     std::hash<T>()(x.get_val(i)) ^
                     std::hash<std::string>()(x.get_dim_name(i));

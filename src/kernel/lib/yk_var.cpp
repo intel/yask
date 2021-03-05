@@ -55,6 +55,7 @@ namespace yask {
         _vec_left_pads.set_from_const(0, n);
         _vec_allocs.set_from_const(0, n);
         _vec_local_offsets.set_from_const(0, n);
+        _vec_strides.set_from_const(0, n);
     }
 
     // Convenience function to format indices like
@@ -145,19 +146,19 @@ namespace yask {
                     " on device)";
             #endif
             if (long_info) {
-                oss << " for ";
-                if (_corep->_domains._get_num_dims())
-                    oss << IDX_STR2(_allocs, " * ") << " FP elem(s)"
-                        " at rank-offsets " << IDX_STR(_rank_offsets) <<
-                        ", local-offsets " << IDX_STR(_local_offsets) <<
-                        ", left-halos " << IDX_STR(_left_halos) <<
-                        ", right-halos " << IDX_STR(_right_halos) <<
-                        ", left-pads " << IDX_STR(_actl_left_pads) <<
-                        ", right-pads " << IDX_STR(_actl_right_pads) <<
-                        ", left-wf-exts " << IDX_STR(_left_wf_exts) <<
-                        ", right-wf-exts " << IDX_STR(_right_wf_exts) <<
-                        ", and ";
-                oss << _dirty_steps.size() << " dirty flag(s)";
+                if (_corep->_domains.get_num_dims())
+                    oss <<
+                        ", allocs = " << IDX_STR2(_allocs, " * ") <<
+                        ", rank-offsets = " << IDX_STR(_rank_offsets) <<
+                        ", local-offsets = " << IDX_STR(_local_offsets) <<
+                        ", left-halos = " << IDX_STR(_left_halos) <<
+                        ", right-halos = " << IDX_STR(_right_halos) <<
+                        ", left-pads = " << IDX_STR(_actl_left_pads) <<
+                        ", right-pads = " << IDX_STR(_actl_right_pads) <<
+                        ", left-wf-exts = " << IDX_STR(_left_wf_exts) <<
+                        ", right-wf-exts = " << IDX_STR(_right_wf_exts) <<
+                        ", strides = " << IDX_STR(_vec_strides);
+                oss << ", " << _dirty_steps.size() << " dirty flag(s)";
             }
             return oss.str();
         }
@@ -189,7 +190,7 @@ namespace yask {
     }
 
     // Resizes the underlying generic var.
-    // Modifies _pads and _allocs.
+    // Updates dependent core info.
     // Fails if mem different and already alloc'd.
     void YkVarBase::resize() {
         STATE_VARS(this);
@@ -325,6 +326,9 @@ namespace yask {
             if (_corep->_step_dim_mask & mbit)
                 new_dirty = _corep->_allocs[i];
         }
+        
+        // Copy new strides.
+        _corep->_vec_strides = get_vec_strides();
 
         // Resize dirty flags, too.
         size_t old_dirty = _dirty_steps.size();
@@ -396,7 +400,7 @@ namespace yask {
                 // Adjust alloc indices to overall indices.
                 IdxTuple opt(pt);
                 bool ok = true;
-                for (int i = 0; ok && i < pt._get_num_dims(); i++) {
+                for (int i = 0; ok && i < pt.get_num_dims(); i++) {
                     auto val = pt.get_val(i);
                     idx_t mbit = 1LL << i;
 
@@ -460,9 +464,9 @@ namespace yask {
         STATE_VARS(this);
         bool all_ok = true;
         auto n = get_num_dims();
-        if (indices._get_num_dims() != n) {
+        if (indices.get_num_dims() != n) {
             FORMAT_AND_THROW_YASK_EXCEPTION("Error: '" << fn << "' called with " <<
-                                            indices._get_num_dims() <<
+                                            indices.get_num_dims() <<
                                             " indices instead of " << n);
         }
         if (clipped_indices)

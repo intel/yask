@@ -200,18 +200,11 @@ namespace yask {
             if (gp.get_loop_type() != VarPoint::LOOP_OFFSET)
                 continue;
 
-            // Make base point (misc & inner-dim indices = 0).
+            // Make base point (misc & domain indices = 0).
             auto bgp = make_base_point(gp);
 
-            // Not already saved?
-            if (!lookup_point_ptr(*bgp)) {
-
-                // Get temp var for ptr.
-                string ptr_name = make_var_name();
-
-                // Save for future use.
-                save_point_ptr(*bgp, ptr_name);
-            }
+            // Make and save ptr vars for future use.
+            save_point_ptr(*bgp);
 
             // Collect some stats for reads using this ptr.
             if (_vv._aligned_vecs.count(gp)) {
@@ -242,12 +235,12 @@ namespace yask {
             // Make base point (inner-dim index = 0).
             auto bgp = make_base_point(gp);
 
-            // Got a pointer?
+            // Got a pointer to it?
             auto* p = lookup_point_ptr(*bgp);
             if (!p)
                 continue;
 
-            // Make code for pointer and prefetches.
+            // Make code for pointer and its prefetches.
             if (!done.count(*p)) {
 
                 // Print pointer creation.
@@ -331,10 +324,10 @@ namespace yask {
                         if (p && *p == ptr) {
 
                             // Expression for this offset from inner-dim var.
-                            string inner_expr = idim + " + ofs";
+                            string inner_ofs = "ofs";
 
                             // Expression for ptr offset at this point.
-                            string ofs_expr = get_ptr_offset(gp, inner_expr);
+                            string ofs_expr = get_ptr_offset(os, gp, inner_ofs);
                             print_point_comment(os, gp, "Prefetch for ");
 
                             // Already done?
@@ -358,25 +351,16 @@ namespace yask {
         }
     }
 
-    // Make base point (misc & inner-dim indices = 0).
+    // Make base point: same as 'gp', but misc indices and
+    // and domain indices = 0.
     var_point_ptr CppVecPrintHelper::make_base_point(const VarPoint& gp) {
         var_point_ptr bgp = gp.clone_var_point();
         for (auto& dim : gp.get_dims()) {
             auto& dname = dim->_get_name();
             auto type = dim->get_type();
 
-            // Set inner domain index to 0.
-            if (dname == get_dims()._inner_dim) {
+            if (type == DOMAIN_INDEX || type == MISC_INDEX) {
                 IntScalar idi(dname, 0);
-                bgp->set_arg_const(idi);
-            }
-
-            // Set misc indices to their min value if they are inside
-            // inner domain dim.
-            else if (_settings._inner_misc && type == MISC_INDEX) {
-                auto* var = gp._get_var();
-                auto min_val = var->get_min_indices()[dname];
-                IntScalar idi(dname, min_val);
                 bgp->set_arg_const(idi);
             }
         }
@@ -385,8 +369,8 @@ namespace yask {
     
     // Print code to set ptr_name to gp.
     void CppVecPrintHelper::print_point_ptr(ostream& os, const string& ptr_name,
-                                          const VarPoint& gp) {
-        print_point_comment(os, gp, "Calculate pointer to ");
+                                            const VarPoint& gp) {
+        print_point_comment(os, gp, "Create pointer to ");
 
         // Get pointer to vector using normalized indices.
         // Ignore out-of-range errors because we might get a base pointer to an
@@ -408,55 +392,108 @@ namespace yask {
         os << _line_prefix << type << " " << ptr_name << " = " << vp << _line_suffix;
     }
 
-    // Get expression for offset of 'gp' from base pointer.  Base pointer
-    // points to vector with outer-dims == same values as in 'gp', inner-dim
-    // == 0 and misc dims == their min value.
-    string CppVecPrintHelper::get_ptr_offset(const VarPoint& gp, const string& inner_expr) {
-        auto* var = gp._get_var();
+    // Print creation of stride vars.
+    // Save var names for later use.
+    void CppVecPrintHelper::print_strides(ostream& os, const Var& var) {
 
-        // Need to create an expression for inner-dim
-        // and misc indices offsets.
-                
-        // Start with offset in inner-dim direction.
-        // This must the dim that appears before the misc dims
-        // in the var layout.
-        string idim = _dims._inner_dim;
-        string ofs_str = "(";
-        if (inner_expr.length())
-            ofs_str += inner_expr;
-        else
-            ofs_str += gp.make_norm_arg_str(idim, _dims);
-        ofs_str += ")";
+        int dnum = 0;
+        for (auto& dim : var.get_dims()) {
+            const auto& vname = var.get_name();
+            const auto& dname = dim->_get_name();
+            auto dtype = dim->get_type();
 
-        // Misc indices if they are inside inner-dim.
-        if (_settings._inner_misc) {
-            for (int i = 0; i < var->get_num_dims(); i++) {
-                auto& dimi = gp.get_dims().at(i);
-                auto& dni = dimi->_get_name();
-                auto typei = dimi->get_type();
-                if (typei == MISC_INDEX) {
+            // Don't need step-dim stride.
+            bool is_step = dtype == STEP_INDEX;
+            
+            auto key = StrideKey(vname, dname);
+            if (!is_step && !_strides.count(key) ) {
+                os << endl << " // Stride for var '" << vname <<
+                    "' in '" << dname << "' dim.\n";
 
-                    // Mult by size of remaining misc dims.
-                    for (int j = i; j < var->get_num_dims(); j++) {
-                        auto& dimj = gp.get_dims().at(j);
-                        auto& dnj = dimj->_get_name();
-                        auto typej = dimj->get_type();
-                        if (typej == MISC_INDEX) {
-                            auto min_idx = var->get_min_indices()[dnj];
-                            auto max_idx = var->get_max_indices()[dnj];
-                            ofs_str += " * (" + to_string(max_idx) +
-                                " - " + to_string(min_idx) + " + 1)";
-                        }
+                string tname = make_var_name();
+                _strides[key] = tname;
+                assert(lookup_stride(var, dname));
+
+                // Get ptr to var core.
+                string var_ptr = get_local_var(os, get_var_ptr(var),
+                                               CppPrintHelper::_var_ptr_restrict_type);
+
+                // Determine stride.
+                // Default is to obtain dynamic value from var.
+                string stride = var_ptr + "->_vec_strides[" + to_string(dnum) + "]";
+
+                // Inner dim size and inner misc dim sizes are fixed.
+                // NB: during layout, the inner dim is moved to the inner-most
+                // position; the misc dims are moved after that if '_inner_misc' is true.
+                bool is_inner = dname == _dims._inner_dim;
+                bool is_inner_misc = dtype == MISC_INDEX && _settings._inner_misc;
+                if (is_inner || is_inner_misc) {
+
+                    // Stride of inner dim will be 1 or size of misc vars.
+                    stride = "1";
+
+                    // Mult by size of following inner-misc dims, if any.
+                    if (_settings._inner_misc)
+                        for (int j = 0; j < var.get_num_dims(); j++) {
+                            auto& dimj = var.get_dims().at(j);
+                            auto& dnj = dimj->_get_name();
+                            auto typej = dimj->get_type();
+                            if (typej == MISC_INDEX && (is_inner || j > dnum)) {
+                                auto min_idx = var.get_min_indices()[dnj];
+                                auto max_idx = var.get_max_indices()[dnj];
+                                auto sz = max_idx - min_idx + 1;
+                                os << " // Misc indices for '" << dnj << "' range from " <<
+                                    min_idx << " to " << max_idx << ": " << sz << " value(s).\n";
+                                stride += " * " + to_string(sz);
+                            }
                     }
-                        
-                    // Add offset of this misc value, which must be const.
-                    auto min_val = var->get_min_indices()[dni];
-                    auto val = gp.get_arg_consts()[dni];
-                    ofs_str += " + (" + to_string(val) + " - " +
-                        to_string(min_val) + ")";
+                }
+
+                // Print final assignment.
+                os << _line_prefix << "const idx_t " << tname << " = " <<
+                    stride << _line_suffix;
+
+            }
+            dnum++;
+        }
+    }
+    
+    // Get expression for offset of 'gp' from base pointer.  Base pointer
+    // points to vector with domain dims and misc dims == 0.
+    string CppVecPrintHelper::get_ptr_offset(ostream& os,
+                                             const VarPoint& gp,
+                                             const string& inner_ofs) {
+        auto* var = gp._get_var();
+        assert(var);
+        string ofs_str;
+        int nterms = 0;
+
+        // Construct the linear offset by adding the products of
+        // each index with the var's stride in that dim.
+        for (int i = 0; i < var->get_num_dims(); i++) {
+            auto& dimi = gp.get_dims().at(i);
+            auto typei = dimi->get_type();
+
+            // There is a separate pointer for each value of
+            // the step index, so we don't need to include
+            // that index in the offset calculation.
+            bool is_step = typei == STEP_INDEX;
+            if (!is_step) {
+                string dni = dimi->_get_name();
+                string nas = gp.make_norm_arg_str(dni, _dims);
+                if (nas != "0") {
+                    if (nterms)
+                        ofs_str += " + ";
+                    if (dni == _dims._inner_dim && inner_ofs.length())
+                        nas += " + " + inner_ofs;
+                    auto* stride = lookup_stride(*var, dni);
+                    assert(stride);
+                    ofs_str += "((" + nas + ") * " + *stride + ")";
+                    nterms++;
                 }
             }
         }
+
         return ofs_str;
     }
     
@@ -484,7 +521,7 @@ namespace yask {
 #endif
 
                 // Output read using base addr.
-                auto ofs_str = get_ptr_offset(gp);
+                auto ofs_str = get_ptr_offset(os, gp);
                 print_point_comment(os, gp, "Read aligned");
                 code_str = make_var_name();
                 os << _line_prefix << get_var_type() << " " << code_str << " = " <<
@@ -572,7 +609,7 @@ namespace yask {
             if (p) {
 
                 // Offset.
-                auto ofs_str = get_ptr_offset(gp);
+                auto ofs_str = get_ptr_offset(os, gp);
 
                 // Output write using base addr.
                 print_point_comment(os, gp, "Write aligned");

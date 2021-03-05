@@ -112,15 +112,15 @@ namespace yask {
         if (_step_dim.length() == 0) {
             THROW_YASK_EXCEPTION("Error: no step dimension defined");
         }
-        if (!_domain_dims._get_num_dims()) {
+        if (!_domain_dims.get_num_dims()) {
             THROW_YASK_EXCEPTION("Error: no domain dimension(s) defined");
         }
 
         // Set specific positional dims.
         _outer_dim = _domain_dims.get_dim_name(0);
-        _inner_dim = _domain_dims.get_dim_name(_domain_dims._get_num_dims() - 1);
-        string _near_inner_dim = _domain_dims._get_num_dims() >= 2 ?
-            _domain_dims.get_dim_name(_domain_dims._get_num_dims() - 2) : _outer_dim;
+        _inner_dim = _domain_dims.get_dim_name(_domain_dims.get_num_dims() - 1);
+        string _near_inner_dim = _domain_dims.get_num_dims() >= 2 ?
+            _domain_dims.get_dim_name(_domain_dims.get_num_dims() - 2) : _outer_dim;
 
         os << "Step dimension: " << _step_dim << endl;
         os << "Domain dimension(s): " << _domain_dims.make_dim_str() << endl;
@@ -143,7 +143,7 @@ namespace yask {
             fold_opts.add_dim_back(dname, sz);
         }
         os << " Number of SIMD elements: " << vlen << endl;
-        if (fold_opts._get_num_dims())
+        if (fold_opts.get_num_dims())
             os << " Requested vector-fold dimension(s) and point-size(s): " <<
                 _fold.make_dim_val_str(" * ") << endl;
         else
@@ -152,12 +152,12 @@ namespace yask {
         // If needed, adjust folding to exactly cover vlen unless vlen is 1.
         // If vlen is 1, we will allow any folding.
         if (vlen > 1 && _fold.product() != vlen) {
-            if (fold_opts._get_num_dims())
+            if (fold_opts.get_num_dims())
                 os << "Notice: adjusting requested fold to achieve SIMD length of " <<
                     vlen << ".\n";
 
             // If 1D, there is only one option.
-            if (_domain_dims._get_num_dims() == 1)
+            if (_domain_dims.get_num_dims() == 1)
                 _fold[_inner_dim] = vlen;
 
             // If 2D+, adjust folding.
@@ -201,7 +201,7 @@ namespace yask {
                         int sz = p ? *p : 0; // 0 => not specified.
                         inner_opts.add_dim_front(dname, sz); // favor more inner ones.
                     }
-                    assert(inner_opts._get_num_dims() == _domain_dims._get_num_dims() - 1);
+                    assert(inner_opts.get_num_dims() == _domain_dims.get_num_dims() - 1);
 
                     // Get final size of non-inner dims.
                     inner_folds = inner_opts.get_compact_factors(upper_sz);
@@ -217,7 +217,7 @@ namespace yask {
                     else
                         _fold[dname] = 1;
                 }
-                assert(_fold._get_num_dims() == _domain_dims._get_num_dims());
+                assert(_fold.get_num_dims() == _domain_dims.get_num_dims());
             }            
 
             // Check it.
@@ -278,7 +278,7 @@ namespace yask {
             _cluster_mults.make_dim_val_str(" * ") << endl;
         os << " Cluster dimension(s) and point-size(s): " <<
             _cluster_pts.make_dim_val_str(" * ") << endl;
-        if (_misc_dims._get_num_dims())
+        if (_misc_dims.get_num_dims())
             os << "Misc dimension(s): " << _misc_dims.make_dim_str() << endl;
         else
             os << "No misc dimensions used\n";

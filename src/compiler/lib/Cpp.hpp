@@ -33,7 +33,7 @@ IN THE SOFTWARE.
 #include "Var.hpp"
 
 namespace yask {
-
+    
     /////////// Scalar code /////////////
 
     // Outputs C++ scalar code for YASK.
@@ -65,17 +65,21 @@ namespace yask {
         }
 
         // Format a pointer to a var.
-        virtual string get_var_ptr(const VarPoint& gp) {
-            const auto* var = gp._get_var();
-            string gname = var->_get_name();
+        virtual string get_var_ptr(const Var& var) {
+            string gname = var._get_name();
             string expr;
-            if (var->is_scratch())
+            if (var.is_scratch())
                 expr = "thread_core_data.";
             else
                 expr = "core_data->";
             expr += "var_" + gname + "_core_p.get()";
             return expr;
         }
+        virtual string get_var_ptr(const VarPoint& gp) {
+            const auto* var = gp._get_var();
+            assert(var);
+            return get_var_ptr(*var);
+        }        
         
         // Make call for a point.
         // This is a utility function used for both reads and writes.
@@ -117,6 +121,10 @@ namespace yask {
         map<VarPoint, string> _vec_ptrs; // pointers to var vecs. value: ptr-var name.
         map<string, int> _ptr_ofs_lo; // lowest read offset from _vec_ptrs in inner dim.
         map<string, int> _ptr_ofs_hi; // highest read offset from _vec_ptrs in inner dim.
+
+        // Vars for tracking strides in vars.
+        typedef pair<string, string> StrideKey; // var and dim names.
+        map<StrideKey, string> _strides; // var containing stride for given dim in var.
 
         // Element indices.
         string _elem_suffix = "_elem";
@@ -190,8 +198,8 @@ namespace yask {
         }
 
         // Get offset from base pointer.
-        virtual string get_ptr_offset(const VarPoint& gp,
-                                    const string& inner_expr = "");
+        virtual string get_ptr_offset(ostream& os, const VarPoint& gp,
+                                      const string& inner_ofs = "");
 
     public:
 
@@ -212,11 +220,11 @@ namespace yask {
         // if all writes were printed.
         virtual string write_to_point(ostream& os, const VarPoint& gp, const string& val) override;
 
-        // Print code to set pointers of aligned reads.
-        virtual void print_base_ptrs(ostream& os);
-
         // Make base point (misc & inner-dim indices = 0).
         virtual var_point_ptr make_base_point(const VarPoint& gp);
+
+        // Print code to set pointers of aligned reads.
+        virtual void print_base_ptrs(ostream& os);
 
         // Print prefetches for each base pointer.
         // Print only 'ptr_var' if provided.
@@ -233,13 +241,26 @@ namespace yask {
         // Print code to set ptr_name to gp.
         virtual void print_point_ptr(ostream& os, const string& ptr_name, const VarPoint& gp);
 
+        // Print strides for 'var'.
+        virtual void print_strides(ostream& os, const Var& var);
+        
         // Access cached values.
-        virtual void save_point_ptr(const VarPoint& gp, string var) {
-            _vec_ptrs[gp] = var;
-        }
         virtual string* lookup_point_ptr(const VarPoint& gp) {
             if (_vec_ptrs.count(gp))
                 return &_vec_ptrs.at(gp);
+            return 0;
+        }
+        virtual void save_point_ptr(const VarPoint& gp) {
+            if (!_vec_ptrs.count(gp)) {
+                string ptr_name = make_var_name();
+                _vec_ptrs[gp] = ptr_name;
+                assert(lookup_point_ptr(gp));
+            }
+        }
+        virtual string* lookup_stride(const Var& var, const string& dim) {
+            auto key = StrideKey(var.get_name(), dim);
+            if (_strides.count(key))
+                return &_strides.at(key);
             return 0;
         }
     };

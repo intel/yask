@@ -691,13 +691,13 @@ namespace yask {
         return _var->get_dims();
     }
 
-    // Make string like "x+(4/VLEN_X)" from
+    // Make normalized string like "x+(4/VLEN_X)" from
     // original arg "x+4" in 'dname' dim.
     // This object has numerators; 'fold' object has denominators.
     // Args w/o simple offset are not modified.
     string VarPoint::make_norm_arg_str(const string& dname,
-                                     const Dimensions& dims,
-                                     const VarMap* var_map) const {
+                                       const Dimensions& dims,
+                                       const VarMap* var_map) const {
         string res;
 
         // Const offset?
@@ -716,11 +716,13 @@ namespace yask {
             auto& gdims = _var->get_dims();
             for (size_t i = 0; i < gdims.size(); i++) {
                 auto gdname = gdims[i]->_get_name();
-                if (gdname == dname)
-                    res += _args.at(i)->make_str(var_map);
+                if (gdname == dname) {
+                    res = _args.at(i)->make_str(var_map);
+                    break;
+                }
             }
         }
-
+        assert(res.length());
         return res;
     }
 

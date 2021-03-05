@@ -46,10 +46,10 @@ namespace yask {
         const void* _elems = get_storage();
         stringstream oss;
         oss << "'" << _name << "' ";
-        if (_var_dims._get_num_dims() == 0)
+        if (_var_dims.get_num_dims() == 0)
             oss << "scalar";
         else
-            oss << _var_dims._get_num_dims() << "-D var (" <<
+            oss << _var_dims.get_num_dims() << "-D var (" <<
                 _var_dims.make_dim_val_str(" * ") << ")";
         if (_elems) {
             oss << " with storage at " << _elems;

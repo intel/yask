@@ -166,7 +166,7 @@ namespace yask {
             return _l1_dist;
         }
 
-        // Determine whether dims are same.
+        // Determine whether dims are same as 'other' var.
         virtual bool are_dims_same(const Var& other) const {
             if (_dims.size() != other._dims.size())
                 return false;
