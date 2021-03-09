@@ -538,7 +538,7 @@ MISC_LOOP_ORDER		?=	1 .. N-1
 MISC_LOOP_CODE		?=	$(MISC_LOOP_OUTER_MODS) omp loop($(MISC_LOOP_ORDER)) { \
 				$(MISC_LOOP_INNER_MODS) call(MISC_FN); }
 
-# Compile rules.
+# Compile rules based on source dir.
 
 $(YK_OBJ_DIR)/%.o: $(COMM_DIR)/%.cpp $(YK_INC_GLOB)
 	$(MKDIR) $(dir $@)
@@ -801,12 +801,11 @@ echo-settings:
 	$(YK_CXX) --version
 
 # Print stats on inner SIMD loops from asm file.
-# Compile with 'EXTRA_YK_CXXFLAGS=-Fa CXX_PREFIX=' to make asm file.
-# (The 'CXX_PREFIX=' part just turns off 'ccmake' because it
-# won't rebuild if only '-Fa' is added.)
-code-stats: kernel
+code-stats: $(YK_LIB)
+	$(MKDIR) $(YK_OBJ_DIR)
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) -x c++ -S -o $(YK_OBJ_DIR)/factory.s $(YK_LIB_SRC_DIR)/factory.cpp
 	@echo "Code stats for stencil computation:"
-	$(PERL) $(VIEW_ASM) -p -l -f=calc_clusters factory.s
+	$(PERL) $(VIEW_ASM) -p -l -f='calc_.*opt' $(YK_OBJ_DIR)/factory.s
 
 # Print some usage info.
 help:

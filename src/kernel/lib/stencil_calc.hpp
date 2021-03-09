@@ -316,7 +316,7 @@ namespace yask {
         }
         
         // Calculate results within a sub-block.
-        // Essentially a chooser between the scalar or vector version.
+        // Essentially just a chooser between the debug and optimized versions.
         void
         calc_sub_block(int region_thread_idx,
                        int block_thread_idx,
@@ -793,12 +793,14 @@ namespace yask {
 
             // Define the function called from the generated loops to simply
             // call the loop-of-clusters function.
+            // This code traverses the inner dim.
             #define CALC_INNER_LOOP(loop_idxs)                          \
                 calc_loop_of_clusters(corep, region_thread_idx, block_thread_idx, \
                                       loop_idxs, inner_posn)
 
             // Include automatically-generated loop code that calls
-            // CALC_INNER_LOOP().
+            // CALC_INNER_LOOP(). This code traverses all spatial dims
+            // except the inner one. OMP offloading happens in this code.
             FORCE_INLINE_RECURSIVE {
                 #include "yask_sub_block_loops.hpp"
             }
