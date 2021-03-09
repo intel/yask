@@ -172,10 +172,6 @@ namespace {
                         soln->set_prefetch_dist(1, 1);
                         soln->set_prefetch_dist(2, 0);
                     }
-                    else if (target == "avx512") {
-                        soln->set_prefetch_dist(1, 0);
-                        soln->set_prefetch_dist(2, 2);
-                    }
                     else if (target == "avx2") {
                         soln->set_prefetch_dist(1, 0);
                         soln->set_prefetch_dist(2, 0);

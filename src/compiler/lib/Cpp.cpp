@@ -269,85 +269,88 @@ namespace yask {
         for (int level = 1; level <= 2; level++) {
 
             os << "\n // Prefetch to L" << level << " cache if enabled.\n";
-                os << _line_prefix << "#if PFD_L" << level << " > 0\n";
+            os << _line_prefix << "#if (PFD_L" << level << " > 0)";
+            if (!ahead)
+                os << " && (defined PREFETCH_BEFORE_LOOP)";
+            os << "\n";
 
-                // Loop thru vec ptrs.
-                for (auto vp : _vec_ptrs) {
-                    auto& ptr = vp.second; // ptr var name.
+            // Loop thru vec ptrs.
+            for (auto vp : _vec_ptrs) {
+                auto& ptr = vp.second; // ptr var name.
 
-                    // Filter by ptr_var if provided.
-                    if (ptr_var.length() && ptr_var != ptr)
-                        continue;
+                // Filter by ptr_var if provided.
+                if (ptr_var.length() && ptr_var != ptr)
+                    continue;
 
-                    // _ptr_ofs{Lo,Hi} contain first and last offsets in idim,
-                    // NOT normalized to vector len.
-                    string left = _dims.make_norm_str(_ptr_ofs_lo[ptr], idim);
-                    if (left.length() == 0) left = "0";
-                    string right = _dims.make_norm_str(_ptr_ofs_hi[ptr], idim);
+                // _ptr_ofs{Lo,Hi} contain first and last offsets in idim,
+                // NOT normalized to vector len.
+                string left = _dims.make_norm_str(_ptr_ofs_lo[ptr], idim);
+                if (left.length() == 0) left = "0";
+                string right = _dims.make_norm_str(_ptr_ofs_hi[ptr], idim);
 
-                    // Loop bounds.
-                    string start, stop;
+                // Loop bounds.
+                string start, stop;
                     
-                    // If fetching ahead, only need to get those following
-                    // the previous one.
-                    if (ahead)
-                        start = "(PFD_L" + to_string(level) + "*" + imult + ")" + right;
+                // If fetching ahead, only need to get those following
+                // the previous one.
+                if (ahead)
+                    start = "(PFD_L" + to_string(level) + "*" + imult + ")" + right;
 
-                    // If fetching first time, need to fetch across whole range;
-                    // starting at left edge.
-                    else
-                        start = left;
-                    start = "(" + start + ")";
+                // If fetching first time, need to fetch across whole range;
+                // starting at left edge.
+                else
+                    start = left;
+                start = "(" + start + ")";
                     
-                    // If fetching again, stop before next one.
-                    if (ahead)
-                        stop = "((PFD_L" + to_string(level) + "+1)*" + imult + ")" + right;
+                // If fetching again, stop before next one.
+                if (ahead)
+                    stop = "((PFD_L" + to_string(level) + "+1)*" + imult + ")" + right;
 
-                    // If fetching first time, stop where next "ahead" one ends.
-                    else
-                        stop = "(PFD_L" + to_string(level) + "*" + imult + ")" + right;
-                    stop = "(" + stop + ")";
+                // If fetching first time, stop where next "ahead" one ends.
+                else
+                    stop = "(PFD_L" + to_string(level) + "*" + imult + ")" + right;
+                stop = "(" + stop + ")";
 
-                    // Start loop of prefetches.
-                    os << "\n // For pointer '" << ptr << "'\n"
-                        "#pragma unroll(" << stop << " - " << start << ")\n" <<
-                        _line_prefix << " for (int ofs = " << start <<
-                        "; ofs < " << stop << "; ofs++) {\n";
+                // Start loop of prefetches.
+                os << "\n // For pointer '" << ptr << "'\n"
+                    "#pragma unroll(" << stop << " - " << start << ")\n" <<
+                    _line_prefix << " for (int ofs = " << start <<
+                    "; ofs < " << stop << "; ofs++) {\n";
 
-                    // Need to print prefetch for every unique var-point read.
-                    set<string> done;
-                    for (auto& gp : _vv._aligned_vecs) {
+                // Need to print prefetch for every unique var-point read.
+                set<string> done;
+                for (auto& gp : _vv._aligned_vecs) {
 
-                        // For the current base ptr?
-                        auto bgp = make_base_point(gp);
-                        auto* p = lookup_point_ptr(*bgp);
-                        if (p && *p == ptr) {
+                    // For the current base ptr?
+                    auto bgp = make_base_point(gp);
+                    auto* p = lookup_point_ptr(*bgp);
+                    if (p && *p == ptr) {
 
-                            // Expression for this offset from inner-dim var.
-                            string inner_ofs = "ofs";
+                        // Expression for this offset from inner-dim var.
+                        string inner_ofs = "ofs";
 
-                            // Expression for ptr offset at this point.
-                            string ofs_expr = get_ptr_offset(os, gp, inner_ofs);
-                            print_point_comment(os, gp, "Prefetch for ");
+                        // Expression for ptr offset at this point.
+                        string ofs_expr = get_ptr_offset(os, gp, inner_ofs);
+                        print_point_comment(os, gp, "Prefetch for ");
 
-                            // Already done?
-                            if (done.count(ofs_expr))
-                                os << " // Already accounted for.\n";
+                        // Already done?
+                        if (done.count(ofs_expr))
+                            os << " // Already accounted for.\n";
 
-                            else {
-                                done.insert(ofs_expr);
+                        else {
+                            done.insert(ofs_expr);
 
-                                // Prefetch.
-                                os << _line_prefix << "  prefetch<L" << level << "_HINT>(&" << ptr <<
-                                    "[" << ofs_expr << "])" << _line_suffix;
-                            }
+                            // Prefetch.
+                            os << _line_prefix << "  prefetch<L" << level << "_HINT>(&" << ptr <<
+                                "[" << ofs_expr << "])" << _line_suffix;
                         }
                     }
-
-                    // End loop;
-                    os << " }\n";
                 }
-                os << _line_prefix << "#endif // L" << level << " prefetch.\n";
+
+                // End loop;
+                os << " }\n";
+            }
+            os << _line_prefix << "#endif // L" << level << " prefetch.\n";
         }
     }
 

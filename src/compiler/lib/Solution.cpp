@@ -83,19 +83,11 @@ namespace yask {
             return _settings._prefetch_dists.at(level);
         else if (is_target_set()) {
             auto target = get_target();
-
-            // Defaults for various targets.
             if (target == "knl") {
                 if (level == 1)
                     return 1;
                 else
                     return 0;
-            }
-            else {
-                if (level == 1)
-                    return 0;
-                else
-                    return 2;
             }
         }
         return 0;
