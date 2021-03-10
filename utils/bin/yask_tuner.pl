@@ -765,7 +765,7 @@ sub getRunCmd($) {
   my $exePrefix = $timeCmd;
   $exePrefix .= " sde -$arch --" if $sde;
 
-  my $runCmd = "bin/yask.sh -log $outDir/yask.$stencil.$arch.run".sprintf("%06d",$run).".log";
+  my $runCmd = "bin/yask.sh -log_dir $outDir/logs -log yask.$stencil.$arch.run".sprintf("%06d",$run).".log";
   if (defined $mic) {
     $runCmd .= " -mic $mic";
   } else {
