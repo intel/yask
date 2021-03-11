@@ -460,7 +460,7 @@ namespace {
             A(t+1, x) EQUALS -2 * A(t, x);
             B(t+1, x) EQUALS def_1d(B, t, x, 0, 1);
 
-            // 'C' depends on 'A', creating a 2nd stage.
+            // 'C(t+1)' depends on 'A(t+1)', creating a 2nd stage.
             C(t+1, x) EQUALS def_1d(A, t+1, x, 1, 0) + C(t, x+1);
         }
     };
@@ -477,6 +477,7 @@ namespace {
         // Vars.
         yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y }); // time-varying var.
         yc_var_proxy B = yc_var_proxy("B", get_soln(), { t, x, y }); // time-varying var.
+        yc_var_proxy C = yc_var_proxy("C", get_soln(), { t, x, y }); // time-varying var.
 
     public:
 
@@ -486,11 +487,14 @@ namespace {
         // Define equation to apply to all points in 'A' and 'B' vars.
         virtual void define() {
 
-            // Define A(t+1) from A(t) & stencil at B(t).
+            // Define A(t+1) from A(t) & B(t).
             A(t+1, x, y) EQUALS A(t, x, y) - def_2d(B, t, x, 0, 1, y, 2, 1);
 
-            // Define B(t+1) from B(t) & stencil at A(t+1).
+            // Define B(t+1) from B(t) & A(t+1), creating a 2nd stage.
             B(t+1, x, y) EQUALS B(t, x, y) - def_2d(A, t+1, x, 3, 2, y, 0, 1);
+
+            // Define C(t+1) from B(t+1), creating a 3rd stage.
+            C(t+1, x, y) EQUALS B(t+1, x-1, y+2);
         }
     };
 
