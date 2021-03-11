@@ -375,14 +375,25 @@ namespace yask {
                                     mpi_exterior_dim = j;
 
                                     // Include automatically-generated loop
-                                    // code that calls calc_region(bp) for
+                                    // code to call calc_region() for
                                     // each region. The region will be trimmed
                                     // to the active MPI exterior section.
                                     TRACE_MSG("run_solution: step " << start_t <<
                                               " for stage '" << bp->get_name() <<
                                               "' in MPI exterior dim " << j <<
                                               " on the " << (is_left ? "left" : "right"));
+
+                                    // Loop prefix.
+                                    #define USE_LOOP_PART_0
                                     #include "yask_rank_loops.hpp"
+
+                                    // Loop body.
+                                    calc_region(bp, body_indices);
+
+                                    // Loop suffix.
+                                    #define USE_LOOP_PART_1
+                                    #include "yask_rank_loops.hpp"
+                                    
                                 } // left/right.
                             } // domain dims.
 
@@ -407,14 +418,24 @@ namespace yask {
                             do_mpi_interior = true;
                         } // Overlapping.
 
-                        // Include automatically-generated loop code that calls
-                        // calc_region(bp) for each region. If overlapping
+                        // Include automatically-generated loop code to call
+                        // calc_region() for each region. If overlapping
                         // comms, this will be just the interior.  If not, it
                         // will cover the whole rank.
                         TRACE_MSG("run_solution: step " << start_t <<
                                   " for stage '" << bp->get_name() << "'");
+
+                        // Loop prefix.
+                        #define USE_LOOP_PART_0
                         #include "yask_rank_loops.hpp"
 
+                        // Loop body.
+                        calc_region(bp, body_indices);
+
+                        // Loop suffix.
+                        #define USE_LOOP_PART_1
+                        #include "yask_rank_loops.hpp"
+ 
                         // Mark as dirty only if we did exterior.
                         bool mark_dirty = do_mpi_left || do_mpi_right;
                         update_vars(bp, start_t, stop_t, mark_dirty);
@@ -460,14 +481,25 @@ namespace yask {
                                 mpi_exterior_dim = j;
 
                                 // Include automatically-generated loop
-                                // code that calls calc_region(bp) for
+                                // code to call calc_region(bp) for
                                 // each region. The region will be trimmed
                                 // to the active MPI exterior section.
                                 TRACE_MSG("run_solution: steps [" << start_t <<
                                           " ... " << stop_t <<
                                           ") in MPI exterior dim " << j <<
                                           " on the " << (is_left ? "left" : "right"));
+
+                                // Loop prefix.
+                                #define USE_LOOP_PART_0
                                 #include "yask_rank_loops.hpp"
+
+                                // Loop body.
+                                calc_region(bp, body_indices);
+
+                                // Loop suffix.
+                                #define USE_LOOP_PART_1
+                                #include "yask_rank_loops.hpp"
+                                
                             } // left/right.
                         } // domain dims.
 
@@ -484,12 +516,22 @@ namespace yask {
                         do_mpi_interior = true;
                     } // Overlapping.
 
-                    // Include automatically-generated loop code that calls
-                    // calc_region(bp) for each region. If overlapping
+                    // Include automatically-generated loop code to call
+                    // calc_region() for each region. If overlapping
                     // comms, this will be just the interior.  If not, it
                     // will cover the whole rank.
                     TRACE_MSG("run_solution: steps [" << start_t <<
                               " ... " << stop_t << ")");
+
+                    // Loop prefix.
+                    #define USE_LOOP_PART_0
+                    #include "yask_rank_loops.hpp"
+
+                    // Loop body.
+                    calc_region(bp, body_indices);
+                    
+                    // Loop suffix.
+                    #define USE_LOOP_PART_1
                     #include "yask_rank_loops.hpp"
 
                     // Mark as dirty only if we did exterior.
@@ -671,11 +713,21 @@ namespace yask {
                         idx_t nphases = 1; // Only 1 phase w/o TB.
                         idx_t phase = 0;
 
-                        // Include automatically-generated loop code that
-                        // calls calc_block() for each block in this region.
+                        // Include automatically-generated loop code to
+                        // call calc_block() for each block in this region.
                         // Loops through x from begin_rx to end_rx-1;
                         // similar for y and z.  This code typically
                         // contains the outer OpenMP loop(s).
+
+                        // Loop prefix.
+                        #define USE_LOOP_PART_0
+                        #include "yask_region_loops.hpp"
+
+                        // Loop body.
+                        calc_block(bp, region_shift_num, nphases, phase, rank_idxs, body_indices);
+
+                        // Loop suffix.
+                        #define USE_LOOP_PART_1
                         #include "yask_region_loops.hpp"
                     }
 
@@ -734,6 +786,16 @@ namespace yask {
                     // Call calc_block() on every block concurrently.  Only
                     // the shapes corresponding to the current 'phase' will
                     // be calculated.
+
+                    // Loop prefix.
+                    #define USE_LOOP_PART_0
+                    #include "yask_region_loops.hpp"
+
+                    // Loop body.
+                    calc_block(bp, region_shift_num, nphases, phase, rank_idxs, body_indices);
+
+                    // Loop suffix.
+                    #define USE_LOOP_PART_1
                     #include "yask_region_loops.hpp"
                 }
 
@@ -837,8 +899,20 @@ namespace yask {
             BridgeMask bridge_mask;
             ScanIndices adj_block_idxs = block_idxs;
 
-            // Include automatically-generated loop code that
-            // calls calc_mini_block() for each mini-block in this block.
+            // Include automatically-generated loop code to
+            // call calc_mini_block() for each mini-block in this block.
+
+            // Loop prefix.
+            #define USE_LOOP_PART_0
+            #include "yask_block_loops.hpp"
+
+            // Loop body.
+            calc_mini_block(region_thread_idx, bp, region_shift_num,
+                            nphases, phase, nshapes, shape, bridge_mask,
+                            rank_idxs, region_idxs, block_idxs, body_indices);
+            
+            // Loop suffix.
+            #define USE_LOOP_PART_1
             #include "yask_block_loops.hpp"
         } // no TB.
 
@@ -915,11 +989,23 @@ namespace yask {
                 // as block temporal size.
                 assert(num_t == 1);
 
-                // Include automatically-generated loop code that calls
+                // Include automatically-generated loop code to call
                 // calc_mini_block() for each mini-block in this block.
                 StagePtr bp; // null.
+
+                // Loop prefix.
+                #define USE_LOOP_PART_0
                 #include "yask_block_loops.hpp"
 
+                // Loop body.
+                calc_mini_block(region_thread_idx, bp, region_shift_num,
+                                nphases, phase, nshapes, shape, bridge_mask,
+                                rank_idxs, region_idxs, block_idxs, body_indices);
+            
+                // Loop suffix.
+                #define USE_LOOP_PART_1
+                #include "yask_block_loops.hpp"
+                
             } // shape loop.
         } // TB.
     } // calc_block().

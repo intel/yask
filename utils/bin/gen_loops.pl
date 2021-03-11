@@ -43,6 +43,8 @@ $| = 1;                         # autoflush.
 my %OPT;                        # cmd-line options.
 my @dims;                       # indices of dimensions.
 my $inputVar;                   # input var.
+my $outputVar;                  # output var.
+my $loopPart = "USE_LOOP_PART_";
 
 # loop-feature bit fields.
 my $bSerp = 0x1;                # serpentine path
@@ -72,11 +74,12 @@ sub inVar {
 }
 
 # Accessors for local struct.
+# locVar() => "local_indices".
 # locVar("foo", 5) => "local_indices.foo[5]".
 sub locVar {
     my $vname = shift;
     my $part = (defined $vname) ? ".$vname" : "";
-    return "local_indices$part".idx(@_);
+    return "$outputVar$part".idx(@_);
 }
 
 # Access values in input struct.
@@ -159,8 +162,8 @@ sub dimStr {
     return $s;
 }
 
-# make args for a call.
-sub makeArgs {
+# set var for the body.
+sub setOutVar {
     my @loopDims = @_;
 
     my @stmts;
@@ -698,29 +701,27 @@ sub processCode($) {
     my @loopCounts;             # number of dimensions in each loop.
     my @loopDims;               # dimension(s) of current loop.
     my $curInnerDim;            # iteration dimension of inner loop (undef if not in inner loop).
+    my $innerNum = 0;           # inner-loop counter.
 
     # modifiers before loop() statements.
     my @loopPrefix;             # string(s) to put before loop body.
     my $features = 0;           # bits for loop features.
-
-    # lists of code parts to be output.
-    # set at call() statements.
-    my @callStmts;              # calculation statements.
 
     # Lines of code to output.
     my @code;
 
     # Front matter.
     push @code,
+        "#ifdef $loopPart$innerNum\n",
         "// These macros must be re-defined for each generated loop-nest.",
         "#ifndef OMP_PRAGMA",
         "#define OMP_PRAGMA ".pragma($OPT{ompMod}),
         "#endif",
-        "#ifndef INNER_PRAGMA",
-        "#define INNER_PRAGMA ".pragma($OPT{innerMod}),
-        "#endif",
         "#ifndef SIMD_PRAGMA",
         "#define SIMD_PRAGMA ".pragma($OPT{simdMod}),
+        "#endif",
+        "#ifndef INNER_PRAGMA",
+        "#define INNER_PRAGMA ".pragma($OPT{innerMod}),
         "#endif",
         "// 'ScanIndices $inputVar' must be set before the following code.",
         "{";
@@ -805,42 +806,6 @@ sub processCode($) {
             }
         }
 
-        # Function(s) to call.
-        # Set @*Stmts* vars.
-        elsif (lc $tok eq 'call') {
-
-            die "error: '$tok' attempted outside of inner loop.\n"
-                if !defined $curInnerDim;
-
-            # Process funcs (args to call).
-            checkToken($toks[$ti++], '\(', 1);
-            my $ncall = 0;
-            while (1) {
-                my $arg = getNextArg(\@toks, \$ti);
-                last if !defined($arg);
-                $ncall++;
-
-                # standard args to functions.
-                my $callArgs = $OPT{comArgs};
-
-                # get optional args from input.
-                if (checkToken($toks[$ti], '\(', 0)) {
-                    $ti++;
-                    my @oargs = getArgs(\@toks, \$ti);
-                    $callArgs = joinArgs($callArgs, @oargs) if (@oargs);
-                }
-                
-                # Code for calls.
-                # e.g., prefix_fn(...);
-                push @callStmts, makeArgs(@loopStack)
-                    if $ncall == 1;
-                push @callStmts,
-                    "  $OPT{callPrefix}$arg(".
-                    joinArgs($callArgs, locVar()). ");";
-
-            }                   # args
-        }                       # call
-
         # End of loop.
         # This is where most of @code is created for inner loops.
         elsif ($tok eq '}') {
@@ -849,7 +814,6 @@ sub processCode($) {
             # not inner loop?
             # just need to end it.
             if (!defined $curInnerDim) {
-
                 endLoop(\@code);
             }
 
@@ -869,21 +833,26 @@ sub processCode($) {
                 beginLoop(\@code, \@loopDims, \@loopPrefix, 
                           $beginVal, $endVal, $features, \@loopStack);
 
-                # Indices to pass to call.
+                # Indices for body.
                 push @code, 
-                    " // Local copy of indices for function calls.",
-                    " ScanIndices ".locVar()."($inputVar);";
+                    " // Local copy of indices for loop body.",
+                    " ScanIndices ".locVar()."($inputVar);",
+                    setOutVar(@loopDims);
 
-                # loop body.
-                push @code, @callStmts;
+                # Break for body.
+                push @code,
+                    "#undef $loopPart$innerNum\n",
+                    "#endif\n",
+                    "\n// Loop body goes here.\n\n";
+
+                $innerNum++;
+                push @code,
+                    "#ifdef $loopPart$innerNum\n";
 
                 # end of loop.
                 endLoop(\@code);
 
-                # clear code buffers.
-                undef @callStmts;
-
-                # clear other data for this loop.
+                # clear data for this loop.
                 undef $curInnerDim;
                 undef @loopDims;
                 undef @loopPrefix;
@@ -920,7 +889,8 @@ sub processCode($) {
         "#undef OMP_PRAGMA",
         "#undef INNER_PRAGMA",
         "#undef SIMD_PRAGMA",
-        "// End of generated code.";
+        "#undef $loopPart$innerNum\n",
+        "#endif\n";
     
     # indent program avail?
     my $indent = 'indent';
@@ -938,12 +908,12 @@ sub processCode($) {
     open OUT, "| $cmd" or die "error: cannot run '$cmd'.\n";
 
     # header.
-    print OUT "/*\n",
+    print OUT
+        "/*\n",
         " * ".scalar(@dims)."-D var-scanning code.\n",
         " * Generated automatically from the following pseudo-code:\n",
         " *\n",
-        " * N = ",$#dims,";\n",
-        "#pragma once\n";
+        " * N = ",$#dims,";\n";
 
     # format input to show in the header.
     my $cmd2 = "echo '$codeString'";
@@ -960,6 +930,7 @@ sub processCode($) {
         print OUT "\n" if $line =~ m=^\s*//=; # blank line before comment.
         print OUT " $line\n";
     }
+    print OUT "// End of generated code.";
     close OUT;
     print "info: output in '$OPT{output}'.\n";
 }
@@ -970,9 +941,8 @@ sub main() {
     my(@KNOBS) = (
         # knob,        description,   optional default
         [ "ndims=i", "Value of N.", 1],
-        [ "inVar=s", "Name of input index vars.", 'scanVars'],
-        [ "comArgs=s", "Common arguments to all calls.", ''],
-        [ "callPrefix=s", "Common prefix for function call(s).", ''],
+        [ "inVar=s", "Name of existing input 'ScanIndices' var.", 'loop_indices'],
+        [ "outVar=s", "Name of created loop-body 'ScanIndices' var.", 'body_indices'],
         [ "ompMod=s", "Set OMP_PRAGMA to insert before 'omp' loop(s).", "omp parallel for"],
         [ "simdMod=s", "Set SIMD_PRAGMA to insert before 'simd' loop(s).", "omp simd"],
         [ "innerMod=s", "Set INNER_PRAGMA to insert before inner loop(s).", ''],
@@ -989,8 +959,9 @@ sub main() {
             "  indices between 0 and N-1 indicated by 'loop(<indices>)'\n",
             "Indices may be specified as a comma-separated list or <first..last> range,\n",
             "  using the variable 'N' as needed.\n",
-            "Inner loops should contain call statements that generate calls to calculation functions.\n",
-            "A loop statement with more than one argument will generate a single collapsed loop.\n",
+            "A loop statement with more than index will generate a single collapsed loop.\n",
+            "The generated code will contain a prefix before the first inner loop body '{ }'\n",
+            "  and a suffix after each inner loop body.\n",
             "Optional loop modifiers:\n",
             "  omp:             add OMP_PRAGMA to loop (distribute work across SW threads).*\n",
             "  simd:            add SIMD_PRAMA to loop (distribute work across SIMD HW).*\n",
@@ -999,7 +970,7 @@ sub main() {
             "  square_wave:     generate 2D square-wave scan for two innermost dimensions of a collapsed loop.*\n",
             "      * Do not use these modifiers for YASK rank or block loops because they must\n",
             "        execute with strictly-increasing indices when using temporal tiling.\n",
-            "A 'ScanIndices' var must be defined in C++ code prior to including the generated code.\n",
+            "A 'ScanIndices' type must be defined in C++ code prior to including the generated code.\n",
             "  This struct contains the following 'Indices' elements:\n",
             "  'begin':       [in] first index to scan in each dim.\n",
             "  'end':         [in] value beyond last index to scan in each dim.\n",
@@ -1007,29 +978,34 @@ sub main() {
             "  'align':       [in] alignment of strides after first one.\n",
             "  'align_ofs':   [in] value to subtract from 'start' before applying alignment.\n",
             "  'group_size':  [in] min size of each group of points visisted first in a multi-dim loop.\n",
-            "  'start':       [out] set to first scan point in called function(s) in inner loop(s).\n",
-            "  'stop':        [out] set to one past last scan point in called function(s) in inner loop(s).\n",
+            "  'start':       [out] set to first scan point in body of inner loop(s).\n",
+            "  'stop':        [out] set to one past last scan point in body of inner loop(s).\n",
             "  'index':       [out] set to zero on first iteration of loop; increments each iteration.\n",
-            "  Each called function has a 'ScanIndices' variable as a parameter.\n",
-            "  Values in the 'in' arrays in all dimensions are copied from the input.\n",
-            "  Values in the 'out' arrays in any dimension not scanned are copied from the input.\n",
             "  Each array should be the length specified by the largest index used (typically same as -ndims).\n",
+            "A 'ScanIndices' input var must be defined in C++ code prior to including the generated code.\n",
+            "  The 'in' indices control the range of the generaged loop(s).\n",
             "  The 'ScanIndices' input var is named with the -inVar option.\n",
+            "Loop indices will be available in the body of the loop in a new 'ScanIndices' var.\n",
+            "  Values in the 'in' indices are copied from the input var.\n",
+            "  Values in the 'out' indices are set to indicate the range to be covered by the loop body.\n",
+            "  Values in the 'out' indices in any dim not scanned are copied from the input.\n",
+            "  The 'ScanIndices' output var is named with the -outVar option.\n",
             "Options:\n";
         print_options_help(\@KNOBS);
         print "Examples:\n",
-            "  $script -ndims 2 'loop(0,1) { call(f); }'\n",
-            "  $script -ndims 3 'omp loop(0,1) { loop(2) { call(f); } }'\n",
-            "  $script -ndims 3 'omp loop(0) { loop(1,2) { call(f); } }'\n",
-            "  $script -ndims 3 'grouped omp loop(0..N-1) { call(f); }'\n",
-            "  $script -ndims 3 'omp loop(0) { square_wave loop(1..N-1) { call(f); } }'\n",
-            "  $script -ndims 4 'omp loop(0..N+1) { loop(N+2,N-1) { call(f); } }'\n";
+            "  $script -ndims 2 'loop(0,1) { }'\n",
+            "  $script -ndims 3 'omp loop(0,1) { loop(2) { } }'\n",
+            "  $script -ndims 3 'omp loop(0) { loop(1,2) { } }'\n",
+            "  $script -ndims 3 'grouped omp loop(0..N-1) { }'\n",
+            "  $script -ndims 3 'omp loop(0) { square_wave loop(1..N-1) { } }'\n",
+            "  $script -ndims 4 'omp loop(0..N+1) { loop(N+2,N-1) { } }'\n";
         exit 1;
     }
 
     @dims = 0 .. ($OPT{ndims} - 1);
     print "info: generating scanning code for ".scalar(@dims)."-D vars...\n";
     $inputVar = $OPT{inVar};
+    $outputVar = $OPT{outVar};
 
     my $codeString = join(' ', @ARGV); # just concat all non-options params together.
     processCode($codeString);
