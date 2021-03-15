@@ -784,8 +784,8 @@ namespace yask {
                         #define USE_LOOP_PART_1
                         #include "yask_misc_loops.hpp"
                     }
-                    #endif
                 } // left/right.
+                    #endif
             } // scalars.
         } // calc_sub_block_opt.
 
