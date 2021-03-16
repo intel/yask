@@ -158,8 +158,10 @@ void usage(const string& cmd,
         " -step-alloc <size>\n"
         "    Specify the size of the step-dimension memory allocation on all vars.\n"
         "      By default, allocations are calculated automatically for each var.\n"
+        " [-no]-reloc-step\n"
+        "    Allocate YASK vars with the 'step' dim just before the inner dim (default=" << settings._inner_step << ").\n"
         " [-no]-interleave-misc\n"
-        "    Allocate YASK vars with the 'misc' dims as the inner-most dims (default=" << settings._inner_misc << ").\n"
+        "    Allocate YASK vars with the 'misc' dim(s) as the inner-most dim(s) (default=" << settings._inner_misc << ").\n"
         "      This disallows dynamcally changing the 'misc' dim sizes during run-time.\n"
         " -fus\n"
         "    Make first dimension of fold unit stride (default=" << settings._first_inner << ").\n"
@@ -263,7 +265,11 @@ void parse_opts(int argc, const char* argv[],
                 settings._inner_misc = true;
             else if (opt == "-no-interleave-misc")
                 settings._inner_misc = false;
-    
+            else if (opt == "-reloc-step")
+                settings._inner_step = true;
+            else if (opt == "-no-reloc-step")
+                settings._inner_step = false;
+            
             // add any more options w/o values above.
 
             // options w/a value.

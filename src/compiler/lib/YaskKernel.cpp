@@ -250,6 +250,7 @@ namespace yask {
                 string templ = "<Layout_";
                 int step_posn = 0;
                 int inner_posn = 0;
+                bool got_step = false;
                 vector<int> vlens;
                 vector<int> misc_posns;
 
@@ -271,10 +272,11 @@ namespace yask {
                                                      "' with dimensions '" + gdims.make_dim_str() +
                                                      "' because '" + dname + "' must be first dimension");
                             }
-                            if (folded) {
+                            if (folded && _settings._inner_step) {
                                 step_posn = dn + 1;
                                 defer = true;
                             }
+                            got_step = true;
                         }
 
                         // Inner domain dim?
@@ -323,7 +325,7 @@ namespace yask {
                     templ += "0d"; // Trivial scalar layout.
 
                 // Add step-dim flag.
-                if (step_posn)
+                if (got_step)
                     templ += ", true";
                 else
                     templ += ", false";
