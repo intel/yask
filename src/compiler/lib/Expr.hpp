@@ -791,8 +791,7 @@ namespace yask {
         // Set via Eqs::analyze_loop().
         enum LoopType { LOOP_UNSET,
                         LOOP_INVARIANT, // not dependent on inner dim.
-                        LOOP_OFFSET,    // only dep on inner dim +/- const in inner-dim posn.
-                        LOOP_OTHER      // dep on inner dim in another way.
+                        LOOP_DEPENDENT  // dep on one or more domain dims.
         };
 
     protected:

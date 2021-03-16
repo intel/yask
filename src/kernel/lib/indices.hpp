@@ -652,14 +652,9 @@ namespace yask {
         // Last 'start' index is always < 'end'.
         // Last 'stop' index always == 'end'.
 
-        // Output values; set once for entire range.
-        Indices num_indices;    // number of indices in each dim.
-        idx_t   linear_indices = 0; // total indices over all dims (product of num_indices).
-
         // Output values; set for each index by loop code.
         Indices start, stop;    // first and last+1 for this sub-range.
-        Indices index;          // 0-based unique index for each sub-range in each dim.
-        idx_t   linear_index = 0;   // 0-based index over all dims.
+        Indices cur_indices; // 0-based unique index for each sub-range in each dim.
 
         // Example w/3 sub-ranges in overall range:
         // begin                                         end
@@ -678,10 +673,9 @@ namespace yask {
             align(idx_t(1), ndims),
             align_ofs(idx_t(0), ndims),
             group_size(idx_t(1), ndims),
-            num_indices(idx_t(1), ndims),
             start(idx_t(0), ndims),
             stop(idx_t(0), ndims),
-            index(idx_t(0), ndims) {
+            cur_indices(idx_t(0), ndims) {
             
             // Set alignment to vector lengths.
             // i: index for stencil dims, j: index for domain dims.

@@ -645,9 +645,6 @@ namespace yask {
             auto* var = gp->_get_var();
             auto gdims = var->get_dim_names();
 
-            // Check loop in this dim.
-            auto idim = _dims._inner_dim;
-
             // Access type.
             // Assume invariant, then check below.
             VarPoint::LoopType lt = VarPoint::LOOP_INVARIANT;
@@ -658,24 +655,16 @@ namespace yask {
                 auto& arg = args.at(ai);
                 assert(ai < gdims.size());
 
-                // Get set of vars used.
+                // Get set of vars used by this arg.
                 FindVarsVisitor fvv;
                 arg->accept(&fvv);
 
-                // Does this arg refer to idim?
-                if (fvv.vars_used.count(idim)) {
+                // Does this arg refer to any domain dim?
+                for (auto d : _dims._domain_dims) {
+                    auto& dname = d._get_name();
 
-                    // Is it in the idim posn and a simple offset?
-                    int offset = 0;
-                    if (gdims.at(ai) == idim &&
-                        arg->is_offset_from(idim, offset)) {
-                        lt = VarPoint::LOOP_OFFSET;
-                    }
-
-                    // Otherwise, this arg uses idim, but not
-                    // in a simple way.
-                    else {
-                        lt = VarPoint::LOOP_OTHER;
+                    if (fvv.vars_used.count(dname)) {
+                        lt = VarPoint::LOOP_DEPENDENT;
                         break;  // no need to continue.
                     }
                 }

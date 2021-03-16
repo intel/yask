@@ -30,12 +30,16 @@ IN THE SOFTWARE.
 namespace yask {
 
     // Print extraction of indices.
-    void YASKCppPrinter::print_indices(ostream& os) const {
+    void YASKCppPrinter::print_indices(ostream& os,
+                                       bool print_step, bool print_domain) const {
         os << "\n // Extract index for each dim.\n";
         int i = 0;
         for (auto& dim : _dims._stencil_dims) {
             auto& dname = dim._get_name();
-            os << " idx_t " << dname << " = idxs[" << i << "];\n";
+            bool is_step = dname == _dims._step_dim;
+            if ((print_step && is_step) ||
+                (print_domain && !is_step))
+                os << " idx_t " << dname << " = idxs[" << i << "];\n";
             i++;
         }
     }
@@ -526,6 +530,7 @@ namespace yask {
 
                 delete sp;
             }
+            os << " OMP_END_DECL_TARGET\n";
 
             // Vector/Cluster code.
             for (bool do_cluster : { false, true }) {
@@ -554,7 +559,7 @@ namespace yask {
                 // Vector/cluster vars.
                 string idim = _dims._inner_dim;
                 string vcstr = do_cluster ? "cluster" : "vector";
-                string funcstr = "calc_loop_of_" + vcstr + "s";
+                string funcstr = "calc_" + vcstr + "s";
                 string nvecs = do_cluster ? "CMULT_" + all_caps(idim) : "1";
                 string nelems = (do_cluster ? nvecs + " * ": "") + "VLEN_" + all_caps(idim);
 
@@ -564,9 +569,7 @@ namespace yask {
                 string istop = "stop_" + idim;
                 string istep = "step_" + idim;
                 string iestep = "step_" + idim + "_elem";
-                os << endl << " // Calculate a series of " << vcstr << "s iterating in +'" << idim <<
-                    "' direction from " << _dims._stencil_dims.make_dim_str() <<
-                    " indices in 'idxs' to '" << istop << "'.\n";
+                os << endl << " // Calculate a tile of " << vcstr << "s bounded by 'norm_sb_idxs'.\n";
                 if (do_cluster)
                     os << " // Each cluster calculates '" << _dims._cluster_pts.make_dim_val_str(" * ") <<
                         "' point(s) containing " << _dims._cluster_mults.product() << " '" <<
@@ -580,25 +583,22 @@ namespace yask {
                     " vector block(s) created from " << vv.get_num_aligned_vecs() <<
                     " aligned vector-block(s).\n"
                     " // There are approximately " << (stats.get_num_ops() * num_results) <<
-                    " FP operation(s) per iteration.\n" <<
+                    " FP operation(s) per inner-loop iteration.\n" <<
                     " static void " << funcstr << "(" <<
                     _core_t << "* core_data, int core_idx, int block_thread_idx,"
-                    " const Indices& idxs, idx_t " << istop;
+                    " const ScanIndices& norm_sb_idxs";
                 if (!do_cluster)
                     os << ", idx_t write_mask";
                 os << ") {\n"
                     " host_assert(core_data);\n"
                     " host_assert(core_data->_thread_core_list.get());\n"
-                    " auto& thread_core_data = core_data->_thread_core_list[core_idx];\n";
-                print_indices(os);
-                os << " idx_t " << istart << " = " << idim << ";\n";
-                os << " idx_t " << istep << " = " << nvecs << "; // number of vectors per iter.\n";
-                os << " idx_t " << iestep << " = " << nelems << "; // number of elements per iter.\n";
+                    " auto& thread_core_data = core_data->_thread_core_list[core_idx];\n"
+                    " const Indices& idxs = norm_sb_idxs.start;\n";
+                print_indices(os, true, false);
  
                 // C++ vector print assistant.
                 CppVecPrintHelper* vp = new_cpp_vec_print_helper(vv, cv);
                 vp->set_use_masked_writes(!do_cluster);
-                vp->print_elem_indices(os);
 
                 // Print time-invariants.
                 os << "\n // Invariants within a step.\n";
@@ -609,22 +609,23 @@ namespace yask {
                 for (auto gp : _vars)
                     vp->print_strides(os, *gp);
                 
-                // Print loop-invariants.
-                os << "\n // Inner-loop invariants.\n";
+                // Print loop-invariant values, if any.
                 CppLoopVarPrintVisitor lvv(os, *vp);
                 vceq->visit_eqs(&lvv);
 
-                // Print pointers and pre-loop prefetches.
+                // Print pointers.
                 vp->print_base_ptrs(os);
 
                 // Actual computation loop.
-                os << "\n // Inner loop.\n";
-                if (_dims._fold.product() == 1)
-                    os << " // Specifying SIMD here because there is no explicit vectorization.\n"
-                        " _SIMD";
-                os << " for (idx_t " << idim << " = " << istart << "; " <<
-                    idim << " < " << istop << "; " <<
-                    idim << " += " << istep << ") {\n";
+                // Include generated loop-nest.
+                os <<
+                    "\n // Loop prefix.\n"
+                    "#define USE_LOOP_PART_0\n"
+                    "#include \"yask_sub_block_loops.hpp\"\n"
+                    "\n // Loop body. Always unit stride, so don't need stop indices.\n"
+                    " Indices& idxs = body_indices.start;\n";
+                print_indices(os, false, true);
+                vp->print_elem_indices(os);
 
                 // Generate loop body using vars stored in print helper.
                 // Visit all expressions to cover the whole vector/cluster.
@@ -635,14 +636,15 @@ namespace yask {
                 vp->print_prefetches(os, true);
 
                 // End of loop.
-                os << " " << vp->get_elem_index(idim) << " += " << iestep << ";\n";
-                os << " } // Inner ('" << idim << "') loop.\n";
+                os <<
+                    "\n // Loop sufffix.\n"
+                    "#define USE_LOOP_PART_1\n"
+                    "#include \"yask_sub_block_loops.hpp\"\n";
 
                 // End of function.
                 os << "} // " << funcstr << ".\n";
                 delete vp;
             }
-            os << " OMP_END_DECL_TARGET\n";
 
             os << "}; // " << egs_name << ".\n" // end of struct.
                 " static_assert(std::is_trivially_copyable<" << egs_name << ">::value,"

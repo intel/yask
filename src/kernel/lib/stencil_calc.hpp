@@ -361,8 +361,18 @@ namespace yask {
             misc_idxs.stride.set_from_const(1);
             misc_idxs.align.set_from_const(1);
 
+            calc_sub_block_dbg2(cp, region_thread_idx, misc_idxs);
+        }
+
+        // Scalar calc loop.
+        // Static to isolate offload code.
+        static void
+        calc_sub_block_dbg2(StencilCoreDataT* cp,
+                            int region_thread_idx,
+                            const ScanIndices& misc_idxs) {
+
             // Scan through n-D space.
-            // Set OMP loop to offload or disable OMP.
+            // Set OMP loop to offload or disable OMP on host.
             #ifdef USE_OFFLOAD
             #define OMP_PRAGMA \
                 _Pragma("omp target parallel for device(KernelEnv::_omp_devn) schedule(static,1)")
@@ -376,7 +386,7 @@ namespace yask {
 
             // Loop body.
             // Since stride is always 1, we ignore stop var.
-            _bundle.calc_scalar(cp, region_thread_idx, body_indices.start);
+            StencilBundleImplT::calc_scalar(cp, region_thread_idx, body_indices.start);
 
             // Loop suffix.
             #define USE_LOOP_PART_1
@@ -646,11 +656,6 @@ namespace yask {
             // Full rectilinear polytope of aligned clusters: use optimized
             // code for full clusters w/o masking.
             if (do_clusters) {
-                TRACE_MSG("calc_sub_block_opt:  using cluster code for rank-indices [" <<
-                          sb_fcidxs.begin.make_val_str() <<
-                          " ... " << sb_fcidxs.end.make_val_str() <<
-                          ") by region thread " << region_thread_idx <<
-                          " and block thread " << block_thread_idx);
 
                 // Stride sizes are based on cluster lengths (in vector units).
                 // The stride in the inner loop is hard-coded in the generated code.
@@ -658,9 +663,14 @@ namespace yask {
                     norm_sb_idxs.stride[i] = dims->_cluster_mults[j]; // N vecs.
                 }
 
+                TRACE_MSG("calc_sub_block_opt:  using cluster code for normalized sub-block indices [" <<
+                          norm_sb_idxs.begin.make_val_str() <<
+                          " ... " << norm_sb_idxs.end.make_val_str() <<
+                          ") by region thread " << region_thread_idx <<
+                          " and block thread " << block_thread_idx);
+                
                 // Perform the calculations in this block.
-                calc_clusters(cp, region_thread_idx, block_thread_idx,
-                              norm_sb_idxs, inner_posn);
+                calc_clusters_opt2(cp, region_thread_idx, block_thread_idx, norm_sb_idxs);
                 
             } // whole clusters.
 
@@ -714,7 +724,7 @@ namespace yask {
                 // Perform the calculations around the outside of this block.
                 calc_outer_vectors(cp, region_thread_idx, block_thread_idx,
                                    norm_sb_idxs, norm_sb_fcidxs, norm_sb_fvidxs,
-                                   peel_masks, rem_masks, inner_posn);
+                                   peel_masks, rem_masks);
                 #endif
             } // do vectors.
 
@@ -785,73 +795,25 @@ namespace yask {
                         #include "yask_misc_loops.hpp"
                     }
                 } // left/right.
-                    #endif
+
+                #endif
             } // scalars.
         } // calc_sub_block_opt.
 
-        // Calculate a block of clusters.
+        // Calculate a sub-block of clusters.
         // This should be the hottest function for most stencils--
         // all functions called from this one should be inlined.
-        void
-        calc_clusters(StencilCoreDataT* corep,
-                      int region_thread_idx,
-                      int block_thread_idx,
-                      ScanIndices& norm_sb_idxs,
-                      int inner_posn) {
-
-            // Include automatically-generated loop code to call
-            // calc_loop_of_clusters(). This code traverses all spatial dims
-            // except the inner one. OMP offloading happens in this code.
+        // Static to isolate offload.
+        static void
+        calc_clusters_opt2(StencilCoreDataT* corep,
+                           int region_thread_idx,
+                           int block_thread_idx,
+                           const ScanIndices& norm_sb_idxs) {
+            
             FORCE_INLINE_RECURSIVE {
 
-                // Disable OMP if not offloading.
-                #ifndef USE_OFFLOAD
-                #define OMP_PRAGMA
-                #endif
-                
-                // Loop prefix.
-                #define USE_LOOP_PART_0
-                #include "yask_sub_block_loops.hpp"
-
-                // Loop body.
-                #ifndef USE_OFFLOAD
-                #ifdef TRACE
-                {
-                    STATE_VARS(this);
-                    TRACE_MSG("calc_loop_of_clusters: local vector-indices [" <<
-                              body_indices.start.make_val_str() <<
-                              " ... " << body_indices.stop.make_val_str() <<
-                              ") by region thread " << region_thread_idx <<
-                              " and block thread " << block_thread_idx);
-                }
-                #endif
-                #ifdef CHECK
-                {
-                    STATE_VARS(this);
-
-                    // Check that only the inner dim has a range greater than one cluster.
-                    DOMAIN_VAR_LOOP_FAST(i, j) {
-                        if (i != inner_posn)
-                            host_assert(body_indices.start[i] + dims->_cluster_mults[j] >=
-                                        body_indices.stop[i]);
-                    }
-                }
-                #endif
-                #endif
-
-                // Need all starting indices.
-                const Indices& start_idxs = body_indices.start;
-
-                // Need stop for inner loop only.
-                idx_t stop_inner = body_indices.stop[inner_posn];
-
                 // Call code from stencil compiler.
-                _bundle.calc_loop_of_clusters(corep, region_thread_idx, block_thread_idx,
-                                              start_idxs, stop_inner);
-                
-                // Loop suffix.
-                #define USE_LOOP_PART_1
-                #include "yask_sub_block_loops.hpp"
+                StencilBundleImplT::calc_clusters(corep, region_thread_idx, block_thread_idx, norm_sb_idxs);
             }
         }
 
@@ -864,8 +826,18 @@ namespace yask {
                            ScanIndices& norm_sb_fcidxs,
                            ScanIndices& norm_sb_fvidxs,
                            Indices& peel_masks,
-                           Indices& rem_masks,
-                           int inner_posn) {
+                           Indices& rem_masks) {
+
+            STATE_VARS(this);
+            TRACE_MSG("calc_outer_vectors: normalized sub-block indices [" <<
+                      norm_sb_idxs.start.make_val_str() <<
+                      " ... " << norm_sb_idxs.stop.make_val_str() <<
+                      " by region thread " << region_thread_idx <<
+                      " and block thread " << block_thread_idx);
+
+            #if 1
+            THROW_YASK_EXCEPTION("vectors TBD");
+            #else
 
             // Define the function called from the generated loops.
             // Include automatically-generated loop code.
@@ -911,29 +883,6 @@ namespace yask {
 
                 // Continue only if outside of at least one dim.
                 if (ok) {
-                    #ifndef USE_OFFLOAD
-                    #ifdef TRACE
-                    {
-                        STATE_VARS(this);
-                        TRACE_MSG("calc_loop_of_outer_vectors: local vector-indices [" <<
-                                  body_indices.start.make_val_str() <<
-                                  " ... " << body_indices.stop.make_val_str() <<
-                                  ") w/write-mask = 0x" << std::hex << mask << std::dec <<
-                                  " by region thread " << region_thread_idx <<
-                                  " and block thread " << block_thread_idx);
-                    }
-                    #endif
-                    #ifdef CHECK
-                    {
-                        STATE_VARS(this);
-                        // Check that only the inner dim has a range greater than one vector.
-                        for (int i = 0; i < nsdims; i++) {
-                            if (i != step_posn && i != inner_posn)
-                                assert(body_indices.start[i] + 1 >= body_indices.stop[i]);
-                        }
-                    }
-                    #endif
-                    #endif
 
                     // Need all starting indices.
                     const Indices& start_idxs = body_indices.start;
@@ -950,6 +899,7 @@ namespace yask {
                 #define USE_LOOP_PART_1
                 #include "yask_sub_block_loops.hpp"
             }
+            #endif
         }
             
      }; // StencilBundleBase.

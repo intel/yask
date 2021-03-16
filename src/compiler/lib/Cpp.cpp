@@ -197,7 +197,7 @@ namespace yask {
         for (auto& gp : gps) {
 
             // Can we use a pointer?
-            if (gp.get_loop_type() != VarPoint::LOOP_OFFSET)
+            if (gp.get_loop_type() != VarPoint::LOOP_DEPENDENT)
                 continue;
 
             // Make base point (misc & domain indices = 0).
@@ -207,6 +207,7 @@ namespace yask {
             save_point_ptr(*bgp);
 
             // Collect some stats for reads using this ptr.
+            // These stats will be used for calculating prefetch ranges.
             if (_vv._aligned_vecs.count(gp)) {
                 auto* p = lookup_point_ptr(*bgp);
                 assert(p);
@@ -246,9 +247,12 @@ namespace yask {
                 // Print pointer creation.
                 print_point_ptr(os, *p, *bgp);
 
+                #if 0
+                // TODO: re-enable pre-loop prefetching.
                 // Print prefetch(es) for this ptr if a read.
                 if (_vv._aligned_vecs.count(gp))
                     print_prefetches(os, false, *p);
+                #endif
 
                 done.insert(*p);
             }
@@ -513,7 +517,7 @@ namespace yask {
         // Read must be aligned, and we must have a pointer.
         else if (_vv._aligned_vecs.count(gp) &&
                  gp.get_vec_type() == VarPoint::VEC_FULL &&
-                 gp.get_loop_type() == VarPoint::LOOP_OFFSET) {
+                 gp.get_loop_type() == VarPoint::LOOP_DEPENDENT) {
 
             // Got a pointer to the base addr?
             auto bgp = make_base_point(gp);
@@ -604,7 +608,7 @@ namespace yask {
                                            const string& val) {
 
         // Can we use a pointer?
-        if (gp.get_loop_type() == VarPoint::LOOP_OFFSET) {
+        if (gp.get_loop_type() == VarPoint::LOOP_DEPENDENT) {
 
             // Got a pointer to the base addr?
             auto bgp = make_base_point(gp);

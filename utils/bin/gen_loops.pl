@@ -164,19 +164,15 @@ sub dimStr {
 
 # set var for the body.
 sub setOutVar {
-    my @loopDims = @_;
+    my @dims = @_;
 
     my @stmts;
     map {
         push @stmts,
             " ".locVar("start", $_)." = ".startVar($_).";",
             " ".locVar("stop", $_)." = ".stopVar($_).";",
-            " ".locVar("index", $_)." = ".indexVar($_).";",
-            " ".locVar("num_indices", $_)." = ".numItersVar($_).";";
-    } @loopDims;
-    push @stmts,
-        " ".locVar("linear_indices")." = ".numItersVar(@loopDims).";",
-        " ".locVar("linear_index")." = ".loopIndexVar(@loopDims).";";
+            " ".locVar("cur_indices", $_)." = ".indexVar($_).";";
+    } @dims;
     return @stmts;
 }
 
@@ -555,7 +551,7 @@ sub tokenize($) {
         my $tok = substr($str, 0, $len, '');
 
         # keep unless WS.
-        push @toks, $tok unless $tok =~ /^\s$/;
+        push @toks, $tok unless $tok =~ /^\s+$/;
     }
     return @toks;
 }
@@ -657,22 +653,25 @@ sub getArgs($$) {
         }
 
         # Handle '..'.
-        elsif ($arg =~ /^\.+$/) {
+        elsif ($arg =~ /^\.\.+$/) {
             die "Error: missing token before '$arg'.\n"
                 if !defined $prevArg;
             die "Error: non-numerical token before '$arg'.\n"
-                if $prevArg !~ /^\d+$/;
+                if $prevArg !~ /^[-]?\d+$/;
+            pop @args;
             my $arg2 = getNextArg($toks, $ti);
             die "Error: missing token after '$arg'.\n"
                 if !defined $arg2;
             die "Error: non-numerical token after '$arg'.\n"
-                if $arg2 !~ /^\d+$/;
-            for my $i ($prevArg+1 .. $arg2) {
+                if $arg2 !~ /^[-]?\d+$/;
+            for my $i ($prevArg .. $arg2) {
                 push @args, $i;
             }
         }
 
         else {
+            die "Error: non-numerical token '$arg'.\n"
+                if $arg !~ /^[-]?\d+$/;
             push @args, $arg;
             $prevArg = $arg;
         }
@@ -768,48 +767,66 @@ sub processCode($) {
 
             # get loop dimension(s).
             checkToken($toks[$ti++], '\(', 1);
-            @loopDims = getArgs(\@toks, \$ti);
-            die "error: no args for '$tok'.\n" if @loopDims == 0;
+            @loopDims = getArgs(\@toks, \$ti);  # might be empty.
             checkToken($toks[$ti++], '\{', 1); # eat the '{'.
-
-            push @loopStack, @loopDims;          # all dims including outer loops.
-            push @loopCounts, scalar(@loopDims); # number of dims in this loop.
+            my $ndims = scalar(@loopDims);
 
             # check for existence of all vars.
             for my $ld (@loopDims) {
                 die "Error: loop variable '$ld' not in ".dimStr(@dims).".\n"
                     if !grep($_ eq $ld, @dims);
+                for my $ls (@loopStack) {
+                    die "Error: loop variable '$ld' already used.\n"
+                        if $ld == $ls;
+                }
             }
-            
+
+            push @loopStack, @loopDims;          # all dims so far.
+            push @loopCounts, $ndims; # number of dims in each loop.
+
             # set inner dim if applicable.
             undef $curInnerDim;
-            if (isInInner(\@toks, \$ti)) {
+            if ($ndims && isInInner(\@toks, \$ti)) {
                 $curInnerDim = $loopDims[$#loopDims];
             }
 
-            # print more info.
-            print "info: generating scan over ".dimStr(@loopDims)."...\n";
+            # Start the loop unless it's an inner loop.
+            if ($ndims) {
+                print "info: generating scan over ".dimStr(@loopDims)."...\n";
 
-            # add initial code for index vars, but don't start loop body yet.
-            addIndexVars1(\@code, \@loopDims, $features);
+                # add initial code for index vars, but don't start loop body yet.
+                addIndexVars1(\@code, \@loopDims, $features);
             
-            # if *not* the inner loop, start the loop body.
-            # if it is the inner loop, we might need more than one loop body, so
-            # it will not be generated until the '}' is seen.
-            if (!defined $curInnerDim) {
-                beginLoop(\@code, \@loopDims, \@loopPrefix, 0, undef, $features, \@loopStack);
+                # if *not* the inner loop, start the loop body.
+                # if it is the inner loop, we might need more than one loop body, so
+                # it will not be generated until the '}' is seen.
+                if (!defined $curInnerDim) {
+                    beginLoop(\@code, \@loopDims, \@loopPrefix, 0, undef, $features, \@loopStack);
+
+                    # clear data for this loop.
+                    undef @loopDims;
+                    undef @loopPrefix;
+                    $features = 0;
+                }
+            } else {
+                print "info: generating dummy loop for empty $tok args...\n";
+                my $ivar = "dummy" . scalar(@loopCounts);
+                push @code, " // Dummy loop.",
+                    @loopPrefix,
+                    " for (int $ivar = 0; $ivar < 1; $ivar++) {";
 
                 # clear data for this loop.
                 undef @loopDims;
                 undef @loopPrefix;
                 $features = 0;
             }
+
         }
 
         # End of loop.
         # This is where most of @code is created for inner loops.
         elsif ($tok eq '}') {
-            die "error: attempt to end loop w/o beginning\n" if !@loopStack;
+            die "error: attempt to end loop w/o beginning\n" if !@loopCounts;
 
             # not inner loop?
             # just need to end it.
@@ -837,7 +854,7 @@ sub processCode($) {
                 push @code, 
                     " // Local copy of indices for loop body.",
                     " ScanIndices ".locVar()."($inputVar);",
-                    setOutVar(@loopDims);
+                    setOutVar(@loopStack);
 
                 # Break for body.
                 push @code,
@@ -908,12 +925,13 @@ sub processCode($) {
     open OUT, "| $cmd" or die "error: cannot run '$cmd'.\n";
 
     # header.
+    my $ndims = scalar(@dims);
     print OUT
         "/*\n",
-        " * ".scalar(@dims)."-D var-scanning code.\n",
+        " * $ndims-D var-scanning code.\n",
         " * Generated automatically from the following pseudo-code:\n",
         " *\n",
-        " * N = ",$#dims,";\n";
+        " * N = ",$ndims,";\n";
 
     # format input to show in the header.
     my $cmd2 = "echo '$codeString'";
@@ -960,8 +978,8 @@ sub main() {
             "Indices may be specified as a comma-separated list or <first..last> range,\n",
             "  using the variable 'N' as needed.\n",
             "A loop statement with more than index will generate a single collapsed loop.\n",
-            "The generated code will contain a prefix before the first inner loop body '{ }'\n",
-            "  and a suffix after each inner loop body.\n",
+            "The generated code will contain a macro-delimited part before the first inner loop body\n",
+            "  and a part after each inner loop body.\n",
             "Optional loop modifiers:\n",
             "  omp:             add OMP_PRAGMA to loop (distribute work across SW threads).*\n",
             "  simd:            add SIMD_PRAMA to loop (distribute work across SIMD HW).*\n",
@@ -998,7 +1016,7 @@ sub main() {
             "  $script -ndims 3 'omp loop(0) { loop(1,2) { } }'\n",
             "  $script -ndims 3 'grouped omp loop(0..N-1) { }'\n",
             "  $script -ndims 3 'omp loop(0) { square_wave loop(1..N-1) { } }'\n",
-            "  $script -ndims 4 'omp loop(0..N+1) { loop(N+2,N-1) { } }'\n";
+            "  $script -ndims 4 'omp loop(0..N-2) { loop(N-2,N-1) { } }'\n";
         exit 1;
     }
 
