@@ -84,6 +84,7 @@ opts=""
 bindir=`dirname $0`
 logdir="./logs"
 tmplog="/tmp/yask-p$$"
+val="-validate -no-pre_auto_tune -no-auto_tune -no-warmup -num_trials 1 -trial_steps 1 -l 63 -b 24"
 
 # Display stencils in this dir and exit.
 function show_stencils {
@@ -154,6 +155,8 @@ while true; do
         echo "  -log_dir <dir>"
         echo "     Directory name to prepend to log <filename>."
         echo "     Default is '$logdir'."
+        echo "  -v"
+        echo "     Run simple validation: shortcut for '$val'."
         echo "  -show_arch"
         echo "     Print the default architecture string and exit."
         echo "  <env-var=value>"
@@ -236,6 +239,10 @@ while true; do
     elif [[ "$1" == "-ranks" && -n ${2+set} ]]; then
         nranks=$2
         shift
+        shift
+
+    elif [[ "$1" == "-v" ]]; then
+        opts+=" $val"
         shift
 
     elif [[ "$1" =~ ^[A-Za-z0-9_]+= ]]; then

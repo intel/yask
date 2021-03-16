@@ -51,51 +51,6 @@ struct MySettings {
     MySettings(yk_solution_ptr ksoln) :
         _ksoln(ksoln) { }
 
-    // A custom option-handler for '-v'.
-    class ValOption : public CommandLineParser::OptionBase {
-        MySettings& _as;
-        static constexpr idx_t _lsz=63, _bsz=24;
-
-    public:
-
-        ValOption(MySettings& as) :
-            OptionBase("v",
-                       "Minimal validation: shortcut for '-validate -no-pre_auto_tune -no-auto_tune"
-                       " -no-warmup -t 1 -trial_steps 1 -l " + to_string(_lsz) +
-                       " -b " + to_string(_bsz) + "'."),
-            _as(as) { }
-
-        // Set multiple vars.
-        virtual bool check_arg(const std::vector<std::string>& args,
-                               int& argi) {
-            if (_check_arg(args, argi, _name)) {
-                _as.validate = true;
-                _as.do_pre_auto_tune = false;
-                _as.do_warmup = false;
-                _as.num_trials = 1;
-                _as.trial_steps = 1;
-
-                // Create soln options and parse them if there is a soln.
-                if (_as._ksoln) {
-                    for (auto& dname : _as._ksoln->get_domain_dim_names()) {
-
-                        // Local domain size, e.g., "-lx 63".
-                        string arg = "-l" + dname + " " + to_string(_lsz);
-
-                        // Block size, e.g., "-bx 24".
-                        arg += " -b" + dname + " " + to_string(_bsz);
-
-                        // Parse 'arg'.
-                        auto rem = _as._ksoln->apply_command_line_options(arg);
-                        assert(rem.length() == 0);
-                    }
-                }
-                return true;
-            }
-            return false;
-        }
-    };
-
     // Parse options from the command-line and set corresponding vars.
     // Exit with message on error or request for help.
     void parse(int argc, char** argv) {
@@ -167,7 +122,6 @@ struct MySettings {
                           ("validate",
                            "Run validation iteration(s) after performance trial(s).",
                            validate));
-        parser.add_option(new ValOption(*this));
 
         // Parse 'args' and 'argv' cmd-line options, which sets values.
         // Any remaining strings will be returned.
