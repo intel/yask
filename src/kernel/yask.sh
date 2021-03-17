@@ -84,7 +84,9 @@ opts=""
 bindir=`dirname $0`
 logdir="./logs"
 tmplog="/tmp/yask-p$$"
-val="-validate -no-pre_auto_tune -no-auto_tune -no-warmup -num_trials 1 -trial_steps 1 -l 63 -b 24"
+doval=0
+val="-validate -no-pre_auto_tune -no-auto_tune -no-warmup -num_trials 1 -trial_steps 1 -b 24"
+valsz="-l 64"
 
 # Display stencils in this dir and exit.
 function show_stencils {
@@ -157,6 +159,7 @@ while true; do
         echo "     Default is '$logdir'."
         echo "  -v"
         echo "     Run simple validation: shortcut for '$val'."
+        echo "     If you don't specify any global or local domain sizes, '$valsz' is also added."
         echo "  -show_arch"
         echo "     Print the default architecture string and exit."
         echo "  <env-var=value>"
@@ -242,7 +245,7 @@ while true; do
         shift
 
     elif [[ "$1" == "-v" ]]; then
-        opts+=" $val"
+        doval=1
         shift
 
     elif [[ "$1" =~ ^[A-Za-z0-9_]+= ]]; then
@@ -337,8 +340,8 @@ else
     envs+=" LD_LIBRARY_PATH=$bindir/../lib:$LD_LIBRARY_PATH$libpath"
 fi
 
-# Set OMP threads to number of cores per rank if already specified and not KNL.
-if [[ "$opts" != *"-max_threads"* && $arch != "knl" ]]; then
+# Set OMP threads to number of cores per socket if not already specified and not KNL.
+if [[ "$opts" =~ -max_threads && $arch != "knl" ]]; then
     if command -v lscpu >/dev/null; then
         nsocks=`lscpu | awk -F: '/Socket.s.:/ { print $2 }'`
         ncores=`lscpu | awk -F: '/Core.s. per socket:/ { print $2 }'`
@@ -346,6 +349,17 @@ if [[ "$opts" != *"-max_threads"* && $arch != "knl" ]]; then
             mthrs=$(( $nsocks * $ncores / $nranks ))
             opts="-max_threads $mthrs $opts"
         fi
+    fi
+fi
+
+# Add validation opts to beginning.
+if [[ $doval == 1 ]]; then
+
+    # Add local size only if no sizes are specified.
+    if [[ "$opts" =~ -[lg][A-Za-z0-9_]*[[:space:]][0-9]+ ]]; then
+        opts="$val $opts"
+    else
+        opts="$val $valsz $opts"
     fi
 fi
 
