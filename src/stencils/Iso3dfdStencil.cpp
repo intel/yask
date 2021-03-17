@@ -64,7 +64,7 @@ namespace {
         // Define RHS expression for p at t+1 based on values from v and p at t.
         virtual yc_number_node_ptr get_next_p() {
 
-            // yc_var_proxy spacing.
+            // Grid spacing.
             // In this implementation, it's a constant.
             // Could make this a YASK variable to allow setting at run-time.
             double delta_xyz = 50.0;
@@ -76,7 +76,7 @@ namespace {
             if (rad > 0)
                 coeff = get_center_fd_coefficients(2, get_radius());
             else
-                coeff.push_back(1.0);
+                coeff.push_back(1.0); // Dummy value for zero radius (not FD).
 
             for (size_t i = 0; i < coeff.size(); i++) {
 
