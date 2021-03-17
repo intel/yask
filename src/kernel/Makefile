@@ -482,7 +482,7 @@ NVDIMS		:=	`awk '/NUM_STENCIL_AND_VAR_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
 # so no OpenMP here.
 RANK_LOOP_FLAGS		?=	-ndims $(NSDIMS) -inVar rank_idxs
 RANK_LOOP_ORDER		?=	1 .. N-1
-RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_ORDER)) { }
+RANK_LOOP_CODE		?=	$(RANK_LOOP_MODS) loop($(RANK_LOOP_ORDER)) { }
 
 # Region loops break up a region using OpenMP threading into blocks.  The
 # 'omp' modifier creates an outer OpenMP loop so that each block is assigned
@@ -490,7 +490,7 @@ RANK_LOOP_CODE		?=	$(RANK_LOOP_OUTER_MODS) loop($(RANK_LOOP_ORDER)) { }
 REGION_LOOP_FLAGS	?=	-ndims $(NSDIMS) -inVar region_idxs \
 				-ompMod '$(omp_par_for) schedule($(omp_region_schedule)) proc_bind(spread)'
 REGION_LOOP_ORDER	?=	1 .. N-1
-REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) omp loop($(REGION_LOOP_ORDER)) { } 
+REGION_LOOP_CODE	?=	$(REGION_LOOP_MODS) omp loop($(REGION_LOOP_ORDER)) { } 
 
 # Block loops break up a block into mini-blocks.
 # These are executed sequentially, so no OpenMP.
@@ -498,7 +498,7 @@ REGION_LOOP_CODE	?=	$(REGION_LOOP_OUTER_MODS) omp loop($(REGION_LOOP_ORDER)) { }
 # the scanning paths must have strictly incrementing indices. 
 BLOCK_LOOP_FLAGS		?=	-ndims $(NSDIMS) -inVar adj_block_idxs
 BLOCK_LOOP_ORDER	?=	1 .. N-1
-BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_ORDER)) { }
+BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_MODS) loop($(BLOCK_LOOP_ORDER)) { }
 
 # Mini-Block loops break up a mini-block into sub-blocks. The 'omp' modifier
 # creates a nested OpenMP loop so that each sub-block is assigned to a
@@ -507,7 +507,7 @@ BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_OUTER_MODS) loop($(BLOCK_LOOP_ORDER)) { }
 MINI_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -inVar adj_mb_idxs \
 				-ompMod '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(spread)'
 MINI_BLOCK_LOOP_ORDER	?=	1 .. N-1
-MINI_BLOCK_LOOP_CODE	?=	$(MINI_BLOCK_LOOP_OUTER_MODS) omp loop($(MINI_BLOCK_LOOP_ORDER)) { }
+MINI_BLOCK_LOOP_CODE	?=	$(MINI_BLOCK_LOOP_MODS) omp loop($(MINI_BLOCK_LOOP_ORDER)) { }
 
 # Sub-block loops break up a sub-block into clusters or vectors.  These
 # loops are run by a single OMP thread. When offloading, this loop is run in
@@ -517,21 +517,21 @@ SUB_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -inVar norm_sb_idxs
 ifeq ($(offload),1)
 SUB_BLOCK_LOOP_FLAGS	+=	-ompMod '$(omp_target_par_for) schedule($(omp_target_schedule))'
 SUB_BLOCK_LOOP_ORDER	?=	2 .. N-1
-SUB_BLOCK_INNER_LOOP	?=	1
-SUB_BLOCK_LOOP_CODE	:=	$(SUB_BLOCK_LOOP_OUTER_MODS) omp loop($(SUB_BLOCK_LOOP_ORDER)) { \
-				  loop($(SUB_BLOCK_INNER_LOOP)) { } }
+SUB_BLOCK_LOOP_INNER_DIM ?=	1
+SUB_BLOCK_LOOP_CODE	:=	$(SUB_BLOCK_LOOP_MODS) omp loop($(SUB_BLOCK_LOOP_ORDER)) { \
+				  loop($(SUB_BLOCK_LOOP_INNER_DIM)) { } }
 else
 SUB_BLOCK_LOOP_ORDER	?=	1 .. N-2
-SUB_BLOCK_INNER_LOOP	?=	N-1
-SUB_BLOCK_LOOP_CODE	:=	$(SUB_BLOCK_LOOP_OUTER_MODS) loop($(SUB_BLOCK_LOOP_ORDER)) { \
-				  loop($(SUB_BLOCK_INNER_LOOP)) { } }
+SUB_BLOCK_LOOP_INNER_DIM ?=	N-1
+SUB_BLOCK_LOOP_CODE	:=	$(SUB_BLOCK_LOOP_MODS) loop($(SUB_BLOCK_LOOP_ORDER)) { \
+				  loop($(SUB_BLOCK_LOOP_INNER_DIM)) { } }
 endif
 
 # General-purpose parallel loop.
 MISC_LOOP_FLAGS		?=	-ndims $(NSDIMS) -inVar misc_idxs \
 				-ompMod '$(omp_par_for) schedule($(omp_misc_schedule)) proc_bind(spread)'
 MISC_LOOP_ORDER		?=	1 .. N-1
-MISC_LOOP_CODE		?=	$(MISC_LOOP_OUTER_MODS) omp loop($(MISC_LOOP_ORDER)) { }
+MISC_LOOP_CODE		?=	$(MISC_LOOP_MODS) omp loop($(MISC_LOOP_ORDER)) { }
 
 # Compile rules based on source dir.
 
@@ -722,11 +722,9 @@ echo-settings:
 	@echo "Build environment for" $(YK_EXEC) on `date`; \
 	echo TARGET=$(TARGET); \
 	echo BLOCK_LOOP_CODE="\"$(BLOCK_LOOP_CODE)\""; \
-	echo BLOCK_LOOP_INNER_MODS="\"$(BLOCK_LOOP_INNER_MODS)\""; \
 	echo BLOCK_LOOP_FLAGS="\"$(BLOCK_LOOP_FLAGS)\""; \
 	echo BLOCK_LOOP_ORDER="\"$(BLOCK_LOOP_ORDER)\""; \
-	echo BLOCK_LOOP_OUTER_MODS="\"$(BLOCK_LOOP_OUTER_MODS)\""; \
-	echo BLOCK_LOOP_OUTER_VARS="\"$(BLOCK_LOOP_OUTER_VARS)\""; \
+	echo BLOCK_LOOP_MODS="\"$(BLOCK_LOOP_MODS)\""; \
 	echo DEF_ARGS="\"$(DEF_ARGS)\""; \
 	echo EXTRA_MACROS="\"$(EXTRA_MACROS)\""; \
 	echo EXTRA_YC_FLAGS="\"$(EXTRA_YC_FLAGS)\""; \
@@ -734,36 +732,26 @@ echo-settings:
 	echo ISA=$(ISA); \
 	echo MACROS="\"$(MACROS)\""; \
 	echo MINI_BLOCK_LOOP_CODE="\"$(MINI_BLOCK_LOOP_CODE)\""; \
-	echo MINI_BLOCK_LOOP_INNER_MODS="\"$(MINI_BLOCK_LOOP_INNER_MODS)\""; \
 	echo MINI_BLOCK_LOOP_FLAGS="\"$(MINI_BLOCK_LOOP_FLAGS)\""; \
 	echo MINI_BLOCK_LOOP_ORDER="\"$(MINI_BLOCK_LOOP_ORDER)\""; \
-	echo MINI_BLOCK_LOOP_OUTER_MODS="\"$(MINI_BLOCK_LOOP_OUTER_MODS)\""; \
-	echo MINI_BLOCK_LOOP_OUTER_VARS="\"$(MINI_BLOCK_LOOP_OUTER_VARS)\""; \
+	echo MINI_BLOCK_LOOP_MODS="\"$(MINI_BLOCK_LOOP_MODS)\""; \
 	echo MISC_LOOP_CODE="\"$(MISC_LOOP_CODE)\""; \
-	echo MISC_LOOP_INNER_MODS="\"$(MISC_LOOP_INNER_MODS)\""; \
 	echo MISC_LOOP_FLAGS="\"$(MISC_LOOP_FLAGS)\""; \
 	echo MISC_LOOP_ORDER="\"$(MISC_LOOP_ORDER)\""; \
-	echo MISC_LOOP_OUTER_MODS="\"$(MISC_LOOP_OUTER_MODS)\""; \
-	echo MISC_LOOP_OUTER_VARS="\"$(MISC_LOOP_OUTER_VARS)\""; \
+	echo MISC_LOOP_MODS="\"$(MISC_LOOP_MODS)\""; \
 	echo OMPFLAGS="\"$(OMPFLAGS)\""; \
 	echo RANK_LOOP_CODE="\"$(RANK_LOOP_CODE)\""; \
 	echo RANK_LOOP_FLAGS="\"$(RANK_LOOP_FLAGS)\""; \
 	echo RANK_LOOP_ORDER="\"$(RANK_LOOP_ORDER)\""; \
-	echo RANK_LOOP_OUTER_MODS="\"$(RANK_LOOP_OUTER_MODS)\""; \
-	echo RANK_LOOP_OUTER_VARS="\"$(RANK_LOOP_OUTER_VARS)\""; \
+	echo RANK_LOOP_MODS="\"$(RANK_LOOP_MODS)\""; \
 	echo REGION_LOOP_CODE="\"$(REGION_LOOP_CODE)\""; \
-	echo REGION_LOOP_INNER_MODS="\"$(REGION_LOOP_INNER_MODS)\""; \
 	echo REGION_LOOP_FLAGS="\"$(REGION_LOOP_FLAGS)\""; \
 	echo REGION_LOOP_ORDER="\"$(REGION_LOOP_ORDER)\""; \
-	echo REGION_LOOP_OUTER_MODS="\"$(REGION_LOOP_OUTER_MODS)\""; \
-	echo REGION_LOOP_OUTER_VARS="\"$(REGION_LOOP_OUTER_VARS)\""; \
+	echo REGION_LOOP_MODS="\"$(REGION_LOOP_MODS)\""; \
 	echo SUB_BLOCK_LOOP_CODE="\"$(SUB_BLOCK_LOOP_CODE)\""; \
-	echo SUB_BLOCK_LOOP_INNER_MODS="\"$(SUB_BLOCK_LOOP_INNER_MODS)\""; \
-	echo SUB_BLOCK_LOOP_INNER_VARS="\"$(SUB_BLOCK_LOOP_INNER_VARS)\""; \
 	echo SUB_BLOCK_LOOP_FLAGS="\"$(SUB_BLOCK_LOOP_FLAGS)\""; \
 	echo SUB_BLOCK_LOOP_ORDER="\"$(SUB_BLOCK_LOOP_ORDER)\""; \
-	echo SUB_BLOCK_LOOP_OUTER_MODS="\"$(SUB_BLOCK_LOOP_OUTER_MODS)\""; \
-	echo SUB_BLOCK_LOOP_OUTER_VARS="\"$(SUB_BLOCK_LOOP_OUTER_VARS)\""; \
+	echo SUB_BLOCK_LOOP_MODS="\"$(SUB_BLOCK_LOOP_MODS)\""; \
 	echo YASK_OUTPUT_DIR=$(YASK_OUTPUT_DIR); \
 	echo YC_FLAGS="\"$(YC_FLAGS)\""; \
 	echo YC_STENCIL=$(YC_STENCIL); \

@@ -1037,7 +1037,6 @@ sub makeLoopVars($$$$) {
   # vars to create.
   my $order = join(',', @dims);  # e.g., '2, 1'.
   my $outerMods = '';
-  my $innerMods = '';
 
   # path gene?
   my $pathKey = $tunerPrefix."Path";
@@ -1048,8 +1047,7 @@ sub makeLoopVars($$$$) {
   }
   
   my $loopVars = " ".$makePrefix."_LOOP_ORDER='$order'";
-  $loopVars .= " ".$makePrefix."_LOOP_OUTER_MODS='$outerMods'";
-  $loopVars .= " ".$makePrefix."_LOOP_INNER_MODS='$innerMods'";
+  $loopVars .= " ".$makePrefix."_LOOP_MODS='$outerMods'";
   return $loopVars;
 }
 
