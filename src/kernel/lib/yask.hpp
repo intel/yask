@@ -124,13 +124,26 @@ typedef std::uint64_t uidx_t;
 
 // Conditional inlining
 #if !defined(NO_INLINE) && !defined(CHECK)
+#ifndef ALWAYS_INLINE
 #define ALWAYS_INLINE __attribute__((always_inline)) inline
+#endif
+#ifndef FORCE_INLINE
 #define FORCE_INLINE _Pragma("forceinline")
+#endif
+#ifndef FORCE_INLINE_RECURSIVE
 #define FORCE_INLINE_RECURSIVE _Pragma("forceinline recursive")
+#endif
+
 #else
+#ifndef ALWAYS_INLINE
 #define ALWAYS_INLINE inline
+#endif
+#ifndef FORCE_INLINE
 #define FORCE_INLINE
+#endif
+#ifndef FORCE_INLINE_RECURSIVE
 #define FORCE_INLINE_RECURSIVE
+#endif
 #endif
 
 #ifndef NO_VEC
