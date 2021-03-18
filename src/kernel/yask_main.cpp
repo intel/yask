@@ -298,36 +298,43 @@ int main(int argc, char** argv)
 
             // Warmup and calibration phases.
             double rate = 1.0;
-            idx_t warmup_steps = 1;
-            idx_t max_wsteps = 10;
-            for (int n = 0; n < 3; n++) {
+            {
+                idx_t warmup_steps = 1;
+                idx_t max_wsteps = 10;
+                int nruns = 3;
+                for (int n = 0; n < nruns; n++) {
 
-                // Run steps.
-                // Always run warmup forward, even for reverse stencils.
-                // (The result will be meaningless, but that doesn't matter.)
-                os << "Running " << warmup_steps << " step(s) for " <<
-                    (n ? "calibration" : "warm-up") << "...\n" << flush;
-                kenv->global_barrier();
-                ksoln->run_solution(0, warmup_steps-1);
-                kenv->global_barrier();
-                auto stats = context->get_stats();
-                auto wtime = stats->get_elapsed_secs();
-                os << "  Done in " << make_num_str(wtime) << " secs.\n";
-                rate = (wtime > 0.) ? double(warmup_steps) / wtime : 0;
+                    // Run steps.
+                    // Always run warmup forward, even for reverse stencils.
+                    // (The result will be meaningless, but that doesn't matter.)
+                    os << "Running " << warmup_steps << " step(s) for " <<
+                        (n ? "calibration" : "warm-up") << "...\n" << flush;
+                    kenv->global_barrier();
+                    ksoln->run_solution(0, warmup_steps-1);
+                    kenv->global_barrier();
+                    auto stats = context->get_stats();
+                    auto wtime = stats->get_elapsed_secs();
+                    os << "  Done in " << make_num_str(wtime) << " secs.\n";
+                    rate = (wtime > 0.) ? double(warmup_steps) / wtime : 0;
 
-                // Done if time est. isn't needed.
-                if (opts.trial_steps > 0)
-                    break;
+                    // Done if time est. isn't needed.
+                    if (opts.trial_steps > 0)
+                        break;
 
-                // Use time to set number of steps for next trial.
-                double warmup_time = 0.5 * (n + 1);
-                warmup_steps = ceil(rate * warmup_time);
-                warmup_steps = min(warmup_steps, max_wsteps);
-                max_wsteps *= max_wsteps;
+                    // Use time to set number of steps for next trial.
+                    double warmup_time = 0.5 * (n + 1);
+                    warmup_steps = ceil(rate * warmup_time);
+                    warmup_steps = min(warmup_steps, max_wsteps);
+                    max_wsteps *= max_wsteps;
 
-                // Average across all ranks because it is critical that
-                // all ranks use the same number of steps to avoid deadlock.
-                warmup_steps = CEIL_DIV(sum_over_ranks(warmup_steps, ep->comm), num_ranks);
+                    // Average across all ranks because it is critical that
+                    // all ranks use the same number of steps to avoid deadlock.
+                    warmup_steps = CEIL_DIV(sum_over_ranks(warmup_steps, ep->comm), num_ranks);
+
+                    // Done if only 1 step to do.
+                    if (warmup_steps <= 1)
+                        break;
+                }
             }
 
             // Set final number of steps.
