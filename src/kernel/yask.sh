@@ -27,10 +27,8 @@
 
 # Create invocation string w/proper quoting.
 invo="Script invocation: $0"
-whitespace="[[:space:]]"
-for i in "$@"
-do
-    if [[ $i =~ $whitespace ]]; then
+for i in "$@"; do
+    if [[ $i =~ [[:space:]] ]]; then
         i=\'$i\'
     fi
     invo="$invo $i"
@@ -147,9 +145,7 @@ while true; do
         echo "     Shortcut for the following options if <N> > 1:"
         echo "       -mpi_cmd 'mpirun -np <N>'"
         echo "     If a different MPI command is needed, use -mpi_cmd <command> explicitly."
-        if [[ -n "$nranks" ]]; then
-            echo "     The default <N> for this host is '$nranks'."
-        fi
+        echo "     The default <N> for this host is '$nranks'."
         echo "  -log <filename>"
         echo "     Write copy of output to <filename>."
         echo "     Default <filename> is based on stencil, arch, hostname, time-stamp, and process ID."
@@ -158,7 +154,7 @@ while true; do
         echo "     Directory name to prepend to log <filename>."
         echo "     Default is '$logdir'."
         echo "  -v"
-        echo "     Run simple validation: shortcut for '$val'."
+        echo "     Pass default validation options to YASK executable; shortcut for '$val'."
         echo "     If you don't specify any global or local domain sizes, '$valsz' is also added."
         echo "  -show_arch"
         echo "     Print the default architecture string and exit."
@@ -341,7 +337,7 @@ else
 fi
 
 # Set OMP threads to number of cores per socket if not already specified and not KNL.
-if [[ "$opts" =~ -max_threads && $arch != "knl" ]]; then
+if [[ ( ! "$opts" =~ -max_threads ) && ( $arch != "knl" ) ]]; then
     if command -v lscpu >/dev/null; then
         nsocks=`lscpu | awk -F: '/Socket.s.:/ { print $2 }'`
         ncores=`lscpu | awk -F: '/Core.s. per socket:/ { print $2 }'`
