@@ -117,17 +117,19 @@ namespace yask {
     // Emulate instrinsics for unsupported VLEN.
     // Only 256 and 512-bit vectors supported.
     // VLEN == 1 also supported as scalar.
+    #ifndef NO_INTRINSICS
     #if VLEN == 1
     #define NO_INTRINSICS
     // note: no warning here because intrinsics aren't wanted in this case.
 
     #elif !defined(INAME)
-    #warning "Emulating intrinsics because HW vector length not defined; check setting of USE_INTRIN256, USE_INTRIN512LO or USE_INTRIN512 in kernel Makefile"
+    #warning "Emulating intrinsics because HW vector length not defined; set NO_INTRINSICS to avoid this warning"
     #define NO_INTRINSICS
 
     #elif VLEN != VEC_ELEMS
-    #warning "Emulating intrinsics because VLEN != HW vector length"
+    #warning "Emulating intrinsics because VLEN != HW vector length; set NO_INTRINSICS to avoid this warning"
     #define NO_INTRINSICS
+    #endif
     #endif
 
     // Macro for looping through an aligned real_vec_t.
