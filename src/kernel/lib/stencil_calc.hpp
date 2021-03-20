@@ -442,7 +442,7 @@ namespace yask {
               Indices and areas in each domain dim:
 
               eidxs.begin
-               | peel <--------- partial vecs here -------> rem
+               | peel <--------- partial vecs here -------> remainder
                | |   left <------ full vecs here ----> right |
                | |    |         full clusters here       |   | eidxs.end
                | |    |                 |                |   |  |
@@ -452,10 +452,15 @@ namespace yask {
               +---+-------+---------------------------+-----+---+ "+" => vec-aligned boundaries.
               ^   ^       ^                            ^     ^   ^
               |   |       |                            |     |   |
-              |   |      fcidxs.begin                  |     |  ovidxs.end (rounded up)
-              |  fvidxs.begin                          |    fvidxs.end
-             ovidxs.begin (rounded down)              fcidxs.end
-                                                   (end indices are one past last)
+              |   |      fcidxs.begin (rounded up)     |     |  ovidxs.end (rounded up)
+              |  fvidxs.begin (rounded up)             |    fvidxs.end (rounded down)
+             ovidxs.begin (rounded down)              fcidxs.end (rounded down)
+                                                   ('end' indices are one past last)
+
+             Also need to handle all sorts of cases where some of these
+             sections are empty, the case where the peel and remainder
+             overlap, and the case where the left and right full vecs
+             overlap.
             */
 
             // Init sub-block begin & end from block start & stop indices.
@@ -488,7 +493,7 @@ namespace yask {
 
             // Flag for full clusters.
             bool do_clusters = true;
-            bool do_only_clusters = true;
+            bool do_outside_clusters = false;
 
             // Bit-field flags for full and partial vecs on left and right
             // in each dim.
@@ -511,68 +516,46 @@ namespace yask {
                 // Begin/end of rank-relative scalar elements in this dim.
                 auto ebgn = sb_idxs.begin[i] - rofs;
                 auto eend = sb_idxs.end[i] - rofs;
-                sb_eidxs.begin[i] = ebgn;
-                sb_eidxs.end[i] = eend;
 
-                // Find range of full clusters.  Note that fcend <= eend
-                // because we round down to get whole clusters only.
-                // Similarly, fcbgn >= ebgn.
+                // Find range of full clusters.
+                // These are also the inner-boundaries of the
+                // full vectors.
+                // NB: fcbgn will be > fcend if the sub-block
+                // is within a cluster.
                 auto cpts = dims->_cluster_pts[j];
                 auto fcbgn = round_up_flr(ebgn, cpts);
                 auto fcend = round_down_flr(eend, cpts);
-                fcend = std::max(fcend, fcbgn);
-                sb_fcidxs.begin[i] = fcbgn;
-                sb_fcidxs.end[i] = fcend;
-                assert(fcend >= fcbgn);
 
-                // No clusters to do?
-                // If nothing in any dim, then no clusters at all.
-                if (fcend <= fcbgn)
-                    do_clusters = false;
-
-                // Find range of full vectors.  Same as with full clusters,
-                // except using fold sizes.
+                // Find range of full vectors.
+                // These are also the inner-boundaries of the peel
+                // and rem sections.
+                // NB: fvbgn will be > fvend if the sub-block
+                // is within a vector.
                 auto vpts = fold_pts[j];
                 auto fvbgn = round_up_flr(ebgn, vpts);
                 auto fvend = round_down_flr(eend, vpts);
-                fvend = std::max(fvend, fvbgn);
-                sb_fvidxs.begin[i] = fvbgn;
-                sb_fvidxs.end[i] = fvend;
-                assert(fvend >= fvbgn);
 
-                // Any full vectors to do on left or right?  These should
-                // always be false when cluster size is 1.
-                bool do_left_fvec = fvbgn < fcbgn;
-                bool do_right_fvec = fvend > fcend;
-                if (do_left_fvec)
-                    set_bit(do_left_fvecs, j);
-                if (do_right_fvec)
-                    set_bit(do_right_fvecs, j);
-
-                // Any partial vectors to do on left or right?
-                bool do_left_pvec = ebgn < fvbgn;
-                bool do_right_pvec = eend > fvend;
-                if (do_left_pvec)
-                    set_bit(do_left_pvecs, j);
-                if (do_right_pvec)
-                    set_bit(do_right_pvecs, j);
-
-                // Any outside parts?
-                if (do_left_fvec || do_right_fvec ||
-                    do_left_pvec || do_right_pvec)
-                    do_only_clusters = false;
-                
                 // Outer vector-aligned boundaries.  Note that rounding
                 // direction is opposite of full vectors, i.e., rounding
                 // toward outside of sub-block. These will be used as
                 // boundaries for partial vectors if needed.
                 auto ovbgn = round_down_flr(ebgn, vpts);
                 auto ovend = round_up_flr(eend, vpts);
-                sb_ovidxs.begin[i] = ovbgn;
-                sb_ovidxs.end[i] = ovend;
                 assert(ovend >= ovbgn);
+                assert(ovbgn <= fvbgn);
+                assert(ovend >= fvend);
+                
+                // Any full vectors to do on left or right?  These should
+                // always be false when cluster size is 1.
+                bool do_left_fvec = fvbgn < fcbgn;
+                bool do_right_fvec = fvend > fcend;
+
+                // Any partial vectors to do on left or right?
+                bool do_left_pvec = ebgn < fvbgn;
+                bool do_right_pvec = eend > fvend;
 
                 // Create masks.
+                idx_t pmask = 0, rmask = 0;
                 if (do_left_pvec || do_right_pvec) {
 
                     // Calculate masks in this dim for partial vectors.
@@ -595,8 +578,6 @@ namespace yask {
                     //   0 0 1 1
                     //   0 0 1 1
                     // so that the 6 corner elements are updated per vec.
-
-                    idx_t pmask = 0, rmask = 0;
 
                     // Need to set upper bit.
                     idx_t mbit = idx_t(1) << (dims->_fold_pts.product() - 1);
@@ -627,15 +608,73 @@ namespace yask {
                                  rmask |= mbit;
                              return true; // from lambda.
                          });
-
-                    // Save masks in this dim.
-                    peel_masks[j] = pmask;
-                    rem_masks[j] = rmask;
                     if (do_left_pvec)
                         assert(pmask != 0);
                     if (do_right_pvec)
                         assert(rmask != 0);
                 }
+
+                // Special cases: boundaries and flags that need fixing due
+                // to overlaps...
+
+                // Overlapping peel and rem, i.e., ebgn and eend are in the
+                // same vector. AND peel and rem masks into one mask and do
+                // peel only.
+                if (do_left_pvec && do_right_pvec && ovbgn == fvend) {
+                    assert(fvbgn == ovend);
+                    pmask &= rmask;
+                    rmask = 0;
+                    do_left_pvec = true;
+                    do_right_pvec = false;
+                    do_left_fvec = false;
+                    do_right_fvec = false;
+                    do_clusters = false;
+                }
+
+                // No clusters.
+                else if (fcend <= fcbgn) {
+
+                    // Move both cluster boundaries to end
+                    // of full-vec range.
+                    fcbgn = fcend = fvend;
+                    do_clusters = false;
+
+                    // Any full vecs?  Do left only due to fc-range
+                    // adjustment above.
+                    if (do_left_fvec || do_right_fvec) {
+                        do_left_fvec = true;
+                        do_right_fvec = false;
+                    }
+                }
+
+                // Any outside parts at all?
+                if (do_left_fvec || do_right_fvec ||
+                    do_left_pvec || do_right_pvec)
+                    do_outside_clusters = true;
+
+                // Save loop-local (current dim) vars.
+                // ScanIndices vars.
+                sb_eidxs.begin[i] = ebgn;
+                sb_eidxs.end[i] = eend;
+                sb_fcidxs.begin[i] = fcbgn;
+                sb_fcidxs.end[i] = fcend;
+                sb_fvidxs.begin[i] = fvbgn;
+                sb_fvidxs.end[i] = fvend;
+                sb_ovidxs.begin[i] = ovbgn;
+                sb_ovidxs.end[i] = ovend;
+
+                // Domain-dim mask vars.
+                peel_masks[j] = pmask;
+                rem_masks[j] = rmask;
+                if (do_left_fvec)
+                    set_bit(do_left_fvecs, j);
+                if (do_right_fvec)
+                    set_bit(do_right_fvecs, j);
+                if (do_left_pvec)
+                    set_bit(do_left_pvecs, j);
+                if (do_right_pvec)
+                    set_bit(do_right_pvecs, j);
+
             } // domain dims.
 
             // Normalized cluster indices.
@@ -665,7 +704,7 @@ namespace yask {
                 
             } // whole clusters.
 
-            if (do_only_clusters)
+            if (!do_outside_clusters)
                 TRACE_MSG("no full or partial vectors to calculate");
             else {
                 TRACE_MSG("processing full and/or partial vectors "
@@ -681,7 +720,7 @@ namespace yask {
                 THROW_YASK_EXCEPTION("Internal error: vector border-code not expected when VLEN==1");
                 #else
 
-                // Other normalized indices.
+                // Normalized vector indices.
                 auto norm_fvidxs = normalize_indices(sb_fvidxs, true);
                 auto norm_ovidxs = normalize_indices(sb_ovidxs, true);
 
@@ -768,7 +807,7 @@ namespace yask {
                             // Loop through each domain dim to set range for
                             // this combo and l-r seq.
                             #ifdef TRACE
-                            std::string descr;
+                            std::string descr = std::string("part ") + std::to_string(partn) + ": '";
                             #endif
                             int nsel = 0;
                             DOMAIN_VAR_LOOP(i, j) {
@@ -805,15 +844,14 @@ namespace yask {
                                     }
                                     #ifdef TRACE
                                     if (descr.length())
-                                        descr += " ^ "; // meaning "intersected with".
+                                        descr += " & ";
                                     descr += std::string(is_left ? "left" : "right") + "-" +
                                         domain_dims.get_dim_name(j);
                                     #endif
                                 }
                             }
                             #ifdef TRACE
-                            descr = std::string("part ") + std::to_string(partn) +
-                                ": '" + descr + "'";
+                            descr += "'";
                             #endif
 
                             // Calc this full-vector part.
@@ -859,7 +897,7 @@ namespace yask {
         // This should be the hottest function for most stencils.
         // All functions called from this one should be inlined.
         // Indices must be vec-len-normalized and rank-relative.
-        // Static to isolate offload.
+        // Static to make sure offload doesn't need 'this'.
         static void
         calc_clusters_opt2(StencilCoreDataT* corep,
                            int region_thread_idx,
@@ -878,7 +916,7 @@ namespace yask {
         // Calculate a tile of vectors using the given mask.
         // All functions called from this one should be inlined.
         // Indices must be vec-len-normalized and rank-relative.
-        // Static to isolate offload.
+        // Static to make sure offload doesn't need 'this'.
         static void
         calc_vectors_opt2(StencilCoreDataT* corep,
                           int region_thread_idx,
