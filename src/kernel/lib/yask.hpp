@@ -90,6 +90,9 @@ typedef int MPI_Request;
 // Type for unsigned indices.
 typedef std::uint64_t uidx_t;
 
+// Type for bitmasks.
+typedef std::uint64_t bit_mask_t;
+
 // Common utilities.
 #include "common_utils.hpp"
 

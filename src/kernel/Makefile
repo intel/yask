@@ -513,7 +513,7 @@ MINI_BLOCK_LOOP_CODE	?=	$(MINI_BLOCK_LOOP_MODS) omp loop($(MINI_BLOCK_LOOP_ORDER
 # loops are run by a single OMP thread. When offloading, this loop is run in
 # parallel on the offload device.  The indexes in this loop
 # are 'normalized', i.e., vector units and rank-relative.
-SUB_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -inVar norm_sb_idxs
+SUB_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -inVar norm_idxs
 ifeq ($(offload),1)
 SUB_BLOCK_LOOP_FLAGS	+=	-ompMod '$(omp_target_par_for) schedule($(omp_target_schedule))'
 SUB_BLOCK_LOOP_ORDER	?=	2 .. N-1

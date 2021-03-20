@@ -64,15 +64,16 @@ namespace yask {
     }
 
     // Get the 'r'th set of 'k' elements from set of integers between '0' and 'n-1'.
-    // Returns vector of 'k' values.
+    // Returns bitmask with 'k' bits set, where bit 'b' = 1 indicates integer 'b' is in set.
     // 'r' must be between '0' and 'n_choose_k(n, k)-1'.
-    vector<int> n_choose_k_set(int n, int k, int r) {
+    size_t n_choose_k_set(int n, int k, int r) {
         assert(n >= 0);
         assert(k >= 0);
         assert(r >= 0);
         assert(r < n_choose_k(n, k));
+        assert(size_t(n) <= sizeof(size_t) * 8);
 
-        vector<int> c;
+        size_t c = 0;
 
         // Empty set.
         if (n <= 0 || k <= 0)
@@ -80,23 +81,31 @@ namespace yask {
 
         // Pick one item.
         if (k == 1) {
-            c.push_back(r);
+            set_bit(c, r);
             return c;
         }
 
         // Pick k items.
+        int ca[sizeof(size_t)];
         int j = 0;
         for (int i = 0; i < k-1; i++) {
-            c.push_back((i == 0) ? -1 : c[i-1]);
+            ca[i] = (i == 0) ? -1 : ca[i-1];
             while (true) {
-                c[i]++;
-                int nc = n_choose_k(n - (c[i]+1), k - (i+1));
+                ca[i]++;
+                int nc = n_choose_k(n - (ca[i]+1), k - (i+1));
                 if (j + nc >= r + 1)
                     break;
                 j += nc;
             }
         }
-        c.push_back(c[k-2] + r - j + 1);
+        ca[k-1] = ca[k-2] + r - j + 1;
+
+        for (int i = 0; i < k; i++) {
+            assert(ca[i] >= 0);
+            assert(ca[i] < n);
+            set_bit(c, ca[i]);
+        }
+        
         return c;
     }
 

@@ -638,23 +638,24 @@ namespace yask {
         int ndims = 0;
 
         // Input values; not modified.
-        Indices begin, end;     // first and end (beyond last) range of each index.
-        Indices stride;         // distance between indices within [begin .. end).
-        Indices align;          // alignment of indices after first one.
-        Indices align_ofs;      // adjustment for alignment (see below).
-        Indices group_size;     // proximity grouping within range.
+        Indices begin, end;     // First and end (beyond last) range of each index.
+        Indices stride;         // Max distance between indices within [begin .. end).
+                                // Distance might be shorter for peel and/or remainder iterations.
+        Indices align;          // Alignment of beginning indices whenever possible (see notes below).
+        Indices align_ofs;      // Adjustment for alignment (see below).
+        Indices group_size;     // Proximity grouping within range.
 
-        // Alignment:
+        // Notes:
         // First 'start' index is always at 'begin'.
         // Subsequent indices are at 'begin' + 'stride', 'begin' + 2*'stride', etc. if 'align'==1.
-        // If 'align'>1, subsequent indices will be aligned such that
+        // If 'align'>1, 2nd and subsequent 'start' indices will be aligned such that
         // (('start' - 'align_ofs') % 'align') == 0.
         // Last 'start' index is always < 'end'.
-        // Last 'stop' index always == 'end'.
+        // Last 'stop' index is always at 'end'.
 
         // Output values; set for each index by loop code.
         Indices start, stop;    // first and last+1 for this sub-range.
-        Indices cur_indices; // 0-based unique index for each sub-range in each dim.
+        Indices cur_indices;    // 0-based unique index for each sub-range in each dim.
 
         // Example w/3 sub-ranges in overall range:
         // begin                                         end

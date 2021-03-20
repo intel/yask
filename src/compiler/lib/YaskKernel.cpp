@@ -263,7 +263,8 @@ namespace yask {
                         bool defer = false; // add dim later.
 
                         // Step dim?
-                        // If this exists, it will get placed near to the end,
+                        // If this exists, it will get placed near to the end
+                        // if the "inner step" setting is used,
                         // just before the inner & misc dims.
                         if (dtype == STEP_INDEX) {
                             assert(dname == _dims._step_dim);
@@ -280,7 +281,8 @@ namespace yask {
                         }
 
                         // Inner domain dim?
-                        // If this exists, it will get placed at or near the end.
+                        // If this exists, it will get placed at end or
+                        // before misc dims if "inner misc" setting is used.
                         else if (dname == _dims._inner_dim) {
                             assert(dtype == DOMAIN_INDEX);
                             if (folded) {
@@ -289,7 +291,8 @@ namespace yask {
                             }
                         }
 
-                        // Misc dims? Placed after the inner domain dim if requested.
+                        // Misc dims? Placed after the inner domain dim
+                        // if "inner misc" setting is used.
                         else if (dtype == MISC_INDEX) {
                             if (folded && _settings._inner_misc) {
                                 misc_posns.push_back(dn + 1);
@@ -297,7 +300,7 @@ namespace yask {
                             }
                         }
 
-                        // Add index position to layout.
+                        // Add this index position to layout if not deferred.
                         if (!defer) {
                             int other_posn = dn + 1;
                             templ += to_string(other_posn);
@@ -571,7 +574,7 @@ namespace yask {
                 string istop = "stop_" + idim;
                 string istep = "step_" + idim;
                 string iestep = "step_" + idim + "_elem";
-                os << endl << " // Calculate a tile of " << vcstr << "s bounded by 'norm_sb_idxs'.\n";
+                os << endl << " // Calculate a tile of " << vcstr << "s bounded by 'norm_idxs'.\n";
                 if (do_cluster)
                     os << " // Each cluster calculates '" << _dims._cluster_pts.make_dim_val_str(" * ") <<
                         "' point(s) containing " << _dims._cluster_mults.product() << " '" <<
@@ -588,14 +591,14 @@ namespace yask {
                     " FP operation(s) per inner-loop iteration.\n" <<
                     " static void " << funcstr << "(" <<
                     _core_t << "* core_data, int core_idx, int block_thread_idx,"
-                    " const ScanIndices& norm_sb_idxs";
+                    " const ScanIndices& norm_idxs";
                 if (!do_cluster)
-                    os << ", idx_t write_mask";
+                    os << ", bit_mask_t write_mask";
                 os << ") {\n"
                     " host_assert(core_data);\n"
                     " host_assert(core_data->_thread_core_list.get());\n"
                     " auto& thread_core_data = core_data->_thread_core_list[core_idx];\n"
-                    " const Indices& idxs = norm_sb_idxs.start;\n";
+                    " const Indices& idxs = norm_idxs.start;\n";
                 print_indices(os, true, false);
  
                 // C++ vector print assistant.

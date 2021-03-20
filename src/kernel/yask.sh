@@ -360,7 +360,7 @@ if [[ $doval == 1 ]]; then
 fi
 
 # Commands to capture some important system status and config info for benchmark documentation.
-config_cmds="sleep 1; uptime; lscpu; cpuinfo -A; sed '/^$/q' /proc/cpuinfo; cpupower frequency-info; uname -a; $dump /etc/system-release; $dump /proc/cmdline; $dump /proc/meminfo; free -gt; numactl -H; ulimit -a; lspci -v; lshw"
+config_cmds="sleep 1; uptime; lscpu; cpuinfo -A; sed '/^$/q' /proc/cpuinfo; cpupower frequency-info; uname -a; $dump /etc/system-release; $dump /proc/cmdline; $dump /proc/meminfo; free -gt; numactl -H; ulimit -a; lspci -v"
 if [[ $arch == "offload" ]]; then
     config_cmds+="; clinfo -l";
 fi
@@ -375,7 +375,7 @@ cmds+="; date"
 
 echo "===================" | tee -a $logfile
 
-# Finally, invoke the binary.
+# Finally, invoke the binary in a shell.
 if [[ -z "$sh_prefix" ]]; then
     sh -c -x "$cmds" 2>&1 | tee -a $logfile
 else

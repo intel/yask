@@ -290,7 +290,7 @@ namespace yask {
                 if (opts->_region_sizes[i] >= opts->_rank_sizes[i])
                     stride[i] = end[i] - begin[i];
             }
-            TRACE_MSG("run_solution: after adjustment for " << num_wf_shifts <<
+            TRACE_MSG("after adjustment for " << num_wf_shifts <<
                       " wave-front shift(s): [" <<
                       begin.make_dim_val_str() << " ... " <<
                       end.make_dim_val_str() << ") by " <<
@@ -346,7 +346,7 @@ namespace yask {
 
                         // Check step.
                         if (check_step_conds && !bp->is_in_valid_step(start_t)) {
-                            TRACE_MSG("run_solution: step " << start_t <<
+                            TRACE_MSG("step " << start_t <<
                                       " not valid for stage '" <<
                                       bp->get_name() << "'");
                             continue;
@@ -378,10 +378,11 @@ namespace yask {
                                     // code to call calc_region() for
                                     // each region. The region will be trimmed
                                     // to the active MPI exterior section.
-                                    TRACE_MSG("run_solution: step " << start_t <<
+                                    TRACE_MSG("step " << start_t <<
                                               " for stage '" << bp->get_name() <<
-                                              "' in MPI exterior dim " << j <<
-                                              " on the " << (is_left ? "left" : "right"));
+                                              "' in MPI exterior " <<
+                                              (is_left ? "left-" : "right-") <<
+                                              domain_dims.get_dim_name(j));
 
                                     // Loop prefix.
                                     #define USE_LOOP_PART_0
@@ -422,7 +423,7 @@ namespace yask {
                         // calc_region() for each region. If overlapping
                         // comms, this will be just the interior.  If not, it
                         // will cover the whole rank.
-                        TRACE_MSG("run_solution: step " << start_t <<
+                        TRACE_MSG("step " << start_t <<
                                   " for stage '" << bp->get_name() << "'");
 
                         // Loop prefix.
@@ -484,10 +485,11 @@ namespace yask {
                                 // code to call calc_region(bp) for
                                 // each region. The region will be trimmed
                                 // to the active MPI exterior section.
-                                TRACE_MSG("run_solution: steps [" << start_t <<
+                                TRACE_MSG("WF steps [" << start_t <<
                                           " ... " << stop_t <<
-                                          ") in MPI exterior dim " << j <<
-                                          " on the " << (is_left ? "left" : "right"));
+                                          ") in MPI exterior " <<
+                                          (is_left ? "left-" : "right-") <<
+                                          domain_dims.get_dim_name(j));
 
                                 // Loop prefix.
                                 #define USE_LOOP_PART_0
@@ -520,7 +522,7 @@ namespace yask {
                     // calc_region() for each region. If overlapping
                     // comms, this will be just the interior.  If not, it
                     // will cover the whole rank.
-                    TRACE_MSG("run_solution: steps [" << start_t <<
+                    TRACE_MSG("steps [" << start_t <<
                               " ... " << stop_t << ")");
 
                     // Loop prefix.
@@ -618,9 +620,10 @@ namespace yask {
                   rank_idxs.start.make_val_str() << " ... " <<
                   rank_idxs.stop.make_val_str() << ") within possibly-adjusted rank [" <<
                   rank_idxs.begin.make_val_str() << " ... " <<
-                  rank_idxs.end.make_val_str() << ")" );
+                  rank_idxs.end.make_val_str() << ") for " <<
+                  make_mpi_section_descr());
 
-        // Track time (use "else" to avoid double-counting).
+        // Track time separately for MPI exterior and interior.
         if (!do_mpi_interior && (do_mpi_left || do_mpi_right))
             ext_time.start();
         else
@@ -669,13 +672,13 @@ namespace yask {
                     if (sel_bp && sel_bp != bp)
                         continue;
 
-                    TRACE_MSG("calc_region: no TB; stage '" <<
+                    TRACE_MSG("no TB; stage '" <<
                               bp->get_name() << "' in step(s) [" <<
                               start_t << " ... " << stop_t << ")");
 
                     // Check step.
                     if (check_step_conds && !bp->is_in_valid_step(start_t)) {
-                        TRACE_MSG("calc_region: step " << start_t <<
+                        TRACE_MSG("step " << start_t <<
                                   " not valid for stage '" << bp->get_name() << "'");
                         continue;
                     }
@@ -896,7 +899,7 @@ namespace yask {
             idx_t nshapes = 1;
             idx_t shape = 0;
             idx_t shift_num = 0;
-            BridgeMask bridge_mask;
+            bit_mask_t bridge_mask = 0;
             ScanIndices adj_block_idxs = block_idxs;
 
             // Include automatically-generated loop code to
@@ -926,7 +929,7 @@ namespace yask {
             // for each combination of domain dims. E.g., need 'x' and
             // 'y' bridges for 2D problem in phase 1.
             idx_t nshapes = n_choose_k(nddims, phase);
-            BridgeMask bridge_mask(nddims, false);
+            bit_mask_t bridge_mask = 0;
 
             // Set temporal indices to full range.
             block_idxs.cur_indices[step_posn] = 0; // only one index.
@@ -974,15 +977,7 @@ namespace yask {
 
                 // Get 'shape'th combo of 'phase' things from 'nddims'.
                 // These will be used to create bridge shapes.
-                auto dims_to_bridge = n_choose_k_set(nddims, phase, shape);
-
-                // Set bits for selected dims.
-                DOMAIN_VAR_LOOP_FAST(i, j)
-                    bridge_mask.at(j) = false;
-                for (int i = 0; i < phase; i++) {
-                    auto dim = dims_to_bridge[i];
-                    bridge_mask.at(dim) = true;
-                }
+                bridge_mask = n_choose_k_set(nddims, phase, shape);
 
                 // Can only be one time iteration here when doing TB
                 // because mini-block temporal size is always same
@@ -1021,7 +1016,7 @@ namespace yask {
                                          idx_t region_shift_num,
                                          idx_t nphases, idx_t phase,
                                          idx_t nshapes, idx_t shape,
-                                         const BridgeMask& bridge_mask,
+                                         const bit_mask_t& bridge_mask,
                                          const ScanIndices& rank_idxs,
                                          const ScanIndices& base_region_idxs,
                                          const ScanIndices& base_block_idxs,
@@ -1337,12 +1332,8 @@ namespace yask {
         }
         TRACE_MSG("shift_region: updated span: [" <<
                   idxs.begin.make_val_str() << " ... " <<
-                  idxs.end.make_val_str() << ") " <<
-                  (do_mpi_interior ? "for MPI interior" :
-                   do_mpi_left ? ("for MPI exterior left dim " +
-                                  to_string(mpi_exterior_dim)) :
-                   do_mpi_right ? ("for MPI exterior right dim " +
-                                   to_string(mpi_exterior_dim)): "") <<
+                  idxs.end.make_val_str() << ") for " <<
+                  make_mpi_section_descr() << 
                   " within region base [" <<
                   base_start.make_val_str() << " ... " <<
                   base_stop.make_val_str() << ") shifted " <<
@@ -1370,7 +1361,7 @@ namespace yask {
                                           idx_t mb_shift_num,
                                           idx_t nphases, idx_t phase,
                                           idx_t nshapes, idx_t shape,
-                                          const BridgeMask& bridge_mask,
+                                          const bit_mask_t& bridge_mask,
                                           ScanIndices& idxs) {
         STATE_VARS(this);
         auto nstages = st_stages.size();
@@ -1438,7 +1429,7 @@ namespace yask {
             // until all dims are bridged at last phase.
             // Use list of dims to bridge for this shape
             // computed earlier.
-            if (phase > 0 && bridge_mask[j]) {
+            if (phase > 0 && is_bit_set(bridge_mask, j)) {
                 TRACE_MSG("shift_mini_block: phase " << phase <<
                           ", shape " << shape <<
                           ": bridging dim " << j);

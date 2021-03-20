@@ -168,7 +168,6 @@ namespace yask {
     typedef std::set<StencilBundleBase*> StencilBundleSet;
     typedef std::shared_ptr<Stage> StagePtr;
     typedef std::vector<StagePtr> StageList;
-    typedef std::vector<bool> BridgeMask;
 
     // Common data needed in the kernel(s).
     struct CommonCoreData {
@@ -236,11 +235,21 @@ namespace yask {
         // include any extensions needed for WF.
         BoundingBox mpi_interior;
 
-        // Flags to calculate the interior and/or exterior.
+        // Flags to track state of calculating the interior and/or exterior.
         bool do_mpi_interior = true;
         bool do_mpi_left = true;        // left exterior in given dim.
         bool do_mpi_right = true;        // right exterior in given dim.
         idx_t mpi_exterior_dim = 0;      // which domain dim in left/right.
+        std::string make_mpi_section_descr() {
+            STATE_VARS(this);
+            return std::string("MPI") +
+                (do_mpi_interior ? " interior" :
+                 do_mpi_left ? (" exterior left-" +
+                                domain_dims.get_dim_name(mpi_exterior_dim)) :
+                 do_mpi_right ? (" exterior right-" +
+                                 domain_dims.get_dim_name(mpi_exterior_dim)) :
+                 "-independent") + " section";
+        }
 
         // Is overlapping-comms mode currently enabled?
         inline bool is_overlap_active() const {
@@ -501,7 +510,7 @@ namespace yask {
                              idx_t region_shift_num,
                              idx_t nphases, idx_t phase,
                              idx_t nshapes, idx_t shape,
-                             const BridgeMask& bridge_mask,
+                             const bit_mask_t& bridge_mask,
                              const ScanIndices& rank_idxs,
                              const ScanIndices& base_region_idxs,
                              const ScanIndices& base_block_idxs,
@@ -538,7 +547,7 @@ namespace yask {
                               idx_t mb_shift_num,
                               idx_t nphases, idx_t phase,
                               idx_t nshapes, idx_t shape,
-                              const BridgeMask& bridge_mask,
+                              const bit_mask_t& bridge_mask,
                               ScanIndices& idxs);
 
         // Set the bounding-box around all stencil bundles.

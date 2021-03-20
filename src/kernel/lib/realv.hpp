@@ -412,7 +412,7 @@ namespace yask {
         // masked copy: copy only the selected elements of 'from'
         // into 'this', keeping the existing ones.
         ALWAYS_INLINE void copy_from_masked(const real_vec_t& from,
-                                           uidx_t k1) {
+                                            uidx_t k1) {
             #if defined(NO_INTRINSICS) || !defined(USE_AVX512)
             REAL_VEC_LOOP(i) if ((k1 >> i) & 1) u.r[i] = from[i];
             #else

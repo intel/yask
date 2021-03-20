@@ -123,7 +123,7 @@ namespace yask {
 
         // Dimensions with 0 values.
         std::string _step_dim;  // usually time, 't'.
-        std::string _inner_dim; // the domain dim used in the inner loop.
+        std::string _inner_dim; // the domain dim w/the fastest-changing index.
         IdxTuple _domain_dims;
         IdxTuple _stencil_dims; // step & domain dims.
         IdxTuple _misc_dims;
