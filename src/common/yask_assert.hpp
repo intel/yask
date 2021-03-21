@@ -23,6 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 #pragma once
+#include <stdio.h>
 
 // Stringizing hacks for the C preprocessor.
 #define YSTR1(s) #s
