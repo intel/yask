@@ -640,7 +640,6 @@ namespace yask {
         // Input values; not modified.
         Indices begin, end;     // First and end (beyond last) range of each index.
         Indices stride;         // Max distance between indices within [begin .. end).
-                                // Distance might be shorter for peel and/or remainder iterations.
         Indices align;          // Alignment of beginning indices whenever possible (see notes below).
         Indices align_ofs;      // Adjustment for alignment (see below).
         Indices group_size;     // Proximity grouping within range.

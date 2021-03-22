@@ -116,22 +116,22 @@ namespace yask {
         reset_auto_tuner(true, false);
 
         // Report ranks.
-        DEBUG_MSG("\nNum MPI ranks:            " << env->get_num_ranks() <<
-                  "\nThis MPI rank index:      " << env->get_rank_index());
+        DEBUG_MSG("\nNum MPI ranks:             " << env->get_num_ranks() <<
+                  "\nThis MPI rank index:       " << env->get_rank_index());
 
         // report threads.
         {
-            DEBUG_MSG("Num OpenMP procs:         " << omp_get_num_procs());
+            DEBUG_MSG("Num OpenMP procs:          " << omp_get_num_procs());
             int rt, bt;
             int at = get_num_comp_threads(rt, bt);
-            DEBUG_MSG("Num OpenMP threads avail: " << opts->max_threads <<
-                      "\nNum OpenMP threads used:  " << at <<
-                      "\n  Num threads per region: " << rt <<
-                      "\n  Num threads per block:  " << bt);
+            DEBUG_MSG("Num OpenMP threads avail:  " << opts->max_threads <<
+                      "\nNum OpenMP threads used:   " << at <<
+                      "\n  Num threads per region:  " << rt <<
+                      "\n  Num threads per block:   " << bt);
             #ifdef USE_OFFLOAD
-            DEBUG_MSG("Num OpenMP devices:       " << omp_get_num_devices() <<
-                      "\nOpenMP offload device:    " << KernelEnv::_omp_devn <<
-                      "\nOpenMP host device:       " << KernelEnv::_omp_hostn);
+            DEBUG_MSG("Num OpenMP devices:        " << omp_get_num_devices() <<
+                      "\nOpenMP offload device:     " << KernelEnv::_omp_devn <<
+                      "\nOpenMP host device:        " << KernelEnv::_omp_hostn);
             #endif
         }
 

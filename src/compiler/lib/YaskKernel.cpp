@@ -137,8 +137,10 @@ namespace yask {
         }
         os << "namespace yask {\n"
             " OMP_DECL_TARGET\n"
+            "\n //Number of points or multipliers in domain dims.\n"
             " constexpr idx_t fold_pts[]{ " << _dims._fold.make_val_str() << " };\n"
             " constexpr idx_t cluster_pts[]{ " << _dims._cluster_pts.make_val_str() << " };\n"
+            " constexpr idx_t cluster_mults[]{ " << _dims._cluster_mults.make_val_str() << " };\n"
             " OMP_END_DECL_TARGET\n"
             "}\n";
         os << "#define VLEN (" << _dims._fold.product() << ")" << endl;
@@ -624,10 +626,16 @@ namespace yask {
                 // Actual computation loop.
                 // Include generated loop-nest.
                 os <<
+                    "\n // Make more efficient expressions for sub-block loop vars.\n"
+                    "\n // Subtract one from 'dn' to convert stencil dims to domain dims.\n"
+                    "\n#define STRIDE_EXPR(dn) " <<
+                    (do_cluster ? "cluster_mults[dn-1]" : "idx_t(1)") << "\n"
+                    "\n#define ALIGN_EXPR(dn) idx_t(1)\n"
+                    "\n#define ALIGN_OFS_EXPR(dn) idx_t(0)\n"
                     "\n // Loop prefix.\n"
                     "#define USE_LOOP_PART_0\n"
                     "#include \"yask_sub_block_loops.hpp\"\n"
-                    "\n // Loop body. Always unit stride, so don't need stop indices.\n"
+                    "\n // Loop body. Just doing one, so don't need stop indices.\n"
                     " Indices& idxs = body_indices.start;\n";
                 print_indices(os, false, true);
                 vp->print_elem_indices(os);

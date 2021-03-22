@@ -45,6 +45,7 @@ my @dims;                       # indices of dimensions.
 my $inputVar;                   # input var.
 my $outputVar;                  # output var.
 my $loopPart = "USE_LOOP_PART_";
+my @exprs = ("stride", "align", "align_ofs", "group_size");
 
 # loop-feature bit fields.
 my $bSerp = 0x1;                # serpentine path
@@ -66,14 +67,20 @@ sub idx {
 # Examples if $inputVar == "block_idxs":
 # inVar() => "block_idxs".
 # inVar("foo") => "block_idxs.foo".
-# inVar("foo", 5) => "block_idxs.foo[5]".
+# inVar("foo", 5) => "block_idxs.foo[5]"
+#                 OR "FOO_EXPR(5)" if @exprs contains "foo".
 sub inVar {
     my $vname = shift;
     my $part = (defined $vname) ? ".$vname" : "";
+    if (defined $vname && scalar @_ == 1 && grep( /^$vname$/, @exprs)) {
+        my $em = (uc $vname)."_EXPR";
+        return "$em(@_)";
+    }
     return "$inputVar$part".idx(@_);
 }
 
-# Accessors for local struct.
+# Accessors for local (output) struct.
+# Examples if $outputVar == "local_idxs":
 # locVar() => "local_indices".
 # locVar("foo", 5) => "local_indices.foo[5]".
 sub locVar {
@@ -721,7 +728,15 @@ sub processCode($) {
         "#endif",
         "#ifndef INNER_PRAGMA",
         "#define INNER_PRAGMA ".pragma($OPT{innerMod}),
-        "#endif",
+        "#endif";
+    for my $expr (@exprs) {
+        my $em = (uc $expr)."_EXPR";
+        push @code,
+            "#ifndef $em",
+            "#define ${em}(dim_num) ".inVar($expr).'[dim_num]',
+            "#endif";
+    }
+    push @code,
         "// 'ScanIndices $inputVar' must be set before the following code.",
         "{";
     
@@ -905,7 +920,13 @@ sub processCode($) {
         "}",
         "#undef OMP_PRAGMA",
         "#undef INNER_PRAGMA",
-        "#undef SIMD_PRAGMA",
+        "#undef SIMD_PRAGMA";
+    for my $expr (@exprs) {
+        my $em = (uc $expr)."_EXPR";
+        push @code,
+            "#undef $em";
+    }
+    push @code,
         "#undef $loopPart$innerNum\n",
         "#endif\n";
     
