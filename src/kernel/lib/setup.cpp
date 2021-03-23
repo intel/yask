@@ -34,7 +34,7 @@ namespace yask {
     // Init MPI, OMP.
     void KernelEnv::init_env(int* argc, char*** argv, MPI_Comm existing_comm)
     {
-        DEBUG_MSG("Initializing YASK environment...");
+        TRACE_MSG("Initializing YASK environment...");
         YaskTimer init_timer;
         init_timer.start();
          
@@ -43,7 +43,7 @@ namespace yask {
         num_ranks = 1;
 
         #ifdef USE_MPI
-        DEBUG_MSG("Initializing MPI...");
+        TRACE_MSG("Initializing MPI...");
         int is_init = false;
         MPI_Initialized(&is_init);
 
@@ -96,8 +96,7 @@ namespace yask {
         #endif
 
         #ifdef _OPENMP
-        DEBUG_MSG("Initializing OpenMP...");
-        #endif
+        TRACE_MSG("Initializing OpenMP...");
 
         // Set env vars needed by OMP.
         // TODO: make this visible to the user.
@@ -114,19 +113,16 @@ namespace yask {
             max_threads = mt;
 
         #ifdef USE_OFFLOAD
-        DEBUG_MSG("Initializing OpenMP offload; please wait for JIT compilation...");
         _omp_hostn = omp_get_initial_device();
         _omp_devn = omp_get_default_device();
+        #endif
 
-        // Dummy OMP section to trigger JIT.
-        // This should be the first "omp target" pragma encountered.
-        int dummy = 42;
-        #pragma omp target data device(KernelEnv::_omp_devn) map(dummy)
-        { }
+        #else
+        max_threads = 1;
         #endif
 
         init_timer.stop();
-        DEBUG_MSG("Environment initialization done in " <<
+        TRACE_MSG("Environment initialization done in " <<
                   make_num_str(init_timer.get_elapsed_secs()) << " secs.");
     }
 

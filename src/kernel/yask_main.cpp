@@ -226,17 +226,19 @@ int main(int argc, char** argv)
         MySettings opts1(nullptr);
         opts1.parse(argc, argv);
         yk_env::set_trace_enabled(opts1.do_trace);
-        
-        // Set up the environment (mostly MPI).
+
+        // Set up the environment.
         auto kenv = kfac.new_env();
+        auto ep = dynamic_pointer_cast<KernelEnv>(kenv);
+        auto num_ranks = kenv->get_num_ranks();
+
+        // Enable debug only on requested rank.
         if (opts1.msg_rank == kenv->get_rank_index())
             yk_env::set_debug_output(yof.new_stdout_output());
         else
             yk_env::set_debug_output(yof.new_null_output());
-        auto ep = dynamic_pointer_cast<KernelEnv>(kenv);
-        auto num_ranks = kenv->get_num_ranks();
         auto& os = kenv->get_debug_output()->get_ostream();
-
+        
         // Make solution object containing data and parameters for stencil eval.
         // TODO: do everything through API without cast to StencilContext.
         auto ksoln = kfac.new_solution(kenv);

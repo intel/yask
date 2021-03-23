@@ -53,6 +53,25 @@ namespace yask {
     yk_solution_ptr yk_factory::new_solution(yk_env_ptr env,
                                              const yk_solution_ptr source) const {
         TRACE_MSG("creating new YASK solution...");
+
+        #ifdef USE_OFFLOAD
+        {
+            DEBUG_MSG("Initializing OpenMP offload; there may be a delay for JIT compilation...");
+            YaskTimer init_timer;
+            init_timer.start();
+
+            // Dummy OMP section to trigger JIT.
+            // This should be the first "omp target" pragma encountered.
+            int dummy = 42;
+            #pragma omp target data device(KernelEnv::_omp_devn) map(dummy)
+            { }
+
+            init_timer.stop();
+            DEBUG_MSG("OpenMP offload initialization done in " <<
+                      make_num_str(init_timer.get_elapsed_secs()) << " secs.");
+        }
+        #endif
+
         auto ep = dynamic_pointer_cast<KernelEnv>(env);
         assert(ep);
         auto dp = YASK_STENCIL_CONTEXT::new_dims(); // create Dims.
