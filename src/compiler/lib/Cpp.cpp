@@ -412,8 +412,8 @@ namespace yask {
     // Save var names for later use.
     void CppVecPrintHelper::print_strides(ostream& os, const Var& var) {
 
-        int dnum = 0;
-        for (auto& dim : var.get_dims()) {
+        for (int dnum = 0; dnum < var.get_num_dims(); dnum++) {
+            auto& dim = var.get_dims().at(dnum);
             const auto& vname = var.get_name();
             const auto& dname = dim->_get_name();
             auto dtype = dim->get_type();
@@ -445,11 +445,15 @@ namespace yask {
                 bool is_inner = dname == _dims._inner_dim;
                 bool is_inner_misc = dtype == MISC_INDEX && _settings._inner_misc;
                 if (is_inner || is_inner_misc) {
+                    os << " // Stride is a known fixed value.\n";
 
                     // Stride of inner dim will be 1 or size of misc vars.
                     stride = "1";
 
                     // Mult by size of following inner-misc dims, if any.
+                    // If inner-misc is active, all misc dims are nested
+                    // inside the inner domain dim, so their strides are
+                    // fixed.
                     if (_settings._inner_misc)
                         for (int j = 0; j < var.get_num_dims(); j++) {
                             auto& dimj = var.get_dims().at(j);
@@ -471,7 +475,7 @@ namespace yask {
                     stride << _line_suffix;
                 if (stride != slookup)
                     os << _line_prefix << "host_assert(" << slookup <<
-                        " == " << stride << ")" << _line_suffix;
+                        " == " << svar << ")" << _line_suffix;
 
                 // Local offset.
                 string lofs_lookup = var_ptr + "->_local_offsets[" + to_string(dnum) + "]";
@@ -495,9 +499,8 @@ namespace yask {
                     lofs << _line_suffix;
                 if (lofs != lofs_lookup)
                     os << _line_prefix << "host_assert(" << lofs_lookup <<
-                        " == " << lofs << ")" << _line_suffix;
+                        " == " << lofs_var << ")" << _line_suffix;
             }
-            dnum++;
         }
     }
     

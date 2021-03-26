@@ -71,8 +71,8 @@ namespace yask {
         string _step_dim;         // step dimension, usually time.
         IntTuple _domain_dims;    // domain dims, usually spatial (with zero value).
         IntTuple _stencil_dims;   // both step and domain dims.
-        string _inner_dim;        // domain dim that will be used in the inner loop.
-        string _outer_dim;        // domain dim that will be used in the outer loop.
+        string _inner_dim;        // inner-most domain dim in mem array layout.
+        string _outer_dim;        // outer-most domain dim in mem array layout.
         IntTuple _misc_dims;      // misc dims that are not the step or domain.
 
         // Following contain only domain dims.

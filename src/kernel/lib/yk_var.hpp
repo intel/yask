@@ -96,17 +96,18 @@ namespace yask {
         Indices _left_halos, _right_halos; // space within pads for halo exchange | zero.
         Indices _left_wf_exts, _right_wf_exts; // additional halos for wave-fronts | zero.
         Indices _rank_offsets;   // offsets of this var domain in overall problem | zero.
-        Indices _local_offsets; // offsets of this var domain in this rank | first index for step or misc.
+        Indices _local_offsets; // offsets of this var domain in this rank | first index.
         Indices _allocs;    // actual var alloc in reals | same.
 
-        // Each entry in _soln_vec_lens is same as dims->_fold_pts.
+        // Each entry in _soln_vec_lens is same as the corresponding dim in dims->_fold_pts.
         Indices _soln_vec_lens;  // num reals in each elem in soln fold | one.
 
         // Each entry in _var_vec_lens may be same as dims->_fold_pts or one, depending
         // on whether var is fully vectorized.
         Indices _var_vec_lens;  // num reals in each elem in this var | one.
 
-        // Sizes in vectors for sizes that are always vec lens (to avoid division).
+        // Sizes in vectors for sizes that are always vec lens.
+        // These are pre-calculated to avoid division later.
         Indices _vec_left_pads; // _actl_left_pads / _var_vec_lens.
         Indices _vec_allocs; // _allocs / _var_vec_lens.
         Indices _vec_local_offsets; // _local_offsets / _var_vec_lens.
@@ -356,7 +357,7 @@ namespace yask {
         // Get a pointer to given vector.
         // Indices must be normalized and rank-relative.
         // It's important that this function be efficient, since
-        // it's indiectly used from the stencil kernel.
+        // it's used in the stencil kernel.
         ALWAYS_INLINE
         const real_vec_t* get_vec_ptr_norm(const Indices& vec_idxs,
                                            idx_t alloc_step_idx,
@@ -1018,6 +1019,7 @@ namespace yask {
                 auto* p = dims->_vec_fold_pts.lookup(dname);
                 idx_t dval = p ? *p : 1;
                 _core._soln_vec_lens[i] = dval;
+                _core._var_vec_lens[i] = 1;
             }
 
             // Create core on offload device.
@@ -1106,6 +1108,7 @@ namespace yask {
        }
 
         // Get strides in underlying storage.
+        // This will be element strides in this class.
         virtual Indices get_vec_strides() const override {
             return _data.get_strides();
         }
@@ -1513,6 +1516,7 @@ namespace yask {
         }
 
         // Get strides in underlying storage.
+        // This will be vector strides in this class.
         virtual Indices get_vec_strides() const override {
             return _data.get_strides();
         }

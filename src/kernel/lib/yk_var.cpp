@@ -157,7 +157,7 @@ namespace yask {
                         ", right-pads = " << IDX_STR(_actl_right_pads) <<
                         ", left-wf-exts = " << IDX_STR(_left_wf_exts) <<
                         ", right-wf-exts = " << IDX_STR(_right_wf_exts) <<
-                        ", strides = " << IDX_STR(_vec_strides);
+                        ", vec-strides = " << IDX_STR(_vec_strides);
                 oss << ", " << _dirty_steps.size() << " dirty flag(s)";
             }
             return oss.str();
@@ -327,7 +327,7 @@ namespace yask {
                 new_dirty = _corep->_allocs[i];
         }
         
-        // Copy new strides.
+        // Calc new strides.
         _corep->_vec_strides = get_vec_strides();
 
         // Resize dirty flags, too.

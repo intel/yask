@@ -32,7 +32,14 @@ namespace yask {
     // Print extraction of indices.
     void YASKCppPrinter::print_indices(ostream& os,
                                        bool print_step, bool print_domain) const {
-        os << "\n // Extract index for each dim.\n";
+        if (print_step && print_domain)
+            os << "\n // Extract index for each stencil dim.\n";
+        else if (print_step)
+            os << "\n // Extract index for the step dim.\n";
+        else if (print_domain)
+            os << "\n // Extract index for each domain dim.\n";
+        else
+            return;
         int i = 0;
         for (auto& dim : _dims._stencil_dims) {
             auto& dname = dim._get_name();
@@ -242,6 +249,8 @@ namespace yask {
             }
 
             // Use vector-folded layout if possible.
+            // Possible when a var contains all of the dims with
+            // vec-len > 1.
             bool folded = gp->is_foldable();
             string vtype = folded ? "YkVecVar" : "YkElemVar";
             string ctype = vtype + "Core";
@@ -264,10 +273,9 @@ namespace yask {
                         auto dtype = dim->get_type();
                         bool defer = false; // add dim later.
 
-                        // Step dim?
-                        // If this exists, it will get placed near to the end
-                        // if the "inner step" setting is used,
-                        // just before the inner & misc dims.
+                        // Step dim?  If this exists, it will get placed
+                        // near to the end if the "inner step" setting is
+                        // used, just before the inner & misc dims.
                         if (dtype == STEP_INDEX) {
                             assert(dname == _dims._step_dim);
                             if (dn > 0) {
@@ -275,28 +283,26 @@ namespace yask {
                                                      "' with dimensions '" + gdims.make_dim_str() +
                                                      "' because '" + dname + "' must be first dimension");
                             }
-                            if (folded && _settings._inner_step) {
+                            if (_settings._inner_step) {
                                 step_posn = dn + 1;
                                 defer = true;
                             }
                             got_step = true;
                         }
 
-                        // Inner domain dim?
-                        // If this exists, it will get placed at end or
-                        // before misc dims if "inner misc" setting is used.
+                        // Inner domain dim?  If this exists, it will get
+                        // placed at end (or just before misc dims if "inner
+                        // misc" setting is used).
                         else if (dname == _dims._inner_dim) {
                             assert(dtype == DOMAIN_INDEX);
-                            if (folded) {
-                                inner_posn = dn + 1;
-                                defer = true;
-                            }
+                            inner_posn = dn + 1;
+                            defer = true;
                         }
 
                         // Misc dims? Placed after the inner domain dim
                         // if "inner misc" setting is used.
                         else if (dtype == MISC_INDEX) {
-                            if (folded && _settings._inner_misc) {
+                            if (_settings._inner_misc) {
                                 misc_posns.push_back(dn + 1);
                                 defer = true;
                             }

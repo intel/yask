@@ -423,6 +423,7 @@ namespace yask {
                 strides[d] = sd;
                 assert(sd >= 0);
 
+                // Check that the distance holds for other indices.
                 #ifdef CHECK
                 for (idx_t j : { 13, -17 }) {
                     idxs[d] = j;
@@ -432,9 +433,7 @@ namespace yask {
                 #endif
             }
             return strides;
-        }
-
-        
+        }        
     };
 
 } // namespace yask.
