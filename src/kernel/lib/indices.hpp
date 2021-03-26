@@ -646,9 +646,10 @@ namespace yask {
 
         // Notes:
         // First 'start' index is always at 'begin'.
-        // Subsequent indices are at 'begin' + 'stride', 'begin' + 2*'stride', etc. if 'align'==1.
-        // If 'align'>1, 2nd and subsequent 'start' indices will be aligned such that
-        // (('start' - 'align_ofs') % 'align') == 0.
+        // If 'align'==1, subsequent 'start' indices are at 'begin' + 'cur_indices'*'stride'.
+        // If 'align'>1, subsequent 'start' indices will be aligned such that
+        //   ('start' <= 'begin' + 'cur_indices'*'stride') &&
+        //   (('start' - 'align_ofs') % 'align') == 0.
         // Last 'start' index is always < 'end'.
         // Last 'stop' index is always at 'end'.
 

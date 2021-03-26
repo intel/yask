@@ -63,6 +63,7 @@ namespace yask {
         string _var_regex;       // vars to update.
         bool _find_deps = true;
         bool _print_eqs = false;
+        bool _use_ptrs = true;  // enable access via pointers & strides.
     };
 
     // Stencil dimensions.

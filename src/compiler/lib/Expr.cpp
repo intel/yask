@@ -844,6 +844,32 @@ namespace yask {
         _update_str();
     }
 
+    // Set given arg to given expr.
+    void VarPoint::set_arg_expr(const string& expr_dim, const string& expr) {
+
+        // Find dim in var.
+        auto gdims = _var->get_dims();
+        for (size_t i = 0; i < gdims.size(); i++) {
+            auto gdim = gdims[i];
+            auto dname = gdim->_get_name();
+            if (expr_dim == dname) {
+
+                // Make expr node.
+                auto ep = make_shared<CodeExpr>(expr);
+
+                // Replace in args.
+                _args[i] = ep;
+
+                // Remove const and/or offset if either exists.
+                _consts = _consts.remove_dim(dname);
+                _offsets = _offsets.remove_dim(dname);
+
+                break;
+            }
+        }
+        _update_str();
+    }
+
     // Is this expr a simple offset?
     bool IndexExpr::is_offset_from(string dim, int& offset) {
 

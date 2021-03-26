@@ -90,10 +90,12 @@ namespace yask {
             idx_t ai = _layout.layout(idxs);
 
             #ifdef CHECK
-            if (check)
+            if (check) {
 
                 // Make sure final 1D index is in bounds.
+                host_assert(ai >= 0);
                 host_assert(ai < _layout.get_num_elements());
+            }
             #endif
             return ai;
         }

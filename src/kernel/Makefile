@@ -36,16 +36,21 @@ pmem			?=	0
 real_bytes		?=	4
 allow_new_var_types	?=	1
 streaming_stores	?=	0
+use_ptrs		?=	1
 omp			?=	1
+offload			?=	0
+offload_usm		?=	0
+offload_arch		?=	spir64
 omp_par_for		?=	omp parallel for
+ifeq ($(offload_arch),x86_64)
+  omp_target_par_for	?=	omp target parallel for device(KernelEnv::_omp_devn)
+else
+  omp_target_par_for	?=	omp target teams distribute parallel for device(KernelEnv::_omp_devn)
+endif
 omp_region_schedule	?=	dynamic,1
 omp_block_schedule	?=	static,1
 omp_misc_schedule	?=	guided
-#omp_target_par_for	?=	omp target parallel for device(KernelEnv::_omp_devn)
-omp_target_par_for	?=	omp target teams distribute parallel for device(KernelEnv::_omp_devn)
 omp_target_schedule	?=	static,1
-offload			?=	0
-offload_usm		?=	0
 trace			?=	0
 trace_mem		?=	0
 check			?=	0
@@ -59,15 +64,6 @@ check			?=	0
 # FIXME: offload_usm is not currently enabled.
 ifeq ($(offload_usm),1)
  offload		:=	1
-endif
-
-# Set 'arch' to 'intel64' when OpenMP offloading to avoid intrinsics.
-# TODO: update this when OpenMP offload intrinsics are available.
-ifeq ($(offload),1)
- YK_ARCH		:=	offload
- arch			:=	intel64
- pfd_l1			:=	0
- pfd_l2			:=	0
 endif
 
 # If 'arch' isn't set, determine default architecture by running kernel
@@ -94,15 +90,19 @@ else
   $(error Target not recognized; use arch=avx512, avx512-ymm, avx2, avx, knl, or intel64)
 endif
 
-# Specify YK_STENCIL and/or YK_ARCH on 'make' cmd-line to name binaries differently.
+# Set the following vars on 'make' cmd-line for corresponding effects:
+# - YK_STENCIL and/or YK_ARCH to name binaries differently.
+# - YC_STENCIL to override stencil name passed to YASK compiler.
+# - YC_TARGET to override target passed to YASK compiler.
 YK_STENCIL	?=	$(stencil)
-YK_ARCH		?=	$(arch)
-
-# Specify YC_STENCIL on 'make' cmd-line to pass different stencil name to YASK compiler.
 YC_STENCIL	?=	$(stencil)
-
-# Specify YC_TARGET on 'make' cmd-line to override target for YASK compiler.
-YC_TARGET	?=	$(TARGET)
+ifeq ($(offload),1)
+  YK_ARCH	:=	$(arch).offload-$(offload_arch)
+  YC_TARGET	?=	intel64
+else
+  YK_ARCH	:=	$(arch)
+  YC_TARGET	?=	$(TARGET)
+endif
 
 # Default compiler settings based on target.
 ifeq ($(TARGET),knl)
@@ -113,31 +113,31 @@ ifeq ($(TARGET),knl)
  # either flat or cache memory modes, but these configurations are uncommon.
  ICC_ISA	?=	-xMIC-AVX512
  CXX_ISA	?=	-march=knl
- MACROS		+=	USE_INTRIN512 USE_RCP28 NUMA_PREF=1
+ VEC_MACROS	?=	USE_INTRIN512 USE_RCP28 NUMA_PREF=1
 
 else ifeq ($(TARGET),avx512)
 
  ICC_ISA	?=	-xCORE-AVX512
  CXX_ISA	?=	-march=skylake-avx512
- MACROS		+=	USE_INTRIN512
+ VEC_MACROS	?=	USE_INTRIN512
 
 else ifeq ($(TARGET),avx512-ymm)
 
  ICC_ISA	?=	-xCORE-AVX512
  CXX_ISA	?=	-march=skylake-avx512
- MACROS		+=	USE_INTRIN512LO
+ VEC_MACROS	?=	USE_INTRIN512LO
 
 else ifeq ($(TARGET),avx2)
 
  ICC_ISA	?=	-xCORE-AVX2
  CXX_ISA	?=	-march=haswell
- MACROS		+=	USE_INTRIN256 USE_AVX2
+ VEC_MACROS	?=	USE_INTRIN256 USE_AVX2
 
 else ifeq ($(TARGET),avx)
 
  ICC_ISA	?=	-xAVX
  CXX_ISA	?=	-march=sandybridge
- MACROS		+=	USE_INTRIN256
+ VEC_MACROS	?=	USE_INTRIN256
 
 else ifeq ($(TARGET),intel64)
 
@@ -158,14 +158,23 @@ include $(YASK_BASE)/src/common/common.mk
 # Vars starting with 'YC_' apply to the stencil compiler.
 # Vars starting with 'YK_' apply to the stencil kernel.
 
-# Turn off prefetching at O0.
+# Turn off prefetching at O0 or for offload.
 ifneq ($(filter -O0,$(YK_CXXOPT)),)
+ pfd_l1		:=	0
+ pfd_l2		:=	0
+endif
+ifeq ($(offload),1)
  pfd_l1		:=	0
  pfd_l2		:=	0
 endif
 
 # Flags passed to stencil compiler.
 YC_FLAGS	:=	-stencil $(YC_STENCIL) -target $(YC_TARGET) -elem-bytes $(real_bytes)
+ifeq ($(use_ptrs),1)
+ YC_FLAGS	+=	-use-ptrs
+else
+ YC_FLAGS	+=	-no-use-ptrs
+endif
 ifneq ($(fold),)
  YC_FLAGS	+=	-fold $(fold)
 endif
@@ -215,7 +224,7 @@ YK_ARCH_DIR	:=	$(YK_OUT_DIR)/$(YK_ARCH)
 YK_OBJ_DIR	:=	$(YK_ARCH_DIR)/obj
 
 # Dirs for stencil-specific output files.
-YK_TAG		:=	$(YK_STENCIL).$(YK_ARCH)
+YK_TAG  	:=	$(YK_STENCIL).$(YK_ARCH)
 YK_EXT_BASE	:=	$(YK_BASE).$(YK_TAG)
 YK_EXT_OUT_DIR	:=	$(YK_OUT_DIR)/$(YK_EXT_BASE)
 YK_SWIG_OUT_DIR	:=	$(YK_EXT_OUT_DIR)/swig
@@ -378,7 +387,8 @@ ifeq ($(cxx_is_intel_clang),1)
 			-fimf-precision=low -ffp-model=fast -fimf-domain-exclusion=none -fma
  YK_CXXFLAGS	+=	-Wno-unknown-pragmas -Wno-unused-variable \
 			-Wno-unused-const-variable -fno-color-diagnostics
- MACROS		+=	NO_VEC2 NO_SVML
+ MACROS		+=	NO_VEC2
+ VEC_MACROS	+=	NO_SVML
  OMPFLAG	:=	-fiopenmp
 
 # Clang compiler (not Intel version).
@@ -386,7 +396,7 @@ else ifeq ($(cxx_is_clang),1)
  YK_CXXFLAGS	+=	$(CXX_ISA)
  YK_CXXFLAGS	+=	-Wno-unknown-pragmas -Wno-unused-variable \
 			-Wno-unused-const-variable -fno-color-diagnostics
- MACROS		+=	NO_SVML
+ VEC_MACROS	+=	NO_SVML
 
 # Classic Intel compiler (not clang-based).
 else ifeq ($(cxx_is_intel),1)
@@ -409,12 +419,13 @@ else ifeq ($(cxx_is_gnu),1)
  YK_CXXFLAGS	+=	$(CXX_ISA)
  YK_CXXFLAGS	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
  SWIG_CXXFLAGS	+=	$(SWIG_GCCFLAGS)
- MACROS		+=	NO_SVML
+ VEC_MACROS	+=	NO_SVML
 
 # Unknown compiler.
 # NB: the ISA will not be specified.
 else
- MACROS		+=	NO_VEC NO_SVML NO_UNROLL
+ MACROS		+=	NO_VEC NO_UNROLL
+ VEC_MACROS	+=	NO_SVML
 
 endif # compiler.
 
@@ -426,10 +437,13 @@ else
 endif
 ifeq ($(offload),1)
  MACROS		+=	USE_OFFLOAD
- OMP_TARGET	:=	spir64
- #OMP_TARGET	:=	x86_64
- OMPFLAGS	:=	$(OMPFLAG) -fopenmp-targets=$(OMP_TARGET)
+ ifeq ($(offload_arch),x86_64)
+  MACROS	+=	USE_OFFLOAD_X86
+ endif
+ OMPFLAGS	+=	-fopenmp-targets=$(offload_arch)
  CXX_PREFIX	:=
+else
+ MACROS		+=	$(VEC_MACROS)
 endif
 ifeq ($(offload_usm),1)
  MACROS		+=	USE_OFFLOAD_USM

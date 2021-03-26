@@ -37,7 +37,7 @@ IN THE SOFTWARE.
 // Temporarily replace assert() with printf() when offloading, but
 // this doesn't cause program to halt.
 // Also define host_assert() to be a stub.
-#ifdef USE_OFFLOAD
+#if defined(USE_OFFLOAD) && !defined(USE_OFFLOAD_X86)
 #define assert(expr)                                                    \
     ((expr) ?                                                           \
      ((void)0) :                                                        \

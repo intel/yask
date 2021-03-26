@@ -660,6 +660,8 @@ namespace yask {
                 arg->accept(&fvv);
 
                 // Does this arg refer to any domain dim?
+                // If so, it must be a simple offset because that was
+                // checked earlier.
                 for (auto d : _dims._domain_dims) {
                     auto& dname = d._get_name();
 

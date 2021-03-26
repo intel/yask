@@ -385,7 +385,7 @@ namespace yask {
         }
 
         // Scalar calc loop.
-        // Static to isolate offload code.
+        // Static to make sure offload doesn't need 'this'.
         static void
         calc_sub_block_dbg2(StencilCoreDataT* cp,
                             int region_thread_idx,

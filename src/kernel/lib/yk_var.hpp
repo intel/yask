@@ -406,7 +406,9 @@ namespace yask {
         real_vec_t read_vec_norm(const Indices& vec_idxs,
                                  idx_t alloc_step_idx) const {
             const real_vec_t* vp = get_vec_ptr_norm(vec_idxs, alloc_step_idx);
-            return *vp;
+            real_vec_t res;
+            res.load_from(vp);
+            return res;
         }
 
         // Write one vector.
@@ -417,7 +419,15 @@ namespace yask {
                             const Indices& vec_idxs,
                             idx_t alloc_step_idx) {
             real_vec_t* vp = get_vec_ptr_norm(vec_idxs, alloc_step_idx);
-            *vp = val;
+            val.store_to(vp);
+        }
+        ALWAYS_INLINE
+        void write_vec_norm_masked(real_vec_t val,
+                                   const Indices& vec_idxs,
+                                   idx_t alloc_step_idx,
+                                   uidx_t mask) {
+            real_vec_t* vp = get_vec_ptr_norm(vec_idxs, alloc_step_idx);
+            val.store_to_masked(vp, mask);
         }
 
         // Prefetch one vector.

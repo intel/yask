@@ -334,7 +334,7 @@ namespace yask {
         virtual double get_value() const { return _f; }
     };
 
-    // Any expression that returns a real (not from a var).
+    // Any expression that returns a real (not from a YASK var).
     // This is an expression leaf-node.
     class CodeExpr : public NumExpr {
     protected:
@@ -790,7 +790,7 @@ namespace yask {
         // Analysis of this point for accesses via loops through the inner dim.
         // Set via Eqs::analyze_loop().
         enum LoopType { LOOP_UNSET,
-                        LOOP_INVARIANT, // not dependent on inner dim.
+                        LOOP_INVARIANT, // not dependent on a domain dim.
                         LOOP_DEPENDENT  // dep on one or more domain dims.
         };
 
@@ -873,6 +873,9 @@ namespace yask {
         // Set given arg to given const.
         virtual void set_arg_const(const IntScalar& val);
 
+        // Set given arg to given expr.
+        virtual void set_arg_expr(const string& expr_dim, const string& expr);
+        
         // Some comparisons.
         bool operator==(const VarPoint& rhs) const {
             return _def_str == rhs._def_str;

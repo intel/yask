@@ -188,6 +188,8 @@ void usage(const string& cmd,
         "    Set heuristic for max single expression-size (default=" << settings._max_expr_size << ").\n"
         " -min-es <num-nodes>\n"
         "    Set heuristic for min expression-size for reuse (default=" << settings._min_expr_size << ").\n"
+        " [-no]-use-ptrs\n"
+        "    Enable var access via pointers & strides (default=" << settings._use_ptrs << ").\n"
         " [-no]-find-deps\n"
         "    Find dependencies between stencil equations (default=" << settings._find_deps << ").\n"
         " [-no]-print-eqs\n"
@@ -269,6 +271,10 @@ void parse_opts(int argc, const char* argv[],
                 settings._inner_step = true;
             else if (opt == "-no-reloc-step")
                 settings._inner_step = false;
+            else if (opt == "-use-ptrs")
+                settings._use_ptrs = true;
+            else if (opt == "-no-use-ptrs")
+                settings._use_ptrs = false;
             
             // add any more options w/o values above.
 

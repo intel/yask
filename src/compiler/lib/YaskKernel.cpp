@@ -569,6 +569,7 @@ namespace yask {
                 string funcstr = "calc_" + vcstr + "s";
                 string nvecs = do_cluster ? "CMULT_" + all_caps(idim) : "1";
                 string nelems = (do_cluster ? nvecs + " * ": "") + "VLEN_" + all_caps(idim);
+                string write_mask = do_cluster ? "" : "write_mask";
 
                 // Loop-calculation code.
                 // Function header.
@@ -595,7 +596,7 @@ namespace yask {
                     _core_t << "* core_data, int core_idx, int block_thread_idx,"
                     " const ScanIndices& norm_idxs";
                 if (!do_cluster)
-                    os << ", bit_mask_t write_mask";
+                    os << ", bit_mask_t " << write_mask;
                 os << ") {\n"
                     " host_assert(core_data);\n"
                     " host_assert(core_data->_thread_core_list.get());\n"
@@ -605,7 +606,7 @@ namespace yask {
  
                 // C++ vector print assistant.
                 CppVecPrintHelper* vp = new_cpp_vec_print_helper(vv, cv);
-                vp->set_use_masked_writes(!do_cluster);
+                vp->set_write_mask(write_mask);
 
                 // Print time-invariants.
                 os << "\n // Invariants within a step.\n";

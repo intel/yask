@@ -122,15 +122,16 @@ namespace yask {
         map<string, int> _ptr_ofs_lo; // lowest read offset from _vec_ptrs in inner dim.
         map<string, int> _ptr_ofs_hi; // highest read offset from _vec_ptrs in inner dim.
 
-        // Vars for tracking strides in vars.
-        typedef pair<string, string> StrideKey; // var and dim names.
-        map<StrideKey, string> _strides; // var containing stride for given dim in var.
+        // Vars for tracking strides and local offsets in vars.
+        typedef pair<string, string> VarDimKey; // var and dim names.
+        map<VarDimKey, string> _strides; // var containing stride for given dim in var.
+        map<VarDimKey, string> _local_offsets; // var containing offset for given dim in var.
 
         // Element indices.
         string _elem_suffix = "_elem";
         VarMap _vec2elem_map; // maps vector indices to elem indices; filled by print_elem_indices.
 
-        bool _use_masked_writes = true;
+        string _write_mask = "";
 
         // A simple constant.
         virtual string add_const_expr(ostream& os, double v) override {
@@ -204,11 +205,11 @@ namespace yask {
     public:
 
         // Whether to use masks during write.
-        virtual void set_use_masked_writes(bool do_use) {
-            _use_masked_writes = do_use;
+        virtual void set_write_mask(string mask_var) {
+            _write_mask = mask_var;
         }
-        virtual bool get_use_masked_writes() const {
-            return _use_masked_writes;
+        virtual string get_write_mask() const {
+            return _write_mask;
         }
 
         // Print any needed memory reads and/or constructions to 'os'.
@@ -221,7 +222,7 @@ namespace yask {
         virtual string write_to_point(ostream& os, const VarPoint& gp, const string& val) override;
 
         // Make base point (misc & inner-dim indices = 0).
-        virtual var_point_ptr make_base_point(const VarPoint& gp);
+        virtual var_point_ptr make_base_point(ostream& os, const VarPoint& gp);
 
         // Print code to set pointers of aligned reads.
         virtual void print_base_ptrs(ostream& os);
@@ -258,9 +259,15 @@ namespace yask {
             }
         }
         virtual string* lookup_stride(const Var& var, const string& dim) {
-            auto key = StrideKey(var.get_name(), dim);
+            auto key = VarDimKey(var.get_name(), dim);
             if (_strides.count(key))
                 return &_strides.at(key);
+            return 0;
+        }
+        virtual string* lookup_local_offset(const Var& var, const string& dim) {
+            auto key = VarDimKey(var.get_name(), dim);
+            if (_local_offsets.count(key))
+                return &_local_offsets.at(key);
             return 0;
         }
     };
