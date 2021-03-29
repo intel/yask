@@ -28,6 +28,7 @@ IN THE SOFTWARE.
 #pragma once
 
 #include "Expr.hpp"
+#include "VarPoint.hpp"
 
 using namespace std;
 
@@ -54,8 +55,12 @@ namespace yask {
         // Ptr to solution that this var belongs to (its parent).
         StencilSolution* _soln = 0;
 
-        // How many dims are foldable.
-        int _num_foldable_dims = -1; // -1 => unknown.
+        // How many dims of various types.
+        // -1 => unknown.
+        int _num_step_dims = -1;
+        int _num_domain_dims = -1;
+        int _num_misc_dims = -1;
+        int _num_foldable_dims = -1;
 
         // Whether this var can be vector-folded.
         bool _is_foldable = false;
@@ -74,6 +79,15 @@ namespace yask {
 
         // Greatest L1 dist of any halo point that accesses this var.
         int _l1_dist = 0;
+
+        virtual void _check_ok() const {
+            assert(_num_step_dims >= 0);
+            assert(_num_step_dims <= 1);
+            assert(_num_domain_dims >= 0);
+            assert(_num_misc_dims >= 0);
+            assert(_num_foldable_dims >= 0);
+            assert(_num_foldable_dims <= _num_domain_dims);
+        }
 
     public:
         // Ctors.
@@ -103,9 +117,13 @@ namespace yask {
 
         // Step dim or null if none.
         virtual const index_expr_ptr get_step_dim() const {
-            for (auto d : _dims)
-                if (d->get_type() == STEP_INDEX)
-                    return d;
+            _check_ok();
+            if (_num_step_dims > 0) {
+                for (auto d : _dims)
+                    if (d->get_type() == STEP_INDEX)
+                        return d;
+                assert("internal error: step dim not found");
+            }
             return nullptr;
         }
 
@@ -116,13 +134,27 @@ namespace yask {
         virtual StencilSolution* _get_soln() { return _soln; }
         virtual void set_soln(StencilSolution* soln) { _soln = soln; }
 
+        // Get dim-type counts.
+        virtual int get_num_step_dims() const {
+            _check_ok();
+            return _num_step_dims;
+        }
+        virtual int get_num_domain_dims() const {
+            _check_ok();
+            return _num_domain_dims;
+        }
+        virtual int get_num_misc_dims() const {
+            _check_ok();
+            return _num_misc_dims;
+        }
+        
         // Get foldablity.
         virtual int get_num_foldable_dims() const {
-            assert(_num_foldable_dims >= 0);
+            _check_ok();
             return _num_foldable_dims;
         }
         virtual bool is_foldable() const {
-            assert(_num_foldable_dims >= 0);
+            _check_ok();
             return _is_foldable;
         }
 
@@ -183,8 +215,8 @@ namespace yask {
         // Determine how many values in step-dim are needed.
         virtual int get_step_dim_size() const;
 
-        // Determine whether var can be folded.
-        virtual void set_folding(const Dimensions& dims);
+        // Determine dim-type counts and whether var can be folded.
+        virtual void set_dim_counts(const Dimensions& dims);
 
         // Determine whether halo sizes are equal.
         virtual bool is_halo_same(const Var& other) const;
@@ -287,10 +319,10 @@ namespace yask {
             _vars.insert(p);
         }
 
-        // Determine whether each var can be folded.
-        virtual void set_folding(const Dimensions& dims) {
+        // Determine dim-type counts and whether each var can be folded.
+        virtual void set_dim_counts(const Dimensions& dims) {
             for (auto gp : _vars)
-                gp->set_folding(dims);
+                gp->set_dim_counts(dims);
         }
     };
 

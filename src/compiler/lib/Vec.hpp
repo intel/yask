@@ -230,7 +230,7 @@ namespace yask {
         // Read from a single point.
         // Return code for read.
         virtual string read_from_scalar_point(ostream& os, const VarPoint& gp,
-                                              const VarMap& v_map) =0;
+                                              const VarMap* v_map) =0;
 
         // Read from multiple points that are not vectorizable.
         // Return var name.

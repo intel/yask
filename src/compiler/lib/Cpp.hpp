@@ -118,7 +118,7 @@ namespace yask {
     protected:
 
         // Vars for tracking pointers to var values.
-        map<VarPoint, string> _vec_ptrs; // pointers to var vecs. value: ptr-var name.
+        map<VarPoint, string> _vec_ptrs; // pointers to var vecs; value: ptr-var name.
         map<string, int> _ptr_ofs_lo; // lowest read offset from _vec_ptrs in inner dim.
         map<string, int> _ptr_ofs_hi; // highest read offset from _vec_ptrs in inner dim.
 
@@ -132,6 +132,7 @@ namespace yask {
         string _elem_suffix_local = "_local_elem";
         VarMap _vec2elem_local_map, _vec2elem_global_map;
 
+        // Set to var name of write mask if/when used.
         string _write_mask = "";
 
         // A simple constant.
@@ -160,7 +161,8 @@ namespace yask {
                                        const string& func_name,
                                        const string& first_arg,
                                        const string& last_arg,
-                                       bool is_norm);
+                                       bool is_vector_normalized,
+                                       const VarMap* var_map = 0);
 
         // Print aligned memory read.
         virtual string print_aligned_vec_read(ostream& os, const VarPoint& gp) override;
@@ -186,7 +188,7 @@ namespace yask {
         // Read from a single point to be broadcast to a vector.
         // Return code for read.
         virtual string read_from_scalar_point(ostream& os, const VarPoint& gp,
-                                              const VarMap& v_map) override;
+                                              const VarMap* var_map) override;
 
         // Read from multiple points that are not vectorizable.
         // Return var name.

@@ -28,6 +28,7 @@ IN THE SOFTWARE.
 #pragma once
 
 #include "Expr.hpp"
+#include "VarPoint.hpp"
 #include "Settings.hpp"
 
 using namespace std;

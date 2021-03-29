@@ -34,6 +34,8 @@ IN THE SOFTWARE.
 
 namespace yask {
 
+    /////// Some locally-defined specialized visitors.
+    
     // A visitor to collect vars and points visited in a set of eqs.
     // For each eq, there are accessors for its output var and point
     // and its input vars and points.
@@ -157,6 +159,170 @@ namespace yask {
         }
     };
 
+    // Visitor for determining vectorization potential of var points.
+    // Vectorization depends not only on the dims of the var itself
+    // but also on how the var is indexed at each point.
+    class SetVecVisitor : public ExprVisitor {
+        const Dimensions& _dims;
+
+    public:
+        SetVecVisitor(const Dimensions& dims) :
+            _dims(dims) { 
+            _visit_equals_lhs = true;
+            _visit_var_point_args = true;
+            _visit_conds = true;
+        }
+
+        // Check each var point in expr.
+        virtual string visit(VarPoint* gp) {
+            auto* var = gp->_get_var();
+
+            // Folded dims in the solution.
+            int soln_nfd = _dims._fold_gt1.size();
+            
+            // Folded dims in this var.
+            int var_nfd = var->get_num_foldable_dims();
+            assert(var_nfd <= soln_nfd);
+
+            // Degenerate case with no folding in soln: we still mark points
+            // using vars with some domain dims as vectorizable.
+            if (soln_nfd == 0 && var->is_foldable())
+                gp->set_vec_type(VarPoint::VEC_FULL);
+
+            // No foldable dims.
+            else if (var_nfd == 0)
+                gp->set_vec_type(VarPoint::VEC_NONE);
+
+            else {
+                assert(var_nfd > 0);
+
+                // Amount of vectorization allowed primarily depends on number
+                // of folded dimensions in the var accessed at this point.
+                // Vectorization is only possible if each access to a vectorized
+                // dim is a simple offset.  For example, in var dim 'x', the
+                // index in the corresponding posn must be 'x', 'x+n', or 'x-n'.
+                // TODO: is this redundant with expr analysis?
+                int fdoffsets = 0;
+                for (auto fdim : _dims._fold_gt1) {
+                    auto& fdname = fdim._get_name();
+                    if (gp->get_arg_offsets().lookup(fdname))
+                        fdoffsets++;
+                }
+                assert(fdoffsets <= var_nfd);
+
+                // All folded dims are vectorizable?
+                if (fdoffsets == soln_nfd) {
+                    assert(var->is_foldable());
+                    gp->set_vec_type(VarPoint::VEC_FULL); // all good.
+                }
+
+                // Some dims are vectorizable?
+                else if (fdoffsets > 0)
+                    gp->set_vec_type(VarPoint::VEC_PARTIAL);
+
+                // No dims are vectorizable.
+                else
+                    gp->set_vec_type(VarPoint::VEC_NONE);
+
+            }
+
+            // Also check args of this var point.
+            return ExprVisitor::visit(gp);
+        }
+    };
+
+    // Visitor to find set of all referenced index vars.
+    class FindIndicesVisitor : public ExprVisitor {
+
+    public:
+        set<string> vars_used;
+
+        FindIndicesVisitor() {
+            _visit_equals_lhs = true;
+            _visit_var_point_args = true;
+            _visit_conds = true;
+        }
+        
+        // Check each index expr;
+        virtual string visit(IndexExpr* ie) {
+            vars_used.insert(ie->_get_name());
+            return "";
+        }
+    };
+
+    // Visitor for determining inner-loop accesses of var points.
+    class SetLoopVisitor : public ExprVisitor {
+        const Dimensions& _dims;
+
+    public:
+        SetLoopVisitor(const Dimensions& dims) :
+            _dims(dims) { 
+            _visit_equals_lhs = true;
+            _visit_var_point_args = true;
+            _visit_conds = true;
+        }
+
+        // Check each var point in expr.
+        virtual string visit(VarPoint* gp) {
+
+            // Info from var.
+            auto* var = gp->_get_var();
+            auto gdims = var->get_dim_names();
+
+            // Access type.
+            // Assume invariant, then check below.
+            VarPoint::VarDepType lt = VarPoint::DOMAIN_VAR_INVARIANT;
+
+            // Check every point arg.
+            auto& args = gp->get_args();
+            for (size_t ai = 0; ai < args.size(); ai++) {
+                auto& arg = args.at(ai);
+                assert(ai < gdims.size());
+
+                // Get set of indices used by this arg expr.
+                FindIndicesVisitor fvv;
+                arg->accept(&fvv);
+
+                // Does this arg refer to any domain dim?
+                for (auto d : _dims._domain_dims) {
+                    auto& dname = d._get_name();
+
+                    if (fvv.vars_used.count(dname)) {
+                        lt = VarPoint::DOMAIN_VAR_DEPENDENT;
+                        break;  // no need to continue.
+                    }
+                }
+            }
+            gp->set_var_dep(lt);
+            return "";
+        }
+    };
+
+    // Visitor that will shift each var point by an offset.
+    class OffsetVisitor: public ExprVisitor {
+        IntTuple _ofs;
+
+    public:
+        OffsetVisitor(const IntTuple& ofs) :
+            _ofs(ofs) {
+            _visit_equals_lhs = true;
+            _visit_var_point_args = true;
+            _visit_conds = true;
+        }
+
+        // Visit a var point.
+        virtual string visit(VarPoint* gp) {
+
+            // Shift var _ofs points.
+            auto ofs0 = gp->get_arg_offsets();
+            IntTuple new_loc = ofs0.add_elements(_ofs, false);
+            gp->set_arg_offsets(new_loc);
+            return "";
+        }
+    };
+
+    ////////// Methods.
+   
     // Analyze group of equations.
     // Sets _step_dir in dims.
     // Finds dependencies based on all eqs if 'settings._find_deps', setting
@@ -211,7 +377,7 @@ namespace yask {
             // LHS must have all domain dims.
             for (auto& dd : dims._domain_dims) {
                 auto& dname = dd._get_name();
-                num_expr_ptr dexpr = op1->get_arg(dname);
+                auto dexpr = op1->get_arg(dname);
                 if (!dexpr)
                     THROW_YASK_EXCEPTION("Error: var equation " + eq1->make_quoted_str() +
                                          " does not use domain-dimension '" + dname +
@@ -239,7 +405,8 @@ namespace yask {
                 if (dn == step_dim) {
                 }
 
-                // LHS must have simple indices in domain dims.
+                // LHS must have simple indices in domain dims, e.g.,
+                // 'x', 'y'.
                 else if (dims._domain_dims.lookup(dn)) {
 
                     // Make expected arg, e.g., 'x'.
@@ -546,66 +713,6 @@ namespace yask {
         topo_sort();
     }
 
-    // Visitor for determining vectorization potential of var points.
-    // Vectorization depends not only on the dims of the var itself
-    // but also on how the var is indexed at each point.
-    class SetVecVisitor : public ExprVisitor {
-        const Dimensions& _dims;
-
-    public:
-        SetVecVisitor(const Dimensions& dims) :
-            _dims(dims) { 
-            _visit_equals_lhs = true;
-            _visit_var_point_args = true;
-            _visit_conds = true;
-        }
-
-        // Check each var point in expr.
-        virtual string visit(VarPoint* gp) {
-            auto* var = gp->_get_var();
-
-            // Never vectorize scalars.
-            if (var->get_num_dims() == 0) {
-                gp->set_vec_type(VarPoint::VEC_NONE);
-                return "";      // Also, no args to visit.
-            }
-
-            // Amount of vectorization allowed primarily depends on number
-            // of folded dimensions in the var accessed at this point.
-            int var_nfd = var->get_num_foldable_dims();
-            int soln_nfd = _dims._fold_gt1.size();
-            assert(var_nfd <= soln_nfd);
-
-            // Vectorization is only possible if each access to a vectorized
-            // dim is a simple offset.  For example, in var dim 'x', the
-            // index in the corresponding posn must be 'x', 'x+n', or 'x-n'.
-            int fdoffsets = 0;
-            for (auto fdim : _dims._fold_gt1) {
-                auto& fdname = fdim._get_name();
-                if (gp->get_arg_offsets().lookup(fdname))
-                    fdoffsets++;
-            }
-            assert(fdoffsets <= var_nfd);
-
-            // All folded dims are vectorizable?
-            // NB: this will always be the case when there is
-            // no folding in the soln.
-            if (fdoffsets == soln_nfd)
-                gp->set_vec_type(VarPoint::VEC_FULL); // all good.
-
-            // Some dims are vectorizable?
-            else if (fdoffsets > 0)
-                gp->set_vec_type(VarPoint::VEC_PARTIAL);
-
-            // Uses no folded dims, so scalar only.
-            else
-                gp->set_vec_type(VarPoint::VEC_NONE);
-
-            // Also check args of this var point.
-            return ExprVisitor::visit(gp);
-        }
-    };
-
     // Determine which var points can be vectorized.
     void Eqs::analyze_vec(const Dimensions& dims) {
 
@@ -614,69 +721,6 @@ namespace yask {
         SetVecVisitor svv(dims);
         visit_eqs(&svv);
     }
-
-    // Visitor to find referenced vars.
-    class FindVarsVisitor : public ExprVisitor {
-
-    public:
-        set<string> vars_used;
-
-        // Check each index expr;
-        virtual string visit(IndexExpr* ie) {
-            vars_used.insert(ie->_get_name());
-            return "";
-        }
-    };
-
-    // Visitor for determining inner-loop accesses of var points.
-    class SetLoopVisitor : public ExprVisitor {
-        const Dimensions& _dims;
-
-    public:
-        SetLoopVisitor(const Dimensions& dims) :
-            _dims(dims) { 
-            _visit_equals_lhs = true;
-            _visit_var_point_args = true;
-            _visit_conds = true;
-        }
-
-        // Check each var point in expr.
-        virtual string visit(VarPoint* gp) {
-
-            // Info from var.
-            auto* var = gp->_get_var();
-            auto gdims = var->get_dim_names();
-
-            // Access type.
-            // Assume invariant, then check below.
-            VarPoint::VarDepType lt = VarPoint::DOMAIN_VAR_INVARIANT;
-
-            // Check every point arg.
-            auto& args = gp->get_args();
-            for (size_t ai = 0; ai < args.size(); ai++) {
-                auto& arg = args.at(ai);
-                assert(ai < gdims.size());
-
-                // Get set of vars used by this arg.
-                FindVarsVisitor fvv;
-                arg->accept(&fvv);
-
-                // Does this arg refer to any domain dim?
-                // If so, it must be a simple offset because that was
-                // checked earlier.
-                for (auto d : _dims._domain_dims) {
-                    auto& dname = d._get_name();
-
-                    if (fvv.vars_used.count(dname)) {
-                        lt = VarPoint::DOMAIN_VAR_DEPENDENT;
-                        break;  // no need to continue.
-                    }
-                }
-            }
-            gp->set_var_dep(lt);
-            return "";
-        }
-    };
 
     // Determine loop access behavior of var points.
     void Eqs::analyze_loop(const Dimensions& dims) {
@@ -865,27 +909,6 @@ namespace yask {
         }
         cv.print_stats(os, msg);
     }
-
-    // Visitor that will shift each var point by an offset.
-    class OffsetVisitor: public ExprVisitor {
-        IntTuple _ofs;
-
-    public:
-        OffsetVisitor(const IntTuple& ofs) :
-            _ofs(ofs) {
-            _visit_equals_lhs = true;
-        }
-
-        // Visit a var point.
-        virtual string visit(VarPoint* gp) {
-
-            // Shift var _ofs points.
-            auto ofs0 = gp->get_arg_offsets();
-            IntTuple new_loc = ofs0.add_elements(_ofs, false);
-            gp->set_arg_offsets(new_loc);
-            return "";
-        }
-    };
 
     // Replicate each equation at the non-zero offsets for
     // each vector in a cluster.

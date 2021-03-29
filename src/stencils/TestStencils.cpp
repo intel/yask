@@ -759,10 +759,10 @@ namespace {
         // Define equation to apply to all points in 'A' var.
         virtual void define() {
 
-            // Time condition.
+            // Step condition based on step value.
             auto tc0 = (t % 2 == 0);
 
-            // Var condition.
+            // Step condition based on misc-var contents.
             auto vc0 = (B(0) > B(1));
         
             // Set A w/different stencils depending on the conditions.  It is

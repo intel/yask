@@ -130,39 +130,46 @@ namespace yask {
     }
 
     // Determine whether var can be folded.
-    void Var::set_folding(const Dimensions& dims) {
+    void Var::set_dim_counts(const Dimensions& dims) {
 
+        // Find num of dim types in this var.
+        _num_step_dims = 0;
+        _num_domain_dims = 0;
+        _num_misc_dims = 0;
         _num_foldable_dims = 0;
+        for (auto gdim : _dims) {
+            auto& dname = gdim->_get_name();
+            auto dtype = gdim->get_type();
 
-        // Never fold scalars, even if there is no vectorization.
-        if (get_num_dims() == 0) {
-            _is_foldable = false;
-            return;
-        }
+            if (dtype == STEP_INDEX)
+                _num_step_dims++;
 
-        // Find the number of folded dims used in this var.
-        for (auto fdim : dims._fold_gt1) {
-            auto& fdname = fdim._get_name();
-
-            // Search for dim in var.
-            bool found = false;
-            for (auto gdim : _dims) {
-                auto& gdname = gdim->_get_name();
-                if (fdname == gdname) {
-                    found = true;
-                    break;
-                }
+            else if (dtype == DOMAIN_INDEX) {
+                _num_domain_dims++;
+                if (dims._fold_gt1.lookup(dname))
+                    _num_foldable_dims++;
             }
-            if (found)
-                _num_foldable_dims++;
+
+            else if (dtype == MISC_INDEX) {
+                _num_misc_dims++;
+            }
+
+            else
+                assert("internal error: unknown dim type");
         }
 
-        // Can fold if ALL fold dims >1 are used in this var.
+        // Never fold vars without domain dims, even if there is no vectorization.
+        if (_num_domain_dims == 0)
+            _is_foldable = false;
 
-        // NB: this will always be true if there is no vectorization, i.e.,
-        // both are zero.  We do this because the compiler expects stencils
-        // to be vectorizable.
-        _is_foldable = _num_foldable_dims == int(dims._fold_gt1.size());
+        // Otherwise, can fold if ALL vec dims are used in this var.
+        else {
+
+            // NB: this will be true if there is no vectorization, i.e.,
+            // both are zero.  We do this because the compiler expects stencils
+            // to be vectorizable.
+            _is_foldable = _num_foldable_dims == int(dims._fold_gt1.size());
+        }
     }
     
     // Determine whether halo sizes are equal.

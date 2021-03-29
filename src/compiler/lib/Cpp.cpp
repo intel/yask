@@ -32,6 +32,7 @@ namespace yask {
     /////////// Scalar code /////////////
 
     // Format a real, preserving precision.
+    // Also used for vector code, assuming automatic broadcast.
     string CppPrintHelper::format_real(double v) {
 
         // Int representation equivalent?
@@ -81,205 +82,43 @@ namespace yask {
 
     /////////// Vector code /////////////
 
-    // Read from a single point.
-    // Return code for read.
-    string CppVecPrintHelper::read_from_scalar_point(ostream& os, const VarPoint& gp,
-                                                     const VarMap& v_map) {
-
-
-        ///// TODO: use pointer when avail /////
-
-        // Get/set local vars.
-        string var_ptr = get_local_var(os, get_var_ptr(gp), _var_ptr_restrict_type);
-        string sas = gp.make_step_arg_str(var_ptr, _dims);
-        string step_arg = sas.length() ? get_local_var(os, sas, CppPrintHelper::_step_val_type) : "0";
-
-        // Assume that broadcast will be handled automatically by
-        // operator overloading in kernel code.
-        // Specify that any indices should use element vars.
-        string str = var_ptr + "->read_elem(";
-        string args = gp.make_arg_str(&v_map);
-        str += "{" + args + "}, " + step_arg + ")";
-        return str;
-    }
-
-    // Read from multiple points that are not vectorizable.
-    // Return var name.
-    string CppVecPrintHelper::print_partial_vec_read(ostream& os, const VarPoint& gp) {
-        print_point_comment(os, gp, "Construct folded vector from non-folded data");
-
-        // Make a vec var.
-        string mv_name = make_var_name();
-        os << _line_prefix << get_var_type() << " " << mv_name << _line_suffix;
-
-        // Loop through all points in the vector fold.
-        get_fold().visit_all_points([&](const IntTuple& vec_point,
-                                        size_t pelem){
-
-                // Example: vec_point contains x=0, y=2, z=1, where each val
-                // is the offset in the given fold dim.  We want to map
-                // x=>x_elem, y=>(y_elem+2), z=>(z_elem+1) in var-point
-                // index args.
-                VarMap v_map;
-                for (auto& dim : vec_point) {
-                    auto& dname = dim._get_name();
-                    int dofs = dim.get_val();
-
-                    auto& ename = _vec2elem_global_map.at(dname);
-                    if (dofs == 0)
-                        v_map[dname] = ename;
-                    else {
-                        v_map[dname] = "(" + ename + "+" + to_string(dofs) + ")";
-                    }
-                }
-
-                // Read or reuse.
-                string stmt = read_from_scalar_point(os, gp, v_map);
-                auto* varname = lookup_elem_var(stmt);
-                if (!varname) {
-
-                    // Read val into a new scalar var.
-                    string vname = make_var_name();
-                    os << _line_prefix << "real_t " << vname <<
-                        " = " << stmt << _line_suffix;
-                    varname = save_elem_var(stmt, vname);
-                }
-
-                // Output translated expression for this element.
-                os << _line_prefix << mv_name << "[" << pelem << "] = " <<
-                    *varname << "; // for offset " << vec_point.make_dim_val_str() <<
-                    _line_suffix;
-
-                return true;
-            }); // end of lambda.
-        return mv_name;
-    }
-
     // Create call for a point.
-    // This is a utility function used for reads & writes.
+    // This is a utility function used for most var accesses.
     string CppVecPrintHelper::make_point_call(ostream& os,
                                               const VarPoint& gp,
                                               const string& func_name,
                                               const string& first_arg,
                                               const string& last_arg,
-                                              bool is_norm) {
+                                              bool is_vec_norm,
+                                              const VarMap* var_map) {
+
+        // Vec-norm accesses must be from folded var.
+        if (is_vec_norm)
+            assert(gp.is_var_foldable());
+        
+        // Var map is required for non-vec accesses to get elem indices.
+        else
+            assert(var_map);
 
         // Get/set local vars.
-        string var_ptr = get_local_var(os, get_var_ptr(gp), CppPrintHelper::_var_ptr_restrict_type);
+        string var_ptr = get_local_var(os, get_var_ptr(gp),
+                                       CppPrintHelper::_var_ptr_restrict_type);
         string sas = gp.make_step_arg_str(var_ptr, _dims);
-        string step_arg = sas.length() ? get_local_var(os, sas, CppPrintHelper::_step_val_type) : "0";
+        string step_arg = sas.length() ?
+            get_local_var(os, sas, CppPrintHelper::_step_val_type) : "0";
 
         string res = var_ptr + "->" + func_name + "(";
         if (first_arg.length())
             res += first_arg + ", ";
-        string args = is_norm ? gp.make_norm_arg_str(_dims) : gp.make_arg_str();
+        string args = is_vec_norm ?
+            gp.make_norm_arg_str(_dims, var_map) : gp.make_arg_str(var_map);
         res += "{" + args + "} ," + step_arg;
         if (last_arg.length())
             res += ", " + last_arg;
         res += ")";
         return res;
     }
-
-    // Print prefetches for each base pointer.
-    // 'level': cache level.
-    // 'ahead': prefetch PF distance ahead instead of up to PF dist.
-    // TODO: add handling of misc dims.
-    void CppVecPrintHelper::print_prefetches(ostream& os,
-                                            bool ahead, string ptr_var) {
-        if (!_settings._use_ptrs)
-            return;
-
-        // cluster mult in inner dim.
-        const string& idim = _dims._inner_dim;
-        string imult = "CMULT_" + PrinterBase::all_caps(idim);
-
-        for (int level = 1; level <= 2; level++) {
-
-            os << "\n // Prefetch to L" << level << " cache if enabled.\n";
-            os << _line_prefix << "#if (PFD_L" << level << " > 0)";
-            if (!ahead)
-                os << " && (defined PREFETCH_BEFORE_LOOP)";
-            os << "\n";
-
-            // Loop thru vec ptrs.
-            for (auto vp : _vec_ptrs) {
-                auto& ptr = vp.second; // ptr var name.
-
-                // Filter by ptr_var if provided.
-                if (ptr_var.length() && ptr_var != ptr)
-                    continue;
-
-                // _ptr_ofs{Lo,Hi} contain first and last offsets in idim,
-                // NOT normalized to vector len.
-                string left = _dims.make_norm_str(_ptr_ofs_lo[ptr], idim);
-                if (left.length() == 0) left = "0";
-                string right = _dims.make_norm_str(_ptr_ofs_hi[ptr], idim);
-
-                // Loop bounds.
-                string start, stop;
-                    
-                // If fetching ahead, only need to get those following
-                // the previous one.
-                if (ahead)
-                    start = "(PFD_L" + to_string(level) + "*" + imult + ")" + right;
-
-                // If fetching first time, need to fetch across whole range;
-                // starting at left edge.
-                else
-                    start = left;
-                start = "(" + start + ")";
-                    
-                // If fetching again, stop before next one.
-                if (ahead)
-                    stop = "((PFD_L" + to_string(level) + "+1)*" + imult + ")" + right;
-
-                // If fetching first time, stop where next "ahead" one ends.
-                else
-                    stop = "(PFD_L" + to_string(level) + "*" + imult + ")" + right;
-                stop = "(" + stop + ")";
-
-                // Start loop of prefetches.
-                os << "\n // For pointer '" << ptr << "'\n"
-                    "#pragma unroll(" << stop << " - " << start << ")\n" <<
-                    _line_prefix << " for (int ofs = " << start <<
-                    "; ofs < " << stop << "; ofs++) {\n";
-
-                // Need to print prefetch for every unique var-point read.
-                set<string> done;
-                for (auto& gp : _vv._aligned_vecs) {
-
-                    // For the current base ptr?
-                    auto* p = lookup_base_point_ptr(gp);
-                    if (p && *p == ptr) {
-
-                        // Expression for this offset from inner-dim var.
-                        string inner_ofs = "ofs";
-
-                        // Expression for ptr offset at this point.
-                        string ofs_expr = get_ptr_offset(os, gp, inner_ofs);
-                        print_point_comment(os, gp, "Prefetch");
-
-                        // Already done?
-                        if (done.count(ofs_expr))
-                            os << " // Already accounted for.\n";
-
-                        else {
-                            done.insert(ofs_expr);
-
-                            // Prefetch.
-                            os << _line_prefix << "  prefetch<L" << level << "_HINT>(&" << ptr <<
-                                "[" << ofs_expr << "])" << _line_suffix;
-                        }
-                    }
-                }
-
-                // End loop;
-                os << " }\n";
-            }
-            os << _line_prefix << "#endif // L" << level << " prefetch.\n";
-        }
-    }
-
+    
     // Make base point: same as 'gp', but misc indices and domain indices =
     // local offset (step index unchanged).
     var_point_ptr CppVecPrintHelper::make_base_point(const VarPoint& gp) {
@@ -302,6 +141,72 @@ namespace yask {
         return bgp;
     }
     
+    // Print base pointer of 'gp'.
+    void CppVecPrintHelper::print_base_ptr(ostream& os, const VarPoint& gp) {
+        if (!_settings._use_ptrs)
+            return;
+
+        // Got a pointer to it already?
+        auto* p = lookup_base_point_ptr(gp);
+        if (!p) {
+
+            // Make base point (misc & domain indices set to canonical
+            // value). There will be one pointer for every
+            // unique var/step-arg combo.
+            auto bgp = make_base_point(gp);
+            auto* var = bgp->_get_var();
+           
+            // Make and save ptr var for future use.
+            string ptr_name = make_var_name();
+            _vec_ptrs[*bgp] = ptr_name;
+
+            // Print pointer definition.
+            print_point_comment(os, *bgp, "Create pointer");
+
+            // Get pointer to var using normalized indices.
+            // Ignore out-of-range errors because we might get a base pointer to an
+            // element before the allocated range.
+            // TODO: is this still true with local offsets?
+            bool folded = var->is_foldable();
+            auto vp = folded ?
+                make_point_call(os, *bgp, "get_vec_ptr_norm", "", "false", true) :
+                make_point_call(os, *bgp, "get_elem_ptr_local", "", "false", false, &_vec2elem_local_map);
+
+            // Ptr should provide unique access if all accesses are through pointers.
+            // TODO: check for non-ptr accesses via read/write calls.
+            bool is_unique = !_settings._allow_unaligned_loads;
+            string type = is_unique ? _var_ptr_restrict_type : _var_ptr_type;
+
+            // Print type and value.
+            os << _line_prefix << type << " " << ptr_name << " = " << vp << _line_suffix;
+        }
+
+        // Collect some stats for reads using this ptr.
+        // These stats will be used for calculating prefetch ranges.
+        // TODO: update prefetch to work with any inner-loop dim, not
+        // just the one that's the same as the inner dim of the layouts.
+        p = lookup_base_point_ptr(gp);
+        assert(p);
+
+        // Get const offsets from original.
+        auto& offsets = gp.get_arg_offsets();
+
+        // Get offset in inner dim.
+        // E.g., A(t, x+1, y+4) => 4.
+        const string& idim = _dims._inner_dim;
+        auto* ofs = offsets.lookup(idim);
+        if (ofs) {
+            
+            // Remember lowest inner-dim offset from this ptr.
+            if (!_ptr_ofs_lo.count(*p) || _ptr_ofs_lo[*p] > *ofs)
+                _ptr_ofs_lo[*p] = *ofs;
+            
+            // Remember highest one.
+            if (!_ptr_ofs_hi.count(*p) || _ptr_ofs_hi[*p] < *ofs)
+                _ptr_ofs_hi[*p] = *ofs;
+        }
+    }
+
     // Print creation of stride and local-offset vars.
     // Save var names for later use.
     void CppVecPrintHelper::print_strides(ostream& os, const VarPoint& gp) {
@@ -405,7 +310,108 @@ namespace yask {
             }
         }
     }
-    
+
+    // Print prefetches for each base pointer.
+    // 'ahead': prefetch PF distance ahead instead of up to PF dist.
+    // TODO: handle of misc dims.
+    // TODO: allow non-inner-dim prefetching.
+    void CppVecPrintHelper::print_prefetches(ostream& os,
+                                             bool ahead, string ptr_var) {
+        if (!_settings._use_ptrs)
+            return;
+
+        // cluster mult in inner dim.
+        const string& idim = _dims._inner_dim;
+        string imult = "CMULT_" + PrinterBase::all_caps(idim);
+
+        // 'level': cache level.
+        for (int level = 1; level <= 2; level++) {
+
+            os << "\n // Prefetch to L" << level << " cache if enabled.\n";
+            os << _line_prefix << "#if (PFD_L" << level << " > 0)";
+            if (!ahead)
+                os << " && (defined PREFETCH_BEFORE_LOOP)";
+            os << "\n";
+
+            // Loop thru vec ptrs.
+            for (auto vp : _vec_ptrs) {
+                auto& ptr = vp.second; // ptr var name.
+
+                // Filter by ptr_var if provided.
+                if (ptr_var.length() && ptr_var != ptr)
+                    continue;
+
+                // _ptr_ofs{Lo,Hi} contain first and last offsets in idim,
+                // NOT normalized to vector len.
+                string left = _dims.make_norm_str(_ptr_ofs_lo[ptr], idim);
+                if (left.length() == 0) left = "0";
+                string right = _dims.make_norm_str(_ptr_ofs_hi[ptr], idim);
+
+                // Loop bounds.
+                string start, stop;
+                    
+                // If fetching ahead, only need to get those following
+                // the previous one.
+                if (ahead)
+                    start = "(PFD_L" + to_string(level) + "*" + imult + ")" + right;
+
+                // If fetching first time, need to fetch across whole range;
+                // starting at left edge.
+                else
+                    start = left;
+                start = "(" + start + ")";
+                    
+                // If fetching again, stop before next one.
+                if (ahead)
+                    stop = "((PFD_L" + to_string(level) + "+1)*" + imult + ")" + right;
+
+                // If fetching first time, stop where next "ahead" one ends.
+                else
+                    stop = "(PFD_L" + to_string(level) + "*" + imult + ")" + right;
+                stop = "(" + stop + ")";
+
+                // Start loop of prefetches.
+                os << "\n // For pointer '" << ptr << "'\n"
+                    "#pragma unroll(" << stop << " - " << start << ")\n" <<
+                    _line_prefix << " for (int ofs = " << start <<
+                    "; ofs < " << stop << "; ofs++) {\n";
+
+                // Need to print prefetch for every unique var-point read.
+                set<string> done;
+                for (auto& gp : _vv._aligned_vecs) {
+
+                    // For the current base ptr?
+                    auto* p = lookup_base_point_ptr(gp);
+                    if (p && *p == ptr) {
+
+                        // Expression for this offset from inner-dim var.
+                        string inner_ofs = "ofs";
+
+                        // Expression for ptr offset at this point.
+                        string ofs_expr = get_ptr_offset(os, gp, inner_ofs);
+                        print_point_comment(os, gp, "Prefetch");
+
+                        // Already done?
+                        if (done.count(ofs_expr))
+                            os << " // Already accounted for.\n";
+
+                        else {
+                            done.insert(ofs_expr);
+
+                            // Prefetch.
+                            os << _line_prefix << "  prefetch<L" << level << "_HINT>(&" << ptr <<
+                                "[" << ofs_expr << "])" << _line_suffix;
+                        }
+                    }
+                }
+
+                // End loop;
+                os << " }\n";
+            }
+            os << _line_prefix << "#endif // L" << level << " prefetch.\n";
+        }
+    }
+
     // Get expression for offset of 'gp' from base pointer.  Base pointer
     // points to vector with domain dims and misc dims == 0.
     string CppVecPrintHelper::get_ptr_offset(ostream& os,
@@ -460,15 +466,15 @@ namespace yask {
         // If not done, continue based on type of vectorization.
         else {
 
-            // Scalar GP?
+            // Scalar point?
             if (gp.get_vec_type() == VarPoint::VEC_NONE) {
 #ifdef DEBUG_GP
                 cout << " //** reading from point " << gp.make_str() << " as scalar.\n";
 #endif
-                code_str = read_from_scalar_point(os, gp, _vec2elem_global_map);
+                code_str = read_from_scalar_point(os, gp, &_vec2elem_global_map);
             }
 
-            // Non-scalar but non-vectorizable GP?
+            // Non-scalar but non-vectorizable point?
             else if (gp.get_vec_type() == VarPoint::VEC_PARTIAL) {
 #ifdef DEBUG_GP
                 cout << " //** reading from point " << gp.make_str() << " as partially vectorized.\n";
@@ -576,8 +582,75 @@ namespace yask {
         return mv_name;
     }
 
+    // Read from a single point.
+    // 'gp' may or may not allow vec read.
+    // Return code for read.
+    string CppVecPrintHelper::read_from_scalar_point(ostream& os, const VarPoint& gp,
+                                                     const VarMap* var_map) {
+        assert(var_map);
+        auto* var = gp._get_var();
+        assert(!var->is_foldable()); // Assume all scalar reads from scalar vars.
+        
+        ///// TODO: use pointer when avail /////
+
+        return make_point_call(os, gp, "read_elem", "", "", false, var_map);
+    }
+
+    // Read from multiple points that are not vectorized.
+    // Return var name.
+    string CppVecPrintHelper::print_partial_vec_read(ostream& os, const VarPoint& gp) {
+        print_point_comment(os, gp, "Construct folded vector from non-folded data");
+
+        // Make a vec var.
+        string mv_name = make_var_name();
+        os << _line_prefix << get_var_type() << " " << mv_name << _line_suffix;
+
+        // Loop through all points in the vector fold.
+        get_fold().visit_all_points([&](const IntTuple& vec_point,
+                                        size_t pelem){
+
+                // Example: vec_point contains x=0, y=2, z=1, where each val
+                // is the offset in the given fold dim.  We want to map
+                // x=>x_elem, y=>(y_elem+2), z=>(z_elem+1) in var-point
+                // index args.
+                VarMap v_map;
+                for (auto& dim : vec_point) {
+                    auto& dname = dim._get_name();
+                    int dofs = dim.get_val();
+
+                    auto& ename = _vec2elem_global_map.at(dname);
+                    if (dofs == 0)
+                        v_map[dname] = ename;
+                    else {
+                        v_map[dname] = "(" + ename + "+" + to_string(dofs) + ")";
+                    }
+                }
+
+                // Read or reuse.
+                string stmt = read_from_scalar_point(os, gp, &v_map);
+                auto* varname = lookup_elem_var(stmt);
+                if (!varname) {
+
+                    // Read val into a new scalar var.
+                    string vname = make_var_name();
+                    os << _line_prefix << "real_t " << vname <<
+                        " = " << stmt << _line_suffix;
+                    varname = save_elem_var(stmt, vname);
+                }
+
+                // Output translated expression for this element.
+                os << _line_prefix << mv_name << "[" << pelem << "] = " <<
+                    *varname << "; // for offset " << vec_point.make_dim_val_str() <<
+                    _line_suffix;
+
+                return true;
+            }); // end of lambda.
+        return mv_name;
+    }
+
     // Print unaliged memory read.
     // Assumes this results in same values as print_unaligned_vec().
+    // TODO: use pointer.
     string CppVecPrintHelper::print_unaligned_vec_read(ostream& os, const VarPoint& gp) {
         print_point_comment(os, gp, "Read unaligned");
         os << " // NOTICE: Assumes constituent vectors are consecutive in memory!" << endl;
@@ -594,7 +667,6 @@ namespace yask {
     }
 
     // Print aligned memory write.
-    // This should be the most common type of var write.
     void CppVecPrintHelper::print_aligned_vec_write(ostream& os, const VarPoint& gp,
                                                     const string& val) {
 
@@ -678,7 +750,7 @@ namespace yask {
     }
 
     // Print init of element indices.
-    // Fill _vec2elem_map as side-effect.
+    // Fill _vec2elem_*_map as side-effect.
     void CppVecPrintHelper::print_elem_indices(ostream& os) {
         auto& fold = get_fold();
         os << "\n // Element indices derived from vector indices.\n";
@@ -696,76 +768,6 @@ namespace yask {
                 dname << " * VLEN_" << cap_dname << ");\n";
             _vec2elem_global_map[dname] = egname;
             i++;
-        }
-    }
-
-    // Print base pointer of 'gp'.
-    void CppVecPrintHelper::print_base_ptr(ostream& os, const VarPoint& gp) {
-        if (!_settings._use_ptrs)
-            return;
-
-        // Got a pointer to it already?
-        auto* p = lookup_base_point_ptr(gp);
-        if (!p) {
-
-            // Make base point (misc & domain indices set to canonical
-            // value). There will be one pointer for every
-            // unique var/step-arg combo.
-            auto bgp = make_base_point(gp);
-           
-            // Make and save ptr var for future use.
-            string ptr_name = make_var_name();
-            _vec_ptrs[*bgp] = ptr_name;
-
-            // Print pointer definition.
-            print_point_comment(os, *bgp, "Create pointer");
-
-            // Get pointer to var using normalized indices.
-            // Ignore out-of-range errors because we might get a base pointer to an
-            // element before the allocated range. TODO: is this still true?
-            auto vec_type = bgp->get_vec_type();
-            auto vp = (vec_type == VarPoint::VEC_FULL) ?
-                make_point_call(os, *bgp, "get_vec_ptr_norm", "", "false", true) :
-                make_point_call(os, *bgp, "get_elem_ptr_local", "", "false", false);
-
-            // Ptr will be unique if:
-            // - Var doesn't have step dim, or
-            // - Var doesn't allow dynamic step allocs and the alloc size is one (TODO), or
-            // - Var doesn't allow dynamic step allocs and all accesses are via
-            //   offsets from the step dim w/compatible offsets (TODO).
-            // TODO: must also share pointers during code gen in last 2 cases.
-            auto* var = bgp->_get_var();
-            bool is_unique = false;
-            //bool is_unique = (var->get_step_dim() == nullptr);
-            string type = is_unique ? _var_ptr_restrict_type : _var_ptr_type;
-
-            // Print type and value.
-            os << _line_prefix << type << " " << ptr_name << " = " << vp << _line_suffix;
-        }
-
-        // Collect some stats for reads using this ptr.
-        // These stats will be used for calculating prefetch ranges.
-        // TODO: update prefetch to work with any inner-loop dim, not
-        // just the one that's the same as the inner dim of the layouts.
-        p = lookup_base_point_ptr(gp);
-        assert(p);
-
-        // Get const offsets from original.
-        auto& offsets = gp.get_arg_offsets();
-
-        // Get offset in inner dim.
-        // E.g., A(t, x+1, y+4) => 4.
-        const string& idim = _dims._inner_dim;
-        auto* ofs = offsets.lookup(idim);
-        if (ofs) {
-            
-            // Remember lowest inner-dim offset from this ptr.
-            if (!_ptr_ofs_lo.count(*p) || _ptr_ofs_lo[*p] > *ofs)
-                _ptr_ofs_lo[*p] = *ofs;
-            
-            // Remember highest one.
-            if (!_ptr_ofs_hi.count(*p) || _ptr_ofs_hi[*p] < *ofs)
-                _ptr_ofs_hi[*p] = *ofs;
         }
     }
     

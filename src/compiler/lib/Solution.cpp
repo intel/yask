@@ -147,12 +147,12 @@ namespace yask {
     void StencilSolution::analyze_solution(int vlen,
                                            bool is_folding_efficient) {
 
-        // Find all the stencil dimensions from the vars.
-        // Create the final folds and clusters from the cmd-line options.
+        // Find all the stencil dimensions in the settings and/or vars.
+        // Create the final folds and clusters.
         _dims.set_dims(_vars, _settings, vlen, is_folding_efficient, *_dos);
 
-        // Determine which vars can be folded.
-        _vars.set_folding(_dims);
+        // Count dim types in each var and determine foldability.
+        _vars.set_dim_counts(_dims);
 
         // Determine which var points can be vectorized and analyze inner-loop accesses.
         _eqs.analyze_vec(_dims);
