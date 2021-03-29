@@ -634,16 +634,12 @@ $(YK_GEN_DIR)/yask_misc_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 $(YK_GEN_DIR)/yask_layout_macros.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
 	$(PERL) $< -m $(NVDIMS) > $@
-	@- gindent -fca $@ || \
-	  indent -fca $@ ||   \
-	  echo "note:" $@ "is not properly indented because indent program failed or was not found."
+	@- $(INDENT) $@
 
 $(YK_GEN_DIR)/yask_layouts.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
 	$(PERL) $< -d $(NVDIMS) > $@
-	@- gindent -fca $@ || \
-	  indent -fca $@ ||   \
-	  echo "note:" $@ "is not properly indented because indent program failed or was not found."
+	@- $(INDENT) $@
 
 $(YK_GEN_DIR)/yask_var_code.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
@@ -655,9 +651,7 @@ $(YK_CODE_FILE): $(YC_EXEC)
 	@- rm -f $@
 	$(BASH) -o pipefail -c \
 	  "$(RUN_PREFIX) $< $(YC_FLAGS) -p $@ $(EXTRA_YC_FLAGS) 2>&1 | tee $(YC_REPORT_FILE)"
-	@- gindent -fca $@ || \
-	  indent -fca $@ ||   \
-	  echo "note:" $@ "is not properly indented because no indent program was found."
+	@- $(INDENT) $@
 
 headers: $(YK_GEN_HEADERS)
 	@ echo 'Header files generated.'

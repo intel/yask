@@ -82,6 +82,7 @@ SWIG		:=	swig
 PERL		:=	perl
 MKDIR		:=	mkdir -p -v
 BASH		:=	bash
+INDENT		:=	$(UTILS_BIN_DIR)/yask_indent.sh
 
 # Find include path needed for python interface.
 # NB: constructing string inside print() to work for python 2 or 3.

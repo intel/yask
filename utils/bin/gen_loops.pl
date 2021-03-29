@@ -46,6 +46,7 @@ my $inputVar;                   # input var.
 my $outputVar;                  # output var.
 my $loopPart = "USE_LOOP_PART_";
 my @exprs = ("stride", "align", "align_ofs", "group_size");
+my $indent = dirname($0)."/yask_indent.sh";
 
 # loop-feature bit fields.
 my $bSerp = 0x1;                # serpentine path
@@ -931,17 +932,10 @@ sub processCode($) {
         "#endif\n";
     
     # indent program avail?
-    my $indent = 'indent';
-    if (!defined which($indent)) {
-        $indent = 'gindent';
-        if (!defined which($indent)) {
-            print "note: cannot find [g]indent utility--output will be unformatted.\n";
-            undef $indent;
-        }
-    }
+    undef $indent if ! -x $indent;
 
     # open output stream.
-    my $cmd = defined $indent ? "$indent -fca -o $OPT{output} -" :
+    my $cmd = defined $indent ? "$indent -o $OPT{output} -" :
         "cat > $OPT{output}";
     open OUT, "| $cmd" or die "error: cannot run '$cmd'.\n";
 
