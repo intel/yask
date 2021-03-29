@@ -30,7 +30,7 @@ if command -v gindent >/dev/null; then
     set -x; gindent $args $@
 elif command -v indent >/dev/null; then
     set -x; indent $args $@
-elif [[ -n "$1" && -e "$1" ]]; then
-    echo "Note: $1 is not indented because neither 'gindent' nor 'indent' was found."
+else
+    echo "Note: generated file not indented because neither 'gindent' nor 'indent' was found."
 fi
 

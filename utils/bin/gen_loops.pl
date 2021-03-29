@@ -931,13 +931,8 @@ sub processCode($) {
         "#undef $loopPart$innerNum\n",
         "#endif\n";
     
-    # indent program avail?
-    undef $indent if ! -x $indent;
-
     # open output stream.
-    my $cmd = defined $indent ? "$indent -o $OPT{output} -" :
-        "cat > $OPT{output}";
-    open OUT, "| $cmd" or die "error: cannot run '$cmd'.\n";
+    open OUT, "> $OPT{output}" or die;
 
     # header.
     my $ndims = scalar(@dims);
@@ -946,17 +941,9 @@ sub processCode($) {
         " * $ndims-D var-scanning code.\n",
         " * Generated automatically from the following pseudo-code:\n",
         " *\n",
-        " * N = ",$ndims,";\n";
-
-    # format input to show in the header.
-    my $cmd2 = "echo '$codeString'";
-    $cmd2 .= " | $indent -" if (defined $indent);
-    open IN, "$cmd2 |" or die "error: cannot run '$cmd2'.\n";
-    while (<IN>) {
-        print OUT " * $_";
-    }
-    close IN;
-    print OUT " *\n */";
+        " * N = ",$ndims,";\n",
+        " * $codeString\n",
+        " *\n */";
 
     # print out code.
     for my $line (@code) {
@@ -965,6 +952,8 @@ sub processCode($) {
     }
     print OUT "// End of generated code.";
     close OUT;
+    system("$indent $OPT{output}") if -x $indent;
+
     print "info: output in '$OPT{output}'.\n";
 }
 
