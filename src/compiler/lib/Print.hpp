@@ -99,10 +99,15 @@ namespace yask {
             return _var_prefix + to_string(_var_num++);
         }
 
+        // Determine if local var exists for 'expr'.
+        virtual bool is_local_var(const string& expr) const {
+            return _local_vars.count(expr) != 0;
+        }
+
         // If var exists for 'expr', return it.
         // If not, create var of 'type' in 'os' and return it.
         virtual string get_local_var(ostream& os, const string& expr,
-                                   string type = "") {
+                                     string type = "") {
 
             if (_local_vars.count(expr))
                 return _local_vars.at(expr);

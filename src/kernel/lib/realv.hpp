@@ -429,7 +429,7 @@ namespace yask {
             #endif
         }
         ALWAYS_INLINE void load_from_masked(const real_vec_t* __restrict from,
-                                           uidx_t k1) {
+                                            uidx_t k1) {
             #if defined(NO_INTRINSICS) || defined(NO_LOAD_INTRINSICS) || !defined(USE_AVX512)
             REAL_VEC_LOOP(i) if ((k1 >> i) & 1) u.r[i] = (*from)[i];
             #else

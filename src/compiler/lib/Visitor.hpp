@@ -99,7 +99,8 @@ namespace yask {
             return res;
         }
 
-        // Visit RHS of equals and LHS and conditions per flags.
+        // Visit RHS of equals always.
+        // Visit LHS and/or conditions per flags.
         virtual string visit(EqualsExpr* ee) {
             if (_visit_equals_lhs)
                 ee->_get_lhs()->accept(this);

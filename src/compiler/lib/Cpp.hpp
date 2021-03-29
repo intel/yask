@@ -84,16 +84,16 @@ namespace yask {
         // Make call for a point.
         // This is a utility function used for both reads and writes.
         virtual string make_point_call(ostream& os,
-                                     const VarPoint& gp,
-                                     const string& fname,
-                                     string opt_arg = "");
+                                       const VarPoint& gp,
+                                       const string& fname,
+                                       string opt_arg = "");
 
         // Return a var-point reference.
         virtual string read_from_point(ostream& os, const VarPoint& gp) override;
 
         // Return code to update a var point.
         virtual string write_to_point(ostream& os, const VarPoint& gp,
-                                    const string& val) override;
+                                      const string& val) override;
     };
 
     /////////// Vector code /////////////
@@ -128,8 +128,9 @@ namespace yask {
         map<VarDimKey, string> _local_offsets; // var containing offset for given dim in var.
 
         // Element indices.
-        string _elem_suffix = "_elem";
-        VarMap _vec2elem_map; // maps vector indices to elem indices; filled by print_elem_indices.
+        string _elem_suffix_global = "_global_elem";
+        string _elem_suffix_local = "_local_elem";
+        VarMap _vec2elem_local_map, _vec2elem_global_map;
 
         string _write_mask = "";
 
@@ -146,20 +147,20 @@ namespace yask {
         // Print a comment about a point.
         // This is a utility function used for both reads and writes.
         virtual void print_point_comment(ostream& os, const VarPoint& gp,
-                                       const string& verb) const {
+                                         const string& verb) const {
 
-            os << endl << " // " << verb << " vector starting at " <<
+            os << endl << " // " << verb << " at " <<
                 gp.make_str() << "." << endl;
         }
 
-        // Return code for a vectorized point.
+        // Return code for a var function call at a point.
         // This is a utility function used for both reads and writes.
-        virtual string print_vec_point_call(ostream& os,
-                                         const VarPoint& gp,
-                                         const string& func_name,
-                                         const string& first_arg,
-                                         const string& last_arg,
-                                         bool is_norm);
+        virtual string make_point_call(ostream& os,
+                                       const VarPoint& gp,
+                                       const string& func_name,
+                                       const string& first_arg,
+                                       const string& last_arg,
+                                       bool is_norm);
 
         // Print aligned memory read.
         virtual string print_aligned_vec_read(ostream& os, const VarPoint& gp) override;
@@ -169,8 +170,8 @@ namespace yask {
         virtual string print_unaligned_vec_read(ostream& os, const VarPoint& gp) override;
 
         // Print aligned memory write.
-        virtual string print_aligned_vec_write(ostream& os, const VarPoint& gp,
-                                            const string& val) override;
+        virtual void print_aligned_vec_write(ostream& os, const VarPoint& gp,
+                                             const string& val) override;
 
         // Print conversion from memory vars to point var gp if needed.
         // This calls print_unaligned_vec_ctor(), which can be overloaded
@@ -185,11 +186,11 @@ namespace yask {
         // Read from a single point to be broadcast to a vector.
         // Return code for read.
         virtual string read_from_scalar_point(ostream& os, const VarPoint& gp,
-                                           const VarMap* v_map=0) override;
+                                              const VarMap& v_map) override;
 
         // Read from multiple points that are not vectorizable.
         // Return var name.
-        virtual string print_non_vec_read(ostream& os, const VarPoint& gp) override;
+        virtual string print_partial_vec_read(ostream& os, const VarPoint& gp) override;
 
         // Print construction for one point var pv_name from elems.
         // This version prints inefficient element-by-element assignment.
@@ -222,10 +223,10 @@ namespace yask {
         virtual string write_to_point(ostream& os, const VarPoint& gp, const string& val) override;
 
         // Make base point (misc & inner-dim indices = 0).
-        virtual var_point_ptr make_base_point(ostream& os, const VarPoint& gp);
+        virtual var_point_ptr make_base_point(const VarPoint& gp);
 
         // Print code to set pointers of aligned reads.
-        virtual void print_base_ptrs(ostream& os);
+        virtual void print_base_ptr(ostream& os, const VarPoint& gp);
 
         // Print prefetches for each base pointer.
         // Print only 'ptr_var' if provided.
@@ -235,28 +236,22 @@ namespace yask {
         virtual void print_elem_indices(ostream& os);
 
         // get un-normalized index.
-        virtual const string& get_elem_index(const string& dname) const {
-            return _vec2elem_map.at(dname);
+        virtual const string& get_local_elem_index(const string& dname) const {
+            return _vec2elem_local_map.at(dname);
         }
-
-        // Print code to set ptr_name to gp.
-        virtual void print_point_ptr(ostream& os, const string& ptr_name, const VarPoint& gp);
+        virtual const string& get_global_elem_index(const string& dname) const {
+            return _vec2elem_global_map.at(dname);
+        }
 
         // Print strides for 'var'.
-        virtual void print_strides(ostream& os, const Var& var);
+        virtual void print_strides(ostream& os, const VarPoint& gp);
         
         // Access cached values.
-        virtual string* lookup_point_ptr(const VarPoint& gp) {
-            if (_vec_ptrs.count(gp))
-                return &_vec_ptrs.at(gp);
+        virtual string* lookup_base_point_ptr(const VarPoint& gp) {
+            auto bgp = make_base_point(gp);
+            if (_vec_ptrs.count(*bgp))
+                return &_vec_ptrs.at(*bgp);
             return 0;
-        }
-        virtual void save_point_ptr(const VarPoint& gp) {
-            if (!_vec_ptrs.count(gp)) {
-                string ptr_name = make_var_name();
-                _vec_ptrs[gp] = ptr_name;
-                assert(lookup_point_ptr(gp));
-            }
         }
         virtual string* lookup_stride(const Var& var, const string& dim) {
             auto key = VarDimKey(var.get_name(), dim);
@@ -272,17 +267,21 @@ namespace yask {
         }
     };
 
-    // Outputs the time-invariant variables.
-    class CppStepVarPrintVisitor : public PrintVisitorBase {
+    // Outputs loop-invariant values.
+    class CppPreLoopPrintVisitor : public PrintVisitorBase {
     protected:
         CppVecPrintHelper& _cvph;
 
     public:
-        CppStepVarPrintVisitor(ostream& os,
+        CppPreLoopPrintVisitor(ostream& os,
                                CppVecPrintHelper& ph,
                                const VarMap* var_map = 0) :
             PrintVisitorBase(os, ph, var_map),
-            _cvph(ph) { }
+            _cvph(ph) {
+            _visit_equals_lhs = true;
+            _visit_var_point_args = true;
+            _visit_conds = true;
+        }
 
         // A var access.
         virtual string visit(VarPoint* gp);
@@ -290,22 +289,6 @@ namespace yask {
         virtual string get_var_ptr(VarPoint& gp) {
             return _cvph.get_var_ptr(gp);
         }
-    };
-
-    // Outputs the loop-invariant variables for an inner loop.
-    class CppLoopVarPrintVisitor : public PrintVisitorBase {
-    protected:
-        CppVecPrintHelper& _cvph;
-
-    public:
-        CppLoopVarPrintVisitor(ostream& os,
-                               CppVecPrintHelper& ph,
-                               const VarMap* var_map = 0) :
-            PrintVisitorBase(os, ph, var_map),
-            _cvph(ph) { }
-
-        // A var access.
-        virtual string visit(VarPoint* gp);
     };
 
     // Print out a stencil in C++ form for YASK.

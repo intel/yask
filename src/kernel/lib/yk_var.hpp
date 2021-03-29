@@ -173,9 +173,10 @@ namespace yask {
         // Get a pointer to given element.
         // 'alloc_step_idx' must be within allocation bounds and consistent
         // with 'idxs[step_posn]'.
-        const real_t* get_elem_ptr(const Indices& idxs,
-                                   idx_t alloc_step_idx,
-                                   bool check_bounds=true) const {
+        template <bool is_global>
+        const real_t* _get_elem_ptr(const Indices& idxs,
+                                    idx_t alloc_step_idx,
+                                    bool check_bounds) const {
             constexpr auto n = LayoutFn::get_num_sizes();
             Indices adj_idxs(n);
 
@@ -192,8 +193,12 @@ namespace yask {
 
                     // Adjust for offsets and padding.
                     // This gives a positive 0-based local element index.
-                    idx_t ai = idxs[i] + _actl_left_pads[i] -
-                        (_rank_offsets[i] + _local_offsets[i]);
+                    idx_t ai = idxs[i] + _actl_left_pads[i] - _local_offsets[i];
+
+                    // Also adjust for rank offsets if using global indices.
+                    if (is_global)
+                        ai -= _rank_offsets[i];
+                    
                     host_assert(ai >= 0);
                     adj_idxs[i] = uidx_t(ai);
                 }
@@ -202,16 +207,35 @@ namespace yask {
             // Get pointer via layout in _data.
             return _data.get_ptr(adj_idxs, check_bounds);
         }
+        const real_t* get_elem_ptr(const Indices& global_idxs,
+                                   idx_t alloc_step_idx,
+                                   bool check_bounds=true) const {
+            return _get_elem_ptr<true>(global_idxs, alloc_step_idx, check_bounds);
+        }
+        const real_t* get_elem_ptr_local(const Indices& local_idxs,
+                                   idx_t alloc_step_idx,
+                                   bool check_bounds=true) const {
+            return _get_elem_ptr<false>(local_idxs, alloc_step_idx, check_bounds);
+        }
 
-        // Non-const version.
+        // Non-const versions.
         // Implemented via casting.
         ALWAYS_INLINE
-        real_t* get_elem_ptr(const Indices& idxs,
+        real_t* get_elem_ptr(const Indices& global_idxs,
                              idx_t alloc_step_idx,
                              bool check_bounds=true) {
             const real_t* p =
                 const_cast<const YkElemVarCore*>(this)->
-                get_elem_ptr(idxs, alloc_step_idx, check_bounds);
+                get_elem_ptr(global_idxs, alloc_step_idx, check_bounds);
+            return const_cast<real_t*>(p);
+        }
+        ALWAYS_INLINE
+        real_t* get_elem_ptr_local(const Indices& local_idxs,
+                                   idx_t alloc_step_idx,
+                                   bool check_bounds=true) {
+            const real_t* p =
+                const_cast<const YkElemVarCore*>(this)->
+                get_elem_ptr_local(local_idxs, alloc_step_idx, check_bounds);
             return const_cast<real_t*>(p);
         }
 
@@ -379,7 +403,7 @@ namespace yask {
 
                     // Adjust for padding.
                     // Since the indices are rank-relative, subtract only
-                    // the local offsets. (Compare to get_elem_ptr().)
+                    // the local offsets.
                     // This gives a 0-based local *vector* index.
                     adj_idxs[i] = vec_idxs[i] + _vec_left_pads[i] - _vec_local_offsets[i];
                 }

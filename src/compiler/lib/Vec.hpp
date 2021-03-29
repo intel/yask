@@ -216,9 +216,8 @@ namespace yask {
         virtual string print_unaligned_vec_read(ostream& os, const VarPoint& gp) =0;
 
         // Print write to an aligned vector block.
-        // Return expression written.
-        virtual string print_aligned_vec_write(ostream& os, const VarPoint& gp,
-                                            const string& val) =0;
+        virtual void print_aligned_vec_write(ostream& os, const VarPoint& gp,
+                                             const string& val) =0;
 
         // Print conversion from existing vars to make an unaligned vector block.
         // Return var name.
@@ -226,16 +225,16 @@ namespace yask {
 
         // Print construction for one point var pv_name from elems.
         virtual void print_unaligned_vec_ctor(ostream& os, const VarPoint& gp,
-                                           const string& pv_name) =0;
+                                              const string& pv_name) =0;
 
         // Read from a single point.
         // Return code for read.
         virtual string read_from_scalar_point(ostream& os, const VarPoint& gp,
-                                           const VarMap* v_map=0) =0;
+                                              const VarMap& v_map) =0;
 
         // Read from multiple points that are not vectorizable.
         // Return var name.
-        virtual string print_non_vec_read(ostream& os, const VarPoint& gp) =0;
+        virtual string print_partial_vec_read(ostream& os, const VarPoint& gp) =0;
 
     public:
         VecPrintHelper(VecInfoVisitor& vv,

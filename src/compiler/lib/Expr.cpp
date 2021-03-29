@@ -37,6 +37,9 @@ namespace yask {
     yc_var* VarPoint::get_var() {
         return _var;
     }
+    const yc_var* VarPoint::get_var() const {
+        return _var;
+    }
 
     //node_factory API methods.
     yc_index_node_ptr
@@ -693,7 +696,6 @@ namespace yask {
 
     // Make normalized string like "x+(4/VLEN_X)" from
     // original arg "x+4" in 'dname' dim.
-    // This object has numerators; 'fold' object has denominators.
     // Args w/o simple offset are not modified.
     string VarPoint::make_norm_arg_str(const string& dname,
                                        const Dimensions& dims,
@@ -708,7 +710,7 @@ namespace yask {
             res = dname;
         
         // dname exists in fold?
-        else if (ofs && dims._fold.lookup(dname))
+        else if (ofs && dims._fold_gt1.lookup(dname))
             res = "(" + dname + dims.make_norm_str(*ofs, dname) + ")";
         
         // Otherwise, just find and format arg as-is.
@@ -731,7 +733,7 @@ namespace yask {
     // This object has numerators; norm object has denominators.
     // Args w/o simple offset are not modified.
     string VarPoint::make_norm_arg_str(const Dimensions& dims,
-                                     const VarMap* var_map) const {
+                                       const VarMap* var_map) const {
 
         string res;
         auto& gd = _var->get_dims();
@@ -745,9 +747,10 @@ namespace yask {
     }
 
     // Make string like "g->_wrap_step(t+1)" from original arg "t+1"
-    // if var uses step dim, "0" otherwise.
+    // if var uses step dim, "" otherwise.
     // If var doesn't allow dynamic alloc, set to fixed value.
-    string VarPoint::make_step_arg_str(const string& var_ptr, const Dimensions& dims) const {
+    string VarPoint::make_step_arg_str(const string& var_ptr,
+                                       const Dimensions& dims) const {
 
         auto& gd = _var->get_dims();
         for (size_t i = 0; i < gd.size(); i++) {
@@ -766,7 +769,7 @@ namespace yask {
                 }
             }
         }
-        return "0";
+        return "";
     }
 
     // Set given arg to given offset; ignore if not in step or domain var dims.

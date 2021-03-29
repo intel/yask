@@ -636,6 +636,8 @@ namespace yask {
         SetLoopVisitor(const Dimensions& dims) :
             _dims(dims) { 
             _visit_equals_lhs = true;
+            _visit_var_point_args = true;
+            _visit_conds = true;
         }
 
         // Check each var point in expr.
@@ -647,7 +649,7 @@ namespace yask {
 
             // Access type.
             // Assume invariant, then check below.
-            VarPoint::LoopType lt = VarPoint::LOOP_INVARIANT;
+            VarPoint::VarDepType lt = VarPoint::DOMAIN_VAR_INVARIANT;
 
             // Check every point arg.
             auto& args = gp->get_args();
@@ -666,12 +668,12 @@ namespace yask {
                     auto& dname = d._get_name();
 
                     if (fvv.vars_used.count(dname)) {
-                        lt = VarPoint::LOOP_DEPENDENT;
+                        lt = VarPoint::DOMAIN_VAR_DEPENDENT;
                         break;  // no need to continue.
                     }
                 }
             }
-            gp->set_loop_type(lt);
+            gp->set_var_dep(lt);
             return "";
         }
     };

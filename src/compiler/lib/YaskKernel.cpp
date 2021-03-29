@@ -555,10 +555,10 @@ namespace yask {
                     _cluster_eq_bundles.get_all().at(ei) : eq;
                 assert(eg_desc == vceq->get_descr());
 
-                // Create vector info for this eq_bundle.
-                // The visitor is accepted at all nodes in the cluster AST;
-                // for each var access node in the AST, the vectors
-                // needed are determined and saved in the visitor.
+                // Create vector info for this eq_bundle.  The visitor is
+                // accepted at all nodes in the cluster AST; for each var
+                // access node in the AST, the vectors needed are determined
+                // and saved in the visitor.
                 VecInfoVisitor vv(_dims);
                 vceq->visit_eqs(&vv);
 
@@ -614,21 +614,11 @@ namespace yask {
                 CppVecPrintHelper* vp = new_cpp_vec_print_helper(vv, cv);
                 vp->set_write_mask(write_mask);
 
-                // Print time-invariants.
-                os << "\n // Invariants within a step.\n";
-                CppStepVarPrintVisitor svv(os, *vp);
-                vceq->visit_eqs(&svv);
-
-                // Print strides for each var.
-                for (auto gp : _vars)
-                    vp->print_strides(os, *gp);
-                
                 // Print loop-invariant values, if any.
-                CppLoopVarPrintVisitor lvv(os, *vp);
-                vceq->visit_eqs(&lvv);
-
-                // Print pointers.
-                vp->print_base_ptrs(os);
+                // Store them in the CppVecPrintHelper for later use in the loop body.
+                os << "\n // Loop-invariant values.\n";
+                CppPreLoopPrintVisitor plv(os, *vp);
+                vceq->visit_eqs(&plv);
 
                 // Actual computation loop.
                 // Include generated loop-nest.

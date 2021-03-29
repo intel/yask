@@ -782,16 +782,16 @@ namespace yask {
         // What kind of vectorization can be done on this point.
         // Set via Eqs::analyze_vec().
         enum VecType { VEC_UNSET,
-                       VEC_FULL, // vectorizable in all folded dims.
-                       VEC_PARTIAL, // vectorizable in some folded dims.
-                       VEC_NONE  // vectorizable in no folded dims.
+                       VEC_FULL, // vectorizable in all vec dims.
+                       VEC_PARTIAL, // vectorizable in some vec dims.
+                       VEC_NONE  // vectorizable in no vec dims.
         };
 
-        // Analysis of this point for accesses via loops through the inner dim.
+        // Analysis of this point for accesses via loops through the domain dims.
         // Set via Eqs::analyze_loop().
-        enum LoopType { LOOP_UNSET,
-                        LOOP_INVARIANT, // not dependent on a domain dim.
-                        LOOP_DEPENDENT  // dep on one or more domain dims.
+        enum VarDepType { DOMAIN_VAR_UNSET,
+                        DOMAIN_VAR_INVARIANT, // not dependent on a domain dim.
+                        DOMAIN_VAR_DEPENDENT  // dep on one or more domain dims.
         };
 
     protected:
@@ -815,7 +815,7 @@ namespace yask {
         IntTuple _consts;
 
         VecType _vec_type = VEC_UNSET; // allowed vectorization.
-        LoopType _loop_type = LOOP_UNSET; // analysis for looping.
+        VarDepType _var_dep = DOMAIN_VAR_UNSET; // analysis for looping.
 
         // Cache the string repr.
         string _def_str;
@@ -850,12 +850,12 @@ namespace yask {
         virtual void set_vec_type(VecType vt) {
             _vec_type = vt;
         }
-        virtual LoopType get_loop_type() const {
-            assert(_loop_type != LOOP_UNSET);
-            return _loop_type;
+        virtual VarDepType get_var_dep() const {
+            assert(_var_dep != DOMAIN_VAR_UNSET);
+            return _var_dep;
         }
-        virtual void set_loop_type(LoopType vt) {
-            _loop_type = vt;
+        virtual void set_var_dep(VarDepType vt) {
+            _var_dep = vt;
         }
 
         // Get arg for 'dim' or return null if none.
@@ -930,7 +930,7 @@ namespace yask {
                                       const VarMap* var_map = 0) const;
 
         // Make string like "g->_wrap_step(t+1)" from original arg "t+1"
-        // if var uses step dim, "0" otherwise.
+        // if var uses step dim, "" otherwise.
         virtual string make_step_arg_str(const string& var_ptr, const Dimensions& dims) const;
 
         // Create a deep copy of this expression,
@@ -940,6 +940,7 @@ namespace yask {
 
         // APIs.
         virtual yc_var* get_var();
+        virtual const yc_var* get_var() const;
     };
 
     // Equality operator for a var point.
