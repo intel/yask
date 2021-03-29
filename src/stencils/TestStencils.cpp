@@ -332,7 +332,10 @@ namespace {
     
         // Time-varying var. Intermix last domain dim with misc dims to make
         // sure compiler creates correct layout.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, a, y, b, c }); 
+        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, a, y, b, c });
+
+        // Misc-only var.
+        yc_var_proxy B = yc_var_proxy("B", get_soln(), { c, b });
 
     public:
 
@@ -354,7 +357,7 @@ namespace {
                 v += A(t, x, -2, y + i, 2, 0);
             for (int i = 1; i <= r + 3; i++)
                 v += A(t, x, 0, y - i, 0, -1);
-            A(t+1, x, 1, y, 2, 3) EQUALS v;
+            A(t+1, x, 1, y, 2, 3) EQUALS v + B(-2, 3) - B(4, -2);
         }
     };
 
