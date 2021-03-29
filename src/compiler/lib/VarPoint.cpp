@@ -105,6 +105,14 @@ namespace yask {
         }
         return str;
     }
+    string VarPoint::make_arg_str(const string& dim,
+                                  const VarMap* var_map) const {
+        int i = 0;
+        auto arg = get_arg(dim);
+        assert(arg.get());
+        string str = arg->make_str(var_map);
+        return str;
+    }
     string VarPoint::_make_str(const VarMap* var_map) const {
         string str = _var->_get_name() + "(" +
                              make_arg_str(var_map) + ")";

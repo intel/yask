@@ -388,7 +388,7 @@ namespace yask {
                         string inner_ofs = "ofs";
 
                         // Expression for ptr offset at this point.
-                        string ofs_expr = get_ptr_offset(os, gp, inner_ofs);
+                        string ofs_expr = get_ptr_offset(os, gp, 0, inner_ofs);
                         print_point_comment(os, gp, "Prefetch");
 
                         // Already done?
@@ -416,6 +416,7 @@ namespace yask {
     // points to vector with domain dims and misc dims == 0.
     string CppVecPrintHelper::get_ptr_offset(ostream& os,
                                              const VarPoint& gp,
+                                             const VarMap* var_map,
                                              const string& inner_ofs) {
         auto* var = gp._get_var();
         assert(var);
@@ -427,25 +428,29 @@ namespace yask {
         for (int i = 0; i < var->get_num_dims(); i++) {
             auto& dimi = gp.get_dims().at(i);
             auto typei = dimi->get_type();
+            bool is_step = typei == STEP_INDEX;
 
             // There is a separate pointer for each value of
             // the step index, so we don't need to include
             // that index in the offset calculation.
-            bool is_step = typei == STEP_INDEX;
             if (!is_step) {
                 string dni = dimi->_get_name();
                 auto* lofs = lookup_local_offset(*var, dni);
                 assert(lofs);
                 auto* stride = lookup_stride(*var, dni);
                 assert(stride);
-                string nas = gp.make_norm_arg_str(dni, _dims);
+
+                // Construct offset in this dim.
+                string nas = (gp.get_vec_type() == VarPoint::VEC_FULL) ?
+                    gp.make_norm_arg_str(dni, _dims, var_map) :
+                    gp.make_arg_str(dni, var_map);
+                nas += " - " + *lofs;
+                if (dni == _dims._inner_dim && inner_ofs.length())
+                    nas += " + " + inner_ofs;
 
                 // Add to offset expression.
                 if (nterms)
                     ofs_str += " + ";
-                nas += " - " + *lofs;
-                if (dni == _dims._inner_dim && inner_ofs.length())
-                    nas += " + " + inner_ofs;
                 ofs_str += "((" + nas + ") * " + *stride + ")";
                 nterms++;
             }
@@ -471,7 +476,7 @@ namespace yask {
 #ifdef DEBUG_GP
                 cout << " //** reading from point " << gp.make_str() << " as scalar.\n";
 #endif
-                code_str = read_from_scalar_point(os, gp, &_vec2elem_global_map);
+                code_str = read_from_scalar_point(os, gp, &_vec2elem_local_map);
             }
 
             // Non-scalar but non-vectorizable point?
@@ -583,17 +588,35 @@ namespace yask {
     }
 
     // Read from a single point.
-    // 'gp' may or may not allow vec read.
     // Return code for read.
     string CppVecPrintHelper::read_from_scalar_point(ostream& os, const VarPoint& gp,
                                                      const VarMap* var_map) {
         assert(var_map);
         auto* var = gp._get_var();
-        assert(!var->is_foldable()); // Assume all scalar reads from scalar vars.
-        
-        ///// TODO: use pointer when avail /////
+        assert(!var->is_foldable()); // Assume all scalar reads are from non-vec vars.
 
-        return make_point_call(os, gp, "read_elem", "", "", false, var_map);
+        // Do we have a pointer to the base?
+        auto* p = lookup_base_point_ptr(gp);
+        if (p) {
+
+            // Ptr expression.
+            string ptr_expr = *p;
+            if (var->get_num_dims() > 0) {
+                auto ofs_str = get_ptr_offset(os, gp, var_map);
+                ptr_expr += " + (" + ofs_str + ")";
+            }
+
+            // Check addr.
+            auto rp = make_point_call(os, gp, "get_elem_ptr_local", "", "", false, var_map);
+            os << _line_prefix << "host_assert(" <<
+                ptr_expr << " == " << rp << ")" << _line_suffix;
+
+            // Return expr.
+            return string("*(") + ptr_expr + ")";
+        }
+
+        else
+            return make_point_call(os, gp, "read_elem", "", "", false, var_map);
     }
 
     // Read from multiple points that are not vectorized.
@@ -618,7 +641,7 @@ namespace yask {
                     auto& dname = dim._get_name();
                     int dofs = dim.get_val();
 
-                    auto& ename = _vec2elem_global_map.at(dname);
+                    auto& ename = _vec2elem_local_map.at(dname);
                     if (dofs == 0)
                         v_map[dname] = ename;
                     else {

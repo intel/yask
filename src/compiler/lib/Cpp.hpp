@@ -203,6 +203,7 @@ namespace yask {
 
         // Get offset from base pointer.
         virtual string get_ptr_offset(ostream& os, const VarPoint& gp,
+                                      const VarMap* var_map = 0,
                                       const string& inner_ofs = "");
 
     public:

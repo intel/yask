@@ -173,14 +173,17 @@ namespace yask {
         // Apply substitutions to indices using 'var_map' if provided.
         virtual string make_arg_str(const VarMap* var_map = 0) const;
 
+        // String w/just comma-sep args, e.g., 'y+2' in 'dname' dim.
+        // Apply substitutions to indices using 'var_map' if provided.
+        virtual string make_arg_str(const string& dname,
+                                    const VarMap* var_map = 0) const;
+
         // String v/vec-normalized args, e.g., 'x, y+(2/VLEN_Y)'.
-        // This object has numerators; 'fold' object has denominators.
         // Apply substitutions to indices using 'var_map' if provided.
         virtual string make_norm_arg_str(const Dimensions& dims,
                                          const VarMap* var_map = 0) const;
 
         // Make string like "x+(4/VLEN_X)" from original arg "x+4" in 'dname' dim.
-        // This object has numerators; 'fold' object has denominators.
         // Apply substitutions to indices using 'var_map' if provided.
         virtual string make_norm_arg_str(const string& dname,
                                          const Dimensions& dims,

@@ -616,7 +616,7 @@ namespace yask {
 
                 // Print loop-invariant values, if any.
                 // Store them in the CppVecPrintHelper for later use in the loop body.
-                os << "\n // Loop-invariant values.\n";
+                os << "\n ////// Loop-invariant values.\n";
                 CppPreLoopPrintVisitor plv(os, *vp);
                 vceq->visit_eqs(&plv);
 
@@ -629,10 +629,10 @@ namespace yask {
                     (do_cluster ? "cluster_mults[dn-1]" : "idx_t(1)") << "\n"
                     "\n#define ALIGN_EXPR(dn) idx_t(1)\n"
                     "\n#define ALIGN_OFS_EXPR(dn) idx_t(0)\n"
-                    "\n // Loop prefix.\n"
+                    "\n ////// Loop prefix.\n"
                     "#define USE_LOOP_PART_0\n"
                     "#include \"yask_sub_block_loops.hpp\"\n"
-                    "\n // Loop body. Just doing one, so don't need stop indices.\n"
+                    "\n ////// Loop body. Just doing one, so don't need stop indices.\n"
                     " Indices& idxs = body_indices.start;\n";
                 print_indices(os, false, true);
                 vp->print_elem_indices(os);
@@ -647,7 +647,7 @@ namespace yask {
 
                 // End of loop.
                 os <<
-                    "\n // Loop sufffix.\n"
+                    "\n ////// Loop sufffix.\n"
                     "#define USE_LOOP_PART_1\n"
                     "#include \"yask_sub_block_loops.hpp\"\n";
 
