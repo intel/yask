@@ -224,7 +224,7 @@ sub getResultsFromLine($$) {
     $results->{$val_key} = 'passed';
   }
   elsif ($line =~ /Results NOT VERIFIED/i) {
-    $results->{$val_key} = 'not checked';
+    $results->{$val_key} = 'not verified';
   }
   
   # Output of 'uname -a'
