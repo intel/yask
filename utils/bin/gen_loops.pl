@@ -45,13 +45,13 @@ my @dims;                       # indices of dimensions.
 my $inputVar;                   # input var.
 my $outputVar;                  # output var.
 my $loopPart = "USE_LOOP_PART_";
-my @exprs = ("stride", "align", "align_ofs", "group_size");
+my @exprs = ("stride", "align", "align_ofs", "tile_size");
 my $indent = dirname($0)."/yask_indent.sh";
 
 # loop-feature bit fields.
 my $bSerp = 0x1;                # serpentine path
 my $bSquare = 0x2;              # square_wave path
-my $bGroup = 0x4;               # group path
+my $bTile = 0x4;               # tile path
 my $bSimd = 0x8;                # simd prefix
 
 ##########
@@ -106,8 +106,8 @@ sub alignVar {
 sub alignOfsVar {
     return inVar("align_ofs", @_);
 }
-sub groupSizeVar {
-    return inVar("group_size", @_);
+sub tileSizeVar {
+    return inVar("tile_size", @_);
 }
 
 # These are generated scalars.
@@ -120,31 +120,31 @@ sub alignBeginVar {
 sub numItersVar {
     return join('_', 'num_iters', @_);
 }
-sub numGroupsVar {
-    return join('_', 'num_full_groups', @_);
+sub numTilesVar {
+    return join('_', 'num_full_tiles', @_);
 }
-sub numFullGroupItersVar {
-    return join('_', 'num_iters_in_full_group', @_);
+sub numFullTileItersVar {
+    return join('_', 'num_iters_in_full_tile', @_);
 }
-sub numGroupSetItersVar {
-    return scalar @_ ? join('_', 'num_iters_in_group_set', @_) :
-        'num_iters_in_full_group';
+sub numTileSetItersVar {
+    return scalar @_ ? join('_', 'num_iters_in_tile_set', @_) :
+        'num_iters_in_full_tile';
 }
 sub indexVar {
     return join('_', 'index', @_);
 }
-sub groupIndexVar {
-    return join('_', 'index_of_group', @_);
+sub tileIndexVar {
+    return join('_', 'index_of_tile', @_);
 }
-sub groupSetOffsetVar {
-    return scalar @_ ? join('_', 'index_offset_within_group_set', @_) :
-        'index_offset_within_this_group';
+sub tileSetOffsetVar {
+    return scalar @_ ? join('_', 'index_offset_within_tile_set', @_) :
+        'index_offset_within_this_tile';
 }
-sub groupOffsetVar {
-    return join('_', 'index_offset_within_this_group', @_);
+sub tileOffsetVar {
+    return join('_', 'index_offset_within_this_tile', @_);
 }
-sub numLocalGroupItersVar {
-    return join('_', 'num_iters_in_group', @_);
+sub numLocalTileItersVar {
+    return join('_', 'num_iters_in_tile', @_);
 }
 sub loopIndexVar {
     return join('_', 'loop_index', @_);
@@ -219,9 +219,9 @@ sub addIndexVars1($$$) {
                 my $aavar = adjAlignVar($dim);
                 my $abvar = alignBeginVar($dim);
                 my $nvar = numItersVar($dim);
-                my $ntvar = numGroupsVar($dim);
-                my $tsvar = groupSizeVar($dim);
-                my $ntivar = numFullGroupItersVar($dim);
+                my $ntvar = numTilesVar($dim);
+                my $tsvar = tileSizeVar($dim);
+                my $ntivar = numFullTileItersVar($dim);
 
                 # Example alignment:
                 # bvar = 20.
@@ -241,20 +241,20 @@ sub addIndexVars1($$$) {
                     " This value is rounded up because the last iteration may cover fewer than $svar strides.",
                     " const $itype $nvar = yask::ceil_idiv_flr($evar - $abvar, $svar);";
 
-                # For grouped loops.
-                if ($features & $bGroup) {
+                # For tiled loops.
+                if ($features & $bTile) {
 
-                    # loop iterations within one group.
+                    # loop iterations within one tile.
                     push @$code,
-                        " // Number of iterations in one full group in dimension $dim.".
-                        " This value is rounded up, effectively increasing the group size if needed".
+                        " // Number of iterations in one full tile in dimension $dim.".
+                        " This value is rounded up, effectively increasing the tile size if needed".
                         " to a multiple of $svar.".
-                        " A group is considered 'full' if it has the max number of iterations.",
+                        " A tile is considered 'full' if it has the max number of iterations.",
                         " const $itype $ntivar = std::min(yask::ceil_idiv_flr($tsvar, $svar), $nvar);";
 
-                    # number of full groups.
+                    # number of full tiles.
                     push @$code, 
-                        " // Number of full groups in dimension $dim.",
+                        " // Number of full tiles in dimension $dim.",
                         " const $itype $ntvar = $ntivar ? $nvar / $ntivar : 0;";
                 }
             }
@@ -287,28 +287,28 @@ sub addIndexVars2($$$$) {
     my $outerDim = $loopDims->[0];        # outer dim of these loops.
     my $innerDim = $loopDims->[$#$loopDims]; # inner dim of these loops.
 
-    # Grouping.
-    if ($features & $bGroup) {
+    # Tiling.
+    if ($features & $bTile) {
 
-        die "error: serpentine not compatible with grouping.\n"
+        die "error: serpentine not compatible with tiling.\n"
             if $features & $bSerp;
-        die "error: square-wave not compatible with grouping.\n"
+        die "error: square-wave not compatible with tiling.\n"
             if $features & $bSquare;
 
         my $ndims = scalar @$loopDims;
 
         # declare local size vars.
-        push @$code, " // Working vars for iterations in groups.".
-            " These are initialized to full-group counts and then".
-            " reduced if we are in a partial group.";
+        push @$code, " // Working vars for iterations in tiles.".
+            " These are initialized to full-tile counts and then".
+            " reduced if we are in a partial tile.";
         for my $i (0 .. $ndims-1) {
             my $dim = $loopDims->[$i];
-            my $ltvar = numLocalGroupItersVar($dim);
-            my $ltval = numFullGroupItersVar($dim);
+            my $ltvar = numLocalTileItersVar($dim);
+            my $ltval = numFullTileItersVar($dim);
             push @$code, " $itype $ltvar = $ltval;";
         }
 
-        # calculate group indices and sizes and 1D offsets within groups.
+        # calculate tile indices and sizes and 1D offsets within tiles.
         my $prevOvar = $civar;  # previous offset.
         for my $i (0 .. $ndims-1) {
 
@@ -325,84 +325,84 @@ sub addIndexVars2($$$$) {
             my @inDims = @$loopDims[$i + 1 .. $ndims - 1];
             my $inStr = dimStr(@inDims);
 
-            # Size of group set.
-            my $tgvar = numGroupSetItersVar(@inDims);
+            # Size of tile set.
+            my $tgvar = numTileSetItersVar(@inDims);
             my $tgval = join(' * ', 
-                             (map { numLocalGroupItersVar($_) } @dims),
+                             (map { numLocalTileItersVar($_) } @dims),
                              (map { numItersVar($_) } @inDims));
             my $tgStr = @inDims ?
-                "the set of groups across $inStr" : "this group";
+                "the set of tiles across $inStr" : "this tile";
             push @$code,
                 " // Number of iterations in $tgStr.",
                 " $itype $tgvar = $tgval;";
 
-            # Index of this group in this dim.
-            my $tivar = groupIndexVar($dim);
+            # Index of this tile in this dim.
+            my $tivar = tileIndexVar($dim);
             my $tival = "$tgvar ? $prevOvar / $tgvar : 0";
             push @$code,
-                " // Index of this group in dimension $dim.",
+                " // Index of this tile in dimension $dim.",
                 " $itype $tivar = $tival;";
 
-            # 1D offset within group set.
-            my $ovar = groupSetOffsetVar(@inDims);
+            # 1D offset within tile set.
+            my $ovar = tileSetOffsetVar(@inDims);
             my $oval = "$prevOvar % $tgvar";
             push @$code,
                 " // Linear offset within $tgStr.",
                 " $itype $ovar = $oval;";
 
-            # Size of this group in this dim.
-            my $ltvar = numLocalGroupItersVar($dim);
+            # Size of this tile in this dim.
+            my $ltvar = numLocalTileItersVar($dim);
             my $ltval = numItersVar($dim).
-                " - (".numGroupsVar($dim)." * ".numFullGroupItersVar($dim).")";
+                " - (".numTilesVar($dim)." * ".numFullTileItersVar($dim).")";
             push @$code,
-                " // Adjust number of iterations in this group in dimension $dim.",
-                " if ($tivar >= ".numGroupsVar($dim).")".
+                " // Adjust number of iterations in this tile in dimension $dim.",
+                " if ($tivar >= ".numTilesVar($dim).")".
                 "  $ltvar = $ltval;";
 
             # for next dim.
             $prevOvar = $ovar;
         }
 
-        # Calculate nD indices within group and overall.
-        # TODO: allow different paths *within* group.
+        # Calculate nD indices within tile and overall.
+        # TODO: allow different paths *within* tile.
         for my $i (0 .. $ndims-1) {
             my $dim = $loopDims->[$i];
-            my $tivar = groupIndexVar($dim);
-            my $ovar = groupSetOffsetVar(); # last one calculated above.
+            my $tivar = tileIndexVar($dim);
+            my $ovar = tileSetOffsetVar(); # last one calculated above.
 
             # dims after (inside of) $i (empty for inner dim)
             my @inDims = @$loopDims[$i + 1 .. $ndims - 1];
 
-            # Determine offset within this group.
-            my $dovar = groupOffsetVar($dim);
+            # Determine offset within this tile.
+            my $dovar = tileOffsetVar($dim);
             my $doval = $ovar;
 
             # divisor of index is product of sizes of remaining nested dimensions.
             if (@inDims) {
-                my $subVal = join(' * ', map { numLocalGroupItersVar($_) } @inDims);
+                my $subVal = join(' * ', map { numLocalTileItersVar($_) } @inDims);
                 $doval .= " / ($subVal)";
             }
 
             # mod by size of this dimension (not needed for outer-most dim).
             if ($i > 0) {
-                $doval = "($doval) % ".numLocalGroupItersVar($dim);
+                $doval = "($doval) % ".numLocalTileItersVar($dim);
             }
 
             # output offset in this dim.
             push @$code,
-                " // Offset within this group in dimension $dim.",
+                " // Offset within this tile in dimension $dim.",
                 " $itype $dovar = $doval;";
 
             # final index in this dim.
             my $divar = indexVar($dim);
-            my $dival = numFullGroupItersVar($dim)." * $tivar + $dovar";
+            my $dival = numFullTileItersVar($dim)." * $tivar + $dovar";
             push @$code,
                 " // Zero-based, unit-stride index for ".dimStr($dim).".",
                 " $itype $divar = $dival;";
         }
     }
 
-    # No grouping.
+    # No tiling.
     else {
 
         # find enclosing dim outside of these loops if avail.
@@ -762,9 +762,9 @@ sub processCode($) {
             print "info: generating SIMD in following loop.\n";
         }
 
-        # use grouped path in next loop if possible.
-        elsif (lc $tok eq 'grouped') {
-            $features |= $bGroup;
+        # use tiled path in next loop if possible.
+        elsif (lc $tok eq 'tiled') {
+            $features |= $bTile;
         }
         
         # use serpentine path in next loop if possible.
@@ -987,11 +987,12 @@ sub main() {
             "Optional loop modifiers:\n",
             "  omp:             add OMP_PRAGMA to loop (distribute work across SW threads).*\n",
             "  simd:            add SIMD_PRAMA to loop (distribute work across SIMD HW).*\n",
-            "  grouped:         generate grouped scan within a collapsed loop.\n",
+            "  tiled:           generate tiled scan within a collapsed loop.\n",
             "  serpentine:      generate reverse scan when enclosing loop dimension is odd.*\n",
             "  square_wave:     generate 2D square-wave scan for two innermost dimensions of a collapsed loop.*\n",
             "      * Do not use these modifiers for YASK rank or block loops because they must\n",
             "        execute with strictly-increasing indices when using temporal tiling.\n",
+            "        Also, do not combile these modifiers with 'tiled'.\n",
             "A 'ScanIndices' type must be defined in C++ code prior to including the generated code.\n",
             "  This struct contains the following 'Indices' elements:\n",
             "  'begin':       [in] first index to scan in each dim.\n",
@@ -999,7 +1000,7 @@ sub main() {
             "  'stride':      [in] distance between each scan point in each dim.\n",
             "  'align':       [in] alignment of strides after first one.\n",
             "  'align_ofs':   [in] value to subtract from 'start' before applying alignment.\n",
-            "  'group_size':  [in] min size of each group of points visisted first in a multi-dim loop.\n",
+            "  'tile_size':   [in] size of each tile in each tiled dim (ignored if not tiled).\n",
             "  'start':       [out] set to first scan point in body of inner loop(s).\n",
             "  'stop':        [out] set to one past last scan point in body of inner loop(s).\n",
             "  'index':       [out] set to zero on first iteration of loop; increments each iteration.\n",
@@ -1018,7 +1019,7 @@ sub main() {
             "  $script -ndims 2 'loop(0,1) { }'\n",
             "  $script -ndims 3 'omp loop(0,1) { loop(2) { } }'\n",
             "  $script -ndims 3 'omp loop(0) { loop(1,2) { } }'\n",
-            "  $script -ndims 3 'grouped omp loop(0..N-1) { }'\n",
+            "  $script -ndims 3 'tiled omp loop(0..N-1) { }'\n",
             "  $script -ndims 3 'omp loop(0) { square_wave loop(1..N-1) { } }'\n",
             "  $script -ndims 4 'omp loop(0..N-2) { loop(N-2,N-1) { } }'\n";
         exit 1;
