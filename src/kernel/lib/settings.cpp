@@ -187,28 +187,29 @@ namespace yask {
 
         _rank_sizes = dims->_stencil_dims;
         _rank_sizes.set_vals_same(0); // 0 => calc from global.
+        _rank_tile_sizes = dims->_stencil_dims;
+        _rank_tile_sizes.set_vals_same(0); // 0 => rank size.
 
         _region_sizes = dims->_stencil_dims;
         _region_sizes.set_vals_same(0);   // 0 => rank size.
-
-        _block_group_sizes = dims->_stencil_dims;
-        _block_group_sizes.set_vals_same(0); // 0 => min size.
-
+        _region_tile_sizes = dims->_stencil_dims;
+        _region_tile_sizes.set_vals_same(0); // 0 => region size.
+        
         _block_sizes = dims->_stencil_dims;
         _block_sizes.set_vals_same(def_blk_size);
         _block_sizes.set_val(step_dim, 0); // 0 => default.
-
-        _mini_block_group_sizes = dims->_stencil_dims;
-        _mini_block_group_sizes.set_vals_same(0); // 0 => min size.
+        _block_tile_sizes = dims->_stencil_dims;
+        _block_tile_sizes.set_vals_same(0); // 0 => block size.
 
         _mini_block_sizes = dims->_stencil_dims;
         _mini_block_sizes.set_vals_same(0);            // 0 => calc from block.
-
-        _sub_block_group_sizes = dims->_stencil_dims;
-        _sub_block_group_sizes.set_vals_same(0); // 0 => min size.
+        _mini_block_tile_sizes = dims->_stencil_dims;
+        _mini_block_tile_sizes.set_vals_same(0); // 0 => mini-block size.
 
         _sub_block_sizes = dims->_stencil_dims;
         _sub_block_sizes.set_vals_same(0);            // 0 => calc from mini-block.
+        _sub_block_tile_sizes = dims->_stencil_dims;
+        _sub_block_tile_sizes.set_vals_same(0); // 0 => sub-block size.
 
         _min_pad_sizes = dims->_stencil_dims;
         _min_pad_sizes.set_vals_same(0);
@@ -276,15 +277,17 @@ namespace yask {
         // Following options are in 'this' object.
         _add_domain_option(parser, "g", "Global-domain (overall-problem) size", _global_sizes);
         _add_domain_option(parser, "l", "Local-domain (rank) size", _rank_sizes);
-        _add_domain_option(parser, "d", "Deprecated alias for local-domain size", _rank_sizes);
+        _add_domain_option(parser, "d", "[Deprecated] Alias for local-domain size", _rank_sizes);
         _add_domain_option(parser, "r", "Region size", _region_sizes, true);
         _add_domain_option(parser, "b", "Block size", _block_sizes, true);
         _add_domain_option(parser, "mb", "Mini-block size", _mini_block_sizes);
         _add_domain_option(parser, "sb", "Sub-block size", _sub_block_sizes);
-#ifdef SHOW_GROUPS
-        _add_domain_option(parser, "bg", "[Advanced] Block-group size", _block_group_sizes);
-        _add_domain_option(parser, "mbg", "[Advanced] Mini-block-group size", _mini_block_group_sizes);
-        _add_domain_option(parser, "sbg", "[Advanced] Sub-block-group size", _sub_block_group_sizes);
+#ifdef USE_TILING
+        _add_domain_option(parser, "l_tile", "[Advanced] Local-domain-tile size", _rank_tile_sizes);
+        _add_domain_option(parser, "r_tile", "[Advanced] Region-tile size", _region_tile_sizes);
+        _add_domain_option(parser, "b_tile", "[Advanced] Block-tile size", _block_tile_sizes);
+        _add_domain_option(parser, "mb_tile", "[Advanced] Mini-block-tile size", _mini_block_tile_sizes);
+        _add_domain_option(parser, "sb_tile", "[Advanced] Sub-block-tile size", _sub_block_tile_sizes);
 #endif
         _add_domain_option(parser, "mp", "[Advanced] Minimum var-padding size (including halo)", _min_pad_sizes);
         _add_domain_option(parser, "ep", "[Advanced] Extra var-padding size (beyond halo)", _extra_pad_sizes);
@@ -373,17 +376,21 @@ namespace yask {
                            "Adjust block sizes *during* normal operation to tune for performance: "
                            "Each step will use a different block size until an optimal size is found. "
                            "Will likely cause varying performance between steps, "
-                           "so this is not recommended for benchmarking.",
+                           "so this is not recommended for benchmarking. "
+                           "Auto-tuning blocks will automatically set the mini-block and sub-block "
+                           "sizes to their defaults after each change to the block sizes.",
                            _do_auto_tune));
         parser.add_option(new CommandLineParser::DoubleOption
                           ("auto_tune_min_secs",
                            "[Advanced] Minimum seconds to run new trial during auto-tuning "
-                           "for trial to be considered better than the existing best.",
+                           "for new trial to be considered better than the existing best.",
                            _tuner_min_secs));
         parser.add_option(new CommandLineParser::BoolOption
                           ("auto_tune_mini_blocks",
                            "[Advanced] Apply the auto-tuner to mini-block sizes instead of block sizes. "
-                           "Particularly useful when using temporal block tiling.",
+                           "Particularly useful when using temporal block tiling."
+                           "Auto-tuning mini-blocks will automatically set the sub-block "
+                           "sizes to their defaults after each change to the mini-block sizes.",
                            _tune_mini_blks));
         parser.add_option(new CommandLineParser::BoolOption
                           ("auto_tune_each_stage",
@@ -408,7 +415,7 @@ namespace yask {
         add_options(soln_parser);
         soln_parser.print_help(os);
         os << "\nTerms for the various levels of tiling from smallest to largest:\n"
-            " A 'point' is a single floating-point (FP) element.\n"
+            " A 'point' is a single floating-point (FP) element in a grid.\n"
             "  This binary uses " << REAL_BYTES << "-byte FP elements.\n"
             " A 'vector' is composed of points.\n"
             "  A 'folded vector' contains points in more than one dimension.\n"
@@ -439,11 +446,11 @@ namespace yask {
             "  This is the unit of work for one MPI rank.\n"
             "  Ranks are evaluated in parallel in separate MPI processes.\n"
             " The 'global-domain' or 'overall-problem' is composed of local-domains.\n"
-            "  This is the unit of work across all MPI ranks.\n" <<
-#ifndef USE_MPI
+            "  This is the unit of work across all MPI ranks.\n"
+            #ifndef USE_MPI
             "   This binary has NOT been compiled with MPI support,\n"
-            "   so the global-domain is equivalent to the single local-domain.\n" <<
-#endif
+            "   so the global-domain is equivalent to the single local-domain.\n"
+            #endif
             "\nGuidelines for setting tiling sizes:\n"
             " The vector and cluster sizes are set at compile-time, so\n"
             "  there are no run-time options to set them.\n"
@@ -488,10 +495,13 @@ namespace yask {
             " Set global-domain sizes to specify the work done across all MPI ranks.\n"
             "  A global-domain size of 0 in a given domain dimension =>\n"
             "   global-domain size is the sum of local-domain sizes in that dimension.\n"
-#ifdef SHOW_GROUPS
-            " Setting 'group' sizes controls only the order of tile evaluation.\n"
-            "  These are advanced settings that are not commonly used.\n"
-#endif
+            #ifdef USE_TILING
+            " Set 'tile' sizes to provide finer control over the order of evaluation\n"
+            "  within the given area. For example, sub-block-tiles create smaller areas\n"
+            "  within sub-blocks; points with the first sub-block-tile will be scheduled\n"
+            "  before those the second sub-block-tile, etc. (There is no additional level\n"
+            "  of looping or sychronization added with this tiling.)\n"
+            #endif
             "\nControlling OpenMP threading:\n"
             " Using '-max_threads 0' =>\n"
             "  max_threads is set to OpenMP's default number of threads.\n"
@@ -499,18 +509,22 @@ namespace yask {
             "  hyper-threads used without having to know the number of cores,\n"
             "  e.g., using '-thread_divisor 2' will halve the number of OpenMP threads.\n"
             " For stencil evaluation, threads are allocated using nested OpenMP:\n"
-            "  Num threads per region = max_threads / thread_divisor / block_threads.\n"
-            "  Num threads per block = block_threads.\n"
-            "  Num threads per sub-block = 1.\n"
-            "  Num threads used for halo exchange is same as num per region.\n" <<
-#ifdef USE_MPI
+            "  Num CPU threads per region = max_threads / thread_divisor / block_threads.\n"
+            "  Num CPU threads per block = block_threads.\n"
+            "  Num CPU threads per sub-block = 1.\n"
+            #ifdef USE_OFFLOAD
+            " When using offloaded kernel evaluation, there may be multiple teams\n"
+            "  and offload threads used within each sub-block. These may be controlled by\n"
+            "  the standard OpenMP environment vars OMP_NUM_TEAMS and OMP_TEAMS_THREAD_LIMIT.\n"
+            #endif
+            #ifdef USE_MPI
             "\nControlling MPI scaling:\n"
             "  To 'strong-scale' a given overall-problem size, use multiple MPI ranks\n"
             "   and keep the global-domain sizes constant.\n"
             "  To 'weak-scale' to a larger overall-problem size, use multiple MPI ranks\n"
-            "   and keep the local-domain sizes constant.\n" <<
-#endif
-            app_notes;
+            "   and keep the local-domain sizes constant.\n"
+            #endif
+           << app_notes;
 
         // Make example knobs.
         string ex1, ex2;
@@ -530,29 +544,49 @@ namespace yask {
         os << flush;
     }
 
-    // For each one of 'inner_sizes' that is zero,
-    // make it equal to corresponding one in 'outer_sizes'.
-    // Round up each of 'inner_sizes' to be a multiple of corresponding one in 'mults'.
+    // For each one of 'inner_sizes' dim that is zero,
+    // make it equal to same dim in 'outer_sizes'.
+    // Round up each of 'inner_sizes' dim to be a multiple of same dim in 'mults'.
+    // Limit size to 'outer_sizes'.
     // Output info to 'os' using '*_name' and dim names.
     // Does not process 'step_dim'.
     // Return product of number of inner subsets.
-    idx_t KernelSettings::find_num_subsets(ostream& os,
-                                          IdxTuple& inner_sizes, const string& inner_name,
-                                          const IdxTuple& outer_sizes, const string& outer_name,
-                                          const IdxTuple& mults, const std::string& step_dim) {
+    static idx_t find_num_subsets(ostream& os,
+                                  IdxTuple& inner_sizes, const string& inner_name,
+                                  const IdxTuple& outer_sizes, const string& outer_name,
+                                  const IdxTuple& mults, const string& mult_name,
+                                  const std::string& step_dim) {
 
         idx_t prod = 1;
+        bool rounded = false;
+        bool trimmed = false;
         for (auto& dim : inner_sizes) {
             auto& dname = dim._get_name();
             if (dname == step_dim)
                 continue;
             idx_t* dptr = inner_sizes.lookup(dname); // use lookup() to get non-const ptr.
 
+            // Set default to outer size.
             idx_t outer_size = outer_sizes[dname];
             if (*dptr <= 0)
                 *dptr = outer_size; // 0 => use full size as default.
-            if (mults.lookup(dname) && mults[dname] > 1)
-                *dptr = ROUND_UP(*dptr, mults[dname]);
+
+            // Round up.
+            if (mults.lookup(dname) && mults[dname] > 1) {
+                idx_t rsz = ROUND_UP(*dptr, mults[dname]);
+                if (rsz != *dptr) {
+                    *dptr = rsz;
+                    rounded = true;
+                }
+            }
+
+            // Limit.
+            if (*dptr > outer_size) {
+                *dptr = outer_size;
+                trimmed = true;
+            }
+
+            // Calc stats.
             idx_t inner_size = *dptr;
             idx_t ninner = (inner_size <= 0) ? 0 :
                 (outer_size + inner_size - 1) / inner_size; // full or partial.
@@ -561,16 +595,25 @@ namespace yask {
             idx_t nfull = rem ? (ninner - 1) : ninner; // full only.
 
             if (outer_size > 0) {
-                os << " In '" << dname << "' dimension, " <<
+                os << " In '" << dname << "' dim, " <<
                     outer_name << " of size " <<
-                    outer_size << " contains " << nfull << " " <<
-                    inner_name << "(s) of size " << inner_size;
+                    outer_size << " contains " << ninner << " " <<
+                    inner_name << "(s)";
                 if (rem)
-                    os << " plus 1 remainder " << inner_name << " of size " << rem;
-                os << "." << endl;
+                    os << ": " << nfull << " of full-size " << inner_size <<
+                        " plus 1 of remainder-size " << rem;
+                else
+                    os << " of size " << inner_size;
+                os << ".\n";
             }
             prod *= ninner;
         }
+        if (rounded)
+            os << " The " << inner_name << " sizes have been rounded up to multiples of " <<
+                mult_name << " sizes.\n";
+        if (trimmed)
+            os << " The " << inner_name << " sizes have been limited to " <<
+                outer_name << " sizes.\n";
         return prod;
     }
 
@@ -604,12 +647,14 @@ namespace yask {
         // current temporal block size if needed.
         // Default region size (if 0) will be size of rank-domain.
         os << "\nRegions:" << endl;
-        auto nr = find_num_subsets(os, _region_sizes, "region",
+        auto nr = find_num_subsets(os,
+                                   _region_sizes, "region",
                                    _rank_sizes, "local-domain",
-                                   cluster_pts, step_dim);
+                                   cluster_pts, "cluster",
+                                   step_dim);
         os << " num-regions-per-local-domain-per-step: " << nr << endl;
         os << " Since the region size in the '" << step_dim <<
-            "' dim is " << rt << ", temporal wave-front rank tiling is ";
+            "' dim is " << rt << ", temporal wave-front region tiling is ";
         if (!rt) os << "NOT ";
         os << "enabled.\n";
 
@@ -617,34 +662,37 @@ namespace yask {
         // Also fix up block sizes as needed.
         // Default block size (if 0) will be size of region.
         os << "\nBlocks:" << endl;
-        auto nb = find_num_subsets(os, _block_sizes, "block",
-                                 _region_sizes, "region",
-                                 cluster_pts, step_dim);
+        auto nb = find_num_subsets(os,
+                                   _block_sizes, "block",
+                                   _region_sizes, "region",
+                                   cluster_pts, "cluster",
+                                   step_dim);
         os << " num-blocks-per-region-per-step: " << nb << endl;
         os << " num-blocks-per-local-domain-per-step: " << (nb * nr) << endl;
         os << " Since the block size in the '" << step_dim <<
-            "' dim is " << bt << ", temporal blocking is ";
+            "' dim is " << bt << ", temporal concurrent block tiling is ";
         if (!bt) os << "NOT ";
         os << "enabled.\n";
 
         // Determine num mini-blocks.
         // Also fix up mini-block sizes as needed.
         os << "\nMini-blocks:" << endl;
-        auto nmb = find_num_subsets(os, _mini_block_sizes, "mini-block",
-                                  _block_sizes, "block",
-                                  cluster_pts, step_dim);
+        auto nmb = find_num_subsets(os,
+                                    _mini_block_sizes, "mini-block",
+                                    _block_sizes, "block",
+                                    cluster_pts, "cluster",
+                                    step_dim);
         os << " num-mini-blocks-per-block-per-step: " << nmb << endl;
         os << " num-mini-blocks-per-region-per-step: " << (nmb * nb) << endl;
         os << " num-mini-blocks-per-local-domain-per-step: " << (nmb * nb * nr) << endl;
         os << " Since the mini-block size in the '" << step_dim <<
-            "' dim is " << mbt << ", temporal wave-front block tiling is ";
+            "' dim is " << mbt << ", temporal wave-front mini-block tiling is ";
         if (!mbt) os << "NOT ";
         os << "enabled.\n";
 
-        // Adjust defaults for sub-blocks to be slab if
-        // we are using more than one block thread.
-        // Otherwise, find_num_subsets() would set default
-        // to entire block.
+        // Adjust defaults for sub-blocks to be slab if we are using more
+        // than one block thread.  Otherwise, find_num_subsets() would set
+        // default to entire block, and we wouldn't use multiple threads.
         if (num_block_threads > 1 && _sub_block_sizes.sum() == 0) {
 
             // Default dim is outer one.
@@ -690,13 +738,16 @@ namespace yask {
         // Determine num sub-blocks.
         // Also fix up sub-block sizes as needed.
         os << "\nSub-blocks:" << endl;
-        auto nsb = find_num_subsets(os, _sub_block_sizes, "sub-block",
-                                  _mini_block_sizes, "mini-block",
-                                  cluster_pts, step_dim);
+        auto nsb = find_num_subsets(os,
+                                    _sub_block_sizes, "sub-block",
+                                    _mini_block_sizes, "mini-block",
+                                    cluster_pts, "cluster",
+                                    step_dim);
         os << " num-sub-blocks-per-mini-block-per-step: " << nsb << endl;
         os << " num-sub-blocks-per-block-per-step: " << (nsb * nmb) << endl;
         os << " num-sub-blocks-per-region-per-step: " << (nsb * nmb * nb) << endl;
         os << " num-sub-blocks-per-rank-per-step: " << (nsb * nmb * nb * nr) << endl;
+        os << " Temporal sub-block tiling is never enabled.\n";
 
         // Determine binding dimension. Do this again if it was done above
         // by default because it may have changed during adjustment.
@@ -724,57 +775,60 @@ namespace yask {
                 "  because block-thread binding is enabled on " << num_block_threads << " block threads.\n";
         }
 
-        // Now, we adjust groups. These are done after all the above sizes
-        // because group sizes are more like 'guidelines' and don't have
+#ifdef USE_TILING
+        // Now, we adjust tiles. These are done after all the above sizes
+        // because tile sizes are more like 'guidelines' and don't have
         // their own loops.
 
-        // Adjust defaults for groups to be min size.
-        // Otherwise, find_num_block_groups_in_region() would set default
-        // to entire region.
-        DOMAIN_VAR_LOOP(i, j) {
-            if (_block_group_sizes[i] == 0)
-                _block_group_sizes[i] = 1; // will be rounded up to min size.
-            if (_mini_block_group_sizes[i] == 0)
-                _mini_block_group_sizes[i] = 1; // will be rounded up to min size.
-            if (_sub_block_group_sizes[i] == 0)
-                _sub_block_group_sizes[i] = 1; // will be rounded up to min size.
-        }
+        // Show num rank-tiles.
+        // TODO: only print this if rank-tiling is enabled.
+        os << "\nLocal-domain tiles:\n";
+        auto nlg = find_num_subsets(os,
+                                    _rank_tile_sizes, "local-domain-tile",
+                                    _rank_sizes, "local-domain",
+                                    _region_sizes, "region",
+                                    step_dim);
+        os << " num-local-domain-tiles-per-local-domain-per-step: " << nlg << endl;
 
-#ifdef SHOW_GROUPS
-        os << "\nGroups (only affect ordering):" << endl;
+        // Show num region-tiles.
+        // TODO: only print this if region-tiling is enabled.
+        os << "\nRegion tiles:\n";
+        auto nrg = find_num_subsets(os,
+                                    _region_tile_sizes, "region-tile",
+                                    _region_sizes, "region",
+                                    _block_sizes, "block",
+                                    step_dim);
+        os << " num-region-tiles-per-region-per-step: " << nlg << endl;
 
-        // Show num block-groups.
-        // TODO: only print this if block-grouping is enabled.
-        auto nbg = find_num_subsets(os, _block_group_sizes, "block-group",
-                                  _region_sizes, "region",
-                                  _block_sizes, step_dim);
-        os << " num-block-groups-per-region-per-step: " << nbg << endl;
-        auto nb_g = find_num_subsets(os, _block_sizes, "block",
-                                   _block_group_sizes, "block-group",
-                                   cluster_pts, step_dim);
-        os << " num-blocks-per-block-group-per-step: " << nb_g << endl;
+        // Show num block-tiles.
+        // TODO: only print this if block-tiling is enabled.
+        os << "\nBlock tiles:\n";
+        auto nbg = find_num_subsets(os,
+                                    _block_tile_sizes, "block-tile",
+                                    _block_sizes, "block",
+                                    _mini_block_sizes, "mini-block",
+                                    step_dim);
+        os << " num-block-tiles-per-block-per-step: " << nbg << endl;
 
-        // Show num mini-block-groups.
-        // TODO: only print this if mini-block-grouping is enabled.
-        auto nmbg = find_num_subsets(os, _mini_block_group_sizes, "mini-block-group",
-                                   _block_sizes, "block",
-                                   _mini_block_sizes, step_dim);
-        os << " num-mini-block-groups-per-block-per-step: " << nmbg << endl;
-        auto nmb_g = find_num_subsets(os, _mini_block_sizes, "mini-block",
-                                    _mini_block_group_sizes, "mini-block-group",
-                                    cluster_pts, step_dim);
-        os << " num-mini-blocks-per-block-group-per-step: " << nmb_g << endl;
+        // Show num mini-block-tiles.
+        // TODO: only print this if mini-block-tiling is enabled.
+        os << "\nMini-block tiles:\n";
+        auto nmbt = find_num_subsets(os,
+                                     _mini_block_tile_sizes, "mini-block-tile",
+                                     _mini_block_sizes, "mini-block",
+                                     _sub_block_sizes, "sub-block",
+                                     step_dim);
+        os << " num-mini-block-tiles-per-mini-block-per-step: " << nmbt << endl;
 
-        // Show num sub-block-groups.
-        // TODO: only print this if sub-block-grouping is enabled.
-        auto nsbg = find_num_subsets(os, _sub_block_group_sizes, "sub-block-group",
-                                   _mini_block_sizes, "mini-block",
-                                   _sub_block_sizes, step_dim);
-        os << " num-sub-block-groups-per-mini-block-per-step: " << nsbg << endl;
-        auto nsb_g = find_num_subsets(os, _sub_block_sizes, "sub-block",
-                                      _sub_block_group_sizes, "sub-block-group",
-                                      cluster_pts, step_dim);
-        os << " num-sub-blocks-per-sub-block-group-per-step: " << nsb_g << endl;
+        // Show num sub-block-tiles.
+        // TODO: only print this if sub-block-tiling is enabled.
+        os << "\nSub-block tiles:\n";
+        auto nsbt = find_num_subsets(os,
+                                     _sub_block_tile_sizes, "sub-block-tile",
+                                     _sub_block_sizes, "sub-block",
+                                     cluster_pts, "cluster",
+                                     step_dim);
+        os << " num-sub-block-tiles-per-sub-block-per-step: " << nsbt << endl;
 #endif
         os << endl;
     }

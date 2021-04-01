@@ -150,9 +150,9 @@ sub usage {
 my %geneRanges;
 my $autoKey = 'def_';          # prefix for default setting.
 
-# control groups.
+# control tiles.
 # TODO: make an option.
-my $showGroups = 0;
+my $showTiles = 0;
 
 # autoflush.
 $| = 1;
@@ -273,7 +273,7 @@ for my $origOpt (@ARGV) {
     # special case for local-domain size: also set default for other max sizes.
     if ($key =~ /^l[xyz]?$/ && $max > 0) {
       my @szs = qw(r b mb sb);
-      push @szs, qw(bg mbg sbg) if $showGroups;
+      push @szs, qw(bg mbg sbg) if $showTiles;
       for my $i (@szs) {
         my $key2 = $key;
         $key2 =~ s/^l/$i/;
@@ -328,11 +328,11 @@ $outFH->open(">$outFile") or die "error: cannot write to '$outFile'\n"
   unless $checking;
 
 # things to get from the run.
-if ($showGroups) {
+if ($showTiles) {
   push @YaskUtils::log_keys,
-    'block-group-size',
-    'mini-block-group-size';
-    'sub-block-group-size';
+    'block-tile-size',
+    'mini-block-tile-size';
+    'sub-block-tile-size';
 }
 
 # how many individuals to create randomly and then keep at any given time.
@@ -372,7 +372,7 @@ my @loopOrders =
 
 # Possible space-filling curve modifiers.
 my @pathNamesIncreasing =
-  ('', 'grouped');
+  ('', 'tiled');
 my @pathNames =
   (@pathNamesIncreasing, 'serpentine', 'square_wave serpentine', 'square_wave');
 
@@ -450,18 +450,18 @@ my @rangesAll =
    [ 0, 1, 1, 'bind_block_threads' ],
   );
 
-if ($showGroups) {
+if ($showTiles) {
   push @rangesAll,
     (
-     # block-group size.
-     [ 0, $maxDim, 1, 'bgx' ],
-     [ 0, $maxDim, 1, 'bgy' ],
-     [ 0, $maxDim, 1, 'bgz' ],
+     # block-tile size.
+     [ 0, $maxDim, 1, 'btx' ],
+     [ 0, $maxDim, 1, 'bty' ],
+     [ 0, $maxDim, 1, 'btz' ],
      
-     # sub-block-group size.
-     [ 0, $maxDim, 1, 'sbgx' ],
-     [ 0, $maxDim, 1, 'sbgy' ],
-     [ 0, $maxDim, 1, 'sbgz' ],
+     # sub-block-tile size.
+     [ 0, $maxDim, 1, 'sbtx' ],
+     [ 0, $maxDim, 1, 'sbty' ],
+     [ 0, $maxDim, 1, 'sbtz' ],
     );
 }
 
@@ -678,7 +678,7 @@ sub readHashes($$$) {
 
   my @vals;
   for my $d (@dirs) {
-    if ($key =~ /bg$/ && !$showGroups) {
+    if ($key =~ /bg$/ && !$showTiles) {
       push @vals, 1;
     } else {
       push @vals, readHash($hash, "$key$d", $isBuildVar);
@@ -1042,7 +1042,7 @@ sub makeLoopVars($$$$) {
   my $pathKey = $tunerPrefix."Path";
   if (exists $h->{$pathKey}) {
     my $path = readHash($h, $pathKey, 1);
-    my $pathStr = @pathNames[$path];                # e.g., 'grouped'.
+    my $pathStr = @pathNames[$path];                # e.g., 'tiled'.
     $outerMods = $pathStr;
   }
   
@@ -1180,8 +1180,8 @@ sub fitness {
   adjSizes(\@bs, \@rs);         # block <= region.
   adjSizes(\@mbs, \@bs);        # mini-block <= block.
   adjSizes(\@sbs, \@mbs);       # sub-block <= mini-block.
-  adjSizes(\@bgs, \@rs);        # block-group <= region.
-  adjSizes(\@sbgs, \@mbs);      # sub-block-group <= mini-block.
+  adjSizes(\@bts, \@rs);        # block-tile <= region.
+  adjSizes(\@sbts, \@mbs);      # sub-block-tile <= mini-block.
 
   # 3d sizes in points.
   my $dPts = mult(@ds);
@@ -1191,8 +1191,8 @@ sub fitness {
   my $sbPts = mult(@sbs);
   my $cPts = mult(@cs);
   my $fPts = mult(@fs);
-  my $bgPts = mult(@bgs);
-  my $sbgPts = mult(@sbgs);
+  my $btPts = mult(@bts);
+  my $sbtPts = mult(@sbts);
 
   # Clusters per block.
   my @bcs = map { ceil($bs[$_] / $cs[$_]) } 0..$#dirs;
@@ -1226,9 +1226,9 @@ sub fitness {
     print "  clusters per block = $bCls\n";
     print "  mini-blocks per block = $bMbs\n";
     print "  mem estimate = ".($overallSize/$YaskUtils::oneGi)." GB\n";
-    if ($showGroups) {
-      print "  block-group size = $bgPts\n";
-      print "  sub-block-group size = $sbgPts\n";
+    if ($showTiles) {
+      print "  block-tile size = $btPts\n";
+      print "  sub-block-tile size = $sbtPts\n";
     }
   }
 
@@ -1284,9 +1284,9 @@ sub fitness {
   addStat($ok, 'clusters per block', $bCls);
   addStat($ok, 'mini-blocks per block', $bMbs);
   addStat($ok, 'vectors per cluster', $cvs);
-  if ($showGroups) {
-    addStat($ok, 'block-group size', $bgPts);
-    addStat($ok, 'sub-block-group size', $sbgPts);
+  if ($showTiles) {
+    addStat($ok, 'block-tile size', $btPts);
+    addStat($ok, 'sub-block-tile size', $sbtPts);
   }
 
   # exit here if just checking.
@@ -1341,9 +1341,9 @@ sub fitness {
   $args .= " -mbx $mbs[0] -mby $mbs[1] -mbz $mbs[2]";
   $args .= " -sbx $sbs[0] -sby $sbs[1] -sbz $sbs[2]";
   $args .= " -epx $ps[0] -epy $ps[1] -epz $ps[2]";
-  if ($showGroups) {
-    $args .= " -bgx $bgs[0] -bgy $bgs[1] -bgz $bgs[2]";
-    $args .= " -sbgx $sbgs[0] -sbgy $sbgs[1] -sbgz $sbgs[2]";
+  if ($showTiles) {
+    $args .= " -btx $bts[0] -bty $bts[1] -btz $bts[2]";
+    $args .= " -sbtx $sbts[0] -sbty $sbts[1] -sbtz $sbts[2]";
   }
 
   # num of secs and trials.

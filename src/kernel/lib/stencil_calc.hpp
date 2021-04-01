@@ -78,21 +78,19 @@ namespace yask {
             return norm;
         }
         inline ScanIndices
-        normalize_indices(const ScanIndices& orig, bool unit_stride) {
+        normalize_indices(const ScanIndices& orig) {
             ScanIndices norm(orig);
             norm.begin = normalize_indices(orig.begin);
             norm.start = norm.begin;
             norm.end = normalize_indices(orig.end);
             norm.stop = norm.end;
+            norm.tile_size = normalize_indices(orig.tile_size);
 
-            // This is superceded by the ALIGN_EXPR macros set by
-            // the YASK compiler, so this isn't needed.
+            // These are superceded by the ALIGN_EXPR and STRIDE_EXPR macros
+            // set by the YASK compiler, so this isn't really needed, but
+            // they're set for consistency.
             norm.align.set_from_const(1); // 1-vector alignment.
-
-            // This is superceded by the STRIDE_EXPR macros set by
-            // the YASK compiler, so this isn't needed.
-            if (unit_stride)
-                norm.stride.set_from_const(1); // 1-vector stride.
+            norm.stride.set_from_const(1); // 1-vector stride.
             return norm;
         }
 
@@ -374,14 +372,13 @@ namespace yask {
             // Init sub-block begin & end from block start & stop indices.
             // Use the 'misc' loops. Indices for these loops will be scalar and
             // global rather than normalized as in the cluster and vector loops.
-            ScanIndices misc_idxs(*dims, true);
-            misc_idxs.init_from_outer(mini_block_idxs);
+            ScanIndices sb_idxs = mini_block_idxs.create_inner();
 
-            // Stride sizes and alignment are one element.
-            misc_idxs.stride.set_from_const(1);
-            misc_idxs.align.set_from_const(1);
-
-            calc_sub_block_dbg2(cp, region_thread_idx, misc_idxs);
+            // Stride and alignment to 1 element.
+            sb_idxs.stride.set_from_const(1);
+            sb_idxs.align.set_from_const(1);
+            
+            calc_sub_block_dbg2(cp, region_thread_idx, sb_idxs);
         }
 
         // Scalar calc loop.
@@ -473,8 +470,10 @@ namespace yask {
             // These indices are in element units and global (NOT rank-relative).
             // All other indices below are contructed from 'sb_idxs' to ensure
             // step indices are copied properly.
-            ScanIndices sb_idxs(*dims, true);
-            sb_idxs.init_from_outer(mini_block_idxs);
+            ScanIndices sb_idxs = mini_block_idxs.create_inner();
+
+            // Tiles in sub-blocks.
+            sb_idxs.tile_size = settings._sub_block_tile_sizes;
 
             // Sub block indices in element units and rank-relative.
             ScanIndices sb_eidxs(sb_idxs);
@@ -686,7 +685,7 @@ namespace yask {
             } // domain dims.
 
             // Normalized cluster indices.
-            auto norm_fcidxs = normalize_indices(sb_fcidxs, false);
+            auto norm_fcidxs = normalize_indices(sb_fcidxs);
 
             if (!do_clusters)
                 TRACE_MSG("no full clusters to calculate");
@@ -731,8 +730,8 @@ namespace yask {
                 #else
 
                 // Normalized vector indices.
-                auto norm_fvidxs = normalize_indices(sb_fvidxs, true);
-                auto norm_ovidxs = normalize_indices(sb_ovidxs, true);
+                auto norm_fvidxs = normalize_indices(sb_fvidxs);
+                auto norm_ovidxs = normalize_indices(sb_ovidxs);
 
                 // Need to find range in each border part.
                 // 2D example w/4 edges and 4 corners:

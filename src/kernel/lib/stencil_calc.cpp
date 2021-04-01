@@ -49,11 +49,7 @@ namespace yask {
         assert(!is_scratch());
 
         // No TB allowed here.
-#ifdef CHECK
-        idx_t begin_t = mini_block_idxs.begin[step_posn];
-        idx_t end_t = mini_block_idxs.end[step_posn];
-        assert(abs(end_t - begin_t) == 1);
-#endif
+        assert(abs(mini_block_idxs.get_overall_range(step_posn)) == 1);
 
         // Nothing to do if outer BB is empty.
         if (_bundle_bb.bb_num_points == 0) {
@@ -130,6 +126,11 @@ namespace yask {
                 // copy of 'mb_idxs' except when updating scratch-vars.
                 ScanIndices adj_mb_idxs = sg->adjust_span(region_thread_idx, mb_idxs);
 
+                // Tweak settings for adjusted indices.
+                adj_mb_idxs.adjust_from_settings(settings._mini_block_sizes,
+                                                 settings._mini_block_tile_sizes,
+                                                 settings._sub_block_sizes);
+
                 // If binding threads to data.
                 if (bind_threads) {
 
@@ -141,7 +142,7 @@ namespace yask {
                         // If this is the binding dim, set stride size
                         // and alignment granularity to the slab
                         // width. Setting the alignment keeps slabs
-                        // aligned between stages.
+                        // aligned between stages and/or steps.
                         if (i == bind_posn) {
                             adj_mb_idxs.stride[i] = bind_slab_pts;
                             adj_mb_idxs.align[i] = bind_slab_pts;
@@ -152,7 +153,7 @@ namespace yask {
                         // only option for mini-block shapes when
                         // binding.  TODO: consider other options.
                         else
-                            adj_mb_idxs.stride[i] = adj_mb_idxs.end[i] - adj_mb_idxs.begin[i];
+                            adj_mb_idxs.stride[i] = adj_mb_idxs.get_overall_range(i);
                     }
 
                     TRACE_MSG("calc_mini_block('" << get_name() << "'): " <<
@@ -203,15 +204,6 @@ namespace yask {
                 // If not binding or there is only one block per thread.
                 // (This is the more common case.)
                 else {
-
-                    // Tweak settings for adjusted indices.
-                    DOMAIN_VAR_LOOP_FAST(i, j) {
-
-                        // If original [or auto-tuned] sub-block covers
-                        // entire mini-block, set stride size to full width.
-                        if (settings._sub_block_sizes[i] >= settings._mini_block_sizes[i])
-                            adj_mb_idxs.stride[i] = adj_mb_idxs.end[i] - adj_mb_idxs.begin[i];
-                    }
 
                     TRACE_MSG("calc_mini_block('" << get_name() << "'): " <<
                               " for reqd bundle '" << sg->get_name() << "': [" <<
@@ -373,10 +365,9 @@ namespace yask {
             // Stats for this bundle for 1 pt.
             idx_t writes1 = 0, reads1 = 0, fpops1 = 0;
 
-            // Loop through all the needed bundles to
-            // count stats for scratch bundles.
-            // Does not count extra ops needed in scratch halos
-            // since this varies depending on block size.
+            // Loop through all the needed bundles to count stats for
+            // scratch bundles.  Does not count extra ops needed in scratch
+            // halos since this varies depending on block size.
             auto sg_list = sg->get_reqd_bundles();
             for (auto* rsg : sg_list) {
                 reads1 += rsg->get_scalar_points_read();

@@ -145,7 +145,7 @@ namespace yask {
 
                 // Find the bundles that need to be processed.
                 // This will be the prerequisite scratch-var
-                // bundles plus this non-scratch group.
+                // bundles plus this non-scratch tile.
                 auto sg_list = asg->get_reqd_bundles();
 
                 // Loop through all the needed bundles.
@@ -284,18 +284,6 @@ namespace yask {
                 }
             }
 
-            // If original region covered entire rank in a dim, set
-            // stride size to ensure only one stride is taken.
-            DOMAIN_VAR_LOOP_FAST(i, j) {
-                if (opts->_region_sizes[i] >= opts->_rank_sizes[i])
-                    stride[i] = end[i] - begin[i];
-            }
-            TRACE_MSG("after adjustment for " << num_wf_shifts <<
-                      " wave-front shift(s): [" <<
-                      begin.make_dim_val_str() << " ... " <<
-                      end.make_dim_val_str() << ") by " <<
-                      stride.make_dim_val_str());
-
             // At this point, 'begin' and 'end' should describe the *max* range
             // needed in the domain for this rank for the first time step.  At
             // any subsequent time step, this max may be shifted for temporal
@@ -308,7 +296,16 @@ namespace yask {
             rank_idxs.begin = begin;
             rank_idxs.end = end;
             rank_idxs.stride = stride;
-
+            rank_idxs.tile_size = opts->_rank_tile_sizes;
+            rank_idxs.adjust_from_settings(opts->_rank_sizes,
+                                           opts->_rank_tile_sizes,
+                                           opts->_region_sizes);
+            TRACE_MSG("after adjustment for " << num_wf_shifts <<
+                      " wave-front shift(s): [" <<
+                      rank_idxs.begin.make_val_str() << " ... " <<
+                      rank_idxs.end.make_val_str() << ") by " <<
+                      rank_idxs.stride.make_val_str());
+            
             // Make sure threads are set properly for a region.
             set_region_threads();
 
@@ -630,8 +627,7 @@ namespace yask {
             int_time.start();
 
         // Init region begin & end from rank start & stop indices.
-        ScanIndices region_idxs(*dims, true, &rank_domain_offsets);
-        region_idxs.init_from_outer(rank_idxs);
+        ScanIndices region_idxs = rank_idxs.create_inner();
 
         // Time range.
         // When doing WF rank tiling, this loop will stride through
@@ -649,6 +645,7 @@ namespace yask {
         for (idx_t index_t = 0; index_t < num_t; index_t++) {
 
             // This value of index_t steps from start_t to stop_t-1.
+            // Be sure to handle reverse steps.
             const idx_t start_t = begin_t + (index_t * stride_t);
             const idx_t stop_t = (stride_t > 0) ?
                 min(start_t + stride_t, end_t) :
@@ -684,13 +681,14 @@ namespace yask {
                     }
 
                     // Strides within a region are based on stage block sizes.
+                    // These may be different when per-stage auto-tuning has been done.
                     auto& settings = bp->get_active_settings();
                     region_idxs.stride = settings._block_sizes;
                     region_idxs.stride[step_posn] = stride_t;
 
-                    // Groups in region loops are based on block-group sizes.
-                    region_idxs.group_size = settings._block_group_sizes;
-
+                    // Tiles in region loops.
+                    region_idxs.tile_size = settings._region_tile_sizes;
+                    
                     // Set region_idxs begin & end based on shifted rank
                     // start & stop (original region begin & end), rank
                     // boundaries, and stage BB. This will be the base of the
@@ -698,14 +696,9 @@ namespace yask {
                     bool ok = shift_region(rank_idxs.start, rank_idxs.stop,
                                            region_shift_num, bp,
                                            region_idxs);
-
-                    DOMAIN_VAR_LOOP_FAST(i, j) {
-
-                        // If there is only one blk in a region, make sure
-                        // this blk fills this whole region.
-                        if (settings._block_sizes[i] >= settings._region_sizes[i])
-                            region_idxs.stride[i] = region_idxs.end[i] - region_idxs.begin[i];
-                    }
+                    region_idxs.adjust_from_settings(settings._region_sizes,
+                                                     settings._region_tile_sizes,
+                                                     settings._block_sizes);
 
                     // Only need to loop through the span of the region if it is
                     // at least partly inside the extended BB. For overlapping
@@ -751,13 +744,14 @@ namespace yask {
                 StagePtr bp;
 
                 // Strides within a region are based on rank block sizes.
+                // Cannot use different strides per stage with TB.
                 auto& settings = *opts;
                 region_idxs.stride = settings._block_sizes;
                 region_idxs.stride[step_posn] = stride_t;
 
-                // Groups in region loops are based on block-group sizes.
-                region_idxs.group_size = settings._block_group_sizes;
-
+                // Tiles in region loops.
+                region_idxs.tile_size = settings._region_tile_sizes;
+                
                 // Set region_idxs begin & end based on shifted start & stop
                 // and rank boundaries.  This will be the base of the region
                 // loops. The bounds in region_idxs may be outside the
@@ -765,24 +759,20 @@ namespace yask {
                 bool ok = shift_region(rank_idxs.start, rank_idxs.stop,
                                        region_shift_num, bp,
                                        region_idxs);
+                region_idxs.adjust_from_settings(settings._region_sizes,
+                                                 settings._region_tile_sizes,
+                                                 settings._block_sizes);
 
                 // Should always be valid because we just shifted (no trim).
                 // Trimming will be done at the mini-block level.
                 assert(ok);
 
-                DOMAIN_VAR_LOOP_FAST(i, j) {
-
-                    // If original blk covered entire region, reset stride.
-                    if (settings._block_sizes[i] >= settings._region_sizes[i])
-                        region_idxs.stride[i] = region_idxs.end[i] - region_idxs.begin[i];
-                }
-
                 // To tesselate n-D domain space, we use n+1 distinct
-                // "phases".  For example, 1-D TB uses "upward" triangles
-                // and "downward" triangles. Region threads sync after every
-                // phase. Thus, the phase loop is here around the generated
-                // OMP loops.  TODO: schedule phases and their shapes via task
-                // dependencies.
+                // "phases".  For example, 1-D TB uses "upward" trapezoids
+                // and "downward" trapezoids. Region threads sync after
+                // every phase. Thus, the phase loop is here around the
+                // generated OMP loops.  TODO: schedule phases and their
+                // shapes via task dependencies.
                 idx_t nphases = nddims + 1;
                 for (idx_t phase = 0; phase < nphases; phase++) {
 
@@ -855,8 +845,7 @@ namespace yask {
                   ") by region thread " << region_thread_idx);
 
         // Init block begin & end from region start & stop indices.
-        ScanIndices block_idxs(*dims, true);
-        block_idxs.init_from_outer(region_idxs);
+        ScanIndices block_idxs = region_idxs.create_inner();
 
         // Time range.
         // When not doing TB, there is only one step.
@@ -890,8 +879,8 @@ namespace yask {
             block_idxs.stride = settings._mini_block_sizes;
             block_idxs.stride[step_posn] = stride_t;
 
-            // Groups in block loops are based on mini-block-group sizes.
-            block_idxs.group_size = settings._mini_block_group_sizes;
+            // Tiles in block loops.
+            block_idxs.tile_size = settings._block_tile_sizes;
 
             // Default settings for no TB.
             StagePtr bp = sel_bp;
@@ -901,6 +890,9 @@ namespace yask {
             idx_t shift_num = 0;
             bit_mask_t bridge_mask = 0;
             ScanIndices adj_block_idxs = block_idxs;
+            adj_block_idxs.adjust_from_settings(settings._block_sizes,
+                                                settings._block_tile_sizes,
+                                                settings._mini_block_sizes);
 
             // Include automatically-generated loop code to
             // call calc_mini_block() for each mini-block in this block.
@@ -941,8 +933,8 @@ namespace yask {
             block_idxs.stride = settings._mini_block_sizes;
             block_idxs.stride[step_posn] = step_dir;
 
-            // Groups in block loops are based on mini-block-group sizes.
-            block_idxs.group_size = settings._mini_block_group_sizes;
+            // Tiles in block loops.
+            block_idxs.tile_size = settings._block_tile_sizes;
 
             // Increase range of block to cover all phases and
             // shapes.
@@ -960,11 +952,10 @@ namespace yask {
                 // do.
                 auto width = region_idxs.stop[i] - region_idxs.start[i];
                 adj_block_idxs.end[i] += width;
-
-                // If original MB covers a whole block, reset stride.
-                if (settings._mini_block_sizes[i] >= settings._block_sizes[i])
-                    adj_block_idxs.stride[i] = adj_block_idxs.end[i] - adj_block_idxs.begin[i];
             }
+            adj_block_idxs.adjust_from_settings(settings._block_sizes,
+                                                settings._block_tile_sizes,
+                                                settings._mini_block_sizes);
             TRACE_MSG("calc_block: phase " << phase <<
                       ", adjusted block [" <<
                       adj_block_idxs.begin.make_val_str() << " ... " <<
@@ -1043,8 +1034,7 @@ namespace yask {
         }
 
         // Init mini-block begin & end from blk start & stop indices.
-        ScanIndices mini_block_idxs(*dims, true);
-        mini_block_idxs.init_from_outer(adj_block_idxs);
+        ScanIndices mini_block_idxs = adj_block_idxs.create_inner();
 
         // Time range.
         // No more temporal blocks below mini-blocks, so we always stride
@@ -1108,8 +1098,8 @@ namespace yask {
                 mini_block_idxs.stride = settings._sub_block_sizes;
                 mini_block_idxs.stride[step_posn] = stride_t;
 
-                // Groups in mini-blk loops are based on sub-block-group sizes.
-                mini_block_idxs.group_size = settings._sub_block_group_sizes;
+                // Tiles in mini-blk loops.
+                mini_block_idxs.tile_size = settings._mini_block_tile_sizes;
 
                 // Set mini_block_idxs begin & end based on shifted rank
                 // start & stop (original region begin & end), rank
@@ -1136,6 +1126,9 @@ namespace yask {
                                           mini_block_idxs);
 
                 if (ok) {
+                    mini_block_idxs.adjust_from_settings(settings._mini_block_sizes,
+                                                         settings._mini_block_tile_sizes,
+                                                         settings._sub_block_sizes);
 
                     // Update offsets of scratch vars based on the current
                     // mini-block location.

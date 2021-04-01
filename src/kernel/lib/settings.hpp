@@ -193,17 +193,20 @@ namespace yask {
         DimsPtr _dims;
 
         // Sizes in elements (points).
-        // All these tuples contain stencil dims, even the ones that
-        // don't strictly need them.
+        // All these tuples contain step dims, even the ones that
+        // don't use them, for consistency.
+        // TODO: consider adding rank and/or region tiles.
         IdxTuple _global_sizes;     // Overall problem domain sizes.
-        IdxTuple _rank_sizes;     // This rank's domain sizes.
+        IdxTuple _rank_sizes;     // This rank's domain (local) sizes.
+        IdxTuple _rank_tile_sizes; // rank-tile size (only used for 'tiled' rank loops).
         IdxTuple _region_sizes;   // region size (used for wave-front tiling).
-        IdxTuple _block_group_sizes; // block-group size (only used for 'grouped' region loops).
+        IdxTuple _region_tile_sizes; // region-tile size (only used for 'tiled' region loops).
         IdxTuple _block_sizes;       // block size (used for each outer thread).
-        IdxTuple _mini_block_group_sizes; // mini-block-group size (only used for 'grouped' block loops).
+        IdxTuple _block_tile_sizes; // block-tile size (only used for 'tiled' block loops).
         IdxTuple _mini_block_sizes;       // mini-block size (used for wave-fronts in blocks).
-        IdxTuple _sub_block_group_sizes; // sub-block-group size (only used for 'grouped' mini-block loops).
+        IdxTuple _mini_block_tile_sizes; // mini-block-tile size (only used for 'tiled' mini-block loops).
         IdxTuple _sub_block_sizes;       // sub-block size (used for each nested thread).
+        IdxTuple _sub_block_tile_sizes; // sub-block-tile size (only used for 'tiled' sub-block loops).
         IdxTuple _min_pad_sizes;         // minimum spatial padding (including halos).
         IdxTuple _extra_pad_sizes;       // extra spatial padding (outside of halos).
 
@@ -253,11 +256,6 @@ namespace yask {
                                         const std::string& descrip,
                                         IdxTuple& var,
                                         bool allow_step = false);
-
-        idx_t find_num_subsets(std::ostream& os,
-                             IdxTuple& inner_sizes, const std::string& inner_name,
-                             const IdxTuple& outer_sizes, const std::string& outer_name,
-                             const IdxTuple& mults, const std::string& step_dim);
 
     public:
         // Add options to a cmd-line parser to set the settings.

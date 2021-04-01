@@ -481,13 +481,14 @@ namespace yask {
 
         // Change derived sizes to 0 so adjust_settings()
         // will set them to the default.
+        // TODO: keep the use-provided settings if possible.
         if (!tune_mini_blks()) {
-            _settings->_block_group_sizes.set_vals_same(0);
+            _settings->_block_tile_sizes.set_vals_same(0);
             _settings->_mini_block_sizes.set_vals_same(0);
         }
-        _settings->_mini_block_group_sizes.set_vals_same(0);
+        _settings->_mini_block_tile_sizes.set_vals_same(0);
         _settings->_sub_block_sizes.set_vals_same(0);
-        _settings->_sub_block_group_sizes.set_vals_same(0);
+        _settings->_sub_block_tile_sizes.set_vals_same(0);
 
         // Save debug output and set to null.
         auto saved_op = get_debug_output();

@@ -624,11 +624,11 @@ namespace yask {
                 // Include generated loop-nest.
                 os <<
                     "\n // Make more efficient expressions for sub-block loop vars.\n"
-                    "\n // Subtract one from 'dn' to convert stencil dims to domain dims.\n"
-                    "\n#define STRIDE_EXPR(dn) " <<
+                    " // (Subtract one from 'dn' to convert stencil dims to domain dims.)\n"
+                    "#define STRIDE_EXPR(dn) " <<
                     (do_cluster ? "cluster_mults[dn-1]" : "idx_t(1)") << "\n"
-                    "\n#define ALIGN_EXPR(dn) idx_t(1)\n"
-                    "\n#define ALIGN_OFS_EXPR(dn) idx_t(0)\n"
+                    "#define ALIGN_EXPR(dn) idx_t(1)\n"
+                    "#define ALIGN_OFS_EXPR(dn) idx_t(0)\n"
                     "\n ////// Loop prefix.\n"
                     "#define USE_LOOP_PART_0\n"
                     "#include \"yask_sub_block_loops.hpp\"\n"

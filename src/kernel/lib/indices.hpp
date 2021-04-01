@@ -630,19 +630,19 @@ namespace yask {
     // Forward defns.
     struct Dims;
 
-    // A group of Indices needed for generated loops.
+    // A collection of Indices needed for generated loops.
     // See the help message from gen_loops.pl for the
     // documentation of the indices.
     // This class is NOT virtual.
     struct ScanIndices {
-        int ndims = 0;
+        int ndims = 0;          // All indices will be in stencil dims.
 
         // Input values; not modified.
-        Indices begin, end;     // First and end (beyond last) range of each index.
-        Indices stride;         // Max distance between indices within [begin .. end).
+        Indices begin, end;     // First and end (one beyond last) index (range).
+        Indices stride;         // Distance between successive indices within begin/end range.
         Indices align;          // Alignment of beginning indices whenever possible (see notes below).
         Indices align_ofs;      // Adjustment for alignment (see below).
-        Indices group_size;     // Proximity grouping within range.
+        Indices tile_size;      // Tiling within begin/end range if enabled during loop generation.
 
         // Notes:
         // First 'start' index is always at 'begin'.
@@ -673,7 +673,7 @@ namespace yask {
             stride(idx_t(1), ndims),
             align(idx_t(1), ndims),
             align_ofs(idx_t(0), ndims),
-            group_size(idx_t(1), ndims),
+            tile_size(idx_t(1), ndims),
             start(idx_t(0), ndims),
             stop(idx_t(0), ndims),
             cur_indices(idx_t(0), ndims) {
@@ -687,25 +687,35 @@ namespace yask {
         ScanIndices(const Dims& dims, bool use_vec_align, Indices* ofs) :
             ScanIndices(dims, use_vec_align) {
             if (ofs) {
-                DOMAIN_VAR_LOOP_FAST(i, j) {
-                    host_assert(ofs->get_num_dims() == ndims - 1);
+                host_assert(ofs->get_num_dims() == ndims - 1);
+                DOMAIN_VAR_LOOP_FAST(i, j)
                     align_ofs[i] = (*ofs)[j];
-                }
             }
         }
         ScanIndices(const Dims& dims, bool use_vec_align, IdxTuple* ofs) :
             ScanIndices(dims, use_vec_align) {
             if (ofs) {
-                DOMAIN_VAR_LOOP_FAST(i, j) {
-                    host_assert(ofs->get_num_dims() == ndims - 1);
+                host_assert(ofs->get_num_dims() == ndims - 1);
+                DOMAIN_VAR_LOOP_FAST(i, j)
                     align_ofs[i] = ofs->get_val(j);
-                }
             }
         }
 
         // Default bit-wise copy should be okay.
 
-        // Init from outer-loop indices.
+        // Get ranges.
+        inline idx_t get_overall_range(int dim_posn) const {
+            host_assert(dim_posn >= 0);
+            host_assert(dim_posn < ndims);
+            return end[dim_posn] - begin[dim_posn];
+        }
+        inline idx_t get_current_range(int dim_posn) const {
+            host_assert(dim_posn >= 0);
+            host_assert(dim_posn < ndims);
+            return stop[dim_posn] - start[dim_posn];
+        }
+
+        // Create inner-loop indices from outer-loop indices.
         // Start..stop from point in outer loop become begin..end
         // for this loop.
         //
@@ -715,21 +725,58 @@ namespace yask {
         //   |------------------|------------------|------|
         // start      |        stop
         //            V
-        // begin    (this)     end
+        // begin    (inner)    end
         //   |------------------|
-        // start               stop  (may be sub-dividied later)
-        ALWAYS_INLINE
-        void init_from_outer(const ScanIndices& outer) {
+        // start               stop
+        // NB: inner loops are initialized with one iteration,
+        // but typically they are sub-divided later.
+        ScanIndices create_inner() const {
+            ScanIndices inner(*this);
 
             // Begin & end set from start & stop of outer loop.
-            begin = start = outer.start;
-            end = stop = outer.stop;
+            inner.begin = inner.start = start;
+            inner.end = inner.stop = stop;
 
-            // Pass some values through.
-            align = outer.align;
-            align_ofs = outer.align_ofs;
+            // Pass alignment unchanged.
+            inner.align = align;
+            inner.align_ofs = align_ofs;
 
-            // Leave others alone.
+            // Init tile size & stride to whole range.
+            DOMAIN_VAR_LOOP_FAST(i, j)
+                inner.tile_size[i] = inner.stride[i] = get_overall_range(i);
+
+            // Init first indices.
+            inner.cur_indices.set_from_const(0);
+            return inner;
+        }
+
+        // Adjust upper limits of strides and tiles based on settings.  This
+        // is used to ensure only one inner range and/or tile is configured
+        // if originally requested even if the current area has been
+        // increased slightly. For example, if the original mini-block-size
+        // and sub-block-size are 32, then the mini-block-size is increased
+        // to 34 for temporal tiling, this function will set the mini-block
+        // stride to 34 per the *intention* of the original setting to have
+        // only one sub-block. Similar for tiles.
+        inline void
+        adjust_from_settings(const IdxTuple& orig_sizes_of_this,
+                             const IdxTuple& orig_tile_sizes_of_this,
+                             const IdxTuple& orig_sizes_of_inner) {
+
+            assert(ndims == orig_sizes_of_this.get_num_dims());
+            assert(ndims == orig_tile_sizes_of_this.get_num_dims());
+            assert(ndims == orig_sizes_of_inner.get_num_dims());
+            DOMAIN_VAR_LOOP(i, j) {
+            
+                // If original [or auto-tuned] inner area covers
+                // this entire area, set stride size to full width.
+                if (orig_sizes_of_inner[i] >= orig_sizes_of_this[i])
+                    stride[i] = get_overall_range(i);
+
+                // Similar for tiles.
+                if (orig_tile_sizes_of_this[i] >= orig_sizes_of_this[i])
+                    tile_size[i] = get_overall_range(i);
+            }
         }
     };
     OMP_END_DECL_TARGET

@@ -262,47 +262,69 @@ namespace yask {
                   make_byte_str(tot_nbytes));
 
         // Report some sizes and settings.
-        DEBUG_MSG("\nWork-unit sizes in points (from smallest to largest):\n"
-                  " vector-size:           " << dims->_fold_pts.make_dim_val_str(" * ") << endl <<
-                  " cluster-size:          " << dims->_cluster_pts.make_dim_val_str(" * ") << endl <<
-                  " sub-block-size:        " << opts->_sub_block_sizes.remove_dim(step_posn).make_dim_val_str(" * ") << endl <<
-                  " mini-block-size:       " << opts->_mini_block_sizes.make_dim_val_str(" * ") << endl <<
-                  " block-size:            " << opts->_block_sizes.make_dim_val_str(" * ") << endl <<
-                  " region-size:           " << opts->_region_sizes.make_dim_val_str(" * ") << endl <<
-                  " local-domain-size:     " << opts->_rank_sizes.remove_dim(step_posn).make_dim_val_str(" * ") << endl <<
-                  " global-domain-size:    " << opts->_global_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
-#ifdef SHOW_GROUPS
-        DEBUG_MSG(" sub-block-group-size:  " << opts->_sub_block_group_sizes.make_dim_val_str(" * ") << endl <<
-                  " block-group-size:      " << opts->_block_group_sizes.make_dim_val_str(" * "));
+        DEBUG_MSG("\nWork-unit sizes in grid points (from largest to smallest):");
+        DEBUG_MSG(" global-domain-size:     " <<
+                  opts->_global_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+        DEBUG_MSG(" local-domain-size:      " <<
+                  opts->_rank_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+#ifdef USE_TILING
+        DEBUG_MSG(" local-domain-tile-size: " <<
+                  opts->_rank_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
 #endif
+        DEBUG_MSG(" region-size:            " <<
+                  opts->_region_sizes.make_dim_val_str(" * "));
+#ifdef USE_TILING
+        DEBUG_MSG(" region-tile-size:       " <<
+                  opts->_region_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+#endif
+        DEBUG_MSG(" block-size:             " <<
+                  opts->_block_sizes.make_dim_val_str(" * "));
+#ifdef USE_TILING
+        DEBUG_MSG(" block-tile-size:        " <<
+                  opts->_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+#endif
+        DEBUG_MSG(" mini-block-size:        " <<
+                  opts->_mini_block_sizes.make_dim_val_str(" * "));
+#ifdef USE_TILING
+        DEBUG_MSG(" mini-block-tile-size:   " <<
+                  opts->_mini_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+#endif
+        DEBUG_MSG(" sub-block-size:         " <<
+                  opts->_sub_block_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+#ifdef USE_TILING
+        DEBUG_MSG(" sub-block-tile-size:    " <<
+                  opts->_sub_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+#endif
+        DEBUG_MSG(" cluster-size:           " << dims->_cluster_pts.make_dim_val_str(" * "));
+        DEBUG_MSG(" vector-size:            " << dims->_fold_pts.make_dim_val_str(" * "));
         DEBUG_MSG("\nOther settings:\n"
-                  " yask-version:          " << yask_get_version_string() << endl <<
-                  " target:                " << get_target() << endl <<
-                  " stencil-name:          " << get_name() << endl <<
-                  " stencil-description:   " << get_description() << endl <<
-                  " element-size:          " << make_byte_str(get_element_bytes()) << endl <<
-                  " local-domain:          " << rank_bb.make_range_string(domain_dims));
+                  " yask-version:           " << yask_get_version_string() << endl <<
+                  " target:                 " << get_target() << endl <<
+                  " stencil-name:           " << get_name() << endl <<
+                  " stencil-description:    " << get_description() << endl <<
+                  " element-size:           " << make_byte_str(get_element_bytes()) << endl <<
+                  " local-domain:           " << rank_bb.make_range_string(domain_dims));
 #ifdef USE_MPI
-        DEBUG_MSG(" num-ranks:             " << opts->_num_ranks.make_dim_val_str(" * ") << endl <<
-                  " rank-indices:          " << opts->_rank_indices.make_dim_val_str() << endl <<
-                  " local-domain-offsets:  " << rank_domain_offsets.make_dim_val_str(dims->_domain_dims));
+        DEBUG_MSG(" num-ranks:              " << opts->_num_ranks.make_dim_val_str(" * ") << endl <<
+                  " rank-indices:           " << opts->_rank_indices.make_dim_val_str() << endl <<
+                  " local-domain-offsets:   " << rank_domain_offsets.make_dim_val_str(dims->_domain_dims));
         if (opts->overlap_comms)
-            DEBUG_MSG(" mpi-interior:          " << mpi_interior.make_range_string(domain_dims));
+            DEBUG_MSG(" mpi-interior:           " << mpi_interior.make_range_string(domain_dims));
 #endif
-        DEBUG_MSG( " vector-len:            " << VLEN << endl <<
-                   " extra-padding:         " << opts->_extra_pad_sizes.remove_dim(step_posn).make_dim_val_str() << endl <<
-                   " minimum-padding:       " << opts->_min_pad_sizes.remove_dim(step_posn).make_dim_val_str() << endl <<
-                   " allow-addl-padding:    " << opts->_allow_addl_pad << endl <<
-                   " L1-prefetch-distance:  " << PFD_L1 << endl <<
-                   " L2-prefetch-distance:  " << PFD_L2 << endl <<
-                   " max-halos:             " << max_halos.make_dim_val_str());
+        DEBUG_MSG(" vector-len:             " << VLEN << endl <<
+                  " extra-padding:          " << opts->_extra_pad_sizes.remove_dim(step_posn).make_dim_val_str() << endl <<
+                  " minimum-padding:        " << opts->_min_pad_sizes.remove_dim(step_posn).make_dim_val_str() << endl <<
+                  " allow-addl-padding:     " << opts->_allow_addl_pad << endl <<
+                  " L1-prefetch-distance:   " << PFD_L1 << endl <<
+                  " L2-prefetch-distance:   " << PFD_L2 << endl <<
+                  " max-halos:              " << max_halos.make_dim_val_str());
         print_temporal_tiling_info();
 
         // Info about eqs, stages and bundles.
         DEBUG_MSG("\n"
-                  "Num stages:             " << st_stages.size() << endl <<
-                  "Num stencil bundles:    " << st_bundles.size() << endl <<
-                  "Num stencil equations:  " << NUM_STENCIL_EQS);
+                  "Num stages:              " << st_stages.size() << endl <<
+                  "Num stencil bundles:     " << st_bundles.size() << endl <<
+                  "Num stencil equations:   " << NUM_STENCIL_EQS);
 
         // Info on work in stages.
         DEBUG_MSG("\nBreakdown of work stats in this rank:");
