@@ -625,15 +625,17 @@ namespace yask {
                 os <<
                     "\n // Make more efficient expressions for sub-block loop vars.\n"
                     " // (Subtract one from 'dn' to convert stencil dims to domain dims.)\n"
-                    "#define STRIDE_EXPR(dn) " <<
+                    "#define SUB_BLOCK_STRIDE_EXPR(dn) " <<
                     (do_cluster ? "cluster_mults[dn-1]" : "idx_t(1)") << "\n"
-                    "#define ALIGN_EXPR(dn) idx_t(1)\n"
-                    "#define ALIGN_OFS_EXPR(dn) idx_t(0)\n"
+                    "#define SUB_BLOCK_ALIGN_EXPR(dn) idx_t(1)\n"
+                    "#define SUB_BLOCK_ALIGN_OFS_EXPR(dn) idx_t(0)\n"
                     "\n ////// Loop prefix.\n"
-                    "#define USE_LOOP_PART_0\n"
+                    "#define SUB_BLOCK_LOOP_INDICES norm_idxs\n"
+                    "#define SUB_BLOCK_BODY_INDICES norm_idx\n"
+                    "#define SUB_BLOCK_USE_LOOP_PART_0\n"
                     "#include \"yask_sub_block_loops.hpp\"\n"
                     "\n ////// Loop body. Just doing one, so don't need stop indices.\n"
-                    " Indices& idxs = body_indices.start;\n";
+                    " Indices& idxs = norm_idx.start;\n";
                 print_indices(os, false, true);
                 vp->print_elem_indices(os);
 
@@ -648,7 +650,7 @@ namespace yask {
                 // End of loop.
                 os <<
                     "\n ////// Loop sufffix.\n"
-                    "#define USE_LOOP_PART_1\n"
+                    "#define SUB_BLOCK_USE_LOOP_PART_1\n"
                     "#include \"yask_sub_block_loops.hpp\"\n";
 
                 // End of function.

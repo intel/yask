@@ -180,22 +180,25 @@ namespace yask {
                         
                         // Disable the OpenMP construct in the mini-block loop
                         // because we're already in the parallel section.
-                        #define OMP_PRAGMA
+                        #define MINI_BLOCK_OMP_PRAGMA
 
                         // Loop prefix.
-                        #define USE_LOOP_PART_0
+                        #define MINI_BLOCK_LOOP_INDICES adj_mb_idxs
+                        #define MINI_BLOCK_BODY_INDICES sub_blk_range
+                        #define MINI_BLOCK_USE_LOOP_PART_0
                         #include "yask_mini_block_loops.hpp"
 
                         // Loop body.
                         const idx_t idx_ofs = 0x1000; // to help keep pattern when idx is neg.
-                        auto bind_elem_idx = body_indices.start[bind_posn];
+                        auto bind_elem_idx = sub_blk_range.start[bind_posn];
                         auto bind_slab_idx = idiv_flr(bind_elem_idx + idx_ofs, bind_slab_pts);
                         auto bind_thr = imod_flr<idx_t>(bind_slab_idx, nbt);
                         if (block_thread_idx == bind_thr)
-                            sg->calc_sub_block(region_thread_idx, block_thread_idx, settings, body_indices);
+                            sg->calc_sub_block(region_thread_idx, block_thread_idx,
+                                               settings, sub_blk_range);
 
                         // Loop sufffix.
-                        #define USE_LOOP_PART_1
+                        #define MINI_BLOCK_USE_LOOP_PART_1
                         #include "yask_mini_block_loops.hpp"
 
                     } // Parallel region.
@@ -217,15 +220,18 @@ namespace yask {
                     // each sub-block using standard OpenMP scheduling.
                     
                     // Loop prefix.
-                    #define USE_LOOP_PART_0
+                    #define MINI_BLOCK_LOOP_INDICES adj_mb_idxs
+                    #define MINI_BLOCK_BODY_INDICES sub_blk_range
+                    #define MINI_BLOCK_USE_LOOP_PART_0
                     #include "yask_mini_block_loops.hpp"
 
                     // Loop body.
                     int block_thread_idx = omp_get_thread_num();
-                    sg->calc_sub_block(region_thread_idx, block_thread_idx, settings, body_indices);
+                    sg->calc_sub_block(region_thread_idx, block_thread_idx,
+                                       settings, sub_blk_range);
 
                     // Loop suffix.
-                    #define USE_LOOP_PART_1
+                    #define MINI_BLOCK_USE_LOOP_PART_1
                     #include "yask_mini_block_loops.hpp"
 
                 } // OMP parallel when binding threads to data.

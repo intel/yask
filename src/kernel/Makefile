@@ -494,14 +494,14 @@ NVDIMS		:=	`awk '/NUM_STENCIL_AND_VAR_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
 # wavefronts. The time loop may be found in
 # StencilEquations::run_solution(). The regions are executed sequentially,
 # so no OpenMP here.
-RANK_LOOP_FLAGS		?=	-ndims $(NSDIMS) -inVar rank_idxs
+RANK_LOOP_FLAGS		?=	-ndims $(NSDIMS) -macroPrefix RANK_
 RANK_LOOP_ORDER		?=	1 .. N-1
 RANK_LOOP_CODE		?=	$(RANK_LOOP_MODS) loop($(RANK_LOOP_ORDER)) { }
 
 # Region loops break up a region using OpenMP threading into blocks.  The
 # 'omp' modifier creates an outer OpenMP loop so that each block is assigned
 # to a top-level OpenMP thread.
-REGION_LOOP_FLAGS	?=	-ndims $(NSDIMS) -inVar region_idxs \
+REGION_LOOP_FLAGS	?=	-ndims $(NSDIMS) -macroPrefix REGION_ \
 				-ompMod '$(omp_par_for) schedule($(omp_region_schedule)) proc_bind(spread)'
 REGION_LOOP_ORDER	?=	1 .. N-1
 REGION_LOOP_CODE	?=	$(REGION_LOOP_MODS) omp loop($(REGION_LOOP_ORDER)) { } 
@@ -510,7 +510,7 @@ REGION_LOOP_CODE	?=	$(REGION_LOOP_MODS) omp loop($(REGION_LOOP_ORDER)) { }
 # These are executed sequentially, so no OpenMP.
 # Like with rank loops, in order for temporal wavefronts to operate properly,
 # the scanning paths must have strictly incrementing indices. 
-BLOCK_LOOP_FLAGS		?=	-ndims $(NSDIMS) -inVar adj_block_idxs
+BLOCK_LOOP_FLAGS		?=	-ndims $(NSDIMS) -macroPrefix BLOCK_
 BLOCK_LOOP_ORDER	?=	1 .. N-1
 BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_MODS) loop($(BLOCK_LOOP_ORDER)) { }
 
@@ -518,7 +518,7 @@ BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_MODS) loop($(BLOCK_LOOP_ORDER)) { }
 # creates a nested OpenMP loop so that each sub-block is assigned to a
 # nested OpenMP thread. The OpenMP construct is not used when running with
 # '-bind_block_threads'.
-MINI_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -inVar adj_mb_idxs \
+MINI_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -macroPrefix MINI_BLOCK_ \
 				-ompMod '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(spread)'
 MINI_BLOCK_LOOP_ORDER	?=	1 .. N-1
 MINI_BLOCK_LOOP_CODE	?=	$(MINI_BLOCK_LOOP_MODS) omp loop($(MINI_BLOCK_LOOP_ORDER)) { }
@@ -527,7 +527,7 @@ MINI_BLOCK_LOOP_CODE	?=	$(MINI_BLOCK_LOOP_MODS) omp loop($(MINI_BLOCK_LOOP_ORDER
 # loops are run by a single OMP thread. When offloading, this loop is run in
 # parallel on the offload device.  The indexes in this loop
 # are 'normalized', i.e., vector units and rank-relative.
-SUB_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -inVar norm_idxs
+SUB_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -macroPrefix SUB_BLOCK_
 ifeq ($(offload),1)
 SUB_BLOCK_LOOP_FLAGS	+=	-ompMod '$(omp_target_par_for) schedule($(omp_target_schedule))'
 SUB_BLOCK_LOOP_ORDER	?=	2 .. N-1
@@ -542,7 +542,7 @@ SUB_BLOCK_LOOP_CODE	:=	$(SUB_BLOCK_LOOP_MODS) loop($(SUB_BLOCK_LOOP_ORDER)) { \
 endif
 
 # General-purpose parallel loop.
-MISC_LOOP_FLAGS		?=	-ndims $(NSDIMS) -inVar misc_idxs \
+MISC_LOOP_FLAGS		?=	-ndims $(NSDIMS) -macroPrefix MISC_ \
 				-ompMod '$(omp_par_for) schedule($(omp_misc_schedule)) proc_bind(spread)'
 MISC_LOOP_ORDER		?=	1 .. N-1
 MISC_LOOP_CODE		?=	$(MISC_LOOP_MODS) omp loop($(MISC_LOOP_ORDER)) { }
@@ -866,7 +866,7 @@ endif
 
 # Default min & max test number to run.
 first_test	:=	0
-last_test	:=	99
+last_test	:=	999
 
 # Default threads.
 max_threads	:=	6

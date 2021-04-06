@@ -382,14 +382,16 @@ namespace yask {
                                               domain_dims.get_dim_name(j));
 
                                     // Loop prefix.
-                                    #define USE_LOOP_PART_0
+                                    #define RANK_LOOP_INDICES rank_idxs
+                                    #define RANK_BODY_INDICES region_range
+                                    #define RANK_USE_LOOP_PART_0
                                     #include "yask_rank_loops.hpp"
 
                                     // Loop body.
-                                    calc_region(bp, body_indices);
+                                    calc_region(bp, region_range);
 
                                     // Loop suffix.
-                                    #define USE_LOOP_PART_1
+                                    #define RANK_USE_LOOP_PART_1
                                     #include "yask_rank_loops.hpp"
                                     
                                 } // left/right.
@@ -424,14 +426,16 @@ namespace yask {
                                   " for stage '" << bp->get_name() << "'");
 
                         // Loop prefix.
-                        #define USE_LOOP_PART_0
+                        #define RANK_LOOP_INDICES rank_idxs
+                        #define RANK_BODY_INDICES region_range
+                        #define RANK_USE_LOOP_PART_0
                         #include "yask_rank_loops.hpp"
 
                         // Loop body.
-                        calc_region(bp, body_indices);
+                        calc_region(bp, region_range);
 
                         // Loop suffix.
-                        #define USE_LOOP_PART_1
+                        #define RANK_USE_LOOP_PART_1
                         #include "yask_rank_loops.hpp"
  
                         // Mark as dirty only if we did exterior.
@@ -489,14 +493,16 @@ namespace yask {
                                           domain_dims.get_dim_name(j));
 
                                 // Loop prefix.
-                                #define USE_LOOP_PART_0
+                                #define RANK_LOOP_INDICES rank_idxs
+                                #define RANK_BODY_INDICES region_range
+                                #define RANK_USE_LOOP_PART_0
                                 #include "yask_rank_loops.hpp"
 
                                 // Loop body.
-                                calc_region(bp, body_indices);
+                                calc_region(bp, region_range);
 
                                 // Loop suffix.
-                                #define USE_LOOP_PART_1
+                                #define RANK_USE_LOOP_PART_1
                                 #include "yask_rank_loops.hpp"
                                 
                             } // left/right.
@@ -523,14 +529,16 @@ namespace yask {
                               " ... " << stop_t << ")");
 
                     // Loop prefix.
-                    #define USE_LOOP_PART_0
+                    #define RANK_LOOP_INDICES rank_idxs
+                    #define RANK_BODY_INDICES region_range
+                    #define RANK_USE_LOOP_PART_0
                     #include "yask_rank_loops.hpp"
 
                     // Loop body.
-                    calc_region(bp, body_indices);
+                    calc_region(bp, region_range);
                     
                     // Loop suffix.
-                    #define USE_LOOP_PART_1
+                    #define RANK_USE_LOOP_PART_1
                     #include "yask_rank_loops.hpp"
 
                     // Mark as dirty only if we did exterior.
@@ -716,14 +724,16 @@ namespace yask {
                         // contains the outer OpenMP loop(s).
 
                         // Loop prefix.
-                        #define USE_LOOP_PART_0
+                        #define REGION_LOOP_INDICES region_idxs
+                        #define REGION_BODY_INDICES blk_range
+                        #define REGION_USE_LOOP_PART_0
                         #include "yask_region_loops.hpp"
 
                         // Loop body.
-                        calc_block(bp, region_shift_num, nphases, phase, rank_idxs, body_indices);
+                        calc_block(bp, region_shift_num, nphases, phase, rank_idxs, blk_range);
 
                         // Loop suffix.
-                        #define USE_LOOP_PART_1
+                        #define REGION_USE_LOOP_PART_1
                         #include "yask_region_loops.hpp"
                     }
 
@@ -781,14 +791,16 @@ namespace yask {
                     // be calculated.
 
                     // Loop prefix.
-                    #define USE_LOOP_PART_0
+                    #define REGION_LOOP_INDICES region_idxs
+                    #define REGION_BODY_INDICES blk_range
+                    #define REGION_USE_LOOP_PART_0
                     #include "yask_region_loops.hpp"
 
                     // Loop body.
-                    calc_block(bp, region_shift_num, nphases, phase, rank_idxs, body_indices);
+                    calc_block(bp, region_shift_num, nphases, phase, rank_idxs, blk_range);
 
                     // Loop suffix.
-                    #define USE_LOOP_PART_1
+                    #define REGION_USE_LOOP_PART_1
                     #include "yask_region_loops.hpp"
                 }
 
@@ -898,16 +910,18 @@ namespace yask {
             // call calc_mini_block() for each mini-block in this block.
 
             // Loop prefix.
-            #define USE_LOOP_PART_0
+            #define BLOCK_LOOP_INDICES adj_block_idxs
+            #define BLOCK_BODY_INDICES mini_blk_range
+            #define BLOCK_USE_LOOP_PART_0
             #include "yask_block_loops.hpp"
 
             // Loop body.
             calc_mini_block(region_thread_idx, bp, region_shift_num,
                             nphases, phase, nshapes, shape, bridge_mask,
-                            rank_idxs, region_idxs, block_idxs, body_indices);
+                            rank_idxs, region_idxs, block_idxs, mini_blk_range);
             
             // Loop suffix.
-            #define USE_LOOP_PART_1
+            #define BLOCK_USE_LOOP_PART_1
             #include "yask_block_loops.hpp"
         } // no TB.
 
@@ -980,16 +994,18 @@ namespace yask {
                 StagePtr bp; // null.
 
                 // Loop prefix.
-                #define USE_LOOP_PART_0
+                #define BLOCK_LOOP_INDICES adj_block_idxs
+                #define BLOCK_BODY_INDICES mini_blk_range
+                #define BLOCK_USE_LOOP_PART_0
                 #include "yask_block_loops.hpp"
 
                 // Loop body.
                 calc_mini_block(region_thread_idx, bp, region_shift_num,
                                 nphases, phase, nshapes, shape, bridge_mask,
-                                rank_idxs, region_idxs, block_idxs, body_indices);
+                                rank_idxs, region_idxs, block_idxs, mini_blk_range);
             
                 // Loop suffix.
-                #define USE_LOOP_PART_1
+                #define BLOCK_USE_LOOP_PART_1
                 #include "yask_block_loops.hpp"
                 
             } // shape loop.

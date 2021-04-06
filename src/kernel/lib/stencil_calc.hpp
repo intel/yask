@@ -321,18 +321,20 @@ namespace yask {
             auto* cp = _corep();
 
             // Loop prefix.
-            #define USE_LOOP_PART_0
+            #define MISC_LOOP_INDICES misc_idxs
+            #define MISC_BODY_INDICES misc_range
+            #define MISC_USE_LOOP_PART_0
             #include "yask_misc_loops.hpp"
 
             // Loop body.  Since stride is always 1, we ignore
             // stop indices.  If point is in sub-domain for this bundle,
             // then execute the reference scalar code.  TODO: fix domain of
             // scratch vars.
-            if (_bundle.is_in_valid_domain(cp, body_indices.start))
-                _bundle.calc_scalar(cp, scratch_var_idx, body_indices.start);
+            if (_bundle.is_in_valid_domain(cp, misc_range.start))
+                _bundle.calc_scalar(cp, scratch_var_idx, misc_range.start);
 
             // Loop suffix.
-            #define USE_LOOP_PART_1
+            #define MISC_USE_LOOP_PART_1
             #include "yask_misc_loops.hpp"
         }
         
@@ -391,22 +393,24 @@ namespace yask {
             // Scan through n-D space.
             // Set OMP loop to offload or disable OMP on host.
             #ifdef USE_OFFLOAD
-            #define OMP_PRAGMA \
+            #define MISC_OMP_PRAGMA \
                 _Pragma("omp target parallel for device(KernelEnv::_omp_devn) schedule(static,1)")
             #else
-            #define OMP_PRAGMA
+            #define MISC_OMP_PRAGMA
             #endif
             
             // Loop prefix.
-            #define USE_LOOP_PART_0
+            #define MISC_LOOP_INDICES misc_idxs
+            #define MISC_BODY_INDICES misc_range
+            #define MISC_USE_LOOP_PART_0
             #include "yask_misc_loops.hpp"
 
             // Loop body.
             // Since stride is always 1, we only need start indices.
-            StencilBundleImplT::calc_scalar(cp, region_thread_idx, body_indices.start);
+            StencilBundleImplT::calc_scalar(cp, region_thread_idx, misc_range.start);
 
             // Loop suffix.
-            #define USE_LOOP_PART_1
+            #define MISC_USE_LOOP_PART_1
             #include "yask_misc_loops.hpp"
         }
 
