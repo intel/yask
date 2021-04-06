@@ -273,7 +273,7 @@ for my $origOpt (@ARGV) {
     # special case for local-domain size: also set default for other max sizes.
     if ($key =~ /^l[xyz]?$/ && $max > 0) {
       my @szs = qw(r b mb sb);
-      push @szs, qw(bg mbg sbg) if $showTiles;
+      push @szs, qw(b_tile mb_tile sb_tile) if $showTiles;
       for my $i (@szs) {
         my $key2 = $key;
         $key2 =~ s/^l/$i/;
@@ -408,7 +408,7 @@ my @schedules =
 # 2-D array. Each outer array element contains the following elements:
 # 0. min allowed value; '0' is a special case handled by YASK.
 # 1. max allowed value.
-# 2. step size between values (usually 1).
+# 2. step size between values.
 # 3. name.
 my @rangesAll = 
   (
@@ -419,25 +419,25 @@ my @rangesAll =
 
    # region size.
    [ 1, $maxTimeBlock, 1, 'rt' ],
-   [ 0, $maxDim, 1, 'rx' ],
-   [ 0, $maxDim, 1, 'ry' ],
-   [ 0, $maxDim, 1, 'rz' ],
+   [ 0, $maxDim, 4, 'rx' ],
+   [ 0, $maxDim, 4, 'ry' ],
+   [ 0, $maxDim, 4, 'rz' ],
 
    # block size.
    [ 1, $maxTimeBlock, 1, 'bt' ],
-   [ 0, $maxDim, 1, 'bx' ],
-   [ 0, $maxDim, 1, 'by' ],
-   [ 0, $maxDim, 1, 'bz' ],
+   [ 0, $maxDim, 4, 'bx' ],
+   [ 0, $maxDim, 4, 'by' ],
+   [ 0, $maxDim, 4, 'bz' ],
 
    # mini-block size.
-   [ 0, $maxDim, 1, 'mbx' ],
-   [ 0, $maxDim, 1, 'mby' ],
-   [ 0, $maxDim, 1, 'mbz' ],
+   [ 0, $maxDim, 4, 'mbx' ],
+   [ 0, $maxDim, 4, 'mby' ],
+   [ 0, $maxDim, 4, 'mbz' ],
 
    # sub-block size.
-   [ 0, $maxDim, 1, 'sbx' ],
-   [ 0, $maxDim, 1, 'sby' ],
-   [ 0, $maxDim, 1, 'sbz' ],
+   [ 0, $maxDim, 4, 'sbx' ],
+   [ 0, $maxDim, 4, 'sby' ],
+   [ 0, $maxDim, 4, 'sbz' ],
 
    # extra padding.
    [ 0, $maxPad, 1, 'epx' ],
@@ -454,14 +454,19 @@ if ($showTiles) {
   push @rangesAll,
     (
      # block-tile size.
-     [ 0, $maxDim, 1, 'btx' ],
-     [ 0, $maxDim, 1, 'bty' ],
-     [ 0, $maxDim, 1, 'btz' ],
+     [ 0, $maxDim, 4, 'b_tilex' ],
+     [ 0, $maxDim, 4, 'b_tiley' ],
+     [ 0, $maxDim, 4, 'b_tilez' ],
+     
+     # mini-block-tile size.
+     [ 0, $maxDim, 4, 'mb_tilex' ],
+     [ 0, $maxDim, 4, 'mb_tiley' ],
+     [ 0, $maxDim, 4, 'mb_tilez' ],
      
      # sub-block-tile size.
-     [ 0, $maxDim, 1, 'sbtx' ],
-     [ 0, $maxDim, 1, 'sbty' ],
-     [ 0, $maxDim, 1, 'sbtz' ],
+     [ 0, $maxDim, 4, 'sb_tilex' ],
+     [ 0, $maxDim, 4, 'sb_tiley' ],
+     [ 0, $maxDim, 4, 'sb_tilez' ],
     );
 }
 
@@ -1147,8 +1152,9 @@ sub fitness {
   my @bs = readHashes($h, 'b', 0);
   my @mbs = readHashes($h, 'mb', 0);
   my @sbs = readHashes($h, 'sb', 0);
-  my @bgs = readHashes($h, 'bg', 0);
-  my @sbgs = readHashes($h, 'sbg', 0);
+  my @b_tiles = readHashes($h, 'b_tile', 0);
+  my @mb_tiles = readHashes($h, 'mb_tile', 0);
+  my @sb_tiles = readHashes($h, 'sb_tile', 0);
   my @cvs = readHashes($h, 'c', 1); # in vectors, not in points!
   my @ps = readHashes($h, 'ep', 0);
   my $fold = readHash($h, 'fold', 1);
@@ -1180,8 +1186,9 @@ sub fitness {
   adjSizes(\@bs, \@rs);         # block <= region.
   adjSizes(\@mbs, \@bs);        # mini-block <= block.
   adjSizes(\@sbs, \@mbs);       # sub-block <= mini-block.
-  adjSizes(\@bts, \@rs);        # block-tile <= region.
-  adjSizes(\@sbts, \@mbs);      # sub-block-tile <= mini-block.
+  adjSizes(\@b_tiles, \@bs);        # block-tile <= block.
+  adjSizes(\@mb_tiles, \@mbs);        # mini-block-tile <= mini-block.
+  adjSizes(\@sb_tiles, \@sbs);      # sub-block-tile <= sub-block.
 
   # 3d sizes in points.
   my $dPts = mult(@ds);
@@ -1191,8 +1198,9 @@ sub fitness {
   my $sbPts = mult(@sbs);
   my $cPts = mult(@cs);
   my $fPts = mult(@fs);
-  my $btPts = mult(@bts);
-  my $sbtPts = mult(@sbts);
+  my $b_tilePts = mult(@b_tiles);
+  my $mb_tilePts = mult(@mb_tiles);
+  my $sb_tilePts = mult(@sb_tiles);
 
   # Clusters per block.
   my @bcs = map { ceil($bs[$_] / $cs[$_]) } 0..$#dirs;
@@ -1227,8 +1235,9 @@ sub fitness {
     print "  mini-blocks per block = $bMbs\n";
     print "  mem estimate = ".($overallSize/$YaskUtils::oneGi)." GB\n";
     if ($showTiles) {
-      print "  block-tile size = $btPts\n";
-      print "  sub-block-tile size = $sbtPts\n";
+      print "  block-tile size = $b_tilePts\n";
+      print "  mini-block-tile size = $m_tilePts\n";
+      print "  sub-block-tile size = $sb_tilePts\n";
     }
   }
 
@@ -1285,8 +1294,9 @@ sub fitness {
   addStat($ok, 'mini-blocks per block', $bMbs);
   addStat($ok, 'vectors per cluster', $cvs);
   if ($showTiles) {
-    addStat($ok, 'block-tile size', $btPts);
-    addStat($ok, 'sub-block-tile size', $sbtPts);
+    addStat($ok, 'block-tile size', $b_tilePts);
+    addStat($ok, 'mini-block-tile size', $mb_tilePts);
+    addStat($ok, 'sub-block-tile size', $sb_tilePts);
   }
 
   # exit here if just checking.
@@ -1342,8 +1352,9 @@ sub fitness {
   $args .= " -sbx $sbs[0] -sby $sbs[1] -sbz $sbs[2]";
   $args .= " -epx $ps[0] -epy $ps[1] -epz $ps[2]";
   if ($showTiles) {
-    $args .= " -btx $bts[0] -bty $bts[1] -btz $bts[2]";
-    $args .= " -sbtx $sbts[0] -sbty $sbts[1] -sbtz $sbts[2]";
+    $args .= " -b_tilex $b_tiles[0] -b_tiley $b_tiles[1] -b_tilez $b_tiles[2]";
+    $args .= " -mb_tilex $mb_tiles[0] -mb_tiley $mb_tiles[1] -mb_tilez $mb_tiles[2]";
+    $args .= " -sb_tilex $sb_tiles[0] -sb_tiley $sb_tiles[1] -sb_tilez $sb_tiles[2]";
   }
 
   # num of secs and trials.

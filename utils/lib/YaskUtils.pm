@@ -29,17 +29,6 @@ use strict;
 use FileHandle;
 use Carp;
 
-# Special keys.
-my $linux_key = "Linux kernel";
-my $nodes_key = "MPI node(s)";
-my $val_key = "validation results";
-our @special_log_keys =
-  (
-   $linux_key,
-   $nodes_key,
-   $val_key,
-   );
-
 # Values to get from log file.
 # First one should be overall "fitness".
 # Key must start with the following string.
@@ -72,12 +61,6 @@ our @log_keys =
    'num threads per region',
    'num threads per block',
    'total overall allocation',
-   'global-domain size',
-   'local-domain size',
-   'region size',
-   'block size',
-   'mini-block size',
-   'sub-block size',
    'cluster size',
    'vector size',
    'num regions per local-domain per step',
@@ -90,8 +73,38 @@ our @log_keys =
    'L2 prefetch distance',
    'num temporal block steps',
    'num wave front steps',
+  );
 
-   # other values from log file.
+# Keys set with custom code.
+my $linux_key = "Linux kernel";
+my $nodes_key = "MPI node(s)";
+my $val_key = "validation results";
+our @special_log_keys =
+  (
+   $linux_key,
+   $nodes_key,
+   $val_key,
+  );
+
+# Adjustable sizes.
+our @size_log_keys =
+  (
+   'global-domain size',
+   'local-domain size',
+   'region size',
+   'block size',
+   'mini-block size',
+   'sub-block size',
+   'local-domain-tile size',
+   'region-tile size',
+   'block-tile size',
+   'mini-block-tile size',
+   'sub-block-tile size',
+  );
+
+# System settings.
+our @sys_log_keys =
+  (
    'model name',
    'CPU(s)',
    'core(s) per socket',
@@ -102,7 +115,7 @@ our @log_keys =
    'ShMem',
   );
 
-our @all_log_keys = ( @log_keys, @special_log_keys );
+our @all_log_keys = ( @log_keys, @size_log_keys, @sys_log_keys, @special_log_keys );
 
 our $oneKi = 1024;
 our $oneMi = $oneKi * $oneKi;
@@ -186,7 +199,7 @@ sub getResultsFromLine($$) {
   # pre-process keys one time.
   if (scalar keys %proc_keys == 0) {
     undef %proc_keys;
-    for my $m (@log_keys) {
+    for my $m (@log_keys, @size_log_keys, @sys_log_keys) {
 
       my $pm = lc $m;
       $pm =~ s/^\s+//;
@@ -243,17 +256,15 @@ sub getResultsFromLine($$) {
 
   # If auto-tuner is run globally, capture updated values.
   # Invalidate settings overridden by auto-tuner on multiple stages.
-  elsif ($line =~ /^auto-tuner(.).*size:/) {
+  elsif ($line =~ /^\s*auto-tuner(.).*size:/) {
     my $c = $1;
 
-    # If colon found above, tuner is global.
+    # If colon found immediately after "auto-tuner", tuner is global.
     my $onep = ($c eq ':');
     
-    for my $k ('block size',
-               'mini-block size',
-               'sub-block size',) {
+    for my $k (@size_log_keys) {
       $line =~ s/-size/ size/;
-      if ($line =~ / (best-)?$k:\s*(t=.*)/i) {
+      if ($line =~ / (best-)?$k:\s*(.*)/i) {
         my $val = $onep ? $2 : 'auto-tuned';
         $results->{$k} = $val;
       }

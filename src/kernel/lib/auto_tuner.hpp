@@ -34,11 +34,16 @@ namespace yask {
     protected:
 
         // Settings to change. May be pointer to solution settings
-        // or local settings for a pack.
+        // or local settings for a stage.
         KernelSettings* _settings = 0;
 
         // Name of tuner.
         std::string _name;
+
+        // String to print before each msg.
+        std::string _prefix;
+        #define AT_DEBUG_MSG(msg) DEBUG_MSG(_prefix << msg)
+        #define AT_TRACE_MSG(msg) TRACE_MSG(_prefix << msg)
 
         // Null stream to throw away debug info.
         yask_output_factory yof;
@@ -50,35 +55,60 @@ namespace yask {
         // AT parameters.
         double warmup_steps = 100;
         double warmup_secs = 0.5; // end warmup when either warmup_steps OR warmup_secs is reached.
-        idx_t min_steps = 100;
+        idx_t trial_steps = 100;
+        double trial_secs = 0.25; // end trial when either trial_steps OR trial_secs is reached.
         double cutoff = 0.8;   // can stop eval if current rate < best rate * cutoff;
-        idx_t max_radius = 8;   // starting search radius.
-        idx_t min_dist = 4;     // min distance to move in any direction per eval.
+        idx_t min_dist = 4;     // min distance to move in any direction per trial.
         idx_t min_pts = 512; // 8^3; min points in a block.
-        idx_t min_blks = 4;  // num number of blocks; gets set to number of region threads.
+        idx_t min_blks = 1;  // min number of blocks.
+        idx_t max_radius = 8;   // starting search radius.
 
-        // Results.
-        std::unordered_map<IdxTuple, double> results; // block-size -> perf cache.
-        int n2big = 0, n2small = 0, n2far = 0;
+        // State of the search of one set of target sizes.
+        struct AutoTunerState {
 
-        // Best so far.
-        IdxTuple best_sizes;
-        double best_rate = 0.;
+            // Results.
+            std::unordered_map<IdxTuple, double> results; // block-size -> perf cache.
+            int n2big = 0, n2small = 0, n2far = 0;
 
-        // Current point in search.
-        IdxTuple center_sizes;
-        idx_t target_steps = 0;
-        idx_t radius = 0;
+            // Best so far.
+            IdxTuple best_sizes;
+            double best_rate = 0.;
+
+            // Current location of search.
+            IdxTuple center_sizes;
+            idx_t radius = 0;
+            idx_t neigh_idx = 0;
+            bool better_neigh_found = false;
+
+            // Cumulative data within a trial or warmup.
+            double ctime = 0.;
+            idx_t csteps = 0;
+            bool in_warmup = true;
+
+            void init(AutoTuner* at, bool warmup_needed) {
+                results.clear();
+                n2big = n2small = n2far = 0;
+                best_sizes.set_vals_same(0);
+                best_rate = 0.;
+                center_sizes.set_vals_same(0);
+                radius = at->max_radius;
+                neigh_idx = 0;
+                better_neigh_found = false;
+                ctime = 0.;
+                csteps = 0;
+                in_warmup = warmup_needed;
+            }
+        };
+
+        // Current state of search.
+        AutoTunerState at_state;
         bool done = false;
-        idx_t neigh_idx = 0;
-        bool better_neigh_found = false;
-
-        // Cumulative vars.
-        double ctime = 0.;
-        idx_t csteps = 0;
-        bool in_warmup = true;
-
+        IdxTuple* outerp = 0;
+        IdxTuple* targetp = 0;
+        idx_t target_steps = 0;
+ 
         bool check_sizes(const IdxTuple& sizes);
+        bool next_target();
 
     public:
         static constexpr idx_t max_stride_t = 4;
@@ -94,30 +124,6 @@ namespace yask {
         // Increment this to track steps.
         idx_t steps_done = 0;
 
-        // Access settings.
-        bool tune_mini_blks() const;
-        IdxTuple& target_sizes() {
-            return tune_mini_blks() ?
-                _settings->_mini_block_sizes : _settings->_block_sizes;
-        }
-        IdxTuple& outer_sizes() {
-            return tune_mini_blks() ?
-                _settings->_block_sizes : _settings->_region_sizes;
-        }
-        IdxTuple& target_sizes() const {
-            return tune_mini_blks() ?
-                _settings->_mini_block_sizes : _settings->_block_sizes;
-        }
-        IdxTuple& outer_sizes() const {
-            return tune_mini_blks() ?
-                _settings->_block_sizes : _settings->_region_sizes;
-        }
-
-        // Change settings pointers.
-        void set_settings(KernelSettings* p) {
-            _settings = p;
-        }
-
         // Reset all state to beginning.
         void clear(bool mark_done, bool verbose = false);
 
@@ -126,9 +132,11 @@ namespace yask {
 
         // Print the best settings.
         void print_settings() const;
+        void print_temporal_settings() const;
 
-        // Apply settings.
-        void apply();
+        // If 'use_best', apply best settings and other kernel settings.
+        // Else, just set other kernel settings.
+        void apply(bool use_best);
 
         // Done?
         bool is_done() const { return done; }

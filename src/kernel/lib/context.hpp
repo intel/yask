@@ -369,12 +369,6 @@ namespace yask {
             rank_bb.bb_valid = prep;
         }
 
-        // Modify settings in shared state and auto-tuner.
-        void set_settings(KernelSettingsPtr opts) {
-            _state->_opts = opts;
-            _at.set_settings(opts.get());
-        }
-
         // Reset elapsed times to zero.
         void clear_timers();
 
@@ -422,7 +416,8 @@ namespace yask {
         virtual void reset_locks();
 
         // Print info about the soln.
-        virtual void print_temporal_tiling_info() const;
+        virtual void print_temporal_tiling_info(std::string prefix = "") const;
+        virtual void print_sizes(std::string prefix = "") const;
         virtual void print_warnings() const;
 
         /// Get statistics associated with preceding calls to run_solution().
@@ -718,6 +713,8 @@ namespace yask {
         }
 
         // Auto-tuner methods.
+        void visit_auto_tuners(std::function<void (AutoTuner& at)> visitor);
+        void visit_auto_tuners(std::function<void (const AutoTuner& at)> visitor) const;
         virtual void eval_auto_tuner(idx_t num_steps);
 
         // Auto-tuner APIs.

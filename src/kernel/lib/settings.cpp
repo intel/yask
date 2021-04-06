@@ -373,25 +373,19 @@ namespace yask {
 #endif
         parser.add_option(new CommandLineParser::BoolOption
                           ("auto_tune",
-                           "Adjust block sizes *during* normal operation to tune for performance: "
-                           "Each step will use a different block size until an optimal size is found. "
+                           "Adjust specified block and tile sizes *during* normal operation "
+                           "to tune for performance, a.k.a., 'online' or 'in-situ' tuning. "
+                           "Successive steps will use different sizes until an optimal size is found. "
                            "Will likely cause varying performance between steps, "
                            "so this is not recommended for benchmarking. "
-                           "Auto-tuning blocks will automatically set the mini-block and sub-block "
-                           "sizes to their defaults after each change to the block sizes.",
+                           "However, this can be a useful tool for deployment of YASK stencils "
+                           "onto unknown and/or varied systems where 'offline' tuning is not practical.",
                            _do_auto_tune));
         parser.add_option(new CommandLineParser::DoubleOption
-                          ("auto_tune_min_secs",
-                           "[Advanced] Minimum seconds to run new trial during auto-tuning "
+                          ("auto_tune_trial_secs",
+                           "[Advanced] Seconds to run new trial during auto-tuning "
                            "for new trial to be considered better than the existing best.",
-                           _tuner_min_secs));
-        parser.add_option(new CommandLineParser::BoolOption
-                          ("auto_tune_mini_blocks",
-                           "[Advanced] Apply the auto-tuner to mini-block sizes instead of block sizes. "
-                           "Particularly useful when using temporal block tiling."
-                           "Auto-tuning mini-blocks will automatically set the sub-block "
-                           "sizes to their defaults after each change to the mini-block sizes.",
-                           _tune_mini_blks));
+                           _tuner_trial_secs));
         parser.add_option(new CommandLineParser::BoolOption
                           ("auto_tune_each_stage",
                            "[Advanced] Apply the auto-tuner separately to each stage. "
@@ -399,6 +393,29 @@ namespace yask {
                            "passes across the entire var, "
                            "i.e., when no temporal tiling is used.",
                            _allow_stage_tuners));
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("auto_tune_blocks",
+                           "[Advanced] Apply the auto-tuner to block sizes. "
+                           "This is the most common tuning for CPU kernels. "
+                           "Auto-tuning blocks will automatically set all lower-level "
+                           "sizes to their defaults after each change to the block sizes.",
+                           _tune_blks));
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("auto_tune_mini_blocks",
+                           "[Advanced] Apply the auto-tuner to mini-block sizes. "
+                           "Often useful when using temporal block tiling."
+                           "Auto-tuning mini-blocks will automatically set all lower-level "
+                           "sizes to their defaults after each change to the mini-block sizes.",
+                           _tune_mini_blks));
+        #ifdef USE_TILING
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("auto_tune_sub_block_tiles",
+                           "[Advanced] Apply the auto-tuner to sub-block-tile sizes. "
+                           "Often useful for tuning GPU kernels. "
+                           "Auto-tuning sub-block-tiles will automatically set all lower-level "
+                           "sizes to their defaults after each change to the sub-block-tile sizes.",
+                           _tune_sub_blk_tiles));
+        #endif
     }
 
     // Print usage message.
@@ -414,48 +431,89 @@ namespace yask {
         CommandLineParser soln_parser;
         add_options(soln_parser);
         soln_parser.print_help(os);
-        os << "\nTerms for the various levels of tiling from smallest to largest:\n"
-            " A 'point' is a single floating-point (FP) element in a grid.\n"
-            "  This binary uses " << REAL_BYTES << "-byte FP elements.\n"
-            " A 'vector' is composed of points.\n"
-            "  A 'folded vector' contains points in more than one dimension.\n"
-            "  The size of a vector is typically that of a SIMD register.\n"
-            " A 'cluster' is composed of vectors.\n"
-            "  This is the unit of work done in each inner-most loop iteration.\n"
-            " A 'sub-block' is composed of vector-clusters.\n"
-            "  If the number of block-threads is greater than one,\n"
-            "   then this is the unit of work for one nested OpenMP thread;\n"
-            "   else, sub-blocks are evaluated sequentially within each mini-block.\n"
-            " A 'mini-block' is composed of sub-blocks.\n"
+        os <<
+            "\nTerms for the various work-sizes from largest to smallest:\n"
+            " The 'global-domain' or 'overall-problem' is the work done across all MPI ranks.\n"
+            "  The global-domain is composed of one or more local-domains.\n"
+            #ifndef USE_MPI
+            "  This binary has NOT been compiled with MPI support,\n"
+            "   so the global-domain is equivalent to the single local-domain.\n"
+            #endif
+            " A 'local-domain' or 'rank-domain' the work done in one MPI rank.\n"
+            "  Ranks are evaluated in parallel in separate MPI processes.\n"
+            "  Each local-domain is composed of one or more regions.\n"
+            " A 'region' is a sub-division of work within a local-domain.\n"
+            "  If using temporal wave-front rank tiling (see region-size guidelines),\n"
+            "   then this is the work done in each wave-front rank tile;\n"
+            "   else, there is typically only one region the size of the local-domain.\n"
+            "  Regions are evaluated sequentially within ranks.\n"
+            "  Each region is composed of one or more blocks.\n"
+            " A 'block' is a sub-division of work within a region.\n"
+            "  If the number of threads is greater than one (typical),\n"
+            "   then this is the unit of work for one OpenMP thread,\n"
+            "   and blocks are evaluated concurrently within each region;\n"
+            "   else, blocks are evaluated sequentially within each region.\n"
+            "  Each block is composed of one or more mini-blocks.\n"
+            " A 'mini-block' is a sub-division of work within a block.\n"
             "  If using temporal wave-front block tiling (see mini-block-size guidelines),\n"
-            "   then this is the unit of work for each wave-front block tile,\n"
+            "   then this is the work done for each wave-front block tile,\n"
             "   and the number temporal steps in the mini-block is always equal\n"
             "   to the number temporal steps a temporal block;\n"
             "   else, there is typically only one mini-block the size of a block.\n"
             "  Mini-blocks are evaluated sequentially within blocks.\n"
-            " A 'block' is composed of mini-blocks.\n"
-            "  If the number of threads is greater than one (typical),\n"
-            "   then this is the unit of work for one OpenMP thread;\n"
-            "   else, blocks are evaluated sequentially within each region.\n"
-            " A 'region' is composed of blocks.\n"
-            "  If using temporal wave-front rank tiling (see region-size guidelines),\n"
-            "   then this is the unit of work for each wave-front rank tile;\n"
-            "   else, there is typically only one region the size of the rank-domain.\n"
-            "  Regions are evaluated sequentially within ranks.\n"
-            " A 'local-domain' or 'rank-domain' is composed of regions.\n"
-            "  This is the unit of work for one MPI rank.\n"
-            "  Ranks are evaluated in parallel in separate MPI processes.\n"
-            " The 'global-domain' or 'overall-problem' is composed of local-domains.\n"
-            "  This is the unit of work across all MPI ranks.\n"
-            #ifndef USE_MPI
-            "   This binary has NOT been compiled with MPI support,\n"
-            "   so the global-domain is equivalent to the single local-domain.\n"
-            #endif
-            "\nGuidelines for setting tiling sizes:\n"
-            " The vector and cluster sizes are set at compile-time, so\n"
-            "  there are no run-time options to set them.\n"
-            " Set sub-block sizes to specify a unit of work done by each nested OpenMP thread.\n"
-            "  Multiple sub-blocks are intended to allow sharing of caches\n"
+            "  Each mini-block is composed of one or more sub-blocks.\n"
+            " A 'sub-block' is a sub-division of work within a mini-block.\n"
+            "  If the number of block-threads is greater than one,\n"
+            "   then this is the unit of work for one nested OpenMP thread,\n"
+            "   and sub-blocks are evaluated concurrently within each mini-block;\n"
+            "   else, sub-blocks are evaluated sequentially within each mini-block.\n"
+            "  There is no additional temporal tiling at the sub-block level.\n"
+            "  Each sub-block is composed of one or more clusters.\n"
+            " A 'cluster' is the work done in each inner-most loop iteration.\n"
+            "  Each cluster is composed of one or more vectors.\n"
+            " A 'vector' is typically the work done by a SIMD instruction.\n"
+            "  A 'folded vector' contains points in more than one dimension.\n"
+            "  The size of a vector is typically that of a SIMD register.\n"
+            "  Each vector is composed of one or more points.\n"
+            " A 'point' is a single floating-point (FP) element in a grid.\n"
+            "  This binary uses " << REAL_BYTES << "-byte FP elements.\n"
+            "\n"
+            "Guidelines for setting work-sizes:\n"
+            " The global-domain sizes specify the work done across all MPI ranks.\n"
+            "  A global-domain size of 0 in a given domain dimension =>\n"
+            "   global-domain size is the sum of local-domain sizes in that dimension.\n"
+            " The local-domain sizes specify the work done on each MPI rank.\n"
+            "  A local-domain size of 0 in a given domain dimension =>\n"
+            "   local-domain size is determined by the global-domain size in that dimension.\n"
+            "  This and the number of vars affect the amount of memory used per rank.\n"
+            "  Either the global-domain size or the local-domain size must be specified.\n"
+            " The region sizes are used to configure temporal wave-front rank tiling.\n"
+            "  Temporal wave-front rank tiling may increase locality in large shared caches\n"
+            "   when a local-domain is larger than the capacity of those caches.\n"
+            "  A region size >1 in the step dimension (e.g., '-rt') enables wave-front rank tiling.\n"
+            "  A region size of 0 in the step dimension => the temporal wave-front\n"
+            "   rank tiling will have the same number of steps as the temporal block tiling.\n"
+            "  The region size in the step dimension affects how often MPI halo-exchanges occur:\n"
+            "   A region size of 0 in the step dimension => exchange after every stage.\n"
+            "   A region size >0 in the step dimension => exchange after that many steps.\n"
+            " The block sizes specify the work done by each top-level OpenMP thread.\n"
+            "  A block size of 0 in a given domain dimension =>\n"
+            "   block size is set to region size in that dimension.\n"
+            "  A block size of 0 in the step dimension (e.g., '-bt') disables any temporal blocking.\n"
+            "  A block size of 1 in the step dimension enables temporal blocking, but only between\n"
+            "   stages in the same step.\n"
+            "  A block size >1 in the step dimension enables temporal region tiling across multiple steps.\n"
+            "  The temporal block size may be automatically reduced if needed based on the\n"
+            "   domain block sizes, the stencil halos, and the step size of the regions.\n"
+            " The mini-block sizes are used to configure temporal wave-front block tiling.\n"
+            "   Temporal wave-front block tiling may increase locality in core-local caches\n"
+            "   (e.g., L2) when blocks are larger than that the capacity of those caches.\n"
+            "  A mini-block size of 0 in a given domain dimension =>\n"
+            "   mini-block size is set to block size in that dimension.\n"
+            "  The size of a mini-block in the step dimension is always implicitly\n"
+            "   the same as that of a block.\n"
+            " The sub-block sizes specify the work done by each nested OpenMP thread.\n"
+            "  Multiple sub-blocks may enable more effective sharing of caches\n"
             "   among multiple hyper-threads in a core when there is more than\n"
             "   one block-thread. It can also be used to share data between caches\n"
             "   among multiple cores.\n"
@@ -463,66 +521,39 @@ namespace yask {
             "   sub-block size is set to mini-block size in that dimension;\n"
             "   when there is more than one block-thread, the first dimension\n"
             "   will instead be set to the vector length to create \"slab\" shapes.\n"
-            " Set mini-block sizes to control temporal wave-front tile sizes within a block.\n"
-            "  Multiple mini-blocks are intended to increase locality in level-2 caches\n"
-            "   when blocks are larger than L2 capacity.\n"
-            "  A mini-block size of 0 in a given domain dimension =>\n"
-            "   mini-block size is set to block size in that dimension.\n"
-            "  The size of a mini-block in the step dimension is always implicitly\n"
-            "   the same as that of a block.\n"
-            " Set block sizes to specify a unit of work done by each top-level OpenMP thread.\n"
-            "  A block size of 0 in a given domain dimension =>\n"
-            "   block size is set to region size in that dimension.\n"
-            "  A block size of 0 in the step dimension (e.g., '-bt') disables any temporal blocking.\n"
-            "  A block size of 1 in the step dimension enables temporal blocking, but only between\n"
-            "   stages in the same step.\n"
-            "  A block size >1 in the step dimension enables temporal blocking across multiple steps.\n"
-            "  The temporal block size may be automatically reduced if needed based on the\n"
-            "   domain block sizes and the stencil halos.\n"
-            " Set region sizes to control temporal wave-front tile sizes within a rank.\n"
-            "  Multiple regions are intended to increase locality in level-3 caches\n"
-            "   when ranks are larger than L3 capacity.\n"
-            "  A region size of 0 in the step dimension (e.g., '-rt') => region size is\n"
-            "   set to block size in the step dimension.\n"
-            "  A region size >1 in the step dimension enables wave-front rank tiling.\n"
-            "  The region size in the step dimension affects how often MPI halo-exchanges occur:\n"
-            "   A region size of 0 in the step dimension => exchange after every stage.\n"
-            "   A region size >0 in the step dimension => exchange after that many steps.\n"
-            " Set local-domain sizes to specify the work done on this MPI rank.\n"
-            "  A local-domain size of 0 in a given domain dimension =>\n"
-            "   local-domain size is determined by the global-domain size in that dimension.\n"
-            "  This and the number of vars affect the amount of memory used.\n"
-            " Set global-domain sizes to specify the work done across all MPI ranks.\n"
-            "  A global-domain size of 0 in a given domain dimension =>\n"
-            "   global-domain size is the sum of local-domain sizes in that dimension.\n"
+            " The vector and cluster sizes are set at compile-time, so\n"
+            "  there are no run-time options to set them.\n"
             #ifdef USE_TILING
             " Set 'tile' sizes to provide finer control over the order of evaluation\n"
             "  within the given area. For example, sub-block-tiles create smaller areas\n"
             "  within sub-blocks; points with the first sub-block-tile will be scheduled\n"
             "  before those the second sub-block-tile, etc. (There is no additional level\n"
-            "  of looping or sychronization added with this tiling.)\n"
+            "  of temporal tiling or sychronization added with this tiling.)\n"
+            "  A tile size of 0 in a given domain dimension => tile size is set to the size\n"
+            "   of its enclosing area in that dimension, i.e., there will only be one tile\n"
+            "   in that dimension.\n"
+            #endif
+            #ifdef USE_MPI
+            "\nControlling MPI scaling:\n"
+            " To 'strong-scale' a given overall-problem size, use multiple MPI ranks\n"
+            "  and keep the global-domain sizes constant.\n"
+            " To 'weak-scale' to a larger overall-problem size, use multiple MPI ranks\n"
+            "  and keep the local-domain sizes constant.\n"
             #endif
             "\nControlling OpenMP threading:\n"
             " Using '-max_threads 0' =>\n"
             "  max_threads is set to OpenMP's default number of threads.\n"
-            " The -thread_divisor option is a convenience to control the number of\n"
-            "  hyper-threads used without having to know the number of cores,\n"
+            " The -thread_divisor option is a convenience to reduce the number of\n"
+            "  threads used without having to know the max_threads setting;\n"
             "  e.g., using '-thread_divisor 2' will halve the number of OpenMP threads.\n"
             " For stencil evaluation, threads are allocated using nested OpenMP:\n"
-            "  Num CPU threads per region = max_threads / thread_divisor / block_threads.\n"
+            "  Num CPU threads per mini-block and sub-block = 1.\n"
             "  Num CPU threads per block = block_threads.\n"
-            "  Num CPU threads per sub-block = 1.\n"
+            "  Num CPU threads per region = max_threads / thread_divisor / block_threads.\n"
             #ifdef USE_OFFLOAD
             " When using offloaded kernel evaluation, there may be multiple teams\n"
             "  and offload threads used within each sub-block. These may be controlled by\n"
             "  the standard OpenMP environment vars OMP_NUM_TEAMS and OMP_TEAMS_THREAD_LIMIT.\n"
-            #endif
-            #ifdef USE_MPI
-            "\nControlling MPI scaling:\n"
-            "  To 'strong-scale' a given overall-problem size, use multiple MPI ranks\n"
-            "   and keep the global-domain sizes constant.\n"
-            "  To 'weak-scale' to a larger overall-problem size, use multiple MPI ranks\n"
-            "   and keep the local-domain sizes constant.\n"
             #endif
            << app_notes;
 
@@ -654,7 +685,7 @@ namespace yask {
                                    step_dim);
         os << " num-regions-per-local-domain-per-step: " << nr << endl;
         os << " Since the region size in the '" << step_dim <<
-            "' dim is " << rt << ", temporal wave-front region tiling is ";
+            "' dim is " << rt << ", temporal wave-front rank tiling is ";
         if (!rt) os << "NOT ";
         os << "enabled.\n";
 
@@ -670,7 +701,7 @@ namespace yask {
         os << " num-blocks-per-region-per-step: " << nb << endl;
         os << " num-blocks-per-local-domain-per-step: " << (nb * nr) << endl;
         os << " Since the block size in the '" << step_dim <<
-            "' dim is " << bt << ", temporal concurrent block tiling is ";
+            "' dim is " << bt << ", temporal concurrent region tiling is ";
         if (!bt) os << "NOT ";
         os << "enabled.\n";
 
@@ -686,7 +717,7 @@ namespace yask {
         os << " num-mini-blocks-per-region-per-step: " << (nmb * nb) << endl;
         os << " num-mini-blocks-per-local-domain-per-step: " << (nmb * nb * nr) << endl;
         os << " Since the mini-block size in the '" << step_dim <<
-            "' dim is " << mbt << ", temporal wave-front mini-block tiling is ";
+            "' dim is " << mbt << ", temporal wave-front block tiling is ";
         if (!mbt) os << "NOT ";
         os << "enabled.\n";
 
@@ -747,7 +778,7 @@ namespace yask {
         os << " num-sub-blocks-per-block-per-step: " << (nsb * nmb) << endl;
         os << " num-sub-blocks-per-region-per-step: " << (nsb * nmb * nb) << endl;
         os << " num-sub-blocks-per-rank-per-step: " << (nsb * nmb * nb * nr) << endl;
-        os << " Temporal sub-block tiling is never enabled.\n";
+        os << " Temporal mini-block tiling is never enabled.\n";
 
         // Determine binding dimension. Do this again if it was done above
         // by default because it may have changed during adjustment.

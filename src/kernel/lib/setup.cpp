@@ -511,6 +511,141 @@ namespace yask {
 
     } // setup_rank().
 
+    void StencilContext::print_warnings() const {
+        STATE_VARS(this);
+#ifdef CHECK
+        DEBUG_MSG("*** WARNING: YASK compiled with CHECK; ignore performance.");
+#endif
+#if defined(NO_INTRINSICS) && (VLEN > 1)
+        DEBUG_MSG("*** WARNING: YASK compiled with NO_INTRINSICS; ignore performance.");
+#endif
+#ifdef MODEL_CACHE
+        DEBUG_MSG("*** WARNING: YASK compiled with MODEL_CACHE; ignore performance.");
+#endif
+#ifdef TRACE_MEM
+        DEBUG_MSG("*** WARNING: YASK compiled with TRACE_MEM; ignore performance.");
+#endif
+#ifdef TRACE_INTRINSICS
+        DEBUG_MSG("*** WARNING: YASK compiled with TRACE_INTRINSICS; ignore performance.");
+#endif
+        TRACE_MSG("***  WARNING: YASK run with -trace; ignore performance results");
+#ifdef NO_HALO_EXCHANGE
+        DEBUG_MSG("*** WARNING: YASK compiled with NO_HALO_EXCHANGE; ignore performance and results.");
+#endif
+    }
+
+    void StencilContext::print_temporal_tiling_info(string prefix) const {
+        STATE_VARS(this);
+
+        DEBUG_MSG(prefix << " num-wave-front-steps:      " << wf_steps << endl <<
+                  prefix << " num-temporal-block-steps:  " << tb_steps);
+
+        // Print detailed info only if temporal tiling enabled.
+        if (wf_steps > 0 || tb_steps > 0) {
+            DEBUG_MSG(prefix << " wave-front-angles:         " << wf_angles.make_dim_val_str() << endl <<
+                      prefix << " num-wave-front-shifts:     " << num_wf_shifts << endl <<
+                      prefix << " wave-front-shift-amounts:  " << wf_shift_pts.make_dim_val_str() << endl <<
+                      prefix << " left-wave-front-exts:      " << left_wf_exts.make_dim_val_str() << endl <<
+                      prefix << " right-wave-front-exts:     " << right_wf_exts.make_dim_val_str() << endl <<
+                      prefix << " ext-local-domain:          " << ext_bb.make_range_string(domain_dims) << endl <<
+                      prefix << " temporal-block-angles:     " << tb_angles.make_dim_val_str() << endl <<
+                      prefix << " num-temporal-block-shifts: " << num_tb_shifts << endl <<
+                      prefix << " temporal-block-long-base:  " << tb_widths.make_dim_val_str(" * ") << endl <<
+                      prefix << " temporal-block-short-base: " << tb_tops.make_dim_val_str(" * ") << endl <<
+                      prefix << " mini-block-angles:         " << mb_angles.make_dim_val_str());
+        }
+    }
+
+    void StencilContext::print_sizes(string prefix) const {
+        STATE_VARS(this);
+#ifdef USE_TILING
+        DEBUG_MSG(prefix << " local-domain-tile-size: " <<
+                  opts->_rank_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+#endif
+        DEBUG_MSG(prefix << " region-size:            " <<
+                  opts->_region_sizes.make_dim_val_str(" * "));
+#ifdef USE_TILING
+        DEBUG_MSG(prefix << " region-tile-size:       " <<
+                  opts->_region_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+#endif
+        DEBUG_MSG(prefix << " block-size:             " <<
+                  opts->_block_sizes.make_dim_val_str(" * "));
+#ifdef USE_TILING
+        DEBUG_MSG(prefix << " block-tile-size:        " <<
+                  opts->_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+#endif
+        DEBUG_MSG(prefix << " mini-block-size:        " <<
+                  opts->_mini_block_sizes.make_dim_val_str(" * "));
+#ifdef USE_TILING
+        DEBUG_MSG(prefix << " mini-block-tile-size:   " <<
+                  opts->_mini_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+#endif
+        DEBUG_MSG(prefix << " sub-block-size:         " <<
+                  opts->_sub_block_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+#ifdef USE_TILING
+        DEBUG_MSG(prefix << " sub-block-tile-size:    " <<
+                  opts->_sub_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+#endif
+    }
+
+    void StencilContext::init_stats() {
+        STATE_VARS(this);
+
+        // Calc and report total allocation and domain sizes.
+        rank_nbytes = get_num_bytes();
+        tot_nbytes = sum_over_ranks(rank_nbytes, env->comm);
+        rank_domain_pts = rank_bb.bb_num_points;
+        tot_domain_pts = sum_over_ranks(rank_domain_pts, env->comm);
+        DEBUG_MSG("\nDomain size in this rank (points):          " << make_num_str(rank_domain_pts) <<
+                  "\nTotal allocation in this rank:              " << make_byte_str(rank_nbytes) <<
+                  "\nOverall problem size in " << env->num_ranks << " rank(s) (points): " <<
+                  make_num_str(tot_domain_pts) <<
+                  "\nTotal overall allocation in " << env->num_ranks << " rank(s):      " <<
+                  make_byte_str(tot_nbytes));
+
+        // Report some sizes and settings.
+        DEBUG_MSG("\nWork-unit sizes in grid points (from largest to smallest):");
+        DEBUG_MSG(" global-domain-size:     " <<
+                  opts->_global_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+        DEBUG_MSG(" local-domain-size:      " <<
+                  opts->_rank_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+        print_sizes();
+        DEBUG_MSG(" cluster-size:           " << dims->_cluster_pts.make_dim_val_str(" * "));
+        DEBUG_MSG(" vector-size:            " << dims->_fold_pts.make_dim_val_str(" * "));
+        DEBUG_MSG("\nOther settings:\n"
+                  " yask-version:           " << yask_get_version_string() << endl <<
+                  " target:                 " << get_target() << endl <<
+                  " stencil-name:           " << get_name() << endl <<
+                  " stencil-description:    " << get_description() << endl <<
+                  " element-size:           " << make_byte_str(get_element_bytes()));
+#ifdef USE_MPI
+        DEBUG_MSG(" num-ranks:              " << opts->_num_ranks.make_dim_val_str(" * ") << endl <<
+                  " rank-indices:           " << opts->_rank_indices.make_dim_val_str() << endl <<
+                  " local-domain-offsets:   " << rank_domain_offsets.make_dim_val_str(dims->_domain_dims));
+        if (opts->overlap_comms)
+            DEBUG_MSG(" mpi-interior:           " << mpi_interior.make_range_string(domain_dims));
+#endif
+        DEBUG_MSG(" vector-len:             " << VLEN << endl <<
+                  " extra-padding:          " << opts->_extra_pad_sizes.remove_dim(step_posn).make_dim_val_str() << endl <<
+                  " minimum-padding:        " << opts->_min_pad_sizes.remove_dim(step_posn).make_dim_val_str() << endl <<
+                  " allow-addl-padding:     " << opts->_allow_addl_pad << endl <<
+                  " L1-prefetch-distance:   " << PFD_L1 << endl <<
+                  " L2-prefetch-distance:   " << PFD_L2 << endl <<
+                  " max-halos:              " << max_halos.make_dim_val_str());
+        print_temporal_tiling_info();
+
+        // Info about eqs, stages and bundles.
+        DEBUG_MSG("\n"
+                  "Num stages:              " << st_stages.size() << endl <<
+                  "Num stencil bundles:     " << st_bundles.size() << endl <<
+                  "Num stencil equations:   " << NUM_STENCIL_EQS);
+
+        // Info on work in stages.
+        DEBUG_MSG("\nBreakdown of work stats in this rank:");
+        for (auto& sp : st_stages)
+            sp->init_work_stats();
+    }
+
     // Set non-scratch var sizes and offsets based on settings.
     // Set wave-front settings.
     // This should be called anytime a setting or rank offset is changed.
@@ -586,6 +721,7 @@ namespace yask {
         assert(num_wf_shifts >= 0);
 
         // Determine whether separate tuners can be used.
+        // Only allowed when no TB and >1 stage.
         state->_use_stage_tuners = opts->_allow_stage_tuners && (tb_steps == 0) && (st_stages.size() > 1);
 
         // Calculate angles and related settings.

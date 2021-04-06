@@ -233,10 +233,12 @@ namespace yask {
         int _bind_posn = 1;
 
         // Tuning.
-        bool _do_auto_tune = false;    // whether to do auto-tuning.
-        bool _tune_mini_blks = false; // auto-tune mini-blks instead of blks.
+        bool _do_auto_tune = false;    // whether to do "online" auto-tuning.
+        bool _tune_blks = true;
+        bool _tune_mini_blks = false;
+        bool _tune_sub_blk_tiles = false;
         bool _allow_stage_tuners = false; // allow per-stage tuners when possible.
-        double _tuner_min_secs = 0.25;   // min time to run tuner for new better setting.
+        double _tuner_trial_secs = 0.25;   // time to run tuner for new better setting.
 
         // Debug.
         bool force_scalar = false; // Do only scalar ops.
