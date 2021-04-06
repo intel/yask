@@ -3,6 +3,7 @@
 * New YASK users may want to start with the [YASK tutorial](http://intel.github.io/yask/YASK-tutorial.pdf).
 * Users with existing YASK-based code may want to jump to the [backward-compatibility notices](#backward-compatibility-notices).
 * All YASK users will also be interested in the [API documentation](http://intel.github.io/yask/api/html/index.html).
+* **Coming soon: GPU support via OpenMP device offload!**
 
 ## Overview
 YASK is a framework to rapidly create high-performance stencil code including optimizations and features such as
