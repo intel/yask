@@ -48,7 +48,7 @@ else
   omp_target_par_for	?=	omp target teams distribute parallel for device(KernelEnv::_omp_devn)
 endif
 omp_region_schedule	?=	dynamic,1
-omp_block_schedule	?=	static,1
+omp_mini_block_schedule	?=	static,1
 omp_misc_schedule	?=	guided
 omp_target_schedule	?=	static,1
 trace			?=	0
@@ -519,7 +519,7 @@ BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_MODS) loop($(BLOCK_LOOP_ORDER)) { }
 # nested OpenMP thread. The OpenMP construct is not used when running with
 # '-bind_block_threads'.
 MINI_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -macroPrefix MINI_BLOCK_ \
-				-ompMod '$(omp_par_for) schedule($(omp_block_schedule)) proc_bind(spread)'
+				-ompMod '$(omp_par_for) schedule($(omp_mini_block_schedule)) proc_bind(spread)'
 MINI_BLOCK_LOOP_ORDER	?=	1 .. N-1
 MINI_BLOCK_LOOP_CODE	?=	$(MINI_BLOCK_LOOP_MODS) omp loop($(MINI_BLOCK_LOOP_ORDER)) { }
 

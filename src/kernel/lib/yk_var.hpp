@@ -1425,7 +1425,8 @@ namespace yask {
                         Indices ofs = vec_range.unlayout(false, j);
                         Indices pt = firstv.add_elements(ofs);
 
-                        // Inner loop.
+                        // Inner loop. 
+                        // TODO: use SIMT model for offload.
                         for (idx_t i = 0; i < ni; i++) {
                             pt[ip] = firstv[ip] + i;
                             idx_t bofs = tofs + j * ni + i;

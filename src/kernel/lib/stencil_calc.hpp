@@ -391,7 +391,7 @@ namespace yask {
                             const ScanIndices& misc_idxs) {
 
             // Scan through n-D space.
-            // Set OMP loop to offload or disable OMP on host.
+            // Set OMP loop to offload; disable OMP on host.
             #ifdef USE_OFFLOAD
             #define MISC_OMP_PRAGMA \
                 _Pragma("omp target parallel for device(KernelEnv::_omp_devn) schedule(static,1)")

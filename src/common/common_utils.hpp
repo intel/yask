@@ -108,8 +108,8 @@ namespace yask {
     //  div_equally_size_n(6, 4, 3) returns 1.
     template <typename T>
     inline T div_equally_size_n(T num, T nparts, T n) {
-        assert(n >= 0);
-        assert(n < nparts);
+        host_assert(n >= 0);
+        host_assert(n < nparts);
         T p = num / nparts;
         T rem = num % nparts;
         p += (n < rem) ? 1 : 0;
@@ -117,10 +117,10 @@ namespace yask {
     }
     
     // Divide 'num' equally into 'nparts'.
-    // Returns the cumulative sizes of the 0-'n'th parts,
-    // if 0 <= 'n' < 'nparts' and 0 if n == -1.
-    // The -1 case is handy for calculating the initial
-    // starting point when passing 'n'-1.
+    // Returns the *cumulative* sizes of the 0-'n'th parts,
+    // if 0 <= 'n' < 'nparts' and 0 if n < 0.
+    // The <0 case is handy for calculating the initial
+    // starting point when passing 'n'-1 and 'n'==0.
     // Example:
     //  div_equally_cumu_size_n(6, 4, -1) returns 0.
     //  div_equally_cumu_size_n(6, 4, 0) returns 2.
@@ -129,10 +129,10 @@ namespace yask {
     //  div_equally_cumu_size_n(6, 4, 3) returns 6.
     template <typename T>
     inline T div_equally_cumu_size_n(T num, T nparts, T n) {
-        if (n == -1)
+        if (n < 0)
             return 0;
-        assert(n >= 0);
-        assert(n < nparts);
+        host_assert(n >= 0);
+        host_assert(n < nparts);
         T p = (num / nparts) * (n + 1);
         T rem = num % nparts;
         p += (n < rem) ? (n + 1) : rem;
@@ -152,6 +152,8 @@ namespace yask {
 
     // A var that behaves like OMP_NUM_THREADS to specify the
     // default number of threads in each level.
+    // TODO: try to remove the need for these vars by using
+    // OMP APIs to discover the nesting levels and num threads.
     constexpr int yask_max_levels = 2;
     extern int yask_num_threads[];
 

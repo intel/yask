@@ -54,8 +54,8 @@ my $indent = dirname($0)."/yask_indent.sh";
 my $bSerp = 0x1;                # serpentine path
 my $bSquare = 0x2;              # square_wave path
 my $bTile = 0x4;               # tile path
-my $bSimd = 0x8;                # simd prefix
-my $bStatic = 0x10;                # assume static scheduling
+my $bOmpPar = 0x8;                # OpenMP parallel
+my $bStatic = 0x10;                # use static scheduling
 
 ##########
 # Various functions to create variable references.
@@ -202,10 +202,9 @@ sub indexType {
 sub adjFeatures($$$$) {
     my $code = shift;           # ref to list of code lines.
     my $loopDims = shift;       # ref to list of dimensions in loop.
-    my $of = shift;             # feature bits for path types.
+    my $features = shift;             # feature bits for path types.
     my $loopStack = shift;      # whole stack at this point, including enclosing dims.
 
-    my $af = $of;
     my $ndims = scalar @$loopDims;
     my $outerDim = $loopDims->[0];        # outer dim of these loops.
     my $innerDim = $loopDims->[$#$loopDims]; # inner dim of these loops.
@@ -214,27 +213,32 @@ sub adjFeatures($$$$) {
     my $encDim;
     map { $encDim = $loopStack->[$_]
               if $loopStack->[$_ + 1] eq $outerDim; } 0..($#$loopStack-1);
-    
-    if ($ndims < 2 && ($af & $bSquare)) {
-        warn "warning: square-wave ignored for loop with $ndims dim.\n";
-        $af &= ~$bSquare;     # clear bit.
+
+    if (($features & $bStatic) && !($features & $bOmpPar)) {
+        warn "notice: static ignored for non-OpenMP parallel loop.\n";
+        $features &= ~$bStatic;     # clear bit.
     }
-    if ($ndims < 2 && !defined $encDim && ($af & $bSerp)) {
-        warn "warning: serpentine ignored for outer loop.\n";
-        $af &= ~$bSerp;     # clear bit.
+    if ($ndims < 2 && ($features & $bSquare)) {
+        warn "notice: square-wave ignored for loop with only $ndims dim.\n";
+        $features &= ~$bSquare;     # clear bit.
+    }
+    if ($ndims < 2 && !defined $encDim && ($features & $bSerp)) {
+        warn "notice: serpentine ignored for outer loop.\n";
+        $features &= ~$bSerp;     # clear bit.
     }
     
-    if ($af & $bTile) {
+    if ($features & $bTile) {
 
         if ($ndims < 2) {
-            warn "warning: tiling ignored for loop with $ndims dim.\n";
-            $af &= ~$bTile;     # clear bit.
+            warn "notice: tiling ignored for loop with only $ndims dim.\n";
+            $features &= ~$bTile;     # clear bit.
         }
         die "error: serpentine not compatible with tiling.\n"
-            if $af & $bSerp;
+            if $features & $bSerp;
         die "error: square-wave not compatible with tiling.\n"
-            if $af & $bSquare;
+            if $features & $bSquare;
     }
+    return $features;
 }
 
 # Create and init vars *before* beginning of simple or collapsed loop.
@@ -548,13 +552,13 @@ sub addIndexVars2($$$$) {
 
 # start simple or collapsed loop body.
 sub beginLoop($$$$$$$) {
-    my $code = shift;           # ref to list of code lines.
-    my $loopDims = shift;       # ref to list of dimensions.
+    my $code = shift;           # ref to list of code lines to be added to.
+    my $loopDims = shift;       # ref to list of dimensions for this loop.
     my $prefix = shift;         # ref to list of prefix code. May be undef.
-    my $beginVal = shift;       # beginning of loop.
+    my $beginVal = shift;       # beginning of loop (0 for default).
     my $endVal = shift;         # end of loop (undef to use default).
     my $features = shift;       # bits for path types.
-    my $loopStack = shift;      # whole stack, including enclosing dims.
+    my $loopStack = shift;      # whole stack of dims so far, including enclosing dims.
 
     $features = adjFeatures($code, $loopDims, $features, $loopStack);
     $endVal = numItersVar(@$loopDims) if !defined $endVal;
@@ -749,7 +753,6 @@ sub processCode($) {
     my @loopStack;              # current nesting of dimensions.
     my @loopCounts;             # number of dimensions in each loop.
     my @loopDims;               # dimension(s) of current loop.
-    my $curInnerDim;            # iteration dimension of inner loop (undef if not in inner loop).
     my $innerNum = 0;           # inner-loop counter.
 
     # modifiers before loop() statements.
@@ -800,9 +803,17 @@ sub processCode($) {
     for (my $ti = 0; $ti <= $#toks; ) {
         my $tok = checkToken($toks[$ti++], '.*', 1);
 
-        # use OpenMP on next loop.
-        if (lc $tok eq 'omp') {
+        # generate simd in next loop.
+        if (lc $tok eq 'simd') {
 
+            push @loopPrefix, ' ${macroPrefix}OMP_SIMD';
+            print "info: generating SIMD in following loop.\n";
+        }
+
+        # use OpenMP on next loop.
+        elsif (lc $tok eq 'omp') {
+
+            $features |= $bOmpPar;
             push @loopPrefix,
                 " // Distribute iterations among OpenMP threads.", 
                 " ${macroPrefix}OMP_PRAGMA";
@@ -814,14 +825,6 @@ sub processCode($) {
 
             $features |= $bStatic;
             print "info: using static-scheduling optimizations.\n";
-        }
-
-        # generate simd in next loop.
-        elsif (lc $tok eq 'simd') {
-
-            push @loopPrefix, ' ${macroPrefix}OMP_SIMD';
-            $features |= $bSimd;
-            print "info: generating SIMD in following loop.\n";
         }
 
         # use tiled path in next loop if possible.
@@ -839,17 +842,17 @@ sub processCode($) {
             $features |= $bSquare;
         }
         
-        # beginning of a loop.
-        # also eats the args in parens and the following '{'.
+        # Beginning of a loop.
+        # Also eats the args in parens and the following '{'.
         elsif (lc $tok eq 'loop') {
 
-            # get loop dimension(s).
+            # Get loop dimension(s).
             checkToken($toks[$ti++], '\(', 1);
             @loopDims = getArgs(\@toks, \$ti);  # might be empty.
             checkToken($toks[$ti++], '\{', 1); # eat the '{'.
             my $ndims = scalar(@loopDims);
 
-            # check for existence of all vars.
+            # Check index consistency.
             for my $ld (@loopDims) {
                 die "Error: loop variable '$ld' not in ".dimStr(@dims).".\n"
                     if !grep($_ eq $ld, @dims);
@@ -862,104 +865,70 @@ sub processCode($) {
             push @loopStack, @loopDims;          # all dims so far.
             push @loopCounts, $ndims; # number of dims in each loop.
 
-            # set inner dim if applicable.
-            undef $curInnerDim;
-            if ($ndims && isInInner(\@toks, \$ti)) {
-                $curInnerDim = $loopDims[$#loopDims];
-            }
+            # In inner loop?
+            my $is_inner = $ndims && isInInner(\@toks, \$ti);
+            push @loopPrefix, " ${macroPrefix}INNER_PRAGMA" if $is_inner;
 
-            # Start the loop unless it's an inner loop.
+            # Start the loop unless there are no indices.
             if ($ndims) {
                 print "info: generating scan over ".dimStr(@loopDims)."...\n";
 
-                # add initial code for index vars, but don't start loop body yet.
+                # Add pre-loop code for index vars.
                 addIndexVars1(\@code, \@loopDims, $features, \@loopStack);
             
-                # if *not* the inner loop, start the loop body.
-                # if it is the inner loop, we might need more than one loop body, so
-                # it will not be generated until the '}' is seen.
-                if (!defined $curInnerDim) {
-                    beginLoop(\@code, \@loopDims, \@loopPrefix, 0, undef, $features, \@loopStack);
+                # Start the loop.
+                beginLoop(\@code, \@loopDims, \@loopPrefix, 0, undef, $features, \@loopStack);
 
-                    # clear data for this loop.
-                    undef @loopDims;
-                    undef @loopPrefix;
-                    $features = 0;
+                # Inner-loop-specific code.
+                if ($is_inner) {
+
+                    # Start-stop indices for body.
+                    # Using a copy so it will become OMP private.
+                    push @code, 
+                        " // Local copy of indices for loop body.",
+                        " ScanIndices ".locVar()."($macroPrefix$inputVar);",
+                        setOutVar(@loopStack);
+
+                    # Macro break for body: end one and start next one.
+                    push @code,
+                        "#undef ${macroPrefix}$loopPart$innerNum\n",
+                        "#endif\n",
+                        "\n// Loop body goes here.\n\n";
+                    $innerNum++;
+                    push @code,
+                        "#ifdef ${macroPrefix}$loopPart$innerNum\n";
                 }
+
             } else {
+
+                # Dummy loop needed when there are no indices in the loop.
+                # Needed to get nesting right.
                 print "info: generating dummy loop for empty $tok args...\n";
                 my $ivar = "dummy" . scalar(@loopCounts);
                 push @code, " // Dummy loop.",
                     @loopPrefix,
                     " for (int $ivar = 0; $ivar < 1; $ivar++) {";
-
-                # clear data for this loop.
-                undef @loopDims;
-                undef @loopPrefix;
-                $features = 0;
             }
 
+            # clear data for this loop so we'll be ready for a nested loop.
+            undef @loopDims;
+            undef @loopPrefix;
+            $features = 0;
         }
 
         # End of loop.
-        # This is where most of @code is created for inner loops.
         elsif ($tok eq '}') {
             die "error: attempt to end loop w/o beginning\n" if !@loopCounts;
 
-            # not inner loop?
-            # just need to end it.
-            if (!defined $curInnerDim) {
-                endLoop(\@code);
-            }
-
-            # inner loop.
-            # for each part of loop, need to
-            # - start it,
-            # - add to @code,
-            # - end it.
-            else {
-                my $beginVal = 0;
-                my $endVal = numItersVar(@loopDims);
-                my $comment = " // Inner loop.";
-
-                # beginning of loop.
-                push @code, $comment;
-                push @code, " ${macroPrefix}INNER_PRAGMA";
-                beginLoop(\@code, \@loopDims, \@loopPrefix, 
-                          $beginVal, $endVal, $features, \@loopStack);
-
-                # Indices for body.
-                push @code, 
-                    " // Local copy of indices for loop body.",
-                    " ScanIndices ".locVar()."($macroPrefix$inputVar);",
-                    setOutVar(@loopStack);
-
-                # Break for body.
-                push @code,
-                    "#undef ${macroPrefix}$loopPart$innerNum\n",
-                    "#endif\n",
-                    "\n// Loop body goes here.\n\n";
-
-                $innerNum++;
-                push @code,
-                    "#ifdef ${macroPrefix}$loopPart$innerNum\n";
-
-                # end of loop.
-                endLoop(\@code);
-
-                # clear data for this loop.
-                undef $curInnerDim;
-                undef @loopDims;
-                undef @loopPrefix;
-                $features = 0;
-            }                   # inner loop.
-
             # pop stacks.
-            my $ndims = pop @loopCounts;
+            my $ndims = pop @loopCounts; # How many indices in this loop?
             for my $i (1..$ndims) {
                 my $sdim = pop @loopStack;
-                #push @code, " // End of $sdim loop.";
+                push @code, " // End of scan over dim $sdim.";
             }
+
+            # Emit code.
+            endLoop(\@code);
         }                       # end of a loop.
 
         # separator (ignore).
@@ -1032,9 +1001,9 @@ sub main() {
         [ "macroPrefix=s", "Common prefix of all generated macros", ''],
         [ "inVar=s", "Name of existing input 'ScanIndices' var.", 'loop_indices'],
         [ "outVar=s", "Name of created loop-body 'ScanIndices' var.", 'body_indices'],
-        [ "ompMod=s", "Set OMP_PRAGMA to insert before 'omp' loop(s).", "omp parallel for"],
-        [ "simdMod=s", "Set SIMD_PRAGMA to insert before 'simd' loop(s).", "omp simd"],
-        [ "innerMod=s", "Set INNER_PRAGMA to insert before inner loop(s).", ''],
+        [ "ompMod=s", "Set default OMP_PRAGMA macro used before 'omp' loop(s).", "omp parallel for"],
+        [ "simdMod=s", "Set default SIMD_PRAGMA macro used before 'simd' loop(s).", "omp simd"],
+        [ "innerMod=s", "Set default INNER_PRAGMA macro used before inner loop(s).", ''],
         [ "output=s", "Name of output file.", 'loops.h'],
         );
     my($command_line) = process_command_line(\%OPT, \@KNOBS);
@@ -1054,8 +1023,8 @@ sub main() {
             "Optional loop modifiers:\n",
             "  simd:            add SIMD_PRAMA before loop (distribute work across SIMD HW).\n",
             "  omp:             add OMP_PRAGMA before loop (distribute work across SW threads).\n",
-            "  static:          use optimized index calculation for statically-scheduled OpenMP\n",
-            "                     loops (without a chunk-size specification).\n",
+            "  static:          create optimized index calculation for statically-scheduled OpenMP loops;\n",
+            "                     must set OMP_PRAGMA to 'parallel', not 'parallel for'.\n",
             "  tiled:           generate tiled scan within a collapsed loop.\n",
             "  serpentine:      generate reverse scan when enclosing loop index is odd.*\n",
             "  square_wave:     generate 2D square-wave scan for two innermost dimensions of a collapsed loop.*\n",
