@@ -893,7 +893,7 @@ sub processCode($) {
                     push @code,
                         "#undef ${macroPrefix}$loopPart$innerNum\n",
                         "#endif\n",
-                        "\n// Loop body goes here.\n\n";
+                        "\n // Loop body goes here.\n\n";
                     $innerNum++;
                     push @code,
                         "#ifdef ${macroPrefix}$loopPart$innerNum\n";

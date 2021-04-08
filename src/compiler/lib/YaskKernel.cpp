@@ -604,8 +604,8 @@ namespace yask {
                 if (!do_cluster)
                     os << ", bit_mask_t " << write_mask;
                 os << ") {\n"
-                    " host_assert(core_data);\n"
-                    " host_assert(core_data->_thread_core_list.get());\n"
+                    " assert(core_data);\n"
+                    " assert(core_data->_thread_core_list.get());\n"
                     " auto& thread_core_data = core_data->_thread_core_list[core_idx];\n"
                     " const Indices& idxs = norm_idxs.start;\n";
                 print_indices(os, true, false);

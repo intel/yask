@@ -82,6 +82,8 @@ opts=""
 bindir=`dirname $0`
 logdir="./logs"
 tmplog="/tmp/yask-p$$"
+
+# Validation shortcut (-v) vars.
 doval=0
 val="-validate -no-pre_auto_tune -no-auto_tune -no-warmup -num_trials 1 -trial_steps 1 -b 24"
 valsz="-l 64"

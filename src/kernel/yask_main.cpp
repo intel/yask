@@ -44,6 +44,7 @@ struct MySettings {
     int debug_sleep = 0;          // sec to sleep for debug attach.
     bool do_trace = false;         // tracing.
     int msg_rank = 0;              // rank to print debug msgs.
+    int init_val = 0;        // value to init all points.
 
     // Ptr to the soln.
     yk_solution_ptr _ksoln;
@@ -103,6 +104,11 @@ struct MySettings {
                           ("dt",
                            "[Deprecated] Use '-trial_steps'.",
                            trial_steps));
+        parser.add_option(new CommandLineParser::IntOption
+                          ("init_val",
+                           "Initialize all points in all stencil vars to given value. "
+                           "If zero, points are set to different values.",
+                           init_val));
         parser.add_option(new CommandLineParser::IntOption
                           ("trial_time",
                            "Approximate number of seconds to run each performance trial. "
@@ -208,6 +214,16 @@ void alloc_steps(yk_solution_ptr soln, const MySettings& opts) {
     }
 }
 
+// Init values in vars.
+void init_vars(MySettings& opts, std::shared_ptr<yask::StencilContext> context) {
+    if (opts.init_val != 0)
+        context->init_same(opts.init_val);
+    else {
+        double seed = opts.validate ? 1.0 : 0.1;
+        context->init_diff(seed);
+    }
+}
+
 // Parse command-line args, run kernel, run validation if requested.
 int main(int argc, char** argv)
 {
@@ -274,9 +290,7 @@ int main(int argc, char** argv)
             THROW_YASK_EXCEPTION("Exiting because there are no points in the domain");
 
         // Init data in vars and params.
-        double seed = opts.validate ? 1.0 : 0.1;
-        if (opts.do_warmup || !opts.validate)
-            context->init_diff(seed);
+        init_vars(opts, context);
 
         // Handle device updates manually.
         context->copy_vars_to_device();
@@ -392,7 +406,7 @@ int main(int argc, char** argv)
 
             // init data before each trial for comparison if validating.
             if (opts.validate) {
-                context->init_diff(seed);
+                init_vars(opts, context);
                 context->copy_vars_to_device();
             }
 
@@ -521,14 +535,14 @@ int main(int argc, char** argv)
             ref_soln->prepare_solution();
 
             // init to same value used in context.
-            ref_context->init_diff(seed);
+            init_vars(opts, ref_context);
 
             #ifdef CHECK_INIT
 
             // Debug code to determine if data compares immediately after init matches.
             os << endl << div_line <<
                 "Reinitializing data for minimal validation...\n" << flush;
-            context->init_diff(seed);
+            init_vars(opts, context);
             #else
 
             // Ref trial.

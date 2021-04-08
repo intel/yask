@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// Test some OpenMP constructs with a hand-coded 2-stage stencil.
+// Test some OpenMP constructs with a hand-coded 2-stage, 1-D stencil.
 // Test hierarchical offloading if enabled.
 
 #include <cstdlib>
@@ -34,6 +34,17 @@ IN THE SOFTWARE.
 #include <omp.h>
 
 using namespace std;
+
+// Macro defaults
+#ifndef FN
+#define FN 3
+#endif
+#ifndef USE_HOST_OMP
+#define USE_HOST_OMP 1
+#endif
+#ifndef USE_NESTED_HOST_OMP
+#define USE_NESTED_HOST_OMP 1
+#endif
 
 // Rounding macros for integer types.
 #define CEIL_DIV(numer, denom) (((numer) + (denom) - 1) / (denom))
@@ -54,33 +65,89 @@ bool within_tolerance(T val, T ref, T epsilon) {
 }
 
 // Various functions to implement.
-#if 0
+// Enable one.
+
+// Using simple non-library math.
+#if FN==1
 #define FN_A(a) (3.14 * a)
 #define FN_B(b) (b * 1./2.5)
 #define FN_C(am, ap, c) ((2. * (am) + (ap)) + 0.5 * (c))
-#endif
-#if 0
+
+// Using math lib fns.
+#elif FN==2
 #define FN_A(a) (cos(a) - 2. * sin(a))
 #define FN_B(b) (pow(b, 1./2.5))
 #define FN_C(am, ap, c) (atan((am) + (ap)) + cbrt(c))
-#endif
-#if 1
+
+// Same as FN=2, but using sincos() instead of separate sin() and cos().
+#elif FN==3
 #define FN_A(a) (sincos(a, &sa, &ca), ca - 2. * sa)
+#define CHK_A(a) (cos(a) - 2. * sin(a))
 #define FN_B(b) (pow(b, 1./2.5))
 #define FN_C(am, ap, c) (atan((am) + (ap)) + cbrt(c))
+#else
+#error "FN macro value not valid"
 #endif
+
+// Checking fns are same as perf fns if not specifically defined.
+#ifndef CHK_A
+#define CHK_A(a) FN_A(a)
+#endif
+#ifndef CHK_B
+#define CHK_B(b) FN_B(b)
+#endif
+#ifndef CHK_C
+#define CHK_C(am, ap, c) FN_C(am, ap, c)
+#endif
+
 
 int main(int argc, char* argv[]) {
 
+    cout << "Outer host OpenMP parallel region is "
+        #if USE_HOST_OMP==0
+        "NOT "
+        #endif
+        "enabled.\n";
+    cout << "Inner host OpenMP parallel region is "
+        #if USE_NESTED_HOST_OMP==0
+        "NOT "
+        #endif
+        "enabled.\n";
+    
+    // Cmd-line settings.
+    long n = 1171;             // Size of array.
+    int nreg = 2;               // Number of regions.
     int nthr = 4;               // Number of host threads.
     int nruns = 2;              // Number of runs.
-    
-    if (argc > 1)
-        nthr = atoi(argv[1]);
-    if (argc > 2)
-        nruns = atoi(argv[2]);
-    if (nthr < 1) {
-        cerr << "Usage: " << argv[0] << " [num host threads] [num runs]\n";
+
+    int ai = 0;
+    ai++;
+    if (argc > ai)
+        nthr = atoi(argv[ai]);
+    ai++;
+    if (argc > ai)
+        n = atol(argv[ai]);
+    ai++;
+    if (argc > ai)
+        nreg = atoi(argv[ai]);
+    int nblks = nthr * 2 - nthr / 2; // Blocks per region.
+    ai++;
+    if (argc > ai)
+        nblks = atoi(argv[ai]);
+    ai++;
+    if (argc > ai)
+        nruns = atoi(argv[ai]);
+
+    cout << "Current settings: "
+        " num-host-threads=" << nthr <<
+        ", prob-size=" << n <<
+        ", num-regions=" << nreg <<
+        ", num-blocks=" << nblks <<
+        ", num-runs=" << nruns <<
+        endl;
+    if (nthr < 1 || n < 1 || nreg < 1 || nblks < 1 || nruns < 1) {
+        cerr << "Usage: " << argv[0] << " [num host threads] [problem size]"
+            " [num regions] [num blocks per region] [num runs]\n";
         return 1;
     }
 
@@ -102,9 +169,8 @@ int main(int argc, char* argv[]) {
     cout << "NOT testing on offload device.\n";
     #endif
 
-    long n = 1171; // Array size.
     size_t bsz = n * sizeof(double);
-    const int np = 3;
+    constexpr int np = 3;
     double* p[np];
     void* devp[np];
     for (int k = 0; k < np; k++) {
@@ -136,19 +202,17 @@ int main(int argc, char* argv[]) {
         omp_set_max_active_levels(2);
 
         // Divide n into regions.
-        long halo_sz = 2;
-        int nreg = 2;
+        constexpr long halo_sz = 2;
         long n_per_reg = CEIL_DIV(n, nreg);
 
         // Divide region into blocks.
-        int nblks = nthr * 2 - nthr / 2;
         long n_per_blk = CEIL_DIV(n_per_reg, nblks);
 
         // Calc regions sequentially.
         for ( int reg = 0; reg < nreg; reg++) {
             long rbegin = max(reg * n_per_reg, halo_sz);
             long rend = min((reg+1) * n_per_reg, n - halo_sz);
-            if (reg == nreg - 1)
+            if (reg == nreg-1)
                 rend += halo_sz; // parallelogram adj.
             cout << "Region " << reg << " on [" <<
                 rbegin << "..." << rend << ")\n" <<
@@ -162,25 +226,30 @@ int main(int argc, char* argv[]) {
                 long shift = halo_sz * stage;
                 sbegin -= shift;
                 sbegin = max(sbegin, halo_sz);
-                send -= shift;
+                if (reg < nreg-1)
+                    send -= shift;
                 send = min(send, n - halo_sz);
                 cout << "Stage " << stage << " on [" <<
                     sbegin << "..." << send << ")\n" << flush;
     
                 // OMP on host.
+                #if USE_HOST_OMP==1
                 omp_set_num_threads(nthr);
                 #pragma omp parallel for schedule(dynamic,1)
+                #endif
                 for ( long i = 0; i < nblks; i++ )
                 {
                     long begin = sbegin + i * n_per_blk;
                     long end = min(begin + n_per_blk, send);
+                    #if USE_HOST_OMP==1
                     #pragma omp critical
+                    #endif
                     {
                         cout << " Running thread " << omp_get_thread_num() << " on blk [" <<
                             begin << "..." << end << ")\n" << flush;
                     }
 
-                    #if 1
+                    #if USE_NESTED_HOST_OMP==1
                     // Nested OMP on host.
                     // (Doesn't really do anything useful w/1 thread.)
                     // TODO: divide into >1 thread.
@@ -229,21 +298,25 @@ int main(int argc, char* argv[]) {
         #endif
         
         // Check.
+        
+        long cbegin = halo_sz;
+        long cend = n - halo_sz;
+        cout << "Checking [" << cbegin << "..." << cend << ")\n" << flush;
         long nbad = 0;
-        for (long i = halo_sz; i < n - halo_sz; i++) {
+        for (long i = cbegin; i < cend; i++) {
             double orig = double(i);
             double sa, ca;
-            double expected = FN_A(orig);
+            double expected = CHK_A(orig);
             if (!within_tolerance(p[0][i], expected, 1e-6)) {
                 cout << "A[" << i << "] = " << p[0][i] << "; expecting " << expected << endl;
                 nbad++;
             }
-            expected = FN_B(orig);
+            expected = CHK_B(orig);
             if (!within_tolerance(p[1][i], expected, 1e-6)) {
                 cout << "B[" << i << "] = " << p[1][i] << "; expecting " << expected << endl;
                 nbad++;
             }
-            expected = FN_C(p[0][i-halo_sz], p[0][i+halo_sz], orig);
+            expected = CHK_C(p[0][i-halo_sz], p[0][i+halo_sz], orig);
             if (!within_tolerance(p[2][i], expected, 1e-6)) {
                 cout << "C[" << i << "] = " << p[2][i] << "; expecting " << expected << endl;
                 nbad++;
@@ -253,7 +326,8 @@ int main(int argc, char* argv[]) {
         cout << "Num errors: " << nbad << endl;
         if (nbad)
             return nbad;
-    }
+
+    } // Runs.
     for (int k = 0; k < np; k++)
         delete[] p[k];
 
