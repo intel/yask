@@ -41,16 +41,6 @@ omp			?=	1
 offload			?=	0
 offload_usm		?=	0
 offload_arch		?=	spir64
-omp_par_for		?=	omp parallel for
-ifeq ($(offload_arch),x86_64)
-  omp_target_par_for	?=	omp target parallel for device(KernelEnv::_omp_devn)
-else
-  omp_target_par_for	?=	omp target teams distribute parallel for device(KernelEnv::_omp_devn)
-endif
-omp_region_schedule	?=	dynamic,1
-omp_mini_block_schedule	?=	static,1
-omp_misc_schedule	?=	guided
-omp_target_schedule	?=	static,1
 trace			?=	0
 trace_mem		?=	0
 check			?=	0
@@ -494,6 +484,7 @@ NVDIMS		:=	`awk '/NUM_STENCIL_AND_VAR_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
 # wavefronts. The time loop may be found in
 # StencilEquations::run_solution(). The regions are executed sequentially,
 # so no OpenMP here.
+RANK_LOOP_MODS		?=	nested
 RANK_LOOP_FLAGS		?=	-ndims $(NSDIMS) -macroPrefix RANK_
 RANK_LOOP_ORDER		?=	1 .. N-1
 RANK_LOOP_CODE		?=	$(RANK_LOOP_MODS) loop($(RANK_LOOP_ORDER)) { }
@@ -501,25 +492,26 @@ RANK_LOOP_CODE		?=	$(RANK_LOOP_MODS) loop($(RANK_LOOP_ORDER)) { }
 # Region loops break up a region using OpenMP threading into blocks.  The
 # 'omp' modifier creates an outer OpenMP loop so that each block is assigned
 # to a top-level OpenMP thread.
-REGION_LOOP_FLAGS	?=	-ndims $(NSDIMS) -macroPrefix REGION_ \
-				-ompMod '$(omp_par_for) schedule($(omp_region_schedule)) proc_bind(spread)'
+REGION_LOOP_OMP		?=	omp parallel for schedule(dynamic,1) proc_bind(spread)
+REGION_LOOP_FLAGS	?=	-ndims $(NSDIMS) -macroPrefix REGION_ -ompMod '$(REGION_LOOP_OMP)'
 REGION_LOOP_ORDER	?=	1 .. N-1
 REGION_LOOP_CODE	?=	$(REGION_LOOP_MODS) omp loop($(REGION_LOOP_ORDER)) { } 
 
 # Block loops break up a block into mini-blocks.
 # These are executed sequentially, so no OpenMP.
 # Like with rank loops, in order for temporal wavefronts to operate properly,
-# the scanning paths must have strictly incrementing indices. 
-BLOCK_LOOP_FLAGS		?=	-ndims $(NSDIMS) -macroPrefix BLOCK_
+# the scanning paths must have strictly incrementing indices.
+BLOCK_LOOP_MODS		?=	nested
+BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -macroPrefix BLOCK_
 BLOCK_LOOP_ORDER	?=	1 .. N-1
 BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_MODS) loop($(BLOCK_LOOP_ORDER)) { }
 
 # Mini-Block loops break up a mini-block into sub-blocks. The 'omp' modifier
 # creates a nested OpenMP loop so that each sub-block is assigned to a
 # nested OpenMP thread. The OpenMP construct is not used when running with
-# '-bind_block_threads'.
-MINI_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -macroPrefix MINI_BLOCK_ \
-				-ompMod '$(omp_par_for) schedule($(omp_mini_block_schedule)) proc_bind(spread)'
+# '-bind_block_threads' because another parallel section is created.
+MINI_BLOCK_LOOP_OMP	?=	omp parallel for schedule(static,1) proc_bind(spread)
+MINI_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -macroPrefix MINI_BLOCK_ -ompMod '$(MINI_BLOCK_LOOP_OMP)'
 MINI_BLOCK_LOOP_ORDER	?=	1 .. N-1
 MINI_BLOCK_LOOP_CODE	?=	$(MINI_BLOCK_LOOP_MODS) omp loop($(MINI_BLOCK_LOOP_ORDER)) { }
 
@@ -529,21 +521,25 @@ MINI_BLOCK_LOOP_CODE	?=	$(MINI_BLOCK_LOOP_MODS) omp loop($(MINI_BLOCK_LOOP_ORDER
 # are 'normalized', i.e., vector units and rank-relative.
 SUB_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -macroPrefix SUB_BLOCK_
 ifeq ($(offload),1)
-SUB_BLOCK_LOOP_FLAGS	+=	-ompMod '$(omp_target_par_for) schedule($(omp_target_schedule))'
+ifeq ($(offload_arch),x86_64)
+ SUB_BLOCK_LOOP_OMP	?=	omp target parallel for device(KernelEnv::_omp_devn)
+else
+ SUB_BLOCK_LOOP_OMP	?=	omp target teams distribute parallel for device(KernelEnv::_omp_devn)
+endif
+SUB_BLOCK_LOOP_FLAGS	+=	-ompMod '$(SUB_BLOCK_LOOP_OMP)'
 SUB_BLOCK_LOOP_ORDER	?=	2 .. N-1
 SUB_BLOCK_LOOP_INNER_DIM ?=	1
 SUB_BLOCK_LOOP_CODE	:=	$(SUB_BLOCK_LOOP_MODS) omp loop($(SUB_BLOCK_LOOP_ORDER)) { \
 				  loop($(SUB_BLOCK_LOOP_INNER_DIM)) { } }
 else
-SUB_BLOCK_LOOP_ORDER	?=	1 .. N-2
-SUB_BLOCK_LOOP_INNER_DIM ?=	N-1
-SUB_BLOCK_LOOP_CODE	:=	$(SUB_BLOCK_LOOP_MODS) loop($(SUB_BLOCK_LOOP_ORDER)) { \
-				  loop($(SUB_BLOCK_LOOP_INNER_DIM)) { } }
+SUB_BLOCK_LOOP_MODS	?=	nested
+SUB_BLOCK_LOOP_ORDER	?=	1 .. N-1
+SUB_BLOCK_LOOP_CODE	:=	$(SUB_BLOCK_LOOP_MODS) loop($(SUB_BLOCK_LOOP_ORDER)) { }
 endif
 
 # General-purpose parallel loop.
-MISC_LOOP_FLAGS		?=	-ndims $(NSDIMS) -macroPrefix MISC_ \
-				-ompMod '$(omp_par_for) schedule($(omp_misc_schedule)) proc_bind(spread)'
+MISC_LOOP_OMP		?=	omp parallel for schedule(guided) proc_bind(spread)
+MISC_LOOP_FLAGS		?=	-ndims $(NSDIMS) -macroPrefix MISC_ -ompMod '$(MISC_LOOP_OMP)'
 MISC_LOOP_ORDER		?=	1 .. N-1
 MISC_LOOP_CODE		?=	$(MISC_LOOP_MODS) omp loop($(MISC_LOOP_ORDER)) { }
 

@@ -64,14 +64,31 @@ bool within_tolerance(T val, T ref, T epsilon) {
     return ok;
 }
 
+// Divide 'num' equally into 'nparts'.
+// Returns the *cumulative* sizes of the 0-'n'th parts,
+// if 0 <= 'n' < 'nparts' and 0 if n < 0.
+// The <0 case is handy for calculating the initial
+// starting point when passing 'n'-1 and 'n'==0.
+template <typename T>
+inline T div_equally_cumu_size_n(T num, T nparts, T n) {
+    if (n < 0)
+        return 0;
+    T p = (num / nparts) * (n + 1);
+    T rem = num % nparts;
+    p += (n < rem) ? (n + 1) : rem;
+    return p;
+}
+
 // Various functions to implement.
+// FN_A and FN_B are 1-element computations from A and B, resp.
+// FN_C is a stencil from 2 points in A and 1 point in C.
 // Enable one.
 
 // Using simple non-library math.
 #if FN==1
-#define FN_A(a) (3.14 * a)
-#define FN_B(b) (b * 1./2.5)
-#define FN_C(am, ap, c) ((2. * (am) + (ap)) + 0.5 * (c))
+#define FN_A(a) (3. * a)
+#define FN_B(b) (b * 2. + 1.)
+#define FN_C(am, ap, c) ((2. * (am) + (ap)) + 4. * (c))
 
 // Using math lib fns.
 #elif FN==2
@@ -100,6 +117,8 @@ bool within_tolerance(T val, T ref, T epsilon) {
 #define CHK_C(am, ap, c) FN_C(am, ap, c)
 #endif
 
+// Initial value.
+#define INIT_FN(ai, i) (5. + (2. * ai) + i)
 
 int main(int argc, char* argv[]) {
 
@@ -115,18 +134,26 @@ int main(int argc, char* argv[]) {
         "enabled.\n";
     
     // Cmd-line settings.
-    long n = 1171;             // Size of array.
+    long pn = 1024;             // Problem size.
     int nreg = 2;               // Number of regions.
     int nthr = 4;               // Number of host threads.
     int nruns = 2;              // Number of runs.
+    bool help = false;
+    #if USE_HOST_OMP==0
+    nthr = 1;
+    #endif
 
     int ai = 0;
     ai++;
-    if (argc > ai)
-        nthr = atoi(argv[ai]);
+    if (argc > ai) {
+        if (string(argv[ai]) == "-h")
+            help = true;
+        else
+            nthr = atoi(argv[ai]);
+    }
     ai++;
     if (argc > ai)
-        n = atol(argv[ai]);
+        pn = atol(argv[ai]);
     ai++;
     if (argc > ai)
         nreg = atoi(argv[ai]);
@@ -140,12 +167,12 @@ int main(int argc, char* argv[]) {
 
     cout << "Current settings: "
         " num-host-threads=" << nthr <<
-        ", prob-size=" << n <<
+        ", prob-size=" << pn <<
         ", num-regions=" << nreg <<
         ", num-blocks=" << nblks <<
         ", num-runs=" << nruns <<
         endl;
-    if (nthr < 1 || n < 1 || nreg < 1 || nblks < 1 || nruns < 1) {
+    if (help || nthr < 1 || pn < 1 || nreg < 1 || nblks < 1 || nruns < 1) {
         cerr << "Usage: " << argv[0] << " [num host threads] [problem size]"
             " [num regions] [num blocks per region] [num runs]\n";
         return 1;
@@ -158,7 +185,10 @@ int main(int argc, char* argv[]) {
     cout << ndev << " OMP device(s)\n"
         " host: " << hostn << "\n"
         " dev: " << devn << endl << flush;
-    assert(ndev > 0);
+    if (ndev == 0) {
+        cerr << "No OMP devices available.\n";
+        exit(1);
+    }
 
     // Dummy OMP offload section to trigger JIT.
     int MOLUE = 42;
@@ -169,21 +199,30 @@ int main(int argc, char* argv[]) {
     cout << "NOT testing on offload device.\n";
     #endif
 
-    size_t bsz = n * sizeof(double);
-    constexpr int np = 3;
-    double* p[np];
-    void* devp[np];
-    for (int k = 0; k < np; k++) {
-        p[k] = new double[n];
+    constexpr long halo_sz = 2;
+    long an = pn + 2 * halo_sz; // array size.
+    size_t bsz = an * sizeof(double); // array size in bytes.
+    constexpr int na = 3; // num of arrays.
+    double* p[na]; // host ptrs.
+    #ifdef USE_OFFLOAD
+    void* devp[na]; // dev ptrs.
+    #endif
+    for (int k = 0; k < na; k++) {
+        p[k] = new double[an];
         assert(p[k]);
     }
     
     for (int r = 0; r < nruns; r++) {
-        cout << "Run " << (r+1) << endl << flush;
-    
-        for (int k = 0; k < np; k++) {
-            for (long i = 0; i < n; i++)
-                p[k][i] = double(i);
+        long pbegin = halo_sz;
+        long pend = pbegin + pn;
+        cout << "Run " << (r+1) << endl <<
+            " Working range = [" << pbegin << "..." <<
+            pend << ")\n" << flush;
+
+        // Init data.
+        for (int k = 0; k < na; k++) {
+            for (long i = 0; i < an; i++)
+                p[k][i] = INIT_FN(k, i);
 
             // alloc buffers on target and copy to it.
             #ifdef USE_OFFLOAD
@@ -195,42 +234,48 @@ int main(int argc, char* argv[]) {
             res = omp_target_memcpy(devp[k], p[k], bsz, 0, 0, devn, hostn);
             assert(res == 0);
 
-            // invalidate local copy.
+            // invalidate local copy to catch data transfer problems.
             memset(p[k], 0x55, bsz);
             #endif
         }
         omp_set_max_active_levels(2);
 
-        // Divide n into regions.
-        constexpr long halo_sz = 2;
-        long n_per_reg = CEIL_DIV(n, nreg);
+        // Divide pn into regions.
+        long n_per_reg = CEIL_DIV(pn, nreg);
 
         // Divide region into blocks.
         long n_per_blk = CEIL_DIV(n_per_reg, nblks);
+        cout << " Using " << nreg << " region(s) of " << n_per_reg <<
+            " point(s) each comprising " << nblks << " block(s) of " <<
+            n_per_blk << " point(s) each.\n";
 
         // Calc regions sequentially.
-        for ( int reg = 0; reg < nreg; reg++) {
-            long rbegin = max(reg * n_per_reg, halo_sz);
-            long rend = min((reg+1) * n_per_reg, n - halo_sz);
-            if (reg == nreg-1)
-                rend += halo_sz; // parallelogram adj.
-            cout << "Region " << reg << " on [" <<
-                rbegin << "..." << rend << ")\n" <<
-                "Scheduling " << nthr << " host thread(s) on " <<
-                nblks << " blk(s) of data...\n" << flush;
+        for (int reg = 0; reg < nreg; reg++) {
+            long rbegin = reg * n_per_reg + halo_sz;
+            long rend = (reg+1) * n_per_reg + halo_sz; // Don't need to trim yet.
+            cout << " Region " << reg << " on [" <<
+                rbegin << "..." << rend << ")\n";
 
             // Calc both stages in this region.
-            for ( int stage = 0; stage < 2; stage++) {
+            for (int stage = 0; stage < 2; stage++) {
                 long sbegin = rbegin;
                 long send = rend;
+
+                // Shift after 1st stage to handle dependencies.
                 long shift = halo_sz * stage;
                 sbegin -= shift;
-                sbegin = max(sbegin, halo_sz);
                 if (reg < nreg-1)
                     send -= shift;
-                send = min(send, n - halo_sz);
-                cout << "Stage " << stage << " on [" <<
-                    sbegin << "..." << send << ")\n" << flush;
+                else
+                    send = an - halo_sz;
+
+                // Trim to array size w/o halos.
+                sbegin = max(sbegin, pbegin);
+                send = min(send, pend);
+                cout << " Stage " << stage << " on [" <<
+                    sbegin << "..." << send << ")\n" <<
+                    "   Scheduling " << nthr << " host thread(s) on " <<
+                    nblks << " blk(s) of data...\n" << flush;
     
                 // OMP on host.
                 #if USE_HOST_OMP==1
@@ -241,44 +286,95 @@ int main(int argc, char* argv[]) {
                 {
                     long begin = sbegin + i * n_per_blk;
                     long end = min(begin + n_per_blk, send);
+                    if (i == nblks-1)
+                        end = send;
+                    int tn0 = omp_get_thread_num();
                     #if USE_HOST_OMP==1
                     #pragma omp critical
                     #endif
                     {
-                        cout << " Running thread " << omp_get_thread_num() << " on blk [" <<
+                        cout << "   Running thread " << tn0 << " on blk [" <<
                             begin << "..." << end << ")\n" << flush;
                     }
 
-                    #if USE_NESTED_HOST_OMP==1
-                    // Nested OMP on host.
-                    // (Doesn't really do anything useful w/1 thread.)
-                    // TODO: divide into >1 thread.
-                    omp_set_num_threads(1);
-                    #pragma omp parallel proc_bind(spread)
-                    #endif
-                    {
-                        double* A = p[0];
-                        double* B = p[1];
-                        double* C = p[2];
+                    double* A = p[0];
+                    double* B = p[1];
+                    double* C = p[2];
 
-                        // Calc current stage in current block.
-                        // Use OMP on target if enabled.
-                        if (stage == 0) {
-                            #ifdef USE_OFFLOAD
-                            #pragma omp target parallel for device(devn) schedule(static,1)
-                            #endif
-                            for (long j = begin; j < end; j++)
-                            {
-                                double sa, ca;
-                                A[j] = FN_A(A[j]);
-                                B[j] = FN_B(B[j]);
-                            }
+                    // Calc current stage in current block.
+                    // Use OMP on target if enabled.
+                    if (stage == 0) {
+                        #ifdef USE_OFFLOAD
+                        #pragma omp target parallel for device(devn) schedule(static,1)
+                        #endif
+                        for (long j = begin; j < end; j++)
+                        {
+                            double sa, ca;
+                            A[j] = FN_A(A[j]);
+                            B[j] = FN_B(B[j]);
                         }
-                        else {
-                            #ifdef USE_OFFLOAD
-                            #pragma omp target parallel for device(devn) schedule(static,1)
-                            #endif
-                            for (long j = begin; j < end; j++)
+                    }
+
+                    // 2nd stage, 1st run.
+                    else if (r == 0) {
+                        #ifdef USE_OFFLOAD
+                        #pragma omp target teams distribute parallel for device(devn)
+                        #elif USE_NESTED_HOST_OMP==1
+                        #pragma omp parallel for num_threads(nthr)
+                        #endif
+                        for (long j = begin; j < end; j++)
+                        {
+                            if (j == begin) {
+                                int ntm1 = omp_get_num_teams();
+                                int nt1 = omp_get_num_threads();
+                                int nthr = ntm1 * nt1;
+                                printf("     Running thread %i w/%i teams and %i threads/team: %i threads\n",
+                                       tn0, ntm1, nt1, nthr);
+                                #ifndef USE_OFFLOAD
+                                fflush(stdout);
+                                #endif
+                            }
+                            C[j] = FN_C(A[j - halo_sz], A[j + halo_sz], C[j]);
+                        }
+                    }
+
+                    // 2nd stage, >1st run.
+                    else {
+
+                        // Use a manually-generated parallel loop after the 1st run.
+                        #ifdef USE_OFFLOAD
+                        #pragma omp critical
+                        {
+                            cout << "    Launching kernel from host thread " << tn0 <<
+                                "\n" << flush;
+                        }
+                        #pragma omp target teams device(devn)
+                        #pragma omp parallel
+                        #elif USE_NESTED_HOST_OMP==1
+                        #pragma omp parallel num_threads(nthr)
+                        #endif
+                        {
+                            int ntm1 = omp_get_num_teams();
+                            int nt1 = omp_get_num_threads();
+                            int tmn1 = omp_get_team_num();
+                            int tn1 = omp_get_thread_num();
+                            long nthr = ntm1 * nt1;
+                            long tn = (tmn1 * nt1 + tn1);
+                            long niters = end - begin;
+
+                            // Calculate begin and end points for this thread.
+                            long tbegin = div_equally_cumu_size_n(niters, nthr, tn - 1) + begin;
+                            long tend = div_equally_cumu_size_n(niters, nthr, tn) + begin;
+                            #pragma omp critical
+                            {
+                                printf("     Running thread %i w/team %i/%i & thread %i/%i (%li/%li) on [%li...%li)\n",
+                                       tn0, tmn1, ntm1, tn1, nt1, tn, nthr, tbegin, tend);
+                                #ifndef USE_OFFLOAD
+                                fflush(stdout);
+                                #endif
+                            }
+                            
+                            for (long j = tbegin; j < tend; j++)
                             {
                                 C[j] = FN_C(A[j - halo_sz], A[j + halo_sz], C[j]);
                             }
@@ -290,7 +386,7 @@ int main(int argc, char* argv[]) {
     
         // Copy results back and free mem on dev.
         #ifdef USE_OFFLOAD
-        for (int k = 0; k < np; k++) {
+        for (int k = 0; k < na; k++) {
             omp_target_memcpy(p[k], devp[k], bsz, 0, 0, hostn, devn);
             omp_target_disassociate_ptr(p[k], devn);
             omp_target_free(devp[k], devn);
@@ -300,35 +396,34 @@ int main(int argc, char* argv[]) {
         // Check.
         
         long cbegin = halo_sz;
-        long cend = n - halo_sz;
+        long cend = cbegin + pn;
         cout << "Checking [" << cbegin << "..." << cend << ")\n" << flush;
         long nbad = 0;
         for (long i = cbegin; i < cend; i++) {
-            double orig = double(i);
             double sa, ca;
-            double expected = CHK_A(orig);
+            double expected = CHK_A(INIT_FN(0, i));
             if (!within_tolerance(p[0][i], expected, 1e-6)) {
                 cout << "A[" << i << "] = " << p[0][i] << "; expecting " << expected << endl;
                 nbad++;
             }
-            expected = CHK_B(orig);
+            expected = CHK_B(INIT_FN(1, i));
             if (!within_tolerance(p[1][i], expected, 1e-6)) {
                 cout << "B[" << i << "] = " << p[1][i] << "; expecting " << expected << endl;
                 nbad++;
             }
-            expected = CHK_C(p[0][i-halo_sz], p[0][i+halo_sz], orig);
+            expected = CHK_C(p[0][i-halo_sz], p[0][i+halo_sz], INIT_FN(2, i));
             if (!within_tolerance(p[2][i], expected, 1e-6)) {
                 cout << "C[" << i << "] = " << p[2][i] << "; expecting " << expected << endl;
                 nbad++;
             }
         }
 
-        cout << "Num errors: " << nbad << endl;
+        cout << "Run " << (r+1) << ": num errors: " << nbad << endl;
         if (nbad)
             return nbad;
 
     } // Runs.
-    for (int k = 0; k < np; k++)
+    for (int k = 0; k < na; k++)
         delete[] p[k];
 
     return 0;
