@@ -365,6 +365,7 @@ int main(int argc, char* argv[]) {
                             // Calculate begin and end points for this thread.
                             long tbegin = div_equally_cumu_size_n(niters, nthr, tn - 1) + begin;
                             long tend = div_equally_cumu_size_n(niters, nthr, tn) + begin;
+                            #ifdef SHOW_THREADS
                             #pragma omp critical
                             {
                                 printf("     Running thread %i w/team %i/%i & thread %i/%i (%li/%li) on [%li...%li)\n",
@@ -373,6 +374,7 @@ int main(int argc, char* argv[]) {
                                 fflush(stdout);
                                 #endif
                             }
+                            #endif
                             
                             for (long j = tbegin; j < tend; j++)
                             {

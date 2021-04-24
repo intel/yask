@@ -104,7 +104,7 @@ namespace yask {
         assert(ret == 0);
         ret = setenv("KMP_HOT_TEAMS_MODE", "1", 0); // more efficient nesting.
         assert(ret == 0);
-        ret = setenv("KMP_HOT_TEAMS_MAX_LEVEL", "2", 0); // 2-level nesting.
+        ret = setenv("KMP_HOT_TEAMS_MAX_LEVEL", "3", 0); // nesting.
 
         // Check initial value of OMP max threads.
         // Side effect: causes OMP to dump debug info if env var set.

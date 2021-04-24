@@ -468,7 +468,7 @@ YK_LIBS		+=	$(EXTRA_YK_LIBS)
 NSDIMS		:=	`awk '/NUM_STENCIL_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
 NVDIMS		:=	`awk '/NUM_STENCIL_AND_VAR_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
 
-######## Loop-compiler configuration:
+######## Loop-compiler inputs:
 # The loop indices range from 0..N-1.
 # Dim 0 is the step dim, usually time.
 # The step loop is handled outside of the generated loops,

@@ -74,12 +74,12 @@ sub idx {
 # inVar() => "block_idxs".
 # inVar("foo") => "block_idxs.foo".
 # inVar("foo", 5) => "block_idxs.foo[5]"
-#                 OR "FOO_EXPR(5)" if @exprs contains "foo".
+#                 OR "FOO(5)" if @exprs contains "foo".
 sub inVar {
     my $vname = shift;
     my $part = (defined $vname) ? ".$vname" : "";
     if (defined $vname && scalar @_ == 1 && grep( /^$vname$/, @exprs)) {
-        my $em = $macroPrefix.(uc $vname)."_EXPR";
+        my $em = $macroPrefix.(uc $vname);
         return "$em(@_)";
     }
     return "$macroPrefix$inputVar$part".idx(@_);
@@ -885,7 +885,7 @@ sub processCode($) {
         macroDef($inputVar, $OPT{inVar}),
         macroDef($outputVar, $OPT{outVar});
     for my $expr (@exprs) {
-        push @code, macroDef((uc $expr)."_EXPR(dim_num)", inVar($expr).'[dim_num]');
+        push @code, macroDef((uc $expr)."(dim_num)", inVar($expr).'[dim_num]');
     }
     push @code,
         "// 'ScanIndices $macroPrefix$inputVar' must be set before the following code.",
@@ -1054,7 +1054,7 @@ sub processCode($) {
         macroUndef('SIMD_PRAGMA'),
         macroUndef('INNER_PRAGMA');
     for my $expr (@exprs) {
-        push @code, macroUndef((uc $expr)."_EXPR");
+        push @code, macroUndef((uc $expr));
     }
     push @code,
         macroUndef($loopPart.$innerNum),

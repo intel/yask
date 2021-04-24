@@ -625,10 +625,10 @@ namespace yask {
                 os <<
                     "\n // Make more efficient expressions for sub-block loop vars.\n"
                     " // (Subtract one from 'dn' to convert stencil dims to domain dims.)\n"
-                    "#define SUB_BLOCK_STRIDE_EXPR(dn) " <<
+                    "#define SUB_BLOCK_STRIDE(dn) " <<
                     (do_cluster ? "cluster_mults[dn-1]" : "idx_t(1)") << "\n"
-                    "#define SUB_BLOCK_ALIGN_EXPR(dn) idx_t(1)\n"
-                    "#define SUB_BLOCK_ALIGN_OFS_EXPR(dn) idx_t(0)\n"
+                    "#define SUB_BLOCK_ALIGN(dn) idx_t(1)\n"
+                    "#define SUB_BLOCK_ALIGN_OFS(dn) idx_t(0)\n"
                     "\n ////// Loop prefix.\n"
                     "#define SUB_BLOCK_LOOP_INDICES norm_idxs\n"
                     "#define SUB_BLOCK_BODY_INDICES norm_idx\n"
