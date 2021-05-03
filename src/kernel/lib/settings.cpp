@@ -196,20 +196,27 @@ namespace yask {
         _region_tile_sizes.set_vals_same(0); // 0 => region size.
         
         _block_sizes = dims->_stencil_dims;
+        #ifdef USE_OFFLOAD
+        _block_sizes.set_vals_same(0); // 0 => region size.
+        #else
         _block_sizes.set_vals_same(def_blk_size);
+        #endif
         _block_sizes.set_val(step_dim, 0); // 0 => default.
         _block_tile_sizes = dims->_stencil_dims;
         _block_tile_sizes.set_vals_same(0); // 0 => block size.
 
-        _mini_block_sizes = dims->_stencil_dims;
-        _mini_block_sizes.set_vals_same(0);            // 0 => calc from block.
-        _mini_block_tile_sizes = dims->_stencil_dims;
-        _mini_block_tile_sizes.set_vals_same(0); // 0 => mini-block size.
+        _micro_block_sizes = dims->_stencil_dims;
+        _micro_block_sizes.set_vals_same(0);            // 0 => calc from block.
+        _micro_block_tile_sizes = dims->_stencil_dims;
+        _micro_block_tile_sizes.set_vals_same(0); // 0 => micro-block size.
 
-        _sub_block_sizes = dims->_stencil_dims;
-        _sub_block_sizes.set_vals_same(0);            // 0 => calc from mini-block.
-        _sub_block_tile_sizes = dims->_stencil_dims;
-        _sub_block_tile_sizes.set_vals_same(0); // 0 => sub-block size.
+        _nano_block_sizes = dims->_stencil_dims;
+        _nano_block_sizes.set_vals_same(0);            // 0 => calc from micro-block.
+        _nano_block_tile_sizes = dims->_stencil_dims;
+        _nano_block_tile_sizes.set_vals_same(0); // 0 => nano-block size.
+
+        _pico_block_sizes = dims->_stencil_dims;
+        _pico_block_sizes.set_vals_same(0);            // 0 => cluster size.
 
         _min_pad_sizes = dims->_stencil_dims;
         _min_pad_sizes.set_vals_same(0);
@@ -277,17 +284,19 @@ namespace yask {
         // Following options are in 'this' object.
         _add_domain_option(parser, "g", "Global-domain (overall-problem) size", _global_sizes);
         _add_domain_option(parser, "l", "Local-domain (rank) size", _rank_sizes);
-        _add_domain_option(parser, "d", "[Deprecated] Alias for local-domain size", _rank_sizes);
+        _add_domain_option(parser, "d", "[Deprecated] Use -l", _rank_sizes);
         _add_domain_option(parser, "r", "Region size", _region_sizes, true);
         _add_domain_option(parser, "b", "Block size", _block_sizes, true);
-        _add_domain_option(parser, "mb", "Mini-block size", _mini_block_sizes);
-        _add_domain_option(parser, "sb", "Sub-block size", _sub_block_sizes);
+        _add_domain_option(parser, "mb", "Micro-block size", _micro_block_sizes);
+        _add_domain_option(parser, "nb", "Nano-block size", _nano_block_sizes);
+        _add_domain_option(parser, "sb", "[Deprecated] Use -nb", _nano_block_sizes);
+        _add_domain_option(parser, "pb", "Pico-block size", _pico_block_sizes);
 #ifdef USE_TILING
         _add_domain_option(parser, "l_tile", "[Advanced] Local-domain-tile size", _rank_tile_sizes);
         _add_domain_option(parser, "r_tile", "[Advanced] Region-tile size", _region_tile_sizes);
         _add_domain_option(parser, "b_tile", "[Advanced] Block-tile size", _block_tile_sizes);
-        _add_domain_option(parser, "mb_tile", "[Advanced] Mini-block-tile size", _mini_block_tile_sizes);
-        _add_domain_option(parser, "sb_tile", "[Advanced] Sub-block-tile size", _sub_block_tile_sizes);
+        _add_domain_option(parser, "mb_tile", "[Advanced] Micro-block-tile size", _micro_block_tile_sizes);
+        _add_domain_option(parser, "nb_tile", "[Advanced] Nano-block-tile size", _nano_block_tile_sizes);
 #endif
         _add_domain_option(parser, "mp", "[Advanced] Minimum var-padding size (including halo)", _min_pad_sizes);
         _add_domain_option(parser, "ep", "[Advanced] Extra var-padding size (beyond halo)", _extra_pad_sizes);
@@ -340,13 +349,13 @@ namespace yask {
                            "Will be restricted to a value less than or equal to "
                            "the maximum number of OpenMP threads specified by -max_threads "
                            "and/or -thread_divisor. "
-                           "Each thread is used to execute stencils within a sub-block, and "
-                           "sub-blocks are executed in parallel within mini-blocks.",
+                           "Each thread is used to execute stencils within a nano-block, and "
+                           "nano-blocks are executed in parallel within micro-blocks.",
                            num_block_threads));
         parser.add_option(new CommandLineParser::BoolOption
                           ("bind_block_threads",
-                           "[Advanced] Divide mini-blocks into sub-blocks of slabs along the first valid dimension "
-                           "(usually the outer-domain dimension), ignoring other sub-block sizes. "
+                           "[Advanced] Divide micro-blocks into nano-blocks of slabs along the first valid dimension "
+                           "(usually the outer-domain dimension), ignoring other nano-block sizes. "
                            "Assign each slab to a block thread based on its global index in that dimension. "
                            "This setting may increase cache locality when using multiple "
                            "block-threads, especially when scratch vars are used and/or "
@@ -401,21 +410,25 @@ namespace yask {
                            "sizes to their defaults after each change to the block sizes.",
                            _tune_blks));
         parser.add_option(new CommandLineParser::BoolOption
-                          ("auto_tune_mini_blocks",
-                           "[Advanced] Apply the auto-tuner to mini-block sizes. "
+                          ("auto_tune_micro_blocks",
+                           "[Advanced] Apply the auto-tuner to micro-block sizes. "
                            "Often useful when using temporal block tiling."
-                           "Auto-tuning mini-blocks will automatically set all lower-level "
-                           "sizes to their defaults after each change to the mini-block sizes.",
-                           _tune_mini_blks));
-        #ifdef USE_TILING
+                           "Auto-tuning micro-blocks will automatically set all lower-level "
+                           "sizes to their defaults after each change to the micro-block sizes.",
+                           _tune_micro_blks));
         parser.add_option(new CommandLineParser::BoolOption
-                          ("auto_tune_sub_block_tiles",
-                           "[Advanced] Apply the auto-tuner to sub-block-tile sizes. "
-                           "Often useful for tuning GPU kernels. "
-                           "Auto-tuning sub-block-tiles will automatically set all lower-level "
-                           "sizes to their defaults after each change to the sub-block-tile sizes.",
-                           _tune_sub_blk_tiles));
-        #endif
+                          ("auto_tune_nano_blocks",
+                           "[Advanced] Apply the auto-tuner to nano-block sizes. "
+                           "Auto-tuning nano-blocks will automatically set all lower-level "
+                           "sizes to their defaults after each change to the nano-block sizes.",
+                           _tune_nano_blks));
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("auto_tune_pico_blocks",
+                           "[Advanced] Apply the auto-tuner to pico-block sizes. "
+                           "May be especially useful for tuning GPU kernels. "
+                           "Auto-tuning pico-blocks will automatically set all lower-level "
+                           "sizes to their defaults after each change to the pico-block sizes.",
+                           _tune_pico_blks));
     }
 
     // Print usage message.
@@ -461,35 +474,44 @@ namespace yask {
             "   else, blocks are evaluated sequentially within each region.\n"
             "  This is the most commonly-tuned work-size for many stencils, especially\n"
             "   when not using any sort of temporal tiling.\n"
-            "  Each block is composed of one or more mini-blocks.\n"
-            " A 'mini-block' is a sub-division of work within a block.\n"
-            "  The purpose of mini-blocking is to allow distinction between the amount\n"
+            "  Each block is composed of one or more micro-blocks.\n"
+            " A 'micro-block' is a sub-division of work within a block.\n"
+            "  The purpose of micro-blocking is to allow distinction between the amount\n"
             "   of work done by a thread (via blocking) and the amount of work done for\n"
-            "   cache locality (via mini-blocking).\n"
-            "  If using temporal wave-front block tiling (see mini-block-size guidelines),\n"
+            "   cache locality (via micro-blocking).\n"
+            "  If using temporal wave-front block tiling (see micro-block-size guidelines),\n"
             "   then this is the work done for each wave-front block tile,\n"
-            "   and the number temporal steps in the mini-block is always equal\n"
+            "   and the number temporal steps in the micro-block is always equal\n"
             "   to the number temporal steps a block;\n"
-            "   else, there is typically only one mini-block the size of a block.\n"
-            "  If mini-block sizes are not specified, a mini-block is the same size\n"
+            "   else, there is typically only one micro-block the size of a block.\n"
+            "  If micro-block sizes are not specified, a micro-block is the same size\n"
             "   as a block, and the amount of work done by a thread and the amount of\n"
             "   work done for cache locality is the same.\n"
-            "  Mini-blocks are evaluated sequentially within blocks.\n"
-            "  Each mini-block is composed of one or more sub-blocks.\n"
-            " A 'sub-block' is a sub-division of work within a mini-block.\n"
-            "  The purpose of sub-blocking is to allow multiple OpenMP threads\n"
-            "   to cooperatively work on a mini-block, sharing cached values--\n"
+            "  Micro-blocks are evaluated sequentially within blocks.\n"
+            "  Each micro-block is composed of one or more nano-blocks.\n"
+            " A 'nano-block' is a sub-division of work within a micro-block.\n"
+            "  The purpose of nano-blocking is to allow multiple OpenMP threads\n"
+            "   to cooperatively work on a micro-block, sharing cached values--\n"
             "   this is particularly useful when using hyper-threads on a CPU.\n"
             "  If the number of block-threads is greater than one,\n"
             "   then this is the unit of work for one nested OpenMP thread,\n"
-            "   and sub-blocks are evaluated concurrently within each mini-block;\n"
-            "   else, sub-blocks are evaluated sequentially within each mini-block.\n"
+            "   and nano-blocks are evaluated concurrently within each micro-block;\n"
+            "   else, nano-blocks are evaluated sequentially within each micro-block.\n"
             #ifdef USE_OFFLOAD
-            "  When offloading computation to a device, this is the unit of work\n"
+            "  When offloading computation to a device, a nano-block is the unit of work\n"
             "   done in each offloaded kernel invocation.\n"
             #endif
-            "  There is no temporal tiling at the sub-block level.\n"
-            "  Each sub-block is composed of one or more clusters.\n"
+            "  There is no temporal tiling at the nano-block level.\n"
+            "  Each nano-block is composed of one or more pico-blocks.\n"
+            " A 'pico-block' is a sub-division of work within a nano-block.\n"
+            "  The purpose of a pico-block is to allow additional cache-locality\n"
+            "   at this low level.\n"
+            #ifdef USE_OFFLOAD
+            "  When offloading computation to a device, a pico-block allows\n"
+            "   cache-locality within a kernel work item.\n"
+            #endif
+            "  There is no temporal tiling at the pico-block level.\n"
+            "  Each pico-block is composed of one or more clusters.\n"
             " A 'cluster' is the work done in each inner-most loop iteration.\n"
             "  The purpose of clustering is to allow more than one vector of\n"
             "   work to be done in each loop iteration, useful for very simple stencils.\n"
@@ -528,29 +550,31 @@ namespace yask {
             "  A block size >1 in the step dimension enables temporal region tiling across multiple steps.\n"
             "  The temporal block size may be automatically reduced if needed based on the\n"
             "   domain block sizes, the stencil halos, and the step size of the regions.\n"
-            " The mini-block sizes are used to configure temporal wave-front block tiling.\n"
+            " The micro-block sizes are used to configure temporal wave-front block tiling.\n"
             "   Temporal wave-front block tiling may increase locality in core-local caches\n"
             "   (e.g., L2) when blocks are larger than that the capacity of those caches.\n"
-            "  A mini-block size of 0 in a given domain dimension =>\n"
-            "   mini-block size is set to block size in that dimension.\n"
-            "  The size of a mini-block in the step dimension is always implicitly\n"
+            "  A micro-block size of 0 in a given domain dimension =>\n"
+            "   micro-block size is set to block size in that dimension.\n"
+            "  The size of a micro-block in the step dimension is always implicitly\n"
             "   the same as that of a block.\n"
-            " The sub-block sizes specify the work done by each nested OpenMP thread.\n"
-            "  Multiple sub-blocks may enable more effective sharing of caches\n"
+            " The nano-block sizes specify the work done by each nested OpenMP thread.\n"
+            "  Multiple nano-blocks may enable more effective sharing of caches\n"
             "   among multiple hyper-threads in a core when there is more than\n"
             "   one block-thread. It can also be used to share data between caches\n"
             "   among multiple cores.\n"
-            "  A sub-block size of 0 in a given domain dimension =>\n"
-            "   sub-block size is set to mini-block size in that dimension;\n"
+            "  A nano-block size of 0 in a given domain dimension =>\n"
+            "   nano-block size is set to micro-block size in that dimension;\n"
             "   when there is more than one block-thread, the first dimension\n"
             "   will instead be set to the vector length to create \"slab\" shapes.\n"
+            "  A pico-block size of 0 in a given domain dimension =>\n"
+            "   pico-block size is set to cluster size in that dimension;\n"
             " The vector and cluster sizes are set at compile-time, so\n"
             "  there are no run-time options to set them.\n"
             #ifdef USE_TILING
             " Set 'tile' sizes to provide finer control over the order of evaluation\n"
-            "  within the given area. For example, sub-block-tiles create smaller areas\n"
-            "  within sub-blocks; points with the first sub-block-tile will be scheduled\n"
-            "  before those the second sub-block-tile, etc. (There is no additional level\n"
+            "  within the given area. For example, nano-block-tiles create smaller areas\n"
+            "  within nano-blocks; points with the first nano-block-tile will be scheduled\n"
+            "  before those the second nano-block-tile, etc. (There is no additional level\n"
             "  of temporal tiling or sychronization added with this tiling.)\n"
             "  A tile size of 0 in a given domain dimension => tile size is set to the size\n"
             "   of its enclosing area in that dimension, i.e., there will only be one tile\n"
@@ -570,12 +594,12 @@ namespace yask {
             "  threads used without having to know the max_threads setting;\n"
             "  e.g., using '-thread_divisor 2' will halve the number of OpenMP threads.\n"
             " For stencil evaluation, threads are allocated using nested OpenMP:\n"
-            "  Num CPU threads per mini-block and sub-block = 1.\n"
+            "  Num CPU threads per micro-block and nano-block = 1.\n"
             "  Num CPU threads per block = block_threads.\n"
             "  Num CPU threads per region = max_threads / thread_divisor / block_threads.\n"
             #ifdef USE_OFFLOAD
             " When using offloaded kernel evaluation, there may be multiple teams\n"
-            "  and offload threads used within each sub-block. These may be controlled by\n"
+            "  and offload threads used within each nano-block. These may be controlled by\n"
             "  the standard OpenMP environment vars OMP_NUM_TEAMS and OMP_TEAMS_THREAD_LIMIT.\n"
             #endif
            << app_notes;
@@ -682,7 +706,7 @@ namespace yask {
         auto& inner_dim = _dims->_inner_dim;
         auto& rt = _region_sizes[step_dim];
         auto& bt = _block_sizes[step_dim];
-        auto& mbt = _mini_block_sizes[step_dim];
+        auto& mbt = _micro_block_sizes[step_dim];
         auto& cluster_pts = _dims->_cluster_pts;
         int nddims = _dims->_domain_dims.get_num_dims();
 
@@ -693,7 +717,7 @@ namespace yask {
         if (!rt)
             rt = bt;       // Default region steps == block steps.
         if (!mbt)
-            mbt = bt;       // Default mini-blk steps == block steps.
+            mbt = bt;       // Default micro-blk steps == block steps.
 
         // Determine num regions.
         // Also fix up region sizes as needed.
@@ -728,26 +752,26 @@ namespace yask {
         if (!bt) os << "NOT ";
         os << "enabled.\n";
 
-        // Determine num mini-blocks.
-        // Also fix up mini-block sizes as needed.
-        os << "\nMini-blocks:" << endl;
+        // Determine num micro-blocks.
+        // Also fix up micro-block sizes as needed.
+        os << "\nMicro-blocks:" << endl;
         auto nmb = find_num_subsets(os,
-                                    _mini_block_sizes, "mini-block",
+                                    _micro_block_sizes, "micro-block",
                                     _block_sizes, "block",
                                     cluster_pts, "cluster",
                                     step_dim);
-        os << " num-mini-blocks-per-block-per-step: " << nmb << endl;
-        os << " num-mini-blocks-per-region-per-step: " << (nmb * nb) << endl;
-        os << " num-mini-blocks-per-local-domain-per-step: " << (nmb * nb * nr) << endl;
-        os << " Since the mini-block size in the '" << step_dim <<
+        os << " num-micro-blocks-per-block-per-step: " << nmb << endl;
+        os << " num-micro-blocks-per-region-per-step: " << (nmb * nb) << endl;
+        os << " num-micro-blocks-per-local-domain-per-step: " << (nmb * nb * nr) << endl;
+        os << " Since the micro-block size in the '" << step_dim <<
             "' dim is " << mbt << ", temporal wave-front block tiling is ";
         if (!mbt) os << "NOT ";
         os << "enabled.\n";
 
-        // Adjust defaults for sub-blocks to be slab if we are using more
+        // Adjust defaults for nano-blocks to be slab if we are using more
         // than one block thread.  Otherwise, find_num_subsets() would set
         // default to entire block, and we wouldn't use multiple threads.
-        if (num_block_threads > 1 && _sub_block_sizes.sum() == 0) {
+        if (num_block_threads > 1 && _nano_block_sizes.sum() == 0) {
 
             // Default dim is outer one.
             _bind_posn = 1;
@@ -782,26 +806,47 @@ namespace yask {
             // Use narrow slabs if at least 2D.
             // TODO: consider a better heuristic.
             if (nddims >= 2)
-                _sub_block_sizes[_bind_posn] = cpts;
+                _nano_block_sizes[_bind_posn] = cpts;
 
             // Divide block equally.
             else
-                _sub_block_sizes[_bind_posn] = ROUND_UP(bsz / num_block_threads, cpts);
+                _nano_block_sizes[_bind_posn] = ROUND_UP(bsz / num_block_threads, cpts);
         }
 
-        // Determine num sub-blocks.
-        // Also fix up sub-block sizes as needed.
-        os << "\nSub-blocks:" << endl;
+        // Determine num nano-blocks.
+        // Also fix up nano-block sizes as needed.
+        os << "\nNano-blocks:" << endl;
         auto nsb = find_num_subsets(os,
-                                    _sub_block_sizes, "sub-block",
-                                    _mini_block_sizes, "mini-block",
+                                    _nano_block_sizes, "nano-block",
+                                    _micro_block_sizes, "micro-block",
                                     cluster_pts, "cluster",
                                     step_dim);
-        os << " num-sub-blocks-per-mini-block-per-step: " << nsb << endl;
-        os << " num-sub-blocks-per-block-per-step: " << (nsb * nmb) << endl;
-        os << " num-sub-blocks-per-region-per-step: " << (nsb * nmb * nb) << endl;
-        os << " num-sub-blocks-per-rank-per-step: " << (nsb * nmb * nb * nr) << endl;
-        os << " Temporal mini-block tiling is never enabled.\n";
+        os << " num-nano-blocks-per-micro-block-per-step: " << nsb << endl;
+        os << " num-nano-blocks-per-block-per-step: " << (nsb * nmb) << endl;
+        os << " num-nano-blocks-per-region-per-step: " << (nsb * nmb * nb) << endl;
+        os << " num-nano-blocks-per-rank-per-step: " << (nsb * nmb * nb * nr) << endl;
+        os << " Temporal nano-block tiling is never enabled.\n";
+
+        // Adjust defaults for pico-blocks.
+        DOMAIN_VAR_LOOP(i, j) {
+            if (_pico_block_sizes[i] < cluster_pts[j])
+                _pico_block_sizes[i] = cluster_pts[j];
+        }
+        
+        // Determine num pico-blocks.
+        // Also fix up pico-block sizes as needed.
+        os << "\nPico-blocks:" << endl;
+        auto npb = find_num_subsets(os,
+                                    _pico_block_sizes, "pico-block",
+                                    _nano_block_sizes, "nano-block",
+                                    cluster_pts, "cluster",
+                                    step_dim);
+        os << " num-pico-blocks-per-nano-block-per-step: " << npb << endl;
+        os << " num-pico-blocks-per-micro-block-per-step: " << (npb * nsb) << endl;
+        os << " num-pico-blocks-per-block-per-step: " << (npb * nsb * nmb) << endl;
+        os << " num-pico-blocks-per-region-per-step: " << (npb * nsb * nmb * nb) << endl;
+        os << " num-pico-blocks-per-rank-per-step: " << (npb * nsb * nmb * nb * nr) << endl;
+        os << " Temporal pico-block tiling is never enabled.\n";
 
         // Determine binding dimension. Do this again if it was done above
         // by default because it may have changed during adjustment.
@@ -814,17 +859,17 @@ namespace yask {
                     continue;
 
                 auto bsz = _block_sizes[i];
-                auto sbsz = _sub_block_sizes[i];
+                auto sbsz = _nano_block_sizes[i];
                 auto sb_per_b = CEIL_DIV(bsz, sbsz);
 
-                // Choose first dim with enough sub-blocks
+                // Choose first dim with enough nano-blocks
                 // per block.
                 if (sb_per_b >= num_block_threads) {
                     _bind_posn = i;
                     break;
                 }
             }
-            os << " Note: only the sub-block size in the '" <<
+            os << " Note: only the nano-block size in the '" <<
                 _dims->_stencil_dims.get_dim_name(_bind_posn) << "' dimension may be used at run-time\n"
                 "  because block-thread binding is enabled on " << num_block_threads << " block threads.\n";
         }
@@ -860,30 +905,32 @@ namespace yask {
         auto nbg = find_num_subsets(os,
                                     _block_tile_sizes, "block-tile",
                                     _block_sizes, "block",
-                                    _mini_block_sizes, "mini-block",
+                                    _micro_block_sizes, "micro-block",
                                     step_dim);
         os << " num-block-tiles-per-block-per-step: " << nbg << endl;
 
-        // Show num mini-block-tiles.
-        // TODO: only print this if mini-block-tiling is enabled.
-        os << "\nMini-block tiles:\n";
+        // Show num micro-block-tiles.
+        // TODO: only print this if micro-block-tiling is enabled.
+        os << "\nMicro-block tiles:\n";
         auto nmbt = find_num_subsets(os,
-                                     _mini_block_tile_sizes, "mini-block-tile",
-                                     _mini_block_sizes, "mini-block",
-                                     _sub_block_sizes, "sub-block",
+                                     _micro_block_tile_sizes, "micro-block-tile",
+                                     _micro_block_sizes, "micro-block",
+                                     _nano_block_sizes, "nano-block",
                                      step_dim);
-        os << " num-mini-block-tiles-per-mini-block-per-step: " << nmbt << endl;
+        os << " num-micro-block-tiles-per-micro-block-per-step: " << nmbt << endl;
 
-        // Show num sub-block-tiles.
-        // TODO: only print this if sub-block-tiling is enabled.
-        os << "\nSub-block tiles:\n";
+        // Show num nano-block-tiles.
+        // TODO: only print this if nano-block-tiling is enabled.
+        os << "\nNano-block tiles:\n";
         auto nsbt = find_num_subsets(os,
-                                     _sub_block_tile_sizes, "sub-block-tile",
-                                     _sub_block_sizes, "sub-block",
-                                     cluster_pts, "cluster",
+                                     _nano_block_tile_sizes, "nano-block-tile",
+                                     _nano_block_sizes, "nano-block",
+                                     _pico_block_sizes, "pico-block",
                                      step_dim);
-        os << " num-sub-block-tiles-per-sub-block-per-step: " << nsbt << endl;
-#endif
+        os << " num-nano-block-tiles-per-nano-block-per-step: " << nsbt << endl;
+
+        // NB: there are no pico-block tiles.
+ #endif
         os << endl;
     }
 

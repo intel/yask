@@ -37,11 +37,18 @@ namespace yask {
                          const std::string& name) :
         ContextLinker(context),
         _settings(settings),
-        _name("auto-tuner") {
+        _name("auto-tuner")
+    {
+        STATE_VARS(this);
         assert(settings);
         if (name.length())
             _name += "(" + name + ")";
         _prefix = string(" ") + _name + ": ";
+
+        // Save temporal sizes.
+        bt = _settings->_block_sizes[step_dim];
+        mbt = _settings->_micro_block_sizes[step_dim];
+
         trial_secs = _settings->_tuner_trial_secs;
         clear(settings->_do_auto_tune); // TODO: why is this parameter used?
     }
@@ -55,37 +62,52 @@ namespace yask {
         STATE_VARS(this);
         outerp = 0;
         min_blks = 1;
+        min_pts = 1;
 
         // Blocks?
         if (targetp == 0 &&
             _settings->_tune_blks) {
             targetp = &_settings->_block_sizes;
             outerp = &_settings->_region_sizes;
+            min_pts = 512; // 8^3; min points in a block.
 
             // Set min blocks to number of region threads.
+            #ifndef USE_OFFLOAD
             int rt=0, bt=0;
             get_num_comp_threads(rt, bt);
             min_blks = rt;
+            #endif
             AT_DEBUG_MSG("searching block sizes...");
         }
 
-        // Mini-blocks?
+        // Micro-blocks?
         else if ((targetp == 0 ||
                   targetp == &_settings->_block_sizes) &&
-                 _settings->_tune_mini_blks) {
-            targetp = &_settings->_mini_block_sizes;
+                 _settings->_tune_micro_blks) {
+            targetp = &_settings->_micro_block_sizes;
             outerp = &_settings->_block_sizes;
-            AT_DEBUG_MSG("searching mini-block sizes...");
+            AT_DEBUG_MSG("searching micro-block sizes...");
        }
 
-        // Sub-block tiles?
+        // Nano-blocks?
         else if ((targetp == 0 ||
                   targetp == &_settings->_block_sizes ||
-                  targetp == &_settings->_mini_block_sizes) &&
-                 _settings->_tune_sub_blk_tiles) {
-            targetp = &_settings->_sub_block_tile_sizes;
-            outerp = &_settings->_sub_block_sizes;
-            AT_DEBUG_MSG("searching sub-block-tile sizes...");
+                  targetp == &_settings->_micro_block_sizes) &&
+                 _settings->_tune_nano_blks) {
+            targetp = &_settings->_nano_block_sizes;
+            outerp = &_settings->_micro_block_sizes;
+            AT_DEBUG_MSG("searching nano-block sizes...");
+        }
+
+        // Pico-blocks?
+        else if ((targetp == 0 ||
+                  targetp == &_settings->_block_sizes ||
+                  targetp == &_settings->_micro_block_sizes ||
+                  targetp == &_settings->_nano_block_sizes) &&
+                 _settings->_tune_pico_blks) {
+            targetp = &_settings->_pico_block_sizes;
+            outerp = &_settings->_nano_block_sizes;
+            AT_DEBUG_MSG("searching pico-block sizes...");
         }
 
         else {
@@ -100,9 +122,6 @@ namespace yask {
             
         // Get initial search center from current target.
         at_state.center_sizes = *targetp;
-
-        // Save number of steps.
-        target_steps = (*targetp)[step_dim];
 
         // Pick better starting point if needed.
         // TODO: create a better heuristic.
@@ -428,7 +447,6 @@ namespace yask {
 
         if (use_best) {
             if (at_state.best_rate > 0. && targetp) {
-                at_state.best_sizes[step_posn] = target_steps;
                 AT_DEBUG_MSG("applying size "  <<
                              at_state.best_sizes.make_dim_val_str(" * "));
                 *targetp = at_state.best_sizes;
@@ -438,39 +456,49 @@ namespace yask {
         }
         assert(targetp);
         
-        // Ensure step-dim value is set properly.
-        (*targetp)[step_posn] = target_steps;
-
         // Change derived sizes to 0 so adjust_settings()
         // will set them to the default.
         // TODO: keep the user-provided settings if possible.
         if (targetp == &_settings->_block_sizes) {
             _settings->_block_tile_sizes.set_vals_same(0);
-            _settings->_mini_block_sizes.set_vals_same(0);
-            _settings->_mini_block_tile_sizes.set_vals_same(0);
-            _settings->_sub_block_sizes.set_vals_same(0);
-            _settings->_sub_block_tile_sizes.set_vals_same(0);
+            _settings->_micro_block_sizes.set_vals_same(0);
+            _settings->_micro_block_tile_sizes.set_vals_same(0);
+            _settings->_nano_block_sizes.set_vals_same(0);
+            _settings->_nano_block_tile_sizes.set_vals_same(0);
+            _settings->_pico_block_sizes.set_vals_same(0);
         }
-        if (targetp == &_settings->_mini_block_sizes) {
-            _settings->_mini_block_tile_sizes.set_vals_same(0);
-            _settings->_sub_block_sizes.set_vals_same(0);
-            _settings->_sub_block_tile_sizes.set_vals_same(0);
+        else if (targetp == &_settings->_micro_block_sizes) {
+            _settings->_micro_block_tile_sizes.set_vals_same(0);
+            _settings->_nano_block_sizes.set_vals_same(0);
+            _settings->_nano_block_tile_sizes.set_vals_same(0);
+            _settings->_pico_block_sizes.set_vals_same(0);
         }
-            
+        else if (targetp == &_settings->_nano_block_sizes) {
+            _settings->_nano_block_tile_sizes.set_vals_same(0);
+            _settings->_pico_block_sizes.set_vals_same(0);
+        }
+        else if (targetp == &_settings->_pico_block_sizes) {
+            // Nothing below pico blocks.
+        }
+
+        // Restore temporal sizes.
+        _settings->_block_sizes[step_dim] = bt;
+        _settings->_micro_block_sizes[step_dim] = mbt;
+        
         // Save debug output and set to null.
         auto saved_op = get_debug_output();
         set_debug_output(nullop);
 
-        // Make sure everything is resized based on block size.
+        // Make sure everything is resized based on new target size.
         _settings->adjust_settings();
 
         // Update temporal blocking info.
         _context->update_tb_info();
 
-        // Reallocate scratch data based on new mini-block size.
-        // TODO: only do this when blocks have increased or
-        // decreased by a certain percentage.
-        _context->alloc_scratch_data();
+        // Reallocate scratch data based on new block size.
+        // TODO: only do this when needed.
+        if (targetp == &_settings->_block_sizes)
+            _context->alloc_scratch_data();
 
         // Restore debug output.
         set_debug_output(saved_op);

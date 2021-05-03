@@ -730,7 +730,7 @@ namespace yask {
         // start               stop
         // NB: inner loops are initialized with one iteration,
         // but typically they are sub-divided later.
-        ScanIndices create_inner() const {
+        inline ScanIndices create_inner() const {
             ScanIndices inner(*this);
 
             // Begin & end set from start & stop of outer loop.
@@ -753,11 +753,11 @@ namespace yask {
         // Adjust upper limits of strides and tiles based on settings.  This
         // is used to ensure only one inner range and/or tile is configured
         // if originally requested even if the current area has been
-        // increased slightly. For example, if the original mini-block-size
-        // and sub-block-size are 32, then the mini-block-size is increased
-        // to 34 for temporal tiling, this function will set the mini-block
+        // increased slightly. For example, if the original micro-block-size
+        // and nano-block-size are 32, then the micro-block-size is increased
+        // to 34 for temporal tiling, this function will set the micro-block
         // stride to 34 per the *intention* of the original setting to have
-        // only one sub-block. Similar for tiles.
+        // only one nano-block. Similar for tiles.
         inline void
         adjust_from_settings(const IdxTuple& orig_sizes_of_this,
                              const IdxTuple& orig_tile_sizes_of_this,

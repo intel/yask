@@ -552,7 +552,7 @@ namespace yask {
                       prefix << " num-temporal-block-shifts: " << num_tb_shifts << endl <<
                       prefix << " temporal-block-long-base:  " << tb_widths.make_dim_val_str(" * ") << endl <<
                       prefix << " temporal-block-short-base: " << tb_tops.make_dim_val_str(" * ") << endl <<
-                      prefix << " mini-block-angles:         " << mb_angles.make_dim_val_str());
+                      prefix << " micro-block-angles:         " << mb_angles.make_dim_val_str());
         }
     }
 
@@ -574,18 +574,20 @@ namespace yask {
         DEBUG_MSG(prefix << " block-tile-size:        " <<
                   opts->_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
 #endif
-        DEBUG_MSG(prefix << " mini-block-size:        " <<
-                  opts->_mini_block_sizes.make_dim_val_str(" * "));
+        DEBUG_MSG(prefix << " micro-block-size:       " <<
+                  opts->_micro_block_sizes.make_dim_val_str(" * "));
 #ifdef USE_TILING
-        DEBUG_MSG(prefix << " mini-block-tile-size:   " <<
-                  opts->_mini_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+        DEBUG_MSG(prefix << " micro-block-tile-size:  " <<
+                  opts->_micro_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
 #endif
-        DEBUG_MSG(prefix << " sub-block-size:         " <<
-                  opts->_sub_block_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+        DEBUG_MSG(prefix << " nano-block-size:        " <<
+                  opts->_nano_block_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
 #ifdef USE_TILING
-        DEBUG_MSG(prefix << " sub-block-tile-size:    " <<
-                  opts->_sub_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+        DEBUG_MSG(prefix << " nano-block-tile-size:   " <<
+                  opts->_nano_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
 #endif
+        DEBUG_MSG(prefix << " pico-block-size:        " <<
+                  opts->_pico_block_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
     }
 
     void StencilContext::init_stats() {
@@ -834,7 +836,7 @@ namespace yask {
                 // sizes from context settings instead of stages.
                 assert(state->_use_stage_tuners == false);
                 auto blksize = opts->_block_sizes[i];
-                auto mblksize = opts->_mini_block_sizes[i];
+                auto mblksize = opts->_micro_block_sizes[i];
 
                 // Req'd shift in this dim based on max halos.
                 // Can't use separate L & R shift because of possible data reuse in vars.
@@ -1348,7 +1350,7 @@ namespace yask {
                 if (print_info)
                     DEBUG_MSG("Note: '" << name << "' domain"
                               " has one or more starting edges not on vector boundaries;"
-                              " masked calculations will be used in peel and remainder sub-blocks.");
+                              " masked calculations will be used in peel and remainder nano-blocks.");
                 bb_is_aligned = false;
                 break;
             }
@@ -1364,7 +1366,7 @@ namespace yask {
                     if (print_info && bb_is_aligned)
                         DEBUG_MSG("Note: '" << name << "' domain"
                                   " has one or more sizes that are not vector-cluster multiples;"
-                                  " masked calculations will be used in peel and remainder sub-blocks.");
+                                  " masked calculations will be used in peel and remainder nano-blocks.");
                 bb_is_cluster_mult = false;
                 break;
             }

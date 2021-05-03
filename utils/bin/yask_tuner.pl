@@ -331,8 +331,8 @@ $outFH->open(">$outFile") or die "error: cannot write to '$outFile'\n"
 if ($showTiles) {
   push @YaskUtils::log_keys,
     'block-tile-size',
-    'mini-block-tile-size';
-    'sub-block-tile-size';
+    'micro-block-tile-size';
+    'nano-block-tile-size';
 }
 
 # how many individuals to create randomly and then keep at any given time.
@@ -429,12 +429,12 @@ my @rangesAll =
    [ 0, $maxDim, 4, 'by' ],
    [ 0, $maxDim, 4, 'bz' ],
 
-   # mini-block size.
+   # micro-block size.
    [ 0, $maxDim, 4, 'mbx' ],
    [ 0, $maxDim, 4, 'mby' ],
    [ 0, $maxDim, 4, 'mbz' ],
 
-   # sub-block size.
+   # nano-block size.
    [ 0, $maxDim, 4, 'sbx' ],
    [ 0, $maxDim, 4, 'sby' ],
    [ 0, $maxDim, 4, 'sbz' ],
@@ -458,12 +458,12 @@ if ($showTiles) {
      [ 0, $maxDim, 4, 'b_tiley' ],
      [ 0, $maxDim, 4, 'b_tilez' ],
      
-     # mini-block-tile size.
+     # micro-block-tile size.
      [ 0, $maxDim, 4, 'mb_tilex' ],
      [ 0, $maxDim, 4, 'mb_tiley' ],
      [ 0, $maxDim, 4, 'mb_tilez' ],
      
-     # sub-block-tile size.
+     # nano-block-tile size.
      [ 0, $maxDim, 4, 'sb_tilex' ],
      [ 0, $maxDim, 4, 'sb_tiley' ],
      [ 0, $maxDim, 4, 'sb_tilez' ],
@@ -504,7 +504,7 @@ if ($doBuild) {
 
      # other build options.
      [ 0, $#schedules, 1, 'ompRegionSchedule' ], # OMP schedule for region loop.
-     [ 0, $#schedules, 1, 'ompBlockSchedule' ], # OMP schedule for mini-block loop.
+     [ 0, $#schedules, 1, 'ompBlockSchedule' ], # OMP schedule for micro-block loop.
 
     );
 }
@@ -1184,11 +1184,11 @@ sub fitness {
   # adjust inner sizes to fit in their enclosing sizes.
   adjSizes(\@rs, \@ds);         # region <= domain.
   adjSizes(\@bs, \@rs);         # block <= region.
-  adjSizes(\@mbs, \@bs);        # mini-block <= block.
-  adjSizes(\@sbs, \@mbs);       # sub-block <= mini-block.
+  adjSizes(\@mbs, \@bs);        # micro-block <= block.
+  adjSizes(\@sbs, \@mbs);       # nano-block <= micro-block.
   adjSizes(\@b_tiles, \@bs);        # block-tile <= block.
-  adjSizes(\@mb_tiles, \@mbs);        # mini-block-tile <= mini-block.
-  adjSizes(\@sb_tiles, \@sbs);      # sub-block-tile <= sub-block.
+  adjSizes(\@mb_tiles, \@mbs);        # micro-block-tile <= micro-block.
+  adjSizes(\@sb_tiles, \@sbs);      # nano-block-tile <= nano-block.
 
   # 3d sizes in points.
   my $dPts = mult(@ds);
@@ -1206,7 +1206,7 @@ sub fitness {
   my @bcs = map { ceil($bs[$_] / $cs[$_]) } 0..$#dirs;
   my $bCls = mult(@bcs);
 
-  # Mini-blocks per block.
+  # Micro-blocks per block.
   my @bmbs = map { ceil($bs[$_] / $mbs[$_]) } 0..$#dirs;
   my $bMbs = mult(@bmbs);
 
@@ -1226,18 +1226,18 @@ sub fitness {
     print "  local-domain size = $dPts\n";
     print "  region size = $rPts\n";
     print "  block size = $bPts\n";
-    print "  sub-block size = $sbPts\n";
+    print "  nano-block size = $sbPts\n";
     print "  cluster size = $cPts\n";
     print "  fold size = $fPts\n";
     print "  regions per local-domain = $dRegs\n";
     print "  blocks per region = $rBlks\n";
     print "  clusters per block = $bCls\n";
-    print "  mini-blocks per block = $bMbs\n";
+    print "  micro-blocks per block = $bMbs\n";
     print "  mem estimate = ".($overallSize/$YaskUtils::oneGi)." GB\n";
     if ($showTiles) {
       print "  block-tile size = $b_tilePts\n";
-      print "  mini-block-tile size = $m_tilePts\n";
-      print "  sub-block-tile size = $sb_tilePts\n";
+      print "  micro-block-tile size = $m_tilePts\n";
+      print "  nano-block-tile size = $sb_tilePts\n";
     }
   }
 
@@ -1285,18 +1285,18 @@ sub fitness {
   addStat($ok, 'local-domain size', $dPts);
   addStat($ok, 'region size', $rPts);
   addStat($ok, 'block size', $bPts);
-  addStat($ok, 'mini-block size', $mbPts);
-  addStat($ok, 'sub-block size', $sbPts);
+  addStat($ok, 'micro-block size', $mbPts);
+  addStat($ok, 'nano-block size', $sbPts);
   addStat($ok, 'cluster size', $cPts);
   addStat($ok, 'regions per local-domain', $dRegs);
   addStat($ok, 'blocks per region', $rBlks);
   addStat($ok, 'clusters per block', $bCls);
-  addStat($ok, 'mini-blocks per block', $bMbs);
+  addStat($ok, 'micro-blocks per block', $bMbs);
   addStat($ok, 'vectors per cluster', $cvs);
   if ($showTiles) {
     addStat($ok, 'block-tile size', $b_tilePts);
-    addStat($ok, 'mini-block-tile size', $mb_tilePts);
-    addStat($ok, 'sub-block-tile size', $sb_tilePts);
+    addStat($ok, 'micro-block-tile size', $mb_tilePts);
+    addStat($ok, 'nano-block-tile size', $sb_tilePts);
   }
 
   # exit here if just checking.
@@ -1328,8 +1328,8 @@ sub fitness {
   $mvars .= makeLoopVars($h, 'RANK', 'rank', 3);
   $mvars .= makeLoopVars($h, 'REGION', 'region', 3);
   $mvars .= makeLoopVars($h, 'BLOCK', 'block', 3);
-  $mvars .= makeLoopVars($h, 'MINI_BLOCK', 'miniBlock', 3);
-  $mvars .= makeLoopVars($h, 'SUB_BLOCK', 'subBlock', 2);
+  $mvars .= makeLoopVars($h, 'MICRO_BLOCK', 'miniBlock', 3);
+  $mvars .= makeLoopVars($h, 'NANO_BLOCK', 'subBlock', 2);
 
   # other vars.
   $mvars .= " omp_region_schedule=$regionScheduleStr omp_block_schedule=$blockScheduleStr";

@@ -203,10 +203,11 @@ namespace yask {
         IdxTuple _region_tile_sizes; // region-tile size (only used for 'tiled' region loops).
         IdxTuple _block_sizes;       // block size (used for each outer thread).
         IdxTuple _block_tile_sizes; // block-tile size (only used for 'tiled' block loops).
-        IdxTuple _mini_block_sizes;       // mini-block size (used for wave-fronts in blocks).
-        IdxTuple _mini_block_tile_sizes; // mini-block-tile size (only used for 'tiled' mini-block loops).
-        IdxTuple _sub_block_sizes;       // sub-block size (used for each nested thread).
-        IdxTuple _sub_block_tile_sizes; // sub-block-tile size (only used for 'tiled' sub-block loops).
+        IdxTuple _micro_block_sizes;       // micro-block size (used for wave-fronts in blocks).
+        IdxTuple _micro_block_tile_sizes; // micro-block-tile size (only used for 'tiled' micro-block loops).
+        IdxTuple _nano_block_sizes;       // nano-block size (used for each nested thread).
+        IdxTuple _nano_block_tile_sizes; // nano-block-tile size (only used for 'tiled' nano-block loops).
+        IdxTuple _pico_block_sizes;       // pico-block size (used within nano-blocks).
         IdxTuple _min_pad_sizes;         // minimum spatial padding (including halos).
         IdxTuple _extra_pad_sizes;       // extra spatial padding (outside of halos).
 
@@ -235,8 +236,9 @@ namespace yask {
         // Tuning.
         bool _do_auto_tune = false;    // whether to do "online" auto-tuning.
         bool _tune_blks = true;
-        bool _tune_mini_blks = false;
-        bool _tune_sub_blk_tiles = false;
+        bool _tune_micro_blks = false;
+        bool _tune_nano_blks = false;
+        bool _tune_pico_blks = false;
         bool _allow_stage_tuners = false; // allow per-stage tuners when possible.
         double _tuner_trial_secs = 0.25;   // time to run tuner for new better setting.
 

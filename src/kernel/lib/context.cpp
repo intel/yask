@@ -78,8 +78,8 @@ namespace yask {
         // vars will be large enough. Turn off any temporal blocking.
         opts->_region_sizes.set_vals_same(0);
         opts->_block_sizes.set_vals_same(0);
-        opts->_mini_block_sizes.set_vals_same(0);
-        opts->_sub_block_sizes.set_vals_same(0);
+        opts->_micro_block_sizes.set_vals_same(0);
+        opts->_nano_block_sizes.set_vals_same(0);
         opts->adjust_settings();
         update_var_info(true);
 
@@ -774,7 +774,7 @@ namespace yask {
                                                  settings._block_sizes);
 
                 // Should always be valid because we just shifted (no trim).
-                // Trimming will be done at the mini-block level.
+                // Trimming will be done at the micro-block level.
                 assert(ok);
 
                 // To tesselate n-D domain space, we use n+1 distinct
@@ -835,7 +835,7 @@ namespace yask {
     } // calc_region.
 
     // Calculate results within a block. This function calls
-    // 'calc_mini_block()' for the specified stage or all stages if 'sel_bp'
+    // 'calc_micro_block()' for the specified stage or all stages if 'sel_bp'
     // is null.  When using TB, only the shape(s) needed for the tesselation
     // 'phase' are computed.  Typically called by a top-level OMP thread
     // from calc_region().
@@ -863,7 +863,7 @@ namespace yask {
         // When not doing TB, there is only one step.
         // When doing TB, we will only do one iteration here
         // that covers all steps,
-        // and calc_mini_block() will loop over all steps.
+        // and calc_micro_block() will loop over all steps.
         idx_t begin_t = block_idxs.begin[step_posn];
         idx_t end_t = block_idxs.end[step_posn];
         idx_t step_dir = (end_t >= begin_t) ? 1 : -1;
@@ -886,9 +886,9 @@ namespace yask {
             block_idxs.start[step_posn] = begin_t;
             block_idxs.stop[step_posn] = end_t;
 
-            // Strides within a block are based on stage mini-block sizes.
+            // Strides within a block are based on stage micro-block sizes.
             auto& settings = bp->get_active_settings();
-            block_idxs.stride = settings._mini_block_sizes;
+            block_idxs.stride = settings._micro_block_sizes;
             block_idxs.stride[step_posn] = stride_t;
 
             // Tiles in block loops.
@@ -904,21 +904,21 @@ namespace yask {
             ScanIndices adj_block_idxs = block_idxs;
             adj_block_idxs.adjust_from_settings(settings._block_sizes,
                                                 settings._block_tile_sizes,
-                                                settings._mini_block_sizes);
+                                                settings._micro_block_sizes);
 
             // Include automatically-generated loop code to
-            // call calc_mini_block() for each mini-block in this block.
+            // call calc_micro_block() for each micro-block in this block.
 
             // Loop prefix.
             #define BLOCK_LOOP_INDICES adj_block_idxs
-            #define BLOCK_BODY_INDICES mini_blk_range
+            #define BLOCK_BODY_INDICES micro_blk_range
             #define BLOCK_USE_LOOP_PART_0
             #include "yask_block_loops.hpp"
 
             // Loop body.
-            calc_mini_block(region_thread_idx, bp, region_shift_num,
+            calc_micro_block(region_thread_idx, bp, region_shift_num,
                             nphases, phase, nshapes, shape, bridge_mask,
-                            rank_idxs, region_idxs, block_idxs, mini_blk_range);
+                            rank_idxs, region_idxs, block_idxs, micro_blk_range);
             
             // Loop suffix.
             #define BLOCK_USE_LOOP_PART_1
@@ -942,9 +942,9 @@ namespace yask {
             block_idxs.start[step_posn] = begin_t;
             block_idxs.stop[step_posn] = end_t;
 
-            // Strides within a block are based on rank mini-block sizes.
+            // Strides within a block are based on rank micro-block sizes.
             auto& settings = *opts;
-            block_idxs.stride = settings._mini_block_sizes;
+            block_idxs.stride = settings._micro_block_sizes;
             block_idxs.stride[step_posn] = step_dir;
 
             // Tiles in block loops.
@@ -959,22 +959,22 @@ namespace yask {
                 // cover a range as big as this block's base plus the
                 // next block in all dims, so we add the width of the
                 // current block to the end.  This makes the adjusted
-                // blocks overlap, but the size of each mini-block is
+                // blocks overlap, but the size of each micro-block is
                 // trimmed at each step to the proper active size.
                 // TODO: find a way to make this more efficient to avoid
-                // calling calc_mini_block() many times with nothing to
+                // calling calc_micro_block() many times with nothing to
                 // do.
                 auto width = region_idxs.stop[i] - region_idxs.start[i];
                 adj_block_idxs.end[i] += width;
             }
             adj_block_idxs.adjust_from_settings(settings._block_sizes,
                                                 settings._block_tile_sizes,
-                                                settings._mini_block_sizes);
+                                                settings._micro_block_sizes);
             TRACE_MSG("calc_block: phase " << phase <<
                       ", adjusted block [" <<
                       adj_block_idxs.begin.make_val_str() << " ... " <<
                       adj_block_idxs.end.make_val_str() <<
-                      ") with mini-block stride " <<
+                      ") with micro-block stride " <<
                       adj_block_idxs.stride.make_val_str());
 
             // Loop thru shapes.
@@ -985,24 +985,24 @@ namespace yask {
                 bridge_mask = n_choose_k_set(nddims, phase, shape);
 
                 // Can only be one time iteration here when doing TB
-                // because mini-block temporal size is always same
+                // because micro-block temporal size is always same
                 // as block temporal size.
                 assert(num_t == 1);
 
                 // Include automatically-generated loop code to call
-                // calc_mini_block() for each mini-block in this block.
+                // calc_micro_block() for each micro-block in this block.
                 StagePtr bp; // null.
 
                 // Loop prefix.
                 #define BLOCK_LOOP_INDICES adj_block_idxs
-                #define BLOCK_BODY_INDICES mini_blk_range
+                #define BLOCK_BODY_INDICES micro_blk_range
                 #define BLOCK_USE_LOOP_PART_0
                 #include "yask_block_loops.hpp"
 
                 // Loop body.
-                calc_mini_block(region_thread_idx, bp, region_shift_num,
+                calc_micro_block(region_thread_idx, bp, region_shift_num,
                                 nphases, phase, nshapes, shape, bridge_mask,
-                                rank_idxs, region_idxs, block_idxs, mini_blk_range);
+                                rank_idxs, region_idxs, block_idxs, micro_blk_range);
             
                 // Loop suffix.
                 #define BLOCK_USE_LOOP_PART_1
@@ -1012,13 +1012,13 @@ namespace yask {
         } // TB.
     } // calc_block().
 
-    // Calculate results within a mini-block.
-    // This function calls 'StencilBundleBase::calc_mini_block()'
+    // Calculate results within a micro-block.
+    // This function calls 'StencilBundleBase::calc_micro_block()'
     // for each bundle in the specified stage or all stages if 'sel_bp' is
     // null. When using TB, only the 'shape' needed for the tesselation
     // 'phase' are computed. The starting 'shift_num' is relative
     // to the bottom of the current region and block.
-    void StencilContext::calc_mini_block(int region_thread_idx,
+    void StencilContext::calc_micro_block(int region_thread_idx,
                                          StagePtr& sel_bp,
                                          idx_t region_shift_num,
                                          idx_t nphases, idx_t phase,
@@ -1030,9 +1030,9 @@ namespace yask {
                                          const ScanIndices& adj_block_idxs) {
 
         STATE_VARS(this);
-        TRACE_MSG("calc_mini_block: phase " << phase <<
+        TRACE_MSG("calc_micro_block: phase " << phase <<
                   ", shape " << shape <<
-                  ", mini-block [" <<
+                  ", micro-block [" <<
                   adj_block_idxs.start.make_val_str() << " ... " <<
                   adj_block_idxs.stop.make_val_str() << ") within base-block [" <<
                   base_block_idxs.begin.make_val_str() << " ... " <<
@@ -1049,14 +1049,14 @@ namespace yask {
                 poke_halo_exchange();
         }
 
-        // Init mini-block begin & end from blk start & stop indices.
-        ScanIndices mini_block_idxs = adj_block_idxs.create_inner();
+        // Init micro-block begin & end from blk start & stop indices.
+        ScanIndices micro_block_idxs = adj_block_idxs.create_inner();
 
         // Time range.
-        // No more temporal blocks below mini-blocks, so we always stride
+        // No more temporal blocks below micro-blocks, so we always stride
         // by +/- 1.
-        idx_t begin_t = mini_block_idxs.begin[step_posn];
-        idx_t end_t = mini_block_idxs.end[step_posn];
+        idx_t begin_t = micro_block_idxs.begin[step_posn];
+        idx_t end_t = micro_block_idxs.end[step_posn];
         idx_t step_dir = (end_t >= begin_t) ? 1 : -1;
         idx_t stride_t = 1 * step_dir;        // +/- 1.
         assert(stride_t);
@@ -1071,17 +1071,17 @@ namespace yask {
             const idx_t stop_t = (stride_t > 0) ?
                 min(start_t + stride_t, end_t) :
                 max(start_t + stride_t, end_t);
-            TRACE_MSG("calc_mini_block: phase " << phase <<
+            TRACE_MSG("calc_micro_block: phase " << phase <<
                       ", shape " << shape <<
                       ", in step " << start_t);
             assert(abs(stop_t - start_t) == 1); // no more TB.
 
             // Set step indices that will pass through generated code.
-            mini_block_idxs.cur_indices[step_posn] = index_t;
-            mini_block_idxs.begin[step_posn] = start_t;
-            mini_block_idxs.end[step_posn] = stop_t;
-            mini_block_idxs.start[step_posn] = start_t;
-            mini_block_idxs.stop[step_posn] = stop_t;
+            micro_block_idxs.cur_indices[step_posn] = index_t;
+            micro_block_idxs.begin[step_posn] = start_t;
+            micro_block_idxs.end[step_posn] = stop_t;
+            micro_block_idxs.start[step_posn] = start_t;
+            micro_block_idxs.stop[step_posn] = stop_t;
 
             // Stages to evaluate at this time step.
             for (auto& bp : st_stages) {
@@ -1092,12 +1092,12 @@ namespace yask {
 
                 // Check step.
                 if (check_step_conds && !bp->is_in_valid_step(start_t)) {
-                    TRACE_MSG("calc_mini_block: step " << start_t <<
+                    TRACE_MSG("calc_micro_block: step " << start_t <<
                               " not valid for stage '" <<
                               bp->get_name() << "'");
                     continue;
                 }
-                TRACE_MSG("calc_mini_block: phase " << phase <<
+                TRACE_MSG("calc_micro_block: phase " << phase <<
                           ", shape " << shape <<
                           ", step " << start_t <<
                           ", stage '" << bp->get_name() <<
@@ -1108,30 +1108,30 @@ namespace yask {
                 if (region_thread_idx == 0)
                     bp->start_timers();
 
-                // Strides within a mini-blk are based on sub-blk sizes.
+                // Strides within a micro-blk are based on nano-blk sizes.
                 // This will get overridden later if thread binding is enabled.
                 auto& settings = bp->get_active_settings();
-                mini_block_idxs.stride = settings._sub_block_sizes;
-                mini_block_idxs.stride[step_posn] = stride_t;
+                micro_block_idxs.stride = settings._nano_block_sizes;
+                micro_block_idxs.stride[step_posn] = stride_t;
 
-                // Tiles in mini-blk loops.
-                mini_block_idxs.tile_size = settings._mini_block_tile_sizes;
+                // Tiles in micro-blk loops.
+                micro_block_idxs.tile_size = settings._micro_block_tile_sizes;
 
-                // Set mini_block_idxs begin & end based on shifted rank
+                // Set micro_block_idxs begin & end based on shifted rank
                 // start & stop (original region begin & end), rank
                 // boundaries, and stage BB. There may be several TB layers
                 // within a region WF, so we need to add the region and
-                // local mini-block shift counts.
+                // local micro-block shift counts.
                 bool ok = shift_region(rank_idxs.start, rank_idxs.stop,
                                        region_shift_num + shift_num, bp,
-                                       mini_block_idxs);
+                                       micro_block_idxs);
 
-                // Set mini_block_idxs begin & end based on shifted begin &
+                // Set micro_block_idxs begin & end based on shifted begin &
                 // end of block for given phase & shape.  This will be the
-                // base for the mini-block loops, which have no temporal
+                // base for the micro-block loops, which have no temporal
                 // tiling.
                 if (ok)
-                    ok = shift_mini_block(adj_block_idxs.start, adj_block_idxs.stop,
+                    ok = shift_micro_block(adj_block_idxs.start, adj_block_idxs.stop,
                                           adj_block_idxs.begin, adj_block_idxs.end,
                                           base_block_idxs.begin, base_block_idxs.end,
                                           base_region_idxs.begin, base_region_idxs.end,
@@ -1139,22 +1139,22 @@ namespace yask {
                                           nphases, phase,
                                           nshapes, shape,
                                           bridge_mask,
-                                          mini_block_idxs);
+                                          micro_block_idxs);
 
                 if (ok) {
-                    mini_block_idxs.adjust_from_settings(settings._mini_block_sizes,
-                                                         settings._mini_block_tile_sizes,
-                                                         settings._sub_block_sizes);
+                    micro_block_idxs.adjust_from_settings(settings._micro_block_sizes,
+                                                         settings._micro_block_tile_sizes,
+                                                         settings._nano_block_sizes);
 
                     // Update offsets of scratch vars based on the current
-                    // mini-block location.
+                    // micro-block location.
                     if (scratch_vecs.size())
-                        update_scratch_var_info(region_thread_idx, mini_block_idxs.begin);
+                        update_scratch_var_info(region_thread_idx, micro_block_idxs.begin);
 
-                    // Call calc_mini_block() for each non-scratch bundle.
+                    // Call calc_micro_block() for each non-scratch bundle.
                     for (auto* sb : *bp)
                         if (sb->get_bb().bb_num_points)
-                            sb->calc_mini_block(region_thread_idx, settings, mini_block_idxs);
+                            sb->calc_micro_block(region_thread_idx, settings, micro_block_idxs);
 
                     // Make sure streaming stores are visible for later loads.
                     make_stores_visible();
@@ -1170,7 +1170,7 @@ namespace yask {
             } // stages.
         } // time-steps.
 
-    } // calc_mini_block().
+    } // calc_micro_block().
 
     // Find boundaries within region with 'base_start' to 'base_stop'
     // shifted 'shift_num' times, which should start at 0 and increment for
@@ -1351,7 +1351,7 @@ namespace yask {
         return ok;
     }
 
-    // For given 'phase' and 'shape', find boundaries within mini-block at
+    // For given 'phase' and 'shape', find boundaries within micro-block at
     // 'mb_base_start' to 'mb_base_stop' shifted by 'mb_shift_num', which
     // should start at 0 and increment for each stage in each time-step.
     // 'mb_base' is subset of 'adj_block_base'.  Also trim to block at
@@ -1359,7 +1359,7 @@ namespace yask {
     // Input 'begin' and 'end' of 'idxs' should be trimmed to region.  Writes
     // results back into 'begin' and 'end' of 'idxs'.  Returns 'true' if
     // resulting area is non-empty, 'false' if empty.
-    bool StencilContext::shift_mini_block(const Indices& mb_base_start,
+    bool StencilContext::shift_micro_block(const Indices& mb_base_start,
                                           const Indices& mb_base_stop,
                                           const Indices& adj_block_base_start,
                                           const Indices& adj_block_base_stop,
@@ -1439,7 +1439,7 @@ namespace yask {
             // Use list of dims to bridge for this shape
             // computed earlier.
             if (phase > 0 && is_bit_set(bridge_mask, j)) {
-                TRACE_MSG("shift_mini_block: phase " << phase <<
+                TRACE_MSG("shift_micro_block: phase " << phase <<
                           ", shape " << shape <<
                           ": bridging dim " << j);
 
@@ -1457,7 +1457,7 @@ namespace yask {
                 ok = false;
             else {
 
-                // Is this mini-block first and/or last in block?
+                // Is this micro-block first and/or last in block?
                 bool is_first_mb = mb_base_start[i] <= adj_block_base_start[i];
                 bool is_last_mb = mb_base_stop[i] >= adj_block_base_stop[i];
 
@@ -1468,7 +1468,7 @@ namespace yask {
                 idx_t mb_start = mb_base_start[i];
                 idx_t mb_stop = mb_base_stop[i];
 
-                // Shift mini-block by MB angles unless there is only one.
+                // Shift micro-block by MB angles unless there is only one.
                 // MB is a wave-front, so only shift left.
                 if (!is_one_mb) {
                     auto mb_angle = mb_angles[j];
@@ -1482,11 +1482,11 @@ namespace yask {
                 if (is_last_mb)
                     mb_stop = shape_stop;
 
-                // Trim mini-block to fit in region.
+                // Trim micro-block to fit in region.
                 mb_start = max(mb_start, idxs.begin[i]);
                 mb_stop = min(mb_stop, idxs.end[i]);
 
-                // Trim mini-block range to fit in shape.
+                // Trim micro-block range to fit in shape.
                 mb_start = max(mb_start, shape_start);
                 mb_stop = min(mb_stop, shape_stop);
 
@@ -1503,11 +1503,11 @@ namespace yask {
 
         } // dims.
 
-        TRACE_MSG("shift_mini_block: phase " << phase << "/" << nphases <<
+        TRACE_MSG("shift_micro_block: phase " << phase << "/" << nphases <<
                   ", shape " << shape << "/" << nshapes <<
                   ", updated span: [" <<
                   idxs.begin.make_val_str() << " ... " <<
-                  idxs.end.make_val_str() << ") from original mini-block [" <<
+                  idxs.end.make_val_str() << ") from original micro-block [" <<
                   mb_base_start.make_val_str() << " ... " <<
                   mb_base_stop.make_val_str() << ") shifted " <<
                   mb_shift_num << " time(s) within adj-block base [" <<
@@ -1522,9 +1522,9 @@ namespace yask {
     }
 
     // Adjust offsets of scratch vars based on thread number 'thread_idx'
-    // and beginning point of mini-block 'idxs'.  Each scratch-var is
+    // and beginning point of micro-block 'idxs'.  Each scratch-var is
     // assigned to a thread, so it must "move around" as the thread is
-    // assigned to each mini-block.  This move is accomplished by changing
+    // assigned to each micro-block.  This move is accomplished by changing
     // the vars' local offsets.
     void StencilContext::update_scratch_var_info(int thread_idx,
                                                  const Indices& idxs) {

@@ -319,7 +319,7 @@ namespace yask {
         IdxTuple left_wf_exts;    // WF extension needed on left side of rank for halo exch.
         IdxTuple right_wf_exts;    // WF extension needed on right side of rank.
 
-        // Settings for temporal blocking and mini-blocks.
+        // Settings for temporal blocking and micro-blocks.
         idx_t tb_steps = 0;  // max number of steps in a TB. 0 => no TB.
         IdxTuple tb_angles;  // TB skewing angles for each shift (in points).
         idx_t num_tb_shifts = 0; // number of TB shifts required in tb_steps.
@@ -499,8 +499,8 @@ namespace yask {
                         const ScanIndices& rank_idxs,
                         const ScanIndices& region_idxs);
 
-        // Calculate results within a mini-block.
-        void calc_mini_block(int region_thread_idx,
+        // Calculate results within a micro-block.
+        void calc_micro_block(int region_thread_idx,
                              StagePtr& sel_bp,
                              idx_t region_shift_num,
                              idx_t nphases, idx_t phase,
@@ -531,7 +531,7 @@ namespace yask {
                             ScanIndices& idxs);
 
         // Set various limits in 'idxs' based on current step in block.
-        bool shift_mini_block(const Indices& mb_base_start,
+        bool shift_micro_block(const Indices& mb_base_start,
                               const Indices& mb_base_stop,
                               const Indices& adj_block_base_start,
                               const Indices& adj_block_base_stop,

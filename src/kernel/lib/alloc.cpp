@@ -1126,7 +1126,7 @@ namespace yask {
         // Update core pointers in generated bundles.
         make_scratch_vars(rthreads);
 
-        // Find the max mini-block size across all stages.
+        // Find the max micro-block size across all stages.
         // They can be different across stages when stage-specific
         // auto-tuning has been used.
         IdxTuple mblksize(domain_dims);
@@ -1135,12 +1135,12 @@ namespace yask {
             DOMAIN_VAR_LOOP(i, j) {
 
                 // Round up to cluster size.
-                auto sz = round_up_flr(psettings._mini_block_sizes[i],
+                auto sz = round_up_flr(psettings._micro_block_sizes[i],
                                        cluster_pts[j]);
                 mblksize[j] = max(mblksize[j], sz);
             }
         }
-        TRACE_MSG("alloc_scratch_data: max rounded-up mini-block size across stage(s) is " <<
+        TRACE_MSG("alloc_scratch_data: max rounded-up micro-block size across stage(s) is " <<
                   mblksize.make_dim_val_str(" * "));
 
         // Pass 0: count required size, allocate chunk of memory at end.
@@ -1172,7 +1172,7 @@ namespace yask {
 
                         if (gp->is_dim_used(dname)) {
 
-                            // Set domain size of scratch var to mini-block size.
+                            // Set domain size of scratch var to micro-block size.
                             gp->_set_domain_size(dname, mblksize[dname]);
 
                             // Conservative allowance for WF exts and/or temporal shifts.

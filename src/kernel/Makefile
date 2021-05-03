@@ -39,7 +39,6 @@ streaming_stores	?=	0
 use_ptrs		?=	1
 omp			?=	1
 offload			?=	0
-offload_usm		?=	0
 offload_arch		?=	spir64
 trace			?=	0
 trace_mem		?=	0
@@ -49,12 +48,6 @@ check			?=	0
 # run-time option.  Including the "trace" code has a small impact on
 # binary size and performance, even if not used. Including the "trace_mem"
 # code has a large impact, even if not used.
-
-# Enable offload if offload with unified shared mem is enabled.
-# FIXME: offload_usm is not currently enabled.
-ifeq ($(offload_usm),1)
- offload		:=	1
-endif
 
 # If 'arch' isn't set, determine default architecture by running kernel
 # script w/special knob.
@@ -80,8 +73,17 @@ else
   $(error Target not recognized; use arch=avx512, avx512-ymm, avx2, avx, knl, or intel64)
 endif
 
+# Enable offload if offload with unified shared mem is enabled.
+# FIXME: offload_usm is not currently enabled.
+offload_usm		?=	0
+ifeq ($(offload_usm),1)
+ offload		:=	1
+endif
+
+# Main vars for naming the libraries and executables and running
+# the YASK compiler.
 # Set the following vars on 'make' cmd-line for corresponding effects:
-# - YK_STENCIL and/or YK_ARCH to name binaries differently.
+# - YK_STENCIL and/or YK_ARCH to name libraries and executables differently.
 # - YC_STENCIL to override stencil name passed to YASK compiler.
 # - YC_TARGET to override target passed to YASK compiler.
 YK_STENCIL	?=	$(stencil)
@@ -93,6 +95,7 @@ else
   YK_ARCH	:=	$(arch)
   YC_TARGET	?=	$(TARGET)
 endif
+YK_TAG  	:=	$(YK_STENCIL).$(YK_ARCH)
 
 # Default compiler settings based on target.
 ifeq ($(TARGET),knl)
@@ -214,7 +217,6 @@ YK_ARCH_DIR	:=	$(YK_OUT_DIR)/$(YK_ARCH)
 YK_OBJ_DIR	:=	$(YK_ARCH_DIR)/obj
 
 # Dirs for stencil-specific output files.
-YK_TAG  	:=	$(YK_STENCIL).$(YK_ARCH)
 YK_EXT_BASE	:=	$(YK_BASE).$(YK_TAG)
 YK_EXT_OUT_DIR	:=	$(YK_OUT_DIR)/$(YK_EXT_BASE)
 YK_SWIG_OUT_DIR	:=	$(YK_EXT_OUT_DIR)/swig
@@ -237,8 +239,9 @@ YK_GEN_HEADERS	:=	$(addprefix $(YK_GEN_DIR)/, \
 				yask_rank_loops.hpp \
 				yask_region_loops.hpp \
 				yask_block_loops.hpp \
-				yask_mini_block_loops.hpp \
-				yask_sub_block_loops.hpp \
+				yask_micro_block_loops.hpp \
+				yask_nano_block_loops.hpp \
+				yask_pico_block_loops.hpp \
 				yask_misc_loops.hpp \
 				yask_layout_macros.hpp \
 				yask_layouts.hpp \
@@ -497,7 +500,7 @@ REGION_LOOP_FLAGS	?=	-ndims $(NSDIMS) -macroPrefix REGION_ -ompMod '$(REGION_LOO
 REGION_LOOP_ORDER	?=	1 .. N-1
 REGION_LOOP_CODE	?=	$(REGION_LOOP_MODS) omp loop($(REGION_LOOP_ORDER)) { } 
 
-# Block loops break up a block into mini-blocks.
+# Block loops break up a block into micro-blocks.
 # These are executed sequentially, so no OpenMP.
 # Like with rank loops, in order for temporal wavefronts to operate properly,
 # the scanning paths must have strictly incrementing indices.
@@ -506,36 +509,41 @@ BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -macroPrefix BLOCK_
 BLOCK_LOOP_ORDER	?=	1 .. N-1
 BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_MODS) loop($(BLOCK_LOOP_ORDER)) { }
 
-# Mini-Block loops break up a mini-block into sub-blocks. The 'omp' modifier
-# creates a nested OpenMP loop so that each sub-block is assigned to a
+# Mini-Block loops break up a micro-block into nano-blocks. The 'omp' modifier
+# creates a nested OpenMP loop so that each nano-block is assigned to a
 # nested OpenMP thread. The OpenMP construct is not used when running with
 # '-bind_block_threads' because another parallel section is created.
-MINI_BLOCK_LOOP_OMP	?=	omp parallel for schedule(static,1) proc_bind(spread)
-MINI_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -macroPrefix MINI_BLOCK_ -ompMod '$(MINI_BLOCK_LOOP_OMP)'
-MINI_BLOCK_LOOP_ORDER	?=	1 .. N-1
-MINI_BLOCK_LOOP_CODE	?=	$(MINI_BLOCK_LOOP_MODS) omp loop($(MINI_BLOCK_LOOP_ORDER)) { }
+MICRO_BLOCK_LOOP_OMP	?=	omp parallel for schedule(static,1) proc_bind(spread)
+MICRO_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -macroPrefix MICRO_BLOCK_ -ompMod '$(MICRO_BLOCK_LOOP_OMP)'
+MICRO_BLOCK_LOOP_ORDER	?=	1 .. N-1
+MICRO_BLOCK_LOOP_CODE	?=	$(MICRO_BLOCK_LOOP_MODS) omp loop($(MICRO_BLOCK_LOOP_ORDER)) { }
 
-# Sub-block loops break up a sub-block into clusters or vectors.  These
+# Nano-block loops break up a nano-block into pico-blocks.  These
 # loops are run by a single OMP thread. When offloading, this loop is run in
 # parallel on the offload device.  The indexes in this loop
 # are 'normalized', i.e., vector units and rank-relative.
-SUB_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -macroPrefix SUB_BLOCK_
+NANO_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -macroPrefix NANO_BLOCK_
 ifeq ($(offload),1)
 ifeq ($(offload_arch),x86_64)
- SUB_BLOCK_LOOP_OMP	?=	omp target parallel for device(KernelEnv::_omp_devn)
+ NANO_BLOCK_LOOP_OMP	?=	omp target parallel for device(KernelEnv::_omp_devn)
 else
- SUB_BLOCK_LOOP_OMP	?=	omp target teams distribute parallel for device(KernelEnv::_omp_devn)
+ NANO_BLOCK_LOOP_OMP	?=	omp target teams distribute parallel for device(KernelEnv::_omp_devn)
 endif
-SUB_BLOCK_LOOP_FLAGS	+=	-ompMod '$(SUB_BLOCK_LOOP_OMP)'
-SUB_BLOCK_LOOP_ORDER	?=	2 .. N-1
-SUB_BLOCK_LOOP_INNER_DIM ?=	1
-SUB_BLOCK_LOOP_CODE	:=	$(SUB_BLOCK_LOOP_MODS) omp loop($(SUB_BLOCK_LOOP_ORDER)) { \
-				  loop($(SUB_BLOCK_LOOP_INNER_DIM)) { } }
+NANO_BLOCK_LOOP_FLAGS	+=	-ompMod '$(NANO_BLOCK_LOOP_OMP)'
+NANO_BLOCK_LOOP_ORDER	?=	1 .. N-1
+NANO_BLOCK_LOOP_CODE	:=	$(NANO_BLOCK_LOOP_MODS) omp loop($(NANO_BLOCK_LOOP_ORDER)) { }
 else
-SUB_BLOCK_LOOP_MODS	?=	nested
-SUB_BLOCK_LOOP_ORDER	?=	1 .. N-1
-SUB_BLOCK_LOOP_CODE	:=	$(SUB_BLOCK_LOOP_MODS) loop($(SUB_BLOCK_LOOP_ORDER)) { }
+NANO_BLOCK_LOOP_MODS	?=	nested
+NANO_BLOCK_LOOP_ORDER	?=	1 .. N-1
+NANO_BLOCK_LOOP_CODE	:=	$(NANO_BLOCK_LOOP_MODS) loop($(NANO_BLOCK_LOOP_ORDER)) { }
 endif
+
+# Pico-Block loops break up a pico-block into vectors or clusters.
+# The pico loops are in reverse nesting order because this works better for offload kernels.
+PICO_BLOCK_LOOP_MODS	?=	nested
+PICO_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -macroPrefix PICO_BLOCK_
+PICO_BLOCK_LOOP_ORDER	?=	N-1 .. 1
+PICO_BLOCK_LOOP_CODE	?=	$(PICO_BLOCK_LOOP_MODS) loop($(PICO_BLOCK_LOOP_ORDER)) { }
 
 # General-purpose parallel loop.
 MISC_LOOP_OMP		?=	omp parallel for schedule(guided) proc_bind(spread)
@@ -615,13 +623,17 @@ $(YK_GEN_DIR)/yask_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
 	$(PERL) $< -output $@ $(BLOCK_LOOP_FLAGS) $(EXTRA_LOOP_FLAGS) $(EXTRA_BLOCK_LOOP_FLAGS) "$(BLOCK_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_mini_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
+$(YK_GEN_DIR)/yask_micro_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
-	$(PERL) $< -output $@ $(MINI_BLOCK_LOOP_FLAGS) $(EXTRA_LOOP_FLAGS) $(EXTRA_MINI_BLOCK_LOOP_FLAGS) "$(MINI_BLOCK_LOOP_CODE)"
+	$(PERL) $< -output $@ $(MICRO_BLOCK_LOOP_FLAGS) $(EXTRA_LOOP_FLAGS) $(EXTRA_MICRO_BLOCK_LOOP_FLAGS) "$(MICRO_BLOCK_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_sub_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
+$(YK_GEN_DIR)/yask_nano_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
-	$(PERL) $< -output $@ $(SUB_BLOCK_LOOP_FLAGS) $(EXTRA_LOOP_FLAGS) $(EXTRA_SUB_BLOCK_LOOP_FLAGS) "$(SUB_BLOCK_LOOP_CODE)"
+	$(PERL) $< -output $@ $(NANO_BLOCK_LOOP_FLAGS) $(EXTRA_LOOP_FLAGS) $(EXTRA_NANO_BLOCK_LOOP_FLAGS) "$(NANO_BLOCK_LOOP_CODE)"
+
+$(YK_GEN_DIR)/yask_pico_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
+	$(MKDIR) $(YK_GEN_DIR)
+	$(PERL) $< -output $@ $(PICO_BLOCK_LOOP_FLAGS) $(EXTRA_LOOP_FLAGS) $(EXTRA_PICO_BLOCK_LOOP_FLAGS) "$(PICO_BLOCK_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_misc_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
@@ -735,10 +747,10 @@ echo-settings:
 	echo EXTRA_YK_CXXFLAGS="\"$(EXTRA_YK_CXXFLAGS)\""; \
 	echo ISA=$(ISA); \
 	echo MACROS="\"$(MACROS)\""; \
-	echo MINI_BLOCK_LOOP_CODE="\"$(MINI_BLOCK_LOOP_CODE)\""; \
-	echo MINI_BLOCK_LOOP_FLAGS="\"$(MINI_BLOCK_LOOP_FLAGS)\""; \
-	echo MINI_BLOCK_LOOP_ORDER="\"$(MINI_BLOCK_LOOP_ORDER)\""; \
-	echo MINI_BLOCK_LOOP_MODS="\"$(MINI_BLOCK_LOOP_MODS)\""; \
+	echo MICRO_BLOCK_LOOP_CODE="\"$(MICRO_BLOCK_LOOP_CODE)\""; \
+	echo MICRO_BLOCK_LOOP_FLAGS="\"$(MICRO_BLOCK_LOOP_FLAGS)\""; \
+	echo MICRO_BLOCK_LOOP_ORDER="\"$(MICRO_BLOCK_LOOP_ORDER)\""; \
+	echo MICRO_BLOCK_LOOP_MODS="\"$(MICRO_BLOCK_LOOP_MODS)\""; \
 	echo MISC_LOOP_CODE="\"$(MISC_LOOP_CODE)\""; \
 	echo MISC_LOOP_FLAGS="\"$(MISC_LOOP_FLAGS)\""; \
 	echo MISC_LOOP_ORDER="\"$(MISC_LOOP_ORDER)\""; \
@@ -752,10 +764,14 @@ echo-settings:
 	echo REGION_LOOP_FLAGS="\"$(REGION_LOOP_FLAGS)\""; \
 	echo REGION_LOOP_ORDER="\"$(REGION_LOOP_ORDER)\""; \
 	echo REGION_LOOP_MODS="\"$(REGION_LOOP_MODS)\""; \
-	echo SUB_BLOCK_LOOP_CODE="\"$(SUB_BLOCK_LOOP_CODE)\""; \
-	echo SUB_BLOCK_LOOP_FLAGS="\"$(SUB_BLOCK_LOOP_FLAGS)\""; \
-	echo SUB_BLOCK_LOOP_ORDER="\"$(SUB_BLOCK_LOOP_ORDER)\""; \
-	echo SUB_BLOCK_LOOP_MODS="\"$(SUB_BLOCK_LOOP_MODS)\""; \
+	echo NANO_BLOCK_LOOP_CODE="\"$(NANO_BLOCK_LOOP_CODE)\""; \
+	echo NANO_BLOCK_LOOP_FLAGS="\"$(NANO_BLOCK_LOOP_FLAGS)\""; \
+	echo NANO_BLOCK_LOOP_ORDER="\"$(NANO_BLOCK_LOOP_ORDER)\""; \
+	echo NANO_BLOCK_LOOP_MODS="\"$(NANO_BLOCK_LOOP_MODS)\""; \
+	echo PICO_BLOCK_LOOP_CODE="\"$(PICO_BLOCK_LOOP_CODE)\""; \
+	echo PICO_BLOCK_LOOP_FLAGS="\"$(PICO_BLOCK_LOOP_FLAGS)\""; \
+	echo PICO_BLOCK_LOOP_ORDER="\"$(PICO_BLOCK_LOOP_ORDER)\""; \
+	echo PICO_BLOCK_LOOP_MODS="\"$(PICO_BLOCK_LOOP_MODS)\""; \
 	echo YASK_OUTPUT_DIR=$(YASK_OUTPUT_DIR); \
 	echo YC_FLAGS="\"$(YC_FLAGS)\""; \
 	echo YC_STENCIL=$(YC_STENCIL); \
@@ -952,7 +968,7 @@ DEF_TEST_ARGS := -log_dir $(TEST_LOG_OUT_DIR) \
 
 # Test args for 1 and >1 ranks.
 test_args0	:=	$(DEF_TEST_ARGS) -l 48 -r 32 -b 24 -rt 0 $(EXTRA_TEST_ARGS)
-test_args1	:=	$(DEF_TEST_ARGS) -l 48 -r 32 -b 24 -mb 16 -rt 1 $(EXTRA_TEST_ARGS)
+test_args1	:=	$(DEF_TEST_ARGS) -l 64 -b 48 -mb 32 -nb 24 -pb 16 -rt 1 $(EXTRA_TEST_ARGS)
 test_args2	:=	$(DEF_TEST_ARGS) -l 63 -r 32 -b 24 -mb 16 -rt 2 $(EXTRA_TEST_ARGS)
 test_args3	:=	$(DEF_TEST_ARGS) -l 63 -r 48 -b 24 -mb 16 -bt 2 $(EXTRA_TEST_ARGS)
 test_args4	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -bind_block_threads $(EXTRA_TEST_ARGS)

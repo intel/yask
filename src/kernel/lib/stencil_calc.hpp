@@ -85,12 +85,8 @@ namespace yask {
             norm.end = normalize_indices(orig.end);
             norm.stop = norm.end;
             norm.tile_size = normalize_indices(orig.tile_size);
-
-            // These are superceded by the ALIGN and STRIDE macros
-            // set by the YASK compiler, so this isn't really needed, but
-            // they're set for consistency.
-            norm.align.set_from_const(1); // 1-vector alignment.
-            norm.stride.set_from_const(1); // 1-vector stride.
+            norm.align = normalize_indices(orig.align);
+            norm.stride = normalize_indices(orig.stride);
             return norm;
         }
 
@@ -160,18 +156,18 @@ namespace yask {
         virtual void
         calc_in_domain(int scratch_var_idx, const ScanIndices& misc_idxs) =0;
 
-        // Calculate results within a mini-block.
+        // Calculate results within a micro-block.
         void
-        calc_mini_block(int region_thread_idx,
+        calc_micro_block(int region_thread_idx,
                         KernelSettings& settings,
-                        const ScanIndices& mini_block_idxs);
+                        const ScanIndices& micro_block_idxs);
 
-        // Calculate results within a sub-block.
+        // Calculate results within a nano-block.
         virtual void
-        calc_sub_block(int region_thread_idx,
+        calc_nano_block(int region_thread_idx,
                        int block_thread_idx,
                        KernelSettings& settings,
-                       const ScanIndices& mini_block_idxs) =0;
+                       const ScanIndices& micro_block_idxs) =0;
 
         // Functions below are stubs for the code generated
         // by the stencil compiler.
@@ -338,55 +334,55 @@ namespace yask {
             #include "yask_misc_loops.hpp"
         }
         
-        // Calculate results within a sub-block.
+        // Calculate results within a nano-block.
         // Essentially just a chooser between the debug and optimized versions.
         void
-        calc_sub_block(int region_thread_idx,
+        calc_nano_block(int region_thread_idx,
                        int block_thread_idx,
                        KernelSettings& settings,
-                       const ScanIndices& mini_block_idxs) override {
+                       const ScanIndices& micro_block_idxs) override {
 
             // Choose between scalar debug and optimized impls.
             if (settings.force_scalar)
-                calc_sub_block_dbg(region_thread_idx, block_thread_idx,
-                                      settings, mini_block_idxs);
+                calc_nano_block_dbg(region_thread_idx, block_thread_idx,
+                                      settings, micro_block_idxs);
             else
-                calc_sub_block_opt(region_thread_idx, block_thread_idx,
-                                   settings, mini_block_idxs);
+                calc_nano_block_opt(region_thread_idx, block_thread_idx,
+                                   settings, micro_block_idxs);
         }
 
-        // Calculate results for one sub-block using pure scalar code.
+        // Calculate results for one nano-block using pure scalar code.
         // This is very slow and used for debug.
         void
-        calc_sub_block_dbg(int region_thread_idx,
+        calc_nano_block_dbg(int region_thread_idx,
                            int block_thread_idx,
                            KernelSettings& settings,
-                           const ScanIndices& mini_block_idxs) {
+                           const ScanIndices& micro_block_idxs) {
             STATE_VARS(this);
-            TRACE_MSG("calc_sub_block_dbg for bundle '" << get_name() << "': [" <<
-                      mini_block_idxs.start.make_val_str() <<
-                      " ... " << mini_block_idxs.stop.make_val_str() <<
+            TRACE_MSG("calc_nano_block_dbg for bundle '" << get_name() << "': [" <<
+                      micro_block_idxs.start.make_val_str() <<
+                      " ... " << micro_block_idxs.stop.make_val_str() <<
                       ") by region thread " << region_thread_idx <<
                       " and block thread " << block_thread_idx);
 
             auto* cp = _corep();
 
-            // Init sub-block begin & end from block start & stop indices.
+            // Init nano-block begin & end from block start & stop indices.
             // Use the 'misc' loops. Indices for these loops will be scalar and
             // global rather than normalized as in the cluster and vector loops.
-            ScanIndices sb_idxs = mini_block_idxs.create_inner();
+            ScanIndices sb_idxs = micro_block_idxs.create_inner();
 
             // Stride and alignment to 1 element.
             sb_idxs.stride.set_from_const(1);
             sb_idxs.align.set_from_const(1);
             
-            calc_sub_block_dbg2(cp, region_thread_idx, sb_idxs);
+            calc_nano_block_dbg2(cp, region_thread_idx, sb_idxs);
         }
 
         // Scalar calc loop.
         // Static to make sure offload doesn't need 'this'.
         static void
-        calc_sub_block_dbg2(StencilCoreDataT* cp,
+        calc_nano_block_dbg2(StencilCoreDataT* cp,
                             int region_thread_idx,
                             const ScanIndices& misc_idxs) {
 
@@ -414,19 +410,19 @@ namespace yask {
             #include "yask_misc_loops.hpp"
         }
 
-        // Calculate results for one sub-block.
-        // The index ranges in 'mini_block_idxs' are sub-divided
+        // Calculate results for one nano-block.
+        // The index ranges in 'micro_block_idxs' are sub-divided
         // into full vector-clusters, full vectors, and partial vectors.
         // The resulting areas are evaluated by the YASK-compiler-generated code.
         void
-        calc_sub_block_opt(int region_thread_idx,
+        calc_nano_block_opt(int region_thread_idx,
                            int block_thread_idx,
                            KernelSettings& settings,
-                           const ScanIndices& mini_block_idxs) {
+                           const ScanIndices& micro_block_idxs) {
             STATE_VARS(this);
-            TRACE_MSG("calc_sub_block_opt for bundle '" << get_name() << "': [" <<
-                      mini_block_idxs.start.make_val_str() <<
-                      " ... " << mini_block_idxs.stop.make_val_str() <<
+            TRACE_MSG("calc_nano_block_opt for bundle '" << get_name() << "': [" <<
+                      micro_block_idxs.start.make_val_str() <<
+                      " ... " << micro_block_idxs.stop.make_val_str() <<
                       ") by region thread " << region_thread_idx <<
                       " and block thread " << block_thread_idx);
             auto* cp = _corep();
@@ -470,33 +466,38 @@ namespace yask {
              overlap.
             */
 
-            // Init sub-block begin & end from block start & stop indices.
+            // Init nano-block begin & end from block start & stop indices.
             // These indices are in element units and global (NOT rank-relative).
             // All other indices below are contructed from 'sb_idxs' to ensure
             // step indices are copied properly.
-            ScanIndices sb_idxs = mini_block_idxs.create_inner();
+            ScanIndices sb_idxs = micro_block_idxs.create_inner();
 
-            // Tiles in sub-blocks.
-            sb_idxs.tile_size = settings._sub_block_tile_sizes;
+            // Strides within a nano-blk are based on pico-blk sizes.
+            sb_idxs.stride = settings._pico_block_sizes;
+            sb_idxs.stride[step_posn] = idx_t(1);
+
+            // We need to run pico loops only if they're greater than a cluster.
+            bool need_pico_loops = sb_idxs.stride.product() > dims->_cluster_pts.product();
+
+            // Tiles in nano-blocks.
+            sb_idxs.tile_size = settings._nano_block_tile_sizes;
 
             // Sub block indices in element units and rank-relative.
             ScanIndices sb_eidxs(sb_idxs);
 
-            // Subset of sub-block that is full clusters.
+            // Subset of nano-block that is full clusters.
             // These indices are in element units and rank-relative.
             ScanIndices sb_fcidxs(sb_idxs);
 
-            // Subset of sub-block that is full vectors.
+            // Subset of nano-block that is full vectors.
             // These indices are in element units and rank-relative.
             ScanIndices sb_fvidxs(sb_idxs);
 
-            // Superset of sub-block rounded to vector outer-boundaries as shown above.
+            // Superset of nano-block rounded to vector outer-boundaries as shown above.
             // These indices are in element units and rank-relative.
             ScanIndices sb_ovidxs(sb_idxs);
 
             // These will be set to rank-relative, so set ofs to zero.
-            // However, these are superceded by the ALIGN_OFS macros set by
-            // the YASK compiler, so these are not actually needed.
             sb_eidxs.align_ofs.set_from_const(0);
             sb_fcidxs.align_ofs.set_from_const(0);
             sb_fvidxs.align_ofs.set_from_const(0);
@@ -517,7 +518,7 @@ namespace yask {
 
             // For each domain dim:
             // - Adjust indices to be rank-relative.
-            // - Determine the subset of this sub-block that is
+            // - Determine the subset of this nano-block that is
             //   clusters, vectors, and partial vectors.
             DOMAIN_VAR_LOOP(i, j) {
 
@@ -531,7 +532,7 @@ namespace yask {
                 // Find range of full clusters.
                 // These are also the inner-boundaries of the
                 // full vectors.
-                // NB: fcbgn will be > fcend if the sub-block
+                // NB: fcbgn will be > fcend if the nano-block
                 // is within a cluster.
                 auto cpts = dims->_cluster_pts[j];
                 auto fcbgn = round_up_flr(ebgn, cpts);
@@ -540,7 +541,7 @@ namespace yask {
                 // Find range of full vectors.
                 // These are also the inner-boundaries of the peel
                 // and rem sections.
-                // NB: fvbgn will be > fvend if the sub-block
+                // NB: fvbgn will be > fvend if the nano-block
                 // is within a vector.
                 auto vpts = fold_pts[j];
                 auto fvbgn = round_up_flr(ebgn, vpts);
@@ -548,7 +549,7 @@ namespace yask {
 
                 // Outer vector-aligned boundaries.  Note that rounding
                 // direction is opposite of full vectors, i.e., rounding
-                // toward outside of sub-block. These will be used as
+                // toward outside of nano-block. These will be used as
                 // boundaries for partial vectors if needed.
                 auto ovbgn = round_down_flr(ebgn, vpts);
                 auto ovend = round_up_flr(eend, vpts);
@@ -604,14 +605,14 @@ namespace yask {
                              pmask >>= 1;
                              rmask >>= 1;
 
-                             // If the peel point is within the sub-block,
+                             // If the peel point is within the nano-block,
                              // set the next bit in the mask.
                              // Index is outer begin point plus this offset.
                              idx_t pi = ovbgn + pt[j];
                              if (pi >= ebgn)
                                  pmask |= mbit;
 
-                             // If the rem point is within the sub-block,
+                             // If the rem point is within the nano-block,
                              // put a 1 in the mask.
                              // Index is full-vector end point plus this offset.
                              pi = fvend + pt[j];
@@ -697,21 +698,17 @@ namespace yask {
             // Full rectilinear polytope of aligned clusters: use optimized
             // code for full clusters w/o masking.
             else {
-                // Stride sizes are based on cluster lengths (in vector units).
-                // This is actually overridded by the STRIDE macros generated
-                // by the YASK compiler, so this is not needed.
-                DOMAIN_VAR_LOOP_FAST(i, j)
-                    norm_fcidxs.stride[i] = dims->_cluster_mults[j]; // N vecs.
-
                 TRACE_MSG("calculating clusters within "
                           "normalized local indices [" <<
                           norm_fcidxs.begin.make_val_str() <<
                           " ... " << norm_fcidxs.end.make_val_str() <<
-                          ") by region thread " << region_thread_idx <<
+                          ") with stride " << norm_fcidxs.stride.make_val_str() <<
+                          (need_pico_loops ? " with" : " without") << " pico loops"
+                          " by region thread " << region_thread_idx <<
                           " and block thread " << block_thread_idx);
                 
                 // Perform the calculations in this block.
-                calc_clusters_opt2(cp,
+                calc_clusters_opt2(cp, need_pico_loops,
                                    region_thread_idx, block_thread_idx,
                                    norm_fcidxs);
                 
@@ -813,7 +810,7 @@ namespace yask {
                             // macros generated by the YASK compiler, so
                             // these settings are not needed.
                             auto fv_part(norm_fcidxs);
-                            fv_part.stride.set_from_const(1); // 1-vector stride.
+                            ///fv_part.stride.set_from_const(1); // 1-vector stride.
                             auto pv_part(norm_fvidxs);
 
                             bool fv_needed = true;
@@ -907,7 +904,7 @@ namespace yask {
                 #endif
             }
             
-        } // calc_sub_block_opt.
+        } // calc_nano_block_opt.
 
         // Calculate a tile of clusters.
         // This should be the hottest function for most stencils.
@@ -916,17 +913,21 @@ namespace yask {
         // Static to make sure offload doesn't need 'this'.
         static void
         calc_clusters_opt2(StencilCoreDataT* corep,
+                           bool need_pico_loops,
                            int region_thread_idx,
                            int block_thread_idx,
-                           const ScanIndices& norm_idxs) {
+                           ScanIndices& norm_idxs) {
 
-            FORCE_INLINE_RECURSIVE {
-
-                // Call code from stencil compiler.
+            // Call code from stencil compiler.
+            if (need_pico_loops)
+                StencilBundleImplT::
+                    calc_clusters_with_pico_loops(corep,
+                                                  region_thread_idx, block_thread_idx,
+                                                  norm_idxs);
+            else
                 StencilBundleImplT::calc_clusters(corep,
                                                   region_thread_idx, block_thread_idx,
                                                   norm_idxs);
-            }
         }
 
         // Calculate a tile of vectors using the given mask.
@@ -937,7 +938,7 @@ namespace yask {
         calc_vectors_opt2(StencilCoreDataT* corep,
                           int region_thread_idx,
                           int block_thread_idx,
-                          const ScanIndices& norm_idxs,
+                          ScanIndices& norm_idxs,
                           bit_mask_t mask) {
             
             FORCE_INLINE_RECURSIVE {

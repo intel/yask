@@ -65,8 +65,9 @@ our @log_keys =
    'vector size',
    'num regions per local-domain per step',
    'num blocks per region per step',
-   'num mini-blocks per block per step',
-   'num sub-blocks per mini-block per step',
+   'num micro-blocks per block per step',
+   'num nano-blocks per micro-block per step',
+   'num pico-blocks per nano-block per step',
    'extra padding',
    'minimum padding',
    'L1 prefetch distance',
@@ -77,10 +78,12 @@ our @log_keys =
 
 # Keys set with custom code.
 my $linux_key = "Linux kernel";
+my $hostname_key = "hostname";
 my $nodes_key = "MPI node(s)";
 my $val_key = "validation results";
 our @special_log_keys =
   (
+   $hostname_key,
    $linux_key,
    $nodes_key,
    $val_key,
@@ -93,13 +96,14 @@ our @size_log_keys =
    'local-domain size',
    'region size',
    'block size',
-   'mini-block size',
-   'sub-block size',
+   'micro-block size',
+   'nano-block size',
+   'pico-block size',
    'local-domain-tile size',
    'region-tile size',
    'block-tile size',
-   'mini-block-tile size',
-   'sub-block-tile size',
+   'micro-block-tile size',
+   'nano-block-tile size',
   );
 
 # System settings.
@@ -226,6 +230,8 @@ sub getResultsFromLine($$) {
   $line =~ s/grid/var/g;
   $line =~ s/Grid/Var/g;
   $line =~ s/target.ISA/target/g;
+  $line =~ s/mini([_-])bl/micro${1}bl/g;
+  $line =~ s/sub([_-])bl/nano${1}bl/g;
   
   # special cases for manual parsing...
 
@@ -243,7 +249,10 @@ sub getResultsFromLine($$) {
   # Output of 'uname -a'
   elsif ($line =~ /^\s*Linux\s/) {
     my @w = split ' ', $line;
-    $results->{$linux_key} = $w[2]; # 'Linux' hostname kernel ...
+
+    # 'Linux' hostname kernel ...
+    $results->{$hostname_key} = $w[1];
+    $results->{$linux_key} = $w[2];
   }
 
   # MPI node names.
@@ -350,4 +359,3 @@ sub printCsvValues($$) {
 # return with a 1 so require() will not fail...
 #
 1;
-

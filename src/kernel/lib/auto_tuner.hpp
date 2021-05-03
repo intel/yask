@@ -56,12 +56,12 @@ namespace yask {
         double warmup_steps = 100;
         double warmup_secs = 0.5; // end warmup when either warmup_steps OR warmup_secs is reached.
         idx_t trial_steps = 100;
-        double trial_secs = 0.25; // end trial when either trial_steps OR trial_secs is reached.
+        double trial_secs = 0.5; // end trial when either trial_steps OR trial_secs is reached.
         double cutoff = 0.8;   // can stop eval if current rate < best rate * cutoff;
-        idx_t min_dist = 4;     // min distance to move in any direction per trial.
-        idx_t min_pts = 512; // 8^3; min points in a block.
-        idx_t min_blks = 1;  // min number of blocks.
-        idx_t max_radius = 8;   // starting search radius.
+        idx_t min_dist = 1;     // min distance to move in any direction per trial.
+        idx_t min_pts = 1; // min pts in an area.
+        idx_t min_blks = 1;  // min number of areas.
+        idx_t max_radius = 8;   // starting search radius; should be a power of 2.
 
         // State of the search of one set of target sizes.
         struct AutoTunerState {
@@ -105,7 +105,9 @@ namespace yask {
         bool done = false;
         IdxTuple* outerp = 0;
         IdxTuple* targetp = 0;
-        idx_t target_steps = 0;
+
+        // Saved temporal sizes.
+        idx_t bt = 0, mbt = 0;
  
         bool check_sizes(const IdxTuple& sizes);
         bool next_target();

@@ -31,36 +31,36 @@ using namespace std;
 
 namespace yask {
 
-    // Calculate results within a mini-block defined by 'mini_block_idxs'.
-    // This is called by StencilContext::calc_mini_block() for each bundle.
+    // Calculate results within a micro-block defined by 'micro_block_idxs'.
+    // This is called by StencilContext::calc_micro_block() for each bundle.
     // It is here that any required scratch-var stencils are evaluated
     // first and then the non-scratch stencils in the stencil bundle.
     // It is also here that the boundaries of the bounding-box(es) of the bundle
     // are respected. There must not be any temporal blocking at this point.
-    void StencilBundleBase::calc_mini_block(int region_thread_idx,
+    void StencilBundleBase::calc_micro_block(int region_thread_idx,
                                             KernelSettings& settings,
-                                            const ScanIndices& mini_block_idxs) {
+                                            const ScanIndices& micro_block_idxs) {
         STATE_VARS(this);
-        TRACE_MSG("calc_mini_block('" << get_name() << "'): [" <<
-                   mini_block_idxs.begin.make_val_str() << " ... " <<
-                   mini_block_idxs.end.make_val_str() << ") by " <<
-                   mini_block_idxs.stride.make_val_str() <<
+        TRACE_MSG("calc_micro_block('" << get_name() << "'): [" <<
+                   micro_block_idxs.begin.make_val_str() << " ... " <<
+                   micro_block_idxs.end.make_val_str() << ") by " <<
+                   micro_block_idxs.stride.make_val_str() <<
                    " by region thread " << region_thread_idx);
         assert(!is_scratch());
 
         // No TB allowed here.
-        assert(abs(mini_block_idxs.get_overall_range(step_posn)) == 1);
+        assert(abs(micro_block_idxs.get_overall_range(step_posn)) == 1);
 
         // Nothing to do if outer BB is empty.
         if (_bundle_bb.bb_num_points == 0) {
-            TRACE_MSG("calc_mini_block: empty BB");
+            TRACE_MSG("calc_micro_block: empty BB");
             return;
         }
 
         // TODO: if >1 BB, check limits of outer one first to save time.
 
         // Set number of threads in this block.
-        // This will be the number of sub-blocks done in parallel.
+        // This will be the number of nano-blocks done in parallel.
         int nbt = _context->set_block_threads();
 
         // Thread-binding info.
@@ -68,12 +68,12 @@ namespace yask {
         // and binding is enabled.
         bool bind_threads = nbt > 1 && settings.bind_block_threads;
         int bind_posn = settings._bind_posn;
-        idx_t bind_slab_pts = settings._sub_block_sizes[bind_posn]; // Other sizes not used.
+        idx_t bind_slab_pts = settings._nano_block_sizes[bind_posn]; // Other sizes not used.
 
         // Loop through each solid BB for this bundle.
-        // For each BB, calc intersection between it and 'mini_block_idxs'.
-        // If this is non-empty, apply the bundle to all its required sub-blocks.
-        TRACE_MSG("calc_mini_block('" << get_name() << "'): checking " <<
+        // For each BB, calc intersection between it and 'micro_block_idxs'.
+        // If this is non-empty, apply the bundle to all its required nano-blocks.
+        TRACE_MSG("calc_micro_block('" << get_name() << "'): checking " <<
                    _bb_list.size() << " BB(s)");
         int bbn = 0;
   	for (auto& bb : _bb_list) {
@@ -82,17 +82,17 @@ namespace yask {
             if (bb.bb_num_points == 0)
                 bb_ok = false;
 
-            // Trim the mini-block indices based on the bounding box(es)
+            // Trim the micro-block indices based on the bounding box(es)
             // for this bundle.
-            ScanIndices mb_idxs(mini_block_idxs);
+            ScanIndices mb_idxs(micro_block_idxs);
             DOMAIN_VAR_LOOP_FAST(i, j) {
 
                 // Begin point.
-                auto bbegin = max(mini_block_idxs.begin[i], bb.bb_begin[j]);
+                auto bbegin = max(micro_block_idxs.begin[i], bb.bb_begin[j]);
                 mb_idxs.begin[i] = bbegin;
 
                 // End point.
-                auto bend = min(mini_block_idxs.end[i], bb.bb_end[j]);
+                auto bend = min(micro_block_idxs.end[i], bb.bb_end[j]);
                 mb_idxs.end[i] = bend;
 
                 // Anything to do?
@@ -104,12 +104,12 @@ namespace yask {
 
             // nothing to do?
             if (!bb_ok) {
-                TRACE_MSG("calc_mini_block for bundle '" << get_name() <<
+                TRACE_MSG("calc_micro_block for bundle '" << get_name() <<
                            "': no overlap between bundle " << bbn << " and current block");
                 continue; // to next BB.
             }
 
-            TRACE_MSG("calc_mini_block('" << get_name() <<
+            TRACE_MSG("calc_micro_block('" << get_name() <<
                        "'): after trimming for BB " << bbn << ": [" <<
                        mb_idxs.begin.make_val_str() <<
                        " ... " << mb_idxs.end.make_val_str() << ")");
@@ -127,16 +127,16 @@ namespace yask {
                 ScanIndices adj_mb_idxs = sg->adjust_span(region_thread_idx, mb_idxs);
 
                 // Tweak settings for adjusted indices.
-                adj_mb_idxs.adjust_from_settings(settings._mini_block_sizes,
-                                                 settings._mini_block_tile_sizes,
-                                                 settings._sub_block_sizes);
+                adj_mb_idxs.adjust_from_settings(settings._micro_block_sizes,
+                                                 settings._micro_block_tile_sizes,
+                                                 settings._nano_block_sizes);
 
                 // If binding threads to data.
                 if (bind_threads) {
 
                     // Tweak settings for adjusted indices.  This sets
-                    // up the sub-blocks as multiple slabs perpendicular
-                    // to the binding dim within the mini-block.
+                    // up the nano-blocks as multiple slabs perpendicular
+                    // to the binding dim within the micro-block.
                     DOMAIN_VAR_LOOP_FAST(i, j) {
 
                         // If this is the binding dim, set stride size
@@ -150,13 +150,13 @@ namespace yask {
 
                         // If this is not the binding dim, set stride
                         // size to full width.  For now, this is the
-                        // only option for mini-block shapes when
+                        // only option for micro-block shapes when
                         // binding.  TODO: consider other options.
                         else
                             adj_mb_idxs.stride[i] = adj_mb_idxs.get_overall_range(i);
                     }
 
-                    TRACE_MSG("calc_mini_block('" << get_name() << "'): " <<
+                    TRACE_MSG("calc_micro_block('" << get_name() << "'): " <<
                               " for reqd bundle '" << sg->get_name() << "': [" <<
                               adj_mb_idxs.begin.make_val_str() << " ... " <<
                               adj_mb_idxs.end.make_val_str() << ") by " <<
@@ -165,41 +165,41 @@ namespace yask {
                               " with " << nbt << " block thread(s) bound to data");
 
                     // Start threads within a block.  Each of these threads
-                    // will eventually work on a separate sub-block.  This
+                    // will eventually work on a separate nano-block.  This
                     // is nested within an OMP region thread.
                     _Pragma("omp parallel proc_bind(spread)") {
                         assert(omp_get_level() == 2);
                         assert(omp_get_num_threads() == nbt);
                         int block_thread_idx = omp_get_thread_num();
 
-                        // Run the mini-block loops on all block threads and
-                        // call calc_sub_block() only by the designated
+                        // Run the micro-block loops on all block threads and
+                        // call calc_nano_block() only by the designated
                         // thread for the given slab index in the binding
                         // dim. This is an explicit replacement for "normal"
                         // OpenMP scheduling.
                         
-                        // Disable the OpenMP construct in the mini-block loop
+                        // Disable the OpenMP construct in the micro-block loop
                         // because we're already in the parallel section.
-                        #define MINI_BLOCK_OMP_PRAGMA
+                        #define MICRO_BLOCK_OMP_PRAGMA
 
                         // Loop prefix.
-                        #define MINI_BLOCK_LOOP_INDICES adj_mb_idxs
-                        #define MINI_BLOCK_BODY_INDICES sub_blk_range
-                        #define MINI_BLOCK_USE_LOOP_PART_0
-                        #include "yask_mini_block_loops.hpp"
+                        #define MICRO_BLOCK_LOOP_INDICES adj_mb_idxs
+                        #define MICRO_BLOCK_BODY_INDICES nano_blk_range
+                        #define MICRO_BLOCK_USE_LOOP_PART_0
+                        #include "yask_micro_block_loops.hpp"
 
                         // Loop body.
                         const idx_t idx_ofs = 0x1000; // to help keep pattern when idx is neg.
-                        auto bind_elem_idx = sub_blk_range.start[bind_posn];
+                        auto bind_elem_idx = nano_blk_range.start[bind_posn];
                         auto bind_slab_idx = idiv_flr(bind_elem_idx + idx_ofs, bind_slab_pts);
                         auto bind_thr = imod_flr<idx_t>(bind_slab_idx, nbt);
                         if (block_thread_idx == bind_thr)
-                            sg->calc_sub_block(region_thread_idx, block_thread_idx,
-                                               settings, sub_blk_range);
+                            sg->calc_nano_block(region_thread_idx, block_thread_idx,
+                                               settings, nano_blk_range);
 
                         // Loop sufffix.
-                        #define MINI_BLOCK_USE_LOOP_PART_1
-                        #include "yask_mini_block_loops.hpp"
+                        #define MICRO_BLOCK_USE_LOOP_PART_1
+                        #include "yask_micro_block_loops.hpp"
 
                     } // Parallel region.
                 } // Binding threads to data.
@@ -208,7 +208,7 @@ namespace yask {
                 // (This is the more common case.)
                 else {
 
-                    TRACE_MSG("calc_mini_block('" << get_name() << "'): " <<
+                    TRACE_MSG("calc_micro_block('" << get_name() << "'): " <<
                               " for reqd bundle '" << sg->get_name() << "': [" <<
                               adj_mb_idxs.begin.make_val_str() << " ... " <<
                               adj_mb_idxs.end.make_val_str() << ") by " <<
@@ -216,23 +216,23 @@ namespace yask {
                               " by region thread " << region_thread_idx <<
                               " with " << nbt << " block thread(s) NOT bound to data");
 
-                    // Call calc_sub_block() with a different thread for
-                    // each sub-block using standard OpenMP scheduling.
+                    // Call calc_nano_block() with a different thread for
+                    // each nano-block using standard OpenMP scheduling.
                     
                     // Loop prefix.
-                    #define MINI_BLOCK_LOOP_INDICES adj_mb_idxs
-                    #define MINI_BLOCK_BODY_INDICES sub_blk_range
-                    #define MINI_BLOCK_USE_LOOP_PART_0
-                    #include "yask_mini_block_loops.hpp"
+                    #define MICRO_BLOCK_LOOP_INDICES adj_mb_idxs
+                    #define MICRO_BLOCK_BODY_INDICES nano_blk_range
+                    #define MICRO_BLOCK_USE_LOOP_PART_0
+                    #include "yask_micro_block_loops.hpp"
 
                     // Loop body.
                     int block_thread_idx = omp_get_thread_num();
-                    sg->calc_sub_block(region_thread_idx, block_thread_idx,
-                                       settings, sub_blk_range);
+                    sg->calc_nano_block(region_thread_idx, block_thread_idx,
+                                       settings, nano_blk_range);
 
                     // Loop suffix.
-                    #define MINI_BLOCK_USE_LOOP_PART_1
-                    #include "yask_mini_block_loops.hpp"
+                    #define MICRO_BLOCK_USE_LOOP_PART_1
+                    #include "yask_micro_block_loops.hpp"
 
                 } // OMP parallel when binding threads to data.
             } // bundles.
@@ -290,7 +290,7 @@ namespace yask {
                     adj_idxs.end[i] = idxs.end[i] + rh;
 
                     // Make sure var covers index bounds.
-                    TRACE_MSG("adjust_span: mini-blk [" <<
+                    TRACE_MSG("adjust_span: micro-blk [" <<
                               idxs.begin[i] << "..." <<
                               idxs.end[i] << ") adjusted to [" <<
                               adj_idxs.begin[i] << "..." <<

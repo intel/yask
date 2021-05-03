@@ -592,9 +592,6 @@ sub beginLoop($$$$$$$) {
 
     # Start "normal" nested loops.
     if ($features & $bNested) {
-        push @$code,
-            "\n // Loop through the ranges of $ndims dim(s).",
-            " $itype $ivar = -1;\n";
         push @$code, @$prefix if defined $prefix;
         for my $i (0 .. $ndims-1) {
             my $dim = $loopDims->[$i];
@@ -603,9 +600,7 @@ sub beginLoop($$$$$$$) {
             push @$code,
                 " for ($itype $divar = 0; $divar < $nvar; $divar++)";
         }
-        push @$code,
-            " { {",
-            "  $ivar++;";
+        push @$code, " { {";
     }
 
     # Start a parallel region if using manual distribution.
@@ -809,8 +804,19 @@ sub getArgs($$) {
                 if !defined $arg2;
             die "Error: non-numerical token after '$arg'.\n"
                 if $arg2 !~ /^[-]?\d+$/;
-            for my $i ($prevArg .. $arg2) {
-                push @args, $i;
+            if ($prevArg == $arg2) {
+                push @args, $arg2;
+            }
+            elsif ($prevArg < $arg2) {
+                for my $i ($prevArg .. $arg2) {
+                    push @args, $i;
+                }
+            }
+            else {
+                # Reverse args.
+                for (my $i = $prevArg; $i >= $arg2; $i--) {
+                    push @args, $i;
+                }
             }
         }
 
@@ -979,11 +985,22 @@ sub processCode($) {
                 if ($is_inner) {
 
                     # Start-stop indices for body.
-                    # Using a copy so it will become OMP private.
-                    push @code, 
-                        " // Local copy of indices for loop body.",
-                        " ScanIndices ".locVar()."($macroPrefix$inputVar);",
-                        setOutVar(@loopStack);
+                    # NB: always use a copy; ref not working as of 4/30/2021.
+                    if ($features & $bOmpPar) {
+                    
+                        # Using a copy so it will become OMP private.
+                        push @code,
+                            " // Local copy of indices for loop body.",
+                            " ScanIndices ".locVar()."($macroPrefix$inputVar);",
+                            setOutVar(@loopStack);
+                    } else {
+
+                        # Just a reference if no OMP.
+                        push @code,
+                            " // Ref to indices for loop body.",
+                            " ScanIndices& ".locVar()." = $macroPrefix$inputVar;",
+                            setOutVar(@loopStack);
+                    }
 
                     # Macro break for body: end one and start next one.
                     push @code,
@@ -1003,7 +1020,7 @@ sub processCode($) {
                 my $ivar = "dummy" . scalar(@loopCounts);
                 push @code, " // Dummy loop.",
                     @loopPrefix,
-                    " for (int $ivar = 0; $ivar < 1; $ivar++) {";
+                    " for (int $ivar = 0; $ivar < 1; $ivar++) { {";
             }
 
             # clear data for this loop so we'll be ready for a nested loop.

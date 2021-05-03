@@ -547,116 +547,158 @@ namespace yask {
 
             // Vector/Cluster code.
             for (bool do_cluster : { false, true }) {
+                for (bool do_pico : { false, true }) {
 
-                // Cluster eq_bundle at same 'ei' index.
-                // This should be the same eq-bundle because it was copied from the
-                // scalar one.
-                auto& vceq = do_cluster ?
-                    _cluster_eq_bundles.get_all().at(ei) : eq;
-                assert(eg_desc == vceq->get_descr());
+                    // Not using vectors with pico loops.
+                    if (!do_cluster && do_pico)
+                        continue;
 
-                // Create vector info for this eq_bundle.  The visitor is
-                // accepted at all nodes in the cluster AST; for each var
-                // access node in the AST, the vectors needed are determined
-                // and saved in the visitor.
-                VecInfoVisitor vv(_dims);
-                vceq->visit_eqs(&vv);
+                    // Cluster eq_bundle at same 'ei' index.
+                    // This should be the same eq-bundle because it was copied from the
+                    // scalar one.
+                    auto& vceq = do_cluster ?
+                        _cluster_eq_bundles.get_all().at(ei) : eq;
+                    assert(eg_desc == vceq->get_descr());
 
-                // Collect stats.
-                CounterVisitor cv;
-                vceq->visit_eqs(&cv);
-                int num_results = do_cluster ?
-                    _dims._cluster_pts.product() :
-                    _dims._fold.product();
+                    // Create vector info for this eq_bundle.  The visitor is
+                    // accepted at all nodes in the cluster AST; for each var
+                    // access node in the AST, the vectors needed are determined
+                    // and saved in the visitor.
+                    VecInfoVisitor vv(_dims);
+                    vceq->visit_eqs(&vv);
 
-                // Vector/cluster vars.
-                string idim = _dims._inner_dim;
-                string vcstr = do_cluster ? "cluster" : "vector";
-                string funcstr = "calc_" + vcstr + "s";
-                string nvecs = do_cluster ? "CMULT_" + all_caps(idim) : "1";
-                string nelems = (do_cluster ? nvecs + " * ": "") + "VLEN_" + all_caps(idim);
-                string write_mask = do_cluster ? "" : "write_mask";
+                    // Collect stats.
+                    CounterVisitor cv;
+                    vceq->visit_eqs(&cv);
+                    int num_results = do_cluster ?
+                        _dims._cluster_pts.product() :
+                        _dims._fold.product();
 
-                // Loop-calculation code.
-                // Function header.
-                string istart = "start_" + idim;
-                string istop = "stop_" + idim;
-                string istep = "step_" + idim;
-                string iestep = "step_" + idim + "_elem";
-                os << endl << " // Calculate a tile of " << vcstr << "s bounded by 'norm_idxs'.\n";
-                if (do_cluster)
-                    os << " // Each cluster calculates '" << _dims._cluster_pts.make_dim_val_str(" * ") <<
-                        "' point(s) containing " << _dims._cluster_mults.product() << " '" <<
-                        _dims._fold.make_dim_val_str(" * ") << "' vector(s).\n";
-                else
-                    os << " // Each vector calculates '" << _dims._fold.make_dim_val_str(" * ") <<
-                        "' point(s).\n";
-                os << " // Indices must be rank-relative (not global).\n"
-                    " // Indices must be normalized, i.e., already divided by VLEN_*.\n"
-                    " // SIMD calculations use " << vv.get_num_points() <<
-                    " vector block(s) created from " << vv.get_num_aligned_vecs() <<
-                    " aligned vector-block(s).\n"
-                    " // There are approximately " << (stats.get_num_ops() * num_results) <<
-                    " FP operation(s) per inner-loop iteration.\n" <<
-                    " static void " << funcstr << "(" <<
-                    _core_t << "* core_data, int core_idx, int block_thread_idx,"
-                    " const ScanIndices& norm_idxs";
-                if (!do_cluster)
-                    os << ", bit_mask_t " << write_mask;
-                os << ") {\n"
-                    " assert(core_data);\n"
-                    " assert(core_data->_thread_core_list.get());\n"
-                    " auto& thread_core_data = core_data->_thread_core_list[core_idx];\n"
-                    " const Indices& idxs = norm_idxs.start;\n";
-                print_indices(os, true, false);
+                    // Vector/cluster vars.
+                    string idim = _dims._inner_dim;
+                    string vcstr = do_cluster ? "cluster" : "vector";
+                    string funcstr = "calc_" + vcstr + "s";
+                    if (do_pico)
+                        funcstr += "_with_pico_loops";
+                    string nvecs = do_cluster ? "CMULT_" + all_caps(idim) : "1";
+                    string nelems = (do_cluster ? nvecs + " * ": "") + "VLEN_" + all_caps(idim);
+                    string write_mask = do_cluster ? "" : "write_mask";
+
+                    // Loop-calculation code.
+                    // Function header.
+                    string istart = "start_" + idim;
+                    string istop = "stop_" + idim;
+                    string istep = "step_" + idim;
+                    string iestep = "step_" + idim + "_elem";
+                    os << endl << " // Calculate a nano-block of " << vcstr << "s bounded by 'norm_idxs'.\n";
+                    if (do_pico)
+                        os << " // There are pico-loops inside nano-loops.\n";
+                    else
+                        os << " // There are no pico-loops inside nano-loops.\n";
+                    if (do_cluster)
+                        os << " // Each cluster calculates '" << _dims._cluster_pts.make_dim_val_str(" * ") <<
+                            "' point(s) containing " << _dims._cluster_mults.product() << " '" <<
+                            _dims._fold.make_dim_val_str(" * ") << "' vector(s).\n";
+                    else
+                        os << " // Each vector calculates '" << _dims._fold.make_dim_val_str(" * ") <<
+                            "' point(s).\n";
+                    os << " // Indices must be rank-relative (not global).\n"
+                        " // Indices must be normalized, i.e., already divided by VLEN_*.\n"
+                        " // SIMD calculations use " << vv.get_num_points() <<
+                        " vector block(s) created from " << vv.get_num_aligned_vecs() <<
+                        " aligned vector-block(s).\n"
+                        " // There are approximately " << (stats.get_num_ops() * num_results) <<
+                        " FP operation(s) per inner-loop iteration.\n" <<
+                        " static void " << funcstr << "(" <<
+                        _core_t << "* core_data, int core_idx, int block_thread_idx,"
+                        " ScanIndices& norm_nb_idxs";
+                    if (!do_cluster)
+                        os << ", bit_mask_t " << write_mask;
+                    os << ") {\n"
+                        " FORCE_INLINE_RECURSIVE {\n"
+                        " assert(core_data);\n"
+                        " assert(core_data->_thread_core_list.get());\n"
+                        " auto& thread_core_data = core_data->_thread_core_list[core_idx];\n"
+                        " const Indices& idxs = norm_nb_idxs.start;\n";
+                    print_indices(os, true, false);
  
-                // C++ vector print assistant.
-                CppVecPrintHelper* vp = new_cpp_vec_print_helper(vv, cv);
-                vp->set_write_mask(write_mask);
+                    // C++ vector print assistant.
+                    CppVecPrintHelper* vp = new_cpp_vec_print_helper(vv, cv);
+                    vp->set_write_mask(write_mask);
 
-                // Print loop-invariant values, if any.
-                // Store them in the CppVecPrintHelper for later use in the loop body.
-                os << "\n ////// Loop-invariant values.\n";
-                CppPreLoopPrintVisitor plv(os, *vp);
-                vceq->visit_eqs(&plv);
+                    // Print loop-invariant values, if any.
+                    // Store them in the CppVecPrintHelper for later use in the loop body.
+                    os << "\n ////// Loop-invariant values.\n";
+                    CppPreLoopPrintVisitor plv(os, *vp);
+                    vceq->visit_eqs(&plv);
 
-                // Actual computation loop.
-                // Include generated loop-nest.
-                os <<
-                    "\n // Make more efficient expressions for sub-block loop vars.\n"
-                    " // (Subtract one from 'dn' to convert stencil dims to domain dims.)\n"
-                    "#define SUB_BLOCK_STRIDE(dn) " <<
-                    (do_cluster ? "cluster_mults[dn-1]" : "idx_t(1)") << "\n"
-                    "#define SUB_BLOCK_ALIGN(dn) idx_t(1)\n"
-                    "#define SUB_BLOCK_ALIGN_OFS(dn) idx_t(0)\n"
-                    "\n ////// Loop prefix.\n"
-                    "#define SUB_BLOCK_LOOP_INDICES norm_idxs\n"
-                    "#define SUB_BLOCK_BODY_INDICES norm_idx\n"
-                    "#define SUB_BLOCK_USE_LOOP_PART_0\n"
-                    "#include \"yask_sub_block_loops.hpp\"\n"
-                    "\n ////// Loop body. Just doing one, so don't need stop indices.\n"
-                    " Indices& idxs = norm_idx.start;\n";
-                print_indices(os, false, true);
-                vp->print_elem_indices(os);
+                    // Inner-loop strides.
+                    string inner_strides = do_cluster ? "cluster_mults[dn-1]" : "idx_t(1)";
+                    
+                    // Computation loops.
+                    // Include generated loop-nests.
+                    os <<
+                        "\n // Make more efficient expressions for nano loop vars.\n";
+                    if (!do_pico)
+                        os <<
+                            "#define NANO_BLOCK_STRIDE(dn) " << inner_strides << "\n";
+                    os <<
+                        "#define NANO_BLOCK_ALIGN(dn) idx_t(1)\n"
+                        "#define NANO_BLOCK_ALIGN_OFS(dn) idx_t(0)\n"
+                        "#define NANO_BLOCK_LOOP_INDICES norm_nb_idxs\n"
+                        "#define NANO_BLOCK_BODY_INDICES norm_nb_range\n"
+                        "\n ////// Loop prefix.\n"
+                        "#define NANO_BLOCK_USE_LOOP_PART_0\n"
+                        "#include \"yask_nano_block_loops.hpp\"\n";
+                    if (do_pico)
+                        os <<
+                            "\n // Pico loops inside nano loops.\n"
+                            " ScanIndices norm_pb_idxs = norm_nb_range.create_inner();\n"
+                            "\n // Make more efficient expressions for pico loop vars.\n"
+                            " // (Subtract one from 'dn' to convert stencil dims to domain dims.)\n"
+                            "#define PICO_BLOCK_STRIDE(dn) " << inner_strides << "\n"
+                            "#define PICO_BLOCK_ALIGN(dn) idx_t(1)\n"
+                            "#define PICO_BLOCK_ALIGN_OFS(dn) idx_t(0)\n"
+                            "#define PICO_BLOCK_LOOP_INDICES norm_pb_idxs\n"
+                            "#define PICO_BLOCK_BODY_INDICES norm_pb_range\n"
+                            "\n ////// Loop prefix.\n"
+                            "#define PICO_BLOCK_USE_LOOP_PART_0\n"
+                            "#include \"yask_pico_block_loops.hpp\"\n"
+                            "\n ////// Loop body. Just doing one, so don't need stop indices.\n"
+                            " Indices& idxs = norm_pb_range.start;\n";
+                    else
+                        os <<
+                            "\n ////// Loop body. Just doing one, so don't need stop indices.\n"
+                            " Indices& idxs = norm_nb_range.start;\n";
 
-                // Generate loop body using vars stored in print helper.
-                // Visit all expressions to cover the whole vector/cluster.
-                PrintVisitorBottomUp pcv(os, *vp);
-                vceq->visit_eqs(&pcv);
+                    // Get named indices from 'idxs'.
+                    print_indices(os, false, true);
+                    vp->print_elem_indices(os);
 
-                // Insert prefetches using vars stored in print helper for next iteration.
-                vp->print_prefetches(os, true);
+                    // Generate loop body using vars stored in print helper.
+                    // Visit all expressions to cover the whole vector/cluster.
+                    PrintVisitorBottomUp pcv(os, *vp);
+                    vceq->visit_eqs(&pcv);
 
-                // End of loop.
-                os <<
-                    "\n ////// Loop sufffix.\n"
-                    "#define SUB_BLOCK_USE_LOOP_PART_1\n"
-                    "#include \"yask_sub_block_loops.hpp\"\n";
+                    // Insert prefetches using vars stored in print helper for next iteration.
+                    vp->print_prefetches(os, true);
 
-                // End of function.
-                os << "} // " << funcstr << ".\n";
-                delete vp;
-            }
+                    // End of loops.
+                    os <<
+                        "\n ////// Loop suffixes.\n";
+                    if (do_pico)
+                        os <<
+                            "#define PICO_BLOCK_USE_LOOP_PART_1\n"
+                            "#include \"yask_pico_block_loops.hpp\"\n";
+                    os <<
+                        "#define NANO_BLOCK_USE_LOOP_PART_1\n"
+                        "#include \"yask_nano_block_loops.hpp\"\n";
+
+                    // End of recursive block & function.
+                    os << "} } // " << funcstr << ".\n";
+                    delete vp;
+                } // pico.
+            } // cluster/vector
 
             os << "}; // " << egs_name << ".\n" // end of struct.
                 " static_assert(std::is_trivially_copyable<" << egs_name << ">::value,"
