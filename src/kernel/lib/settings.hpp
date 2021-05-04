@@ -169,7 +169,7 @@ namespace yask {
     };
     typedef std::shared_ptr<Dims> DimsPtr;
 
-    // Utility to determine number of points in a "sizes" var.
+    // Utility to determine number of spatial points in a "sizes" var.
     inline idx_t get_num_domain_points(const IdxTuple& sizes) {
         host_assert(sizes.get_num_dims() == NUM_STENCIL_DIMS);
         idx_t pts = 1;

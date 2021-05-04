@@ -69,13 +69,16 @@ namespace yask {
             _settings->_tune_blks) {
             targetp = &_settings->_block_sizes;
             outerp = &_settings->_region_sizes;
-            min_pts = 512; // 8^3; min points in a block.
 
             // Set min blocks to number of region threads.
             #ifndef USE_OFFLOAD
             int rt=0, bt=0;
             get_num_comp_threads(rt, bt);
-            min_blks = rt;
+            min_blks = max<int>(rt / 2, 1);
+
+            // Set min pts.
+            min_pts = max<int>(min<int>(get_num_domain_points(*outerp) / min_blks, 512), 1); // 512=8^3.
+
             #endif
             AT_DEBUG_MSG("searching block sizes...");
         }
@@ -181,18 +184,22 @@ namespace yask {
     // Check whether sizes within search limits.
     bool AutoTuner::check_sizes(const IdxTuple& bsize) {
         bool ok = true;
+        AT_TRACE_MSG("checking size "  <<
+                     bsize.make_dim_val_str(" * "));
 
         // Too small?
-        if (ok && get_num_domain_points(bsize) < min_pts) {
+        if (get_num_domain_points(bsize) < min_pts) {
             at_state.n2small++;
+            AT_TRACE_MSG("too small");
             ok = false;
         }
 
         // Too few?
-        else if (ok) {
+        else {
             idx_t nblks = get_num_domain_points(*outerp) /
                 get_num_domain_points(bsize);
             if (nblks < min_blks) {
+                AT_TRACE_MSG("too big");
                 ok = false;
                 at_state.n2big++;
             }
@@ -317,7 +324,7 @@ namespace yask {
                     auto& dname = odim._get_name(); // a domain-dim name.
                     auto& dofs = odim.get_val(); // always [0..2].
 
-                    // Min and max sizes of this dim.
+                    // Min and max sizes in this dim.
                     auto dmin = dims->_cluster_pts[dname];
                     auto dmax = (*outerp)[dname];
 
@@ -349,34 +356,32 @@ namespace yask {
                         break;  // out of dim-loop.
                     }
 
-                    // Too small?
-                    if (sz < dmin) {
-                        at_state.n2small++;
-                        ok = false;
-                        break;  // out of dim-loop.
-                    }
-
                     // Adjustments.
-                    sz = min(sz, dmax);
+                    sz = max(sz, dmin);
                     sz = ROUND_UP(sz, dmin);
+                    sz = min(sz, dmax);
 
                     // Save.
                     bsize[dname] = sz;
 
                 } // domain dims.
-                AT_TRACE_MSG("checking size "  <<
-                             bsize.make_dim_val_str(" * "));
 
                 // Check sizes.
                 if (ok && !check_sizes(bsize))
                     ok = false;
 
-                // Valid size and not already checked?
-                if (ok && at_state.results.count(bsize) == 0) {
+                // Valid size and not already evaluated?
+                if (ok) {
+                    if (at_state.results.count(bsize) > 0)
+                        AT_TRACE_MSG("already evaluated");
+                    else {
+                        AT_TRACE_MSG("exiting eval() with new size");
 
-                    // Run next step with this size.
-                    *targetp = bsize;
-                    break;      // out of while(true) loop.
+                        // Run next step with this size.
+                        *targetp = bsize;
+                        apply(false);
+                        return;
+                    }
                 }
 
             } // valid neighbor index.
@@ -413,12 +418,15 @@ namespace yask {
                     // No more radii for this target.
                     else {
 
-                        // Apply current best result.
+                        // Apply current best result for this target.
                         apply(true);
 
                         // Move to next target.
-                        if (next_target())
-                            AT_TRACE_MSG("moving to next target");
+                        if (next_target()) {
+                            AT_TRACE_MSG("exiting eval() with new target");
+                            apply(false);
+                            return;
+                        }
 
                         // No more targets.
                         else {
@@ -431,14 +439,9 @@ namespace yask {
                     }
                 }
             } // beyond next neighbor of center.
-        } // search for new setting to try.
+        } // while(true) search for new setting to try.
 
-        // Fix settings for next step, but don't use best.
-        apply(false);
-        AT_TRACE_MSG("next size "  <<
-                     targetp->make_dim_val_str(" * "));
-
-        // Return to start next trial.
+        THROW_YASK_EXCEPTION("internal error: exited from infinite loop");
     } // eval.
 
     // Adjust related kernel settings to prepare for a run.
