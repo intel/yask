@@ -84,12 +84,19 @@ namespace yask {
 
         /// Get the target ISA.
         /**
-           @returns String describing the instruction-set architecture targeted
+           @returns String describing the instruction-set architecture of the CPU targeted
            during kernel compilation.
            See the allowed YASK kernel targets in yc_solution::set_target().
         */
         virtual std::string
         get_target() const =0;
+
+        /// Get whether the stencil kernel will be offloaded to a device.
+        /**
+           @returns _true_ if kernel will be offloaded or _false_ if not.
+        */
+        virtual bool
+        is_offloaded() const =0;
 
         /// Get the floating-point precision size.
         /**

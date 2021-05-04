@@ -148,22 +148,24 @@ public:
             // This code is run immediately after 'kernel_soln' is created.
             soln->CALL_AFTER_NEW_SOLUTION
                 (
-                 // Check target at kernel run-time.
-                 auto isa = kernel_soln.get_target();
-                 if (isa == "knl") {
-                     kernel_soln.set_block_size("x", 16);
-                     kernel_soln.set_block_size("y", 16);
-                     kernel_soln.set_block_size("z", 32);
-                 }
-                 else if (isa == "avx2") {
-                     kernel_soln.set_block_size("x", 64);
-                     kernel_soln.set_block_size("y", 16);
-                     kernel_soln.set_block_size("z", 96);
-                 }
-                 else {
-                     kernel_soln.set_block_size("x", 96);
-                     kernel_soln.set_block_size("y", 16);
-                     kernel_soln.set_block_size("z", 80);
+                 // Check CPU target at kernel run-time.
+                 if (!kernel_soln.is_offloaded()) {
+                     auto isa = kernel_soln.get_target();
+                     if (isa == "knl") {
+                         kernel_soln.set_block_size("x", 16);
+                         kernel_soln.set_block_size("y", 16);
+                         kernel_soln.set_block_size("z", 32);
+                     }
+                     else if (isa == "avx2") {
+                         kernel_soln.set_block_size("x", 64);
+                         kernel_soln.set_block_size("y", 16);
+                         kernel_soln.set_block_size("z", 96);
+                     }
+                     else {
+                         kernel_soln.set_block_size("x", 96);
+                         kernel_soln.set_block_size("y", 16);
+                         kernel_soln.set_block_size("z", 80);
+                     }
                  }
                  );
         }

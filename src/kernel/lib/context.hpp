@@ -582,6 +582,13 @@ namespace yask {
         virtual const std::string& get_description() const {
             return long_name;
         }
+        virtual bool is_offloaded() const {
+            #if USE_OFFLOAD
+            return true;
+            #else
+            return false;
+            #endif
+        }
         virtual void set_debug_output(yask_output_ptr debug) {
             KernelStateBase::set_debug_output(debug);
         }

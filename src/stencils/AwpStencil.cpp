@@ -531,26 +531,28 @@ namespace {
                 // This code is run immediately after 'kernel_soln' is created.
                 soln->CALL_AFTER_NEW_SOLUTION
                     (
-                     // Check target at kernel run-time.
-                     auto isa = kernel_soln.get_target();
-                     if (isa == "knl") {
+                     // Check CPU target at kernel run-time.
+                     if (!kernel_soln.is_offloaded()) {
+                         auto isa = kernel_soln.get_target();
+                         if (isa == "knl") {
 
-                         // Use half the threads: 2 threads on 2 cores per block.
-                         kernel_soln.apply_command_line_options("-thread_divisor 2 -block_threads 4");
+                             // Use half the threads: 2 threads on 2 cores per block.
+                             kernel_soln.apply_command_line_options("-thread_divisor 2 -block_threads 4");
                          
-                         kernel_soln.set_block_size("x", 48);
-                         kernel_soln.set_block_size("y", 48);
-                         kernel_soln.set_block_size("z", 112);
-                     }
-                     else if (isa == "avx2") {
-                         kernel_soln.set_block_size("x", 64);
-                         kernel_soln.set_block_size("y", 8);
-                         kernel_soln.set_block_size("z", 64);
-                     }
-                     else {
-                         kernel_soln.set_block_size("x", 116);
-                         kernel_soln.set_block_size("y", 8);
-                         kernel_soln.set_block_size("z", 128);
+                             kernel_soln.set_block_size("x", 48);
+                             kernel_soln.set_block_size("y", 48);
+                             kernel_soln.set_block_size("z", 112);
+                         }
+                         else if (isa == "avx2") {
+                             kernel_soln.set_block_size("x", 64);
+                             kernel_soln.set_block_size("y", 8);
+                             kernel_soln.set_block_size("z", 64);
+                         }
+                         else {
+                             kernel_soln.set_block_size("x", 116);
+                             kernel_soln.set_block_size("y", 8);
+                             kernel_soln.set_block_size("z", 128);
+                         }
                      }
                      );
             }

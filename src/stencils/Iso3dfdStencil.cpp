@@ -182,22 +182,24 @@ namespace {
                 // This code is run immediately after 'kernel_soln' is created.
                 soln->CALL_AFTER_NEW_SOLUTION
                     (
-                     // Check target at kernel run-time.
-                     auto isa = kernel_soln.get_target();
-                     if (isa == "knl") {
-                         kernel_soln.set_block_size("x", 160);
-                         kernel_soln.set_block_size("y", 256);
-                         kernel_soln.set_block_size("z", 96);
-                     }
-                     else if (isa == "avx2") {
-                         kernel_soln.set_block_size("x", 48);
-                         kernel_soln.set_block_size("y", 64);
-                         kernel_soln.set_block_size("z", 112);
-                     }
-                     else {
-                         kernel_soln.set_block_size("x", 96);
-                         kernel_soln.set_block_size("y", 28);
-                         kernel_soln.set_block_size("z", 96);
+                     // Check CPU target at kernel run-time.
+                     if (!kernel_soln.is_offloaded()) {
+                         auto isa = kernel_soln.get_target();
+                         if (isa == "knl") {
+                             kernel_soln.set_block_size("x", 160);
+                             kernel_soln.set_block_size("y", 256);
+                             kernel_soln.set_block_size("z", 96);
+                         }
+                         else if (isa == "avx2") {
+                             kernel_soln.set_block_size("x", 48);
+                             kernel_soln.set_block_size("y", 64);
+                             kernel_soln.set_block_size("z", 112);
+                         }
+                         else {
+                             kernel_soln.set_block_size("x", 96);
+                             kernel_soln.set_block_size("y", 28);
+                             kernel_soln.set_block_size("z", 96);
+                         }
                      }
                      );
             }
