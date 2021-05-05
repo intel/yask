@@ -666,7 +666,7 @@ namespace yask {
         //                                       start   stop  (index = 2)
 
         // Ctor.
-        ScanIndices(const Dims& dims, bool use_vec_align) :
+        ScanIndices(bool use_vec_align) :
             ndims(NUM_STENCIL_DIMS),
             begin(idx_t(0), ndims),
             end(idx_t(0), ndims),
@@ -684,16 +684,16 @@ namespace yask {
                 DOMAIN_VAR_LOOP_FAST(i, j)
                     align[i] = fold_pts[j];
         }
-        ScanIndices(const Dims& dims, bool use_vec_align, Indices* ofs) :
-            ScanIndices(dims, use_vec_align) {
+        ScanIndices(bool use_vec_align, Indices* ofs) :
+            ScanIndices(use_vec_align) {
             if (ofs) {
                 host_assert(ofs->get_num_dims() == ndims - 1);
                 DOMAIN_VAR_LOOP_FAST(i, j)
                     align_ofs[i] = (*ofs)[j];
             }
         }
-        ScanIndices(const Dims& dims, bool use_vec_align, IdxTuple* ofs) :
-            ScanIndices(dims, use_vec_align) {
+        ScanIndices(bool use_vec_align, IdxTuple* ofs) :
+            ScanIndices(use_vec_align) {
             if (ofs) {
                 host_assert(ofs->get_num_dims() == ndims - 1);
                 DOMAIN_VAR_LOOP_FAST(i, j)

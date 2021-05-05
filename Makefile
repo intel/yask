@@ -157,9 +157,9 @@ clean:
 realclean: clean
 	rm -rf $(LIB_OUT_DIR) $(BIN_OUT_DIR) $(BUILD_OUT_DIR)
 	rm -fv TAGS '*~'
-	- find * -name '*~' -print -delete
-	- find * -name '*.optrpt' -print -delete
-	- find * -name __pycache__ -print -delete
+	- find src include utils -name '*~' -print -delete
+	- find src -name '*.optrpt' -print -delete
+	- find src -name __pycache__ -print -delete
 	$(YC_MAKE) $@
 	$(YK_MAKE) $@
 	- find $(PY_OUT_DIR) -mindepth 1 '!' -name __init__.py -print -delete

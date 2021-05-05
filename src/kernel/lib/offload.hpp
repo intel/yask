@@ -25,6 +25,7 @@ IN THE SOFTWARE.
 
 // This file contains declarations and code needed for OpenMP offload.
 // Active when USE_OFFLOAD macro is set, otherwise stubs are provided.
+// Also see OMP_* macros in yask.hpp.
 
 #pragma once
 

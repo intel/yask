@@ -116,8 +116,11 @@ typedef std::uint64_t bit_mask_t;
 #define USE_OFFLOAD_NO_USM
 #endif
 
-#define OMP_DECL_TARGET _Pragma("omp declare target")
-#define OMP_END_DECL_TARGET _Pragma("omp end declare target")
+// Commenting these out for now, because "omp declare target"
+// doesn't seem to be required in most cases for the latest compiler;
+// worse, it often causes it to crash or return incorrect results.
+#define OMP_DECL_TARGET // _Pragma("omp declare target")
+#define OMP_END_DECL_TARGET // _Pragma("omp end declare target")
 
 #else
 #define OMP_DECL_TARGET

@@ -90,7 +90,7 @@ namespace yask {
 
         // Indices to loop through.
         // Init from begin & end tuples.
-        ScanIndices rank_idxs(*dims, false, &rank_domain_offsets);
+        ScanIndices rank_idxs(false, &rank_domain_offsets);
         rank_idxs.begin = begin;
         rank_idxs.end = end;
 
@@ -292,7 +292,7 @@ namespace yask {
             // calculations are made.
 
             // Indices needed for the 'rank' loops.
-            ScanIndices rank_idxs(*dims, true, &rank_domain_offsets);
+            ScanIndices rank_idxs(true, &rank_domain_offsets);
             rank_idxs.begin = begin;
             rank_idxs.end = end;
             rank_idxs.stride = stride;

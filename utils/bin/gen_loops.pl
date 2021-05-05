@@ -42,7 +42,7 @@ $| = 1;                         # autoflush.
 ##########
 # Globals.
 my %OPT;                        # cmd-line options.
-my @dims;                       # indices of dimensions.
+my @dims;                       # indices of all dimensions.
 my $inputVar = "LOOP_INDICES";   # input var macro.
 my $outputVar = "BODY_INDICES";  # output var.
 my $loopPart = "USE_LOOP_PART_"; # macro to enable specified loop part.
@@ -95,27 +95,26 @@ sub locVar {
     return "$macroPrefix$outputVar$part".idx(@_);
 }
 
-# Access values in input struct.
+# Names for vars used in the generated code.
+# Arg(s) are loop dim(s).
 sub beginVar {
-    return inVar("begin", @_);
+    return join('_', "begin", @_);
 }
 sub endVar {
-    return inVar("end", @_);
+    return join('_', "end", @_);
 }
 sub strideVar {
-    return inVar("stride", @_);
+    return join('_', "stride", @_);
 }
 sub alignVar {
-    return inVar("align", @_);
+    return join('_', "align", @_);
 }
 sub alignOfsVar {
-    return inVar("align_ofs", @_);
+    return join('_', "align_ofs", @_);
 }
 sub tileSizeVar {
-    return inVar("tile_size", @_);
+    return join('_', "tile_size", @_);
 }
-
-# These are generated scalars.
 sub adjAlignVar {
     return join('_', 'adj_align', @_);
 }
@@ -175,16 +174,77 @@ sub dimStr {
     return $s;
 }
 
-# set var for the body.
-sub setOutVar {
-    my @dims = @_;
+# copy vars from the input.
+sub getInVars() {
 
+    my $itype = indexType();
     my @stmts;
-    map {
+    for my $dim (@dims) {
+
+        # Vars from the struct.
+        my $bvar = beginVar($dim);
+        my $evar = endVar($dim);
+        my $svar = strideVar($dim);
+        my $avar = alignVar($dim);
+        my $aovar = alignOfsVar($dim);
+        my $tsvar = tileSizeVar($dim);
+        my $s0var = startVar($dim);
+        my $s1var = stopVar($dim);
+        my $ivar = indexVar($dim);
         push @stmts,
-            " ".locVar("start", $_)." = ".startVar($_).";",
-            " ".locVar("stop", $_)." = ".stopVar($_).";",
-            " ".locVar("cur_indices", $_)." = ".indexVar($_).";";
+            " // Extract input vars from struct for dim $dim.",
+            " const $itype $bvar = ".inVar("begin", $dim).";",
+            " const $itype $evar = ".inVar("end", $dim).";",
+            " const $itype $svar = ".inVar("stride", $dim).";",
+            " const $itype $avar = ".inVar("align", $dim).";",
+            " const $itype $aovar = ".inVar("align_ofs", $dim).";",
+            " const $itype $tsvar = ".inVar("tile_size", $dim).";",
+            " const $itype orig_$s0var = ".inVar("start", $dim).";",
+            " const $itype orig_$s1var = ".inVar("stop", $dim).";",
+            " const $itype orig_$ivar = ".inVar("cur_indices", $dim).";",
+    }
+    return @stmts;
+}
+
+# set var for the body.
+sub setOutVars {
+    my $setInputs = shift;
+    my @ldims = @_;
+
+    my $itype = indexType();
+    my @stmts;
+    for my $dim (@dims) {
+
+        # Vars from the struct.
+        my $bvar = beginVar($dim);
+        my $evar = endVar($dim);
+        my $svar = strideVar($dim);
+        my $avar = alignVar($dim);
+        my $aovar = alignOfsVar($dim);
+        my $tsvar = tileSizeVar($dim);
+        my $s0var = startVar($dim);
+        my $s1var = stopVar($dim);
+        my $ivar = indexVar($dim);
+        if ($setInputs) {
+            push @stmts,
+                " ".locVar("begin", $dim)." = $bvar;",
+                " ".locVar("end", $dim)." = $evar;",
+                " ".locVar("stride", $dim)." = $svar;",
+                " ".locVar("align", $dim)." = $avar;",
+                " ".locVar("align_ofs", $dim)." = $aovar;",
+                " ".locVar("tile_size", $dim)." = $tsvar;";
+        }
+        if (grep {$_ == $dim} @ldims) {
+            push @stmts,
+                " ".locVar("start", $dim)." = $s0var;",
+                " ".locVar("stop", $dim)." = $s1var;",
+                " ".locVar("cur_indices", $dim)." = $ivar;";
+        } else {
+            push @stmts,
+                " ".locVar("start", $dim)." = orig_$s0var;",
+                " ".locVar("stop", $dim)." = orig_$s1var;",
+                " ".locVar("cur_indices", $dim)." = orig_$ivar;";
+        }
     } @dims;
     return @stmts;
 }
@@ -193,8 +253,7 @@ sub setOutVar {
 # Loop-constructing functions.
 
 # return type of var needed for loop index.
-# args: dimension(s) -- currently ignored.
-sub indexType {
+sub indexType() {
     return 'idx_t';
 }
 
@@ -261,7 +320,7 @@ sub addIndexVars1($$$$) {
     push @$code,
         " // ** Begin scan over ".dimStr(@$loopDims).". **";
 
-    my $itype = indexType(@$loopDims);
+    my $itype = indexType();
 
     for my $pass (0..1) {
         for my $i (0..$#$loopDims) {
@@ -270,16 +329,20 @@ sub addIndexVars1($$$$) {
 
             # Pass 0: iterations.
             if ($pass == 0) {
+
+                # Vars from the struct.
                 my $bvar = beginVar($dim);
                 my $evar = endVar($dim);
                 my $svar = strideVar($dim);
                 my $avar = alignVar($dim);
                 my $aovar = alignOfsVar($dim);
+                my $tsvar = tileSizeVar($dim);
+
+                # New vars.
                 my $aavar = adjAlignVar($dim);
                 my $abvar = alignBeginVar($dim);
                 my $nvar = numItersVar($dim);
                 my $ntvar = numTilesVar($dim);
-                my $tsvar = tileSizeVar($dim);
                 my $ntivar = numFullTileItersVar($dim);
 
                 # Example alignment:
@@ -341,7 +404,7 @@ sub addIndexVars2($$$$) {
     my $features = shift;       # bits for path types.
     my $loopStack = shift;      # whole stack at this point, including enclosing dims.
 
-    my $itype = indexType(@$loopDims);
+    my $itype = indexType();
     my $civar = loopIndexVar(@$loopDims); # multi-dim index var; everything based on this.
     my $ndims = scalar @$loopDims;
     my $outerDim = $loopDims->[0];        # outer dim of these loops.
@@ -514,11 +577,11 @@ sub addIndexVars2($$$$) {
                     "  // Compute extended index over 2 iterations of $prevDivar.",
                     "  $itype $divar2 = $divar + ($nvar * ($prevDivar & 1));",
                     "  // Select $divar from 0,0,1,1,2,2,... sequence",
-                    "  $divar = $divar2 / 2;",
+                    "  $itype $divar = $divar2 / 2;",
                     "  // Select $prevDivar adjustment value from 0,1,1,0,0,1,1, ... sequence.",
                     "  $itype $avar = ($divar2 & 0x1) ^ (($divar2 & 0x2) >> 1);",
                     "  // Adjust $prevDivar +/-1 by replacing bit 0.",
-                    "  $prevDivar = ($prevDivar & ($itype)-2) | $avar;",
+                    "  $prevDivar = ($prevDivar & $itype(-2)) | $avar;",
                     " } // square-wave.";
             }
 
@@ -550,7 +613,7 @@ sub addIndexVars3($$$$) {
     my $features = shift;       # bits for path types.
     my $loopStack = shift;      # whole stack at this point, including enclosing dims.
 
-    my $itype = indexType(@$loopDims);
+    my $itype = indexType();
 
     # start and stop vars based on individual begin, end, stride, and index vars.
     for my $dim (@$loopDims) {
@@ -583,7 +646,7 @@ sub beginLoop($$$$$$$) {
     $beginVal = 0 if !defined $beginVal;
     $endVal = numItersVar(@$loopDims) if !defined $endVal;
     $features = adjFeatures($code, $loopDims, $features, $loopStack);
-    my $itype = indexType(@$loopDims);
+    my $itype = indexType();
     my $ivar = loopIndexVar(@$loopDims);
     my $ndims = scalar @$loopDims;
 
@@ -895,7 +958,8 @@ sub processCode($) {
     }
     push @code,
         "// 'ScanIndices $macroPrefix$inputVar' must be set before the following code.",
-        "{";
+        "{",
+        getInVars();
     
     # loop thru all the tokens in the input.
     for (my $ti = 0; $ti <= $#toks; ) {
@@ -987,19 +1051,19 @@ sub processCode($) {
                     # Start-stop indices for body.
                     # NB: always use a copy; ref not working as of 4/30/2021.
                     if ($features & $bOmpPar) {
-                    
-                        # Using a copy so it will become OMP private.
                         push @code,
-                            " // Local copy of indices for loop body.",
-                            " ScanIndices ".locVar()."($macroPrefix$inputVar);",
-                            setOutVar(@loopStack);
+                            " // Indices for loop body.";
+                    
+                        # Using a new var so it will become OMP private.
+                        push @code,
+                            " ScanIndices ".locVar()."(false);",
+                            setOutVars(1, @loopStack);
                     } else {
 
                         # Just a reference if no OMP.
                         push @code,
-                            " // Ref to indices for loop body.",
                             " ScanIndices& ".locVar()." = $macroPrefix$inputVar;",
-                            setOutVar(@loopStack);
+                            setOutVars(0, @loopStack);
                     }
 
                     # Macro break for body: end one and start next one.

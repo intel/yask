@@ -726,8 +726,8 @@ namespace yask {
                           " ... " << sb_fcidxs.end.make_val_str() <<
                           ") by region thread " << region_thread_idx <<
                           " and block thread " << block_thread_idx);
-                #if VLEN == 1
-                THROW_YASK_EXCEPTION("Internal error: vector border-code not expected when VLEN==1");
+                #if CPTS == 1
+                THROW_YASK_EXCEPTION("Internal error: vector border-code not expected with cluster-size==1");
                 #else
 
                 // Normalized vector indices.
@@ -940,14 +940,16 @@ namespace yask {
                           int block_thread_idx,
                           ScanIndices& norm_idxs,
                           bit_mask_t mask) {
-            
-            FORCE_INLINE_RECURSIVE {
 
-                // Call code from stencil compiler.
-                StencilBundleImplT::calc_vectors(corep,
-                                                 region_thread_idx, block_thread_idx,
-                                                 norm_idxs, mask);
-            }
+            #if CPTS == 1
+            THROW_YASK_EXCEPTION("Internal error: masked-vector code not expected with cluster-size==1");
+            #else
+            
+            // Call code from stencil compiler.
+            StencilBundleImplT::calc_vectors(corep,
+                                             region_thread_idx, block_thread_idx,
+                                             norm_idxs, mask);
+            #endif
         }
 
     }; // StencilBundleBase.

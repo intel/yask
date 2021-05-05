@@ -150,7 +150,8 @@ namespace yask {
             " constexpr idx_t cluster_mults[]{ " << _dims._cluster_mults.make_val_str() << " };\n"
             " OMP_END_DECL_TARGET\n"
             "}\n";
-        os << "#define VLEN (" << _dims._fold.product() << ")" << endl;
+        os << "#define VLEN (" << _dims._fold.product() << ")\n"
+            "#define CPTS (" << _dims._cluster_pts.product() << ")\n";
         os << "#define FIRST_FOLD_INDEX_IS_UNIT_STRIDE (" <<
             (_dims._fold.is_first_inner() ? 1 : 0) << ")" << endl;
         os << "#define NUM_VEC_FOLD_DIMS (" << nvec << ")" << endl;
@@ -633,7 +634,8 @@ namespace yask {
                     vceq->visit_eqs(&plv);
 
                     // Inner-loop strides.
-                    string inner_strides = do_cluster ? "cluster_mults[dn-1]" : "idx_t(1)";
+                    string inner_strides = do_cluster ?
+                        "((dn==0) ? idx_t(1) : cluster_mults[std::max(dn-1,0)])" : "idx_t(1)";
                     
                     // Computation loops.
                     // Include generated loop-nests.
