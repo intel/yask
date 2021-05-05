@@ -11,6 +11,7 @@ var searchData=
   ['is_5felement_5fallocated',['is_element_allocated',['../classyask_1_1yk__var.html#ad84cc59ae2c7f11c505c99e5955a60a9',1,'yask::yk_var::is_element_allocated(const std::vector&lt; idx_t &gt; &amp;indices) const'],['../classyask_1_1yk__var.html#a49fcc4e673af91318403f804d5bd9b25',1,'yask::yk_var::is_element_allocated(const std::initializer_list&lt; idx_t &gt; &amp;indices) const']]],
   ['is_5ffixed_5fsize',['is_fixed_size',['../classyask_1_1yk__var.html#a420e0dde2114ba663069b16d579072eb',1,'yask::yk_var']]],
   ['is_5ffolding_5fset',['is_folding_set',['../classyask_1_1yc__solution.html#abaefa9675e9551ec10b9eee0016a0822',1,'yask::yc_solution']]],
+  ['is_5foffloaded',['is_offloaded',['../classyask_1_1yk__solution.html#a2978fb8fd701fe35ae8a8b19e23e5544',1,'yask::yk_solution']]],
   ['is_5fstorage_5fallocated',['is_storage_allocated',['../classyask_1_1yk__var.html#a3b09855a3cfa7e43c32fc43a24503340',1,'yask::yk_var']]],
   ['is_5fstorage_5flayout_5fidentical',['is_storage_layout_identical',['../classyask_1_1yk__var.html#a3611ad6d130cb5ee7e030e6ad0c24f5b',1,'yask::yk_var']]],
   ['is_5ftarget_5fset',['is_target_set',['../classyask_1_1yc__solution.html#abc13ff80f75eac42bb7300c24246f78c',1,'yask::yc_solution']]],

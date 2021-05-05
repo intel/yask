@@ -99,6 +99,9 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:ab25bbfab5dffc379bfb8c55ac64d6898"><td class="memItemLeft" align="right" valign="top">virtual std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ab25bbfab5dffc379bfb8c55ac64d6898">get_target</a> () const =0</td></tr>
 <tr class="memdesc:ab25bbfab5dffc379bfb8c55ac64d6898"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the target ISA.  <a href="#ab25bbfab5dffc379bfb8c55ac64d6898">More...</a><br /></td></tr>
 <tr class="separator:ab25bbfab5dffc379bfb8c55ac64d6898"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2978fb8fd701fe35ae8a8b19e23e5544"><td class="memItemLeft" align="right" valign="top">virtual bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a2978fb8fd701fe35ae8a8b19e23e5544">is_offloaded</a> () const =0</td></tr>
+<tr class="memdesc:a2978fb8fd701fe35ae8a8b19e23e5544"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get whether the stencil kernel will be offloaded to a device.  <a href="#a2978fb8fd701fe35ae8a8b19e23e5544">More...</a><br /></td></tr>
+<tr class="separator:a2978fb8fd701fe35ae8a8b19e23e5544"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a50e565487b7175447cc9f6489221eef4"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a50e565487b7175447cc9f6489221eef4">get_element_bytes</a> () const =0</td></tr>
 <tr class="memdesc:a50e565487b7175447cc9f6489221eef4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the floating-point precision size.  <a href="#a50e565487b7175447cc9f6489221eef4">More...</a><br /></td></tr>
 <tr class="separator:a50e565487b7175447cc9f6489221eef4"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -337,7 +340,35 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 </div><div class="memdoc">
 
 <p>Get the target ISA. </p>
-<dl class="section return"><dt>Returns</dt><dd>String describing the instruction-set architecture targeted during kernel compilation. See the allowed YASK kernel targets in <a class="el" href="classyask_1_1yc__solution.html#a1c03fc69e306a700de8c5ae3973229c2" title="Set the output target.">yc_solution::set_target()</a>. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>String describing the instruction-set architecture of the CPU targeted during kernel compilation. See the allowed YASK kernel targets in <a class="el" href="classyask_1_1yc__solution.html#a1c03fc69e306a700de8c5ae3973229c2" title="Set the output target.">yc_solution::set_target()</a>. </dd></dl>
+
+</div>
+</div>
+<a id="a2978fb8fd701fe35ae8a8b19e23e5544"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2978fb8fd701fe35ae8a8b19e23e5544">&#9670;&nbsp;</a></span>is_offloaded()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual bool yask::yk_solution::is_offloaded </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get whether the stencil kernel will be offloaded to a device. </p>
+<dl class="section return"><dt>Returns</dt><dd><em>true</em> if kernel will be offloaded or <em>false</em> if not. </dd></dl>
 
 </div>
 </div>
