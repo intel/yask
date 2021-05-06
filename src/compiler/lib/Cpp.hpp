@@ -318,7 +318,8 @@ namespace yask {
         // Print extraction of indices.
         virtual void print_indices(ostream& os,
                                    bool print_step = true,
-                                   bool print_domain = true) const;
+                                   bool print_domain = true,
+                                   const string prefix = "") const;
 
         // Print pieces of YASK output.
         virtual void print_macros(ostream& os);

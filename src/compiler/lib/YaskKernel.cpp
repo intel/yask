@@ -31,7 +31,8 @@ namespace yask {
 
     // Print extraction of indices.
     void YASKCppPrinter::print_indices(ostream& os,
-                                       bool print_step, bool print_domain) const {
+                                       bool print_step, bool print_domain,
+                                       const string prefix) const {
         if (print_step && print_domain)
             os << "\n // Extract index for each stencil dim.\n";
         else if (print_step)
@@ -45,8 +46,13 @@ namespace yask {
             auto& dname = dim._get_name();
             bool is_step = dname == _dims._step_dim;
             if ((print_step && is_step) ||
-                (print_domain && !is_step))
-                os << " idx_t " << dname << " = idxs[" << i << "];\n";
+                (print_domain && !is_step)) {
+                if (prefix.length())
+                    os << " idx_t " << dname << " = " << prefix << i << ";\n"
+                        " host_assert(" << dname << " == idxs[" << i << "]);\n";
+                else
+                    os << " idx_t " << dname << " = idxs[" << i << "];\n";
+            }
             i++;
         }
     }
@@ -674,7 +680,7 @@ namespace yask {
                             " Indices& idxs = norm_nb_range.start;\n";
 
                     // Get named indices from 'idxs'.
-                    print_indices(os, false, true);
+                    print_indices(os, false, true, "start_");
                     vp->print_elem_indices(os);
 
                     // Generate loop body using vars stored in print helper.
