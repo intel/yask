@@ -236,9 +236,9 @@ namespace yask {
         // Tuning.
         bool _do_auto_tune = false;    // whether to do "online" auto-tuning.
         bool _tune_blks = true;
-        bool _tune_micro_blks = false;
-        bool _tune_nano_blks = false;
-        bool _tune_pico_blks = false;
+        bool _tune_micro_blks = true;
+        bool _tune_nano_blks = true;
+        bool _tune_pico_blks = true;
         bool _allow_stage_tuners = false; // allow per-stage tuners when possible.
         double _tuner_trial_secs = 0.25;   // time to run tuner for new better setting.
 
