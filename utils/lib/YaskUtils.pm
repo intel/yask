@@ -81,12 +81,14 @@ my $linux_key = "Linux kernel";
 my $hostname_key = "hostname";
 my $nodes_key = "MPI node(s)";
 my $val_key = "validation results";
+my $yask_key = "YASK vars";
 our @special_log_keys =
   (
    $hostname_key,
    $linux_key,
    $nodes_key,
    $val_key,
+   $yask_key,
   );
 
 # Adjustable sizes.
@@ -261,6 +263,13 @@ sub getResultsFromLine($$) {
     my $nname = $1;
     $results->{$nodes_key} .= ' ' if defined $results->{$nodes_key};
     $results->{$nodes_key} .= $nname;
+  }
+
+  # Vars containing "YASK".
+  elsif ($line =~ /^env:\s+(\w*YASK\w*=.*)/) {
+    $results->{$yask_key} .= '; ' if
+      exists $results->{$yask_key};
+    $results->{$yask_key} .= $1;
   }
 
   # If auto-tuner is run globally, capture updated values.
