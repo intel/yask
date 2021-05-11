@@ -42,7 +42,6 @@ namespace yask {
         const CompilerSettings& _settings; // compiler settings.
         const Dimensions& _dims;    // problem dims.
         const CounterVisitor* _cv;  // counter info.
-        string _var_prefix;          // first part of var name.
         string _var_type;            // type, if any, of var.
         string _line_prefix;         // prefix for each line.
         string _line_suffix;         // suffix for each line.
@@ -52,13 +51,11 @@ namespace yask {
         PrintHelper(const CompilerSettings& settings,
                     const Dimensions& dims,
                     const CounterVisitor* cv,
-                    const string& var_prefix,
                     const string& var_type,
                     const string& line_prefix,
                     const string& line_suffix) :
             _var_num(1), _settings(settings), _dims(dims), _cv(cv),
-            _var_prefix(var_prefix), _var_type(var_type),
-            _line_prefix(line_prefix), _line_suffix(line_suffix) { }
+            _var_type(var_type), _line_prefix(line_prefix), _line_suffix(line_suffix) { }
 
         virtual ~PrintHelper() { }
 
@@ -95,8 +92,8 @@ namespace yask {
         }
 
         // Make and return next var name.
-        virtual string make_var_name() {
-            return _var_prefix + to_string(_var_num++);
+        virtual string make_var_name(string prefix) {
+            return prefix + "_temp" + to_string(_var_num++);
         }
 
         // Determine if local var exists for 'expr'.
@@ -107,7 +104,7 @@ namespace yask {
         // If var exists for 'expr', return it.
         // If not, create var of 'type' in 'os' and return it.
         virtual string get_local_var(ostream& os, const string& expr,
-                                     string type = "") {
+                                     string type, string prefix) {
 
             if (_local_vars.count(expr))
                 return _local_vars.at(expr);
@@ -115,7 +112,7 @@ namespace yask {
             // Make a var.
             if (!type.length())
                 type = _var_type;
-            string v_name = make_var_name();
+            string v_name = make_var_name(prefix);
             os << _line_prefix << type << " " << v_name <<
                 " = " << expr << _line_suffix;
             _local_vars[expr] = v_name;
@@ -181,11 +178,13 @@ namespace yask {
         map<Expr*, string> _temp_vars;
 
         // Declare a new temp var and set 'res' to it.
+        // Prepend 'prefix' to name of var.
         // Print LHS of assignment to it.
         // 'ex' is used as key to save name of temp var and to write a comment.
         // If 'comment' is set, use it for the comment.
         // Return stream to continue w/RHS.
-        virtual ostream& make_next_temp_var(string& res, Expr* ex, string comment = "");
+        virtual ostream& make_next_temp_var(string& res, Expr* ex,
+                                            string prefix, string comment);
 
     public:
         // os is used for printing intermediate results as needed.

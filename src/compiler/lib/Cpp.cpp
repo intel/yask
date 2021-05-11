@@ -57,9 +57,9 @@ namespace yask {
                                            string opt_arg) {
 
         // Get/set local vars.
-        string var_ptr = get_local_var(os, get_var_ptr(gp), _var_ptr_restrict_type);
+        string var_ptr = get_local_var(os, get_var_ptr(gp), _var_ptr_restrict_type, "expr");
         string sas = gp.make_step_arg_str(var_ptr, _dims);
-        string step_arg = sas.length() ? get_local_var(os, sas, _step_val_type) : "0";
+        string step_arg = sas.length() ? get_local_var(os, sas, _step_val_type, "step") : "0";
 
         string res = var_ptr + "->" + fname + "(";
         if (opt_arg.length())
@@ -102,10 +102,10 @@ namespace yask {
 
         // Get/set local vars.
         string var_ptr = get_local_var(os, get_var_ptr(gp),
-                                       CppPrintHelper::_var_ptr_restrict_type);
+                                       CppPrintHelper::_var_ptr_restrict_type, "expr");
         string sas = gp.make_step_arg_str(var_ptr, _dims);
         string step_arg = sas.length() ?
-            get_local_var(os, sas, CppPrintHelper::_step_val_type) : "0";
+            get_local_var(os, sas, CppPrintHelper::_step_val_type, "step") : "0";
 
         string res = var_ptr + "->" + func_name + "(";
         if (first_arg.length())
@@ -155,9 +155,10 @@ namespace yask {
             // unique var/step-arg combo.
             auto bgp = make_base_point(gp);
             auto* var = bgp->_get_var();
+            assert(var);
            
             // Make and save ptr var for future use.
-            string ptr_name = make_var_name();
+            string ptr_name = make_var_name(var->_get_name() + "_ptr");
             _vec_ptrs[*bgp] = ptr_name;
 
             // Print pointer definition.
@@ -228,13 +229,14 @@ namespace yask {
                 os << endl << " // Stride for var '" << vname <<
                     "' in '" << dname << "' dim.\n";
 
-                string svar = make_var_name();
+                string svar = make_var_name(vname + "_" + dname + "_stride");
                 _strides[key] = svar;
                 assert(lookup_stride(var, dname));
 
                 // Get ptr to var core.
                 string var_ptr = get_local_var(os, get_var_ptr(var),
-                                               CppPrintHelper::_var_ptr_restrict_type);
+                                               CppPrintHelper::_var_ptr_restrict_type,
+                                               vname + "_core");
 
                 // Determine stride.
                 // Default is to obtain dynamic value from var.
@@ -281,7 +283,7 @@ namespace yask {
 
                 // Local offset.
                 string lofs_lookup = var_ptr + "->_local_offsets[" + to_string(dnum) + "]";
-                string lofs_var = make_var_name();
+                string lofs_var = make_var_name(vname + "_" + dname + "_ofs");
                 string lofs("idx_t(0)"); // Known to be zero.
                 _local_offsets[key] = lofs_var;
                 assert(lookup_local_offset(var, dname));
@@ -554,7 +556,7 @@ namespace yask {
 
         // Make comment and function call.
         print_point_comment(os, gp, "Read aligned vector");
-        string mv_name = make_var_name();
+        string mv_name = make_var_name("vec");
 
         // Do we have a pointer to the base?
         auto* p = lookup_base_point_ptr(gp);
@@ -625,7 +627,7 @@ namespace yask {
         print_point_comment(os, gp, "Construct folded vector from non-folded data");
 
         // Make a vec var.
-        string mv_name = make_var_name();
+        string mv_name = make_var_name("vec");
         os << _line_prefix << get_var_type() << " " << mv_name << _line_suffix;
 
         // Loop through all points in the vector fold.
@@ -655,7 +657,7 @@ namespace yask {
                 if (!varname) {
 
                     // Read val into a new scalar var.
-                    string vname = make_var_name();
+                    string vname = make_var_name("scalar");
                     os << _line_prefix << "real_t " << vname <<
                         " = " << stmt << _line_suffix;
                     varname = save_elem_var(stmt, vname);
@@ -679,7 +681,7 @@ namespace yask {
         os << " // NOTICE: Assumes constituent vectors are consecutive in memory!" << endl;
 
         // Make a var.
-        string mv_name = make_var_name();
+        string mv_name = make_var_name("unaligned_vec");
         os << _line_prefix << get_var_type() << " " << mv_name << _line_suffix;
         auto vp = make_point_call(os, gp, "get_elem_ptr", "", "true", false);
 
@@ -733,7 +735,7 @@ namespace yask {
         print_point_comment(os, gp, "Construct unaligned");
 
         // Declare var.
-        string pv_name = make_var_name();
+        string pv_name = make_var_name("unaligned_vec");
         os << _line_prefix << get_var_type() << " " << pv_name << _line_suffix;
 
         // Contruct it.
@@ -800,10 +802,12 @@ namespace yask {
 
         // Pointer to this var.
         string varp = get_var_ptr(*gp);
+        string vname = gp->get_var_name();
         if (!_cvph.is_local_var(varp))
-            _os << "\n // Pointer to core of var '" << gp->get_var_name() << "'.\n";
+            _os << "\n // Pointer to core of var '" << vname << "'.\n";
         string var_ptr = _cvph.get_local_var(_os, varp,
-                                             CppPrintHelper::_var_ptr_restrict_type);
+                                             CppPrintHelper::_var_ptr_restrict_type,
+                                             vname + "_core");
         
         // Time var for this access, if any.
         auto& dims = _cvph.get_dims();
@@ -811,7 +815,8 @@ namespace yask {
         if (sas.length()) {
             if (!_cvph.is_local_var(sas))
                 _os << "\n // Index for '" << sas << "'.\n";
-            _cvph.get_local_var(_os, sas, CppPrintHelper::_step_val_type);
+            _cvph.get_local_var(_os, sas, CppPrintHelper::_step_val_type,
+                                vname + "_step_idx");
         }
 
         // Print strides and local offsets for this var.
@@ -830,7 +835,7 @@ namespace yask {
             if (!_cvph.lookup_point_var(*gp)) {
                 string expr = _ph.read_from_point(_os, *gp);
                 string res;
-                make_next_temp_var(res, gp) << expr << _ph.get_line_suffix();
+                make_next_temp_var(res, gp, "expr", "") << expr << _ph.get_line_suffix();
 
                 // Save for future use.
                 _cvph.save_point_var(*gp, res);

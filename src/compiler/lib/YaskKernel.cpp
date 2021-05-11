@@ -61,7 +61,7 @@ namespace yask {
     void YASKCppPrinter::add_comment(ostream& os, EqBundle& eq) {
 
         // Use a simple human-readable visitor to create a comment.
-        PrintHelper ph(_settings, _dims, NULL, "temp", "", " // ", ".\n");
+        PrintHelper ph(_settings, _dims, NULL, "", " // ", ".\n");
         PrintVisitorTopDown commenter(os, ph);
         eq.visit_eqs(&commenter);
     }
@@ -474,7 +474,7 @@ namespace yask {
                     // C++ scalar print assistant.
                     CounterVisitor cv;
                     eq->step_cond->accept(&cv);
-                    CppPrintHelper* sp = new CppPrintHelper(_settings, _dims, &cv, "temp", "real_t", " ", ";\n");
+                    CppPrintHelper* sp = new CppPrintHelper(_settings, _dims, &cv, "real_t", " ", ";\n");
 
                     // Generate the code.
                     PrintVisitorTopDown pcv(os, *sp);
@@ -539,7 +539,7 @@ namespace yask {
                 // C++ scalar print assistant.
                 CounterVisitor cv;
                 eq->visit_eqs(&cv);
-                CppPrintHelper* sp = new CppPrintHelper(_settings, _dims, &cv, "temp", "real_t", " ", ";\n");
+                CppPrintHelper* sp = new CppPrintHelper(_settings, _dims, &cv, "real_t", " ", ";\n");
 
                 // Generate the code.
                 PrintVisitorBottomUp pcv(os, *sp);
@@ -597,11 +597,11 @@ namespace yask {
                     string istop = "stop_" + idim;
                     string istep = "step_" + idim;
                     string iestep = "step_" + idim + "_elem";
-                    os << endl << " // Calculate a nano-block of " << vcstr << "s bounded by 'norm_idxs'.\n";
+                    os << endl << " // Calculate a nano-block of " << vcstr << "s bounded by 'norm_nb_idxs'.\n";
                     if (do_pico)
-                        os << " // There are pico-loops inside nano-loops.\n";
+                        os << " // There are pico-loops inside the nano-loops.\n";
                     else
-                        os << " // There are no pico-loops inside nano-loops.\n";
+                        os << " // There are no pico-loops inside the nano-loops.\n";
                     if (do_cluster)
                         os << " // Each cluster calculates '" << _dims._cluster_pts.make_dim_val_str(" * ") <<
                             "' point(s) containing " << _dims._cluster_mults.product() << " '" <<

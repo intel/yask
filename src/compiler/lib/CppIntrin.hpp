@@ -45,12 +45,11 @@ namespace yask {
                              const CompilerSettings& settings,
                              const Dimensions& dims,
                              const CounterVisitor* cv,
-                             const string& var_prefix,
                              const string& var_type,
                              const string& line_prefix,
                              const string& line_suffix) :
             CppVecPrintHelper(vv, settings, dims, cv,
-                              var_prefix, var_type, line_prefix, line_suffix) { }
+                              var_type, line_prefix, line_suffix) { }
 
         // Dtor.
         virtual ~CppIntrinPrintHelper() { }
@@ -136,12 +135,11 @@ namespace yask {
                              const CompilerSettings& settings,
                              const Dimensions& dims,
                              const CounterVisitor* cv,
-                             const string& var_prefix,
                              const string& var_type,
                              const string& line_prefix,
                              const string& line_suffix) :
             CppIntrinPrintHelper(vv, settings, dims, cv,
-                                 var_prefix, var_type, line_prefix, line_suffix) { }
+                                 var_type, line_prefix, line_suffix) { }
     };
 
     // Specialization for AVX, AVX2.
@@ -163,12 +161,11 @@ namespace yask {
                              const CompilerSettings& settings,
                              const Dimensions& dims,
                              const CounterVisitor* cv,
-                             const string& var_prefix,
                              const string& var_type,
                              const string& line_prefix,
                              const string& line_suffix) :
             CppIntrinPrintHelper(vv, settings, dims, cv,
-                                 var_prefix, var_type, line_prefix, line_suffix) { }
+                                 var_type, line_prefix, line_suffix) { }
     };
 
     // Print 256-bit AVX intrinsic code.
@@ -177,7 +174,7 @@ namespace yask {
         virtual CppVecPrintHelper* new_cpp_vec_print_helper(VecInfoVisitor& vv,
                                                         CounterVisitor& cv) {
             return new CppAvx256PrintHelper(vv, _settings, _dims, &cv,
-                                            "temp", "real_vec_t", " ", ";\n");
+                                            "real_vec_t", " ", ";\n");
         }
 
     public:
@@ -197,7 +194,7 @@ namespace yask {
         virtual CppVecPrintHelper* new_cpp_vec_print_helper(VecInfoVisitor& vv,
                                                         CounterVisitor& cv) {
             return new CppAvx512PrintHelper(vv, _settings, _dims, &cv,
-                                            "temp", "real_vec_t", " ", ";\n");
+                                            "real_vec_t", " ", ";\n");
         }
 
     public:

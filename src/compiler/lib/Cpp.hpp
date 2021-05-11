@@ -47,12 +47,10 @@ namespace yask {
         CppPrintHelper(const CompilerSettings& settings,
                        const Dimensions& dims,
                        const CounterVisitor* cv,
-                       const string& var_prefix,
                        const string& var_type,
                        const string& line_prefix,
                        const string& line_suffix) :
-            PrintHelper(settings, dims, cv, var_prefix, var_type,
-                        line_prefix, line_suffix) { }
+            PrintHelper(settings, dims, cv, var_type, line_prefix, line_suffix) { }
         virtual ~CppPrintHelper() { }
 
         // Format a real, preserving precision.
@@ -107,12 +105,11 @@ namespace yask {
                           const CompilerSettings& settings,
                           const Dimensions& dims,
                           const CounterVisitor* cv,
-                          const string& var_prefix,
                           const string& var_type,
                           const string& line_prefix,
                           const string& line_suffix) :
             CppPrintHelper(settings, dims, cv,
-                           var_prefix, var_type, line_prefix, line_suffix),
+                           var_type, line_prefix, line_suffix),
             VecPrintHelper(vv) { }
         
     protected:
@@ -312,7 +309,7 @@ namespace yask {
         virtual CppVecPrintHelper* new_cpp_vec_print_helper(VecInfoVisitor& vv,
                                                         CounterVisitor& cv) {
             return new CppVecPrintHelper(vv, _settings, _dims, &cv,
-                                         "temp", "real_vec_t", " ", ";\n");
+                                         "real_vec_t", " ", ";\n");
         }
 
         // Print extraction of indices.

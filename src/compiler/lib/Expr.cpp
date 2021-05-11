@@ -669,7 +669,7 @@ namespace yask {
         ostringstream oss;
         CompilerSettings _dummy_settings;
         Dimensions _dummy_dims;
-        PrintHelper ph(_dummy_settings, _dummy_dims, NULL, "temp", "", "", ""); // default helper.
+        PrintHelper ph(_dummy_settings, _dummy_dims, NULL, "", "", ""); // default helper.
         CompilerSettings settings; // default settings.
         PrintVisitorTopDown pv(oss, ph, var_map);
         string res = accept(&pv);

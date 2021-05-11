@@ -33,12 +33,14 @@ namespace yask {
     ////////////// Print visitors ///////////////
 
     // Declare a new temp var and set 'res' to it.
+    // Prepend 'prefix' to name of var.
     // Print LHS of assignment to it.
     // 'ex' is used as key to save name of temp var and to write a comment.
     // If 'comment' is set, use it for the comment.
     // Return stream to continue w/RHS.
-    ostream& PrintVisitorBase::make_next_temp_var(string& res, Expr* ex, string comment) {
-        res = _ph.make_var_name();
+    ostream& PrintVisitorBase::make_next_temp_var(string& res, Expr* ex,
+                                                  string prefix, string comment) {
+        res = _ph.make_var_name(prefix);
         if (ex) {
             _temp_vars[ex] = res;
             if (comment.length() == 0)
@@ -225,7 +227,7 @@ namespace yask {
                 if (too_small)
                     res = td_res;
                 else
-                    make_next_temp_var(res, ex) << td_res << _ph.get_line_suffix();
+                    make_next_temp_var(res, ex, "expr", "") << td_res << _ph.get_line_suffix();
             }
 
             // otherwise, there are common subexprs, and top-down is not forced,
@@ -274,7 +276,7 @@ namespace yask {
         // temp2 = -temp1;
         // with 'temp2' returned.
         string rhs = ue->_get_rhs()->accept(this);
-        make_next_temp_var(res, ue) << ue->get_op_str() << rhs << _ph.get_line_suffix();
+        make_next_temp_var(res, ue, "expr", "") << ue->get_op_str() << rhs << _ph.get_line_suffix();
         return res;
     }
 
@@ -290,13 +292,14 @@ namespace yask {
 
         // Expand both sides, then apply operator to result.
         // Example: '(a * b) / (c * d)' might output the following:
-        // temp1 = a * b;
-        // temp2 = b * c;
-        // temp3 = temp1 / temp2;
-        // with 'temp3' returned.
+        // expr1 = a * b;
+        // expr2 = b * c;
+        // expr3 = expr1 / expr2;
+        // with 'expr3' returned.
         string lhs = be->_get_lhs()->accept(this);
         string rhs = be->_get_rhs()->accept(this);
-        make_next_temp_var(res, be) << lhs << ' ' << be->get_op_str() << ' ' << rhs << _ph.get_line_suffix();
+        make_next_temp_var(res, be, "expr", "") <<
+            lhs << ' ' << be->get_op_str() << ' ' << rhs << _ph.get_line_suffix();
         return res;
     }
 
@@ -343,8 +346,8 @@ namespace yask {
 
                 // Make 2 temp vars.
                 string res2;
-                make_next_temp_var(res, fe) << "0" << _ph.get_line_suffix();
-                make_next_temp_var(res2, paired) << "0" << _ph.get_line_suffix();
+                make_next_temp_var(res, fe, "arg0", "") << "0" << _ph.get_line_suffix();
+                make_next_temp_var(res2, paired, "arg1", "") << "0" << _ph.get_line_suffix();
 
                 // Call function to set both.
                 _os << _ph.get_line_prefix() << 
@@ -367,7 +370,7 @@ namespace yask {
                     args += ", ";
                 args += ep->accept(this);
             }
-            make_next_temp_var(res, fe) << _func_prefix << fe->get_op_str() <<
+            make_next_temp_var(res, fe, "res", "") << _func_prefix << fe->get_op_str() <<
                 "(" << args << ")" << _ph.get_line_suffix();
         }
         return res;
@@ -418,7 +421,7 @@ namespace yask {
 
                 // Output this step.
                 string tmp;
-                make_next_temp_var(tmp, ex, ex_str) << lhs << ' ' << ce->get_op_str() << ' ' <<
+                make_next_temp_var(tmp, ex, "expr", ex_str) << lhs << ' ' << ce->get_op_str() << ' ' <<
                     op_str << _ph.get_line_suffix();
                 lhs = tmp; // result returned and/or used in next iteration.
             }
@@ -438,7 +441,7 @@ namespace yask {
 
         // Assign RHS to a temp var.
         string tmp;
-        make_next_temp_var(tmp, rp) << rhs << _ph.get_line_suffix();
+        make_next_temp_var(tmp, rp, "expr", "") << rhs << _ph.get_line_suffix();
 
         // Comment about update.
         var_point_ptr gpp = ee->_get_lhs();
@@ -652,7 +655,7 @@ namespace yask {
 
             CounterVisitor cv;
             eq->visit_eqs(&cv);
-            PrintHelper ph(_settings, _dims, &cv, "temp", "real", " ", ".\n");
+            PrintHelper ph(_settings, _dims, &cv, "real", " ", ".\n");
 
             if (eq->cond.get()) {
                 string cond_str = eq->cond->make_str();
