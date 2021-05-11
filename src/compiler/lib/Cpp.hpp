@@ -122,7 +122,7 @@ namespace yask {
         // Vars for tracking strides and local offsets in vars.
         typedef pair<string, string> VarDimKey; // var and dim names.
         map<VarDimKey, string> _strides; // var containing stride for given dim in var.
-        map<VarDimKey, string> _local_offsets; // var containing offset for given dim in var.
+        map<VarDimKey, string> _offsets; // var containing offset for given dim in var.
 
         // Element indices.
         string _elem_suffix_global = "_global_elem";
@@ -259,10 +259,10 @@ namespace yask {
                 return &_strides.at(key);
             return 0;
         }
-        virtual string* lookup_local_offset(const Var& var, const string& dim) {
+        virtual string* lookup_offset(const Var& var, const string& dim) {
             auto key = VarDimKey(var.get_name(), dim);
-            if (_local_offsets.count(key))
-                return &_local_offsets.at(key);
+            if (_offsets.count(key))
+                return &_offsets.at(key);
             return 0;
         }
     };

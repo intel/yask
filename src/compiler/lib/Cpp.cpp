@@ -132,7 +132,7 @@ namespace yask {
             auto type = dim->get_type();
 
             if (type == DOMAIN_INDEX || type == MISC_INDEX) {
-                auto* lofs = lookup_local_offset(*var, dname);
+                auto* lofs = lookup_offset(*var, dname);
                 assert(lofs);
                 bgp->set_arg_expr(dname, *lofs);
             }
@@ -281,34 +281,52 @@ namespace yask {
                     os << _line_prefix << "host_assert(" << slookup <<
                         " == " << svar << ")" << _line_suffix;
 
-                // Local offset.
-                string lofs_lookup = var_ptr + "->_local_offsets[" + to_string(dnum) + "]";
-                string lofs_var = make_var_name(vname + "_" + dname + "_ofs");
-                string lofs("idx_t(0)"); // Known to be zero.
-                _local_offsets[key] = lofs_var;
-                assert(lookup_local_offset(var, dname));
-                os << endl << " // Local offset for var '" << vname <<
+                // Offset to be subtracted from index.
+                os << endl << " // Index offset for var '" << vname <<
                     "' in '" << dname << "' dim.\n";
+                string ofs_var = make_var_name(vname + "_" + dname + "_ofs");
+                _offsets[key] = ofs_var;
+                assert(lookup_offset(var, dname));
 
-                // Lookup needed for domain dim in scratch var because scratch
-                // vars are "relocated" to location of current block.
+                string ofs; // Offset value.
+                string ofs_expr = var_ptr + "->_local_offsets[" + to_string(dnum) + "]";
                 if (var.is_scratch() && dtype == DOMAIN_INDEX) {
-                    os << " // This value varies because '" << vname <<
-                        "' is a scratch var.\n";
-                    lofs = lofs_lookup;
-                }
-                else
-                    os << " // This is a known fixed value.\n";
 
-                // Need min value for misc indices.
-                if (dtype == MISC_INDEX)
-                    lofs = "idx_t(" + to_string(var.get_min_indices()[dname]) + ")";
-                
-                os << _line_prefix << "const idx_t " << lofs_var << " = " <<
-                    lofs << _line_suffix;
-                if (lofs != lofs_lookup)
-                    os << _line_prefix << "host_assert(" << lofs_lookup <<
-                        " == " << lofs_var << ")" << _line_suffix;
+                    // Lookup needed for domain dim in scratch var because scratch
+                    // vars are "relocated" to location of current block.
+                    os << " // Local offset varies because '" << vname <<
+                        "' is a scratch var.\n";
+                    ofs = ofs_expr;
+                }
+                else if (dtype == MISC_INDEX) {
+
+                    // Need min value for misc indices.
+                    os << " // Local offset is minimum misc-index.\n";
+                    ofs = "idx_t(" + to_string(var.get_min_indices()[dname]) + ")";
+                }
+                else {
+                    os << " // Local offset is zero.\n";
+                    ofs = "idx_t(0)";
+                }
+
+                // Offset includes local offset and pad.
+                #ifndef ADJ_FOR_PAD
+                #define ADJ_FOR_PAD 1
+                #endif
+                #if ADJ_FOR_PAD
+                string pad_expr = var_ptr + "->_actl_left_pads[" + to_string(dnum) + "]";
+                ofs_expr += " - " + pad_expr;
+                if (dtype != MISC_INDEX) {
+                    os << " // Offset is adjusted by actual allocated padding.\n";
+                    ofs += " - " + pad_expr;
+                }
+                #endif
+
+                os << _line_prefix << "const idx_t " << ofs_var << " = " <<
+                    ofs << _line_suffix;
+                if (ofs != ofs_expr)
+                    os << _line_prefix << "host_assert(" << ofs_expr <<
+                        " == " << ofs_var << ")" << _line_suffix;
             }
         }
     }
@@ -437,7 +455,7 @@ namespace yask {
             // that index in the offset calculation.
             if (!is_step) {
                 string dni = dimi->_get_name();
-                auto* lofs = lookup_local_offset(*var, dni);
+                auto* lofs = lookup_offset(*var, dni);
                 assert(lofs);
                 auto* stride = lookup_stride(*var, dni);
                 assert(stride);
