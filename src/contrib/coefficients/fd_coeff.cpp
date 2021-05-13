@@ -26,8 +26,10 @@ IN THE SOFTWARE.
 // Finite-differences coefficients code.
 // Contributed by Jeremy Tillay.
 
-#include <iostream>
+#include <cassert>
 #include <cstring>
+#include <cmath>
+#include <iostream>
 #include <vector>
 #include "fd_coeff.hpp"
 
@@ -51,7 +53,7 @@ namespace yask {
     void fd_coeff(double *coeff, const double eval_point, const int order, const double *points, const int num_points)
     {
         double c1, c2, c3;
-        double x_0=eval_point;
+        double x_0 = eval_point;
 
         int m_idx = (order+1)*num_points;
         int n_idx = num_points;
@@ -63,25 +65,38 @@ namespace yask {
         d[0]=1.0;
         c1 = 1.0;
 
-        for(int n=1; n<=num_points-1;++n){
+        for (int n=1; n<=num_points-1; ++n){
             c2=1.0;
             for(int v=0; v<=n-1; ++v){
                 c3 = points[n] - points[v];
                 c2 = c2*c3;
-                for(int m=0; m<=min(n, order); ++m){
-                    d[m*m_idx+n*n_idx + v] = (points[n]-x_0)*d[m*m_idx + (n-1)*n_idx + v] - m*d[(m-1)*m_idx + (n-1)*n_idx + v];
-                    d[m*m_idx + n*n_idx + v] *= 1.0/c3;
+                for (int m=0; m<=min(n, order); ++m) {
+                    double dval = (points[n] - x_0) * d[m * m_idx + (n-1) * n_idx + v];
+                    if (m > 0)
+                        dval -= m * d[(m-1) * m_idx + (n-1) * n_idx + v];
+                    dval *= 1.0/c3;
+                    if (dval == -0.0)
+                        dval = 0.0;
+                    assert(isfinite(dval));
+                    d[m * m_idx + n * n_idx + v] = dval;
                 }
             }
-            for(int m=0; m<= min(n, order); ++m){
-                d[m*m_idx+n*n_idx+n] = m*d[(m-1)*m_idx+(n-1)*n_idx+(n-1)] - (points[n-1]-x_0)*d[m*m_idx+(n-1)*n_idx+n-1];
-                d[m*m_idx+n*n_idx+n] *= c1/c2;
+            for (int m=0; m<= min(n, order); ++m) {
+                double dval = 0.0;
+                if (m > 0)
+                    dval += m * d[(m-1) * m_idx + (n-1) * n_idx + (n-1)];
+                dval -= (points[n-1] - x_0) * d[m * m_idx + (n-1) * n_idx + n-1];
+                dval *= c1/c2;
+                if (dval == -0.0)
+                    dval = 0.0;
+                assert(isfinite(dval));
+                d[m*m_idx + n*n_idx + n] = dval;
             }
             c1=c2;
         }
 
         for(int i=0; i<num_points; ++i){
-            coeff[i] = d[order*m_idx+(num_points-1)*n_idx + i];
+            coeff[i] = d[order * m_idx + (num_points-1) * n_idx + i];
         }
     }
 }
