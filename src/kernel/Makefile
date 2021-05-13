@@ -378,7 +378,7 @@ ifeq ($(cxx_is_intel_clang),1)
  YK_CXXFLAGS	+=	$(CXX_ISA)
  YK_CXXFLAGS	+=	-ansi-alias \
 			-fimf-precision=low -ffp-model=fast -fimf-domain-exclusion=none -fma
- YK_CXXFLAGS	+=	-Wno-unknown-pragmas -Wno-unused-variable \
+ YK_CXXFLAGS	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable \
 			-Wno-unused-const-variable -fno-color-diagnostics
  MACROS		+=	NO_VEC2
  VEC_MACROS	+=	NO_SVML
@@ -387,7 +387,7 @@ ifeq ($(cxx_is_intel_clang),1)
 # Clang compiler (not Intel version).
 else ifeq ($(cxx_is_clang),1)
  YK_CXXFLAGS	+=	$(CXX_ISA)
- YK_CXXFLAGS	+=	-Wno-unknown-pragmas -Wno-unused-variable \
+ YK_CXXFLAGS	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable \
 			-Wno-unused-const-variable -fno-color-diagnostics
  VEC_MACROS	+=	NO_SVML
 
