@@ -814,8 +814,8 @@ namespace yask {
         }
     }
     
-    // Print loop-invariant values for each VarPoint.
-    string CppPreLoopPrintVisitor::visit(VarPoint* gp) {
+    // Print loop-invariant meta values for each VarPoint.
+    string CppPreLoopPrintMetaVisitor::visit(VarPoint* gp) {
         assert(gp);
 
         // Pointer to this var.
@@ -842,6 +842,13 @@ namespace yask {
 
         // Make and print a base pointer for this access.
         _cvph.print_base_ptr(_os, *gp);
+
+        return "";
+    }
+
+    // Print loop-invariant data values for each VarPoint.
+    string CppPreLoopPrintDataVisitor::visit(VarPoint* gp) {
+        assert(gp);
 
         // Retrieve prior dependence analysis of this var point.
         auto dep_type = gp->get_var_dep();

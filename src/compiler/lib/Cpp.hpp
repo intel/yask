@@ -283,12 +283,33 @@ namespace yask {
             _visit_conds = true;
         }
 
-        // A var access.
-        virtual string visit(VarPoint* gp);
-
         virtual string get_var_ptr(VarPoint& gp) {
             return _cvph.get_var_ptr(gp);
         }
+    };
+
+    // Meta values such as strides and pointers.
+    class CppPreLoopPrintMetaVisitor : public CppPreLoopPrintVisitor {
+    public:
+        CppPreLoopPrintMetaVisitor(ostream& os,
+                                   CppVecPrintHelper& ph,
+                                   const VarMap* var_map = 0) :
+            CppPreLoopPrintVisitor(os, ph, var_map) { }
+
+        // A var access.
+        virtual string visit(VarPoint* gp);
+    };
+
+    // Data values.
+    class CppPreLoopPrintDataVisitor : public CppPreLoopPrintVisitor {
+    public:
+        CppPreLoopPrintDataVisitor(ostream& os,
+                                   CppVecPrintHelper& ph,
+                                   const VarMap* var_map = 0) :
+            CppPreLoopPrintVisitor(os, ph, var_map) { }
+
+        // A var access.
+        virtual string visit(VarPoint* gp);
     };
 
     // Print out a stencil in C++ form for YASK.

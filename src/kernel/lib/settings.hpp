@@ -225,9 +225,14 @@ namespace yask {
         int num_block_threads = 1; // Number of threads to use for a block.
         bool bind_block_threads = false; // Bind block threads to indices.
 
-        // Var behavior.
+        // Var behavior, including allocation.
         bool _step_wrap = false; // Allow invalid step indices to alias to valid ones (set via APIs only).
         bool _allow_addl_pad = true; // Allow extending padding beyond what's needed for alignment.
+        bool _bundle_allocs = !KernelEnv::_use_offload; // Group allocations together.
+        int _numa_pref = NUMA_PREF;
+        #ifdef USE_PMEM
+        int _numa_pref_max = 128; // GiB to alloc before using PMEM.
+        #endif
 
         // Stencil-dim posn in which to apply block-thread binding.
         // TODO: make this a cmd-line parameter.
@@ -244,10 +249,6 @@ namespace yask {
 
         // Debug.
         bool force_scalar = false; // Do only scalar ops.
-
-        // NUMA settings.
-        int _numa_pref = NUMA_PREF;
-        int _numa_pref_max = 128; // GiB to alloc before using PMEM.
 
         // Ctor/dtor.
         KernelSettings(DimsPtr dims, KernelEnvPtr env);

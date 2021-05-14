@@ -337,30 +337,32 @@ namespace yask {
     constexpr int _shmem_key = 1000;
     constexpr int _pmem_key = 2000;
 
-    // Alloc 'nbytes' for each requested mem type.
-    // Pointers are returned in 'data_buf'.
-    // 'nvars' and 'type' are only used for debug msg.
-    void StencilContext::_alloc_data(const map <int, size_t>& nbytes,
-                                     const map <int, size_t>& nvars,
-                                     map <int, shared_ptr<char>>& data_buf,
+    // Alloc mem for each requested key.
+    // 'type' is only used for debug msg.
+    void StencilContext::_alloc_data(AllocMap& alloc_reqs,
                                      const std::string& type) {
         STATE_VARS(this);
 
-        // Loop through each mem type.
-        for (const auto& i : nbytes) {
-            int mem_key = i.first;
-            size_t nb = i.second;
-            size_t ng = nvars.at(mem_key);
+        // Loop through each request.
+        for (auto& i : alloc_reqs) {
+            auto& key = i.first;
+            auto& data = i.second;
+            auto mem_key = key.first;
+            auto seq_num = key.second;
+            TRACE_MSG("allocation req <" << mem_key << ", " << seq_num << "> for " <<
+                      make_byte_str(data.nbytes));
+            if (data.nbytes == 0)
+                continue;
 
             // Alloc data depending on magic key.
             shared_ptr<char> p;
-            string msg = "Allocating " + make_byte_str(nb) +
-                " for " + to_string(ng) + " " + type + "(s) ";
+            string msg = "Allocating " + make_byte_str(data.nbytes) +
+                " for " + to_string(data.nvars) + " " + type + "(s) ";
 
             if (mem_key == _shmem_key) {
                 msg += "using MPI shm";
                 DEBUG_MSG(msg << "...");
-                p = shared_shm_alloc<char>(nb, &env->shm_comm, &mpi_info->halo_win);
+                p = shared_shm_alloc<char>(data.nbytes, &env->shm_comm, &mpi_info->halo_win);
 
                 // Get pointer for each neighbor rank.
                 #ifdef USE_MPI
@@ -393,7 +395,7 @@ namespace yask {
 
                 msg += "on PMEM device " + to_string(dev_num);
                 DEBUG_MSG(msg << "...");
-                p = shared_pmem_alloc<char>(nb, dev_num);
+                p = shared_pmem_alloc<char>(data.nbytes, dev_num);
             }
             else {
                 if (mem_key == yask_numa_none)
@@ -407,11 +409,11 @@ namespace yask {
                 else
                     msg += "using mem policy " + to_string(mem_key);
                 DEBUG_MSG(msg << "...");
-                p = shared_numa_alloc<char>(nb, mem_key);
+                p = shared_numa_alloc<char>(data.nbytes, mem_key);
             }
 
-            // Save using original key.
-            data_buf[mem_key] = p;
+            // Save ptr value.
+            data.ptr = p;
             TRACE_MSG("Got memory at " << static_cast<void*>(p.get()));
         }
     }
@@ -442,24 +444,17 @@ namespace yask {
                     done.insert(gp);
                 }
             }
+            DEBUG_MSG("var-allocation order:");
+            for (auto sp : sorted_var_ptrs) {
+                auto name = sp->get_name();
+                DEBUG_MSG(" '" << name << "'" <<
+                          (output_var_map.count(name) ? " (output var)" : ""));
+            }
         }
 
-        #ifdef USE_PMEM
-        DEBUG_MSG("PMEM var-allocation priority order:");
-        for (auto sp : sorted_var_ptrs) {
-            auto name = sp->get_name();
-            DEBUG_MSG(" '" << name << "'" <<
-                      (output_var_map.count(name) ? " (output var)" : ""));
-        }
-        #endif
-
-        // Base ptrs for all default-alloc'd data.
-        // These pointers will be shared by the ones in the var
-        // objects, which will take over ownership when these go
-        // out of scope.
-        // Key is numa code.
-        map <int, shared_ptr<char>> _var_data_buf;
-
+        // Requests for allocation.
+        AllocMap alloc_reqs;
+        
         #ifdef USE_PMEM
         auto max_sys_mem = (size_t)opts->_numa_pref_max * 1024*1024*1024;
         #endif
@@ -470,8 +465,14 @@ namespace yask {
             TRACE_MSG("alloc_var_data pass " << pass << " for " <<
                       all_var_ptrs.size() << " var(s)");
 
-            // Count bytes needed and number of vars for each NUMA node.
-            map <int, size_t> npbytes, nvars;
+            // Reset bytes needed and number of vars for each request.
+            for (auto& i : alloc_reqs) {
+                //auto& key = i.first;
+                auto& data = i.second;
+                data.nbytes = 0;
+                data.nvars = 0;
+            }
+            int seq_num = 0;
             size_t sys_mem_used = 0;
 
             // Vars.
@@ -503,21 +504,29 @@ namespace yask {
                     }
                     #endif
 
+                    // If not bundling allocations, increase sequence number.
+                    if (!opts->_bundle_allocs)
+                        seq_num++;
+
+                    // Make a request key and make or lookup data.
+                    AllocKey req_key = make_pair(numa_pref, seq_num);
+                    auto& req_data = alloc_reqs[req_key];
+                    
                     // Set storage if buffer has been allocated in pass 0.
                     if (pass == 1) {
-                        auto p = _var_data_buf[numa_pref];
+                        auto p = req_data.ptr;
                         assert(p);
 
                         // Offset into buffer is running byte count in 'npbytes'.
-                        gp->set_storage(p, npbytes[numa_pref]);
+                        gp->set_storage(p, req_data.nbytes);
                         DEBUG_MSG(gb.make_info_string());
                     }
 
                     // Running totals.
-                    npbytes[numa_pref] += res_bytes;
+                    req_data.nvars++;
+                    req_data.nbytes += res_bytes;
                     if (using_sys_mem)
                         sys_mem_used += res_bytes;
-                    nvars[numa_pref]++;
 
                     if (pass == 0)
                         TRACE_MSG(" var '" << gname << "' needs " << make_byte_str(nbytes) <<
@@ -527,11 +536,12 @@ namespace yask {
                 // Otherwise, just print existing var info.
                 else if (pass == 0)
                     DEBUG_MSG(gb.make_info_string());
-            }
+
+            } // vars.
 
             // Alloc for each "numa_pref" type.
             if (pass == 0)
-                _alloc_data(npbytes, nvars, _var_data_buf, "var");
+                _alloc_data(alloc_reqs, "var");
 
         } // var passes.
     };
@@ -946,12 +956,6 @@ namespace yask {
         // At this point, we have all the buffers configured.
         // Now we need to allocate space for them.
 
-        // Base ptrs for all alloc'd data.
-        // These pointers will be shared by the ones in the var
-        // objects, which will take over ownership when these go
-        // out of scope. Key is memory type.
-        map <int, shared_ptr<char>> _mpi_data_buf;
-
         // A table for send-buffer offsets for all rank pairs for every var:
         // [var-name][sending-rank][receiving-rank]
         map<string, vector<vector<size_t>>> sb_ofs;
@@ -962,6 +966,12 @@ namespace yask {
         // Make sure pad is big enough for shm locks.
         assert(_data_buf_pad >= sizeof(SimpleLock));
 
+        // Requests and base ptrs for all alloc'd data.
+        // These pointers will be shared by the ones in the var
+        // objects, which will take over ownership when these go
+        // out of scope. Key is memory type.
+        AllocMap alloc_reqs;
+
         // Allocate MPI buffers.
         // Pass 0: count required size, allocate chunk of memory at end.
         // Pass 1: distribute parts of already-allocated memory chunk.
@@ -970,8 +980,14 @@ namespace yask {
             TRACE_MSG("alloc_mpi_data pass " << pass << " for " <<
                       mpi_data.size() << " MPI buffer set(s)");
 
-            // Count bytes needed and number of buffers for each NUMA node.
-            map <int, size_t> npbytes, nbufs;
+            // Reset bytes needed and number of vars for each request.
+            for (auto& i : alloc_reqs) {
+                //auto& key = i.first;
+                auto& data = i.second;
+                data.nbytes = 0;
+                data.nvars = 0;
+            }
+            int seq_num = 0;
 
             // Vars. Use the map to ensure same order in all ranks.
             for (auto gi : all_var_map) {
@@ -999,7 +1015,7 @@ namespace yask {
                          MPIBufs& bufs) {
 
                          // Default is global numa pref setting for MPI
-                         // buffer, not possible override for this var.
+                         // buffer, not possible to override for each var.
                          int numa_pref = opts->_numa_pref;
 
                          // If neighbor can use MPI shm, set key, etc.
@@ -1010,20 +1026,30 @@ namespace yask {
                              assert(nshm_rank < env->num_shm_ranks);
                          }
 
-                         // Send and recv.
+                         // Send and recv bufs.
                          for (int bd = 0; bd < MPIBufs::n_buf_dirs; bd++) {
                              auto& buf = var_mpi_data.get_buf(MPIBufs::BufDir(bd), roffsets);
                              if (buf.get_size() == 0)
                                  continue;
 
+                             #if 0
+                             // If not bundling allocations, increase sequence number.
+                             if (!opts->_bundle_allocs)
+                                 seq_num++;
+                             #endif
+                             
+                             // Make a request key and make or lookup data.
+                             AllocKey req_key = make_pair(numa_pref, seq_num);
+                             auto& req_data = alloc_reqs[req_key];
+                    
                              // Don't use my mem for the recv buf if using shm;
                              // instead, we will share the neighbor's send buf.
                              bool use_mine = !(bd == MPIBufs::buf_recv && nshm_rank != MPI_PROC_NULL);
 
                              // Set storage if buffer has been allocated in pass 0.
                              if (pass == 1 && use_mine) {
-                                 auto base = _mpi_data_buf[numa_pref];
-                                 auto ofs = npbytes[numa_pref];
+                                 auto& base = req_data.ptr;
+                                 auto ofs = req_data.nbytes;
                                  assert(base);
                                  auto* rp = buf.set_storage(base, ofs);
                                  TRACE_MSG("  MPI buf '" << buf.name << "' at " << rp <<
@@ -1061,14 +1087,15 @@ namespace yask {
                              // in my mem.
                              if (use_mine) {
                                  auto sbytes = buf.get_bytes();
-                                 npbytes[numa_pref] += ROUND_UP(sbytes + _data_buf_pad,
-                                                                CACHELINE_BYTES);
-                                 nbufs[numa_pref]++;
+                                 req_data.nbytes += ROUND_UP(sbytes + _data_buf_pad,
+                                                             CACHELINE_BYTES);
+                                 req_data.nvars++;
                                  if (pass == 0)
                                      TRACE_MSG("  MPI buf '" << buf.name << "' needs " <<
                                                make_byte_str(sbytes) <<
                                                " (mem-key = " << numa_pref << ")");
                              }
+
                          } // snd/rcv.
                      } );  // neighbors.
 
@@ -1085,12 +1112,11 @@ namespace yask {
                                       " is " << sb_ofs[gname][rn][rn2]);
                     }
                 }
-
             } // vars.
 
             // Alloc for each mem type.
             if (pass == 0)
-                _alloc_data(npbytes, nbufs, _mpi_data_buf, "MPI buffer");
+                _alloc_data(alloc_reqs, "MPI buffer");
 
             MPI_Barrier(env->shm_comm);
         } // MPI passes.
@@ -1109,11 +1135,11 @@ namespace yask {
         // Remove any old scratch data.
         free_scratch_data();
 
-        // Base ptrs for all alloc'd data.
+        // Requests and base ptrs for all alloc'd data.
         // This pointer will be shared by the ones in the var
         // objects, which will take over ownership when it goes
         // out of scope.
-        map <int, shared_ptr<char>> _scratch_data_buf;
+        AllocMap alloc_reqs;
 
         // Make sure the right number of threads are set so we
         // have the right number of scratch vars.
@@ -1149,8 +1175,14 @@ namespace yask {
             TRACE_MSG("alloc_scratch_data pass " << pass << " for " <<
                       scratch_vecs.size() << " set(s) of scratch vars");
 
-            // Count bytes needed and number of vars for each NUMA node.
-            map <int, size_t> npbytes, nvars;
+            // Reset bytes needed and number of vars for each request.
+            for (auto& i : alloc_reqs) {
+                //auto& key = i.first;
+                auto& data = i.second;
+                data.nbytes = 0;
+                data.nvars = 0;
+            }
+            int seq_num = 0;
 
             // Loop through each scratch var vector.
             for (auto* sgv : scratch_vecs) {
@@ -1187,30 +1219,39 @@ namespace yask {
                         }
                     } // dims.
 
+                    // If not bundling allocations, increase sequence number.
+                    if (!opts->_bundle_allocs)
+                        seq_num++;
+
+                    // Make a request key and make or lookup data.
+                    AllocKey req_key = make_pair(numa_pref, seq_num);
+                    auto& req_data = alloc_reqs[req_key];
+                    
                     // Set storage if buffer has been allocated.
                     if (pass == 1) {
-                        auto p = _scratch_data_buf[numa_pref];
+                        auto p = req_data.ptr;
                         assert(p);
-                        gp->set_storage(p, npbytes[numa_pref]);
+                        gp->set_storage(p, req_data.nbytes);
                         TRACE_MSG(gb.make_info_string());
                     }
 
                     // Determine size used (also offset to next location).
                     size_t nbytes = gp->get_num_storage_bytes();
-                    npbytes[numa_pref] += ROUND_UP(nbytes + _data_buf_pad,
-                                                   CACHELINE_BYTES);
-                    nvars[numa_pref]++;
+                    req_data.nbytes += ROUND_UP(nbytes + _data_buf_pad,
+                                                CACHELINE_BYTES);
+                    req_data.nvars++;
                     if (pass == 0)
                         TRACE_MSG(" scratch var '" << gname << "' for thread " <<
                                   thr_num << " needs " << make_byte_str(nbytes) <<
                                   " on NUMA node " << numa_pref);
                     thr_num++;
+
                 } // scratch vars.
             } // scratch-var vecs.
 
             // Alloc for each node.
             if (pass == 0)
-                _alloc_data(npbytes, nvars, _scratch_data_buf, "scratch var");
+                _alloc_data(alloc_reqs, "scratch var");
 
         } // scratch-var passes.
     }

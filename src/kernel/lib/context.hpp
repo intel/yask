@@ -203,9 +203,7 @@ namespace yask {
         static constexpr size_t _data_buf_pad = YASK_PAD_BYTES;
 
         // Alloc given bytes on each NUMA node.
-        virtual void _alloc_data(const std::map <int, size_t>& nbytes,
-                                 const std::map <int, size_t>& nvars,
-                                 std::map <int, std::shared_ptr<char>>& _data_buf,
+        virtual void _alloc_data(AllocMap& alloc_reqs,
                                  const std::string& type);
 
         // Callbacks.

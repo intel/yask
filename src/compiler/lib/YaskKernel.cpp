@@ -265,7 +265,7 @@ namespace yask {
             // Create the template params.
             // Type-name in kernel is 'VAR_TYPE<LAYOUT, WRAP_1ST_IDX, VEC_LENGTHS...>'.
             {
-                string templ = "<Layout_";
+                string templ;
                 int step_posn = 0;
                 int inner_posn = 0;
                 bool got_step = false;
@@ -278,11 +278,17 @@ namespace yask {
                         auto& dim = gp->get_dims()[dn];
                         auto& dname = dim->_get_name();
                         auto dtype = dim->get_type();
-                        bool defer = false; // add dim later.
+                        bool defer = false; // add dim to layout later.
+
+                        // Add vector len to list.
+                        if (folded) {
+                            auto* p = _dims._fold.lookup(dname);
+                            int dval = p ? *p : 1;
+                            vlens.push_back(dval);
+                        }
 
                         // Step dim?  If this exists, it will get placed
-                        // near to the end if the "inner step" setting is
-                        // used, just before the inner & misc dims.
+                        // after the outer dim if requested.
                         if (dtype == STEP_INDEX) {
                             assert(dname == _dims._step_dim);
                             if (dn > 0) {
@@ -300,6 +306,7 @@ namespace yask {
                         // Inner domain dim?  If this exists, it will get
                         // placed at end (or just before misc dims if "inner
                         // misc" setting is used).
+                        // TODO: put all domain dims in their preferred order.
                         else if (dname == _dims._inner_dim) {
                             assert(dtype == DOMAIN_INDEX);
                             inner_posn = dn + 1;
@@ -315,23 +322,24 @@ namespace yask {
                             }
                         }
 
-                        // Add this index position to layout if not deferred.
+                        // Add this index position to layout now unless deferred.
                         if (!defer) {
                             int other_posn = dn + 1;
                             templ += to_string(other_posn);
                         }
-
-                        // Add vector len to list.
-                        if (folded) {
-                            auto* p = _dims._fold.lookup(dname);
-                            int dval = p ? *p : 1;
-                            vlens.push_back(dval);
-                        }
                     }
 
-                    // Add deferred posns at end.
-                    if (step_posn)
-                        templ += to_string(step_posn);
+                    // Add deferred posns.
+                    if (step_posn) {
+
+                        // Step var in 2nd dim if a dim exists.
+                        if (templ.length())
+                            templ.insert(1, to_string(step_posn));
+
+                        // Else at beginning.
+                        else
+                            templ += to_string(step_posn);
+                    }
                     if (inner_posn)
                         templ += to_string(inner_posn);
                     for (auto mp : misc_posns)
@@ -353,6 +361,7 @@ namespace yask {
                     for (auto i : vlens)
                         templ += ", " + to_string(i);
                 }
+                templ.insert(0, "<Layout_");
                 templ += ">";
 
                 // Add templates to types.
@@ -633,11 +642,11 @@ namespace yask {
                     CppVecPrintHelper* vp = new_cpp_vec_print_helper(vv, cv);
                     vp->set_write_mask(write_mask);
 
-                    // Print loop-invariant values, if any.
+                    // Print loop-invariant meta values.
                     // Store them in the CppVecPrintHelper for later use in the loop body.
-                    os << "\n ////// Loop-invariant values.\n";
-                    CppPreLoopPrintVisitor plv(os, *vp);
-                    vceq->visit_eqs(&plv);
+                    os << "\n ////// Loop-invariant meta values.\n";
+                    CppPreLoopPrintMetaVisitor plpmv(os, *vp);
+                    vceq->visit_eqs(&plpmv);
 
                     // Inner-loop strides.
                     string inner_strides = do_cluster ?
@@ -682,6 +691,12 @@ namespace yask {
                     // Get named indices from 'idxs'.
                     print_indices(os, false, true, "start_");
                     vp->print_elem_indices(os);
+
+                    // Print loop-invariant data values.
+                    // TODO: move outside of loop.
+                    // Store them in the CppVecPrintHelper for later use in the loop body.
+                    CppPreLoopPrintMetaVisitor plpdv(os, *vp);
+                    vceq->visit_eqs(&plpdv);
 
                     // Generate loop body using vars stored in print helper.
                     // Visit all expressions to cover the whole vector/cluster.

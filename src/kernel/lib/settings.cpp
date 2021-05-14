@@ -362,6 +362,11 @@ namespace yask {
                            "when temporal blocking is active. "
                            "This option is ignored if there are fewer than two block threads.",
                            bind_block_threads));
+        parser.add_option(new CommandLineParser::BoolOption
+                          ("bundle_allocs",
+                           "[Advanced] Allocate memory for multiple YASK vars in "
+                           "a single large chunk when possible.",
+                           _bundle_allocs));
 #ifdef USE_NUMA
         parser.add_option(new CommandLineParser::IntOption
                           ("numa_pref",

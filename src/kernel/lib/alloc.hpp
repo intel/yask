@@ -184,5 +184,19 @@ namespace yask {
         return _base;
     }
 
+    // Key for allocating memory.
+    // Pair is mem type and sequence number.
+    typedef std::pair<int, int> AllocKey;
+
+    // Data for allocating mem.
+    struct AllocData {
+        std::shared_ptr<char> ptr;
+        size_t nbytes = 0;
+        int nvars = 0;
+    };
+
+    // Map from alloc key to data.
+    typedef std::map<AllocKey, AllocData> AllocMap;
+    
 }
 

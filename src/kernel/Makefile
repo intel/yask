@@ -969,8 +969,8 @@ DEF_TEST_ARGS := -log_dir $(TEST_LOG_OUT_DIR) \
 # Test args for 1 and >1 ranks.
 test_args0	:=	$(DEF_TEST_ARGS) -l 48 -r 32 -b 24 -rt 0 $(EXTRA_TEST_ARGS)
 test_args1	:=	$(DEF_TEST_ARGS) -l 64 -b 48 -mb 32 -nb 24 -pb 16 -rt 1 $(EXTRA_TEST_ARGS)
-test_args2	:=	$(DEF_TEST_ARGS) -l 63 -r 32 -b 24 -mb 16 -rt 2 $(EXTRA_TEST_ARGS)
-test_args3	:=	$(DEF_TEST_ARGS) -l 63 -r 48 -b 24 -mb 16 -bt 2 $(EXTRA_TEST_ARGS)
+test_args2	:=	$(DEF_TEST_ARGS) -l 63 -r 32 -b 24 -mb 16 -rt 2 $(EXTRA_TEST_ARGS) -bundle_allocs
+test_args3	:=	$(DEF_TEST_ARGS) -l 63 -r 48 -b 24 -mb 16 -bt 2 $(EXTRA_TEST_ARGS) -no-bundle_allocs
 test_args4	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -bind_block_threads $(EXTRA_TEST_ARGS)
 
 # Test args for >1 ranks only.

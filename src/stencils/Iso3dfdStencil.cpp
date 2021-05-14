@@ -66,7 +66,7 @@ namespace {
 
             // Grid spacing.
             // In this implementation, it's a constant.
-            // Could make this a YASK variable to allow setting at run-time.
+            // Could make this a scalar YASK variable to allow setting at run-time.
             double delta_xyz = 50.0;
             double d2 = delta_xyz * delta_xyz;
         
