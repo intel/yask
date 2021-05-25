@@ -58,73 +58,73 @@ struct MySettings {
 
         // Create a parser and add options to it.
         CommandLineParser parser;
-        parser.add_option(new CommandLineParser::BoolOption
+        parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("help",
                            "Print help message.",
                            help));
-        parser.add_option(new CommandLineParser::IntOption
+        parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("msg_rank",
                            "Index of MPI rank that will print informational messages.",
                            msg_rank));
-        parser.add_option(new CommandLineParser::BoolOption
+        parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("trace",
                            "Print internal debug messages if compiled with"
                            " general and/or memory-access tracing enabled.",
                            do_trace));
-        parser.add_option(new CommandLineParser::BoolOption
+        parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("pre_auto_tune",
                            "Run iteration(s) *before* performance trial(s) to find good-performing "
                            "values for block sizes. "
                            "Uses default values or command-line-provided values as a starting point.",
                            do_pre_auto_tune));
-        parser.add_option(new CommandLineParser::BoolOption
+        parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("warmup",
                            "Run warmup iteration(s) before performance "
                            "trial(s) and after auto-tuning iterations, if enabled.",
                            do_warmup));
-        parser.add_option(new CommandLineParser::IntOption
+        parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("step_alloc",
                            "Number of steps to allocate in relevant vars, "
                            "overriding default value from YASK compiler.",
                            step_alloc));
-        parser.add_option(new CommandLineParser::IntOption
+        parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("num_trials",
                            "Number of performance trials.",
                            num_trials));
-        parser.add_option(new CommandLineParser::IntOption
+        parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("t",
                            "[Deprecated] Use '-num_trials'.",
                            num_trials));
-        parser.add_option(new CommandLineParser::IntOption
+        parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("trial_steps",
                            "Number of steps to run each performance trial. "
                            "If zero, the 'trial_time' value is used to determine the number of steps to run.",
                            trial_steps));
-        parser.add_option(new CommandLineParser::IntOption
+        parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("dt",
                            "[Deprecated] Use '-trial_steps'.",
                            trial_steps));
-        parser.add_option(new CommandLineParser::IntOption
+        parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("init_val",
                            "Initialize all points in all stencil vars to given value. "
                            "If zero, points are set to different values.",
                            init_val));
-        parser.add_option(new CommandLineParser::IntOption
+        parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("trial_time",
                            "Approximate number of seconds to run each performance trial. "
                            "When the 'trial_steps' value is zero, the number of steps is "
                            "based on the rate measured in the warmup phase. "
                            "(Thus, warmup cannot be disabled when the number of steps is zero.)",
                            trial_time));
-        parser.add_option(new CommandLineParser::IntOption
+        parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("sleep",
                            "Number of seconds to sleep before each performance trial.",
                            pre_trial_sleep_time));
-        parser.add_option(new CommandLineParser::IntOption
+        parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("debug_sleep",
                            "Number of seconds to sleep for debug attach.",
                            debug_sleep));
-        parser.add_option(new CommandLineParser::BoolOption
+        parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("validate",
                            "Run validation iteration(s) after performance trial(s).",
                            validate));

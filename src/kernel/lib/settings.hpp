@@ -240,12 +240,13 @@ namespace yask {
 
         // Tuning.
         bool _do_auto_tune = false;    // whether to do "online" auto-tuning.
-        bool _tune_blks = true;
-        bool _tune_micro_blks = true;
-        bool _tune_nano_blks = true;
-        bool _tune_pico_blks = true;
         bool _allow_stage_tuners = false; // allow per-stage tuners when possible.
         double _tuner_trial_secs = 0.25;   // time to run tuner for new better setting.
+        std::vector<std::string> _tuner_targets; // things to tune from following.
+        std::string _block_str = "b";
+        std::string _micro_block_str = "mb";
+        std::string _nano_block_str = "nb";
+        std::string _pico_block_str = "pb";
 
         // Debug.
         bool force_scalar = false; // Do only scalar ops.

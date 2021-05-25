@@ -111,6 +111,10 @@ namespace yask {
  
         bool check_sizes(const IdxTuple& sizes);
         bool next_target();
+        bool is_target_active(std::string& target) {
+            auto& v = _settings->_tuner_targets;
+            return std::find(v.begin(), v.end(), target) != v.end();
+        }
 
     public:
         static constexpr idx_t max_stride_t = 4;

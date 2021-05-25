@@ -66,7 +66,7 @@ namespace yask {
 
         // Blocks?
         if (targetp == 0 &&
-            _settings->_tune_blks) {
+            is_target_active(_settings->_block_str)) {
             targetp = &_settings->_block_sizes;
             outerp = &_settings->_region_sizes;
 
@@ -86,7 +86,7 @@ namespace yask {
         // Micro-blocks?
         else if ((targetp == 0 ||
                   targetp == &_settings->_block_sizes) &&
-                 _settings->_tune_micro_blks) {
+                 is_target_active(_settings->_micro_block_str)) {
             targetp = &_settings->_micro_block_sizes;
             outerp = &_settings->_block_sizes;
             AT_DEBUG_MSG("searching micro-block sizes...");
@@ -96,7 +96,7 @@ namespace yask {
         else if ((targetp == 0 ||
                   targetp == &_settings->_block_sizes ||
                   targetp == &_settings->_micro_block_sizes) &&
-                 _settings->_tune_nano_blks) {
+                 is_target_active(_settings->_nano_block_str)) {
             targetp = &_settings->_nano_block_sizes;
             outerp = &_settings->_micro_block_sizes;
             AT_DEBUG_MSG("searching nano-block sizes...");
@@ -107,7 +107,7 @@ namespace yask {
                   targetp == &_settings->_block_sizes ||
                   targetp == &_settings->_micro_block_sizes ||
                   targetp == &_settings->_nano_block_sizes) &&
-                 _settings->_tune_pico_blks) {
+                 is_target_active(_settings->_pico_block_str)) {
             targetp = &_settings->_pico_block_sizes;
             outerp = &_settings->_nano_block_sizes;
             AT_DEBUG_MSG("searching pico-block sizes...");

@@ -202,7 +202,7 @@ namespace yask {
 
     public:
 
-        // Base class for an allowed option.
+        // Base class for a command-line option.
         class OptionBase {
         protected:
             std::string _name;
@@ -217,8 +217,8 @@ namespace yask {
 
             // Check for matching option to str at args[argi].
             // Return true and increment argi if match.
-            virtual bool _check_arg(const std::vector<std::string>& args, int& argi,
-                                    const std::string& str) const;
+            virtual bool _is_opt(const std::vector<std::string>& args, int& argi,
+                                 const std::string& str) const;
 
             // Get one double value from args[argi++].
             // Exit on failure.
@@ -227,6 +227,10 @@ namespace yask {
             // Get one idx_t value from args[argi++].
             // Exit on failure.
             virtual idx_t _idx_val(const std::vector<std::string>& args, int& argi);
+
+            // Get one string value from args[argi++].
+            // Exit on failure.
+            virtual std::string _string_val(const std::vector<std::string>& args, int& argi);
 
         public:
             OptionBase(const std::string& name,
@@ -255,8 +259,9 @@ namespace yask {
             // Return true, set val, and increment argi if match.
             virtual bool check_arg(const std::vector<std::string>& args, int& argi) =0;
         };
+        typedef std::shared_ptr<OptionBase> OptionPtr;
 
-        // An allowed boolean option.
+        // A boolean option.
         class BoolOption : public OptionBase {
             bool& _val;
 
@@ -267,11 +272,11 @@ namespace yask {
                 OptionBase(name, help_msg), _val(val) { }
 
             virtual void print_help(std::ostream& os,
-                                    int width) const;
-            virtual bool check_arg(const std::vector<std::string>& args, int& argi);
+                                    int width) const override;
+            virtual bool check_arg(const std::vector<std::string>& args, int& argi) override;
         };
 
-        // An allowed int option.
+        // An int option.
         class IntOption : public OptionBase {
             int& _val;
 
@@ -282,11 +287,11 @@ namespace yask {
                 OptionBase(name, help_msg), _val(val) { }
 
             virtual void print_help(std::ostream& os,
-                                    int width) const;
-            virtual bool check_arg(const std::vector<std::string>& args, int& argi);
+                                    int width) const override;
+            virtual bool check_arg(const std::vector<std::string>& args, int& argi) override;
         };
 
-        // An allowed double option.
+        // A double option.
         class DoubleOption : public OptionBase {
             double& _val;
 
@@ -297,11 +302,11 @@ namespace yask {
                 OptionBase(name, help_msg), _val(val) { }
 
             virtual void print_help(std::ostream& os,
-                                    int width) const;
-            virtual bool check_arg(const std::vector<std::string>& args, int& argi);
+                                    int width) const override;
+            virtual bool check_arg(const std::vector<std::string>& args, int& argi) override;
         };
 
-        // An allowed idx_t option.
+        // An idx_t option.
         class IdxOption : public OptionBase {
             idx_t& _val;
 
@@ -312,11 +317,11 @@ namespace yask {
                 OptionBase(name, help_msg), _val(val) { }
 
             virtual void print_help(std::ostream& os,
-                                    int width) const;
-            virtual bool check_arg(const std::vector<std::string>& args, int& argi);
+                                    int width) const override;
+            virtual bool check_arg(const std::vector<std::string>& args, int& argi) override;
         };
 
-        // An allowed idx_t option that sets multiple vars.
+        // An idx_t option that sets multiple vars.
         class MultiIdxOption : public OptionBase {
             std::vector<idx_t*> _vals;
 
@@ -329,28 +334,55 @@ namespace yask {
             }
 
             virtual void print_help(std::ostream& os,
-                                    int width) const;
+                                    int width) const override;
             virtual bool check_arg(const std::vector<std::string>& args,
-                                   int& argi);
+                                   int& argi) override;
+        };
+
+        // A string option.
+        class StringOption : public OptionBase {
+            std::string& _val;
+
+        public:
+            StringOption(const std::string& name,
+                         const std::string& help_msg,
+                         std::string& val) :
+                OptionBase(name, help_msg), _val(val) { }
+
+            virtual void print_help(std::ostream& os,
+                                    int width) const override;
+            virtual bool check_arg(const std::vector<std::string>& args, int& argi) override;
+        };
+
+        // A list-of-strings option.
+        class StringListOption : public OptionBase {
+            std::set<std::string> _allowed_strs; // empty to allow any strings.
+            std::vector<std::string>& _val;
+
+        public:
+            StringListOption(const std::string& name,
+                             const std::string& help_msg,
+                             std::set<std::string> allowed_strs,
+                             std::vector<std::string>& val) :
+                OptionBase(name, help_msg),
+                _allowed_strs(allowed_strs), _val(val) { }
+
+            virtual void print_help(std::ostream& os,
+                                    int width) const override;
+            virtual bool check_arg(const std::vector<std::string>& args, int& argi) override;
         };
 
     protected:
-        std::map<std::string, OptionBase*> _opts;
-        int _width;
+        std::map<std::string, OptionPtr> _opts;
+        int _width = 78;
 
     public:
 
         // Ctor.
-        CommandLineParser() : _width(78) { }
+        CommandLineParser() { }
 
         // Dtor.
-        ~CommandLineParser() {
-
-            // Delete options.
-            for (auto i : _opts) {
-                delete i.second;
-            }
-        }
+        virtual ~CommandLineParser() { }
 
         // Tokenize args from a string.
         static std::vector<std::string> set_args(const std::string& arg_string);
@@ -361,8 +393,7 @@ namespace yask {
         }
 
         // Add an allowed option.
-        // Options will be deleted upon destruction.
-        virtual void add_option(OptionBase* opt) {
+        virtual void add_option(OptionPtr opt) {
             _opts[opt->get_name()] = opt;
         }
 

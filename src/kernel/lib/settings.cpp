@@ -230,6 +230,12 @@ namespace yask {
 
         _rank_indices = dims->_domain_dims;
         _rank_indices.set_vals_same(0);
+
+        // Things to tune.
+        _tuner_targets.push_back(_block_str);
+        _tuner_targets.push_back(_micro_block_str);
+        _tuner_targets.push_back(_nano_block_str);
+        _tuner_targets.push_back(_pico_block_str);
     }
 
     // Add options to set one domain var to a cmd-line parser.
@@ -249,7 +255,7 @@ namespace yask {
             idx_t* dp = var.lookup(dname); // use lookup() to get non-const ptr.
 
             // Option for individual dim.
-            parser.add_option(new CommandLineParser::IdxOption
+            parser.add_option(make_shared<CommandLineParser::IdxOption>
                               (prefix + dname,
                                descrip + " in '" + dname + "' dimension.",
                                *dp));
@@ -265,7 +271,7 @@ namespace yask {
         auto shortcut = prefix;
         if (shortcut.back() == '_')
             shortcut.pop_back();
-        parser.add_option(new CommandLineParser::MultiIdxOption
+        parser.add_option(make_shared<CommandLineParser::MultiIdxOption>
                           (shortcut,
                            "Shortcut for" + multi_help,
                            multi_vars));
@@ -275,7 +281,7 @@ namespace yask {
     void KernelSettings::add_options(CommandLineParser& parser)
     {
         // Following options are in the 'yask' namespace, i.e., no object.
-        parser.add_option(new CommandLineParser::BoolOption
+        parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("print_suffixes",
                            "Format output with suffixes for human readibility, e.g., 6.15K, 12.3GiB, 7.45m."
                            " If disabled, prints without suffixes for computer parsing, e.g., 6150, 1.23e+10, 7.45e-3.",
@@ -284,13 +290,13 @@ namespace yask {
         // Following options are in 'this' object.
         _add_domain_option(parser, "g", "Global-domain (overall-problem) size", _global_sizes);
         _add_domain_option(parser, "l", "Local-domain (rank) size", _rank_sizes);
-        _add_domain_option(parser, "d", "[Deprecated] Use -l", _rank_sizes);
+        _add_domain_option(parser, "d", "[Deprecated] Use local-domain size options", _rank_sizes);
         _add_domain_option(parser, "r", "Region size", _region_sizes, true);
-        _add_domain_option(parser, "b", "Block size", _block_sizes, true);
-        _add_domain_option(parser, "mb", "Micro-block size", _micro_block_sizes);
-        _add_domain_option(parser, "nb", "Nano-block size", _nano_block_sizes);
-        _add_domain_option(parser, "sb", "[Deprecated] Use -nb", _nano_block_sizes);
-        _add_domain_option(parser, "pb", "Pico-block size", _pico_block_sizes);
+        _add_domain_option(parser, _block_str, "Block size", _block_sizes, true);
+        _add_domain_option(parser, _micro_block_str, "Micro-block size", _micro_block_sizes);
+        _add_domain_option(parser, _nano_block_str, "Nano-block size", _nano_block_sizes);
+        _add_domain_option(parser, _pico_block_str, "Pico-block size", _pico_block_sizes);
+        _add_domain_option(parser, "sb", "[Deprecated] Use nano-block options", _nano_block_sizes);
 #ifdef USE_TILING
         _add_domain_option(parser, "l_tile", "[Advanced] Local-domain-tile size", _rank_tile_sizes);
         _add_domain_option(parser, "r_tile", "[Advanced] Region-tile size", _region_tile_sizes);
@@ -300,7 +306,7 @@ namespace yask {
 #endif
         _add_domain_option(parser, "mp", "[Advanced] Minimum var-padding size (including halo)", _min_pad_sizes);
         _add_domain_option(parser, "ep", "[Advanced] Extra var-padding size (beyond halo)", _extra_pad_sizes);
-        parser.add_option(new CommandLineParser::BoolOption
+        parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("allow_addl_padding",
                            "[Advanced] Allow automatic extension of padding beyond what is needed for"
                            " vector alignment for additional performance reasons",
@@ -308,17 +314,17 @@ namespace yask {
 #ifdef USE_MPI
         _add_domain_option(parser, "nr", "Num ranks", _num_ranks);
         _add_domain_option(parser, "ri", "This rank's logical index (0-based)", _rank_indices);
-        parser.add_option(new CommandLineParser::BoolOption
+        parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("overlap_comms",
                            "Overlap MPI communication with calculation of interior elements whenever possible.",
                            overlap_comms));
-        parser.add_option(new CommandLineParser::IdxOption
+        parser.add_option(make_shared<CommandLineParser::IdxOption>
                           ("min_exterior",
                            "[Advanced] Minimum width of exterior section to"
                            " compute before starting MPI communication. "
                            "Applicable only when overlap_comms is enabled.",
                            _min_exterior));
-        parser.add_option(new CommandLineParser::BoolOption
+        parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("use_shm",
                            "Directly use shared memory for halo-exchange buffers "
                            "between ranks on the same node when possible. "
@@ -326,24 +332,24 @@ namespace yask {
                            "that are used between nodes.",
                            use_shm));
 #endif
-        parser.add_option(new CommandLineParser::BoolOption
+        parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("force_scalar",
                            "[Advanced] Evaluate every var point with scalar stencil operations "
                            "and exchange halos using only scalar packing and unpacking (for debug).",
                            force_scalar));
-        parser.add_option(new CommandLineParser::IntOption
+        parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("max_threads",
                            "Maximum OpenMP threads to use. "
                            "If set to zero (0), the default value from the OpenMP library is used.",
                            max_threads));
-        parser.add_option(new CommandLineParser::IntOption
+        parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("thread_divisor",
                            "Divide the maximum number of OpenMP threads by the specified value, "
                            "discarding any remainder. "
                            "The maximum number of OpenMP threads is determined by the -max_threads "
                            "option or the default value from the OpenMP library. ",
                            thread_divisor));
-        parser.add_option(new CommandLineParser::IntOption
+        parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("block_threads",
                            "Number of threads to use in a nested OpenMP region for each block. "
                            "Will be restricted to a value less than or equal to "
@@ -352,7 +358,7 @@ namespace yask {
                            "Each thread is used to execute stencils within a nano-block, and "
                            "nano-blocks are executed in parallel within micro-blocks.",
                            num_block_threads));
-        parser.add_option(new CommandLineParser::BoolOption
+        parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("bind_block_threads",
                            "[Advanced] Divide micro-blocks into nano-blocks of slabs along the first valid dimension "
                            "(usually the outer-domain dimension), ignoring other nano-block sizes. "
@@ -362,13 +368,13 @@ namespace yask {
                            "when temporal blocking is active. "
                            "This option is ignored if there are fewer than two block threads.",
                            bind_block_threads));
-        parser.add_option(new CommandLineParser::BoolOption
+        parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("bundle_allocs",
                            "[Advanced] Allocate memory for multiple YASK vars in "
                            "a single large chunk when possible.",
                            _bundle_allocs));
 #ifdef USE_NUMA
-        parser.add_option(new CommandLineParser::IntOption
+        parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("numa_pref",
                            "[Advanced] Preferred NUMA node on which to allocate data for "
                            "vars and MPI buffers. Alternatively, use special values " +
@@ -378,14 +384,14 @@ namespace yask {
                            _numa_pref));
 #endif
 #ifdef USE_PMEM
-        parser.add_option(new CommandLineParser::IntOption
+        parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("pmem_threshold",
                            "[Advanced] First allocate up to this many GiB for vars using system memory, "
                            "then allocate memory for remaining vars from a PMEM (persistent memory) device "
                            "named '/mnt/pmemX', where 'X' corresponds to the NUMA node of the YASK process.",
                            _numa_pref_max));
 #endif
-        parser.add_option(new CommandLineParser::BoolOption
+        parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("auto_tune",
                            "Adjust specified block and tile sizes *during* normal operation "
                            "to tune for performance, a.k.a., 'online' or 'in-situ' tuning. "
@@ -395,45 +401,35 @@ namespace yask {
                            "However, this can be a useful tool for deployment of YASK stencils "
                            "onto unknown and/or varied systems where 'offline' tuning is not practical.",
                            _do_auto_tune));
-        parser.add_option(new CommandLineParser::DoubleOption
+        parser.add_option(make_shared<CommandLineParser::DoubleOption>
                           ("auto_tune_trial_secs",
                            "[Advanced] Seconds to run new trial during auto-tuning "
                            "for new trial to be considered better than the existing best.",
                            _tuner_trial_secs));
-        parser.add_option(new CommandLineParser::BoolOption
+        parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("auto_tune_each_stage",
                            "[Advanced] Apply the auto-tuner separately to each stage. "
                            "Will only be used if stages are applied in separate "
                            "passes across the entire var, "
                            "i.e., when no temporal tiling is used.",
                            _allow_stage_tuners));
-        parser.add_option(new CommandLineParser::BoolOption
-                          ("auto_tune_blocks",
-                           "[Advanced] Apply the auto-tuner to block sizes. "
-                           "This is the most common tuning for CPU kernels. "
-                           "Auto-tuning blocks will automatically set all lower-level "
-                           "sizes to their defaults after each change to the block sizes.",
-                           _tune_blks));
-        parser.add_option(new CommandLineParser::BoolOption
-                          ("auto_tune_micro_blocks",
-                           "[Advanced] Apply the auto-tuner to micro-block sizes. "
-                           "Often useful when using temporal block tiling."
-                           "Auto-tuning micro-blocks will automatically set all lower-level "
-                           "sizes to their defaults after each change to the micro-block sizes.",
-                           _tune_micro_blks));
-        parser.add_option(new CommandLineParser::BoolOption
-                          ("auto_tune_nano_blocks",
-                           "[Advanced] Apply the auto-tuner to nano-block sizes. "
-                           "Auto-tuning nano-blocks will automatically set all lower-level "
-                           "sizes to their defaults after each change to the nano-block sizes.",
-                           _tune_nano_blks));
-        parser.add_option(new CommandLineParser::BoolOption
-                          ("auto_tune_pico_blocks",
-                           "[Advanced] Apply the auto-tuner to pico-block sizes. "
-                           "May be especially useful for tuning GPU kernels. "
-                           "Auto-tuning pico-blocks will automatically set all lower-level "
-                           "sizes to their defaults after each change to the pico-block sizes.",
-                           _tune_pico_blks));
+
+        set<string> allowed_targets;
+        allowed_targets.insert(_block_str);
+        allowed_targets.insert(_micro_block_str);
+        allowed_targets.insert(_nano_block_str);
+        allowed_targets.insert(_pico_block_str);
+        parser.add_option(make_shared<CommandLineParser::StringListOption>
+                          ("auto_tune_targets",
+                           "[Advanced] Apply the auto-tuner to adjust the sizes of the listed targets. "
+                           "Allowed targets are '" + _block_str + "' for block sizes, "
+                           "'" + _micro_block_str + "' for micro-block sizes, "
+                           "'" + _nano_block_str + "' for nano-block sizes, and "
+                           "'" + _pico_block_str + "' for pico-block sizes. "
+                           "Targets must be separated by a single comma (','). "
+                           "When auto-tuning a given size, all lower-level "
+                           "sizes will be reset to their defaults.",
+                           allowed_targets, _tuner_targets));
     }
 
     // Print usage message.

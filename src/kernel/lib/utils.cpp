@@ -164,7 +164,7 @@ namespace yask {
 
     // Check for matching option to "-"str at args[argi].
     // Return true and increment argi if match.
-    bool CommandLineParser::OptionBase::_check_arg(const std::vector<std::string>& args,
+    bool CommandLineParser::OptionBase::_is_opt(const std::vector<std::string>& args,
                                                    int& argi,
                                                    const std::string& str) const
     {
@@ -219,15 +219,29 @@ namespace yask {
         return idx_t(val);
     }
 
+    // Get one string value from args[argi].
+    // On failure, print msg using string from args[argi-1] and exit.
+    // On success, increment argi and return value.
+    string CommandLineParser::OptionBase::_string_val(const vector<string>& args,
+                                                      int& argi)
+    {
+        if (size_t(argi) >= args.size())
+            THROW_YASK_EXCEPTION("Error: no argument for option '" + args[argi - 1] + "'");
+
+        auto v = args[argi];
+        argi++;
+        return v;
+    }
+
     // Check for a boolean option.
     bool CommandLineParser::BoolOption::check_arg(const std::vector<std::string>& args,
                                                   int& argi) {
-        if (_check_arg(args, argi, _name)) {
+        if (_is_opt(args, argi, _name)) {
             _val = true;
             return true;
         }
         string false_name = string("no-") + _name;
-        if (_check_arg(args, argi, false_name)) {
+        if (_is_opt(args, argi, false_name)) {
             _val = false;
             return true;
         }
@@ -245,7 +259,7 @@ namespace yask {
     // Check for a double option.
     bool CommandLineParser::DoubleOption::check_arg(const std::vector<std::string>& args,
                                                     int& argi) {
-        if (_check_arg(args, argi, _name)) {
+        if (_is_opt(args, argi, _name)) {
             _val = _double_val(args, argi);
             return true;
         }
@@ -263,7 +277,7 @@ namespace yask {
     // Check for an int option.
     bool CommandLineParser::IntOption::check_arg(const std::vector<std::string>& args,
                                                  int& argi) {
-        if (_check_arg(args, argi, _name)) {
+        if (_is_opt(args, argi, _name)) {
             _val = (int)_idx_val(args, argi); // TODO: check for over/underflow.
             return true;
         }
@@ -281,7 +295,7 @@ namespace yask {
     // Check for an idx_t option.
     bool CommandLineParser::IdxOption::check_arg(const std::vector<std::string>& args,
                                                  int& argi) {
-        if (_check_arg(args, argi, _name)) {
+        if (_is_opt(args, argi, _name)) {
             _val = _idx_val(args, argi);
             return true;
         }
@@ -312,7 +326,7 @@ namespace yask {
     // Check for an multi-idx_t option.
     bool CommandLineParser::MultiIdxOption::check_arg(const std::vector<std::string>& args,
                                                       int& argi) {
-        if (_check_arg(args, argi, _name)) {
+        if (_is_opt(args, argi, _name)) {
             idx_t val = _idx_val(args, argi);
             for (size_t i = 0; i < _vals.size(); i++)
                 *_vals[i] = val;
@@ -321,10 +335,63 @@ namespace yask {
         return false;
     }
 
+    // Check for a string option.
+    bool CommandLineParser::StringOption::check_arg(const std::vector<std::string>& args,
+                                                    int& argi) {
+        if (_is_opt(args, argi, _name)) {
+            _val = _string_val(args, argi);
+            return true;
+        }
+        return false;
+    }
+
+    // Print help on a string option.
+    void CommandLineParser::StringOption::print_help(ostream& os,
+                                                     int width) const {
+        _print_help(os, _name + " <string>", width);
+        os << _help_leader << _current_value_str <<
+            _val << "." << endl;
+    }
+
+    // Check for a string-list option.
+    bool CommandLineParser::StringListOption::check_arg(const std::vector<std::string>& args,
+                                                        int& argi) {
+        if (_is_opt(args, argi, _name)) {
+            _val.clear();
+            string strs = _string_val(args, argi);
+            stringstream ss(strs);
+            string str;
+            while (getline(ss, str, ',')) {
+                if (_allowed_strs.size() && _allowed_strs.count(str) == 0) {
+                    THROW_YASK_EXCEPTION("Error: illegal argument '" + str + "' to option '" +
+                                         args[argi - 2] + "'");
+                }
+                _val.push_back(str);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    // Print help on a string-list option.
+    void CommandLineParser::StringListOption::print_help(ostream& os,
+                                                         int width) const {
+        _print_help(os, _name + " <string[,string[,...]]>", width);
+        os << _help_leader << _current_value_str;
+        int n = 0;
+        for (auto& v : _val) {
+            if (n)
+                os << ",";
+            os << v;
+            n++;
+        }
+        os << endl;
+    }
+
     // Print help on all options.
     void CommandLineParser::print_help(ostream& os) const {
         for (auto oi : _opts) {
-            const auto* opt = oi.second;
+            const auto opt = oi.second;
             opt->print_help(os, _width);
         }
     }
@@ -342,7 +409,7 @@ namespace yask {
             // Compare against all registered options.
             bool matched = false;
             for (auto oi : _opts) {
-                auto* opt = oi.second;
+                auto opt = oi.second;
 
                 // If a match is found, argi will be incremeted
                 // as needed beyond option and/or its arg.
@@ -373,39 +440,46 @@ namespace yask {
 
     // Tokenize args from a string.
     vector<string> CommandLineParser::set_args(const string& arg_string) {
-        string tmp;
-        bool in_quotes = false;
+        string tmp;            // current arg.
+        char in_quote = '\0';  // current string delimiter or null if none.
         vector<string> args;
         for (char c : arg_string) {
 
-            // If WS, start a new string unless in quotes.
-            if (isspace(c)) {
-                if (in_quotes)
-                    tmp += c;
-                else {
-                    if (tmp.length())
-                        args.push_back(tmp);
+            // If in quotes, add to string or handle end.
+            if (in_quote != '\0') {
+
+                // End of quoted string, i.e., this char
+                // matches opening quote.
+                if (in_quote == c) {
+                    args.push_back(tmp); // may be empty string.
                     tmp.clear();
+                    in_quote = '\0';
                 }
+
+                else
+                    tmp += c;
             }
 
-            // If quote, start or end double-quotes.
-            // TODO: handle single-quotes.
-            else if (c == '"') {
-                if (in_quotes) {
-                    if (tmp.length())
-                        args.push_back(tmp);
-                    tmp.clear();
-                    in_quotes = false;
-                }
-                else
-                    in_quotes = true;
+            // If WS, save old string and start a new string.
+            else if (isspace(c)) {
+                if (tmp.length())
+                    args.push_back(tmp);
+                tmp.clear();
+            }
+
+            // If quote, remember delimiter.
+            else if (c == '"' || c == '\'') {
+                in_quote = c;
             }
 
             // Otherwise, just add to tmp.
             else
                 tmp += c;
         }
+
+        if (in_quote != '\0')
+            THROW_YASK_EXCEPTION("Error: unterminated quote in '" +
+                                 arg_string + "'");
 
         // Last string.
         if (tmp.length())
