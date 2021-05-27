@@ -505,7 +505,7 @@ namespace yask {
                     #endif
 
                     // If not bundling allocations, increase sequence number.
-                    if (!opts->_bundle_allocs)
+                    if (!actl_opts->_bundle_allocs)
                         seq_num++;
 
                     // Make a request key and make or lookup data.
@@ -575,7 +575,7 @@ namespace yask {
                  // Is vectorized exchange allowed based on domain sizes?
                  // Both my rank and neighbor rank must have *all* domain sizes
                  // of vector multiples.
-                 bool vec_ok = !opts->force_scalar && allow_vec_exchange &&
+                 bool vec_ok = !actl_opts->force_scalar && allow_vec_exchange &&
                      mpi_info->has_all_vlen_mults[mpi_info->my_neighbor_index] &&
                      mpi_info->has_all_vlen_mults[neigh_idx];
 
@@ -640,9 +640,9 @@ namespace yask {
                              idx_t lidx = gp->get_last_rank_domain_index(dname);
                              first_inner_idx.add_dim_back(dname, fidx);
                              last_inner_idx.add_dim_back(dname, lidx);
-                             if (opts->is_first_rank(dname))
+                             if (actl_opts->is_first_rank(dname))
                                  fidx -= lhalo; // extend into left halo.
-                             if (opts->is_last_rank(dname))
+                             if (actl_opts->is_last_rank(dname))
                                  lidx += rhalo; // extend into right halo.
                              first_outer_idx.add_dim_back(dname, fidx);
                              last_outer_idx.add_dim_back(dname, lidx);
@@ -779,7 +779,7 @@ namespace yask {
                                  auto neigh_ofs = neigh_offsets[dname];
 
                                  // Min MPI exterior options.
-                                 idx_t min_ext = opts->_min_exterior;
+                                 idx_t min_ext = actl_opts->_min_exterior;
 
                                  // Region to read from, i.e., data from inside
                                  // this rank's domain to be put into neighbor's
@@ -948,7 +948,7 @@ namespace yask {
         TRACE_MSG("number of elements in recv buffers: " << make_num_str(num_elems[int(MPIBufs::buf_recv)]));
 
         // Finalize interior BB if there are multiple ranks and overlap enabled.
-        if (env->num_ranks > 1 && opts->overlap_comms) {
+        if (env->num_ranks > 1 && actl_opts->overlap_comms) {
             mpi_interior.update_bb("interior", this, true);
             TRACE_MSG("MPI interior BB: [" << mpi_interior.make_range_string(domain_dims) << "]");
         }
@@ -1016,7 +1016,7 @@ namespace yask {
 
                          // Default is global numa pref setting for MPI
                          // buffer, not possible to override for each var.
-                         int numa_pref = opts->_numa_pref;
+                         int numa_pref = actl_opts->_numa_pref;
 
                          // If neighbor can use MPI shm, set key, etc.
                          auto nshm_rank = mpi_info->shm_ranks.at(nidx);
@@ -1034,7 +1034,7 @@ namespace yask {
 
                              #if 0
                              // If not bundling allocations, increase sequence number.
-                             if (!opts->_bundle_allocs)
+                             if (!actl_opts->_bundle_allocs)
                                  seq_num++;
                              #endif
                              
@@ -1166,13 +1166,13 @@ namespace yask {
                 mblksize[j] = max(mblksize[j], sz);
             }
         }
-        TRACE_MSG("alloc_scratch_data: max rounded-up micro-block size across stage(s) is " <<
+        TRACE_MSG("max rounded-up micro-block size across stage(s) is " <<
                   mblksize.make_dim_val_str(" * "));
 
         // Pass 0: count required size, allocate chunk of memory at end.
         // Pass 1: distribute parts of already-allocated memory chunk.
         for (int pass = 0; pass < 2; pass++) {
-            TRACE_MSG("alloc_scratch_data pass " << pass << " for " <<
+            TRACE_MSG("pass " << pass << " for " <<
                       scratch_vecs.size() << " set(s) of scratch vars");
 
             // Reset bytes needed and number of vars for each request.
@@ -1214,13 +1214,13 @@ namespace yask {
 
                             // Pads.
                             // Set via both 'extra' and 'min'; larger result will be used.
-                            gp->set_extra_pad_size(dname, opts->_extra_pad_sizes[dname]);
-                            gp->set_min_pad_size(dname, opts->_min_pad_sizes[dname]);
+                            gp->set_extra_pad_size(dname, actl_opts->_extra_pad_sizes[dname]);
+                            gp->set_min_pad_size(dname, actl_opts->_min_pad_sizes[dname]);
                         }
                     } // dims.
 
                     // If not bundling allocations, increase sequence number.
-                    if (!opts->_bundle_allocs)
+                    if (!actl_opts->_bundle_allocs)
                         seq_num++;
 
                     // Make a request key and make or lookup data.
@@ -1241,7 +1241,7 @@ namespace yask {
                                                 CACHELINE_BYTES);
                     req_data.nvars++;
                     if (pass == 0)
-                        TRACE_MSG(" scratch var '" << gname << "' for thread " <<
+                        TRACE_MSG("scratch var '" << gname << "' for thread " <<
                                   thr_num << " needs " << make_byte_str(nbytes) <<
                                   " on NUMA node " << numa_pref);
                     thr_num++;

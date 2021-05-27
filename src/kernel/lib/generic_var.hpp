@@ -165,7 +165,7 @@ namespace yask {
         int get_numa_pref() const {
             STATE_VARS_CONST(this);
             return (_numa_pref != _numa_unset) ?
-                _numa_pref : opts->_numa_pref;
+                _numa_pref : actl_opts->_numa_pref;
         }
         bool set_numa_pref(int numa_node) {
             #ifdef USE_NUMA

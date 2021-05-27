@@ -188,6 +188,13 @@ namespace yask {
 
    public:
 
+        // Abbreviations for sizes.
+        static const std::string _mega_block_str;
+        static const std::string _block_str;
+        static const std::string _micro_block_str;
+        static const std::string _nano_block_str;
+        static const std::string _pico_block_str;
+
         // Ptr to problem dimensions (NOT sizes), folding, etc.
         // This is solution info from the YASK compiler.
         DimsPtr _dims;
@@ -208,13 +215,6 @@ namespace yask {
         IdxTuple _nano_block_tile_sizes; // nano-block-tile size (only used for 'tiled' nano-block loops).
         IdxTuple _pico_block_sizes;       // pico-block size (used within nano-blocks).
 
-        // Abbreviations for sizes.
-        static const std::string _mega_block_str;
-        static const std::string _block_str;
-        static const std::string _micro_block_str;
-        static const std::string _nano_block_str;
-        static const std::string _pico_block_str;
-
         // Global padding applied to all vars by default.
         IdxTuple _min_pad_sizes;         // minimum spatial padding (including halos).
         IdxTuple _extra_pad_sizes;       // extra spatial padding (outside of halos).
@@ -231,7 +231,7 @@ namespace yask {
         int max_threads = 0;      // Initial number of threads to use overall; 0=>OMP default.
         int thread_divisor = 1;   // Reduce number of threads by this amount.
         int num_inner_threads = 1; // Number of threads to use for a block.
-        bool bind_block_threads = false; // Bind block threads to indices.
+        bool bind_inner_threads = false; // Bind inner threads to global indices.
 
         // Var behavior, including allocation.
         bool _step_wrap = false; // Allow invalid step indices to alias to valid ones (set via APIs only).
@@ -565,8 +565,8 @@ namespace yask {
         KernelEnvPtr _env;
 
         // User settings.
-        KernelSettingsPtr _opts; // Active settings (may have been adjusted from _user_opts).
-        KernelSettingsPtr _user_opts; // Settings specified by user.
+        KernelSettingsPtr _actl_opts; // Actual settings to use.
+        KernelSettingsPtr _req_opts; // Settings specified by user and/or tuner.
         bool _use_stage_tuners = false;
 
         // Problem dims.
@@ -601,10 +601,10 @@ namespace yask {
     host_assert(state);                                                 \
     pfx auto* env = state->_env.get();                                  \
     host_assert(env);                                                   \
-    pfx auto* opts = state->_opts.get();                                \
-    host_assert(opts);                                                  \
-    pfx auto* user_opts = state->_user_opts.get();                      \
-    host_assert(user_opts);                                             \
+    pfx auto* actl_opts = state->_actl_opts.get();                      \
+    host_assert(actl_opts);                                             \
+    pfx auto* req_opts = state->_req_opts.get();                        \
+    host_assert(req_opts);                                              \
     pfx auto* dims = state->_dims.get();                                \
     host_assert(dims);                                                  \
     pfx auto* mpi_info = state->_mpi_info.get();                        \
@@ -640,8 +640,8 @@ namespace yask {
         KernelStateBase(KernelStatePtr& state) :
             _state(state) {}
         KernelStateBase(KernelEnvPtr& kenv,
-                        KernelSettingsPtr& ksettings,
-                        KernelSettingsPtr& user_settings);
+                        KernelSettingsPtr& kactl_opts,
+                        KernelSettingsPtr& kreq_opts);
         KernelStateBase(KernelStateBase* p) :
             _state(p->_state) { }
 
@@ -654,10 +654,10 @@ namespace yask {
             host_assert(_state);
             return _state;
         }
-        KernelSettingsPtr& get_settings() { return _state->_opts; }
-        const KernelSettingsPtr& get_settings() const { return _state->_opts; }
-        KernelSettingsPtr& get_user_settings() { return _state->_user_opts; }
-        const KernelSettingsPtr& get_user_settings() const { return _state->_user_opts; }
+        KernelSettingsPtr& get_actl_opts() { return _state->_actl_opts; }
+        const KernelSettingsPtr& get_actl_opts() const { return _state->_actl_opts; }
+        KernelSettingsPtr& get_req_opts() { return _state->_req_opts; }
+        const KernelSettingsPtr& get_req_opts() const { return _state->_req_opts; }
         KernelEnvPtr& get_env() { return _state->_env; }
         const KernelEnvPtr& get_env() const { return _state->_env; }
         DimsPtr& get_dims() { return _state->_dims; }
@@ -685,14 +685,13 @@ namespace yask {
         // disable otherwise.
         // Return number of threads.
         // Do nothing and return 0 if not properly initialized.
-        int set_outer_num_threads();
+        int set_num_outer_threads();
 
         // Set number of threads for a block.
         // Must be called from within a top-level OMP parallel mega-block.
         // Return number of threads.
         // Do nothing and return 0 if not properly initialized.
-        int set_inner_num_threads();
-
+        int set_num_inner_threads();
     };
 
     // An object that is created from a context, shares ownership of the

@@ -366,15 +366,15 @@ namespace yask {
                            "[Deprecated] Use -inner_threads.",
                            num_inner_threads));
         parser.add_option(make_shared<CommandLineParser::BoolOption>
-                          ("bind_block_threads",
+                          ("bind_inner_threads",
                            "[Advanced] Divide micro-blocks into nano-blocks of slabs along the first valid dimension "
                            "(usually the outer-domain dimension), ignoring other nano-block sizes. "
-                           "Assign each slab to a block thread based on its global index in that dimension. "
-                           "This setting may increase cache locality when using multiple "
-                           "block-threads, especially when scratch vars are used and/or "
+                           "Assign each slab to an inner thread based on its global index in that dimension. "
+                           "This setting may increase cache locality when using more than one "
+                           "inner thread, especially when scratch vars are used and/or "
                            "when temporal blocking is active. "
-                           "This option is ignored if there are fewer than two block threads.",
-                           bind_block_threads));
+                           "This option is ignored if there are fewer than two inner threads.",
+                           bind_inner_threads));
         parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("bundle_allocs",
                            "[Advanced] Allocate memory for multiple YASK vars in "
@@ -871,7 +871,7 @@ namespace yask {
 
         // Determine binding dimension. Do this again if it was done above
         // by default because it may have changed during adjustment.
-        if (bind_block_threads && num_inner_threads > 1) {
+        if (bind_inner_threads && num_inner_threads > 1) {
             DOMAIN_VAR_LOOP(i, j) {
 
                 // Don't pick inner dim.
@@ -957,22 +957,23 @@ namespace yask {
 
     // Ctor.
     KernelStateBase::KernelStateBase(KernelEnvPtr& kenv,
-                                     KernelSettingsPtr& ksettings,
-                                     KernelSettingsPtr& user_settings)
+                                     KernelSettingsPtr& kactl_opts,
+                                     KernelSettingsPtr& kreq_opts)
     {
-        // Create state. All other objects that need to share
-        // this state should use a shared ptr to it.
-        _state = make_shared<KernelState>();
+       host_assert(kenv);
+       host_assert(kactl_opts);
+       host_assert(kreq_opts);
+       host_assert(kactl_opts->_dims);
 
+       // Create state. All other objects that need to share
+       // this state should use a shared ptr to it.
+       _state = make_shared<KernelState>();
+       
         // Share passed ptrs.
-        host_assert(kenv);
-        _state->_env = kenv;
-        host_assert(ksettings);
-        _state->_opts = ksettings;
-        host_assert(user_settings);
-        _state->_user_opts = user_settings;
-        host_assert(ksettings->_dims);
-        _state->_dims = ksettings->_dims;
+       _state->_env = kenv;
+       _state->_actl_opts = kactl_opts;
+       _state->_req_opts = kreq_opts;
+       _state->_dims = kactl_opts->_dims;
 
         // Create MPI Info object.
         _state->_mpi_info = make_shared<MPIInfo>(_state->_dims);
@@ -998,7 +999,7 @@ namespace yask {
         STATE_VARS(this);
 
         // Get max number of threads.
-        int mt = max(opts->max_threads, 1);
+        int mt = max(actl_opts->max_threads, 1);
 
         // Set num threads to use for inner and outer loops.
         yask_num_threads[0] = mt;
@@ -1014,13 +1015,13 @@ namespace yask {
         STATE_VARS(this);
 
         // Max threads / divisor.
-        int mt = max(opts->max_threads, 1);
-        int td = max(opts->thread_divisor, 1);
+        int mt = max(actl_opts->max_threads, 1);
+        int td = max(actl_opts->thread_divisor, 1);
         int at = mt / td;
         at = max(at, 1);
 
         // Blk threads per mega-block thread.
-        int bt = max(opts->num_inner_threads, 1);
+        int bt = max(actl_opts->num_inner_threads, 1);
         bt = min(bt, at); // Cannot be > 'at'.
         inner_threads = bt;
         assert(bt >= 1);
@@ -1042,7 +1043,7 @@ namespace yask {
     // Enable nested OMP.
     // Return number of threads.
     // Do nothing and return 0 if not properly initialized.
-    int KernelStateBase::set_outer_num_threads() {
+    int KernelStateBase::set_num_outer_threads() {
         int rt=0, bt=0;
         int at = get_num_comp_threads(rt, bt);
 
@@ -1067,7 +1068,7 @@ namespace yask {
     // Must be called from within a top-level OMP parallel mega-block.
     // Return number of threads.
     // Do nothing and return 0 if not properly initialized.
-    int KernelStateBase::set_inner_num_threads() {
+    int KernelStateBase::set_num_inner_threads() {
         int rt=0, bt=0;
         int at = get_num_comp_threads(rt, bt);
 

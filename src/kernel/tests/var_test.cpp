@@ -56,7 +56,7 @@ void run_tests(int argc, char* argv[]) {
     auto context = dynamic_pointer_cast<StencilContext>(ksoln);
     assert(context.get());
     ostream& os = kenv->get_debug_output()->get_ostream();
-    auto settings = context->get_settings();
+    auto settings = context->get_actl_opts();
 
     // Problem dimensions.
     auto dims = YASK_STENCIL_CONTEXT::new_dims();

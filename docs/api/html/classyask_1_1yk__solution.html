@@ -189,12 +189,6 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a0f7eea6bfc844adcc584c2ca5c1f2ba4"><td class="memItemLeft" align="right" valign="top">virtual bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a0f7eea6bfc844adcc584c2ca5c1f2ba4">is_auto_tuner_enabled</a> () const =0</td></tr>
 <tr class="memdesc:a0f7eea6bfc844adcc584c2ca5c1f2ba4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Determine whether the auto-tuner is enabled on this rank.  <a href="#a0f7eea6bfc844adcc584c2ca5c1f2ba4">More...</a><br /></td></tr>
 <tr class="separator:a0f7eea6bfc844adcc584c2ca5c1f2ba4"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a923afb4530ef5f0370f8bf55856fa040"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a923afb4530ef5f0370f8bf55856fa040">set_region_size</a> (const std::string &amp;dim, <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> size)=0</td></tr>
-<tr class="memdesc:a923afb4530ef5f0370f8bf55856fa040"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Set the region size in the given dimension.  <a href="#a923afb4530ef5f0370f8bf55856fa040">More...</a><br /></td></tr>
-<tr class="separator:a923afb4530ef5f0370f8bf55856fa040"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ac048a52035e60e2cc4e070da0e68181e"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ac048a52035e60e2cc4e070da0e68181e">get_region_size</a> (const std::string &amp;dim) const =0</td></tr>
-<tr class="memdesc:ac048a52035e60e2cc4e070da0e68181e"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Get the region size.  <a href="#ac048a52035e60e2cc4e070da0e68181e">More...</a><br /></td></tr>
-<tr class="separator:ac048a52035e60e2cc4e070da0e68181e"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ab3bd7e95ea13631954d92a638badfb2d"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ab3bd7e95ea13631954d92a638badfb2d">set_min_pad_size</a> (const std::string &amp;dim, <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> size)=0</td></tr>
 <tr class="memdesc:ab3bd7e95ea13631954d92a638badfb2d"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Set the minimum amount of padding for all vars.  <a href="#ab3bd7e95ea13631954d92a638badfb2d">More...</a><br /></td></tr>
 <tr class="separator:ab3bd7e95ea13631954d92a638badfb2d"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -1273,7 +1267,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 
 <p>Run the stencil solution for the specified steps. </p>
 <p>The stencil(s) in the solution are applied to the var data, setting the index variables as follows:</p><ol type="1">
-<li>If temporal wave-front tiling is <em>not</em> used (the default):<ul>
+<li>If temporal tiling is <em>not</em> used (the default):<ul>
 <li>The step index (e.g., <code>t</code> for "time") will be sequentially set to values from <code>first_step_index</code> to <code>last_step_index</code>, inclusive.<ul>
 <li>If the stencil equations were defined with dependencies on lower-valued steps, e.g., <code>t+1</code> depends on <code>t</code>, then <code>last_step_index</code> should be greater than or equal to <code>first_step_index</code> (forward solution).</li>
 <li>If the stencil equations were defined with dependencies on higher-valued steps, e.g., <code>t-1</code> depends on <code>t</code>, then <code>last_step_index</code> should be less than or equal to <code>first_step_index</code> (reverse solution).</li>
@@ -1284,14 +1278,14 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 <li>Since this function initiates MPI communication, it must be called on all MPI ranks, and it will block until all ranks have completed.</li>
 </ul>
 </li>
-<li><b>[Advanced]</b> If temporal wave-front tiling <em>is</em> enabled via <a class="el" href="classyask_1_1yk__solution.html#a923afb4530ef5f0370f8bf55856fa040" title="[Advanced] Set the region size in the given dimension.">set_region_size()</a>:<ul>
-<li>The step index (e.g., <code>t</code> for "time") will be sequentially set to values from <code>first_step_index</code> to <code>last_step_index</code>, inclusive, within each region.<ul>
-<li>The number of steps in a region may also be restricted by the size of the region in the step dimension. In that case, tiles will be done in slices of that size.</li>
+<li><b>[Advanced]</b> If temporal wave-front tiling <em>is</em> enabled:<ul>
+<li>The step index (e.g., <code>t</code> for "time") will be sequentially set to values from <code>first_step_index</code> to <code>last_step_index</code>, inclusive, within each area configured for temporal tiling.<ul>
+<li>The number of steps in an area may also be restricted by the size of the area in the step dimension. In that case, tiles will be done in temporal slices of that size.</li>
 </ul>
 </li>
-<li>For each step index within each region, the domain indices will be set to values across the entire region (not necessarily sequentially).</li>
+<li>For each step index within each area, the domain indices will be set to values across the entire area (not necessarily sequentially).</li>
 <li>Ultimately, the stencil(s) will be applied to same the elements in both the step and domain dimensions as when wave-front tiling is not used.</li>
-<li>MPI halo exchanges will occur before each number of steps in a region.</li>
+<li>MPI halo exchanges may occur at less frequent intervals.</li>
 </ul>
 </li>
 </ol>
@@ -1429,89 +1423,6 @@ Side effect: outputs stats in human-readable format to current debug output obje
 
 <p>Determine whether the auto-tuner is enabled on this rank. </p>
 <p>The auto-tuner is enabled by default. It will become disabled after it has converged or after reset_auto_tuner(false) has been called. </p><dl class="section return"><dt>Returns</dt><dd>Whether the auto-tuner is still searching. </dd></dl>
-
-</div>
-</div>
-<a id="a923afb4530ef5f0370f8bf55856fa040"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a923afb4530ef5f0370f8bf55856fa040">&#9670;&nbsp;</a></span>set_region_size()</h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">virtual void yask::yk_solution::set_region_size </td>
-          <td>(</td>
-          <td class="paramtype">const std::string &amp;&#160;</td>
-          <td class="paramname"><em>dim</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype"><a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a>&#160;</td>
-          <td class="paramname"><em>size</em>&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td></td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-
-<p><b>[Advanced]</b> Set the region size in the given dimension. </p>
-<p>This sets the approximate number of elements that are evaluated in each "region". This is a performance setting and should not affect the functional correctness or total number of elements evaluated. A region is typically the unit of work done by each top-level OpenMP parallel region. The actual number of elements evaluated in a region may be greater than the specified size due to rounding. The number of elements in a region may also be smaller than the specified size when the region is at the edge of the domain.</p>
-<p>A region is most often used to specify the size of a temporal wave-front tile. Thus, you will normally specify the size of the region in the step dimension as well as all the domain dimensions. For example, <code>set_region_size("t", 4)</code> specifies that four time-steps will be executed in each region. The sizes of regions in the domain dimensions are typically set to fit within a large cache structure such as MCDRAM cache in an Intel(R) Xeon Phi(TM) processor.</p>
-<p>In order to get the benefit of regions with multiple steps, you must also call <a class="el" href="classyask_1_1yk__solution.html#a14cc5625fc524fe8eb8d3cedc66778aa" title="Run the stencil solution for the specified steps.">run_solution()</a> where the number of steps between its <code>first_step_index</code> and <code>last_step_index</code> arguments is greater than or equal to the step-size of the regions. </p>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to set. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a7039e7151857e2652592a585c6d00931" title="Get the solution step dimension.">get_step_dim_name()</a> or <a class="el" href="classyask_1_1yk__solution.html#a665968c18b2f70467dbc7decaeeb1a1f" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
-    <tr><td class="paramdir">[in]</td><td class="paramname">size</td><td>Elements in a region in this `dim`. </td></tr>
-  </table>
-  </dd>
-</dl>
-
-</div>
-</div>
-<a id="ac048a52035e60e2cc4e070da0e68181e"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac048a52035e60e2cc4e070da0e68181e">&#9670;&nbsp;</a></span>get_region_size()</h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">virtual <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> yask::yk_solution::get_region_size </td>
-          <td>(</td>
-          <td class="paramtype">const std::string &amp;&#160;</td>
-          <td class="paramname"><em>dim</em></td><td>)</td>
-          <td> const</td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-
-<p><b>[Advanced]</b> Get the region size. </p>
-<p>Returned value may be slightly larger than the value provided via <a class="el" href="classyask_1_1yk__solution.html#a923afb4530ef5f0370f8bf55856fa040" title="[Advanced] Set the region size in the given dimension.">set_region_size()</a> due to rounding. </p><dl class="section return"><dt>Returns</dt><dd>Current settings of region size. </dd></dl>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to get. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a7039e7151857e2652592a585c6d00931" title="Get the solution step dimension.">get_step_dim_name()</a> or <a class="el" href="classyask_1_1yk__solution.html#a665968c18b2f70467dbc7decaeeb1a1f" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
-  </table>
-  </dd>
-</dl>
 
 </div>
 </div>

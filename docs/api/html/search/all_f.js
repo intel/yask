@@ -30,7 +30,6 @@ var searchData=
   ['set_5fradius',['set_radius',['../classyask_1_1yc__solution__with__radius__base.html#a49016a165c8f3e8d2c2b003bebddf80b',1,'yask::yc_solution_with_radius_base']]],
   ['set_5frank_5fdomain_5fsize',['set_rank_domain_size',['../classyask_1_1yk__solution.html#a155d8f4a38da9da11488a18cca50bae8',1,'yask::yk_solution']]],
   ['set_5frank_5findex',['set_rank_index',['../classyask_1_1yk__solution.html#ac0eccaa1d228d7f3408e3c2b0881f279',1,'yask::yk_solution']]],
-  ['set_5fregion_5fsize',['set_region_size',['../classyask_1_1yk__solution.html#a923afb4530ef5f0370f8bf55856fa040',1,'yask::yk_solution']]],
   ['set_5fright_5fhalo_5fsize',['set_right_halo_size',['../classyask_1_1yk__var.html#a6d43cc66c47eb773c0e8aa043ec76099',1,'yask::yk_var']]],
   ['set_5fright_5fmin_5fpad_5fsize',['set_right_min_pad_size',['../classyask_1_1yk__var.html#a02ee27a0c922e55def701d6efffc725c',1,'yask::yk_var']]],
   ['set_5fstep_5falloc_5fsize',['set_step_alloc_size',['../classyask_1_1yc__var.html#ae287dc53eb486e8dbf1a3f6ecec9cafb',1,'yask::yc_var']]],

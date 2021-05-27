@@ -142,8 +142,8 @@ namespace yask {
                 // Pads.
                 // Set via both 'extra' and 'min'; larger result will be used.
                 if (domain_dims.lookup(gdim)) {
-                    ygp->set_extra_pad_size(i, opts->_extra_pad_sizes[gdim]);
-                    ygp->set_min_pad_size(i, opts->_min_pad_sizes[gdim]);
+                    ygp->set_extra_pad_size(i, actl_opts->_extra_pad_sizes[gdim]);
+                    ygp->set_min_pad_size(i, actl_opts->_min_pad_sizes[gdim]);
                 }
 
                 // Offsets.

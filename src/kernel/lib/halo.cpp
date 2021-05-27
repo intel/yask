@@ -192,7 +192,7 @@ namespace yask {
                                    offsets.sub_elements(1).make_dim_val_offset_str());
 
                          // Are we using MPI shm w/this neighbor?
-                         bool using_shm = opts->use_shm && mpi_info->shm_ranks.at(ni) != MPI_PROC_NULL;
+                         bool using_shm = actl_opts->use_shm && mpi_info->shm_ranks.at(ni) != MPI_PROC_NULL;
 
                          // Submit async request to receive data from neighbor.
                          if (halo_step == halo_irecv) {

@@ -34,87 +34,91 @@ namespace yask {
     // APIs.
     // See yask_kernel_api.hpp.
 
-#define GET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
-    idx_t StencilContext::api_name(const string& dim) const {           \
-        STATE_VARS(this);                                               \
-        if (prep_req && !is_prepared())                                 \
-            THROW_YASK_EXCEPTION("Error: '" #api_name                   \
-                                 "()' called before calling 'prepare_solution()'"); \
-        dims->check_dim_type(dim, #api_name, step_ok, domain_ok, misc_ok); \
-        return expr;                                                    \
-    }
+    #define GET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
+        idx_t StencilContext::api_name(const string& dim) const {       \
+            STATE_VARS(this);                                           \
+            if (prep_req && !is_prepared())                             \
+                THROW_YASK_EXCEPTION("Error: '" #api_name               \
+                                     "()' called before calling 'prepare_solution()'"); \
+            dims->check_dim_type(dim, #api_name, step_ok, domain_ok, misc_ok); \
+            return expr;                                                \
+        }
     GET_SOLN_API(get_num_ranks,
-                 opts->_num_ranks[dim],
+                 actl_opts->_num_ranks[dim],
                  false, true, false, false)
     GET_SOLN_API(get_overall_domain_size,
-                 opts->_global_sizes[dim],
+                 actl_opts->_global_sizes[dim],
                  false, true, false, true)
     GET_SOLN_API(get_rank_domain_size,
-                 opts->_rank_sizes[dim],
+                 actl_opts->_rank_sizes[dim],
                  false, true, false, false)
     GET_SOLN_API(get_mega_block_size,
-                 opts->_mega_block_sizes[dim],
+                 actl_opts->_mega_block_sizes[dim],
                  true, true, false, false)
     GET_SOLN_API(get_block_size,
-                 opts->_block_sizes[dim],
+                 actl_opts->_block_sizes[dim],
                  true, true, false, false)
+    GET_SOLN_API(get_min_pad_size,
+                 actl_opts->_min_pad_sizes[dim],
+                 false, true, false, false)
+    GET_SOLN_API(get_rank_index,
+                 actl_opts->_rank_indices[dim],
+                 false, true, false, true)
+
     GET_SOLN_API(get_first_rank_domain_index,
                  rank_bb.bb_begin_tuple(domain_dims)[dim],
                  false, true, false, true)
     GET_SOLN_API(get_last_rank_domain_index,
                  rank_bb.bb_end_tuple(domain_dims)[dim] - 1,
                  false, true, false, true)
-    GET_SOLN_API(get_min_pad_size,
-                 opts->_min_pad_sizes[dim],
-                 false, true, false, false)
-    GET_SOLN_API(get_rank_index,
-                 opts->_rank_indices[dim],
-                 false, true, false, true)
-#undef GET_SOLN_API
+    #undef GET_SOLN_API
 
     // The var sizes are updated any time these settings are changed.
-#define SET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok, reset_prep) \
-    void StencilContext::api_name(const string& dim, idx_t n) {         \
-        STATE_VARS(this);                                               \
-        TRACE_MSG("solution '" << get_name() << "'."                    \
-                   #api_name "('" << dim << "', " << n << ")");         \
-        dims->check_dim_type(dim, #api_name, step_ok, domain_ok, misc_ok); \
-        expr;                                                           \
-        update_var_info(false);                                        \
-        if (reset_prep) set_prepared(false);                           \
-    }
+    #define SET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok, reset_prep) \
+        void StencilContext::api_name(const string& dim, idx_t n) {     \
+            STATE_VARS(this);                                           \
+            TRACE_MSG("solution '" << get_name() << "'."                \
+                      #api_name "('" << dim << "', " << n << ")");      \
+            dims->check_dim_type(dim, #api_name, step_ok, domain_ok, misc_ok); \
+            expr;                                                       \
+            update_var_info(false);                                     \
+            if (reset_prep) set_prepared(false);                        \
+        }
     SET_SOLN_API(set_rank_index,
-                 opts->_rank_indices[dim] = n;
-                 user_opts->_rank_indices[dim] = n;
-                 opts->find_loc = false,
+                 actl_opts->_rank_indices[dim] = n;
+                 req_opts->_rank_indices[dim] = n;
+                 actl_opts->find_loc = false;
+                 req_opts->find_loc = false,
                  false, true, false, true)
     SET_SOLN_API(set_num_ranks,
-                 opts->_num_ranks[dim] = n;
-                 user_opts->_num_ranks[dim] = n,
+                 actl_opts->_num_ranks[dim] = n;
+                 req_opts->_num_ranks[dim] = n,
                  false, true, false, true)
     SET_SOLN_API(set_overall_domain_size,
-                 opts->_global_sizes[dim] = n;
-                 user_opts->_global_sizes[dim] = n;
-                 if (n) opts->_rank_sizes[dim] = 0,
+                 actl_opts->_global_sizes[dim] = n;
+                 req_opts->_global_sizes[dim] = n;
+                 if (n) { actl_opts->_rank_sizes[dim] = 0;
+                     req_opts->_rank_sizes[dim] = 0; },
                  false, true, false, true)
     SET_SOLN_API(set_rank_domain_size,
-                 opts->_rank_sizes[dim] = n;
-                 user_opts->_rank_sizes[dim] = n;
-                 if (n) opts->_global_sizes[dim] = 0,
+                 actl_opts->_rank_sizes[dim] = n;
+                 req_opts->_rank_sizes[dim] = n;
+                 if (n) { actl_opts->_global_sizes[dim] = 0;
+                     req_opts->_global_sizes[dim] = 0; },
                  false, true, false, true)
     SET_SOLN_API(set_mega_block_size,
-                 opts->_mega_block_sizes[dim] = n;
-                 user_opts->_mega_block_sizes[dim] = n,
+                 actl_opts->_mega_block_sizes[dim] = n;
+                 req_opts->_mega_block_sizes[dim] = n,
                  true, true, false, true)
     SET_SOLN_API(set_block_size,
-                 opts->_block_sizes[dim] = n;
-                 user_opts->_block_sizes[dim] = n,
+                 actl_opts->_block_sizes[dim] = n;
+                 req_opts->_block_sizes[dim] = n,
                  true, true, false, true)
     SET_SOLN_API(set_min_pad_size,
-                 opts->_min_pad_sizes[dim] = n;
-                 user_opts->_min_pad_sizes[dim] = n,
+                 actl_opts->_min_pad_sizes[dim] = n;
+                 req_opts->_min_pad_sizes[dim] = n,
                  false, true, false, false)
-#undef SET_SOLN_API
+    #undef SET_SOLN_API
 
     // Callbacks.
     void StencilContext::call_hooks(hook_fn_vec& hook_fns) {
@@ -163,7 +167,7 @@ namespace yask {
             DEBUG_MSG("Num OpenMP procs:          " << omp_get_num_procs());
             int rt, bt;
             int at = get_num_comp_threads(rt, bt);
-            DEBUG_MSG("Num OpenMP threads avail:  " << opts->max_threads <<
+            DEBUG_MSG("Num OpenMP threads avail:  " << actl_opts->max_threads <<
                       "\nNum OpenMP threads used:   " << at <<
                       "\n  Num outer threads:       " << rt <<
                       "\n  Num inner threads:       " << bt);
@@ -177,7 +181,7 @@ namespace yask {
         // Set the number of threads for a region. The number of threads
         // used in top-level OpenMP parallel sections should not change
         // during execution.
-        int rthreads = set_outer_num_threads();
+        int rthreads = set_num_outer_threads();
 
         // Run a dummy nested OMP loop to make sure nested threading is
         // initialized.
@@ -195,7 +199,7 @@ namespace yask {
 
         // Adjust all settings before setting MPI buffers or sizing vars.
         // Prints adjusted settings.
-        opts->adjust_settings(this);
+        actl_opts->adjust_settings(this);
 
         // Set offsets in vars and find WF extensions
         // based on the vars' halos. Force setting
@@ -213,9 +217,9 @@ namespace yask {
         // Copy current settings to stages.  Needed here because settings may
         // have been changed via APIs or from call to setup_rank() since last
         // call to prepare_solution().  This will wipe out any previous
-        // stage-specific auto-tuning.
+        // stage-specific auto-tuning. TODO: fix this.
         for (auto& sp : st_stages)
-            sp->get_local_settings() = *opts;
+            sp->get_local_settings() = *actl_opts;
 
         // Free the scratch and MPI data first to give vars preference.
         // Alloc vars (if needed), scratch vars, MPI bufs.
@@ -292,8 +296,8 @@ namespace yask {
         STATE_VARS(this);
         string rem;
 
-        // Apply settings to active and user-set options.
-        for (auto& cur_opts : { opts, user_opts }) {
+        // Apply settings to actual and requested options.
+        for (auto& cur_opts : { actl_opts, req_opts }) {
         
             // Create a parser and add base options to it.
             CommandLineParser parser;

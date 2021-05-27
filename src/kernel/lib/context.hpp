@@ -435,7 +435,7 @@ namespace yask {
 
         // Adjust offsets of scratch vars based
         // on thread and scan indices.
-        virtual void update_scratch_var_info(int mega_block_thread_idx,
+        virtual void update_scratch_var_info(int outer_thread_idx,
                                               const Indices& idxs);
 
         // Copy non-scratch vars to device.
@@ -499,7 +499,7 @@ namespace yask {
                         const ScanIndices& mega_block_idxs);
 
         // Calculate results within a micro-block.
-        void calc_micro_block(int mega_block_thread_idx,
+        void calc_micro_block(int outer_thread_idx,
                              StagePtr& sel_bp,
                              idx_t mega_block_shift_num,
                              idx_t nphases, idx_t phase,
@@ -681,25 +681,28 @@ namespace yask {
         virtual std::string apply_command_line_options(const std::vector<std::string>& args);
         virtual bool get_step_wrap() const {
             STATE_VARS(this);
-            return opts->_step_wrap;
+            return actl_opts->_step_wrap;
         }
         virtual void set_step_wrap(bool do_wrap) {
             STATE_VARS(this);
-            opts->_step_wrap = do_wrap;
+            req_opts->_step_wrap = do_wrap;
+            actl_opts->_step_wrap = do_wrap;
         }
         virtual bool set_default_numa_preferred(int numa_node) {
             STATE_VARS(this);
 #ifdef USE_NUMA
-            opts->_numa_pref = numa_node;
+            req_opts->_numa_pref = numa_node;
+            actl_opts->_numa_pref = numa_node;
             return true;
 #else
-            opts->_numa_pref = yask_numa_none;
+            req_opts->_numa_pref = yask_numa_none;
+            actl_opts->_numa_pref = yask_numa_none;
             return numa_node == yask_numa_none;
 #endif
         }
         virtual int get_default_numa_preferred() const {
             STATE_VARS_CONST(this);
-            return opts->_numa_pref;
+            return actl_opts->_numa_pref;
         }
         virtual void
         call_before_prepare_solution(hook_fn_t hook_fn) {

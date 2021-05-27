@@ -36,8 +36,8 @@ namespace yask {
     // Set the core vars that are needed for running kernels.
     void CommonCoreData::set_core(const StencilContext *cxt) {
         STATE_VARS_CONST(cxt);
-        _global_sizes.set_from_tuple(opts->_global_sizes);
-        _rank_sizes.set_from_tuple(opts->_rank_sizes);
+        _global_sizes.set_from_tuple(actl_opts->_global_sizes);
+        _rank_sizes.set_from_tuple(actl_opts->_rank_sizes);
         _rank_domain_offsets = cxt->rank_domain_offsets;
     }
     
@@ -76,16 +76,17 @@ namespace yask {
 
         // Force sub-sizes to whole rank size so that scratch
         // vars will be large enough. Turn off any temporal blocking.
-        opts->_mega_block_sizes.set_vals_same(0);
-        opts->_block_sizes.set_vals_same(0);
-        opts->_micro_block_sizes.set_vals_same(0);
-        opts->_nano_block_sizes.set_vals_same(0);
-        opts->adjust_settings();
+        actl_opts->_mega_block_sizes = actl_opts->_rank_sizes;
+        actl_opts->_block_sizes = actl_opts->_rank_sizes;
+        actl_opts->_micro_block_sizes = actl_opts->_rank_sizes;
+        actl_opts->_nano_block_sizes = actl_opts->_rank_sizes;
+        actl_opts->_pico_block_sizes = actl_opts->_rank_sizes;
+        actl_opts->adjust_settings();
         update_var_info(true);
 
         // Copy these settings to stages and realloc scratch vars.
         for (auto& sp : st_stages)
-            sp->get_local_settings() = *opts;
+            sp->get_local_settings() = *actl_opts;
         alloc_scratch_data();
 
         // Indices to loop through.
@@ -224,7 +225,7 @@ namespace yask {
         end.set_vals(ext_bb.bb_end_tuple(domain_dims), false);
         end[step_posn] = end_t;
         IdxTuple stride(stencil_dims);
-        stride.set_vals(opts->_mega_block_sizes, false); // stride by mega-block sizes.
+        stride.set_vals(actl_opts->_mega_block_sizes, false); // stride by mega-block sizes.
         stride[step_posn] = stride_t;
 
         TRACE_MSG("run_solution: [" <<
@@ -296,10 +297,10 @@ namespace yask {
             rank_idxs.begin = begin;
             rank_idxs.end = end;
             rank_idxs.stride = stride;
-            rank_idxs.tile_size = opts->_rank_tile_sizes;
-            rank_idxs.adjust_from_settings(opts->_rank_sizes,
-                                           opts->_rank_tile_sizes,
-                                           opts->_mega_block_sizes);
+            rank_idxs.tile_size = actl_opts->_rank_tile_sizes;
+            rank_idxs.adjust_from_settings(actl_opts->_rank_sizes,
+                                           actl_opts->_rank_tile_sizes,
+                                           actl_opts->_mega_block_sizes);
             TRACE_MSG("after adjustment for " << num_wf_shifts <<
                       " wave-front shift(s): [" <<
                       rank_idxs.begin.make_val_str() << " ... " <<
@@ -307,7 +308,7 @@ namespace yask {
                       rank_idxs.stride.make_val_str());
             
             // Make sure threads are set properly for a mega-block.
-            set_outer_num_threads();
+            set_num_outer_threads();
 
             // Initial halo exchange.
             exchange_halos();
@@ -755,7 +756,7 @@ namespace yask {
 
                 // Strides within a mega-block are based on rank block sizes.
                 // Cannot use different strides per stage with TB.
-                auto& settings = *opts;
+                auto& settings = *actl_opts;
                 mega_block_idxs.stride = settings._block_sizes;
                 mega_block_idxs.stride[step_posn] = stride_t;
 
@@ -847,14 +848,14 @@ namespace yask {
 
         STATE_VARS(this);
         auto* bp = sel_bp.get();
-        int mega_block_thread_idx = omp_get_thread_num();
+        int outer_thread_idx = omp_get_thread_num();
         TRACE_MSG("calc_block: phase " << phase << ", block [" <<
                   mega_block_idxs.start.make_val_str() << " ... " <<
                   mega_block_idxs.stop.make_val_str() <<
                   ") within mega-block [" <<
                   mega_block_idxs.begin.make_val_str() << " ... " <<
                   mega_block_idxs.end.make_val_str() <<
-                  ") by mega-block thread " << mega_block_thread_idx);
+                  ") by mega-block thread " << outer_thread_idx);
 
         // Init block begin & end from mega-block start & stop indices.
         ScanIndices block_idxs = mega_block_idxs.create_inner();
@@ -916,7 +917,7 @@ namespace yask {
             #include "yask_block_loops.hpp"
 
             // Loop body.
-            calc_micro_block(mega_block_thread_idx, bp, mega_block_shift_num,
+            calc_micro_block(outer_thread_idx, bp, mega_block_shift_num,
                             nphases, phase, nshapes, shape, bridge_mask,
                             rank_idxs, mega_block_idxs, block_idxs, micro_blk_range);
             
@@ -943,7 +944,7 @@ namespace yask {
             block_idxs.stop[step_posn] = end_t;
 
             // Strides within a block are based on rank micro-block sizes.
-            auto& settings = *opts;
+            auto& settings = *actl_opts;
             block_idxs.stride = settings._micro_block_sizes;
             block_idxs.stride[step_posn] = step_dir;
 
@@ -1000,7 +1001,7 @@ namespace yask {
                 #include "yask_block_loops.hpp"
 
                 // Loop body.
-                calc_micro_block(mega_block_thread_idx, bp, mega_block_shift_num,
+                calc_micro_block(outer_thread_idx, bp, mega_block_shift_num,
                                 nphases, phase, nshapes, shape, bridge_mask,
                                 rank_idxs, mega_block_idxs, block_idxs, micro_blk_range);
             
@@ -1018,7 +1019,7 @@ namespace yask {
     // null. When using TB, only the 'shape' needed for the tesselation
     // 'phase' are computed. The starting 'shift_num' is relative
     // to the bottom of the current mega-block and block.
-    void StencilContext::calc_micro_block(int mega_block_thread_idx,
+    void StencilContext::calc_micro_block(int outer_thread_idx,
                                          StagePtr& sel_bp,
                                          idx_t mega_block_shift_num,
                                          idx_t nphases, idx_t phase,
@@ -1039,13 +1040,13 @@ namespace yask {
                   base_block_idxs.end.make_val_str() << ") within base-mega-block [" <<
                   base_mega_block_idxs.begin.make_val_str() << " ... " <<
                   base_mega_block_idxs.end.make_val_str() <<
-                  ") by mega-block thread " << mega_block_thread_idx);
+                  ") by mega-block thread " << outer_thread_idx);
 
         // Promote forward progress in MPI when calc'ing interior
         // only. Call from one thread only.
         // Let all other threads continue.
         if (is_overlap_active() && do_mpi_interior) {
-            if (mega_block_thread_idx == 0)
+            if (outer_thread_idx == 0)
                 poke_halo_exchange();
         }
 
@@ -1105,7 +1106,7 @@ namespace yask {
 
                 // Start timers for this stage.  Tracking only on thread
                 // 0. TODO: track all threads and report cross-thread stats.
-                if (mega_block_thread_idx == 0)
+                if (outer_thread_idx == 0)
                     bp->start_timers();
 
                 // Strides within a micro-blk are based on nano-blk sizes.
@@ -1149,12 +1150,12 @@ namespace yask {
                     // Update offsets of scratch vars based on the current
                     // micro-block location.
                     if (scratch_vecs.size())
-                        update_scratch_var_info(mega_block_thread_idx, micro_block_idxs.begin);
+                        update_scratch_var_info(outer_thread_idx, micro_block_idxs.begin);
 
                     // Call calc_micro_block() for each non-scratch bundle.
                     for (auto* sb : *bp)
                         if (sb->get_bb().bb_num_points)
-                            sb->calc_micro_block(mega_block_thread_idx, settings, micro_block_idxs);
+                            sb->calc_micro_block(outer_thread_idx, settings, micro_block_idxs);
 
                     // Make sure streaming stores are visible for later loads.
                     make_stores_visible();
@@ -1164,7 +1165,7 @@ namespace yask {
                 shift_num++;
 
                 // Stop timers for this stage.
-                if (mega_block_thread_idx == 0)
+                if (outer_thread_idx == 0)
                     bp->stop_timers();
 
             } // stages.

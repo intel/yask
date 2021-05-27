@@ -243,8 +243,8 @@ typedef std::uint64_t bit_mask_t;
             const auto last_slash_idx = fname.find_last_of("/");        \
             if (std::string::npos != last_slash_idx)                    \
                 fname.erase(0, last_slash_idx + 1);                     \
-            DEBUG_MSG("YASK: " << msg << " at " << fname << ":" << __LINE__ << \
-                      " in " << __TRACE_FN);                            \
+            DEBUG_MSG("YASK: " << __TRACE_FN << ": " << msg <<          \
+                      " at " << fname << ":" << __LINE__);              \
         } } while(0)
 #else
 #define TRACE_MSG(msg) ((void)0)

@@ -152,8 +152,8 @@ struct MySettings {
                 // TODO: make an API for this.
                 auto context = dynamic_pointer_cast<StencilContext>(_ksoln);
                 assert(context.get());
-                auto& opts = context->get_settings();
-                opts->print_usage(cout, parser, argv[0], app_notes, app_examples);
+                auto& req_opts = context->get_req_opts();
+                req_opts->print_usage(cout, parser, argv[0], app_notes, app_examples);
                 exit_yask(1);
             }
 
@@ -260,7 +260,7 @@ int main(int argc, char** argv)
         auto ksoln = kfac.new_solution(kenv);
         auto context = dynamic_pointer_cast<StencilContext>(ksoln);
         assert(context.get());
-        auto& copts = context->get_settings();
+        auto& copts = context->get_actl_opts();
         assert(copts);
 
         // Parse custom and library-provided cmd-line options and
@@ -504,7 +504,6 @@ int main(int argc, char** argv)
             auto ref_soln = kfac.new_solution(kenv, ksoln);
             auto ref_context = dynamic_pointer_cast<StencilContext>(ref_soln);
             assert(ref_context.get());
-            auto& ref_opts = ref_context->get_settings();
 
             // Reapply cmd-line options to override default settings.
             MySettings my_ref_opts(ref_soln);
@@ -513,6 +512,7 @@ int main(int argc, char** argv)
             // Change some settings.
             ref_context->name += "-reference";
             ref_context->allow_vec_exchange = false;   // exchange scalars in halos.
+            auto& ref_opts = ref_context->get_actl_opts();
             ref_opts->overlap_comms = false;
             ref_opts->use_shm = false;
             ref_opts->_numa_pref = yask_numa_none;

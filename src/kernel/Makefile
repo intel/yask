@@ -512,7 +512,7 @@ BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_MODS) loop($(BLOCK_LOOP_ORDER)) { }
 # Mini-Block loops break up a micro-block into nano-blocks. The 'omp' modifier
 # creates a nested OpenMP loop so that each nano-block is assigned to a
 # nested OpenMP thread. The OpenMP construct is not used when running with
-# '-bind_block_threads' because another parallel section is created.
+# '-bind_inner_threads' because another parallel section is created.
 MICRO_BLOCK_LOOP_OMP	?=	omp parallel for schedule(static,1) proc_bind(spread)
 MICRO_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -macroPrefix MICRO_BLOCK_ -ompMod '$(MICRO_BLOCK_LOOP_OMP)'
 MICRO_BLOCK_LOOP_ORDER	?=	1 .. N-1
@@ -882,7 +882,7 @@ last_test	:=	999
 
 # Default threads.
 max_threads	:=	6
-block_threads	:=	2
+inner_threads	:=	2
 
 ### Unit tests.
 
@@ -963,15 +963,15 @@ cxx-yc-api-test:
 # Validation runs for each binary.
 DEF_TEST_ARGS := -log_dir $(TEST_LOG_OUT_DIR) \
 	-ranks $(ranks) -stencil $(YK_STENCIL) -arch $(YK_ARCH) -v \
-	-trial_steps 2 -max_threads $(max_threads) -block_threads $(block_threads) \
+	-trial_steps 2 -max_threads $(max_threads) -inner_threads $(inner_threads) \
 	-ep 0 -mp 0 -no-allow_addl_padding
 
 # Test args for 1 and >1 ranks.
-test_args0	:=	$(DEF_TEST_ARGS) -l 48 -r 32 -b 24 -rt 0 $(EXTRA_TEST_ARGS)
+test_args0	:=	$(DEF_TEST_ARGS) -l 48 -Mb 32 -b 24 -rt 0 $(EXTRA_TEST_ARGS)
 test_args1	:=	$(DEF_TEST_ARGS) -l 64 -b 48 -mb 32 -nb 24 -pb 16 -rt 1 $(EXTRA_TEST_ARGS)
-test_args2	:=	$(DEF_TEST_ARGS) -l 63 -r 32 -b 24 -mb 16 -rt 2 $(EXTRA_TEST_ARGS) -bundle_allocs
-test_args3	:=	$(DEF_TEST_ARGS) -l 63 -r 48 -b 24 -mb 16 -bt 2 $(EXTRA_TEST_ARGS) -no-bundle_allocs
-test_args4	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -bind_block_threads $(EXTRA_TEST_ARGS)
+test_args2	:=	$(DEF_TEST_ARGS) -l 63 -Mb 32 -b 24 -mb 16 -rt 2 $(EXTRA_TEST_ARGS) -bundle_allocs
+test_args3	:=	$(DEF_TEST_ARGS) -l 63 -Mb 48 -b 24 -mb 16 -bt 2 $(EXTRA_TEST_ARGS) -no-bundle_allocs
+test_args4	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -bind_inner_threads $(EXTRA_TEST_ARGS)
 
 # Test args for >1 ranks only.
 test_args10	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -no-use_shm -overlap_comms $(EXTRA_TEST_ARGS)

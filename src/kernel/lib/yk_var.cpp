@@ -149,6 +149,7 @@ namespace yask {
                 if (_corep->_domains.get_num_dims())
                     oss <<
                         ", allocs = " << IDX_STR2(_allocs, " * ") <<
+                        ", domains = " << IDX_STR2(_domains, " * ") <<
                         ", rank-offsets = " << IDX_STR(_rank_offsets) <<
                         ", local-offsets = " << IDX_STR(_local_offsets) <<
                         ", left-halos = " << IDX_STR(_left_halos) <<
@@ -276,7 +277,7 @@ namespace yask {
                 // Make inner dim an odd number of vecs.
                 // This reportedly helps avoid some uarch aliasing.
                 if (!p &&
-                    opts->_allow_addl_pad &&
+                    actl_opts->_allow_addl_pad &&
                     get_dim_name(i) == inner_dim &&
                     (new_allocs[i] / _corep->_var_vec_lens[i]) % 2 == 0) {
                     new_right_pads[i] += _corep->_var_vec_lens[i];
@@ -480,7 +481,7 @@ namespace yask {
 
             // If this is the step dim and we're not checking
             // it, then anything is ok.
-            if (is_step_dim && (!check_step || opts->_step_wrap))
+            if (is_step_dim && (!check_step || actl_opts->_step_wrap))
                 ok = true;
 
             // Otherwise, check range.

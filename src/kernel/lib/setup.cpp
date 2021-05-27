@@ -169,17 +169,17 @@ namespace yask {
 
         // All ranks should have the same settings for certain options.
         assert_equality_over_ranks(nr, env->comm, "total number of MPI ranks");
-        assert_equality_over_ranks(idx_t(opts->use_shm), env->comm, "use_shm setting");
-        assert_equality_over_ranks(idx_t(opts->find_loc), env->comm, "defined rank indices");
+        assert_equality_over_ranks(idx_t(actl_opts->use_shm), env->comm, "use_shm setting");
+        assert_equality_over_ranks(idx_t(actl_opts->find_loc), env->comm, "defined rank indices");
         DOMAIN_VAR_LOOP(i, j) {
             auto& dname = domain_dims.get_dim_name(j);
-            assert_equality_over_ranks(opts->_global_sizes[i], env->comm,
+            assert_equality_over_ranks(actl_opts->_global_sizes[i], env->comm,
                                        "global-domain size in '" + dname + "' dimension");
-            assert_equality_over_ranks(opts->_num_ranks[j], env->comm,
+            assert_equality_over_ranks(actl_opts->_num_ranks[j], env->comm,
                                        "number of ranks in '" + dname + "' dimension");
 
             // Check that either local or global size is set.
-            if (!opts->_global_sizes[i] && !opts->_rank_sizes[i])
+            if (!actl_opts->_global_sizes[i] && !actl_opts->_rank_sizes[i])
                 THROW_YASK_EXCEPTION("Error: both local-domain size and "
                                      "global-domain size are zero in '" +
                                      dname + "' dimension on rank " +
@@ -190,8 +190,8 @@ namespace yask {
         #ifndef USE_MPI
 
         // Simple settings.
-        opts->_num_ranks.set_vals_same(1);
-        opts->_rank_indices.set_vals_same(0);
+        actl_opts->_num_ranks.set_vals_same(1);
+        actl_opts->_rank_indices.set_vals_same(0);
         rank_domain_offsets.set_vals_same(0);
         assert(nr == 1);
 
@@ -199,51 +199,51 @@ namespace yask {
         DOMAIN_VAR_LOOP(i, j) {
 
             // Need to set local size.
-            if (!opts->_rank_sizes[i])
-                opts->_rank_sizes[i] = opts->_global_sizes[i];
+            if (!actl_opts->_rank_sizes[i])
+                actl_opts->_rank_sizes[i] = opts->_global_sizes[i];
 
             // Need to set global size.
-            else if (!opts->_global_sizes[i])
-                opts->_global_sizes[i] = opts->_rank_sizes[i];
+            else if (!actl_opts->_global_sizes[i])
+                actl_opts->_global_sizes[i] = actl_opts->_rank_sizes[i];
 
             // Check that settings are equal.
-            else if (opts->_global_sizes[i] != opts->_rank_sizes[i]) {
+            else if (actl_opts->_global_sizes[i] != actl_opts->_rank_sizes[i]) {
                 auto& dname = domain_dims.get_dim_name(j);
                 FORMAT_AND_THROW_YASK_EXCEPTION("Error: specified local-domain size of " <<
-                                                opts->_rank_sizes[i] <<
+                                                actl_opts->_rank_sizes[i] <<
                                                 " does not equal specified global-domain size of " <<
-                                                opts->_global_sizes[i] << " in '" << dname <<
+                                                actl_opts->_global_sizes[i] << " in '" << dname <<
                                                 "' dimension");
             }
         }
 
         #else
         // Set number of ranks in each dim if any is unset (zero).
-        TRACE_MSG("rank layout " << opts->_num_ranks.make_dim_val_str(" * ") << " requested");
-        opts->_num_ranks = opts->_num_ranks.get_compact_factors(nr);
-        TRACE_MSG("rank layout " << opts->_num_ranks.make_dim_val_str(" * ") << " selected");
+        TRACE_MSG("rank layout " << actl_opts->_num_ranks.make_dim_val_str(" * ") << " requested");
+        actl_opts->_num_ranks = actl_opts->_num_ranks.get_compact_factors(nr);
+        TRACE_MSG("rank layout " << actl_opts->_num_ranks.make_dim_val_str(" * ") << " selected");
 
         // Check ranks.
-        idx_t req_ranks = opts->_num_ranks.product();
+        idx_t req_ranks = actl_opts->_num_ranks.product();
         if (req_ranks != nr)
             FORMAT_AND_THROW_YASK_EXCEPTION("error: " << req_ranks << " rank(s) requested (" +
-                                            opts->_num_ranks.make_dim_val_str(" * ") + "), but " <<
+                                            actl_opts->_num_ranks.make_dim_val_str(" * ") + "), but " <<
                                             nr << " rank(s) are active");
 
         // Determine my coordinates if not provided already.
         // TODO: do this more intelligently based on proximity.
-        if (opts->find_loc)
-            opts->_rank_indices = opts->_num_ranks.unlayout(me);
+        if (actl_opts->find_loc)
+            actl_opts->_rank_indices = actl_opts->_num_ranks.unlayout(me);
 
         // Check rank indices.
         DOMAIN_VAR_LOOP(i, j) {
             auto& dname = domain_dims.get_dim_name(j);
-            if (opts->_rank_indices[j] < 0 ||
-                opts->_rank_indices[j] >= opts->_num_ranks[j])
+            if (actl_opts->_rank_indices[j] < 0 ||
+                actl_opts->_rank_indices[j] >= actl_opts->_num_ranks[j])
                 THROW_YASK_EXCEPTION("Error: rank index of " +
-                                     to_string(opts->_rank_indices[j]) +
+                                     to_string(actl_opts->_rank_indices[j]) +
                                      " is not within allowed range [0 ... " +
-                                     to_string(opts->_num_ranks[j] - 1) +
+                                     to_string(actl_opts->_num_ranks[j] - 1) +
                                      "] in '" + dname + "' dimension on rank " +
                                      to_string(me));
         }
@@ -266,8 +266,8 @@ namespace yask {
 
             // Init tables for this rank.
             DOMAIN_VAR_LOOP(i, j) {
-                coords[me][j] = opts->_rank_indices[j];
-                rsizes[me][j] = opts->_rank_sizes[i];
+                coords[me][j] = actl_opts->_rank_indices[j];
+                rsizes[me][j] = actl_opts->_rank_sizes[i];
             }
 
             // Exchange coord and size info between all ranks.
@@ -406,7 +406,7 @@ namespace yask {
 
                         // Determine whether neighbor is in my shm group.
                         // If so, record rank number in shmcomm.
-                        if (opts->use_shm && env->shm_comm != MPI_COMM_NULL) {
+                        if (actl_opts->use_shm && env->shm_comm != MPI_COMM_NULL) {
                             int g_rank = rn;
                             int s_rank = MPI_PROC_NULL;
                             MPI_Group_translate_ranks(env->group, 1, &g_rank,
@@ -425,8 +425,8 @@ namespace yask {
                     bool vlen_mults = true;
                     DOMAIN_VAR_LOOP(i, j) {
                         auto& dname = domain_dims.get_dim_name(j);
-                        auto nranks = opts->_num_ranks[j];
-                        bool is_last = (opts->_rank_indices[j] == nranks - 1);
+                        auto nranks = actl_opts->_num_ranks[j];
+                        bool is_last = (actl_opts->_rank_indices[j] == nranks - 1);
 
                         // Does rn have all VLEN-multiple sizes?
                         // TODO: allow last rank in each dim to be non-conformant.
@@ -451,12 +451,12 @@ namespace yask {
             if (pass == 0) {
                 DOMAIN_VAR_LOOP(i, j) {
                     auto& dname = domain_dims.get_dim_name(j);
-                    auto nranks = opts->_num_ranks[j];
-                    auto gsz = opts->_global_sizes[i];
-                    bool is_last = (opts->_rank_indices[j] == nranks - 1);
+                    auto nranks = actl_opts->_num_ranks[j];
+                    auto gsz = actl_opts->_global_sizes[i];
+                    bool is_last = (actl_opts->_rank_indices[j] == nranks - 1);
 
                     // Need to determine my rank size.
-                    if (!opts->_rank_sizes[i]) {
+                    if (!actl_opts->_rank_sizes[i]) {
                         if (rank_domain_sums[j] != 0)
                             FORMAT_AND_THROW_YASK_EXCEPTION
                                 ("Error: local-domain size is not specified in the '" <<
@@ -481,14 +481,14 @@ namespace yask {
                             rsz = rem;
 
                         // Set rank size depending on whether it is last one.
-                        opts->_rank_sizes[i] = rsz;
+                        actl_opts->_rank_sizes[i] = rsz;
                         TRACE_MSG("local-domain-size[" << dname << "] = " << rem);
                     }
 
                     // Need to determine global size.
                     // Set it to sum of rank sizes.
-                    else if (!opts->_global_sizes[i])
-                        opts->_global_sizes[i] = rank_domain_sums[j];
+                    else if (!actl_opts->_global_sizes[i])
+                        actl_opts->_global_sizes[i] = rank_domain_sums[j];
                 }
             }
 
@@ -496,12 +496,12 @@ namespace yask {
             else {
                 DOMAIN_VAR_LOOP(i, j) {
                     auto& dname = domain_dims.get_dim_name(j);
-                    if (opts->_global_sizes[i] != rank_domain_sums[j]) {
+                    if (actl_opts->_global_sizes[i] != rank_domain_sums[j]) {
                         FORMAT_AND_THROW_YASK_EXCEPTION("Error: sum of local-domain sizes across " <<
                                                         nr << " ranks is " <<
                                                         rank_domain_sums[j] <<
                                                         ", which does not equal global-domain size of " <<
-                                                        opts->_global_sizes[i] << " in '" << dname <<
+                                                        actl_opts->_global_sizes[i] << " in '" << dname <<
                                                         "' dimension");
                     }
                 }
@@ -561,34 +561,34 @@ namespace yask {
         STATE_VARS(this);
 #ifdef USE_TILING
         DEBUG_MSG(prefix << " local-domain-tile-size: " <<
-                  opts->_rank_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+                  actl_opts->_rank_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
 #endif
         DEBUG_MSG(prefix << " mega-block-size:        " <<
-                  opts->_mega_block_sizes.make_dim_val_str(" * "));
+                  actl_opts->_mega_block_sizes.make_dim_val_str(" * "));
 #ifdef USE_TILING
         DEBUG_MSG(prefix << " mega-block-tile-size:   " <<
-                  opts->_mega_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+                  actl_opts->_mega_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
 #endif
         DEBUG_MSG(prefix << " block-size:             " <<
-                  opts->_block_sizes.make_dim_val_str(" * "));
+                  actl_opts->_block_sizes.make_dim_val_str(" * "));
 #ifdef USE_TILING
         DEBUG_MSG(prefix << " block-tile-size:        " <<
-                  opts->_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+                  actl_opts->_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
 #endif
         DEBUG_MSG(prefix << " micro-block-size:       " <<
-                  opts->_micro_block_sizes.make_dim_val_str(" * "));
+                  actl_opts->_micro_block_sizes.make_dim_val_str(" * "));
 #ifdef USE_TILING
         DEBUG_MSG(prefix << " micro-block-tile-size:  " <<
-                  opts->_micro_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+                  actl_opts->_micro_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
 #endif
         DEBUG_MSG(prefix << " nano-block-size:        " <<
-                  opts->_nano_block_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+                  actl_opts->_nano_block_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
 #ifdef USE_TILING
         DEBUG_MSG(prefix << " nano-block-tile-size:   " <<
-                  opts->_nano_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+                  actl_opts->_nano_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
 #endif
         DEBUG_MSG(prefix << " pico-block-size:        " <<
-                  opts->_pico_block_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+                  actl_opts->_pico_block_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
     }
 
     void StencilContext::init_stats() {
@@ -609,9 +609,9 @@ namespace yask {
         // Report some sizes and settings.
         DEBUG_MSG("\nWork-unit sizes in grid points (from largest to smallest):");
         DEBUG_MSG(" global-domain-size:     " <<
-                  opts->_global_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+                  actl_opts->_global_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
         DEBUG_MSG(" local-domain-size:      " <<
-                  opts->_rank_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+                  actl_opts->_rank_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
         print_sizes();
         DEBUG_MSG(" cluster-size:           " << dims->_cluster_pts.make_dim_val_str(" * "));
         DEBUG_MSG(" vector-size:            " << dims->_fold_pts.make_dim_val_str(" * "));
@@ -622,16 +622,16 @@ namespace yask {
                   " stencil-description:    " << get_description() << endl <<
                   " element-size:           " << make_byte_str(get_element_bytes()));
 #ifdef USE_MPI
-        DEBUG_MSG(" num-ranks:              " << opts->_num_ranks.make_dim_val_str(" * ") << endl <<
-                  " rank-indices:           " << opts->_rank_indices.make_dim_val_str() << endl <<
+        DEBUG_MSG(" num-ranks:              " << actl_opts->_num_ranks.make_dim_val_str(" * ") << endl <<
+                  " rank-indices:           " << actl_opts->_rank_indices.make_dim_val_str() << endl <<
                   " local-domain-offsets:   " << rank_domain_offsets.make_dim_val_str(dims->_domain_dims));
-        if (opts->overlap_comms)
+        if (actl_opts->overlap_comms)
             DEBUG_MSG(" mpi-interior:           " << mpi_interior.make_range_string(domain_dims));
 #endif
         DEBUG_MSG(" vector-len:             " << VLEN << endl <<
-                  " extra-padding:          " << opts->_extra_pad_sizes.remove_dim(step_posn).make_dim_val_str() << endl <<
-                  " minimum-padding:        " << opts->_min_pad_sizes.remove_dim(step_posn).make_dim_val_str() << endl <<
-                  " allow-addl-padding:     " << opts->_allow_addl_pad << endl <<
+                  " extra-padding:          " << actl_opts->_extra_pad_sizes.remove_dim(step_posn).make_dim_val_str() << endl <<
+                  " minimum-padding:        " << actl_opts->_min_pad_sizes.remove_dim(step_posn).make_dim_val_str() << endl <<
+                  " allow-addl-padding:     " << actl_opts->_allow_addl_pad << endl <<
                   " L1-prefetch-distance:   " << PFD_L1 << endl <<
                   " L2-prefetch-distance:   " << PFD_L2 << endl <<
                   " max-halos:              " << max_halos.make_dim_val_str());
@@ -681,12 +681,12 @@ namespace yask {
                     (!gb.is_user_var() && force)) {
 
                     // Rank domains.
-                    gp->_set_domain_size(dname, opts->_rank_sizes[dname]);
+                    gp->_set_domain_size(dname, actl_opts->_rank_sizes[dname]);
 
                     // Pads.
                     // Set via both 'extra' and 'min'; larger result will be used.
-                    gp->set_extra_pad_size(dname, opts->_extra_pad_sizes[dname]);
-                    gp->set_min_pad_size(dname, opts->_min_pad_sizes[dname]);
+                    gp->set_extra_pad_size(dname, actl_opts->_extra_pad_sizes[dname]);
+                    gp->set_min_pad_size(dname, actl_opts->_min_pad_sizes[dname]);
 
                     // Offsets.
                     auto dp = dims->_domain_dims.lookup_posn(dname);
@@ -705,9 +705,9 @@ namespace yask {
         // Calculate wave-front shifts.
         // See the wavefront diagram in run_solution() for description
         // of angles and extensions.
-        idx_t tb_steps = opts->_block_sizes[step_dim]; // use requested size; actual may be less.
+        idx_t tb_steps = actl_opts->_block_sizes[step_dim]; // use requested size; actual may be less.
         assert(tb_steps >= 0);
-        wf_steps = opts->_mega_block_sizes[step_dim];
+        wf_steps = actl_opts->_mega_block_sizes[step_dim];
         wf_steps = max(wf_steps, tb_steps); // round up WF steps if less than TB steps.
         assert(wf_steps >= 0);
         num_wf_shifts = 0;
@@ -725,14 +725,14 @@ namespace yask {
 
         // Determine whether separate tuners can be used.
         // Only allowed when no TB and >1 stage.
-        state->_use_stage_tuners = opts->_allow_stage_tuners && (tb_steps == 0) && (st_stages.size() > 1);
+        state->_use_stage_tuners = actl_opts->_allow_stage_tuners && (tb_steps == 0) && (st_stages.size() > 1);
 
         // Calculate angles and related settings.
         for (auto& dim : domain_dims) {
             auto& dname = dim._get_name();
-            auto rnsize = opts->_mega_block_sizes[dname];
-            auto rksize = opts->_rank_sizes[dname];
-            auto nranks = opts->_num_ranks[dname];
+            auto rnsize = actl_opts->_mega_block_sizes[dname];
+            auto rksize = actl_opts->_rank_sizes[dname];
+            auto nranks = actl_opts->_num_ranks[dname];
 
             // Req'd shift in this dim based on max halos.
             idx_t angle = ROUND_UP(max_halos[dname], dims->_fold_pts[dname]);
@@ -756,7 +756,7 @@ namespace yask {
             // Is domain size at least as large as halo + wf_ext in direction
             // when there are multiple ranks?
             auto min_size = max_halos[dname] + shifts;
-            if (opts->_num_ranks[dname] > 1 && rksize < min_size) {
+            if (actl_opts->_num_ranks[dname] > 1 && rksize < min_size) {
                 FORMAT_AND_THROW_YASK_EXCEPTION
                     ("Error: local-domain size of " << rksize << " in '" <<
                      dname << "' dim is less than minimum size of " << min_size <<
@@ -765,11 +765,11 @@ namespace yask {
 
             // If there is another rank to the left, set wave-front
             // extension on the left.
-            left_wf_exts[dname] = opts->is_first_rank(dname) ? 0 : shifts;
+            left_wf_exts[dname] = actl_opts->is_first_rank(dname) ? 0 : shifts;
 
             // If there is another rank to the right, set wave-front
             // extension on the right.
-            right_wf_exts[dname] = opts->is_last_rank(dname) ? 0 : shifts;
+            right_wf_exts[dname] = actl_opts->is_last_rank(dname) ? 0 : shifts;
         }
 
         // Now that wave-front settings are known, we can push this info
@@ -806,7 +806,7 @@ namespace yask {
         TRACE_MSG("update_tb_info()...");
 
         // Get requested size.
-        tb_steps = opts->_block_sizes[step_dim];
+        tb_steps = actl_opts->_block_sizes[step_dim];
 
         // Reset all TB and MB vars.
         num_tb_shifts = 0;
@@ -831,13 +831,13 @@ namespace yask {
             DOMAIN_VAR_LOOP(i, j) {
                 auto& dim = domain_dims.get_dim(j);
                 auto& dname = dim._get_name();
-                auto rnsize = opts->_mega_block_sizes[i];
+                auto rnsize = actl_opts->_mega_block_sizes[i];
 
                 // There must be only one block size when using TB, so get
                 // sizes from context settings instead of stages.
                 assert(state->_use_stage_tuners == false);
-                auto blksize = opts->_block_sizes[i];
-                auto mblksize = opts->_micro_block_sizes[i];
+                auto blksize = actl_opts->_block_sizes[i];
+                auto mblksize = actl_opts->_micro_block_sizes[i];
 
                 // Req'd shift in this dim based on max halos.
                 // Can't use separate L & R shift because of possible data reuse in vars.
@@ -935,7 +935,7 @@ namespace yask {
         // TODO: use actual number of shifts dynamically instead of this
         // max.
         DOMAIN_VAR_LOOP(i, j) {
-            auto blk_sz = opts->_block_sizes[i];
+            auto blk_sz = actl_opts->_block_sizes[i];
             auto tb_angle = tb_angles[j];
             tb_widths[j] = blk_sz;
             tb_tops[j] = blk_sz;
@@ -990,7 +990,7 @@ namespace yask {
 
         // Rank BB is based only on rank offsets and rank domain sizes.
         rank_bb.bb_begin = rank_domain_offsets;
-        rank_bb.bb_end = rank_bb.bb_begin_tuple(domain_dims).add_elements(opts->_rank_sizes, false);
+        rank_bb.bb_end = rank_bb.bb_begin_tuple(domain_dims).add_elements(actl_opts->_rank_sizes, false);
         rank_bb.update_bb("rank", this, true, true);
 
         // BB may be extended for wave-fronts.
