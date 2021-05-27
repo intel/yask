@@ -224,11 +224,7 @@ namespace yask {
         if (done)
             return;
 
-        // Setup not done?
-        if (!nullop)
-            return;
-
-        // Cumulative stats and rate.
+       // Cumulative stats and rate.
         at_state.csteps += steps;
         at_state.ctime += etime;
         double crate = (at_state.ctime > 0.) ? (double(at_state.csteps) / at_state.ctime) : 0.;
@@ -490,6 +486,8 @@ namespace yask {
         
         // Save debug output and set to null.
         auto saved_op = get_debug_output();
+        yask_output_factory yof;
+        auto nullop = yof.new_null_output();
         set_debug_output(nullop);
 
         // Make sure everything is resized based on new target size.

@@ -45,10 +45,6 @@ namespace yask {
         #define AT_DEBUG_MSG(msg) DEBUG_MSG(_prefix << msg)
         #define AT_TRACE_MSG(msg) TRACE_MSG(_prefix << msg)
 
-        // Null stream to throw away debug info.
-        yask_output_factory yof;
-        yask_output_ptr nullop = yof.new_null_output();
-
         // Whether to print progress.
         bool verbose = false;
 

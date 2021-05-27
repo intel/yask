@@ -701,6 +701,10 @@ namespace yask {
     // other vars before allocating memory.
     // Called from prepare_solution(), during auto-tuning, etc.
     void KernelSettings::adjust_settings(KernelStateBase* ksb) {
+
+        // Null stream to throw away debug info if 'ksb' is null.
+        yask_output_factory yof;
+        auto nullop = yof.new_null_output();
         yask_output_ptr op = ksb ? ksb->get_debug_output() : nullop;
         ostream& os = op->get_ostream();
 

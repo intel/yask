@@ -183,10 +183,6 @@ namespace yask {
     // of these vars can be set via cmd-line options and/or APIs.
     class KernelSettings {
 
-         // Null stream to throw away debug info.
-        yask_output_factory yof;
-        yask_output_ptr nullop = yof.new_null_output();
-
         // Default block size on CPU.
         int def_blk_size = 0;
 
