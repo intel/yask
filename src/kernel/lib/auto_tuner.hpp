@@ -107,7 +107,7 @@ namespace yask {
  
         bool check_sizes(const IdxTuple& sizes);
         bool next_target();
-        bool is_target_active(std::string& target) {
+        bool is_target_active(const std::string& target) {
             auto& v = _settings->_tuner_targets;
             return std::find(v.begin(), v.end(), target) != v.end();
         }

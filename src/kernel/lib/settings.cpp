@@ -168,6 +168,13 @@ namespace yask {
         return bufs[i].bufs[bd];
     }
 
+    // Settings static vars.
+    const string KernelSettings::_mega_block_str = "Mb";
+    const string KernelSettings::_block_str = "b";
+    const string KernelSettings::_micro_block_str = "mb";
+    const string KernelSettings::_nano_block_str = "nb";
+    const string KernelSettings::_pico_block_str = "pb";
+    
     // Settings ctor.
     KernelSettings::KernelSettings(DimsPtr dims, KernelEnvPtr env) :
         _dims(dims), max_threads(env->max_threads) {

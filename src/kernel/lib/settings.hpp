@@ -209,11 +209,11 @@ namespace yask {
         IdxTuple _pico_block_sizes;       // pico-block size (used within nano-blocks).
 
         // Abbreviations for sizes.
-        std::string _mega_block_str = "Mb";
-        std::string _block_str = "b";
-        std::string _micro_block_str = "mb";
-        std::string _nano_block_str = "nb";
-        std::string _pico_block_str = "pb";
+        static const std::string _mega_block_str;
+        static const std::string _block_str;
+        static const std::string _micro_block_str;
+        static const std::string _nano_block_str;
+        static const std::string _pico_block_str;
 
         // Global padding applied to all vars by default.
         IdxTuple _min_pad_sizes;         // minimum spatial padding (including halos).
