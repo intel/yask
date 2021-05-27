@@ -137,8 +137,9 @@ namespace yask {
 
     // Context ctor.
     StencilContext::StencilContext(KernelEnvPtr& kenv,
-                                   KernelSettingsPtr& ksettings) :
-        KernelStateBase(kenv, ksettings),
+                                   KernelSettingsPtr& ksettings,
+                                   KernelSettingsPtr& user_settings) :
+        KernelStateBase(kenv, ksettings, user_settings),
         _at(this, ksettings.get())
     {
         STATE_VARS(this);
@@ -552,7 +553,7 @@ namespace yask {
                       prefix << " num-temporal-block-shifts: " << num_tb_shifts << endl <<
                       prefix << " temporal-block-long-base:  " << tb_widths.make_dim_val_str(" * ") << endl <<
                       prefix << " temporal-block-short-base: " << tb_tops.make_dim_val_str(" * ") << endl <<
-                      prefix << " micro-block-angles:         " << mb_angles.make_dim_val_str());
+                      prefix << " micro-block-angles:        " << mb_angles.make_dim_val_str());
         }
     }
 
@@ -562,11 +563,11 @@ namespace yask {
         DEBUG_MSG(prefix << " local-domain-tile-size: " <<
                   opts->_rank_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
 #endif
-        DEBUG_MSG(prefix << " region-size:            " <<
-                  opts->_region_sizes.make_dim_val_str(" * "));
+        DEBUG_MSG(prefix << " mega-block-size:        " <<
+                  opts->_mega_block_sizes.make_dim_val_str(" * "));
 #ifdef USE_TILING
-        DEBUG_MSG(prefix << " region-tile-size:       " <<
-                  opts->_region_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+        DEBUG_MSG(prefix << " mega-block-tile-size:   " <<
+                  opts->_mega_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
 #endif
         DEBUG_MSG(prefix << " block-size:             " <<
                   opts->_block_sizes.make_dim_val_str(" * "));
@@ -706,7 +707,7 @@ namespace yask {
         // of angles and extensions.
         idx_t tb_steps = opts->_block_sizes[step_dim]; // use requested size; actual may be less.
         assert(tb_steps >= 0);
-        wf_steps = opts->_region_sizes[step_dim];
+        wf_steps = opts->_mega_block_sizes[step_dim];
         wf_steps = max(wf_steps, tb_steps); // round up WF steps if less than TB steps.
         assert(wf_steps >= 0);
         num_wf_shifts = 0;
@@ -729,7 +730,7 @@ namespace yask {
         // Calculate angles and related settings.
         for (auto& dim : domain_dims) {
             auto& dname = dim._get_name();
-            auto rnsize = opts->_region_sizes[dname];
+            auto rnsize = opts->_mega_block_sizes[dname];
             auto rksize = opts->_rank_sizes[dname];
             auto nranks = opts->_num_ranks[dname];
 
@@ -737,9 +738,9 @@ namespace yask {
             idx_t angle = ROUND_UP(max_halos[dname], dims->_fold_pts[dname]);
 
             // Determine the spatial skewing angles for WF tiling.  We
-            // only need non-zero angles if the region size is less than the
+            // only need non-zero angles if the mega-block size is less than the
             // rank size or there are other ranks in this dim, i.e., if
-            // the region covers the *global* domain in a given dim, no
+            // the mega-block covers the *global* domain in a given dim, no
             // wave-front shifting is needed in that dim.
             idx_t wf_angle = 0;
             if (rnsize < rksize || nranks > 1)
@@ -830,7 +831,7 @@ namespace yask {
             DOMAIN_VAR_LOOP(i, j) {
                 auto& dim = domain_dims.get_dim(j);
                 auto& dname = dim._get_name();
-                auto rnsize = opts->_region_sizes[i];
+                auto rnsize = opts->_mega_block_sizes[i];
 
                 // There must be only one block size when using TB, so get
                 // sizes from context settings instead of stages.
@@ -853,7 +854,7 @@ namespace yask {
                 mb_angles[j] = mb_angle;
 
                 // Determine the max spatial skewing angles for TB.
-                // If blk covers whole region, no shifting is needed in that dim.
+                // If blk covers whole mega-block, no shifting is needed in that dim.
                 idx_t tb_angle = 0;
                 if (blksize < rnsize)
                     tb_angle = angle;

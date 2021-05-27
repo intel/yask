@@ -37,7 +37,7 @@ namespace yask {
     // first and then the non-scratch stencils in the stencil bundle.
     // It is also here that the boundaries of the bounding-box(es) of the bundle
     // are respected. There must not be any temporal blocking at this point.
-    void StencilBundleBase::calc_micro_block(int region_thread_idx,
+    void StencilBundleBase::calc_micro_block(int mega_block_thread_idx,
                                             KernelSettings& settings,
                                             const ScanIndices& micro_block_idxs) {
         STATE_VARS(this);
@@ -45,7 +45,7 @@ namespace yask {
                    micro_block_idxs.begin.make_val_str() << " ... " <<
                    micro_block_idxs.end.make_val_str() << ") by " <<
                    micro_block_idxs.stride.make_val_str() <<
-                   " by region thread " << region_thread_idx);
+                   " by outer thread " << mega_block_thread_idx);
         assert(!is_scratch());
 
         // No TB allowed here.
@@ -61,7 +61,7 @@ namespace yask {
 
         // Set number of threads in this block.
         // This will be the number of nano-blocks done in parallel.
-        int nbt = _context->set_block_threads();
+        int nbt = _context->set_inner_num_threads();
 
         // Thread-binding info.
         // We only bind threads if there is more than one block thread
@@ -124,7 +124,7 @@ namespace yask {
 
                 // Indices needed for the generated loops.  Will normally be a
                 // copy of 'mb_idxs' except when updating scratch-vars.
-                ScanIndices adj_mb_idxs = sg->adjust_span(region_thread_idx, mb_idxs);
+                ScanIndices adj_mb_idxs = sg->adjust_span(mega_block_thread_idx, mb_idxs);
 
                 // Tweak settings for adjusted indices.
                 adj_mb_idxs.adjust_from_settings(settings._micro_block_sizes,
@@ -161,12 +161,12 @@ namespace yask {
                               adj_mb_idxs.begin.make_val_str() << " ... " <<
                               adj_mb_idxs.end.make_val_str() << ") by " <<
                               adj_mb_idxs.stride.make_val_str() <<
-                              " by region thread " << region_thread_idx <<
+                              " by outer thread " << mega_block_thread_idx <<
                               " with " << nbt << " block thread(s) bound to data");
 
                     // Start threads within a block.  Each of these threads
                     // will eventually work on a separate nano-block.  This
-                    // is nested within an OMP region thread.
+                    // is nested within an OMP outer thread.
                     _Pragma("omp parallel proc_bind(spread)") {
                         assert(omp_get_level() == 2);
                         assert(omp_get_num_threads() == nbt);
@@ -194,7 +194,7 @@ namespace yask {
                         auto bind_slab_idx = idiv_flr(bind_elem_idx + idx_ofs, bind_slab_pts);
                         auto bind_thr = imod_flr<idx_t>(bind_slab_idx, nbt);
                         if (block_thread_idx == bind_thr)
-                            sg->calc_nano_block(region_thread_idx, block_thread_idx,
+                            sg->calc_nano_block(mega_block_thread_idx, block_thread_idx,
                                                settings, nano_blk_range);
 
                         // Loop sufffix.
@@ -213,7 +213,7 @@ namespace yask {
                               adj_mb_idxs.begin.make_val_str() << " ... " <<
                               adj_mb_idxs.end.make_val_str() << ") by " <<
                               adj_mb_idxs.stride.make_val_str() <<
-                              " by region thread " << region_thread_idx <<
+                              " by outer thread " << mega_block_thread_idx <<
                               " with " << nbt << " block thread(s) NOT bound to data");
 
                     // Call calc_nano_block() with a different thread for
@@ -227,7 +227,7 @@ namespace yask {
 
                     // Loop body.
                     int block_thread_idx = omp_get_thread_num();
-                    sg->calc_nano_block(region_thread_idx, block_thread_idx,
+                    sg->calc_nano_block(mega_block_thread_idx, block_thread_idx,
                                        settings, nano_blk_range);
 
                     // Loop suffix.
@@ -250,7 +250,7 @@ namespace yask {
     // its halo sizes are still used to specify how much to
     // add to 'idxs'.
     // Returns adjusted indices.
-    ScanIndices StencilBundleBase::adjust_span(int region_thread_idx,
+    ScanIndices StencilBundleBase::adjust_span(int mega_block_thread_idx,
                                                const ScanIndices& idxs) const {
         STATE_VARS(this);
         ScanIndices adj_idxs(idxs);
@@ -260,7 +260,7 @@ namespace yask {
             assert(sv);
 
             // Get the one for this thread.
-            auto& gp = sv->at(region_thread_idx);
+            auto& gp = sv->at(mega_block_thread_idx);
             assert(gp);
             auto& gb = gp->gb();
             assert(gb.is_scratch());

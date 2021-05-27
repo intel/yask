@@ -174,11 +174,11 @@ namespace yask {
         auto& step_dim = dims->_step_dim;
 
         // Target-dependent defaults.
-        int def_blk_size = 32;  // TODO: calculate based on actual cache size and stencil.
-        num_block_threads = 1;
+        def_blk_size = 32;  // TODO: calculate based on actual cache size and stencil.
+        num_inner_threads = 1;
         if (string(YASK_TARGET) == "knl") {
             def_blk_size = 64;   // larger L2.
-            num_block_threads = 8; // 4 threads per core * 2 cores per tile.
+            num_inner_threads = 8; // 4 threads per core * 2 cores per tile.
         }
 
         // Use both step and domain dims for all size tuples.
@@ -190,28 +190,23 @@ namespace yask {
         _rank_tile_sizes = dims->_stencil_dims;
         _rank_tile_sizes.set_vals_same(0); // 0 => rank size.
 
-        _region_sizes = dims->_stencil_dims;
-        _region_sizes.set_vals_same(0);   // 0 => rank size.
-        _region_tile_sizes = dims->_stencil_dims;
-        _region_tile_sizes.set_vals_same(0); // 0 => region size.
+        _mega_block_sizes = dims->_stencil_dims;
+        _mega_block_sizes.set_vals_same(0);   // 0 => rank size.
+        _mega_block_tile_sizes = dims->_stencil_dims;
+        _mega_block_tile_sizes.set_vals_same(0); // 0 => mega-block size.
         
         _block_sizes = dims->_stencil_dims;
-        #ifdef USE_OFFLOAD
-        _block_sizes.set_vals_same(0); // 0 => region size.
-        #else
-        _block_sizes.set_vals_same(def_blk_size);
-        #endif
-        _block_sizes.set_val(step_dim, 0); // 0 => default.
+        _block_sizes.set_vals_same(0); // 0 => mega-block size.
         _block_tile_sizes = dims->_stencil_dims;
         _block_tile_sizes.set_vals_same(0); // 0 => block size.
 
         _micro_block_sizes = dims->_stencil_dims;
-        _micro_block_sizes.set_vals_same(0);            // 0 => calc from block.
+        _micro_block_sizes.set_vals_same(0); // 0 => block size.
         _micro_block_tile_sizes = dims->_stencil_dims;
         _micro_block_tile_sizes.set_vals_same(0); // 0 => micro-block size.
 
         _nano_block_sizes = dims->_stencil_dims;
-        _nano_block_sizes.set_vals_same(0);            // 0 => calc from micro-block.
+        _nano_block_sizes.set_vals_same(0);      // 0 => micro-block size.
         _nano_block_tile_sizes = dims->_stencil_dims;
         _nano_block_tile_sizes.set_vals_same(0); // 0 => nano-block size.
 
@@ -290,16 +285,17 @@ namespace yask {
         // Following options are in 'this' object.
         _add_domain_option(parser, "g", "Global-domain (overall-problem) size", _global_sizes);
         _add_domain_option(parser, "l", "Local-domain (rank) size", _rank_sizes);
-        _add_domain_option(parser, "d", "[Deprecated] Use local-domain size options", _rank_sizes);
-        _add_domain_option(parser, "r", "Region size", _region_sizes, true);
+        _add_domain_option(parser, _mega_block_str, "Mega-block size", _mega_block_sizes, true);
         _add_domain_option(parser, _block_str, "Block size", _block_sizes, true);
         _add_domain_option(parser, _micro_block_str, "Micro-block size", _micro_block_sizes);
         _add_domain_option(parser, _nano_block_str, "Nano-block size", _nano_block_sizes);
         _add_domain_option(parser, _pico_block_str, "Pico-block size", _pico_block_sizes);
-        _add_domain_option(parser, "sb", "[Deprecated] Use nano-block options", _nano_block_sizes);
+        _add_domain_option(parser, "d", "[Deprecated] Use local-domain size options", _rank_sizes);
+        _add_domain_option(parser, "r", "[Deprecated] Use mega-block size options", _mega_block_sizes, true);
+        _add_domain_option(parser, "sb", "[Deprecated] Use nano-block size options", _nano_block_sizes);
 #ifdef USE_TILING
         _add_domain_option(parser, "l_tile", "[Advanced] Local-domain-tile size", _rank_tile_sizes);
-        _add_domain_option(parser, "r_tile", "[Advanced] Region-tile size", _region_tile_sizes);
+        _add_domain_option(parser, "Mb_tile", "[Advanced] Mega-Block-tile size", _mega_block_tile_sizes);
         _add_domain_option(parser, "b_tile", "[Advanced] Block-tile size", _block_tile_sizes);
         _add_domain_option(parser, "mb_tile", "[Advanced] Micro-block-tile size", _micro_block_tile_sizes);
         _add_domain_option(parser, "nb_tile", "[Advanced] Nano-block-tile size", _nano_block_tile_sizes);
@@ -347,17 +343,21 @@ namespace yask {
                            "Divide the maximum number of OpenMP threads by the specified value, "
                            "discarding any remainder. "
                            "The maximum number of OpenMP threads is determined by the -max_threads "
-                           "option or the default value from the OpenMP library. ",
+                           "option or the default value from the OpenMP library.",
                            thread_divisor));
         parser.add_option(make_shared<CommandLineParser::IntOption>
-                          ("block_threads",
+                          ("inner_threads",
                            "Number of threads to use in a nested OpenMP region for each block. "
                            "Will be restricted to a value less than or equal to "
                            "the maximum number of OpenMP threads specified by -max_threads "
                            "and/or -thread_divisor. "
                            "Each thread is used to execute stencils within a nano-block, and "
                            "nano-blocks are executed in parallel within micro-blocks.",
-                           num_block_threads));
+                           num_inner_threads));
+        parser.add_option(make_shared<CommandLineParser::IntOption>
+                          ("block_threads",
+                           "[Deprecated] Use -inner_threads.",
+                           num_inner_threads));
         parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("bind_block_threads",
                            "[Advanced] Divide micro-blocks into nano-blocks of slabs along the first valid dimension "
@@ -457,22 +457,22 @@ namespace yask {
             "  The purpose of local-domains is to control the amount of work done in one\n"
             "   entire MPI rank.\n"
             "  Ranks are evaluated in parallel in separate MPI processes.\n"
-            "  Each local-domain is composed of one or more regions.\n"
-            " A 'region' is a sub-division of work within a local-domain.\n"
-            "  The purpose of regions is to control the amount of work done across an\n"
+            "  Each local-domain is composed of one or more mega-blocks.\n"
+            " A 'mega-block' is a sub-division of work within a local-domain.\n"
+            "  The purpose of mega-blocks is to control the amount of work done across an\n"
             "   entire MPI rank while sharing a large cache.\n"
-            "  If using temporal wave-front rank tiling (see region-size guidelines),\n"
+            "  If using temporal wave-front rank tiling (see mega-block-size guidelines),\n"
             "   then this is the work done in each wave-front rank tile;\n"
-            "   else, there is typically only one region the size of the local-domain.\n"
-            "  Regions are evaluated sequentially within ranks.\n"
-            "  Each region is composed of one or more blocks.\n"
-            " A 'block' is a sub-division of work within a region.\n"
+            "   else, there is typically only one mega-block the size of the local-domain.\n"
+            "  Mega-blocks are evaluated sequentially within ranks.\n"
+            "  Each mega-block is composed of one or more blocks.\n"
+            " A 'block' is a sub-division of work within a mega-block.\n"
             "  The purpose of blocking is to provide control over the amount of\n"
             "   work done by each concurrent OpenMP thread.\n"
             "  If the number of threads is greater than one (typical),\n"
             "   then this is the unit of work for one OpenMP thread,\n"
-            "   and blocks are evaluated concurrently within each region;\n"
-            "   else, blocks are evaluated sequentially within each region.\n"
+            "   and blocks are evaluated concurrently within each mega-block;\n"
+            "   else, blocks are evaluated sequentially within each mega-block.\n"
             "  This is the most commonly-tuned work-size for many stencils, especially\n"
             "   when not using any sort of temporal tiling.\n"
             "  Each block is composed of one or more micro-blocks.\n"
@@ -533,24 +533,24 @@ namespace yask {
             "   local-domain size is determined by the global-domain size in that dimension.\n"
             "  This and the number of vars affect the amount of memory used per rank.\n"
             "  Either the global-domain size or the local-domain size must be specified.\n"
-            " The region sizes are used to configure temporal wave-front rank tiling.\n"
+            " The mega-block sizes are used to configure temporal wave-front rank tiling.\n"
             "  Temporal wave-front rank tiling may increase locality in large shared caches\n"
             "   when a local-domain is larger than the capacity of those caches.\n"
-            "  A region size >1 in the step dimension (e.g., '-rt') enables wave-front rank tiling.\n"
-            "  A region size of 0 in the step dimension => the temporal wave-front\n"
+            "  A mega-block size >1 in the step dimension (e.g., '-rt') enables wave-front rank tiling.\n"
+            "  A mega-block size of 0 in the step dimension => the temporal wave-front\n"
             "   rank tiling will have the same number of steps as the temporal block tiling.\n"
-            "  The region size in the step dimension affects how often MPI halo-exchanges occur:\n"
-            "   A region size of 0 in the step dimension => exchange after every stage.\n"
-            "   A region size >0 in the step dimension => exchange after that many steps.\n"
+            "  The mega-block size in the step dimension affects how often MPI halo-exchanges occur:\n"
+            "   A mega-block size of 0 in the step dimension => exchange after every stage.\n"
+            "   A mega-block size >0 in the step dimension => exchange after that many steps.\n"
             " The block sizes specify the work done by each top-level OpenMP thread.\n"
             "  A block size of 0 in a given domain dimension =>\n"
-            "   block size is set to region size in that dimension.\n"
+            "   block size is set to mega-block size in that dimension.\n"
             "  A block size of 0 in the step dimension (e.g., '-bt') disables any temporal blocking.\n"
             "  A block size of 1 in the step dimension enables temporal blocking, but only between\n"
             "   stages in the same step.\n"
-            "  A block size >1 in the step dimension enables temporal region tiling across multiple steps.\n"
+            "  A block size >1 in the step dimension enables temporal mega-block tiling across multiple steps.\n"
             "  The temporal block size may be automatically reduced if needed based on the\n"
-            "   domain block sizes, the stencil halos, and the step size of the regions.\n"
+            "   domain block sizes, the stencil halos, and the step size of the mega-blocks.\n"
             " The micro-block sizes are used to configure temporal wave-front block tiling.\n"
             "   Temporal wave-front block tiling may increase locality in core-local caches\n"
             "   (e.g., L2) when blocks are larger than that the capacity of those caches.\n"
@@ -595,9 +595,10 @@ namespace yask {
             "  threads used without having to know the max_threads setting;\n"
             "  e.g., using '-thread_divisor 2' will halve the number of OpenMP threads.\n"
             " For stencil evaluation, threads are allocated using nested OpenMP:\n"
-            "  Num CPU threads per micro-block and nano-block = 1.\n"
-            "  Num CPU threads per block = block_threads.\n"
-            "  Num CPU threads per region = max_threads / thread_divisor / block_threads.\n"
+            "  Num outer_threads = max_threads / thread_divisor / inner_threads.\n"
+            "  Num CPU threads per mega-block = outer_threads.\n"
+            "  Num CPU threads per block = inner_threads.\n"
+            "  Num CPU threads per micro-block, nano-block, and pico-block = 1.\n"
             #ifdef USE_OFFLOAD
             " When using offloaded kernel evaluation, there may be multiple teams\n"
             "  and offload threads used within each nano-block. These may be controlled by\n"
@@ -705,7 +706,7 @@ namespace yask {
 
         auto& step_dim = _dims->_step_dim;
         auto& inner_dim = _dims->_inner_dim;
-        auto& rt = _region_sizes[step_dim];
+        auto& rt = _mega_block_sizes[step_dim];
         auto& bt = _block_sizes[step_dim];
         auto& mbt = _micro_block_sizes[step_dim];
         auto& cluster_pts = _dims->_cluster_pts;
@@ -716,40 +717,48 @@ namespace yask {
         bt = max(bt, idx_t(0));
         mbt = max(mbt, idx_t(0));
         if (!rt)
-            rt = bt;       // Default region steps == block steps.
+            rt = bt;       // Default mega-block steps == block steps.
         if (!mbt)
             mbt = bt;       // Default micro-blk steps == block steps.
 
-        // Determine num regions.
-        // Also fix up region sizes as needed.
-        // Temporal region size will be increase to
+        // Determine num mega-blocks.
+        // Also fix up mega-block sizes as needed.
+        // Temporal mega-block size will be increase to
         // current temporal block size if needed.
-        // Default region size (if 0) will be size of rank-domain.
-        os << "\nRegions:" << endl;
+        // Default mega-block size (if 0) will be size of rank-domain.
+        os << "\nMega-Blocks:" << endl;
         auto nr = find_num_subsets(os,
-                                   _region_sizes, "region",
+                                   _mega_block_sizes, "mega-block",
                                    _rank_sizes, "local-domain",
                                    cluster_pts, "cluster",
                                    step_dim);
-        os << " num-regions-per-local-domain-per-step: " << nr << endl;
-        os << " Since the region size in the '" << step_dim <<
+        os << " num-mega-blocks-per-local-domain-per-step: " << nr << endl;
+        os << " Since the mega-block size in the '" << step_dim <<
             "' dim is " << rt << ", temporal wave-front rank tiling is ";
         if (!rt) os << "NOT ";
         os << "enabled.\n";
 
+        // Adjust defaults for blocks on CPU.
+        #ifndef USE_OFFLOAD
+        DOMAIN_VAR_LOOP(i, j) {
+            if (!_block_sizes[i])
+                _block_sizes[i] = def_blk_size;
+        }
+        #endif
+        
         // Determine num blocks.
         // Also fix up block sizes as needed.
-        // Default block size (if 0) will be size of region.
+        // Default block size (if 0) will be size of mega-block.
         os << "\nBlocks:" << endl;
         auto nb = find_num_subsets(os,
                                    _block_sizes, "block",
-                                   _region_sizes, "region",
+                                   _mega_block_sizes, "mega-block",
                                    cluster_pts, "cluster",
                                    step_dim);
-        os << " num-blocks-per-region-per-step: " << nb << endl;
+        os << " num-blocks-per-mega-block-per-step: " << nb << endl;
         os << " num-blocks-per-local-domain-per-step: " << (nb * nr) << endl;
         os << " Since the block size in the '" << step_dim <<
-            "' dim is " << bt << ", temporal concurrent region tiling is ";
+            "' dim is " << bt << ", temporal concurrent mega-block tiling is ";
         if (!bt) os << "NOT ";
         os << "enabled.\n";
 
@@ -762,7 +771,7 @@ namespace yask {
                                     cluster_pts, "cluster",
                                     step_dim);
         os << " num-micro-blocks-per-block-per-step: " << nmb << endl;
-        os << " num-micro-blocks-per-region-per-step: " << (nmb * nb) << endl;
+        os << " num-micro-blocks-per-mega-block-per-step: " << (nmb * nb) << endl;
         os << " num-micro-blocks-per-local-domain-per-step: " << (nmb * nb * nr) << endl;
         os << " Since the micro-block size in the '" << step_dim <<
             "' dim is " << mbt << ", temporal wave-front block tiling is ";
@@ -772,7 +781,7 @@ namespace yask {
         // Adjust defaults for nano-blocks to be slab if we are using more
         // than one block thread.  Otherwise, find_num_subsets() would set
         // default to entire block, and we wouldn't use multiple threads.
-        if (num_block_threads > 1 && _nano_block_sizes.sum() == 0) {
+        if (num_inner_threads > 1 && _nano_block_sizes.sum() == 0) {
 
             // Default dim is outer one.
             _bind_posn = 1;
@@ -792,7 +801,7 @@ namespace yask {
 
                 // Subdivide this dim if there are enough clusters in
                 // the block for each thread.
-                if (clus_per_blk >= num_block_threads) {
+                if (clus_per_blk >= num_inner_threads) {
                     _bind_posn = i;
 
                     // Stop when first dim picked.
@@ -811,7 +820,7 @@ namespace yask {
 
             // Divide block equally.
             else
-                _nano_block_sizes[_bind_posn] = ROUND_UP(bsz / num_block_threads, cpts);
+                _nano_block_sizes[_bind_posn] = ROUND_UP(bsz / num_inner_threads, cpts);
         }
 
         // Determine num nano-blocks.
@@ -824,7 +833,7 @@ namespace yask {
                                     step_dim);
         os << " num-nano-blocks-per-micro-block-per-step: " << nsb << endl;
         os << " num-nano-blocks-per-block-per-step: " << (nsb * nmb) << endl;
-        os << " num-nano-blocks-per-region-per-step: " << (nsb * nmb * nb) << endl;
+        os << " num-nano-blocks-per-mega-block-per-step: " << (nsb * nmb * nb) << endl;
         os << " num-nano-blocks-per-rank-per-step: " << (nsb * nmb * nb * nr) << endl;
         os << " Temporal nano-block tiling is never enabled.\n";
 
@@ -845,13 +854,13 @@ namespace yask {
         os << " num-pico-blocks-per-nano-block-per-step: " << npb << endl;
         os << " num-pico-blocks-per-micro-block-per-step: " << (npb * nsb) << endl;
         os << " num-pico-blocks-per-block-per-step: " << (npb * nsb * nmb) << endl;
-        os << " num-pico-blocks-per-region-per-step: " << (npb * nsb * nmb * nb) << endl;
+        os << " num-pico-blocks-per-mega-block-per-step: " << (npb * nsb * nmb * nb) << endl;
         os << " num-pico-blocks-per-rank-per-step: " << (npb * nsb * nmb * nb * nr) << endl;
         os << " Temporal pico-block tiling is never enabled.\n";
 
         // Determine binding dimension. Do this again if it was done above
         // by default because it may have changed during adjustment.
-        if (bind_block_threads && num_block_threads > 1) {
+        if (bind_block_threads && num_inner_threads > 1) {
             DOMAIN_VAR_LOOP(i, j) {
 
                 // Don't pick inner dim.
@@ -865,14 +874,14 @@ namespace yask {
 
                 // Choose first dim with enough nano-blocks
                 // per block.
-                if (sb_per_b >= num_block_threads) {
+                if (sb_per_b >= num_inner_threads) {
                     _bind_posn = i;
                     break;
                 }
             }
             os << " Note: only the nano-block size in the '" <<
                 _dims->_stencil_dims.get_dim_name(_bind_posn) << "' dimension may be used at run-time\n"
-                "  because block-thread binding is enabled on " << num_block_threads << " block threads.\n";
+                "  because block-thread binding is enabled on " << num_inner_threads << " block threads.\n";
         }
 
 #ifdef USE_TILING
@@ -886,19 +895,19 @@ namespace yask {
         auto nlg = find_num_subsets(os,
                                     _rank_tile_sizes, "local-domain-tile",
                                     _rank_sizes, "local-domain",
-                                    _region_sizes, "region",
+                                    _mega_block_sizes, "mega-block",
                                     step_dim);
         os << " num-local-domain-tiles-per-local-domain-per-step: " << nlg << endl;
 
-        // Show num region-tiles.
-        // TODO: only print this if region-tiling is enabled.
-        os << "\nRegion tiles:\n";
+        // Show num mega-block-tiles.
+        // TODO: only print this if mega-block-tiling is enabled.
+        os << "\nMega-Block tiles:\n";
         auto nrg = find_num_subsets(os,
-                                    _region_tile_sizes, "region-tile",
-                                    _region_sizes, "region",
+                                    _mega_block_tile_sizes, "mega-block-tile",
+                                    _mega_block_sizes, "mega-block",
                                     _block_sizes, "block",
                                     step_dim);
-        os << " num-region-tiles-per-region-per-step: " << nlg << endl;
+        os << " num-mega-block-tiles-per-mega-block-per-step: " << nlg << endl;
 
         // Show num block-tiles.
         // TODO: only print this if block-tiling is enabled.
@@ -937,7 +946,8 @@ namespace yask {
 
     // Ctor.
     KernelStateBase::KernelStateBase(KernelEnvPtr& kenv,
-                                     KernelSettingsPtr& ksettings)
+                                     KernelSettingsPtr& ksettings,
+                                     KernelSettingsPtr& user_settings)
     {
         // Create state. All other objects that need to share
         // this state should use a shared ptr to it.
@@ -948,11 +958,13 @@ namespace yask {
         _state->_env = kenv;
         host_assert(ksettings);
         _state->_opts = ksettings;
+        host_assert(user_settings);
+        _state->_user_opts = user_settings;
         host_assert(ksettings->_dims);
         _state->_dims = ksettings->_dims;
 
-       // Create MPI Info object.
-        _state->_mpi_info = make_shared<MPIInfo>(ksettings->_dims);
+        // Create MPI Info object.
+        _state->_mpi_info = make_shared<MPIInfo>(_state->_dims);
 
         // Set vars after above inits.
         STATE_VARS(this);
@@ -987,7 +999,7 @@ namespace yask {
     }
 
     // Get total number of computation threads to use.
-    int KernelStateBase::get_num_comp_threads(int& region_threads, int& blk_threads) const {
+    int KernelStateBase::get_num_comp_threads(int& outer_threads, int& inner_threads) const {
         STATE_VARS(this);
 
         // Max threads / divisor.
@@ -996,16 +1008,16 @@ namespace yask {
         int at = mt / td;
         at = max(at, 1);
 
-        // Blk threads per region thread.
-        int bt = max(opts->num_block_threads, 1);
+        // Blk threads per mega-block thread.
+        int bt = max(opts->num_inner_threads, 1);
         bt = min(bt, at); // Cannot be > 'at'.
-        blk_threads = bt;
+        inner_threads = bt;
         assert(bt >= 1);
 
-        // Region threads.
+        // Outer threads.
         int rt = at / bt;
         rt = max(rt, 1);
-        region_threads = rt;
+        outer_threads = rt;
         assert(rt >= 1);
 
         // Total number of block threads.
@@ -1015,15 +1027,15 @@ namespace yask {
         return ct;
     }
 
-    // Set number of threads to use for a region.
+    // Set number of threads to use for a mega-block.
     // Enable nested OMP.
     // Return number of threads.
     // Do nothing and return 0 if not properly initialized.
-    int KernelStateBase::set_region_threads() {
+    int KernelStateBase::set_outer_num_threads() {
         int rt=0, bt=0;
         int at = get_num_comp_threads(rt, bt);
 
-        // Must call before entering top parallel region.
+        // Must call before entering top parallel mega-block.
         int ol = omp_get_level();
         assert(ol == 0);
 
@@ -1035,17 +1047,16 @@ namespace yask {
         yask_num_threads[0] = rt;
         yask_num_threads[1] = bt;
 
-        // Set num threads for a region.
+        // Set num threads for a mega-block.
         omp_set_num_threads(rt);
         return rt;
     }
 
-    
     // Set number of threads for a block.
-    // Must be called from within a top-level OMP parallel region.
+    // Must be called from within a top-level OMP parallel mega-block.
     // Return number of threads.
     // Do nothing and return 0 if not properly initialized.
-    int KernelStateBase::set_block_threads() {
+    int KernelStateBase::set_inner_num_threads() {
         int rt=0, bt=0;
         int at = get_num_comp_threads(rt, bt);
 

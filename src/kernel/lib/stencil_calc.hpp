@@ -158,13 +158,13 @@ namespace yask {
 
         // Calculate results within a micro-block.
         void
-        calc_micro_block(int region_thread_idx,
+        calc_micro_block(int mega_block_thread_idx,
                         KernelSettings& settings,
                         const ScanIndices& micro_block_idxs);
 
         // Calculate results within a nano-block.
         virtual void
-        calc_nano_block(int region_thread_idx,
+        calc_nano_block(int mega_block_thread_idx,
                        int block_thread_idx,
                        KernelSettings& settings,
                        const ScanIndices& micro_block_idxs) =0;
@@ -337,24 +337,24 @@ namespace yask {
         // Calculate results within a nano-block.
         // Essentially just a chooser between the debug and optimized versions.
         void
-        calc_nano_block(int region_thread_idx,
+        calc_nano_block(int mega_block_thread_idx,
                        int block_thread_idx,
                        KernelSettings& settings,
                        const ScanIndices& micro_block_idxs) override {
 
             // Choose between scalar debug and optimized impls.
             if (settings.force_scalar)
-                calc_nano_block_dbg(region_thread_idx, block_thread_idx,
+                calc_nano_block_dbg(mega_block_thread_idx, block_thread_idx,
                                       settings, micro_block_idxs);
             else
-                calc_nano_block_opt(region_thread_idx, block_thread_idx,
+                calc_nano_block_opt(mega_block_thread_idx, block_thread_idx,
                                    settings, micro_block_idxs);
         }
 
         // Calculate results for one nano-block using pure scalar code.
         // This is very slow and used for debug.
         void
-        calc_nano_block_dbg(int region_thread_idx,
+        calc_nano_block_dbg(int mega_block_thread_idx,
                            int block_thread_idx,
                            KernelSettings& settings,
                            const ScanIndices& micro_block_idxs) {
@@ -362,8 +362,8 @@ namespace yask {
             TRACE_MSG("calc_nano_block_dbg for bundle '" << get_name() << "': [" <<
                       micro_block_idxs.start.make_val_str() <<
                       " ... " << micro_block_idxs.stop.make_val_str() <<
-                      ") by region thread " << region_thread_idx <<
-                      " and block thread " << block_thread_idx);
+                      ") by outer thread " << mega_block_thread_idx <<
+                      " and inner thread " << block_thread_idx);
 
             auto* cp = _corep();
 
@@ -376,14 +376,14 @@ namespace yask {
             sb_idxs.stride.set_from_const(1);
             sb_idxs.align.set_from_const(1);
             
-            calc_nano_block_dbg2(cp, region_thread_idx, sb_idxs);
+            calc_nano_block_dbg2(cp, mega_block_thread_idx, sb_idxs);
         }
 
         // Scalar calc loop.
         // Static to make sure offload doesn't need 'this'.
         static void
         calc_nano_block_dbg2(StencilCoreDataT* cp,
-                            int region_thread_idx,
+                            int mega_block_thread_idx,
                             const ScanIndices& misc_idxs) {
 
             // Scan through n-D space.
@@ -403,7 +403,7 @@ namespace yask {
 
             // Loop body.
             // Since stride is always 1, we only need start indices.
-            StencilBundleImplT::calc_scalar(cp, region_thread_idx, misc_range.start);
+            StencilBundleImplT::calc_scalar(cp, mega_block_thread_idx, misc_range.start);
 
             // Loop suffix.
             #define MISC_USE_LOOP_PART_1
@@ -415,7 +415,7 @@ namespace yask {
         // into full vector-clusters, full vectors, and partial vectors.
         // The resulting areas are evaluated by the YASK-compiler-generated code.
         void
-        calc_nano_block_opt(int region_thread_idx,
+        calc_nano_block_opt(int mega_block_thread_idx,
                            int block_thread_idx,
                            KernelSettings& settings,
                            const ScanIndices& micro_block_idxs) {
@@ -423,8 +423,8 @@ namespace yask {
             TRACE_MSG("calc_nano_block_opt for bundle '" << get_name() << "': [" <<
                       micro_block_idxs.start.make_val_str() <<
                       " ... " << micro_block_idxs.stop.make_val_str() <<
-                      ") by region thread " << region_thread_idx <<
-                      " and block thread " << block_thread_idx);
+                      ") by outer thread " << mega_block_thread_idx <<
+                      " and inner thread " << block_thread_idx);
             auto* cp = _corep();
 
             /*
@@ -704,12 +704,12 @@ namespace yask {
                           " ... " << norm_fcidxs.end.make_val_str() <<
                           ") with stride " << norm_fcidxs.stride.make_val_str() <<
                           (need_pico_loops ? " with" : " without") << " pico loops"
-                          " by region thread " << region_thread_idx <<
-                          " and block thread " << block_thread_idx);
+                          " by outer thread " << mega_block_thread_idx <<
+                          " and inner thread " << block_thread_idx);
                 
                 // Perform the calculations in this block.
                 calc_clusters_opt2(cp, need_pico_loops,
-                                   region_thread_idx, block_thread_idx,
+                                   mega_block_thread_idx, block_thread_idx,
                                    norm_fcidxs);
                 
             } // whole clusters.
@@ -724,8 +724,8 @@ namespace yask {
                           ") bordering full clusters at [" <<
                           sb_fcidxs.begin.make_val_str() <<
                           " ... " << sb_fcidxs.end.make_val_str() <<
-                          ") by region thread " << region_thread_idx <<
-                          " and block thread " << block_thread_idx);
+                          ") by outer thread " << mega_block_thread_idx <<
+                          " and inner thread " << block_thread_idx);
                 #if CPTS == 1
                 THROW_YASK_EXCEPTION("Internal error: vector border-code not expected with cluster-size==1");
                 #else
@@ -873,11 +873,11 @@ namespace yask {
                                           " within normalized local indices [" <<
                                           fv_part.begin.make_val_str() <<
                                           " ... " << fv_part.end.make_val_str() <<
-                                          ") by region thread " << region_thread_idx <<
-                                          " and block thread " << block_thread_idx);
+                                          ") by outer thread " << mega_block_thread_idx <<
+                                          " and inner thread " << block_thread_idx);
                                 
                                 calc_vectors_opt2(cp,
-                                                  region_thread_idx, block_thread_idx,
+                                                  mega_block_thread_idx, block_thread_idx,
                                                   fv_part, bit_mask_t(-1));
                             }
                             //else TRACE_MSG("full vectors not needed for " << descr);
@@ -889,11 +889,11 @@ namespace yask {
                                           " within normalized local indices [" <<
                                           pv_part.begin.make_val_str() <<
                                           " ... " << pv_part.end.make_val_str() <<
-                                          ") by region thread " << region_thread_idx <<
-                                          " and block thread " << block_thread_idx);
+                                          ") by outer thread " << mega_block_thread_idx <<
+                                          " and inner thread " << block_thread_idx);
                                 
                                 calc_vectors_opt2(cp,
-                                                  region_thread_idx, block_thread_idx,
+                                                  mega_block_thread_idx, block_thread_idx,
                                                   pv_part, pv_mask);
                             }
                             //else TRACE_MSG("partial vectors not needed for " << descr);
@@ -914,7 +914,7 @@ namespace yask {
         static void
         calc_clusters_opt2(StencilCoreDataT* corep,
                            bool need_pico_loops,
-                           int region_thread_idx,
+                           int mega_block_thread_idx,
                            int block_thread_idx,
                            ScanIndices& norm_idxs) {
 
@@ -922,11 +922,11 @@ namespace yask {
             if (need_pico_loops)
                 StencilBundleImplT::
                     calc_clusters_with_pico_loops(corep,
-                                                  region_thread_idx, block_thread_idx,
+                                                  mega_block_thread_idx, block_thread_idx,
                                                   norm_idxs);
             else
                 StencilBundleImplT::calc_clusters(corep,
-                                                  region_thread_idx, block_thread_idx,
+                                                  mega_block_thread_idx, block_thread_idx,
                                                   norm_idxs);
         }
 
@@ -936,7 +936,7 @@ namespace yask {
         // Static to make sure offload doesn't need 'this'.
         static void
         calc_vectors_opt2(StencilCoreDataT* corep,
-                          int region_thread_idx,
+                          int mega_block_thread_idx,
                           int block_thread_idx,
                           ScanIndices& norm_idxs,
                           bit_mask_t mask) {
@@ -947,7 +947,7 @@ namespace yask {
             
             // Call code from stencil compiler.
             StencilBundleImplT::calc_vectors(corep,
-                                             region_thread_idx, block_thread_idx,
+                                             mega_block_thread_idx, block_thread_idx,
                                              norm_idxs, mask);
             #endif
         }

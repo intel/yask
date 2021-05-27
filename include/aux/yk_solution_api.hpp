@@ -467,7 +467,7 @@ namespace yask {
         /**
            The stencil(s) in the solution are applied to the var data, setting the
            index variables as follows:
-           1. If temporal wave-front tiling is *not* used (the default):
+           1. If temporal tiling is *not* used (the default):
             - The step index (e.g., `t` for "time") will be sequentially set to values
             from `first_step_index` to `last_step_index`, inclusive.
              + If the stencil equations were defined with dependencies on lower-valued steps,
@@ -482,16 +482,18 @@ namespace yask {
             - MPI halo exchanges will occur as necessary before or during each step.
             - Since this function initiates MPI communication, it must be called
               on all MPI ranks, and it will block until all ranks have completed.
-           2. **[Advanced]** If temporal wave-front tiling *is* enabled via set_region_size():
+           2. **[Advanced]** If temporal wave-front tiling *is* enabled:
             - The step index (e.g., `t` for "time") will be sequentially set to values
-            from `first_step_index` to `last_step_index`, inclusive, within each region.
-             + The number of steps in a region may also be restricted by the size
-             of the region in the step dimension. In that case, tiles will be done in slices of that size.
-            - For each step index within each region, the domain indices will be set
-            to values across the entire region (not necessarily sequentially).
+            from `first_step_index` to `last_step_index`, inclusive, within each area configured
+            for temporal tiling.
+             + The number of steps in an area may also be restricted by the size
+             of the area in the step dimension. 
+             In that case, tiles will be done in temporal slices of that size.
+            - For each step index within each area, the domain indices will be set
+            to values across the entire area (not necessarily sequentially).
             - Ultimately, the stencil(s) will be applied to same the elements in both the step
             and domain dimensions as when wave-front tiling is not used.
-            - MPI halo exchanges will occur before each number of steps in a region.
+            - MPI halo exchanges may occur at less frequent intervals.
 
            This function should be called only *after* calling prepare_solution().
         */
@@ -559,54 +561,6 @@ namespace yask {
         is_auto_tuner_enabled() const =0;
 
         /* Advanced APIs for yk_solution found below are not needed for most applications. */
-
-        /// **[Advanced]** Set the region size in the given dimension.
-        /**
-           This sets the approximate number of elements that are evaluated in
-           each "region".
-           This is a performance setting and should not affect the functional
-           correctness or total number of elements evaluated.
-           A region is typically the unit of work done by each
-           top-level OpenMP parallel region.  The actual number of elements evaluated
-           in a region may be greater than the specified size due to rounding.
-           The number of elements in a region may
-           also be smaller than the specified size when the region is at the
-           edge of the domain.
-
-           A region is most often used to specify the size of a temporal
-           wave-front tile. Thus, you will normally specify the size of the
-           region in the step dimension as well as all the domain dimensions.
-           For example, `set_region_size("t", 4)` specifies that four
-           time-steps will be executed in each region.
-           The sizes of regions in the domain dimensions are typically
-           set to fit within a large cache structure such as MCDRAM cache
-           in an Intel(R) Xeon Phi(TM) processor.
-
-           In order to get the benefit of regions with multiple steps,
-           you must also call run_solution() where the number of steps
-           between its `first_step_index` and `last_step_index`
-           arguments is greater than or equal to the step-size of the
-           regions.
-        */
-        virtual void
-        set_region_size(const std::string& dim
-                        /**< [in] Name of dimension to set.  Must be one of
-                           the names from get_step_dim_name() or
-                           get_domain_dim_names(). */,
-                        idx_t size
-                        /**< [in] Elements in a region in this `dim`. */ ) =0;
-
-        /// **[Advanced]** Get the region size.
-        /**
-           Returned value may be slightly larger than the value provided
-           via set_region_size() due to rounding.
-           @returns Current settings of region size.
-        */
-        virtual idx_t
-        get_region_size(const std::string& dim
-                        /**< [in] Name of dimension to get.  Must be one of
-                           the names from get_step_dim_name() or
-                           get_domain_dim_names(). */) const =0;
 
         /// **[Advanced]** Set the minimum amount of padding for all vars.
         /**

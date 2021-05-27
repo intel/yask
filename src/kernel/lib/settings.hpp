@@ -116,6 +116,7 @@ namespace yask {
     // Dimensions for a solution.
     // Similar to the Dimensions class in the YASK compiler
     // from which these values are set.
+    // These are not changed after initialization.
     struct Dims {
 
         // Algorithm for vec dims in fold layout.
@@ -124,8 +125,8 @@ namespace yask {
         // Dimensions with 0 values.
         std::string _step_dim;  // usually time, 't'.
         std::string _inner_dim; // the domain dim w/the fastest-changing index.
-        IdxTuple _domain_dims;
-        IdxTuple _stencil_dims; // step & domain dims.
+        IdxTuple _domain_dims;  // e.g., 'x', 'y'.
+        IdxTuple _stencil_dims; // union of step & domain dims.
         IdxTuple _misc_dims;
 
         // Dimensions and sizes.
@@ -186,6 +187,9 @@ namespace yask {
         yask_output_factory yof;
         yask_output_ptr nullop = yof.new_null_output();
 
+        // Default block size on CPU.
+        int def_blk_size = 0;
+
    public:
 
         // Ptr to problem dimensions (NOT sizes), folding, etc.
@@ -195,12 +199,11 @@ namespace yask {
         // Sizes in elements (points).
         // All these tuples contain step dims, even the ones that
         // don't use them, for consistency.
-        // TODO: consider adding rank and/or region tiles.
         IdxTuple _global_sizes;     // Overall problem domain sizes.
         IdxTuple _rank_sizes;     // This rank's domain (local) sizes.
         IdxTuple _rank_tile_sizes; // rank-tile size (only used for 'tiled' rank loops).
-        IdxTuple _region_sizes;   // region size (used for wave-front tiling).
-        IdxTuple _region_tile_sizes; // region-tile size (only used for 'tiled' region loops).
+        IdxTuple _mega_block_sizes;   // mega-block size (used for wave-front tiling).
+        IdxTuple _mega_block_tile_sizes; // mega-block-tile size (only used for 'tiled' mega-block loops).
         IdxTuple _block_sizes;       // block size (used for each outer thread).
         IdxTuple _block_tile_sizes; // block-tile size (only used for 'tiled' block loops).
         IdxTuple _micro_block_sizes;       // micro-block size (used for wave-fronts in blocks).
@@ -208,6 +211,15 @@ namespace yask {
         IdxTuple _nano_block_sizes;       // nano-block size (used for each nested thread).
         IdxTuple _nano_block_tile_sizes; // nano-block-tile size (only used for 'tiled' nano-block loops).
         IdxTuple _pico_block_sizes;       // pico-block size (used within nano-blocks).
+
+        // Abbreviations for sizes.
+        std::string _mega_block_str = "Mb";
+        std::string _block_str = "b";
+        std::string _micro_block_str = "mb";
+        std::string _nano_block_str = "nb";
+        std::string _pico_block_str = "pb";
+
+        // Global padding applied to all vars by default.
         IdxTuple _min_pad_sizes;         // minimum spatial padding (including halos).
         IdxTuple _extra_pad_sizes;       // extra spatial padding (outside of halos).
 
@@ -222,7 +234,7 @@ namespace yask {
         // OpenMP settings.
         int max_threads = 0;      // Initial number of threads to use overall; 0=>OMP default.
         int thread_divisor = 1;   // Reduce number of threads by this amount.
-        int num_block_threads = 1; // Number of threads to use for a block.
+        int num_inner_threads = 1; // Number of threads to use for a block.
         bool bind_block_threads = false; // Bind block threads to indices.
 
         // Var behavior, including allocation.
@@ -243,10 +255,6 @@ namespace yask {
         bool _allow_stage_tuners = false; // allow per-stage tuners when possible.
         double _tuner_trial_secs = 0.25;   // time to run tuner for new better setting.
         std::vector<std::string> _tuner_targets; // things to tune from following.
-        std::string _block_str = "b";
-        std::string _micro_block_str = "mb";
-        std::string _nano_block_str = "nb";
-        std::string _pico_block_str = "pb";
 
         // Debug.
         bool force_scalar = false; // Do only scalar ops.
@@ -275,9 +283,9 @@ namespace yask {
                          const std::vector<std::string>& app_examples);
 
         // Make sure all user-provided settings are valid by rounding-up
-        // values as needed.
-        // Called from prepare_solution(), so it doesn't normally need to be called from user code.
-        // Prints informational info to 'os'.
+        // values as needed.  Called from prepare_solution(), so it doesn't
+        // normally need to be called from user code.  Prints informational
+        // info.
         virtual void adjust_settings(KernelStateBase* ksb = 0);
 
         // Determine if this is the first or last rank in given dim.
@@ -561,7 +569,8 @@ namespace yask {
         KernelEnvPtr _env;
 
         // User settings.
-        KernelSettingsPtr _opts;
+        KernelSettingsPtr _opts; // Active settings (may have been adjusted from _user_opts).
+        KernelSettingsPtr _user_opts; // Settings specified by user.
         bool _use_stage_tuners = false;
 
         // Problem dims.
@@ -598,6 +607,8 @@ namespace yask {
     host_assert(env);                                                   \
     pfx auto* opts = state->_opts.get();                                \
     host_assert(opts);                                                  \
+    pfx auto* user_opts = state->_user_opts.get();                      \
+    host_assert(user_opts);                                             \
     pfx auto* dims = state->_dims.get();                                \
     host_assert(dims);                                                  \
     pfx auto* mpi_info = state->_mpi_info.get();                        \
@@ -633,7 +644,8 @@ namespace yask {
         KernelStateBase(KernelStatePtr& state) :
             _state(state) {}
         KernelStateBase(KernelEnvPtr& kenv,
-                        KernelSettingsPtr& ksettings);
+                        KernelSettingsPtr& ksettings,
+                        KernelSettingsPtr& user_settings);
         KernelStateBase(KernelStateBase* p) :
             _state(p->_state) { }
 
@@ -648,6 +660,8 @@ namespace yask {
         }
         KernelSettingsPtr& get_settings() { return _state->_opts; }
         const KernelSettingsPtr& get_settings() const { return _state->_opts; }
+        KernelSettingsPtr& get_user_settings() { return _state->_user_opts; }
+        const KernelSettingsPtr& get_user_settings() const { return _state->_user_opts; }
         KernelEnvPtr& get_env() { return _state->_env; }
         const KernelEnvPtr& get_env() const { return _state->_env; }
         DimsPtr& get_dims() { return _state->_dims; }
@@ -668,20 +682,20 @@ namespace yask {
         int set_max_threads();
 
         // Get total number of computation threads to use.
-        int get_num_comp_threads(int& region_threads, int& blk_threads) const;
+        int get_num_comp_threads(int& outer_threads, int& inner_threads) const;
 
-        // Set number of threads to use for a region.
+        // Set number of threads to use for a mega-block.
         // Enable nested OMP if there are >1 block threads,
         // disable otherwise.
         // Return number of threads.
         // Do nothing and return 0 if not properly initialized.
-        int set_region_threads();
+        int set_outer_num_threads();
 
         // Set number of threads for a block.
-        // Must be called from within a top-level OMP parallel region.
+        // Must be called from within a top-level OMP parallel mega-block.
         // Return number of threads.
         // Do nothing and return 0 if not properly initialized.
-        int set_block_threads();
+        int set_inner_num_threads();
 
     };
 

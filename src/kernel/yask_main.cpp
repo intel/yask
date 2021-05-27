@@ -360,7 +360,7 @@ int main(int argc, char** argv)
 
                 // Round up to multiple of temporal tiling if not too big.
                 auto step_dim = ksoln->get_step_dim_name();
-                auto rt = copts->_region_sizes[step_dim];
+                auto rt = copts->_mega_block_sizes[step_dim];
                 auto bt = copts->_block_sizes[step_dim];
                 auto tt = max(rt, bt);
                 const idx_t max_mult = 5;
@@ -516,19 +516,6 @@ int main(int argc, char** argv)
             ref_opts->overlap_comms = false;
             ref_opts->use_shm = false;
             ref_opts->_numa_pref = yask_numa_none;
-
-            // TODO: re-enable the region and block settings below;
-            // requires allowing consistent init of different-sized vars
-            // in kernel code.
-            #if 0
-            auto sdim = ref_soln->get_step_dim_name();
-            ref_soln->set_region_size(sdim, 0);
-            ref_soln->set_block_size(sdim, 0);
-            for (auto ddim : ref_soln->get_domain_dim_names()) {
-                ref_soln->set_region_size(ddim, 0);
-                ref_soln->set_block_size(ddim, 0);
-            }
-            #endif
 
             // Override allocations and prep solution as with ref soln.
             alloc_steps(ref_soln, my_ref_opts);

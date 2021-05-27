@@ -76,21 +76,26 @@ namespace yask {
         assert(ep);
         auto dp = YASK_STENCIL_CONTEXT::new_dims(); // create Dims.
         assert(dp);
-        auto op = make_shared<KernelSettings>(dp, ep);
-        assert(op);
+        auto opts = make_shared<KernelSettings>(dp, ep);
+        assert(opts);
+        auto user_opts = make_shared<KernelSettings>(dp, ep);
+        assert(user_opts);
 
-        // Copy settings from source.
+        // Copy settings from source, if any.
         if (source.get()) {
             auto ssp = dynamic_pointer_cast<StencilContext>(source);
             assert(ssp);
             auto sop = ssp->get_settings();
             assert(sop);
-            *op = *sop;
+            *opts = *sop;
+            sop = ssp->get_user_settings();
+            assert(sop);
+            *user_opts = *sop;
         }
 
         // Create problem-specific object defined by stencil compiler.
         // TODO: allow more than one type of solution to be created.
-        auto sp = make_shared<YASK_STENCIL_CONTEXT>(ep, op);
+        auto sp = make_shared<YASK_STENCIL_CONTEXT>(ep, opts, user_opts);
         assert(sp);
 
 #ifdef DEF_ARGS

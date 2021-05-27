@@ -444,10 +444,10 @@ namespace yask {
                     done.insert(gp);
                 }
             }
-            DEBUG_MSG("var-allocation order:");
+            TRACE_MSG("var-allocation order:");
             for (auto sp : sorted_var_ptrs) {
                 auto name = sp->get_name();
-                DEBUG_MSG(" '" << name << "'" <<
+                TRACE_MSG(" '" << name << "'" <<
                           (output_var_map.count(name) ? " (output var)" : ""));
             }
         }
@@ -1189,7 +1189,7 @@ namespace yask {
                 assert(sgv);
 
                 // Loop through each scratch var in this vector.
-                // There will be one for each region thread.
+                // There will be one for each outer thread.
                 assert(int(sgv->size()) == rthreads);
                 int thr_num = 0;
                 for (auto gp : *sgv) {

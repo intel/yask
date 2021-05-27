@@ -346,7 +346,8 @@ namespace yask {
 
         // Constructor.
         StencilContext(KernelEnvPtr& kenv,
-                       KernelSettingsPtr& ksettings);
+                       KernelSettingsPtr& ksettings,
+                       KernelSettingsPtr& user_settings);
 
         // Destructor.
         virtual ~StencilContext() {
@@ -434,7 +435,7 @@ namespace yask {
 
         // Adjust offsets of scratch vars based
         // on thread and scan indices.
-        virtual void update_scratch_var_info(int region_thread_idx,
+        virtual void update_scratch_var_info(int mega_block_thread_idx,
                                               const Indices& idxs);
 
         // Copy non-scratch vars to device.
@@ -486,26 +487,26 @@ namespace yask {
         void run_ref(idx_t first_step_index,
                      idx_t last_step_index);
 
-        // Calculate results within a region.
-        void calc_region(StagePtr& sel_bp,
+        // Calculate results within a mega-block.
+        void calc_mega_block(StagePtr& sel_bp,
                          const ScanIndices& rank_idxs);
 
         // Calculate results within a block.
         void calc_block(StagePtr& sel_bp,
-                        idx_t region_shift_num,
+                        idx_t mega_block_shift_num,
                         idx_t nphases, idx_t phase,
                         const ScanIndices& rank_idxs,
-                        const ScanIndices& region_idxs);
+                        const ScanIndices& mega_block_idxs);
 
         // Calculate results within a micro-block.
-        void calc_micro_block(int region_thread_idx,
+        void calc_micro_block(int mega_block_thread_idx,
                              StagePtr& sel_bp,
-                             idx_t region_shift_num,
+                             idx_t mega_block_shift_num,
                              idx_t nphases, idx_t phase,
                              idx_t nshapes, idx_t shape,
                              const bit_mask_t& bridge_mask,
                              const ScanIndices& rank_idxs,
-                             const ScanIndices& base_region_idxs,
+                             const ScanIndices& base_mega_block_idxs,
                              const ScanIndices& base_block_idxs,
                              const ScanIndices& adj_block_idxs);
 
@@ -522,8 +523,8 @@ namespace yask {
                           idx_t start, idx_t stop,
                           bool mark_dirty);
 
-        // Set various limits in 'idxs' based on current step in region.
-        bool shift_region(const Indices& base_start, const Indices& base_stop,
+        // Set various limits in 'idxs' based on current step in mega-block.
+        bool shift_mega_block(const Indices& base_start, const Indices& base_stop,
                             idx_t shift_num,
                             StagePtr& bp,
                             ScanIndices& idxs);
@@ -535,8 +536,8 @@ namespace yask {
                               const Indices& adj_block_base_stop,
                               const Indices& block_base_start,
                               const Indices& block_base_stop,
-                              const Indices& region_base_start,
-                              const Indices& region_base_stop,
+                              const Indices& mega_block_base_start,
+                              const Indices& mega_block_base_stop,
                               idx_t mb_shift_num,
                               idx_t nphases, idx_t phase,
                               idx_t nshapes, idx_t shape,
@@ -665,14 +666,14 @@ namespace yask {
         virtual void set_rank_domain_size(const std::string& dim, idx_t size);
         virtual void set_min_pad_size(const std::string& dim, idx_t size);
         virtual void set_block_size(const std::string& dim, idx_t size);
-        virtual void set_region_size(const std::string& dim, idx_t size);
+        virtual void set_mega_block_size(const std::string& dim, idx_t size);
         virtual void set_num_ranks(const std::string& dim, idx_t size);
         virtual void set_rank_index(const std::string& dim, idx_t size);
         virtual idx_t get_overall_domain_size(const std::string& dim) const;
         virtual idx_t get_rank_domain_size(const std::string& dim) const;
         virtual idx_t get_min_pad_size(const std::string& dim) const;
         virtual idx_t get_block_size(const std::string& dim) const;
-        virtual idx_t get_region_size(const std::string& dim) const;
+        virtual idx_t get_mega_block_size(const std::string& dim) const;
         virtual idx_t get_num_ranks(const std::string& dim) const;
         virtual idx_t get_rank_index(const std::string& dim) const;
         virtual std::string apply_command_line_options(const std::string& args);

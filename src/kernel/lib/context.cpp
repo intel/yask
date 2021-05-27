@@ -76,7 +76,7 @@ namespace yask {
 
         // Force sub-sizes to whole rank size so that scratch
         // vars will be large enough. Turn off any temporal blocking.
-        opts->_region_sizes.set_vals_same(0);
+        opts->_mega_block_sizes.set_vals_same(0);
         opts->_block_sizes.set_vals_same(0);
         opts->_micro_block_sizes.set_vals_same(0);
         opts->_nano_block_sizes.set_vals_same(0);
@@ -208,7 +208,7 @@ namespace yask {
         // Find begin, stride and end in step-dim.
         idx_t begin_t = first_step_index;
 
-        // Stride-size in step-dim is number of region steps.
+        // Stride-size in step-dim is number of mega-block steps.
         // Then, it is multipled by +/-1 to get proper direction.
         idx_t stride_t = max(wf_steps, idx_t(1)) * step_dir;
         assert(stride_t);
@@ -224,7 +224,7 @@ namespace yask {
         end.set_vals(ext_bb.bb_end_tuple(domain_dims), false);
         end[step_posn] = end_t;
         IdxTuple stride(stencil_dims);
-        stride.set_vals(opts->_region_sizes, false); // stride by region sizes.
+        stride.set_vals(opts->_mega_block_sizes, false); // stride by mega-block sizes.
         stride[step_posn] = stride_t;
 
         TRACE_MSG("run_solution: [" <<
@@ -249,14 +249,14 @@ namespace yask {
                 os << "Modeling cache...\n";
             #endif
 
-            // Adjust end points for overlapping regions due to wavefront angle.
-            // For each subsequent time step in a region, the spatial location
+            // Adjust end points for overlapping mega-blocks due to wavefront angle.
+            // For each subsequent time step in a mega-block, the spatial location
             // of each block evaluation is shifted by the angle for each
-            // stage. So, the total shift in a region is the angle * num
+            // stage. So, the total shift in a mega-block is the angle * num
             // stages * num timesteps. This assumes all stages
             // are inter-dependent to find maximum extension. Actual required
             // size may be less, but this will just result in some calls to
-            // calc_region() that do nothing.
+            // calc_mega_block() that do nothing.
             //
             // Conceptually (showing 2 ranks in t and x dims):
             // -----------------------------  t = rt ------------------------------
@@ -299,15 +299,15 @@ namespace yask {
             rank_idxs.tile_size = opts->_rank_tile_sizes;
             rank_idxs.adjust_from_settings(opts->_rank_sizes,
                                            opts->_rank_tile_sizes,
-                                           opts->_region_sizes);
+                                           opts->_mega_block_sizes);
             TRACE_MSG("after adjustment for " << num_wf_shifts <<
                       " wave-front shift(s): [" <<
                       rank_idxs.begin.make_val_str() << " ... " <<
                       rank_idxs.end.make_val_str() << ") by " <<
                       rank_idxs.stride.make_val_str());
             
-            // Make sure threads are set properly for a region.
-            set_region_threads();
+            // Make sure threads are set properly for a mega-block.
+            set_outer_num_threads();
 
             // Initial halo exchange.
             exchange_halos();
@@ -334,7 +334,7 @@ namespace yask {
                 _at.timer.start();
 
                 // If no wave-fronts (default), loop through stages here, and do
-                // only one stage at a time in calc_region(). This is similar to
+                // only one stage at a time in calc_mega_block(). This is similar to
                 // loop in calc_rank_ref(), but with stages instead of bundles.
                 if (wf_steps == 0) {
 
@@ -354,7 +354,7 @@ namespace yask {
                             do_mpi_interior = false;
 
                             // Overlap comms and computation by restricting
-                            // region boundaries.  Make an external pass for
+                            // mega-block boundaries.  Make an external pass for
                             // each side of each domain dim, e.g., 'left x',
                             // 'right x', 'left y', ...
                             DOMAIN_VAR_LOOP(i, j) {
@@ -372,8 +372,8 @@ namespace yask {
                                     mpi_exterior_dim = j;
 
                                     // Include automatically-generated loop
-                                    // code to call calc_region() for
-                                    // each region. The region will be trimmed
+                                    // code to call calc_mega_block() for
+                                    // each mega-block. The mega-block will be trimmed
                                     // to the active MPI exterior section.
                                     TRACE_MSG("step " << start_t <<
                                               " for stage '" << bp->get_name() <<
@@ -383,12 +383,12 @@ namespace yask {
 
                                     // Loop prefix.
                                     #define RANK_LOOP_INDICES rank_idxs
-                                    #define RANK_BODY_INDICES region_range
+                                    #define RANK_BODY_INDICES mega_block_range
                                     #define RANK_USE_LOOP_PART_0
                                     #include "yask_rank_loops.hpp"
 
                                     // Loop body.
-                                    calc_region(bp, region_range);
+                                    calc_mega_block(bp, mega_block_range);
 
                                     // Loop suffix.
                                     #define RANK_USE_LOOP_PART_1
@@ -419,7 +419,7 @@ namespace yask {
                         } // Overlapping.
 
                         // Include automatically-generated loop code to call
-                        // calc_region() for each region. If overlapping
+                        // calc_mega_block() for each mega-block. If overlapping
                         // comms, this will be just the interior.  If not, it
                         // will cover the whole rank.
                         TRACE_MSG("step " << start_t <<
@@ -427,12 +427,12 @@ namespace yask {
 
                         // Loop prefix.
                         #define RANK_LOOP_INDICES rank_idxs
-                        #define RANK_BODY_INDICES region_range
+                        #define RANK_BODY_INDICES mega_block_range
                         #define RANK_USE_LOOP_PART_0
                         #include "yask_rank_loops.hpp"
 
                         // Loop body.
-                        calc_region(bp, region_range);
+                        calc_mega_block(bp, mega_block_range);
 
                         // Loop suffix.
                         #define RANK_USE_LOOP_PART_1
@@ -453,11 +453,11 @@ namespace yask {
                 } // No WF tiling.
 
                 // If doing wave-fronts, must loop through all stages in
-                // calc_region().
+                // calc_mega_block().
                 else {
 
                     // Null ptr => Eval all stages each time
-                    // calc_region() is called.
+                    // calc_mega_block() is called.
                     StagePtr bp;
 
                     // Do MPI-external passes?
@@ -465,7 +465,7 @@ namespace yask {
                         do_mpi_interior = false;
 
                         // Overlap comms and computation by restricting
-                        // region boundaries.  Make an external pass for
+                        // mega-block boundaries.  Make an external pass for
                         // each side of each domain dim, e.g., 'left x',
                         // 'right x', 'left y', ...
                         DOMAIN_VAR_LOOP(i, j) {
@@ -483,8 +483,8 @@ namespace yask {
                                 mpi_exterior_dim = j;
 
                                 // Include automatically-generated loop
-                                // code to call calc_region(bp) for
-                                // each region. The region will be trimmed
+                                // code to call calc_mega_block(bp) for
+                                // each mega-block. The mega-block will be trimmed
                                 // to the active MPI exterior section.
                                 TRACE_MSG("WF steps [" << start_t <<
                                           " ... " << stop_t <<
@@ -494,12 +494,12 @@ namespace yask {
 
                                 // Loop prefix.
                                 #define RANK_LOOP_INDICES rank_idxs
-                                #define RANK_BODY_INDICES region_range
+                                #define RANK_BODY_INDICES mega_block_range
                                 #define RANK_USE_LOOP_PART_0
                                 #include "yask_rank_loops.hpp"
 
                                 // Loop body.
-                                calc_region(bp, region_range);
+                                calc_mega_block(bp, mega_block_range);
 
                                 // Loop suffix.
                                 #define RANK_USE_LOOP_PART_1
@@ -522,7 +522,7 @@ namespace yask {
                     } // Overlapping.
 
                     // Include automatically-generated loop code to call
-                    // calc_region() for each region. If overlapping
+                    // calc_mega_block() for each mega-block. If overlapping
                     // comms, this will be just the interior.  If not, it
                     // will cover the whole rank.
                     TRACE_MSG("steps [" << start_t <<
@@ -530,12 +530,12 @@ namespace yask {
 
                     // Loop prefix.
                     #define RANK_LOOP_INDICES rank_idxs
-                    #define RANK_BODY_INDICES region_range
+                    #define RANK_BODY_INDICES mega_block_range
                     #define RANK_USE_LOOP_PART_0
                     #include "yask_rank_loops.hpp"
 
                     // Loop body.
-                    calc_region(bp, region_range);
+                    calc_mega_block(bp, mega_block_range);
                     
                     // Loop suffix.
                     #define RANK_USE_LOOP_PART_1
@@ -613,15 +613,15 @@ namespace yask {
 
     } // run_solution().
 
-    // Calculate results within a region.  Each region is typically computed
+    // Calculate results within a mega-block.  Each mega-block is typically computed
     // in a separate OpenMP 'for' region.  In this function, we loop over
     // the time steps and stages and evaluate a stage in each of
-    // the blocks in the region.  If 'sel_bp' is null, eval all stages; else
+    // the blocks in the mega-block.  If 'sel_bp' is null, eval all stages; else
     // eval only the one pointed to.
-    void StencilContext::calc_region(StagePtr& sel_bp,
+    void StencilContext::calc_mega_block(StagePtr& sel_bp,
                                      const ScanIndices& rank_idxs) {
         STATE_VARS(this);
-        TRACE_MSG("calc_region: region [" <<
+        TRACE_MSG("calc_mega_block: mega-block [" <<
                   rank_idxs.start.make_val_str() << " ... " <<
                   rank_idxs.stop.make_val_str() << ") within possibly-adjusted rank [" <<
                   rank_idxs.begin.make_val_str() << " ... " <<
@@ -634,22 +634,22 @@ namespace yask {
         else
             int_time.start();
 
-        // Init region begin & end from rank start & stop indices.
-        ScanIndices region_idxs = rank_idxs.create_inner();
+        // Init mega-block begin & end from rank start & stop indices.
+        ScanIndices mega_block_idxs = rank_idxs.create_inner();
 
         // Time range.
         // When doing WF rank tiling, this loop will stride through
-        // several time-steps in each region.
+        // several time-steps in each mega-block.
         // When also doing TB, it will stride by the block strides.
-        idx_t begin_t = region_idxs.begin[step_posn];
-        idx_t end_t = region_idxs.end[step_posn];
+        idx_t begin_t = mega_block_idxs.begin[step_posn];
+        idx_t end_t = mega_block_idxs.end[step_posn];
         idx_t step_dir = (end_t >= begin_t) ? 1 : -1;
         idx_t stride_t = max(tb_steps, idx_t(1)) * step_dir;
         assert(stride_t);
         const idx_t num_t = CEIL_DIV(abs(end_t - begin_t), abs(stride_t));
 
         // Time loop.
-        idx_t region_shift_num = 0;
+        idx_t mega_block_shift_num = 0;
         for (idx_t index_t = 0; index_t < num_t; index_t++) {
 
             // This value of index_t steps from start_t to stop_t-1.
@@ -660,14 +660,14 @@ namespace yask {
                 max(start_t + stride_t, end_t);
 
             // Set step indices that will pass through generated code.
-            region_idxs.cur_indices[step_posn] = index_t;
-            region_idxs.start[step_posn] = start_t;
-            region_idxs.stop[step_posn] = stop_t;
+            mega_block_idxs.cur_indices[step_posn] = index_t;
+            mega_block_idxs.start[step_posn] = start_t;
+            mega_block_idxs.stop[step_posn] = stop_t;
 
             // If no temporal blocking (default), loop through stages here,
             // and do only one stage at a time in calc_block(). If there is
             // no WF blocking either, the stage loop body will only execute
-            // with one active stage, and 'region_shift_num' will never be > 0.
+            // with one active stage, and 'mega_block_shift_num' will never be > 0.
             if (tb_steps == 0) {
 
                 // Stages to evaluate at this time step.
@@ -688,29 +688,29 @@ namespace yask {
                         continue;
                     }
 
-                    // Strides within a region are based on stage block sizes.
+                    // Strides within a mega-block are based on stage block sizes.
                     // These may be different when per-stage auto-tuning has been done.
                     auto& settings = bp->get_active_settings();
-                    region_idxs.stride = settings._block_sizes;
-                    region_idxs.stride[step_posn] = stride_t;
+                    mega_block_idxs.stride = settings._block_sizes;
+                    mega_block_idxs.stride[step_posn] = stride_t;
 
-                    // Tiles in region loops.
-                    region_idxs.tile_size = settings._region_tile_sizes;
+                    // Tiles in mega-block loops.
+                    mega_block_idxs.tile_size = settings._mega_block_tile_sizes;
                     
-                    // Set region_idxs begin & end based on shifted rank
-                    // start & stop (original region begin & end), rank
+                    // Set mega_block_idxs begin & end based on shifted rank
+                    // start & stop (original mega-block begin & end), rank
                     // boundaries, and stage BB. This will be the base of the
-                    // region loops.
-                    bool ok = shift_region(rank_idxs.start, rank_idxs.stop,
-                                           region_shift_num, bp,
-                                           region_idxs);
-                    region_idxs.adjust_from_settings(settings._region_sizes,
-                                                     settings._region_tile_sizes,
+                    // mega-block loops.
+                    bool ok = shift_mega_block(rank_idxs.start, rank_idxs.stop,
+                                           mega_block_shift_num, bp,
+                                           mega_block_idxs);
+                    mega_block_idxs.adjust_from_settings(settings._mega_block_sizes,
+                                                     settings._mega_block_tile_sizes,
                                                      settings._block_sizes);
 
-                    // Only need to loop through the span of the region if it is
+                    // Only need to loop through the span of the mega-block if it is
                     // at least partly inside the extended BB. For overlapping
-                    // regions, they may start outside the domain but enter the
+                    // mega-blocks, they may start outside the domain but enter the
                     // domain as time progresses and their boundaries shift. So,
                     // we don't want to return if this condition isn't met.
                     if (ok) {
@@ -718,27 +718,27 @@ namespace yask {
                         idx_t phase = 0;
 
                         // Include automatically-generated loop code to
-                        // call calc_block() for each block in this region.
+                        // call calc_block() for each block in this mega-block.
                         // Loops through x from begin_rx to end_rx-1;
                         // similar for y and z.  This code typically
                         // contains the outer OpenMP loop(s).
 
                         // Loop prefix.
-                        #define REGION_LOOP_INDICES region_idxs
-                        #define REGION_BODY_INDICES blk_range
-                        #define REGION_USE_LOOP_PART_0
-                        #include "yask_region_loops.hpp"
+                        #define MEGA_BLOCK_LOOP_INDICES mega_block_idxs
+                        #define MEGA_BLOCK_BODY_INDICES blk_range
+                        #define MEGA_BLOCK_USE_LOOP_PART_0
+                        #include "yask_mega_block_loops.hpp"
 
                         // Loop body.
-                        calc_block(bp, region_shift_num, nphases, phase, rank_idxs, blk_range);
+                        calc_block(bp, mega_block_shift_num, nphases, phase, rank_idxs, blk_range);
 
                         // Loop suffix.
-                        #define REGION_USE_LOOP_PART_1
-                        #include "yask_region_loops.hpp"
+                        #define MEGA_BLOCK_USE_LOOP_PART_1
+                        #include "yask_mega_block_loops.hpp"
                     }
 
                     // Need to shift for next stage and/or time.
-                    region_shift_num++;
+                    mega_block_shift_num++;
 
                 } // stages.
             } // no temporal blocking.
@@ -746,31 +746,31 @@ namespace yask {
             // If using TB, iterate thru steps in a WF and stages in calc_block().
             else {
 
-                TRACE_MSG("calc_region: w/TB in step(s) [" <<
+                TRACE_MSG("calc_mega_block: w/TB in step(s) [" <<
                           start_t << " ... " << stop_t << ")");
 
                 // Null ptr => Eval all stages each time
                 // calc_block() is called.
                 StagePtr bp;
 
-                // Strides within a region are based on rank block sizes.
+                // Strides within a mega-block are based on rank block sizes.
                 // Cannot use different strides per stage with TB.
                 auto& settings = *opts;
-                region_idxs.stride = settings._block_sizes;
-                region_idxs.stride[step_posn] = stride_t;
+                mega_block_idxs.stride = settings._block_sizes;
+                mega_block_idxs.stride[step_posn] = stride_t;
 
-                // Tiles in region loops.
-                region_idxs.tile_size = settings._region_tile_sizes;
+                // Tiles in mega-block loops.
+                mega_block_idxs.tile_size = settings._mega_block_tile_sizes;
                 
-                // Set region_idxs begin & end based on shifted start & stop
-                // and rank boundaries.  This will be the base of the region
-                // loops. The bounds in region_idxs may be outside the
+                // Set mega_block_idxs begin & end based on shifted start & stop
+                // and rank boundaries.  This will be the base of the mega-block
+                // loops. The bounds in mega_block_idxs may be outside the
                 // actual rank because we're starting with the expanded rank.
-                bool ok = shift_region(rank_idxs.start, rank_idxs.stop,
-                                       region_shift_num, bp,
-                                       region_idxs);
-                region_idxs.adjust_from_settings(settings._region_sizes,
-                                                 settings._region_tile_sizes,
+                bool ok = shift_mega_block(rank_idxs.start, rank_idxs.stop,
+                                       mega_block_shift_num, bp,
+                                       mega_block_idxs);
+                mega_block_idxs.adjust_from_settings(settings._mega_block_sizes,
+                                                 settings._mega_block_tile_sizes,
                                                  settings._block_sizes);
 
                 // Should always be valid because we just shifted (no trim).
@@ -779,7 +779,7 @@ namespace yask {
 
                 // To tesselate n-D domain space, we use n+1 distinct
                 // "phases".  For example, 1-D TB uses "upward" trapezoids
-                // and "downward" trapezoids. Region threads sync after
+                // and "downward" trapezoids. Outer OMP threads sync after
                 // every phase. Thus, the phase loop is here around the
                 // generated OMP loops.  TODO: schedule phases and their
                 // shapes via task dependencies.
@@ -791,21 +791,21 @@ namespace yask {
                     // be calculated.
 
                     // Loop prefix.
-                    #define REGION_LOOP_INDICES region_idxs
-                    #define REGION_BODY_INDICES blk_range
-                    #define REGION_USE_LOOP_PART_0
-                    #include "yask_region_loops.hpp"
+                    #define MEGA_BLOCK_LOOP_INDICES mega_block_idxs
+                    #define MEGA_BLOCK_BODY_INDICES blk_range
+                    #define MEGA_BLOCK_USE_LOOP_PART_0
+                    #include "yask_mega_block_loops.hpp"
 
                     // Loop body.
-                    calc_block(bp, region_shift_num, nphases, phase, rank_idxs, blk_range);
+                    calc_block(bp, mega_block_shift_num, nphases, phase, rank_idxs, blk_range);
 
                     // Loop suffix.
-                    #define REGION_USE_LOOP_PART_1
-                    #include "yask_region_loops.hpp"
+                    #define MEGA_BLOCK_USE_LOOP_PART_1
+                    #include "yask_mega_block_loops.hpp"
                 }
 
                 // Loop thru stages that were evaluated in
-                // these 'tb_steps' to increment shift for next region
+                // these 'tb_steps' to increment shift for next mega-block
                 // "layer", if any. This is needed when there are more WF
                 // steps than TB steps.  TODO: consider moving this inside
                 // calc_block().
@@ -817,7 +817,7 @@ namespace yask {
                             continue;
 
                         // One shift for each stage in each TB step.
-                        region_shift_num++;
+                        mega_block_shift_num++;
                     }
                 }
             } // with temporal blocking.
@@ -825,39 +825,39 @@ namespace yask {
 
         if (!do_mpi_interior && (do_mpi_left || do_mpi_right)) {
             double ext_delta = ext_time.stop();
-            TRACE_MSG("secs spent in this region for rank-exterior blocks: " << make_num_str(ext_delta));
+            TRACE_MSG("secs spent in this mega-block for rank-exterior blocks: " << make_num_str(ext_delta));
         }
         else {
             double int_delta = int_time.stop();
-            TRACE_MSG("secs spent in this region for rank-interior blocks: " << make_num_str(int_delta));
+            TRACE_MSG("secs spent in this mega-block for rank-interior blocks: " << make_num_str(int_delta));
         }
 
-    } // calc_region.
+    } // calc_mega_block.
 
     // Calculate results within a block. This function calls
     // 'calc_micro_block()' for the specified stage or all stages if 'sel_bp'
     // is null.  When using TB, only the shape(s) needed for the tesselation
     // 'phase' are computed.  Typically called by a top-level OMP thread
-    // from calc_region().
+    // from calc_mega_block().
     void StencilContext::calc_block(StagePtr& sel_bp,
-                                    idx_t region_shift_num,
+                                    idx_t mega_block_shift_num,
                                     idx_t nphases, idx_t phase,
                                     const ScanIndices& rank_idxs,
-                                    const ScanIndices& region_idxs) {
+                                    const ScanIndices& mega_block_idxs) {
 
         STATE_VARS(this);
         auto* bp = sel_bp.get();
-        int region_thread_idx = omp_get_thread_num();
+        int mega_block_thread_idx = omp_get_thread_num();
         TRACE_MSG("calc_block: phase " << phase << ", block [" <<
-                  region_idxs.start.make_val_str() << " ... " <<
-                  region_idxs.stop.make_val_str() <<
-                  ") within region [" <<
-                  region_idxs.begin.make_val_str() << " ... " <<
-                  region_idxs.end.make_val_str() <<
-                  ") by region thread " << region_thread_idx);
+                  mega_block_idxs.start.make_val_str() << " ... " <<
+                  mega_block_idxs.stop.make_val_str() <<
+                  ") within mega-block [" <<
+                  mega_block_idxs.begin.make_val_str() << " ... " <<
+                  mega_block_idxs.end.make_val_str() <<
+                  ") by mega-block thread " << mega_block_thread_idx);
 
-        // Init block begin & end from region start & stop indices.
-        ScanIndices block_idxs = region_idxs.create_inner();
+        // Init block begin & end from mega-block start & stop indices.
+        ScanIndices block_idxs = mega_block_idxs.create_inner();
 
         // Time range.
         // When not doing TB, there is only one step.
@@ -874,7 +874,7 @@ namespace yask {
         // If TB is not being used, just process the given stage.
         // No need for a time loop.
         // No need to check bounds, because they were checked in
-        // calc_region() when not using TB.
+        // calc_mega_block() when not using TB.
         if (tb_steps == 0) {
             assert(bp);
             assert(abs(stride_t) == 1);
@@ -916,9 +916,9 @@ namespace yask {
             #include "yask_block_loops.hpp"
 
             // Loop body.
-            calc_micro_block(region_thread_idx, bp, region_shift_num,
+            calc_micro_block(mega_block_thread_idx, bp, mega_block_shift_num,
                             nphases, phase, nshapes, shape, bridge_mask,
-                            rank_idxs, region_idxs, block_idxs, micro_blk_range);
+                            rank_idxs, mega_block_idxs, block_idxs, micro_blk_range);
             
             // Loop suffix.
             #define BLOCK_USE_LOOP_PART_1
@@ -964,7 +964,7 @@ namespace yask {
                 // TODO: find a way to make this more efficient to avoid
                 // calling calc_micro_block() many times with nothing to
                 // do.
-                auto width = region_idxs.stop[i] - region_idxs.start[i];
+                auto width = mega_block_idxs.stop[i] - mega_block_idxs.start[i];
                 adj_block_idxs.end[i] += width;
             }
             adj_block_idxs.adjust_from_settings(settings._block_sizes,
@@ -1000,9 +1000,9 @@ namespace yask {
                 #include "yask_block_loops.hpp"
 
                 // Loop body.
-                calc_micro_block(region_thread_idx, bp, region_shift_num,
+                calc_micro_block(mega_block_thread_idx, bp, mega_block_shift_num,
                                 nphases, phase, nshapes, shape, bridge_mask,
-                                rank_idxs, region_idxs, block_idxs, micro_blk_range);
+                                rank_idxs, mega_block_idxs, block_idxs, micro_blk_range);
             
                 // Loop suffix.
                 #define BLOCK_USE_LOOP_PART_1
@@ -1017,15 +1017,15 @@ namespace yask {
     // for each bundle in the specified stage or all stages if 'sel_bp' is
     // null. When using TB, only the 'shape' needed for the tesselation
     // 'phase' are computed. The starting 'shift_num' is relative
-    // to the bottom of the current region and block.
-    void StencilContext::calc_micro_block(int region_thread_idx,
+    // to the bottom of the current mega-block and block.
+    void StencilContext::calc_micro_block(int mega_block_thread_idx,
                                          StagePtr& sel_bp,
-                                         idx_t region_shift_num,
+                                         idx_t mega_block_shift_num,
                                          idx_t nphases, idx_t phase,
                                          idx_t nshapes, idx_t shape,
                                          const bit_mask_t& bridge_mask,
                                          const ScanIndices& rank_idxs,
-                                         const ScanIndices& base_region_idxs,
+                                         const ScanIndices& base_mega_block_idxs,
                                          const ScanIndices& base_block_idxs,
                                          const ScanIndices& adj_block_idxs) {
 
@@ -1036,16 +1036,16 @@ namespace yask {
                   adj_block_idxs.start.make_val_str() << " ... " <<
                   adj_block_idxs.stop.make_val_str() << ") within base-block [" <<
                   base_block_idxs.begin.make_val_str() << " ... " <<
-                  base_block_idxs.end.make_val_str() << ") within base-region [" <<
-                  base_region_idxs.begin.make_val_str() << " ... " <<
-                  base_region_idxs.end.make_val_str() <<
-                  ") by region thread " << region_thread_idx);
+                  base_block_idxs.end.make_val_str() << ") within base-mega-block [" <<
+                  base_mega_block_idxs.begin.make_val_str() << " ... " <<
+                  base_mega_block_idxs.end.make_val_str() <<
+                  ") by mega-block thread " << mega_block_thread_idx);
 
         // Promote forward progress in MPI when calc'ing interior
         // only. Call from one thread only.
         // Let all other threads continue.
         if (is_overlap_active() && do_mpi_interior) {
-            if (region_thread_idx == 0)
+            if (mega_block_thread_idx == 0)
                 poke_halo_exchange();
         }
 
@@ -1105,7 +1105,7 @@ namespace yask {
 
                 // Start timers for this stage.  Tracking only on thread
                 // 0. TODO: track all threads and report cross-thread stats.
-                if (region_thread_idx == 0)
+                if (mega_block_thread_idx == 0)
                     bp->start_timers();
 
                 // Strides within a micro-blk are based on nano-blk sizes.
@@ -1118,12 +1118,12 @@ namespace yask {
                 micro_block_idxs.tile_size = settings._micro_block_tile_sizes;
 
                 // Set micro_block_idxs begin & end based on shifted rank
-                // start & stop (original region begin & end), rank
+                // start & stop (original mega-block begin & end), rank
                 // boundaries, and stage BB. There may be several TB layers
-                // within a region WF, so we need to add the region and
+                // within a mega-block WF, so we need to add the mega-block and
                 // local micro-block shift counts.
-                bool ok = shift_region(rank_idxs.start, rank_idxs.stop,
-                                       region_shift_num + shift_num, bp,
+                bool ok = shift_mega_block(rank_idxs.start, rank_idxs.stop,
+                                       mega_block_shift_num + shift_num, bp,
                                        micro_block_idxs);
 
                 // Set micro_block_idxs begin & end based on shifted begin &
@@ -1134,7 +1134,7 @@ namespace yask {
                     ok = shift_micro_block(adj_block_idxs.start, adj_block_idxs.stop,
                                           adj_block_idxs.begin, adj_block_idxs.end,
                                           base_block_idxs.begin, base_block_idxs.end,
-                                          base_region_idxs.begin, base_region_idxs.end,
+                                          base_mega_block_idxs.begin, base_mega_block_idxs.end,
                                           shift_num,
                                           nphases, phase,
                                           nshapes, shape,
@@ -1149,12 +1149,12 @@ namespace yask {
                     // Update offsets of scratch vars based on the current
                     // micro-block location.
                     if (scratch_vecs.size())
-                        update_scratch_var_info(region_thread_idx, micro_block_idxs.begin);
+                        update_scratch_var_info(mega_block_thread_idx, micro_block_idxs.begin);
 
                     // Call calc_micro_block() for each non-scratch bundle.
                     for (auto* sb : *bp)
                         if (sb->get_bb().bb_num_points)
-                            sb->calc_micro_block(region_thread_idx, settings, micro_block_idxs);
+                            sb->calc_micro_block(mega_block_thread_idx, settings, micro_block_idxs);
 
                     // Make sure streaming stores are visible for later loads.
                     make_stores_visible();
@@ -1164,7 +1164,7 @@ namespace yask {
                 shift_num++;
 
                 // Stop timers for this stage.
-                if (region_thread_idx == 0)
+                if (mega_block_thread_idx == 0)
                     bp->stop_timers();
 
             } // stages.
@@ -1172,12 +1172,12 @@ namespace yask {
 
     } // calc_micro_block().
 
-    // Find boundaries within region with 'base_start' to 'base_stop'
+    // Find boundaries within mega-block with 'base_start' to 'base_stop'
     // shifted 'shift_num' times, which should start at 0 and increment for
     // each stage in each time-step.  Trim to ext-BB and MPI section if 'bp' if
     // not null.  Write results into 'begin' and 'end' in 'idxs'.  Return
     // 'true' if resulting area is non-empty, 'false' if empty.
-    bool StencilContext::shift_region(const Indices& base_start, const Indices& base_stop,
+    bool StencilContext::shift_mega_block(const Indices& base_start, const Indices& base_stop,
                                       idx_t shift_num,
                                       StagePtr& bp,
                                       ScanIndices& idxs) {
@@ -1188,7 +1188,7 @@ namespace yask {
         // may be trimmed based on the BB and WF extensions outside of the
         // rank-BB.
 
-        // Actual region boundaries must stay within [extended] stage BB.
+        // Actual mega-block boundaries must stay within [extended] stage BB.
         // We have to calculate the posn in the extended rank at each
         // value of 'shift_num' because it is being shifted spatially.
         bool ok = true;
@@ -1196,8 +1196,8 @@ namespace yask {
             auto angle = wf_angles[j];
             idx_t shift_amt = angle * shift_num;
 
-            // Shift initial spatial region boundaries for this iteration of
-            // temporal wavefront.  Regions only shift left, so region loops
+            // Shift initial spatial mega-block boundaries for this iteration of
+            // temporal wavefront.  Mega-Blocks only shift left, so mega-block loops
             // must strictly increment. They may do so in any order.  Shift
             // by pts in one WF step.  Always shift left in WFs.
             idx_t rstart = base_start[i] - shift_amt;
@@ -1218,7 +1218,7 @@ namespace yask {
                 idx_t dend = rank_bb.bb_end[j];
 
                 // In left ext, add 'angle' points for every shift to get
-                // region boundary in ext.
+                // mega-block boundary in ext.
                 if (rstart < dbegin && left_wf_exts[j])
                     rstart = max(rstart, dbegin - left_wf_exts[j] + shift_amt);
 
@@ -1226,7 +1226,7 @@ namespace yask {
                 if (rstop > dend && right_wf_exts[j])
                     rstop = min(rstop, dend + right_wf_exts[j] - shift_amt);
 
-                // Trim region based on current MPI section if overlapping.
+                // Trim mega-block based on current MPI section if overlapping.
                 if (is_overlap_active()) {
 
                     // Interior boundaries.
@@ -1251,7 +1251,7 @@ namespace yask {
 
                         // Modify interior if there is an external MPI
                         // section on either side.  Reduce interior by
-                        // 'wf_shift_pts' to get size at base of region,
+                        // 'wf_shift_pts' to get size at base of mega-block,
                         // then expand by current shift amount to get size
                         // at current shift number.
                         if (does_exterior_exist(j, true)) { // left.
@@ -1328,7 +1328,7 @@ namespace yask {
                     } // exterior.
                 } // overlapping.
 
-                // Anything to do in the adjusted region?
+                // Anything to do in the adjusted mega-block?
                 if (rstop <= rstart) {
                     ok = false;
                     break;
@@ -1339,11 +1339,11 @@ namespace yask {
             idxs.begin[i] = rstart;
             idxs.end[i] = rstop;
         }
-        TRACE_MSG("shift_region: updated span: [" <<
+        TRACE_MSG("shift_mega_block: updated span: [" <<
                   idxs.begin.make_val_str() << " ... " <<
                   idxs.end.make_val_str() << ") for " <<
                   make_mpi_section_descr() << 
-                  " within region base [" <<
+                  " within mega-block base [" <<
                   base_start.make_val_str() << " ... " <<
                   base_stop.make_val_str() << ") shifted " <<
                   shift_num << " time(s) is " <<
@@ -1356,7 +1356,7 @@ namespace yask {
     // should start at 0 and increment for each stage in each time-step.
     // 'mb_base' is subset of 'adj_block_base'.  Also trim to block at
     // 'block_base_start' to 'block_base_stop' shifted by 'mb_shift_num'.
-    // Input 'begin' and 'end' of 'idxs' should be trimmed to region.  Writes
+    // Input 'begin' and 'end' of 'idxs' should be trimmed to mega-block.  Writes
     // results back into 'begin' and 'end' of 'idxs'.  Returns 'true' if
     // resulting area is non-empty, 'false' if empty.
     bool StencilContext::shift_micro_block(const Indices& mb_base_start,
@@ -1365,8 +1365,8 @@ namespace yask {
                                           const Indices& adj_block_base_stop,
                                           const Indices& block_base_start,
                                           const Indices& block_base_stop,
-                                          const Indices& region_base_start,
-                                          const Indices& region_base_stop,
+                                          const Indices& mega_block_base_start,
+                                          const Indices& mega_block_base_stop,
                                           idx_t mb_shift_num,
                                           idx_t nphases, idx_t phase,
                                           idx_t nshapes, idx_t shape,
@@ -1384,11 +1384,11 @@ namespace yask {
             // the base block and the L side of the next block.
             auto tb_angle = tb_angles[j];
 
-            // Is this block first and/or last in region?
-            bool is_first_blk = block_base_start[i] <= region_base_start[i];
-            bool is_last_blk = block_base_stop[i] >= region_base_stop[i];
+            // Is this block first and/or last in mega-block?
+            bool is_first_blk = block_base_start[i] <= mega_block_base_start[i];
+            bool is_last_blk = block_base_stop[i] >= mega_block_base_stop[i];
 
-            // Is there only one blk in the region in this dim?
+            // Is there only one blk in the mega-block in this dim?
             bool is_one_blk = is_first_blk && is_last_blk;
 
             // Initial start and stop point of phase-0 block.
@@ -1406,23 +1406,23 @@ namespace yask {
 
             // Adjust these based on current shift.  Adjust by pts in one TB
             // step, reducing size on R & L sides.  But if block is first
-            // and/or last, clamp to region.  TODO: have different R & L
+            // and/or last, clamp to mega-block.  TODO: have different R & L
             // angles. TODO: have different shifts for each stage.
 
             // Shift start to right unless first.  First block will be a
-            // parallelogram or trapezoid clamped to beginning of region.
+            // parallelogram or trapezoid clamped to beginning of mega-block.
             blk_start += tb_angle * mb_shift_num;
             if (is_first_blk)
                 blk_start = idxs.begin[i];
 
             // Shift stop to left. If there will be no bridges, clamp
-            // last block to end of region.
+            // last block to end of mega-block.
             blk_stop -= tb_angle * mb_shift_num;
             if ((nphases == 1 || is_one_blk) && is_last_blk)
                 blk_stop = idxs.end[i];
 
             // Shift start of next block. Last bridge will be
-            // clamped to end of region.
+            // clamped to end of mega-block.
             next_blk_start += tb_angle * mb_shift_num;
             if (is_last_blk)
                 next_blk_start = idxs.end[i];
@@ -1482,7 +1482,7 @@ namespace yask {
                 if (is_last_mb)
                     mb_stop = shape_stop;
 
-                // Trim micro-block to fit in region.
+                // Trim micro-block to fit in mega-block.
                 mb_start = max(mb_start, idxs.begin[i]);
                 mb_stop = min(mb_stop, idxs.end[i]);
 
@@ -1514,9 +1514,9 @@ namespace yask {
                   adj_block_base_start.make_val_str() << " ... " <<
                   adj_block_base_stop.make_val_str() << ") and actual block base [" <<
                   block_base_start.make_val_str() << " ... " <<
-                  block_base_stop.make_val_str() << ") and region base [" <<
-                  region_base_start.make_val_str() << " ... " <<
-                  region_base_stop.make_val_str() << ") is " <<
+                  block_base_stop.make_val_str() << ") and mega-block base [" <<
+                  mega_block_base_start.make_val_str() << " ... " <<
+                  mega_block_base_stop.make_val_str() << ") is " <<
                   (ok ? "not " : "") << "empty");
         return ok;
     }

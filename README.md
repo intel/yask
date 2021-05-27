@@ -78,13 +78,16 @@ SIMD-optimized code for Intel(R) Xeon Phi(TM) and Intel(R) Xeon(R) processors.
 ## Backward-compatibility notices
 ### Version 4
 * Version 4.00.00 was a major release with a number of notices:
-  - Intel(R) Xeon Phi(TM) x100-family processors (KNC) are no longer supported.
-    (Intel(R) Xeon Phi(TM) x200-family processors (KNL) are still supported.)
   - The default compiler for kernels is now the Intel(R) oneAPI C++ compiler, icpx.
     If you want to use a different compiler, use `make YK_CXX=<compiler> ...`.
     The default compiler for the YASK compiler is still `g++`. This can
     be changed with `make YC_CXX=<compiler> ...`. (Note the difference:
     use `YK` for "YASK kernel" and `YC` for "YASK compiler".)
+  - The loop hierarchy has been extended and renamed with (hopefully)
+    more memorable names: regions, blocks, mini-blocks, and sub-blocks
+    are now mega-blocks, blocks, micro-blocks, and nano-blocks.
+    Pico-blocks have been added inside nano-blocks.
+    The `get_region_size()` and `set_region_size()` APIs have been removed.
   - Only one thread per core is now used by default on most CPU models.
     This is done in `yask.sh` by passing `max_threads <N>` to the executable,
     where `<N>` is the number of cores on the node divided by the
@@ -102,6 +105,8 @@ SIMD-optimized code for Intel(R) Xeon Phi(TM) and Intel(R) Xeon(R) processors.
     apply to Intel(R) Xeon Phi(TM) x200-family processors (KNL), which
     continue to use all four hyper-threads per core and eight SW threads per
     block by default (because 2 cores share an L2 cache).
+  - Intel(R) Xeon Phi(TM) x100-family processors (KNC) are no longer supported.
+    (Intel(R) Xeon Phi(TM) x200-family processors (KNL) are still supported.)
 
 ### Version 3
 * Version 3.05.00 changed the default setting of `-use_shm` to `true`.

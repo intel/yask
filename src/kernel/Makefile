@@ -237,7 +237,7 @@ YK_EXT_OBJS	:=	$(addprefix $(YK_EXT_OBJ_DIR)/,$(addsuffix .o,$(YK_EXT_SRC_NAMES)
 YK_CODE_FILE	:=	$(YK_GEN_DIR)/yask_stencil_code.hpp
 YK_GEN_HEADERS	:=	$(addprefix $(YK_GEN_DIR)/, \
 				yask_rank_loops.hpp \
-				yask_region_loops.hpp \
+				yask_mega_block_loops.hpp \
 				yask_block_loops.hpp \
 				yask_micro_block_loops.hpp \
 				yask_nano_block_loops.hpp \
@@ -480,25 +480,25 @@ NVDIMS		:=	`awk '/NUM_STENCIL_AND_VAR_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
 # Thus, N-1 is the inner-most dim.
 # For best perf, this should be the unit-stride dim in the vars.
 
-# Rank loops break up the whole rank into smaller regions.  In order for
+# Rank loops break up the whole rank into smaller mega_blocks.  In order for
 # temporal wavefronts to operate properly, the scanning paths must have
 # strictly incrementing indices in each dim. Those that do not (e.g.,
 # serpentine, square-wave) may *not* be used here when using temporal
 # wavefronts. The time loop may be found in
-# StencilEquations::run_solution(). The regions are executed sequentially,
+# StencilEquations::run_solution(). The mega_blocks are executed sequentially,
 # so no OpenMP here.
 RANK_LOOP_MODS		?=	nested
 RANK_LOOP_FLAGS		?=	-ndims $(NSDIMS) -macroPrefix RANK_
 RANK_LOOP_ORDER		?=	1 .. N-1
 RANK_LOOP_CODE		?=	$(RANK_LOOP_MODS) loop($(RANK_LOOP_ORDER)) { }
 
-# Region loops break up a region using OpenMP threading into blocks.  The
+# Mega_Block loops break up a mega_block using OpenMP threading into blocks.  The
 # 'omp' modifier creates an outer OpenMP loop so that each block is assigned
 # to a top-level OpenMP thread.
-REGION_LOOP_OMP		?=	omp parallel for schedule(dynamic,1) proc_bind(spread)
-REGION_LOOP_FLAGS	?=	-ndims $(NSDIMS) -macroPrefix REGION_ -ompMod '$(REGION_LOOP_OMP)'
-REGION_LOOP_ORDER	?=	1 .. N-1
-REGION_LOOP_CODE	?=	$(REGION_LOOP_MODS) omp loop($(REGION_LOOP_ORDER)) { } 
+MEGA_BLOCK_LOOP_OMP		?=	omp parallel for schedule(dynamic,1) proc_bind(spread)
+MEGA_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -macroPrefix MEGA_BLOCK_ -ompMod '$(MEGA_BLOCK_LOOP_OMP)'
+MEGA_BLOCK_LOOP_ORDER	?=	1 .. N-1
+MEGA_BLOCK_LOOP_CODE	?=	$(MEGA_BLOCK_LOOP_MODS) omp loop($(MEGA_BLOCK_LOOP_ORDER)) { } 
 
 # Block loops break up a block into micro-blocks.
 # These are executed sequentially, so no OpenMP.
@@ -615,9 +615,9 @@ $(YK_GEN_DIR)/yask_rank_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
 	$(PERL) $< -output $@ $(RANK_LOOP_FLAGS) $(EXTRA_LOOP_FLAGS) $(EXTRA_RANK_LOOP_FLAGS) "$(RANK_LOOP_CODE)"
 
-$(YK_GEN_DIR)/yask_region_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
+$(YK_GEN_DIR)/yask_mega_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
-	$(PERL) $< -output $@ $(REGION_LOOP_FLAGS) $(EXTRA_LOOP_FLAGS) $(EXTRA_REGION_LOOP_FLAGS) "$(REGION_LOOP_CODE)"
+	$(PERL) $< -output $@ $(MEGA_BLOCK_LOOP_FLAGS) $(EXTRA_LOOP_FLAGS) $(EXTRA_MEGA_BLOCK_LOOP_FLAGS) "$(MEGA_BLOCK_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
 	$(MKDIR) $(YK_GEN_DIR)
@@ -737,20 +737,12 @@ realclean: clean
 echo-settings:
 	@echo "Build environment for" $(YK_EXEC) on `date`; \
 	echo TARGET=$(TARGET); \
-	echo BLOCK_LOOP_CODE="\"$(BLOCK_LOOP_CODE)\""; \
-	echo BLOCK_LOOP_FLAGS="\"$(BLOCK_LOOP_FLAGS)\""; \
-	echo BLOCK_LOOP_ORDER="\"$(BLOCK_LOOP_ORDER)\""; \
-	echo BLOCK_LOOP_MODS="\"$(BLOCK_LOOP_MODS)\""; \
 	echo DEF_ARGS="\"$(DEF_ARGS)\""; \
 	echo EXTRA_MACROS="\"$(EXTRA_MACROS)\""; \
 	echo EXTRA_YC_FLAGS="\"$(EXTRA_YC_FLAGS)\""; \
 	echo EXTRA_YK_CXXFLAGS="\"$(EXTRA_YK_CXXFLAGS)\""; \
 	echo ISA=$(ISA); \
 	echo MACROS="\"$(MACROS)\""; \
-	echo MICRO_BLOCK_LOOP_CODE="\"$(MICRO_BLOCK_LOOP_CODE)\""; \
-	echo MICRO_BLOCK_LOOP_FLAGS="\"$(MICRO_BLOCK_LOOP_FLAGS)\""; \
-	echo MICRO_BLOCK_LOOP_ORDER="\"$(MICRO_BLOCK_LOOP_ORDER)\""; \
-	echo MICRO_BLOCK_LOOP_MODS="\"$(MICRO_BLOCK_LOOP_MODS)\""; \
 	echo MISC_LOOP_CODE="\"$(MISC_LOOP_CODE)\""; \
 	echo MISC_LOOP_FLAGS="\"$(MISC_LOOP_FLAGS)\""; \
 	echo MISC_LOOP_ORDER="\"$(MISC_LOOP_ORDER)\""; \
@@ -760,10 +752,18 @@ echo-settings:
 	echo RANK_LOOP_FLAGS="\"$(RANK_LOOP_FLAGS)\""; \
 	echo RANK_LOOP_ORDER="\"$(RANK_LOOP_ORDER)\""; \
 	echo RANK_LOOP_MODS="\"$(RANK_LOOP_MODS)\""; \
-	echo REGION_LOOP_CODE="\"$(REGION_LOOP_CODE)\""; \
-	echo REGION_LOOP_FLAGS="\"$(REGION_LOOP_FLAGS)\""; \
-	echo REGION_LOOP_ORDER="\"$(REGION_LOOP_ORDER)\""; \
-	echo REGION_LOOP_MODS="\"$(REGION_LOOP_MODS)\""; \
+	echo MEGA_BLOCK_LOOP_CODE="\"$(MEGA_BLOCK_LOOP_CODE)\""; \
+	echo MEGA_BLOCK_LOOP_FLAGS="\"$(MEGA_BLOCK_LOOP_FLAGS)\""; \
+	echo MEGA_BLOCK_LOOP_ORDER="\"$(MEGA_BLOCK_LOOP_ORDER)\""; \
+	echo MEGA_BLOCK_LOOP_MODS="\"$(MEGA_BLOCK_LOOP_MODS)\""; \
+	echo BLOCK_LOOP_CODE="\"$(BLOCK_LOOP_CODE)\""; \
+	echo BLOCK_LOOP_FLAGS="\"$(BLOCK_LOOP_FLAGS)\""; \
+	echo BLOCK_LOOP_ORDER="\"$(BLOCK_LOOP_ORDER)\""; \
+	echo BLOCK_LOOP_MODS="\"$(BLOCK_LOOP_MODS)\""; \
+	echo MICRO_BLOCK_LOOP_CODE="\"$(MICRO_BLOCK_LOOP_CODE)\""; \
+	echo MICRO_BLOCK_LOOP_FLAGS="\"$(MICRO_BLOCK_LOOP_FLAGS)\""; \
+	echo MICRO_BLOCK_LOOP_ORDER="\"$(MICRO_BLOCK_LOOP_ORDER)\""; \
+	echo MICRO_BLOCK_LOOP_MODS="\"$(MICRO_BLOCK_LOOP_MODS)\""; \
 	echo NANO_BLOCK_LOOP_CODE="\"$(NANO_BLOCK_LOOP_CODE)\""; \
 	echo NANO_BLOCK_LOOP_FLAGS="\"$(NANO_BLOCK_LOOP_FLAGS)\""; \
 	echo NANO_BLOCK_LOOP_ORDER="\"$(NANO_BLOCK_LOOP_ORDER)\""; \
@@ -793,7 +793,7 @@ echo-settings:
 	echo offload_usm=$(offload_usm); \
 	echo omp_block_schedule=$(omp_block_schedule); \
 	echo omp_misc_schedule=$(omp_misc_schedule); \
-	echo omp_region_schedule=$(omp_region_schedule); \
+	echo omp_mega_block_schedule=$(omp_mega_block_schedule); \
 	echo pfd_l1=$(pfd_l1); \
 	echo pfd_l2=$(pfd_l2); \
 	echo radius=$(radius); \

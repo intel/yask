@@ -43,15 +43,33 @@ namespace yask {
         dims->check_dim_type(dim, #api_name, step_ok, domain_ok, misc_ok); \
         return expr;                                                    \
     }
-    GET_SOLN_API(get_num_ranks, opts->_num_ranks[dim], false, true, false, false)
-    GET_SOLN_API(get_overall_domain_size, opts->_global_sizes[dim], false, true, false, true)
-    GET_SOLN_API(get_rank_domain_size, opts->_rank_sizes[dim], false, true, false, false)
-    GET_SOLN_API(get_region_size, opts->_region_sizes[dim], true, true, false, false)
-    GET_SOLN_API(get_block_size, opts->_block_sizes[dim], true, true, false, false)
-    GET_SOLN_API(get_first_rank_domain_index, rank_bb.bb_begin_tuple(domain_dims)[dim], false, true, false, true)
-    GET_SOLN_API(get_last_rank_domain_index, rank_bb.bb_end_tuple(domain_dims)[dim] - 1, false, true, false, true)
-    GET_SOLN_API(get_min_pad_size, opts->_min_pad_sizes[dim], false, true, false, false)
-    GET_SOLN_API(get_rank_index, opts->_rank_indices[dim], false, true, false, true)
+    GET_SOLN_API(get_num_ranks,
+                 opts->_num_ranks[dim],
+                 false, true, false, false)
+    GET_SOLN_API(get_overall_domain_size,
+                 opts->_global_sizes[dim],
+                 false, true, false, true)
+    GET_SOLN_API(get_rank_domain_size,
+                 opts->_rank_sizes[dim],
+                 false, true, false, false)
+    GET_SOLN_API(get_mega_block_size,
+                 opts->_mega_block_sizes[dim],
+                 true, true, false, false)
+    GET_SOLN_API(get_block_size,
+                 opts->_block_sizes[dim],
+                 true, true, false, false)
+    GET_SOLN_API(get_first_rank_domain_index,
+                 rank_bb.bb_begin_tuple(domain_dims)[dim],
+                 false, true, false, true)
+    GET_SOLN_API(get_last_rank_domain_index,
+                 rank_bb.bb_end_tuple(domain_dims)[dim] - 1,
+                 false, true, false, true)
+    GET_SOLN_API(get_min_pad_size,
+                 opts->_min_pad_sizes[dim],
+                 false, true, false, false)
+    GET_SOLN_API(get_rank_index,
+                 opts->_rank_indices[dim],
+                 false, true, false, true)
 #undef GET_SOLN_API
 
     // The var sizes are updated any time these settings are changed.
@@ -65,16 +83,37 @@ namespace yask {
         update_var_info(false);                                        \
         if (reset_prep) set_prepared(false);                           \
     }
-    SET_SOLN_API(set_rank_index, opts->_rank_indices[dim] = n;
-                 opts->find_loc = false, false, true, false, true)
-    SET_SOLN_API(set_num_ranks, opts->_num_ranks[dim] = n, false, true, false, true)
-    SET_SOLN_API(set_overall_domain_size, opts->_global_sizes[dim] = n;
-                 if (n) opts->_rank_sizes[dim] = 0, false, true, false, true)
-    SET_SOLN_API(set_rank_domain_size, opts->_rank_sizes[dim] = n;
-                 if (n) opts->_global_sizes[dim] = 0, false, true, false, true)
-    SET_SOLN_API(set_region_size, opts->_region_sizes[dim] = n, true, true, false, true)
-    SET_SOLN_API(set_block_size, opts->_block_sizes[dim] = n, true, true, false, true)
-    SET_SOLN_API(set_min_pad_size, opts->_min_pad_sizes[dim] = n, false, true, false, false)
+    SET_SOLN_API(set_rank_index,
+                 opts->_rank_indices[dim] = n;
+                 user_opts->_rank_indices[dim] = n;
+                 opts->find_loc = false,
+                 false, true, false, true)
+    SET_SOLN_API(set_num_ranks,
+                 opts->_num_ranks[dim] = n;
+                 user_opts->_num_ranks[dim] = n,
+                 false, true, false, true)
+    SET_SOLN_API(set_overall_domain_size,
+                 opts->_global_sizes[dim] = n;
+                 user_opts->_global_sizes[dim] = n;
+                 if (n) opts->_rank_sizes[dim] = 0,
+                 false, true, false, true)
+    SET_SOLN_API(set_rank_domain_size,
+                 opts->_rank_sizes[dim] = n;
+                 user_opts->_rank_sizes[dim] = n;
+                 if (n) opts->_global_sizes[dim] = 0,
+                 false, true, false, true)
+    SET_SOLN_API(set_mega_block_size,
+                 opts->_mega_block_sizes[dim] = n;
+                 user_opts->_mega_block_sizes[dim] = n,
+                 true, true, false, true)
+    SET_SOLN_API(set_block_size,
+                 opts->_block_sizes[dim] = n;
+                 user_opts->_block_sizes[dim] = n,
+                 true, true, false, true)
+    SET_SOLN_API(set_min_pad_size,
+                 opts->_min_pad_sizes[dim] = n;
+                 user_opts->_min_pad_sizes[dim] = n,
+                 false, true, false, false)
 #undef SET_SOLN_API
 
     // Callbacks.
@@ -126,8 +165,8 @@ namespace yask {
             int at = get_num_comp_threads(rt, bt);
             DEBUG_MSG("Num OpenMP threads avail:  " << opts->max_threads <<
                       "\nNum OpenMP threads used:   " << at <<
-                      "\n  Num threads per region:  " << rt <<
-                      "\n  Num threads per block:   " << bt);
+                      "\n  Num outer threads:       " << rt <<
+                      "\n  Num inner threads:       " << bt);
             #ifdef USE_OFFLOAD
             DEBUG_MSG("Num OpenMP devices:        " << omp_get_num_devices() <<
                       "\nOpenMP offload device:     " << KernelEnv::_omp_devn <<
@@ -138,7 +177,7 @@ namespace yask {
         // Set the number of threads for a region. The number of threads
         // used in top-level OpenMP parallel sections should not change
         // during execution.
-        int rthreads = set_region_threads();
+        int rthreads = set_outer_num_threads();
 
         // Run a dummy nested OMP loop to make sure nested threading is
         // initialized.
@@ -156,7 +195,6 @@ namespace yask {
 
         // Adjust all settings before setting MPI buffers or sizing vars.
         // Prints adjusted settings.
-        // TODO: print settings again after auto-tuning.
         opts->adjust_settings(this);
 
         // Set offsets in vars and find WF extensions
@@ -175,7 +213,7 @@ namespace yask {
         // Copy current settings to stages.  Needed here because settings may
         // have been changed via APIs or from call to setup_rank() since last
         // call to prepare_solution().  This will wipe out any previous
-        // auto-tuning.
+        // stage-specific auto-tuning.
         for (auto& sp : st_stages)
             sp->get_local_settings() = *opts;
 
@@ -252,13 +290,20 @@ namespace yask {
 
     string StencilContext::apply_command_line_options(const vector<string>& args) {
         STATE_VARS(this);
+        string rem;
 
-        // Create a parser and add base options to it.
-        CommandLineParser parser;
-        opts->add_options(parser);
+        // Apply settings to active and user-set options.
+        for (auto& cur_opts : { opts, user_opts }) {
+        
+            // Create a parser and add base options to it.
+            CommandLineParser parser;
+            cur_opts->add_options(parser);
 
-        // Parse cmd-line options, which sets values in settings.
-        return parser.parse_args("YASK", args);
+            // Parse cmd-line options, which sets values in opts.
+            rem = parser.parse_args("YASK", args);
+        }
+
+        return rem;
     }
 
     static string print_pct(double ntime, double dtime) {
@@ -297,7 +342,7 @@ namespace yask {
         double etime = min(ext_time.get_elapsed_secs(), rtime - hetime);
         double itime = int_time.get_elapsed_secs();
 
-        // 'test_time' is part of 'int_time', but only on region thread 0.
+        // 'test_time' is part of 'int_time', but only on outer thread 0.
         // It's not part of 'halo_time', since it's done outside of 'halo_exchange'.
         double ttime = halo_test_time.get_elapsed_secs() / rthr; // ave.
 

@@ -68,9 +68,9 @@ namespace yask {
         if (targetp == 0 &&
             is_target_active(_settings->_block_str)) {
             targetp = &_settings->_block_sizes;
-            outerp = &_settings->_region_sizes;
+            outerp = &_settings->_mega_block_sizes;
 
-            // Set min blocks to number of region threads.
+            // Set min blocks to number of outer threads.
             #ifndef USE_OFFLOAD
             int rt=0, bt=0;
             get_num_comp_threads(rt, bt);

@@ -923,8 +923,10 @@ namespace yask {
         // Ctor.
         {
             os << "\n // Constructor.\n" <<
-                " " << _context << "(KernelEnvPtr kenv, KernelSettingsPtr ksettings) : " <<
-                " StencilContext(kenv, ksettings)";
+                " " << _context << "(KernelEnvPtr kenv, "
+                "KernelSettingsPtr ksettings, "
+                "KernelSettingsPtr user_settings) : " <<
+                " StencilContext(kenv, ksettings, user_settings)";
             for (auto& eg : _eq_bundles.get_all()) {
                 string eg_name = eg->_get_name();
                 os << ",\n  " << eg_name << "(this)";
