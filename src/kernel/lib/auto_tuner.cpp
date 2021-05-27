@@ -45,10 +45,6 @@ namespace yask {
             _name += "(" + name + ")";
         _prefix = string(" ") + _name + ": ";
 
-        // Save temporal sizes.
-        bt = _settings->_block_sizes[step_dim];
-        mbt = _settings->_micro_block_sizes[step_dim];
-
         trial_secs = _settings->_tuner_trial_secs;
         clear(settings->_do_auto_tune); // TODO: why is this parameter used?
     }
@@ -64,58 +60,68 @@ namespace yask {
         min_blks = 1;
         min_pts = 1;
 
+        // Move to next target.
+        if (targetp == 0)
+            targeti = 0;
+        else
+            targeti++;
+        if (targeti >= _settings->_tuner_targets.size()) {
+            targetp = 0;
+            return false;
+        }
+        auto& target_str = _settings->_tuner_targets.at(targeti);
+        AT_TRACE_MSG("next target is '" << target_str << "'");
+
+        // Mega-blocks?
+        if (target_str == _settings->_mega_block_str) {
+            targetp = &_settings->_mega_block_sizes;
+            outerp = &_settings->_rank_sizes;
+            AT_DEBUG_MSG("searching mega-block sizes...");
+        }
+        
         // Blocks?
-        if (targetp == 0 &&
-            is_target_active(_settings->_block_str)) {
+        else if (target_str == _settings->_block_str) {
             targetp = &_settings->_block_sizes;
             outerp = &_settings->_mega_block_sizes;
 
-            // Set min blocks to number of outer threads.
+            // Set min blocks and pts.
             #ifndef USE_OFFLOAD
             int rt=0, bt=0;
             get_num_comp_threads(rt, bt);
-            min_blks = max<int>(rt / 2, 1);
+            min_blks = max<int>(rt / 2, 1); // At least 1 for every 2 threads.
 
-            // Set min pts.
-            min_pts = max<int>(min<int>(get_num_domain_points(*outerp) / min_blks, 512), 1); // 512=8^3.
-
+            // Set min pts (512=8^3).
+            min_pts = max<int>(min<int>(get_num_domain_points(*outerp) /
+                                        min_blks, 512), 1);
             #endif
+
             AT_DEBUG_MSG("searching block sizes...");
         }
 
         // Micro-blocks?
-        else if ((targetp == 0 ||
-                  targetp == &_settings->_block_sizes) &&
-                 is_target_active(_settings->_micro_block_str)) {
+        else if (target_str == _settings->_micro_block_str) {
             targetp = &_settings->_micro_block_sizes;
             outerp = &_settings->_block_sizes;
             AT_DEBUG_MSG("searching micro-block sizes...");
-       }
+        }
 
         // Nano-blocks?
-        else if ((targetp == 0 ||
-                  targetp == &_settings->_block_sizes ||
-                  targetp == &_settings->_micro_block_sizes) &&
-                 is_target_active(_settings->_nano_block_str)) {
+        else if (target_str == _settings->_nano_block_str) {
             targetp = &_settings->_nano_block_sizes;
             outerp = &_settings->_micro_block_sizes;
             AT_DEBUG_MSG("searching nano-block sizes...");
         }
 
         // Pico-blocks?
-        else if ((targetp == 0 ||
-                  targetp == &_settings->_block_sizes ||
-                  targetp == &_settings->_micro_block_sizes ||
-                  targetp == &_settings->_nano_block_sizes) &&
-                 is_target_active(_settings->_pico_block_str)) {
+        else if (target_str == _settings->_pico_block_str) {
             targetp = &_settings->_pico_block_sizes;
             outerp = &_settings->_nano_block_sizes;
             AT_DEBUG_MSG("searching pico-block sizes...");
         }
 
         else {
-            targetp = 0;
-            return false;
+            THROW_YASK_EXCEPTION("Error: unrecognized auto-tuner target '" +
+                                 target_str + "'");
         }
         assert(targetp);
         assert(outerp);
@@ -126,24 +132,10 @@ namespace yask {
         // Get initial search center from current target.
         at_state.center_sizes = *targetp;
 
-        // Pick better starting point if needed.
-        // TODO: create a better heuristic.
-        if (!check_sizes(at_state.center_sizes)) {
-            for (auto dim : at_state.center_sizes) {
-                auto& dname = dim._get_name();
-                auto& dval = dim.get_val();
-                if (dname != step_dim) {
-                    auto dmax = max(idx_t(1), (*outerp)[dname] / 2);
-                    at_state.center_sizes[dname] = dmax;
-                }
-            }
-            *targetp = at_state.center_sizes;
-        }
-
-        // Set vars to starting point.
-        apply(false);
+        // Prepare for next target.
         AT_TRACE_MSG("starting size: "  << at_state.center_sizes.make_dim_val_str(" * "));
         AT_TRACE_MSG("starting search radius: " << at_state.radius);
+        adjust_settings();
         return true;
     }
     
@@ -168,7 +160,7 @@ namespace yask {
 #endif
 
         // Apply the best known settings from existing data, if any.
-        apply(true);
+        apply_best();
 
         // Mark done?
         done = mark_done;
@@ -177,6 +169,8 @@ namespace yask {
         timer.clear();
         steps_done = 0;
         targetp = 0;
+        outerp = 0;
+        targeti = 0;
         at_state.init(this, true);
 
     } // clear.
@@ -224,7 +218,7 @@ namespace yask {
         if (done)
             return;
 
-       // Cumulative stats and rate.
+        // Cumulative stats and rate.
         at_state.csteps += steps;
         at_state.ctime += etime;
         double crate = (at_state.ctime > 0.) ? (double(at_state.csteps) / at_state.ctime) : 0.;
@@ -375,7 +369,7 @@ namespace yask {
 
                         // Run next step with this size.
                         *targetp = bsize;
-                        apply(false);
+                        adjust_settings();
                         return;
                     }
                 }
@@ -415,12 +409,11 @@ namespace yask {
                     else {
 
                         // Apply current best result for this target.
-                        apply(true);
+                        apply_best();
 
                         // Move to next target.
                         if (next_target()) {
                             AT_TRACE_MSG("exiting eval() with new target");
-                            apply(false);
                             return;
                         }
 
@@ -440,49 +433,53 @@ namespace yask {
         THROW_YASK_EXCEPTION("internal error: exited from infinite loop");
     } // eval.
 
-    // Adjust related kernel settings to prepare for a run.
-    void AutoTuner::apply(bool use_best) {
+    // Apply best settings if avail, and adjust other settings.
+    // Returns true if set.
+    bool AutoTuner::apply_best() {
         STATE_VARS(this);
+        if (at_state.best_rate > 0. && targetp) {
+            AT_DEBUG_MSG("applying size "  <<
+                         at_state.best_sizes.make_dim_val_str(" * "));
+            *targetp = at_state.best_sizes;
 
-        if (use_best) {
-            if (at_state.best_rate > 0. && targetp) {
-                AT_DEBUG_MSG("applying size "  <<
-                             at_state.best_sizes.make_dim_val_str(" * "));
-                *targetp = at_state.best_sizes;
-            }
-            else
-                return;
+            // Save these results as requested options.
+            // FIXME: won't work for stage tuning.
+            if (targetp == &_settings->_mega_block_sizes)
+                req_opts->_mega_block_sizes = *targetp;
+            if (targetp == &_settings->_block_sizes)
+                req_opts->_block_sizes = *targetp;
+            if (targetp == &_settings->_micro_block_sizes)
+                req_opts->_micro_block_sizes = *targetp;
+            if (targetp == &_settings->_nano_block_sizes)
+                req_opts->_nano_block_sizes = *targetp;
+            if (targetp == &_settings->_pico_block_sizes)
+                req_opts->_pico_block_sizes = *targetp;
+
+            // Adjust other settings based on target.
+            adjust_settings();
+            return true;
         }
+        return false;
+    }
+    
+    // Adjust related kernel settings to prepare for next run.
+    void AutoTuner::adjust_settings() {
+        STATE_VARS(this);
         assert(targetp);
-        
-        // Change derived sizes to 0 so adjust_settings()
-        // will set them to the default.
-        // TODO: keep the user-provided settings if possible.
-        if (targetp == &_settings->_block_sizes) {
-            _settings->_block_tile_sizes.set_vals_same(0);
-            _settings->_micro_block_sizes.set_vals_same(0);
-            _settings->_micro_block_tile_sizes.set_vals_same(0);
-            _settings->_nano_block_sizes.set_vals_same(0);
-            _settings->_nano_block_tile_sizes.set_vals_same(0);
-            _settings->_pico_block_sizes.set_vals_same(0);
-        }
-        else if (targetp == &_settings->_micro_block_sizes) {
-            _settings->_micro_block_tile_sizes.set_vals_same(0);
-            _settings->_nano_block_sizes.set_vals_same(0);
-            _settings->_nano_block_tile_sizes.set_vals_same(0);
-            _settings->_pico_block_sizes.set_vals_same(0);
-        }
-        else if (targetp == &_settings->_nano_block_sizes) {
-            _settings->_nano_block_tile_sizes.set_vals_same(0);
-            _settings->_pico_block_sizes.set_vals_same(0);
-        }
-        else if (targetp == &_settings->_pico_block_sizes) {
-            // Nothing below pico blocks.
-        }
 
-        // Restore temporal sizes.
-        _settings->_block_sizes[step_dim] = bt;
-        _settings->_micro_block_sizes[step_dim] = mbt;
+        // Reset non-target settings to requested ones.  This is done so
+        // that ajustment will be applied based on requested ones and this
+        // target instead of adjusted ones.
+        if (targetp != &_settings->_mega_block_sizes)
+            _settings->_mega_block_sizes = req_opts->_mega_block_sizes;
+        if (targetp != &_settings->_block_sizes)
+            _settings->_block_sizes = req_opts->_block_sizes;
+        if (targetp != &_settings->_micro_block_sizes)
+            _settings->_micro_block_sizes = req_opts->_micro_block_sizes;
+        if (targetp != &_settings->_nano_block_sizes)
+            _settings->_nano_block_sizes = req_opts->_nano_block_sizes;
+        if (targetp != &_settings->_pico_block_sizes)
+            _settings->_pico_block_sizes = req_opts->_pico_block_sizes;
         
         // Save debug output and set to null.
         auto saved_op = get_debug_output();
@@ -490,21 +487,23 @@ namespace yask {
         auto nullop = yof.new_null_output();
         set_debug_output(nullop);
 
-        // Make sure everything is resized based on new target size.
+        // The following sequence is the required subset of what
+        // is done in prepare_solution().
+        
+        // Make sure everything is adjusted based on new target size.
         _settings->adjust_settings();
 
         // Update temporal blocking info.
+        // (Normally called from update_var_info().)
         _context->update_tb_info();
 
-        // Reallocate scratch data based on new block size.
+        // Reallocate scratch vars based on new micro-block size.
         // TODO: only do this when needed.
-        if (targetp == &_settings->_block_sizes)
-            _context->alloc_scratch_data();
+        _context->alloc_scratch_data();
 
         // Restore debug output.
         set_debug_output(saved_op);
     }
-
 
     ///// StencilContext methods to control the auto-tuner(s).
     void StencilContext::visit_auto_tuners(std::function<void (AutoTuner& at)> visitor) {
@@ -527,17 +526,7 @@ namespace yask {
     }
 
     // Eval auto-tuner for given number of steps.
-    void StencilContext::eval_auto_tuner(idx_t num_steps) {
-
-        // Update stats.
-        visit_auto_tuners
-            ([&](AutoTuner& at)
-             {
-                 at.steps_done += num_steps;
-                 at.timer.stop();
-             });
-
-        // Eval.
+    void StencilContext::eval_auto_tuner() {
         visit_auto_tuners
             ([&](AutoTuner& at)
              {

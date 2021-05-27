@@ -101,19 +101,13 @@ namespace yask {
         bool done = false;
         IdxTuple* outerp = 0;
         IdxTuple* targetp = 0;
+        size_t targeti = 0;
 
-        // Saved temporal sizes.
-        idx_t bt = 0, mbt = 0;
- 
         bool check_sizes(const IdxTuple& sizes);
         bool next_target();
-        bool is_target_active(const std::string& target) {
-            auto& v = _settings->_tuner_targets;
-            return std::find(v.begin(), v.end(), target) != v.end();
-        }
 
     public:
-        static constexpr idx_t max_stride_t = 4;
+        static constexpr idx_t max_stride_t = 100;
 
         AutoTuner(StencilContext* context,
                   KernelSettings* settings,
@@ -136,9 +130,12 @@ namespace yask {
         void print_settings() const;
         void print_temporal_settings() const;
 
-        // If 'use_best', apply best settings and other kernel settings.
-        // Else, just set other kernel settings.
-        void apply(bool use_best);
+        // Apply best settings if avail.
+        // Returns true if set.
+        bool apply_best();
+        
+        // Adjust related kernel settings to prepare for next run.
+        void adjust_settings();
 
         // Done?
         bool is_done() const { return done; }

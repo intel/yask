@@ -216,8 +216,8 @@ namespace yask {
 
         // Copy current settings to stages.  Needed here because settings may
         // have been changed via APIs or from call to setup_rank() since last
-        // call to prepare_solution().  This will wipe out any previous
-        // stage-specific auto-tuning. TODO: fix this.
+        // call to prepare_solution().  FIXME: This will wipe out any previous
+        // stage-specific auto-tuning.
         for (auto& sp : st_stages)
             sp->get_local_settings() = *actl_opts;
 

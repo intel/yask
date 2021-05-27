@@ -577,14 +577,17 @@ namespace yask {
                         }
                     }
 
-                    // Count steps for this stage.
+                    // Add to steps done for this stage.
                     bp->add_steps(num_stage_steps);
                 }
 
                 // Call the auto-tuner to evaluate these steps and change
-                // settings.
-                // FIXME: will not work properly with temporal conditions.
-                eval_auto_tuner(this_num_t);
+                // settings when enough time has passed.
+                // FIXME: in-situ AT will not work properly with temporal conditions
+                // because not all sequences of N steps will do the same amount of work.
+                _at.timer.stop();
+                _at.steps_done += this_num_t;
+                eval_auto_tuner();
 
             } // step loop.
 

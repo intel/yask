@@ -724,7 +724,7 @@ namespace yask {
         // Auto-tuner methods.
         void visit_auto_tuners(std::function<void (AutoTuner& at)> visitor);
         void visit_auto_tuners(std::function<void (const AutoTuner& at)> visitor) const;
-        virtual void eval_auto_tuner(idx_t num_steps);
+        virtual void eval_auto_tuner();
 
         // Auto-tuner APIs.
         virtual void reset_auto_tuner(bool enable, bool verbose = false);

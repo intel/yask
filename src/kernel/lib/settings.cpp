@@ -235,8 +235,6 @@ namespace yask {
 
         // Things to tune.
         _tuner_targets.push_back(_block_str);
-        _tuner_targets.push_back(_micro_block_str);
-        _tuner_targets.push_back(_nano_block_str);
         _tuner_targets.push_back(_pico_block_str);
     }
 
@@ -401,7 +399,7 @@ namespace yask {
         parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("auto_tune",
                            "Adjust specified block and tile sizes *during* normal operation "
-                           "to tune for performance, a.k.a., 'online' or 'in-situ' tuning. "
+                           "to tune for performance, i.e., 'online' or 'in-situ' tuning. "
                            "Successive steps will use different sizes until an optimal size is found. "
                            "Will likely cause varying performance between steps, "
                            "so this is not recommended for benchmarking. "
@@ -413,6 +411,7 @@ namespace yask {
                            "[Advanced] Seconds to run new trial during auto-tuning "
                            "for new trial to be considered better than the existing best.",
                            _tuner_trial_secs));
+        #ifdef ALLOW_STAGE_TUNERS
         parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("auto_tune_each_stage",
                            "[Advanced] Apply the auto-tuner separately to each stage. "
@@ -420,8 +419,10 @@ namespace yask {
                            "passes across the entire var, "
                            "i.e., when no temporal tiling is used.",
                            _allow_stage_tuners));
+        #endif
 
         set<string> allowed_targets;
+        allowed_targets.insert(_mega_block_str);
         allowed_targets.insert(_block_str);
         allowed_targets.insert(_micro_block_str);
         allowed_targets.insert(_nano_block_str);
@@ -429,13 +430,14 @@ namespace yask {
         parser.add_option(make_shared<CommandLineParser::StringListOption>
                           ("auto_tune_targets",
                            "[Advanced] Apply the auto-tuner to adjust the sizes of the listed targets. "
-                           "Allowed targets are '" + _block_str + "' for block sizes, "
+                           "Allowed targets are "
+                           "'" + _mega_block_str + "' for mega-block sizes, "
+                           "'" + _block_str + "' for block sizes, "
                            "'" + _micro_block_str + "' for micro-block sizes, "
                            "'" + _nano_block_str + "' for nano-block sizes, and "
                            "'" + _pico_block_str + "' for pico-block sizes. "
                            "Targets must be separated by a single comma (','). "
-                           "When auto-tuning a given size, all lower-level "
-                           "sizes will be reset to their defaults.",
+                           "Targets will be tuned in the order given and may be repeated.",
                            allowed_targets, _tuner_targets));
     }
 

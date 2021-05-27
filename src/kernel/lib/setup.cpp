@@ -200,7 +200,7 @@ namespace yask {
 
             // Need to set local size.
             if (!actl_opts->_rank_sizes[i])
-                actl_opts->_rank_sizes[i] = opts->_global_sizes[i];
+                actl_opts->_rank_sizes[i] = actl_opts->_global_sizes[i];
 
             // Need to set global size.
             else if (!actl_opts->_global_sizes[i])
