@@ -58,13 +58,13 @@ our @log_keys =
    'num MPI ranks',
    'num ranks',
    'num OpenMP threads', # also matches 'Num OpenMP threads used'.
-   'num threads per region',
-   'num threads per block',
+   'num outer threads',
+   'num inner threads',
    'total overall allocation',
    'cluster size',
    'vector size',
-   'num regions per local-domain per step',
-   'num blocks per region per step',
+   'num mega-block per local-domain per step',
+   'num blocks per mega-block per step',
    'num micro-blocks per block per step',
    'num nano-blocks per micro-block per step',
    'num pico-blocks per nano-block per step',
@@ -74,7 +74,19 @@ our @log_keys =
    'L2 prefetch distance',
    'num temporal block steps',
    'num wave front steps',
-  );
+
+   # values from compiler report
+   'YC_STENCIL',
+   'YC_TARGET',
+   'YK_CXXVER',
+   'YK_CXXCMD',
+   'YK_CXXOPT',
+   'YK_CXXFLAGS',
+   'YK_STENCIL',
+   'YK_ARCH',
+   'YK_TAG',
+   'YK_EXEC',
+ );
 
 # Keys set with custom code.
 my $linux_key = "Linux kernel";
@@ -96,17 +108,22 @@ our @size_log_keys =
   (
    'global-domain size',
    'local-domain size',
-   'region size',
+   'mega-block size',
    'block size',
    'micro-block size',
    'nano-block size',
    'pico-block size',
-   'local-domain-tile size',
-   'region-tile size',
-   'block-tile size',
-   'micro-block-tile size',
-   'nano-block-tile size',
   );
+if (0) {
+  push @size_log_keys,
+    (
+     'local-domain-tile size',
+     'mega-block-tile size',
+     'block-tile size',
+     'micro-block-tile size',
+     'nano-block-tile size',
+     );
+}
 
 # System settings.
 our @sys_log_keys =
@@ -205,9 +222,9 @@ sub getResultsFromLine($$) {
   # pre-process keys one time.
   if (scalar keys %proc_keys == 0) {
     undef %proc_keys;
-    for my $m (@log_keys, @size_log_keys, @sys_log_keys) {
+    for my $k (@log_keys, @size_log_keys, @sys_log_keys) {
 
-      my $pm = lc $m;
+      my $pm = lc $k;
       $pm =~ s/^\s+//;
       $pm =~ s/\s+$//;
 
@@ -216,12 +233,12 @@ sub getResultsFromLine($$) {
 
       # short key.
       my $sk = substr $pm,0,$klen;
-      
+
       # escape regex chars.
       $pm =~ s/\(/\\(/g;
       $pm =~ s/\)/\\)/g;
 
-      $proc_keys{$sk}{$pm} = $m;
+      $proc_keys{$sk}{$pm} = $k;
     }
   }
 
@@ -234,6 +251,7 @@ sub getResultsFromLine($$) {
   $line =~ s/target.ISA/target/g;
   $line =~ s/mini([_-])bl/micro${1}bl/g;
   $line =~ s/sub([_-])bl/nano${1}bl/g;
+  $line =~ s/region/mega-block/g;
   
   # special cases for manual parsing...
 
@@ -291,23 +309,27 @@ sub getResultsFromLine($$) {
 
   # look for matches to all other keys.
   else {
-    my ($key, $val) = split /:/,$line,2;
+    my ($key, $val) = split /[=:]/,$line,2;
     if (defined $val) {
       $key = lc $key;
       $key =~ s/^\s+//;
+      $key =~ s/\s+$//;
       $key =~ s/[- ]+/-/g;      # relax hyphen and space match.
+      $val =~ s/^\s+//;
+      $val =~ s/\s+$//;
 
-      # short key.
+      # short key for quick match.
       my $sk = substr $key,0,$klen;
 
-      # match to short key?
+      # return if no match to short key.
       return if !exists $proc_keys{$sk};
 
       # look for exact key.
       for my $m (keys %{$proc_keys{$sk}}) {
 
         # match?
-        # only check that beginning of key matches.
+        # Only compares found key to beginning of target,
+        # so beginning of target must be unique.
         if ($key =~ /^$m/) {
           $val =~ s/^\s+//;
           $val =~ s/\s+$//;
@@ -359,7 +381,8 @@ sub printCsvValues($$) {
     my $r = $results->{$m};
     $r = '' if !defined $r;
     $r = '"'.$r.'"'  # add quotes if not a number.
-      if $r !~ /^[0-9.e+-]+$/ || $r =~ /[.].*[.]/;
+      if ($r !~ /^[0-9.e+-]+$/ || $r =~ /[.].*[.]/) &&
+      $r !~ /^"/;
     push @cols, $r;
   }
   print $fh join(',', @cols);

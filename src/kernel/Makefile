@@ -151,16 +151,6 @@ include $(YASK_BASE)/src/common/common.mk
 # Vars starting with 'YC_' apply to the stencil compiler.
 # Vars starting with 'YK_' apply to the stencil kernel.
 
-# Turn off prefetching at O0 or for offload.
-ifneq ($(filter -O0,$(YK_CXXOPT)),)
- pfd_l1		:=	0
- pfd_l2		:=	0
-endif
-ifeq ($(offload),1)
- pfd_l1		:=	0
- pfd_l2		:=	0
-endif
-
 # Flags passed to stencil compiler.
 YC_FLAGS	:=	-stencil $(YC_STENCIL) -target $(YC_TARGET) -elem-bytes $(real_bytes)
 ifeq ($(use_ptrs),1)
@@ -283,6 +273,16 @@ OMPFLAG 	:=	-fopenmp
 # Linker flags.
 YK_LIBS		:=	-lrt
 YK_LFLAGS	:=	-Wl,-rpath=$(LIB_OUT_DIR) -L$(LIB_OUT_DIR) -l$(YK_EXT_BASE)
+
+# Turn off prefetching at O0 or for offload.
+ifneq ($(filter -O0,$(YK_CXXOPT)),)
+ pfd_l1		:=	0
+ pfd_l2		:=	0
+endif
+ifeq ($(offload),1)
+ pfd_l1		:=	0
+ pfd_l2		:=	0
+endif
 
 # Add options for NUMA.
 ifeq ($(numa),1)
@@ -735,7 +735,7 @@ realclean: clean
 	- find . -name '*~' -print -delete
 
 echo-settings:
-	@echo "Build environment for" $(YK_EXEC) on `date`; \
+	@echo "Build environment, `date`"; \
 	echo TARGET=$(TARGET); \
 	echo DEF_ARGS="\"$(DEF_ARGS)\""; \
 	echo EXTRA_MACROS="\"$(EXTRA_MACROS)\""; \
@@ -743,11 +743,38 @@ echo-settings:
 	echo EXTRA_YK_CXXFLAGS="\"$(EXTRA_YK_CXXFLAGS)\""; \
 	echo ISA=$(ISA); \
 	echo MACROS="\"$(MACROS)\""; \
-	echo MISC_LOOP_CODE="\"$(MISC_LOOP_CODE)\""; \
-	echo MISC_LOOP_FLAGS="\"$(MISC_LOOP_FLAGS)\""; \
-	echo MISC_LOOP_ORDER="\"$(MISC_LOOP_ORDER)\""; \
-	echo MISC_LOOP_MODS="\"$(MISC_LOOP_MODS)\""; \
 	echo OMPFLAGS="\"$(OMPFLAGS)\""; \
+	echo YASK_OUTPUT_DIR=$(YASK_OUTPUT_DIR); \
+	echo YC_FLAGS="\"$(YC_FLAGS)\""; \
+	echo YC_STENCIL=$(YC_STENCIL); \
+	echo YC_TARGET=$(YC_TARGET); \
+	echo YK_ARCH=$(YK_ARCH); \
+	echo YK_BASE=$(YK_BASE); \
+	echo YK_EXEC=$(YK_EXEC); \
+	echo YK_CXX=$(YK_CXX); \
+	echo YK_CXXCMD=$(YK_CXXCMD); \
+	echo YK_CXXDBG=$(YK_CXXDBG); \
+	echo YK_CXXFLAGS="\"$(YK_CXXFLAGS)\""; \
+	echo YK_CXXOPT=$(YK_CXXOPT); \
+	echo YK_EXT_TAG=$(YK_EXT_TAG); \
+	echo YK_STENCIL=$(YK_STENCIL); \
+	echo YK_TAG=$(YK_TAG); \
+	echo YK_CXXVER=`$(YK_CXX) --version`; \
+	echo arch=$(arch); \
+	echo cluster=$(cluster); \
+	echo fold=$(fold); \
+	echo offload=$(offload); \
+	echo offload_usm=$(offload_usm); \
+	echo omp_block_schedule=$(omp_block_schedule); \
+	echo omp_misc_schedule=$(omp_misc_schedule); \
+	echo omp_mega_block_schedule=$(omp_mega_block_schedule); \
+	echo pfd_l1=$(pfd_l1); \
+	echo pfd_l2=$(pfd_l2); \
+	echo radius=$(radius); \
+	echo real_bytes=$(real_bytes); \
+	echo stencil=$(stencil); \
+	echo streaming_stores=$(streaming_stores)
+	@echo " "; \
 	echo RANK_LOOP_CODE="\"$(RANK_LOOP_CODE)\""; \
 	echo RANK_LOOP_FLAGS="\"$(RANK_LOOP_FLAGS)\""; \
 	echo RANK_LOOP_ORDER="\"$(RANK_LOOP_ORDER)\""; \
@@ -772,37 +799,12 @@ echo-settings:
 	echo PICO_BLOCK_LOOP_FLAGS="\"$(PICO_BLOCK_LOOP_FLAGS)\""; \
 	echo PICO_BLOCK_LOOP_ORDER="\"$(PICO_BLOCK_LOOP_ORDER)\""; \
 	echo PICO_BLOCK_LOOP_MODS="\"$(PICO_BLOCK_LOOP_MODS)\""; \
-	echo YASK_OUTPUT_DIR=$(YASK_OUTPUT_DIR); \
-	echo YC_FLAGS="\"$(YC_FLAGS)\""; \
-	echo YC_STENCIL=$(YC_STENCIL); \
-	echo YC_TARGET=$(YC_TARGET); \
-	echo YK_ARCH=$(YK_ARCH); \
-	echo YK_BASE=$(YK_BASE); \
-	echo YK_CXX=$(YK_CXX); \
-	echo YK_CXXCMD=$(YK_CXXCMD); \
-	echo YK_CXXDBG=$(YK_CXXDBG); \
-	echo YK_CXXFLAGS="\"$(YK_CXXFLAGS)\""; \
-	echo YK_CXXOPT=$(YK_CXXOPT); \
-	echo YK_EXT_TAG=$(YK_EXT_TAG); \
-	echo YK_STENCIL=$(YK_STENCIL); \
-	echo YK_TAG=$(YK_TAG); \
-	echo arch=$(arch); \
-	echo cluster=$(cluster); \
-	echo fold=$(fold); \
-	echo offload=$(offload); \
-	echo offload_usm=$(offload_usm); \
-	echo omp_block_schedule=$(omp_block_schedule); \
-	echo omp_misc_schedule=$(omp_misc_schedule); \
-	echo omp_mega_block_schedule=$(omp_mega_block_schedule); \
-	echo pfd_l1=$(pfd_l1); \
-	echo pfd_l2=$(pfd_l2); \
-	echo radius=$(radius); \
-	echo real_bytes=$(real_bytes); \
-	echo stencil=$(stencil); \
-	echo streaming_stores=$(streaming_stores)
+	echo MISC_LOOP_CODE="\"$(MISC_LOOP_CODE)\""; \
+	echo MISC_LOOP_FLAGS="\"$(MISC_LOOP_FLAGS)\""; \
+	echo MISC_LOOP_ORDER="\"$(MISC_LOOP_ORDER)\""; \
+	echo MISC_LOOP_MODS="\"$(MISC_LOOP_MODS)\""; \
 	git status
 	uname -a
-	$(YK_CXX) --version
 
 # Print stats on inner SIMD loops from asm file.
 code-stats: $(YK_LIB)
