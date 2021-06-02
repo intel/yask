@@ -24,7 +24,6 @@ IN THE SOFTWARE.
 *****************************************************************************/
 
 // Implement TTI stencil using formulation from Devito project.
-// TODO: provide a more readable TTI formulation.
 
 // YASK stencil solution(s) in this file will be integrated into the YASK compiler utility.
 #include "yask_compiler_api.hpp"
