@@ -123,6 +123,7 @@ namespace yask {
         typedef pair<string, string> VarDimKey; // var and dim names.
         map<VarDimKey, string> _strides; // var containing stride for given dim in var.
         map<VarDimKey, string> _offsets; // var containing offset for given dim in var.
+        map<string, string> _ptr_ofs; // var containing const offset for var.
 
         // Element indices.
         string _elem_suffix_global = "_global_elem";

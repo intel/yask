@@ -214,10 +214,19 @@ namespace yask {
         auto* vp = gp._get_var();
         assert(vp);
         auto& var = *vp;
+        const auto& vname = var.get_name();
+
+        // Already done this var?
+        if (_ptr_ofs.count(vname))
+            return;
+
+        // Index-invariant pointer offset.
+        string po_var = make_var_name(vname + "_ptr_ofs");
+        _ptr_ofs[vname] = po_var;
+        string po_expr = "idx_t(0)";
 
         for (int dnum = 0; dnum < var.get_num_dims(); dnum++) {
             auto& dim = var.get_dims().at(dnum);
-            const auto& vname = var.get_name();
             const auto& dname = dim->_get_name();
             auto dtype = dim->get_type();
 
@@ -225,12 +234,12 @@ namespace yask {
             bool is_step = dtype == STEP_INDEX;
             
             auto key = VarDimKey(vname, dname);
-            if (!is_step && !_strides.count(key) ) {
+            if (!is_step) {
                 os << endl << " // Stride for var '" << vname <<
                     "' in '" << dname << "' dim.\n";
 
-                string svar = make_var_name(vname + "_" + dname + "_stride");
-                _strides[key] = svar;
+                string str_var = make_var_name(vname + "_" + dname + "_stride");
+                _strides[key] = str_var;
                 assert(lookup_stride(var, dname));
 
                 // Get ptr to var core.
@@ -275,11 +284,11 @@ namespace yask {
                 }
 
                 // Print final assignment.
-                os << _line_prefix << "const idx_t " << svar << " = " <<
+                os << _line_prefix << "const idx_t " << str_var << " = " <<
                     stride << _line_suffix;
                 if (stride != slookup)
                     os << _line_prefix << "host_assert(" << slookup <<
-                        " == " << svar << ")" << _line_suffix;
+                        " == " << str_var << ")" << _line_suffix;
 
                 // Offset to be subtracted from index.
                 os << endl << " // Index offset for var '" << vname <<
@@ -327,8 +336,15 @@ namespace yask {
                 if (ofs != ofs_expr)
                     os << _line_prefix << "host_assert(" << ofs_expr <<
                         " == " << ofs_var << ")" << _line_suffix;
+
+                // Build total offset expr.
+                po_expr += string(" - (") + ofs_var + " * " + str_var + ")";
             }
         }
+
+        os << "\n // Loop-invariant pointer offset for var '" << vname << "'.\n" <<
+            _line_prefix << "const idx_t " << po_var << " = " <<
+            po_expr << _line_suffix;
     }
 
     // Print prefetches for each base pointer.
@@ -440,8 +456,15 @@ namespace yask {
                                              const string& inner_ofs) {
         auto* var = gp._get_var();
         assert(var);
+        auto vname = var->get_name();
         string ofs_str;
         int nterms = 0;
+
+        // Const offset.
+        if (_ptr_ofs.count(vname)) {
+            ofs_str += string("(") + _ptr_ofs[vname] + ")";
+            nterms++;
+        }
 
         // Construct the linear offset by adding the products of
         // each index with the var's stride in that dim.
@@ -455,8 +478,6 @@ namespace yask {
             // that index in the offset calculation.
             if (!is_step) {
                 string dni = dimi->_get_name();
-                auto* lofs = lookup_offset(*var, dni);
-                assert(lofs);
                 auto* stride = lookup_stride(*var, dni);
                 assert(stride);
 
@@ -464,7 +485,6 @@ namespace yask {
                 string nas = (gp.get_vec_type() == VarPoint::VEC_FULL) ?
                     gp.make_norm_arg_str(dni, _dims, var_map) :
                     gp.make_arg_str(dni, var_map);
-                nas += " - " + *lofs;
                 if (dni == _dims._inner_dim && inner_ofs.length())
                     nas += " + " + inner_ofs;
 
