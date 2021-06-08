@@ -406,6 +406,7 @@ else ifeq ($(cxx_is_intel),1)
  #YK_CXXFLAGS	+=	-qopt-report=5
  #YK_CXXFLAGS	+=	-qopt-report-phase=VEC,PAR,OPENMP,IPO,LOOP
  YK_CXX_VER_CMD :=	$(YK_CXX) -V
+ OMPFLAG	:=	-qopenmp
 
 # Gnu-compatible compiler (but not Intel or Clang).
 else ifeq ($(cxx_is_gnu),1)
