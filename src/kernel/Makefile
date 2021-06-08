@@ -271,7 +271,7 @@ else
 endif
 YK_CXXFLAGS	:=	-g -std=c++11 -Wall
 YK_CXXFLAGS	+=	$(addprefix -I,$(YK_INC_DIRS) $(YK_GEN_DIR))
-OMPFLAGS	+=	-fopenmp
+OMPFLAGS	+=	-qopenmp
 YK_CXXOPT	?=	-O3
 SWIG_CXXFLAGS	:= 	$(DBL_EPSILON_CXXFLAG)
 
