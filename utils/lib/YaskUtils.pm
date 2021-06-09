@@ -92,6 +92,7 @@ our @log_keys =
 my $linux_key = "Linux kernel";
 my $hostname_key = "hostname";
 my $nodes_key = "MPI node(s)";
+my $auto_tuner_key = "Auto-tuner used";
 my $val_key = "validation results";
 my $yask_key = "YASK vars";
 our @special_log_keys =
@@ -99,6 +100,7 @@ our @special_log_keys =
    $hostname_key,
    $linux_key,
    $nodes_key,
+   $auto_tuner_key,
    $val_key,
    $yask_key,
   );
@@ -160,7 +162,7 @@ our $onef = 1e-15;
 
 # Return a number from a number w/suffix.
 # Examples:
-# - removeSuf("2.34K") => 2300.
+# - removeSuf("2.34K") => 2340.
 # - removeSuf("2KiB") => 2048.
 # - removeSuf("foo") => "foo".
 sub removeSuf($) {
@@ -294,6 +296,7 @@ sub getResultsFromLine($$) {
   # Invalidate settings overridden by auto-tuner on multiple stages.
   elsif ($line =~ /^\s*auto-tuner(.).*size:/) {
     my $c = $1;
+    $results->{$auto_tuner_key} = 'TRUE';
 
     # If colon found immediately after "auto-tuner", tuner is global.
     my $onep = ($c eq ':');
@@ -374,20 +377,19 @@ sub printCsvHeader($) {
 # Does NOT print newline.
 sub printCsvValues($$) {
   my $results = shift;          # ref to hash.
-  my $fh = shift;
+  my $fh = shift;               # file handle.
 
   my @cols;
   for my $m (@all_log_keys) {
     my $r = $results->{$m};
     $r = '' if !defined $r;
-    $r = '"'.$r.'"'  # add quotes if not a number.
+    $r = '"'.$r.'"'  # add quotes if not a number, etc.
       if ($r !~ /^[0-9.e+-]+$/ || $r =~ /[.].*[.]/) &&
-      $r !~ /^"/;
+      $r !~ /^"/ && $r ne 'TRUE' && $r ne 'FALSE';
     push @cols, $r;
   }
   print $fh join(',', @cols);
 }
 
-# return with a 1 so require() will not fail...
-#
+# return with a 1 so require() will not fail.
 1;
