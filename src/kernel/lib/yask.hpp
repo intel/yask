@@ -152,14 +152,14 @@ typedef std::uint64_t bit_mask_t;
 #endif
 #endif
 
-#ifndef NO_VEC
+#ifndef NO_PRAGMA_VEC1
 #define _NO_VECTOR _Pragma("novector")
 #define _VEC_ALWAYS _Pragma("vector always")
 #else
 #define _NO_VECTOR
 #define _VEC_ALWAYS
 #endif
-#ifndef NO_VEC2
+#ifndef NO_PRAGMA_VEC2
 #define _VEC_ALIGNED _Pragma("vector aligned")
 #define _VEC_UNALIGNED _Pragma("vector unaligned")
 #define _VEC_STREAMING _Pragma("vector nontemporal")
@@ -169,13 +169,13 @@ typedef std::uint64_t bit_mask_t;
 #define _VEC_STREAMING
 #endif
 
-#ifndef NO_SIMD
+#ifndef NO_PRAGMA_SIMD
 #define _SIMD _Pragma("omp simd")
 #else
 #define _SIMD
 #endif
 
-#ifndef NO_UNROLL
+#ifndef NO_PRAGMA_UNROLL
 #define _UNROLL _Pragma("unroll")
 #else
 #define _UNROLL

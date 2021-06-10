@@ -382,7 +382,6 @@ ifeq ($(cxx_is_llvm_intel),1)
 			-fimf-precision=low -fp-model fast -fimf-domain-exclusion=none -fma
  YK_CXXWARN	+=	-Wno-unknown-pragmas -Wno-unused-variable \
 			-Wno-unused-const-variable -fno-color-diagnostics
- MACROS		+=	NO_VEC2
  OMPFLAG	:=	-fiopenmp
 
 # Clang compiler (clang++, not Intel version).
@@ -420,7 +419,7 @@ else ifeq ($(cxx_is_gnu),1)
 # Unknown compiler.
 # NB: the ISA will not be specified.
 else
- MACROS		+=	NO_VEC NO_UNROLL
+ MACROS		+=	NO_PRAGMA_VEC1 NO_PRAGMA_VEC2 NO_PRAGMA_UNROLL
  VEC_MACROS	+=	NO_SVML
 
 endif # compiler.
