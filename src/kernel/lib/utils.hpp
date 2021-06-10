@@ -45,6 +45,15 @@ namespace yask {
         exit(code);
     }
 
+    // Get an int from an env var.
+    inline int get_env_int(const std::string& name, int def) {
+        int res = def;
+        char* s = getenv(name.c_str());
+        if (s)
+            res = atoi(s);
+        return res;
+    }
+
     // Find sum of rank_vals over all ranks.
     extern idx_t sum_over_ranks(idx_t rank_val, MPI_Comm comm);
 
