@@ -105,37 +105,37 @@ ifeq ($(TARGET),knl)
  # the right thing by default in SNC-2 or SNC-4 clustering modes (using
  # either flat or cache memory modes, but these configurations are uncommon.
  ICC_ISA	?=	-xMIC-AVX512
- CXX_ISA	?=	-march=knl
+ GXX_ISA	?=	-march=knl
  VEC_MACROS	?=	USE_INTRIN512 USE_RCP28 NUMA_PREF=1
 
 else ifeq ($(TARGET),avx512)
 
  ICC_ISA	?=	-xCORE-AVX512
- CXX_ISA	?=	-march=skylake-avx512
+ GXX_ISA	?=	-mavx512f
  VEC_MACROS	?=	USE_INTRIN512
 
 else ifeq ($(TARGET),avx512-ymm)
 
  ICC_ISA	?=	-xCORE-AVX512
- CXX_ISA	?=	-march=skylake-avx512
+ GXX_ISA	?=	-mavx512f
  VEC_MACROS	?=	USE_INTRIN512LO
 
 else ifeq ($(TARGET),avx2)
 
  ICC_ISA	?=	-xCORE-AVX2
- CXX_ISA	?=	-march=haswell
+ GXX_ISA	?=	-mavx2
  VEC_MACROS	?=	USE_INTRIN256 USE_AVX2
 
 else ifeq ($(TARGET),avx)
 
  ICC_ISA	?=	-xAVX
- CXX_ISA	?=	-march=sandybridge
+ GXX_ISA	?=	-mavx
  VEC_MACROS	?=	USE_INTRIN256
 
 else ifeq ($(TARGET),intel64)
 
  ICC_ISA	?=	-xHOST
- CXX_ISA	?=	-march=native
+ GXX_ISA	?=	-march=native
 
 else
 
@@ -264,7 +264,8 @@ YK_CXX		:=	icpx
 MPI_CXX 	:=	mpiicpc
 YK_CXXOPT	?=	-O3
 YK_CXXDBG	?=	-g
-YK_CXXFLAGS	:=	-std=c++11 -Wall $(YK_CXXDBG) $(YK_CXXOPT)
+YK_CXXFLAGS	:=	-std=c++11
+YK_CXXWARN	:=	-Wall
 YK_CXXFLAGS	+=	$(addprefix -I,$(YK_INC_DIRS) $(YK_GEN_DIR))
 SWIG_CXXFLAGS	:= 	$(DBL_EPSILON_CXXFLAG)
 YK_SO_FLAGS	:=	-shared -fPIC
@@ -368,34 +369,35 @@ endif
 # Create a compiler invocation to test for macro settings.
 # Use the flags defined so far.
 YK_CXX_TEST 	:= 	$(YK_CXX) $(YK_CXXFLAGS) $(EXTRA_YK_CXXFLAGS)
-cxx_is_intel_clang :=	$(call MACRO_DEF,$(YK_CXX_TEST),__INTEL_CLANG_COMPILER)
+cxx_is_llvm_intel :=	$(call MACRO_DEF,$(YK_CXX_TEST),__INTEL_LLVM_COMPILER)
 cxx_is_clang	:=	$(call MACRO_DEF,$(YK_CXX_TEST),__clang__)
 cxx_is_intel	:=	$(call MACRO_DEF,$(YK_CXX_TEST),__INTEL_COMPILER)
 cxx_is_gnu	:= 	$(call MACRO_DEF,$(YK_CXX_TEST),__GNUC__)
 
-# Clang (LLVM-based) Intel compiler (icpx).
-ifeq ($(cxx_is_intel_clang),1)
- YK_CXXFLAGS	+=	$(CXX_ISA)
+# LLVM-based Intel compiler (icpx).
+ifeq ($(cxx_is_llvm_intel),1)
+ YK_CXXFLAGS	+=	$(GXX_ISA) $(ICC_ISA)
+ YK_CXXDBG	+=	-gline-tables-only -fdebug-info-for-profiling
  YK_CXXFLAGS	+=	-ansi-alias \
-			-fimf-precision=low -ffp-model=fast -fimf-domain-exclusion=none -fma
- YK_CXXFLAGS	+=	-Wno-unknown-pragmas -Wno-unused-variable \
+			-fimf-precision=low -fp-model fast -fimf-domain-exclusion=none -fma
+ YK_CXXWARN	+=	-Wno-unknown-pragmas -Wno-unused-variable \
 			-Wno-unused-const-variable -fno-color-diagnostics
  MACROS		+=	NO_VEC2
- VEC_MACROS	+=	NO_SVML
  OMPFLAG	:=	-fiopenmp
 
-# Clang compiler (not Intel version).
+# Clang compiler (clang++, not Intel version).
 else ifeq ($(cxx_is_clang),1)
- YK_CXXFLAGS	+=	$(CXX_ISA)
- YK_CXXFLAGS	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable \
+ YK_CXXFLAGS	+=	$(GXX_ISA)
+ YK_CXXWARN	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable \
 			-Wno-unused-const-variable -fno-color-diagnostics
  VEC_MACROS	+=	NO_SVML
 
-# Classic Intel compiler (not clang-based).
+# Classic Intel compiler (icpc, not LLVM-based).
 else ifeq ($(cxx_is_intel),1)
 
  YK_CXXFLAGS	+=	$(ICC_ISA)
- YK_CXXFLAGS	+=	-debug extended -restrict -ansi-alias -fno-alias \
+ YK_CXXDBG	+=	-debug extended
+ YK_CXXFLAGS	+=	-restrict -ansi-alias -fno-alias \
 			-fimf-use-svml=true -fimf-precision=low -fast-transcendentals \
 			-no-prec-sqrt -no-prec-div -fp-model fast=2 -fno-protect-parens -ftz \
 			-fma -fimf-domain-exclusion=none -qopt-assume-safe-padding
@@ -408,10 +410,10 @@ else ifeq ($(cxx_is_intel),1)
  YK_CXX_VER_CMD :=	$(YK_CXX) -V
  OMPFLAG	:=	-qopenmp
 
-# Gnu-compatible compiler (but not Intel or Clang).
+# Gnu-compatible compiler (g++, not Intel or LLVM).
 else ifeq ($(cxx_is_gnu),1)
- YK_CXXFLAGS	+=	$(CXX_ISA)
- YK_CXXFLAGS	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
+ YK_CXXFLAGS	+=	$(GXX_ISA)
+ YK_CXXWARN	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
  SWIG_CXXFLAGS	+=	$(SWIG_GCCFLAGS)
  VEC_MACROS	+=	NO_SVML
 
@@ -465,7 +467,7 @@ else ifeq ($(model_cache),2)
 endif
 
 # Add in final flags and user-added flags.
-YK_CXXFLAGS	+=	$(OMPFLAGS) $(addprefix -D,$(MACROS) $(EXTRA_MACROS)) $(EXTRA_YK_CXXFLAGS)
+YK_CXXFLAGS	+=	$(YK_CXXDBG) $(YK_CXXOPT) $(OMPFLAGS) $(addprefix -D,$(MACROS) $(EXTRA_MACROS)) $(YK_CXXWARN) $(EXTRA_YK_CXXFLAGS)
 YK_LIBS		+=	$(EXTRA_YK_LIBS)
 
 # Number of stencil/var dims extracted from YASK compiler output.
@@ -745,6 +747,7 @@ echo-settings:
 	echo ISA=$(ISA); \
 	echo MACROS="\"$(MACROS)\""; \
 	echo OMPFLAGS="\"$(OMPFLAGS)\""; \
+	echo VEC_MACROS="\"$(VEC_MACROS)\""; \
 	echo YASK_OUTPUT_DIR=$(YASK_OUTPUT_DIR); \
 	echo YC_FLAGS="\"$(YC_FLAGS)\""; \
 	echo YC_STENCIL=$(YC_STENCIL); \
