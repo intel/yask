@@ -154,13 +154,13 @@ namespace yask {
 
         // Return code for a var function call at a point.
         // This is a utility function used for both reads and writes.
-        virtual string make_point_call(ostream& os,
-                                       const VarPoint& gp,
-                                       const string& func_name,
-                                       const string& first_arg,
-                                       const string& last_arg,
-                                       bool is_vector_normalized,
-                                       const VarMap* var_map = 0);
+        virtual string make_point_call_vec(ostream& os,
+                                           const VarPoint& gp,
+                                           const string& func_name,
+                                           const string& first_arg,
+                                           const string& last_arg,
+                                           bool is_vector_normalized,
+                                           const VarMap* var_map = 0);
 
         // Print aligned memory read.
         virtual string print_aligned_vec_read(ostream& os, const VarPoint& gp) override;

@@ -55,10 +55,10 @@ YC_INC_GLOB	:=	$(wildcard $(addsuffix /*.hpp,$(YC_INC_DIRS)))
 YC_STENCIL_INC_GLOB :=	$(wildcard $(YC_STENCIL_DIR)/*.hpp $(YC_STENCIL_DIR)/*/*.hpp)
 
 # Compiler and default flags.
-YC_CXX    	?=	g++  # usually faster than icpc for building the compiler.
+YC_CXX    	:=	$(CXX)
 YC_CXXOPT	:= 	-O2
 YC_CXXFLAGS 	:=	-g -std=c++11 $(YC_CXXOPT) -Wall
-YC_CXXFLAGS	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
+YC_CXXFLAGS	+=	-Wno-unknown-pragmas -Wno-unused-variable
 YC_CXXFLAGS	+=	$(INC_CXXFLAGS)
 YC_INC_CXXFLAGS :=	$(addprefix -I,$(YC_INC_DIRS))
 

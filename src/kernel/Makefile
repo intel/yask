@@ -260,7 +260,7 @@ VIEW_ASM	:=	$(UTILS_BIN_DIR)/view_asm.pl
 YK_SCRIPT_FLAGS	+= "-stencil" $(YK_STENCIL) "-arch" $(YK_ARCH)
 
 # Compiler and default flags.
-YK_CXX		:=	icpx
+YK_CXX		:=	$(CXX)
 MPI_CXX 	:=	mpiicpc
 YK_CXXOPT	?=	-O3
 YK_CXXDBG	?=	-g

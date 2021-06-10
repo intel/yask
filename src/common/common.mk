@@ -78,6 +78,7 @@ YC_EXEC		:=	$(BIN_OUT_DIR)/$(YC_BASE).exe
 YC_SRC_DIR	:=	$(SRC_DIR)/compiler
 
 # Tools.
+CXX		:=	icpx
 SWIG		:=	swig
 PERL		:=	perl
 MKDIR		:=	mkdir -p -v

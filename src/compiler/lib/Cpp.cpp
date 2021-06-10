@@ -84,13 +84,13 @@ namespace yask {
 
     // Create call for a point.
     // This is a utility function used for most var accesses.
-    string CppVecPrintHelper::make_point_call(ostream& os,
-                                              const VarPoint& gp,
-                                              const string& func_name,
-                                              const string& first_arg,
-                                              const string& last_arg,
-                                              bool is_vec_norm,
-                                              const VarMap* var_map) {
+    string CppVecPrintHelper::make_point_call_vec(ostream& os,
+                                                  const VarPoint& gp,
+                                                  const string& func_name,
+                                                  const string& first_arg,
+                                                  const string& last_arg,
+                                                  bool is_vec_norm,
+                                                  const VarMap* var_map) {
 
         // Vec-norm accesses must be from folded var.
         if (is_vec_norm)
@@ -170,8 +170,8 @@ namespace yask {
             // TODO: is this still true with local offsets?
             bool folded = var->is_foldable();
             auto vp = folded ?
-                make_point_call(os, *bgp, "get_vec_ptr_norm", "", "false", true) :
-                make_point_call(os, *bgp, "get_elem_ptr_local", "", "false", false, &_vec2elem_local_map);
+                make_point_call_vec(os, *bgp, "get_vec_ptr_norm", "", "false", true) :
+                make_point_call_vec(os, *bgp, "get_elem_ptr_local", "", "false", false, &_vec2elem_local_map);
 
             // Ptr should provide unique access if all accesses are through pointers.
             // TODO: check for non-ptr accesses via read/write calls.
@@ -605,7 +605,7 @@ namespace yask {
             string ptr_expr = *p + " + (" + ofs_str + ")";
 
             // Check addr.
-            auto rpn = make_point_call(os, gp, "get_vec_ptr_norm", "", "", true);
+            auto rpn = make_point_call_vec(os, gp, "get_vec_ptr_norm", "", "", true);
             os << _line_prefix << "host_assert(" <<
                 ptr_expr << " == " << rpn << ")" << _line_suffix;
 
@@ -619,7 +619,7 @@ namespace yask {
         } else {
 
             // If no pointer, use function call.
-            auto rvn = make_point_call(os, gp, "read_vec_norm", "", "", true);
+            auto rvn = make_point_call_vec(os, gp, "read_vec_norm", "", "", true);
             os << _line_prefix << get_var_type() << " " << mv_name << " = " <<
                 rvn << _line_suffix;
         }
@@ -647,7 +647,7 @@ namespace yask {
             }
 
             // Check addr.
-            auto rp = make_point_call(os, gp, "get_elem_ptr_local", "", "", false, var_map);
+            auto rp = make_point_call_vec(os, gp, "get_elem_ptr_local", "", "", false, var_map);
             os << _line_prefix << "host_assert(" <<
                 ptr_expr << " == " << rp << ")" << _line_suffix;
 
@@ -656,7 +656,7 @@ namespace yask {
         }
 
         else
-            return make_point_call(os, gp, "read_elem", "", "", false, var_map);
+            return make_point_call_vec(os, gp, "read_elem", "", "", false, var_map);
     }
 
     // Read from multiple points that are not vectorized.
@@ -721,7 +721,7 @@ namespace yask {
         // Make a var.
         string mv_name = make_var_name("unaligned_vec");
         os << _line_prefix << get_var_type() << " " << mv_name << _line_suffix;
-        auto vp = make_point_call(os, gp, "get_elem_ptr", "", "true", false);
+        auto vp = make_point_call_vec(os, gp, "get_elem_ptr", "", "true", false);
 
         // Read memory.
         os << _line_prefix << mv_name <<
@@ -744,7 +744,7 @@ namespace yask {
             auto ptr_expr = *p + " + (" + ofs_str + ")";
 
             // Check addr.
-            auto rpn = make_point_call(os, gp, "get_vec_ptr_norm", "", "", true);
+            auto rpn = make_point_call_vec(os, gp, "get_vec_ptr_norm", "", "", true);
             os << _line_prefix << "host_assert(" <<
                 ptr_expr << " == " << rpn << ")" << _line_suffix;
 
@@ -761,7 +761,7 @@ namespace yask {
 
             // If no pointer, use function call.
             string fn = _write_mask.length() ? "write_vec_norm_masked" : "write_vec_norm";
-            auto vn = make_point_call(os, gp, fn, val, _write_mask, true);
+            auto vn = make_point_call_vec(os, gp, fn, val, _write_mask, true);
             os << _line_prefix << vn << _line_suffix;
         }
     }
