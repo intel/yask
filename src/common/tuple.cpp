@@ -328,8 +328,8 @@ namespace yask {
 
     template <typename T>
     std::string Tuple<T>::make_dim_val_offset_str(std::string separator,
-                                              std::string prefix,
-                                              std::string suffix) const {
+                                                  std::string prefix,
+                                                  std::string suffix) const {
         std::ostringstream oss;
         int n = 0;
         for (auto i : _q) {
@@ -350,8 +350,8 @@ namespace yask {
 
     // Return a "compact" set of K factors of N.
     template <typename T>
-    Tuple<T> Tuple<T>::get_compact_factors(idx_t N) const {
-        int K = get_num_dims();
+    Tuple<T> Tuple<T>::get_compact_factors(T N) const {
+        T K = get_num_dims();
         
         // Keep track of "best" result, where the best is most compact.
         Tuple best;
@@ -368,8 +368,8 @@ namespace yask {
             return *this;       // already done.
 
         // Make list of factors of N.
-        vector<idx_t> facts;
-        for (idx_t n = 1; n <= N; n++)
+        vector<T> facts;
+        for (T n = 1; n <= N; n++)
             if (N % n == 0)
                 facts.push_back(n);
 
@@ -435,7 +435,7 @@ namespace yask {
                 break;          // done.
 
         } // keep or not.
-        assert(best.size() == K);
+        assert(best.get_num_dims() == int(K));
         assert(best.product() == N);
         return best;
     }

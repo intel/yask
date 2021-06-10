@@ -330,7 +330,7 @@ namespace yask {
 
         // What get_neighbor_index() returns for myself.
         // Example: trunc(3^3 / 2) = 13 for 3D problem.
-        int my_neighbor_index;
+        idx_t my_neighbor_index;
 
         // MPI rank of each neighbor.
         // MPI_PROC_NULL => no neighbor.
@@ -463,7 +463,7 @@ namespace yask {
                 return 0;
             return num_pts.product();
         }
-        idx_t get_bytes() const {
+        size_t get_bytes() const {
             return get_size() * sizeof(real_t);
         }
 

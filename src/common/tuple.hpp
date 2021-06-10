@@ -584,7 +584,7 @@ namespace yask {
         // a set of factors with largest factor as small as possible,
         // where K is the size of 'this'.
         // Any non-zero numbers in 'this' will be kept if possible.
-        Tuple get_compact_factors(idx_t N) const;
+        Tuple get_compact_factors(T N) const;
 
         // Advance Tuple 'tp' containing indices in the space defined by
         // 'this' to the next logical index.

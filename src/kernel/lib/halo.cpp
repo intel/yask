@@ -258,7 +258,7 @@ namespace yask {
                                  else
                                      nelems = gb.get_elements_in_slice(buf, first, last, use_offload);
                                  halo_pack_time.stop();
-                                 idx_t nbytes = nelems * get_element_bytes();
+                                 size_t nbytes = nelems * get_element_bytes();
 
                                  if (use_offload) {
                                      TRACE_MSG("exchange_halos:    copying buffer from device");
