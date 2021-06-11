@@ -1160,7 +1160,7 @@ sub processCode($) {
         print OUT "\n" if $line =~ m=^\s*//=; # blank line before comment.
         print OUT " $line\n";
     }
-    print OUT "// End of generated code.";
+    print OUT "// End of generated code.\n";
     close OUT;
     system("$indent $OPT{output}") if -x $indent;
 
