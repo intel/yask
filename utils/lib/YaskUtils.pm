@@ -341,6 +341,19 @@ sub getResultsFromLine($$) {
           # Save value w/converted suffix.
           my $k = $proc_keys{$sk}{$m};
           $results->{$k} = $val;
+
+          # More special processing to get env-vars set via script.
+          # TODO: remove overridden vars.
+          if ($k eq 'script invocation') {
+            for my $w (split /\s+/, $val) {
+              if ($w =~ /(\w*YASK\w*=.*)/) {
+                $results->{$yask_key} .= '; ' if
+                  exists $results->{$yask_key};
+                $results->{$yask_key} .= $1;
+              }
+            }
+          }
+          
           last;
         }
       }
