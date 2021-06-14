@@ -47,6 +47,7 @@ my $inputVar = "LOOP_INDICES";   # input var macro.
 my $outputVar = "BODY_INDICES";  # output var.
 my $loopPart = "USE_LOOP_PART_"; # macro to enable specified loop part.
 my $macroPrefix = "";            # prefix for macros.
+my $varPrefix = "";              # prefix for vars.
 my @exprs = ("stride", "align", "align_ofs", "tile_size");
 my $indent = dirname($0)."/yask_indent.sh";
 
@@ -85,79 +86,84 @@ sub inVar {
     return "$macroPrefix$inputVar$part".idx(@_);
 }
 
-# Accessors for local (output) struct.
+# Accessors for output struct.
 # Examples if $outputVar == "local_idxs":
-# locVar() => "local_indices".
-# locVar("foo", 5) => "local_indices.foo[5]".
-sub locVar {
+# outVar() => "local_indices".
+# outVar("foo", 5) => "local_indices.foo[5]".
+sub outVar {
     my $vname = shift;
     my $part = (defined $vname) ? ".$vname" : "";
     return "$macroPrefix$outputVar$part".idx(@_);
 }
 
+# Make a local var.
+sub locVar {
+    return $varPrefix . join('_', @_);
+}
+
 # Names for vars used in the generated code.
 # Arg(s) are loop dim(s).
 sub beginVar {
-    return join('_', "begin", @_);
+    return locVar("begin", @_);
 }
 sub endVar {
-    return join('_', "end", @_);
+    return locVar("end", @_);
 }
 sub strideVar {
-    return join('_', "stride", @_);
+    return locVar("stride", @_);
 }
 sub alignVar {
-    return join('_', "align", @_);
+    return locVar("align", @_);
 }
 sub alignOfsVar {
-    return join('_', "align_ofs", @_);
+    return locVar("align_ofs", @_);
 }
 sub tileSizeVar {
-    return join('_', "tile_size", @_);
+    return locVar("tile_size", @_);
 }
 sub adjAlignVar {
-    return join('_', 'adj_align', @_);
+    return locVar('adj_align', @_);
 }
 sub alignBeginVar {
-    return join('_', 'aligned_begin', @_);
+    return locVar('aligned_begin', @_);
 }
 sub numItersVar {
-    return join('_', 'num_iters', @_);
+    return locVar('num_iters', @_);
 }
 sub numTilesVar {
-    return join('_', 'num_full_tiles', @_);
+    return locVar('num_full_tiles', @_);
 }
 sub numFullTileItersVar {
-    return join('_', 'num_iters_in_full_tile', @_);
+    return locVar('num_iters_in_full_tile', @_);
 }
 sub numTileSetItersVar {
-    return scalar @_ ? join('_', 'num_iters_in_tile_set', @_) :
-        'num_iters_in_full_tile';
+    return scalar @_ ? locVar('num_iters_in_tile_set', @_) :
+        locVar('num_iters_in_full_tile');
 }
 sub indexVar {
-    return join('_', 'index', @_);
+    return locVar('index', @_);
 }
 sub tileIndexVar {
-    return join('_', 'index_of_tile', @_);
+    return locVar('index_of_tile', @_);
 }
 sub tileSetOffsetVar {
-    return scalar @_ ? join('_', 'index_offset_within_tile_set', @_) :
-        'index_offset_within_this_tile';
+    return scalar @_ ? locVar('index_offset_within_tile_set', @_) :
+        locVar('index_offset_within_this_tile');
 }
 sub tileOffsetVar {
-    return join('_', 'index_offset_within_this_tile', @_);
+    return locVar('index_offset_within_this_tile', @_);
 }
 sub numLocalTileItersVar {
-    return join('_', 'num_iters_in_tile', @_);
+    return locVar('num_iters_in_tile', @_);
 }
 sub loopIndexVar {
-    return join('_', 'loop_index', @_);
+    return locVar('loop_index', @_);
 }
 sub startVar {
-    return join('_', 'start', @_);
+    return locVar('start', @_);
 }
 sub stopVar {
-    return join('_', 'stop', @_);
+    return locVar('stop', @_);
 }
 
 # return string of all non-empty args separated by commas.
@@ -188,9 +194,9 @@ sub getInVars() {
         my $avar = alignVar($dim);
         my $aovar = alignOfsVar($dim);
         my $tsvar = tileSizeVar($dim);
-        my $s0var = startVar($dim);
-        my $s1var = stopVar($dim);
-        my $ivar = indexVar($dim);
+        my $s0var = startVar($dim).'_orig';
+        my $s1var = stopVar($dim).'_orig';
+        my $ivar = indexVar($dim).'_orig';
         push @stmts,
             " // Extract input vars from struct for dim $dim.",
             " const $itype $bvar = ".inVar("begin", $dim).";",
@@ -199,16 +205,16 @@ sub getInVars() {
             " const $itype $avar = ".inVar("align", $dim).";",
             " const $itype $aovar = ".inVar("align_ofs", $dim).";",
             " const $itype $tsvar = ".inVar("tile_size", $dim).";",
-            " const $itype orig_$s0var = ".inVar("start", $dim).";",
-            " const $itype orig_$s1var = ".inVar("stop", $dim).";",
-            " const $itype orig_$ivar = ".inVar("cur_indices", $dim).";",
+            " const $itype $s0var = ".inVar("start", $dim).";",
+            " const $itype $s1var = ".inVar("stop", $dim).";",
+            " const $itype $ivar = ".inVar("cur_indices", $dim).";",
     }
     return @stmts;
 }
 
 # set var for the body.
 sub setOutVars {
-    my $setInputs = shift;
+    my $isNewVar = shift;
     my @ldims = @_;
 
     my $itype = indexType();
@@ -225,25 +231,32 @@ sub setOutVars {
         my $s0var = startVar($dim);
         my $s1var = stopVar($dim);
         my $ivar = indexVar($dim);
-        if ($setInputs) {
+
+        # Copy inputs.
+        if ($isNewVar) {
             push @stmts,
-                " ".locVar("begin", $dim)." = $bvar;",
-                " ".locVar("end", $dim)." = $evar;",
-                " ".locVar("stride", $dim)." = $svar;",
-                " ".locVar("align", $dim)." = $avar;",
-                " ".locVar("align_ofs", $dim)." = $aovar;",
-                " ".locVar("tile_size", $dim)." = $tsvar;";
+                " ".outVar("begin", $dim)." = $bvar;",
+                " ".outVar("end", $dim)." = $evar;",
+                " ".outVar("stride", $dim)." = $svar;",
+                " ".outVar("align", $dim)." = $avar;",
+                " ".outVar("align_ofs", $dim)." = $aovar;",
+                " ".outVar("tile_size", $dim)." = $tsvar;";
         }
-        if (grep {$_ == $dim} @ldims) {
+        
+        # If dim not processed, copy orig inputs.
+        my $dimProc = (grep {$_ == $dim} @ldims) > 0;
+        if (!$dimProc) {
+            $s0var .= '_orig';
+            $s1var .= '_orig';
+            $ivar .= '_orig';
+        }
+
+        # Set range if needed.
+        if ($isNewVar || $dimProc) {
             push @stmts,
-                " ".locVar("start", $dim)." = $s0var;",
-                " ".locVar("stop", $dim)." = $s1var;",
-                " ".locVar("cur_indices", $dim)." = $ivar;";
-        } else {
-            push @stmts,
-                " ".locVar("start", $dim)." = orig_$s0var;",
-                " ".locVar("stop", $dim)." = orig_$s1var;",
-                " ".locVar("cur_indices", $dim)." = orig_$ivar;";
+                " ".outVar("start", $dim)." = $s0var;",
+                " ".outVar("stop", $dim)." = $s1var;",
+                " ".outVar("cur_indices", $dim)." = $ivar;";
         }
     } @dims;
     return @stmts;
@@ -1056,13 +1069,13 @@ sub processCode($) {
                     
                         # Using a new var so it will become OMP private.
                         push @code,
-                            " ScanIndices ".locVar()."(false);",
+                            " ScanIndices ".outVar()."(false);",
                             setOutVars(1, @loopStack);
                     } else {
 
                         # Just a reference if no OMP.
                         push @code,
-                            " ScanIndices& ".locVar()." = $macroPrefix$inputVar;",
+                            " ScanIndices& ".outVar()." = $macroPrefix$inputVar;",
                             setOutVars(0, @loopStack);
                     }
 
@@ -1173,7 +1186,7 @@ sub main() {
     my(@KNOBS) = (
         # knob,        description,   optional default
         [ "ndims=i", "Value of N.", 1],
-        [ "macroPrefix=s", "Common prefix of all generated macros", ''],
+        [ "prefix=s", "Common prefix of all generated macros and vars", ''],
         [ "inVar=s", "Name of existing input 'ScanIndices' var.", 'loop_indices'],
         [ "outVar=s", "Name of created loop-body 'ScanIndices' var.", 'body_indices'],
         [ "ompMod=s", "Set default OMP_PRAGMA macro used before 'omp' loop(s).", "omp parallel for"],
@@ -1240,7 +1253,8 @@ sub main() {
 
     @dims = 0 .. ($OPT{ndims} - 1);
     print "info: generating scanning code for ".scalar(@dims)."-D vars...\n";
-    $macroPrefix = $OPT{macroPrefix};
+    $macroPrefix = uc $OPT{prefix};
+    $varPrefix = lc $OPT{prefix};
 
     my $codeString = join(' ', @ARGV); # just concat all non-options params together.
     processCode($codeString);

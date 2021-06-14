@@ -380,7 +380,7 @@ ifeq ($(cxx_is_llvm_intel),1)
  YK_CXXDBG	+=	-gline-tables-only -fdebug-info-for-profiling
  YK_CXXFLAGS	+=	-ansi-alias \
 			-fimf-precision=low -fp-model fast -fimf-domain-exclusion=none -fma
- YK_CXXWARN	+=	-Wno-unknown-pragmas -Wno-unused-variable \
+ YK_CXXWARN	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable \
 			-Wno-unused-const-variable -fno-color-diagnostics
  OMPFLAG	:=	-fiopenmp
 
@@ -490,7 +490,7 @@ NVDIMS		:=	`awk '/NUM_STENCIL_AND_VAR_DIMS/ {print $$NF}' $(YK_CODE_FILE)`
 # StencilEquations::run_solution(). The mega_blocks are executed sequentially,
 # so no OpenMP here.
 RANK_LOOP_MODS		?=	nested
-RANK_LOOP_FLAGS		?=	-ndims $(NSDIMS) -macroPrefix RANK_
+RANK_LOOP_FLAGS		?=	-ndims $(NSDIMS) -prefix rank_
 RANK_LOOP_ORDER		?=	1 .. N-1
 RANK_LOOP_CODE		?=	$(RANK_LOOP_MODS) loop($(RANK_LOOP_ORDER)) { }
 
@@ -498,7 +498,7 @@ RANK_LOOP_CODE		?=	$(RANK_LOOP_MODS) loop($(RANK_LOOP_ORDER)) { }
 # 'omp' modifier creates an outer OpenMP loop so that each block is assigned
 # to a top-level OpenMP thread.
 MEGA_BLOCK_LOOP_OMP		?=	omp parallel for schedule(dynamic,1) proc_bind(spread)
-MEGA_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -macroPrefix MEGA_BLOCK_ -ompMod '$(MEGA_BLOCK_LOOP_OMP)'
+MEGA_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -prefix mega_block_ -ompMod '$(MEGA_BLOCK_LOOP_OMP)'
 MEGA_BLOCK_LOOP_ORDER	?=	1 .. N-1
 MEGA_BLOCK_LOOP_CODE	?=	$(MEGA_BLOCK_LOOP_MODS) omp loop($(MEGA_BLOCK_LOOP_ORDER)) { } 
 
@@ -507,7 +507,7 @@ MEGA_BLOCK_LOOP_CODE	?=	$(MEGA_BLOCK_LOOP_MODS) omp loop($(MEGA_BLOCK_LOOP_ORDER
 # Like with rank loops, in order for temporal wavefronts to operate properly,
 # the scanning paths must have strictly incrementing indices.
 BLOCK_LOOP_MODS		?=	nested
-BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -macroPrefix BLOCK_
+BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -prefix block_
 BLOCK_LOOP_ORDER	?=	1 .. N-1
 BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_MODS) loop($(BLOCK_LOOP_ORDER)) { }
 
@@ -516,7 +516,7 @@ BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_MODS) loop($(BLOCK_LOOP_ORDER)) { }
 # nested OpenMP thread. The OpenMP construct is not used when running with
 # '-bind_inner_threads' because another parallel section is created.
 MICRO_BLOCK_LOOP_OMP	?=	omp parallel for schedule(static,1) proc_bind(spread)
-MICRO_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -macroPrefix MICRO_BLOCK_ -ompMod '$(MICRO_BLOCK_LOOP_OMP)'
+MICRO_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -prefix micro_block_ -ompMod '$(MICRO_BLOCK_LOOP_OMP)'
 MICRO_BLOCK_LOOP_ORDER	?=	1 .. N-1
 MICRO_BLOCK_LOOP_CODE	?=	$(MICRO_BLOCK_LOOP_MODS) omp loop($(MICRO_BLOCK_LOOP_ORDER)) { }
 
@@ -524,7 +524,7 @@ MICRO_BLOCK_LOOP_CODE	?=	$(MICRO_BLOCK_LOOP_MODS) omp loop($(MICRO_BLOCK_LOOP_OR
 # loops are run by a single OMP thread. When offloading, this loop is run in
 # parallel on the offload device.  The indexes in this loop
 # are 'normalized', i.e., vector units and rank-relative.
-NANO_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -macroPrefix NANO_BLOCK_
+NANO_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -prefix nano_block_
 ifeq ($(offload),1)
 ifeq ($(offload_arch),x86_64)
  NANO_BLOCK_LOOP_OMP	?=	omp target parallel for device(KernelEnv::_omp_devn)
@@ -543,13 +543,13 @@ endif
 # Pico-Block loops break up a pico-block into vectors or clusters.
 # The pico loops are in reverse nesting order because this works better for offload kernels.
 PICO_BLOCK_LOOP_MODS	?=	nested
-PICO_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -macroPrefix PICO_BLOCK_
+PICO_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -prefix pico_block_
 PICO_BLOCK_LOOP_ORDER	?=	N-1 .. 1
 PICO_BLOCK_LOOP_CODE	?=	$(PICO_BLOCK_LOOP_MODS) loop($(PICO_BLOCK_LOOP_ORDER)) { }
 
 # General-purpose parallel loop.
 MISC_LOOP_OMP		?=	omp parallel for schedule(guided) proc_bind(spread)
-MISC_LOOP_FLAGS		?=	-ndims $(NSDIMS) -macroPrefix MISC_ -ompMod '$(MISC_LOOP_OMP)'
+MISC_LOOP_FLAGS		?=	-ndims $(NSDIMS) -prefix misc_ -ompMod '$(MISC_LOOP_OMP)'
 MISC_LOOP_ORDER		?=	1 .. N-1
 MISC_LOOP_CODE		?=	$(MISC_LOOP_MODS) omp loop($(MISC_LOOP_ORDER)) { }
 
@@ -814,7 +814,7 @@ code-stats: $(YK_LIB)
 	$(MKDIR) $(YK_OBJ_DIR)
 	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) -x c++ -S -o $(YK_OBJ_DIR)/factory.s $(YK_LIB_SRC_DIR)/factory.cpp
 	@echo "Code stats for stencil computation:"
-	$(PERL) $(VIEW_ASM) -p -l -f='calc_.*opt' $(YK_OBJ_DIR)/factory.s
+	$(PERL) $(VIEW_ASM) -p -l -f='calc_' $(YK_OBJ_DIR)/factory.s
 
 # Print some usage info.
 help:

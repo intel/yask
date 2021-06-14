@@ -602,10 +602,6 @@ namespace yask {
 
                     // Loop-calculation code.
                     // Function header.
-                    string istart = "start_" + idim;
-                    string istop = "stop_" + idim;
-                    string istep = "step_" + idim;
-                    string iestep = "step_" + idim + "_elem";
                     os << endl << " // Calculate a nano-block of " << vcstr << "s bounded by 'norm_nb_idxs'.\n";
                     if (do_pico)
                         os << " // There are pico-loops inside the nano-loops.\n";
@@ -667,7 +663,10 @@ namespace yask {
                         "\n ////// Loop prefix.\n"
                         "#define NANO_BLOCK_USE_LOOP_PART_0\n"
                         "#include \"yask_nano_block_loops.hpp\"\n";
-                    if (do_pico)
+
+                    string loop_prefix;
+                    if (do_pico) {
+                        loop_prefix = "pico_block_";
                         os <<
                             "\n // Pico loops inside nano loops.\n"
                             " ScanIndices norm_pb_idxs = norm_nb_range.create_inner();\n"
@@ -683,13 +682,16 @@ namespace yask {
                             "#include \"yask_pico_block_loops.hpp\"\n"
                             "\n ////// Loop body. Just doing one, so don't need stop indices.\n"
                             " Indices& idxs = norm_pb_range.start;\n";
-                    else
+                    }
+                    else {
+                        loop_prefix = "nano_block_";
                         os <<
                             "\n ////// Loop body. Just doing one, so don't need stop indices.\n"
                             " Indices& idxs = norm_nb_range.start;\n";
+                    }
 
                     // Get named indices from 'idxs'.
-                    print_indices(os, false, true, "start_");
+                    print_indices(os, false, true, loop_prefix + "start_");
                     vp->print_elem_indices(os);
 
                     // Print loop-invariant data values.
