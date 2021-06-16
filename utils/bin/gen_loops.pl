@@ -48,7 +48,8 @@ my $outputVar = "BODY_INDICES";  # output var.
 my $loopPart = "USE_LOOP_PART_"; # macro to enable specified loop part.
 my $macroPrefix = "";            # prefix for macros.
 my $varPrefix = "";              # prefix for vars.
-my @exprs = ("stride", "align", "align_ofs", "tile_size");
+my @fixed_exprs = ("begin", "end", "stride", "align", "align_ofs", "tile_size");
+my @var_exprs = ("start", "stop", "index");
 my $indent = dirname($0)."/yask_indent.sh";
 
 # loop-feature bit fields.
@@ -73,27 +74,28 @@ sub idx {
 # Accessors for input struct.
 # Examples if $inputVar == "block_idxs":
 # inVar() => "block_idxs".
-# inVar("foo") => "block_idxs.foo".
-# inVar("foo", 5) => "block_idxs.foo[5]"
-#                 OR "FOO(5)" if @exprs contains "foo".
+# inVar("foo", 5) => "FOO(5)" (using macro).
 sub inVar {
     my $vname = shift;
-    my $part = (defined $vname) ? ".$vname" : "";
-    if (defined $vname && scalar @_ == 1 && grep( /^$vname$/, @exprs)) {
+    if (defined $vname) {
+        die unless scalar(@_) == 1;
         my $em = $macroPrefix.(uc $vname);
         return "$em(@_)";
     }
-    return "$macroPrefix$inputVar$part".idx(@_);
+    return "$macroPrefix$inputVar";
 }
 
 # Accessors for output struct.
-# Examples if $outputVar == "local_idxs":
+# Examples if $outputVar == "local_indices":
 # outVar() => "local_indices".
 # outVar("foo", 5) => "local_indices.foo[5]".
 sub outVar {
     my $vname = shift;
-    my $part = (defined $vname) ? ".$vname" : "";
-    return "$macroPrefix$outputVar$part".idx(@_);
+    if (defined $vname) {
+        die unless scalar(@_) == 1;
+        return "$macroPrefix$outputVar.$vname".idx(@_);
+    }
+    return "$macroPrefix$outputVar";
 }
 
 # Make a local var.
@@ -198,17 +200,42 @@ sub getInVars() {
         my $s1var = stopVar($dim).'_orig';
         my $ivar = indexVar($dim).'_orig';
         push @stmts,
-            " // Extract input vars from struct for dim $dim.",
-            " const $itype $bvar = ".inVar("begin", $dim).";",
-            " const $itype $evar = ".inVar("end", $dim).";",
-            " const $itype $svar = ".inVar("stride", $dim).";",
-            " const $itype $avar = ".inVar("align", $dim).";",
-            " const $itype $aovar = ".inVar("align_ofs", $dim).";",
-            " const $itype $tsvar = ".inVar("tile_size", $dim).";",
-            " const $itype $s0var = ".inVar("start", $dim).";",
-            " const $itype $s1var = ".inVar("stop", $dim).";",
-            " const $itype $ivar = ".inVar("cur_indices", $dim).";",
+            "// Extract input vars from struct for dim $dim.",
+            "const $itype $bvar = ".inVar("begin", $dim).";",
+            "const $itype $evar = ".inVar("end", $dim).";",
+            "const $itype $svar = ".inVar("stride", $dim).";",
+            "const $itype $avar = ".inVar("align", $dim).";",
+            "const $itype $aovar = ".inVar("align_ofs", $dim).";",
+            "const $itype $tsvar = ".inVar("tile_size", $dim).";",
+            "const $itype $s0var = ".inVar("start", $dim).";",
+            "const $itype $s1var = ".inVar("stop", $dim).";",
+            "const $itype $ivar = ".inVar("index", $dim).";",
     }
+    return @stmts;
+}
+
+# make macros for the body.
+sub makeOutMacros {
+    my @ldims = @_;
+
+    my @stmts;
+    for my $expr (@fixed_exprs, @var_exprs) {
+        my $isVar = (grep {$_ eq $expr} @var_exprs) > 0;
+        my $macro = "${macroPrefix}BODY_".uc($expr)."(dim_num)";
+        my $stmt = " #define $macro (";
+        for my $dim (@dims) {
+            my $vname = locVar($expr, $dim);
+
+            # If dim not processed, use orig inputs.
+            my $dimProc = (grep {$_ == $dim} @ldims) > 0;
+            $vname .= '_orig' if ($isVar && !$dimProc);
+        
+            $stmt .= "((dim_num) == $dim) ? $vname : ";
+        }
+        $stmt .= "0);";
+        push @stmts, $stmt;
+    }
+
     return @stmts;
 }
 
@@ -219,44 +246,16 @@ sub setOutVars {
 
     my $itype = indexType();
     my @stmts;
-    for my $dim (@dims) {
 
-        # Vars from the struct.
-        my $bvar = beginVar($dim);
-        my $evar = endVar($dim);
-        my $svar = strideVar($dim);
-        my $avar = alignVar($dim);
-        my $aovar = alignOfsVar($dim);
-        my $tsvar = tileSizeVar($dim);
-        my $s0var = startVar($dim);
-        my $s1var = stopVar($dim);
-        my $ivar = indexVar($dim);
-
-        # Copy inputs.
-        if ($isNewVar) {
-            push @stmts,
-                " ".outVar("begin", $dim)." = $bvar;",
-                " ".outVar("end", $dim)." = $evar;",
-                " ".outVar("stride", $dim)." = $svar;",
-                " ".outVar("align", $dim)." = $avar;",
-                " ".outVar("align_ofs", $dim)." = $aovar;",
-                " ".outVar("tile_size", $dim)." = $tsvar;";
-        }
-        
-        # If dim not processed, copy orig inputs.
-        my $dimProc = (grep {$_ == $dim} @ldims) > 0;
-        if (!$dimProc) {
-            $s0var .= '_orig';
-            $s1var .= '_orig';
-            $ivar .= '_orig';
-        }
-
-        # Set range if needed.
-        if ($isNewVar || $dimProc) {
-            push @stmts,
-                " ".outVar("start", $dim)." = $s0var;",
-                " ".outVar("stop", $dim)." = $s1var;",
-                " ".outVar("cur_indices", $dim)." = $ivar;";
+    for my $expr (@fixed_exprs, @var_exprs) {
+        my $isVar = (grep {$_ eq $expr} @var_exprs) > 0;
+        for my $dim (@dims) {
+            my $macro = "${macroPrefix}BODY_".uc($expr)."($dim)";
+    
+            # Set if needed.
+            if ($isNewVar || $isVar) {
+                push @stmts, outVar($expr, $dim)." = $macro;";
+            }
         }
     } @dims;
     return @stmts;
@@ -331,7 +330,7 @@ sub addIndexVars1($$$$) {
     my $loopStack = shift;      # whole stack at this point, including enclosing dims.
 
     push @$code,
-        " // ** Begin scan over ".dimStr(@$loopDims).". **";
+        "// ** Begin scan over ".dimStr(@$loopDims).". **";
 
     my $itype = indexType();
 
@@ -368,29 +367,29 @@ sub addIndexVars1($$$$) {
                 # abvar = round_down_flr(20 - 15, 4) + 15 = 4 + 15 = 19.
 
                 push @$code,
-                    " // Alignment must be less than or equal to stride size.",
-                    " const $itype $aavar = std::min($avar, $svar);",
-                    " // Aligned beginning point such that ($bvar - $svar) < $abvar <= $bvar.",
-                    " const $itype $abvar = yask::round_down_flr($bvar - $aovar, $aavar) + $aovar;",
-                    " // Number of iterations to get from $abvar to (but not including) $evar, striding by $svar.".
-                    " This value is rounded up because the last iteration may cover fewer than $svar strides.",
-                    " const $itype $nvar = yask::ceil_idiv_flr($evar - $abvar, $svar);";
+                    "// Alignment must be less than or equal to stride size.",
+                    "const $itype $aavar = std::min($avar, $svar);",
+                    "// Aligned beginning point such that ($bvar - $svar) < $abvar <= $bvar.",
+                    "const $itype $abvar = yask::round_down_flr($bvar - $aovar, $aavar) + $aovar;",
+                    "// Number of iterations to get from $abvar to (but not including) $evar, striding by $svar.".
+                    "This value is rounded up because the last iteration may cover fewer than $svar strides.",
+                    "const $itype $nvar = yask::ceil_idiv_flr($evar - $abvar, $svar);";
 
                 # For tiled loops.
                 if ($features & $bTile) {
 
                     # loop iterations within one tile.
                     push @$code,
-                        " // Number of iterations in one full tile in dimension $dim.".
-                        " This value is rounded up, effectively increasing the tile size if needed".
-                        " to a multiple of $svar.".
-                        " A tile is considered 'full' if it has the max number of iterations.",
-                        " const $itype $ntivar = std::min(yask::ceil_idiv_flr($tsvar, $svar), $nvar);";
+                        "// Number of iterations in one full tile in dimension $dim.".
+                        "This value is rounded up, effectively increasing the tile size if needed".
+                        "to a multiple of $svar.".
+                        "A tile is considered 'full' if it has the max number of iterations.",
+                        "const $itype $ntivar = std::min(yask::ceil_idiv_flr($tsvar, $svar), $nvar);";
 
                     # number of full tiles.
                     push @$code, 
-                        " // Number of full tiles in dimension $dim.",
-                        " const $itype $ntvar = $ntivar ? $nvar / $ntivar : 0;";
+                        "// Number of full tiles in dimension $dim.",
+                        "const $itype $ntvar = $ntivar ? $nvar / $ntivar : 0;";
                 }
             }
 
@@ -403,8 +402,8 @@ sub addIndexVars1($$$$) {
                 my $snvar = numItersVar(@subDims);
                 my $snval = join(' * ', map { numItersVar($_) } @subDims);
                 push @$code,
-                    " // Number of iterations in $loopStr",
-                    " const $itype $snvar = $snval;";
+                    "// Number of iterations in $loopStr",
+                    "const $itype $snvar = $snval;";
             }
         }
     }
@@ -427,14 +426,15 @@ sub addIndexVars2($$$$) {
     if ($features & $bTile) {
 
         # declare local size vars.
-        push @$code, " // Working vars for iterations in tiles.".
-            " These are initialized to full-tile counts and then".
-            " reduced if/when in a partial tile.";
+        push @$code,
+            "// Working vars for iterations in tiles.".
+            "These are initialized to full-tile counts and then".
+            "reduced if/when in a partial tile.";
         for my $i (0 .. $ndims-1) {
             my $dim = $loopDims->[$i];
             my $ltvar = numLocalTileItersVar($dim);
             my $ltval = numFullTileItersVar($dim);
-            push @$code, " $itype $ltvar = $ltval;";
+            push @$code, "$itype $ltvar = $ltval;";
         }
 
         # calculate tile indices and sizes and 1D offsets within tiles.
@@ -462,30 +462,30 @@ sub addIndexVars2($$$$) {
             my $tgStr = @inDims ?
                 "the set of tiles across $inStr" : "this tile";
             push @$code,
-                " // Number of iterations in $tgStr.",
-                " $itype $tgvar = $tgval;";
+                "// Number of iterations in $tgStr.",
+                "$itype $tgvar = $tgval;";
 
             # Index of this tile in this dim.
             my $tivar = tileIndexVar($dim);
             my $tival = "$tgvar ? $prevOvar / $tgvar : 0";
             push @$code,
-                " // Index of this tile in dimension $dim.",
-                " $itype $tivar = $tival;";
+                "// Index of this tile in dimension $dim.",
+                "$itype $tivar = $tival;";
 
             # 1D offset within tile set.
             my $ovar = tileSetOffsetVar(@inDims);
             my $oval = "$prevOvar % $tgvar";
             push @$code,
-                " // Linear offset within $tgStr.",
-                " $itype $ovar = $oval;";
+                "// Linear offset within $tgStr.",
+                "$itype $ovar = $oval;";
 
             # Size of this tile in this dim.
             my $ltvar = numLocalTileItersVar($dim);
             my $ltval = numItersVar($dim).
                 " - (".numTilesVar($dim)." * ".numFullTileItersVar($dim).")";
             push @$code,
-                " // Adjust number of iterations in this tile in dimension $dim.",
-                " if ($tivar >= ".numTilesVar($dim).")".
+                "// Adjust number of iterations in this tile in dimension $dim.",
+                "if ($tivar >= ".numTilesVar($dim).")".
                 "  $ltvar = $ltval;";
 
             # for next dim.
@@ -519,15 +519,15 @@ sub addIndexVars2($$$$) {
 
             # output offset in this dim.
             push @$code,
-                " // Offset within this tile in dimension $dim.",
-                " $itype $dovar = $doval;";
+                "// Offset within this tile in dimension $dim.",
+                "$itype $dovar = $doval;";
 
             # final index in this dim.
             my $divar = indexVar($dim);
             my $dival = numFullTileItersVar($dim)." * $tivar + $dovar";
             push @$code,
-                " // Zero-based, unit-stride index for ".dimStr($dim).".",
-                " $itype $divar = $dival;";
+                "// Zero-based, unit-stride index for ".dimStr($dim).".",
+                "$itype $divar = $dival;";
         }
     }
 
@@ -575,8 +575,8 @@ sub addIndexVars2($$$$) {
 
             # output $divar.
             push @$code,
-                " // Zero-based, unit-stride index for ".dimStr($dim).".",
-                " $itype $divar = $dival;";
+                "// Zero-based, unit-stride index for ".dimStr($dim).".",
+                "$itype $divar = $dival;";
 
             # apply square-wave to inner 2 dimensions if requested.
             my $isInnerSquare = $ndims >=2 && $isInner && ($features & $bSquare);
@@ -585,8 +585,8 @@ sub addIndexVars2($$$$) {
                 my $divar2 = "index_x2";
                 my $avar = "lsb";
                 push @$code, 
-                    " // Modify $prevDivar and $divar for 'square_wave' path.",
-                    " if (($innerNvar > 1) && ($prevDivar/2 < $prevNvar/2)) {",
+                    "// Modify $prevDivar and $divar for 'square_wave' path.",
+                    "if (($innerNvar > 1) && ($prevDivar/2 < $prevNvar/2)) {",
                     "  // Compute extended index over 2 iterations of $prevDivar.",
                     "  $itype $divar2 = $divar + ($nvar * ($prevDivar & 1));",
                     "  // Select $divar from 0,0,1,1,2,2,... sequence",
@@ -595,7 +595,7 @@ sub addIndexVars2($$$$) {
                     "  $itype $avar = ($divar2 & 0x1) ^ (($divar2 & 0x2) >> 1);",
                     "  // Adjust $prevDivar +/-1 by replacing bit 0.",
                     "  $prevDivar = ($prevDivar & $itype(-2)) | $avar;",
-                    " } // square-wave.";
+                    "} // square-wave.";
             }
 
             # reverse order of every-other traversal if requested.
@@ -603,12 +603,12 @@ sub addIndexVars2($$$$) {
             if (($features & $bSerp) && defined $prevDivar) {
                 if ($isInnerSquare) {
                     push @$code,
-                        " // Reverse direction of $divar after every-other iteration of $prevDivar for 'square_wave serpentine' path.",
-                        " if (($prevDivar & 2) == 2) $divar = $nvar - $divar - 1;";
+                        "// Reverse direction of $divar after every-other iteration of $prevDivar for 'square_wave serpentine' path.",
+                        "if (($prevDivar & 2) == 2) $divar = $nvar - $divar - 1;";
                 } else {
                     push @$code,
-                        " // Reverse direction of $divar after every iteration of $prevDivar for  'serpentine' path.",
-                        " if (($prevDivar & 1) == 1) $divar = $nvar - $divar - 1;";
+                        "// Reverse direction of $divar after every iteration of $prevDivar for  'serpentine' path.",
+                        "if (($prevDivar & 1) == 1) $divar = $nvar - $divar - 1;";
                 }
             }
 
@@ -638,9 +638,9 @@ sub addIndexVars3($$$$) {
         my $evar = endVar($dim);
         my $svar = strideVar($dim);
         push @$code,
-            " // This value of $divar covers ".dimStr($dim)." from $stvar to (but not including) $spvar.",
-            " $itype $stvar = std::max($abvar + ($divar * $svar), $bvar);",
-            " $itype $spvar = std::min($abvar + (($divar+1) * $svar), $evar);";
+            "// This value of $divar covers ".dimStr($dim)." from $stvar to (but not including) $spvar.",
+            "$itype $stvar = std::max($abvar + ($divar * $svar), $bvar);",
+            "$itype $spvar = std::min($abvar + (($divar+1) * $svar), $evar);";
     }
 }
 
@@ -674,30 +674,30 @@ sub beginLoop($$$$$$$) {
             my $nvar = numItersVar($dim);
             my $divar = indexVar($dim);
             push @$code,
-                " for ($itype $divar = 0; $divar < $nvar; $divar++)";
+                "for ($itype $divar = 0; $divar < $nvar; $divar++)";
         }
-        push @$code, " { {";
+        push @$code, "{ {";
     }
 
     # Start a parallel region if using manual distribution.
     elsif ($features & $bStatic) {
         push @$code,
-            "\n // Start parallel section.", @$prefix
+            "// Start parallel section.", @$prefix
             if defined $prefix;
         push @$code,
-            " {",
-            "\n // Number of threads in this parallel section.",
-            " $itype nthreads = ${macroPrefix}OMP_NUM_THREADS;",
-            "\n // Unique 0-based thread index in this parallel section.",
-            " $itype thread_num = ${macroPrefix}OMP_THREAD_NUM;",
-            " host_assert(thread_num < nthreads);",
-            "\n // Begin and end indices for this thread.",
-            " $itype thread_begin = $beginVal + ".
+            "{",
+            "// Number of threads in this parallel section.",
+            "$itype nthreads = ${macroPrefix}OMP_NUM_THREADS;",
+            "// Unique 0-based thread index in this parallel section.",
+            "$itype thread_num = ${macroPrefix}OMP_THREAD_NUM;",
+            "host_assert(thread_num < nthreads);",
+            "// Begin and end indices for this thread.",
+            "$itype thread_begin = $beginVal + ".
             "yask::div_equally_cumu_size_n($endVal - $beginVal, nthreads, thread_num - 1);",
-            " $itype thread_end = $beginVal + ".
+            "$itype thread_end = $beginVal + ".
             "yask::div_equally_cumu_size_n($endVal - $beginVal, nthreads, thread_num);",
-            "\n // Starting index.",
-            " $itype $ivar = thread_begin;";
+            "// Starting index.",
+            "$itype $ivar = thread_begin;";
 
         # Add initial-loop index vars for this thread.
         addIndexVars2($code, $loopDims, $features, $loopStack);
@@ -711,7 +711,7 @@ sub beginLoop($$$$$$$) {
             my $nvar = numItersVar($dim);
             my $divar = indexVar($dim);
             push @$code,
-                " for (; $divar < $nvar && $ivar < thread_end; $divar++, ".
+                "for (; $divar < $nvar && $ivar < thread_end; $divar++, ".
                 ($i < $ndims-1 ? indexVar($loopDims->[$i+1])."=0" : "$ivar++").
                 ")";
         }
@@ -722,7 +722,7 @@ sub beginLoop($$$$$$$) {
     else {
         push @$code, @$prefix if defined $prefix;
         push @$code,
-            " for ($itype $ivar = $beginVal; $ivar < $endVal; $ivar++) { {";
+            "for ($itype $ivar = $beginVal; $ivar < $endVal; $ivar++) { {";
         
         # Add inner-loop index vars for this iteration.
         addIndexVars2($code, $loopDims, $features, $loopStack);
@@ -737,7 +737,7 @@ sub beginLoop($$$$$$$) {
 sub endLoop($) {
     my $code = shift;           # ref to list of code lines.
 
-    push @$code, " } }";
+    push @$code, "} }";
 }
 
 ##########
@@ -927,9 +927,12 @@ sub macroDef($$) {
 sub macroUndef($) {
     my $mname = shift;
 
-    my $mname2 = $mname =~ s/\(.*//r;         # remove args.
+    $mname = uc $mname;
+    $mname =~ s/\(.*//r;         # remove args.
     return
-        "#undef ${macroPrefix}$mname2";
+        "#ifdef ${macroPrefix}$mname",
+        "#undef ${macroPrefix}$mname",
+        "#endif";
 }
 
 # Process the loop-code string.
@@ -963,14 +966,13 @@ sub processCode($) {
         macroDef('INNER_PRAGMA', pragma($OPT{innerMod})),
         macroDef('OMP_PRAGMA', pragma($OPT{ompMod})),
         macroDef('OMP_NUM_THREADS', 'omp_get_num_threads()'),
-        macroDef('OMP_THREAD_NUM', 'omp_get_thread_num()'),
-        macroDef($inputVar, $OPT{inVar}),
-        macroDef($outputVar, $OPT{outVar});
-    for my $expr (@exprs) {
-        push @code, macroDef((uc $expr)."(dim_num)", inVar($expr).'[dim_num]');
+        macroDef('OMP_THREAD_NUM', 'omp_get_thread_num()');
+    for my $expr (@fixed_exprs, @var_exprs) {
+        push @code, macroDef((uc $expr)."(dim_num)", inVar().'.'.$expr.'[dim_num]');
     }
     push @code,
-        "// 'ScanIndices $macroPrefix$inputVar' must be set before the following code.",
+        "// 'ScanIndices ".inVar()."' must be set before the following code".
+        " unless all the values extracted from it are pre-defined.",
         "{",
         getInVars();
     
@@ -981,7 +983,7 @@ sub processCode($) {
         # generate simd in next loop.
         if (lc $tok eq 'simd') {
 
-            push @loopPrefix, ' ${macroPrefix}OMP_SIMD';
+            push @loopPrefix, '${macroPrefix}OMP_SIMD';
             print "info: generating SIMD in following loop.\n";
         }
 
@@ -990,8 +992,8 @@ sub processCode($) {
 
             $features |= $bOmpPar;
             push @loopPrefix,
-                " // Distribute iterations among OpenMP threads.", 
-                " ${macroPrefix}OMP_PRAGMA";
+                "// Distribute iterations among OpenMP threads.", 
+                "${macroPrefix}OMP_PRAGMA";
             print "info: using OpenMP on following loop(s).\n";
         }
 
@@ -1049,7 +1051,7 @@ sub processCode($) {
 
             # In inner loop?
             my $is_inner = $ndims && isInInner(\@toks, \$ti);
-            push @loopPrefix, " ${macroPrefix}INNER_PRAGMA" if $is_inner;
+            push @loopPrefix, "${macroPrefix}INNER_PRAGMA" if $is_inner;
 
             # Start the loop unless there are no indices.
             if ($ndims) {
@@ -1062,28 +1064,30 @@ sub processCode($) {
                 if ($is_inner) {
 
                     # Start-stop indices for body.
-                    # NB: always use a copy; ref not working as of 4/30/2021.
+                    push @code,
+                        "// Indices for loop body.",
+                        makeOutMacros(@loopStack),
+                        "#ifdef ".outVar();
                     if ($features & $bOmpPar) {
+                        
+                        # Make a new var so it will become OMP private.
                         push @code,
-                            " // Indices for loop body.";
-                    
-                        # Using a new var so it will become OMP private.
-                        push @code,
-                            " ScanIndices ".outVar()."(false);",
+                            "ScanIndices ".outVar()."(false);",
                             setOutVars(1, @loopStack);
                     } else {
-
+                        
                         # Just a reference if no OMP.
                         push @code,
-                            " ScanIndices& ".outVar()." = $macroPrefix$inputVar;",
+                            "ScanIndices& ".outVar()." = ".inVar().";",
                             setOutVars(0, @loopStack);
                     }
-
+                    push @code, "#endif";
+                    
                     # Macro break for body: end one and start next one.
                     push @code,
                         macroUndef($loopPart.$innerNum),
                         "#endif\n",
-                        "\n // Loop body goes here.\n\n";
+                        "// Loop body goes here.\n\n";
                     $innerNum++;
                     push @code,
                         "#ifdef ${macroPrefix}$loopPart$innerNum\n";
@@ -1095,9 +1099,10 @@ sub processCode($) {
                 # Needed to get nesting and other assumptions right.
                 print "info: generating dummy loop for empty $tok args...\n";
                 my $ivar = "dummy" . scalar(@loopCounts);
-                push @code, " // Dummy loop.",
+                push @code,
+                    "// Dummy loop.",
                     @loopPrefix,
-                    " for (int $ivar = 0; $ivar < 1; $ivar++) { {";
+                    "for (int $ivar = 0; $ivar < 1; $ivar++) { {";
             }
 
             # clear data for this loop so we'll be ready for a nested loop.
@@ -1114,7 +1119,7 @@ sub processCode($) {
             my $ndims = pop @loopCounts; # How many indices in this loop?
             for my $i (1..$ndims) {
                 my $sdim = pop @loopStack;
-                push @code, " // End of scan over dim $sdim.";
+                push @code, "// End of scan over dim $sdim.";
             }
 
             # Emit code.
@@ -1147,8 +1152,10 @@ sub processCode($) {
         macroUndef('OMP_THREAD_NUM'),
         macroUndef('SIMD_PRAGMA'),
         macroUndef('INNER_PRAGMA');
-    for my $expr (@exprs) {
-        push @code, macroUndef((uc $expr));
+    for my $expr (@fixed_exprs, @var_exprs) {
+        push @code,
+            macroUndef($expr),
+            macroUndef("BODY_$expr");
     }
     push @code,
         macroUndef($loopPart.$innerNum),
@@ -1171,7 +1178,7 @@ sub processCode($) {
     # print out code.
     for my $line (@code) {
         print OUT "\n" if $line =~ m=^\s*//=; # blank line before comment.
-        print OUT " $line\n";
+        print OUT " $line\n"; # add space at beginning of every line.
     }
     print OUT "// End of generated code.\n";
     close OUT;
@@ -1187,8 +1194,6 @@ sub main() {
         # knob,        description,   optional default
         [ "ndims=i", "Value of N.", 1],
         [ "prefix=s", "Common prefix of all generated macros and vars", ''],
-        [ "inVar=s", "Name of existing input 'ScanIndices' var.", 'loop_indices'],
-        [ "outVar=s", "Name of created loop-body 'ScanIndices' var.", 'body_indices'],
         [ "ompMod=s", "Set default OMP_PRAGMA macro used before 'omp' loop(s).", "omp parallel for"],
         [ "simdMod=s", "Set default SIMD_PRAGMA macro used before 'simd' loop(s).", "omp simd"],
         [ "innerMod=s", "Set default INNER_PRAGMA macro used before inner loop(s).", ''],
@@ -1234,11 +1239,11 @@ sub main() {
             "  Each array should be the length specified by the largest index used (typically same as -ndims).\n",
             "A 'ScanIndices' input var must be defined in C++ code prior to including the generated code.\n",
             "  The 'in' indices control the range of the generaged loop(s).\n",
-            "  The 'ScanIndices' input var is named with the -inVar option and/or LOOP_INDICES macro.\n",
+            "  The 'ScanIndices' input var is named with the LOOP_INDICES macro.\n",
             "Loop indices will be available in the body of the loop in a new 'ScanIndices' var.\n",
             "  Values in the 'out' indices are set to indicate the range to be covered by the loop body.\n",
             "  Any values in the struct not explicity set are copied from the input.\n",
-            "  The 'ScanIndices' output var is named with the -outVar option and/or BODY_INDICES macro.\n",
+            "  The 'ScanIndices' output var is named with the BODY_INDICES macro.\n",
             "Options:\n";
         print_options_help(\@KNOBS);
         print "Examples:\n",

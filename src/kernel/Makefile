@@ -575,6 +575,10 @@ $(YK_EXT_OBJ_DIR)/%.o: $(YK_LIB_SRC_DIR)/%.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
 	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
+%.i: $(YK_LIB_SRC_DIR)/%.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
+	$(YK_CXXCMD) $(YK_CXXFLAGS) -x c++ -EP $< > $@
+	@ls -l $@
+
 ######## Primary targets.
 # NB: must set stencil and arch make vars to generate the desired YASK kernel.
 

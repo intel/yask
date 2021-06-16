@@ -122,7 +122,7 @@ namespace yask {
 
             // Set indices that will pass through generated code
             // because the step loop is coded here.
-            rank_idxs.cur_indices[step_posn] = index_t;
+            rank_idxs.index[step_posn] = index_t;
             rank_idxs.start[step_posn] = start_t;
             rank_idxs.stop[step_posn] = stop_t;
             rank_idxs.stride[step_posn] = stride_t;
@@ -326,7 +326,7 @@ namespace yask {
                 idx_t this_num_t = abs(stop_t - start_t);
 
                 // Set indices that will pass through generated code.
-                rank_idxs.cur_indices[step_posn] = index_t;
+                rank_idxs.index[step_posn] = index_t;
                 rank_idxs.start[step_posn] = start_t;
                 rank_idxs.stop[step_posn] = stop_t;
                 rank_idxs.stride[step_posn] = stride_t;
@@ -664,7 +664,7 @@ namespace yask {
                 max(start_t + stride_t, end_t);
 
             // Set step indices that will pass through generated code.
-            mega_block_idxs.cur_indices[step_posn] = index_t;
+            mega_block_idxs.index[step_posn] = index_t;
             mega_block_idxs.start[step_posn] = start_t;
             mega_block_idxs.stop[step_posn] = stop_t;
 
@@ -886,7 +886,7 @@ namespace yask {
             assert(num_t == 1);
 
             // Set step indices that will pass through generated code.
-            block_idxs.cur_indices[step_posn] = 0;
+            block_idxs.index[step_posn] = 0;
             block_idxs.start[step_posn] = begin_t;
             block_idxs.stop[step_posn] = end_t;
 
@@ -942,7 +942,7 @@ namespace yask {
             bit_mask_t bridge_mask = 0;
 
             // Set temporal indices to full range.
-            block_idxs.cur_indices[step_posn] = 0; // only one index.
+            block_idxs.index[step_posn] = 0; // only one index.
             block_idxs.start[step_posn] = begin_t;
             block_idxs.stop[step_posn] = end_t;
 
@@ -1081,7 +1081,7 @@ namespace yask {
             assert(abs(stop_t - start_t) == 1); // no more TB.
 
             // Set step indices that will pass through generated code.
-            micro_block_idxs.cur_indices[step_posn] = index_t;
+            micro_block_idxs.index[step_posn] = index_t;
             micro_block_idxs.begin[step_posn] = start_t;
             micro_block_idxs.end[step_posn] = stop_t;
             micro_block_idxs.start[step_posn] = start_t;

@@ -32,7 +32,7 @@ namespace yask {
     // Print extraction of indices.
     void YASKCppPrinter::print_indices(ostream& os,
                                        bool print_step, bool print_domain,
-                                       const string prefix) const {
+                                       const string var_prefix) const {
         if (print_step && print_domain)
             os << "\n // Extract index for each stencil dim.\n";
         else if (print_step)
@@ -47,11 +47,44 @@ namespace yask {
             bool is_step = dname == _dims._step_dim;
             if ((print_step && is_step) ||
                 (print_domain && !is_step)) {
-                if (prefix.length())
-                    os << " idx_t " << dname << " = " << prefix << i << ";\n"
-                        " host_assert(" << dname << " == idxs[" << i << "]);\n";
+                if (var_prefix.length())
+                    os << " idx_t " << dname << " = " << var_prefix << i << ";\n";
                 else
                     os << " idx_t " << dname << " = idxs[" << i << "];\n";
+            }
+            i++;
+        }
+    }
+
+    // Print extraction of inner indices from outer.
+    // See also create_inner() in kernel code.
+    void YASKCppPrinter::print_create_inner(ostream& os,
+                                            bool print_step, bool print_domain,
+                                            const string outer_var_prefix,
+                                            const string inner_var_prefix) const {
+        os << "\n // Convert outer to inner ranges.\n";
+        map<string, string> inner2outer =
+            { { "begin_", "start_" },
+              { "end_", "stop_" },
+              { "orig_start_", "start_" },
+              { "orig_stop_", "stop_" },
+              { "align_", "align_" },
+              { "align_ofs_", "align_ofs_" } };
+        int i = 0;
+        for (auto& dim : _dims._stencil_dims) {
+            auto& dname = dim._get_name();
+            bool is_step = dname == _dims._step_dim;
+            if ((print_step && is_step) ||
+                (print_domain && !is_step)) {
+                for (auto const& i2o : inner2outer)
+                    os << " idx_t " << inner_var_prefix << i2o.first << i << " = " <<
+                        outer_var_prefix << i2o.second << i << ";\n";
+                os << " idx_t " << inner_var_prefix << "orig_index_" << i << " = 0;\n" <<
+                    " idx_t " << inner_var_prefix << "tile_size_" << i << " = " <<
+                    outer_var_prefix << "end_" << i << " - " <<
+                    outer_var_prefix << "begin_" << i << ";\n" <<
+                    " idx_t " << inner_var_prefix << "stride_" << i << " = " <<
+                    inner_var_prefix << "tile_size_" << i << ";\n";
             }
             i++;
         }
@@ -632,7 +665,7 @@ namespace yask {
                         " assert(core_data->_thread_core_list.get());\n"
                         " auto& thread_core_data = core_data->_thread_core_list[core_idx];\n"
                         " const Indices& idxs = norm_nb_idxs.start;\n";
-                    print_indices(os, true, false);
+                    print_indices(os, true, false); // Just step index.
  
                     // C++ vector print assistant.
                     CppVecPrintHelper* vp = new_cpp_vec_print_helper(vv, cv);
@@ -646,7 +679,8 @@ namespace yask {
 
                     // Inner-loop strides.
                     string inner_strides = do_cluster ?
-                        "((dn==0) ? idx_t(1) : cluster_mults[std::max(dn-1,0)])" : "idx_t(1)";
+                        "((dn==0) ? idx_t(1) : cluster_mults[std::max(dn-1,0)])" :
+                        "idx_t(1)";
                     
                     // Computation loops.
                     // Include generated loop-nests.
@@ -659,7 +693,6 @@ namespace yask {
                         "#define NANO_BLOCK_ALIGN(dn) idx_t(1)\n"
                         "#define NANO_BLOCK_ALIGN_OFS(dn) idx_t(0)\n"
                         "#define NANO_BLOCK_LOOP_INDICES norm_nb_idxs\n"
-                        "#define NANO_BLOCK_BODY_INDICES norm_nb_range\n"
                         "\n ////// Loop prefix.\n"
                         "#define NANO_BLOCK_USE_LOOP_PART_0\n"
                         "#include \"yask_nano_block_loops.hpp\"\n";
@@ -669,28 +702,26 @@ namespace yask {
                         loop_prefix = "pico_block_";
                         os <<
                             "\n // Pico loops inside nano loops.\n"
-                            " ScanIndices norm_pb_idxs = norm_nb_range.create_inner();\n"
-                            "\n // Make more efficient expressions for pico loop vars.\n"
-                            " // (Subtract one from 'dn' to convert stencil dims to domain dims.)\n"
+                            " // Make more efficient expressions for pico loop vars.\n"
+                            "#define PICO_BLOCK_BEGIN(dn) NANO_BLOCK_BODY_START(dn)\n"
+                            "#define PICO_BLOCK_END(dn) NANO_BLOCK_BODY_STOP(dn)\n"
                             "#define PICO_BLOCK_STRIDE(dn) " << inner_strides << "\n"
                             "#define PICO_BLOCK_ALIGN(dn) idx_t(1)\n"
                             "#define PICO_BLOCK_ALIGN_OFS(dn) idx_t(0)\n"
-                            "#define PICO_BLOCK_LOOP_INDICES norm_pb_idxs\n"
-                            "#define PICO_BLOCK_BODY_INDICES norm_pb_range\n"
+                            "#define PICO_BLOCK_TILE_SIZE(dn) PICO_BLOCK_STRIDE(dn)\n" // not used.
+                            "#define PICO_BLOCK_START(dn) NANO_BLOCK_BODY_START(dn)\n"
+                            "#define PICO_BLOCK_STOP(dn) NANO_BLOCK_BODY_STOP(dn)\n"
+                            "#define PICO_BLOCK_INDEX(dn) idx_t(0)\n"
                             "\n ////// Loop prefix.\n"
                             "#define PICO_BLOCK_USE_LOOP_PART_0\n"
-                            "#include \"yask_pico_block_loops.hpp\"\n"
-                            "\n ////// Loop body. Just doing one, so don't need stop indices.\n"
-                            " Indices& idxs = norm_pb_range.start;\n";
+                            "#include \"yask_pico_block_loops.hpp\"\n";
                     }
                     else {
                         loop_prefix = "nano_block_";
-                        os <<
-                            "\n ////// Loop body. Just doing one, so don't need stop indices.\n"
-                            " Indices& idxs = norm_nb_range.start;\n";
                     }
 
-                    // Get named indices from 'idxs'.
+                    // Get named domain indices directly from scalar vars.
+                    // Don't need stop vars because inner loop always does one.
                     print_indices(os, false, true, loop_prefix + "start_");
                     vp->print_elem_indices(os);
 

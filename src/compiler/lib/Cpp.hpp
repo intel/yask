@@ -340,6 +340,12 @@ namespace yask {
                                    bool print_domain = true,
                                    const string prefix = "") const;
 
+        // Print extraction of inner indices from outer.
+        void print_create_inner(ostream& os,
+                                bool print_step, bool print_domain,
+                                const string outer_var_prefix,
+                                const string inner_var_prefix) const;
+        
         // Print pieces of YASK output.
         virtual void print_macros(ostream& os);
         virtual void print_data(ostream& os);

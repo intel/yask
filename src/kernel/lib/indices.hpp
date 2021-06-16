@@ -646,16 +646,16 @@ namespace yask {
 
         // Notes:
         // First 'start' index is always at 'begin'.
-        // If 'align'==1, subsequent 'start' indices are at 'begin' + 'cur_indices'*'stride'.
+        // If 'align'==1, subsequent 'start' indices are at 'begin' + 'index'*'stride'.
         // If 'align'>1, subsequent 'start' indices will be aligned such that
-        //   ('start' <= 'begin' + 'cur_indices'*'stride') &&
+        //   ('start' <= 'begin' + 'index'*'stride') &&
         //   (('start' - 'align_ofs') % 'align') == 0.
         // Last 'start' index is always < 'end'.
         // Last 'stop' index is always at 'end'.
 
         // Output values; set for each index by loop code.
         Indices start, stop;    // first and last+1 for this sub-range.
-        Indices cur_indices;    // 0-based unique index for each sub-range in each dim.
+        Indices index;          // 0-based unique index for each sub-range in each dim.
 
         // Example w/3 sub-ranges in overall range:
         // begin                                         end
@@ -676,7 +676,7 @@ namespace yask {
             tile_size(idx_t(1), ndims),
             start(idx_t(0), ndims),
             stop(idx_t(0), ndims),
-            cur_indices(idx_t(0), ndims) {
+            index(idx_t(0), ndims) {
             
             // Set alignment to vector lengths.
             // i: index for stencil dims, j: index for domain dims.
@@ -746,7 +746,7 @@ namespace yask {
                 inner.tile_size[i] = inner.stride[i] = get_overall_range(i);
 
             // Init first indices.
-            inner.cur_indices.set_from_const(0);
+            inner.index.set_from_const(0);
             return inner;
         }
 
