@@ -45,7 +45,6 @@ namespace yask {
             _name += "(" + name + ")";
         _prefix = string(" ") + _name + ": ";
 
-        trial_secs = _settings->_tuner_trial_secs;
         clear(settings->_do_auto_tune); // TODO: why is this parameter used?
     }
 
@@ -56,6 +55,10 @@ namespace yask {
     // and algorithm that will check dependencies more cleanly.
     bool AutoTuner::next_target() {
         STATE_VARS(this);
+
+        trial_secs = _settings->_tuner_trial_secs;
+        max_radius = _settings->_tuner_radius;
+
         outerp = 0;
         min_blks = 1;
         min_pts = 1;
@@ -292,6 +295,7 @@ namespace yask {
 
         // At this point, we have gathered perf info on the current settings.
         // Now, we need to determine next unevaluated point in search space.
+        // When found, we 'return' from this call-back function.
         while (true) {
 
             // Gradient-descent(GD) search:
@@ -323,7 +327,7 @@ namespace yask {
                     dist = max(dist, min_dist);
                     dist *= at_state.radius;
 
-                    auto sz = at_state.center_sizes[dname];
+                    auto sz = at_state.center_sizes[dname]; // current size in 'odim'.
                     switch (dofs) {
                     case 0:     // reduce size in 'odim'.
                         sz -= dist;
@@ -332,15 +336,18 @@ namespace yask {
                     case 1:     // keep size in 'odim'.
                         break;
                     case 2:     // increase size in 'odim'.
-                        sz += dist;
+                        if (sz < dist)
+                            sz = dist;
+                        else
+                            sz += dist;
                         mdist++;
                         break;
                     default:
                         assert(false && "internal error in tune_settings()");
                     }
 
-                    // Don't look in far corners.
-                    if (mdist > 2) {
+                    // Don't look in all dim combos.
+                    if (mdist > 3) {
                         at_state.n2far++;
                         ok = false;
                         break;  // out of dim-loop.

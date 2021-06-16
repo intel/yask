@@ -411,6 +411,11 @@ namespace yask {
                            "[Advanced] Seconds to run new trial during auto-tuning "
                            "for new trial to be considered better than the existing best.",
                            _tuner_trial_secs));
+        parser.add_option(make_shared<CommandLineParser::IntOption>
+                          ("auto_tune_radius",
+                           "[Advanced] Starting search radius for tuning block sizes. "
+                           "A power of 2 is recommended.",
+                           _tuner_radius));
         #ifdef ALLOW_STAGE_TUNERS
         parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("auto_tune_each_stage",

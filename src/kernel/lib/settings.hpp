@@ -249,7 +249,8 @@ namespace yask {
         // Tuning.
         bool _do_auto_tune = false;    // whether to do "online" auto-tuning.
         bool _allow_stage_tuners = false; // allow per-stage tuners when possible.
-        double _tuner_trial_secs = 0.25;   // time to run tuner for new better setting.
+        double _tuner_trial_secs = 0.5;   // time to run tuner for new better setting.
+        int _tuner_radius = 16;
         std::vector<std::string> _tuner_targets; // things to tune from following.
 
         // Debug.
