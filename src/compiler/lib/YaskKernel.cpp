@@ -598,10 +598,6 @@ namespace yask {
             for (bool do_cluster : { false, true }) {
                 for (bool do_pico : { false, true }) {
 
-                    // Not using vectors with pico loops.
-                    if (!do_cluster && do_pico)
-                        continue;
-
                     // Cluster eq_bundle at same 'ei' index.
                     // This should be the same eq-bundle because it was copied from the
                     // scalar one.
@@ -656,7 +652,7 @@ namespace yask {
                         " FP operation(s) per inner-loop iteration.\n" <<
                         " static void " << funcstr << "(" <<
                         _core_t << "* core_data, int core_idx, int block_thread_idx,"
-                        " ScanIndices& norm_nb_idxs";
+                        " int thread_limit, ScanIndices& norm_nb_idxs";
                     if (!do_cluster)
                         os << ", bit_mask_t " << write_mask;
                     os << ") {\n"
@@ -678,6 +674,7 @@ namespace yask {
                     vceq->visit_eqs(&plpmv);
 
                     // Inner-loop strides.
+                    // Will be 1 for vectors and cluster-mults for clusters.
                     string inner_strides = do_cluster ?
                         "((dn==0) ? idx_t(1) : cluster_mults[std::max(dn-1,0)])" :
                         "idx_t(1)";
@@ -685,7 +682,7 @@ namespace yask {
                     // Computation loops.
                     // Include generated loop-nests.
                     os <<
-                        "\n // Make more efficient expressions for nano loop vars.\n";
+                        "\n // Nano loops.\n";
                     if (!do_pico)
                         os <<
                             "#define NANO_BLOCK_STRIDE(dn) " << inner_strides << "\n";
@@ -702,7 +699,6 @@ namespace yask {
                         loop_prefix = "pico_block_";
                         os <<
                             "\n // Pico loops inside nano loops.\n"
-                            " // Make more efficient expressions for pico loop vars.\n"
                             "#define PICO_BLOCK_BEGIN(dn) NANO_BLOCK_BODY_START(dn)\n"
                             "#define PICO_BLOCK_END(dn) NANO_BLOCK_BODY_STOP(dn)\n"
                             "#define PICO_BLOCK_STRIDE(dn) " << inner_strides << "\n"

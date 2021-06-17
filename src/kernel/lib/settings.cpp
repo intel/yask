@@ -31,10 +31,10 @@ namespace yask {
     // Check whether dim is of allowed type.
     // Throw exception if not.
     void Dims::check_dim_type(const std::string& dim,
-                            const std::string& fn_name,
-                            bool step_ok,
-                            bool domain_ok,
-                            bool misc_ok) const {
+                              const std::string& fn_name,
+                              bool step_ok,
+                              bool domain_ok,
+                              bool misc_ok) const {
         if (step_ok && domain_ok && misc_ok)
             return;
         if (dim == _step_dim) {
@@ -93,9 +93,9 @@ namespace yask {
     // Apply a function to each neighbor rank.
     // Does NOT visit self.
     void MPIInfo::visit_neighbors(std::function<void
-                                 (const IdxTuple& neigh_offsets, // NeighborOffset vals.
-                                  int neigh_rank, // MPI rank.
-                                  int neigh_index)> visitor) {
+                                  (const IdxTuple& neigh_offsets, // NeighborOffset vals.
+                                   int neigh_rank, // MPI rank.
+                                   int neigh_index)> visitor) {
 
         neighborhood_sizes.visit_all_points
             ([&](const IdxTuple& neigh_offsets, idx_t i) {
@@ -147,10 +147,10 @@ namespace yask {
     // Apply a function to each neighbor rank.
     // Does NOT visit self or non-existent neighbors.
     void MPIData::visit_neighbors(std::function<void
-                                 (const IdxTuple& neigh_offsets, // NeighborOffset.
-                                  int neigh_rank,
-                                  int neigh_index,
-                                  MPIBufs& bufs)> visitor) {
+                                  (const IdxTuple& neigh_offsets, // NeighborOffset.
+                                   int neigh_rank,
+                                   int neigh_index,
+                                   MPIBufs& bufs)> visitor) {
 
         _mpi_info->visit_neighbors
             ([&](const IdxTuple& neigh_offsets, int neigh_rank, int i) {
@@ -298,13 +298,13 @@ namespace yask {
         _add_domain_option(parser, "d", "[Deprecated] Use local-domain size options", _rank_sizes);
         _add_domain_option(parser, "r", "[Deprecated] Use mega-block size options", _mega_block_sizes, true);
         _add_domain_option(parser, "sb", "[Deprecated] Use nano-block size options", _nano_block_sizes);
-#ifdef USE_TILING
+        #ifdef USE_TILING
         _add_domain_option(parser, "l_tile", "[Advanced] Local-domain-tile size", _rank_tile_sizes);
         _add_domain_option(parser, "Mb_tile", "[Advanced] Mega-Block-tile size", _mega_block_tile_sizes);
         _add_domain_option(parser, "b_tile", "[Advanced] Block-tile size", _block_tile_sizes);
         _add_domain_option(parser, "mb_tile", "[Advanced] Micro-block-tile size", _micro_block_tile_sizes);
         _add_domain_option(parser, "nb_tile", "[Advanced] Nano-block-tile size", _nano_block_tile_sizes);
-#endif
+        #endif
         _add_domain_option(parser, "mp", "[Advanced] Minimum var-padding size (including halo)", _min_pad_sizes);
         _add_domain_option(parser, "ep", "[Advanced] Extra var-padding size (beyond halo)", _extra_pad_sizes);
         parser.add_option(make_shared<CommandLineParser::BoolOption>
@@ -312,7 +312,7 @@ namespace yask {
                            "[Advanced] Allow automatic extension of padding beyond what is needed for"
                            " vector alignment for additional performance reasons",
                            _allow_addl_pad));
-#ifdef USE_MPI
+        #ifdef USE_MPI
         _add_domain_option(parser, "nr", "Num ranks", _num_ranks);
         _add_domain_option(parser, "ri", "This rank's logical index (0-based)", _rank_indices);
         parser.add_option(make_shared<CommandLineParser::BoolOption>
@@ -332,7 +332,7 @@ namespace yask {
                            "Otherwise, use the same non-blocking MPI send and receive calls "
                            "that are used between nodes.",
                            use_shm));
-#endif
+        #endif
         parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("force_scalar",
                            "[Advanced] Evaluate every var point with scalar stencil operations "
@@ -340,25 +340,30 @@ namespace yask {
                            force_scalar));
         parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("max_threads",
-                           "Maximum OpenMP threads to use. "
-                           "If set to zero (0), the default value from the OpenMP library is used.",
+                           "Maximum number of OpenMP CPU threads to use. "
+                           "If zero (0), the default value from the OpenMP library is used.",
                            max_threads));
         parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("thread_divisor",
-                           "Divide the maximum number of OpenMP threads by the specified value, "
+                           "Divide the maximum number of OpenMP CPU threads by the specified value, "
                            "discarding any remainder. "
-                           "The maximum number of OpenMP threads is determined by the -max_threads "
-                           "option or the default value from the OpenMP library.",
+                           "See the -max_threads option.",
                            thread_divisor));
         parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("inner_threads",
-                           "Number of threads to use in a nested OpenMP region for each block. "
+                           "Number of CPU threads to use in a nested OpenMP region within each block. "
                            "Will be restricted to a value less than or equal to "
                            "the maximum number of OpenMP threads specified by -max_threads "
                            "and/or -thread_divisor. "
                            "Each thread is used to execute stencils within a nano-block, and "
                            "nano-blocks are executed in parallel within micro-blocks.",
                            num_inner_threads));
+        #ifdef USE_OFFLOAD
+        parser.add_option(make_shared<CommandLineParser::IntOption>
+                          ("device_thread_limit",
+                           "Set the maximum number of OpenMP device threads used within a team.",
+                           thread_limit));
+        #endif
         parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("block_threads",
                            "[Deprecated] Use -inner_threads.",
@@ -376,9 +381,10 @@ namespace yask {
         parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("bundle_allocs",
                            "[Advanced] Allocate memory for multiple YASK vars in "
-                           "a single large chunk when possible.",
+                           "a single large chunk when possible. "
+                           "If 'false', allocate each YASK var separately.",
                            _bundle_allocs));
-#ifdef USE_NUMA
+        #ifdef USE_NUMA
         parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("numa_pref",
                            "[Advanced] Preferred NUMA node on which to allocate data for "
@@ -387,15 +393,15 @@ namespace yask {
                            to_string(yask_numa_interleave) + " for interleaving pages across all nodes, or " +
                            to_string(yask_numa_none) + " for no NUMA policy.",
                            _numa_pref));
-#endif
-#ifdef USE_PMEM
+        #endif
+        #ifdef USE_PMEM
         parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("pmem_threshold",
                            "[Advanced] First allocate up to this many GiB for vars using system memory, "
                            "then allocate memory for remaining vars from a PMEM (persistent memory) device "
                            "named '/mnt/pmemX', where 'X' corresponds to the NUMA node of the YASK process.",
                            _numa_pref_max));
-#endif
+        #endif
         parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("auto_tune",
                            "Adjust specified block and tile sizes *during* normal operation "
@@ -613,11 +619,6 @@ namespace yask {
             "  Num CPU threads per mega-block = outer_threads.\n"
             "  Num CPU threads per block = inner_threads.\n"
             "  Num CPU threads per micro-block, nano-block, and pico-block = 1.\n"
-            #ifdef USE_OFFLOAD
-            " When using offloaded kernel evaluation, there may be multiple teams\n"
-            "  and offload threads used within each nano-block. These may be controlled by\n"
-            "  the standard OpenMP environment vars OMP_NUM_TEAMS and OMP_TEAMS_THREAD_LIMIT.\n"
-            #endif
            << app_notes;
 
         // Make example knobs.
@@ -739,6 +740,17 @@ namespace yask {
         if (!mbt)
             mbt = bt;       // Default micro-blk steps == block steps.
 
+        // Adjust defaults for blocks on CPU or pico-blocks on GPU.
+        DOMAIN_VAR_LOOP(i, j) {
+            #ifdef USE_OFFLOAD
+            if (!_pico_block_sizes[i])
+                _pico_block_sizes[i] = def_blk_size;
+            #else
+            if (!_block_sizes[i])
+                _block_sizes[i] = def_blk_size;
+            #endif
+        }
+        
         // Determine num mega-blocks.
         // Also fix up mega-block sizes as needed.
         // Temporal mega-block size will be increase to
@@ -746,6 +758,7 @@ namespace yask {
         // Default mega-block size (if 0) will be size of rank-domain.
         os << "\nMega-Blocks:" << endl;
         auto nr = find_num_subsets(os,
+
                                    _mega_block_sizes, "mega-block",
                                    _rank_sizes, "local-domain",
                                    cluster_pts, "cluster",
@@ -756,17 +769,8 @@ namespace yask {
         if (!rt) os << "NOT ";
         os << "enabled.\n";
 
-        // Adjust defaults for blocks on CPU.
-        #ifndef USE_OFFLOAD
-        DOMAIN_VAR_LOOP(i, j) {
-            if (!_block_sizes[i])
-                _block_sizes[i] = def_blk_size;
-        }
-        #endif
-        
         // Determine num blocks.
         // Also fix up block sizes as needed.
-        // Default block size (if 0) will be size of mega-block.
         os << "\nBlocks:" << endl;
         auto nb = find_num_subsets(os,
                                    _block_sizes, "block",
@@ -854,12 +858,6 @@ namespace yask {
         os << " num-nano-blocks-per-mega-block-per-step: " << (nsb * nmb * nb) << endl;
         os << " num-nano-blocks-per-rank-per-step: " << (nsb * nmb * nb * nr) << endl;
         os << " Temporal nano-block tiling is never enabled.\n";
-
-        // Adjust defaults for pico-blocks.
-        DOMAIN_VAR_LOOP(i, j) {
-            if (_pico_block_sizes[i] < cluster_pts[j])
-                _pico_block_sizes[i] = cluster_pts[j];
-        }
         
         // Determine num pico-blocks.
         // Also fix up pico-block sizes as needed.
@@ -902,7 +900,7 @@ namespace yask {
                 "  because block-thread binding is enabled on " << num_inner_threads << " block threads.\n";
         }
 
-#ifdef USE_TILING
+        #ifdef USE_TILING
         // Now, we adjust tiles. These are done after all the above sizes
         // because tile sizes are more like 'guidelines' and don't have
         // their own loops.
@@ -958,7 +956,7 @@ namespace yask {
         os << " num-nano-block-tiles-per-nano-block-per-step: " << nsbt << endl;
 
         // NB: there are no pico-block tiles.
- #endif
+        #endif
         os << endl;
     }
 
@@ -967,20 +965,20 @@ namespace yask {
                                      KernelSettingsPtr& kactl_opts,
                                      KernelSettingsPtr& kreq_opts)
     {
-       host_assert(kenv);
-       host_assert(kactl_opts);
-       host_assert(kreq_opts);
-       host_assert(kactl_opts->_dims);
+        host_assert(kenv);
+        host_assert(kactl_opts);
+        host_assert(kreq_opts);
+        host_assert(kactl_opts->_dims);
 
-       // Create state. All other objects that need to share
-       // this state should use a shared ptr to it.
-       _state = make_shared<KernelState>();
+        // Create state. All other objects that need to share
+        // this state should use a shared ptr to it.
+        _state = make_shared<KernelState>();
        
         // Share passed ptrs.
-       _state->_env = kenv;
-       _state->_actl_opts = kactl_opts;
-       _state->_req_opts = kreq_opts;
-       _state->_dims = kactl_opts->_dims;
+        _state->_env = kenv;
+        _state->_actl_opts = kactl_opts;
+        _state->_req_opts = kreq_opts;
+        _state->_dims = kactl_opts->_dims;
 
         // Create MPI Info object.
         _state->_mpi_info = make_shared<MPIInfo>(_state->_dims);

@@ -689,6 +689,8 @@ namespace yask {
 
             } // domain dims.
 
+            int thread_limit = actl_opts->thread_limit;
+            
             // Normalized cluster indices.
             auto norm_fcidxs = normalize_indices(sb_fcidxs);
 
@@ -710,7 +712,7 @@ namespace yask {
                 // Perform the calculations in this block.
                 calc_clusters_opt2(cp, need_pico_loops,
                                    outer_thread_idx, inner_thread_idx,
-                                   norm_fcidxs);
+                                   thread_limit, norm_fcidxs);
                 
             } // whole clusters.
 
@@ -878,7 +880,7 @@ namespace yask {
                                 
                                 calc_vectors_opt2(cp,
                                                   outer_thread_idx, inner_thread_idx,
-                                                  fv_part, bit_mask_t(-1));
+                                                  thread_limit, fv_part, bit_mask_t(-1));
                             }
                             //else TRACE_MSG("full vectors not needed for " << descr);
 
@@ -894,7 +896,7 @@ namespace yask {
                                 
                                 calc_vectors_opt2(cp,
                                                   outer_thread_idx, inner_thread_idx,
-                                                  pv_part, pv_mask);
+                                                  thread_limit, pv_part, pv_mask);
                             }
                             //else TRACE_MSG("partial vectors not needed for " << descr);
                             
@@ -916,6 +918,7 @@ namespace yask {
                            bool need_pico_loops,
                            int outer_thread_idx,
                            int inner_thread_idx,
+                           int thread_limit,
                            ScanIndices& norm_idxs) {
 
             // Call code from stencil compiler.
@@ -923,11 +926,11 @@ namespace yask {
                 StencilBundleImplT::
                     calc_clusters_with_pico_loops(corep,
                                                   outer_thread_idx, inner_thread_idx,
-                                                  norm_idxs);
+                                                  thread_limit, norm_idxs);
             else
                 StencilBundleImplT::calc_clusters(corep,
                                                   outer_thread_idx, inner_thread_idx,
-                                                  norm_idxs);
+                                                  thread_limit, norm_idxs);
         }
 
         // Calculate a tile of vectors using the given mask.
@@ -938,6 +941,7 @@ namespace yask {
         calc_vectors_opt2(StencilCoreDataT* corep,
                           int outer_thread_idx,
                           int inner_thread_idx,
+                          int thread_limit,
                           ScanIndices& norm_idxs,
                           bit_mask_t mask) {
 
@@ -948,7 +952,7 @@ namespace yask {
             // Call code from stencil compiler.
             StencilBundleImplT::calc_vectors(corep,
                                              outer_thread_idx, inner_thread_idx,
-                                             norm_idxs, mask);
+                                             thread_limit, norm_idxs, mask);
             #endif
         }
 

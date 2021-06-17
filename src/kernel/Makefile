@@ -525,27 +525,27 @@ MICRO_BLOCK_LOOP_CODE	?=	$(MICRO_BLOCK_LOOP_MODS) omp loop($(MICRO_BLOCK_LOOP_OR
 # parallel on the offload device.  The indexes in this loop
 # are 'normalized', i.e., vector units and rank-relative.
 NANO_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -prefix nano_block_
-ifeq ($(offload),1)
-ifeq ($(offload_arch),x86_64)
- NANO_BLOCK_LOOP_OMP	?=	omp target parallel for device(KernelEnv::_omp_devn)
-else
- NANO_BLOCK_LOOP_OMP	?=	omp target teams distribute parallel for device(KernelEnv::_omp_devn)
-endif
-NANO_BLOCK_LOOP_FLAGS	+=	-ompMod '$(NANO_BLOCK_LOOP_OMP)'
 NANO_BLOCK_LOOP_ORDER	?=	1 .. N-1
+ifeq ($(offload),1)
+NANO_BLOCK_LOOP_OMP	?=	omp target teams distribute thread_limit(thread_limit) device(KernelEnv::_omp_devn)
+NANO_BLOCK_LOOP_FLAGS	+=	-ompMod '$(NANO_BLOCK_LOOP_OMP)'
 NANO_BLOCK_LOOP_CODE	:=	$(NANO_BLOCK_LOOP_MODS) omp loop($(NANO_BLOCK_LOOP_ORDER)) { }
 else
 NANO_BLOCK_LOOP_MODS	?=	nested
-NANO_BLOCK_LOOP_ORDER	?=	1 .. N-1
 NANO_BLOCK_LOOP_CODE	:=	$(NANO_BLOCK_LOOP_MODS) loop($(NANO_BLOCK_LOOP_ORDER)) { }
 endif
 
 # Pico-Block loops break up a pico-block into vectors or clusters.
-# The pico loops are in reverse nesting order because this works better for offload kernels.
-PICO_BLOCK_LOOP_MODS	?=	nested
 PICO_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -prefix pico_block_
-PICO_BLOCK_LOOP_ORDER	?=	N-1 .. 1
+PICO_BLOCK_LOOP_ORDER	?=	1 .. N-1
+ifeq ($(offload),1)
+PICO_BLOCK_LOOP_OMP	?=	omp parallel for
+PICO_BLOCK_LOOP_FLAGS	+=	-ompMod '$(PICO_BLOCK_LOOP_OMP)'
+PICO_BLOCK_LOOP_CODE	?=	$(PICO_BLOCK_LOOP_MODS) omp loop($(PICO_BLOCK_LOOP_ORDER)) { }
+else
+PICO_BLOCK_LOOP_MODS	?=	nested
 PICO_BLOCK_LOOP_CODE	?=	$(PICO_BLOCK_LOOP_MODS) loop($(PICO_BLOCK_LOOP_ORDER)) { }
+endif
 
 # General-purpose parallel loop.
 MISC_LOOP_OMP		?=	omp parallel for schedule(guided) proc_bind(spread)

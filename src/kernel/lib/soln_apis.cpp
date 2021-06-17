@@ -173,8 +173,9 @@ namespace yask {
                       "\n  Num inner threads:       " << bt);
             #ifdef USE_OFFLOAD
             DEBUG_MSG("Num OpenMP devices:        " << omp_get_num_devices() <<
+                      "\nOpenMP host device:        " << KernelEnv::_omp_hostn <<
                       "\nOpenMP offload device:     " << KernelEnv::_omp_devn <<
-                      "\nOpenMP host device:        " << KernelEnv::_omp_hostn);
+                      "\ndevice thread limit:       " << actl_opts->thread_limit);
             #endif
         }
 

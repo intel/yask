@@ -60,6 +60,7 @@ our @log_keys =
    'num OpenMP threads', # also matches 'Num OpenMP threads used'.
    'num outer threads',
    'num inner threads',
+   'device thread limit',
    'total overall allocation',
    'cluster size',
    'vector size',

@@ -213,7 +213,7 @@ namespace yask {
         IdxTuple _micro_block_tile_sizes; // micro-block-tile size (only used for 'tiled' micro-block loops).
         IdxTuple _nano_block_sizes;       // nano-block size (used for each nested thread).
         IdxTuple _nano_block_tile_sizes; // nano-block-tile size (only used for 'tiled' nano-block loops).
-        IdxTuple _pico_block_sizes;       // pico-block size (used within nano-blocks).
+        IdxTuple _pico_block_sizes;       // pico-block size (used within nano-blocks, no pico-tiling).
 
         // Global padding applied to all vars by default.
         IdxTuple _min_pad_sizes;         // minimum spatial padding (including halos).
@@ -232,6 +232,7 @@ namespace yask {
         int thread_divisor = 1;   // Reduce number of threads by this amount.
         int num_inner_threads = 1; // Number of threads to use for a block.
         bool bind_inner_threads = false; // Bind inner threads to global indices.
+        int thread_limit = 32;           // Offload threads per team.
 
         // Var behavior, including allocation.
         bool _step_wrap = false; // Allow invalid step indices to alias to valid ones (set via APIs only).
