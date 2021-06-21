@@ -78,6 +78,11 @@ SIMD-optimized code for Intel(R) Xeon Phi(TM) and Intel(R) Xeon(R) processors.
 ## Backward-compatibility notices
 ### Version 4
 * Version 4.00.00 was a major release with a number of notices:
+  - Support has been added for GPU offloading via the OpenMP device model.
+    Build any YASK stencil kernel with `make offload=1`. This will create
+    a kernel library and executable with an "arch" field containing
+    "offload" and the OpenMP device target name.
+    Use `make offload=1 offload_arch=<target>` to change the OpenMP target.
   - The default compiler for kernels is now the Intel(R) oneAPI C++ compiler, icpx.
     If you want to use a different compiler, use `make YK_CXX=<compiler> ...`.
     The default compiler for the YASK compiler is still `g++`. This can
@@ -87,7 +92,12 @@ SIMD-optimized code for Intel(R) Xeon Phi(TM) and Intel(R) Xeon(R) processors.
     more memorable names: regions, blocks, mini-blocks, and sub-blocks
     are now mega-blocks, blocks, micro-blocks, and nano-blocks.
     Pico-blocks have been added inside nano-blocks.
+    When offloading, the nano-blocks and pico-blocks are executed on the device.
+    The looping behaviors, including any temporal tiling, of mega-blocks,
+    blocks, and micro-blocks are handled by the CPU.
     The `get_region_size()` and `set_region_size()` APIs have been removed.
+  - Regarding CPU threads, "region threads" are now referred to as "outer threads",
+    and "block threads" are now referred to as "inner threads".
   - Only one thread per core is now used by default on most CPU models.
     This is done in `yask.sh` by passing `max_threads <N>` to the executable,
     where `<N>` is the number of cores on the node divided by the
@@ -99,7 +109,7 @@ SIMD-optimized code for Intel(R) Xeon Phi(TM) and Intel(R) Xeon(R) processors.
     used two threads per block by default and used both hyper-threads if
     they were enabled.  To configure two hyper-threads to work cooperatively
     on each block, you now must add the options
-    `-max_threads <N> -block_threads 2`, where `<N>` is the number
+    `-max_threads <N> -inner_threads 2`, where `<N>` is the number
     of logical CPUs per MPI rank.
     These changes do not
     apply to Intel(R) Xeon Phi(TM) x200-family processors (KNL), which
