@@ -524,6 +524,7 @@ MICRO_BLOCK_LOOP_CODE	?=	$(MICRO_BLOCK_LOOP_MODS) omp loop($(MICRO_BLOCK_LOOP_OR
 # loops are run by a single OMP thread. When offloading, this loop is run in
 # parallel on the offload device.  The indexes in this loop
 # are 'normalized', i.e., vector units and rank-relative.
+# When offloading, a nano-block is executed on the device.
 NANO_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -prefix nano_block_
 NANO_BLOCK_LOOP_ORDER	?=	1 .. N-1
 ifeq ($(offload),1)
@@ -536,6 +537,7 @@ NANO_BLOCK_LOOP_CODE	:=	$(NANO_BLOCK_LOOP_MODS) loop($(NANO_BLOCK_LOOP_ORDER)) {
 endif
 
 # Pico-Block loops break up a pico-block into vectors or clusters.
+# When offloading, each pico-block is executed by a team of threads on the device.
 PICO_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -prefix pico_block_
 PICO_BLOCK_LOOP_ORDER	?=	1 .. N-1
 ifeq ($(offload),1)

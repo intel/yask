@@ -476,9 +476,6 @@ namespace yask {
             sb_idxs.stride = settings._pico_block_sizes;
             sb_idxs.stride[step_posn] = idx_t(1);
 
-            // We need to run pico loops only if they're greater than a cluster.
-            bool need_pico_loops = sb_idxs.stride.product() > dims->_cluster_pts.product();
-
             // Tiles in nano-blocks.
             sb_idxs.tile_size = settings._nano_block_tile_sizes;
 
@@ -705,13 +702,11 @@ namespace yask {
                           norm_fcidxs.begin.make_val_str() <<
                           " ... " << norm_fcidxs.end.make_val_str() <<
                           ") with stride " << norm_fcidxs.stride.make_val_str() <<
-                          (need_pico_loops ? " with" : " without") << " pico loops"
                           " by outer thread " << outer_thread_idx <<
                           " and inner thread " << inner_thread_idx);
                 
                 // Perform the calculations in this block.
-                calc_clusters_opt2(cp, need_pico_loops,
-                                   outer_thread_idx, inner_thread_idx,
+                calc_clusters_opt2(cp, outer_thread_idx, inner_thread_idx,
                                    thread_limit, norm_fcidxs);
                 
             } // whole clusters.
@@ -915,22 +910,15 @@ namespace yask {
         // Static to make sure offload doesn't need 'this'.
         static void
         calc_clusters_opt2(StencilCoreDataT* corep,
-                           bool need_pico_loops,
                            int outer_thread_idx,
                            int inner_thread_idx,
                            int thread_limit,
                            ScanIndices& norm_idxs) {
 
             // Call code from stencil compiler.
-            if (need_pico_loops)
-                StencilBundleImplT::
-                    calc_clusters_with_pico_loops(corep,
-                                                  outer_thread_idx, inner_thread_idx,
-                                                  thread_limit, norm_idxs);
-            else
-                StencilBundleImplT::calc_clusters(corep,
-                                                  outer_thread_idx, inner_thread_idx,
-                                                  thread_limit, norm_idxs);
+            StencilBundleImplT::calc_clusters(corep,
+                                              outer_thread_idx, inner_thread_idx,
+                                              thread_limit, norm_idxs);
         }
 
         // Calculate a tile of vectors using the given mask.
