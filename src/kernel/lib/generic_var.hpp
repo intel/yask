@@ -42,7 +42,6 @@ namespace yask {
     // The LayoutFn class must provide a 1:1 transform between
     // n-D and 1-D indices.
     // A trivially-copyable type for offloading.
-    OMP_DECL_TARGET
     template <typename T, typename LayoutFn>
     class GenericVarCore {
         friend class GenericVarBase;
@@ -121,7 +120,6 @@ namespace yask {
         }
 
     }; //GenericVarCore.
-    OMP_END_DECL_TARGET
    
     // A base class for a generic n-D var.
     // This class does not define a type or memory layout.

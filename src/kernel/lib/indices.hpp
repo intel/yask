@@ -31,8 +31,6 @@ namespace yask {
     typedef std::vector<idx_t> VarDimSizes;
     typedef std::vector<std::string> VarDimNames;
 
-    OMP_DECL_TARGET;
-    
     // Max number of indices that can be held.
     // Note use of "+max_idxs" in code below to avoid compiler
     // trying to take a reference to it, resulting in an undefined
@@ -42,15 +40,12 @@ namespace yask {
     // Step dim is always in [0] of an Indices type (if it is used).
     constexpr int step_posn = 0;
 
-    OMP_END_DECL_TARGET;
-
     // A class to hold up to a given number of sizes or indices efficiently.
     // Similar to a Tuple, but less overhead and doesn't keep names.
     // This class is NOT virtual.
     // TODO: add a template parameter for max indices.
     // TODO: ultimately, combine with Tuple w/o loss of efficiency.
     class Indices {
-        OMP_DECL_TARGET;
 
     protected:
         idx_t _idxs[+max_idxs]; // Index values.
@@ -358,9 +353,6 @@ namespace yask {
             }
         }
 
-        // Methods below this point are not allowed in OMP target regions.
-        OMP_END_DECL_TARGET;
-        
         // More ctors.
         Indices(const IdxTuple& src) {
             set_from_tuple(src);
@@ -560,8 +552,6 @@ namespace yask {
     #pragma omp declare reduction(max_idxs : Indices :                  \
                                   omp_out = omp_out.max_elements(omp_in) ) \
         initializer (omp_priv = omp_orig)
-
-    OMP_DECL_TARGET
 
     // Layout base class.
     // This class hierarchy is NOT virtual.
@@ -779,6 +769,5 @@ namespace yask {
             }
         }
     };
-    OMP_END_DECL_TARGET
 
 } // yask namespace.

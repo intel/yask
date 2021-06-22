@@ -182,12 +182,10 @@ namespace yask {
             os << "#define VLEN_" << uc_dim << " (" << dim.get_val() << ")" << endl;
         }
         os << "namespace yask {\n"
-            " OMP_DECL_TARGET\n"
             "\n //Number of points or multipliers in domain dims.\n"
             " constexpr idx_t fold_pts[]{ " << _dims._fold.make_val_str() << " };\n"
             " constexpr idx_t cluster_pts[]{ " << _dims._cluster_pts.make_val_str() << " };\n"
             " constexpr idx_t cluster_mults[]{ " << _dims._cluster_mults.make_val_str() << " };\n"
-            " OMP_END_DECL_TARGET\n"
             "}\n";
         os << "#define VLEN (" << _dims._fold.product() << ")\n"
             "#define CPTS (" << _dims._cluster_pts.product() << ")\n";
@@ -470,8 +468,6 @@ namespace yask {
             os << endl << " // " << stats.get_num_ops() << " FP operation(s) per point:\n";
             add_comment(os, *eq);
 
-            os << " OMP_DECL_TARGET\n";
-            
             // Domain condition.
             {
                 os << "\n // Determine whether " << egs_name << " is valid at the domain indices " <<
@@ -592,7 +588,6 @@ namespace yask {
 
                 delete sp;
             }
-            os << " OMP_END_DECL_TARGET\n";
 
             // Vector/Cluster code.
             for (bool do_cluster : { false, true }) {

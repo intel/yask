@@ -79,7 +79,6 @@ namespace yask {
     */
     
     ///// Yk*Var*Core types /////
-    OMP_DECL_TARGET
     
     // Core data that is needed for computations using a var.
     // A trivially-copyable type for offloading.
@@ -471,7 +470,6 @@ namespace yask {
         }
 
     }; // YkVecVarCore.
-    OMP_END_DECL_TARGET
 
     ///// Yk*Var* types /////
 
