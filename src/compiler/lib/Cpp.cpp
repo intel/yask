@@ -812,6 +812,20 @@ namespace yask {
         }
     }
 
+    // Print some rank info.
+    void CppVecPrintHelper::print_rank_data(ostream& os) {
+        auto& fold = get_fold();
+        os << "\n // Rank data.\n";
+        int i = 0;
+        for (auto& dim : fold) {
+            auto& dname = dim._get_name();
+            string rdoname = _rank_domain_offset_prefix + dname;
+            os << " const idx_t " << rdoname <<
+                " = core_data->_common_core._rank_domain_offsets[" << i << "];\n";
+            i++;
+        }
+    }
+    
     // Print init of element indices.
     // Fill _vec2elem_*_map as side-effect.
     void CppVecPrintHelper::print_elem_indices(ostream& os) {
@@ -826,9 +840,8 @@ namespace yask {
                 " = " << dname << " * VLEN_" << cap_dname << ";\n";
             _vec2elem_local_map[dname] = elname;
             string egname = dname + _elem_suffix_global;
-            os << " idx_t " << egname <<
-                " = core_data->_common_core._rank_domain_offsets[" << i << "] + (" <<
-                dname << " * VLEN_" << cap_dname << ");\n";
+            string rdoname = _rank_domain_offset_prefix + dname;
+            os << " idx_t " << egname << " = " << rdoname << " + " << elname << ";\n";
             _vec2elem_global_map[dname] = egname;
             i++;
         }
@@ -837,6 +850,9 @@ namespace yask {
     // Print loop-invariant meta values for each VarPoint.
     string CppPreLoopPrintMetaVisitor::visit(VarPoint* gp) {
         assert(gp);
+
+        // Local offsets.
+        
 
         // Pointer to this var.
         string varp = get_var_ptr(*gp);
@@ -847,7 +863,7 @@ namespace yask {
                                              CppPrintHelper::_var_ptr_restrict_type,
                                              vname + "_core");
         
-        // Time var for this access, if any.
+        // Step var for this access, if any.
         auto& dims = _cvph.get_dims();
         string sas = gp->make_step_arg_str(var_ptr, dims);
         if (sas.length()) {

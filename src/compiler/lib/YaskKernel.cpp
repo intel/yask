@@ -660,6 +660,7 @@ namespace yask {
                 os << "\n ////// Loop-invariant meta values.\n";
                 CppPreLoopPrintMetaVisitor plpmv(os, *vp);
                 vceq->visit_eqs(&plpmv);
+                vp->print_rank_data(os);
 
                 // Inner-loop strides.
                 // Will be 1 for vectors and cluster-mults for clusters.

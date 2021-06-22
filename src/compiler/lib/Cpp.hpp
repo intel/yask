@@ -130,6 +130,9 @@ namespace yask {
         string _elem_suffix_local = "_local_elem";
         VarMap _vec2elem_local_map, _vec2elem_global_map;
 
+        // Rank vars.
+        string _rank_domain_offset_prefix = "rank_domain_offset_";
+
         // Set to var name of write mask if/when used.
         string _write_mask = "";
 
@@ -233,6 +236,9 @@ namespace yask {
         // Print only 'ptr_var' if provided.
         virtual void print_prefetches(ostream& os, bool ahead, string ptr_var = "");
 
+        // print init of rank constants.
+        virtual void print_rank_data(ostream& os);
+        
         // print init of un-normalized indices.
         virtual void print_elem_indices(ostream& os);
 

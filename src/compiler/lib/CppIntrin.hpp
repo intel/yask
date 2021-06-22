@@ -172,7 +172,7 @@ namespace yask {
     class YASKAvx256Printer : public YASKCppPrinter {
     protected:
         virtual CppVecPrintHelper* new_cpp_vec_print_helper(VecInfoVisitor& vv,
-                                                        CounterVisitor& cv) {
+                                                        CounterVisitor& cv) override {
             return new CppAvx256PrintHelper(vv, _settings, _dims, &cv,
                                             "real_vec_t", " ", ";\n");
         }
@@ -184,7 +184,9 @@ namespace yask {
                           EqBundles& cluster_eq_bundles) :
             YASKCppPrinter(stencil, eq_bundles, eq_stages, cluster_eq_bundles) { }
 
-        virtual int num_vec_elems() const { return 32 / _settings._elem_bytes; }
+        virtual int num_vec_elems() const override {
+            return 32 / _settings._elem_bytes;
+        }
     };
 
     // Print 512-bit AVX intrinsic code.
@@ -192,7 +194,7 @@ namespace yask {
     protected:
         bool _is_lo;
         virtual CppVecPrintHelper* new_cpp_vec_print_helper(VecInfoVisitor& vv,
-                                                        CounterVisitor& cv) {
+                                                        CounterVisitor& cv) override {
             return new CppAvx512PrintHelper(vv, _settings, _dims, &cv,
                                             "real_vec_t", " ", ";\n");
         }
@@ -206,12 +208,12 @@ namespace yask {
             YASKCppPrinter(stencil, eq_bundles, eq_stages, cluster_eq_bundles),
             _is_lo(is_lo) { }
 
-        virtual int num_vec_elems() const {
+        virtual int num_vec_elems() const override {
             return (_is_lo ? 32 : 64) / _settings._elem_bytes;
         }
 
         // Whether multi-dim folding is efficient.
-        virtual bool is_folding_efficient() const { return true; }
+        virtual bool is_folding_efficient() const override { return true; }
     };
 
 } // namespace yask.
