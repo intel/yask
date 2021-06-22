@@ -863,21 +863,6 @@ help:
 #################################
 # TODO: convert all testing to a separate test framework.
 
-# Disable folding and clustering for offload testing.
-empty		:=
-space		:=	$(empty) $(empty)
-comma		:=	,
-ifeq ($(offload),1)
-FOLD		=
-CLUSTER		=
-else
-FOLD		=	fold=$(subst $(space),$(comma),$(1))
-CLUSTER		=	cluster=$(subst $(space),$(comma),$(1))
-endif
-
-TEST_ARGS	:=	real_bytes=8 allow_new_var_types=0 check=1 trace=1
-TEST_MAKE 	:=	$(MAKE) $(TEST_ARGS)
-
 # Default number of ranks for running tests.
 # 4 is good because it tests in-plane diagonal exchanges for 2D and 3D tests.
 # 8 would test all exchanges for 3D tests.
@@ -894,6 +879,21 @@ last_test	:=	999
 # Default threads.
 max_threads	:=	6
 inner_threads	:=	2
+
+# Disable folding and clustering for offload testing.
+empty		:=
+space		:=	$(empty) $(empty)
+comma		:=	,
+ifeq ($(offload),1)
+FOLD		=
+CLUSTER		=
+else
+FOLD		=	fold=$(subst $(space),$(comma),$(1))
+CLUSTER		=	cluster=$(subst $(space),$(comma),$(1))
+endif
+
+TEST_ARGS	:=	real_bytes=8 allow_new_var_types=0 check=1 trace=1
+TEST_MAKE 	:=	$(MAKE) $(TEST_ARGS)
 
 ### Unit tests.
 
