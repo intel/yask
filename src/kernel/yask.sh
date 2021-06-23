@@ -86,8 +86,7 @@ tmplog="/tmp/yask-p$$"
 
 # Validation shortcut (-v) vars.
 doval=0
-val="-validate -no-pre_auto_tune -no-auto_tune -no-warmup -num_trials 1 -trial_steps 1 -b 24"
-valsz="-l 64"
+val="-validate -no-pre_auto_tune -no-auto_tune -no-warmup -num_trials 1 -trial_steps 2 -l 64 -Mb 56 -b 48 -mb 40 -nb 32 -pb 24"
 
 # Display stencils in this dir and exit.
 function show_stencils {
@@ -106,34 +105,38 @@ while true; do
     elif [[ "$1" == "-h" ]]; then
         shift
         echo "$0 is a wrapper around the YASK executable to set up the proper environment."
-        echo "Usage: $0 -stencil <stencil> [options]"
-        echo "  -stencil <stencil>"
-        echo "     Specify the solution-name part of the kernel executable."
-        echo "     Should correspond to stencil=<stencil> used during compilation."
+        echo "Usage: $0 -stencil <name> [options]"
+        echo "  -stencil <name>"
+        echo "     Specify the solution-name part of the YASK executable."
+        echo "     Should correspond to stencil=<name> used during compilation,"
+        echo "     or YK_STENCIL=<name> if that was used to override the default."
         echo "     Run this script without any options to see the available stencils."
         echo " "
-        echo "Some options are generic (parsed by the driver script and applied to any stencil),"
-        echo " and some options are parsed by the stencil executable determined by stencil and arch."
-        echo " "
-        echo "Generic (script) options:"
+        echo "Script options:"
         echo "  -h"
         echo "     Print this help."
-        echo "     To see YASK stencil-specific options, run '$0 -stencil <stencil> [-arch <arch>] -help'."
-        echo "  -arch <arch>"
+        echo "     To see more options from the YASK executable, run the following command:"
+        echo "       $0 -stencil <name> [-arch <name>] -help"
+        echo "     This will run the executable with the '-help' option."
+        echo "  -arch <name>"
         echo "     Specify the architecture-name part of the kernel executable."
         echo "     Overrides the default architecture determined from /proc/cpuinfo flags."
-        echo "     The default <arch> for this host is '$def_arch'."
-        echo "     Should correspond to arch=<arch> used during compilation."
+        echo "     The default arch for this host is '$def_arch'."
+        echo "     Should correspond to arch=<name> used during compilation"
+        echo "     with '.offload-<offload_arch>' appended when built with 'offload=1',"
+        echo "     or YK_ARCH=<name> if that was used to override the default."
+        echo "     In any case, the '-stencil' and '-arch' args required to launch"
+        echo "     any executable are printed at the end of a successful compilation."
         echo "  -host <hostname>"
         echo "     Specify host to run executable on."
         echo "     Run sub-shell under 'ssh <hostname>'."
         echo "  -sh_prefix <command>"
         echo "     Run sub-shell under <command>, e.g., a custom ssh command."
         echo "     If -host and -sh_prefix are both specified, run sub-shell under"
-        echo "     'ssh <hostname> <command>."
+        echo "     'ssh <hostname> <command>'."
         echo "  -exe <dir/file>"
         echo "     Specify <dir/file> as YASK executable instead of one in the same directory as"
-        echo "     this script with a name based on stencil and arch."
+        echo "     this script with a name based on '-stencil' and '-arch'."
         echo "     <dir>/../lib will also be prepended to the LD_LIBRARY_PATH env var."
         echo "  -exe_prefix <command>"
         echo "     Run YASK executable as an argument to <command>, e.g., 'numactl -N 0'."
@@ -157,13 +160,19 @@ while true; do
         echo "     Directory name to prepend to log <filename>."
         echo "     Default is '$logdir'."
         echo "  -v"
-        echo "     Pass default validation options to YASK executable; shortcut for '$val'."
-        echo "     If you don't specify any global or local domain sizes, '$valsz' is also added."
+        echo "     Shortcut for the following options:"
+        echo "       $val"
+        echo "     If you want to override any of these values, place them after '-v'."
         echo "  -show_arch"
         echo "     Print the default architecture string and exit."
-        echo "  <env-var=value>"
+        echo "  <env-var>=<value>"
         echo "     Set environment variable <env-var> to <value>."
         echo "     Repeat as necessary to set multiple vars."
+        echo ""
+        echo "  All script args not listed above will be passed to the executable."
+        echo ""
+        echo "  Canonical command issued based on above options:"
+        echo "     ssh <-host option> <-sh_prefix option> sh -c -x '<some system-status cmds>; <-pre_cmd option>; env <env vars> <-mpi_cmd option> <-exe_prefix option> <-exe option> <exe args>; <-post_cmd option>'"
         exit 0
 
     elif [[ "$1" == "-help" ]]; then
@@ -270,7 +279,7 @@ echo $invo
 
 # Check required opt (yes, it's an oxymoron).
 if [[ -z ${stencil:+ok} ]]; then
-    echo "error: missing required option: -stencil <stencil>"
+    echo "error: missing required option: -stencil <name>"
     show_stencils
 fi
 
@@ -353,13 +362,7 @@ fi
 
 # Add validation opts to beginning.
 if [[ $doval == 1 ]]; then
-
-    # Add local size only if no sizes are specified.
-    if [[ "$opts" =~ -[lg][A-Za-z0-9_]*[[:space:]][0-9]+ ]]; then
-        opts="$val $opts"
-    else
-        opts="$val $valsz $opts"
-    fi
+    opts="$val $opts"
 fi
 
 # Commands to capture some important system status and config info for benchmark documentation.
