@@ -498,7 +498,7 @@ RANK_LOOP_CODE		?=	$(RANK_LOOP_MODS) loop($(RANK_LOOP_ORDER)) { }
 # 'omp' modifier creates an outer OpenMP loop so that each block is assigned
 # to a top-level OpenMP thread.
 MEGA_BLOCK_LOOP_OMP		?=	omp parallel for schedule(dynamic,1) proc_bind(spread)
-MEGA_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -prefix mega_block_ -ompMod '$(MEGA_BLOCK_LOOP_OMP)'
+MEGA_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -prefix mega_block_ -omp '$(MEGA_BLOCK_LOOP_OMP)'
 MEGA_BLOCK_LOOP_ORDER	?=	1 .. N-1
 MEGA_BLOCK_LOOP_CODE	?=	$(MEGA_BLOCK_LOOP_MODS) omp loop($(MEGA_BLOCK_LOOP_ORDER)) { } 
 
@@ -516,7 +516,7 @@ BLOCK_LOOP_CODE		?=	$(BLOCK_LOOP_MODS) loop($(BLOCK_LOOP_ORDER)) { }
 # nested OpenMP thread. The OpenMP construct is not used when running with
 # '-bind_inner_threads' because another parallel section is created.
 MICRO_BLOCK_LOOP_OMP	?=	omp parallel for schedule(static,1) proc_bind(spread)
-MICRO_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -prefix micro_block_ -ompMod '$(MICRO_BLOCK_LOOP_OMP)'
+MICRO_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -prefix micro_block_ -omp '$(MICRO_BLOCK_LOOP_OMP)'
 MICRO_BLOCK_LOOP_ORDER	?=	1 .. N-1
 MICRO_BLOCK_LOOP_CODE	?=	$(MICRO_BLOCK_LOOP_MODS) omp loop($(MICRO_BLOCK_LOOP_ORDER)) { }
 
@@ -529,7 +529,7 @@ NANO_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -prefix nano_block_
 NANO_BLOCK_LOOP_ORDER	?=	1 .. N-1
 ifeq ($(offload),1)
 NANO_BLOCK_LOOP_OMP	?=	omp target teams distribute thread_limit(thread_limit) device(KernelEnv::_omp_devn)
-NANO_BLOCK_LOOP_FLAGS	+=	-ompMod '$(NANO_BLOCK_LOOP_OMP)'
+NANO_BLOCK_LOOP_FLAGS	+=	-omp '$(NANO_BLOCK_LOOP_OMP)'
 NANO_BLOCK_LOOP_CODE	:=	$(NANO_BLOCK_LOOP_MODS) omp loop($(NANO_BLOCK_LOOP_ORDER)) { }
 else
 NANO_BLOCK_LOOP_MODS	?=	nested
@@ -542,7 +542,7 @@ PICO_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -prefix pico_block_
 PICO_BLOCK_LOOP_ORDER	?=	1 .. N-1
 ifeq ($(offload),1)
 PICO_BLOCK_LOOP_OMP	?=	omp parallel for
-PICO_BLOCK_LOOP_FLAGS	+=	-ompMod '$(PICO_BLOCK_LOOP_OMP)'
+PICO_BLOCK_LOOP_FLAGS	+=	-omp '$(PICO_BLOCK_LOOP_OMP)'
 PICO_BLOCK_LOOP_CODE	?=	$(PICO_BLOCK_LOOP_MODS) omp loop($(PICO_BLOCK_LOOP_ORDER)) { }
 else
 PICO_BLOCK_LOOP_MODS	?=	nested
@@ -551,7 +551,7 @@ endif
 
 # General-purpose parallel loop.
 MISC_LOOP_OMP		?=	omp parallel for schedule(guided) proc_bind(spread)
-MISC_LOOP_FLAGS		?=	-ndims $(NSDIMS) -prefix misc_ -ompMod '$(MISC_LOOP_OMP)'
+MISC_LOOP_FLAGS		?=	-ndims $(NSDIMS) -prefix misc_ -omp '$(MISC_LOOP_OMP)'
 MISC_LOOP_ORDER		?=	1 .. N-1
 MISC_LOOP_CODE		?=	$(MISC_LOOP_MODS) omp loop($(MISC_LOOP_ORDER)) { }
 

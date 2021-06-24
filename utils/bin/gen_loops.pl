@@ -962,9 +962,9 @@ sub processCode($) {
         "// Enable this part by defining the following macro.",
         "#ifdef ${macroPrefix}$loopPart$innerNum\n",
         "// These macros must be re-defined for each generated loop-nest.",
-        macroDef('SIMD_PRAGMA', pragma($OPT{simdMod})),
-        macroDef('INNER_PRAGMA', pragma($OPT{innerMod})),
-        macroDef('OMP_PRAGMA', pragma($OPT{ompMod})),
+        macroDef('SIMD_PRAGMA', pragma($OPT{simd})),
+        macroDef('INNER_LOOP_PREFIX', pragma($OPT{inner})),
+        macroDef('OMP_PRAGMA', pragma($OPT{omp})),
         macroDef('OMP_NUM_THREADS', 'omp_get_num_threads()'),
         macroDef('OMP_THREAD_NUM', 'omp_get_thread_num()');
     for my $expr (@fixed_exprs, @var_exprs) {
@@ -991,9 +991,7 @@ sub processCode($) {
         elsif (lc $tok eq 'omp') {
 
             $features |= $bOmpPar;
-            push @loopPrefix,
-                "// Distribute iterations among OpenMP threads.", 
-                "${macroPrefix}OMP_PRAGMA";
+            push @loopPrefix, "${macroPrefix}OMP_PRAGMA";
             print "info: using OpenMP on following loop(s).\n";
         }
 
@@ -1051,7 +1049,7 @@ sub processCode($) {
 
             # In inner loop?
             my $is_inner = $ndims && isInInner(\@toks, \$ti);
-            push @loopPrefix, "${macroPrefix}INNER_PRAGMA" if $is_inner;
+            unshift @loopPrefix, "${macroPrefix}INNER_LOOP_PREFIX" if $is_inner;
 
             # Start the loop unless there are no indices.
             if ($ndims) {
@@ -1151,7 +1149,7 @@ sub processCode($) {
         macroUndef('OMP_NUM_THREADS'),
         macroUndef('OMP_THREAD_NUM'),
         macroUndef('SIMD_PRAGMA'),
-        macroUndef('INNER_PRAGMA');
+        macroUndef('INNER_LOOP_PREFIX');
     for my $expr (@fixed_exprs, @var_exprs) {
         push @code,
             macroUndef($expr),
@@ -1194,9 +1192,9 @@ sub main() {
         # knob,        description,   optional default
         [ "ndims=i", "Value of N.", 1],
         [ "prefix=s", "Common prefix of all generated macros and vars", ''],
-        [ "ompMod=s", "Set default OMP_PRAGMA macro used before 'omp' loop(s).", "omp parallel for"],
-        [ "simdMod=s", "Set default SIMD_PRAGMA macro used before 'simd' loop(s).", "omp simd"],
-        [ "innerMod=s", "Set default INNER_PRAGMA macro used before inner loop(s).", ''],
+        [ "inner=s", "Set default INNER_LOOP_PREFIX macro used before inner loop(s).", ''],
+        [ "omp=s", "Set default OMP_PRAGMA macro used before 'omp' loop(s).", "omp parallel for"],
+        [ "simd=s", "Set default SIMD_PRAGMA macro used before 'simd' loop(s).", "omp simd"],
         [ "output=s", "Name of output file.", 'loops.h'],
         );
     my($command_line) = process_command_line(\%OPT, \@KNOBS);
