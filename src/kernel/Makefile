@@ -1032,6 +1032,7 @@ api-tests:
 STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 
 1d-tests:
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stream_1d $(call FOLD,x=4)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_1d $(call FOLD,x=4)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_1d $(call FOLD,x=4) $(call CLUSTER,x=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stages_1d $(call FOLD,x=4)
@@ -1056,13 +1057,13 @@ STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_2d $(call FOLD,x=2 y=2)
 
 3d-tests:
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stream_3d radius=5
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d $(call FOLD,x=2 y=2 z=2) EXTRA_YC_FLAGS=-fus
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d $(call FOLD,x=2 y=2 z=2) EXTRA_YC_FLAGS=-lus
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d $(call FOLD,x=2 z=2) domain_dims=z,y,x
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stages_3d $(call FOLD,y=2 x=2) domain_dims=x,z,y
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_partial_3d $(call FOLD,x=2 z=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_partial_3d $(call FOLD,x=2 z=2) domain_dims=x,z,y
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stream_3d radius=5
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_3d $(call FOLD,x=2 y=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_3d $(call FOLD,x=2 z=2)
 

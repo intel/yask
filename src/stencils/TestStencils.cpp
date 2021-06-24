@@ -366,14 +366,86 @@ namespace {
     // '-stencil' commmand-line option or the 'stencil=' build option.
     static TestMisc2dStencil TestMisc2dStencil_instance;
 
-
-    // A "stream-like" stencil that just reads and writes
+    // "Stream-like" stencils that just read and write
     // with no spatial offsets.
     // The radius controls how many reads are done in the time domain.
     // Running with radius=2 should give performance comparable to
     // (but not identical to) the stream 'triad' benchmark.
+    class StreamStencil1 : public yc_solution_with_radius_base {
 
-    class StreamStencil : public yc_solution_with_radius_base {
+    protected:
+
+        // Indices & dimensions.
+        yc_index_node_ptr t = new_step_index("t");           // step in time dim.
+        yc_index_node_ptr x = new_domain_index("x");         // spatial dim.
+
+        // Vars.
+        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x }); // time-varying 3D var.
+
+    public:
+
+        StreamStencil1(int radius=2) :
+            yc_solution_with_radius_base("test_stream_1d", radius) { }
+        virtual ~StreamStencil1() { }
+
+        // Define equation to read 'get_radius()' values and write one.
+        virtual void define() {
+
+            yc_number_node_ptr v;
+
+            // Add 'get_radius()' values from past time-steps.
+            for (int r = 0; r < get_radius(); r++)
+                v += A(t-r, x);
+
+            // define the value at t+1 to be equivalent to v + 1.
+            A(t+1, x) EQUALS v + 1;
+        }
+    };
+
+    // Create an object of type 'StreamStencil1',
+    // making it available in the YASK compiler utility via the
+    // '-stencil' commmand-line option or the 'stencil=' build option.
+    static StreamStencil1 StreamStencil1_instance;
+
+    class StreamStencil2 : public yc_solution_with_radius_base {
+
+    protected:
+
+        // Indices & dimensions.
+        yc_index_node_ptr t = new_step_index("t");           // step in time dim.
+        yc_index_node_ptr x = new_domain_index("x");         // spatial dim.
+        yc_index_node_ptr y = new_domain_index("y");         // spatial dim.
+
+        // Vars.
+        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y }); // time-varying 3D var.
+
+    public:
+
+        StreamStencil2(int radius=2) :
+            yc_solution_with_radius_base("test_stream_2d", radius) { }
+        virtual ~StreamStencil2() { }
+
+        // Define equation to read 'get_radius()' values and write one.
+        virtual void define() {
+
+            yc_number_node_ptr v;
+
+            // Add 'get_radius()' values from past time-steps.
+            for (int r = 0; r < get_radius(); r++)
+                v += A(t-r, x, y);
+
+            // define the value at t+1 to be equivalent to v + 1.
+            A(t+1, x, y) EQUALS v + 1;
+        }
+    };
+
+    // Create an object of type 'StreamStencil2',
+    // making it available in the YASK compiler utility via the
+    // '-stencil' commmand-line option or the 'stencil=' build option.
+    static StreamStencil2 StreamStencil2_instance;
+
+
+    class StreamStencil3 : public yc_solution_with_radius_base {
 
     protected:
 
@@ -388,9 +460,9 @@ namespace {
 
     public:
 
-        StreamStencil(int radius=2) :
+        StreamStencil3(int radius=2) :
             yc_solution_with_radius_base("test_stream_3d", radius) { }
-        virtual ~StreamStencil() { }
+        virtual ~StreamStencil3() { }
 
         // Define equation to read 'get_radius()' values and write one.
         virtual void define() {
@@ -406,14 +478,13 @@ namespace {
         }
     };
 
-    // Create an object of type 'StreamStencil',
+    // Create an object of type 'StreamStencil3',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static StreamStencil StreamStencil_instance;
+    static StreamStencil3 StreamStencil3_instance;
 
     // Reverse-time stencil.
     // In this test, A(t-1) depends on A(t).
-
     class TestReverseStencil : public TestBase {
 
     protected:
