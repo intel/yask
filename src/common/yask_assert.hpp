@@ -25,11 +25,16 @@ IN THE SOFTWARE.
 #pragma once
 #include <stdio.h>
 
-// Stringizing hacks for the C preprocessor.
+// Hack macros for the C preprocessor.
 #define YSTR1(s) #s
 #define YSTR2(s) YSTR1(s)
 #define YPRAGMA(x) _Pragma(#x)
-    
+#define YCAT(a, ...) YPRIM_CAT(a, __VA_ARGS__)
+#define YPRIM_CAT(a, ...) a ## __VA_ARGS__
+#define YIIF(c) YPRIM_CAT(IIF_, c)
+#define YIIF_0(t, ...) __VA_ARGS__
+#define YIIF_1(t, ...) t
+
 // Control assert() by turning on with CHECK instead of turning off with
 // NDEBUG. This makes it off by default.
 #ifdef CHECK

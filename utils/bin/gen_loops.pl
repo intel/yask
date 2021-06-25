@@ -214,6 +214,29 @@ sub getInVars() {
     return @stmts;
 }
 
+# Conditionally define a macro.
+sub macroDef($$$) {
+    my $mname = shift;
+    my $margs = shift;
+    my $mdef = shift;
+
+    $mname = uc $mname;
+    $margs = (defined $margs) ? "($margs)" : "";
+    return
+        "#ifndef ${macroPrefix}$mname",
+        "#define ${macroPrefix}$mname$margs $mdef",
+        "#endif";
+}
+sub macroUndef($) {
+    my $mname = shift;
+
+    $mname = uc $mname;
+    return
+        "#ifdef ${macroPrefix}$mname",
+        "#undef ${macroPrefix}$mname",
+        "#endif";
+}
+
 # make macros for the body.
 sub makeOutMacros {
     my @ldims = @_;
@@ -221,19 +244,20 @@ sub makeOutMacros {
     my @stmts;
     for my $expr (@fixed_exprs, @var_exprs) {
         my $isVar = (grep {$_ eq $expr} @var_exprs) > 0;
-        my $macro = "${macroPrefix}BODY_".uc($expr)."(dim_num)";
-        my $stmt = " #define $macro (";
+        my $base = "BODY_".uc($expr);
         for my $dim (@dims) {
+
+            # Ex: 'begin_0'.
             my $vname = locVar($expr, $dim);
 
             # If dim not processed, use orig inputs.
+            # Ex: 'stop_0_orig'.
             my $dimProc = (grep {$_ == $dim} @ldims) > 0;
             $vname .= '_orig' if ($isVar && !$dimProc);
         
-            $stmt .= "((dim_num) == $dim) ? $vname : ";
+            push @stmts, macroDef("${base}_$dim", undef, $vname);
         }
-        $stmt .= "0);";
-        push @stmts, $stmt;
+        push @stmts, macroDef($base, "dim_num", "YCAT($macroPrefix${base}_, dim_num)");
     }
 
     return @stmts;
@@ -913,28 +937,6 @@ sub pragma($) {
         "_Pragma(\"$codeString\")" : "";
 }
 
-# Conditionally define a macro.
-sub macroDef($$) {
-    my $mname = shift;
-    my $mdef = shift;
-
-    my $mname2 = $mname =~ s/\(.*//r;         # remove args.
-    return
-        "#ifndef ${macroPrefix}$mname2",
-        "#define ${macroPrefix}$mname $mdef",
-        "#endif";
-}
-sub macroUndef($) {
-    my $mname = shift;
-
-    $mname = uc $mname;
-    $mname =~ s/\(.*//r;         # remove args.
-    return
-        "#ifdef ${macroPrefix}$mname",
-        "#undef ${macroPrefix}$mname",
-        "#endif";
-}
-
 # Process the loop-code string.
 # This is where most of the work is done.
 sub processCode($) {
@@ -962,13 +964,13 @@ sub processCode($) {
         "// Enable this part by defining the following macro.",
         "#ifdef ${macroPrefix}$loopPart$innerNum\n",
         "// These macros must be re-defined for each generated loop-nest.",
-        macroDef('SIMD_PRAGMA', pragma($OPT{simd})),
-        macroDef('INNER_LOOP_PREFIX', pragma($OPT{inner})),
-        macroDef('OMP_PRAGMA', pragma($OPT{omp})),
-        macroDef('OMP_NUM_THREADS', 'omp_get_num_threads()'),
-        macroDef('OMP_THREAD_NUM', 'omp_get_thread_num()');
+        macroDef('SIMD_PRAGMA', undef, pragma($OPT{simd})),
+        macroDef('INNER_LOOP_PREFIX', undef, pragma($OPT{inner})),
+        macroDef('OMP_PRAGMA', undef, pragma($OPT{omp})),
+        macroDef('OMP_NUM_THREADS', undef, 'omp_get_num_threads()'),
+        macroDef('OMP_THREAD_NUM', undef, 'omp_get_thread_num()');
     for my $expr (@fixed_exprs, @var_exprs) {
-        push @code, macroDef((uc $expr)."(dim_num)", inVar().'.'.$expr.'[dim_num]');
+        push @code, macroDef($expr, "dim_num", inVar().'.'.$expr.'[dim_num]');
     }
     push @code,
         "// 'ScanIndices ".inVar()."' must be set before the following code".
@@ -1154,6 +1156,10 @@ sub processCode($) {
         push @code,
             macroUndef($expr),
             macroUndef("BODY_$expr");
+        for my $dim (@dims) {
+            push @code,
+                macroUndef("BODY_${expr}_$dim");
+        }
     }
     push @code,
         macroUndef($loopPart.$innerNum),
