@@ -169,6 +169,43 @@ namespace yask {
         YkElemVarCore(int ndims) :
             YkVarBaseCore(ndims) { }
 
+    protected:
+
+        // Calc one adjusted index and recurse to i-1.
+        template <bool is_global, int i>
+        void _get_adj_idx(Indices& adj_idxs,
+                          const Indices& idxs,
+                          idx_t alloc_step_idx) const {
+            if constexpr (i < 0)
+                             return;
+
+            // Special handling for step index.
+            constexpr auto sp = +step_posn;
+            if constexpr (_use_step_idx && i == sp) {
+                host_assert(alloc_step_idx == _wrap_step(idxs[sp]));
+                adj_idxs[i] = alloc_step_idx;
+            }
+
+            // All other indices.
+            else {
+
+                // Adjust for offsets and padding.
+                // This gives a positive 0-based local element index.
+                idx_t ai = idxs[i] + _actl_left_pads[i] - _local_offsets[i];
+
+                // Also adjust for rank offsets if using global indices.
+                if constexpr (is_global)
+                                 ai -= _rank_offsets[i];
+                    
+                host_assert(ai >= 0);
+                adj_idxs[i] = uidx_t(ai);
+            }
+
+            // Recurse until done.
+            if constexpr (i > 0)
+                             _get_adj_idx<is_global, i - 1>(adj_idxs, idxs, alloc_step_idx);
+        }
+
         // Get a pointer to given element.
         // 'alloc_step_idx' must be within allocation bounds and consistent
         // with 'idxs[step_posn]'.
@@ -178,34 +215,13 @@ namespace yask {
                                     bool check_bounds) const {
             constexpr auto n = LayoutFn::get_num_sizes();
             Indices adj_idxs(n);
-
-            // Special handling for step index.
-            auto sp = +step_posn;
-            if (_use_step_idx) {
-                host_assert(alloc_step_idx == _wrap_step(idxs[sp]));
-                adj_idxs[sp] = alloc_step_idx;
-            }
-
-            // All other indices.
-            _UNROLL for (int i = 0; i < n; i++) {
-                if (!(_use_step_idx && i == sp)) {
-
-                    // Adjust for offsets and padding.
-                    // This gives a positive 0-based local element index.
-                    idx_t ai = idxs[i] + _actl_left_pads[i] - _local_offsets[i];
-
-                    // Also adjust for rank offsets if using global indices.
-                    if (is_global)
-                        ai -= _rank_offsets[i];
-                    
-                    host_assert(ai >= 0);
-                    adj_idxs[i] = uidx_t(ai);
-                }
-            }
+            _get_adj_idx<is_global, n - 1>(adj_idxs, idxs, alloc_step_idx);
 
             // Get pointer via layout in _data.
             return _data.get_ptr(adj_idxs, check_bounds);
         }
+
+    public:
         const real_t* get_elem_ptr(const Indices& global_idxs,
                                    idx_t alloc_step_idx,
                                    bool check_bounds=true) const {
@@ -276,7 +292,68 @@ namespace yask {
         YkVecVarCore(int ndims) :
             YkVarBaseCore(ndims),
             _vec_fold_posns(idx_t(0), ndims) { }
-         
+
+    protected:
+        // Calc one adjusted vec idx and offset and recurse to i-1.
+        template <int i>
+        void _get_adj_idx(Indices& vec_idxs,
+                          Indices& elem_ofs,
+                          const Indices& idxs,
+                          idx_t alloc_step_idx) const {
+            if constexpr (i < 0)
+                             return;
+
+            constexpr int nvls = sizeof...(_templ_vec_lens);
+            constexpr uidx_t vls[nvls] { _templ_vec_lens... };
+
+            // Special handling for step index.
+            constexpr auto sp = +step_posn;
+            if constexpr (_use_step_idx && i == sp) {
+                host_assert(alloc_step_idx == _wrap_step(idxs[sp]));
+                vec_idxs[sp] = alloc_step_idx;
+                elem_ofs[sp] = 0;
+            }
+
+            // All other indices.
+            else {
+
+                // Adjust for offset and padding.
+                // This gives a positive 0-based local element index.
+                idx_t ai = idxs[i] + _actl_left_pads[i] -
+                    (_rank_offsets[i] + _local_offsets[i]);
+                host_assert(ai >= 0);
+                uidx_t adj_idx = uidx_t(ai);
+
+                // Get vector index and offset.
+                // Use unsigned DIV and MOD to avoid compiler having to
+                // emit code for preserving sign when using shifts.
+                vec_idxs[i] = idx_t(adj_idx / vls[i]);
+                elem_ofs[i] = idx_t(adj_idx % vls[i]);
+                host_assert(vec_idxs[i] == idx_t(adj_idx / _var_vec_lens[i]));
+                host_assert(elem_ofs[i] == idx_t(adj_idx % _var_vec_lens[i]));
+            }
+
+            // Recurse until done.
+            if constexpr (i > 0)
+                             _get_adj_idx<i - 1>(vec_idxs, elem_ofs, idxs, alloc_step_idx);
+        }
+
+        // Calc one fold offset and recurse to i-1.
+        template <int i>
+        void _get_fold_ofs(Indices& fold_ofs,
+                           const Indices& elem_ofs) const {
+            if constexpr (i < 0)
+                             return;
+
+            int j = _vec_fold_posns[i];
+            fold_ofs[i] = elem_ofs[j];
+            
+            // Recurse until done.
+            if constexpr (i > 0)
+                             _get_fold_ofs<i - 1>(fold_ofs, elem_ofs);
+        }
+        
+    public:
         // Get a pointer to given element.
         const real_t* get_elem_ptr(const Indices& idxs,
                                    idx_t alloc_step_idx,
@@ -285,54 +362,19 @@ namespace yask {
             // Use template vec lengths instead of run-time values for
             // efficiency.
             constexpr int nvls = sizeof...(_templ_vec_lens);
-            constexpr uidx_t vls[nvls] { _templ_vec_lens... };
             Indices vec_idxs(nvls), elem_ofs(nvls);
             #ifdef DEBUG_LAYOUT
             constexpr auto ns = LayoutFn::get_num_sizes();
             host_assert(ns == nvls);
             #endif
-
-            // Special handling for step index.
-            auto sp = +step_posn;
-            if (_use_step_idx) {
-                host_assert(alloc_step_idx == _wrap_step(idxs[sp]));
-                vec_idxs[sp] = alloc_step_idx;
-                elem_ofs[sp] = 0;
-            }
-
-            // Try to force compiler to use shifts instead of DIV and MOD
-            // when the vec-lengths are 2^n.
-            // All other indices.
-            _UNROLL _NO_VECTOR
-                for (int i = 0; i < nvls; i++) {
-                    if (!(_use_step_idx && i == sp)) {
-
-                        // Adjust for offset and padding.
-                        // This gives a positive 0-based local element index.
-                        idx_t ai = idxs[i] + _actl_left_pads[i] -
-                            (_rank_offsets[i] + _local_offsets[i]);
-                        host_assert(ai >= 0);
-                        uidx_t adj_idx = uidx_t(ai);
-
-                        // Get vector index and offset.
-                        // Use unsigned DIV and MOD to avoid compiler having to
-                        // emit code for preserving sign when using shifts.
-                        vec_idxs[i] = idx_t(adj_idx / vls[i]);
-                        elem_ofs[i] = idx_t(adj_idx % vls[i]);
-                        host_assert(vec_idxs[i] == idx_t(adj_idx / _var_vec_lens[i]));
-                        host_assert(elem_ofs[i] == idx_t(adj_idx % _var_vec_lens[i]));
-                    }
-                }
-
+            _get_adj_idx<nvls - 1>(vec_idxs, elem_ofs, idxs, alloc_step_idx);
+            
             // Get only the vectorized fold offsets, i.e., those
             // with vec-lengths > 1.
             // And, they need to be in the original folding order,
             // which might be different than the var-dim order.
             Indices fold_ofs(NUM_VEC_FOLD_DIMS);
-            _UNROLL for (int i = 0; i < NUM_VEC_FOLD_DIMS; i++) {
-                int j = _vec_fold_posns[i];
-                fold_ofs[i] = elem_ofs[j];
-            }
+            _get_fold_ofs<NUM_VEC_FOLD_DIMS - 1>(fold_ofs, elem_ofs);
 
             // Get 1D element index into vector.
             //auto i = dims->get_elem_index_in_vec(fold_ofs);
@@ -377,6 +419,40 @@ namespace yask {
             *ep = val;
         }
 
+    protected:
+
+        // Get one adjusted index and recurse to i-1.
+        template<int i>
+        void _get_adj_idx(Indices& adj_idxs,
+                          const Indices& vec_idxs,
+                          idx_t alloc_step_idx) const {
+            if constexpr (i < 0)
+                             return;
+
+            // Special handling for step index.
+            constexpr auto sp = +step_posn;
+            if constexpr (_use_step_idx && i == sp) {
+                    host_assert(alloc_step_idx == _wrap_step(vec_idxs[sp]));
+                    adj_idxs[i] = alloc_step_idx;
+                }
+
+            // Other indices.
+            else {
+
+                // Adjust for padding.
+                // Since the indices are rank-relative, subtract only
+                // the local offsets.
+                // This gives a 0-based local *vector* index.
+                adj_idxs[i] = vec_idxs[i] + _vec_left_pads[i] - _vec_local_offsets[i];
+            }
+
+            // Recurse until done.
+            if constexpr (i > 0)
+                             _get_adj_idx<i - 1>(adj_idxs, vec_idxs, alloc_step_idx);
+            
+        }
+        
+    public:
         // Get a pointer to given vector.
         // Indices must be normalized and rank-relative.
         // It's important that this function be efficient, since
@@ -388,25 +464,7 @@ namespace yask {
 
             constexpr int nvls = sizeof...(_templ_vec_lens);
             Indices adj_idxs(nvls);
-
-            // Special handling for step index.
-            auto sp = +step_posn;
-            if (_use_step_idx) {
-                host_assert(alloc_step_idx == _wrap_step(vec_idxs[sp]));
-                adj_idxs[sp] = alloc_step_idx;
-            }
-
-            // Domain indices.
-            _UNROLL for (int i = 0; i < nvls; i++) {
-                if (!(_use_step_idx && i == sp)) {
-
-                    // Adjust for padding.
-                    // Since the indices are rank-relative, subtract only
-                    // the local offsets.
-                    // This gives a 0-based local *vector* index.
-                    adj_idxs[i] = vec_idxs[i] + _vec_left_pads[i] - _vec_local_offsets[i];
-                }
-            }
+            _get_adj_idx<nvls - 1>(adj_idxs, vec_idxs, alloc_step_idx);
 
             // Get ptr via layout in _data.
             return _data.get_ptr(adj_idxs, check_bounds);
@@ -1213,6 +1271,7 @@ namespace yask {
             }
 
             // Init var-dim positions of fold dims.
+            // TODO: figure out how to do this statically.
             assert(dims->_vec_fold_pts.get_num_dims() == NUM_VEC_FOLD_DIMS);
             for (int i = 0; i < NUM_VEC_FOLD_DIMS; i++) {
                 auto& fdim = dims->_vec_fold_pts.get_dim_name(i);

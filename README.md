@@ -79,18 +79,21 @@ SIMD-optimized code for Intel(R) Xeon Phi(TM) and Intel(R) Xeon(R) processors.
 ### Version 4
 * Version 4.00.00 was a major release with a number of notices:
   - Support has been added for GPU offloading via the OpenMP device model.
-    Build any YASK stencil kernel with `make offload=1`. This will create
+    Build any YASK stencil kernel with `make offload=1 ...`. This will create
     a kernel library and executable with an "arch" field containing
     "offload" and the OpenMP device target name.
-    Use `make offload=1 offload_arch=<target>` to change the OpenMP target.
-  - The default compiler for kernels is now the Intel(R) oneAPI C++ compiler, icpx.
-    If you want to use a different compiler, use `make YK_CXX=<compiler> ...`.
-    The default compiler for the YASK compiler is still `g++`. This can
-    be changed with `make YC_CXX=<compiler> ...`. (Note the difference:
-    use `YK` for "YASK kernel" and `YC` for "YASK compiler".)
+    Use `make offload=1 offload_arch=<target>` to change the OpenMP target;
+    the default is `spir64`, for GPUs with Intel(R) Architecture (e.g., Gen12).
+  - The default compiler is now the Intel(R) oneAPI C++ compiler, icpx.
+    If you want to use a different compiler, use `make YK_CXX=<compiler> ...`
+    for the kernel, and/or `make YC_CXX=<compiler> ...` for the YASK compiler,
+    or `make CXX=<compiler>` for both. A C++ compiler that supports C++17
+    is now required.
   - The loop hierarchy has been extended and renamed with (hopefully)
-    more memorable names: regions, blocks, mini-blocks, and sub-blocks
-    are now mega-blocks, blocks, micro-blocks, and nano-blocks.
+    more memorable names:
+    version 3's regions, blocks, mini-blocks, and sub-blocks
+    are now mega-blocks, blocks, micro-blocks, and nano-blocks,
+    respectively.
     Pico-blocks have been added inside nano-blocks.
     When offloading, the nano-blocks and pico-blocks are executed on the device.
     The looping behaviors, including any temporal tiling, of mega-blocks,
@@ -102,7 +105,7 @@ SIMD-optimized code for Intel(R) Xeon Phi(TM) and Intel(R) Xeon(R) processors.
     This is done in `yask.sh` by passing `max_threads <N>` to the executable,
     where `<N>` is the number of cores on the node divided by the
     number of MPI ranks.
-    Consequently, the default number of threads per block is now one
+    Consequently, the default number of inner threads is now one (1)
     to use one core per block.
     This change was made based on observed
     performance on Intel(R) Xeon(R) Scalable Processors.  Previous versions
