@@ -43,6 +43,17 @@ IN THE SOFTWARE.
 #include <memory>
 #include <functional>
 
+// Things SWIG can't handle.
+#ifdef SWIG
+#define YASK_DEPRECATED
+#define YASK_INT64_T long int
+#else
+/// Deprecated attribute.
+#define YASK_DEPRECATED [[deprecated]]
+/// Signed 64-bit int.
+#define YASK_INT64_T std::int64_t
+#endif
+
 namespace yask {
 
     /**
@@ -59,11 +70,7 @@ namespace yask {
 
     /// Type to use for indexing grids.
     /** Index types are signed to allow negative indices in padding/halos. */
-#ifdef SWIG
-    typedef long int idx_t;     // SWIG doesn't seem to understand int64_t.
-#else
-    typedef std::int64_t idx_t;
-#endif
+    typedef YASK_INT64_T idx_t;
 
     // Forward declarations of class-pointers.
 

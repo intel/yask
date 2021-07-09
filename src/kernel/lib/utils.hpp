@@ -30,7 +30,8 @@ IN THE SOFTWARE.
 namespace yask {
 
     // Fatal error.
-    inline void exit_yask(int code) {
+    [[noreturn]] inline
+    void exit_yask(int code) {
 
 #ifdef USE_MPI
         int flag;

@@ -926,28 +926,33 @@ namespace yask {
         get_step_wrap() const =0;
 
         /// ***[Deprecated]*** Use yk_env::set_debug_output().
+        YASK_DEPRECATED
         virtual void
         set_debug_output(yask_output_ptr debug) =0;
 
         /// **[Deprecated]** Use get_num_vars().
+        YASK_DEPRECATED
         inline int
         get_num_grids() const {
             return get_num_vars();
         }
 
         /// **[Deprecated]** Use get_var().
+        YASK_DEPRECATED
         inline yk_var_ptr
         get_grid(const std::string& name) {
             return get_var(name);
         }
                 
         /// **[Deprecated]** Use get_vars().
+        YASK_DEPRECATED
         inline std::vector<yk_var_ptr>
         get_grids() {
             return get_vars();
         }
 
         /// **[Deprecated]** Use new_var().
+        YASK_DEPRECATED
         inline yk_var_ptr
         new_grid(const std::string& name,
                  const std::vector<std::string>& dims) {
@@ -956,6 +961,7 @@ namespace yask {
 
 #ifndef SWIG
         /// **[Deprecated]** Use new_var().
+        YASK_DEPRECATED
         inline yk_var_ptr
         new_grid(const std::string& name,
                  const std::initializer_list<std::string>& dims) {
@@ -964,6 +970,7 @@ namespace yask {
 #endif
 
         /// **[Deprecated]** Use new_fixed_size_var().
+        YASK_DEPRECATED
         inline yk_var_ptr
         new_fixed_size_grid(const std::string& name,
                             const std::vector<std::string>& dims,
@@ -973,6 +980,7 @@ namespace yask {
 
 #ifndef SWIG
         /// **[Deprecated]** Use new_fixed_size_var().
+        YASK_DEPRECATED
         inline yk_var_ptr
         new_fixed_size_grid(const std::string& name,
                             const std::initializer_list<std::string>& dims,
@@ -982,6 +990,7 @@ namespace yask {
 #endif
         
         /// **[Deprecated]** Use fuse_vars().
+        YASK_DEPRECATED
         inline void
         fuse_grids(yk_solution_ptr source) {
             fuse_vars(source);

@@ -234,8 +234,10 @@ namespace yask {
     }; // yk_env.
 
     /// **[Deprecated]** Use yk_var.
+    YASK_DEPRECATED
     typedef yk_var yk_grid;
     /// **[Deprecated]** Use yk_var_ptr.
+    YASK_DEPRECATED
     typedef yk_var_ptr yk_grid_ptr;
 
     /** @}*/

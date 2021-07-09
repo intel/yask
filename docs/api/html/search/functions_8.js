@@ -5,7 +5,7 @@ var searchData=
   ['is_5fdependency_5fchecker_5fenabled',['is_dependency_checker_enabled',['../classyask_1_1yc__solution.html#a8b4a7ac8cc9e6be09b115a106bac769b',1,'yask::yc_solution']]],
   ['is_5fdim_5fused',['is_dim_used',['../classyask_1_1yk__var.html#ace776bc0e51b07e940b23ebbce7a2232',1,'yask::yk_var']]],
   ['is_5fdynamic_5fstep_5falloc',['is_dynamic_step_alloc',['../classyask_1_1yc__var.html#a59099b1ba72b889e386a2f48912eef0a',1,'yask::yc_var::is_dynamic_step_alloc()'],['../classyask_1_1yk__var.html#a9c4783735b2f5b72c659f1572c44598f',1,'yask::yk_var::is_dynamic_step_alloc()']]],
-  ['is_5felement_5fallocated',['is_element_allocated',['../classyask_1_1yk__var.html#ad84cc59ae2c7f11c505c99e5955a60a9',1,'yask::yk_var::is_element_allocated(const std::vector&lt; idx_t &gt; &amp;indices) const'],['../classyask_1_1yk__var.html#a49fcc4e673af91318403f804d5bd9b25',1,'yask::yk_var::is_element_allocated(const std::initializer_list&lt; idx_t &gt; &amp;indices) const']]],
+  ['is_5felement_5fallocated',['is_element_allocated',['../classyask_1_1yk__var.html#a689f863c4e8ee037b09e1d1101c76862',1,'yask::yk_var::is_element_allocated(const std::vector&lt; idx_t &gt; &amp;indices) const'],['../classyask_1_1yk__var.html#a25c4a1c45e2ded794186e0f2ac5ae501',1,'yask::yk_var::is_element_allocated(const std::initializer_list&lt; idx_t &gt; &amp;indices) const']]],
   ['is_5ffixed_5fsize',['is_fixed_size',['../classyask_1_1yk__var.html#a420e0dde2114ba663069b16d579072eb',1,'yask::yk_var']]],
   ['is_5ffolding_5fset',['is_folding_set',['../classyask_1_1yc__solution.html#abaefa9675e9551ec10b9eee0016a0822',1,'yask::yc_solution']]],
   ['is_5foffloaded',['is_offloaded',['../classyask_1_1yk__solution.html#a2978fb8fd701fe35ae8a8b19e23e5544',1,'yask::yk_solution']]],

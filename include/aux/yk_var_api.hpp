@@ -1094,22 +1094,26 @@ namespace yask {
            Use the more explicit form found in the documentation. */
 
         /// **[Deprecated]** Use get_left_halo_size() and get_right_halo_size().
+        YASK_DEPRECATED
         inline idx_t
         get_halo_size(const std::string& dim) const {
             return get_left_halo_size(dim);
         }
         /// **[Deprecated]** Use get_left_pad_size() and get_right_pad_size().
+        YASK_DEPRECATED
         inline idx_t
         get_pad_size(const std::string& dim) const {
             return get_left_pad_size(dim);
         }
         /// **[Deprecated]** Use get_left_extra_pad_size() and get_right_extra_pad_size().
+        YASK_DEPRECATED
         inline idx_t
         get_extra_pad_size(const std::string& dim) const {
             return get_left_extra_pad_size(dim);
         }
 
         /// **[Deprecated]** Use are_indices_local().
+        YASK_DEPRECATED
         inline bool
         is_element_allocated(const std::vector<idx_t>& indices
                              /**< [in] List of indices, one for each var dimension. */ ) const {
@@ -1118,6 +1122,7 @@ namespace yask {
 
 #ifndef SWIG
         /// **[Deprecated]** Use are_indices_local().
+        YASK_DEPRECATED
         inline bool
         is_element_allocated(const std::initializer_list<idx_t>& indices
                              /**< [in] List of indices, one for each var dimension. */ ) const {
@@ -1126,6 +1131,7 @@ namespace yask {
 #endif
 
         /// **[Deprecated]** Use fuse_vars().
+        YASK_DEPRECATED
         inline void
         fuse_grids(yk_var_ptr source) {
             fuse_vars(source);
@@ -1134,6 +1140,7 @@ namespace yask {
     }; // yk_var.
 
     /// **[Deprecated]** Use yk_var.
+    YASK_DEPRECATED
     typedef yk_var yk_grid;
     
     /** @}*/

@@ -640,6 +640,7 @@ namespace yask {
         clear_dependencies() =0;
 
         /// **[Deprecated]** Use set_target() and output_solution().
+        YASK_DEPRECATED
         inline void
         format(const std::string& format_type,
                yask_output_ptr output) {
@@ -648,6 +649,7 @@ namespace yask {
         }
 
         /// **[Deprecated]** Use new_var().
+        YASK_DEPRECATED
         inline yc_var_ptr
         new_grid(const std::string& name,
                  const std::vector<yc_index_node_ptr>& dims) {
@@ -656,7 +658,8 @@ namespace yask {
 
 #ifndef SWIG
         /// **[Deprecated]** Use new_var().
-        inline yc_var_ptr
+         YASK_DEPRECATED
+       inline yc_var_ptr
         new_grid(const std::string& name,
                  const std::initializer_list<yc_index_node_ptr>& dims) {
             return new_var(name, dims);
@@ -664,6 +667,7 @@ namespace yask {
 #endif
 
         /// **[Deprecated]** Use new_scratch_var().
+        YASK_DEPRECATED
         inline yc_var_ptr
         new_scratch_grid(const std::string& name,
                          const std::vector<yc_index_node_ptr>& dims) {
@@ -672,6 +676,7 @@ namespace yask {
 
 #ifndef SWIG
         /// **[Deprecated]** Use new_scratch_var().
+        YASK_DEPRECATED
         inline yc_var_ptr
         new_scratch_grid(const std::string& name,
                          const std::initializer_list<yc_index_node_ptr>& dims) {
@@ -680,18 +685,21 @@ namespace yask {
 #endif
 
         /// **[Deprecated]** Use get_num_vars().
+        YASK_DEPRECATED
         inline int
         get_num_grids() const {
             return get_num_vars();
         }
 
         /// **[Deprecated]** Use get_vars().
+        YASK_DEPRECATED
         inline std::vector<yc_var_ptr>
         get_grids() {
             return get_vars();
         }
 
         /// **[Deprecated]** Use get_var().
+        YASK_DEPRECATED
         inline yc_var_ptr
         get_grid(const std::string& name) {
             return get_var(name);
@@ -824,21 +832,25 @@ namespace yask {
                             /**< [in] Number of elements to allocate in the step dimension. */) =0;
 
         /// **[Deprecated]** Use new_var_point().
+        YASK_DEPRECATED
         inline yc_var_point_node_ptr
         new_grid_point(const std::vector<yc_number_node_ptr>& index_exprs) {
             return new_var_point(index_exprs);
         }
         /// **[Deprecated]** Use new_var_point().
+        YASK_DEPRECATED
         inline yc_var_point_node_ptr
         new_grid_point(const std::initializer_list<yc_number_node_ptr>& index_exprs) {
             return new_var_point(index_exprs);
         }
         /// **[Deprecated]** Use new_relative_var_point().
+        YASK_DEPRECATED
         inline yc_var_point_node_ptr
         new_relative_grid_point(const std::vector<int>& dim_offsets) {
             return new_relative_var_point(dim_offsets);
         }
         /// **[Deprecated]** Use new_relative_var_point().
+        YASK_DEPRECATED
         inline yc_var_point_node_ptr
         new_relative_grid_point(const std::initializer_list<int>& dim_offsets) {
             return new_relative_var_point(dim_offsets);
@@ -1049,12 +1061,16 @@ namespace yask {
     /** @}*/
 
     /// **[Deprecated]** Use yc_var.
+    YASK_DEPRECATED
     typedef yc_var yc_grid;
     /// **[Deprecated]** Use yc_var_ptr.
+    YASK_DEPRECATED
     typedef yc_var_ptr yc_grid_ptr;
     /// **[Deprecated]** Use yc_var_point_node.
+    YASK_DEPRECATED
     typedef yc_var_point_node yc_grid_point_node;
     /// **[Deprecated]** Use yc_var_point_node_ptr.
+    YASK_DEPRECATED
     typedef yc_var_point_node_ptr yc_grid_point_node_ptr;
 
 } // namespace yask.
