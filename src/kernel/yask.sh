@@ -34,11 +34,11 @@ for i in "$@"; do
     invo="$invo $i"
 done
 
-# Default env vars to print debug info.
-envs="OMP_DISPLAY_ENV=VERBOSE"
-envs+=" KMP_VERSION=1"
-envs+=" I_MPI_PRINT_VERSION=1 I_MPI_DEBUG=5"
+# Default env vars to print debug info and set CPU and mem-binding.
+# https://software.intel.com/content/www/us/en/develop/documentation/mpi-developer-reference-linux/top/environment-variable-reference/environment-variables-for-memory-policy-control.html
+envs="OMP_DISPLAY_ENV=VERBOSE KMP_VERSION=1"
 envs+=" OMP_PLACES=cores KMP_HOT_TEAMS_MODE=1 KMP_HOT_TEAMS_MAX_LEVEL=3"
+envs+=" I_MPI_PRINT_VERSION=1 I_MPI_DEBUG=5 I_MPI_HBW_POLICY=hbw_preferred,hbw_preferred"
 
 # On Cygwin, need to put lib dir in path to load .dll's.
 if [[ `uname -o` == "Cygwin" ]]; then
@@ -62,6 +62,8 @@ arch=$def_arch
 
 # Default ranks.
 # Try numactl then lscpu.
+# For either, the goal is to count only NUMA nodes with CPUs.
+# (Systems with HBM may have NUMA nodes without CPUs.)
 nranks=1
 if command -v numactl >/dev/null; then
     ncpubinds=`numactl -s | awk '/^cpubind:/ { print NF-1 }'`
@@ -69,7 +71,7 @@ if command -v numactl >/dev/null; then
         nranks=$ncpubinds
     fi
 elif command -v lscpu >/dev/null; then
-    nnumas=`lscpu | awk -F: '/NUMA node.s.:/ { print $2 }'`
+    nnumas=`lscpu | grep -c '^NUMA node.*CPU'`
     if [[ -n "$nnumas" ]]; then
         nranks=$nnumas
     fi
@@ -348,7 +350,7 @@ else
     envs+=" LD_LIBRARY_PATH=$bindir/../lib:$LD_LIBRARY_PATH$libpath"
 fi
 
-# Set OMP threads to number of cores per socket if not already specified and not KNL.
+# Set OMP threads to number of cores per rank if not already specified and not KNL.
 if [[ ( ! "$opts" =~ -max_threads ) && ( $arch != "knl" ) ]]; then
     if command -v lscpu >/dev/null; then
         nsocks=`lscpu | awk -F: '/Socket.s.:/ { print $2 }'`
