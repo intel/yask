@@ -56,40 +56,6 @@ namespace yask {
         }
     }
 
-    // Print extraction of inner indices from outer.
-    // See also create_inner() in kernel code.
-    void YASKCppPrinter::print_create_inner(ostream& os,
-                                            bool print_step, bool print_domain,
-                                            const string outer_var_prefix,
-                                            const string inner_var_prefix) const {
-        os << "\n // Convert outer to inner ranges.\n";
-        map<string, string> inner2outer =
-            { { "begin_", "start_" },
-              { "end_", "stop_" },
-              { "orig_start_", "start_" },
-              { "orig_stop_", "stop_" },
-              { "align_", "align_" },
-              { "align_ofs_", "align_ofs_" } };
-        int i = 0;
-        for (auto& dim : _dims._stencil_dims) {
-            auto& dname = dim._get_name();
-            bool is_step = dname == _dims._step_dim;
-            if ((print_step && is_step) ||
-                (print_domain && !is_step)) {
-                for (auto const& i2o : inner2outer)
-                    os << " idx_t " << inner_var_prefix << i2o.first << i << " = " <<
-                        outer_var_prefix << i2o.second << i << ";\n";
-                os << " idx_t " << inner_var_prefix << "orig_index_" << i << " = 0;\n" <<
-                    " idx_t " << inner_var_prefix << "tile_size_" << i << " = " <<
-                    outer_var_prefix << "end_" << i << " - " <<
-                    outer_var_prefix << "begin_" << i << ";\n" <<
-                    " idx_t " << inner_var_prefix << "stride_" << i << " = " <<
-                    inner_var_prefix << "tile_size_" << i << ";\n";
-            }
-            i++;
-        }
-    }
-
     // Print an expression as a one-line C++ comment.
     void YASKCppPrinter::add_comment(ostream& os, EqBundle& eq) {
 
@@ -672,8 +638,6 @@ namespace yask {
                 // Include generated loops.
                 os <<
                     "\n // Nano loops.\n"
-                    "#define NANO_BLOCK_ALIGN(dn) idx_t(1)\n"
-                    "#define NANO_BLOCK_ALIGN_OFS(dn) idx_t(0)\n"
                     "#define NANO_BLOCK_LOOP_INDICES norm_nb_idxs\n"
                     "\n ////// Nano loop prefix.\n"
                     "#define NANO_BLOCK_USE_LOOP_PART_0\n"
@@ -683,8 +647,6 @@ namespace yask {
                     "#define PICO_BLOCK_BEGIN(dn) NANO_BLOCK_BODY_START(dn)\n"
                     "#define PICO_BLOCK_END(dn) NANO_BLOCK_BODY_STOP(dn)\n"
                     "#define PICO_BLOCK_STRIDE(dn) " << inner_strides << "\n"
-                    "#define PICO_BLOCK_ALIGN(dn) idx_t(1)\n"
-                    "#define PICO_BLOCK_ALIGN_OFS(dn) idx_t(0)\n"
                     "#define PICO_BLOCK_TILE_SIZE(dn) PICO_BLOCK_STRIDE(dn)\n" // not used.
                     "#define PICO_BLOCK_START(dn) NANO_BLOCK_BODY_START(dn)\n"
                     "#define PICO_BLOCK_STOP(dn) NANO_BLOCK_BODY_STOP(dn)\n"

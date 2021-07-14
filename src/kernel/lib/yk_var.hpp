@@ -222,11 +222,13 @@ namespace yask {
         }
 
     public:
+        ALWAYS_INLINE
         const real_t* get_elem_ptr(const Indices& global_idxs,
                                    idx_t alloc_step_idx,
                                    bool check_bounds=true) const {
             return _get_elem_ptr<true>(global_idxs, alloc_step_idx, check_bounds);
         }
+        ALWAYS_INLINE
         const real_t* get_elem_ptr_local(const Indices& local_idxs,
                                    idx_t alloc_step_idx,
                                    bool check_bounds=true) const {

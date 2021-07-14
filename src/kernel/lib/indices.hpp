@@ -654,7 +654,18 @@ namespace yask {
         // start               stop                            (index = 0)
         //                    start               stop         (index = 1)
         //                                       start   stop  (index = 2)
-
+        
+        // Example 2: begin=5, end=65, align=10, align_ofs=0, stride=20 =>
+        //  the following 4 sets of iteration vars:
+        // 1. index=0, start=5, stop=20 (peel for alignment: adj_begin=0)
+	// 2. index=1, start=20, stop=40
+        // 3. index=2, start=40, stop=60
+        // 4. index=3, start=60, stop=65 (rem)        
+        // The calculation of these vars is done so that the 4 iterations
+        // can be done concurrently, i.e., everything is based on the
+        // current index, and there are no dependencies between iterations
+        // or their placement on threads, etc.
+    
         // Ctor.
         ScanIndices(bool use_vec_align) :
             ndims(NUM_STENCIL_DIMS),

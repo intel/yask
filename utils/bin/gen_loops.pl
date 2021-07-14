@@ -48,7 +48,9 @@ my $outputVar = "BODY_INDICES";  # output var.
 my $loopPart = "USE_LOOP_PART_"; # macro to enable specified loop part.
 my $macroPrefix = "";            # prefix for macros.
 my $varPrefix = "";              # prefix for vars.
-my @fixed_exprs = ("begin", "end", "stride", "align", "align_ofs", "tile_size");
+my $doAlign = 1;                 # generate alignment code.
+my @fixed_exprs = ("begin", "end", "stride", "tile_size");
+my @align_exprs = ("align", "align_ofs");
 my @var_exprs = ("start", "stop", "index");
 my $indent = dirname($0)."/yask_indent.sh";
 
@@ -204,12 +206,15 @@ sub getInVars() {
             "const $itype $bvar = ".inVar("begin", $dim).";",
             "const $itype $evar = ".inVar("end", $dim).";",
             "const $itype $svar = ".inVar("stride", $dim).";",
-            "const $itype $avar = ".inVar("align", $dim).";",
-            "const $itype $aovar = ".inVar("align_ofs", $dim).";",
             "const $itype $tsvar = ".inVar("tile_size", $dim).";",
             "const $itype $s0var = ".inVar("start", $dim).";",
             "const $itype $s1var = ".inVar("stop", $dim).";",
-            "const $itype $ivar = ".inVar("index", $dim).";",
+            "const $itype $ivar = ".inVar("index", $dim).";";
+        push @stmts,
+            "const $itype $avar = ".inVar("align", $dim).";",
+            "const $itype $aovar = ".inVar("align_ofs", $dim).";"
+            if $doAlign;
+        
     }
     return @stmts;
 }
@@ -390,14 +395,21 @@ sub addIndexVars1($$$$) {
                 # aavar = min(4, 8) = 4.
                 # abvar = round_down_flr(20 - 15, 4) + 15 = 4 + 15 = 19.
 
-                push @$code,
-                    "// Alignment must be less than or equal to stride size.",
-                    "const $itype $aavar = std::min($avar, $svar);",
-                    "// Aligned beginning point such that ($bvar - $svar) < $abvar <= $bvar.",
-                    "const $itype $abvar = yask::round_down_flr($bvar - $aovar, $aavar) + $aovar;",
-                    "// Number of iterations to get from $abvar to (but not including) $evar, striding by $svar.".
-                    "This value is rounded up because the last iteration may cover fewer than $svar strides.",
-                    "const $itype $nvar = yask::ceil_idiv_flr($evar - $abvar, $svar);";
+                if ($doAlign) {
+                    push @$code,
+                        "// Alignment must be less than or equal to stride size.",
+                        "const $itype $aavar = std::min($avar, $svar);",
+                        "// Aligned beginning point such that ($bvar - $svar) < $abvar <= $bvar.",
+                        "const $itype $abvar = yask::round_down_flr($bvar - $aovar, $aavar) + $aovar;",
+                        "// Number of iterations to get from $abvar to (but not including) $evar, striding by $svar.".
+                        "This value is rounded up because the last iteration may cover fewer than $svar strides.",
+                        "const $itype $nvar = yask::ceil_idiv_flr($evar - $abvar, $svar);";
+                } else {
+                    push @$code,
+                        "// Number of iterations to get from $bvar to (but not including) $evar, striding by $svar.".
+                        "This value is rounded up because the last iteration may cover fewer than $svar strides.",
+                        "const $itype $nvar = yask::ceil_idiv_flr($evar - $bvar, $svar);";
+                }
 
                 # For tiled loops.
                 if ($features & $bTile) {
@@ -607,7 +619,7 @@ sub addIndexVars2($$$$) {
             if ($isInnerSquare) {
 
                 my $divar2 = "index_x2";
-                my $avar = "lsb";
+                my $bvar = "lsb";
                 push @$code, 
                     "// Modify $prevDivar and $divar for 'square_wave' path.",
                     "if (($innerNvar > 1) && ($prevDivar/2 < $prevNvar/2)) {",
@@ -616,9 +628,9 @@ sub addIndexVars2($$$$) {
                     "  // Select $divar from 0,0,1,1,2,2,... sequence",
                     "  $itype $divar = $divar2 / 2;",
                     "  // Select $prevDivar adjustment value from 0,1,1,0,0,1,1, ... sequence.",
-                    "  $itype $avar = ($divar2 & 0x1) ^ (($divar2 & 0x2) >> 1);",
+                    "  $itype $bvar = ($divar2 & 0x1) ^ (($divar2 & 0x2) >> 1);",
                     "  // Adjust $prevDivar +/-1 by replacing bit 0.",
-                    "  $prevDivar = ($prevDivar & $itype(-2)) | $avar;",
+                    "  $prevDivar = ($prevDivar & $itype(-2)) | $bvar;",
                     "} // square-wave.";
             }
 
@@ -661,10 +673,17 @@ sub addIndexVars3($$$$) {
         my $abvar = alignBeginVar($dim);
         my $evar = endVar($dim);
         my $svar = strideVar($dim);
-        push @$code,
-            "// This value of $divar covers ".dimStr($dim)." from $stvar to (but not including) $spvar.",
-            "$itype $stvar = std::max($abvar + ($divar * $svar), $bvar);",
-            "$itype $spvar = std::min($abvar + (($divar+1) * $svar), $evar);";
+        if ($doAlign) {
+            push @$code,
+                "// This value of $divar covers ".dimStr($dim)." from $stvar to (but not including) $spvar.",
+                "$itype $stvar = std::max($abvar + ($divar * $svar), $bvar);",
+                "$itype $spvar = std::min($abvar + (($divar+1) * $svar), $evar);";
+        } else {
+            push @$code,
+                "// This value of $divar covers ".dimStr($dim)." from $stvar to (but not including) $spvar.",
+                "$itype $stvar = $bvar + ($divar * $svar);",
+                "$itype $spvar = std::min($bvar + (($divar+1) * $svar), $evar);";
+        }
     }
 }
 
@@ -1198,10 +1217,11 @@ sub main() {
         # knob,        description,   optional default
         [ "ndims=i", "Value of N.", 1],
         [ "prefix=s", "Common prefix of all generated macros and vars", ''],
-        [ "inner=s", "Set default INNER_LOOP_PREFIX macro used before inner loop(s).", ''],
-        [ "omp=s", "Set default OMP_PRAGMA macro used before 'omp' loop(s).", "omp parallel for"],
-        [ "simd=s", "Set default SIMD_PRAGMA macro used before 'simd' loop(s).", "omp simd"],
-        [ "output=s", "Name of output file.", 'loops.h'],
+        [ "inner=s", "Set default INNER_LOOP_PREFIX macro used before inner loop(s)", ''],
+        [ "omp=s", "Set default OMP_PRAGMA macro used before 'omp' loop(s)", "omp parallel for"],
+        [ "simd=s", "Set default SIMD_PRAGMA macro used before 'simd' loop(s)", "omp simd"],
+        [ "align!", "Generate peel code for alignment", 1],
+        [ "output=s", "Name of output file", 'loops.h'],
         );
     my($command_line) = process_command_line(\%OPT, \@KNOBS);
     print "$command_line\n" if $OPT{verbose};
@@ -1241,6 +1261,7 @@ sub main() {
             "  'stop':        [out] set to one past last scan point in body of inner loop(s).\n",
             "  'index':       [out] set to zero on first iteration of loop; increments each iteration.\n",
             "  Each array should be the length specified by the largest index used (typically same as -ndims).\n",
+            "  The 'align' and 'align_ofs' elements are ignored if '-no-align' is used.\n",
             "A 'ScanIndices' input var must be defined in C++ code prior to including the generated code.\n",
             "  The 'in' indices control the range of the generaged loop(s).\n",
             "  The 'ScanIndices' input var is named with the LOOP_INDICES macro.\n",
@@ -1264,6 +1285,8 @@ sub main() {
     print "info: generating scanning code for ".scalar(@dims)."-D vars...\n";
     $macroPrefix = uc $OPT{prefix};
     $varPrefix = lc $OPT{prefix};
+    $doAlign = $OPT{align};
+    push @fixed_exprs, @align_exprs if $doAlign;
 
     my $codeString = join(' ', @ARGV); # just concat all non-options params together.
     processCode($codeString);

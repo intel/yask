@@ -469,13 +469,15 @@ namespace yask {
         // Init all vars & params to same value within vars,
         // but different for each var.
         virtual void init_same(real_t seed0) {
-            init_values(seed0, [&](YkVarPtr gp, real_t seed){ gp->set_all_elements_same(seed); });
+            init_values(seed0, [&](YkVarPtr gp, real_t seed)
+                               { gp->set_all_elements_same(seed); });
         }
 
         // Init all vars & params to different values within vars,
         // and different for each var.
         virtual void init_diff(real_t seed0) {
-            init_values(seed0, [&](YkVarPtr gp, real_t seed){ gp->set_all_elements_in_seq(seed); });
+            init_values(seed0, [&](YkVarPtr gp, real_t seed)
+                               { gp->set_all_elements_in_seq(seed); });
         }
 
         // Compare vars in contexts for validation.
