@@ -57,7 +57,7 @@ namespace yask {
                                            string opt_arg) {
 
         // Get/set local vars.
-        string var_ptr = get_local_var(os, get_var_ptr(gp), _var_ptr_restrict_type, "expr");
+        string var_ptr = get_local_var(os, get_var_ptr(gp), _var_ptr_type, "expr");
         string sas = gp.make_step_arg_str(var_ptr, _dims);
         string step_arg = sas.length() ? get_local_var(os, sas, _step_val_type, "step") : "0";
 
@@ -102,7 +102,7 @@ namespace yask {
 
         // Get/set local vars.
         string var_ptr = get_local_var(os, get_var_ptr(gp),
-                                       CppPrintHelper::_var_ptr_restrict_type, "expr");
+                                       CppPrintHelper::_var_ptr_type, "expr");
         string sas = gp.make_step_arg_str(var_ptr, _dims);
         string step_arg = sas.length() ?
             get_local_var(os, sas, CppPrintHelper::_step_val_type, "step") : "0";
@@ -174,8 +174,9 @@ namespace yask {
                 make_point_call_vec(os, *bgp, "get_elem_ptr_local", "", "false", false, &_vec2elem_local_map);
 
             // Ptr should provide unique access if all accesses are through pointers.
+            // TODO: doesn't check for reusing time-slots, e.g., p(t+1) aliased to p(t-1).
             // TODO: check for non-ptr accesses via read/write calls.
-            bool is_unique = !_settings._allow_unaligned_loads;
+            bool is_unique = false; // !_settings._allow_unaligned_loads;
             string type = is_unique ? _var_ptr_restrict_type : _var_ptr_type;
 
             // Print type and value.
