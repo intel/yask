@@ -148,10 +148,14 @@ namespace yask {
             os << "#define VLEN_" << uc_dim << " (" << dim.get_val() << ")" << endl;
         }
         os << "namespace yask {\n"
-            "\n //Number of points or multipliers in domain dims.\n"
+            "\n // Number of points or multipliers in domain dims.\n"
             " constexpr idx_t fold_pts[]{ " << _dims._fold.make_val_str() << " };\n"
             " constexpr idx_t cluster_pts[]{ " << _dims._cluster_pts.make_val_str() << " };\n"
             " constexpr idx_t cluster_mults[]{ " << _dims._cluster_mults.make_val_str() << " };\n"
+            "\n // Number of points or multipliers in stencil dims.\n"
+            " constexpr idx_t stencil_fold_pts[]{ 1, " << _dims._fold.make_val_str() << " };\n"
+            " constexpr idx_t stencil_cluster_pts[]{ 1, " << _dims._cluster_pts.make_val_str() << " };\n"
+            " constexpr idx_t stencil_cluster_mults[]{ 1, " << _dims._cluster_mults.make_val_str() << " };\n"
             "}\n";
         os << "#define VLEN (" << _dims._fold.product() << ")\n"
             "#define CPTS (" << _dims._cluster_pts.product() << ")\n";
@@ -631,7 +635,7 @@ namespace yask {
                 // Inner-loop strides.
                 // Will be 1 for vectors and cluster-mults for clusters.
                 string inner_strides = do_cluster ?
-                    "((dn==0) ? idx_t(1) : cluster_mults[std::max(dn-1,0)])" :
+                    "stencil_cluster_mults[dn]" :
                     "idx_t(1)";
                     
                 // Computation loops.
