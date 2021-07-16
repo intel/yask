@@ -27,25 +27,9 @@ SIMD-optimized code for Intel(R) Xeon Phi(TM) and Intel(R) Xeon(R) processors.
 * Intel(R) Xeon Phi(TM) x200-family processors supporting the MIC_AVX512 instruction set (KNL).
 
 ### Pre-requisites:
-* Intel(R) Parallel Studio XE Cluster Edition for Linux
-  for multi-socket and multi-node operation or
-  Intel(R) Parallel Studio XE Composer Edition for C++ Linux
-  for single-socket only
-  (2021.1.2 or later recommended).
-     * The Intel(R) [oneAPI](https://software.intel.com/content/www/us/en/develop/tools/oneapi.html)
-       C++ compiler (icpx) is the default compiler.
-       To use the classic Intel compiler, specify `YK_CXX=icpc` when running `make`.
-       Note that SIMD operations for functions such as sin() are
-       not supported at this time with icpx.
-     * If you are using g++ version 8.x or later, Intel(R) C++ version 2019
-       or later is required.
-     * Building a YASK kernel with the Gnu C++ compiler is also possible.
-       Specify `YK_CXX=g++ mpi=0` when running `make`.
-       Limited testing with g++ 8.2.0 shows the "iso3dfd" kernel
-       runs about 30% slower compared to the same kernel built with
-       the Intel C++ compiler.
-       Older Gnu C++ compilers can produce kernels that run
-       many times slower.
+* Intel(R) [oneAPI](https://software.intel.com/content/www/us/en/develop/tools/oneapi.html)
+  C++ compiler (icpx) C++ compiler for Linux (2021.1.2 or later recommended).
+  See notes below under version 4.00.00 changes.     
 * Gnu C++ compiler, g++ (4.9.0 or later; 8.2.0 or later recommended).
   Even when using Intel compilers, a g++ installation is required.
 * Linux libraries `librt` and `libnuma`.
