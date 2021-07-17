@@ -98,6 +98,18 @@ RUN_PYTHON	:= 	$(RUN_PREFIX) \
 # Ex: "ifeq ($(call MACRO_DEF,$(CXX),__clang__),1)"...
 MACRO_DEF	=	$(shell $(1) -x c++ /dev/null -dM -E | grep -m 1 -c $(2))
 
+# Function to run a command serially, even with parallel build.
+SERIALIZE	= 	exec {fd}>/tmp/$$USER.YASK.build-lock; \
+			flock -x $$fd; \
+			$(1)
+
+# Function to create a directory.
+# Tries to avoid the possible race condition when calling mkdir in parallel.
+# 1st arg is dir name.
+# Ex: "$(call MK_DIR,path)"
+MK_DIR		=	@ if [ \! -d $(1) ]; then \
+			  $(call SERIALIZE,$(MKDIR) $(1)); fi
+
 # Options to avoid warnings when compiling SWIG-generated code w/gcc.
 SWIG_GCCFLAGS	:=	-Wno-class-memaccess -Wno-stringop-overflow -Wno-stringop-truncation
 

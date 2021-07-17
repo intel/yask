@@ -558,22 +558,22 @@ MISC_LOOP_CODE		?=	$(MISC_LOOP_MODS) omp loop($(MISC_LOOP_ORDER)) { }
 # Compile rules based on source dir.
 
 $(YK_OBJ_DIR)/%.o: $(COMM_DIR)/%.cpp $(YK_INC_GLOB)
-	$(MKDIR) $(dir $@)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
 $(YK_OBJ_DIR)/%.o: $(COEFF_DIR)/%.cpp $(YK_INC_GLOB)
-	$(MKDIR) $(dir $@)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
 $(YK_OBJ_DIR)/%.o: $(YK_LIB_SRC_DIR)/%.cpp $(YK_INC_GLOB)
-	$(MKDIR) $(dir $@)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
 $(YK_EXT_OBJ_DIR)/%.o: $(YK_LIB_SRC_DIR)/%.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
-	$(MKDIR) $(dir $@)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
@@ -594,17 +594,17 @@ kernel: $(YK_EXEC) $(YK_SCRIPT) $(MAKE_REPORT_FILE)
 	@$(YK_VTUNE_CMD)
 
 $(YK_LIB): $(YK_OBJS) $(YK_EXT_OBJS)
-	$(MKDIR) $(dir $@)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $(YK_SO_FLAGS) -o $@ $^ $(YK_LIBS)
 	@ls -l $@
 
 $(YK_EXEC): yask_main.cpp $(YK_LIB)
-	$(MKDIR) $(dir $@)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
 	@ls -l $@
 
 $(YK_SCRIPT): ./yask.sh
-	$(MKDIR) $(dir $@)
+	$(call MK_DIR,$(dir $@))
 	cp $< $@
 	chmod a+rx $@
 	@ls -l $@
@@ -612,7 +612,7 @@ $(YK_SCRIPT): ./yask.sh
 scripts: $(YK_SCRIPT)
 
 $(MAKE_REPORT_FILE): $(YK_LIB)
-	$(MKDIR) $(dir $@)
+	$(call MK_DIR,$(dir $@))
 	@echo MAKEFLAGS="\"$(MAKEFLAGS)"\" > $@ 2>&1
 	- $(MAKE) echo-settings >> $@ 2>&1
 
@@ -620,50 +620,50 @@ $(MAKE_REPORT_FILE): $(YK_LIB)
 # NB: YK_CODE_FILE is a dependency on loop and layout code because
 # the number of dims from that file affects the loops and layouts.
 $(YK_GEN_DIR)/yask_rank_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
-	$(MKDIR) $(YK_GEN_DIR)
+	$(call MK_DIR,$(dir $@))
 	$(PERL) $< -output $@ $(RANK_LOOP_FLAGS) $(EXTRA_LOOP_FLAGS) $(EXTRA_RANK_LOOP_FLAGS) "$(RANK_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_mega_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
-	$(MKDIR) $(YK_GEN_DIR)
+	$(call MK_DIR,$(dir $@))
 	$(PERL) $< -output $@ $(MEGA_BLOCK_LOOP_FLAGS) $(EXTRA_LOOP_FLAGS) $(EXTRA_MEGA_BLOCK_LOOP_FLAGS) "$(MEGA_BLOCK_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
-	$(MKDIR) $(YK_GEN_DIR)
+	$(call MK_DIR,$(dir $@))
 	$(PERL) $< -output $@ $(BLOCK_LOOP_FLAGS) $(EXTRA_LOOP_FLAGS) $(EXTRA_BLOCK_LOOP_FLAGS) "$(BLOCK_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_micro_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
-	$(MKDIR) $(YK_GEN_DIR)
+	$(call MK_DIR,$(dir $@))
 	$(PERL) $< -output $@ $(MICRO_BLOCK_LOOP_FLAGS) $(EXTRA_LOOP_FLAGS) $(EXTRA_MICRO_BLOCK_LOOP_FLAGS) "$(MICRO_BLOCK_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_nano_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
-	$(MKDIR) $(YK_GEN_DIR)
+	$(call MK_DIR,$(dir $@))
 	$(PERL) $< -output $@ $(NANO_BLOCK_LOOP_FLAGS) $(EXTRA_LOOP_FLAGS) $(EXTRA_NANO_BLOCK_LOOP_FLAGS) "$(NANO_BLOCK_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_pico_block_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
-	$(MKDIR) $(YK_GEN_DIR)
+	$(call MK_DIR,$(dir $@))
 	$(PERL) $< -output $@ $(PICO_BLOCK_LOOP_FLAGS) $(EXTRA_LOOP_FLAGS) $(EXTRA_PICO_BLOCK_LOOP_FLAGS) "$(PICO_BLOCK_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_misc_loops.hpp: $(GEN_LOOPS) $(YK_CODE_FILE)
-	$(MKDIR) $(YK_GEN_DIR)
+	$(call MK_DIR,$(dir $@))
 	$(PERL) $< -output $@ $(MISC_LOOP_FLAGS) $(EXTRA_LOOP_FLAGS) $(EXTRA_MISC_LOOP_FLAGS) "$(MISC_LOOP_CODE)"
 
 $(YK_GEN_DIR)/yask_layout_macros.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
-	$(MKDIR) $(YK_GEN_DIR)
+	$(call MK_DIR,$(dir $@))
 	$(PERL) $< -m $(NVDIMS) > $@
 	@- $(INDENT) $@
 
 $(YK_GEN_DIR)/yask_layouts.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
-	$(MKDIR) $(YK_GEN_DIR)
+	$(call MK_DIR,$(dir $@))
 	$(PERL) $< -d $(NVDIMS) > $@
 	@- $(INDENT) $@
 
 $(YK_GEN_DIR)/yask_var_code.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
-	$(MKDIR) $(YK_GEN_DIR)
+	$(call MK_DIR,$(dir $@))
 	$(PERL) $< -v $(NVDIMS) > $@
 
 # NB: '$(BASH) -o pipefail' ensures failure of command before '| tee' is visible.
 $(YK_CODE_FILE): $(YC_EXEC)
-	$(MKDIR) $(dir $@)
+	$(call MK_DIR,$(dir $@))
 	@- rm -f $@
 	$(BASH) -o pipefail -c \
 	  "$(RUN_PREFIX) $< $(YC_FLAGS) -p $@ $(EXTRA_YC_FLAGS) 2>&1 | tee $(YC_REPORT_FILE)"
@@ -685,19 +685,20 @@ py-api: $(YK_PY_LIB)
 # This also creates $(YK_PY_MOD) as a side-effect.
 $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i $(INC_DIR)/*.hpp
 	$(SWIG) -version
-	$(MKDIR) $(YK_SWIG_OUT_DIR) $(PY_OUT_DIR)
+	$(call MK_DIR,$(dir $@))
+	$(call MK_DIR,$(PY_OUT_DIR))
 	$(SWIG) -v -DYK_MODULE=$(YK_PY_MOD_BASE) -cppext cpp \
 	  -DUSE_MPI -DMPI_VERSION=3 -DMPI_Comm=int \
 	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig -I$(COEFF_DIR) \
 	  -c++ -python -o $@ -outdir $(PY_OUT_DIR) -builtin $<
 
 $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.cpp
-	$(MKDIR) $(dir $@)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) -x c++ $(SWIG_CXXFLAGS) $(PYINC) -fPIC -c -o $@ $<
 	@ls -l $@
 
 $(YK_PY_LIB): $(YK_OBJS)  $(YK_EXT_OBJS) $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.o
-	$(MKDIR) $(dir $@)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $(YK_SO_FLAGS) -o $@ $^ $(YK_LIBS)
 	@ls -l $@
 
@@ -817,7 +818,7 @@ echo-settings:
 
 # Print stats on inner SIMD loops from asm file.
 code-stats: $(YK_LIB)
-	$(MKDIR) $(YK_OBJ_DIR)
+	$(call MK_DIR,$(YK_OBJ_DIR))
 	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) -x c++ -S -o $(YK_OBJ_DIR)/factory.s $(YK_LIB_SRC_DIR)/factory.cpp
 	@echo "Code stats for stencil computation:"
 	$(PERL) $(VIEW_ASM) -p -l -f='calc_' $(YK_OBJ_DIR)/factory.s
@@ -898,7 +899,7 @@ TEST_MAKE 	:=	$(MAKE) $(TEST_ARGS)
 ### Unit tests.
 
 $(YK_OMP_TEST_EXEC): $(YK_TEST_SRC_DIR)/openmp_test.cpp
-	$(MKDIR) $(dir $@)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< -o $@ $(YK_LIBS)
 	@ls -l $@
 
@@ -909,7 +910,7 @@ cxx-yk-omp-test:
 	$(RUN_PREFIX) $(YK_OMP_TEST_EXEC) $(max_threads)
 
 $(YK_VAR_TEST_EXEC): $(YK_TEST_SRC_DIR)/var_test.cpp $(YK_LIB)
-	$(MKDIR) $(dir $@)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
 	@ls -l $@
 
@@ -923,7 +924,7 @@ cxx-yk-var-test:
 
 # Build C++ kernel tests.
 $(YK_API_TEST_EXEC): $(YK_TEST_SRC_DIR)/yask_kernel_api_test.cpp $(YK_LIB)
-	$(MKDIR) $(dir $@)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
 	@ls -l $@
 
@@ -940,7 +941,7 @@ py-yk-api-test: $(YK_TEST_SRC_DIR)/yask_kernel_api_test.py $(YK_PY_LIB)
 
 # Build C++ kernel tests with exceptions.
 $(YK_API_TEST_EXEC_WITH_EXCEPTION): $(YK_TEST_SRC_DIR)/yask_kernel_api_exception_test.cpp $(YK_LIB)
-	$(MKDIR) $(dir $@)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
 	@ls -l $@
 
@@ -962,13 +963,13 @@ py-yk-api-test-with-exception: $(YK_TEST_SRC_DIR)/yask_kernel_api_exception_test
 # Run Python compiler API test to create stencil-code file.
 py-yc-api-test:
 	$(MAKE) -C $(YC_SRC_DIR) $@
-	$(MKDIR) $(YK_GEN_DIR)
+	$(call MK_DIR,$(YK_GEN_DIR))
 	mv $(YC_SRC_DIR)/yc-api-test-py.hpp $(YK_CODE_FILE)
 
 # Run C++ compiler API test to create stencil-code file.
 cxx-yc-api-test:
 	$(MAKE) -C $(YC_SRC_DIR) $@
-	$(MKDIR) $(YK_GEN_DIR)
+	$(call MK_DIR,$(YK_GEN_DIR))
 	mv $(YC_SRC_DIR)/yc-api-test-cxx.hpp $(YK_CODE_FILE)
 
 # Validation runs for each binary.

@@ -75,22 +75,22 @@ YC_LFLAGS	:=	-lrt -Wl,-rpath=$(LIB_OUT_DIR) -L$(LIB_OUT_DIR) -l$(YC_BASE)
 # - Set macro to use internal DSL instead of conflicting API operators.
 
 $(YC_OBJ_DIR)/%.o: $(YC_STENCIL_DIR)/%.cpp $(INC_GLOB) $(YC_STENCIL_INC_GLOB)
-	$(MKDIR) $(YC_OBJ_DIR)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -x c++ -DUSE_INTERNAL_DSL -O0 -c -o $@ $<
 	@ls -l $@
 
 $(YC_OBJ_DIR)/%.o: $(COMM_DIR)/%.cpp $(YC_INC_GLOB)
-	$(MKDIR) $(YC_OBJ_DIR)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) $(YC_INC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
 $(YC_OBJ_DIR)/%.o: $(COEFF_DIR)/%.cpp $(YC_INC_GLOB)
-	$(MKDIR) $(YC_OBJ_DIR)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) $(YC_INC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
 $(YC_OBJ_DIR)/%.o: $(YC_LIB_SRC_DIR)/%.cpp $(YC_INC_GLOB)
-	$(MKDIR) $(YC_OBJ_DIR)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) $(YC_INC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
@@ -104,12 +104,12 @@ compiler: $(YC_EXEC)
 	$(MAKE) old-code-check
 
 $(YC_LIB): $(YC_OBJS)
-	$(MKDIR) $(dir $@)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
 	@ls -l $@
 
 $(YC_EXEC): compiler_main.cpp $(YC_STENCIL_OBJS) $(YC_LIB)
-	$(MKDIR) $(dir $@)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YC_LD) $(YC_CXXFLAGS) $(YC_INC_CXXFLAGS) $^ $(YC_LFLAGS) -o $@
 	@ls -l $@
 	$(MAKE) echo-settings
@@ -125,7 +125,8 @@ api: compiler $(YC_PY_LIB)
 # Also builds $(YC_PY_MOD)
 $(YC_SWIG_OUT_DIR)/yask_compiler_api_wrap.cpp: $(YC_SWIG_DIR)/yask*.i $(INC_DIR)/*.hpp
 	$(SWIG) -version
-	$(MKDIR) $(YC_SWIG_OUT_DIR) $(PY_OUT_DIR)
+	$(call MK_DIR,$(dir $@))
+	$(call MK_DIR,$(PY_OUT_DIR))
 	$(SWIG) -v -DYC_MODULE=$(YC_MODULE) -cppext cpp \
 	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig -I$(COEFF_DIR) \
 	  -c++ -python -o $@ -outdir $(PY_OUT_DIR) -builtin $<
@@ -133,13 +134,13 @@ $(YC_SWIG_OUT_DIR)/yask_compiler_api_wrap.cpp: $(YC_SWIG_DIR)/yask*.i $(INC_DIR)
 # Turn off asserts to work around known SWIG issue:
 # https://github.com/swig/swig/issues/773
 $(YC_OBJ_DIR)/yask_compiler_api_wrap.o: $(YC_SWIG_OUT_DIR)/yask_compiler_api_wrap.cpp
-	$(MKDIR) $(YC_OBJ_DIR)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -x c++ \
 	  $(SWIG_GCCFLAGS) $(DBL_EPSILON_CXXFLAG) -DNDEBUG $(PYINC) -fPIC -c -o $@ $<
 	@ls -l $@
 
 $(YC_PY_LIB): $(YC_OBJS) $(YC_OBJ_DIR)/yask_compiler_api_wrap.o
-	$(MKDIR) $(dir $@)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
 	@ls -l $@
 
@@ -147,7 +148,7 @@ $(YC_PY_LIB): $(YC_OBJS) $(YC_OBJ_DIR)/yask_compiler_api_wrap.o
 
 # Build C++ compiler API test.
 $(YC_TEST_EXEC): $(YC_TEST_SRC_DIR)/yask_compiler_api_test.cpp $(YC_LIB)
-	$(MKDIR) $(dir $@)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) $< $(YC_LFLAGS) -o $@
 	@ls -l $@
 
@@ -169,7 +170,7 @@ cxx-yc-api-test: $(YC_TEST_EXEC)
 
 # Build C++ compiler API test with exception.
 $(YC_TEST_EXEC_WITH_EXCEPTION): $(YC_TEST_SRC_DIR)/yask_compiler_api_exception_test.cpp $(YC_LIB)
-	$(MKDIR) $(dir $@)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) $< $(YC_LFLAGS) -o $@
 	@ls -l $@
 
