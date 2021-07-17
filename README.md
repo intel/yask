@@ -12,19 +12,22 @@ YASK is a framework to rapidly create high-performance stencil code
 including optimizations and features such as
 * Support for boundary layers and staggered-grid stencils.
 * Vector-folding to increase data reuse via non-traditional data layout.
-* Multi-level OpenMP parallelism to exploit multiple cores and threads.
-* Scaling to multiple sockets and nodes via MPI with overlapped communication and compute.
+* Multi-level OpenMP parallelism to exploit multiple CPU cores and threads.
+* OpenMP offloading to GPUs.
+* MPI scaling to multiple sockets and nodes with overlapped communication and compute.
 * Spatial tiling with automatically-tuned block sizes.
 * Temporal tiling in multiple dimensions to further increase cache locality.
 * APIs for C++ and Python.
 
 YASK contains a domain-specific compiler to convert stencil-equation specifications to
-SIMD-optimized code for Intel(R) Xeon Phi(TM) and Intel(R) Xeon(R) processors.
+optimized code for Intel(R) Xeon(R) processors, Intel(R) Xeon Phi(TM) processors,
+and Intel(R) graphics processors.
 
 ### Supported Platforms and Processors:
 * 64-bit Linux.
 * Intel(R) Xeon(R) processors supporting the AVX, AVX2, or CORE_AVX512 instruction sets.
 * Intel(R) Xeon Phi(TM) x200-family processors supporting the MIC_AVX512 instruction set (KNL).
+* Intel(R) graphics processors supporting UHD graphics, e.g., "Gen12" GPUs.
 
 ### Pre-requisites:
 * Intel(R) [oneAPI](https://software.intel.com/content/www/us/en/develop/tools/oneapi.html)
