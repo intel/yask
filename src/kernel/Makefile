@@ -539,12 +539,14 @@ endif
 # Pico-Block loops break up a pico-block into vectors or clusters.
 # When offloading, each pico-block is executed by a team of threads on the device.
 PICO_BLOCK_LOOP_FLAGS	?=	-ndims $(NSDIMS) -no-align -prefix pico_block_
-PICO_BLOCK_LOOP_ORDER	?=	1 .. N-1
 ifeq ($(offload),1)
+PICO_BLOCK_LOOP_ORDER	?=	2 .. N-1
 PICO_BLOCK_LOOP_OMP	?=	omp parallel for
 PICO_BLOCK_LOOP_FLAGS	+=	-omp '$(PICO_BLOCK_LOOP_OMP)'
-PICO_BLOCK_LOOP_CODE	?=	$(PICO_BLOCK_LOOP_MODS) omp loop($(PICO_BLOCK_LOOP_ORDER)) { }
+PICO_BLOCK_LOOP_CODE	?=	$(PICO_BLOCK_LOOP_MODS) omp loop($(PICO_BLOCK_LOOP_ORDER)) { \
+				  loop(1) { } }
 else
+PICO_BLOCK_LOOP_ORDER	?=	1 .. N-1
 PICO_BLOCK_LOOP_MODS	?=	nested
 PICO_BLOCK_LOOP_CODE	?=	$(PICO_BLOCK_LOOP_MODS) loop($(PICO_BLOCK_LOOP_ORDER)) { }
 endif
