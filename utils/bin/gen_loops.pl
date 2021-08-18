@@ -880,14 +880,18 @@ sub getNextArg($$) {
     # actual token.
     else {
 
-        # Handle, e.g., 'N+1', 'N-2'.
+        # Handle, e.g., 'N', 'N+1', 'N-2'.
         if ($tok eq 'N') {
-            my $oper = checkToken($toks->[$$ti++], '[-+]', 1);
-            my $tok2 = checkToken($toks->[$$ti++], '\d+', 1);
-            if ($oper eq '+') {
-                $tok = $N + $tok2;
-            } else {
-                $tok = $N - $tok2;
+            $tok = $N;
+            my $oper = checkToken($toks->[$$ti], '[-+]', 0);
+            if (defined $oper) {
+                $$ti++;
+                my $tok2 = checkToken($toks->[$$ti++], '\d+', 1);
+                if ($oper eq '+') {
+                    $tok += $tok2;
+                } else {
+                    $tok -= $tok2;
+                }
             }
         }
 
