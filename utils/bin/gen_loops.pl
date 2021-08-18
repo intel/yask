@@ -932,13 +932,12 @@ sub getArgs($$) {
                 }
             }
             else {
-                # Reverse args.
-                for (my $i = $prevArg; $i >= $arg2; $i--) {
-                    push @args, $i;
-                }
+                # Something like 2..1, so return empty list.
+                # TODO: add an operator to allow reverse ordering.
             }
         }
 
+        # Should be a number.
         else {
             die "Error: non-numerical token '$arg'.\n"
                 if $arg !~ /^[-]?\d+$/;
@@ -1057,7 +1056,7 @@ sub processCode($) {
 
             # Check index consistency.
             for my $ld (@loopDims) {
-                die "Error: loop variable '$ld' not in ".dimStr(@dims).".\n"
+                die "Error: loop dim '$ld' not in ".dimStr(@dims).".\n"
                     if !grep($_ eq $ld, @dims);
                 for my $ls (@loopStack) {
                     die "Error: loop variable '$ld' already used.\n"
