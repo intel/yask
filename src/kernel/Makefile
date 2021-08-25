@@ -80,6 +80,12 @@ ifeq ($(offload_usm),1)
  offload		:=	1
 endif
 
+# Turn off prefetching for offload.
+ifeq ($(offload),1)
+ pfd_l1		:=	0
+ pfd_l2		:=	0
+endif
+
 # Main vars for naming the libraries and executables and running
 # the YASK compiler.
 # Set the following vars on 'make' cmd-line for corresponding effects:
@@ -274,16 +280,6 @@ OMPFLAG 	:=	-fopenmp
 # Linker flags.
 YK_LIBS		:=	-lrt
 YK_LFLAGS	:=	-Wl,-rpath=$(LIB_OUT_DIR) -L$(LIB_OUT_DIR) -l$(YK_EXT_BASE)
-
-# Turn off prefetching at O0 or for offload.
-ifneq ($(filter -O0,$(YK_CXXOPT)),)
- pfd_l1		:=	0
- pfd_l2		:=	0
-endif
-ifeq ($(offload),1)
- pfd_l1		:=	0
- pfd_l2		:=	0
-endif
 
 # Add options for NUMA.
 ifeq ($(numa),1)
