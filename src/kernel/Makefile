@@ -383,6 +383,7 @@ ifeq ($(cxx_is_llvm_intel),1)
  YK_CXXWARN	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable \
 			-Wno-unused-const-variable -fno-color-diagnostics
  OMPFLAG	:=	-fiopenmp
+ SWIG_CXXFLAGS	+=	-Wno-deprecated-declarations
 
 # Clang compiler (clang++, not Intel version).
 else ifeq ($(cxx_is_clang),1)

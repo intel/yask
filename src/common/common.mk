@@ -51,12 +51,12 @@ TEST_LOG_OUT_DIR :=	$(YASK_OUT_BASE)/logs/tests.$(HOSTNAME).$(TIMESTAMP)
 # OS-specific
 ifeq ($(shell uname -o),Cygwin)
   SO_SUFFIX	:=	.dll
-  RUN_PREFIX	:=	env PATH="${PATH}:$(LIB_DIR):$(LIB_OUT_DIR):$(YASK_DIR):$(PY_OUT_DIR)"
+  RUN_PREFIX	:=	env PATH="${PATH}:$(LIB_DIR):$(LIB_OUT_DIR):$(PY_OUT_DIR):$(YASK_DIR)"
   PYTHON	:=	python3
 else
   SO_SUFFIX	:=	.so
   RUN_PREFIX	:=	env I_MPI_DEBUG=+5 I_MPI_PRINT_VERSION=1 OMP_DISPLAY_ENV=VERBOSE KMP_VERSION=1
-  PYTHON	:=	python
+  PYTHON	:=	python3
 endif
 SHELL		:=	/bin/bash
 
@@ -90,7 +90,7 @@ INDENT		:=	$(UTILS_BIN_DIR)/yask_indent.sh
 PYINC		:= 	$(addprefix -I,$(shell $(PYTHON) -c 'import distutils.sysconfig; print(distutils.sysconfig.get_python_inc() + " " + distutils.sysconfig.get_python_inc(plat_specific=1))'))
 
 RUN_PYTHON	:= 	$(RUN_PREFIX) \
-	env PYTHONPATH=$(LIB_DIR):$(LIB_OUT_DIR):$(YASK_DIR):$(PY_OUT_DIR):$(PYTHONPATH) $(PYTHON)
+	env PYTHONPATH=$(LIB_DIR):$(LIB_OUT_DIR):$(PY_OUT_DIR):$(YASK_DIR):$(PYTHONPATH) $(PYTHON)
 
 # Function to check for pre-defined compiler macro.
 # Invokes compiler using 1st arg.
