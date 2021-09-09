@@ -29,6 +29,11 @@
 TIMESTAMP	:=	$(shell date '+%Y-%m-%d')
 HOSTNAME	:= 	$(shell hostname)
 
+# Vars for special strings.
+empty		:=
+space		:=	$(empty) $(empty)
+comma		:=	,
+
 # Set YASK_OUTPUT_DIR to change where all output files go.
 YASK_OUTPUT_DIR	?=	$(YASK_BASE)
 

@@ -463,7 +463,7 @@ else ifeq ($(model_cache),2)
 endif
 
 # Add in final flags and user-added flags.
-YK_CXXFLAGS	+=	$(YK_CXXDBG) $(YK_CXXOPT) $(OMPFLAGS) $(addprefix -D,$(MACROS) $(EXTRA_MACROS)) $(YK_CXXWARN) $(EXTRA_YK_CXXFLAGS)
+YK_CXXFLAGS	+=	$(YK_CXXDBG) $(YK_CXXOPT) $(OMPFLAGS) $(addprefix -D,$(MACROS) $(subst $(comma),$(space),$(EXTRA_MACROS))) $(YK_CXXWARN) $(EXTRA_YK_CXXFLAGS)
 YK_LIBS		+=	$(EXTRA_YK_LIBS)
 
 # Number of stencil/var dims extracted from YASK compiler output.
@@ -882,9 +882,6 @@ max_threads	:=	6
 inner_threads	:=	2
 
 # Disable folding and clustering for offload testing.
-empty		:=
-space		:=	$(empty) $(empty)
-comma		:=	,
 ifeq ($(offload),1)
 FOLD		=
 CLUSTER		=
