@@ -1085,9 +1085,13 @@ STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 	$(MAKE) clean; $(STENCIL_TEST) stencil=awp $(call FOLD,x=2 y=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=awp_abc $(call FOLD,x=2 y=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=tti $(call FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=fsg_merged $(call FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=fsg_merged_abc $(call FOLD,x=2 y=2)
+
+# 3D tests w/seismic stencils that may generate too many kernel parameters for offload.
+3d-tests4:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=fsg $(call FOLD,x=2 y=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=fsg_abc $(call FOLD,x=2 y=2)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=fsg_merged $(call FOLD,x=2 y=2)
 
 4d-tests:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_4d $(call FOLD,w=2 x=2)
@@ -1098,6 +1102,7 @@ stencil-tests:
 	$(MAKE) 3d-tests
 	$(MAKE) 3d-tests2
 	$(MAKE) 3d-tests3
+	if (( $(offload) == 0 )); then $(MAKE) 3d-tests4; fi
 	$(MAKE) 4d-tests
 
 unit-tests:
