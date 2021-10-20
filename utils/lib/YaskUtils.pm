@@ -28,6 +28,7 @@ package YaskUtils;
 use strict;
 use FileHandle;
 use Carp;
+use Scalar::Util qw(looks_like_number);
 
 # Values to get from log file.
 # First one should be overall "fitness".
@@ -396,10 +397,19 @@ sub printCsvValues($$) {
   my @cols;
   for my $m (@all_log_keys) {
     my $r = $results->{$m};
-    $r = '' if !defined $r;
-    $r = '"'.$r.'"'  # add quotes if not a number, etc.
-      if ($r !~ /^[0-9.e+-]+$/ || $r =~ /[.].*[.]/) &&
-      $r !~ /^"/ && $r ne 'TRUE' && $r ne 'FALSE';
+
+    $r = '' if
+      !defined $r;
+
+    # special-case fix for bogus Excel cell reference.
+    $r =~ s/-/ -/ if
+      $r =~ /^"?-[a-zA-Z]/;
+
+    # add quotes if not a number, etc.
+    $r = '"'.$r.'"' if
+      !looks_like_number($r) &&
+      $r !~ /^"/ &&
+      $r ne 'TRUE' && $r ne 'FALSE';
     push @cols, $r;
   }
   print $fh join(',', @cols);
