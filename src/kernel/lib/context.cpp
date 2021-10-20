@@ -81,7 +81,7 @@ namespace yask {
         actl_opts->_micro_block_sizes = actl_opts->_rank_sizes;
         actl_opts->_nano_block_sizes = actl_opts->_rank_sizes;
         actl_opts->_pico_block_sizes = actl_opts->_rank_sizes;
-        actl_opts->adjust_settings();
+        actl_opts->adjust_settings(); // Don't print settings.
         update_var_info(true);
 
         // Copy these settings to stages and realloc scratch vars.

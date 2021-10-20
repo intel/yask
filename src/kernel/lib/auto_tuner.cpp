@@ -138,7 +138,7 @@ namespace yask {
         // Prepare for next target.
         AT_TRACE_MSG("starting size: "  << at_state.center_sizes.make_dim_val_str(" * "));
         AT_TRACE_MSG("starting search radius: " << at_state.radius);
-        adjust_settings();
+        adjust_settings(false);
         return true;
     }
     
@@ -146,10 +146,8 @@ namespace yask {
     void AutoTuner::print_settings() const {
         STATE_VARS(this);
         _context->print_sizes(_prefix);
-    }
-    void AutoTuner::print_temporal_settings() const {
-        STATE_VARS(this);
         _context->print_temporal_tiling_info(_prefix);
+        _settings->adjust_settings(_context);
     }
 
     // Reset the auto-tuner.
@@ -376,7 +374,7 @@ namespace yask {
 
                         // Run next step with this size.
                         *targetp = bsize;
-                        adjust_settings();
+                        adjust_settings(false);
                         return;
                     }
                 }
@@ -463,14 +461,14 @@ namespace yask {
                 req_opts->_pico_block_sizes = *targetp;
 
             // Adjust other settings based on target.
-            adjust_settings();
+            adjust_settings(false);
             return true;
         }
         return false;
     }
     
     // Adjust related kernel settings to prepare for next run.
-    void AutoTuner::adjust_settings() {
+    void AutoTuner::adjust_settings(bool do_print) {
         STATE_VARS(this);
         assert(targetp);
 
@@ -490,16 +488,18 @@ namespace yask {
         
         // Save debug output and set to null.
         auto saved_op = get_debug_output();
-        yask_output_factory yof;
-        auto nullop = yof.new_null_output();
-        set_debug_output(nullop);
+        if (!do_print) {
+            yask_output_factory yof;
+            auto nullop = yof.new_null_output();
+            set_debug_output(nullop);
+        }
 
         // The following sequence is the required subset of what
         // is done in prepare_solution().
         
         // Make sure everything is adjusted based on new target size.
-        _settings->adjust_settings();
-
+        _settings->adjust_settings(do_print ? this : 0);
+        
         // Update temporal blocking info.
         // (Normally called from update_var_info().)
         _context->update_tb_info();
@@ -629,7 +629,6 @@ namespace yask {
                 sp->get_at().print_settings();
         } else
             _at.print_settings();
-        _at.print_temporal_settings();
 
         // Reset stats.
         clear_timers();

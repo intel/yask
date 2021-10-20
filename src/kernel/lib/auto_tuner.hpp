@@ -128,14 +128,13 @@ namespace yask {
 
         // Print the best settings.
         void print_settings() const;
-        void print_temporal_settings() const;
 
         // Apply best settings if avail.
         // Returns true if set.
         bool apply_best();
         
         // Adjust related kernel settings to prepare for next run.
-        void adjust_settings();
+        void adjust_settings(bool do_print);
 
         // Done?
         bool is_done() const { return done; }

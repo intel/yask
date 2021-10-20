@@ -281,9 +281,8 @@ namespace yask {
                          const std::vector<std::string>& app_examples);
 
         // Make sure all user-provided settings are valid by rounding-up
-        // values as needed.  Called from prepare_solution(), so it doesn't
-        // normally need to be called from user code.  Prints informational
-        // info.
+        // values as needed.  Called from prepare_solution().
+        // Prints informational info to debug output in *ksb.
         virtual void adjust_settings(KernelStateBase* ksb = 0);
 
         // Determine if this is the first or last rank in given dim.

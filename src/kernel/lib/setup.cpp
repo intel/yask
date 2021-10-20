@@ -538,56 +538,56 @@ namespace yask {
     void StencilContext::print_temporal_tiling_info(string prefix) const {
         STATE_VARS(this);
 
-        DEBUG_MSG(prefix << " num-wave-front-steps:      " << wf_steps << endl <<
-                  prefix << " num-temporal-block-steps:  " << tb_steps);
+        DEBUG_MSG(prefix << "num-wave-front-steps:      " << wf_steps << endl <<
+                  prefix << "num-temporal-block-steps:  " << tb_steps);
 
         // Print detailed info only if temporal tiling enabled.
         if (wf_steps > 0 || tb_steps > 0) {
-            DEBUG_MSG(prefix << " wave-front-angles:         " << wf_angles.make_dim_val_str() << endl <<
-                      prefix << " num-wave-front-shifts:     " << num_wf_shifts << endl <<
-                      prefix << " wave-front-shift-amounts:  " << wf_shift_pts.make_dim_val_str() << endl <<
-                      prefix << " left-wave-front-exts:      " << left_wf_exts.make_dim_val_str() << endl <<
-                      prefix << " right-wave-front-exts:     " << right_wf_exts.make_dim_val_str() << endl <<
-                      prefix << " ext-local-domain:          " << ext_bb.make_range_string(domain_dims) << endl <<
-                      prefix << " temporal-block-angles:     " << tb_angles.make_dim_val_str() << endl <<
-                      prefix << " num-temporal-block-shifts: " << num_tb_shifts << endl <<
-                      prefix << " temporal-block-long-base:  " << tb_widths.make_dim_val_str(" * ") << endl <<
-                      prefix << " temporal-block-short-base: " << tb_tops.make_dim_val_str(" * ") << endl <<
-                      prefix << " micro-block-angles:        " << mb_angles.make_dim_val_str());
+            DEBUG_MSG(prefix << "wave-front-angles:         " << wf_angles.make_dim_val_str() << endl <<
+                      prefix << "num-wave-front-shifts:     " << num_wf_shifts << endl <<
+                      prefix << "wave-front-shift-amounts:  " << wf_shift_pts.make_dim_val_str() << endl <<
+                      prefix << "left-wave-front-exts:      " << left_wf_exts.make_dim_val_str() << endl <<
+                      prefix << "right-wave-front-exts:     " << right_wf_exts.make_dim_val_str() << endl <<
+                      prefix << "ext-local-domain:          " << ext_bb.make_range_string(domain_dims) << endl <<
+                      prefix << "temporal-block-angles:     " << tb_angles.make_dim_val_str() << endl <<
+                      prefix << "num-temporal-block-shifts: " << num_tb_shifts << endl <<
+                      prefix << "temporal-block-long-base:  " << tb_widths.make_dim_val_str(" * ") << endl <<
+                      prefix << "temporal-block-short-base: " << tb_tops.make_dim_val_str(" * ") << endl <<
+                      prefix << "micro-block-angles:        " << mb_angles.make_dim_val_str());
         }
     }
 
     void StencilContext::print_sizes(string prefix) const {
         STATE_VARS(this);
 #ifdef USE_TILING
-        DEBUG_MSG(prefix << " local-domain-tile-size: " <<
+        DEBUG_MSG(prefix << "local-domain-tile-size: " <<
                   actl_opts->_rank_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
 #endif
-        DEBUG_MSG(prefix << " mega-block-size:        " <<
+        DEBUG_MSG(prefix << "mega-block-size:        " <<
                   actl_opts->_mega_block_sizes.make_dim_val_str(" * "));
 #ifdef USE_TILING
-        DEBUG_MSG(prefix << " mega-block-tile-size:   " <<
+        DEBUG_MSG(prefix << "mega-block-tile-size:   " <<
                   actl_opts->_mega_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
 #endif
-        DEBUG_MSG(prefix << " block-size:             " <<
+        DEBUG_MSG(prefix << "block-size:             " <<
                   actl_opts->_block_sizes.make_dim_val_str(" * "));
 #ifdef USE_TILING
-        DEBUG_MSG(prefix << " block-tile-size:        " <<
+        DEBUG_MSG(prefix << "block-tile-size:        " <<
                   actl_opts->_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
 #endif
-        DEBUG_MSG(prefix << " micro-block-size:       " <<
+        DEBUG_MSG(prefix << "micro-block-size:       " <<
                   actl_opts->_micro_block_sizes.make_dim_val_str(" * "));
 #ifdef USE_TILING
-        DEBUG_MSG(prefix << " micro-block-tile-size:  " <<
+        DEBUG_MSG(prefix << "micro-block-tile-size:  " <<
                   actl_opts->_micro_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
 #endif
-        DEBUG_MSG(prefix << " nano-block-size:        " <<
+        DEBUG_MSG(prefix << "nano-block-size:        " <<
                   actl_opts->_nano_block_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
 #ifdef USE_TILING
-        DEBUG_MSG(prefix << " nano-block-tile-size:   " <<
+        DEBUG_MSG(prefix << "nano-block-tile-size:   " <<
                   actl_opts->_nano_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
 #endif
-        DEBUG_MSG(prefix << " pico-block-size:        " <<
+        DEBUG_MSG(prefix << "pico-block-size:        " <<
                   actl_opts->_pico_block_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
     }
 
@@ -612,7 +612,7 @@ namespace yask {
                   actl_opts->_global_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
         DEBUG_MSG(" local-domain-size:      " <<
                   actl_opts->_rank_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
-        print_sizes();
+        print_sizes(" ");
         DEBUG_MSG(" cluster-size:           " << dims->_cluster_pts.make_dim_val_str(" * "));
         DEBUG_MSG(" vector-size:            " << dims->_fold_pts.make_dim_val_str(" * "));
         DEBUG_MSG("\nOther settings:\n"
@@ -635,7 +635,7 @@ namespace yask {
                   " L1-prefetch-distance:   " << PFD_L1 << endl <<
                   " L2-prefetch-distance:   " << PFD_L2 << endl <<
                   " max-halos:              " << max_halos.make_dim_val_str());
-        print_temporal_tiling_info();
+        print_temporal_tiling_info(" ");
 
         // Info about eqs, stages and bundles.
         DEBUG_MSG("\n"

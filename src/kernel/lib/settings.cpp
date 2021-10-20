@@ -427,7 +427,7 @@ namespace yask {
                           ("auto_tune_each_stage",
                            "[Advanced] Apply the auto-tuner separately to each stage. "
                            "Will only be used if stages are applied in separate "
-                           "passes across the entire var, "
+                           "passes across the entire grid, "
                            "i.e., when no temporal tiling is used.",
                            _allow_stage_tuners));
         #endif
