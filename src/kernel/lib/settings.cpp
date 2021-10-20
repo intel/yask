@@ -762,14 +762,13 @@ namespace yask {
         // Default mega-block size (if 0) will be size of rank-domain.
         os << "\nMega-Blocks:" << endl;
         auto nr = find_num_subsets(os,
-
                                    _mega_block_sizes, "mega-block",
                                    _rank_sizes, "local-domain",
                                    cluster_pts, "cluster",
                                    step_dim);
         os << " num-mega-blocks-per-local-domain-per-step: " << nr << endl;
         os << " Since the mega-block size in the '" << step_dim <<
-            "' dim is " << rt << ", temporal wave-front rank tiling is ";
+            "' dim is " << rt << ", temporal wave-front tiling of each local-domain is ";
         if (!rt) os << "NOT ";
         os << "enabled.\n";
 
@@ -784,7 +783,7 @@ namespace yask {
         os << " num-blocks-per-mega-block-per-step: " << nb << endl;
         os << " num-blocks-per-local-domain-per-step: " << (nb * nr) << endl;
         os << " Since the block size in the '" << step_dim <<
-            "' dim is " << bt << ", temporal concurrent mega-block tiling is ";
+            "' dim is " << bt << ", temporal concurrent tiling of each mega-block is ";
         if (!bt) os << "NOT ";
         os << "enabled.\n";
 
@@ -800,7 +799,7 @@ namespace yask {
         os << " num-micro-blocks-per-mega-block-per-step: " << (nmb * nb) << endl;
         os << " num-micro-blocks-per-local-domain-per-step: " << (nmb * nb * nr) << endl;
         os << " Since the micro-block size in the '" << step_dim <<
-            "' dim is " << mbt << ", temporal wave-front block tiling is ";
+            "' dim is " << mbt << ", temporal wave-front tiling of each block is ";
         if (!mbt) os << "NOT ";
         os << "enabled.\n";
 
@@ -861,7 +860,7 @@ namespace yask {
         os << " num-nano-blocks-per-block-per-step: " << (nsb * nmb) << endl;
         os << " num-nano-blocks-per-mega-block-per-step: " << (nsb * nmb * nb) << endl;
         os << " num-nano-blocks-per-rank-per-step: " << (nsb * nmb * nb * nr) << endl;
-        os << " Temporal nano-block tiling is never enabled.\n";
+        os << " Temporal tiling of micro-blocks is never enabled.\n";
         
         // Determine num pico-blocks.
         // Also fix up pico-block sizes as needed.
@@ -876,7 +875,7 @@ namespace yask {
         os << " num-pico-blocks-per-block-per-step: " << (npb * nsb * nmb) << endl;
         os << " num-pico-blocks-per-mega-block-per-step: " << (npb * nsb * nmb * nb) << endl;
         os << " num-pico-blocks-per-rank-per-step: " << (npb * nsb * nmb * nb * nr) << endl;
-        os << " Temporal pico-block tiling is never enabled.\n";
+        os << " Temporal tiling of nano-blocks is never enabled.\n";
 
         // Determine binding dimension. Do this again if it was done above
         // by default because it may have changed during adjustment.
