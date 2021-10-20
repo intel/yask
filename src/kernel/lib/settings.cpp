@@ -234,8 +234,11 @@ namespace yask {
         _rank_indices.set_vals_same(0);
 
         // Things to tune.
-        _tuner_targets.push_back(_block_str);
+        #ifdef USE_OFFLOAD
         _tuner_targets.push_back(_pico_block_str);
+        #else
+        _tuner_targets.push_back(_block_str);
+        #endif
     }
 
     // Add options to set one domain var to a cmd-line parser.
@@ -432,6 +435,7 @@ namespace yask {
                            _allow_stage_tuners));
         #endif
 
+        // Make set of allowed auto-tune targets.
         set<string> allowed_targets;
         allowed_targets.insert(_mega_block_str);
         allowed_targets.insert(_block_str);
