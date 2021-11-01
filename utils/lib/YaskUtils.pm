@@ -65,7 +65,7 @@ our @log_keys =
    'total overall allocation',
    'cluster size',
    'vector size',
-   'num mega-block per local-domain per step',
+   'num mega-blocks per local-domain per step',
    'num blocks per mega-block per step',
    'num micro-blocks per block per step',
    'num nano-blocks per micro-block per step',
