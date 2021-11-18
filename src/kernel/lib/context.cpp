@@ -197,11 +197,8 @@ namespace yask {
         call_2idx_hooks(_before_run_solution_hooks,
                         first_step_index, last_step_index);
 
-        // Start timer.
+        // Start main timer.
         run_time.start();
-
-        // Start vtune collection.
-        VTUNE_RESUME;
 
         // Determine step dir from order of first/last.
         idx_t step_dir = (last_step_index >= first_step_index) ? 1 : -1;
@@ -607,8 +604,7 @@ namespace yask {
 
         } // Something to do.
         
-        // Stop vtune collection & timer.
-        VTUNE_PAUSE;
+        // Stop timer.
         run_time.stop();
 
         // User-provided code.

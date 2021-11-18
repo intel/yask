@@ -128,11 +128,6 @@ namespace yask {
 
     // Bootstrap factory ctor.
     yk_factory::yk_factory() {
-
-        // Stop collecting VTune data when a factory is defined,
-        // so we can start it again when starting a kernel.
-        // Even better to use -start-paused option.
-        VTUNE_PAUSE;
     }
 
     // Context ctor.

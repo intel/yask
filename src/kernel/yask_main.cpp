@@ -227,6 +227,10 @@ void init_vars(MySettings& opts, std::shared_ptr<yask::StencilContext> context) 
 // Parse command-line args, run kernel, run validation if requested.
 int main(int argc, char** argv)
 {
+    // Stop collecting VTune data.
+    // Even better to use -start-paused option.
+    VTUNE_PAUSE;
+
     // just a line.
     string div_line;
     for (int i = 0; i < 70; i++)
@@ -421,10 +425,16 @@ int main(int argc, char** argv)
             }
             kenv->global_barrier();
 
+            // Start vtune collection.
+            VTUNE_RESUME;
+
             // Actual work.
             context->clear_timers();
             ksoln->run_solution(first_t, last_t);
             kenv->global_barrier();
+
+            // Stop vtune collection.
+            VTUNE_PAUSE;
 
             if (opts.validate)
                 context->copy_vars_from_device();
