@@ -632,12 +632,17 @@ namespace yask {
                 vceq->visit_eqs(&plpmv);
                 vp->print_rank_data(os);
 
+                // Print loop-invariant data values.
+                // Store them in the CppVecPrintHelper for later use in the loop body.
+                CppPreLoopPrintDataVisitor plpdv(os, *vp);
+                vceq->visit_eqs(&plpdv);
+                
                 // Inner-loop strides.
                 // Will be 1 for vectors and cluster-mults for clusters.
                 string inner_strides = do_cluster ?
                     "stencil_cluster_mults[dn]" :
                     "idx_t(1)";
-                    
+
                 // Computation loops.
                 // Include generated loops.
                 os <<
@@ -645,9 +650,11 @@ namespace yask {
                     "#define NANO_BLOCK_LOOP_INDICES norm_nb_idxs\n"
                     "\n ////// Nano loop prefix.\n"
                     "#define NANO_BLOCK_USE_LOOP_PART_0\n"
-                    "#include \"yask_nano_block_loops.hpp\"\n"
-                    
+                    "#include \"yask_nano_block_loops.hpp\"\n";
+
+                os <<
                     "\n // Pico loops inside nano loops.\n"
+                    " // Use macros to get values directly from nano loops.\n"
                     "#define PICO_BLOCK_BEGIN(dn) NANO_BLOCK_BODY_START(dn)\n"
                     "#define PICO_BLOCK_END(dn) NANO_BLOCK_BODY_STOP(dn)\n"
                     "#define PICO_BLOCK_STRIDE(dn) " << inner_strides << "\n"
@@ -663,12 +670,6 @@ namespace yask {
                 // Don't need stop vars because inner loop always does one.
                 print_indices(os, false, true, "pico_block_start_");
                 vp->print_elem_indices(os);
-
-                // Print loop-invariant data values.
-                // TODO: move outside of loop.
-                // Store them in the CppVecPrintHelper for later use in the loop body.
-                CppPreLoopPrintMetaVisitor plpdv(os, *vp);
-                vceq->visit_eqs(&plpdv);
 
                 // Generate loop body using vars stored in print helper.
                 // Visit all expressions to cover the whole vector/cluster.

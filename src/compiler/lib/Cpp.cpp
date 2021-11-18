@@ -147,7 +147,7 @@ namespace yask {
             return;
 
         // Got a pointer to it already?
-        auto* p = lookup_base_point_ptr(gp);
+        auto* p = lookup_base_ptr(gp);
         if (!p) {
 
             // Make base point (misc & domain indices set to canonical
@@ -174,7 +174,7 @@ namespace yask {
                 make_point_call_vec(os, *bgp, "get_elem_ptr_local", "", "false", false, &_vec2elem_local_map);
 
             // Ptr should provide unique access if all accesses are through pointers.
-            // TODO: doesn't check for reusing time-slots, e.g., p(t+1) aliased to p(t-1).
+            // TODO: check for reusing time-slots, e.g., p(t+1) aliased to p(t-1).
             // TODO: check for non-ptr accesses via read/write calls.
             bool is_unique = false; // !_settings._allow_unaligned_loads;
             string type = is_unique ? _var_ptr_restrict_type : _var_ptr_type;
@@ -187,7 +187,7 @@ namespace yask {
         // These stats will be used for calculating prefetch ranges.
         // TODO: update prefetch to work with any inner-loop dim, not
         // just the one that's the same as the inner dim of the layouts.
-        p = lookup_base_point_ptr(gp);
+        p = lookup_base_ptr(gp);
         assert(p);
 
         // Get const offsets from original.
@@ -418,7 +418,7 @@ namespace yask {
                 for (auto& gp : _vv._aligned_vecs) {
 
                     // For the current base ptr?
-                    auto* p = lookup_base_point_ptr(gp);
+                    auto* p = lookup_base_ptr(gp);
                     if (p && *p == ptr) {
 
                         // Expression for this offset from inner-dim var.
@@ -598,7 +598,7 @@ namespace yask {
         string mv_name = make_var_name("vec");
 
         // Do we have a pointer to the base?
-        auto* p = lookup_base_point_ptr(gp);
+        auto* p = lookup_base_ptr(gp);
         if (p) {
 
             // Ptr expression.
@@ -637,7 +637,7 @@ namespace yask {
         assert(!var->is_foldable()); // Assume all scalar reads are from non-vec vars.
 
         // Do we have a pointer to the base?
-        auto* p = lookup_base_point_ptr(gp);
+        auto* p = lookup_base_ptr(gp);
         if (p) {
 
             // Ptr expression.
@@ -737,7 +737,7 @@ namespace yask {
         print_point_comment(os, gp, "Write aligned vector");
         
         // Got a pointer to the base addr?
-        auto* p = lookup_base_point_ptr(gp);
+        auto* p = lookup_base_ptr(gp);
         if (p) {
 
             // Offset.
@@ -851,9 +851,6 @@ namespace yask {
     // Print loop-invariant meta values for each VarPoint.
     string CppPreLoopPrintMetaVisitor::visit(VarPoint* gp) {
         assert(gp);
-
-        // Local offsets.
-        
 
         // Pointer to this var.
         string varp = get_var_ptr(*gp);

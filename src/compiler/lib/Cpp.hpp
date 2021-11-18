@@ -115,15 +115,15 @@ namespace yask {
     protected:
 
         // Vars for tracking pointers to var values.
-        map<VarPoint, string> _vec_ptrs; // pointers to var vecs; value: ptr-var name.
+        map<VarPoint, string> _vec_ptrs; // pointers to lowest-allocated vec; value: ptr-var name.
+ 
+        // Vars for tracking other info about vars.
         map<string, int> _ptr_ofs_lo; // lowest read offset from _vec_ptrs in inner dim.
         map<string, int> _ptr_ofs_hi; // highest read offset from _vec_ptrs in inner dim.
-
-        // Vars for tracking strides and local offsets in vars.
         typedef pair<string, string> VarDimKey; // var and dim names.
         map<VarDimKey, string> _strides; // var containing stride for given dim in var.
         map<VarDimKey, string> _offsets; // var containing offset for given dim in var.
-        map<string, string> _ptr_ofs; // var containing const offset for var.
+        map<string, string> _ptr_ofs; // var containing const offset for key var.
 
         // Element indices.
         string _elem_suffix_global = "_global_elem";
@@ -250,11 +250,11 @@ namespace yask {
             return _vec2elem_global_map.at(dname);
         }
 
-        // Print strides for 'var'.
+        // Print strides for 'gp'.
         virtual void print_strides(ostream& os, const VarPoint& gp);
-        
+
         // Access cached values.
-        virtual string* lookup_base_point_ptr(const VarPoint& gp) {
+        virtual string* lookup_base_ptr(const VarPoint& gp) {
             auto bgp = make_base_point(gp);
             if (_vec_ptrs.count(*bgp))
                 return &_vec_ptrs.at(*bgp);
