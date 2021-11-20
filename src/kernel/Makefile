@@ -80,10 +80,11 @@ ifeq ($(offload_usm),1)
  offload		:=	1
 endif
 
-# Turn off prefetching for offload.
+# YASK compiler settings for offload.
 ifeq ($(offload),1)
  pfd_l1		:=	0
  pfd_l2		:=	0
+ inner_loop_dim :=	1
 endif
 
 # Main vars for naming the libraries and executables and running
@@ -193,6 +194,9 @@ ifneq ($(pfd_l1),)
 endif
 ifneq ($(pfd_l2),)
  YC_FLAGS	+=	-l2-prefetch-dist $(pfd_l2)
+endif
+ifneq ($(inner_loop_dim),)
+ YC_FLAGS	+=	-inner-loop-dim $(inner_loop_dim)
 endif
 
 # Kernel base names.
@@ -1041,7 +1045,7 @@ STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 2d-tests:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_empty step_dim=t domain_dims=d1,d2
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_empty_2d
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d $(call FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d $(call FOLD,x=2 y=2) inner_loop_dim=1
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d $(call FOLD,x=2 y=2) $(call CLUSTER,y=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d $(call FOLD,x=2 y=2) mpi=0 ranks=1
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d arch=intel64 $(call FOLD,x=3 y=2) domain_dims=y,x
@@ -1058,10 +1062,10 @@ STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d $(call FOLD,x=2 y=2 z=2) EXTRA_YC_FLAGS=-no-fus
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d $(call FOLD,x=2 z=2) domain_dims=z,y,x
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stages_3d $(call FOLD,y=2 x=2) domain_dims=x,z,y
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_partial_3d $(call FOLD,x=2 z=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_partial_3d $(call FOLD,x=2 z=2) inner_loop_dim=1
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_partial_3d $(call FOLD,x=2 z=2) domain_dims=x,z,y
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_3d $(call FOLD,x=2 y=2)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_3d $(call FOLD,x=2 z=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_3d $(call FOLD,x=2 y=2) inner_loop_dim=2
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_3d $(call FOLD,x=2 z=2) inner_loop_dim=x
 
 # 3D tests w/specific shapes.
 3d-tests2:
