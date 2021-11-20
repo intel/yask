@@ -185,8 +185,6 @@ namespace yask {
 
         // Collect some stats for reads using this ptr.
         // These stats will be used for calculating prefetch ranges.
-        // TODO: update prefetch to work with any inner-loop dim, not
-        // just the one that's the same as the inner dim of the layouts.
         p = lookup_base_ptr(gp);
         assert(p);
 
@@ -195,7 +193,7 @@ namespace yask {
 
         // Get offset in inner dim.
         // E.g., A(t, x+1, y+4) => 4.
-        const string& idim = _dims._inner_dim;
+        const string& idim = _settings._inner_loop_dim;
         auto* ofs = offsets.lookup(idim);
         if (ofs) {
             
@@ -351,14 +349,13 @@ namespace yask {
     // Print prefetches for each base pointer.
     // 'ahead': prefetch PF distance ahead instead of up to PF dist.
     // TODO: handle of misc dims.
-    // TODO: allow non-inner-dim prefetching.
     void CppVecPrintHelper::print_prefetches(ostream& os,
                                              bool ahead, string ptr_var) {
         if (!_settings._use_ptrs)
             return;
 
         // cluster mult in inner dim.
-        const string& idim = _dims._inner_dim;
+        const string& idim = _settings._inner_loop_dim;
         string imult = "CMULT_" + PrinterBase::all_caps(idim);
 
         // 'level': cache level.
