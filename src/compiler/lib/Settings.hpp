@@ -41,6 +41,7 @@ namespace yask {
         int _elem_bytes = 4;    // bytes in an FP element.
         string _step_dim;        // explicit step dim.
         vector<string> _domain_dims; // explicit domain dims.
+        string _inner_loop_dim;      // explicit inner-loop dim.
         IntTuple _fold_options;    // vector fold.
         IntTuple _cluster_options; // cluster multipliers.
         map<int, int> _prefetch_dists;
@@ -74,6 +75,7 @@ namespace yask {
         string _inner_dim;        // inner-most domain dim in mem array layout.
         string _outer_dim;        // outer-most domain dim in mem array layout.
         IntTuple _misc_dims;      // misc dims that are not the step or domain.
+        int _inner_loop_dim_num = 0; // stencil-dim index of inner-loop-dim.
 
         // Following contain only domain dims.
         IntTuple _scalar;       // points in scalar (value 1 in each).

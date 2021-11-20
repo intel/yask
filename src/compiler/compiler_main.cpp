@@ -126,10 +126,14 @@ void usage(const string& cmd,
         "    Explicitly name the domain dimensions and set their order, e.g., 'x,y,z'.\n"
         "    In addition, domain dimensions are added implicitly when YASK variables are encountered\n"
         "      in the stencil DSL code.\n"
-        "    Either way, the last unique domain dimension specified will become the 'inner' or\n"
-        "      'unit-stride' dimension in array memory layouts. Thus, this option can be used to override\n"
-        "      the default layout order.\n"
-        "    The domain-dimension order also affects default loop nesting and MPI rank layout.\n"
+        "    The domain-dimension order determines array memory layout, default loop nesting, and\n"
+        "      MPI rank layout. Thus, this option can be used to override those traits compared to\n"
+        "      what would be obtained from the DSL code only.\n"
+        " -inner-loop-dim <dim>\n"
+        "    Specify the domain dimension used for the inner-most stencil-computation loop.\n"
+        "      The default is the last domain dimension specified via -domain_dims or in the\n"
+        "        stencil DSL code.\n"
+        "      For this option, a numerical index is allowed: '1' is the first domain-dim, etc.\n"
         " [-no]-reloc-step\n"
         "    Define YASK vars with the 'step' dim just after the first domain dim\n"
         "      instead of just before the first domain dim (default=" << settings._inner_step << ").\n"
@@ -302,6 +306,8 @@ void parse_opts(int argc, const char* argv[],
                     settings._eq_bundle_targets = argop;
                 else if (opt == "-step-dim")
                     settings._step_dim = argop;
+                else if (opt == "-inner-loop-dim")
+                    settings._inner_loop_dim = argop;
                 else if (opt == "-domain-dims") {
                     settings._domain_dims.clear();
                     

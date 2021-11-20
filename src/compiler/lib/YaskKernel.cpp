@@ -106,31 +106,55 @@ namespace yask {
         os << "// Stencil solution:\n"
             "#define YASK_STENCIL_NAME \"" << sname << "\"\n"
             "#define YASK_STENCIL_CONTEXT " << _context << endl;
-
-        os << "\n// target:\n"
+        os << "\n// Target:\n"
             "#define YASK_TARGET \"" << _settings._target << "\"\n"
-            "#define REAL_BYTES (" << _settings._elem_bytes << ")\n";
+            "#define REAL_BYTES " << _settings._elem_bytes << endl;
 
-        os << "\n// Number of domain dimensions:\n"
-            "#define NUM_DOMAIN_DIMS " << _dims._domain_dims.size() << "\n";
-        int i = 0;
-        for (auto& dim : _dims._domain_dims) {
+        auto nsdims = _dims._stencil_dims.size();
+        os << "\n// Dimensions:\n"
+            "#define STEP_DIM " << _dims._step_dim << endl <<
+            "#define INNER_LOOP_DIM " << _settings._inner_loop_dim << endl;
+        os << "#define NUM_DOMAIN_DIMS " << _dims._domain_dims.size() << endl;
+        for (int i = 0; i < _dims._domain_dims.get_num_dims(); i++) {
+            auto& dim = _dims._domain_dims(i);
             auto& dname = dim._get_name();
-            os << "#define DOMAIN_DIM_IDX_" << dname << " (" << (i++) << ")\n";
+            os << "#define DOMAIN_DIM_IDX_" << dname << " " << i << endl;
         }
-        i = 0;
-        for (auto& dim : _dims._stencil_dims) {
+        os << "#define NUM_STENCIL_DIMS " << nsdims << endl;
+        for (int i = 0; i < _dims._stencil_dims.get_num_dims(); i++) {
+            auto& dim = _dims._stencil_dims(i);
             auto& dname = dim._get_name();
-            os << "#define STENCIL_DIM_IDX_" << dname << " (" << (i++) << ")\n";
+            os << "#define STENCIL_DIM_IDX_" << dname << " " << i << endl;
         }
+        os << "#define STENCIL_DIM_IDX_INNER_LOOP " << _dims._inner_loop_dim_num << endl;
+        os << "#define DOMAIN_LOOP_DIMS ";
+        bool need_comma = false;
+        for (int i = 0; i < _dims._domain_dims.get_num_dims(); i++) {
+            auto& dim = _dims._domain_dims(i);
+            auto& dname = dim._get_name();
+            if (need_comma)
+                os << ",";
+            os << (i+1);
+            need_comma = true;
+        }
+        os << "\n#define PICO_BLOCK_OUTER_LOOP_DIMS ";
+        need_comma = false;
+        for (int i = 0; i < _dims._domain_dims.get_num_dims(); i++) {
+            if (i+1 != _dims._inner_loop_dim_num) {
+                auto& dim = _dims._domain_dims(i);
+                auto& dname = dim._get_name();
+                if (need_comma)
+                    os << ",";
+                os << (i+1);
+                need_comma = true;
+            }
+        }
+        os << "\n#define PICO_BLOCK_INNER_LOOP_DIM " << _dims._inner_loop_dim_num << "\n";
         int gdims = 0;
         for (auto gp : _vars) {
             int ndims = gp->get_num_dims();
             gdims = max(gdims, ndims);
         }
-        auto nsdims = _dims._stencil_dims.size();
-        os << "\n// Number of stencil dimensions (step and domain):\n"
-            "#define NUM_STENCIL_DIMS " << nsdims << endl;
         os << "\n// Max number of var dimensions:\n"
             "#define NUM_VAR_DIMS " << gdims << endl;
         os << "\n// Max of stencil and var dims:\n"
@@ -145,7 +169,7 @@ namespace yask {
         for (auto& dim : _dims._fold) {
             auto& dname = dim._get_name();
             string uc_dim = all_caps(dname);
-            os << "#define VLEN_" << uc_dim << " (" << dim.get_val() << ")" << endl;
+            os << "#define VLEN_" << uc_dim << " " << dim.get_val() << endl;
         }
         os << "namespace yask {\n"
             "\n // Number of points or multipliers in domain dims.\n"
@@ -651,19 +675,16 @@ namespace yask {
                     "\n ////// Nano loop prefix.\n"
                     "#define NANO_BLOCK_USE_LOOP_PART_0\n"
                     "#include \"yask_nano_block_loops.hpp\"\n";
-
                 os <<
                     "\n // Pico loops inside nano loops.\n"
                     " // Use macros to get values directly from nano loops.\n"
                     "#define PICO_BLOCK_BEGIN(dn) NANO_BLOCK_BODY_START(dn)\n"
                     "#define PICO_BLOCK_END(dn) NANO_BLOCK_BODY_STOP(dn)\n"
-                    "#define PICO_BLOCK_STRIDE(dn) " << inner_strides << "\n"
-                    "#define PICO_BLOCK_TILE_SIZE(dn) PICO_BLOCK_STRIDE(dn)\n" // not used.
-                    "#define PICO_BLOCK_START(dn) NANO_BLOCK_BODY_START(dn)\n"
-                    "#define PICO_BLOCK_STOP(dn) NANO_BLOCK_BODY_STOP(dn)\n"
-                    "#define PICO_BLOCK_INDEX(dn) idx_t(0)\n"
+                    "#define PICO_BLOCK_STRIDE(dn) " << inner_strides << "\n";
+                os <<
                     "\n ////// Pico loop prefix.\n"
                     "#define PICO_BLOCK_USE_LOOP_PART_0\n"
+                    "#define PICO_BLOCK_USE_LOOP_PART_1\n"
                     "#include \"yask_pico_block_loops.hpp\"\n";
 
                 // Get named domain indices directly from scalar vars.
@@ -682,7 +703,7 @@ namespace yask {
                 // End of loops.
                 os <<
                     "\n ////// Loop suffixes.\n"
-                    "#define PICO_BLOCK_USE_LOOP_PART_1\n"
+                    "#define PICO_BLOCK_USE_LOOP_PART_2\n"
                     "#include \"yask_pico_block_loops.hpp\"\n"
                     "#define NANO_BLOCK_USE_LOOP_PART_1\n"
                     "#include \"yask_nano_block_loops.hpp\"\n";

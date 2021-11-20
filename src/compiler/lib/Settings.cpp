@@ -117,13 +117,43 @@ namespace yask {
         }
 
         // Set specific positional dims.
+        auto ndd = _domain_dims.get_num_dims();
         _outer_dim = _domain_dims.get_dim_name(0);
-        _inner_dim = _domain_dims.get_dim_name(_domain_dims.get_num_dims() - 1);
+        _inner_dim = _domain_dims.get_dim_name(ndd - 1);
         string _near_inner_dim = _domain_dims.get_num_dims() >= 2 ?
             _domain_dims.get_dim_name(_domain_dims.get_num_dims() - 2) : _outer_dim;
+        if (settings._inner_loop_dim.length()) {
+            if (isdigit(settings._inner_loop_dim[0])) {
+                int dn = atoi(settings._inner_loop_dim.c_str());
+                if (dn < 1) {
+                    os << "Note: adjusting inner-loop-dim " << dn << " to 1.\n";
+                    dn = 1;
+                }
+                if (dn > ndd) {
+                    os << "Note: adjusting inner-loop-dim " << dn << " to " << ndd << ".\n";
+                    dn = ndd;
+                }
+                settings._inner_loop_dim = _domain_dims.get_dim_name(dn - 1);
+                _inner_loop_dim_num = dn;
+            }
+            int dp = _domain_dims.lookup_posn(settings._inner_loop_dim);
+            if (dp < 0) {
+                os << "Warning: inner-loop-dim '" << settings._inner_loop_dim <<
+                    "' ignored because it's not a domain dim.\n";
+                settings._inner_loop_dim.clear();
+            } else
+                _inner_loop_dim_num = dp + 1;
+        }
+        if (!settings._inner_loop_dim.length()) {
+            settings._inner_loop_dim = _inner_dim;
+            _inner_loop_dim_num = ndd;
+        }
+        assert(_inner_loop_dim_num > 0);
+        assert(_inner_loop_dim_num <= ndd);
 
         os << "Step dimension: " << _step_dim << endl;
         os << "Domain dimension(s): " << _domain_dims.make_dim_str() << endl;
+        os << "Inner-loop dimension: " << settings._inner_loop_dim << endl;
 
         // Extract domain fold lengths based on cmd-line options.
         IntTuple fold_opts;
@@ -153,7 +183,7 @@ namespace yask {
         // If vlen is 1, we will allow any folding.
         if (vlen > 1 && _fold.product() != vlen) {
             if (fold_opts.get_num_dims())
-                os << "Notice: adjusting requested fold to achieve SIMD length of " <<
+                os << "Note: adjusting requested fold to achieve SIMD length of " <<
                     vlen << ".\n";
 
             // If 1D, there is only one option.

@@ -42,7 +42,7 @@ $| = 1;                         # autoflush.
 ##########
 # Globals.
 my %OPT;                        # cmd-line options.
-my @dims;                       # indices of all dimensions.
+my %macros;                     # macros from file.
 my $inputVar = "LOOP_INDICES";   # input var macro.
 my $outputVar = "BODY_INDICES";  # output var.
 my $loopPart = "USE_LOOP_PART_"; # macro to enable specified loop part.
@@ -184,41 +184,6 @@ sub dimStr {
     return $s;
 }
 
-# copy vars from the input.
-sub getInVars() {
-
-    my $itype = indexType();
-    my @stmts;
-    for my $dim (@dims) {
-
-        # Vars from the struct.
-        my $bvar = beginVar($dim);
-        my $evar = endVar($dim);
-        my $svar = strideVar($dim);
-        my $avar = alignVar($dim);
-        my $aovar = alignOfsVar($dim);
-        my $tsvar = tileSizeVar($dim);
-        my $s0var = startVar($dim).'_orig';
-        my $s1var = stopVar($dim).'_orig';
-        my $ivar = indexVar($dim).'_orig';
-        push @stmts,
-            "// Extract input vars from struct for dim $dim.",
-            "const $itype $bvar = ".inVar("begin", $dim).";",
-            "const $itype $evar = ".inVar("end", $dim).";",
-            "const $itype $svar = ".inVar("stride", $dim).";",
-            "const $itype $tsvar = ".inVar("tile_size", $dim).";",
-            "const $itype $s0var = ".inVar("start", $dim).";",
-            "const $itype $s1var = ".inVar("stop", $dim).";",
-            "const $itype $ivar = ".inVar("index", $dim).";";
-        push @stmts,
-            "const $itype $avar = ".inVar("align", $dim).";",
-            "const $itype $aovar = ".inVar("align_ofs", $dim).";"
-            if $doAlign;
-        
-    }
-    return @stmts;
-}
-
 # Conditionally define a macro.
 sub macroDef($$$) {
     my $mname = shift;
@@ -242,27 +207,46 @@ sub macroUndef($) {
         "#endif";
 }
 
+# copy vars from the input.
+sub getInVars {
+    my $tiledDims = shift;      # ref to hash.
+    my @ldims = @_;
+
+    my $itype = indexType();
+    my @stmts;
+    for my $dim (@ldims) {
+
+        # Vars for input values.
+        my $bvar = beginVar($dim);
+        my $evar = endVar($dim);
+        my $svar = strideVar($dim);
+        my $tsvar = tileSizeVar($dim);
+        my $avar = alignVar($dim);
+        my $aovar = alignOfsVar($dim);
+        push @stmts,
+            "// Create input vars for dim $dim.",
+            "const $itype $bvar = ".inVar("begin", $dim).";",
+            "const $itype $evar = ".inVar("end", $dim).";",
+            "const $itype $svar = ".inVar("stride", $dim).";";
+        push @stmts,
+            "const $itype $avar = ".inVar("align", $dim).";",
+            "const $itype $aovar = ".inVar("align_ofs", $dim).";"
+            if $doAlign;
+        push @stmts,
+            "const $itype $tsvar = ".inVar("tile_size", $dim).";"
+            if defined $$tiledDims{$dim};
+    }
+    return @stmts;
+}
+
 # make macros for the body.
 sub makeOutMacros {
     my @ldims = @_;
 
     my @stmts;
-    for my $expr (@fixed_exprs, @var_exprs) {
-        my $isVar = (grep {$_ eq $expr} @var_exprs) > 0;
+    for my $expr (@var_exprs) {
         my $base = "BODY_".uc($expr);
-        for my $dim (@dims) {
-
-            # Ex: 'begin_0'.
-            my $vname = locVar($expr, $dim);
-
-            # If dim not processed, use orig inputs.
-            # Ex: 'stop_0_orig'.
-            my $dimProc = (grep {$_ == $dim} @ldims) > 0;
-            $vname .= '_orig' if ($isVar && !$dimProc);
-        
-            push @stmts, macroDef("${base}_$dim", undef, $vname);
-        }
-        push @stmts, macroDef($base, "dim_num", "YCAT($macroPrefix${base}_, dim_num)");
+        push @stmts, macroDef($base, "dim_num", "YCAT(".locVar($expr)."_, dim_num)");
     }
 
     return @stmts;
@@ -270,23 +254,17 @@ sub makeOutMacros {
 
 # set var for the body.
 sub setOutVars {
-    my $isNewVar = shift;
     my @ldims = @_;
 
     my $itype = indexType();
     my @stmts;
 
-    for my $expr (@fixed_exprs, @var_exprs) {
-        my $isVar = (grep {$_ eq $expr} @var_exprs) > 0;
-        for my $dim (@dims) {
+    for my $expr (@var_exprs) {
+        for my $dim (@ldims) {
             my $macro = "${macroPrefix}BODY_".uc($expr)."($dim)";
-    
-            # Set if needed.
-            if ($isNewVar || $isVar) {
-                push @stmts, outVar($expr, $dim)." = $macro;";
-            }
+            push @stmts, outVar($expr, $dim)." = $macro;";
         }
-    } @dims;
+    }
     return @stmts;
 }
 
@@ -789,8 +767,9 @@ sub endLoop($) {
 # Split a string into tokens, ignoring whitespace.
 sub tokenize($) {
     my $str = shift;
-    my @toks;
 
+    # Find tokens.
+    my @toks;
     while (length($str)) {
 
         # default is 1 char.
@@ -864,9 +843,8 @@ sub getNextArg($$) {
   my $toks = shift;             # ref to token array.
   my $ti = shift;               # ref to token index (starting at paren).
 
-  my $N = scalar(@dims);
   while (1) {
-    my $tok = checkToken($toks->[$$ti++], '\w+|N[-+]|\,|\.+|\)', 1);
+    my $tok = checkToken($toks->[$$ti++], '\w+|\,|\.+|\)', 1);
 
     # comma (ignore).
     if ($tok eq ',') {
@@ -879,22 +857,6 @@ sub getNextArg($$) {
 
     # actual token.
     else {
-
-        # Handle, e.g., 'N', 'N+1', 'N-2'.
-        if ($tok eq 'N') {
-            $tok = $N;
-            my $oper = checkToken($toks->[$$ti], '[-+]', 0);
-            if (defined $oper) {
-                $$ti++;
-                my $tok2 = checkToken($toks->[$$ti++], '\d+', 1);
-                if ($oper eq '+') {
-                    $tok += $tok2;
-                } else {
-                    $tok -= $tok2;
-                }
-            }
-        }
-
         return $tok;
     }
   }
@@ -964,43 +926,29 @@ sub pragma($) {
 sub processCode($) {
     my $codeString = shift;
 
-    my @toks = tokenize($codeString);
-    ##print join "\n", @toks;
+    # vars across loops.
+    my $partNum = 0;            # macro-part counter.
+    my %dims;                   # all dims seen.
+    my %tiledDims;              # dims needing tiles.
+    my @code;                   # code to output.
 
-    # vars to track loops.
+    # vars to track one loop.
     # set at beginning of loop() statements.
     my @loopStack;              # current nesting of dimensions.
     my @loopCounts;             # number of dimensions in each loop.
     my @loopDims;               # dimension(s) of current loop.
-    my $innerNum = 0;           # inner-loop counter.
 
     # modifiers before loop() statements.
     my @loopPrefix;             # string(s) to put before loop body.
     my $features = 0;           # bits for loop features.
 
-    # Lines of code to output.
-    my @code;
-
-    # Front matter.
-    push @code,
-        "// Enable this part by defining the following macro.",
-        "#ifdef ${macroPrefix}$loopPart$innerNum\n",
-        "// These macros must be re-defined for each generated loop-nest.",
-        macroDef('SIMD_PRAGMA', undef, pragma($OPT{simd})),
-        macroDef('INNER_LOOP_PREFIX', undef, pragma($OPT{inner})),
-        macroDef('OMP_PRAGMA', undef, pragma($OPT{omp})),
-        macroDef('OMP_NUM_THREADS', undef, 'omp_get_num_threads()'),
-        macroDef('OMP_THREAD_NUM', undef, 'omp_get_thread_num()');
-    for my $expr (@fixed_exprs, @var_exprs) {
-        push @code, macroDef($expr, "dim_num", inVar().'.'.$expr.'[dim_num]');
+    # Subst macros.
+    while (my ($key, $value) = each (%macros)) {
+        $codeString =~ s/\b$key\b/$value/g;
     }
-    push @code,
-        "// 'ScanIndices ".inVar()."' must be set before the following code".
-        " unless all the values extracted from it are pre-defined.",
-        "{",
-        getInVars();
-    
+
     # loop thru all the tokens in the input.
+    my @toks = tokenize($codeString);
     for (my $ti = 0; $ti <= $#toks; ) {
         my $tok = checkToken($toks[$ti++], '.*', 1);
 
@@ -1060,8 +1008,8 @@ sub processCode($) {
 
             # Check index consistency.
             for my $ld (@loopDims) {
-                die "Error: loop dim '$ld' not in ".dimStr(@dims).".\n"
-                    if !grep($_ eq $ld, @dims);
+                $dims{$ld} = 1;
+                $tiledDims{$ld} = 1 if ($features & $bTile);
                 for my $ls (@loopStack) {
                     die "Error: loop variable '$ld' already used.\n"
                         if $ld == $ls;
@@ -1089,30 +1037,25 @@ sub processCode($) {
                     push @code,
                         "// Indices for loop body.",
                         makeOutMacros(@loopStack),
-                        "#ifdef ".outVar();
+                        "#ifdef ".outVar(),
+                        "#ifndef ".inVar(),
+                        "#error Cannot create ".outVar()." without ".inVar(),
+                        "#endif";
                     if ($features & $bOmpPar) {
                         
                         # Make a new var so it will become OMP private.
                         push @code,
                             "ScanIndices ".outVar()."(false);",
-                            setOutVars(1, @loopStack);
+                            outVar()." = ".inVar().";",
+                            setOutVars(@loopStack);
                     } else {
                         
                         # Just a reference if no OMP.
                         push @code,
                             "ScanIndices& ".outVar()." = ".inVar().";",
-                            setOutVars(0, @loopStack);
+                            setOutVars(@loopStack);
                     }
-                    push @code, "#endif";
-                    
-                    # Macro break for body: end one and start next one.
-                    push @code,
-                        macroUndef($loopPart.$innerNum),
-                        "#endif\n",
-                        "// Loop body goes here.\n\n";
-                    $innerNum++;
-                    push @code,
-                        "#ifdef ${macroPrefix}$loopPart$innerNum\n";
+                    push @code, "#endif // ".outVar();
                 }
 
             } else {
@@ -1127,6 +1070,15 @@ sub processCode($) {
                     "for (int $ivar = 0; $ivar < 1; $ivar++) { {";
             }
 
+            # Macro break for inserting code: end one and start next one.
+            push @code,
+                macroUndef($loopPart.$partNum),
+                "#endif // Part $partNum.\n";
+            $partNum++;
+            push @code,
+                "// Enable part $loopPart by defining the following macro.",
+                "#ifdef ${macroPrefix}$loopPart$partNum\n";
+            
             # clear data for this loop so we'll be ready for a nested loop.
             undef @loopDims;
             undef @loopPrefix;
@@ -1164,6 +1116,32 @@ sub processCode($) {
     die "error: ".(scalar @loopStack)." loop(s) not closed.\n"
         if @loopStack;
 
+    # Sorted list of dims scanned.
+    my @dims = sort { $a <=> $b } keys %dims;
+    
+    # Front matter.
+    my @fcode;
+    push @fcode,
+        "// Enable part 0 by defining the following macro.",
+        "#ifdef ${macroPrefix}${loopPart}0\n",
+        "// These macros must be re-defined for each generated loop-nest.",
+        macroDef('SIMD_PRAGMA', undef, pragma($OPT{simd})),
+        macroDef('INNER_LOOP_PREFIX', undef, pragma($OPT{inner})),
+        macroDef('OMP_PRAGMA', undef, pragma($OPT{omp})),
+        macroDef('OMP_NUM_THREADS', undef, 'omp_get_num_threads()'),
+        macroDef('OMP_THREAD_NUM', undef, 'omp_get_thread_num()'),
+        "// Define ".inVar()." to initialize loop from a ScanIndices struct with that name.",
+        "// Any element of the struct may be overridden by defining the corresponding macro.",
+        "#ifdef ".inVar();
+    for my $expr (@fixed_exprs) {
+        push @fcode, macroDef($expr, "dim_num", inVar().'.'.$expr.'[dim_num]');
+    }
+    push @fcode,
+        "#endif //".inVar(),
+        "{",
+        getInVars(\%tiledDims, @dims);
+    unshift @code, @fcode;
+    
     # Back matter.
     push @code,
         "}",
@@ -1178,26 +1156,20 @@ sub processCode($) {
         push @code,
             macroUndef($expr),
             macroUndef("BODY_$expr");
-        for my $dim (@dims) {
-            push @code,
-                macroUndef("BODY_${expr}_$dim");
-        }
     }
     push @code,
-        macroUndef($loopPart.$innerNum),
+        macroUndef($loopPart.$partNum),
         "#endif";
     
     # open output stream.
     open OUT, "> $OPT{output}" or die;
 
     # header.
-    my $ndims = scalar(@dims);
     print OUT
         "/*\n",
-        " * $ndims-D var-scanning code.\n",
+        " * Var-scanning code.\n",
         " * Generated automatically from the following pseudo-code:\n",
         " *\n",
-        " * N = ",$ndims,";\n",
         " * $codeString\n",
         " *\n */";
 
@@ -1218,12 +1190,12 @@ sub main() {
 
     my(@KNOBS) = (
         # knob,        description,   optional default
-        [ "ndims=i", "Value of N.", 1],
-        [ "prefix=s", "Common prefix of all generated macros and vars", ''],
+        [ "prefix=s", "Common prefix of generated macros and vars", ''],
         [ "inner=s", "Set default INNER_LOOP_PREFIX macro used before inner loop(s)", ''],
         [ "omp=s", "Set default OMP_PRAGMA macro used before 'omp' loop(s)", "omp parallel for"],
         [ "simd=s", "Set default SIMD_PRAGMA macro used before 'simd' loop(s)", "omp simd"],
         [ "align!", "Generate peel code for alignment", 1],
+        [ "macro_file=s", "Name of input file containing '#define' macros that can be used in <code-string>", ''],
         [ "output=s", "Name of output file", 'loops.h'],
         );
     my($command_line) = process_command_line(\%OPT, \@KNOBS);
@@ -1234,11 +1206,10 @@ sub main() {
         print "Outputs C++ code to scan N-D vars.\n",
             "Usage: $script [options] <code-string>\n",
             "The <code-string> contains optionally-nested scans across the given\n",
-            "  indices between 0 and N-1 indicated by 'loop(<indices>)'\n",
-            "Indices may be specified as a comma-separated list or <first..last> range,\n",
-            "  using the variable 'N' as needed.\n",
-            "The generated code will contain a macro-guarded part before the first inner loop body\n",
-            "  and a part after each inner loop body.\n",
+            "  indices indicated by 'loop(<indices>)'\n",
+            "Indices may be specified as a comma-separated list or <first..last> range.\n",
+            "The generated code will contain a macro-guarded part before the first loop body\n",
+            "  and a part after each loop body.\n",
             "Optional loop modifiers:\n",
             "  simd:            add SIMD_PRAMA before loop (distribute work across SIMD HW).\n",
             "  omp:             add OMP_PRAGMA before loop (distribute work across SW threads).\n",
@@ -1275,21 +1246,40 @@ sub main() {
             "Options:\n";
         print_options_help(\@KNOBS);
         print "Examples:\n",
-            "  $script -ndims 2 'loop(0,1) { }'\n",
-            "  $script -ndims 3 'omp loop(0,1) { loop(2) { } }'\n",
-            "  $script -ndims 3 'omp loop(0) { loop(1,2) { } }'\n",
-            "  $script -ndims 3 'tiled omp loop(0..N-1) { }'\n",
-            "  $script -ndims 3 'omp loop(0) { square_wave loop(1..N-1) { } }'\n",
-            "  $script -ndims 4 'omp loop(0..N-2) { loop(N-1) { } }'\n";
+            "  $script 'loop(0,1) { }'\n",
+            "  $script 'omp loop(0,1) { loop(2) { } }'\n",
+            "  $script 'omp loop(0) { loop(1,2) { } }'\n",
+            "  $script 'tiled omp loop(0,1,2) { }'\n",
+            "  $script 'omp loop(0) { square_wave loop(1..2) { } }'\n",
+            "  $script 'omp loop(0..2) { loop(3) { } }'\n";
         exit 1;
     }
 
-    @dims = 0 .. ($OPT{ndims} - 1);
-    print "info: generating scanning code for ".scalar(@dims)."-D vars...\n";
     $macroPrefix = uc $OPT{prefix};
     $varPrefix = lc $OPT{prefix};
     $doAlign = $OPT{align};
     push @fixed_exprs, @align_exprs if $doAlign;
+
+    # Read macros.
+    if ($OPT{macro_file}) {
+        open MF, "< $OPT{macro_file}" or die "cannot open '$OPT{macro_file}'\n";
+        while (<MF>) {
+            chomp;
+            s/\s+$//;
+
+            # Macro with name and value.
+            if (/^\s*#define\s+(\w+)\s+(.*)/) {
+                $macros{$1} = $2;
+            }
+
+            # Macro with name only.
+            elsif (/^\s*#define\s+(\w+)/) {
+                $macros{$1} = '';
+            }
+        }
+        close MF;
+        print "".(scalar keys %macros)." macro(s) read from '$OPT{macro_file}'\n";
+    }
 
     my $codeString = join(' ', @ARGV); # just concat all non-options params together.
     processCode($codeString);
