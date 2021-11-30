@@ -447,6 +447,9 @@ int main(int argc, char** argv)
             trial_stats.push_back(stats);
         }
 
+        // Done with vtune.
+        VTUNE_DETACH;
+
         // Report stats.
         if (trial_stats.size()) {
 
