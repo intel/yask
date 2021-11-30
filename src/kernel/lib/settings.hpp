@@ -122,9 +122,12 @@ namespace yask {
         // Algorithm for vec dims in fold layout.
         VEC_FOLD_LAYOUT_CLASS _vec_fold_layout;
 
-        // Dimensions with 0 values.
+        // Special dims.
         std::string _step_dim;  // usually time, 't'.
-        std::string _inner_dim; // the domain dim w/the fastest-changing index.
+        std::string _inner_layout_dim; // innermost index in layout.
+        std::string _inner_loop_dim; // innermost index in pico loops.
+        
+        // Dimensions with 0 values.
         IdxTuple _domain_dims;  // e.g., 'x', 'y'.
         IdxTuple _stencil_dims; // union of step & domain dims.
         IdxTuple _misc_dims;
@@ -573,16 +576,6 @@ namespace yask {
         // Problem dims.
         DimsPtr _dims;
 
-        // Position of inner domain dim in stencil-dims tuple.
-        // Misc dims will follow this if/when using interleaving.
-        // TODO: move to Dims.
-        int _inner_posn = -1;   // -1 => not set.
-
-        // Position of outer domain dim in stencil-dims tuple.
-        // For 1D stencils, _outer_posn == _inner_posn.
-        // TODO: move to Dims.
-        int _outer_posn = -1;   // -1 => not set.
-
         // MPI neighbor info.
         MPIInfoPtr _mpi_info;
     };
@@ -611,7 +604,8 @@ namespace yask {
     pfx auto* mpi_info = state->_mpi_info.get();                        \
     host_assert(mpi_info);                                              \
     const auto& step_dim = dims->_step_dim;                             \
-    const auto& inner_dim = dims->_inner_dim;                           \
+    const auto& inner_layout_dim = dims->_inner_layout_dim;             \
+    const auto& inner_loop_dim = dims->_inner_loop_dim;                 \
     const auto& domain_dims = dims->_domain_dims;                       \
     constexpr int nddims = NUM_DOMAIN_DIMS;                             \
     host_assert(nddims == domain_dims.size());                          \
@@ -620,9 +614,7 @@ namespace yask {
     host_assert(nsdims == stencil_dims.size());                         \
     auto& misc_dims = dims->_misc_dims;                                 \
     constexpr int step_posn = 0;                                        \
-    host_assert(step_posn == +step_posn);                               \
-    constexpr int outer_posn = 1;                                       \
-    const int inner_posn = state->_inner_posn
+    host_assert(step_posn == +step_posn);
 #define STATE_VARS(_ksbp) STATE_VARS0(_ksbp,)
 #define STATE_VARS_CONST(_ksbp) STATE_VARS0(_ksbp, const)
 

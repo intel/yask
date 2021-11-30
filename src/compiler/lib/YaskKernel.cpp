@@ -32,7 +32,8 @@ namespace yask {
     // Print extraction of indices.
     void YASKCppPrinter::print_indices(ostream& os,
                                        bool print_step, bool print_domain,
-                                       const string var_prefix) const {
+                                       const string var_prefix,
+                                       const string inner_var_prefix) const {
         if (print_step && print_domain)
             os << "\n // Extract index for each stencil dim.\n";
         else if (print_step)
@@ -45,9 +46,12 @@ namespace yask {
         for (auto& dim : _dims._stencil_dims) {
             auto& dname = dim._get_name();
             bool is_step = dname == _dims._step_dim;
+            bool is_inner = dname == _settings._inner_loop_dim;
             if ((print_step && is_step) ||
                 (print_domain && !is_step)) {
-                if (var_prefix.length())
+                if (inner_var_prefix.length() && is_inner)
+                    os << " idx_t " << dname << " = " << inner_var_prefix << i << ";\n";
+                else if (var_prefix.length())
                     os << " idx_t " << dname << " = " << var_prefix << i << ";\n";
                 else
                     os << " idx_t " << dname << " = idxs[" << i << "];\n";
@@ -332,7 +336,7 @@ namespace yask {
                         // placed at end (or just before misc dims if "inner
                         // misc" setting is used).
                         // TODO: put all domain dims in their preferred order.
-                        else if (dname == _dims._inner_dim) {
+                        else if (dname == _dims._inner_layout_dim) {
                             assert(dtype == DOMAIN_INDEX);
                             inner_posn = dn + 1;
                             defer = true;
@@ -608,7 +612,7 @@ namespace yask {
                     _dims._fold.product();
 
                 // Vector/cluster vars.
-                string idim = _dims._inner_dim;
+                string idim = _settings._inner_loop_dim;
                 string vcstr = do_cluster ? "cluster" : "vector";
                 string funcstr = "calc_" + vcstr + "s";
                 string nvecs = do_cluster ? "CMULT_" + all_caps(idim) : "1";
@@ -672,7 +676,7 @@ namespace yask {
                 os <<
                     "\n // Nano loops.\n"
                     "#define NANO_BLOCK_LOOP_INDICES norm_nb_idxs\n"
-                    "\n ////// Nano loop prefix.\n"
+                    "\n ////// Nano loop(s) prefix.\n"
                     "#define NANO_BLOCK_USE_LOOP_PART_0\n"
                     "#include \"yask_nano_block_loops.hpp\"\n";
                 os <<
@@ -682,15 +686,19 @@ namespace yask {
                     "#define PICO_BLOCK_END(dn) NANO_BLOCK_BODY_STOP(dn)\n"
                     "#define PICO_BLOCK_STRIDE(dn) " << inner_strides << "\n";
                 os <<
-                    "\n ////// Pico loop prefix.\n"
+                    "\n ////// Pico outer-loop(s) prefix.\n"
                     "#define PICO_BLOCK_USE_LOOP_PART_0\n"
-                    "#define PICO_BLOCK_USE_LOOP_PART_1\n"
                     "#include \"yask_pico_block_loops.hpp\"\n";
 
                 // Get named domain indices directly from scalar vars.
-                // Don't need stop vars because inner loop always does one.
-                print_indices(os, false, true, "pico_block_start_");
+                print_indices(os, false, true, "pico_block_start_", "pico_block_begin_");
                 vp->print_elem_indices(os);
+
+                auto ild = _settings._inner_loop_dim;
+                os <<
+                    "\n ////// Pico inner-loop prefix for dim '" << ild << "'.\n"
+                    "#define PICO_BLOCK_USE_LOOP_PART_1\n"
+                    "#include \"yask_pico_block_loops.hpp\"\n";
 
                 // Generate loop body using vars stored in print helper.
                 // Visit all expressions to cover the whole vector/cluster.
@@ -699,6 +707,15 @@ namespace yask {
 
                 // Insert prefetches using vars stored in print helper for next iteration.
                 vp->print_prefetches(os, true);
+
+                // Increment indices.
+                string cap_ild = PrinterBase::all_caps(ild);
+                string cm = do_cluster ? "CMULT_" + cap_ild : "1";
+                string clen = cm + " * VLEN_" + cap_ild;
+                os << "\n // Increment indices.\n"
+                    " " << ild << " += " << cm << ";\n"
+                    " " << vp->get_local_elem_index(ild) << " += " << clen << ";\n"
+                    " " << vp->get_global_elem_index(ild) << " += " << clen << ";\n";
 
                 // End of loops.
                 os <<
@@ -1086,7 +1103,8 @@ namespace yask {
                 _dims._fold_gt1.get_dim_name(i) << "'\n";
         os <<
             "    p->_step_dim = \"" << _dims._step_dim << "\";\n"
-            "    p->_inner_dim = \"" << _dims._inner_dim << "\";\n";
+            "    p->_inner_layout_dim = \"" << _dims._inner_layout_dim << "\";\n"
+            "    p->_inner_loop_dim = \"" << _settings._inner_loop_dim << "\";\n";
         for (auto& dim : _dims._domain_dims) {
             auto& dname = dim._get_name();
             os << "    p->_domain_dims.add_dim_back(\"" << dname << "\", 0);\n";

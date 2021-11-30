@@ -728,7 +728,8 @@ namespace yask {
         ostream& os = op->get_ostream();
 
         auto& step_dim = _dims->_step_dim;
-        auto& inner_dim = _dims->_inner_dim;
+        auto& inner_layout_dim = _dims->_inner_layout_dim;
+        auto& inner_loop_dim = _dims->_inner_loop_dim;
         auto& rt = _mega_block_sizes[step_dim];
         auto& bt = _block_sizes[step_dim];
         auto& mbt = _micro_block_sizes[step_dim];
@@ -817,7 +818,7 @@ namespace yask {
 
                 // Don't pick inner dim.
                 auto& dname = _dims->_domain_dims.get_dim_name(j);
-                if (dname == inner_dim)
+                if (dname == inner_loop_dim)
                     continue;
 
                 auto bsz = _block_sizes[i];
@@ -884,7 +885,7 @@ namespace yask {
 
                 // Don't pick inner dim.
                 auto& dname = _dims->_domain_dims.get_dim_name(j);
-                if (dname == inner_dim)
+                if (dname == inner_loop_dim)
                     continue;
 
                 auto bsz = _block_sizes[i];
@@ -989,15 +990,6 @@ namespace yask {
         // Set vars after above inits.
         STATE_VARS(this);
 
-        // Find index posns in stencil dims.
-        DOMAIN_VAR_LOOP(i, j) {
-            auto& dname = stencil_dims.get_dim_name(i);
-            if (state->_outer_posn < 0)
-                state->_outer_posn = i;
-            if (dname == dims->_inner_dim)
-                state->_inner_posn = i;
-        }
-        host_assert(outer_posn == state->_outer_posn);
     }
 
     // Set number of threads w/o using thread-divisor.

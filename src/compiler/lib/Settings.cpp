@@ -118,10 +118,10 @@ namespace yask {
 
         // Set specific positional dims.
         auto ndd = _domain_dims.get_num_dims();
-        _outer_dim = _domain_dims.get_dim_name(0);
-        _inner_dim = _domain_dims.get_dim_name(ndd - 1);
+        _outer_layout_dim = _domain_dims.get_dim_name(0);
+        _inner_layout_dim = _domain_dims.get_dim_name(ndd - 1);
         string _near_inner_dim = _domain_dims.get_num_dims() >= 2 ?
-            _domain_dims.get_dim_name(_domain_dims.get_num_dims() - 2) : _outer_dim;
+            _domain_dims.get_dim_name(_domain_dims.get_num_dims() - 2) : _outer_layout_dim;
         if (settings._inner_loop_dim.length()) {
             if (isdigit(settings._inner_loop_dim[0])) {
                 int dn = atoi(settings._inner_loop_dim.c_str());
@@ -145,7 +145,7 @@ namespace yask {
                 _inner_loop_dim_num = dp + 1;
         }
         if (!settings._inner_loop_dim.length()) {
-            settings._inner_loop_dim = _inner_dim;
+            settings._inner_loop_dim = _inner_layout_dim;
             _inner_loop_dim_num = ndd;
         }
         assert(_inner_loop_dim_num > 0);
@@ -188,14 +188,14 @@ namespace yask {
 
             // If 1D, there is only one option.
             if (_domain_dims.get_num_dims() == 1)
-                _fold[_inner_dim] = vlen;
+                _fold[_inner_layout_dim] = vlen;
 
             // If 2D+, adjust folding.
             else {
 
                 // Determine inner-dim size separately because
                 // vector-folding works best when folding is
-                // applied in non-inner dims.
+                // applied in non-inner-loop dims.
                 int inner_sz = 1;
 
                 // If specified dims are within vlen, try to use
@@ -203,7 +203,7 @@ namespace yask {
                 if (fold_opts.product() < vlen) {
 
                     // Inner-dim fold-size requested and a factor of vlen?
-                    auto* p = fold_opts.lookup(_inner_dim);
+                    auto* p = fold_opts.lookup(settings._inner_loop_dim);
                     if (p && (vlen % *p == 0))
                         inner_sz = *p;
                 }
@@ -225,7 +225,7 @@ namespace yask {
                     IntTuple inner_opts;
                     for (auto& dim : _domain_dims) {
                         auto& dname = dim._get_name();
-                        if (dname == _inner_dim)
+                        if (dname == settings._inner_loop_dim)
                             continue;
                         auto* p = fold_opts.lookup(dname);
                         int sz = p ? *p : 0; // 0 => not specified.
@@ -240,7 +240,7 @@ namespace yask {
                 // Put them into the fold.
                 for (auto& dim : _domain_dims) {
                     auto& dname = dim._get_name();
-                    if (dname == _inner_dim)
+                    if (dname == settings._inner_loop_dim)
                         _fold[dname] = inner_sz;
                     else if (inner_folds.lookup(dname))
                         _fold[dname] = inner_folds[dname];

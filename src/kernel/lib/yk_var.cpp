@@ -278,7 +278,7 @@ namespace yask {
                 // This reportedly helps avoid some uarch aliasing.
                 if (!p &&
                     actl_opts->_allow_addl_pad &&
-                    get_dim_name(i) == inner_dim &&
+                    get_dim_name(i) == inner_layout_dim &&
                     (new_allocs[i] / _corep->_var_vec_lens[i]) % 2 == 0) {
                     new_right_pads[i] += _corep->_var_vec_lens[i];
                 }

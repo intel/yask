@@ -150,9 +150,8 @@ namespace yask {
             return p && *this == *p;
         }
 
-        // Check for same logical var.
-        // A logical var is defined by the var itself
-        // and any const indices.
+        // Check for same logical var.  A logical var is defined by the var
+        // itself and any const indices.
         virtual bool is_same_logical_var(const VarPoint& rhs) const {
             return _var == rhs._var && _consts == rhs._consts;
         }

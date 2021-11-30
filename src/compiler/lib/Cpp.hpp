@@ -344,7 +344,8 @@ namespace yask {
         virtual void print_indices(ostream& os,
                                    bool print_step = true,
                                    bool print_domain = true,
-                                   const string prefix = "") const;
+                                   const string prefix = "",
+                                   const string inner_var_prefix = "") const;
 
         // Print pieces of YASK output.
         virtual void print_macros(ostream& os);

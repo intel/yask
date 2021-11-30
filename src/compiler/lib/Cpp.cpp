@@ -254,7 +254,7 @@ namespace yask {
                 // Inner dim stride and inner misc dim strides are fixed.
                 // NB: during layout, the inner dim is moved to the inner-most
                 // position; the misc dims are moved after that if '_inner_misc' is true.
-                bool is_inner = dname == _dims._inner_dim;
+                bool is_inner = dname == _dims._inner_layout_dim;
                 bool is_inner_misc = dtype == MISC_INDEX && _settings._inner_misc;
                 if (is_inner || is_inner_misc) {
                     os << " // This is a known fixed value.\n";
@@ -394,7 +394,7 @@ namespace yask {
                 else
                     start = left;
                 start = "(" + start + ")";
-                    
+
                 // If fetching again, stop before next one.
                 if (ahead)
                     stop = "((PFD_L" + to_string(level) + "+1)*" + imult + ")" + right;
@@ -418,7 +418,7 @@ namespace yask {
                     auto* p = lookup_base_ptr(gp);
                     if (p && *p == ptr) {
 
-                        // Expression for this offset from inner-dim var.
+                        // Expression for this offset from inner-loop-dim var.
                         string inner_ofs = "ofs";
 
                         // Expression for ptr offset at this point.
@@ -483,7 +483,7 @@ namespace yask {
                 string nas = (gp.get_vec_type() == VarPoint::VEC_FULL) ?
                     gp.make_norm_arg_str(dni, _dims, var_map) :
                     gp.make_arg_str(dni, var_map);
-                if (dni == _dims._inner_dim && inner_ofs.length())
+                if (dni == _settings._inner_loop_dim && inner_ofs.length())
                     nas += " + " + inner_ofs;
 
                 // Add to offset expression.
@@ -829,19 +829,17 @@ namespace yask {
     void CppVecPrintHelper::print_elem_indices(ostream& os) {
         auto& fold = get_fold();
         os << "\n // Element indices derived from vector indices.\n";
-        int i = 0;
         for (auto& dim : fold) {
             auto& dname = dim._get_name();
             string cap_dname = PrinterBase::all_caps(dname);
             string elname = dname + _elem_suffix_local;
-            os << " idx_t " << elname <<
-                " = " << dname << " * VLEN_" << cap_dname << ";\n";
-            _vec2elem_local_map[dname] = elname;
             string egname = dname + _elem_suffix_global;
             string rdoname = _rank_domain_offset_prefix + dname;
-            os << " idx_t " << egname << " = " << rdoname << " + " << elname << ";\n";
+            os << " idx_t " << elname <<
+                " = " << dname << " * VLEN_" << cap_dname << ";\n"
+                " idx_t " << egname << " = " << rdoname << " + " << elname << ";\n";
+            _vec2elem_local_map[dname] = elname;
             _vec2elem_global_map[dname] = egname;
-            i++;
         }
     }
     

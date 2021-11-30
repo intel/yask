@@ -1080,7 +1080,7 @@ namespace yask {
 
         // Divide the overall BB into a slice for each thread
         // across the outer dim.
-        const int odim = 0;     // Use 0 instead of outer_posn because BB lens are in domain dims.
+        const int odim = 0;     // Split across first domain dim; TODO: pick smarter.
         idx_t outer_len = _bundle_bb.bb_len[odim];
         idx_t nthreads = yask_get_num_threads();
         idx_t len_per_thr = CEIL_DIV(outer_len, nthreads);
