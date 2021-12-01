@@ -151,18 +151,18 @@ namespace yask {
         if (!p) {
 
             // Make base point (misc & domain indices set to canonical
-            // value). There will be one pointer for every
-            // unique var/step-arg combo.
+            // value). There will be one pointer for every unique
+            // var/step-arg combo.
             auto bgp = make_base_point(gp);
             auto* var = bgp->_get_var();
             assert(var);
            
             // Make and save ptr var for future use.
             string ptr_name = make_var_name(var->_get_name() + "_ptr");
-            _vec_ptrs[*bgp] = ptr_name;
+            _base_ptrs[*bgp] = ptr_name;
 
             // Print pointer definition.
-            print_point_comment(os, *bgp, "Create pointer");
+            print_point_comment(os, *bgp, "Create base pointer");
 
             // Get pointer to var using normalized indices.
             // Ignore out-of-range errors because we might get a base pointer to an
@@ -182,10 +182,14 @@ namespace yask {
             // Print type and value.
             os << _line_prefix << type << " " << ptr_name << " = " << vp << _line_suffix;
         }
+    }
+
+    // Get stats from given point.
+    void CppVecPrintHelper::get_point_stats(ostream& os, const VarPoint& gp) {
 
         // Collect some stats for reads using this ptr.
         // These stats will be used for calculating prefetch ranges.
-        p = lookup_base_ptr(gp);
+        auto* p = lookup_base_ptr(gp);
         assert(p);
 
         // Get const offsets from original.
@@ -207,6 +211,7 @@ namespace yask {
         }
     }
 
+    
     // Print creation of stride and local-offset vars.
     // Save var names for later use.
     void CppVecPrintHelper::print_strides(ostream& os, const VarPoint& gp) {
@@ -341,7 +346,7 @@ namespace yask {
             }
         }
 
-        os << "\n // Loop-invariant pointer offset for var '" << vname << "'.\n" <<
+        os << "\n // Offset from base ptr to 0th position in var '" << vname << "'.\n" <<
             _line_prefix << "const idx_t " << po_var << " = " <<
             po_expr << _line_suffix;
     }
@@ -367,18 +372,19 @@ namespace yask {
                 os << " && (defined PREFETCH_BEFORE_LOOP)";
             os << "\n";
 
-            // Loop thru vec ptrs.
-            for (auto vp : _vec_ptrs) {
+            // Loop thru var ptrs.
+            for (auto vp : _base_ptrs) {
                 auto& ptr = vp.second; // ptr var name.
 
                 // Filter by ptr_var if provided.
                 if (ptr_var.length() && ptr_var != ptr)
                     continue;
 
-                // _ptr_ofs{Lo,Hi} contain first and last offsets in idim,
+                // _ptr_ofs_{lo,hi} contain first and last offsets in idim,
                 // NOT normalized to vector len.
                 string left = _dims.make_norm_str(_ptr_ofs_lo[ptr], idim);
-                if (left.length() == 0) left = "0";
+                if (left.length() == 0)
+                    left = "0";
                 string right = _dims.make_norm_str(_ptr_ofs_hi[ptr], idim);
 
                 // Loop bounds.
@@ -446,8 +452,7 @@ namespace yask {
         }
     }
 
-    // Get expression for offset of 'gp' from base pointer.  Base pointer
-    // points to vector with domain dims and misc dims == 0.
+    // Get expression for offset of 'gp' from base pointer.
     string CppVecPrintHelper::get_ptr_offset(ostream& os,
                                              const VarPoint& gp,
                                              const VarMap* var_map,
@@ -847,7 +852,7 @@ namespace yask {
     string CppPreLoopPrintMetaVisitor::visit(VarPoint* gp) {
         assert(gp);
 
-        // Pointer to this var.
+        // Pointer to this var's core.
         string varp = get_var_ptr(*gp);
         string vname = gp->get_var_name();
         if (!_cvph.is_local_var(varp))
@@ -861,7 +866,7 @@ namespace yask {
         string sas = gp->make_step_arg_str(var_ptr, dims);
         if (sas.length()) {
             if (!_cvph.is_local_var(sas))
-                _os << "\n // Index for '" << sas << "'.\n";
+                _os << "\n // Step index for var '" << vname << "'.\n";
             _cvph.get_local_var(_os, sas, CppPrintHelper::_step_val_type,
                                 vname + "_step_idx");
         }
@@ -871,6 +876,9 @@ namespace yask {
 
         // Make and print a base pointer for this access.
         _cvph.print_base_ptr(_os, *gp);
+
+        // Get some stats for this point.
+        _cvph.get_point_stats(_os, *gp);
 
         return "";
     }
