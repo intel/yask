@@ -155,8 +155,8 @@ namespace yask {
         _vars.set_dim_counts(_dims);
 
         // Determine which var points can be vectorized and analyze inner-loop accesses.
-        _eqs.analyze_vec(_dims);
-        _eqs.analyze_loop(_dims);
+        _eqs.analyze_vec(_settings, _dims);
+        _eqs.analyze_loop(_settings, _dims);
 
         // Find dependencies between equations.
         _eqs.analyze_eqs(_settings, _dims, *_dos);

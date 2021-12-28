@@ -253,10 +253,12 @@ namespace yask {
     // Visitor for determining inner-loop accesses of var points.
     class SetLoopVisitor : public ExprVisitor {
         const Dimensions& _dims;
+        const CompilerSettings& _settings;
 
     public:
-        SetLoopVisitor(const Dimensions& dims) :
-            _dims(dims) { 
+        SetLoopVisitor(const Dimensions& dims,
+                       const CompilerSettings& settings) :
+            _dims(dims), _settings(settings) { 
             _visit_equals_lhs = true;
             _visit_var_point_args = true;
             _visit_conds = true;
@@ -268,6 +270,9 @@ namespace yask {
             // Info from var.
             auto* var = gp->_get_var();
             auto gdims = var->get_dim_names();
+
+            // Inner-loop var.
+            auto& idim = _settings._inner_loop_dim;
 
             // Access type.
             // Assume invariant, then check below.
@@ -284,12 +289,32 @@ namespace yask {
                 arg->accept(&fvv);
 
                 // Does this arg refer to any domain dim?
-                for (auto d : _dims._domain_dims) {
-                    auto& dname = d._get_name();
+                if (lt == VarPoint::DOMAIN_VAR_INVARIANT) {
+                    for (auto d : _dims._domain_dims) {
+                        auto& dname = d._get_name();
+                        
+                        if (dname != idim && fvv.vars_used.count(dname)) {
+                            lt = VarPoint::DOMAIN_VAR_DEPENDENT;
+                            break;  // out of dim loop; no need to continue.
+                        }
+                    }
+                }
+                
+                // Does this arg refer to idim?
+                if (fvv.vars_used.count(idim)) {
 
-                    if (fvv.vars_used.count(dname)) {
-                        lt = VarPoint::DOMAIN_VAR_DEPENDENT;
-                        break;  // no need to continue.
+                    // Is it in the idim posn and a simple offset?
+                    int offset = 0;
+                    if (gdims.at(ai) == idim &&
+                        arg->is_offset_from(idim, offset)) {
+                        lt = VarPoint::INNER_LOOP_OFFSET;
+                    }
+
+                    // Otherwise, this arg uses idim, but not
+                    // in a simple way.
+                    else {
+                        lt = VarPoint::INNER_LOOP_COMPLEX;
+                        break;  // out of arg loop; no need to continue.
                     }
                 }
             }
@@ -331,9 +356,9 @@ namespace yask {
     // TODO: split this into smaller functions.
     // BIG-TODO: replace dependency algorithms with integration of a polyhedral
     // library.
-    void Eqs::analyze_eqs(CompilerSettings& settings,
-                         Dimensions& dims,
-                         ostream& os) {
+    void Eqs::analyze_eqs(const CompilerSettings& settings,
+                          Dimensions& dims,
+                          ostream& os) {
         auto& step_dim = dims._step_dim;
 
         // Gather initial stats from all eqs.
@@ -714,7 +739,8 @@ namespace yask {
     }
 
     // Determine which var points can be vectorized.
-    void Eqs::analyze_vec(const Dimensions& dims) {
+    void Eqs::analyze_vec(const CompilerSettings& settings,
+                          const Dimensions& dims) {
 
         // Send a 'SetVecVisitor' to each point in
         // the current equations.
@@ -723,11 +749,12 @@ namespace yask {
     }
 
     // Determine loop access behavior of var points.
-    void Eqs::analyze_loop(const Dimensions& dims) {
+    void Eqs::analyze_loop(const CompilerSettings& settings,
+                           const Dimensions& dims) {
 
         // Send a 'SetLoopVisitor' to each point in
         // the current equations.
-        SetLoopVisitor slv(dims);
+        SetLoopVisitor slv(dims, settings);
         visit_eqs(&slv);
     }
 

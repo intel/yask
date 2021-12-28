@@ -676,7 +676,7 @@ namespace yask {
                 os <<
                     "\n // Nano loops.\n"
                     "#define NANO_BLOCK_LOOP_INDICES norm_nb_idxs\n"
-                    "\n ////// Nano loop(s) prefix.\n"
+                    "\n // Start Nano loop(s).\n"
                     "#define NANO_BLOCK_USE_LOOP_PART_0\n"
                     "#include \"yask_nano_block_loops.hpp\"\n";
                 os <<
@@ -686,7 +686,7 @@ namespace yask {
                     "#define PICO_BLOCK_END(dn) NANO_BLOCK_BODY_STOP(dn)\n"
                     "#define PICO_BLOCK_STRIDE(dn) " << inner_strides << "\n";
                 os <<
-                    "\n ////// Pico outer-loop(s) prefix.\n"
+                    "\n // Start Pico outer-loop(s).\n"
                     "#define PICO_BLOCK_USE_LOOP_PART_0\n"
                     "#include \"yask_pico_block_loops.hpp\"\n";
 
@@ -694,9 +694,13 @@ namespace yask {
                 print_indices(os, false, true, "pico_block_start_", "pico_block_begin_");
                 vp->print_elem_indices(os);
 
+                // Create inner-loop base ptrs.
+                os << "\n // Create inner-loop base pointers.\n";
+                vp->print_inner_loop_base_ptrs(os);
+
                 auto ild = _settings._inner_loop_dim;
                 os <<
-                    "\n ////// Pico inner-loop prefix for dim '" << ild << "'.\n"
+                    "\n // Start Pico inner-loop for dim '" << ild << "'.\n"
                     "#define PICO_BLOCK_USE_LOOP_PART_1\n"
                     "#include \"yask_pico_block_loops.hpp\"\n";
 
@@ -719,7 +723,7 @@ namespace yask {
 
                 // End of loops.
                 os <<
-                    "\n ////// Loop suffixes.\n"
+                    "\n ////// Loop endings.\n"
                     "#define PICO_BLOCK_USE_LOOP_PART_2\n"
                     "#include \"yask_pico_block_loops.hpp\"\n"
                     "#define NANO_BLOCK_USE_LOOP_PART_1\n"

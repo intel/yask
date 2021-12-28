@@ -366,15 +366,17 @@ namespace yask {
         }
 
         // Find dependencies based on all eqs.
-        virtual void analyze_eqs(CompilerSettings& settings,
-                                Dimensions& dims,
-                                std::ostream& os);
+        virtual void analyze_eqs(const CompilerSettings& settings,
+                                 Dimensions& dims,
+                                 std::ostream& os);
 
         // Determine which var points can be vectorized.
-        virtual void analyze_vec(const Dimensions& dims);
+        virtual void analyze_vec(const CompilerSettings& settings,
+                                 const Dimensions& dims);
 
         // Determine how var points are accessed in a loop.
-        virtual void analyze_loop(const Dimensions& dims);
+        virtual void analyze_loop(const CompilerSettings& settings,
+                                  const Dimensions& dims);
 
         // Update var access stats.
         virtual void update_var_stats();

@@ -118,15 +118,19 @@ namespace yask {
         // There is a unique ptr for each step-arg per var.
         // Thus, there is a many->one mapping for points that vary only by domain and/or misc indices.
         // Key: point expr; value: ptr-var name.
-        map<VarPoint, string> _base_ptrs; 
+        map<VarPoint, string> _var_base_ptrs;
+
+        // Name of ptr to zero index in inner-loop dim.
+        // Key: point expr; value: ptr-var name.
+        map<VarPoint, string> _inner_loop_base_ptrs;
  
         // Vars for tracking other info about vars.
         typedef pair<string, string> VarDimKey; // var and dim names.
         map<VarDimKey, string> _strides; // var containing stride expr for given dim in var.
         map<VarDimKey, string> _offsets; // var containing offset expr for given dim in var.
         map<string, string> _ptr_ofs; // var containing const offset expr for key var.
-        map<string, int> _ptr_ofs_lo; // lowest read offset from var in inner loop dim.
-        map<string, int> _ptr_ofs_hi; // highest read offset from var in inner loop dim.
+        map<string, int> _ptr_ofs_lo; // lowest read offset from var in inner loop dim. FIXME?
+        map<string, int> _ptr_ofs_hi; // highest read offset from var in inner loop dim. FIXME?
 
         // Element indices.
         string _elem_suffix_global = "_global_elem";
@@ -206,9 +210,11 @@ namespace yask {
         }
 
         // Get offset from base pointer.
-        virtual string get_ptr_offset(ostream& os, const VarPoint& gp,
-                                      const VarMap* var_map = 0,
-                                      const string& inner_ofs = "");
+        virtual string get_var_base_ptr_offset(ostream& os, const VarPoint& gp,
+                                               const VarMap* var_map = 0);
+        virtual string get_inner_loop_ptr_offset(ostream& os, const VarPoint& gp,
+                                                 const VarMap* var_map = 0,
+                                                 const string& inner_ofs = "");
 
     public:
 
@@ -229,14 +235,15 @@ namespace yask {
         // if all writes were printed.
         virtual string write_to_point(ostream& os, const VarPoint& gp, const string& val) override;
 
-        // Make base point (misc & inner-dim indices = 0).
-        virtual var_point_ptr make_base_point(const VarPoint& gp);
+        // Make var base point (first allocated point).
+        virtual var_point_ptr make_var_base_point(const VarPoint& gp);
 
-        // Print code to set pointers of aligned reads.
-        virtual void print_base_ptr(ostream& os, const VarPoint& gp);
+        // Make inner-loop base point (misc & inner-dim indices = 0).
+        virtual var_point_ptr make_inner_loop_base_point(const VarPoint& gp);
 
-        // Get stats from given point.
-        virtual void get_point_stats(ostream& os, const VarPoint& gp);
+        // Print code to create base pointers for aligned reads.
+        virtual void print_var_base_ptr(ostream& os, const VarPoint& gp);
+        virtual void print_inner_loop_base_ptrs(ostream& os);
 
         // Print prefetches for each base pointer.
         // Print only 'ptr_var' if provided.
@@ -260,10 +267,16 @@ namespace yask {
         virtual void print_strides(ostream& os, const VarPoint& gp);
 
         // Access cached values.
-        virtual string* lookup_base_ptr(const VarPoint& gp) {
-            auto bgp = make_base_point(gp);
-            if (_base_ptrs.count(*bgp))
-                return &_base_ptrs.at(*bgp);
+        virtual string* lookup_var_base_ptr(const VarPoint& gp) {
+            auto bgp = make_var_base_point(gp);
+            if (_var_base_ptrs.count(*bgp))
+                return &_var_base_ptrs.at(*bgp);
+            return 0;
+        }
+        virtual string* lookup_inner_loop_base_ptr(const VarPoint& gp) {
+            auto bgp = make_inner_loop_base_point(gp);
+            if (_inner_loop_base_ptrs.count(*bgp))
+                return &_inner_loop_base_ptrs.at(*bgp);
             return 0;
         }
         virtual string* lookup_stride(const Var& var, const string& dim) {
