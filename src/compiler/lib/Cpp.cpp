@@ -141,17 +141,18 @@ namespace yask {
         return bgp;
     }
 
-    // Make inner-loop base point (misc & inner-loop-dim indices = 0).
+    // Make inner-loop base point (no inner-layout dim offset; inner-misc dims = min-val).
     var_point_ptr CppVecPrintHelper::make_inner_loop_base_point(const VarPoint& gp) {
         var_point_ptr bgp = gp.clone_var_point();
         for (auto& dim : gp.get_dims()) {
             auto& dname = dim->_get_name();
             auto type = dim->get_type();
 
-            // Set inner-loop domain index to 0.
-            if (dname == _settings._inner_loop_dim) {
+            // Set inner-layout dim to current index only,
+            // i.e., no offset.
+            if (dname == _dims._inner_layout_dim) {
                 IntScalar idi(dname, 0);
-                bgp->set_arg_const(idi);
+                bgp->set_arg_offset(idi);
             }
 
             // Set misc indices to their min value if they are inside
@@ -379,7 +380,7 @@ namespace yask {
             auto& var = *vp;
             const auto& vname = var.get_name();
 
-            // Make base point (misc & inner-dim indices = 0).
+            // Make base point (no inner-layout offset; inner-misc indices = min-val).
             auto bgp = make_inner_loop_base_point(gp);
 
             // Not already saved?
@@ -400,7 +401,7 @@ namespace yask {
                 // Get const offsets.
                 auto& offsets = gp.get_arg_offsets();
 
-                // Get offset in inner dim.
+                // Get offset in inner-loop dim.
                 // E.g., A(t, x+1, y+4) => 4.
                 auto* ofs = offsets.lookup(idim);
 
@@ -447,11 +448,23 @@ namespace yask {
         }
     }
 
+    // print increments of pointers.
+    void CppVecPrintHelper::print_inc_inner_loop_ptrs(ostream& os, const string& inc_amt) {
+        for (auto& i : _inner_loop_base_ptrs) {
+            auto& vp = i.first;
+            auto& ptr = i.second;
+            auto* stride = lookup_stride(*vp._get_var(), _settings._inner_loop_dim);
+            assert(stride);
+            os << _line_prefix << ptr << " += " << inc_amt << " * " << *stride << _line_suffix;
+        }
+    }
+    
     // Print prefetches for each inner-loop base pointer.
     // 'ahead': prefetch PF distance ahead instead of up to PF dist.
     // TODO: handle of misc dims.
     void CppVecPrintHelper::print_prefetches(ostream& os,
                                              bool ahead, string ptr_var) {
+        return; // FIXME.
         if (!_settings._use_ptrs)
             return;
 
@@ -597,9 +610,10 @@ namespace yask {
         return ofs_str;
     }
 
-    // Get expression for offset of 'gp' from inner-loop base pointer.  Base pointer
-    // points to vector with outer-dims == same values as in 'gp', inner-loop dim
-    // == 0 and misc dims == their min value.
+    // Get expression for offset of 'gp' from inner-loop base pointer.  Base
+    // pointer points to vector with inner-layout dim w/no offset, domain
+    // dims == same values as in 'gp', and misc dims == their min value.
+    // Return empty string if no offset.
     string CppVecPrintHelper::get_inner_loop_ptr_offset(ostream& os,
                                                         const VarPoint& gp,
                                                         const VarMap* var_map,
@@ -612,47 +626,63 @@ namespace yask {
 
         // Construct the point-specific linear offset by adding the products
         // of each index with the var's stride in that dim.
-        string idim = _settings._inner_loop_dim;
+        string idim = _dims._inner_layout_dim;
         for (int i = 0; i < var->get_num_dims(); i++) {
             auto& dimi = gp.get_dims().at(i);
             auto dni = dimi->_get_name();
             auto typei = dimi->get_type();
             bool is_misc = typei == MISC_INDEX;
 
-            // Need to create an expression for inner-dim
+            // Need to create an expression for inner-layout dim
             // and inner-misc indices offsets only.
+            // These offsets should be const, thus avoiding mults.
             if (dni == idim ||
                 (is_misc && _settings._inner_misc)) {
 
                 // Construct offset in this dim.
-                string nas = (gp.get_vec_type() == VarPoint::VEC_FULL) ?
-                    gp.make_norm_arg_str(dni, _dims, var_map) :
-                    gp.make_arg_str(dni, var_map);
+                string nas;
 
-                // Adjust offset for min value of this misc index.
-                if (is_misc) {
-                    auto min_val = var->get_min_indices()[dni];
-                    nas += " - " + to_string(min_val);
+                if (dni == idim) {
+
+                    // Get const offset in inner dim.
+                    // E.g., if idim == 'y', A(t, x+1, y+4) => 4.
+                    auto& offsets = gp.get_arg_offsets();
+                    auto* ofs = offsets.lookup(idim);
+                    assert(ofs);
+
+                    // Is non-zero?
+                    if (*ofs) {
+                        if (_dims._fold_gt1.lookup(dni))
+                            nas = _dims.make_norm_str(*ofs, dni);
+                        else
+                            nas = to_string(*ofs);
+                    }
+
+                    // Override?
+                    if (inner_expr.length())
+                        nas = inner_expr;
                 }
-
-                // Override?
-                if (dni == idim && inner_expr.length())
-                    nas = inner_expr;
+                    
+                // Offset from min value of this misc index.
+                else if (is_misc) {
+                    auto min_val = var->get_min_indices()[dni];
+                    nas = gp.make_arg_str(dni, var_map) + " - " + to_string(min_val);
+                }
 
                 // Get stride in this dim.
                 auto* stride = lookup_stride(*var, dni);
                 assert(stride);
 
                 // Mult & add to offset expression.
-                if (nterms)
-                    ofs_str += " + ";
-                ofs_str += "((" + nas + ") * (" + *stride + "))";
-                nterms++;
+                if (nas.length()) {
+                    if (nterms)
+                        ofs_str += " + ";
+                    ofs_str += "((" + nas + ") * (" + *stride + "))";
+                    nterms++;
+                }
             }
         }
 
-        if (nterms == 0)
-            ofs_str = "0";
         return ofs_str;
     }
     
@@ -759,10 +789,14 @@ namespace yask {
         if (p) {
 
             // Ptr expression.
+            string ptr_expr = *p;
+            string ptr_var = ptr_expr;
             auto ofs_str = get_inner_loop_ptr_offset(os, gp);
-            string ptr_expr = *p + " + (" + ofs_str + ")";
-            auto ptr_var = get_local_var(os, ptr_expr,
-                                         CppPrintHelper::_var_ptr_type, "ptr_expr");
+            if (ofs_str.length()) {
+                ptr_expr += " + (" + ofs_str + ")";
+                ptr_var = get_local_var(os, ptr_expr,
+                                        CppPrintHelper::_var_ptr_type, "ptr_expr");
+            }
 
             // Check addr.
             auto rpn = make_point_call_vec(os, gp, "get_vec_ptr_norm", "", "", true);
@@ -801,18 +835,21 @@ namespace yask {
 
             // Ptr expression.
             string ptr_expr = *p;
-            if (var->get_num_dims() > 0) {
-                auto ofs_str = get_inner_loop_ptr_offset(os, gp, var_map);
+            string ptr_var = ptr_expr;
+            auto ofs_str = get_inner_loop_ptr_offset(os, gp, var_map);
+            if (ofs_str.length()) {
                 ptr_expr += " + (" + ofs_str + ")";
+                ptr_var = get_local_var(os, ptr_expr,
+                                        CppPrintHelper::_var_ptr_type, "ptr_expr");
             }
-
+            
             // Check addr.
             auto rp = make_point_call_vec(os, gp, "get_elem_ptr_local", "", "", false, var_map);
             os << _line_prefix << "host_assert(" <<
-                ptr_expr << " == " << rp << ")" << _line_suffix;
+                ptr_var << " == " << rp << ")" << _line_suffix;
 
             // Return expr.
-            return string("*(") + ptr_expr + ")";
+            return string("*(") + ptr_var + ")";
         }
 
         else
@@ -899,14 +936,20 @@ namespace yask {
         auto* p = lookup_inner_loop_base_ptr(gp);
         if (p) {
 
-            // Offset.
+            // Ptr expression.
+            string ptr_expr = *p;
+            string ptr_var = ptr_expr;
             auto ofs_str = get_inner_loop_ptr_offset(os, gp);
-            auto ptr_expr = *p + " + (" + ofs_str + ")";
+            if (ofs_str.length()) {
+                ptr_expr += " + (" + ofs_str + ")";
+                ptr_var = get_local_var(os, ptr_expr,
+                                        CppPrintHelper::_var_ptr_type, "ptr_expr");
+            }
 
             // Check addr.
             auto rpn = make_point_call_vec(os, gp, "get_vec_ptr_norm", "", "", true);
             os << _line_prefix << "host_assert(" <<
-                ptr_expr << " == " << rpn << ")" << _line_suffix;
+                ptr_var << " == " << rpn << ")" << _line_suffix;
 
             // Output store.
             os << _line_prefix << val;

@@ -348,15 +348,15 @@ namespace {
             // Define the value at t+1 using asymmetric stencil
             // with various pos & neg indices in misc dims.
             auto r = get_radius();
-            yc_number_node_ptr v = A(t, x, 0, y, -1, 2) + 1.0;
+            yc_number_node_ptr v = A(t, x, 0, y, 1, 2) + 1.0;
             for (int i = 1; i <= r; i++)
-                v += A(t, x + i, 3, y, 0, 1);
+                v += A(t, x + i, 3, y,     0, 3);
             for (int i = 1; i <= r + 1; i++)
-                v += A(t, x - i, 4, y, 2, 1);
+                v += A(t, x - i, 4, y,     2, 2);
             for (int i = 1; i <= r + 2; i++)
-                v += A(t, x, -2, y + i, 2, 0);
+                v += A(t, x,    -2, y + i, 2, 2);
             for (int i = 1; i <= r + 3; i++)
-                v += A(t, x, 0, y - i, 0, -1);
+                v += A(t, x,     0, y - i, 0, 3);
             A(t+1, x, 1, y, 2, 3) EQUALS v + B(-2, 3) - B(4, -2);
         }
     };

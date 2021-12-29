@@ -716,10 +716,11 @@ namespace yask {
                 string cap_ild = PrinterBase::all_caps(ild);
                 string cm = do_cluster ? "CMULT_" + cap_ild : "1";
                 string clen = cm + " * VLEN_" + cap_ild;
-                os << "\n // Increment indices.\n"
+                os << "\n // Increment indices and pointers.\n"
                     " " << ild << " += " << cm << ";\n"
                     " " << vp->get_local_elem_index(ild) << " += " << clen << ";\n"
                     " " << vp->get_global_elem_index(ild) << " += " << clen << ";\n";
+                vp->print_inc_inner_loop_ptrs(os, cm);
 
                 // End of loops.
                 os <<

@@ -120,7 +120,8 @@ namespace yask {
         // Key: point expr; value: ptr-var name.
         map<VarPoint, string> _var_base_ptrs;
 
-        // Name of ptr to zero index in inner-loop dim.
+        // Name of ptr to current point in inner-loop dim.
+        // Inner-layout dim index has no offset, and misc-dim indices are at min-value.
         // Key: point expr; value: ptr-var name.
         map<VarPoint, string> _inner_loop_base_ptrs;
  
@@ -238,7 +239,7 @@ namespace yask {
         // Make var base point (first allocated point).
         virtual var_point_ptr make_var_base_point(const VarPoint& gp);
 
-        // Make inner-loop base point (misc & inner-dim indices = 0).
+        // Make inner-loop base point (no inner-layout offset; misc-dim indices = min-val).
         virtual var_point_ptr make_inner_loop_base_point(const VarPoint& gp);
 
         // Print code to create base pointers for aligned reads.
@@ -254,6 +255,9 @@ namespace yask {
         
         // print init of un-normalized indices.
         virtual void print_elem_indices(ostream& os);
+
+        // print increments of pointers.
+        virtual void print_inc_inner_loop_ptrs(ostream& os, const string& inc_amt);
 
         // get un-normalized index.
         virtual const string& get_local_elem_index(const string& dname) const {
