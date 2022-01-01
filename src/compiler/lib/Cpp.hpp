@@ -100,18 +100,6 @@ namespace yask {
     class CppVecPrintHelper : public CppPrintHelper,
                               public VecPrintHelper {
 
-    public:
-        CppVecPrintHelper(VecInfoVisitor& vv,
-                          const CompilerSettings& settings,
-                          const Dimensions& dims,
-                          const CounterVisitor* cv,
-                          const string& var_type,
-                          const string& line_prefix,
-                          const string& line_suffix) :
-            CppPrintHelper(settings, dims, cv,
-                           var_type, line_prefix, line_suffix),
-            VecPrintHelper(vv) { }
-        
     protected:
 
         // Name of ptr to lowest-allocated vec for a given point in that var.
@@ -151,9 +139,10 @@ namespace yask {
         // Set to var name of write mask if/when used.
         string _write_mask = "";
 
-        // Inner-loop vector and element steps.
-        string _inner_loop_vec_step;
-        string _inner_loop_elem_step;
+        // Inner-loop steps.
+        bool _is_using_cluster = false;
+        int _inner_loop_vec_step = 1;
+        int _inner_loop_elem_step = 1;
 
         // A simple constant.
         virtual string add_const_expr(ostream& os, double v) override {
@@ -229,7 +218,19 @@ namespace yask {
                                                  const string& inner_ofs = "");
 
     public:
-
+        CppVecPrintHelper(VecInfoVisitor& vv,
+                          const CompilerSettings& settings,
+                          const Dimensions& dims,
+                          const CounterVisitor* cv,
+                          const string& var_type,
+                          const string& line_prefix,
+                          const string& line_suffix) :
+            CppPrintHelper(settings, dims, cv,
+                           var_type, line_prefix, line_suffix),
+            VecPrintHelper(vv) {
+            set_using_cluster(false);
+        }
+        
         // Whether to use masks during write.
         virtual void set_write_mask(string mask_var) {
             _write_mask = mask_var;
@@ -239,11 +240,11 @@ namespace yask {
         }
 
         // Set step lengths.
-        virtual void set_inner_loop_vec_step(string vs) {
-            _inner_loop_vec_step = vs;
-        }
-        virtual void set_inner_loop_elem_step(string vs) {
-            _inner_loop_elem_step = vs;
+        virtual void set_using_cluster(bool use) {
+            _is_using_cluster = use;
+            const string& ildim = _settings._inner_loop_dim;
+            _inner_loop_vec_step = use ? _dims._cluster_mults[ildim] : 1;
+            _inner_loop_elem_step = _inner_loop_vec_step * _dims._fold[ildim];
         }
 
         // Print any needed memory reads and/or constructions to 'os'.
@@ -281,8 +282,8 @@ namespace yask {
         // print init of un-normalized indices.
         virtual void print_elem_indices(ostream& os);
 
-        // print increments of pointers.
-        virtual void print_inc_inner_loop_ptrs(ostream& os);
+        // print increments of indices & pointers.
+        virtual void print_inc_inner_loop(ostream& os);
 
         // get un-normalized index.
         virtual const string& get_local_elem_index(const string& dname) const {

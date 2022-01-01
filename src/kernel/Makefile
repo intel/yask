@@ -1041,6 +1041,7 @@ STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stream_1d $(call FOLD,x=4)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_1d $(call FOLD,x=4)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_1d $(call FOLD,x=4) $(call CLUSTER,x=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_1d $(call FOLD,x=4) $(call CLUSTER,x=5)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stages_1d $(call FOLD,x=4)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_func_1d $(call FOLD,x=4)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_step_cond_1d $(call FOLD,x=4)
@@ -1051,8 +1052,10 @@ STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 2d-tests:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_empty step_dim=t domain_dims=d1,d2
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_empty_2d
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d $(call FOLD,x=2 y=2) inner_loop_dim=2
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d $(call FOLD,x=2 y=2) inner_loop_dim=1
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d $(call FOLD,x=2 y=2) $(call CLUSTER,y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d $(call FOLD,x=2 y=2) $(call CLUSTER,x=3 y=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d $(call FOLD,x=2 y=2) mpi=0 ranks=1
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d arch=intel64 $(call FOLD,x=3 y=2) domain_dims=y,x
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_reverse_2d radius=1

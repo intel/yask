@@ -399,6 +399,8 @@ namespace yask {
             }
         }
 
+        const string& ildim = _settings._inner_loop_dim;
+        
         // Loop through all aligned read points.
         for (auto& gp : _vv._aligned_vecs) {
 
@@ -411,7 +413,6 @@ namespace yask {
 
             // Get offset in inner-loop dim.
             // E.g., A(t, x+1, y+4, z-2) => 4 if ildim = 'y'.
-            const string& ildim = _settings._inner_loop_dim;
             auto* ofs = offsets.lookup(ildim);
             if (ofs) {
 
@@ -436,7 +437,9 @@ namespace yask {
                     _pt_inner_loop_hi[*key] = vofs;
 
                 // Need a buffer?
-                auto len = _pt_inner_loop_hi.at(*key) - _pt_inner_loop_lo.at(*key);
+                // Length will cover range of vecs minus current num of vecs.
+                auto len = _pt_inner_loop_hi.at(*key) -
+                    _pt_inner_loop_lo.at(*key) + 1 - _inner_loop_vec_step;
                 if (len > _settings._min_buffer_len)
                     _pt_buf_len[*key] = len;
             }
@@ -452,13 +455,14 @@ namespace yask {
     void CppVecPrintHelper::print_buffer_code(ostream& os, bool in_loop) {
 
         set<VarPoint> done;
+        const string& ildim = _settings._inner_loop_dim;
         
         // Loop through all aligned read points.
         for (auto& gp : _vv._aligned_vecs) {
             if (_inner_loop_key.count(gp) == 0)
                 continue;
 
-            // Only need buffer for one point along inner-loop.
+            // Only need buffer for unique point along inner-loop.
             auto key = _inner_loop_key[gp];
             if (done.count(*key))
                 continue;
@@ -468,13 +472,12 @@ namespace yask {
                 continue;
             
             auto lo = _pt_inner_loop_lo.at(*key);
-            auto hi = _pt_inner_loop_hi.at(*key);
             auto len = _pt_buf_len[*key];
+            auto end = lo + len;
             auto* vp = gp._get_var();
             assert(vp);
             auto& var = *vp;
             const auto& vname = var.get_name();
-            const string& ildim = _settings._inner_loop_dim;
 
             int start_ofs, stop_ofs, start_load;
             string bname;
@@ -483,14 +486,12 @@ namespace yask {
                 os << _line_prefix << "{\n";
                 assert(_pt_buf_name.count(*key));
                 bname = _pt_buf_name.at(*key);
-                if (len > 1) {
-                    for (int i = 0; i < len-1; i++)
-                        os << _line_prefix << bname << "[" << i << "] = " <<
-                            bname << "[" << (i+1) << "]" << _line_suffix;
-                }
-                start_ofs = hi;
-                stop_ofs = hi + 1;
-                start_load = len - 1;
+                for (int i = 0; i < len - _inner_loop_vec_step; i++)
+                    os << _line_prefix << bname << "[" << i << "] = " <<
+                        bname << "[" << (i + _inner_loop_vec_step) << "]" << _line_suffix;
+                start_ofs = end;
+                stop_ofs = end + _inner_loop_vec_step;
+                start_load = len - _inner_loop_vec_step;
             }
 
             else {
@@ -499,11 +500,11 @@ namespace yask {
                 if (len == 1)
                     os << "offset " << lo << "\n";
                 else
-                    os << "offsets in [" << lo << "..." << (hi-1) << "]\n";
+                    os << "offsets in [" << lo << "..." << (end-1) << "]\n";
                 os << _line_prefix << _var_type << " " << bname << "[" << len << "];\n";
                 os << _line_prefix << "{\n";
                 start_ofs = lo;
-                stop_ofs = hi;
+                stop_ofs = end;
                 start_load = 0;
             }
 
@@ -536,8 +537,20 @@ namespace yask {
         }
     }
     
-    // print increments of pointers.
-    void CppVecPrintHelper::print_inc_inner_loop_ptrs(ostream& os) {
+    // print increments of indices & pointers.
+    void CppVecPrintHelper::print_inc_inner_loop(ostream& os) {
+
+        auto& ild = _settings._inner_loop_dim;
+        os << "\n // Increment indices and pointers.\n" <<
+            _line_prefix << ild << " += " <<
+            _inner_loop_vec_step << _line_suffix <<
+
+            _line_prefix << get_local_elem_index(ild) << " += " <<
+            _inner_loop_elem_step << _line_suffix <<
+
+            _line_prefix << get_global_elem_index(ild) << " += " <<
+            _inner_loop_elem_step << _line_suffix;
+        
         for (auto& i : _inner_loop_base_ptrs) {
             auto& vp = i.first;
             auto& ptr = i.second;
@@ -872,16 +885,15 @@ namespace yask {
                 auto& ofs = offsets[ildim]; // Elem ofs.
                 auto vofs = ofs / _dims._fold[ildim]; // Vector ofs.
                 auto lo = _pt_inner_loop_lo.at(*key);
-                auto hi = _pt_inner_loop_hi.at(*key);
-                assert(vofs >= lo);
-                assert(vofs <= hi);
-                if (vofs < hi) {
+                auto len = _pt_buf_len.at(*key);
+                auto end = lo + len;
+                int i = vofs - lo;
+                if (i >= 0 && i < len) {
                     in_buf = true;
-                    int i = vofs - lo;
 
                     // Load from buffer.
                     os << _line_prefix << get_var_type() << " " << mv_name << " = " <<
-                        bname << "[" << i << " ]" << _line_suffix;
+                        bname << "[" << i << "]" << _line_suffix;
                 }
             }
         }
@@ -928,7 +940,7 @@ namespace yask {
 
         } else if (!in_buf) {
 
-            // If no pointer, use function call.
+            // If no buffer or pointer, use function call.
             auto rvn = make_point_call_vec(os, gp, "read_vec_norm", "", "", true);
             os << _line_prefix << get_var_type() << " " << mv_name << " = " <<
                 rvn << _line_suffix;
