@@ -129,9 +129,16 @@ namespace yask {
         typedef pair<string, string> VarDimKey; // var and dim names.
         map<VarDimKey, string> _strides; // var containing stride expr for given dim in var.
         map<VarDimKey, string> _offsets; // var containing offset expr for given dim in var.
-        map<string, string> _ptr_ofs; // var containing const offset expr for key var.
-        map<string, int> _ptr_ofs_lo; // lowest read offset from var in inner loop dim. FIXME?
-        map<string, int> _ptr_ofs_hi; // highest read offset from var in inner loop dim. FIXME?
+        map<string, string> _ptr_ofs; // var containing offset expr for key var.
+        map<VarPoint, var_point_ptr> _inner_loop_key; // offsets perpendicular to inner-loop dim for var.
+
+        // Read stats.
+        // Key: point w/no inner-loop offset.
+        // Offsets and legths in vec-lengths in inner-loop dim.
+        map<VarPoint, int> _pt_inner_loop_lo; // lowest read offset in inner-loop dim.
+        map<VarPoint, int> _pt_inner_loop_hi; // highest read offset in inner-loop dim.
+        map<VarPoint, int> _pt_buf_len;       // buffer length.
+        map<VarPoint, string> _pt_buf_name;   // buffer name.
 
         // Element indices.
         string _elem_suffix_global = "_global_elem";
@@ -143,6 +150,10 @@ namespace yask {
 
         // Set to var name of write mask if/when used.
         string _write_mask = "";
+
+        // Inner-loop vector and element steps.
+        string _inner_loop_vec_step;
+        string _inner_loop_elem_step;
 
         // A simple constant.
         virtual string add_const_expr(ostream& os, double v) override {
@@ -227,6 +238,14 @@ namespace yask {
             return _write_mask;
         }
 
+        // Set step lengths.
+        virtual void set_inner_loop_vec_step(string vs) {
+            _inner_loop_vec_step = vs;
+        }
+        virtual void set_inner_loop_elem_step(string vs) {
+            _inner_loop_elem_step = vs;
+        }
+
         // Print any needed memory reads and/or constructions to 'os'.
         // Return code containing a vector of var points.
         virtual string read_from_point(ostream& os, const VarPoint& gp) override;
@@ -244,11 +263,17 @@ namespace yask {
 
         // Print code to create base pointers for aligned reads.
         virtual void print_var_base_ptr(ostream& os, const VarPoint& gp);
-        virtual void print_inner_loop_base_ptrs(ostream& os);
 
-        // Print prefetches for each base pointer.
-        // Print only 'ptr_var' if provided.
-        virtual void print_prefetches(ostream& os, bool ahead, string ptr_var = "");
+        // Print things needed before inner loop.
+        virtual void print_inner_loop_prefix(ostream& os);
+
+        // Print prefetches for each inner-loop base pointer.
+        // 'in_loop': prefetch PF distance ahead instead of up to PF dist.
+        virtual void print_prefetches(ostream& os, bool in_loop);
+
+        // Print buffer-code for each inner-loop base pointer.
+        // 'in_loop': just shift and load last one.
+        virtual void print_buffer_code(ostream& os, bool in_loop);
 
         // print init of rank constants.
         virtual void print_rank_data(ostream& os);
@@ -257,7 +282,7 @@ namespace yask {
         virtual void print_elem_indices(ostream& os);
 
         // print increments of pointers.
-        virtual void print_inc_inner_loop_ptrs(ostream& os, const string& inc_amt);
+        virtual void print_inc_inner_loop_ptrs(ostream& os);
 
         // get un-normalized index.
         virtual const string& get_local_elem_index(const string& dname) const {

@@ -615,7 +615,9 @@ namespace yask {
                   " target:                 " << get_target() << endl <<
                   " stencil-name:           " << get_name() << endl <<
                   " stencil-description:    " << get_description() << endl <<
-                  " element-size:           " << make_byte_str(get_element_bytes()));
+                  " element-size:           " << make_byte_str(get_element_bytes()) << endl <<
+                  " inner-layout dim:       " << dims->_inner_layout_dim << endl <<
+                  " inner-loop dim:         " << dims->_inner_loop_dim);
 #ifdef USE_MPI
         DEBUG_MSG(" num-ranks:              " << actl_opts->_num_ranks.make_dim_val_str(" * ") << endl <<
                   " rank-indices:           " << actl_opts->_rank_indices.make_dim_val_str() << endl <<

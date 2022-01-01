@@ -42,6 +42,7 @@ namespace yask {
         string _step_dim;        // explicit step dim.
         vector<string> _domain_dims; // explicit domain dims.
         string _inner_loop_dim;      // explicit inner-loop dim.
+        int _min_buffer_len = 1;     // min length of an inner-loop buffer.
         IntTuple _fold_options;    // vector fold.
         IntTuple _cluster_options; // cluster multipliers.
         map<int, int> _prefetch_dists;

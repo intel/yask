@@ -652,6 +652,12 @@ namespace yask {
                 // C++ vector print assistant.
                 auto* vp = new_cpp_vec_print_helper(vv, cv);
                 vp->set_write_mask(write_mask);
+                auto& ild = _settings._inner_loop_dim;
+                string cap_ild = PrinterBase::all_caps(ild);
+                string cm = do_cluster ? "CMULT_" + cap_ild : "1";
+                vp->set_inner_loop_vec_step(cm);
+                string clen = cm + " * VLEN_" + cap_ild;
+                vp->set_inner_loop_elem_step(clen);
 
                 // Print loop-invariant meta values.
                 // Store them in the CppVecPrintHelper for later use in the loop body.
@@ -695,10 +701,9 @@ namespace yask {
                 vp->print_elem_indices(os);
 
                 // Create inner-loop base ptrs.
-                os << "\n // Create inner-loop base pointers.\n";
-                vp->print_inner_loop_base_ptrs(os);
+                os << "\n // Set up for inner loop.\n";
+                vp->print_inner_loop_prefix(os);
 
-                auto ild = _settings._inner_loop_dim;
                 os <<
                     "\n // Start Pico inner-loop for dim '" << ild << "'.\n"
                     "#define PICO_BLOCK_USE_LOOP_PART_1\n"
@@ -712,15 +717,15 @@ namespace yask {
                 // Insert prefetches using vars stored in print helper for next iteration.
                 vp->print_prefetches(os, true);
 
+                // Shift and fill buffers.
+                vp->print_buffer_code(os, true);
+                
                 // Increment indices.
-                string cap_ild = PrinterBase::all_caps(ild);
-                string cm = do_cluster ? "CMULT_" + cap_ild : "1";
-                string clen = cm + " * VLEN_" + cap_ild;
                 os << "\n // Increment indices and pointers.\n"
                     " " << ild << " += " << cm << ";\n"
                     " " << vp->get_local_elem_index(ild) << " += " << clen << ";\n"
                     " " << vp->get_global_elem_index(ild) << " += " << clen << ";\n";
-                vp->print_inc_inner_loop_ptrs(os, cm);
+                vp->print_inc_inner_loop_ptrs(os);
 
                 // End of loops.
                 os <<

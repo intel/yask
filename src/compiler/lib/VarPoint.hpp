@@ -63,7 +63,7 @@ namespace yask {
         // Vars below are calculated from above.
         
         // Simple offset for each expr that is dim +/- offset, e.g.,
-        // "x=-5, z=4" from above example.
+        // "x=-5, z=4" from above example ('y*2' is not an offset expr).
         // Includes zero offsets.
         // Set in ctor and modified via set_arg_offset/Const().
         IntTuple _offsets;

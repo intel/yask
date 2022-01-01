@@ -134,11 +134,15 @@ void usage(const string& cmd,
         "      The default is the last domain dimension specified via -domain_dims or in the\n"
         "        stencil DSL code.\n"
         "      For this option, a numerical index is allowed: '1' is the first domain-dim, etc.\n"
+        " -min-buffer-len <n>\n"
+        "    Create buffers in the inner loop if at least <n> points could be stored in it\n"
+        "      (default=" << settings._min_buffer_len << ").\n"
         " [-no]-reloc-step\n"
         "    Define YASK vars with the 'step' dim just after the first domain dim\n"
         "      instead of just before the first domain dim (default=" << settings._inner_step << ").\n"
         " [-no]-interleave-misc\n"
         "    Define YASK vars with the 'misc' dim(s) as the inner-most dim(s) (default=" << settings._inner_misc << ").\n"
+        "      This effectively creates an AoSoA-style layout instead of an SoAoA one.\n"
         "      This disallows dynamcally changing the 'misc' dim sizes during run-time.\n"
         " -[no]-fus\n"
         "    Make first dimension of fold unit stride (default=" << settings._first_inner << ").\n"
@@ -361,6 +365,8 @@ void parse_opts(int argc, const char* argv[],
                         settings._halo_size = val;
                     else if (opt == "-step-alloc")
                         settings._step_alloc = val;
+                    else if (opt == "-min-buffer-len")
+                        settings._min_buffer_len = val;
 
                     // add any more options w/int values here.
 

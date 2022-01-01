@@ -198,6 +198,12 @@ endif
 ifneq ($(inner_loop_dim),)
  YC_FLAGS	+=	-inner-loop-dim $(inner_loop_dim)
 endif
+ifeq ($(interleave_misc),1)
+ YC_FLAGS	+=	-interleave-misc
+endif
+ifneq ($(min_buffer_len),)
+ YC_FLAGS	+=	-min-buffer-len $(min_buffer_len)
+endif
 
 # Kernel base names.
 YK_BASE		:=	yask_kernel
@@ -1051,8 +1057,8 @@ STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d arch=intel64 $(call FOLD,x=3 y=2) domain_dims=y,x
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_reverse_2d radius=1
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stages_2d $(call FOLD,x=2 y=2)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d $(call FOLD,x=2 y=2)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d EXTRA_YC_FLAGS=-interleave-misc
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d $(call FOLD,x=2 y=2) interleave-misc=0
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d $(call FOLD,x=2 y=2) interleave-misc=1
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_2d $(call FOLD,x=2 y=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_2d $(call FOLD,x=2 y=2)
 
