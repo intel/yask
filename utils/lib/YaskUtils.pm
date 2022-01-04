@@ -43,39 +43,47 @@ our @log_keys =
    'mid throughput (est-FLOPS)',
    'mid elapsed time (sec)',
    'mid num-steps-done',
+
    'best throughput (num-points/sec)',
    'best throughput (num-reads/sec)',
    'best throughput (num-writes/sec)',
    'best throughput (est-FLOPS)',
    'best elapsed time (sec)',
    'best num-steps-done',
-   'yask version',
-   'target',
+
    'stencil name',
    'stencil description',
    'element size',
    'script invocation',
    'binary invocation',
+   'yask version',
+   'target',
+
    'num MPI ranks',
-   'num ranks',
    'num OpenMP threads', # also matches 'Num OpenMP threads used'.
    'num outer threads',
    'num inner threads',
    'device thread limit',
+
+   'domain size in this rank',
+   'total allocation in this rank',
+   'overall problem size',
    'total overall allocation',
-   'cluster size',
-   'vector size',
+   'inner-layout dim',
+   'inner-loop dim',
+
    'num mega-blocks per local-domain per step',
    'num blocks per mega-block per step',
    'num micro-blocks per block per step',
    'num nano-blocks per micro-block per step',
    'num pico-blocks per nano-block per step',
-   'extra padding',
-   'minimum padding',
+
    'L1 prefetch distance',
    'L2 prefetch distance',
    'num temporal block steps',
    'num wave front steps',
+   'extra padding',
+   'min padding',
 
    # values from compiler report
    'YC_STENCIL',
@@ -107,7 +115,7 @@ our @special_log_keys =
    $yask_key,
   );
 
-# Adjustable sizes.
+#  Sizes.
 our @size_log_keys =
   (
    'global-domain size',
@@ -117,15 +125,17 @@ our @size_log_keys =
    'micro-block size',
    'nano-block size',
    'pico-block size',
+   'cluster size',
+   'vector size',
   );
 if (0) {
   push @size_log_keys,
     (
-     'local-domain-tile size',
-     'mega-block-tile size',
-     'block-tile size',
-     'micro-block-tile size',
-     'nano-block-tile size',
+     'local-domain tile size',
+     'mega-block tile size',
+     'block tile size',
+     'micro-block tile size',
+     'nano-block tile size',
      );
 }
 
@@ -256,6 +266,7 @@ sub getResultsFromLine($$) {
   $line =~ s/mini([_-])bl/micro${1}bl/g;
   $line =~ s/sub([_-])bl/nano${1}bl/g;
   $line =~ s/region/mega-block/g;
+  $line =~ s/minimum-padding/min-padding/g;
   
   # special cases for manual parsing...
 

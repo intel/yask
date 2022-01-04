@@ -627,7 +627,7 @@ namespace yask {
 #endif
         DEBUG_MSG(" vector-len:             " << VLEN << endl <<
                   " extra-padding:          " << actl_opts->_extra_pad_sizes.remove_dim(step_posn).make_dim_val_str() << endl <<
-                  " minimum-padding:        " << actl_opts->_min_pad_sizes.remove_dim(step_posn).make_dim_val_str() << endl <<
+                  " min-padding:            " << actl_opts->_min_pad_sizes.remove_dim(step_posn).make_dim_val_str() << endl <<
                   " allow-addl-padding:     " << actl_opts->_allow_addl_pad << endl <<
                   " L1-prefetch-distance:   " << PFD_L1 << endl <<
                   " L2-prefetch-distance:   " << PFD_L2 << endl <<
