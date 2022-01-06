@@ -217,6 +217,9 @@ namespace yask {
                                                  const VarMap* var_map = 0,
                                                  const string& inner_ofs = "");
 
+        // Collect some stats on points.
+        virtual void get_point_stats();
+        
     public:
         CppVecPrintHelper(VecInfoVisitor& vv,
                           const CompilerSettings& settings,
@@ -283,7 +286,7 @@ namespace yask {
         virtual void print_elem_indices(ostream& os);
 
         // print increments of indices & pointers.
-        virtual void print_inc_inner_loop(ostream& os);
+        virtual void print_end_inner_loop(ostream& os);
 
         // get un-normalized index.
         virtual const string& get_local_elem_index(const string& dname) const {

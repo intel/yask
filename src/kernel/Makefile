@@ -104,7 +104,7 @@ else
 endif
 YK_TAG  	:=	$(YK_STENCIL).$(YK_ARCH)
 
-# Default compiler settings based on target.
+# Default settings based on target.
 ifeq ($(TARGET),knl)
 
  # NUMA_PREF=1 causes YASK to use MCDRAM on a node in "flat" memory mode. It
@@ -114,6 +114,7 @@ ifeq ($(TARGET),knl)
  ICC_ISA	?=	-xMIC-AVX512
  GXX_ISA	?=	-march=knl
  VEC_MACROS	?=	USE_INTRIN512 USE_RCP28 NUMA_PREF=1
+ pfd_l1		?=	1
 
 else ifeq ($(TARGET),avx512)
 

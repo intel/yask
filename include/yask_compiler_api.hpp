@@ -409,10 +409,6 @@ namespace yask {
                           int level) =0;
 
         /// Set the prefetch distance for the given cache.
-        /**
-           If the prefetch distance is not set for a given cache,
-           a default will be used based on the target format.
-         */
         virtual void
         set_prefetch_dist(/** [in] Cache level: 1 or 2. */
                           int level,

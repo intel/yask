@@ -239,6 +239,7 @@ namespace yask {
         }
     }
 
+    // A handy macro to create some local vars based on a Var ptr.
     #define VAR_DECLS(gp) \
         int ndims = gp->get_num_dims();         \
         auto gdims = gp->get_dims_tuple();      \
@@ -698,6 +699,12 @@ namespace yask {
                 // Create inner-loop base ptrs.
                 os << "\n // Set up for inner loop.\n";
                 vp->print_inner_loop_prefix(os);
+    
+                // Initial prefetches.
+                vp->print_prefetches(os, false);
+
+                // Create and init buffers.
+                vp->print_buffer_code(os, false);
 
                 auto& ild = _settings._inner_loop_dim;
                 os <<
@@ -716,8 +723,8 @@ namespace yask {
                 // Shift and fill buffers.
                 vp->print_buffer_code(os, true);
                 
-                // Increment indices.
-                vp->print_inc_inner_loop(os);
+                // Increment indices, etc.
+                vp->print_end_inner_loop(os);
 
                 // End of loops.
                 os <<

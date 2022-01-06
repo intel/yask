@@ -81,15 +81,6 @@ namespace yask {
                                  " is not 1 or 2.");
         if (_settings._prefetch_dists.count(level))
             return _settings._prefetch_dists.at(level);
-        else if (is_target_set()) {
-            auto target = get_target();
-            if (target == "knl") {
-                if (level == 1)
-                    return 1;
-                else
-                    return 0;
-            }
-        }
         return 0;
     }
     void StencilSolution::set_prefetch_dist(int level,
@@ -98,7 +89,7 @@ namespace yask {
         if (distance < 0)
             THROW_YASK_EXCEPTION("Error: prefetch-distance " +
                                  to_string(distance) +
-                                 " is not positive.");
+                                 " is not zero or positive.");
         _settings._prefetch_dists[level] = distance;
     }
     yc_solution_base::soln_map& yc_solution_base::get_registry() {
