@@ -85,6 +85,7 @@ ifeq ($(offload),1)
  pfd_l1		:=	0
  pfd_l2		:=	0
  inner_loop_dim :=	1
+ reloc_step	:=	1
 endif
 
 # Main vars for naming the libraries and executables and running
@@ -198,6 +199,9 @@ ifneq ($(pfd_l2),)
 endif
 ifneq ($(inner_loop_dim),)
  YC_FLAGS	+=	-inner-loop-dim $(inner_loop_dim)
+endif
+ifeq ($(reloc_step),1)
+ YC_FLAGS	+=	-reloc-step
 endif
 ifeq ($(interleave_misc),1)
  YC_FLAGS	+=	-interleave-misc

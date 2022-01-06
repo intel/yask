@@ -357,12 +357,12 @@ namespace yask {
                             int other_posn = dn + 1;
                             templ += to_string(other_posn);
                         }
-                    }
+                    } // dims.
 
                     // Add deferred posns.
                     if (step_posn) {
 
-                        // Step var in 2nd dim if a dim exists.
+                        // Step var in 2nd dim if possible.
                         if (templ.length())
                             templ.insert(1, to_string(step_posn));
 

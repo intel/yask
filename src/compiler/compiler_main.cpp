@@ -138,10 +138,11 @@ void usage(const string& cmd,
         "    Create buffers in the inner loop if at least <n> points could be stored in it\n"
         "      (default=" << settings._min_buffer_len << ").\n"
         " [-no]-reloc-step\n"
-        "    Define YASK vars with the 'step' dim just after the first domain dim\n"
+        "    Set YASK var layout with the 'step' dim just after the first domain dim\n"
         "      instead of just before the first domain dim (default=" << settings._inner_step << ").\n"
         " [-no]-interleave-misc\n"
-        "    Define YASK vars with the 'misc' dim(s) as the inner-most dim(s) (default=" << settings._inner_misc << ").\n"
+        "    Set YASK vars layout with the 'misc' dim(s) as the inner-most dim(s) (default=" <<
+        settings._inner_misc << ").\n"
         "      This effectively creates an AoSoA-style layout instead of an SoAoA one.\n"
         "      This disallows dynamcally changing the 'misc' dim sizes during run-time.\n"
         " -[no]-fus\n"
