@@ -37,9 +37,12 @@ real_bytes		?=	4
 allow_new_var_types	?=	1
 streaming_stores	?=	0
 use_ptrs		?=	1
+reloc_step		?=	0
+interleave_misc		?=	0
 omp			?=	1
 offload			?=	0
 offload_arch		?=	spir64
+
 trace			?=	0
 trace_mem		?=	0
 check			?=	0
@@ -162,11 +165,6 @@ include $(YASK_BASE)/src/common/common.mk
 
 # Flags passed to stencil compiler.
 YC_FLAGS	:=	-stencil $(YC_STENCIL) -target $(YC_TARGET) -elem-bytes $(real_bytes)
-ifeq ($(use_ptrs),1)
- YC_FLAGS	+=	-use-ptrs
-else
- YC_FLAGS	+=	-no-use-ptrs
-endif
 ifneq ($(fold),)
  YC_FLAGS	+=	-fold $(fold)
 endif
@@ -200,14 +198,24 @@ endif
 ifneq ($(inner_loop_dim),)
  YC_FLAGS	+=	-inner-loop-dim $(inner_loop_dim)
 endif
+ifneq ($(min_buffer_len),)
+ YC_FLAGS	+=	-min-buffer-len $(min_buffer_len)
+endif
+
+ifeq ($(use_ptrs),1)
+ YC_FLAGS	+=	-use-ptrs
+else
+ YC_FLAGS	+=	-no-use-ptrs
+endif
 ifeq ($(reloc_step),1)
  YC_FLAGS	+=	-reloc-step
+else
+ YC_FLAGS	+=	-no-reloc-step
 endif
 ifeq ($(interleave_misc),1)
  YC_FLAGS	+=	-interleave-misc
-endif
-ifneq ($(min_buffer_len),)
- YC_FLAGS	+=	-min-buffer-len $(min_buffer_len)
+else
+ YC_FLAGS	+=	-no-interleave-misc
 endif
 
 # Kernel base names.
