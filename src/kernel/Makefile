@@ -147,7 +147,7 @@ else ifeq ($(TARGET),avx)
 else ifeq ($(TARGET),intel64)
 
  ICC_ISA	?=	-xHOST
- GXX_ISA	?=	-march=native
+ GXX_ISA	?=
 
 else
 
@@ -899,9 +899,15 @@ first_test	:=	0
 last_test	:=	999
 
 # Default threads.
-max_threads	:=	6
+ifeq ($(offload),1)
+max_threads	:=	4
 inner_threads	:=	2
+else
+max_threads	:=	16
+inner_threads	:=	2
+endif
 
+# Makefile functions for folding and clustering.
 # Disable folding and clustering for offload testing.
 ifeq ($(offload),1)
 FOLD		=
