@@ -257,8 +257,31 @@ namespace yask {
     // Print YASK var types and core-data class.
     void YASKCppPrinter::print_data(ostream& os) {
 
+        // Preferred dim layout order.
+        vector<string> dorder;
+        for (int i = 0; i < _dims._domain_dims.get_num_dims(); i++)
+            dorder.push_back(_dims._domain_dims.get_dim_name(i));
+        if (_settings._inner_step && dorder.size() > 1)
+            dorder.insert(dorder.begin() + 1, _dims._step_dim);
+        else
+            dorder.insert(dorder.begin(), _dims._step_dim);
+        for (int i = 0; i < _dims._misc_dims.get_num_dims(); i++) {
+            auto& dname = _dims._misc_dims.get_dim_name(i);
+            if (_settings._inner_misc)
+                dorder.push_back(dname);
+            else
+                dorder.insert(dorder.begin() + i, dname);
+        }
+        os << "\n ///// Stencil var type(s).\n"
+            " // General array layout order (outer-to-inner): ";
+        for (size_t i = 0; i < dorder.size(); i++) {
+            if (i > 0)
+                os << ", ";
+            os << dorder[i];
+        }
+        os << ".\n";
+        
         // Var types.
-        os << "\n ///// Stencil var type(s)." << endl;
         for (auto gp : _vars) {
             VAR_DECLS(gp);
 
@@ -275,9 +298,10 @@ namespace yask {
             else
                 os << "not updated by any equation (read-only).\n";
             if (ndims) {
-                os << " // Dimensions: ";
+                os << " // Dimensions in parameter order: ";
                 for (int dn = 0; dn < ndims; dn++) {
-                    if (dn) os << ", ";
+                    if (dn)
+                        os << ", ";
                     auto& dim = gp->get_dims()[dn];
                     auto& dname = dim->_get_name();
                     os << "'" << dname << "'(#" << (dn+1) << ")";
@@ -296,85 +320,52 @@ namespace yask {
             // Type-name in kernel is 'VAR_TYPE<LAYOUT, WRAP_1ST_IDX, VEC_LENGTHS...>'.
             {
                 string templ;
-                int step_posn = 0;
-                int inner_posn = 0;
                 bool got_step = false;
-                vector<int> vlens;
-                vector<int> misc_posns;
 
                 // 1-D or more.
                 if (ndims) {
-                    for (int dn = 0; dn < ndims; dn++) {
-                        auto& dim = gp->get_dims()[dn];
-                        auto& dname = dim->_get_name();
-                        auto dtype = dim->get_type();
-                        bool defer = false; // add dim to layout later.
+                    int ndone = 0;
+                    os << " // Dimensions in layout order: ";
 
-                        // Add vector len to list.
-                        if (folded) {
-                            auto* p = _dims._fold.lookup(dname);
-                            int dval = p ? *p : 1;
-                            vlens.push_back(dval);
-                        }
+                    // Preferred order.
+                    for (size_t i = 0; i < dorder.size(); i++) {
+                        auto& dname = dorder[i];
 
-                        // Step dim?  If this exists, it will get placed
-                        // after the outer dim if requested.
-                        if (dtype == STEP_INDEX) {
-                            assert(dname == _dims._step_dim);
-                            if (dn > 0) {
-                                THROW_YASK_EXCEPTION("Error: cannot create var '" + var +
-                                                     "' with dimensions '" + gdims.make_dim_str() +
-                                                     "' because '" + dname + "' must be first dimension");
+                        // Find in this var (if it exists).
+                        for (int dn = 0; dn < ndims; dn++) {
+                            auto& dim = gp->get_dims()[dn];
+                            if (dname != dim->_get_name())
+                                continue;
+                            auto dtype = dim->get_type();
+
+                            // Step dim?
+                            if (dtype == STEP_INDEX) {
+                                assert(dname == _dims._step_dim);
+                                if (dn > 0) {
+                                    THROW_YASK_EXCEPTION("Error: cannot create var '" + var +
+                                                         "' with dimensions '" + gdims.make_dim_str() +
+                                                         "' because '" + dname + "' must be first dimension");
+                                }
+                                got_step = true;
                             }
-                            if (_settings._inner_step) {
-                                step_posn = dn + 1;
-                                defer = true;
+
+                            // Inner domain dim?
+                            else if (dname == _dims._inner_layout_dim) {
+                                assert(dtype == DOMAIN_INDEX);
                             }
-                            got_step = true;
-                        }
 
-                        // Inner domain dim?  If this exists, it will get
-                        // placed at end (or just before misc dims if "inner
-                        // misc" setting is used).
-                        // TODO: put all domain dims in their preferred order.
-                        else if (dname == _dims._inner_layout_dim) {
-                            assert(dtype == DOMAIN_INDEX);
-                            inner_posn = dn + 1;
-                            defer = true;
-                        }
-
-                        // Misc dims? Placed after the inner domain dim
-                        // if "inner misc" setting is used.
-                        else if (dtype == MISC_INDEX) {
-                            if (_settings._inner_misc) {
-                                misc_posns.push_back(dn + 1);
-                                defer = true;
-                            }
-                        }
-
-                        // Add this index position to layout now unless deferred.
-                        if (!defer) {
-                            int other_posn = dn + 1;
-                            templ += to_string(other_posn);
+                            // Add this index position to layout template.
+                            templ += to_string(dn+1);
+                            if (ndone)
+                                os << ", ";
+                            os << dname;
+                            ndone++;
                         }
                     } // dims.
+                    assert(ndims == ndone);
+                    os << ".\n";
 
-                    // Add deferred posns.
-                    if (step_posn) {
-
-                        // Step var in 2nd dim if possible.
-                        if (templ.length())
-                            templ.insert(1, to_string(step_posn));
-
-                        // Else at beginning.
-                        else
-                            templ += to_string(step_posn);
-                    }
-                    if (inner_posn)
-                        templ += to_string(inner_posn);
-                    for (auto mp : misc_posns)
-                        templ += to_string(mp);
-                }
+                } // not scalar.
 
                 // Scalar.
                 else
@@ -386,11 +377,19 @@ namespace yask {
                 else
                     templ += ", false";
 
-                // Add vec lens.
+                // Vector lengths.
                 if (folded) {
-                    for (auto i : vlens)
-                        templ += ", " + to_string(i);
+                    for (int dn = 0; dn < ndims; dn++) {
+                        auto& dim = gp->get_dims()[dn];
+                        auto& dname = dim->_get_name();
+                        
+                        // Add vector len to list.
+                        auto* p = _dims._fold.lookup(dname);
+                        int dval = p ? *p : 1;
+                        templ += ", " + to_string(dval);
+                    }
                 }
+
                 templ.insert(0, "<Layout_");
                 templ += ">";
 

@@ -141,10 +141,10 @@ void usage(const string& cmd,
         "    Set YASK var layout with the 'step' dim just after the first domain dim\n"
         "      instead of just before the first domain dim (default=" << settings._inner_step << ").\n"
         " [-no]-interleave-misc\n"
-        "    Set YASK vars layout with the 'misc' dim(s) as the inner-most dim(s) (default=" <<
-        settings._inner_misc << ").\n"
+        "    Set YASK vars layout with the 'misc' dim(s) as the inner-most dim(s)\n"
+        "      instead of the outer-most (default=" << settings._inner_misc << ").\n"
         "      This effectively creates an AoSoA-style layout instead of an SoAoA one.\n"
-        "      This disallows dynamcally changing the 'misc' dim sizes during run-time.\n"
+        "      This disallows dynamcally changing the 'misc' dim sizes from the kernel APIs.\n"
         " -[no]-fus\n"
         "    Make first dimension of fold unit stride (default=" << settings._first_inner << ").\n"
         "      This controls the intra-vector memory layout.\n"
