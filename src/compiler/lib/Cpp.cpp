@@ -499,7 +499,7 @@ namespace yask {
                         bname << "[" << (i + _inner_loop_vec_step) << "]" << _line_suffix;
                 start_ofs = end;
                 stop_ofs = end + _inner_loop_vec_step;
-                start_load = len - _inner_loop_vec_step;
+                start_load = max(len - _inner_loop_vec_step, 0);
             }
 
             else {
@@ -518,7 +518,7 @@ namespace yask {
 
             // Load the buffer.
             int i = start_load;
-            for (int vofs = start_ofs; vofs < stop_ofs; vofs++, i++) {
+            for (int vofs = start_ofs; vofs < stop_ofs && i < len; vofs++, i++) {
                 auto eofs = vofs * _dims._fold[ildim]; // Vector ofs.
 
                 // Make pt w/needed offset.
