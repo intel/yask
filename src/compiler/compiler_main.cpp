@@ -203,7 +203,9 @@ void usage(const string& cmd,
         " -min-es <num-nodes>\n"
         "    Set heuristic for min expression-size for reuse (default=" << settings._min_expr_size << ").\n"
         " [-no]-use-ptrs\n"
-        "    Enable var access via pointers & strides (default=" << settings._use_ptrs << ").\n"
+        "    Generate kernel code using pointers & strides (default=" << settings._use_ptrs << ").\n"
+        " [-no]-use-offsets\n"
+        "    Generate kernel code with offsets including padding (default=" << settings._use_offsets << ").\n"
         " [-no]-find-deps\n"
         "    Find dependencies between stencil equations (default=" << settings._find_deps << ").\n"
         " [-no]-print-eqs\n"
@@ -285,6 +287,10 @@ void parse_opts(int argc, const char* argv[],
                 settings._use_ptrs = true;
             else if (opt == "-no-use-ptrs")
                 settings._use_ptrs = false;
+            else if (opt == "-use-offsets")
+                settings._use_offsets = true;
+            else if (opt == "-no-use-offsets")
+                settings._use_offsets = false;
             
             // add any more options w/o values above.
 

@@ -699,10 +699,10 @@ namespace yask {
                 os << "\n // Set up for inner loop.\n";
                 vp->print_inner_loop_prefix(os);
     
-                // Initial prefetches.
+                // Initial prefetches, if any.
                 vp->print_prefetches(os, false);
 
-                // Create and init buffers.
+                // Create and init buffers, if any.
                 vp->print_buffer_code(os, false);
 
                 auto& ild = _settings._inner_loop_dim;

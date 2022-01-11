@@ -226,6 +226,7 @@ namespace yask {
         string po_var = make_var_name(vname + "_ptr_ofs");
         _ptr_ofs[vname] = po_var;
         string po_expr = "idx_t(0)";
+        string po_deco = "const";
 
         for (int dnum = 0; dnum < var.get_num_dims(); dnum++) {
             auto& dim = var.get_dims().at(dnum);
@@ -300,6 +301,7 @@ namespace yask {
                 string ofs_var = make_var_name(vname + "_" + dname + "_ofs");
                 _offsets[key] = ofs_var;
                 assert(lookup_offset(var, dname));
+                string ofs_deco = "constexpr";
 
                 string ofs; // Offset value.
                 string ofs_expr = var_ptr + "->_local_offsets[" + to_string(dnum) + "]";
@@ -310,6 +312,7 @@ namespace yask {
                     os << " // Local offset varies because '" << vname <<
                         "' is a scratch var.\n";
                     ofs = ofs_expr;
+                    ofs_deco = "const";
                 }
                 else if (dtype == MISC_INDEX) {
 
@@ -323,19 +326,17 @@ namespace yask {
                 }
 
                 // Offset includes local offset and pad.
-                #ifndef ADJ_FOR_PAD
-                #define ADJ_FOR_PAD 1
-                #endif
-                #if ADJ_FOR_PAD
-                string pad_expr = var_ptr + "->_actl_left_pads[" + to_string(dnum) + "]";
-                ofs_expr += " - " + pad_expr;
-                if (dtype != MISC_INDEX) {
-                    os << " // Offset is adjusted by actual allocated padding.\n";
-                    ofs += " - " + pad_expr;
+                if (_settings._use_offsets) {
+                    string pad_expr = var_ptr + "->_actl_left_pads[" + to_string(dnum) + "]";
+                    ofs_expr += " - " + pad_expr;
+                    if (dtype != MISC_INDEX) {
+                        os << " // Offset is adjusted by actual allocated padding.\n";
+                        ofs += " - " + pad_expr;
+                    }
+                    ofs_deco = "const";
                 }
-                #endif
 
-                os << _line_prefix << "const idx_t " << ofs_var << " = " <<
+                os << _line_prefix << ofs_deco << " idx_t " << ofs_var << " = " <<
                     ofs << _line_suffix;
                 if (ofs != ofs_expr)
                     os << _line_prefix << "host_assert(" << ofs_expr <<
@@ -347,7 +348,7 @@ namespace yask {
         }
 
         os << "\n // Offset from base ptr to 0th position in var '" << vname << "'.\n" <<
-            _line_prefix << "const idx_t " << po_var << " = " <<
+            _line_prefix << po_deco << " idx_t " << po_var << " = " <<
             po_expr << _line_suffix;
     }
 
