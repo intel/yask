@@ -206,6 +206,8 @@ void usage(const string& cmd,
         "    Generate kernel code using pointers & strides (default=" << settings._use_ptrs << ").\n"
         " [-no]-use-offsets\n"
         "    Generate kernel code with offsets including padding (default=" << settings._use_offsets << ").\n"
+        " [-no]-early-loads\n"
+        "    Generate aligned loads before they are needed (default=" << settings._early_loads << ").\n"
         " [-no]-find-deps\n"
         "    Find dependencies between stencil equations (default=" << settings._find_deps << ").\n"
         " [-no]-print-eqs\n"
@@ -291,6 +293,10 @@ void parse_opts(int argc, const char* argv[],
                 settings._use_offsets = true;
             else if (opt == "-no-use-offsets")
                 settings._use_offsets = false;
+            else if (opt == "-early-loads")
+                settings._early_loads = true;
+            else if (opt == "-no-early-loads")
+                settings._early_loads = false;
             
             // add any more options w/o values above.
 

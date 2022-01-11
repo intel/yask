@@ -271,6 +271,9 @@ namespace yask {
         // Print things needed before inner loop.
         virtual void print_inner_loop_prefix(ostream& os);
 
+        // Print all aligned loads before they're needed.
+        virtual void print_early_loads(ostream& os);
+
         // Print prefetches for each inner-loop base pointer.
         // 'in_loop': prefetch PF distance ahead instead of up to PF dist.
         virtual void print_prefetches(ostream& os, bool in_loop);

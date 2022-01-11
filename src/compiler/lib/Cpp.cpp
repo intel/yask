@@ -457,6 +457,18 @@ namespace yask {
         }
     }
 
+    // Print all aligned loads.
+    void CppVecPrintHelper::print_early_loads(ostream& os) {
+        get_point_stats();
+
+        os << "\n // Issuing all aligned loads.\n";
+
+        // Loop through all aligned read points.
+        for (auto& gp : _vv._aligned_vecs) {
+            read_from_point(os, gp);
+        }
+    }
+
     // Print buffer-code for each inner-loop base pointer.
     // 'in_loop': just shift and load last one.
     void CppVecPrintHelper::print_buffer_code(ostream& os, bool in_loop) {

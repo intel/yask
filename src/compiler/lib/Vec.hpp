@@ -253,10 +253,9 @@ namespace yask {
         }
 
         // Access cached values.
-        virtual const string* save_point_var(const VarPoint& gp, const string& var) {
+        virtual void save_point_var(const VarPoint& gp, const string& var) {
             _vec_vars[gp] = var;
-            return &_vec_vars.at(gp);
-        }
+         }
         virtual const string* lookup_point_var(const VarPoint& gp) {
             if (_vec_vars.count(gp))
                 return &_vec_vars.at(gp);

@@ -711,6 +711,10 @@ namespace yask {
                     "#define PICO_BLOCK_USE_LOOP_PART_1\n"
                     "#include \"yask_pico_block_loops.hpp\"\n";
 
+                // Issue loads early.
+                if (_settings._early_loads)
+                    vp->print_early_loads(os);
+                
                 // Generate loop body using vars stored in print helper.
                 // Visit all expressions to cover the whole vector/cluster.
                 PrintVisitorBottomUp pcv(os, *vp);
