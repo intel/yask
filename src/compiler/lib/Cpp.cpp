@@ -401,6 +401,7 @@ namespace yask {
     }
 
     // Collect some stats on points.
+    // These are used to create buffers and prefetches.
     void CppVecPrintHelper::get_point_stats() {
 
         // Done?
@@ -444,11 +445,12 @@ namespace yask {
                 if (!_pt_inner_loop_hi.count(*key) || _pt_inner_loop_hi.at(*key) < vofs)
                     _pt_inner_loop_hi[*key] = vofs;
 
-                // Need a buffer?
-                // Length will cover range of vecs minus num of vecs.
-                // The num of vecs is subtracted because we don't need to put the vecs
-                // read in the current loop iteration in the buffer (until it's shifted
-                // at the end of the loop.)
+                // Need a buffer? (This will change as new points are
+                // discovered.)  Length will cover range of vecs needed
+                // minus num of vecs read in each iteration.  The num of
+                // vecs is subtracted because we don't need to put the vecs
+                // read in the current loop iteration in the buffer (until
+                // it's shifted at the end of the loop.)
                 auto len = _pt_inner_loop_hi.at(*key) -
                     _pt_inner_loop_lo.at(*key) + 1 - _inner_loop_vec_step;
                 if (len > _settings._min_buffer_len)
