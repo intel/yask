@@ -257,7 +257,7 @@ namespace yask {
         }
 
         // Read one element.
-        // Indices are relative to overall problem domain.
+        // Indices are global, i.e., relative to overall problem domain.
         ALWAYS_INLINE
         real_t read_elem(const Indices& idxs,
                          idx_t alloc_step_idx) const {
@@ -266,12 +266,32 @@ namespace yask {
         }
 
         // Write one element.
-        // Indices are relative to overall problem domain.
+        // Indices are global, i.e., relative to overall problem domain.
         ALWAYS_INLINE
         void write_elem(real_t val,
                         const Indices& idxs,
                         idx_t alloc_step_idx) {
             real_t* ep = get_elem_ptr(idxs, alloc_step_idx);
+            *ep = val;
+        }
+
+
+        // Read one element.
+        // Indices are local.
+        ALWAYS_INLINE
+        real_t read_elem_local(const Indices& idxs,
+                         idx_t alloc_step_idx) const {
+            const real_t* ep = get_elem_ptr_local(idxs, alloc_step_idx);
+            return *ep;
+        }
+
+        // Write one element.
+        // Indices are local.
+        ALWAYS_INLINE
+        void write_elem_local(real_t val,
+                        const Indices& idxs,
+                        idx_t alloc_step_idx) {
+            real_t* ep = get_elem_ptr_local(idxs, alloc_step_idx);
             *ep = val;
         }
 

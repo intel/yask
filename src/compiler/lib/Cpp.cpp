@@ -378,24 +378,25 @@ namespace yask {
 
             // Doesn't already exist?
             if (!lookup_inner_loop_base_ptr(gp)) {
-
-                // Make base point (no inner-layout offset; inner-misc indices = min-val).
-                auto bgp = make_inner_loop_base_point(gp);
-
-                // Get temp var for ptr.
-                string ptr_name = make_var_name(vname + "_inner_loop_ptr");
-
-                // Save for future use.
-                _inner_loop_base_ptrs[*bgp] = ptr_name;
-
-                // Print pointer creation.
                 const auto* vbp = lookup_var_base_ptr(gp);
-                assert(vbp);
-                auto ofs_expr = get_var_base_ptr_offset(os, *bgp);
-                os << "\n // Pointer to " << bgp->make_str() << " with any " <<
-                    _dims._inner_layout_dim << " offset\n";
-                os << _line_prefix << _var_ptr_type << " " << ptr_name << " = " <<
-                    *vbp << " + " << ofs_expr << _line_suffix;
+                if (vbp) {
+
+                    // Make base point (no inner-layout offset; inner-misc indices = min-val).
+                    auto bgp = make_inner_loop_base_point(gp);
+                    
+                    // Get temp var for ptr.
+                    string ptr_name = make_var_name(vname + "_inner_loop_ptr");
+                    
+                    // Save for future use.
+                    _inner_loop_base_ptrs[*bgp] = ptr_name;
+                    
+                    // Print pointer creation.
+                    auto ofs_expr = get_var_base_ptr_offset(os, *bgp);
+                    os << "\n // Pointer to " << bgp->make_str() << " with any " <<
+                        _dims._inner_layout_dim << " offset\n";
+                    os << _line_prefix << _var_ptr_type << " " << ptr_name << " = " <<
+                        *vbp << " + " << ofs_expr << _line_suffix;
+                }
             }
         }
     }
@@ -982,7 +983,7 @@ namespace yask {
         }
 
         else
-            return make_point_call_vec(os, gp, "read_elem", "", "", false, var_map);
+            return make_point_call_vec(os, gp, "read_elem_local", "", "", false, var_map);
     }
 
     // Read from multiple points that are not vectorized.
