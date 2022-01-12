@@ -30,18 +30,20 @@
 # Initial defaults.
 # These can be overridden on the 'make' command-line.
 stencil			?=	iso3dfd
+omp			?=	1
 mpi			?=	1
+offload			?=	0
+offload_arch		?=	spir64
 numa			?=	1
 pmem			?=	0
+
 real_bytes		?=	4
 allow_new_var_types	?=	1
 streaming_stores	?=	0
 use_ptrs		?=	1
 reloc_step		?=	0
 interleave_misc		?=	0
-omp			?=	1
-offload			?=	0
-offload_arch		?=	spir64
+early_loads		?=	0
 
 trace			?=	0
 trace_mem		?=	0
@@ -89,6 +91,7 @@ ifeq ($(offload),1)
  pfd_l2		:=	0
  inner_loop_dim :=	1
  reloc_step	:=	1
+ early_loads	:=	1
 endif
 
 # Main vars for naming the libraries and executables and running
@@ -97,7 +100,7 @@ endif
 # - YK_STENCIL and/or YK_ARCH to name libraries and executables differently.
 # - YC_STENCIL to override stencil name passed to YASK compiler.
 # - YC_TARGET to override target passed to YASK compiler.
-YK_STENCIL	?=	$(stencil)
+YK_STENCIL	?=	$(stencil)$(YK_STENCIL_SUFFIX)
 YC_STENCIL	?=	$(stencil)
 ifeq ($(offload),1)
   YK_ARCH	:=	$(arch).offload-$(offload_arch)
@@ -165,6 +168,8 @@ include $(YASK_BASE)/src/common/common.mk
 
 # Flags passed to stencil compiler.
 YC_FLAGS	:=	-stencil $(YC_STENCIL) -target $(YC_TARGET) -elem-bytes $(real_bytes)
+
+# Stencil compiler flags that take an argument.
 ifneq ($(fold),)
  YC_FLAGS	+=	-fold $(fold)
 endif
@@ -202,6 +207,7 @@ ifneq ($(min_buffer_len),)
  YC_FLAGS	+=	-min-buffer-len $(min_buffer_len)
 endif
 
+# Stencil compiler flags that are boolean.
 ifeq ($(use_ptrs),1)
  YC_FLAGS	+=	-use-ptrs
 else
@@ -216,6 +222,11 @@ ifeq ($(interleave_misc),1)
  YC_FLAGS	+=	-interleave-misc
 else
  YC_FLAGS	+=	-no-interleave-misc
+endif
+ifeq ($(early_loads),1)
+ YC_FLAGS	+=	-early-loads
+else
+ YC_FLAGS	+=	-no-early-loads
 endif
 
 # Kernel base names.
@@ -996,7 +1007,7 @@ cxx-yc-api-test:
 	$(call MK_DIR,$(YK_GEN_DIR))
 	mv $(YC_SRC_DIR)/yc-api-test-cxx.hpp $(YK_CODE_FILE)
 
-# Validation runs for each binary.
+##### Validation runs for each binary.
 DEF_TEST_ARGS := -log_dir $(TEST_LOG_OUT_DIR) \
 	-ranks $(ranks) -stencil $(YK_STENCIL) -arch $(YK_ARCH) -v \
 	-trial_steps 2 -max_threads $(max_threads) -inner_threads $(inner_threads) \
@@ -1032,6 +1043,7 @@ yk-mpi-tests:
 
 # Run the default YASK compiler and kernel.
 # First run on 1 rank, then multiple ranks if ranks>1.
+# This is the primary target for building and running stencil tests.
 yc-and-yk-test: $(YK_EXEC) $(YK_SCRIPT)
 	$(MAKE) ranks=1 yk-tests
 	if (( $(ranks) > 1 )); then $(MAKE) yk-tests yk-mpi-tests; fi
