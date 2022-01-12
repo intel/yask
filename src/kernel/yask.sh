@@ -301,7 +301,7 @@ exe_host=${host:-`hostname`}
 dump="head -v -n -0"
 
 # Init log file.
-: ${logfile:=yask.$stencil.$arch.$exe_host.`date +%Y-%m-%d_%H-%M`_p$$.log}
+: ${logfile:=yask.$stencil.$arch.$exe_host.`date +%Y-%m-%d_%H-%M-%S`_p$$.log}
 if [[ -n "$logdir" ]]; then
     logfile="$logdir/$logfile"
 fi
