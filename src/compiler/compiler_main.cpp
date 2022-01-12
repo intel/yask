@@ -225,6 +225,11 @@ void usage(const string& cmd,
 void parse_opts(int argc, const char* argv[],
                CompilerSettings& settings)
 {
+    cout << "Invocation:";
+    for (int argi = 0; argi < argc; argi++)
+        cout << " " << argv[argi];
+    cout << endl;
+
     if (argc <= 1)
         usage(argv[0], settings);
 
