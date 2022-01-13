@@ -129,6 +129,10 @@ namespace yask {
         _dims = dims;
     }
 
+    // Simple accessors.
+    CompilerSettings& Var::get_settings() { return _soln->get_settings(); }
+    const Dimensions& Var::get_soln_dims() { return _soln->get_dims(); }
+
     // Determine whether var can be folded.
     void Var::set_dim_counts(const Dimensions& dims) {
 
@@ -311,36 +315,31 @@ namespace yask {
     }
 
     // Determine how many values in step-dim are needed.
-    int Var::get_step_dim_size() const
+    Var::StepDimInfo Var::get_step_dim_info() const
     {
-        // Specified by API.
-        if (_step_alloc > 0)
-            return _step_alloc;
-
+        StepDimInfo sdi;
+        
         // No step-dim index used.
         auto step_dim = get_step_dim();
         if (!step_dim)
-            return 1;
+            return sdi;
 
-        // Specified on cmd line.
-        if (_soln->get_settings()._step_alloc > 0)
-            return _soln->get_settings()._step_alloc;
-        
         // No info stored?
         if (_halos.size() == 0)
-            return 1;
+            return sdi;
 
         // Need the max across all stages.
         int max_sz = 1;
 
-        // Loop thru each stage w/halos.
+        // Loop thru each stage w/halos, including halos w/size zero.
         for (auto& hi : _halos) {
-#ifdef DEBUG_HALOS
-            auto& pname = hi.first;
-#endif
+            auto& stage_name = hi.first;
             auto& h2 = hi.second;
 
-            // First and last step-dim found.
+            // Written?
+            bool is_written = _write_stages.count(stage_name) > 0;
+
+            // First (lowest) and last (highest) step-dim offset.
             const int unset = -9999;
             int first_ofs = unset, last_ofs = unset;
 
@@ -358,7 +357,7 @@ namespace yask {
                     if (halo.size()) {
 #ifdef DEBUG_HALOS
                         cout << "** var " << _name << " has halo " << halo.make_dim_val_str() <<
-                            " at ofs " << ofs << " in stage " << pname << endl;
+                            " at ofs " << ofs << " in stage " << stage_name << endl;
 #endif
 
                         // Update vars.
@@ -380,26 +379,32 @@ namespace yask {
             if (last_ofs != unset && first_ofs != unset && last_ofs != first_ofs) {
 
                 // Default step-dim size is range of step offsets.
-                // For example, if equation touches 't' through 't+2',
-                // 'sz' is 3.
+                // For example, if equation touches 't-1' through 't+2',
+                // 'sz' is 4.
                 int sz = last_ofs - first_ofs + 1;
 
-                // First and last largest halos.
-                int first_max_halo = 0, last_max_halo = 0;
-                for (auto& i : h2) {
-                    //auto left = i.first;
-                    auto& h3 = i.second; // map of step-dims to halos.
+                // Check for possible writeback.
+                if (is_written) {
 
-                    if (h3.count(first_ofs) && h3.at(first_ofs).size())
-                        first_max_halo = max(first_max_halo, h3.at(first_ofs).max());
-                    if (h3.count(last_ofs) && h3.at(last_ofs).size())
-                        last_max_halo = max(last_max_halo, h3.at(last_ofs).max());
+                    // First and last largest halos.
+                    int first_max_halo = 0, last_max_halo = 0;
+                    for (auto& i : h2) {
+                        //auto left = i.first;
+                        auto& h3 = i.second; // map of step-dims to halos.
+                        
+                        if (h3.count(first_ofs) && h3.at(first_ofs).size())
+                            first_max_halo = max(first_max_halo, h3.at(first_ofs).max());
+                        if (h3.count(last_ofs) && h3.at(last_ofs).size())
+                            last_max_halo = max(last_max_halo, h3.at(last_ofs).max());
+                    }
+
+                    // If first and last halos are zero, we can further optimize storage by
+                    // immediately reusing memory location.
+                    if (sz > 1 && first_max_halo == 0 && last_max_halo == 0) {
+                        sz--;
+                        sdi.writeback_stages.insert(stage_name);
+                    }
                 }
-
-                // If first and last halos are zero, we can further optimize storage by
-                // immediately reusing memory location.
-                if (sz > 1 && first_max_halo == 0 && last_max_halo == 0)
-                    sz--;
 
                 // Keep max so far.
                 max_sz = max(max_sz, sz);
@@ -407,7 +412,16 @@ namespace yask {
 
         } // stages.
 
-        return max_sz;
+        // Override by API.
+        if (_step_alloc > 0)
+            sdi.step_dim_size = _step_alloc;
+
+        // Specified on cmd line.
+        if (_soln->get_settings()._step_alloc > 0)
+            sdi.step_dim_size = _soln->get_settings()._step_alloc;
+
+        sdi.step_dim_size = max_sz;
+        return sdi;
     }
 
     // Description of this var.

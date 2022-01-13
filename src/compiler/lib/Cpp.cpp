@@ -1213,6 +1213,7 @@ namespace yask {
     }
 
     // Print loop-invariant data values for each VarPoint.
+    // TODO: fix warning from loading invariant real_vec_t outside of OMP device region.
     string CppPreLoopPrintDataVisitor::visit(VarPoint* gp) {
         assert(gp);
 

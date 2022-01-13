@@ -41,6 +41,7 @@ void CppIntrinPrintHelper::try_align(ostream& os,
     // Find case(s) that can use valignd.
     // Try all possible combinations of 2 aligned vectors, including
     // each vector paired w/itself.
+    // TODO: develop a more targeted algorithm instead of using a blind search.
     for (auto mi = aligned_vecs.begin(); mi != aligned_vecs.end(); mi++) {
         auto& mv1 = *mi;
         for (auto mj = aligned_vecs.begin(); mj != aligned_vecs.end(); mj++) {
@@ -190,6 +191,7 @@ void CppIntrinPrintHelper::try_perm1(ostream& os,
     size_t nelems = elems.size();
 
     // Try a permute of each aligned vector.
+    // TODO: develop a more targeted algorithm instead of using a blind search.
     for (auto mi = aligned_vecs.begin(); mi != aligned_vecs.end(); mi++) {
         auto mv = *mi;
 
@@ -291,6 +293,7 @@ void CppIntrinPrintHelper::try_perm2(ostream& os,
     // Find case(s) that can use perm2.  Try all possible combinations
     // of 2 aligned vectors, but NOT including each vector paired
     // w/itself. (For that, we can use perm1.)
+    // TODO: develop a more targeted algorithm instead of using a blind search.
     for (auto mi = aligned_vecs.begin(); mi != aligned_vecs.end(); mi++) {
         auto& mv1 = *mi;
         for (auto mj = aligned_vecs.begin(); mj != aligned_vecs.end(); mj++) {

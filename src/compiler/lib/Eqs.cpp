@@ -1114,19 +1114,24 @@ namespace yask {
 #endif
         
         // First, set halos based only on immediate accesses.
-        for (auto& bp : get_all()) {
-            auto pname = bp->_get_name();
-            
-            for (auto& eq : bp->get_eqs()) {
+        // Loop thru stages.
+        for (auto& sp : get_all()) {
+            auto stage_name = sp->_get_name();
+
+            // Loop thru equations in this stage.
+            for (auto& eq : sp->get_eqs()) {
 
                 // Get all var points touched by this eq.
                 auto& all_pts1 = pv.get_all_pts().at(eq.get());
+                auto& out_pt1 = pv.get_output_pts().at(eq.get());
 
                 // Update stats of each var accessed in 'eq'.
                 for (auto ap : all_pts1) {
                     auto* g = ap->_get_var(); // var for point 'ap'.
-                    g->update_halo(pname, ap->get_arg_offsets());
+                    g->update_halo(stage_name, ap->get_arg_offsets());
                 }
+                auto* g = out_pt1->_get_var();
+                g->update_write_stages(stage_name);
             }
         }
 

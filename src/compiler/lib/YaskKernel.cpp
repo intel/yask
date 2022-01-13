@@ -72,7 +72,7 @@ namespace yask {
     // Print YASK code in new stencil context class.
     void YASKCppPrinter::print(ostream& os) {
 
-        string sname = _stencil._get_name();
+        string sname = _stencil.get_long_name();
         os << "// Automatically-generated code; do not edit.\n"
             "\n////// YASK implementation of the '" << sname <<
             "' stencil //////\n";
@@ -832,8 +832,18 @@ namespace yask {
                     string ovar = var + "_ofs_" + dname;
                     int aval = 1;
                     int oval = 0;
+                    string comment;
                     if (dtype == STEP_INDEX) {
-                        aval = gp->get_step_dim_size();
+                        auto sdi = gp->get_step_dim_info();
+                        aval = sdi.step_dim_size;
+                        auto& wb_stages = sdi.writeback_stages;
+                        for (auto& ws : gp->get_write_stages()) {
+                            comment += " Written in stage '" + ws +
+                                "' with writeback (immediate replacement)";
+                            if (!wb_stages.count(ws))
+                                comment += " NOT";
+                            comment += " allowed.";
+                        }
                         init_code += " " + base_ptr + "->_set_dynamic_step_alloc(" +
                             (gp->is_dynamic_step_alloc() ? "true" : "false") +
                             ");\n";
@@ -846,7 +856,8 @@ namespace yask {
                         }
                     }
                     os << " const idx_t " << avar << " = " << aval <<
-                        "; // default allocation in '" << dname << "' dimension.\n";
+                        "; // Default allocation in '" << dname << "' dimension." <<
+                        comment << "\n";
                     init_code += " " + var_ptr + "->_set_alloc_size(\"" + dname +
                         "\", " + avar + ");\n";
                     if (oval) {

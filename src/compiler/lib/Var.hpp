@@ -36,6 +36,7 @@ namespace yask {
 
     // Fwd decl.
     struct Dimensions;
+    class CompilerSettings;
 
     // A class for a Var.
     // This is a generic container for all variables to be accessed
@@ -77,6 +78,9 @@ namespace yask {
         // int key: step-dim offset or 0 if no step-dim.
         map<string, map<bool, map<int, IntTuple>>> _halos;
 
+        // Set of stages in which var is written.
+        set<string> _write_stages;
+
         // Greatest L1 dist of any halo point that accesses this var.
         int _l1_dist = 0;
 
@@ -104,7 +108,7 @@ namespace yask {
         void set_name(const string& name) { _name = name; }
         string get_descr() const;
 
-        // Access dims.
+        // Access dims for this var (not for soln).
         virtual const index_expr_ptr_vec& get_dims() const { return _dims; }
         IntTuple get_dims_tuple() const {
             IntTuple gdims;
@@ -133,6 +137,8 @@ namespace yask {
         // Access to solution.
         virtual StencilSolution* _get_soln() { return _soln; }
         virtual void set_soln(StencilSolution* soln) { _soln = soln; }
+        virtual CompilerSettings& get_settings();
+        virtual const Dimensions& get_soln_dims();
 
         // Get dim-type counts.
         virtual int get_num_step_dims() const {
@@ -213,7 +219,11 @@ namespace yask {
         }
 
         // Determine how many values in step-dim are needed.
-        virtual int get_step_dim_size() const;
+        struct StepDimInfo {
+            int step_dim_size = 1;
+            set<string> writeback_stages;
+        };
+        virtual StepDimInfo get_step_dim_info() const;
 
         // Determine dim-type counts and whether var can be folded.
         virtual void set_dim_counts(const Dimensions& dims);
@@ -226,6 +236,14 @@ namespace yask {
 
         // Update halos and L1 dist based on each value in 'offsets'.
         virtual void update_halo(const string& stage_name, const IntTuple& offsets);
+
+        // Stage(s) with write.
+        virtual const set<string>& get_write_stages() {
+            return _write_stages;
+        }
+        virtual void update_write_stages(const string& stage_name) {
+            _write_stages.insert(stage_name);
+        }
 
         // Update L1 dist.
         virtual void update_l1_dist(int l1_dist) {
@@ -260,7 +278,8 @@ namespace yask {
         }
         virtual idx_t
         get_step_alloc_size() const {
-            return get_step_dim_size();
+            auto sdi = get_step_dim_info();
+            return sdi.step_dim_size;
         }
         virtual void
         set_step_alloc_size(idx_t size) {
