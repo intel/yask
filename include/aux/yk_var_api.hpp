@@ -144,7 +144,7 @@ namespace yask {
          <td colspan="4"><center>overall problem domain</center>
          <td colspan="2"><center>right padding of rank Z</center>
        </table>
-       The intermediate halos and paddings also exist, but are not shown in the above diagram.
+       Halos and paddings between ranks also exist, but are not shown in the above diagram.
        The halos overlap the domains of adjacent ranks.
        For example, the left halo of rank B in the diagram would overlap the domain of rank A.
        Data in these overlapped areas are exchanged as needed during stencil application
@@ -709,7 +709,7 @@ namespace yask {
                                  one for each var dimension. */ ) =0;
 #endif
         
-        /// Format the indices for pretty-printing.
+        /// Format the indices for human-readable display.
         /**
            Provide indices in a list in the same order returned by get_dim_names().
            @returns A string containing the var name and the index values.
@@ -719,7 +719,7 @@ namespace yask {
                        /**< [in] List of indices, one for each var dimension. */ ) const =0;
 
 #ifndef SWIG
-        /// Format the indices for pretty-printing.
+        /// Format the indices for human-readable display.
         /**
            See format_indices().
            @returns A string containing the var name and the index values.
@@ -1070,7 +1070,7 @@ namespace yask {
            all elements of a var via its raw buffer, e.g., add some constant
            value to all elements.
            - If the layouts of two vars are identical, you can use their
-           raw buffers to copy or compare the var contents for equality or
+           raw buffers to copy all data from one to the other or
            perform element-wise binary mathematical operations on them,
            e.g., add all elements from one var to another.
 
@@ -1079,6 +1079,7 @@ namespace yask {
            index and that element's offset from the beginning of the buffer
            such as row-major or column-major layout.
            - All elements in the buffer are part of the rank domain or halo.
+           - All elements in the buffer contain valid floating-point values.
 
            Thus,
            - You should not perform any operations dependent on
@@ -1090,27 +1091,7 @@ namespace yask {
         */
         virtual void* get_raw_storage_buffer() =0;
 
-        /* Deprecated APIs for yk_var found below should be avoided.
-           Use the more explicit form found in the documentation. */
-
-        /// **[Deprecated]** Use get_left_halo_size() and get_right_halo_size().
-        YASK_DEPRECATED
-        inline idx_t
-        get_halo_size(const std::string& dim) const {
-            return get_left_halo_size(dim);
-        }
-        /// **[Deprecated]** Use get_left_pad_size() and get_right_pad_size().
-        YASK_DEPRECATED
-        inline idx_t
-        get_pad_size(const std::string& dim) const {
-            return get_left_pad_size(dim);
-        }
-        /// **[Deprecated]** Use get_left_extra_pad_size() and get_right_extra_pad_size().
-        YASK_DEPRECATED
-        inline idx_t
-        get_extra_pad_size(const std::string& dim) const {
-            return get_left_extra_pad_size(dim);
-        }
+        /* Deprecated APIs for yk_var found below should be avoided. */
 
         /// **[Deprecated]** Use are_indices_local().
         YASK_DEPRECATED

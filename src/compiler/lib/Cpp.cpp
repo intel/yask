@@ -476,7 +476,7 @@ namespace yask {
                 // The num of vecs stepped in the inner loop is subtracted
                 // because we don't need to put the vecs read in the current
                 // loop iteration in the buffer (until it's shifted at the
-                // end of the loop.)  But the length may then be increased
+                // end of the loop.)  Then, the length may then be increased
                 // if reading ahead unless we're also writing back, in which
                 // case read-ahead can't be used.
                 auto len = _pt_inner_loop_hi.at(*key) -
@@ -486,14 +486,15 @@ namespace yask {
                 cout << "*** Buffer for " << key->make_str() << " has length " << len << endl;
                 #endif
                 if (!is_write) {
-                    auto ral = _inner_loop_vec_step * _settings._read_ahead_dist;
+                    auto rad = _settings._read_ahead_dist;
+                    auto ral = _inner_loop_vec_step * rad;
                     #if DEBUG_BUFFERS
-                    cout << " *** Adding " << ral << " to buffer for read-ahead\n";
+                    cout << " *** Adding " << ral << " vecs to buffer for read-ahead\n";
                     #endif
                     len += ral;
 
                     // Increase var allocation for read-ahead.
-                    var.update_read_ahead_pad(ral);
+                    var.update_read_ahead_pad(_inner_loop_elem_step * rad);
                 }
                 if (len > _settings._min_buffer_len)
                     _pt_buf_len[*key] = len;

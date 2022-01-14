@@ -239,28 +239,18 @@ namespace yask {
             // Adjust padding only for domain dims.
             if (_corep->_domain_dim_mask & mbit) {
 
-                // Get max of existing pad & new required pad if allocated.
-                // This will avoid throwing an exception due to decreasing
-                // requested padding after allocation.
+                // Add more padding.
+                new_left_pads[i] += _corep->_req_left_epads[i];
+                new_right_pads[i] += _corep->_req_right_epads[i];
+                new_left_pads[i] = max(new_left_pads[i], _corep->_req_left_pads[i]);
+                new_right_pads[i] = max(new_right_pads[i], _corep->_req_right_pads[i]);
+
+                // If storage is allocated, get max of existing pad & new
+                // pad.  This will avoid throwing an exception due to
+                // decreasing requested padding after allocation.
                 if (p) {
                     new_left_pads[i] = max(new_left_pads[i], _corep->_actl_left_pads[i]);
                     new_right_pads[i] = max(new_right_pads[i], _corep->_actl_right_pads[i]);
-                }
-
-                // If storage not yet allocated, increase to requested pad.
-                // Final pad is max of requested pad and halo + requested extra pad.
-                // Requested padding is a hint, so ignoring it when allocated
-                // will avoid throwing an exception due to increasing
-                // requested padding after allocation.
-                if (!p) {
-                    new_left_pads[i] = max(new_left_pads[i],
-                                           _corep->_left_halos[i] + _corep->_req_left_epads[i]);
-                    new_right_pads[i] = max(new_right_pads[i],
-                                            _corep->_right_halos[i] + _corep->_req_right_epads[i]);
-                    new_left_pads[i] = max(new_left_pads[i],
-                                           _corep->_req_left_pads[i]);
-                    new_right_pads[i] = max(new_right_pads[i],
-                                            _corep->_req_right_pads[i]);
                 }
 
                 // Round left pad up to vec len.

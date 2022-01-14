@@ -187,10 +187,10 @@ Public Member Functions</h2></td></tr>
 <tr class="memdesc:a4b19f91ffed51602eb08f60f2ddb8e70"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set var elements within specified subset of the var from values in a buffer.  <a href="#a4b19f91ffed51602eb08f60f2ddb8e70">More...</a><br /></td></tr>
 <tr class="separator:a4b19f91ffed51602eb08f60f2ddb8e70"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a16aca4721fceade611c11d2d11472162"><td class="memItemLeft" align="right" valign="top">virtual std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a16aca4721fceade611c11d2d11472162">format_indices</a> (const std::vector&lt; <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> &gt; &amp;indices) const =0</td></tr>
-<tr class="memdesc:a16aca4721fceade611c11d2d11472162"><td class="mdescLeft">&#160;</td><td class="mdescRight">Format the indices for pretty-printing.  <a href="#a16aca4721fceade611c11d2d11472162">More...</a><br /></td></tr>
+<tr class="memdesc:a16aca4721fceade611c11d2d11472162"><td class="mdescLeft">&#160;</td><td class="mdescRight">Format the indices for human-readable display.  <a href="#a16aca4721fceade611c11d2d11472162">More...</a><br /></td></tr>
 <tr class="separator:a16aca4721fceade611c11d2d11472162"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a0b705bdba753e24e12de0297bb30e133"><td class="memItemLeft" align="right" valign="top">virtual std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a0b705bdba753e24e12de0297bb30e133">format_indices</a> (const std::initializer_list&lt; <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> &gt; &amp;indices) const =0</td></tr>
-<tr class="memdesc:a0b705bdba753e24e12de0297bb30e133"><td class="mdescLeft">&#160;</td><td class="mdescRight">Format the indices for pretty-printing.  <a href="#a0b705bdba753e24e12de0297bb30e133">More...</a><br /></td></tr>
+<tr class="memdesc:a0b705bdba753e24e12de0297bb30e133"><td class="mdescLeft">&#160;</td><td class="mdescRight">Format the indices for human-readable display.  <a href="#a0b705bdba753e24e12de0297bb30e133">More...</a><br /></td></tr>
 <tr class="separator:a0b705bdba753e24e12de0297bb30e133"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a2de3a290dae76a40b3c208074ebbdb89"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a2de3a290dae76a40b3c208074ebbdb89">get_halo_exchange_l1_norm</a> () const =0</td></tr>
 <tr class="memdesc:a2de3a290dae76a40b3c208074ebbdb89"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Get the maximum L1-norm of a neighbor rank for halo exchange.  <a href="#a2de3a290dae76a40b3c208074ebbdb89">More...</a><br /></td></tr>
@@ -261,18 +261,6 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a4a4e42c4cfc5b3b6a5d998611d0d8602"><td class="memItemLeft" align="right" valign="top">virtual void *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a4a4e42c4cfc5b3b6a5d998611d0d8602">get_raw_storage_buffer</a> ()=0</td></tr>
 <tr class="memdesc:a4a4e42c4cfc5b3b6a5d998611d0d8602"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Get pointer to raw data storage buffer.  <a href="#a4a4e42c4cfc5b3b6a5d998611d0d8602">More...</a><br /></td></tr>
 <tr class="separator:a4a4e42c4cfc5b3b6a5d998611d0d8602"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a1bfcc3e304d44a200612614784b02654"><td class="memItemLeft" align="right" valign="top"><a id="a1bfcc3e304d44a200612614784b02654"></a>
-<a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a1bfcc3e304d44a200612614784b02654">get_halo_size</a> (const std::string &amp;dim) const</td></tr>
-<tr class="memdesc:a1bfcc3e304d44a200612614784b02654"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yk__var.html#acd8e51e7ee79fcc55a622b3012da63bc" title="Get the left halo size in the specified dimension.">get_left_halo_size()</a> and <a class="el" href="classyask_1_1yk__var.html#aeb1b9954909e58d6f12c2c9d8296005e" title="Get the right halo size in the specified dimension.">get_right_halo_size()</a>. <br /></td></tr>
-<tr class="separator:a1bfcc3e304d44a200612614784b02654"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:acf189ae8522acf8ced07ec7ccaf42bc7"><td class="memItemLeft" align="right" valign="top"><a id="acf189ae8522acf8ced07ec7ccaf42bc7"></a>
-<a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#acf189ae8522acf8ced07ec7ccaf42bc7">get_pad_size</a> (const std::string &amp;dim) const</td></tr>
-<tr class="memdesc:acf189ae8522acf8ced07ec7ccaf42bc7"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yk__var.html#a2a6b515ee0073b8ff35fb8bee47de00e" title="Get the actual left padding in the specified dimension.">get_left_pad_size()</a> and <a class="el" href="classyask_1_1yk__var.html#a44d13a6f6925574545bd5594cecece43" title="Get the actual right padding in the specified dimension.">get_right_pad_size()</a>. <br /></td></tr>
-<tr class="separator:acf189ae8522acf8ced07ec7ccaf42bc7"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a65bb0baff24dfcb8b8629244568f7b15"><td class="memItemLeft" align="right" valign="top"><a id="a65bb0baff24dfcb8b8629244568f7b15"></a>
-<a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a65bb0baff24dfcb8b8629244568f7b15">get_extra_pad_size</a> (const std::string &amp;dim) const</td></tr>
-<tr class="memdesc:a65bb0baff24dfcb8b8629244568f7b15"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yk__var.html#ae62308be69ca643714879b0a1362de0e" title="Get the actual extra left padding in the specified dimension.">get_left_extra_pad_size()</a> and <a class="el" href="classyask_1_1yk__var.html#afe6845890c3f22bf4614f1f57f414501" title="Get the actual extra right padding in the specified dimension.">get_right_extra_pad_size()</a>. <br /></td></tr>
-<tr class="separator:a65bb0baff24dfcb8b8629244568f7b15"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a689f863c4e8ee037b09e1d1101c76862"><td class="memItemLeft" align="right" valign="top"><a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a689f863c4e8ee037b09e1d1101c76862">is_element_allocated</a> (const std::vector&lt; <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> &gt; &amp;indices) const</td></tr>
 <tr class="memdesc:a689f863c4e8ee037b09e1d1101c76862"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yk__var.html#a81a6970b7812b2c5c4bdb71cd6b1384d" title="Determine whether the given indices refer to an accessible element in this rank.">are_indices_local()</a>.  <a href="#a689f863c4e8ee037b09e1d1101c76862">More...</a><br /></td></tr>
 <tr class="separator:a689f863c4e8ee037b09e1d1101c76862"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -328,7 +316,7 @@ Domain Dimensions</h2>
 <tr>
 <td colspan="2"><center>left padding of rank A</center> </td><td colspan="4"><center>overall problem domain</center> </td><td colspan="2"><center>right padding of rank Z</center> </td></tr>
 </table>
-<p>The intermediate halos and paddings also exist, but are not shown in the above diagram. The halos overlap the domains of adjacent ranks. For example, the left halo of rank B in the diagram would overlap the domain of rank A. Data in these overlapped areas are exchanged as needed during stencil application to maintain a consistent values as if there was only one rank.</p>
+<p>Halos and paddings between ranks also exist, but are not shown in the above diagram. The halos overlap the domains of adjacent ranks. For example, the left halo of rank B in the diagram would overlap the domain of rank A. Data in these overlapped areas are exchanged as needed during stencil application to maintain a consistent values as if there was only one rank.</p>
 <h2><a class="anchor" id="autotoc_md3"></a>
 Miscellaneous Dimensions</h2>
 <p>In each miscellaneous dimension, there is no padding or halos. There is a fixed allocation size, and each index must be between its first and last valid value. The valid miscellaneous indices may be retrieved via <a class="el" href="classyask_1_1yk__var.html#a9faab903ed2467e46ed0b5ea43a9e1e4" title="Get the first index of a specified miscellaneous dimension.">yk_var::get_first_misc_index()</a> and <a class="el" href="classyask_1_1yk__var.html#ab551b0a8749c38e8307082631cf597fa" title="Get the last index of a specified miscellaneous dimension.">yk_var::get_last_misc_index()</a>.</p>
@@ -1689,7 +1677,7 @@ Data Storage</h2>
 </table>
 </div><div class="memdoc">
 
-<p>Format the indices for pretty-printing. </p>
+<p>Format the indices for human-readable display. </p>
 <p>Provide indices in a list in the same order returned by <a class="el" href="classyask_1_1yk__var.html#a9793866823ba93e4d2f284ffeeab92c8" title="Get all the dimensions in this var.">get_dim_names()</a>. </p><dl class="section return"><dt>Returns</dt><dd>A string containing the var name and the index values. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
@@ -1724,8 +1712,8 @@ Data Storage</h2>
 </table>
 </div><div class="memdoc">
 
-<p>Format the indices for pretty-printing. </p>
-<p>See <a class="el" href="classyask_1_1yk__var.html#a16aca4721fceade611c11d2d11472162" title="Format the indices for pretty-printing.">format_indices()</a>. </p><dl class="section return"><dt>Returns</dt><dd>A string containing the var name and the index values. </dd></dl>
+<p>Format the indices for human-readable display. </p>
+<p>See <a class="el" href="classyask_1_1yk__var.html#a16aca4721fceade611c11d2d11472162" title="Format the indices for human-readable display.">format_indices()</a>. </p><dl class="section return"><dt>Returns</dt><dd>A string containing the var name and the index values. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[in]</td><td class="paramname">indices</td><td>List of indices, one for each var dimension. </td></tr>
@@ -1761,7 +1749,7 @@ Data Storage</h2>
 <p><b>[Advanced]</b> Get the maximum L1-norm of a neighbor rank for halo exchange. </p>
 <p>This setting determines which MPI neighbors participate in a halo exchange. The L1-norm is also known as the "Manhattan distance" or "taxicab norm". In this case, the distance in <em>each</em> domain dimension can be only zero or one, so the sum can range from zero to the number of domain dimensions.</p>
 <p>Examples for a domain size with 2 spatial dimensions (e.g., "x" and "y"): L1-norm = 0: no halos are exchanged for this var. L1-norm = 1: halos are exchanged between "up", "down", "left" and "right" neighbors. L1-norm = 2: halos are exchanged as above plus diagonal neighbors.</p>
-<p>The actual exchanges are further controlled by the size of the halo in each direction per <a class="el" href="classyask_1_1yk__var.html#a1bfcc3e304d44a200612614784b02654" title="[Deprecated] Use get_left_halo_size() and get_right_halo_size().">get_halo_size()</a>.</p>
+<p>The actual exchanges are further controlled by the size of the halo in each direction per get_halo_size().</p>
 <dl class="section return"><dt>Returns</dt><dd>L1-norm, ranging from zero to number of domain dimensions. </dd></dl>
 
 </div>
@@ -2604,11 +2592,12 @@ Data Storage</h2>
 </ul>
 <p>Thus,</p><ul>
 <li>You can perform element-wise unary mathematical operations on all elements of a var via its raw buffer, e.g., add some constant value to all elements.</li>
-<li>If the layouts of two vars are identical, you can use their raw buffers to copy or compare the var contents for equality or perform element-wise binary mathematical operations on them, e.g., add all elements from one var to another.</li>
+<li>If the layouts of two vars are identical, you can use their raw buffers to copy all data from one to the other or perform element-wise binary mathematical operations on them, e.g., add all elements from one var to another.</li>
 </ul>
 <p>The following assumptions are not safe:</p><ul>
 <li>Any expectations regarding the relationship between an element index and that element's offset from the beginning of the buffer such as row-major or column-major layout.</li>
 <li>All elements in the buffer are part of the rank domain or halo.</li>
+<li>All elements in the buffer contain valid floating-point values.</li>
 </ul>
 <p>Thus,</p><ul>
 <li>You should not perform any operations dependent on the logical indices of any element via raw buffer, e.g., matrix multiply.</li>
