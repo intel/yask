@@ -308,12 +308,14 @@ namespace yask {
         _add_domain_option(parser, "mb_tile", "[Advanced] Micro-block-tile size", _micro_block_tile_sizes);
         _add_domain_option(parser, "nb_tile", "[Advanced] Nano-block-tile size", _nano_block_tile_sizes);
         #endif
-        _add_domain_option(parser, "mp", "[Advanced] Minimum var-padding size (including halo)", _min_pad_sizes);
-        _add_domain_option(parser, "ep", "[Advanced] Extra var-padding size (beyond halo)", _extra_pad_sizes);
+        _add_domain_option(parser, "mp", "[Advanced] Minimum padding size (including halo)"
+                           " applied to all YASK vars", _min_pad_sizes);
+        _add_domain_option(parser, "ep", "[Advanced] Extra padding size (beyond halo)"
+                           " applied to all YASK vars", _extra_pad_sizes);
         parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("allow_addl_padding",
-                           "[Advanced] Allow automatic extension of padding beyond what is needed for"
-                           " vector alignment for additional performance reasons",
+                           "[Advanced] Allow automatic extension of padding for"
+                           " additional performance on any or all YASK vars",
                            _allow_addl_pad));
         #ifdef USE_MPI
         _add_domain_option(parser, "nr", "Num ranks", _num_ranks);

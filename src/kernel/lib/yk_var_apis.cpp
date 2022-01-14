@@ -118,20 +118,61 @@ namespace yask {
     SET_VAR_API(_set_alloc_size, corep()->_domains[posn] = n, true, true, true, true)
 
     // These are the safer ones used in the APIs.
-    SET_VAR_API(set_left_halo_size, corep()->_left_halos[posn] = n, true, false, true, false)
-    SET_VAR_API(set_right_halo_size, corep()->_right_halos[posn] = n, true, false, true, false)
-    SET_VAR_API(set_halo_size, corep()->_left_halos[posn] = corep()->_right_halos[posn] = n, true, false, true, false)
-    SET_VAR_API(set_alloc_size, corep()->_domains[posn] = n, true,
-                gb()._is_dynamic_step_alloc, gb()._fixed_size, gb()._is_dynamic_misc_alloc)
-    SET_VAR_API(set_left_min_pad_size, corep()->_req_left_pads[posn] = n, true, false, true, false)
-    SET_VAR_API(set_right_min_pad_size, corep()->_req_right_pads[posn] = n, true, false, true, false)
-    SET_VAR_API(set_min_pad_size, corep()->_req_left_pads[posn] = corep()->_req_right_pads[posn] = n, true,
-                false, true, false)
-    SET_VAR_API(set_left_extra_pad_size, corep()->_req_left_epads[posn] = n, true, false, true, false)
-    SET_VAR_API(set_right_extra_pad_size, corep()->_req_right_epads[posn] = n, true, false, true, false)
-    SET_VAR_API(set_extra_pad_size, corep()->_req_left_epads[posn] = corep()->_req_right_epads[posn] = n, true,
-                false, true, false)
-    SET_VAR_API(set_first_misc_index, corep()->_local_offsets[posn] = n, false, false, false, gb()._is_user_var)
+    SET_VAR_API(set_left_halo_size,
+                corep()->_left_halos[posn] = n,
+                true, false, true, false)
+    SET_VAR_API(set_right_halo_size,
+                corep()->_right_halos[posn] = n,
+                true, false, true, false)
+    SET_VAR_API(set_halo_size,
+                corep()->_left_halos[posn] = corep()->_right_halos[posn] = n,
+                true, false, true, false)
+    SET_VAR_API(set_alloc_size,
+                corep()->_domains[posn] = n,
+                true, gb()._is_dynamic_step_alloc, gb()._fixed_size, gb()._is_dynamic_misc_alloc)
+    SET_VAR_API(set_left_min_pad_size,
+                corep()->_req_left_pads[posn] = n,
+                true, false, true, false)
+    SET_VAR_API(set_right_min_pad_size,
+                corep()->_req_right_pads[posn] = n,
+                true, false, true, false)
+    SET_VAR_API(set_min_pad_size,
+                corep()->_req_left_pads[posn] = n;
+                corep()->_req_right_pads[posn] = n,
+                true, false, true, false)
+    SET_VAR_API(update_left_min_pad_size,
+                corep()->_req_left_pads[posn] = max(n, corep()->_req_left_pads[posn]),
+                true, false, true, false)
+    SET_VAR_API(update_right_min_pad_size,
+                corep()->_req_right_pads[posn] = max(n, corep()->_req_right_pads[posn]),
+                true, false, true, false)
+    SET_VAR_API(update_min_pad_size,
+                corep()->_req_left_pads[posn] = max(n, corep()->_req_left_pads[posn]);
+                corep()->_req_right_pads[posn] = max(n, corep()->_req_right_pads[posn]),
+                true, false, true, false)
+    SET_VAR_API(set_left_extra_pad_size,
+                corep()->_req_left_epads[posn] = n,
+                true, false, true, false)
+    SET_VAR_API(set_right_extra_pad_size,
+                corep()->_req_right_epads[posn] = n,
+                true, false, true, false)
+    SET_VAR_API(set_extra_pad_size,
+                corep()->_req_left_epads[posn] = n;
+                corep()->_req_right_epads[posn] = n,
+                true, false, true, false)
+    SET_VAR_API(update_left_extra_pad_size,
+                corep()->_req_left_epads[posn] = max(n, corep()->_req_left_epads[posn]),
+                true, false, true, false)
+    SET_VAR_API(update_right_extra_pad_size,
+                corep()->_req_right_epads[posn] = max (n, corep()->_req_right_epads[posn]),
+                true, false, true, false)
+    SET_VAR_API(update_extra_pad_size,
+                corep()->_req_left_epads[posn] = max(n, corep()->_req_left_epads[posn]);
+                corep()->_req_right_epads[posn] = max (n, corep()->_req_right_epads[posn]),
+                true, false, true, false)
+    SET_VAR_API(set_first_misc_index,
+                corep()->_local_offsets[posn] = n,
+                false, false, false, gb()._is_user_var)
     #undef SET_VAR_API
 
     bool YkVarImpl::is_storage_layout_identical(const YkVarImpl* op,

@@ -410,16 +410,41 @@ namespace yask {
             return;
         
         const string& ildim = _settings._inner_loop_dim;
+        const string& sdim = _dims._step_dim;
         
         // Loop through all aligned read points.
         for (auto& gp : _vv._aligned_vecs) {
+            Var* vp = const_cast<Var*>(gp._get_var()); // Need to modify var.
+            assert(vp);
+            auto& var = *vp;
+            const auto& vname = var.get_name();
 
             // Ignore if there's not an associated inner-loop base ptr.
             if (!lookup_inner_loop_base_ptr(gp))
                 continue;
-            
-            // Get const domain offsets for this point.
+
+            // Get const offsets for this point.
             auto& offsets = gp.get_arg_offsets();
+
+            // Get offset in step dim, if any.
+            auto* sofs = offsets.lookup(sdim);
+
+            // Is there also a write to this var that might overwrite
+            // a read at this step-dim offset?
+            // This would be true only with immediate replacement (writeback)
+            // optimization.
+            bool is_write = false;
+            if (sofs) {
+
+                auto sdi = var.get_step_dim_info();
+                if (sdi.writeback_ofs.count(_stage_name) &&
+                    sdi.writeback_ofs.at(_stage_name) == *sofs) {
+                    is_write = true;
+                    #if DEBUG_BUFFERS
+                    cout << "** Found writeback to " << vname << " over ofs " << *sofs << endl;
+                    #endif
+                }
+            }
 
             // Get offset in inner-loop dim.
             // E.g., A(t, x+1, y+4, z-2) => 4 if ildim = 'y'.
@@ -447,13 +472,29 @@ namespace yask {
                     _pt_inner_loop_hi[*key] = vofs;
 
                 // Need a buffer? (This will change as new points are
-                // discovered.)  Length will cover range of vecs needed
-                // minus num of vecs read in each iteration.  The num of
-                // vecs is subtracted because we don't need to put the vecs
-                // read in the current loop iteration in the buffer (until
-                // it's shifted at the end of the loop.)
+                // discovered.)  Length will cover range of vecs needed.
+                // The num of vecs stepped in the inner loop is subtracted
+                // because we don't need to put the vecs read in the current
+                // loop iteration in the buffer (until it's shifted at the
+                // end of the loop.)  But the length may then be increased
+                // if reading ahead unless we're also writing back, in which
+                // case read-ahead can't be used.
                 auto len = _pt_inner_loop_hi.at(*key) -
-                    _pt_inner_loop_lo.at(*key) + 1 - _inner_loop_vec_step;
+                    _pt_inner_loop_lo.at(*key) + 1;
+                len -= _inner_loop_vec_step;
+                #if DEBUG_BUFFERS
+                cout << "*** Buffer for " << key->make_str() << " has length " << len << endl;
+                #endif
+                if (!is_write) {
+                    auto ral = _inner_loop_vec_step * _settings._read_ahead_dist;
+                    #if DEBUG_BUFFERS
+                    cout << " *** Adding " << ral << " to buffer for read-ahead\n";
+                    #endif
+                    len += ral;
+
+                    // Increase var allocation for read-ahead.
+                    var.update_read_ahead_pad(ral);
+                }
                 if (len > _settings._min_buffer_len)
                     _pt_buf_len[*key] = len;
             }
@@ -481,6 +522,7 @@ namespace yask {
         const string& ildim = _settings._inner_loop_dim;
         
         // Loop through all aligned read points.
+        // TODO: can we just loop thru _inner_loop_key?
         for (auto& gp : _vv._aligned_vecs) {
             if (_inner_loop_key.count(gp) == 0)
                 continue;
@@ -504,6 +546,8 @@ namespace yask {
 
             int start_ofs, stop_ofs, start_load;
             string bname;
+
+            // Before end of loop.
             if (in_loop) {
                 os << "\n // Update buffer for " << key->make_str() << endl;
                 os << _line_prefix << "{\n";
@@ -517,6 +561,7 @@ namespace yask {
                 start_load = max(len - _inner_loop_vec_step, 0);
             }
 
+            // Before start of loop.
             else {
                 bname = make_var_name(vname + "_buf");
                 os << "\n // Buffer for " << key->make_str() << " with " << ildim << " vector ";

@@ -90,8 +90,8 @@ namespace yask {
         // Comments show settings for domain dims | non-domain dims.
         Indices _domains;   // size of "interior" of var (i.e., not pads) | alloc size.
         Indices _req_left_epads, _req_right_epads; // requested extra space around halos | zero.
-        Indices _req_left_pads, _req_right_pads; // requested extra space around domains | zero.
-        Indices _actl_left_pads, _actl_right_pads; // actual extra space around domains | zero.
+        Indices _req_left_pads, _req_right_pads; // requested space around domains | zero.
+        Indices _actl_left_pads, _actl_right_pads; // actual space around domains | zero.
         Indices _left_halos, _right_halos; // space within pads for halo exchange | zero.
         Indices _left_wf_exts, _right_wf_exts; // additional halos for wave-fronts | zero.
         Indices _rank_offsets;   // offsets of this var domain in overall problem | zero.
@@ -1801,9 +1801,15 @@ namespace yask {
         SET_VAR_API(set_left_min_pad_size)
         SET_VAR_API(set_right_min_pad_size)
         SET_VAR_API(set_min_pad_size)
+        SET_VAR_API(update_left_min_pad_size)
+        SET_VAR_API(update_right_min_pad_size)
+        SET_VAR_API(update_min_pad_size)
         SET_VAR_API(set_left_extra_pad_size)
         SET_VAR_API(set_right_extra_pad_size)
         SET_VAR_API(set_extra_pad_size)
+        SET_VAR_API(update_left_extra_pad_size)
+        SET_VAR_API(update_right_extra_pad_size)
+        SET_VAR_API(update_extra_pad_size)
         SET_VAR_API(set_alloc_size)
         SET_VAR_API(set_first_misc_index)
 

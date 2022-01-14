@@ -41,9 +41,12 @@ real_bytes		?=	4
 allow_new_var_types	?=	1
 streaming_stores	?=	0
 use_ptrs		?=	1
+use_safe_ptrs		?=	0
 reloc_step		?=	0
 interleave_misc		?=	0
 early_loads		?=	0
+min_buffer_len		?=	0
+read_ahead_dist		?=	0
 
 trace			?=	0
 trace_mem		?=	0
@@ -206,12 +209,20 @@ endif
 ifneq ($(min_buffer_len),)
  YC_FLAGS	+=	-min-buffer-len $(min_buffer_len)
 endif
+ifneq ($(read_ahead_dist),)
+ YC_FLAGS	+=	-read-ahead-dist $(read_ahead_dist)
+endif
 
 # Stencil compiler flags that are boolean.
 ifeq ($(use_ptrs),1)
  YC_FLAGS	+=	-use-ptrs
 else
  YC_FLAGS	+=	-no-use-ptrs
+endif
+ifeq ($(use_safe_ptrs),1)
+ YC_FLAGS	+=	-use-safe-ptrs
+else
+ YC_FLAGS	+=	-no-use-safe-ptrs
 endif
 ifeq ($(reloc_step),1)
  YC_FLAGS	+=	-reloc-step

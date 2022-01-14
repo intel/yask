@@ -137,6 +137,9 @@ void usage(const string& cmd,
         " -min-buffer-len <n>\n"
         "    Create buffers in the inner loop if at least <n> points could be stored in it\n"
         "      (default=" << settings._min_buffer_len << ").\n"
+        " -read-ahead-dist <n>\n"
+        "    Number of iterations to read ahead into the inner-loop buffers\n"
+        "      (default=" << settings._read_ahead_dist << ").\n"
         " [-no]-reloc-step\n"
         "    Set YASK var layout with the 'step' dim just after the first domain dim\n"
         "      instead of just before the first domain dim (default=" << settings._inner_step << ").\n"
@@ -203,9 +206,13 @@ void usage(const string& cmd,
         " -min-es <num-nodes>\n"
         "    Set heuristic for min expression-size for reuse (default=" << settings._min_expr_size << ").\n"
         " [-no]-use-ptrs\n"
-        "    Generate kernel code using pointers & strides (default=" << settings._use_ptrs << ").\n"
-        " [-no]-use-offsets\n"
-        "    Generate kernel code with offsets including padding (default=" << settings._use_offsets << ").\n"
+        "    Generate inner-loop kernel code using data pointers & strides, avoiding function calls\n"
+        "      (default=" << settings._use_ptrs << ").\n"
+        " [-no]-use-safe-ptrs\n"
+        "    Generate kernel code with pointer parameters to base addresses for each YASK var\n"
+        "      (default=" << settings._use_offsets << ").\n"
+        "      This is a workaround for offload-device drivers that don't allow negative indices from\n"
+        "      a pointer that is a kernel argument.\n"
         " [-no]-early-loads\n"
         "    Generate aligned loads before they are needed (default=" << settings._early_loads << ").\n"
         " [-no]-find-deps\n"
@@ -294,9 +301,9 @@ void parse_opts(int argc, const char* argv[],
                 settings._use_ptrs = true;
             else if (opt == "-no-use-ptrs")
                 settings._use_ptrs = false;
-            else if (opt == "-use-offsets")
+            else if (opt == "-use-safe-ptrs")
                 settings._use_offsets = true;
-            else if (opt == "-no-use-offsets")
+            else if (opt == "-no-use-safe-ptrs")
                 settings._use_offsets = false;
             else if (opt == "-early-loads")
                 settings._early_loads = true;
@@ -385,6 +392,8 @@ void parse_opts(int argc, const char* argv[],
                         settings._step_alloc = val;
                     else if (opt == "-min-buffer-len")
                         settings._min_buffer_len = val;
+                    else if (opt == "-read-ahead-dist")
+                        settings._read_ahead_dist = val;
 
                     // add any more options w/int values here.
 

@@ -442,311 +442,327 @@ namespace yask {
     // Print YASK equation bundles.
     void YASKCppPrinter::print_eq_bundles(ostream& os) {
 
-        for (int ei = 0; ei < _eq_bundles.get_num(); ei++) {
+        for (auto& bp : _eq_stages.get_all()) {
+            string stage_name = bp->_get_name();
+            os << "\n //////// Stencil ";
+            if (bp->is_scratch())
+                os << "scratch-";
+            os << "stage '" << stage_name << "' //////\n";
 
-            // Scalar eq_bundle.
-            auto& eq = _eq_bundles.get_all().at(ei);
-            string eg_name = eq->_get_name();
-            string eg_desc = eq->get_descr();
-            string egs_name = _stencil_prefix + eg_name;
+            // Bundles in this stage;
+            for (auto& eq : bp->get_bundles()) {
 
-            // Stats for this eq_bundle.
-            CounterVisitor stats;
-            eq->visit_eqs(&stats);
+                // Find equation index.
+                // TODO: remove need for this.
+                int ei = 0;
+                for (; ei < _eq_bundles.get_num(); ei++) {
+                    if (eq == _eq_bundles.get_all().at(ei))
+                        break;
+                }
+                assert(ei < _eq_bundles.get_num());
+                string eg_name = eq->_get_name();
+                string eg_desc = eq->get_descr();
+                string egs_name = _stencil_prefix + eg_name;
 
-            os << endl << " ////// Stencil " << eg_desc << " //////\n" <<
+                // Stats for this eq_bundle.
+                CounterVisitor stats;
+                eq->visit_eqs(&stats);
+
+                os << endl << " ////// Stencil " << eg_desc << " //////\n" <<
                 "\n struct " << egs_name << " {\n"
-                "  const char* _name = \"" << eg_name << "\";\n"
-                "  const int _scalar_fp_ops = " << stats.get_num_ops() << ";\n"
-                "  const int _scalar_points_read = " << stats.get_num_reads() << ";\n"
-                "  const int _scalar_points_written = " << stats.get_num_writes() << ";\n"
-                "  const bool _is_scratch = " << (eq->is_scratch() ? "true" : "false") << ";\n";
+                    "  const char* _name = \"" << eg_name << "\";\n"
+                    "  const int _scalar_fp_ops = " << stats.get_num_ops() << ";\n"
+                    "  const int _scalar_points_read = " << stats.get_num_reads() << ";\n"
+                    "  const int _scalar_points_written = " << stats.get_num_writes() << ";\n"
+                    "  const bool _is_scratch = " << (eq->is_scratch() ? "true" : "false") << ";\n";
 
-            // Example computation.
-            os << endl << " // " << stats.get_num_ops() << " FP operation(s) per point:\n";
-            add_comment(os, *eq);
+                // Example computation.
+                os << endl << " // " << stats.get_num_ops() << " FP operation(s) per point:\n";
+                add_comment(os, *eq);
 
-            // Domain condition.
-            {
-                os << "\n // Determine whether " << egs_name << " is valid at the domain indices " <<
-                    _dims._stencil_dims.make_dim_str() << ".\n"
-                    " // Return true if indices are within the valid sub-domain or false otherwise.\n"
-                    " ALWAYS_INLINE static bool is_in_valid_domain(const " <<
-                    _core_t << "* core_data, const Indices& idxs) {"
-                    " host_assert(core_data);\n";
-                print_indices(os);
-                if (eq->cond)
-                    os << " return " << eq->cond->make_str() << ";\n";
-                else
-                    os << " return true; // full domain.\n";
-                os << " }\n";
+                // Domain condition.
+                {
+                    os << "\n // Determine whether " << egs_name << " is valid at the domain indices " <<
+                        _dims._stencil_dims.make_dim_str() << ".\n"
+                        " // Return true if indices are within the valid sub-domain or false otherwise.\n"
+                        " ALWAYS_INLINE static bool is_in_valid_domain(const " <<
+                        _core_t << "* core_data, const Indices& idxs) {"
+                        " host_assert(core_data);\n";
+                    print_indices(os);
+                    if (eq->cond)
+                        os << " return " << eq->cond->make_str() << ";\n";
+                    else
+                        os << " return true; // full domain.\n";
+                    os << " }\n";
 
-                os << "\n // Return whether there is a sub-domain expression.\n"
-                    " ALWAYS_INLINE static bool is_sub_domain_expr() {\n"
-                    "  return " << (eq->cond ? "true" : "false") <<
-                    ";\n }\n";
+                    os << "\n // Return whether there is a sub-domain expression.\n"
+                        " ALWAYS_INLINE static bool is_sub_domain_expr() {\n"
+                        "  return " << (eq->cond ? "true" : "false") <<
+                        ";\n }\n";
 
-                os << "\n // Return human-readable description of sub-domain.\n"
-                    " inline std::string get_domain_description() const {\n";
-                if (eq->cond)
-                    os << " return \"" << eq->cond->make_str() << "\";\n";
-                else
-                    os << " return \"true\"; // full domain.\n";
-                os << " }\n";
-            }
+                    os << "\n // Return human-readable description of sub-domain.\n"
+                        " inline std::string get_domain_description() const {\n";
+                    if (eq->cond)
+                        os << " return \"" << eq->cond->make_str() << "\";\n";
+                    else
+                        os << " return \"true\"; // full domain.\n";
+                    os << " }\n";
+                }
 
-            // Step condition.
-            {
-                os << endl << " // Determine whether " << egs_name <<
-                    " is valid at the step input_step_index.\n" <<
-                    " // Return true if valid or false otherwise.\n"
-                    " ALWAYS_INLINE static bool is_in_valid_step(const " <<
-                    _core_t << "* core_data, idx_t input_step_index) {"
-                    " host_assert(core_data);\n";
-                if (eq->step_cond) {
-                    os << " idx_t " << _dims._step_dim << " = input_step_index;\n"
-                        "\n // " << eq->step_cond->make_str() << "\n";
+                // Step condition.
+                {
+                    os << endl << " // Determine whether " << egs_name <<
+                        " is valid at the step input_step_index.\n" <<
+                        " // Return true if valid or false otherwise.\n"
+                        " ALWAYS_INLINE static bool is_in_valid_step(const " <<
+                        _core_t << "* core_data, idx_t input_step_index) {"
+                        " host_assert(core_data);\n";
+                    if (eq->step_cond) {
+                        os << " idx_t " << _dims._step_dim << " = input_step_index;\n"
+                            "\n // " << eq->step_cond->make_str() << "\n";
                     
+                        // C++ scalar print assistant.
+                        CounterVisitor cv;
+                        eq->step_cond->accept(&cv);
+                        CppPrintHelper* sp = new CppPrintHelper(_settings, _dims, &cv, "real_t", " ", ";\n");
+
+                        // Generate the code.
+                        PrintVisitorTopDown pcv(os, *sp);
+                        string expr = eq->step_cond->accept(&pcv);
+                        os << " return " << expr << ";\n";
+                    }
+                    else
+                        os << " return true; // any step.\n";
+                    os << " }\n";
+
+                    os << "\n // Return whether there is a step-condition expression.\n"
+                        " ALWAYS_INLINE static bool is_step_cond_expr() {\n"
+                        "  return " << (eq->step_cond ? "true" : "false") <<
+                        ";\n }\n";
+
+                    os << "\n // Return human-readable description of step condition.\n"
+                        " inline std::string get_step_cond_description() const {\n";
+                    if (eq->step_cond)
+                        os << " return \"" << eq->step_cond->make_str() << "\";\n";
+                    else
+                        os << " return \"true\"; // any step.\n";
+                    os << " }\n";
+                }
+
+                // LHS step index.
+                {
+                    os << endl;
+                    if (eq->step_expr)
+                        os << " // Set 'output_step_index' to the step that an update"
+                            " occurs when calling one of the calc_*() methods with"
+                            " 'input_step_index' and return 'true'.\n";
+                    else
+                        os << "// Return 'false' because this bundle does not update"
+                            " vars with the step dimension.\n";
+                    os << " ALWAYS_INLINE static bool get_output_step_index(idx_t input_step_index,"
+                        " idx_t& output_step_index) {\n";
+                    if (eq->step_expr) {
+                        os << " idx_t " << _dims._step_dim << " = input_step_index;\n"
+                            " output_step_index = " << eq->step_expr->make_str() << ";\n"
+                            " return true;\n";
+                    }
+                    else
+                        os << " return false;\n";
+                    os << " }\n";
+                }
+            
+                // Scalar code.
+                {
+                    // Stencil-calculation code.
+                    // Function header.
+                    os << endl << " // Calculate one scalar result relative to indices " <<
+                        _dims._stencil_dims.make_dim_str() << ".\n"
+                        " // There are approximately " << stats.get_num_ops() <<
+                        " FP operation(s) per invocation.\n"
+                        " static void calc_scalar(" <<
+                        _core_t << "* core_data, int core_idx, const Indices& idxs) {\n"
+                        " host_assert(core_data);\n"
+                        " host_assert(core_data->_thread_core_list.get());\n"
+                        " auto& thread_core_data = core_data->_thread_core_list[core_idx];\n";
+                    print_indices(os);
+
                     // C++ scalar print assistant.
                     CounterVisitor cv;
-                    eq->step_cond->accept(&cv);
+                    eq->visit_eqs(&cv);
                     CppPrintHelper* sp = new CppPrintHelper(_settings, _dims, &cv, "real_t", " ", ";\n");
 
                     // Generate the code.
-                    PrintVisitorTopDown pcv(os, *sp);
-                    string expr = eq->step_cond->accept(&pcv);
-                    os << " return " << expr << ";\n";
+                    PrintVisitorBottomUp pcv(os, *sp);
+                    eq->visit_eqs(&pcv);
+
+                    // End of function.
+                    os << "} // calc_scalar." << endl;
+
+                    delete sp;
                 }
-                else
-                    os << " return true; // any step.\n";
-                os << " }\n";
 
-                os << "\n // Return whether there is a step-condition expression.\n"
-                    " ALWAYS_INLINE static bool is_step_cond_expr() {\n"
-                    "  return " << (eq->step_cond ? "true" : "false") <<
-                    ";\n }\n";
+                // Vector/Cluster code.
+                for (bool do_cluster : { false, true }) {
 
-                os << "\n // Return human-readable description of step condition.\n"
-                    " inline std::string get_step_cond_description() const {\n";
-                if (eq->step_cond)
-                    os << " return \"" << eq->step_cond->make_str() << "\";\n";
-                else
-                    os << " return \"true\"; // any step.\n";
-                os << " }\n";
-            }
+                    // Cluster eq_bundle at same 'ei' index.
+                    // This should be the same eq-bundle because it was copied from the
+                    // scalar one.
+                    auto& vceq = do_cluster ?
+                        _cluster_eq_bundles.get_all().at(ei) : eq;
+                    assert(eg_desc == vceq->get_descr());
 
-            // LHS step index.
-            {
-                os << endl;
-                if (eq->step_expr)
-                    os << " // Set 'output_step_index' to the step that an update"
-                    " occurs when calling one of the calc_*() methods with"
-                    " 'input_step_index' and return 'true'.\n";
-                else
-                    os << "// Return 'false' because this bundle does not update"
-                        " vars with the step dimension.\n";
-                os << " ALWAYS_INLINE static bool get_output_step_index(idx_t input_step_index,"
-                    " idx_t& output_step_index) {\n";
-                if (eq->step_expr) {
-                    os << " idx_t " << _dims._step_dim << " = input_step_index;\n"
-                        " output_step_index = " << eq->step_expr->make_str() << ";\n"
-                        " return true;\n";
-                }
-                else
-                    os << " return false;\n";
-                os << " }\n";
-            }
-            
-            // Scalar code.
-            {
-                // Stencil-calculation code.
-                // Function header.
-                os << endl << " // Calculate one scalar result relative to indices " <<
-                    _dims._stencil_dims.make_dim_str() << ".\n"
-                    " // There are approximately " << stats.get_num_ops() <<
-                    " FP operation(s) per invocation.\n"
-                    " static void calc_scalar(" <<
-                    _core_t << "* core_data, int core_idx, const Indices& idxs) {\n"
-                    " host_assert(core_data);\n"
-                    " host_assert(core_data->_thread_core_list.get());\n"
-                    " auto& thread_core_data = core_data->_thread_core_list[core_idx];\n";
-                print_indices(os);
+                    // Create vector info for this eq_bundle.  The visitor is
+                    // accepted at all nodes in the cluster AST; for each var
+                    // access node in the AST, the vectors needed are determined
+                    // and saved in the visitor.
+                    VecInfoVisitor vv(_dims);
+                    vceq->visit_eqs(&vv);
 
-                // C++ scalar print assistant.
-                CounterVisitor cv;
-                eq->visit_eqs(&cv);
-                CppPrintHelper* sp = new CppPrintHelper(_settings, _dims, &cv, "real_t", " ", ";\n");
+                    // Collect stats.
+                    CounterVisitor cv;
+                    vceq->visit_eqs(&cv);
+                    int num_results = do_cluster ?
+                        _dims._cluster_pts.product() :
+                        _dims._fold.product();
 
-                // Generate the code.
-                PrintVisitorBottomUp pcv(os, *sp);
-                eq->visit_eqs(&pcv);
+                    // Vector/cluster vars.
+                    string idim = _settings._inner_loop_dim;
+                    string vcstr = do_cluster ? "cluster" : "vector";
+                    string funcstr = "calc_" + vcstr + "s";
+                    string nvecs = do_cluster ? "CMULT_" + all_caps(idim) : "1";
+                    string nelems = (do_cluster ? nvecs + " * ": "") + "VLEN_" + all_caps(idim);
+                    string write_mask = do_cluster ? "" : "write_mask";
 
-                // End of function.
-                os << "} // calc_scalar." << endl;
-
-                delete sp;
-            }
-
-            // Vector/Cluster code.
-            for (bool do_cluster : { false, true }) {
-
-                // Cluster eq_bundle at same 'ei' index.
-                // This should be the same eq-bundle because it was copied from the
-                // scalar one.
-                auto& vceq = do_cluster ?
-                    _cluster_eq_bundles.get_all().at(ei) : eq;
-                assert(eg_desc == vceq->get_descr());
-
-                // Create vector info for this eq_bundle.  The visitor is
-                // accepted at all nodes in the cluster AST; for each var
-                // access node in the AST, the vectors needed are determined
-                // and saved in the visitor.
-                VecInfoVisitor vv(_dims);
-                vceq->visit_eqs(&vv);
-
-                // Collect stats.
-                CounterVisitor cv;
-                vceq->visit_eqs(&cv);
-                int num_results = do_cluster ?
-                    _dims._cluster_pts.product() :
-                    _dims._fold.product();
-
-                // Vector/cluster vars.
-                string idim = _settings._inner_loop_dim;
-                string vcstr = do_cluster ? "cluster" : "vector";
-                string funcstr = "calc_" + vcstr + "s";
-                string nvecs = do_cluster ? "CMULT_" + all_caps(idim) : "1";
-                string nelems = (do_cluster ? nvecs + " * ": "") + "VLEN_" + all_caps(idim);
-                string write_mask = do_cluster ? "" : "write_mask";
-
-                // Loop-calculation code.
-                // Function header.
-                os << endl << " // Calculate a nano-block of " << vcstr << "s bounded by 'norm_nb_idxs'.\n";
-                if (do_cluster)
-                    os << " // Each cluster calculates '" << _dims._cluster_pts.make_dim_val_str(" * ") <<
-                        "' point(s) containing " << _dims._cluster_mults.product() << " '" <<
-                        _dims._fold.make_dim_val_str(" * ") << "' vector(s).\n";
-                else
-                    os << " // Each vector calculates '" << _dims._fold.make_dim_val_str(" * ") <<
-                        "' point(s).\n";
-                os << " // Indices must be rank-relative (not global).\n"
-                    " // Indices must be normalized, i.e., already divided by VLEN_*.\n"
-                    " // SIMD calculations use " << vv.get_num_points() <<
-                    " vector block(s) created from " << vv.get_num_aligned_vecs() <<
-                    " aligned vector-block(s).\n"
-                    " // There are approximately " << (stats.get_num_ops() * num_results) <<
-                    " FP operation(s) per inner-loop iteration.\n" <<
-                    " static void " << funcstr << "(" <<
-                    _core_t << "* core_data, int core_idx, int block_thread_idx,"
-                    " int thread_limit, ScanIndices& norm_nb_idxs";
-                if (!do_cluster)
-                    os << ", bit_mask_t " << write_mask;
-                os << ") {\n"
-                    " FORCE_INLINE_RECURSIVE {\n"
-                    " assert(core_data);\n"
-                    " assert(core_data->_thread_core_list.get());\n"
-                    " auto& thread_core_data = core_data->_thread_core_list[core_idx];\n"
-                    " const Indices& idxs = norm_nb_idxs.start;\n";
-                print_indices(os, true, false); // Just step index.
+                    // Loop-calculation code.
+                    // Function header.
+                    os << endl << " // Calculate a nano-block of " << vcstr << "s bounded by 'norm_nb_idxs'.\n";
+                    if (do_cluster)
+                        os << " // Each cluster calculates '" << _dims._cluster_pts.make_dim_val_str(" * ") <<
+                            "' point(s) containing " << _dims._cluster_mults.product() << " '" <<
+                            _dims._fold.make_dim_val_str(" * ") << "' vector(s).\n";
+                    else
+                        os << " // Each vector calculates '" << _dims._fold.make_dim_val_str(" * ") <<
+                            "' point(s).\n";
+                    os << " // Indices must be rank-relative (not global).\n"
+                        " // Indices must be normalized, i.e., already divided by VLEN_*.\n"
+                        " // SIMD calculations use " << vv.get_num_points() <<
+                        " vector block(s) created from " << vv.get_num_aligned_vecs() <<
+                        " aligned vector-block(s).\n"
+                        " // There are approximately " << (stats.get_num_ops() * num_results) <<
+                        " FP operation(s) per inner-loop iteration.\n" <<
+                        " static void " << funcstr << "(" <<
+                        _core_t << "* core_data, int core_idx, int block_thread_idx,"
+                        " int thread_limit, ScanIndices& norm_nb_idxs";
+                    if (!do_cluster)
+                        os << ", bit_mask_t " << write_mask;
+                    os << ") {\n"
+                        " FORCE_INLINE_RECURSIVE {\n"
+                        " assert(core_data);\n"
+                        " assert(core_data->_thread_core_list.get());\n"
+                        " auto& thread_core_data = core_data->_thread_core_list[core_idx];\n"
+                        " const Indices& idxs = norm_nb_idxs.start;\n";
+                    print_indices(os, true, false); // Just step index.
  
-                // C++ vector print assistant.
-                auto* vp = new_cpp_vec_print_helper(vv, cv);
-                vp->set_write_mask(write_mask);
-                vp->set_using_cluster(do_cluster);
+                    // C++ vector print assistant.
+                    auto* vp = new_cpp_vec_print_helper(vv, cv);
+                    vp->set_write_mask(write_mask);
+                    vp->set_using_cluster(do_cluster);
+                    vp->set_stage_name(stage_name);
 
-                // Print loop-invariant meta values.
-                // Store them in the CppVecPrintHelper for later use in the loop body.
-                os << "\n ////// Loop-invariant meta values.\n";
-                CppPreLoopPrintMetaVisitor plpmv(os, *vp);
-                vceq->visit_eqs(&plpmv);
-                vp->print_rank_data(os);
+                    // Print loop-invariant meta values.
+                    // Store them in the CppVecPrintHelper for later use in the loop body.
+                    os << "\n ////// Loop-invariant meta values.\n";
+                    CppPreLoopPrintMetaVisitor plpmv(os, *vp);
+                    vceq->visit_eqs(&plpmv);
+                    vp->print_rank_data(os);
 
-                // Print loop-invariant data values.
-                // Store them in the CppVecPrintHelper for later use in the loop body.
-                CppPreLoopPrintDataVisitor plpdv(os, *vp);
-                vceq->visit_eqs(&plpdv);
+                    // Print loop-invariant data values.
+                    // Store them in the CppVecPrintHelper for later use in the loop body.
+                    CppPreLoopPrintDataVisitor plpdv(os, *vp);
+                    vceq->visit_eqs(&plpdv);
                 
-                // Inner-loop strides.
-                // Will be 1 for vectors and cluster-mults for clusters.
-                string inner_strides = do_cluster ?
-                    "stencil_cluster_mults[dn]" :
-                    "idx_t(1)";
+                    // Inner-loop strides.
+                    // Will be 1 for vectors and cluster-mults for clusters.
+                    string inner_strides = do_cluster ?
+                        "stencil_cluster_mults[dn]" :
+                        "idx_t(1)";
 
-                // Computation loops.
-                // Include generated loops.
-                os <<
-                    "\n // Nano loops.\n"
-                    "#define NANO_BLOCK_LOOP_INDICES norm_nb_idxs\n"
-                    "\n // Start Nano loop(s).\n"
-                    "#define NANO_BLOCK_USE_LOOP_PART_0\n"
-                    "#include \"yask_nano_block_loops.hpp\"\n";
-                os <<
-                    "\n // Pico loops inside nano loops.\n"
-                    " // Use macros to get values directly from nano loops.\n"
-                    "#define PICO_BLOCK_BEGIN(dn) NANO_BLOCK_BODY_START(dn)\n"
-                    "#define PICO_BLOCK_END(dn) NANO_BLOCK_BODY_STOP(dn)\n"
-                    "#define PICO_BLOCK_STRIDE(dn) " << inner_strides << "\n";
-                os <<
-                    "\n // Start Pico outer-loop(s).\n"
-                    "#define PICO_BLOCK_USE_LOOP_PART_0\n"
-                    "#include \"yask_pico_block_loops.hpp\"\n";
+                    // Computation loops.
+                    // Include generated loops.
+                    os <<
+                        "\n // Nano loops.\n"
+                        "#define NANO_BLOCK_LOOP_INDICES norm_nb_idxs\n"
+                        "\n // Start Nano loop(s).\n"
+                        "#define NANO_BLOCK_USE_LOOP_PART_0\n"
+                        "#include \"yask_nano_block_loops.hpp\"\n";
+                    os <<
+                        "\n // Pico loops inside nano loops.\n"
+                        " // Use macros to get values directly from nano loops.\n"
+                        "#define PICO_BLOCK_BEGIN(dn) NANO_BLOCK_BODY_START(dn)\n"
+                        "#define PICO_BLOCK_END(dn) NANO_BLOCK_BODY_STOP(dn)\n"
+                        "#define PICO_BLOCK_STRIDE(dn) " << inner_strides << "\n";
+                    os <<
+                        "\n // Start Pico outer-loop(s).\n"
+                        "#define PICO_BLOCK_USE_LOOP_PART_0\n"
+                        "#include \"yask_pico_block_loops.hpp\"\n";
 
-                // Get named domain indices directly from scalar vars.
-                print_indices(os, false, true, "pico_block_start_", "pico_block_begin_");
-                vp->print_elem_indices(os);
+                    // Get named domain indices directly from scalar vars.
+                    print_indices(os, false, true, "pico_block_start_", "pico_block_begin_");
+                    vp->print_elem_indices(os);
 
-                // Create inner-loop base ptrs.
-                os << "\n // Set up for inner loop.\n";
-                vp->print_inner_loop_prefix(os);
+                    // Create inner-loop base ptrs.
+                    os << "\n // Set up for inner loop.\n";
+                    vp->print_inner_loop_prefix(os);
     
-                // Initial prefetches, if any.
-                vp->print_prefetches(os, false);
+                    // Initial prefetches, if any.
+                    vp->print_prefetches(os, false);
 
-                // Create and init buffers, if any.
-                vp->print_buffer_code(os, false);
+                    // Create and init buffers, if any.
+                    vp->print_buffer_code(os, false);
 
-                auto& ild = _settings._inner_loop_dim;
-                os <<
-                    "\n // Start Pico inner-loop for dim '" << ild << "'.\n"
-                    "#define PICO_BLOCK_USE_LOOP_PART_1\n"
-                    "#include \"yask_pico_block_loops.hpp\"\n";
+                    auto& ild = _settings._inner_loop_dim;
+                    os <<
+                        "\n // Start Pico inner-loop for dim '" << ild << "'.\n"
+                        "#define PICO_BLOCK_USE_LOOP_PART_1\n"
+                        "#include \"yask_pico_block_loops.hpp\"\n";
 
-                // Issue loads early.
-                if (_settings._early_loads)
-                    vp->print_early_loads(os);
+                    // Issue loads early.
+                    if (_settings._early_loads)
+                        vp->print_early_loads(os);
                 
-                // Generate loop body using vars stored in print helper.
-                // Visit all expressions to cover the whole vector/cluster.
-                PrintVisitorBottomUp pcv(os, *vp);
-                vceq->visit_eqs(&pcv);
+                    // Generate loop body using vars stored in print helper.
+                    // Visit all expressions to cover the whole vector/cluster.
+                    PrintVisitorBottomUp pcv(os, *vp);
+                    vceq->visit_eqs(&pcv);
 
-                // Insert prefetches using vars stored in print helper for next iteration.
-                vp->print_prefetches(os, true);
+                    // Insert prefetches using vars stored in print helper for next iteration.
+                    vp->print_prefetches(os, true);
 
-                // Shift and fill buffers.
-                vp->print_buffer_code(os, true);
+                    // Shift and fill buffers.
+                    vp->print_buffer_code(os, true);
                 
-                // Increment indices, etc.
-                vp->print_end_inner_loop(os);
+                    // Increment indices, etc.
+                    vp->print_end_inner_loop(os);
 
-                // End of loops.
-                os <<
-                    "\n ////// Loop endings.\n"
-                    "#define PICO_BLOCK_USE_LOOP_PART_2\n"
-                    "#include \"yask_pico_block_loops.hpp\"\n"
-                    "#define NANO_BLOCK_USE_LOOP_PART_1\n"
-                    "#include \"yask_nano_block_loops.hpp\"\n";
+                    // End of loops.
+                    os <<
+                        "\n ////// Loop endings.\n"
+                        "#define PICO_BLOCK_USE_LOOP_PART_2\n"
+                        "#include \"yask_pico_block_loops.hpp\"\n"
+                        "#define NANO_BLOCK_USE_LOOP_PART_1\n"
+                        "#include \"yask_nano_block_loops.hpp\"\n";
 
-                // End of recursive block & function.
-                os << "} } // " << funcstr << ".\n";
-                delete vp;
-            } // cluster/vector
+                    // End of recursive block & function.
+                    os << "} } // " << funcstr << ".\n";
+                    delete vp;
+                } // cluster/vector
 
-            os << "}; // " << egs_name << ".\n" // end of struct.
-                " static_assert(std::is_trivially_copyable<" << egs_name << ">::value,"
-                "\"Needed for OpenMP offload\");\n";
+                os << "}; // " << egs_name << ".\n" // end of struct.
+                    " static_assert(std::is_trivially_copyable<" << egs_name << ">::value,"
+                    "\"Needed for OpenMP offload\");\n";
 
-        } // stencil eq_bundles.
+            } // stencil eq_bundles.
+        } // stages.
     }
 
     // Print derived YASK context.
@@ -824,6 +840,12 @@ namespace yask {
                         init_code += " " + var_ptr + "->set" + bstr + "size(\"" + dname +
                             "\", " + hvar + ");\n";
                     }
+
+                    // Extra padding for read-ahead.
+                    if (dname == _settings._inner_loop_dim &&
+                        gp->get_read_ahead_pad() > 0)
+                        init_code += " " + var_ptr + "->update_right_extra_pad_size(\"" + dname +
+                            "\", " + to_string(gp->get_read_ahead_pad()) + "); // For read-ahead.\n";
                 }
 
                 // non-domain dimension.
@@ -836,13 +858,18 @@ namespace yask {
                     if (dtype == STEP_INDEX) {
                         auto sdi = gp->get_step_dim_info();
                         aval = sdi.step_dim_size;
-                        auto& wb_stages = sdi.writeback_stages;
-                        for (auto& ws : gp->get_write_stages()) {
+                        auto& wb_ofs = sdi.writeback_ofs;
+                        for (auto& i : gp->get_write_points()) {
+                            auto& ws = i.first;
+                            int sofs = i.second;
                             comment += " Written in stage '" + ws +
-                                "' with writeback (immediate replacement)";
-                            if (!wb_stages.count(ws))
-                                comment += " NOT";
-                            comment += " allowed.";
+                                "' at step-offset " + to_string(sofs) +
+                                " with writeback (immediate replacement)";
+                            if (!wb_ofs.count(ws))
+                                comment += " NOT allowed.";
+                            else
+                                comment += " allowed over read at step-offset " +
+                                    to_string(wb_ofs.at(ws)) + ".";
                         }
                         init_code += " " + base_ptr + "->_set_dynamic_step_alloc(" +
                             (gp->is_dynamic_step_alloc() ? "true" : "false") +

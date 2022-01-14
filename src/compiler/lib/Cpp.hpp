@@ -102,6 +102,9 @@ namespace yask {
 
     protected:
 
+        // Name of current stage;
+        string _stage_name;
+
         // Name of ptr to lowest-allocated vec for a given point in that var.
         // There is a unique ptr for each step-arg per var.
         // Thus, there is a many->one mapping for points that vary only by domain and/or misc indices.
@@ -248,6 +251,11 @@ namespace yask {
             const string& ildim = _settings._inner_loop_dim;
             _inner_loop_vec_step = use ? _dims._cluster_mults[ildim] : 1;
             _inner_loop_elem_step = _inner_loop_vec_step * _dims._fold[ildim];
+        }
+
+        // Set stage name.
+        virtual void set_stage_name(const string& sname) {
+            _stage_name = sname;
         }
 
         // Print any needed memory reads and/or constructions to 'os'.

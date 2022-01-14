@@ -1214,8 +1214,8 @@ namespace yask {
 
                             // Pads.
                             // Set via both 'extra' and 'min'; larger result will be used.
-                            gp->set_extra_pad_size(dname, actl_opts->_extra_pad_sizes[dname]);
-                            gp->set_min_pad_size(dname, actl_opts->_min_pad_sizes[dname]);
+                            gp->update_extra_pad_size(dname, actl_opts->_extra_pad_sizes[dname]);
+                            gp->update_min_pad_size(dname, actl_opts->_min_pad_sizes[dname]);
                         }
                     } // dims.
 

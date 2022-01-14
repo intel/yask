@@ -1131,7 +1131,7 @@ namespace yask {
                     g->update_halo(stage_name, ap->get_arg_offsets());
                 }
                 auto* g = out_pt1->_get_var();
-                g->update_write_stages(stage_name);
+                g->update_write_points(stage_name, out_pt1->get_arg_offsets());
             }
         }
 

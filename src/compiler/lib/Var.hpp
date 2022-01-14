@@ -78,8 +78,12 @@ namespace yask {
         // int key: step-dim offset or 0 if no step-dim.
         map<string, map<bool, map<int, IntTuple>>> _halos;
 
-        // Set of stages in which var is written.
-        set<string> _write_stages;
+        // Extra padding needed for read-ahead.
+        int _read_ahead_pad = 0;
+
+        // Key: stage.
+        // Val: step-index for write in stage.
+        map<string, int> _write_points;
 
         // Greatest L1 dist of any halo point that accesses this var.
         int _l1_dist = 0;
@@ -199,6 +203,17 @@ namespace yask {
             return h;
         }
 
+        // Extra padding.
+        virtual void set_read_ahead_pad(int n) {
+            _read_ahead_pad = n;
+        }
+        virtual void update_read_ahead_pad(int n) {
+            _read_ahead_pad = max(_read_ahead_pad, n);
+        }
+        virtual int get_read_ahead_pad() const {
+            return _read_ahead_pad;
+        }
+
         // Get max L1 dist of halos.
         virtual int get_l1_dist() const {
             return _l1_dist;
@@ -221,7 +236,7 @@ namespace yask {
         // Determine how many values in step-dim are needed.
         struct StepDimInfo {
             int step_dim_size = 1;
-            set<string> writeback_stages;
+            map<string, int> writeback_ofs;
         };
         virtual StepDimInfo get_step_dim_info() const;
 
@@ -237,13 +252,11 @@ namespace yask {
         // Update halos and L1 dist based on each value in 'offsets'.
         virtual void update_halo(const string& stage_name, const IntTuple& offsets);
 
-        // Stage(s) with write.
-        virtual const set<string>& get_write_stages() {
-            return _write_stages;
+        // Stage(s) with writes.
+        virtual const map<string, int>& get_write_points() const {
+            return _write_points;
         }
-        virtual void update_write_stages(const string& stage_name) {
-            _write_stages.insert(stage_name);
-        }
+        virtual void update_write_points(const string& stage_name, const IntTuple& offsets);
 
         // Update L1 dist.
         virtual void update_l1_dist(int l1_dist) {

@@ -291,6 +291,14 @@ namespace yask {
         update_l1_dist(l1_dist);
     }
 
+    // Update write stages and offsets.
+    void Var::update_write_points(const string& stage_name, const IntTuple& offsets) {
+        auto& sdims = get_soln_dims();
+        auto* sofs = offsets.lookup(sdims._step_dim);
+        if (sofs)
+            _write_points[stage_name] = *sofs;
+    }
+    
     // Update const indices based on 'indices'.
     void Var::update_const_indices(const IntTuple& indices) {
 
@@ -337,7 +345,7 @@ namespace yask {
             auto& h2 = hi.second;
 
             // Written?
-            bool is_written = _write_stages.count(stage_name) > 0;
+            bool is_written = false;
 
             // First (lowest) and last (highest) step-dim offset.
             const int unset = -9999;
@@ -352,6 +360,10 @@ namespace yask {
                 for (auto& j : h3) {
                     auto ofs = j.first;
                     auto& halo = j.second; // halo tuple at step-val 'ofs'.
+
+                    // Written here?
+                    if (_write_points.count(stage_name) && _write_points.at(stage_name) == ofs)
+                        is_written = true;
 
                     // Any existing value?
                     if (halo.size()) {
@@ -398,11 +410,17 @@ namespace yask {
                             last_max_halo = max(last_max_halo, h3.at(last_ofs).max());
                     }
 
-                    // If first and last halos are zero, we can further optimize storage by
-                    // immediately reusing memory location.
+                    // If first and last halos are zero, we can further optimize
+                    // storage by immediately reusing memory location.
                     if (sz > 1 && first_max_halo == 0 && last_max_halo == 0) {
+                        int write_ofs = _write_points.at(stage_name);
                         sz--;
-                        sdi.writeback_stages.insert(stage_name);
+                        if (last_ofs == write_ofs) // forward step.
+                            sdi.writeback_ofs[stage_name] = first_ofs; // replace lowest read.
+                        else if (first_ofs == write_ofs) // backward step.
+                            sdi.writeback_ofs[stage_name] = last_ofs; // replace lowest read.
+                        else
+                            assert("write ofs is neither first or last");
                     }
                 }
 
