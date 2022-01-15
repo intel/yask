@@ -45,7 +45,7 @@ use_safe_ptrs		?=	0
 reloc_step		?=	0
 interleave_misc		?=	0
 early_loads		?=	0
-min_buffer_len		?=	0
+min_buffer_len		?=	1
 read_ahead_dist		?=	0
 
 trace			?=	0

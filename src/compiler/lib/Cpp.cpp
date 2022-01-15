@@ -496,7 +496,7 @@ namespace yask {
                     // Increase var allocation for read-ahead.
                     var.update_read_ahead_pad(_inner_loop_elem_step * rad);
                 }
-                if (len > _settings._min_buffer_len)
+                if (len >= max(_settings._min_buffer_len, 1))
                     _pt_buf_len[*key] = len;
             }
         }
