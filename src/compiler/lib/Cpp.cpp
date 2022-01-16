@@ -125,7 +125,6 @@ namespace yask {
         var_point_ptr bgp = gp.clone_var_point();
         auto* var = bgp->_get_var();
         assert(var);
-        bool is_scratch = var->is_scratch();
         int dnum = 0;
         for (auto& dim : bgp->get_dims()) {
             auto& dname = dim->_get_name();
@@ -141,7 +140,7 @@ namespace yask {
         return bgp;
     }
 
-    // Make inner-loop base point (no inner-layout dim offset; inner-misc dims = min-val).
+    // Make inner-loop base point (inner-layout dim offset = 0; inner-misc dims = min-val).
     var_point_ptr CppVecPrintHelper::make_inner_loop_base_point(const VarPoint& gp) {
         var_point_ptr bgp = gp.clone_var_point();
         for (auto& dim : gp.get_dims()) {
@@ -167,7 +166,7 @@ namespace yask {
         return bgp;
     }
     
-    // Print var-base pointer of 'gp'.
+    // Print creation of var-base pointer of 'gp'.
     void CppVecPrintHelper::print_var_base_ptr(ostream& os, const VarPoint& gp) {
         if (!_settings._use_ptrs)
             return;
@@ -353,15 +352,12 @@ namespace yask {
     }
 
     // Print creation of inner-loop ptrs.
+    // To be used before the inner-loop starts.
     void CppVecPrintHelper::print_inner_loop_prefix(ostream& os) {
-
-        // A set for the aligned reads & writes.
-        VarPointSet gps;
-
-        // Aligned reads as determined by VecInfoVisitor.
-        gps = _vv._aligned_vecs;
-
-        // Writes (assume aligned).
+        get_point_stats();
+        
+        // A set for both aligned reads & writes.
+        VarPointSet gps = _aligned_reads;
         gps.insert(_vv._vec_writes.begin(), _vv._vec_writes.end());
 
         // Loop through all aligned read & write points.
@@ -381,7 +377,7 @@ namespace yask {
                 const auto* vbp = lookup_var_base_ptr(gp);
                 if (vbp) {
 
-                    // Make base point (no inner-layout offset; inner-misc indices = min-val).
+                    // Make base point (inner-layout offset = 0; inner-misc indices = min-val).
                     auto bgp = make_inner_loop_base_point(gp);
                     
                     // Get temp var for ptr.
@@ -401,12 +397,14 @@ namespace yask {
         }
     }
 
-    // Collect some stats on points.
+    //#define DEBUG_BUFFERS
+    
+    // Collect some stats on read points.
     // These are used to create buffers and prefetches.
     void CppVecPrintHelper::get_point_stats() {
 
-        // Done?
-        if (_inner_loop_key.size())
+        // Done if there are at least as many reads as original.
+        if (_aligned_reads.size() >= _vv._aligned_vecs.size())
             return;
         
         const string& ildim = _settings._inner_loop_dim;
@@ -419,9 +417,12 @@ namespace yask {
             auto& var = *vp;
             const auto& vname = var.get_name();
 
-            // Ignore if there's not an associated inner-loop base ptr.
-            if (!lookup_inner_loop_base_ptr(gp))
-                continue;
+            #ifdef DEBUG_BUFFERS
+            cout << "*** Getting stats for " << gp.make_str() << endl;
+            #endif
+            
+            // Add to read set.
+            _aligned_reads.insert(gp);
 
             // Get const offsets for this point.
             auto& offsets = gp.get_arg_offsets();
@@ -440,7 +441,7 @@ namespace yask {
                 if (sdi.writeback_ofs.count(_stage_name) &&
                     sdi.writeback_ofs.at(_stage_name) == *sofs) {
                     is_write = true;
-                    #if DEBUG_BUFFERS
+                    #ifdef DEBUG_BUFFERS
                     cout << "** Found writeback to " << vname << " over ofs " << *sofs << endl;
                     #endif
                 }
@@ -466,10 +467,12 @@ namespace yask {
                 // Remember lowest inner-loop dim offset from this key.
                 if (!_pt_inner_loop_lo.count(*key) || _pt_inner_loop_lo.at(*key) > vofs)
                     _pt_inner_loop_lo[*key] = vofs;
+                auto lo = _pt_inner_loop_lo.at(*key);
                 
                 // Remember highest one.
                 if (!_pt_inner_loop_hi.count(*key) || _pt_inner_loop_hi.at(*key) < vofs)
                     _pt_inner_loop_hi[*key] = vofs;
+                auto hi = _pt_inner_loop_hi.at(*key);
 
                 // Need a buffer? (This will change as new points are
                 // discovered.)  Length will cover range of vecs needed.
@@ -479,24 +482,50 @@ namespace yask {
                 // end of the loop.)  Then, the length may then be increased
                 // if reading ahead unless we're also writing back, in which
                 // case read-ahead can't be used.
-                auto len = _pt_inner_loop_hi.at(*key) -
-                    _pt_inner_loop_lo.at(*key) + 1;
+                auto len = hi - lo + 1;
                 len -= _inner_loop_vec_step;
-                #if DEBUG_BUFFERS
-                cout << "*** Buffer for " << key->make_str() << " has length " << len << endl;
+                #ifdef DEBUG_BUFFERS
+                cout << "*** Buffer for " << key->make_str() <<
+                    " has non-read-ahead length " << len << endl;
                 #endif
-                if (!is_write) {
-                    auto rad = _settings._read_ahead_dist;
-                    auto ral = _inner_loop_vec_step * rad;
-                    #if DEBUG_BUFFERS
-                    cout << " *** Adding " << ral << " vecs to buffer for read-ahead\n";
-                    #endif
-                    len += ral;
+                auto mbl = max(_settings._min_buffer_len, 1);
 
-                    // Increase var allocation for read-ahead.
-                    var.update_read_ahead_pad(_inner_loop_elem_step * rad);
+                // Add read-ahead if requested and allowed.
+                auto rad = _settings._read_ahead_dist;
+                auto ralv = _inner_loop_vec_step * rad;
+                auto rale = _inner_loop_elem_step * rad;
+                if (rad > 0 && !is_write && (len + ralv) >= mbl) {
+                    #ifdef DEBUG_BUFFERS
+                    cout << " *** Adding " << ralv << " vecs to buffer for read-ahead\n";
+                    #endif
+
+                    // Add more read points to read set.
+                    // These may not be in the original set because they are
+                    // for reading ahead.
+                    // If some already exist, it will not hurt to re-add them.
+                    auto ofs = lo + len + 1;
+                    for (int i = 0; i < ralv; i++, ofs++) {
+                        auto rap = key->clone_var_point();
+                        auto eofs = ofs * _dims._fold[ildim];
+                        IntScalar idi(ildim, eofs); // At end of buffer.
+                        rap->set_arg_offset(idi);
+                        cout << "  *** Adding read point " << rap->make_str() << endl;
+                        _aligned_reads.insert(*rap); // Save new read point.
+                        _inner_loop_key[*rap] = key; // Save its key.
+                    }
+
+                    // Increase buf len.
+                    len += ralv;
+
+                    // Increase var allocation for read-ahead (in elements,
+                    // not vecs).  TODO: be more accurate about when to
+                    // increase pad; this assumes it extends beyond halo
+                    // region.
+                    var.update_read_ahead_pad(rale);
                 }
-                if (len >= max(_settings._min_buffer_len, 1))
+
+                // Remember buf len using key if above threshold.
+                if (len >= mbl)
                     _pt_buf_len[*key] = len;
             }
         }
@@ -506,12 +535,14 @@ namespace yask {
     void CppVecPrintHelper::print_early_loads(ostream& os) {
         get_point_stats();
 
-        os << "\n // Issuing all aligned loads.\n";
+        os << "\n // Issuing all aligned loads early (before needed).\n";
 
         // Loop through all aligned read points.
-        for (auto& gp : _vv._aligned_vecs) {
+        // TODO: ignore points in buffer.
+        for (auto& gp : _aligned_reads) {
             read_from_point(os, gp);
         }
+        os << "\n // Done issuing all aligned loads early.\n";
     }
 
     // Print buffer-code for each inner-loop base pointer.
@@ -524,7 +555,7 @@ namespace yask {
         
         // Loop through all aligned read points.
         // TODO: can we just loop thru _inner_loop_key?
-        for (auto& gp : _vv._aligned_vecs) {
+        for (auto& gp : _aligned_reads) {
             if (_inner_loop_key.count(gp) == 0)
                 continue;
 
@@ -824,6 +855,7 @@ namespace yask {
     // Print any needed memory reads and/or constructions to 'os'.
     // Return code containing a vector of var points.
     string CppVecPrintHelper::read_from_point(ostream& os, const VarPoint& gp) {
+        get_point_stats();
         string code_str;
 
         // Already done and saved.
@@ -852,7 +884,7 @@ namespace yask {
             // Everything below this should be VEC_FULL.
 
             // An aligned vector block?
-            else if (_vv._aligned_vecs.count(gp)) {
+            else if (_aligned_reads.count(gp)) {
 #ifdef DEBUG_GP
                 cout << " //** reading from point " << gp.make_str() << " as fully vectorized and aligned.\n";
 #endif

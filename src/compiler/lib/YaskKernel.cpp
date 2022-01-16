@@ -668,6 +668,7 @@ namespace yask {
                     vp->set_write_mask(write_mask);
                     vp->set_using_cluster(do_cluster);
                     vp->set_stage_name(stage_name);
+                    vp->get_point_stats();
 
                     // Print loop-invariant meta values.
                     // Store them in the CppVecPrintHelper for later use in the loop body.

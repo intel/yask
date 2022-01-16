@@ -1084,6 +1084,7 @@ STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_1d $(call FOLD,x=4)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_1d $(call FOLD,x=4) $(call CLUSTER,x=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_1d $(call FOLD,x=4) $(call CLUSTER,x=5)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_1d $(call FOLD,x=4) $(call CLUSTER,x=5) read_ahead_dist=3
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stages_1d $(call FOLD,x=4)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_func_1d $(call FOLD,x=4)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_step_cond_1d $(call FOLD,x=4)
@@ -1101,10 +1102,11 @@ STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d $(call FOLD,x=2 y=2) mpi=0 ranks=1
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d arch=intel64 $(call FOLD,x=3 y=2) domain_dims=y,x
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_reverse_2d radius=1
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_reverse_2d radius=1 read_ahead_dist=2
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stages_2d $(call FOLD,x=2 y=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d $(call FOLD,x=2 y=2) interleave-misc=0
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d $(call FOLD,x=2 y=2) interleave-misc=1
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_2d $(call FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_2d $(call FOLD,x=2 y=2) read_ahead_dist=2
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_2d $(call FOLD,x=2 y=2)
 
 3d-tests:
@@ -1114,7 +1116,7 @@ STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d $(call FOLD,x=2 z=2) domain_dims=z,y,x
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d $(call FOLD,x=2 z=2) inner_loop_dim=2
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stages_3d $(call FOLD,y=2 x=2) domain_dims=x,z,y
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_partial_3d $(call FOLD,x=2 z=2) 
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_partial_3d $(call FOLD,x=2 z=2) read_ahead_dist=2
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_partial_3d $(call FOLD,x=2 z=2) inner_loop_dim=1
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_partial_3d $(call FOLD,x=2 z=2) domain_dims=x,z,y
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_3d $(call FOLD,x=2 y=2) inner_loop_dim=1

@@ -122,13 +122,15 @@ namespace yask {
         map<VarDimKey, string> _offsets; // var containing offset expr for given dim in var.
         map<string, string> _ptr_ofs; // var containing offset expr for key var.
         map<VarPoint, var_point_ptr> _inner_loop_key; // offsets perpendicular to inner-loop dim for var.
+        VarPointSet _aligned_reads;                   // _vv._aligned_vecs plus those for read-ahead.
 
         // Read stats.
         // Key: point w/no inner-loop offset.
         // Offsets and legths in vec-lengths in inner-loop dim.
+        // TODO: convert to one map with struct value.
         map<VarPoint, int> _pt_inner_loop_lo; // lowest read offset in inner-loop dim.
         map<VarPoint, int> _pt_inner_loop_hi; // highest read offset in inner-loop dim.
-        map<VarPoint, int> _pt_buf_len;       // buffer length.
+        map<VarPoint, int> _pt_buf_len;       // buffer length (only exists if needed).
         map<VarPoint, string> _pt_buf_name;   // buffer name.
 
         // Element indices.
@@ -220,9 +222,6 @@ namespace yask {
                                                  const VarMap* var_map = 0,
                                                  const string& inner_ofs = "");
 
-        // Collect some stats on points.
-        virtual void get_point_stats();
-        
     public:
         CppVecPrintHelper(VecInfoVisitor& vv,
                           const CompilerSettings& settings,
@@ -258,7 +257,10 @@ namespace yask {
             _stage_name = sname;
         }
 
-        // Print any needed memory reads and/or constructions to 'os'.
+        // Collect some stats on points.
+        virtual void get_point_stats();
+        
+         // Print any needed memory reads and/or constructions to 'os'.
         // Return code containing a vector of var points.
         virtual string read_from_point(ostream& os, const VarPoint& gp) override;
 
