@@ -539,7 +539,7 @@ RANK_LOOP_CODE		?=	$(RANK_LOOP_MODS) loop($(RANK_LOOP_ORDER)) { }
 # Mega_Block loops break up a mega-block using OpenMP threading into blocks.  The
 # 'omp' modifier creates an outer OpenMP loop so that each block is assigned
 # to a top-level OpenMP thread.
-MEGA_BLOCK_LOOP_OMP		?=	omp parallel for schedule(dynamic,1) proc_bind(spread)
+MEGA_BLOCK_LOOP_OMP	?=	omp parallel for schedule(dynamic,1) proc_bind(spread)
 MEGA_BLOCK_LOOP_FLAGS	?=	-prefix mega_block_ -omp '$(MEGA_BLOCK_LOOP_OMP)'
 MEGA_BLOCK_LOOP_ORDER	?=	DOMAIN_LOOP_DIMS
 MEGA_BLOCK_LOOP_CODE	?=	$(MEGA_BLOCK_LOOP_MODS) omp loop($(MEGA_BLOCK_LOOP_ORDER)) { } 
@@ -584,8 +584,8 @@ endif
 PICO_BLOCK_LOOP_FLAGS	?=	-no-align -prefix pico_block_
 PICO_BLOCK_LOOP_ORDER	?=	PICO_BLOCK_OUTER_LOOP_DIMS
 ifeq ($(offload),1)
-PICO_BLOCK_LOOP_MODS	?=	omp
-PICO_BLOCK_LOOP_OMP	?=	omp parallel for
+PICO_BLOCK_LOOP_MODS	?=	omp nested
+PICO_BLOCK_LOOP_OMP	?=	omp parallel for simd
 PICO_BLOCK_LOOP_FLAGS	+=	-omp '$(PICO_BLOCK_LOOP_OMP)'
 else
 PICO_BLOCK_LOOP_MODS	?=	nested

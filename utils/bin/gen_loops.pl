@@ -43,12 +43,12 @@ $| = 1;                         # autoflush.
 # Globals.
 my %OPT;                        # cmd-line options.
 my %macros;                     # macros from file.
-my $inputVar = "LOOP_INDICES";   # input var macro.
-my $outputVar = "BODY_INDICES";  # output var.
+my $inputVar = "LOOP_INDICES";  # input var macro.
+my $outputVar = "BODY_INDICES"; # output var.
 my $loopPart = "USE_LOOP_PART_"; # macro to enable specified loop part.
-my $macroPrefix = "";            # prefix for macros.
-my $varPrefix = "";              # prefix for vars.
-my $doAlign = 1;                 # generate alignment code.
+my $macroPrefix = "";           # prefix for macros.
+my $varPrefix = "";             # prefix for vars.
+my $doAlign = 1;                # generate alignment code.
 my @fixed_exprs = ("begin", "end", "stride", "tile_size");
 my @align_exprs = ("align", "align_ofs");
 my @var_exprs = ("start", "stop", "index");
@@ -57,10 +57,11 @@ my $indent = dirname($0)."/yask_indent.sh";
 # loop-feature bit fields.
 my $bSerp = 0x1;                # serpentine path
 my $bSquare = 0x2;              # square_wave path
-my $bTile = 0x4;               # tile path
-my $bOmpPar = 0x8;                # OpenMP parallel
-my $bStatic = 0x10;                # use static scheduling
-my $bNested = 0x20;                # use "normal" nested loops
+my $bTile = 0x4;                # tile path
+my $bOmpPar = 0x8;              # OpenMP parallel
+my $bManual = 0x10;             # use manual scheduling
+my $bNested = 0x20;             # use "normal" nested loops
+my $bSimd = 0x40;               # OpenMP SIMD
 
 ##########
 # Various functions to create variable references.
@@ -278,8 +279,7 @@ sub indexType() {
 
 # Adjust features.
 # Returns new set of features.
-sub adjFeatures($$$$) {
-    my $code = shift;           # ref to list of code lines.
+sub adjFeatures($$$) {
     my $loopDims = shift;       # ref to list of dimensions in loop.
     my $features = shift;             # feature bits for path types.
     my $loopStack = shift;      # whole stack at this point, including enclosing dims.
@@ -293,9 +293,9 @@ sub adjFeatures($$$$) {
     map { $encDim = $loopStack->[$_]
               if $loopStack->[$_ + 1] eq $outerDim; } 0..($#$loopStack-1);
 
-    if (($features & $bStatic) && !($features & $bOmpPar)) {
-        warn "notice: static ignored for non-OpenMP parallel loop.\n";
-        $features &= ~$bStatic;    # clear bits.
+    if (($features & $bManual) && !($features & $bOmpPar)) {
+        warn "notice: manual ignored for non-OpenMP parallel loop.\n";
+        $features &= ~$bManual;    # clear bits.
     }
     if ($ndims < 2 && ($features & ($bSquare | $bNested))) {
         warn "notice: square-wave and nested ignored for loop with only $ndims dim.\n";
@@ -317,12 +317,12 @@ sub adjFeatures($$$$) {
         die "error: square-wave not compatible with tiling.\n"
             if $features & $bSquare;
     }
-    if ($features & ($bStatic | $bNested)) {
-        die "error: serpentine not compatible with static or nested.\n"
+    if ($features & ($bManual | $bNested)) {
+        die "error: serpentine not compatible with manual or nested.\n"
             if $features & $bSerp;
-        die "error: square-wave not compatible with static or nested.\n"
+        die "error: square-wave not compatible with manual or nested.\n"
             if $features & $bSquare;
-        die "error: tiling not compatible with static or nested.\n"
+        die "error: tiling not compatible with manual or nested.\n"
             if $features & $bTile;
     }
     return $features;
@@ -679,7 +679,7 @@ sub beginLoop($$$$$$$) {
 
     $beginVal = 0 if !defined $beginVal;
     $endVal = numItersVar(@$loopDims) if !defined $endVal;
-    $features = adjFeatures($code, $loopDims, $features, $loopStack);
+    $features = adjFeatures($loopDims, $features, $loopStack);
     my $itype = indexType();
     my $ivar = loopIndexVar(@$loopDims);
     my $ndims = scalar @$loopDims;
@@ -701,7 +701,7 @@ sub beginLoop($$$$$$$) {
     }
 
     # Start a parallel region if using manual distribution.
-    elsif ($features & $bStatic) {
+    elsif ($features & $bManual) {
         push @$code,
             "// Start parallel section.", @$prefix
             if defined $prefix;
@@ -939,7 +939,6 @@ sub processCode($) {
     my @loopDims;               # dimension(s) of current loop.
 
     # modifiers before loop() statements.
-    my @loopPrefix;             # string(s) to put before loop body.
     my $features = 0;           # bits for loop features.
 
     # Subst macros.
@@ -955,7 +954,7 @@ sub processCode($) {
         # generate simd in next loop.
         if (lc $tok eq 'simd') {
 
-            push @loopPrefix, '${macroPrefix}OMP_SIMD';
+            $features |= $bSimd;
             print "info: generating SIMD in following loop.\n";
         }
 
@@ -963,15 +962,14 @@ sub processCode($) {
         elsif (lc $tok eq 'omp') {
 
             $features |= $bOmpPar;
-            push @loopPrefix, "${macroPrefix}OMP_PRAGMA";
             print "info: using OpenMP on following loop(s).\n";
         }
 
-        # generate static-scheduling optimizations in next loop.
-        elsif (lc $tok eq 'static') {
+        # generate manual-scheduling optimizations in next loop.
+        elsif (lc $tok eq 'manual') {
 
-            $features |= $bStatic;
-            print "info: using static-scheduling optimizations.\n";
+            $features |= $bManual;
+            print "info: using manual-scheduling optimizations.\n";
         }
 
         # generate nested loops.
@@ -1004,7 +1002,7 @@ sub processCode($) {
             checkToken($toks[$ti++], '\(', 1);
             @loopDims = getArgs(\@toks, \$ti);  # might be empty.
             checkToken($toks[$ti++], '\{', 1); # eat the '{'.
-            my $ndims = scalar(@loopDims);
+            my $ndims = scalar(@loopDims);     # num dims in this loop.
 
             # Check index consistency.
             for my $ld (@loopDims) {
@@ -1016,13 +1014,30 @@ sub processCode($) {
                 }
             }
 
-            push @loopStack, @loopDims;          # all dims so far.
+            push @loopStack, @loopDims; # all dims so far.
             push @loopCounts, $ndims; # number of dims in each loop.
+            my @loopPrefix;     # string(s) to put before loop body.
 
             # In inner loop?
             my $is_inner = $ndims && isInInner(\@toks, \$ti);
-            unshift @loopPrefix, "${macroPrefix}INNER_LOOP_PREFIX" if $is_inner;
+            push @loopPrefix, "${macroPrefix}INNER_LOOP_PREFIX" if $is_inner;
 
+            # Add OMP pragma(s).
+            my $is_omp_nested = 0;
+            if ($features & $bOmpPar) {
+                if ($features & $bNested) {
+                    push @code, 
+                        macroDef('OMP_NESTED_PRAGMA', undef, pragma("$OPT{omp} collapse($ndims)"));
+                    push @loopPrefix, "${macroPrefix}OMP_NESTED_PRAGMA";
+                    $is_omp_nested = 1;
+                } else {
+                    push @loopPrefix, "${macroPrefix}OMP_PRAGMA";
+                }
+            }
+            if ($features & $bSimd) {
+                push @loopPrefix, '${macroPrefix}OMP_SIMD';
+            }
+                
             # Start the loop unless there are no indices.
             if ($ndims) {
                 print "info: generating scan over ".dimStr(@loopDims)."...\n";
@@ -1070,6 +1085,9 @@ sub processCode($) {
                     "for (int $ivar = 0; $ivar < 1; $ivar++) { {";
             }
 
+            # Remove temp pragma.
+            push @code, macroUndef('OMP_NESTED_PRAGMA') if $is_omp_nested;
+            
             # Macro break for inserting code: end one and start next one.
             push @code,
                 macroUndef($loopPart.$partNum),
@@ -1213,16 +1231,16 @@ sub main() {
             "Optional loop modifiers:\n",
             "  simd:            add SIMD_PRAMA before loop (distribute work across SIMD HW).\n",
             "  omp:             add OMP_PRAGMA before loop (distribute work across SW threads).\n",
-            "  static:          create optimized index calculation for statically-scheduled OpenMP loops;\n",
-            "                     must set OMP_PRAGMA to something like 'parallel', not 'parallel for'.\n",
             "  nested:          use traditional nested loops instead of generating one flattened loop;\n",
-            "                     must use OpenMP 'collapse' in OMP_PRAGMA for 'nested omp' loops.\n",
+            "                     automatically adds 'collapse' clause to OpenMP loops.\n",
+            "  manual:          create optimized index calculation for manually-scheduled OpenMP loops;\n",
+            "                     must set OMP_PRAGMA to something like 'parallel', not 'parallel for'.\n",
             "  tiled:           generate tiled scan within a >1D loop.\n",
             "  serpentine:      generate reverse scan when enclosing loop index is odd.*\n",
             "  square_wave:     generate 2D square-wave scan for two innermost dims of >1D loop.*\n",
             "      * Do not use these modifiers for YASK rank or block loops because they must\n",
             "        execute with strictly-increasing indices when using temporal tiling.\n",
-            "        Also, do not combile these modifiers with 'tiled'.\n",
+            "        Also, do not combile these modifiers with 'tiled' or 'manual'.\n",
             "A 'ScanIndices' type must be defined in C++ code prior to including the generated code.\n",
             "  This struct contains the following 'Indices' elements:\n",
             "  'begin':       [in] first index to scan in each dim.\n",
@@ -1247,11 +1265,14 @@ sub main() {
         print_options_help(\@KNOBS);
         print "Examples:\n",
             "  $script 'loop(0,1) { }'\n",
+            "  $script 'omp loop(0,1) { }'\n",
+            "  $script 'omp nested loop(0,1) { }'\n",
+            "  $script 'omp serpentine loop(0,1) { }'\n",
+            "  $script 'omp tiled loop(0,1,2) { }'\n",
             "  $script 'omp loop(0,1) { loop(2) { } }'\n",
             "  $script 'omp loop(0) { loop(1,2) { } }'\n",
-            "  $script 'tiled omp loop(0,1,2) { }'\n",
             "  $script 'omp loop(0) { square_wave loop(1..2) { } }'\n",
-            "  $script 'omp loop(0..2) { loop(3) { } }'\n";
+            "  $script 'omp loop(0,1,2) { loop(3) { } }'\n";
         exit 1;
     }
 
