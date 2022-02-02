@@ -115,8 +115,8 @@ SERIALIZE	= 	exec {fd}>/tmp/$$USER.YASK.build-lock; \
 MK_DIR		=	@ if [ \! -d $(1) ]; then \
 			  $(call SERIALIZE,$(MKDIR) $(1)); fi
 
-# Options to avoid warnings when compiling SWIG-generated code w/gcc.
-SWIG_GCCFLAGS	:=	-Wno-class-memaccess -Wno-stringop-overflow -Wno-stringop-truncation
+# Options for compiling SWIG-generated code w/gcc.
+SWIG_GCCFLAGS	:= -D_PyObject_GC_UNTRACK='(void)'
 
 # Define deprecated macro used by SWIG.
 DBL_EPSILON_CXXFLAG	:=	-DDBL_EPSILON=2.2204460492503131e-16
