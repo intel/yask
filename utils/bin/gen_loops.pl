@@ -604,7 +604,7 @@ sub addIndexVars2($$$$) {
                     "  // Compute extended index over 2 iterations of $prevDivar.",
                     "  $itype $divar2 = $divar + ($nvar * ($prevDivar & 1));",
                     "  // Select $divar from 0,0,1,1,2,2,... sequence",
-                    "  $itype $divar = $divar2 / 2;",
+                    "  $divar = $divar2 / 2;",
                     "  // Select $prevDivar adjustment value from 0,1,1,0,0,1,1, ... sequence.",
                     "  $itype $bvar = ($divar2 & 0x1) ^ (($divar2 & 0x2) >> 1);",
                     "  // Adjust $prevDivar +/-1 by replacing bit 0.",
