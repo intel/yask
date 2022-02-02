@@ -569,12 +569,12 @@ MICRO_BLOCK_LOOP_CODE	?=	$(MICRO_BLOCK_LOOP_MODS) omp loop($(MICRO_BLOCK_LOOP_OR
 # When offloading, a nano-block is executed on the device.
 NANO_BLOCK_LOOP_FLAGS	?=	-no-align -prefix nano_block_
 NANO_BLOCK_LOOP_ORDER	?=	DOMAIN_LOOP_DIMS
+NANO_BLOCK_LOOP_MODS	?=	serpentine square_wave
 ifeq ($(offload),1)
 NANO_BLOCK_LOOP_OMP	?=	omp target teams distribute thread_limit(thread_limit) device(KernelEnv::_omp_devn)
 NANO_BLOCK_LOOP_FLAGS	+=	-omp '$(NANO_BLOCK_LOOP_OMP)'
 NANO_BLOCK_LOOP_CODE	:=	$(NANO_BLOCK_LOOP_MODS) omp loop($(NANO_BLOCK_LOOP_ORDER)) { }
 else
-NANO_BLOCK_LOOP_MODS	?=	nested
 NANO_BLOCK_LOOP_CODE	:=	$(NANO_BLOCK_LOOP_MODS) loop($(NANO_BLOCK_LOOP_ORDER)) { }
 endif
 
