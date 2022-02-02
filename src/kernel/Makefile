@@ -569,7 +569,7 @@ MICRO_BLOCK_LOOP_CODE	?=	$(MICRO_BLOCK_LOOP_MODS) omp loop($(MICRO_BLOCK_LOOP_OR
 # When offloading, a nano-block is executed on the device.
 NANO_BLOCK_LOOP_FLAGS	?=	-no-align -prefix nano_block_
 NANO_BLOCK_LOOP_ORDER	?=	DOMAIN_LOOP_DIMS
-NANO_BLOCK_LOOP_MODS	?=	serpentine square_wave
+NANO_BLOCK_LOOP_MODS	?=	serpentine
 ifeq ($(offload),1)
 NANO_BLOCK_LOOP_OMP	?=	omp target teams distribute thread_limit(thread_limit) device(KernelEnv::_omp_devn)
 NANO_BLOCK_LOOP_FLAGS	+=	-omp '$(NANO_BLOCK_LOOP_OMP)'
@@ -1115,6 +1115,7 @@ STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d $(call FOLD,x=2 y=2 z=2) EXTRA_YC_FLAGS=-no-fus
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d $(call FOLD,x=2 z=2) domain_dims=z,y,x
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d $(call FOLD,x=2 z=2) inner_loop_dim=2
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d $(call FOLD,x=2 z=2) NANO_BLOCK_LOOP_MODS=serpentine
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stages_3d $(call FOLD,y=2 x=2) domain_dims=x,z,y
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_partial_3d $(call FOLD,x=2 z=2) read_ahead_dist=2
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_partial_3d $(call FOLD,x=2 z=2) inner_loop_dim=1
