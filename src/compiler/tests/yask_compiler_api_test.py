@@ -48,16 +48,14 @@ if __name__ == "__main__":
 
     # Example index expression.
     e0 = x + 3;
-    print("Simple index expression: " + e0.format_simple());
+    print("Simple index expression: ", e0.format_simple());
 
     # Create a var.
     g1 = soln.new_var("test_var", [t, x, y, z])
 
     # Create simple expressions to reference a point in g1.
-    n0r = g1.new_relative_var_point([0, 0, 0, 0])  # center-point at this timestep.
-    print("Simple var-access expression: " + n0r.format_simple());
     n0 = g1.new_var_point([t, x, y, z])  # center-point at this timestep.
-    print("Simple var-access expression: " + n0.format_simple());
+    print("Simple var-access expression: ", n0.format_simple());
     
     # Create a more complex expression using points in g1.
     # This will average some of the neighboring points around the
@@ -79,7 +77,7 @@ if __name__ == "__main__":
     # values of each point.
     sn0 = sg1.new_var_point([x, y, z]) # LHS of eq is a point on scratch-var
     sn1 = nfac.new_equation_node(sn0, n2) # equate to expr n2.
-    print("Scratch-var equation before formatting: " + sn1.format_simple())
+    print("Scratch-var equation before formatting: ", sn1.format_simple())
 
     # Use values in scratch var to make a new eq.
     sn2 = (sg1.new_var_point([x+1, y,   z  ]) +
@@ -98,35 +96,36 @@ if __name__ == "__main__":
     # Create an equation to define the value at the next timestep
     # using sn5 in sub-domain sd0 and -sn5 otherwise.
     n4a = nfac.new_equation_node(n3, sn5, sd0)
-    print("Main-var interior equation before formatting: " + n4a.format_simple())
+    print("Main-var interior equation before formatting: ", n4a.format_simple())
     n4b = nfac.new_equation_node(n3, sn5n, sd0n)
-    print("Main-var edge equation before formatting: " + n4b.format_simple())
+    print("Main-var edge equation before formatting: ", n4b.format_simple())
 
     # Print some info about the solution.
-    print("Solution '" + soln.get_name() + "' contains " +
-          str(soln.get_num_vars()) + " var(s), and " +
-          str(soln.get_num_equations()) + " equation(s).")
+    print("Solution '", soln.get_name(), "' contains ",
+          soln.get_num_vars(), " var(s), and ",
+          soln.get_num_equations(), " equation(s).")
     for var in soln.get_vars() :
-        print("Var " + var.get_name() +
-              " has the following dim(s): " +
-              repr(var.get_dim_names()));
+        print("Var ", var.get_name(), " has the following dim(s): ",
+              var.get_dim_names());
 
     # Number of bytes in each FP value.
     soln.set_element_bytes(4)
 
     # Generate DOT output.
     dot_file = ofac.new_file_output("yc-api-test-py.dot")
-    soln.format("dot", dot_file)
-    print("DOT-format written to '" + dot_file.get_filename() + "'.")
+    soln.set_target("dot")
+    soln.output_solution(dot_file)
+    print("DOT-format written to '", dot_file.get_filename(), "'.")
 
     # Generate YASK output.
     yask_file = ofac.new_file_output("yc-api-test-py.hpp")
-    soln.format("avx", yask_file)
-    print("YASK-format written to '" + yask_file.get_filename() + "'.")
+    soln.set_target("avx")
+    soln.output_solution(yask_file)
+    print("YASK-format written to '", yask_file.get_filename(), "'.")
 
     print("Equations:")
     for eq in soln.get_equations() :
-        print("  " + eq.format_simple())
+        print("  ", eq.format_simple())
 
-    print("Debug output captured:\n" + do.get_string())
+    print("Debug output captured:\n", do.get_string())
     print("End of YASK compiler API test.")

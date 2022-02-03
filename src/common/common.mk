@@ -115,8 +115,11 @@ SERIALIZE	= 	exec {fd}>/tmp/$$USER.YASK.build-lock; \
 MK_DIR		=	@ if [ \! -d $(1) ]; then \
 			  $(call SERIALIZE,$(MKDIR) $(1)); fi
 
+# Script to remove unsupported function in python 3.8+.
+SWIG_PATCH	:= perl -i -n -e 'print unless /_PyObject_GC_UNTRACK/'
+
 # Options for compiling SWIG-generated code w/gcc.
-SWIG_GCCFLAGS	:= -D_PyObject_GC_UNTRACK='(void)'
+SWIG_GCCFLAGS	:= -DYASK_DEPRECATED=''
 
 # Define deprecated macro used by SWIG.
 DBL_EPSILON_CXXFLAG	:=	-DDBL_EPSILON=2.2204460492503131e-16

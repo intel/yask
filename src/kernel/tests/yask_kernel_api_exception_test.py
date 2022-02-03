@@ -74,7 +74,7 @@ if __name__ == "__main__":
     except RuntimeError as e:
         print ("YASK throws an exception.")
         print (format(e))
-        print ("Exception Test: Catch exception correctly.")
+        print ("Exception Test: Caught exception correctly.")
         num_exception = num_exception + 1
 
     # Exception test
@@ -84,29 +84,12 @@ if __name__ == "__main__":
     except RuntimeError as e:
         print ("YASK throws an exception.")
         print (format(e))
-        print ("Exception Test: Catch exception correctly.")
+        print ("Exception Test: Caught exception correctly.")
         num_exception = num_exception + 1
     
     # Allocate memory for any vars that do not have storage set.
     # Set other data structures needed for stencil application.
     soln.prepare_solution()
-
-    # Print some info about the solution.
-    print("Stencil-solution '" + name + "':")
-    print("  Step dimension: " + repr(soln.get_step_dim_name()))
-    print("  Domain dimensions: " + repr(soln.get_domain_dim_names()))
-    print("  Vars:")
-    for var in soln.get_vars() :
-        print("    " + var.get_name() + repr(var.get_dim_names()))
-        for dname in var.get_dim_names() :
-            if dname in soln.get_domain_dim_names() :
-                print("      '" + dname + "' allowed index range in this rank: " +
-                      repr(var.get_first_rank_alloc_index(dname)) + " ... " +
-                      repr(var.get_last_rank_alloc_index(dname)))
-            elif dname in soln.get_misc_dim_names() :
-                print("      '" + dname + "' allowed index range: " +
-                      repr(var.get_first_misc_index(dname)) + " ... " +
-                      repr(var.get_last_misc_index(dname)))
 
     # Init the vars.
     for var in soln.get_vars() :
@@ -121,7 +104,7 @@ if __name__ == "__main__":
 
     soln.end_solution()
     soln.get_stats()
-    print("Debug output captured:\n" + debug_output.get_string())
+    #print("Debug output captured:\n", debug_output.get_string())
 
     if num_exception != 2:
         print("There is a problem in exception test.")

@@ -96,12 +96,6 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:acbb35addfd24ab805d68e7ec0e76b8b9"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yc.html#ga9a62b44ca70077bbedfd93527c87c56e">yc_var_point_node_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__var.html#acbb35addfd24ab805d68e7ec0e76b8b9">new_var_point</a> (const std::initializer_list&lt; <a class="el" href="group__yc.html#ga22125cb7af210ef5a3ffad03f544074a">yc_number_node_ptr</a> &gt; &amp;index_exprs)=0</td></tr>
 <tr class="memdesc:acbb35addfd24ab805d68e7ec0e76b8b9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a reference to a point in this var.  <a href="#acbb35addfd24ab805d68e7ec0e76b8b9">More...</a><br /></td></tr>
 <tr class="separator:acbb35addfd24ab805d68e7ec0e76b8b9"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a2d35bc9166438e77a4f9ff7dc2778f6b"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yc.html#ga9a62b44ca70077bbedfd93527c87c56e">yc_var_point_node_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__var.html#a2d35bc9166438e77a4f9ff7dc2778f6b">new_relative_var_point</a> (const std::vector&lt; int &gt; &amp;dim_offsets)=0</td></tr>
-<tr class="memdesc:a2d35bc9166438e77a4f9ff7dc2778f6b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a reference to a point in this var using relative offsets.  <a href="#a2d35bc9166438e77a4f9ff7dc2778f6b">More...</a><br /></td></tr>
-<tr class="separator:a2d35bc9166438e77a4f9ff7dc2778f6b"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a18912b133d220d8ea20a847abb893592"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yc.html#ga9a62b44ca70077bbedfd93527c87c56e">yc_var_point_node_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__var.html#a18912b133d220d8ea20a847abb893592">new_relative_var_point</a> (const std::initializer_list&lt; int &gt; &amp;dim_offsets)=0</td></tr>
-<tr class="memdesc:a18912b133d220d8ea20a847abb893592"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create a reference to a point in this var using relative offsets.  <a href="#a18912b133d220d8ea20a847abb893592">More...</a><br /></td></tr>
-<tr class="separator:a18912b133d220d8ea20a847abb893592"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a59099b1ba72b889e386a2f48912eef0a"><td class="memItemLeft" align="right" valign="top">virtual bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__var.html#a59099b1ba72b889e386a2f48912eef0a">is_dynamic_step_alloc</a> () const =0</td></tr>
 <tr class="memdesc:a59099b1ba72b889e386a2f48912eef0a"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Get whether the allocation of the step dimension of this var can be modified at run-time.  <a href="#a59099b1ba72b889e386a2f48912eef0a">More...</a><br /></td></tr>
 <tr class="separator:a59099b1ba72b889e386a2f48912eef0a"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -114,6 +108,14 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:ae287dc53eb486e8dbf1a3f6ecec9cafb"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__var.html#ae287dc53eb486e8dbf1a3f6ecec9cafb">set_step_alloc_size</a> (<a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> size)=0</td></tr>
 <tr class="memdesc:ae287dc53eb486e8dbf1a3f6ecec9cafb"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Set the current allocation in the step dimension of this var.  <a href="#ae287dc53eb486e8dbf1a3f6ecec9cafb">More...</a><br /></td></tr>
 <tr class="separator:ae287dc53eb486e8dbf1a3f6ecec9cafb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a08bd94bd9934eb4cec308638cfffe53d"><td class="memItemLeft" align="right" valign="top"><a id="a08bd94bd9934eb4cec308638cfffe53d"></a>
+virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> <a class="el" href="group__yc.html#ga9a62b44ca70077bbedfd93527c87c56e">yc_var_point_node_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__var.html#a08bd94bd9934eb4cec308638cfffe53d">new_relative_var_point</a> (const std::vector&lt; int &gt; &amp;dim_offsets)=0</td></tr>
+<tr class="memdesc:a08bd94bd9934eb4cec308638cfffe53d"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yc__var.html#aad91c7587f75392db28d7a19bb53b423" title="Create a reference to a point in this var.">new_var_point()</a>. <br /></td></tr>
+<tr class="separator:a08bd94bd9934eb4cec308638cfffe53d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3d1dc10ae85f73f74203ce405618ae5e"><td class="memItemLeft" align="right" valign="top"><a id="a3d1dc10ae85f73f74203ce405618ae5e"></a>
+virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> <a class="el" href="group__yc.html#ga9a62b44ca70077bbedfd93527c87c56e">yc_var_point_node_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__var.html#a3d1dc10ae85f73f74203ce405618ae5e">new_relative_var_point</a> (const std::initializer_list&lt; int &gt; &amp;dim_offsets)=0</td></tr>
+<tr class="memdesc:a3d1dc10ae85f73f74203ce405618ae5e"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yc__var.html#aad91c7587f75392db28d7a19bb53b423" title="Create a reference to a point in this var.">new_var_point()</a>. <br /></td></tr>
+<tr class="separator:a3d1dc10ae85f73f74203ce405618ae5e"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aa9dcbc42cd74571ef124f9801a177e18"><td class="memItemLeft" align="right" valign="top"><a id="aa9dcbc42cd74571ef124f9801a177e18"></a>
 <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> <a class="el" href="group__yc.html#ga9a62b44ca70077bbedfd93527c87c56e">yc_var_point_node_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__var.html#aa9dcbc42cd74571ef124f9801a177e18">new_grid_point</a> (const std::vector&lt; <a class="el" href="group__yc.html#ga22125cb7af210ef5a3ffad03f544074a">yc_number_node_ptr</a> &gt; &amp;index_exprs)</td></tr>
 <tr class="memdesc:aa9dcbc42cd74571ef124f9801a177e18"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yc__var.html#aad91c7587f75392db28d7a19bb53b423" title="Create a reference to a point in this var.">new_var_point()</a>. <br /></td></tr>
@@ -124,11 +126,11 @@ Public Member Functions</h2></td></tr>
 <tr class="separator:a33df3a69c0a880009a764dd6b9ae04b0"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a01803ca6d935b1d67093ee39192ecd39"><td class="memItemLeft" align="right" valign="top"><a id="a01803ca6d935b1d67093ee39192ecd39"></a>
 <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> <a class="el" href="group__yc.html#ga9a62b44ca70077bbedfd93527c87c56e">yc_var_point_node_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__var.html#a01803ca6d935b1d67093ee39192ecd39">new_relative_grid_point</a> (const std::vector&lt; int &gt; &amp;dim_offsets)</td></tr>
-<tr class="memdesc:a01803ca6d935b1d67093ee39192ecd39"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yc__var.html#a2d35bc9166438e77a4f9ff7dc2778f6b" title="Create a reference to a point in this var using relative offsets.">new_relative_var_point()</a>. <br /></td></tr>
+<tr class="memdesc:a01803ca6d935b1d67093ee39192ecd39"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yc__var.html#a08bd94bd9934eb4cec308638cfffe53d" title="[Deprecated] Use new_var_point().">new_relative_var_point()</a>. <br /></td></tr>
 <tr class="separator:a01803ca6d935b1d67093ee39192ecd39"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a69b1d05f4337b58afd9e5715663456ce"><td class="memItemLeft" align="right" valign="top"><a id="a69b1d05f4337b58afd9e5715663456ce"></a>
 <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> <a class="el" href="group__yc.html#ga9a62b44ca70077bbedfd93527c87c56e">yc_var_point_node_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__var.html#a69b1d05f4337b58afd9e5715663456ce">new_relative_grid_point</a> (const std::initializer_list&lt; int &gt; &amp;dim_offsets)</td></tr>
-<tr class="memdesc:a69b1d05f4337b58afd9e5715663456ce"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yc__var.html#a2d35bc9166438e77a4f9ff7dc2778f6b" title="Create a reference to a point in this var using relative offsets.">new_relative_var_point()</a>. <br /></td></tr>
+<tr class="memdesc:a69b1d05f4337b58afd9e5715663456ce"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yc__var.html#a08bd94bd9934eb4cec308638cfffe53d" title="[Deprecated] Use new_var_point().">new_relative_var_point()</a>. <br /></td></tr>
 <tr class="separator:a69b1d05f4337b58afd9e5715663456ce"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
@@ -284,74 +286,6 @@ Public Member Functions</h2></td></tr>
 <p>C++ initializer-list version with same semantics as the vector version of <a class="el" href="classyask_1_1yc__var.html#aad91c7587f75392db28d7a19bb53b423" title="Create a reference to a point in this var.">new_var_point()</a>.</p>
 <p>See example code shown in <a class="el" href="classyask_1_1yc__solution.html#a192b0f12d3943483514e16c82c15a42b" title="Create an n-dimensional variable in the solution.">yc_solution::new_var()</a>.</p>
 <dl class="section note"><dt>Note</dt><dd>Not available in the Python API. Use the vector version. </dd></dl>
-<dl class="section return"><dt>Returns</dt><dd>Pointer to AST node used to read or write from point in var. </dd></dl>
-
-</div>
-</div>
-<a id="a2d35bc9166438e77a4f9ff7dc2778f6b"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a2d35bc9166438e77a4f9ff7dc2778f6b">&#9670;&nbsp;</a></span>new_relative_var_point() <span class="overload">[1/2]</span></h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">virtual <a class="el" href="group__yc.html#ga9a62b44ca70077bbedfd93527c87c56e">yc_var_point_node_ptr</a> yask::yc_var::new_relative_var_point </td>
-          <td>(</td>
-          <td class="paramtype">const std::vector&lt; int &gt; &amp;&#160;</td>
-          <td class="paramname"><em>dim_offsets</em></td><td>)</td>
-          <td></td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-
-<p>Create a reference to a point in this var using relative offsets. </p>
-<p>A shorthand function for calling <a class="el" href="classyask_1_1yc__var.html#aad91c7587f75392db28d7a19bb53b423" title="Create a reference to a point in this var.">new_var_point()</a> when all index expressions are constant offsets. Each offset refers to the dimensions defined when the var was created via <a class="el" href="classyask_1_1yc__solution.html#a192b0f12d3943483514e16c82c15a42b" title="Create an n-dimensional variable in the solution.">yc_solution::new_var()</a>.</p>
-<p>Example: if <code>g = new_var("data", {t, x, y})</code> with step-dimension <code>t</code> and domain-dimensions <code>x</code> and <code>y</code>, <code>g-&gt;new_relative_var_point({1, -1, 0})</code> refers to the same point as <code>g-&gt;new_var_point({t + 1, x - 1, y})</code>.</p>
-<dl class="section warning"><dt>Warning</dt><dd>This convenience function can only be used when every dimension of the var is either the step dimension or a domain dimension. If this is not the case, use <a class="el" href="classyask_1_1yc__var.html#aad91c7587f75392db28d7a19bb53b423" title="Create a reference to a point in this var.">new_var_point()</a>. </dd></dl>
-<dl class="section return"><dt>Returns</dt><dd>Pointer to AST node used to read from or write to point in var. </dd></dl>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">dim_offsets</td><td>offset from evaluation index in each dim. </td></tr>
-  </table>
-  </dd>
-</dl>
-
-</div>
-</div>
-<a id="a18912b133d220d8ea20a847abb893592"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a18912b133d220d8ea20a847abb893592">&#9670;&nbsp;</a></span>new_relative_var_point() <span class="overload">[2/2]</span></h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">virtual <a class="el" href="group__yc.html#ga9a62b44ca70077bbedfd93527c87c56e">yc_var_point_node_ptr</a> yask::yc_var::new_relative_var_point </td>
-          <td>(</td>
-          <td class="paramtype">const std::initializer_list&lt; int &gt; &amp;&#160;</td>
-          <td class="paramname"><em>dim_offsets</em></td><td>)</td>
-          <td></td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-
-<p>Create a reference to a point in this var using relative offsets. </p>
-<p>C++ initializer-list version with same semantics as the vector version of <a class="el" href="classyask_1_1yc__var.html#a2d35bc9166438e77a4f9ff7dc2778f6b" title="Create a reference to a point in this var using relative offsets.">new_relative_var_point()</a>. </p><dl class="section note"><dt>Note</dt><dd>Not available in the Python API. Use the vector version. </dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>Pointer to AST node used to read or write from point in var. </dd></dl>
 
 </div>

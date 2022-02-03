@@ -149,21 +149,24 @@ typedef std::uint64_t bit_mask_t;
 #endif
 #endif
 
+// Vector pragmas supported by classic and LLVM-based Intel compilers.
 #ifndef NO_PRAGMA_VEC1
 #define _NO_VECTOR _Pragma("novector")
 #define _VEC_ALWAYS _Pragma("vector always")
+#define _VEC_ALIGNED _Pragma("vector aligned")
+#define _VEC_STREAMING _Pragma("vector nontemporal")
 #else
 #define _NO_VECTOR
 #define _VEC_ALWAYS
-#endif
-#ifndef NO_PRAGMA_VEC2
-#define _VEC_ALIGNED _Pragma("vector aligned")
-#define _VEC_UNALIGNED _Pragma("vector unaligned")
-#define _VEC_STREAMING _Pragma("vector nontemporal")
-#else
 #define _VEC_ALIGNED
-#define _VEC_UNALIGNED
 #define _VEC_STREAMING
+#endif
+
+// Vector pragmas supported by classic but not LLVM-based Intel compiler.
+#ifndef NO_PRAGMA_VEC2
+#define _VEC_UNALIGNED _Pragma("vector unaligned")
+#else
+#define _VEC_UNALIGNED
 #endif
 
 #ifndef NO_PRAGMA_SIMD

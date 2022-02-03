@@ -119,12 +119,14 @@ int main() {
 
         // Generate DOT output.
         auto dot_file = ofac.new_file_output("yc-api-test-cxx.dot");
-        soln->format("dot", dot_file);
+        soln->set_target("dot");
+        soln->output_solution(dot_file);
         cout << "DOT-format written to '" << dot_file->get_filename() << "'.\n";
 
         // Generate YASK output.
         auto yask_file = ofac.new_file_output("yc-api-test-cxx.hpp");
-        soln->format("avx", yask_file);
+        soln->set_target("avx");
+        soln->output_solution(yask_file);
         cout << "YASK-format written to '" << yask_file->get_filename() << "'.\n";
 
         cout << "End of YASK compiler API test.\n";

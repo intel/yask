@@ -50,48 +50,17 @@ if __name__ == "__main__":
 
     # Create a var.
     g1 = soln.new_var("test_var", [t, x, y, z])
-
-    # Create an expression for the new value.
-    # This will average some of the neighboring points around the
-    # current stencil application point in the current timestep.
-    n0 = g1.new_relative_var_point([0, 0, 0, 0])  # center-point at this timestep.
+    n0 = g1.new_var_point([t, x, y, z])  # center-point at this timestep.
 
     # Exception test
-    print("Exception Test: Call 'new_relative_var_point' with wrong argument.")
+    print("Exception Test: Calling 'new_var_point' with too many arguments.")
     try:
-        n1 = nfac.new_add_node(n0, g1.new_relative_var_point([0, -1,  0,  0,  1])) # left.
+        n1 = g1.new_var_point([t, x, y, z, x])
     except RuntimeError as e:
         print ("YASK threw an expected exception.")
         print (format(e))
-        print ("Exception Test: Catch exception correctly.")
+        print ("Exception Test: Caught exception correctly.")
         num_exception = num_exception + 1
-
-    # Create an expression using points in g1.
-    # This will average some of the neighboring points around the
-    # current stencil application point in the current timestep.
-    n1 = (g1.new_var_point([t, x,   y,   z  ]) + # center.
-          g1.new_var_point([t, x-1, y,   z  ]) + # left.
-          g1.new_var_point([t, x+1, y,   z  ]) + # right.
-          g1.new_var_point([t, x,   y-1, z  ]) + # above.
-          g1.new_var_point([t, x,   y+1, z  ]) + # below.
-          g1.new_var_point([t, x,   y,   z-1]) + # in front.
-          g1.new_var_point([t, x,   y,   z  ])) # behind.
-    n2 = n1 / 7  # ave of the 7 points.
-
-    # Create an equation to define the value at the next timestep.
-    n3 = g1.new_relative_var_point([1, 0, 0, 0]) # center-point at next timestep.
-    n4 = nfac.new_equation_node(n3, n2) # equate to expr n2.
-    print("Equation before formatting: " + n4.format_simple())
-    print("Solution '" + soln.get_name() + "' contains " +
-          str(soln.get_num_vars()) + " var(s), and " +
-          str(soln.get_num_equations()) + " equation(s).")
-    for var in soln.get_vars() :
-        print("Var " + var.get_name() +
-              " has the following dim(s): " +
-              repr(var.get_dim_names()));
-
-    # Number of bytes in each FP value.
-    soln.set_element_bytes(4)
 
     # Exception test
     print("Exception Test: Call 'new_file_output' with invalid dir.")
@@ -100,26 +69,17 @@ if __name__ == "__main__":
     except RuntimeError as e:
         print ("YASK threw an expected exception.")
         print (format(e))
-        print ("Exception Test: Catch exception correctly.")
+        print ("Exception Test: Caught exception correctly.")
         num_exception = num_exception + 1
 
-    # Generate DOT output.
-    dot_file = ofac.new_file_output("yc-api-test-with-exception-py.dot")
-    soln.format("dot", dot_file)
-    print("DOT-format written to '" + dot_file.get_filename() + "'.")
-
-    # Generate YASK output.
-    yask_file = ofac.new_file_output("yc-api-test-with-exception-py.hpp")
-    soln.format("avx", yask_file)
-    print("YASK-format written to '" + yask_file.get_filename() + "'.")
-
     # Exception test
+    print("Exception Test: Call 'set_target' with invalid target.")
     try:
-        soln.format("wrong_format", dot_file)
+        soln.set_target("bad_target")
     except RuntimeError as e:
         print ("YASK threw an expected exception.")
         print (format(e))
-        print ("Exception Test: Catch exception correctly.")
+        print ("Exception Test: Caught exception correctly.")
         num_exception = num_exception + 1
 
     # Check whether program handles exceptions or not.
@@ -127,4 +87,4 @@ if __name__ == "__main__":
         print("There is a problem in exception test.")
         exit(1)
     else:
-        print("End of YASK compiler API test with exception.")
+        print("End of YASK compiler API test with exceptions.")

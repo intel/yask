@@ -425,13 +425,14 @@ ifeq ($(cxx_is_llvm_intel),1)
 			-Wno-unused-const-variable -fno-color-diagnostics
  OMPFLAG	:=	-fiopenmp
  SWIG_CXXFLAGS	+=	-Wno-deprecated-declarations
+ VEC_MACROS	+=	NO_PRAGMA_VEC2
 
 # Clang compiler (clang++, not Intel version).
 else ifeq ($(cxx_is_clang),1)
  YK_CXXFLAGS	+=	$(GXX_ISA)
  YK_CXXWARN	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable \
 			-Wno-unused-const-variable -fno-color-diagnostics
- VEC_MACROS	+=	NO_SVML
+ VEC_MACROS	+=	NO_SVML NO_PRAGMA_VEC2
 
 # Classic Intel compiler (icpc, not LLVM-based).
 else ifeq ($(cxx_is_intel),1)
@@ -733,6 +734,7 @@ $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.cpp: $(YK_SWIG_DIR)/yask*.i $(INC_DIR)/*
 	  -DUSE_MPI -DMPI_VERSION=3 -DMPI_Comm=int \
 	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig -I$(COEFF_DIR) \
 	  -c++ -python -o $@ -outdir $(PY_OUT_DIR) -builtin $<
+	$(SWIG_PATCH) $<
 
 $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.o: $(YK_SWIG_OUT_DIR)/yask_kernel_api_wrap.cpp
 	$(call MK_DIR,$(dir $@))

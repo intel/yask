@@ -50,15 +50,15 @@ and Intel(R) graphics processors.
       Reading the generated code is only necessary for debug or curiosity.
     * SWIG (3.0.12 or later; 4.0.0 or later recommended),
       http://www.swig.org, for creating the Python interface.
-    * Python 2 (2.7.5 or later) or 3 (3.6.1 or later, recommended),
+    * Python 3 (3.6.1 or later, recommended):
       https://www.python.org/downloads, for creating and using the Python interface.
-    * Doxygen (1.8.11 or later),
+    * Doxygen (1.8.11 or later):
       http://doxygen.org, for creating updated API documentation.
       If you're not changing the API documentation, you can view the existing documentation
       at the link at the top of this page.
-    * Graphviz (2.30.1 or later),
+    * Graphviz (2.30.1 or later):
       http://www.graphviz.org, for rendering stencil diagrams.
-    * Intel(R) Software Development Emulator,
+    * Intel(R) Software Development Emulator:
       https://software.intel.com/en-us/articles/intel-software-development-emulator,
       for functional testing if you don't have native support for the targeted instruction set.
 
@@ -107,6 +107,8 @@ and Intel(R) graphics processors.
     block by default (because 2 cores share an L2 cache).
   - Intel(R) Xeon Phi(TM) x100-family processors (KNC) are no longer supported.
     (Intel(R) Xeon Phi(TM) x200-family processors (KNL) are still supported.)
+  - Python v2 is no longer supported.
+  - Deprecated `new_relative_var_point()` API.
 
 ### Version 3
 * Version 3.05.00 changed the default setting of `-use_shm` to `true`.

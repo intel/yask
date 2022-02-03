@@ -45,11 +45,15 @@ IN THE SOFTWARE.
 
 // Things SWIG can't handle.
 #ifdef SWIG
+#ifndef YASK_DEPRECATED
 #define YASK_DEPRECATED
+#endif
 #define YASK_INT64_T long int
 #else
 /// Deprecated attribute.
+#ifndef YASK_DEPRECATED
 #define YASK_DEPRECATED [[deprecated]]
+#endif
 /// Signed 64-bit int.
 #define YASK_INT64_T std::int64_t
 #endif

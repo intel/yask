@@ -33,7 +33,6 @@ IN THE SOFTWARE.
 #include <sys/types.h>
 #include <unistd.h>
 
-
 using namespace std;
 using namespace yask;
 

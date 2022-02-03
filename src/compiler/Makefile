@@ -130,6 +130,7 @@ $(YC_SWIG_OUT_DIR)/yask_compiler_api_wrap.cpp: $(YC_SWIG_DIR)/yask*.i $(INC_DIR)
 	$(SWIG) -v -DYC_MODULE=$(YC_MODULE) -cppext cpp \
 	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig -I$(COEFF_DIR) \
 	  -c++ -python -o $@ -outdir $(PY_OUT_DIR) -builtin $<
+	$(SWIG_PATCH) $<
 
 # Turn off asserts to work around known SWIG issue:
 # https://github.com/swig/swig/issues/773
