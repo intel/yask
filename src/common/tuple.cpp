@@ -85,13 +85,15 @@ namespace yask {
         }
     }
     template <typename T>
-    void Tuple<T>::add_dim_front(const std::string& dim, const T& val) {
+    void Tuple<T>::add_dim_at(int posn, const std::string& dim, const T& val) {
         auto* p = lookup(dim);
         if (p)
             *p = val;
         else {
+            assert(posn >= 0);
+            assert(posn <= int(_q.size()));
             Scalar<T> sv(dim, val);
-            _q.insert(_q.begin(), sv);
+            _q.insert(_q.begin() + posn, sv);
         }
     }
 

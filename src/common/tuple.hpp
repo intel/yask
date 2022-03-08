@@ -298,9 +298,15 @@ namespace yask {
         void add_dim_back(const Scalar<T>& sc) {
             add_dim_back(sc._get_name(), sc.get_val());
         }
-        void add_dim_front(const std::string& dim, const T& val);
+        void add_dim_at(int posn, const std::string& dim, const T& val);
+        void add_dim_at(int posn, const Scalar<T>& sc) {
+            add_dim_at(posn, sc._get_name(), sc.get_val());
+        }
+        void add_dim_front(const std::string& dim, const T& val) {
+            add_dim_at(0, dim, val);
+        }
         void add_dim_front(const Scalar<T>& sc) {
-            add_dim_front(sc._get_name(), sc.get_val());
+            add_dim_at(0, sc._get_name(), sc.get_val());
         }
 
         // Set value by dim posn (posn i must exist).

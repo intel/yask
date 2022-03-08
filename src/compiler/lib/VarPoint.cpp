@@ -127,6 +127,9 @@ namespace yask {
     const index_expr_ptr_vec& VarPoint::get_dims() const {
         return _var->get_dims();
     }
+    const index_expr_ptr_vec& VarPoint::get_layout_dims() const {
+        return _var->get_layout_dims();
+    }
 
     // Make normalized string like "x+(4/VLEN_X)" from
     // original arg "x+4" in 'dname' dim.

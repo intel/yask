@@ -41,12 +41,13 @@ namespace yask {
     // A class for a Var.
     // This is a generic container for all variables to be accessed
     // from the kernel. A 0-D var is a scalar, a 1-D var is an array, etc.
-    // Dims can be the step dim, a domain dim, or anything else.
+    // Dims can be the step dim, a domain dim, or a misc dim.
     class Var : public virtual yc_var {
 
     protected:
         string _name;           // name of this var.
-        index_expr_ptr_vec _dims;  // dimensions of this var.
+        index_expr_ptr_vec _dims;  // dimensions of this var in param order.
+        index_expr_ptr_vec _layout_dims;  // dimensions of this var in layout order.
         bool _is_scratch = false; // true if a temp var.
 
         // Step-dim info.
@@ -113,6 +114,7 @@ namespace yask {
         string get_descr() const;
 
         // Access dims for this var (not for soln).
+        // The are returned in declaration order (not necessarily layout order).
         virtual const index_expr_ptr_vec& get_dims() const { return _dims; }
         IntTuple get_dims_tuple() const {
             IntTuple gdims;
@@ -122,6 +124,8 @@ namespace yask {
             }
             return gdims;
         }
+        virtual const index_expr_ptr_vec& get_layout_dims() const { return _layout_dims; }
+        virtual index_expr_ptr_vec& get_layout_dims() { return _layout_dims; }
 
         // Step dim or null if none.
         virtual const index_expr_ptr get_step_dim() const {

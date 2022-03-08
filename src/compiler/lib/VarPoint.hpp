@@ -97,6 +97,7 @@ namespace yask {
         virtual const string& get_var_name() const;
         virtual bool is_var_foldable() const;
         virtual const index_expr_ptr_vec& get_dims() const;
+        virtual const index_expr_ptr_vec& get_layout_dims() const;
 
         // Accessors.
         virtual const num_expr_ptr_vec& get_args() const { return _args; }

@@ -151,8 +151,32 @@ namespace yask {
         assert(_inner_loop_dim_num > 0);
         assert(_inner_loop_dim_num <= ndd);
 
+        // Order all dims for layout.
+        // Start w/all domain dims.
+        _layout_dims = _domain_dims;
+
+        // Insert step dim depending on setting.
+        if (settings._inner_step && _layout_dims.size() > 1)
+            _layout_dims.add_dim_at(1, _step_dim, 0);
+        else
+            _layout_dims.add_dim_front(_step_dim, 0);
+
+        // Insert misc dims depending on setting.
+        for (int i = 0; i < _misc_dims.get_num_dims(); i++) {
+            auto& mdim = _misc_dims.get_dim(i);
+            if (settings._inner_misc)
+                _layout_dims.add_dim_back(mdim);
+            else
+                _layout_dims.add_dim_at(i, mdim);
+        }
+
         os << "Step dimension: " << _step_dim << endl;
         os << "Domain dimension(s): " << _domain_dims.make_dim_str() << endl;
+        if (_misc_dims.get_num_dims())
+            os << "Misc dimension(s): " << _misc_dims.make_dim_str() << endl;
+        else
+            os << "No misc dimensions used\n";
+        os << "Dimension(s) in layout order: " << _layout_dims.make_dim_str() << endl;
         os << "Inner-loop dimension: " << settings._inner_loop_dim << endl;
 
         // Extract domain fold lengths based on cmd-line options.
@@ -172,7 +196,8 @@ namespace yask {
             _fold.set_val(dname, sz);
             fold_opts.add_dim_back(dname, sz);
         }
-        os << " Number of SIMD elements: " << vlen << endl;
+        os << "Folding and clustering:\n"
+            " Number of SIMD elements: " << vlen << endl;
         if (fold_opts.get_num_dims())
             os << " Requested vector-fold dimension(s) and point-size(s): " <<
                 _fold.make_dim_val_str(" * ") << endl;
@@ -308,10 +333,6 @@ namespace yask {
             _cluster_mults.make_dim_val_str(" * ") << endl;
         os << " Cluster dimension(s) and point-size(s): " <<
             _cluster_pts.make_dim_val_str(" * ") << endl;
-        if (_misc_dims.get_num_dims())
-            os << "Misc dimension(s): " << _misc_dims.make_dim_str() << endl;
-        else
-            os << "No misc dimensions used\n";
     }
 
     // Make string like "+(4/VLEN_X)" or "-(2/VLEN_Y)" or "" if ofs==zero.

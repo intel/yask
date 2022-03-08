@@ -257,27 +257,14 @@ namespace yask {
     // Print YASK var types and core-data class.
     void YASKCppPrinter::print_data(ostream& os) {
 
-        // Preferred dim layout order.
-        vector<string> dorder;
-        for (int i = 0; i < _dims._domain_dims.get_num_dims(); i++)
-            dorder.push_back(_dims._domain_dims.get_dim_name(i));
-        if (_settings._inner_step && dorder.size() > 1)
-            dorder.insert(dorder.begin() + 1, _dims._step_dim);
-        else
-            dorder.insert(dorder.begin(), _dims._step_dim);
-        for (int i = 0; i < _dims._misc_dims.get_num_dims(); i++) {
-            auto& dname = _dims._misc_dims.get_dim_name(i);
-            if (_settings._inner_misc)
-                dorder.push_back(dname);
-            else
-                dorder.insert(dorder.begin() + i, dname);
-        }
+        // Dim layout order to be applied to all vars,
+        // regardless of their dim-declaration order.
         os << "\n ///// Stencil var type(s).\n"
             " // General array layout order (outer-to-inner): ";
-        for (size_t i = 0; i < dorder.size(); i++) {
+        for (size_t i = 0; i < _dims._layout_dims.size(); i++) {
             if (i > 0)
                 os << ", ";
-            os << dorder[i];
+            os << _dims._layout_dims.get_dim(i)._get_name();
         }
         os << ".\n";
         
@@ -298,7 +285,7 @@ namespace yask {
             else
                 os << "not updated by any equation (read-only).\n";
             if (ndims) {
-                os << " // Dimensions in parameter order: ";
+                os << " // Dimensions in parameter (declaration) order: ";
                 for (int dn = 0; dn < ndims; dn++) {
                     if (dn)
                         os << ", ";
@@ -325,11 +312,12 @@ namespace yask {
                 // 1-D or more.
                 if (ndims) {
                     int ndone = 0;
+                    auto& ldims = gp->get_layout_dims();
                     os << " // Dimensions in layout order: ";
 
                     // Preferred order.
-                    for (size_t i = 0; i < dorder.size(); i++) {
-                        auto& dname = dorder[i];
+                    for (size_t i = 0; i < _dims._layout_dims.size(); i++) {
+                        auto& dname = _dims._layout_dims.get_dim(i)._get_name();
 
                         // Find in this var (if it exists).
                         for (int dn = 0; dn < ndims; dn++) {
@@ -337,6 +325,9 @@ namespace yask {
                             if (dname != dim->_get_name())
                                 continue;
                             auto dtype = dim->get_type();
+
+                            // Update layout list in var.
+                            ldims.push_back(dim);
 
                             // Step dim?
                             if (dtype == STEP_INDEX) {
@@ -360,9 +351,12 @@ namespace yask {
                                 os << ", ";
                             os << dname;
                             ndone++;
-                        }
-                    } // dims.
+
+                            break; // This dim has been found.
+                        } // dims in parameter order.
+                    } // dims in layout order.
                     assert(ndims == ndone);
+                    assert(ndims == int(ldims.size()));
                     os << ".\n";
 
                 } // not scalar.
