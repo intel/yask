@@ -152,7 +152,7 @@ namespace yask {
             auto& dname = dim->_get_name();
             auto type = dim->get_type();
 
-            // Set inner-layout dim to current index only,
+            // Set inner-layout domain dim to current index only,
             // i.e., no offset.
             if (dname == _dims._inner_layout_dim) {
                 IntScalar idi(dname, 0);

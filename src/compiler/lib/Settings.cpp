@@ -155,11 +155,8 @@ namespace yask {
         // Start w/all domain dims.
         _layout_dims = _domain_dims;
 
-        // Insert step dim depending on setting.
-        if (settings._inner_step && _layout_dims.size() > 1)
-            _layout_dims.add_dim_at(1, _step_dim, 0);
-        else
-            _layout_dims.add_dim_front(_step_dim, 0);
+        // Insert step dim.
+        _layout_dims.add_dim_front(_step_dim, 0);
 
         // Insert misc dims depending on setting.
         for (int i = 0; i < _misc_dims.get_num_dims(); i++) {
@@ -168,6 +165,12 @@ namespace yask {
                 _layout_dims.add_dim_back(mdim);
             else
                 _layout_dims.add_dim_at(i, mdim);
+        }
+
+        // Move outer layout dim if requested.
+        if (settings._outer_domain && _layout_dims.size() > 1) {
+            _layout_dims.remove_dim(_outer_layout_dim);
+            _layout_dims.add_dim_front(_outer_layout_dim, 0);
         }
 
         os << "Step dimension: " << _step_dim << endl;

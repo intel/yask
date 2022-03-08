@@ -140,14 +140,20 @@ void usage(const string& cmd,
         " -read-ahead-dist <n>\n"
         "    Number of iterations to read ahead into the inner-loop buffers\n"
         "      (default=" << settings._read_ahead_dist << ").\n"
-        " [-no]-reloc-step\n"
-        "    Set YASK var layout with the 'step' dim just after the first domain dim\n"
-        "      instead of just before the first domain dim (default=" << settings._inner_step << ").\n"
-        " [-no]-interleave-misc\n"
-        "    Set YASK vars layout with the 'misc' dim(s) as the inner-most dim(s)\n"
+        " [-no]-inner-misc-layout\n"
+        "    Set YASK-var memory layout so that the misc dim(s) are the inner-most dim(s)\n"
         "      instead of the outer-most (default=" << settings._inner_misc << ").\n"
-        "      This effectively creates an AoSoA-style layout instead of an SoAoA one.\n"
-        "      This disallows dynamcally changing the 'misc' dim sizes from the kernel APIs.\n"
+        "      This effectively creates an AoSoA-style layout instead of an SoAoA one,\n"
+        "      where the last 'A' is the SIMD vector.\n"
+        "      This setting may help decrease the number of memory streams for complex\n"
+        "      kernels when misc dims are used to consolidate vars.\n"
+        "      This disallows dynamically changing the 'misc' dim sizes from the kernel APIs.\n"
+        " [-no]-outer-domain-layout\n"
+        "    Set YASK-var memory layout so that the first domain dim is the outer-most\n"
+        "      dim, even if the var contains step or misc dims (default=" << settings._outer_domain << ").\n"
+        "      This setting may be useful for run-time allocators that automatically partition\n"
+        "      array layouts across NUMA nodes.\n"
+        "      Only applied if there are two or more domain dims.\n"
         " -[no]-fus\n"
         "    Make first dimension of fold unit stride (default=" << settings._first_inner << ").\n"
         "      This controls the intra-vector memory layout.\n"
@@ -289,14 +295,14 @@ void parse_opts(int argc, const char* argv[],
                 settings._print_eqs = true;
             else if (opt == "-no-print-eqs")
                 settings._print_eqs = false;
-            else if (opt == "-interleave-misc")
+            else if (opt == "-inner-misc-layout")
                 settings._inner_misc = true;
-            else if (opt == "-no-interleave-misc")
+            else if (opt == "-no-inner-misc-layout")
                 settings._inner_misc = false;
-            else if (opt == "-reloc-step")
-                settings._inner_step = true;
-            else if (opt == "-no-reloc-step")
-                settings._inner_step = false;
+            else if (opt == "-outer-domain-layout")
+                settings._outer_domain = true;
+            else if (opt == "-no-outer-domain-layout")
+                settings._outer_domain = false;
             else if (opt == "-use-ptrs")
                 settings._use_ptrs = true;
             else if (opt == "-no-use-ptrs")

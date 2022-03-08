@@ -54,7 +54,7 @@ namespace yask {
         int _halo_size = 0;      // 0 => calculate each halo automatically.
         int _step_alloc = 0;     // 0 => calculate each step allocation automatically.
         bool _inner_misc = false;
-        bool _inner_step = false;
+        bool _outer_domain = false;
         int _max_expr_size = 50;
         int _min_expr_size = 2;
         bool _do_cse = true;      // do common-subexpr elim.
