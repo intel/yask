@@ -42,7 +42,8 @@ allow_new_var_types	?=	1
 streaming_stores	?=	0
 use_ptrs		?=	1
 use_safe_ptrs		?=	0
-outer_domain_layout		?=	0
+outer_domain_layout	?=	0
+inner_misc_layout 	?=	1
 early_loads		?=	0
 min_buffer_len		?=	1
 read_ahead_dist		?=	0
@@ -92,9 +93,8 @@ ifeq ($(offload),1)
  pfd_l1		:=	0
  pfd_l2		:=	0
  inner_loop_dim :=	1
- outer_domain_layout	:=	1
  early_loads	:=	1
- inner_misc_layout :=	0
+ outer_domain_layout	:=	1
 endif
 
 # Main vars for naming the libraries and executables and running
@@ -125,41 +125,35 @@ ifeq ($(TARGET),knl)
  GXX_ISA	?=	-march=knl
  VEC_MACROS	?=	USE_INTRIN512 USE_RCP28 NUMA_PREF=1
  pfd_l1		?=	1
- inner_misc_layout ?=	1
 
 else ifeq ($(TARGET),avx512)
 
  ICC_ISA	?=	-xCORE-AVX512
  GXX_ISA	?=	-mavx512f -mavx512vl -mavx512cd -mavx512bw
  VEC_MACROS	?=	USE_INTRIN512
- inner_misc_layout ?=	1
 
 else ifeq ($(TARGET),avx512-ymm)
 
  ICC_ISA	?=	-xCORE-AVX512
  GXX_ISA	?=	-mavx512f -mavx512vl -mavx512cd -mavx512bw
  VEC_MACROS	?=	USE_INTRIN512LO
- inner_misc_layout ?=	1
 
 else ifeq ($(TARGET),avx2)
 
  ICC_ISA	?=	-xCORE-AVX2
  GXX_ISA	?=	-mavx2
  VEC_MACROS	?=	USE_INTRIN256 USE_AVX2
- inner_misc_layout ?=	1
 
 else ifeq ($(TARGET),avx)
 
  ICC_ISA	?=	-xAVX
  GXX_ISA	?=	-mavx
  VEC_MACROS	?=	USE_INTRIN256
- inner_misc_layout ?=	1
 
 else ifeq ($(TARGET),intel64)
 
  ICC_ISA	?=	-xHOST
  GXX_ISA	?=
- inner_misc_layout ?=	0
 
 else
 
@@ -1112,8 +1106,10 @@ STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_reverse_2d radius=1
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_reverse_2d radius=1 read_ahead_dist=2
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stages_2d $(call FOLD,x=2 y=2)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d $(call FOLD,x=2 y=2) inner_misc_layout=0
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d $(call FOLD,x=2 y=2) inner_misc_layout=1
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d $(call FOLD,x=2 y=2) inner_misc_layout=0 outer_domain_layout=0
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d $(call FOLD,x=2 y=2) inner_misc_layout=0 outer_domain_layout=1
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d $(call FOLD,x=2 y=2) inner_misc_layout=1 outer_domain_layout=0
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d $(call FOLD,x=2 y=2) inner_misc_layout=1 outer_domain_layout=1
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_2d $(call FOLD,x=2 y=2) read_ahead_dist=2
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_2d $(call FOLD,x=2 y=2)
 

@@ -151,37 +151,6 @@ namespace yask {
         assert(_inner_loop_dim_num > 0);
         assert(_inner_loop_dim_num <= ndd);
 
-        // Order all dims for layout.
-        // Start w/all domain dims.
-        _layout_dims = _domain_dims;
-
-        // Insert step dim.
-        _layout_dims.add_dim_front(_step_dim, 0);
-
-        // Insert misc dims depending on setting.
-        for (int i = 0; i < _misc_dims.get_num_dims(); i++) {
-            auto& mdim = _misc_dims.get_dim(i);
-            if (settings._inner_misc)
-                _layout_dims.add_dim_back(mdim);
-            else
-                _layout_dims.add_dim_at(i, mdim);
-        }
-
-        // Move outer layout dim if requested.
-        if (settings._outer_domain && _layout_dims.size() > 1) {
-            _layout_dims.remove_dim(_outer_layout_dim);
-            _layout_dims.add_dim_front(_outer_layout_dim, 0);
-        }
-
-        os << "Step dimension: " << _step_dim << endl;
-        os << "Domain dimension(s): " << _domain_dims.make_dim_str() << endl;
-        if (_misc_dims.get_num_dims())
-            os << "Misc dimension(s): " << _misc_dims.make_dim_str() << endl;
-        else
-            os << "No misc dimensions used\n";
-        os << "Dimension(s) in layout order: " << _layout_dims.make_dim_str() << endl;
-        os << "Inner-loop dimension: " << settings._inner_loop_dim << endl;
-
         // Extract domain fold lengths based on cmd-line options.
         IntTuple fold_opts;
         for (auto& dim : _domain_dims) {
@@ -298,6 +267,46 @@ namespace yask {
         _fold.set_first_inner(settings._first_inner);
         _fold_gt1.set_first_inner(settings._first_inner);
 
+
+        // Order all dims for layout.
+        // Start w/all domain dims.
+        _layout_dims = _domain_dims;
+
+        // Insert step dim.
+        _layout_dims.add_dim_front(_step_dim, 0);
+
+        // Insert misc dims depending on setting.
+        for (int i = 0; i < _misc_dims.get_num_dims(); i++) {
+            auto& mdim = _misc_dims.get_dim(i);
+            if (settings._inner_misc)
+                _layout_dims.add_dim_back(mdim);
+            else
+                _layout_dims.add_dim_at(i, mdim);
+        }
+
+        // Move outer layout domain dim if requested.
+        if (settings._outer_domain) {
+            _layout_dims.remove_dim(_outer_layout_dim);
+            _layout_dims.add_dim_front(_outer_layout_dim, 0);
+        }
+
+        // Move inner layout domain dim if no explicit SIMD.
+        // This will help enable implicit SIMD when possible.
+        if (_fold.product() <= 1) {
+            _layout_dims.remove_dim(_inner_layout_dim);
+            _layout_dims.add_dim_back(_inner_layout_dim, 0);
+        }
+
+        os << "Step dimension: " << _step_dim << endl;
+        os << "Domain dimension(s): " << _domain_dims.make_dim_str() << endl;
+        if (_misc_dims.get_num_dims())
+            os << "Misc dimension(s): " << _misc_dims.make_dim_str() << endl;
+        else
+            os << "No misc dimensions used\n";
+        os << "Dimension(s) in layout order: " << _layout_dims.make_dim_str() << endl;
+        os << "Inner-loop dimension: " << settings._inner_loop_dim << endl;
+
+        
         // Checks for unaligned loads.
         if (settings._allow_unaligned_loads) {
             if (_fold_gt1.size() > 1) {
