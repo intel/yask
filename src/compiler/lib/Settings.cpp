@@ -286,14 +286,14 @@ namespace yask {
 
         // Move outer layout domain dim if requested.
         if (settings._outer_domain) {
-            _layout_dims.remove_dim(_outer_layout_dim);
+            _layout_dims = _layout_dims.remove_dim(_outer_layout_dim);
             _layout_dims.add_dim_front(_outer_layout_dim, 0);
         }
 
         // Move inner layout domain dim if no explicit SIMD.
         // This will help enable implicit SIMD when possible.
         if (_fold.product() <= 1) {
-            _layout_dims.remove_dim(_inner_layout_dim);
+            _layout_dims = _layout_dims.remove_dim(_inner_layout_dim);
             _layout_dims.add_dim_back(_inner_layout_dim, 0);
         }
 
