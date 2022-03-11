@@ -521,7 +521,9 @@ namespace yask {
                         auto eofs = ofs * _dims._fold[ildim];
                         IntScalar idi(ildim, eofs); // At end of buffer.
                         rap->set_arg_offset(idi);
+                        #ifdef DEBUG_READ_AHEAD
                         cout << "  *** Adding read point " << rap->make_str() << endl;
+                        #endif
                         _aligned_reads.insert(*rap); // Save new read point.
                         _inner_loop_key[*rap] = key; // Save its key.
                     }
