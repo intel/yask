@@ -71,7 +71,7 @@ else ifneq ($(filter $(arch),avx2 hsw bdw),)
   TARGET		:=	avx2
 else ifneq ($(filter $(arch),avx512-ymm avx512lo),)
   TARGET		:=	avx512-ymm
-else ifneq ($(filter $(arch),avx512 avx512-zmm avx512hi avx512f skx skl clx icx),)
+else ifneq ($(filter $(arch),avx512 avx512-zmm avx512hi avx512f skx skl clx icx spr),)
   TARGET		:=	avx512
 else ifneq ($(filter $(arch),knl),)
   TARGET		:=	knl
@@ -173,6 +173,9 @@ include $(YASK_BASE)/src/common/common.mk
 YC_FLAGS	:=	-stencil $(YC_STENCIL) -target $(YC_TARGET) -elem-bytes $(real_bytes)
 
 # Stencil compiler flags that take an argument.
+ifneq ($(radius),)
+ YC_FLAGS	+=	-radius $(radius)
+endif
 ifneq ($(fold),)
  YC_FLAGS	+=	-fold $(fold)
 endif
@@ -181,9 +184,6 @@ ifneq ($(cluster),)
 endif
 ifneq ($(eqs),)
  YC_FLAGS	+=	-eq-bundles $(eqs)
-endif
-ifneq ($(radius),)
- YC_FLAGS	+=	-radius $(radius)
 endif
 ifneq ($(halo),)
  YC_FLAGS	+=	-halo $(halo)
