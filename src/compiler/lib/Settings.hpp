@@ -67,6 +67,7 @@ namespace yask {
         bool _find_deps = true;
         bool _print_eqs = false;
         bool _use_ptrs = true;  // enable access via pointers & strides.
+        bool _use_many_ptrs = false;  // make pointer for almost every point.
         bool _use_offsets = false; // compute offsets from var alloc start.
         bool _early_loads = true; // issue loads early in the inner loop.
     };

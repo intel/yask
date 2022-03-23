@@ -143,7 +143,7 @@ namespace yask {
     }
 
     // Make inner-loop base point:
-    //  inner-layout dim offset = 0;
+    //  domain dim offset = 0;
     //  inner-misc indices = min-val (local-offset);
     //  other indices = those from 'gp'.
     var_point_ptr CppVecPrintHelper::make_inner_loop_base_point(const VarPoint& gp) {
@@ -151,17 +151,20 @@ namespace yask {
         for (auto& dim : gp.get_dims()) {
             auto& dname = dim->_get_name();
             auto type = dim->get_type();
+            bool use_domain = (type == DOMAIN_INDEX) &&
+                (!_settings._use_many_ptrs || dname == _dims._inner_layout_dim);
+            bool use_misc = (type == MISC_INDEX) && _settings._inner_misc;
 
-            // Set inner-layout domain dim to current index only,
+            // Set domain dims to current index only,
             // i.e., no offset.
-            if (dname == _dims._inner_layout_dim) {
+            if (use_domain) {
                 IntScalar idi(dname, 0);
                 bgp->set_arg_offset(idi);
             }
 
             // Set misc indices to their min value if they are inside
             // inner domain dim.
-            else if (_settings._inner_misc && type == MISC_INDEX) {
+            else if (use_misc) {
                 auto* var = gp._get_var();
                 auto min_val = var->get_min_indices()[dname];
                 IntScalar idi(dname, min_val);
@@ -389,7 +392,7 @@ namespace yask {
                 const auto* vbp = lookup_var_base_ptr(gp);
                 if (vbp) {
 
-                    // Make base point (inner-layout offset = 0; inner-misc indices = min-val).
+                    // Make base point (domain offset = 0; inner-misc indices = min-val).
                     auto bgp = make_inner_loop_base_point(gp);
                     
                     // Get temp var for ptr.
@@ -400,8 +403,7 @@ namespace yask {
                     
                     // Print pointer creation.
                     auto ofs_expr = get_var_base_ptr_offset(os, *bgp);
-                    os << "\n // Pointer to " << bgp->make_str() << " with any " <<
-                        _dims._inner_layout_dim << " offset\n";
+                    os << "\n // Pointer to " << bgp->make_str() << " in loop\n";
                     os << _line_prefix << _var_ptr_type << " " << ptr_name << " = " <<
                         *vbp << " + " << ofs_expr << _line_suffix;
                 }
@@ -796,8 +798,8 @@ namespace yask {
     }
 
     // Get expression for offset of 'gp' from inner-loop base pointer.  Base
-    // pointer points to vector with inner-layout dim w/no offset, domain
-    // dims == same values as in 'gp', and misc dims == their min value.
+    // pointer points to vector with domain dim w/no offset or
+    // same values as in 'gp', and misc dims == their min value.
     // Return empty string if no offset.
     string CppVecPrintHelper::get_inner_loop_ptr_offset(ostream& os,
                                                         const VarPoint& gp,
@@ -811,50 +813,48 @@ namespace yask {
 
         // Construct the point-specific linear offset by adding the products
         // of each index with the var's stride in that dim.
-        string ildim = _dims._inner_layout_dim;
         for (int i = 0; i < var->get_num_dims(); i++) {
             auto& dimi = gp.get_layout_dims().at(i);
-            auto dni = dimi->_get_name();
-            auto typei = dimi->get_type();
-            bool is_misc = typei == MISC_INDEX;
+            auto dname = dimi->_get_name();
+            auto type = dimi->get_type();
+            bool use_domain = (type == DOMAIN_INDEX) &&
+                (!_settings._use_many_ptrs || dname == _dims._inner_layout_dim);
+            bool use_misc = (type == MISC_INDEX) && _settings._inner_misc;
 
-            // Need to create an expression for inner-layout dim
-            // and inner-misc indices offsets only.
-            // These offsets should be const, thus avoiding mults.
-            if (dni == ildim ||
-                (is_misc && _settings._inner_misc)) {
+            // Need to create an expression for offsets.
+            if (use_domain || use_misc) {
 
                 // Construct offset in this dim.
                 string nas;
 
-                if (dni == ildim) {
+                if (use_domain) {
 
                     // Get const offset in inner dim.
                     // E.g., if idim == 'y', A(t, x+1, y+4) => 4.
                     auto& offsets = gp.get_arg_offsets();
-                    auto ofs = offsets[ildim];
+                    auto ofs = offsets[dname];
 
                     // Is non-zero?
                     if (ofs) {
-                        if (_dims._fold_gt1.lookup(dni))
-                            nas = _dims.make_norm_str(ofs, dni);
+                        if (_dims._fold_gt1.lookup(dname))
+                            nas = _dims.make_norm_str(ofs, dname);
                         else
                             nas = to_string(ofs);
                     }
 
                     // Override?
-                    if (inner_expr.length())
+                    if (dname == _dims._inner_layout_dim && inner_expr.length())
                         nas = inner_expr;
                 }
                     
                 // Offset from min value of this misc index.
-                else if (is_misc) {
-                    auto min_val = var->get_min_indices()[dni];
-                    nas = gp.make_arg_str(dni, var_map) + " - " + to_string(min_val);
+                else {
+                    auto min_val = var->get_min_indices()[dname];
+                    nas = gp.make_arg_str(dname, var_map) + " - " + to_string(min_val);
                 }
 
                 // Get stride in this dim.
-                auto* stride = lookup_stride(*var, dni);
+                auto* stride = lookup_stride(*var, dname);
                 assert(stride);
 
                 // Mult & add to offset expression.
