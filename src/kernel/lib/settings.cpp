@@ -337,11 +337,15 @@ namespace yask {
                            "Otherwise, use the same non-blocking MPI send and receive calls "
                            "that are used between nodes.",
                            use_shm));
+        parser.add_option(make_shared<CommandLineParser::BoolOption>
+                          ("skip_halo_exchange",
+                           "[Debug] Do not perform halo packs/unpacks/sends/receives.",
+                           skip_halo_exchange));
         #endif
         parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("force_scalar",
-                           "[Advanced] Evaluate every var point with scalar stencil operations "
-                           "and exchange halos using only scalar packing and unpacking (for debug).",
+                           "[Debug] Evaluate every var point with scalar stencil operations "
+                           "and exchange halos using only scalar packing and unpacking.",
                            force_scalar));
         parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("max_threads",
@@ -368,6 +372,13 @@ namespace yask {
                           ("device_thread_limit",
                            "Set the maximum number of OpenMP device threads used within a team.",
                            thread_limit));
+        #ifdef USE_MPI
+        parser.add_option(make_shared<CommandLineParser::BoolOption>
+                          ("use_device_mpi",
+                           "Enable device-to-device MPI transfers using device addresses. "
+                           "Must be supported by MPI library and hardware.",
+                           use_device_mpi));
+        #endif
         #endif
         parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("block_threads",
@@ -401,7 +412,7 @@ namespace yask {
         #endif
         #ifdef USE_PMEM
         parser.add_option(make_shared<CommandLineParser::IntOption>
-                          ("pmem_threshold",
+                         ("pmem_threshold",
                            "[Advanced] First allocate up to this many GiB for vars using system memory, "
                            "then allocate memory for remaining vars from a PMEM (persistent memory) device "
                            "named '/mnt/pmemX', where 'X' corresponds to the NUMA node of the YASK process.",

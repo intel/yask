@@ -43,7 +43,6 @@ namespace yask {
       ---------------------               ----------------------
       var A ----> local_buf ------------> local_buf ----> var A
              pack        MPI_isend   MPI_irecv     unpack
-             (implicit shm created by MPI lib not shown)
 
       Device halo exchange w/o direct device copy and w/o shm:
       rank I                              rank J (neighbor of I)
@@ -52,23 +51,29 @@ namespace yask {
             pack      | copy to host            ^     unpack
                       V                         | copy to dev
                host_local_buf ---------> host_local_buf
-                         MPI_isend   MPI_irecv
+                        MPI_isend   MPI_irecv
 
       Device halo exchange w/o direct device copy and w/shm:
-      --not implemented [yet].
+      --not implemented.
 
       Device halo exchange w/direct device copy:
-      --not implemented [yet].
+      rank I                             rank J (neighbor of I)
+      ---------------------------        -----------------------------
+      dev var A --> dev_local_buf -----> dev_local_buf ----> dev var A
+               pack       MPI_isend    MPI_irecv      unpack
+             (may still be implicitly routed through host.)
     */
     
     // Exchange dirty halo data for all vars and all steps.
     void StencilContext::exchange_halos() {
 
-        #if defined(USE_MPI) && !defined(NO_HALO_EXCHANGE)
+        #if defined(USE_MPI)
         STATE_VARS(this);
         if (!enable_halo_exchange || env->num_ranks < 2)
             return;
         auto& use_offload = KernelEnv::_use_offload;
+        auto use_device_mpi = use_offload ? actl_opts->use_device_mpi : false;
+        auto skip_exchange = actl_opts->skip_halo_exchange;
 
         halo_time.start();
         double wait_delta = 0.;
@@ -118,6 +123,11 @@ namespace yask {
                 if (!gb.is_dirty(t))
                     continue;
 
+                if (skip_exchange) {
+                    gb.set_dirty(false, t);
+                    continue;
+                }
+                
                 // Swap this var.
                 vars_to_swap[gname] = gp;
 
@@ -188,11 +198,13 @@ namespace yask {
                          MPIBufs& bufs) {
                          auto& send_buf = bufs.bufs[MPIBufs::buf_send];
                          auto& recv_buf = bufs.bufs[MPIBufs::buf_recv];
-                         TRACE_MSG("exchange_halos:   with rank " << neighbor_rank << " at relative position " <<
+                         TRACE_MSG("exchange_halos:   with rank " << neighbor_rank <<
+                                   " at relative position " <<
                                    offsets.sub_elements(1).make_dim_val_offset_str());
 
                          // Are we using MPI shm w/this neighbor?
-                         bool using_shm = actl_opts->use_shm && mpi_info->shm_ranks.at(ni) != MPI_PROC_NULL;
+                         bool using_shm = actl_opts->use_shm &&
+                             mpi_info->shm_ranks.at(ni) != MPI_PROC_NULL;
 
                          // Submit async request to receive data from neighbor.
                          if (halo_step == halo_irecv) {
@@ -202,9 +214,11 @@ namespace yask {
                                      TRACE_MSG("exchange_halos:    no receive req due to shm");
                                  else {
                                      void* buf = (void*)recv_buf._elems;
-                                     TRACE_MSG("exchange_halos:    requesting up to " << make_byte_str(nbytes));
+                                     void* rbuf = use_device_mpi ? get_dev_ptr(buf) : buf;
+                                     TRACE_MSG("exchange_halos:    requesting up to " <<
+                                               make_byte_str(nbytes) << " into " << rbuf);
                                      auto& r = var_recv_reqs[ni];
-                                     MPI_Irecv(buf, nbytes, MPI_BYTE,
+                                     MPI_Irecv(rbuf, nbytes, MPI_BYTE,
                                                neighbor_rank, int(gi),
                                                env->comm, &r);
                                      num_recv_reqs++;
@@ -260,11 +274,12 @@ namespace yask {
                                  halo_pack_time.stop();
                                  size_t nbytes = nelems * get_element_bytes();
 
-                                 if (use_offload) {
+                                 if (use_offload && !use_device_mpi) {
                                      TRACE_MSG("exchange_halos:    copying buffer from device");
                                      halo_copy_time.start();
                                      offload_copy_from_device(buf, nbytes);
                                      halo_copy_time.stop();
+                                     assert(!using_shm);
                                  }
 
                                  if (using_shm) {
@@ -275,9 +290,11 @@ namespace yask {
 
                                      // Send packed buffer to neighbor.
                                      assert(nbytes <= send_buf.get_bytes());
-                                     TRACE_MSG("exchange_halos:    sending " << make_byte_str(nbytes));
                                      auto& r = var_send_reqs[ni];
-                                     MPI_Isend(buf, nbytes, MPI_BYTE,
+                                     void* sbuf = use_device_mpi ? get_dev_ptr(buf) : buf;
+                                     TRACE_MSG("exchange_halos:    sending " << make_byte_str(nbytes) <<
+                                               " from " << sbuf);
+                                     MPI_Isend(sbuf, nbytes, MPI_BYTE,
                                                neighbor_rank, int(gi), env->comm, &r);
                                      num_send_reqs++;
                                  }
@@ -326,7 +343,7 @@ namespace yask {
                                  }
 
                                  void* buf = (void*)recv_buf._elems;
-                                 if (use_offload) {
+                                 if (use_offload && !use_device_mpi) {
                                      TRACE_MSG("exchange_halos:    copying buffer to device");
                                      halo_copy_time.start();
                                      offload_copy_to_device(buf, nbytes);
@@ -410,9 +427,9 @@ namespace yask {
     // TODO: replace with more direct and less intrusive techniques.
     void StencilContext::poke_halo_exchange() {
 
-        #if defined(USE_MPI) && !defined(NO_HALO_EXCHANGE)
+        #if defined(USE_MPI)
         STATE_VARS(this);
-        if (!enable_halo_exchange || env->num_ranks < 2)
+        if (!enable_halo_exchange || actl_opts->skip_halo_exchange || env->num_ranks < 2)
             return;
 
         halo_test_time.start();

@@ -31,14 +31,17 @@ IN THE SOFTWARE.
 
 namespace yask {
 
+    #ifdef USE_OFFLOAD_NO_USM
+
     // Get device addr from any mapped host addr 'hostp'.
     // If 'must_be_mapped' is true, assertion will fail if not mapped.
     // If 'enable_trace' is true, host and device addrs will be printed when
     // tracing. Make sure 'enable_trace' is false if called from 'TRACE_MSG'
     // to avoid deadlock.
     template <typename T>
-    T* get_dev_ptr(T* hostp, bool must_be_mapped = true, bool enable_trace = true) {
-        #ifdef USE_OFFLOAD_NO_USM
+    T* get_dev_ptr(T* hostp,
+                   bool must_be_mapped = true,
+                   bool enable_trace = true) {
         if (!hostp)
             return NULL;
         auto devn = KernelEnv::_omp_devn;
@@ -62,12 +65,8 @@ namespace yask {
                       "; dev addr == " << (void*)dp);
         }
         return dp;
-        #endif
-        return hostp;
     }
         
-    #ifdef USE_OFFLOAD_NO_USM
-
     // Allocate space for 'num' 'T' objects on offload device.
     // Map 'hostp' to allocated mem.
     // Return device ptr.
@@ -175,6 +174,10 @@ namespace yask {
     #else
 
     // Stub functions when not offloading or when using USM.
+    template <typename T>
+    T* get_dev_ptr(T* hostp,
+                   bool must_be_mapped = true,
+                   bool enable_trace = true) { return hostp; }
     template <typename T>
     void* offload_map_alloc(T* hostp, size_t num) { return hostp; }
     template <typename T>

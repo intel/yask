@@ -229,13 +229,22 @@ namespace yask {
         bool overlap_comms = true; // overlap comms with computation.
         bool use_shm = !KernelEnv::_use_offload;      // use shared memory if possible.
         idx_t _min_exterior = 0;   // minimum size of MPI exterior to calculate.
+        #ifdef USE_OFFLOAD
+        bool use_device_mpi = true; // transfer data directly between devices.
+        #else
+        bool use_device_mpi = false;
+        #endif
 
         // OpenMP settings.
-        int max_threads = 0;      // Initial number of threads to use overall; 0=>OMP default.
+        int max_threads = 0;      // Initial number of host threads to use overall; 0=>OMP default.
         int thread_divisor = 1;   // Reduce number of threads by this amount.
         int num_inner_threads = 1; // Number of threads to use for a block.
         bool bind_inner_threads = false; // Bind inner threads to global indices.
+        #ifdef USE_OFFLOAD
         int thread_limit = 32;           // Offload threads per team.
+        #else
+        int thread_limit = 1;
+        #endif
 
         // Var behavior, including allocation.
         bool _step_wrap = false; // Allow invalid step indices to alias to valid ones (set via APIs only).
@@ -259,6 +268,7 @@ namespace yask {
 
         // Debug.
         bool force_scalar = false; // Do only scalar ops.
+        bool skip_halo_exchange = false; // Don't do pack/unpack/send/recv.
 
         // Ctor/dtor.
         KernelSettings(DimsPtr dims, KernelEnvPtr env);

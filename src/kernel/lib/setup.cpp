@@ -524,10 +524,9 @@ namespace yask {
 #ifdef TRACE_INTRINSICS
         DEBUG_MSG("*** WARNING: YASK compiled with TRACE_INTRINSICS; ignore performance.");
 #endif
-        TRACE_MSG("***  WARNING: YASK run with -trace; ignore performance results");
-#ifdef NO_HALO_EXCHANGE
-        DEBUG_MSG("*** WARNING: YASK compiled with NO_HALO_EXCHANGE; ignore performance and results.");
-#endif
+        TRACE_MSG("***  WARNING: YASK run with -trace; ignore performance");
+        if (actl_opts->skip_halo_exchange)
+            DEBUG_MSG("*** WARNING: YASK run without halo exchanges; ignore performance; invalid results.");
     }
 
     void StencilContext::print_temporal_tiling_info(string prefix) const {
