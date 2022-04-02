@@ -1455,7 +1455,8 @@ namespace yask {
 
             // Find range.
             auto vec_range = get_slice_range(firstv, lastv);
-            auto nv = vec_range.product() * VLEN;
+            auto nv = vec_range.product();
+            auto ne = nv * VLEN;
             TRACE_MSG("copy_vecs_in_slice: " << nv << " vec(s) in " <<
                       make_info_string() << " [" <<
                       make_index_string(firstv) << " ... " <<
@@ -1478,9 +1479,25 @@ namespace yask {
             idx_t tsz = vec_range.product();
             idx_t tofs = 0;
 
-            // Iterate through inner index in inner loop.
-            // This enables more optimization.
-            const auto ip = get_num_dims() - 1;
+            // Determine inner-loop dim.
+            // Use last dim by default.
+            auto ip = get_num_dims() - 1;
+
+            // Use first non-step dim by default if inner loop dim doesn't match layout.
+            // Remember that this var may not have either.
+            if (dims->_inner_loop_dim != dims->_inner_layout_dim)
+                ip = _has_step_dim ? 1 : 0;
+
+            // Look for specified dim.
+            // TODO: determine actual first or last layout dim.
+            for (int i = 0; i < get_num_dims(); i++) {
+                if (get_dim_name(i) == dims->_inner_loop_dim) {
+                    ip = i;
+                    break;
+                }
+            }
+
+            // Extract inner-loop range and re-init it in 'vec_range'.
             idx_t ni = vec_range[ip];
             vec_range[ip] = 1; // Do whole range in each iter.
 
@@ -1499,7 +1516,7 @@ namespace yask {
                     auto nj = vec_range.product();
 
                     // Run outer loop on device in parallel.
-                    _Pragma("omp target parallel for device(devn)")
+                    _Pragma("omp target teams distribute parallel for device(devn)")
                     for (idx_t j = 0; j < nj; j++) {
                         Indices ofs = vec_range.unlayout(false, j);
                         Indices pt = firstv.add_elements(ofs);
@@ -1548,8 +1565,8 @@ namespace yask {
                 
             } // time steps.
 
-            assert(tofs * VLEN == nv);
-            return nv;
+            assert(tofs == nv);
+            return ne;
         }
 
     public:
