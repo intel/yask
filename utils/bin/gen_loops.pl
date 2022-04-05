@@ -1025,7 +1025,7 @@ sub processCode($) {
             # Add OMP pragma(s).
             my $is_omp_nested = 0;
             if ($features & $bOmpPar) {
-                if ($features & $bNested) {
+                if (($features & $bNested) && $ndims) {
                     push @code, 
                         macroDef('OMP_NESTED_PRAGMA', undef, pragma("$OPT{omp} collapse($ndims)"));
                     push @loopPrefix, "${macroPrefix}OMP_NESTED_PRAGMA";
