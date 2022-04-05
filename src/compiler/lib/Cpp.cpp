@@ -144,7 +144,7 @@ namespace yask {
 
     // Make inner-loop base point:
     //  domain dim offset = 0;
-    //  inner-misc indices = min-val (local-offset);
+    //  misc indices = min-val (local-offset);
     //  other indices = those from 'gp'.
     var_point_ptr CppVecPrintHelper::make_inner_loop_base_point(const VarPoint& gp) {
         var_point_ptr bgp = gp.clone_var_point();
@@ -153,7 +153,7 @@ namespace yask {
             auto type = dim->get_type();
             bool use_domain = (type == DOMAIN_INDEX) &&
                 (!_settings._use_many_ptrs || dname == _dims._inner_layout_dim);
-            bool use_misc = (type == MISC_INDEX) && _settings._inner_misc;
+            bool use_misc = type == MISC_INDEX;
 
             // Set domain dims to current index only,
             // i.e., no offset.
@@ -162,8 +162,7 @@ namespace yask {
                 bgp->set_arg_offset(idi);
             }
 
-            // Set misc indices to their min value if they are inside
-            // inner domain dim.
+            // Set misc indices to their min value.
             else if (use_misc) {
                 auto* var = gp._get_var();
                 auto min_val = var->get_min_indices()[dname];
@@ -239,14 +238,14 @@ namespace yask {
             auto& dim = var.get_dims().at(dnum);
             const auto& dname = dim->_get_name();
             auto dtype = dim->get_type();
-
-            // Don't need step-dim stride.
             bool is_step = dtype == STEP_INDEX;
+            bool is_misc = dtype == MISC_INDEX;
+            bool is_inner = dname == _dims._inner_layout_dim;
             
             auto key = VarDimKey(vname, dname);
             if (!is_step) {
                 os << endl << " // Stride for var '" << vname <<
-                    "' in '" << dname << "' dim.\n";
+                    "' in dim '" << dname << "'.\n";
 
                 string str_var = make_var_name(vname + "_" + dname + "_stride");
                 _strides[key] = str_var;
@@ -261,45 +260,51 @@ namespace yask {
                 // Default is to obtain dynamic value from var.
                 string slookup = var_ptr + "->_vec_strides[" + to_string(dnum) + "]";
                 string stride = slookup;
-
-                // Inner dim stride and inner-misc dim strides are fixed.
-                // NB: during layout, the inner dim is moved to the inner-most
-                // position; the misc dims are moved after that if '_inner_misc' is true.
-                bool is_inner = dname == _dims._inner_layout_dim;
-                bool is_inner_misc = dtype == MISC_INDEX && _settings._inner_misc;
                 string sdeco = "const";
-                if (is_inner || is_inner_misc) {
-                    os << " // This is a known fixed value.\n";
-                    sdeco = "constexpr";
 
-                    // Stride of inner dim will be 1 or size of inner-misc vars.
-                    stride = "1";
+                // Under certain conditions, strides are known fixed values.
+                // Must be last dim or followed only by fixed-size misc dims.
+                bool is_fixed = true;
+                string fstride;
 
-                    // Mult by size of following inner-misc dims, if any.
-                    // If inner-misc is active, all misc dims are nested
-                    // inside the inner domain dim, so their strides are
-                    // fixed.
-                    bool found = false;
+                // Loop in layout order.
+                bool dfound = false;
+                for (int j = 0; j < var.get_num_dims(); j++) {
+                    auto& dimj = var.get_layout_dims().at(j);
+                    auto& dnj = dimj->_get_name();
+                    auto typej = dimj->get_type();
 
-                    // Loop in layout order.
-                    for (int j = 0; j < var.get_num_dims(); j++) {
-                        auto& dimj = var.get_layout_dims().at(j);
-                        auto& dnj = dimj->_get_name();
-                        auto typej = dimj->get_type();
-                        
-                        // Process only dims following the current one.
-                        if (found) {
-                            assert(typej == MISC_INDEX);
+                    // If misc, must also use inner-misc setting, which disallows
+                    // resizing via APIs.
+                    bool is_miscj = (typej == MISC_INDEX) && _settings._inner_misc;
+                    
+                    // Multply the strides of the dims following the current one.
+                    if (dfound) {
+                        if (is_miscj) {
                             auto min_idx = var.get_min_indices()[dnj];
                             auto max_idx = var.get_max_indices()[dnj];
                             auto sz = max_idx - min_idx + 1;
-                            os << " // Misc indices for '" << dnj << "' range from " <<
+                            os << " // Indices for inner-dim '" << dnj << "' range from " <<
                                 min_idx << " to " << max_idx << ": " << sz << " value(s).\n";
-                            stride += " * " + to_string(sz);
+                            if (fstride.length())
+                                fstride += " * ";
+                            fstride += to_string(sz);
                         }
-                        if (dnj == dname)
-                            found = true;
+                        else {
+                            os << " // Size of inner-dim '" << dnj << "' is not known at "
+                                "compile-time.\n";
+                            is_fixed = false; // Not a fixed value.
+                        }
                     }
+                    if (dnj == dname)
+                        dfound = true;
+                }
+                if (is_fixed) {
+                    sdeco = "constexpr";
+                    if (fstride.length())
+                        stride = fstride;
+                    else
+                        stride = "1";
                 }
 
                 // Print final assignment.
@@ -311,7 +316,7 @@ namespace yask {
 
                 // Offset to be subtracted from index.
                 os << endl << " // Index offset for var '" << vname <<
-                    "' in '" << dname << "' dim.\n";
+                    "' in dim '" << dname << "'.\n";
                 string ofs_var = make_var_name(vname + "_" + dname + "_ofs");
                 _offsets[key] = ofs_var;
                 assert(lookup_offset(var, dname));
@@ -819,7 +824,7 @@ namespace yask {
             auto type = dimi->get_type();
             bool use_domain = (type == DOMAIN_INDEX) &&
                 (!_settings._use_many_ptrs || dname == _dims._inner_layout_dim);
-            bool use_misc = (type == MISC_INDEX) && _settings._inner_misc;
+            bool use_misc = type == MISC_INDEX;
 
             // Need to create an expression for offsets.
             if (use_domain || use_misc) {
@@ -849,6 +854,7 @@ namespace yask {
                     
                 // Offset from min value of this misc index.
                 else {
+                    assert(type == MISC_INDEX);
                     auto min_val = var->get_min_indices()[dname];
                     nas = gp.make_arg_str(dname, var_map) + " - " + to_string(min_val);
                 }

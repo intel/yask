@@ -53,7 +53,7 @@ namespace yask {
         bool _bundle_scratch = true;
         int _halo_size = 0;      // 0 => calculate each halo automatically.
         int _step_alloc = 0;     // 0 => calculate each step allocation automatically.
-        bool _inner_misc = false;
+        bool _inner_misc = true;
         bool _outer_domain = false;
         int _max_expr_size = 50;
         int _min_expr_size = 2;
