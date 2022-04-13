@@ -127,7 +127,6 @@ namespace yask {
         var_point_ptr bgp = gp.clone_var_point();
         auto* var = bgp->_get_var();
         assert(var);
-        int dnum = 0;
         for (auto& dim : bgp->get_dims()) {
             auto& dname = dim->_get_name();
             auto type = dim->get_type();
@@ -137,7 +136,6 @@ namespace yask {
                 assert(lofs);
                 bgp->set_arg_expr(dname, *lofs);
             }
-            dnum++;
         }
         return bgp;
     }
