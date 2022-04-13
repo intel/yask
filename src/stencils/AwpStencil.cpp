@@ -45,6 +45,8 @@ using namespace yask;
 #define DO_ABOVE_SURFACE
 
 // Set the following macro to use intermediate scratch vars.
+// This is a compute/memory tradeoff: using scratch vars reduces
+// compute and increases memory accesses.
 //#define USE_SCRATCH_VARS
 
 // For the surface stress conditions, we need to write into 2 points
