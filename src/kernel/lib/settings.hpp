@@ -237,8 +237,8 @@ namespace yask {
 
         // OpenMP settings.
         int max_threads = 0;      // Initial number of host threads to use overall; 0=>OMP default.
-        int thread_divisor = 1;   // Reduce number of threads by this amount.
-        int num_inner_threads = 1; // Number of threads to use for a block.
+        int num_outer_threads = 0; // Number of threads to use for blocks.
+        int num_inner_threads = 1; // Number of threads to use within a block.
         bool bind_inner_threads = false; // Bind inner threads to global indices.
         #ifdef USE_OFFLOAD
         int thread_limit = 32;           // Offload threads per team.

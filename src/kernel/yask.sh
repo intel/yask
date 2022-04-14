@@ -36,9 +36,10 @@ done
 
 # Default env vars to print debug info and set CPU and mem-binding.
 # https://software.intel.com/content/www/us/en/develop/documentation/mpi-developer-reference-linux/top/environment-variable-reference/environment-variables-for-memory-policy-control.html
-envs="OMP_DISPLAY_ENV=VERBOSE KMP_VERSION=1"
+envs="OMP_DISPLAY_ENV=VERBOSE KMP_VERSION=1 KMP_AFFINITY=verbose"
 envs+=" OMP_PLACES=cores KMP_HOT_TEAMS_MODE=1 KMP_HOT_TEAMS_MAX_LEVEL=3"
-envs+=" I_MPI_PRINT_VERSION=1 I_MPI_DEBUG=5 I_MPI_HBW_POLICY=hbw_preferred,hbw_preferred"
+envs+=" I_MPI_PRINT_VERSION=1 I_MPI_DEBUG=5"
+#envs+=" I_MPI_HBW_POLICY=hbw_preferred,hbw_preferred"
 
 # On Cygwin, need to put lib dir in path to load .dll's.
 if [[ `uname -o` == "Cygwin" ]]; then
@@ -99,6 +100,7 @@ function show_stencils {
 }
 
 # Loop thru cmd-line args.
+using_opt_outer_threads=0
 while true; do
 
     if [[ ! -n ${1+set} ]]; then
@@ -259,6 +261,8 @@ while true; do
         shift
 
     elif [[ "$1" =~ ^[A-Za-z0-9_]+= ]]; then
+
+        # Something like FOO=bar sets an env var.
         envs+=" $1"
         shift
 
@@ -269,8 +273,19 @@ while true; do
         opts+=" $@"
         break
 
+    elif [[ ( "$1" == "-block_threads" ) ||  \
+                ( "$1" == "-thread_divisor" ) ]]; then
+        echo "Option '$1' is no longer supported."
+        echo "Use '-max_threads', '-outer_threads', and/or '-inner_threads'."
+        exit 1
+
     else
-        # Pass this unknown option to executable.
+        # Check for existance of some options, but don't consume them.
+        if [[ "$1" == "-outer_threads" ]]; then
+            using_opt_outer_threads=1
+        fi
+        
+        # Pass this option to executable.
         opts+=" $1"
         shift
         
@@ -351,13 +366,14 @@ else
 fi
 
 # Set OMP threads to number of cores per rank if not already specified and not KNL.
-if [[ ( ! "$opts" =~ -max_threads ) && ( $arch != "knl" ) ]]; then
+# TODO: extend to work on multiple nodes.
+if [[ ( $using_opt_outer_threads == 0 ) && ( $arch != "knl" ) ]]; then
     if command -v lscpu >/dev/null; then
         nsocks=`lscpu | awk -F: '/Socket.s.:/ { print $2 }'`
         ncores=`lscpu | awk -F: '/Core.s. per socket:/ { print $2 }'`
         if [[ -n "$nsocks" && -n "$ncores" ]]; then
             mthrs=$(( $nsocks * $ncores / $nranks ))
-            opts="-max_threads $mthrs $opts"
+            opts="-outer_threads $mthrs $opts"
         fi
     fi
 fi

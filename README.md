@@ -88,8 +88,11 @@ and Intel(R) graphics processors.
     The `get_region_size()` and `set_region_size()` APIs have been removed.
   - Regarding CPU threads, "region threads" are now referred to as "outer threads",
     and "block threads" are now referred to as "inner threads".
+    The options `-block_threads` and `-thread_divisor` have been removed.
+    See the `-help` documentation for new options `-outer_threads` and `-inner_threads`.
+    The `-max_threads` option remains.
   - Only one thread per core is now used by default on most CPU models.
-    This is done in `yask.sh` by passing `max_threads <N>` to the executable,
+    This is done in `yask.sh` by passing `-outer_threads <N>` to the executable,
     where `<N>` is the number of cores on the node divided by the
     number of MPI ranks.
     Consequently, the default number of inner threads is now one (1)
@@ -98,13 +101,11 @@ and Intel(R) graphics processors.
     performance on Intel(R) Xeon(R) Scalable Processors.  Previous versions
     used two threads per block by default and used both hyper-threads if
     they were enabled.  To configure two hyper-threads to work cooperatively
-    on each block, you now must add the options
-    `-max_threads <N> -inner_threads 2`, where `<N>` is the number
-    of logical CPUs per MPI rank.
+    on each block, use the option `-inner_threads 2`.
     These changes do not
     apply to Intel(R) Xeon Phi(TM) x200-family processors (KNL), which
-    continue to use all four hyper-threads per core and eight SW threads per
-    block by default (because 2 cores share an L2 cache).
+    continue to use all 4 hyper-threads per core and 8 inner threads
+    by default (because 2 cores share an L2 cache).
   - Intel(R) Xeon Phi(TM) x100-family processors (KNC) are no longer supported.
     (Intel(R) Xeon Phi(TM) x200-family processors (KNL) are still supported.)
   - Python v2 is no longer supported.

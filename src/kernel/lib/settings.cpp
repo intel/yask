@@ -349,23 +349,27 @@ namespace yask {
                            force_scalar));
         parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("max_threads",
-                           "Maximum number of OpenMP CPU threads to use. "
+                           "Maximum number of OpenMP CPU threads to use for both outer and inner threads. "
                            "If zero (0), the default value from the OpenMP library is used.",
                            max_threads));
         parser.add_option(make_shared<CommandLineParser::IntOption>
-                          ("thread_divisor",
-                           "Divide the maximum number of OpenMP CPU threads by the specified value, "
-                           "discarding any remainder. "
-                           "See the -max_threads option.",
-                           thread_divisor));
+                          ("outer_threads",
+                           "Number of CPU threads to use in an OpenMP region within each rank. "
+                           "Will be restricted to a value less than or equal to "
+                           "the maximum number of OpenMP threads specified by -max_threads "
+                           "divided by the number specified by -inner_threads. "
+                           "Each thread is used to execute a block of stencils. "
+                           "If zero (0), set to the value specified by -max_threads "
+                           "divided by the number specified by -inner_threads.",
+                           num_outer_threads));
         parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("inner_threads",
                            "Number of CPU threads to use in a nested OpenMP region within each block. "
                            "Will be restricted to a value less than or equal to "
-                           "the maximum number of OpenMP threads specified by -max_threads "
-                           "and/or -thread_divisor. "
+                           "the maximum number of OpenMP threads specified by -max_threads. "
                            "Each thread is used to execute stencils within a nano-block, and "
-                           "nano-blocks are executed in parallel within micro-blocks.",
+                           "nano-blocks are executed in parallel within micro-blocks. "
+                           "If zero (0), set to one (1).",
                            num_inner_threads));
         #ifdef USE_OFFLOAD
         parser.add_option(make_shared<CommandLineParser::IntOption>
@@ -380,10 +384,6 @@ namespace yask {
                            use_device_mpi));
         #endif
         #endif
-        parser.add_option(make_shared<CommandLineParser::IntOption>
-                          ("block_threads",
-                           "[Deprecated] Use -inner_threads.",
-                           num_inner_threads));
         parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("bind_inner_threads",
                            "[Advanced] Divide micro-blocks into nano-blocks of slabs along the first valid dimension "
@@ -625,14 +625,9 @@ namespace yask {
             " To 'weak-scale' to a larger overall-problem size, use multiple MPI ranks\n"
             "  and keep the local-domain sizes constant.\n"
             #endif
-            "\nControlling OpenMP threading:\n"
-            " Using '-max_threads 0' =>\n"
-            "  max_threads is set to OpenMP's default number of threads.\n"
-            " The -thread_divisor option is a convenience to reduce the number of\n"
-            "  threads used without having to know the max_threads setting;\n"
-            "  e.g., using '-thread_divisor 2' will halve the number of OpenMP threads.\n"
+            "\nControlling OpenMP CPU threading:\n"
             " For stencil evaluation, threads are allocated using nested OpenMP:\n"
-            "  Num outer_threads = max_threads / thread_divisor / inner_threads.\n"
+            "  Num outer_threads = max_threads / inner_threads if not specified.\n"
             "  Num CPU threads per mega-block = outer_threads.\n"
             "  Num CPU threads per block = inner_threads.\n"
             "  Num CPU threads per micro-block, nano-block, and pico-block = 1.\n"
@@ -1027,27 +1022,22 @@ namespace yask {
     int KernelStateBase::get_num_comp_threads(int& outer_threads, int& inner_threads) const {
         STATE_VARS(this);
 
-        // Max threads / divisor.
         int mt = max(actl_opts->max_threads, 1);
-        int td = max(actl_opts->thread_divisor, 1);
-        int at = mt / td;
-        at = max(at, 1);
 
-        // Blk threads per mega-block thread.
-        int bt = max(actl_opts->num_inner_threads, 1);
-        bt = min(bt, at); // Cannot be > 'at'.
-        inner_threads = bt;
-        assert(bt >= 1);
+        int it = max(actl_opts->num_inner_threads, 1);
+        it = min(it, mt);
+        inner_threads = it;
 
-        // Outer threads.
-        int rt = at / bt;
-        rt = max(rt, 1);
-        outer_threads = rt;
-        assert(rt >= 1);
+        int max_ot = max(mt / it, 1);
+        int ot = actl_opts->num_outer_threads;
+        if (ot <= 0)
+            ot = max_ot;
+        ot = min(ot, max_ot);
+        outer_threads = ot;
 
-        // Total number of block threads.
+        // Total number of inner threads.
         // Might be less than max threads due to truncation.
-        int ct = bt * rt;
+        int ct = it * ot;
         assert(ct <= mt);
         return ct;
     }

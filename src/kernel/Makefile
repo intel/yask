@@ -924,10 +924,10 @@ last_test	:=	999
 
 # Default threads.
 ifeq ($(offload),1)
-max_threads	:=	4
+outer_threads	:=	2
 inner_threads	:=	2
 else
-max_threads	:=	16
+outer_threads	:=	8
 inner_threads	:=	2
 endif
 
@@ -1023,7 +1023,7 @@ cxx-yc-api-test:
 ##### Validation runs for each binary.
 DEF_TEST_ARGS := -log_dir $(TEST_LOG_OUT_DIR) \
 	-ranks $(ranks) -stencil $(YK_STENCIL) -arch $(YK_ARCH) -v \
-	-trial_steps 2 -max_threads $(max_threads) -inner_threads $(inner_threads) \
+	-trial_steps 2 -outer_threads $(outer_threads) -inner_threads $(inner_threads) \
 	-ep 0 -mp 0 -no-allow_addl_padding
 
 # Test args for 1 and >1 ranks.
