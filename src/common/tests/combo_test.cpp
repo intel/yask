@@ -36,7 +36,7 @@ using namespace std;
 using namespace yask;
 
 int main(int argc, char** argv) {
-    int n = 5;
+    constexpr int n = 5;
     int exnc[n+2] = { 1, 5, 10, 10, 5, 1, 0 }; // expected num combos.
     
     for (int k = 0; k <= n+1; k++) {
