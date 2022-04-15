@@ -1,6 +1,6 @@
 ##############################################################################
 ## YASK: Yet Another Stencil Kit
-## Copyright (c) 2014-2021, Intel Corporation
+## Copyright (c) 2014-2022, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -44,26 +44,11 @@
 #
 # real_bytes: FP precision: 4=float, 8=double.
 #
-# fold: How to fold vectors (x*y*z).
-# fold_4byte: How to fold vectors when real_bytes=4.
-# fold_8byte: How to fold vectors when real_bytes=8.
-#
-# cluster: How many folded vectors to evaluate simultaneously.
+# fold: In which dimension(s) to vectorize.
+# cluster: How many vectors to evaluate simultaneously.
 #
 # pfd_l1: L1 prefetch distance (0 => disabled).
 # pfd_l2: L2 prefetch distance (0 => disabled).
-#
-# omp_region_schedule: OMP schedule policy for region loop.
-# omp_block_schedule: OMP schedule policy for nested OpenMP block loop.
-# omp_misc_schedule: OMP schedule policy for OpenMP misc loop.
-#
-# def_block_threads: Number of threads to use in nested OpenMP block loop by default.
-# def_thread_divisor: Divide number of OpenMP threads by this factor by default.
-# def_*_args: Default cmd-line args for specific settings.
-# more_def_args: Additional default cmd-line args.
-#
-# allow_new_grid_types: Whether to allow grid types not defined in the stencil
-#   to be created via new_grid() and new_fixed_size_grid().
 
 # Common defaults.
 offload			?=	0

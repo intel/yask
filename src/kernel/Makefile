@@ -600,30 +600,23 @@ MISC_LOOP_FLAGS		?=	-prefix misc_ -omp '$(MISC_LOOP_OMP)'
 MISC_LOOP_ORDER		?=	DOMAIN_LOOP_DIMS
 MISC_LOOP_CODE		?=	$(MISC_LOOP_MODS) omp loop($(MISC_LOOP_ORDER)) { }
 
-# Compile rules based on source dir.
+# Source dirs.
+VPATH	:=	$(patsubst $space,$colon,$(COMM_DIR) $(COEFF_DIR) $(YK_LIB_SRC_DIR))
 
-$(YK_OBJ_DIR)/%.o: $(COMM_DIR)/%.cpp $(YK_INC_GLOB)
+# Compile rules.
+$(YK_OBJ_DIR)/%.o: %.cpp $(YK_INC_GLOB)
 	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
-$(YK_OBJ_DIR)/%.o: $(COEFF_DIR)/%.cpp $(YK_INC_GLOB)
+$(YK_EXT_OBJ_DIR)/%.o: %.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
 	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
-$(YK_OBJ_DIR)/%.o: $(YK_LIB_SRC_DIR)/%.cpp $(YK_INC_GLOB)
-	$(call MK_DIR,$(dir $@))
-	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
-	@ls -l $@
-
-$(YK_EXT_OBJ_DIR)/%.o: $(YK_LIB_SRC_DIR)/%.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
-	$(call MK_DIR,$(dir $@))
-	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
-	@ls -l $@
-
-%.i: $(YK_LIB_SRC_DIR)/%.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
-	$(YK_CXXCMD) $(YK_CXXFLAGS) -x c++ -EP $< > $@
+# C++-preprocessor rule.
+%.i: %.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
+	$(YK_CXX) $(YK_CXXFLAGS) -x c++ -EP $< > $@
 	@ls -l $@
 
 ######## Primary targets.

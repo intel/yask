@@ -37,8 +37,9 @@ YC_TEST_SRC_DIR	:=	$(abspath ./tests)
 YC_OUT_BASE	:=	$(BUILD_OUT_DIR)/compiler
 YC_SWIG_OUT_DIR	:=	$(YC_OUT_BASE)/swig
 YC_OBJ_DIR	:=	$(YC_OUT_BASE)/obj
-YC_STENCIL_DIR	:= 	$(SRC_DIR)/stencils
-YC_STENCIL_DIRS	:=	$(shell find -L $(YC_STENCIL_DIR) -type d)
+YC_STENCIL_DIR		:= 	$(SRC_DIR)/stencils
+YC_STENCIL_DIRS		:=	$(shell find -L $(YC_STENCIL_DIR) -type d)
+YC_STENCIL_OBJ_DIR	:=	$(YC_OUT_BASE)/obj/stencils
 
 # Compiler files.
 YC_MODULE	:=	$(YC_BASE)
@@ -51,10 +52,10 @@ YC_SRC_NAMES	:=	Expr VarPoint ExprUtils Var Settings Eqs Print Vec Cpp CppIntrin
 YC_OBJS		:=	$(addprefix $(YC_OBJ_DIR)/,$(addsuffix .o,$(YC_SRC_NAMES) $(COMM_SRC_NAMES)))
 YC_INC_DIRS	:=	$(INC_DIR) $(YC_LIB_SRC_DIR) $(COMM_DIR) $(COEFF_DIR)
 YC_INC_FILES	:=	$(wildcard $(addsuffix /*.hpp,$(YC_INC_DIRS)))
-YC_STENCIL_SRC_FILES :=	$(foreach dir,$(YC_STENCIL_DIRS),$(wildcard $(dir)/*.cpp))
-YC_STENCIL_INC_FILES :=	$(foreach dir,$(YC_STENCIL_DIRS),$(wildcard $(dir)/*.hpp))
-YC_STENCIL_NAMES:=	$(notdir $(patsubst %.cpp,%,$(YC_STENCIL_SRC_FILES)))
-YC_STENCIL_OBJS	:=	$(addprefix $(YC_OBJ_DIR)/,$(addsuffix .o,$(YC_STENCIL_NAMES)))
+YC_STENCIL_SRC_FILES	:=	$(foreach dir,$(YC_STENCIL_DIRS),$(wildcard $(dir)/*.cpp))
+YC_STENCIL_INC_FILES	:=	$(foreach dir,$(YC_STENCIL_DIRS),$(wildcard $(dir)/*.hpp))
+YC_STENCIL_NAMES	:=	$(notdir $(patsubst %.cpp,%,$(YC_STENCIL_SRC_FILES)))
+YC_STENCIL_OBJS		:=	$(addprefix $(YC_STENCIL_OBJ_DIR)/,$(addsuffix .o,$(YC_STENCIL_NAMES)))
 
 # Compiler and default flags.
 YC_CXX    	:=	$(CXX)
@@ -71,29 +72,21 @@ YC_CXXFLAGS	+=	$(EXTRA_YC_CXXFLAGS)
 YC_LD		:=	$(YC_CXX)
 YC_LFLAGS	:=	-lrt -Wl,-rpath=$(LIB_OUT_DIR) -L$(LIB_OUT_DIR) -l$(YC_BASE)
 
-# Compile rules.
+# Source dirs.
+VPATH	:=	$(patsubst $space,$colon,$(YC_STENCIL_DIRS) $(COMM_DIR) $(COEFF_DIR) $(YC_LIB_SRC_DIR))
 
-$(YC_OBJ_DIR)/%.o: $(COMM_DIR)/%.cpp $(YC_INC_FILES)
+# Compile rules for non-stencil files.
+
+$(YC_OBJ_DIR)/%.o: %.cpp $(YC_INC_FILES)
 	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXOPT) $(YC_CXXFLAGS) $(YC_INC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
-$(YC_OBJ_DIR)/%.o: $(COEFF_DIR)/%.cpp $(YC_INC_FILES)
-	$(call MK_DIR,$(dir $@))
-	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXOPT) $(YC_CXXFLAGS) $(YC_INC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
-	@ls -l $@
-
-$(YC_OBJ_DIR)/%.o: $(YC_LIB_SRC_DIR)/%.cpp $(YC_INC_FILES)
-	$(call MK_DIR,$(dir $@))
-	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXOPT) $(YC_CXXFLAGS) $(YC_INC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
-	@ls -l $@
-
-# Rules for example stencils,
+# Compile rules for example stencils,
 # - Build at O0 to avoid C++ compiler wasting time optimizing them.
 # - Set macro to use internal DSL instead of conflicting API operators.
 
-VPATH	:=	$(patsubst $space,$colon,$(YC_STENCIL_DIRS))
-$(YC_OBJ_DIR)/%.o: %.cpp $(INC_FILES) $(YC_STENCIL_INC_FILES)
+$(YC_STENCIL_OBJ_DIR)/%.o: %.cpp $(INC_FILES) $(YC_STENCIL_INC_FILES)
 	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YC_CXX) -O0 $(YC_CXXFLAGS) -x c++ -DUSE_INTERNAL_DSL -c -o $@ $<
 	@ls -l $@
