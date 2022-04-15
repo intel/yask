@@ -77,14 +77,13 @@ namespace yask {
 
         halo_time.start();
         double wait_delta = 0.;
-        TRACE_MSG("exchange_halos");
         if (is_overlap_active()) {
             if (do_mpi_left)
-                TRACE_MSG(" following calc of MPI left exterior");
+                TRACE_MSG("following calc of MPI left exterior");
             if (do_mpi_right)
-                TRACE_MSG(" following calc of MPI right exterior");
+                TRACE_MSG("following calc of MPI right exterior");
             if (do_mpi_interior)
-                TRACE_MSG(" following calc of MPI interior");
+                TRACE_MSG("following calc of MPI interior");
         }
 
         // Vars for list of vars that need to be swapped and their step
@@ -141,7 +140,7 @@ namespace yask {
 
             } // steps.
         } // vars.
-        TRACE_MSG("exchange_halos: need to exchange halos for " <<
+        TRACE_MSG("need to exchange halos for " <<
                   vars_to_swap.size() << " var(s)");
         assert(vars_to_swap.size() == first_steps_to_swap.size());
         assert(vars_to_swap.size() == last_steps_to_swap.size());
@@ -168,13 +167,13 @@ namespace yask {
         for (auto halo_step : steps_to_do) {
 
             if (halo_step == halo_irecv)
-                TRACE_MSG("exchange_halos: requesting data phase");
+                TRACE_MSG("requesting data phase");
             else if (halo_step == halo_pack_isend)
-                TRACE_MSG("exchange_halos: packing and sending data phase");
+                TRACE_MSG("packing and sending data phase");
             else if (halo_step == halo_unpack)
-                TRACE_MSG("exchange_halos: waiting for and unpacking data phase");
+                TRACE_MSG("waiting for and unpacking data phase");
             else if (halo_step == halo_final)
-                TRACE_MSG("exchange_halos: waiting for send to finish phase");
+                TRACE_MSG("waiting for send to finish phase");
             else
                 THROW_YASK_EXCEPTION("internal error: unknown halo-exchange step");
 
@@ -189,6 +188,8 @@ namespace yask {
                 auto& var_mpi_data = mpi_data.at(gname);
                 MPI_Request* var_recv_reqs = var_mpi_data.recv_reqs.data();
                 MPI_Request* var_send_reqs = var_mpi_data.send_reqs.data();
+                TRACE_MSG(" processing var '" << gname << "'");
+                bool finalizing_var = false;
 
                 // Loop thru all this rank's neighbors.
                 var_mpi_data.visit_neighbors
@@ -226,7 +227,7 @@ namespace yask {
                              }
                              else
                                  TRACE_MSG("exchange_halos:    0B to request");
-                         }
+                         } // recv step.
 
                          // Pack data into send buffer, then send to neighbor.
                          else if (halo_step == halo_pack_isend) {
@@ -301,7 +302,7 @@ namespace yask {
                              }
                              else
                                  TRACE_MSG("   0B to send");
-                         }
+                         } // pack & send step.
 
                          // Wait for data from neighbor, then unpack it.
                          else if (halo_step == halo_unpack) {
@@ -371,7 +372,7 @@ namespace yask {
                              }
                              else
                                  TRACE_MSG("exchange_halos:    0B to wait for");
-                         }
+                         } // unpack step.
 
                          // Final steps.
                          else if (halo_step == halo_final) {
@@ -398,28 +399,36 @@ namespace yask {
                                      r = MPI_REQUEST_NULL;
                                  }
                              }
-
-                             // Mark vars as up-to-date when done.
-                             for (idx_t si = first_steps_to_swap[gp]; si <= last_steps_to_swap[gp]; si++) {
-                                 if (gb.is_dirty(si)) {
-                                     gb.set_dirty(false, si);
-                                     TRACE_MSG("exchange_halos: var '" << gname <<
-                                               "' marked as clean at step-index " << si);
-                                 }
-                             }
-                         }
+                             finalizing_var = true;
+                             
+                         } // final step.
 
                      }); // visit neighbors.
 
-            } // vars.
+                // Did we finish w/this var?
+                if (finalizing_var) {
 
+                    // Mark var as up-to-date.
+                    for (idx_t si = first_steps_to_swap[gp]; si <= last_steps_to_swap[gp]; si++) {
+                        if (gb.is_dirty(si)) {
+                            gb.set_dirty(false, si);
+                            TRACE_MSG(" var '" << gname <<
+                                      "' marked as clean at step-index " << si);
+                        }
+                        else
+                            TRACE_MSG(" var '" << gname <<
+                                      "' already clean at step-index " << si);
+                    }
+                }
+                
+            } // vars to swap.
         } // exchange sequence.
 
-        TRACE_MSG("exchange_halos: " << num_recv_reqs << " MPI receive request(s) issued");
-        TRACE_MSG("exchange_halos: " << num_send_reqs << " MPI send request(s) issued");
+        TRACE_MSG(num_recv_reqs << " MPI receive request(s) issued");
+        TRACE_MSG(num_send_reqs << " MPI send request(s) issued");
         auto mpi_call_time = halo_time.stop();
-        TRACE_MSG("exchange_halos: secs spent in MPI waits: " << make_num_str(wait_delta));
-        TRACE_MSG("exchange_halos: secs spent in this call: " << make_num_str(mpi_call_time));
+        TRACE_MSG("secs spent in MPI waits: " << make_num_str(wait_delta));
+        TRACE_MSG("secs spent in this call: " << make_num_str(mpi_call_time));
         #endif
     }
 

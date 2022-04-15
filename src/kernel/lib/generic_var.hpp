@@ -40,7 +40,8 @@ namespace yask {
     // Core elements of a generic n-D var of elements of type T.
     // This class defines the type and memory layout.
     // The LayoutFn class must provide a 1:1 transform between
-    // n-D and 1-D indices.
+    // n-D and 1-D indices with a constant stride between
+    // consecutively-indexed elements in each dim.
     // A trivially-copyable type for offloading.
     template <typename T, typename LayoutFn>
     class GenericVarCore {

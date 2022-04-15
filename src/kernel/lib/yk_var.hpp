@@ -585,9 +585,9 @@ namespace yask {
         // Whether this was created via an API.
         bool _is_user_var = false;
 
-        // Data that needs to be copied to neighbor's halos if using MPI.
-        // If this var has the step dim, there is one bit per alloc'd step.
-        // Otherwise, only bit 0 is used.
+        // Data that needs to be copied to neighbors' halos if using MPI.
+        // If this var has the step dim, there is one elem per alloc'd step.
+        // Otherwise, only elem 0 is used.
         std::vector<bool> _dirty_steps;
 
         // Convenience function to format indices like
