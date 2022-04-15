@@ -54,7 +54,7 @@ YC_INC_DIRS	:=	$(INC_DIR) $(YC_LIB_SRC_DIR) $(COMM_DIR) $(COEFF_DIR)
 YC_INC_FILES	:=	$(wildcard $(addsuffix /*.hpp,$(YC_INC_DIRS)))
 YC_STENCIL_SRC_FILES	:=	$(foreach dir,$(YC_STENCIL_DIRS),$(wildcard $(dir)/*.cpp))
 YC_STENCIL_INC_FILES	:=	$(foreach dir,$(YC_STENCIL_DIRS),$(wildcard $(dir)/*.hpp))
-YC_STENCIL_NAMES	:=	$(notdir $(patsubst %.cpp,%,$(YC_STENCIL_SRC_FILES)))
+YC_STENCIL_NAMES	:=	$(notdir $(basename $(YC_STENCIL_SRC_FILES)))
 YC_STENCIL_OBJS		:=	$(addprefix $(YC_STENCIL_OBJ_DIR)/,$(addsuffix .o,$(YC_STENCIL_NAMES)))
 
 # Compiler and default flags.
