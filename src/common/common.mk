@@ -33,6 +33,7 @@ HOSTNAME	:= 	$(shell hostname)
 empty		:=
 space		:=	$(empty) $(empty)
 comma		:=	,
+colon		:=	:
 
 # Set YASK_OUTPUT_DIR to change where all output files go.
 YASK_OUTPUT_DIR	?=	$(YASK_BASE)
