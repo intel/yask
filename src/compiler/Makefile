@@ -60,7 +60,7 @@ YC_STENCIL_OBJS		:=	$(addprefix $(YC_STENCIL_OBJ_DIR)/,$(addsuffix .o,$(YC_STENC
 # Compiler and default flags.
 YC_CXX    	:=	$(CXX)
 YC_CXXOPT	:= 	-O2
-YC_CXXFLAGS 	:=	-g -std=c++11 -Wall
+YC_CXXFLAGS 	:=	-g -std=c++17 -Wall
 YC_CXXFLAGS	+=	-Wno-unknown-pragmas -Wno-unused-variable
 YC_CXXFLAGS	+=	$(INC_CXXFLAGS)
 YC_INC_CXXFLAGS :=	$(addprefix -I,$(YC_INC_DIRS))

@@ -69,12 +69,13 @@ YK_MAKE		:=	$(MAKE) $(YASK_MFLAGS) -C src/kernel YASK_OUTPUT_DIR=$(YASK_OUT_BASE
 YC_MAKE		:=	$(MAKE) $(YASK_MFLAGS) -C src/compiler YASK_OUTPUT_DIR=$(YASK_OUT_BASE)
 
 # Default flags--used only for targets in this Makefile.
-# For compiler, use YC_CXX*.
-# For kernel, use YK_CXX*.
-CXXOPT		:=	-O2
-CXXFLAGS 	:=	-g -std=c++11 -Wall $(CXXOPT)
-CXXFLAGS	+=	$(addprefix -I,$(INC_DIR) $(COMM_DIR))
-CXXFLAGS	+=	-fopenmp
+# For compiler, use YC_CXX* vars.
+# For kernel, use YK_CXX* vars.
+YASK_CXX	:= 	$(CXX)
+YASK_CXXOPT	:=	-O2
+YASK_CXXFLAGS 	:=	-g -std=c++17 -Wall $(YASK_CXXOPT)
+YASK_CXXFLAGS	+=	$(addprefix -I,$(INC_DIR) $(COMM_DIR))
+YASK_CXXFLAGS	+=	-fopenmp
 
 ######## Primary targets & rules
 # NB: must set stencil and arch to generate the desired kernel.
@@ -245,11 +246,11 @@ yc-and-yk-test:
 
 $(TUPLE_TEST_EXEC): $(COMM_DIR)/tests/tuple_test.cpp $(COMM_DIR)/*.*pp
 	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(CXX) $(CXXFLAGS) $(LFLAGS) -o $@ $< $(COMM_DIR)/tuple.cpp $(COMM_DIR)/common_utils.cpp
+	$(CXX_PREFIX) $(YASK_CXX) $(YASK_CXXFLAGS) $(LFLAGS) -o $@ $< $(COMM_DIR)/tuple.cpp $(COMM_DIR)/common_utils.cpp
 
 $(COMBO_TEST_EXEC): $(COMM_DIR)/tests/combo_test.cpp $(COMM_DIR)/*.*pp
 	$(MKDIR) $(dir $@)
-	$(CXX_PREFIX) $(CXX) $(CXXFLAGS) $(LFLAGS) -o $@ $< $(COMM_DIR)/combo.cpp
+	$(CXX_PREFIX) $(YASK_CXX) $(YASK_CXXFLAGS) $(LFLAGS) -o $@ $< $(COMM_DIR)/combo.cpp
 
 tuple-test: $(TUPLE_TEST_EXEC)
 	@echo '*** Running the C++ YASK tuple test...'
