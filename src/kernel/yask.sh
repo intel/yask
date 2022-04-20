@@ -300,8 +300,8 @@ if [[ -z ${stencil:+ok} ]]; then
     show_stencils
 fi
 
-# Simplified MPI in x-dim only.
-if [[ -n "$nranks" && $nranks > 1 ]]; then
+# Simple MPI for one node.
+if [[ $nranks > 1 ]]; then
     : ${mpi_cmd="mpirun -np $nranks"}
 fi
 
@@ -385,8 +385,15 @@ fi
 
 # Commands to capture some important system status and config info for benchmark documentation.
 config_cmds="sleep 1; uptime; lscpu; cpuinfo -A; sed '/^$/q' /proc/cpuinfo; cpupower frequency-info; uname -a; $dump /etc/system-release; $dump /proc/cmdline; $dump /proc/meminfo; free -gt; numactl -H; ulimit -a; ipcs -l; env | awk '/YASK/ { print \"env:\", \$1 }'"
-if [[ $arch == "offload" ]]; then
+
+# Heuristic to determine if this is an offload kernel.
+if [[ $arch =~ "offload" ]]; then
     config_cmds+="; clinfo -l";
+    if [[ $nranks > 1 ]]; then
+        envs+=" I_MPI_OFFLOAD_TOPOLIB=level_zero I_MPI_OFFLOAD=2"
+    else
+        envs+=" EnableImplicitScaling=1"
+    fi
 fi
 
 # Command sequence to be run in a shell.

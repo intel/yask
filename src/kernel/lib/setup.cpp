@@ -52,12 +52,6 @@ namespace yask {
             existing_comm == MPI_COMM_WORLD) {
             if (!is_init) {
 
-                // Set env vars for MPI offload.
-                #ifdef USE_OFFLOAD
-                setenv("I_MPI_OFFLOAD", "1", 0);
-                setenv("I_MPI_OFFLOAD_TOPOLIB", "level_zero", 0);
-                #endif
-                
                 int provided = 0;
                 MPI_Init_thread(argc, argv, MPI_THREAD_MULTIPLE, &provided);
                 if (provided < MPI_THREAD_SERIALIZED) {
