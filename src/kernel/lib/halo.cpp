@@ -86,13 +86,12 @@ namespace yask {
         }
 
         // Vars for list of vars that need to be swapped and their step
-        // indices.  Use an ordered map by *name* to make sure vars are
-        // swapped in same order on all ranks. (If we order vars by
-        // pointer, pointer values will not generally be the same on each
-        // rank.)
-        VarPtrMap vars_to_swap;
-        map<YkVarPtr, idx_t> first_steps_to_swap;
-        map<YkVarPtr, idx_t> last_steps_to_swap;
+        // indices.
+        struct SwapInfo {
+            YkVarPtr gp;
+            set<idx_t> steps;
+        };
+        vector<SwapInfo> vars_to_swap;
 
         // Loop thru all vars in stencil.
         for (auto& gp : orig_var_ptrs) {
@@ -114,6 +113,7 @@ namespace yask {
                 start_t = gp->get_first_valid_step_index();
                 stop_t = gp->get_last_valid_step_index() + 1;
             }
+            bool first = true;
             for (idx_t t = start_t; t < stop_t; t++) {
 
                 // Only need to swap vars whose halos are not up-to-date
@@ -122,22 +122,18 @@ namespace yask {
                     continue;
 
                 // Swap this var.
-                vars_to_swap[gname] = gp;
-
-                // Update first step.
-                if (first_steps_to_swap.count(gp) == 0 || t < first_steps_to_swap[gp])
-                    first_steps_to_swap[gp] = t;
-
-                // Update last step.
-                if (last_steps_to_swap.count(gp) == 0 || t > last_steps_to_swap[gp])
-                    last_steps_to_swap[gp] = t;
+                if (first) {
+                    SwapInfo si;
+                    si.gp = gp;
+                    vars_to_swap.push_back(si);
+                    first = false;
+                }
+                vars_to_swap.back().steps.insert(t);
 
             } // steps.
         } // vars.
         TRACE_MSG("need to exchange halos for " <<
-                  vars_to_swap.size() << " var(s)");
-        assert(vars_to_swap.size() == first_steps_to_swap.size());
-        assert(vars_to_swap.size() == last_steps_to_swap.size());
+                  vars_to_swap.size() << " var/step combo(s)");
 
         // Sequence of things to do for each neighbor.
         enum halo_steps { halo_irecv, halo_pack_isend, halo_unpack, halo_final };
@@ -174,15 +170,15 @@ namespace yask {
             // Loop thru all vars to swap.
             // Use 'gi' as an MPI tag.
             int gi = 0;
-            for (auto gtsi : vars_to_swap) {
+            for (auto& si : vars_to_swap) {
                 gi++;
-                auto& gname = gtsi.first;
-                auto& gp = gtsi.second;
+                auto gp = si.gp;
                 auto& gb = gp->gb();
+                auto& gname = gb.get_name();
+                TRACE_MSG(" processing var '" << gname << "', " << si.steps.size() << " step(s)");
                 auto& var_mpi_data = mpi_data.at(gname);
                 MPI_Request* var_recv_reqs = var_mpi_data.recv_reqs.data();
                 MPI_Request* var_send_reqs = var_mpi_data.send_reqs.data();
-                TRACE_MSG(" processing var '" << gname << "'");
                 bool finalizing_var = false;
 
                 // Loop thru all this rank's neighbors.
@@ -237,14 +233,6 @@ namespace yask {
                                  IdxTuple first = send_buf.begin_pt;
                                  IdxTuple last = send_buf.last_pt;
 
-                                 // The code in alloc_mpi_data() pre-calculated the first and
-                                 // last points of each buffer, except in the step dim, where
-                                 // the max range was set. Update actual range now.
-                                 if (gp->is_dim_used(step_dim)) {
-                                     first.set_val(step_dim, first_steps_to_swap[gp]);
-                                     last.set_val(step_dim, last_steps_to_swap[gp]);
-                                 }
-
                                  // Wait until buffer is avail if sharing one.
                                  if (using_shm) {
                                      TRACE_MSG("exchange_halos:    waiting to write to shm buffer");
@@ -260,14 +248,26 @@ namespace yask {
                                            (send_vec_ok ? "with" : "without") <<
                                            " vector copy into " << buf <<
                                            (use_offload ? " on device" : " on host"));
-                                 idx_t nelems = 0;
+                                 size_t nbytes = 0;
+                                 char* bufp = (char*)buf;
+                                 
+                                 // Pack one step at a time.
                                  halo_pack_time.start();
-                                 if (send_vec_ok)
-                                     nelems = gb.get_vecs_in_slice(buf, first, last, use_offload);
-                                 else
-                                     nelems = gb.get_elements_in_slice(buf, first, last, use_offload);
+                                 for (auto t : si.steps) {
+                                     if (gp->is_dim_used(step_dim)) {
+                                         first.set_val(step_dim, t);
+                                         last.set_val(step_dim, t);
+                                     }
+                                     idx_t nelems = 0;
+                                     if (send_vec_ok)
+                                         nelems = gb.get_vecs_in_slice(bufp, first, last, use_offload);
+                                     else
+                                         nelems = gb.get_elements_in_slice(bufp, first, last, use_offload);
+                                     auto nb = nelems * get_element_bytes();
+                                     bufp += nb;
+                                     nbytes += nb;
+                                 }
                                  halo_pack_time.stop();
-                                 size_t nbytes = nelems * get_element_bytes();
 
                                  if (use_offload && !use_device_mpi) {
                                      TRACE_MSG("exchange_halos:    copying buffer from device");
@@ -331,12 +331,6 @@ namespace yask {
                                  IdxTuple first = recv_buf.begin_pt;
                                  IdxTuple last = recv_buf.last_pt;
 
-                                 // Set step val as above.
-                                 if (gp->is_dim_used(step_dim)) {
-                                     first.set_val(step_dim, first_steps_to_swap[gp]);
-                                     last.set_val(step_dim, last_steps_to_swap[gp]);
-                                 }
-
                                  void* buf = (void*)recv_buf._elems;
                                  if (use_offload && !use_device_mpi) {
                                      TRACE_MSG("exchange_halos:    copying buffer to device");
@@ -352,14 +346,27 @@ namespace yask {
                                            (recv_vec_ok ? "with" : "without") <<
                                            " vector copy from " << buf <<
                                            (use_offload ? " on device" : " on host"));
-                                 idx_t nelems = 0;
+                                 size_t nbytes = 0;
+                                 char* bufp = (char*)buf;
+
+                                 // Unpack one step at a time.                                 
                                  halo_unpack_time.start();
-                                 if (recv_vec_ok)
-                                     nelems = gp->set_vecs_in_slice(buf, first, last, use_offload);
-                                 else
-                                     nelems = gp->set_elements_in_slice(buf, first, last, use_offload);
+                                 for (auto t : si.steps) {
+                                     if (gp->is_dim_used(step_dim)) {
+                                         first.set_val(step_dim, t);
+                                         last.set_val(step_dim, t);
+                                     }
+                                     idx_t nelems = 0;
+                                     if (recv_vec_ok)
+                                         nelems = gp->set_vecs_in_slice(bufp, first, last, use_offload);
+                                     else
+                                         nelems = gp->set_elements_in_slice(bufp, first, last, use_offload);
+                                     auto nb = nelems * get_element_bytes();
+                                     bufp += nb;
+                                     nbytes += nb;
+                                 }
                                  halo_unpack_time.stop();
-                                 assert(nelems <= recv_buf.get_size());
+                                 assert(nbytes <= recv_buf.get_bytes());
 
                                  if (using_shm)
                                      recv_buf.mark_read_done();
@@ -403,19 +410,19 @@ namespace yask {
                 if (finalizing_var) {
 
                     // Mark var as up-to-date.
-                    for (idx_t si = first_steps_to_swap[gp]; si <= last_steps_to_swap[gp]; si++) {
-                        if (gb.is_dirty(si)) {
-                            gb.set_dirty(false, si);
+                    for (auto t : si.steps) {
+                        if (gb.is_dirty(t)) {
+                            gb.set_dirty(false, t);
                             TRACE_MSG(" var '" << gname <<
-                                      "' marked as clean at step-index " << si);
+                                      "' marked as clean at step-index " << t);
                         }
                         else
                             TRACE_MSG(" var '" << gname <<
-                                      "' already clean at step-index " << si);
+                                      "' already clean at step-index " << t);
                     }
                 }
                 
-            } // vars to swap.
+            } // var/steps to swap.
         } // exchange sequence.
 
         TRACE_MSG(num_recv_reqs << " MPI receive request(s) issued");
