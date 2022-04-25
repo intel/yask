@@ -338,9 +338,14 @@ namespace yask {
                            "that are used between nodes.",
                            use_shm));
         parser.add_option(make_shared<CommandLineParser::BoolOption>
-                          ("skip_halo_exchange",
-                           "[Debug] Do not perform halo packs/unpacks/sends/receives.",
-                           skip_halo_exchange));
+                          ("exchange_halos",
+                           "[Debug] Perform halo packs/unpacks/sends/receives. "
+                           "Will not give correct results if disabled.",
+                           do_halo_exchange));
+        parser.add_option(make_shared<CommandLineParser::BoolOption>
+                          ("force_scalar_exchange",
+                           "[Debug] Do not allow vectorized halo exchanges.",
+                           force_scalar_exchange));
         #endif
         parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("force_scalar",

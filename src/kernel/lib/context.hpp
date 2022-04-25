@@ -325,15 +325,6 @@ namespace yask {
         IdxTuple tb_tops;      // top of TB trapezoid.
         IdxTuple mb_angles;  // MB skewing angles for each shift (in points).
 
-        // MPI settings.
-        // TODO: move to settings or MPI info object.
-#ifdef NO_VEC_EXCHANGE
-        bool allow_vec_exchange = false;
-#else
-        bool allow_vec_exchange = true; // allow vectorized halo exchange.
-#endif
-        bool enable_halo_exchange = true;
-
         // Clear this to ignore step conditions.
         bool check_step_conds = true;
 

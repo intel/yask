@@ -524,8 +524,9 @@ int main(int argc, char** argv)
 
             // Change some settings.
             ref_context->name += "-reference";
-            ref_context->allow_vec_exchange = false;   // exchange scalars in halos.
             auto& ref_opts = ref_context->get_actl_opts();
+            ref_opts->force_scalar_exchange = true;
+            ref_opts->do_halo_exchange = true;
             ref_opts->overlap_comms = false;
             ref_opts->use_shm = false;
             ref_opts->_numa_pref = yask_numa_none;

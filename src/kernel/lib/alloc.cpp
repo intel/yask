@@ -575,7 +575,7 @@ namespace yask {
                  // Is vectorized exchange allowed based on domain sizes?
                  // Both my rank and neighbor rank must have *all* domain sizes
                  // of vector multiples.
-                 bool vec_ok = !actl_opts->force_scalar && allow_vec_exchange &&
+                 bool vec_ok = !actl_opts->force_scalar_exchange &&
                      mpi_info->has_all_vlen_mults[mpi_info->my_neighbor_index] &&
                      mpi_info->has_all_vlen_mults[neigh_idx];
 

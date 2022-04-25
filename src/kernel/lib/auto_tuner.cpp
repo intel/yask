@@ -575,7 +575,8 @@ namespace yask {
 
         // Temporarily disable halo exchange to tune intra-rank.
         // Will not produce valid results.
-        enable_halo_exchange = false;
+        auto save_exchange_halos = actl_opts->do_halo_exchange;
+        actl_opts->do_halo_exchange = false;
 
         // Temporarily ignore step conditions to force eval of conditional
         // bundles.  NB: may affect perf, e.g., if stages A and B run in
@@ -615,7 +616,7 @@ namespace yask {
         #endif
 
         // reenable normal operation.
-        enable_halo_exchange = true;
+        actl_opts->do_halo_exchange = true;
         check_step_conds = true;
         do_device_copies = true;
 

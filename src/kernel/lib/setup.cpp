@@ -526,7 +526,7 @@ namespace yask {
         DEBUG_MSG("*** WARNING: YASK compiled with TRACE_INTRINSICS; ignore performance.");
 #endif
         TRACE_MSG("***  WARNING: YASK run with -trace; ignore performance");
-        if (actl_opts->skip_halo_exchange)
+        if (!actl_opts->do_halo_exchange)
             DEBUG_MSG("*** WARNING: YASK run without halo exchanges; ignore performance; invalid results.");
     }
 

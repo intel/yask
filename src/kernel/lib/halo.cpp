@@ -44,7 +44,7 @@ namespace yask {
       var A ----> local_buf ------------> local_buf ----> var A
              pack        MPI_isend   MPI_irecv     unpack
 
-      Device halo exchange w/o direct device copy and w/o shm:
+      Device halo exchange w/o direct device copy w/o shm:
       rank I                              rank J (neighbor of I)
       -----------------------             -----------------------
       var A --> dev_local_buf             dev_local_buf --> var A
@@ -53,10 +53,10 @@ namespace yask {
                host_local_buf ---------> host_local_buf
                         MPI_isend   MPI_irecv
 
-      Device halo exchange w/o direct device copy and w/shm:
+      Device halo exchange w/o direct device copy w/shm:
       --not implemented.
 
-      Device halo exchange w/direct device copy:
+      Device halo exchange w/direct device copy w/o shm:
       rank I                             rank J (neighbor of I)
       ---------------------------        -----------------------------
       dev var A --> dev_local_buf -----> dev_local_buf ----> dev var A
@@ -69,11 +69,10 @@ namespace yask {
 
         #if defined(USE_MPI)
         STATE_VARS(this);
-        if (!enable_halo_exchange || env->num_ranks < 2)
+        if (!actl_opts->do_halo_exchange || env->num_ranks < 2)
             return;
         auto& use_offload = KernelEnv::_use_offload;
         auto use_device_mpi = use_offload ? actl_opts->use_device_mpi : false;
-        auto skip_exchange = actl_opts->skip_halo_exchange;
 
         halo_time.start();
         double wait_delta = 0.;
@@ -122,11 +121,6 @@ namespace yask {
                 if (!gb.is_dirty(t))
                     continue;
 
-                if (skip_exchange) {
-                    gb.set_dirty(false, t);
-                    continue;
-                }
-                
                 // Swap this var.
                 vars_to_swap[gname] = gp;
 
@@ -438,7 +432,7 @@ namespace yask {
 
         #if defined(USE_MPI)
         STATE_VARS(this);
-        if (!enable_halo_exchange || actl_opts->skip_halo_exchange || env->num_ranks < 2)
+        if (!actl_opts->do_halo_exchange || env->num_ranks < 2)
             return;
 
         halo_test_time.start();

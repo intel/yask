@@ -268,7 +268,8 @@ namespace yask {
 
         // Debug.
         bool force_scalar = false; // Do only scalar ops.
-        bool skip_halo_exchange = false; // Don't do pack/unpack/send/recv.
+        bool do_halo_exchange = true; // False => skip halo exchanges.
+        bool force_scalar_exchange = false; // Don't allow vec exchanges.
 
         // Ctor/dtor.
         KernelSettings(DimsPtr dims, KernelEnvPtr env);
