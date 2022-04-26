@@ -258,7 +258,7 @@ namespace yask {
             THROW_YASK_EXCEPTION("Error: cannot allocate " + make_byte_str(nbytes) +
                                  " on '" + pmem_name + "'");
         #else
-        THROW_YASK_EXCEPTION("Error: PMEM allocation is not enabled; build with pmem=1");
+        THROW_YASK_EXCEPTION("Error: PMEM allocation is not enabled; build with pmem=0");
         #endif
 
         // Check alignment.
@@ -989,10 +989,9 @@ namespace yask {
             }
             int seq_num = 0;
 
-            // Vars. Use the map to ensure same order in all ranks.
-            for (auto gi : all_var_map) {
-                auto& gname = gi.first;
-                auto& gp = gi.second;
+            // Vars that may have MPI buffers.
+            for (auto gp : orig_var_ptrs) {
+                auto& gname = gp->get_name();
 
                 // Are there MPI bufs for this var?
                 if (mpi_data.count(gname) == 0)

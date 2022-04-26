@@ -177,6 +177,7 @@ namespace yask {
         char* cp = shm_alloc(nbytes, shm_comm, shm_win);
 
         // Map alloc to device.
+        // Shm on device not currently supported.
         offload_map_alloc(cp, nbytes);
 
         // Make shared ptr.

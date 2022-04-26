@@ -54,7 +54,15 @@ namespace yask {
                         MPI_isend   MPI_irecv
 
       Device halo exchange w/o direct device copy w/shm:
-      --not implemented.
+      rank I                              rank J (neighbor of I)
+      -----------------------             -----------------------
+      var A --> dev_local_buf             dev_local_buf --> var A
+            pack      | copy to host            ^     unpack
+                      |                         | copy to dev
+                      +----> shared_buf --------+
+              ** Not yet implemented because each device rank
+                 needs a separate buffer, but the host shares one.
+                 TODO: modify allocator to support this.
 
       Device halo exchange w/direct device copy w/o shm:
       rank I                             rank J (neighbor of I)
@@ -244,11 +252,6 @@ namespace yask {
 
                                  // Copy (pack) data from var to buffer.
                                  void* buf = (void*)send_buf._elems;
-                                 TRACE_MSG("exchange_halos:    packing [" << first.make_dim_val_str() <<
-                                           " ... " << last.make_dim_val_str() << "] " <<
-                                           (send_vec_ok ? "with" : "without") <<
-                                           " vector copy into " << buf <<
-                                           (use_offload ? " on device" : " on host"));
                                  size_t npbytes = 0;
                                  char* bufp = (char*)buf;
                                  
@@ -259,6 +262,11 @@ namespace yask {
                                          first.set_val(step_dim, t);
                                          last.set_val(step_dim, t);
                                      }
+                                     TRACE_MSG("exchange_halos:    packing [" << first.make_dim_val_str() <<
+                                               " ... " << last.make_dim_val_str() << "] " <<
+                                               (send_vec_ok ? "with" : "without") <<
+                                               " vector copy into " << bufp <<
+                                               (use_offload ? " on device" : " on host"));
                                      idx_t nelems = 0;
                                      if (send_vec_ok)
                                          nelems = gb.get_vecs_in_slice(bufp, first, last, use_offload);
@@ -360,12 +368,6 @@ namespace yask {
                                      }
 
                                      // Copy data from buffer to var.
-                                     TRACE_MSG("exchange_halos:    unpacking into [" <<
-                                               first.make_dim_val_str() <<
-                                               " ... " << last.make_dim_val_str() << "] " <<
-                                               (recv_vec_ok ? "with" : "without") <<
-                                               " vector copy from " << buf <<
-                                               (use_offload ? " on device" : " on host"));
                                      size_t npbytes = 0;
                                      char* bufp = (char*)buf;
 
@@ -376,6 +378,12 @@ namespace yask {
                                              first.set_val(step_dim, t);
                                              last.set_val(step_dim, t);
                                          }
+                                         TRACE_MSG("exchange_halos:    unpacking into [" <<
+                                                   first.make_dim_val_str() <<
+                                                   " ... " << last.make_dim_val_str() << "] " <<
+                                                   (recv_vec_ok ? "with" : "without") <<
+                                                   " vector copy from " << bufp <<
+                                                   (use_offload ? " on device" : " on host"));
                                          idx_t nelems = 0;
                                          if (recv_vec_ok)
                                              nelems = gp->set_vecs_in_slice(bufp, first, last, use_offload);
