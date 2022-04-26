@@ -349,8 +349,7 @@ namespace yask {
             nup++;
 
             // Set appropriate dirty flag.
-            // FIXME: does not keep dirty flags consistent across ranks!
-            gb().set_dirty_using_alloc_index(true, asi);
+            gb().set_dirty_using_alloc_index(YkVarBase::self, true, asi);
         }
         TRACE_MSG("set_element(" << val << ", {" <<
                   gb().make_index_string(indices) << "}, " <<
@@ -379,8 +378,7 @@ namespace yask {
             nup++;
 
             // Set appropriate dirty flag.
-            // FIXME: does not keep dirty flags consistent across ranks!
-            gb().set_dirty_using_alloc_index(true, asi);
+            gb().set_dirty_using_alloc_index(YkVarBase::self, true, asi);
         }
         TRACE_MSG("add_to_element(" << val << ", {" <<
                   gb().make_index_string(indices) <<  "}, " <<
@@ -454,7 +452,6 @@ namespace yask {
                                               first_indices, last_indices, on_device);
             
         // Set appropriate dirty flag(s).
-        // FIXME: does not keep dirty flags consistent across ranks!
         set_dirty_in_slice(first_indices, last_indices);
 
         // Return number of writes.
@@ -498,7 +495,6 @@ namespace yask {
                                               first_indices, last_indices, on_device);
             
         // Set appropriate dirty flag(s).
-        // FIXME: does not keep dirty flags consistent across ranks!
         set_dirty_in_slice(first_indices, last_indices);
 
         // Return number of writes.

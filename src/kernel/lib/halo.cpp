@@ -93,8 +93,7 @@ namespace yask {
                 TRACE_MSG("following calc of MPI interior");
         }
 
-        // Vars for list of vars that need to be swapped and their step
-        // indices.
+        // Vars that need to be swapped and their step indices.
         struct SwapInfo {
             YkVarPtr gp;
             set<idx_t> steps;
@@ -104,10 +103,7 @@ namespace yask {
         // Loop thru all vars in stencil.
         for (auto& gp : orig_var_ptrs) {
             auto& gb = gp->gb();
-
-            // Don't swap scratch vars.
-            if (gb.is_scratch())
-                continue;
+            assert(!gb.is_scratch());
 
             // Only need to swap data in vars that have any MPI buffers.
             auto& gname = gp->get_name();
@@ -124,9 +120,15 @@ namespace yask {
             bool first = true;
             for (idx_t t = start_t; t < stop_t; t++) {
 
+                // If my var is dirty, the 'others' flag should always
+                // be set. Otherwise, the MPI exchanges will get
+                // out-of-sync.
+                if (gb.is_dirty(YkVarBase::self, t))
+                    assert(gb.is_dirty(YkVarBase::others, t));
+
                 // Only need to swap vars whose halos are not up-to-date
                 // for this step.
-                if (!gb.is_dirty(t))
+                if (!gb.is_dirty(YkVarBase::others, t))
                     continue;
 
                 // Swap this var.
@@ -140,8 +142,8 @@ namespace yask {
 
             } // steps.
         } // vars.
-        TRACE_MSG("need to exchange halos for " <<
-                  vars_to_swap.size() << " var/step combo(s)");
+        TRACE_MSG("need to exchange halos from " << vars_to_swap.size() <<
+                  " var(s)");
 
         // Sequence of things to do for each neighbor.
         enum halo_steps { halo_irecv, halo_pack_isend, halo_unpack, halo_final };
@@ -250,41 +252,55 @@ namespace yask {
                                      wait_delta += halo_wait_time.stop();
                                  }
 
+                                 // Check to see if my var is dirty in any step that the
+                                 // 'others' may be dirty in.
+                                 bool is_mine_dirty = false;
+                                 for (auto t : si.steps) {
+                                     if (gb.is_dirty(YkVarBase::self, t))
+                                         is_mine_dirty = true;
+                                 }
+
                                  // Copy (pack) data from var to buffer.
                                  void* buf = (void*)send_buf._elems;
                                  size_t npbytes = 0;
                                  char* bufp = (char*)buf;
                                  
                                  // Pack one step at a time.
-                                 halo_pack_time.start();
-                                 for (auto t : si.steps) {
-                                     if (gp->is_dim_used(step_dim)) {
-                                         first.set_val(step_dim, t);
-                                         last.set_val(step_dim, t);
+                                 // TODO: develop mechanism to allow only dirty steps
+                                 // to be packed and sent; this would involve sending
+                                 // the step indices.
+                                 if (is_mine_dirty) {
+                                     halo_pack_time.start();
+                                     for (auto t : si.steps) {
+                                         if (gp->is_dim_used(step_dim)) {
+                                             first.set_val(step_dim, t);
+                                             last.set_val(step_dim, t);
+                                         }
+                                         TRACE_MSG("exchange_halos:    packing [" << first.make_dim_val_str() <<
+                                                   " ... " << last.make_dim_val_str() << "] " <<
+                                                   (send_vec_ok ? "with" : "without") <<
+                                                   " vector copy into " << (void*)bufp <<
+                                                   (use_offload ? " on device" : " on host"));
+                                         idx_t nelems = 0;
+                                         if (send_vec_ok)
+                                             nelems = gb.get_vecs_in_slice(bufp, first, last, use_offload);
+                                         else
+                                             nelems = gb.get_elements_in_slice(bufp, first, last, use_offload);
+                                         auto nb = nelems * get_element_bytes();
+                                         bufp += nb;
+                                         npbytes += nb;
                                      }
-                                     TRACE_MSG("exchange_halos:    packing [" << first.make_dim_val_str() <<
-                                               " ... " << last.make_dim_val_str() << "] " <<
-                                               (send_vec_ok ? "with" : "without") <<
-                                               " vector copy into " << bufp <<
-                                               (use_offload ? " on device" : " on host"));
-                                     idx_t nelems = 0;
-                                     if (send_vec_ok)
-                                         nelems = gb.get_vecs_in_slice(bufp, first, last, use_offload);
-                                     else
-                                         nelems = gb.get_elements_in_slice(bufp, first, last, use_offload);
-                                     auto nb = nelems * get_element_bytes();
-                                     bufp += nb;
-                                     npbytes += nb;
-                                 }
-                                 halo_pack_time.stop();
-                                 assert(npbytes <= nbbytes);
+                                     halo_pack_time.stop();
+                                     assert(npbytes <= nbbytes);
 
-                                 if (use_offload && !use_device_mpi) {
-                                     TRACE_MSG("exchange_halos:    copying buffer from device");
-                                     halo_copy_time.start();
-                                     offload_copy_from_device(buf, npbytes);
-                                     halo_copy_time.stop();
-                                     assert(!using_shm);
+                                     // Copy packed data from device if needed.
+                                     if (use_offload && !use_device_mpi) {
+                                         TRACE_MSG("exchange_halos:    copying buffer from device");
+                                         halo_copy_time.start();
+                                         offload_copy_from_device(buf, npbytes);
+                                         halo_copy_time.stop();
+                                         assert(!using_shm);
+                                     }
                                  }
 
                                  if (using_shm) {
@@ -382,7 +398,7 @@ namespace yask {
                                                    first.make_dim_val_str() <<
                                                    " ... " << last.make_dim_val_str() << "] " <<
                                                    (recv_vec_ok ? "with" : "without") <<
-                                                   " vector copy from " << bufp <<
+                                                   " vector copy from " << (void*)bufp <<
                                                    (use_offload ? " on device" : " on host"));
                                          idx_t nelems = 0;
                                          if (recv_vec_ok)
@@ -441,16 +457,9 @@ namespace yask {
                 if (finalizing_var) {
 
                     // Mark var as up-to-date.
-                    for (auto t : si.steps) {
-                        if (gb.is_dirty(t)) {
-                            gb.set_dirty(false, t);
-                            TRACE_MSG(" var '" << gname <<
-                                      "' marked as clean at step-index " << t);
-                        }
-                        else
-                            TRACE_MSG(" var '" << gname <<
-                                      "' already clean at step-index " << t);
-                    }
+                    gb.set_dirty_all(YkVarBase::self, false);
+                    gb.set_dirty_all(YkVarBase::others, false);
+                    TRACE_MSG(" var '" << gname << "' marked as clean");
                 }
                 
             } // vars to swap.

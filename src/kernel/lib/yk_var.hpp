@@ -560,6 +560,9 @@ namespace yask {
         public KernelStateBase {
         friend class YkVarImpl;
 
+    public:
+        enum dirty_idx { self, others };
+
     protected:
 
         // Ptr to the core data.
@@ -585,11 +588,14 @@ namespace yask {
         // Whether this was created via an API.
         bool _is_user_var = false;
 
-        // Data that needs to be copied to neighbors' halos if using MPI.
-        // If this var has the step dim, there is one elem per alloc'd step.
-        // Otherwise, only elem 0 is used.
-        std::vector<bool> _dirty_steps;
-
+        // 0: Data needs to be copied to neighbors' halos of this var if using
+        // MPI.
+        // 1: Data *may* need to be copied from one or neighbors into
+        // the halo of this var.
+        // If this var has the step dim, there is one elem per alloc'd
+        // step.  Otherwise, only elem 0 is used.
+        std::vector<bool> _dirty_steps[2];
+        
         // Convenience function to format indices like
         // "x=5, y=3".
         virtual std::string make_index_string(const Indices& idxs,
@@ -631,7 +637,7 @@ namespace yask {
         // Resize or fail if already allocated.
         void resize();
 
-        // Set dirty flags in range.
+        // Set my dirty flags in range.
         void set_dirty_in_slice(const Indices& first_indices,
                                 const Indices& last_indices);
 
@@ -755,12 +761,12 @@ namespace yask {
         }
 
         // Halo-exchange flag accessors.
-        virtual bool is_dirty(idx_t step_idx) const;
-        virtual void set_dirty(bool dirty, idx_t step_idx);
-        virtual void set_dirty_all(bool dirty);
-        inline void set_dirty_using_alloc_index(bool dirty, idx_t alloc_idx) {
-            _dirty_steps[alloc_idx] = dirty;
+        virtual bool is_dirty(dirty_idx whose, idx_t step_idx) const;
+        virtual void set_dirty(dirty_idx whose, bool dirty, idx_t step_idx);
+        inline void set_dirty_using_alloc_index(dirty_idx whose, bool dirty, idx_t alloc_idx) {
+            _dirty_steps[whose][alloc_idx] = dirty;
         }
+        virtual void set_dirty_all(dirty_idx whose, bool dirty);
 
         // Resize flag accessors.
         virtual void set_fixed_size(bool is_fixed) {
@@ -1148,11 +1154,11 @@ namespace yask {
         // Init data.
         void set_all_elements_same(double seed) override final {
             _data.set_elems_same(seed);
-            set_dirty_all(true);
+            set_dirty_all(self, true);
         }
         void set_all_elements_in_seq(double seed) override final {
             _data.set_elems_in_seq(seed);
-            set_dirty_all(true);
+            set_dirty_all(self, true);
         }
 
         // Get a pointer to given element.
@@ -1328,7 +1334,7 @@ namespace yask {
         void set_all_elements_same(double seed) override final {
             real_vec_t seedv = seed; // bcast.
             _data.set_elems_same(seedv);
-            set_dirty_all(true);
+            set_dirty_all(self, true);
         }
         void set_all_elements_in_seq(double seed) override final {
             real_vec_t seedv;
@@ -1340,7 +1346,7 @@ namespace yask {
             for (int i = 0; i < n; i++)
                 seedv[i] = seed * (1.0 + double(i) / n);
             _data.set_elems_in_seq(seedv);
-            set_dirty_all(true);
+            set_dirty_all(self, true);
         }
 
         // Get a pointer to given element.

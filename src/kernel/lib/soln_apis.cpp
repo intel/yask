@@ -249,9 +249,6 @@ namespace yask {
         STATE_VARS(this);
         TRACE_MSG("end_solution()...");
 
-        // Final halo exchange (usually not needed).
-        exchange_halos();
-
         // Release any MPI data.
         env->global_barrier();
         mpi_data.clear();

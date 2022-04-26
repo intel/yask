@@ -48,6 +48,10 @@ namespace yask {
         STATE_VARS(this);
         run_time.start();
 
+        // Since any APIs may have been called in other ranks, mark all
+        // neighbor vars as possibly dirty.
+        set_all_neighbor_vars_dirty();
+
         // Disable offload.
         bool save_offload = KernelEnv::_use_offload;
         KernelEnv::_use_offload = false;
@@ -165,11 +169,12 @@ namespace yask {
                     sg->calc_in_domain(scratch_var_idx, misc_idxs);
                 } // needed bundles.
 
-                // Mark vars that [may] have been written to.
+                // Mark vars that *may* have been written to.
                 // Mark vars as dirty even if not actually written by this
                 // rank. This is needed because neighbors will not know what
                 // vars are actually dirty, and all ranks must have the same
                 // information about which vars are possibly dirty.
+                // TODO: update separate dirty flags.
                 update_vars(nullptr, start_t, stop_t, true);
 
             } // all bundles.
@@ -196,9 +201,12 @@ namespace yask {
         // User-provided code.
         call_2idx_hooks(_before_run_solution_hooks,
                         first_step_index, last_step_index);
-
         // Start main timer.
         run_time.start();
+
+        // Since any APIs may have been called in other ranks, mark all
+        // neighbor vars as possibly dirty.
+        set_all_neighbor_vars_dirty();
 
         // Determine step dir from order of first/last.
         idx_t step_dir = (last_step_index >= first_step_index) ? 1 : -1;
@@ -1177,10 +1185,11 @@ namespace yask {
     // each stage in each time-step.  Trim to ext-BB and MPI section if 'bp' if
     // not null.  Write results into 'begin' and 'end' in 'idxs'.  Return
     // 'true' if resulting area is non-empty, 'false' if empty.
-    bool StencilContext::shift_mega_block(const Indices& base_start, const Indices& base_stop,
-                                      idx_t shift_num,
-                                      StagePtr& bp,
-                                      ScanIndices& idxs) {
+    bool StencilContext::shift_mega_block(const Indices& base_start,
+                                          const Indices& base_stop,
+                                          idx_t shift_num,
+                                          StagePtr& bp,
+                                          ScanIndices& idxs) {
         STATE_VARS(this);
 
         // For wavefront adjustments, see conceptual diagram in
@@ -1360,18 +1369,18 @@ namespace yask {
     // results back into 'begin' and 'end' of 'idxs'.  Returns 'true' if
     // resulting area is non-empty, 'false' if empty.
     bool StencilContext::shift_micro_block(const Indices& mb_base_start,
-                                          const Indices& mb_base_stop,
-                                          const Indices& adj_block_base_start,
-                                          const Indices& adj_block_base_stop,
-                                          const Indices& block_base_start,
-                                          const Indices& block_base_stop,
-                                          const Indices& mega_block_base_start,
-                                          const Indices& mega_block_base_stop,
-                                          idx_t mb_shift_num,
-                                          idx_t nphases, idx_t phase,
-                                          idx_t nshapes, idx_t shape,
-                                          const bit_mask_t& bridge_mask,
-                                          ScanIndices& idxs) {
+                                           const Indices& mb_base_stop,
+                                           const Indices& adj_block_base_start,
+                                           const Indices& adj_block_base_stop,
+                                           const Indices& block_base_start,
+                                           const Indices& block_base_stop,
+                                           const Indices& mega_block_base_start,
+                                           const Indices& mega_block_base_stop,
+                                           idx_t mb_shift_num,
+                                           idx_t nphases, idx_t phase,
+                                           idx_t nshapes, idx_t shape,
+                                           const bit_mask_t& bridge_mask,
+                                           ScanIndices& idxs) {
         STATE_VARS(this);
         auto nstages = st_stages.size();
         bool ok = true;
@@ -1593,8 +1602,8 @@ namespace yask {
         return errs;
     }
 
-    // Update data in vars that have been written to by stage 'sel_bp'.
-    // Set the last "valid step" and mark vars as "dirty", i.e., needing
+    // Update data in vars that have been written to by stage 'sel_bp':
+    // set the last "valid step" and mark vars as "dirty", i.e., needing
     // halo exchange.
     void StencilContext::update_vars(const StagePtr& sel_bp,
                                      idx_t start, idx_t stop,
@@ -1631,8 +1640,10 @@ namespace yask {
                         // Update if not already done.
                         if (vars_done[gp].count(t_out) == 0) {
                             gb.update_valid_step(t_out);
-                            if (mark_dirty)
-                                gb.set_dirty(true, t_out);
+                            if (mark_dirty) {
+                                gb.set_dirty(YkVarBase::self, true, t_out);
+                                gb.set_dirty(YkVarBase::others, true, t_out);
+                            }
                             TRACE_MSG("var '" << gp->get_name() <<
                                       "' updated at step " << t_out);
                             vars_done[gp].insert(t_out);

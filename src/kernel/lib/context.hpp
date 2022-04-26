@@ -513,8 +513,17 @@ namespace yask {
         // If sel_bp==null, use all bundles.
         // If 'mark_dirty', also mark as needing halo exchange.
         void update_vars(const StagePtr& sel_bp,
-                          idx_t start, idx_t stop,
-                          bool mark_dirty);
+                         idx_t start, idx_t stop,
+                         bool mark_dirty);
+
+        // Mark all exchangable vars as possibly dirty in other ranks. This
+        // should be called anytime APIs could have been called and before
+        // running any steps.
+        void set_all_neighbor_vars_dirty() {
+            for (auto& gp : orig_var_ptrs) {
+                gp->gb().set_dirty_all(YkVarBase::others, true);
+            }
+        }
 
         // Set various limits in 'idxs' based on current step in mega-block.
         bool shift_mega_block(const Indices& base_start, const Indices& base_stop,

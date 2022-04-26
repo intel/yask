@@ -83,17 +83,17 @@ namespace yask {
     }
 
     // Halo-exchange flag accessors.
-    bool YkVarBase::is_dirty(idx_t step_idx) const {
-        if (_dirty_steps.size() == 0)
+    bool YkVarBase::is_dirty(dirty_idx whose, idx_t step_idx) const {
+        if (_dirty_steps[whose].size() == 0)
             const_cast<YkVarBase*>(this)->resize();
         if (_has_step_dim)
             step_idx = _wrap_step(step_idx);
         else
             step_idx = 0;
-        return _dirty_steps[step_idx];
+        return _dirty_steps[whose][step_idx];
     }
-    void YkVarBase::set_dirty(bool dirty, idx_t step_idx) {
-        if (_dirty_steps.size() == 0)
+    void YkVarBase::set_dirty(dirty_idx whose, bool dirty, idx_t step_idx) {
+        if (_dirty_steps[whose].size() == 0)
             resize();
         if (_has_step_dim) {
 
@@ -106,12 +106,12 @@ namespace yask {
         }
         else
             step_idx = 0;
-        set_dirty_using_alloc_index(dirty, step_idx);
+        set_dirty_using_alloc_index(whose, dirty, step_idx);
     }
-    void YkVarBase::set_dirty_all(bool dirty) {
-        if (_dirty_steps.size() == 0)
+    void YkVarBase::set_dirty_all(dirty_idx whose, bool dirty) {
+        if (_dirty_steps[whose].size() == 0)
             resize();
-        for (auto i : _dirty_steps)
+        for (auto i : _dirty_steps[whose])
             i = dirty;
     }
 
@@ -159,7 +159,7 @@ namespace yask {
                         ", left-wf-exts = " << IDX_STR(_left_wf_exts) <<
                         ", right-wf-exts = " << IDX_STR(_right_wf_exts) <<
                         ", vec-strides = " << IDX_STR(_vec_strides);
-                oss << ", " << _dirty_steps.size() << " dirty flag(s)";
+                oss << ", " << _dirty_steps[self].size() << " dirty flag(s)";
             }
             return oss.str();
         }
@@ -322,11 +322,12 @@ namespace yask {
         _corep->_vec_strides = get_vec_strides();
 
         // Resize dirty flags, too.
-        size_t old_dirty = _dirty_steps.size();
+        size_t old_dirty = _dirty_steps[self].size();
         if (old_dirty != new_dirty) {
 
             // Resize & set all as dirty.
-            _dirty_steps.assign(new_dirty, true);
+            _dirty_steps[self].assign(new_dirty, true);
+            _dirty_steps[others].assign(new_dirty, true);
 
             // Init range.
             init_valid_steps();
@@ -540,9 +541,9 @@ namespace yask {
         if (_has_step_dim) {
             for (idx_t i = first_indices[+step_posn];
                  i <= last_indices[+step_posn]; i++)
-                set_dirty(true, i);
+                set_dirty(self, true, i);
         } else
-            set_dirty_using_alloc_index(true, 0);
+            set_dirty_using_alloc_index(self, true, 0);
     }
 
     // Print one element like
