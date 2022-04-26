@@ -506,8 +506,8 @@ namespace yask {
         // Exchange all dirty halo data for all stencil bundles.
         void exchange_halos();
 
-        // Call MPI_Test() on all unfinished requests to promote MPI progress.
-        void poke_halo_exchange();
+        // Call MPI_Test() on all unfinished requests to advance MPI progress.
+        void adv_halo_exchange();
 
         // Update valid steps in vars that have been written to by stage 'sel_bp'.
         // If sel_bp==null, use all bundles.

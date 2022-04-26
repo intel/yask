@@ -76,6 +76,7 @@ namespace yask {
         };
 
         LockVal _write_count, _read_count;
+        LockVal _data; // Optional simple data field.
 
         static constexpr idx_t _ival = 1000;
 
@@ -147,6 +148,15 @@ namespace yask {
             assert(is_ok_to_write());
             _write_count.val++;
             _check("mark_write_done");
+        }
+
+        // Access data value.
+        // Of course, other data can be gated w/this lock.
+        idx_t get_data() const {
+            return _data.val;
+        }
+        void set_data(idx_t v) {
+            _data.val = v;
         }
     };
 

@@ -177,8 +177,9 @@ namespace yask {
                 auto& gname = gb.get_name();
                 TRACE_MSG(" processing var '" << gname << "', " << si.steps.size() << " step(s)");
                 auto& var_mpi_data = mpi_data.at(gname);
-                MPI_Request* var_recv_reqs = var_mpi_data.recv_reqs.data();
-                MPI_Request* var_send_reqs = var_mpi_data.send_reqs.data();
+                auto* var_recv_reqs = var_mpi_data.recv_reqs.data();
+                auto* var_send_reqs = var_mpi_data.send_reqs.data();
+                auto* var_recv_stats = var_mpi_data.recv_stats.data();
                 bool finalizing_var = false;
 
                 // Loop thru all this rank's neighbors.
@@ -199,17 +200,17 @@ namespace yask {
 
                          // Submit async request to receive data from neighbor.
                          if (halo_step == halo_irecv) {
-                             auto nbytes = recv_buf.get_bytes();
-                             if (nbytes) {
+                             auto nbbytes = recv_buf.get_bytes();
+                             if (nbbytes) {
                                  if (using_shm)
                                      TRACE_MSG("exchange_halos:    no receive req due to shm");
                                  else {
                                      void* buf = (void*)recv_buf._elems;
                                      void* rbuf = use_device_mpi ? get_dev_ptr(buf) : buf;
                                      TRACE_MSG("exchange_halos:    requesting up to " <<
-                                               make_byte_str(nbytes) << " into " << rbuf);
+                                               make_byte_str(nbbytes) << " into " << rbuf);
                                      auto& r = var_recv_reqs[ni];
-                                     MPI_Irecv(rbuf, nbytes, MPI_BYTE,
+                                     MPI_Irecv(rbuf, nbbytes, MPI_BYTE,
                                                neighbor_rank, int(gi),
                                                env->comm, &r);
                                      num_recv_reqs++;
@@ -221,8 +222,8 @@ namespace yask {
 
                          // Pack data into send buffer, then send to neighbor.
                          else if (halo_step == halo_pack_isend) {
-                             auto nbytes = send_buf.get_bytes();
-                             if (nbytes) {
+                             auto nbbytes = send_buf.get_bytes();
+                             if (nbbytes) {
 
                                  // Vec ok?
                                  // Domain sizes must be ok, and buffer size must be ok
@@ -248,7 +249,7 @@ namespace yask {
                                            (send_vec_ok ? "with" : "without") <<
                                            " vector copy into " << buf <<
                                            (use_offload ? " on device" : " on host"));
-                                 size_t nbytes = 0;
+                                 size_t npbytes = 0;
                                  char* bufp = (char*)buf;
                                  
                                  // Pack one step at a time.
@@ -265,31 +266,33 @@ namespace yask {
                                          nelems = gb.get_elements_in_slice(bufp, first, last, use_offload);
                                      auto nb = nelems * get_element_bytes();
                                      bufp += nb;
-                                     nbytes += nb;
+                                     npbytes += nb;
                                  }
                                  halo_pack_time.stop();
+                                 assert(npbytes <= nbbytes);
 
                                  if (use_offload && !use_device_mpi) {
                                      TRACE_MSG("exchange_halos:    copying buffer from device");
                                      halo_copy_time.start();
-                                     offload_copy_from_device(buf, nbytes);
+                                     offload_copy_from_device(buf, npbytes);
                                      halo_copy_time.stop();
                                      assert(!using_shm);
                                  }
 
                                  if (using_shm) {
-                                     TRACE_MSG("exchange_halos:    no send req due to shm");
+                                     TRACE_MSG("exchange_halos:    put " << make_byte_str(npbytes) <<
+                                               " into shm");
+                                     send_buf.set_data(npbytes);  // Send size thru lock.
                                      send_buf.mark_write_done();
                                  }
                                  else {
 
                                      // Send packed buffer to neighbor.
-                                     assert(nbytes <= send_buf.get_bytes());
                                      auto& r = var_send_reqs[ni];
                                      void* sbuf = use_device_mpi ? get_dev_ptr(buf) : buf;
-                                     TRACE_MSG("exchange_halos:    sending " << make_byte_str(nbytes) <<
+                                     TRACE_MSG("exchange_halos:    sending " << make_byte_str(npbytes) <<
                                                " from " << sbuf);
-                                     MPI_Isend(sbuf, nbytes, MPI_BYTE,
+                                     MPI_Isend(sbuf, npbytes, MPI_BYTE,
                                                neighbor_rank, int(gi), env->comm, &r);
                                      num_send_reqs++;
                                  }
@@ -300,8 +303,9 @@ namespace yask {
 
                          // Wait for data from neighbor, then unpack it.
                          else if (halo_step == halo_unpack) {
-                             auto nbytes = recv_buf.get_bytes();
-                             if (nbytes) {
+                             auto nbbytes = recv_buf.get_bytes();
+                             if (nbbytes) {
+                                 int nbytes = 0;
 
                                  // Wait until data in buffer is avail.
                                  if (using_shm) {
@@ -309,65 +313,84 @@ namespace yask {
                                      halo_wait_time.start();
                                      recv_buf.wait_for_ok_to_read();
                                      wait_delta += halo_wait_time.stop();
+                                     nbytes = recv_buf.get_data(); // Size was stored in lock.
                                  }
                                  else {
 
-                                     // Wait for data from neighbor before unpacking it.
                                      auto& r = var_recv_reqs[ni];
-                                     if (r != MPI_REQUEST_NULL) {
-                                         TRACE_MSG("exchange_halos:    waiting for receipt of " <<
-                                                   make_byte_str(nbytes));
+                                     auto& s = var_recv_stats[ni];
+
+                                     if (r == MPI_REQUEST_NULL) {
+                                         // Already got status from an MPI_Test* or MPI_Wait* function.
+                                         TRACE_MSG("exchange_halos:    already received of up to " <<
+                                                   make_byte_str(nbbytes));
+                                     }
+
+                                     else {
+                                         // Wait for data from neighbor before unpacking it.
+                                         TRACE_MSG("exchange_halos:    waiting for receipt of up to " <<
+                                                   make_byte_str(nbbytes));
                                          halo_wait_time.start();
-                                         MPI_Wait(&r, MPI_STATUS_IGNORE);
+                                         MPI_Wait(&r, &s);
                                          wait_delta += halo_wait_time.stop();
+                                         r = MPI_REQUEST_NULL;
                                      }
-                                     r = MPI_REQUEST_NULL;
+                                     MPI_Get_count(&s, MPI_BYTE, &nbytes);
                                  }
+                                 TRACE_MSG("exchange_halos:    got " << make_byte_str(nbytes));
+                                 assert(nbytes <= nbbytes);
 
-                                 // Vec ok?
-                                 bool recv_vec_ok = recv_buf.vec_copy_ok;
+                                 if (!nbytes) {
+                                     TRACE_MSG("exchange_halos:    received no data");
+                                 } else {
 
-                                 // Get first and last ranges.
-                                 IdxTuple first = recv_buf.begin_pt;
-                                 IdxTuple last = recv_buf.last_pt;
+                                     // Vec ok?
+                                     bool recv_vec_ok = recv_buf.vec_copy_ok;
 
-                                 void* buf = (void*)recv_buf._elems;
-                                 if (use_offload && !use_device_mpi) {
-                                     TRACE_MSG("exchange_halos:    copying buffer to device");
-                                     halo_copy_time.start();
-                                     offload_copy_to_device(buf, nbytes);
-                                     halo_copy_time.stop();
-                                 }
+                                     // Get first and last ranges.
+                                     IdxTuple first = recv_buf.begin_pt;
+                                     IdxTuple last = recv_buf.last_pt;
 
-                                 // Copy data from buffer to var.
-                                 TRACE_MSG("exchange_halos:    got data; unpacking into [" <<
-                                           first.make_dim_val_str() <<
-                                           " ... " << last.make_dim_val_str() << "] " <<
-                                           (recv_vec_ok ? "with" : "without") <<
-                                           " vector copy from " << buf <<
-                                           (use_offload ? " on device" : " on host"));
-                                 size_t nbytes = 0;
-                                 char* bufp = (char*)buf;
-
-                                 // Unpack one step at a time.                                 
-                                 halo_unpack_time.start();
-                                 for (auto t : si.steps) {
-                                     if (gp->is_dim_used(step_dim)) {
-                                         first.set_val(step_dim, t);
-                                         last.set_val(step_dim, t);
+                                     void* buf = (void*)recv_buf._elems;
+                                     if (use_offload && !use_device_mpi) {
+                                         TRACE_MSG("exchange_halos:    copying buffer to device");
+                                         halo_copy_time.start();
+                                         offload_copy_to_device(buf, nbytes);
+                                         halo_copy_time.stop();
                                      }
-                                     idx_t nelems = 0;
-                                     if (recv_vec_ok)
-                                         nelems = gp->set_vecs_in_slice(bufp, first, last, use_offload);
-                                     else
-                                         nelems = gp->set_elements_in_slice(bufp, first, last, use_offload);
-                                     auto nb = nelems * get_element_bytes();
-                                     bufp += nb;
-                                     nbytes += nb;
-                                 }
-                                 halo_unpack_time.stop();
-                                 assert(nbytes <= recv_buf.get_bytes());
 
+                                     // Copy data from buffer to var.
+                                     TRACE_MSG("exchange_halos:    unpacking into [" <<
+                                               first.make_dim_val_str() <<
+                                               " ... " << last.make_dim_val_str() << "] " <<
+                                               (recv_vec_ok ? "with" : "without") <<
+                                               " vector copy from " << buf <<
+                                               (use_offload ? " on device" : " on host"));
+                                     size_t npbytes = 0;
+                                     char* bufp = (char*)buf;
+
+                                     // Unpack one step at a time.                                 
+                                     halo_unpack_time.start();
+                                     for (auto t : si.steps) {
+                                         if (gp->is_dim_used(step_dim)) {
+                                             first.set_val(step_dim, t);
+                                             last.set_val(step_dim, t);
+                                         }
+                                         idx_t nelems = 0;
+                                         if (recv_vec_ok)
+                                             nelems = gp->set_vecs_in_slice(bufp, first, last, use_offload);
+                                         else
+                                             nelems = gp->set_elements_in_slice(bufp, first, last, use_offload);
+                                         auto nb = nelems * get_element_bytes();
+                                         bufp += nb;
+                                         npbytes += nb;
+                                     }
+                                     halo_unpack_time.stop();
+
+                                     // Should have unpacked exactly what we got.
+                                     assert(npbytes == nbytes);
+                                 }
+                                 
                                  if (using_shm)
                                      recv_buf.mark_read_done();
                              }
@@ -377,8 +400,8 @@ namespace yask {
 
                          // Final steps.
                          else if (halo_step == halo_final) {
-                             auto nbytes = send_buf.get_bytes();
-                             if (nbytes) {
+                             auto nbbytes = send_buf.get_bytes();
+                             if (nbbytes) {
 
                                  if (using_shm)
                                      TRACE_MSG("exchange_halos:    no send wait due to shm");
@@ -392,7 +415,7 @@ namespace yask {
                                      // doing another one.
                                      auto& r = var_send_reqs[ni];
                                      if (r != MPI_REQUEST_NULL) {
-                                         TRACE_MSG("   waiting to finish send of " << make_byte_str(nbytes));
+                                         TRACE_MSG("   waiting to finish send of up to " << make_byte_str(nbbytes));
                                          halo_wait_time.start();
                                          MPI_Wait(&var_send_reqs[ni], MPI_STATUS_IGNORE);
                                          wait_delta += halo_wait_time.stop();
@@ -422,7 +445,7 @@ namespace yask {
                     }
                 }
                 
-            } // var/steps to swap.
+            } // vars to swap.
         } // exchange sequence.
 
         TRACE_MSG(num_recv_reqs << " MPI receive request(s) issued");
@@ -433,9 +456,8 @@ namespace yask {
         #endif
     }
 
-    // Call MPI_Test() on all unfinished requests to promote MPI progress.
-    // TODO: replace with more direct and less intrusive techniques.
-    void StencilContext::poke_halo_exchange() {
+    // Call MPI_Test() on all unfinished requests to advance MPI progress.
+    void StencilContext::adv_halo_exchange() {
 
         #if defined(USE_MPI)
         STATE_VARS(this);
@@ -443,31 +465,43 @@ namespace yask {
             return;
 
         halo_test_time.start();
-        TRACE_MSG("poke_halo_exchange");
+        TRACE_MSG("entering");
 
         // Loop thru MPI data.
         int num_tests = 0;
         for (auto& mdi : mpi_data) {
             auto& gname = mdi.first;
             auto& var_mpi_data = mdi.second;
-            MPI_Request* var_recv_reqs = var_mpi_data.recv_reqs.data();
-            MPI_Request* var_send_reqs = var_mpi_data.send_reqs.data();
+            auto* var_recv_reqs = var_mpi_data.recv_reqs.data();
+            auto* var_send_reqs = var_mpi_data.send_reqs.data();
+            auto* var_recv_stats = var_mpi_data.recv_stats.data();
+            auto* var_send_stats = var_mpi_data.send_stats.data();
 
             int flag;
+
             #if 1
-            int indices[max(var_mpi_data.recv_reqs.size(), var_mpi_data.send_reqs.size())];
-            MPI_Testsome(int(var_mpi_data.recv_reqs.size()), var_recv_reqs, &flag, indices, MPI_STATUS_IGNORE);
-            MPI_Testsome(int(var_mpi_data.send_reqs.size()), var_send_reqs, &flag, indices, MPI_STATUS_IGNORE);
-            #elif 0
-            int index;
-            MPI_Testany(int(var_mpi_data.recv_reqs.size()), var_recv_reqs, &index, &flag, MPI_STATUS_IGNORE);
-            MPI_Testany(int(var_mpi_data.send_reqs.size()), var_send_reqs, &index, &flag, MPI_STATUS_IGNORE);
+            auto asize = max(var_mpi_data.recv_reqs.size(), var_mpi_data.send_reqs.size());
+            int indices[asize];
+            MPI_Status stats[asize];
+            auto n = MPI_Testsome(int(var_mpi_data.recv_reqs.size()), var_recv_reqs, &flag, indices, stats);
+            for (int i = 0; i < n; i++) {
+                int loc = indices[i]; // Location of completed recv.
+                var_recv_stats[loc] = stats[i]; // Update correct stat.
+                assert(var_recv_reqs[loc] == MPI_REQUEST_NULL);
+            }
+            n = MPI_Testsome(int(var_mpi_data.send_reqs.size()), var_send_reqs, &flag, indices, stats);
+            for (int i = 0; i < n; i++) {
+                int loc = indices[i]; // Location of completed send.
+                var_send_stats[loc] = stats[i]; // Update correct stat.
+                assert(var_send_reqs[loc] == MPI_REQUEST_NULL);
+            }
+
             #else
             for (size_t i = 0; i < var_mpi_data.recv_reqs.size(); i++) {
                 auto& r = var_recv_reqs[i];
                 if (r != MPI_REQUEST_NULL) {
                     //TRACE_MSG(gname << " recv test &MPI_Request = " << &r);
-                    MPI_Test(&r, &flag, MPI_STATUS_IGNORE);
+                    MPI_Test(&r, &flag, &var_recv_stats[i]);
                     num_tests++;
                     if (flag)
                         r = MPI_REQUEST_NULL;
@@ -477,7 +511,7 @@ namespace yask {
                 auto& r = var_send_reqs[i];
                 if (r != MPI_REQUEST_NULL) {
                     //TRACE_MSG(gname << " send test &MPI_Request = " << &r);
-                    MPI_Test(&r, &flag, MPI_STATUS_IGNORE);
+                    MPI_Test(&r, &flag, &var_send_stats[i]);
                     num_tests++;
                     if (flag)
                         r = MPI_REQUEST_NULL;
@@ -486,7 +520,7 @@ namespace yask {
             #endif
         }
         auto ttime = halo_test_time.stop();
-        TRACE_MSG("poke_halo_exchange: secs spent in " << num_tests <<
+        TRACE_MSG("secs spent in " << num_tests <<
                   " MPI test(s): " << make_num_str(ttime));
         #endif
     }

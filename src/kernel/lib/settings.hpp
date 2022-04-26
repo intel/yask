@@ -471,6 +471,15 @@ namespace yask {
             if (_shm_lock)
                 _shm_lock->mark_write_done();
         }
+        idx_t get_data() const {
+            if (_shm_lock)
+                return _shm_lock->get_data();
+            return 0;
+        }
+        void set_data(idx_t v) {
+            if (_shm_lock)
+                _shm_lock->set_data(v);
+        }
 
         // Number of points overall.
         idx_t get_size() const {
@@ -541,6 +550,8 @@ namespace yask {
         // These are used for async comms.
         std::vector<MPI_Request> recv_reqs;
         std::vector<MPI_Request> send_reqs;
+        std::vector<MPI_Status> recv_stats;
+        std::vector<MPI_Status> send_stats;
 
         MPIData(MPIInfoPtr mpi_info) :
             _mpi_info(mpi_info) {
@@ -553,6 +564,10 @@ namespace yask {
             // Init handles.
             recv_reqs.resize(n, MPI_REQUEST_NULL);
             send_reqs.resize(n, MPI_REQUEST_NULL);
+            MPI_Status nullst;
+            memset(&nullst, 0, sizeof(nullst));
+            recv_stats.resize(n, nullst);
+            send_stats.resize(n, nullst);
         }
 
         void reset_locks() {

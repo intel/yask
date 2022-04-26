@@ -1046,7 +1046,7 @@ namespace yask {
         // Let all other threads continue.
         if (is_overlap_active() && do_mpi_interior) {
             if (outer_thread_idx == 0)
-                poke_halo_exchange();
+                adv_halo_exchange();
         }
 
         // Init micro-block begin & end from blk start & stop indices.
