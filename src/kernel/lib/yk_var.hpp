@@ -561,6 +561,8 @@ namespace yask {
         friend class YkVarImpl;
 
     public:
+
+        // Index for distinguishing my var from neighbors' vars.
         enum dirty_idx { self, others };
 
     protected:
@@ -588,12 +590,12 @@ namespace yask {
         // Whether this was created via an API.
         bool _is_user_var = false;
 
-        // 0: Data needs to be copied to neighbors' halos of this var if using
-        // MPI.
-        // 1: Data *may* need to be copied from one or neighbors into
+        // Tracking flags for data modified since last halo exchange.
+        // [self]: Data needs to be copied to neighbors' halos of this var.
+        // [others]: Data *may* need to be copied from one or neighbors into
         // the halo of this var.
-        // If this var has the step dim, there is one elem per alloc'd
-        // step.  Otherwise, only elem 0 is used.
+        // vector contents: If this var has the step dim, there is one flag
+        // per alloc'd step.  Otherwise, only [0] is used.
         std::vector<bool> _dirty_steps[2];
         
         // Convenience function to format indices like

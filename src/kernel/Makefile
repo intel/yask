@@ -1015,23 +1015,25 @@ cxx-yc-api-test:
 
 ##### Validation runs for each binary.
 DEF_TEST_ARGS := -log_dir $(TEST_LOG_OUT_DIR) \
-	-ranks $(ranks) -stencil $(YK_STENCIL) -arch $(YK_ARCH) -v \
-	-trial_steps 2 -outer_threads $(outer_threads) -inner_threads $(inner_threads) \
+	-ranks $(ranks) -stencil $(YK_STENCIL) -arch $(YK_ARCH) \
+	-validate -no-pre_auto_tune -no-auto_tune -no-warmup -num_trials 1 -trial_steps 2 \
+	-outer_threads $(outer_threads) -inner_threads $(inner_threads) \
 	-ep 0 -mp 0 -no-allow_addl_padding
+DEF_MPI_TEST_ARGS := $(DEF_TEST_ARGS) -min_exterior 0
 
 # Test args for 1 and >1 ranks.
 test_args0	:=	$(DEF_TEST_ARGS) -l 48 -Mb 32 -b 24 -rt 0 $(EXTRA_TEST_ARGS)
 test_args1	:=	$(DEF_TEST_ARGS) -l 64 -b 48 -mb 32 -nb 24 -pb 16 -rt 1 $(EXTRA_TEST_ARGS)
-test_args2	:=	$(DEF_TEST_ARGS) -l 63 -Mb 32 -b 24 -mb 16 -rt 2 $(EXTRA_TEST_ARGS) -bundle_allocs
-test_args3	:=	$(DEF_TEST_ARGS) -l 63 -Mb 48 -b 24 -mb 16 -bt 2 $(EXTRA_TEST_ARGS) -no-bundle_allocs
+test_args2	:=	$(DEF_TEST_ARGS) -l 63 -Mb 32 -b 24 -mb 16 -rt 2 -bundle_allocs $(EXTRA_TEST_ARGS)
+test_args3	:=	$(DEF_TEST_ARGS) -l 63 -Mb 48 -b 24 -mb 16 -bt 2 -no-bundle_allocs $(EXTRA_TEST_ARGS)
 test_args4	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -bind_inner_threads $(EXTRA_TEST_ARGS)
 
 # Test args for >1 ranks only.
-test_args10	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -no-use_shm -overlap_comms $(EXTRA_TEST_ARGS)
+test_args10	:=	$(DEF_MPI_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -no-use_shm -overlap_comms $(EXTRA_TEST_ARGS)
 ifeq ($(offload),1)
-test_args11	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -no-use_shm -no-overlap_comms $(EXTRA_TEST_ARGS)
+test_args11	:=	$(DEF_MPI_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -no-use_shm -no-overlap_comms $(EXTRA_TEST_ARGS)
 else
-test_args11	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -use_shm -no-overlap_comms $(EXTRA_TEST_ARGS)
+test_args11	:=	$(DEF_MPI_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -use_shm -no-overlap_comms $(EXTRA_TEST_ARGS)
 endif
 
 # Run the kernel binary using several combos of sizes and ranks.

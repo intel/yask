@@ -48,8 +48,10 @@ namespace yask {
                    " by outer thread " << outer_thread_idx);
         assert(!is_scratch());
 
-        // No TB allowed here.
+        // No temporal blocking allowed here.
         assert(abs(micro_block_idxs.get_overall_range(step_posn)) == 1);
+        auto t = micro_block_idxs.begin[step_posn];
+        assert(abs(micro_block_idxs.end[step_posn] - t) == 1);
 
         // Nothing to do if outer BB is empty.
         if (_bundle_bb.bb_num_points == 0) {
@@ -236,7 +238,45 @@ namespace yask {
 
                 } // OMP parallel when binding threads to data.
             } // bundles.
+
+            // Mark exterior dirty for halo exchange if exterior was done.
+            bool mark_dirty = _context->do_mpi_left || _context->do_mpi_right;
+            update_var_info(YkVarBase::self, t, mark_dirty, false);
+            
         } // BB list.
+    } // calc_micro_block().
+
+    // Mark vars dirty that are updated by this bundle and/or
+    // update last valid step.
+    void StencilBundleBase::update_var_info(YkVarBase::dirty_idx whose,
+                                        idx_t t,
+                                        bool mark_dirty,
+                                        bool update_valid_step) {
+        STATE_VARS(this);
+
+        // Get output step for this bundle, if any.  For most stencils, this
+        // will be t+1 or t-1 if striding backward.
+        idx_t t_out = 0;
+        if (!get_output_step_index(t, t_out)) {
+            TRACE_MSG("not updating because output step is not available");
+            return;
+        }
+
+        // Output vars for this bundle.  NB: don't need to mark
+        // scratch vars as dirty because they are never exchanged.
+        for (auto gp : output_var_ptrs) {
+            auto& gb = gp->gb();
+
+            // Update last valid step.
+            if (update_valid_step)
+                gb.update_valid_step(t_out);
+
+            // Mark given dirty flag.
+            if (mark_dirty) {
+                gb.set_dirty(whose, true, t_out);
+                TRACE_MSG(gb.get_name() << " marked dirty");
+            }
+        }
     }
 
     // If this bundle is updating scratch var(s),

@@ -227,12 +227,13 @@ namespace yask {
         IdxTuple _rank_indices;    // my rank index in each dim.
         bool find_loc = true;      // whether my rank index needs to be calculated.
         bool overlap_comms = true; // overlap comms with computation.
-        bool use_shm = !KernelEnv::_use_offload;      // use shared memory if possible.
-        idx_t _min_exterior = 0;   // minimum size of MPI exterior to calculate.
+        idx_t _min_exterior = 32;   // minimum size of MPI exterior to calculate.
         #ifdef USE_OFFLOAD
         bool use_device_mpi = true; // transfer data directly between devices.
+        bool use_shm = false;       // transfer data using shared memory (w/o MPI calls) on same node.
         #else
         bool use_device_mpi = false;
+        bool use_shm = true;
         #endif
 
         // OpenMP settings.

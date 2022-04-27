@@ -237,26 +237,45 @@ namespace yask {
         bool do_mpi_interior = true;
         bool do_mpi_left = true;        // left exterior in given dim.
         bool do_mpi_right = true;        // right exterior in given dim.
-        idx_t mpi_exterior_dim = 0;      // which domain dim in left/right.
-        std::string make_mpi_section_descr() {
-            STATE_VARS(this);
-            return std::string("MPI") +
-                (do_mpi_interior ? " interior" :
-                 do_mpi_left ? (" exterior left-" +
-                                domain_dims.get_dim_name(mpi_exterior_dim)) :
-                 do_mpi_right ? (" exterior right-" +
-                                 domain_dims.get_dim_name(mpi_exterior_dim)) :
-                 "-independent") + " section";
+        idx_t mpi_exterior_dim = -1;      // which domain dim in left/right.
+
+        // Set MPI flag to defaults.
+        inline void init_mpi_flags() {
+            do_mpi_interior = do_mpi_left = do_mpi_right = true;
+            mpi_exterior_dim = -1;
         }
 
         // Is overlapping-comms mode currently enabled?
         inline bool is_overlap_active() const {
+            assert(do_mpi_interior || do_mpi_left || do_mpi_right);
+            if (!do_mpi_interior)
+                assert(do_mpi_left || do_mpi_right); // one or both.
+            else {
+                assert(do_mpi_left == do_mpi_right); // both or neither.
+                if (do_mpi_left != do_mpi_right)
+                    assert(mpi_exterior_dim >= 0); // must specify dim.
+            }
             bool active = !do_mpi_interior || !do_mpi_left || !do_mpi_right;
             if (active) {
-                assert(do_mpi_interior || do_mpi_left || do_mpi_right);
                 assert(mpi_interior.bb_valid);
             }
             return active;
+        }
+
+        // Describe MPI flag setting.
+        std::string make_mpi_section_descr() {
+            STATE_VARS(this);
+            if (is_overlap_active())
+                return std::string("MPI ") +
+                    (do_mpi_interior ? "interior" :
+                     (do_mpi_left && do_mpi_right) ? "exterior" :
+                     do_mpi_left ?
+                     ("exterior left-" +
+                      domain_dims.get_dim_name(mpi_exterior_dim)) :
+                     ("exterior right-" +
+                      domain_dims.get_dim_name(mpi_exterior_dim))) +
+                    " section";
+            return std::string("all MPI sections");
         }
 
         // Is there a non-zero exterior in the given section?
@@ -512,7 +531,7 @@ namespace yask {
         // Update valid steps in vars that have been written to by stage 'sel_bp'.
         // If sel_bp==null, use all bundles.
         // If 'mark_dirty', also mark as needing halo exchange.
-        void update_vars(const StagePtr& sel_bp,
+        void update_var_info(const StagePtr& sel_bp,
                          idx_t start, idx_t stop,
                          bool mark_dirty);
 

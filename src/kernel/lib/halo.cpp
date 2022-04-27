@@ -84,14 +84,7 @@ namespace yask {
 
         halo_time.start();
         double wait_delta = 0.;
-        if (is_overlap_active()) {
-            if (do_mpi_left)
-                TRACE_MSG("following calc of MPI left exterior");
-            if (do_mpi_right)
-                TRACE_MSG("following calc of MPI right exterior");
-            if (do_mpi_interior)
-                TRACE_MSG("following calc of MPI interior");
-        }
+        TRACE_MSG("following calc of " << make_mpi_section_descr());
 
         // Vars that need to be swapped and their step indices.
         struct SwapInfo {
@@ -122,7 +115,8 @@ namespace yask {
 
                 // If my var is dirty, the 'others' flag should always
                 // be set. Otherwise, the MPI exchanges will get
-                // out-of-sync.
+                // out-of-sync because my neighbor might not ask for
+                // my data.
                 if (gb.is_dirty(YkVarBase::self, t))
                     assert(gb.is_dirty(YkVarBase::others, t));
 
@@ -221,7 +215,7 @@ namespace yask {
                                                make_byte_str(nbbytes) << " into " << rbuf);
                                      auto& r = var_recv_reqs[ni];
                                      MPI_Irecv(rbuf, nbbytes, MPI_BYTE,
-                                               neighbor_rank, int(gi),
+                                               neighbor_rank, gi,
                                                env->comm, &r);
                                      num_recv_reqs++;
                                  }
@@ -346,7 +340,7 @@ namespace yask {
 
                                      if (r == MPI_REQUEST_NULL) {
                                          // Already got status from an MPI_Test* or MPI_Wait* function.
-                                         TRACE_MSG("exchange_halos:    already received of up to " <<
+                                         TRACE_MSG("exchange_halos:    already received up to " <<
                                                    make_byte_str(nbbytes));
                                      }
 
@@ -494,19 +488,23 @@ namespace yask {
             auto* var_recv_stats = var_mpi_data.recv_stats.data();
             auto* var_send_stats = var_mpi_data.send_stats.data();
 
-            int flag;
-
             #if 1
+            // Bulk testing.
             auto asize = max(var_mpi_data.recv_reqs.size(), var_mpi_data.send_reqs.size());
             int indices[asize];
             MPI_Status stats[asize];
-            auto n = MPI_Testsome(int(var_mpi_data.recv_reqs.size()), var_recv_reqs, &flag, indices, stats);
+            int n = 0;
+            MPI_Testsome(int(var_mpi_data.recv_reqs.size()), var_recv_reqs, &n, indices, stats);
+            TRACE_MSG("completed " << n << " recv requests");
             for (int i = 0; i < n; i++) {
                 int loc = indices[i]; // Location of completed recv.
                 var_recv_stats[loc] = stats[i]; // Update correct stat.
                 assert(var_recv_reqs[loc] == MPI_REQUEST_NULL);
+                int nbytes = 0;
+                MPI_Get_count(&stats[i], MPI_BYTE, &nbytes);
+                TRACE_MSG((i+1) << ". got " << make_byte_str(nbytes) << " from req " << loc);
             }
-            n = MPI_Testsome(int(var_mpi_data.send_reqs.size()), var_send_reqs, &flag, indices, stats);
+            MPI_Testsome(int(var_mpi_data.send_reqs.size()), var_send_reqs, &n, indices, stats);
             for (int i = 0; i < n; i++) {
                 int loc = indices[i]; // Location of completed send.
                 var_send_stats[loc] = stats[i]; // Update correct stat.
@@ -514,6 +512,8 @@ namespace yask {
             }
 
             #else
+            // Individual testing.
+            int flag = 0;
             for (size_t i = 0; i < var_mpi_data.recv_reqs.size(); i++) {
                 auto& r = var_recv_reqs[i];
                 if (r != MPI_REQUEST_NULL) {

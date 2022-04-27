@@ -89,7 +89,7 @@ tmplog="/tmp/yask-p$$"
 
 # Validation shortcut (-v) vars.
 doval=0
-val="-validate -no-pre_auto_tune -no-auto_tune -no-warmup -num_trials 1 -trial_steps 2 -l 80 -Mb 70 -b 62 -mb 54 -nb 42 -pb 20"
+val="-validate -no-pre_auto_tune -no-auto_tune -no-warmup -num_trials 1 -trial_steps 2 -l 80 -Mb 72 -b 64 -mb 56 -nb 48 -pb 20"
 
 # Display stencils in this dir and exit.
 function show_stencils {

@@ -121,8 +121,8 @@ struct MySettings {
                            "Number of seconds to sleep before each performance trial.",
                            pre_trial_sleep_time));
         parser.add_option(make_shared<CommandLineParser::IntOption>
-                          ("debug_sleep",
-                           "Number of seconds to sleep for debug attach.",
+                          ("debug_delay",
+                           "[Debug] Number of seconds to sleep for debug attach.",
                            debug_sleep));
         parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("validate",

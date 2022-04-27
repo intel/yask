@@ -108,6 +108,9 @@ namespace yask {
         // size.
         update_scratch_var_info(scratch_var_idx, rank_idxs.begin);
 
+        // Doing all parts.
+        init_mpi_flags();
+        
         // Initial halo exchange.
         // TODO: get rid of all halo exchanges in this function,
         // and calculate overall problem in one rank.
@@ -132,7 +135,7 @@ namespace yask {
             rank_idxs.stride[step_posn] = stride_t;
 
             // Loop thru bundles. We ignore stages here
-            // because staging is an optional optimizations.
+            // because staging is an optional optimization.
             for (auto* asg : st_bundles) {
 
                 // Scan through n-D space.
@@ -167,19 +170,18 @@ namespace yask {
                               misc_idxs.begin.make_val_str() <<
                               " ... " << misc_idxs.end.make_val_str() << ")");
                     sg->calc_in_domain(scratch_var_idx, misc_idxs);
+
                 } // needed bundles.
 
-                // Mark vars that *may* have been written to.
-                // Mark vars as dirty even if not actually written by this
-                // rank. This is needed because neighbors will not know what
-                // vars are actually dirty, and all ranks must have the same
-                // information about which vars are possibly dirty.
-                // TODO: update separate dirty flags.
-                update_vars(nullptr, start_t, stop_t, true);
+                // Mark vars that were updated in this rank.
+                asg->update_var_info(YkVarBase::self, start_t, true, false);
 
-            } // all bundles.
+                // Mark vars that *may* have been written to by any rank.
+                update_var_info(nullptr, start_t, stop_t, true);
 
-        } // iterations.
+           } // all bundles.
+
+         } // iterations.
         steps_done += abs(end_t - begin_t);
 
         // Final halo exchange.
@@ -196,6 +198,7 @@ namespace yask {
     void StencilContext::run_solution(idx_t first_step_index,
                                       idx_t last_step_index)
     {
+        TRACE_MSG("running steps " << first_step_index << " ... " << last_step_index);
         STATE_VARS(this);
 
         // User-provided code.
@@ -233,7 +236,7 @@ namespace yask {
         stride.set_vals(actl_opts->_mega_block_sizes, false); // stride by mega-block sizes.
         stride[step_posn] = stride_t;
 
-        TRACE_MSG("run_solution: [" <<
+        TRACE_MSG("running area [" <<
                   begin.make_dim_val_str() << " ... " <<
                   end.make_dim_val_str() << ") by " <<
                   stride.make_dim_val_str());
@@ -355,7 +358,7 @@ namespace yask {
                             continue;
                         }
 
-                        // Do MPI-external passes?
+                        // Do MPI-external parts separately?
                         if (mpi_interior.bb_valid) {
                             do_mpi_interior = false;
 
@@ -403,26 +406,25 @@ namespace yask {
                                 } // left/right.
                             } // domain dims.
 
-                            // Mark vars that [may] have been written to by
-                            // this stage. Mark vars as dirty even if not
-                            // actually written by this rank, perhaps due to
-                            // sub-domains or asymmetrical stencils. This is
-                            // needed because neighbors will not know what vars
-                            // are actually dirty, and all ranks must have the
-                            // same information about which vars are possibly
-                            // dirty.  TODO: make this smarter to save unneeded
-                            // MPI exchanges.
-                            update_vars(bp, start_t, stop_t, true);
+                            // Mark vars that *may* have been written to by
+                            // this stage by any rank. Mark vars as dirty
+                            // even if not actually written by this rank,
+                            // perhaps due to sub-domains or asymmetrical
+                            // stencils. This is needed because neighbors
+                            // will not know what vars are actually dirty,
+                            // and all ranks must have the same information
+                            // about which vars are possibly dirty.
+                            update_var_info(bp, start_t, stop_t, true);
 
                             // Do the appropriate steps for halo exchange of exterior.
-                            // TODO: exchange halo for each dim as soon as it's done.
                             do_mpi_left = do_mpi_right = true;
                             exchange_halos();
 
                             // Do interior only in next pass.
                             do_mpi_left = do_mpi_right = false;
                             do_mpi_interior = true;
-                        } // Overlapping.
+
+                        } // Exterior only for overlapping comms.
 
                         // Include automatically-generated loop code to call
                         // calc_mega_block() for each mega-block. If overlapping
@@ -444,16 +446,16 @@ namespace yask {
                         #define RANK_USE_LOOP_PART_1
                         #include "yask_rank_loops.hpp"
  
-                        // Mark as dirty only if we did exterior.
+                        // Mark as dirty only if we just did exterior.
                         bool mark_dirty = do_mpi_left || do_mpi_right;
-                        update_vars(bp, start_t, stop_t, mark_dirty);
+                        update_var_info(bp, start_t, stop_t, mark_dirty);
 
                         // Do the appropriate steps for halo exchange depending
                         // on 'do_mpi_*' flags.
                         exchange_halos();
 
                         // Set the overlap flags back to default.
-                        do_mpi_interior = do_mpi_left = do_mpi_right = true;
+                        init_mpi_flags();
 
                     } // stages.
                 } // No WF tiling.
@@ -466,7 +468,7 @@ namespace yask {
                     // calc_mega_block() is called.
                     StagePtr bp;
 
-                    // Do MPI-external passes?
+                    // Do MPI-external parts separately?
                     if (mpi_interior.bb_valid) {
                         do_mpi_interior = false;
 
@@ -515,17 +517,17 @@ namespace yask {
                         } // domain dims.
 
                         // Mark vars dirty for all stages.
-                        update_vars(bp, start_t, stop_t, true);
+                        update_var_info(bp, start_t, stop_t, true);
 
                         // Do the appropriate steps for halo exchange of exterior.
-                        // TODO: exchange halo for each dim as soon as it's done.
                         do_mpi_left = do_mpi_right = true;
                         exchange_halos();
 
                         // Do interior only in next pass.
                         do_mpi_left = do_mpi_right = false;
                         do_mpi_interior = true;
-                    } // Overlapping.
+
+                    } // Exterior only for overlapping comms.
 
                     // Include automatically-generated loop code to call
                     // calc_mega_block() for each mega-block. If overlapping
@@ -547,16 +549,16 @@ namespace yask {
                     #define RANK_USE_LOOP_PART_1
                     #include "yask_rank_loops.hpp"
 
-                    // Mark as dirty only if we did exterior.
+                    // Mark as dirty only if we just did exterior.
                     bool mark_dirty = do_mpi_left || do_mpi_right;
-                    update_vars(bp, start_t, stop_t, mark_dirty);
+                    update_var_info(bp, start_t, stop_t, mark_dirty);
 
                     // Do the appropriate steps for halo exchange depending
                     // on 'do_mpi_*' flags.
                     exchange_halos();
 
                     // Set the overlap flags back to default.
-                    do_mpi_interior = do_mpi_left = do_mpi_right = true;
+                    init_mpi_flags();
 
                 } // With WF tiling.
 
@@ -594,7 +596,8 @@ namespace yask {
                 _at.steps_done += this_num_t;
                 eval_auto_tuner();
 
-            } // step loop.
+                TRACE_MSG("did " << this_num_t << " step(s)");
+           } // step loop.
 
             #ifdef MODEL_CACHE
             // Print cache stats, then disable.
@@ -1602,15 +1605,14 @@ namespace yask {
         return errs;
     }
 
-    // Update data in vars that have been written to by stage 'sel_bp':
-    // set the last "valid step" and mark vars as "dirty", i.e., needing
-    // halo exchange.
-    void StencilContext::update_vars(const StagePtr& sel_bp,
+    // Update data in vars that *may* have been written to by stage 'sel_bp'
+    // in any rank: set the last "valid step" and mark vars as "dirty",
+    // i.e., may need halo exchange.
+    void StencilContext::update_var_info(const StagePtr& sel_bp,
                                      idx_t start, idx_t stop,
                                      bool mark_dirty) {
         STATE_VARS(this);
         idx_t stride = (start > stop) ? -1 : 1;
-        map<YkVarPtr, set<idx_t>> vars_done;
 
         // Stages.
         for (auto& bp : st_stages) {
@@ -1625,34 +1627,13 @@ namespace yask {
                 // Each bundle in this stage.
                 for (auto* sb : *bp) {
 
-                    // Get output step for this bundle, if any.
-                    // For most stencils, this will be t+1 or
-                    // t-1 if striding backward.
-                    idx_t t_out = 0;
-                    if (!sb->get_output_step_index(t, t_out))
-                        continue;
+                    // Output vars for this bundle.
+                    sb->update_var_info(YkVarBase::others, t, mark_dirty, true);
 
-                    // Output vars for this bundle.  NB: don't need to mark
-                    // scratch vars as dirty because they are never exchanged.
-                    for (auto gp : sb->output_var_ptrs) {
-                        auto& gb = gp->gb();
-
-                        // Update if not already done.
-                        if (vars_done[gp].count(t_out) == 0) {
-                            gb.update_valid_step(t_out);
-                            if (mark_dirty) {
-                                gb.set_dirty(YkVarBase::self, true, t_out);
-                                gb.set_dirty(YkVarBase::others, true, t_out);
-                            }
-                            TRACE_MSG("var '" << gp->get_name() <<
-                                      "' updated at step " << t_out);
-                            vars_done[gp].insert(t_out);
-                        }
-                    }
                 } // bundles.
             } // steps.
         } // stages.
-    } // update_vars().
+    } // update_var_info().
 
     // Reset any locks, etc.
     void StencilContext::reset_locks() {

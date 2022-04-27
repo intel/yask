@@ -346,6 +346,8 @@ namespace yask {
 
         // 'test_time' is part of 'int_time', but only on outer thread 0.
         // It's not part of 'halo_time', since it's done outside of 'halo_exchange'.
+        // We calculate an average to distribute this time across threads,
+        // although it's just an estimate.
         double ttime = halo_test_time.get_elapsed_secs() / rthr; // ave.
 
         // Remove average test time from interior time.
@@ -472,13 +474,14 @@ namespace yask {
             }
 
             #ifdef USE_MPI
+            if (etime > 0.0)
+                DEBUG_MSG(" Compute-time breakdown by halo area:\n"
+                          "  rank-exterior compute (sec):         " << make_num_str(etime) <<
+                          print_pct(etime, ctime) << endl <<
+                          "  rank-interior compute (sec):         " << make_num_str(itime) <<
+                          print_pct(itime, ctime));
             double hotime = max(hetime - hwtime - hptime - hutime - hctime, 0.);
-            DEBUG_MSG(" Compute-time breakdown by halo area:\n"
-                      "  rank-exterior compute (sec):         " << make_num_str(etime) <<
-                      print_pct(etime, ctime) << endl <<
-                      "  rank-interior compute (sec):         " << make_num_str(itime) <<
-                      print_pct(itime, ctime) << endl <<
-                      " Halo-time breakdown:\n"
+            DEBUG_MSG(" Halo-time breakdown:\n"
                       "  MPI waits (sec):                     " << make_num_str(hwtime) <<
                       print_pct(hwtime, htime) << endl <<
                       "  MPI tests (sec):                     " << make_num_str(ttime) <<

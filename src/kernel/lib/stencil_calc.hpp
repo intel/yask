@@ -162,6 +162,14 @@ namespace yask {
                         KernelSettings& settings,
                         const ScanIndices& micro_block_idxs);
 
+        // Mark vars dirty that are updated by this bundle and/or
+        // update last valid step.
+        void
+        update_var_info(YkVarBase::dirty_idx whose,
+                    idx_t step,
+                    bool mark_dirty,
+                    bool update_valid_step);
+        
         // Calculate results within a nano-block.
         virtual void
         calc_nano_block(int outer_thread_idx,
