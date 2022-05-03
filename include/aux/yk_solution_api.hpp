@@ -244,6 +244,9 @@ namespace yask {
            Unless auto-tuning is disabled, the block size will be used as
            a starting point for an automated search for a higher-performing
            block size.
+
+           This and all other tile sizes (Mega-blocks, blocks, micro-blocks, etc.)
+           can be set via apply_command_line_options().
         */
         virtual void
         set_block_size(const std::string& dim
@@ -529,6 +532,30 @@ namespace yask {
         */
         virtual void
         run_solution(idx_t step_index /**< [in] Index in the step dimension */ ) =0;
+
+        /// Update data on the device.
+        /**
+           If the stencil kernel will be offloaded, copies any YASK var data that
+           has been modified on the host but not on the device from the host
+           to the device.
+
+           This is done automatically as needed, so calling this function is only
+           needed when you want to control when the copy is done.
+        */
+        virtual void
+        copy_vars_to_device() const =0;
+
+        /// Update data on the host.
+        /**
+           If the stencil kernel will be offloaded, copies any YASK var data that
+           has been modified on the device but not on the host from the device
+           to the host.
+
+           This is done automatically as needed, so calling this function is only
+           needed when you want to control when the copy is done.
+        */
+        virtual void
+        copy_vars_from_device() const =0;
 
         /// Finish using a solution.
         /**

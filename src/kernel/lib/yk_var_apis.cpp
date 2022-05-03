@@ -322,7 +322,10 @@ namespace yask {
                                  get_name() + "'");
         gb().check_indices(indices, "get_element", true, true, false);
         idx_t asi = gb().get_alloc_step_index(indices);
+        
+        gb().const_copy_data_from_device(); // TODO: make more efficient.
         real_t val = gb().read_elem(indices, asi, __LINE__);
+
         TRACE_MSG("get_element({" << gb().make_index_string(indices) << "}) on '" <<
                   get_name() + "' returns " << val);
         return double(val);
@@ -345,10 +348,13 @@ namespace yask {
             // that updates the step index.
             gb().check_indices(indices, "set_element", strict_indices, false, false)) {
             idx_t asi = gb().get_alloc_step_index(indices);
+
+            gb().copy_data_from_device(); // TODO: make more efficient.
             gb().write_elem(real_t(val), indices, asi, __LINE__);
             nup++;
 
-            // Set appropriate dirty flag.
+            // Set appropriate dirty flags.
+            gb()._coh.mod_host();
             gb().set_dirty_using_alloc_index(YkVarBase::self, true, asi);
         }
         TRACE_MSG("set_element(" << val << ", {" <<
@@ -374,10 +380,19 @@ namespace yask {
             // Check step index because this API must read before writing.
             gb().check_indices(indices, "add_to_element", strict_indices, true, false)) {
             idx_t asi = gb().get_alloc_step_index(indices);
+
+            #ifdef USE_OFFLOAD_NO_USM
+            if (gb()._coh.need_to_update_host()) {
+                #pragma omp critical
+                gb().copy_data_from_device(); // TODO: make more efficient.
+             }
+            #endif
+
             gb().add_to_elem(real_t(val), indices, asi, __LINE__);
             nup++;
 
-            // Set appropriate dirty flag.
+            // Set appropriate dirty flags.
+            gb()._coh.mod_host();
             gb().set_dirty_using_alloc_index(YkVarBase::self, true, asi);
         }
         TRACE_MSG("add_to_element(" << val << ", {" <<
@@ -412,11 +427,16 @@ namespace yask {
             }
         };
 
+        if (on_device)
+            const_copy_data_to_device();
+        else
+            const_copy_data_from_device();
+        
         // Call the generic visit.
         auto n = const_cast<YkVarBase*>(this)->
             _visit_elements_in_slice<GetElem>(true, (void*)buffer_ptr,
                                               first_indices, last_indices, on_device);
-            
+
         // Return number of writes.
         return n;
     }
@@ -446,12 +466,21 @@ namespace yask {
             }
         };
 
+        if (on_device)
+            const_copy_data_to_device();
+        else
+            const_copy_data_from_device();
+        
         // Call the generic visit.
         auto n = 
             _visit_elements_in_slice<SetElem>(true, (void*)buffer_ptr,
                                               first_indices, last_indices, on_device);
             
-        // Set appropriate dirty flag(s).
+        // Set appropriate dirty flags.
+        if (on_device)
+            _coh.mod_dev();
+        else
+            _coh.mod_host();
         set_dirty_in_slice(first_indices, last_indices);
 
         // Return number of writes.
@@ -484,6 +513,11 @@ namespace yask {
             }
         };
 
+        if (on_device)
+            const_copy_data_to_device();
+        else
+            const_copy_data_from_device();
+        
         // Set up pointer to val for visitor.
         // Requires casting if real_t is a float.
         real_t v = real_t(val);
@@ -494,7 +528,11 @@ namespace yask {
             _visit_elements_in_slice<SetElem>(strict_indices, (void*)buffer_ptr,
                                               first_indices, last_indices, on_device);
             
-        // Set appropriate dirty flag(s).
+        // Set appropriate dirty flags.
+        if (on_device)
+            _coh.mod_dev();
+        else
+            _coh.mod_host();
         set_dirty_in_slice(first_indices, last_indices);
 
         // Return number of writes.

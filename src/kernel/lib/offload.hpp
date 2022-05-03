@@ -209,6 +209,13 @@ namespace yask {
     }
 
     // Type to track and sync pointers on target device.
+    // A synced pointer has these characteristics:
+    // - Pointer exists on host & dev.
+    // - Object containing pointer is mapped (associated) on dev.
+    // - On host copy of ptr:
+    //   - Addr pointed to (value of '_p') is mapped on dev (value of '_dp').
+    // - On dev copy of ptr:
+    //   - Addr pointed to is mapped dev addr.
     template <typename T>
     class synced_ptr {
     private:
@@ -296,6 +303,129 @@ namespace yask {
             _sync();
         }
 
+    };
+
+    // Host/device coherency state machine.
+    class Coherency {
+    public:
+
+        // Coherency states.
+        enum coh_state { host_mod, // Host copy modified; device copy out-of-sync.
+                         dev_mod, // Device copy modified; host copy out-of-sync.
+                         in_sync, // Host and device have same data.
+                         num_states };
+
+        // Current state.
+        inline coh_state get_state() const {
+            return _state;
+        }
+
+        // Set state directly (not recommended).
+        void _force_state(coh_state state) {
+            TRACE_MSG("coherency state forced to " << state);
+            _state = state;
+        }
+
+        #ifdef USE_OFFLOAD_NO_USM
+        
+    protected:
+        coh_state _state = host_mod;
+
+    public:
+
+        // Boolean queries.
+        inline bool need_to_update_host() const {
+            return _state == dev_mod;
+        }
+        inline bool need_to_update_dev() const {
+            return _state == host_mod;
+        }
+
+        // State-transition events.
+        // Functions return new state.
+        
+        // Call when host copy is modified, but dev copy is not.
+        coh_state mod_host() {
+            if (_state == dev_mod)
+                THROW_YASK_EXCEPTION("internal error: "
+                                     "host copy modified, but device copy was newer");
+            _state = host_mod;
+            return _state;
+        }
+
+        // Call when dev copy is modified, but host copy is not.
+        coh_state mod_dev() {
+            if (_state == host_mod)
+                THROW_YASK_EXCEPTION("internal error: "
+                                     "device copy modified, but host copy was newer");
+            _state = dev_mod;
+            return _state;
+        }
+
+        // Call when both dev and host copies are modified w/the same changes.
+        coh_state mod_both() {
+            if (_state == dev_mod)
+                THROW_YASK_EXCEPTION("internal error: "
+                                     "host copy modified, but device copy was newer");
+            if (_state == host_mod)
+                THROW_YASK_EXCEPTION("internal error: "
+                                     "device copy modified, but host copy was newer");
+            assert(_state == in_sync);
+            return _state;
+        }
+
+        // Call when host data is copied to dev.
+        coh_state host_copied_to_dev() {
+            if (_state == dev_mod)
+                THROW_YASK_EXCEPTION("internal error: "
+                                     "host data copied to dev, but device copy was newer");
+            _state = in_sync;
+            return _state;
+        }
+
+        // Call when dev data is copied to host.
+        coh_state dev_copied_to_host() {
+            if (_state == host_mod)
+                THROW_YASK_EXCEPTION("internal error: "
+                                     "device data copied to host, but host copy was newer");
+            _state = in_sync;
+            return _state;
+        }
+
+        #else
+        // Stubs for no offload or USM.
+
+    protected:
+        coh_state _state = in_sync;
+
+    public:
+
+        // Boolean queries.
+        inline bool need_to_update_host() const {
+            return false;
+        }
+        inline bool need_to_update_dev() const {
+            return false;
+        }
+
+        // State-transition event stubs.
+        coh_state mod_host() {
+            return _state;
+        }
+        coh_state mod_dev() {
+            return _state;
+        }
+        coh_state mod_both() {
+            return _state;
+        }
+        coh_state host_copied_to_dev() {
+            return _state;
+        }
+        coh_state dev_copied_to_host() {
+            return _state;
+        }
+        
+        #endif
     };
     
 } // namespace yask.

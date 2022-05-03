@@ -889,12 +889,12 @@ help:
 	#echo " $(MAKE) clean; $(MAKE) -j arch=intel64 stencil=ssg radius=0 fold='x=1,y=1,z=1' YK_CXXOPT='-O0' trace_mem=1 # Trace all mem accesses with '-trace'"; \
 	echo " "
 	@echo "Example regression tests (run before any git push or pull request):"; \
-	echo " $(MAKE) -j all                   # Normal full API and stencil tests"; \
-	echo " $(MAKE) -j all offload=1 max_threads=1  # Test device offload with one CPU thread"; \
-	echo " $(MAKE) -j all ranks=8           # Test with 8 MPI ranks"; \
-	echo " $(MAKE) -j all YK_CXXOPT=-O1     # Test at O1 optimization"; \
-	echo " $(MAKE) -j all YK_CXX=g++ mpi=0  # Test g++ w/o MPI"; \
-	echo " $(MAKE) -j all YASK_OUTPUT_DIR=\`pwd\`/test  # Test using alternate output dir"
+	echo " $(MAKE) -j all                           # Normal full API and stencil tests"; \
+	echo " $(MAKE) -j all offload=1 max_threads=1   # Test device offload with one CPU thread"; \
+	echo " $(MAKE) -j all ranks=8                   # Test with 8 MPI ranks"; \
+	echo " $(MAKE) -j all YK_CXXOPT=-O1             # Test at O1 optimization"; \
+	echo " $(MAKE) -j all YK_CXX=g++ mpi=0          # Test g++ w/o MPI"; \
+	echo " $(MAKE) -j all YASK_OUTPUT_DIR=test-dir  # Test using alternate output dir"
 
 
 #################################

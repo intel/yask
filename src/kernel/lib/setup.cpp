@@ -969,6 +969,7 @@ namespace yask {
         itimer.start();
         for (auto gp : orig_var_ptrs) {
             real_init_fn(gp, seed);
+            gp->gb().get_coh().mod_host();
             seed += seed0;
         }
         itimer.stop();

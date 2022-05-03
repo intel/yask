@@ -36,7 +36,7 @@ done
 
 # Default env vars to print debug info and set CPU and mem-binding.
 # https://software.intel.com/content/www/us/en/develop/documentation/mpi-developer-reference-linux/top/environment-variable-reference/environment-variables-for-memory-policy-control.html
-envs="OMP_DISPLAY_ENV=VERBOSE KMP_VERSION=1 KMP_AFFINITY=verbose"
+envs="OMP_DISPLAY_ENV=VERBOSE KMP_VERSION=1"
 envs+=" OMP_PLACES=cores KMP_HOT_TEAMS_MODE=1 KMP_HOT_TEAMS_MAX_LEVEL=3"
 envs+=" I_MPI_PRINT_VERSION=1 I_MPI_DEBUG=5"
 #envs+=" I_MPI_HBW_POLICY=hbw_preferred,hbw_preferred"
@@ -280,9 +280,11 @@ while true; do
         exit 1
 
     else
-        # Check for existance of some options, but don't consume them.
+        # Check for existance of some binary options, but don't consume them.
         if [[ "$1" == "-outer_threads" ]]; then
             using_opt_outer_threads=1
+        elif [[ "$1" == "-trace" ]]; then
+            envs+=" KMP_AFFINITY=verbose"
         fi
         
         # Pass this option to executable.

@@ -296,13 +296,13 @@ int main(int argc, char** argv)
         // Init data in vars and params.
         init_vars(opts, context);
 
-        // Handle device updates manually.
+        // Copy vars now instead of waiting for run_solution() to do it
+        // automatically. This will remove overhead from first call.
         context->copy_vars_to_device();
 
         // Invoke auto-tuner.
         if (opts.do_pre_auto_tune)
             ksoln->run_auto_tuner_now();
-        context->do_device_copies = false;
 
         // Enable/disable further auto-tuning.
         ksoln->reset_auto_tuner(copts->_do_auto_tune);
@@ -408,7 +408,7 @@ int main(int argc, char** argv)
             os << div_line <<
                 "Trial number:                      " << (tr + 1) << endl << flush;
 
-            // init data before each trial for comparison if validating.
+            // re-init data before each trial for comparison if validating.
             if (opts.validate) {
                 init_vars(opts, context);
                 context->copy_vars_to_device();
@@ -436,9 +436,6 @@ int main(int argc, char** argv)
             // Stop vtune collection.
             VTUNE_PAUSE;
 
-            if (opts.validate)
-                context->copy_vars_from_device();
-            
             // Calc and report perf.
             auto tstats = context->get_stats();
             auto stats = dynamic_pointer_cast<Stats>(tstats);

@@ -174,10 +174,10 @@ namespace yask {
                 } // needed bundles.
 
                 // Mark vars that were updated in this rank.
-                asg->update_var_info(YkVarBase::self, start_t, true, false);
+                asg->update_var_info(YkVarBase::self, start_t, true, false, false);
 
                 // Mark vars that *may* have been written to by any rank.
-                update_var_info(nullptr, start_t, stop_t, true);
+                update_var_info(nullptr, start_t, stop_t, true, false);
 
            } // all bundles.
 
@@ -247,9 +247,12 @@ namespace yask {
         }
         else {
 
-            // Copy vars to device, if any.
-            if (do_device_copies)
-                copy_vars_to_device();
+            // Copy vars to device as needed. The vars will be left updated
+            // on the device but not on the host after this call. Thus, if
+            // this function is called multiple times without accessing any
+            // data on the host, this should only trigger copying on the
+            // first call.
+            copy_vars_to_device();
 
             #ifdef MODEL_CACHE
             if (env.my_rank != env.msg_rank)
@@ -608,10 +611,6 @@ namespace yask {
                 cache_model.disable();
             }
             #endif
-
-            // Copy vars from device, if any.
-            if (do_device_copies)
-                copy_vars_from_device();
 
         } // Something to do.
         
@@ -1588,8 +1587,9 @@ namespace yask {
     // Return number of mis-compares.
     idx_t StencilContext::compare_data(const StencilContext& ref) const {
         STATE_VARS_CONST(this);
+        copy_vars_from_device();
 
-        DEBUG_MSG("Comparing var(s) in '" << name << "' to '" << ref.name << "'...");
+        DEBUG_MSG("Comparing output var(s) in '" << name << "' to '" << ref.name << "'...");
         if (output_var_ptrs.size() != ref.output_var_ptrs.size()) {
             TRACE_MSG("** number of output vars not equal");
             return 1;
@@ -1607,10 +1607,11 @@ namespace yask {
 
     // Update data in vars that *may* have been written to by stage 'sel_bp'
     // in any rank: set the last "valid step" and mark vars as "dirty",
-    // i.e., may need halo exchange.
+    // i.e., indicate that we may need to do a halo exchange.
     void StencilContext::update_var_info(const StagePtr& sel_bp,
-                                     idx_t start, idx_t stop,
-                                     bool mark_dirty) {
+                                         idx_t start, idx_t stop,
+                                         bool mark_dirty,
+                                         bool mod_dev_data) {
         STATE_VARS(this);
         idx_t stride = (start > stop) ? -1 : 1;
 
@@ -1628,7 +1629,7 @@ namespace yask {
                 for (auto* sb : *bp) {
 
                     // Output vars for this bundle.
-                    sb->update_var_info(YkVarBase::others, t, mark_dirty, true);
+                    sb->update_var_info(YkVarBase::others, t, mark_dirty, mod_dev_data, true);
 
                 } // bundles.
             } // steps.
@@ -1645,24 +1646,22 @@ namespace yask {
         }
     }
 
-    // Copy vars from host to device.
-    // TODO: copy only when needed.
-    void StencilContext::copy_vars_to_device() {
+    // Copy vars from host to device as needed.
+    void StencilContext::copy_vars_to_device() const {
         #ifdef USE_OFFLOAD_NO_USM
         for (auto gp : orig_var_ptrs) {
             assert(gp);
-            gp->gb().copy_data_to_device();
+            gp->gb().const_copy_data_to_device();
         }
         #endif
     }
     
-    // Copy output vars from device to host.
-    // TODO: copy only when needed.
-    void StencilContext::copy_vars_from_device() {
+    // Copy vars from device to host as needed.
+    void StencilContext::copy_vars_from_device() const {
         #ifdef USE_OFFLOAD_NO_USM
-        for (auto gp : output_var_ptrs) {
+        for (auto gp : orig_var_ptrs) {
             assert(gp);
-            gp->gb().copy_data_from_device();
+            gp->gb().const_copy_data_from_device();
         }
         #endif
     }

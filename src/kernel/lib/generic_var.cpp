@@ -76,7 +76,7 @@ namespace yask {
     template <typename T>
     void GenericVarTyped<T>::set_storage(shared_ptr<char>& base, size_t offset) {
         STATE_VARS(this);
-        auto* _elemsp = get_elems();
+        auto& _elemsp = get_elems();
 
         // Release any old data if last owner.
         release_storage(true);
@@ -90,7 +90,7 @@ namespace yask {
         char* p = base.get() ? base.get() + offset : 0;
 
         // Set ptr and sync offload pointer in core.
-        *_elemsp = (T*)p;
+        _elemsp = (T*)p;
         sync_data_ptr();
     }
 
@@ -98,14 +98,14 @@ namespace yask {
     template <typename T>
     void GenericVarTyped<T>::release_storage(bool reset_ptr) {
         STATE_VARS(this);
-        auto* _elemsp = get_elems();
+        auto& _elemsp = get_elems();
 
         _base.reset();
 
         // Set ptr and sync offload pointer in core.
         if (reset_ptr) {
             char* p = 0;
-            _elemsp->set_and_sync((T*)p);
+            _elemsp.set_and_sync((T*)p);
         }
     }
 

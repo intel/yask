@@ -600,5 +600,34 @@ namespace yask {
              });
     }
 
+    // Copy data to/from device.
+    void YkVarBase::copy_data_to_device() {
+        STATE_VARS(this);
+        if (_coh.need_to_update_dev()) {
+            void* vp = get_storage();
+            char* cp = static_cast<char*>(vp);
+            auto nb = get_num_bytes();
+            if (vp && nb) {
+                TRACE_MSG("'" << get_name() << "' data copied to device");
+                offload_copy_to_device(cp, nb);
+                _coh.host_copied_to_dev();
+            }
+        }
+    }
+    void YkVarBase::copy_data_from_device() {
+        STATE_VARS(this);
+        if (_coh.need_to_update_host()) {
+            void* vp = get_storage();
+            char* cp = static_cast<char*>(vp);
+            auto nb = get_num_bytes();
+            if (vp && nb) {
+                TRACE_MSG("'" << get_name() << "' data copied from device");
+                offload_copy_from_device(cp, nb);
+                _coh.dev_copied_to_host();
+            }
+        }
+    }
+    
+
 } // namespace.
 

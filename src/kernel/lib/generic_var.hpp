@@ -254,7 +254,7 @@ namespace yask {
             GenericVarBase(state, name, dim_names) { }
 
         // Direct access to storage ptr.
-        virtual synced_ptr<T>* get_elems() =0;
+        virtual synced_ptr<T>& get_elems() =0;
 
     public:
 
@@ -278,7 +278,7 @@ namespace yask {
 
         // Sync pointer to data.
         void sync_data_ptr() {
-            get_elems()->sync();
+            get_elems().sync();
         }
 
         // Perform default allocation.
@@ -321,9 +321,9 @@ namespace yask {
         }
 
         // Direct access to storage ptr.
-        synced_ptr<T>* get_elems() override {
-            auto* p = &(_corep->_elems);
-            return p;
+        // Allows modifying the pointer itself.
+        synced_ptr<T>& get_elems() override {
+            return _corep->_elems;
         }
 
     public:

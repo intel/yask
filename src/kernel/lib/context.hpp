@@ -344,11 +344,8 @@ namespace yask {
         IdxTuple tb_tops;      // top of TB trapezoid.
         IdxTuple mb_angles;  // MB skewing angles for each shift (in points).
 
-        // Clear this to ignore step conditions.
+        // Clear this to ignore step conditions during auto-tuning.
         bool check_step_conds = true;
-
-        // Clear this to skip data transfer to/from device.
-        bool do_device_copies = true;
 
         // MPI buffers for each var.
         // Map key: var name.
@@ -448,11 +445,11 @@ namespace yask {
         virtual void update_scratch_var_info(int outer_thread_idx,
                                               const Indices& idxs);
 
-        // Copy non-scratch vars to device.
-        void copy_vars_to_device();
+        // Copy non-scratch vars to device as needed.
+        void copy_vars_to_device() const;
 
-        // Copy non-scratch output vars from device.
-        void copy_vars_from_device();
+        // Copy non-scratch output vars from device as needed.
+        void copy_vars_from_device() const;
         
         // Get total memory allocation required by vars.
         // Does not include MPI buffers.
@@ -532,8 +529,9 @@ namespace yask {
         // If sel_bp==null, use all bundles.
         // If 'mark_dirty', also mark as needing halo exchange.
         void update_var_info(const StagePtr& sel_bp,
-                         idx_t start, idx_t stop,
-                         bool mark_dirty);
+                             idx_t start, idx_t stop,
+                             bool mark_dirty,
+                             bool mod_dev_data = true);
 
         // Mark all exchangable vars as possibly dirty in other ranks. This
         // should be called anytime APIs could have been called and before

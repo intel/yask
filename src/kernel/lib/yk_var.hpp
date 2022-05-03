@@ -597,6 +597,9 @@ namespace yask {
         // vector contents: If this var has the step dim, there is one flag
         // per alloc'd step.  Otherwise, only [0] is used.
         std::vector<bool> _dirty_steps[2];
+
+        // Coherency of device data.
+        Coherency _coh;
         
         // Convenience function to format indices like
         // "x=5, y=3".
@@ -770,6 +773,10 @@ namespace yask {
         }
         virtual void set_dirty_all(dirty_idx whose, bool dirty);
 
+        // Coherency.
+        const Coherency& get_coh() const { return _coh; }
+        Coherency& get_coh() { return _coh; }
+
         // Resize flag accessors.
         virtual void set_fixed_size(bool is_fixed) {
             _fixed_size = is_fixed;
@@ -786,7 +793,7 @@ namespace yask {
             _is_dynamic_misc_alloc = is_dynamic;
         }
 
-        // Does this var cover the N-D domain?
+        // Does this var cover the n-D domain?
         virtual bool is_domain_var() const;
 
         // Scratch accessors.
@@ -860,19 +867,16 @@ namespace yask {
                               int max_print = 20) const;
 
         // Copy data to/from device.
-        void copy_data_to_device() {
-            STATE_VARS(this);
-            void* vp = get_storage();
-            char* cp = static_cast<char*>(vp);
-            auto nb = get_num_bytes();
-            offload_copy_to_device(cp, nb);
+        void copy_data_to_device();
+        void copy_data_from_device();
+
+        // Versions that lie about being 'const' so we can copy data to/from
+        // the device without changing the API user's view that it has not changed.
+        inline void const_copy_data_to_device() const {
+            const_cast<YkVarBase*>(this)->copy_data_to_device();
         }
-        void copy_data_from_device() {
-            STATE_VARS(this);
-            void* vp = get_storage();
-            char* cp = static_cast<char*>(vp);
-            auto nb = get_num_bytes();
-            offload_copy_from_device(cp, nb);
+        inline void const_copy_data_from_device() const {
+            const_cast<YkVarBase*>(this)->copy_data_from_device();
         }
 
         // Set elements.
@@ -1601,12 +1605,21 @@ namespace yask {
                 }
             };
 
+            if (on_device)
+                const_copy_data_to_device();
+            else
+                const_copy_data_from_device();
+            
             // Call the generic vec copier.
             auto nset = _copy_vecs_in_slice<SetVec>((void*)buffer_ptr,
                                                     first_indices, last_indices,
                                                     on_device);
 
             // Set appropriate dirty flag(s).
+            if (on_device)
+                _coh.mod_dev();
+            else
+                _coh.mod_host();
             set_dirty_in_slice(first_indices, last_indices);
 
             return nset;
@@ -1634,6 +1647,11 @@ namespace yask {
                     p[pofs] = val;
                 }
             };
+
+            if (on_device)
+                const_copy_data_to_device();
+            else
+                const_copy_data_from_device();
 
             // Call the generic vec copier.
             auto n = const_cast<YkVecVar*>(this)->

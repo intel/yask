@@ -573,9 +573,13 @@ namespace yask {
         YaskTimer at_timer;
         at_timer.start();
 
+        // Copy vars to device now so that automatic copy in
+        // run_solution() will not impact timing.
+        copy_vars_to_device();
+
         // Temporarily disable halo exchange to tune intra-rank.
-        // Will not produce valid results.
-        auto save_exchange_halos = actl_opts->do_halo_exchange;
+        // Will not produce valid results and will corrupt data.
+        auto save_halo_exchange = actl_opts->do_halo_exchange;
         actl_opts->do_halo_exchange = false;
 
         // Temporarily ignore step conditions to force eval of conditional
@@ -583,9 +587,6 @@ namespace yask {
         // AAABAAAB sequence, perf may be [very] different if run as
         // ABABAB..., esp. w/temporal tiling.  TODO: work around this.
         check_step_conds = false;
-
-        // Temporarily disable device copies.
-        do_device_copies = false;
 
         // Init tuners.
         reset_auto_tuner(true, verbose);
@@ -616,9 +617,8 @@ namespace yask {
         #endif
 
         // reenable normal operation.
-        actl_opts->do_halo_exchange = true;
+        actl_opts->do_halo_exchange = save_halo_exchange;
         check_step_conds = true;
-        do_device_copies = true;
 
         // Report results.
         at_timer.stop();

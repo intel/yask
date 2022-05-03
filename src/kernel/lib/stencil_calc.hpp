@@ -166,9 +166,10 @@ namespace yask {
         // update last valid step.
         void
         update_var_info(YkVarBase::dirty_idx whose,
-                    idx_t step,
-                    bool mark_dirty,
-                    bool update_valid_step);
+                        idx_t step,
+                        bool mark_extern_dirty,
+                        bool mod_dev_data,
+                        bool update_valid_step);
         
         // Calculate results within a nano-block.
         virtual void

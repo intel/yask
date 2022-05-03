@@ -180,6 +180,12 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a46dc15b38732b30c820ffd7765292342"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a46dc15b38732b30c820ffd7765292342">run_solution</a> (<a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> step_index)=0</td></tr>
 <tr class="memdesc:a46dc15b38732b30c820ffd7765292342"><td class="mdescLeft">&#160;</td><td class="mdescRight">Run the stencil solution for the specified step.  <a href="#a46dc15b38732b30c820ffd7765292342">More...</a><br /></td></tr>
 <tr class="separator:a46dc15b38732b30c820ffd7765292342"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2cdea230253b47bd16c1a0c326a78df8"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a2cdea230253b47bd16c1a0c326a78df8">copy_vars_to_device</a> () const =0</td></tr>
+<tr class="memdesc:a2cdea230253b47bd16c1a0c326a78df8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Update data on the device.  <a href="#a2cdea230253b47bd16c1a0c326a78df8">More...</a><br /></td></tr>
+<tr class="separator:a2cdea230253b47bd16c1a0c326a78df8"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a105c993241498d9c2a98cbec353fc61a"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a105c993241498d9c2a98cbec353fc61a">copy_vars_from_device</a> () const =0</td></tr>
+<tr class="memdesc:a105c993241498d9c2a98cbec353fc61a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Update data on the host.  <a href="#a105c993241498d9c2a98cbec353fc61a">More...</a><br /></td></tr>
+<tr class="separator:a105c993241498d9c2a98cbec353fc61a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:afac6a33fe5d098d31a844f4eba654b19"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#afac6a33fe5d098d31a844f4eba654b19">end_solution</a> ()=0</td></tr>
 <tr class="memdesc:afac6a33fe5d098d31a844f4eba654b19"><td class="mdescLeft">&#160;</td><td class="mdescRight">Finish using a solution.  <a href="#afac6a33fe5d098d31a844f4eba654b19">More...</a><br /></td></tr>
 <tr class="separator:afac6a33fe5d098d31a844f4eba654b19"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -711,7 +717,8 @@ virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc
 
 <p>Set the block size in the given dimension. </p>
 <p>This sets the approximate number of elements that are evaluated in each "block". This is a performance setting and should not affect the functional correctness or total number of elements evaluated. A block is typically the unit of work done by a top-level OpenMP thread. The actual number of elements evaluated in a block may be greater than the specified size due to rounding up to fold-cluster sizes. The number of elements in a block may also be smaller than the specified size when the block is at the edge of the domain. The block size cannot be set in the solution-step dimension (because temporal blocking is not yet enabled).</p>
-<p>Unless auto-tuning is disabled, the block size will be used as a starting point for an automated search for a higher-performing block size. </p>
+<p>Unless auto-tuning is disabled, the block size will be used as a starting point for an automated search for a higher-performing block size.</p>
+<p>This and all other tile sizes (Mega-blocks, blocks, micro-blocks, etc.) can be set via <a class="el" href="classyask_1_1yk__solution.html#ac111abbade055c4923cd0044360ec3b7" title="Set kernel options from a string.">apply_command_line_options()</a>. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to set. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a7039e7151857e2652592a585c6d00931" title="Get the solution step dimension.">get_step_dim_name()</a> or <a class="el" href="classyask_1_1yk__solution.html#a665968c18b2f70467dbc7decaeeb1a1f" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
@@ -1336,6 +1343,64 @@ virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc
   </table>
   </dd>
 </dl>
+
+</div>
+</div>
+<a id="a2cdea230253b47bd16c1a0c326a78df8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2cdea230253b47bd16c1a0c326a78df8">&#9670;&nbsp;</a></span>copy_vars_to_device()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual void yask::yk_solution::copy_vars_to_device </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Update data on the device. </p>
+<p>If the stencil kernel will be offloaded, copies any YASK var data that has been modified on the host but not on the device from the host to the device.</p>
+<p>This is done automatically as needed, so calling this function is only needed when you want to control when the copy is done. </p>
+
+</div>
+</div>
+<a id="a105c993241498d9c2a98cbec353fc61a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a105c993241498d9c2a98cbec353fc61a">&#9670;&nbsp;</a></span>copy_vars_from_device()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual void yask::yk_solution::copy_vars_from_device </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Update data on the host. </p>
+<p>If the stencil kernel will be offloaded, copies any YASK var data that has been modified on the device but not on the host from the device to the host.</p>
+<p>This is done automatically as needed, so calling this function is only needed when you want to control when the copy is done. </p>
 
 </div>
 </div>

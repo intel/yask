@@ -241,7 +241,7 @@ namespace yask {
 
             // Mark exterior dirty for halo exchange if exterior was done.
             bool mark_dirty = _context->do_mpi_left || _context->do_mpi_right;
-            update_var_info(YkVarBase::self, t, mark_dirty, false);
+            update_var_info(YkVarBase::self, t, mark_dirty, true, false);
             
         } // BB list.
     } // calc_micro_block().
@@ -249,9 +249,10 @@ namespace yask {
     // Mark vars dirty that are updated by this bundle and/or
     // update last valid step.
     void StencilBundleBase::update_var_info(YkVarBase::dirty_idx whose,
-                                        idx_t t,
-                                        bool mark_dirty,
-                                        bool update_valid_step) {
+                                            idx_t t,
+                                            bool mark_extern_dirty,
+                                            bool mod_dev_data,
+                                            bool update_valid_step) {
         STATE_VARS(this);
 
         // Get output step for this bundle, if any.  For most stencils, this
@@ -267,15 +268,22 @@ namespace yask {
         for (auto gp : output_var_ptrs) {
             auto& gb = gp->gb();
 
-            // Update last valid step.
-            if (update_valid_step)
-                gb.update_valid_step(t_out);
-
             // Mark given dirty flag.
-            if (mark_dirty) {
+            // This flag will be false if we're only updating the interior,
+            // i.e., we don't need to trigger a halo exchange.
+            if (mark_extern_dirty) {
                 gb.set_dirty(whose, true, t_out);
                 TRACE_MSG(gb.get_name() << " marked dirty");
             }
+
+            // Mark the entire var as dirty on the device, regardless
+            // of whether this is the interior or exterior.
+            if (mod_dev_data)
+                gb.get_coh().mod_dev();
+
+            // Update last valid step.
+            if (update_valid_step)
+                gb.update_valid_step(t_out);
         }
     }
 
