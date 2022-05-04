@@ -39,7 +39,7 @@ namespace yask {
     // tracing. Make sure 'enable_trace' is false if called from 'TRACE_MSG'
     // to avoid deadlock.
     template <typename T>
-    T* get_dev_ptr(T* hostp,
+    T* get_dev_ptr(const T* hostp,
                    bool must_be_mapped = true,
                    bool enable_trace = true) {
         if (!hostp)
@@ -50,16 +50,9 @@ namespace yask {
             return NULL;
         assert(is_present);
 
-        // Temp var to capture device ptr.
-        T* dp = 0;
-
-        // Get pointer on device via OMP offload map.  The "target data"
-        // pragma maps variables to the device data environment, but doesn't
-        // execute on the device.
-        #pragma omp target data device(devn) use_device_ptr(hostp)
-        {
-            dp = hostp;
-        }
+        void* mp = omp_get_mapped_ptr(hostp, devn);
+        T* dp = (T*)mp;
+        
         if (enable_trace) {
             TRACE_MSG("host addr == " << (void*)hostp <<
                       "; dev addr == " << (void*)dp);
@@ -195,6 +188,11 @@ namespace yask {
     #endif
 
     // Non-typed versions.
+    inline void* get_dev_ptr(const void* hostp,
+                             bool must_be_mapped = true,
+                             bool enable_trace = true) {
+        return (void*)get_dev_ptr((char*) hostp, must_be_mapped, enable_trace);
+    }
     inline void _offload_copy_to_device(void* devp, void* hostp, size_t nbytes) {
         _offload_copy_to_device(devp, (char*)hostp, nbytes);
     }
