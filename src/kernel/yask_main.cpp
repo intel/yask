@@ -588,7 +588,7 @@ int main(int argc, char** argv)
             os << "\nResults NOT VERIFIED.\n";
         ksoln->end_solution();
 
-        os << "Stencil '" << ksoln->get_name() << "'.\n";
+        os << "Stencil '" << context->get_description() << "'.\n";
         if (!ok)
             exit_yask(1);
 
