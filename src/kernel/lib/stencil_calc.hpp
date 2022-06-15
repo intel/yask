@@ -925,9 +925,11 @@ namespace yask {
                            ScanIndices& norm_idxs) {
 
             // Call code from stencil compiler.
+            ssc_start();
             StencilBundleImplT::calc_clusters(corep,
                                               outer_thread_idx, inner_thread_idx,
                                               thread_limit, norm_idxs);
+            ssc_stop();
         }
 
         // Calculate a tile of vectors using the given mask.

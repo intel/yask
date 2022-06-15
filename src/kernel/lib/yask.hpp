@@ -265,6 +265,27 @@ typedef std::uint64_t bit_mask_t;
 // Debug breakpoint.
 #define INT3 asm volatile("int $3")
 
+// SSC marks for emulator instrumentation.
+#define TRACING_SSC_MARK( MARK_ID )     \
+        __asm__ __volatile__ (          \
+        "\n\t  movl $"#MARK_ID", %%ebx" \
+        "\n\t  .byte 0x64, 0x67, 0x90"  \
+        : : : "%ebx" );
+namespace yask {
+    inline void ssc_start()
+    {
+        asm volatile ("push %rbx");
+        TRACING_SSC_MARK(111);
+        asm volatile ("pop %rbx");
+    }
+    inline void ssc_stop()
+    {
+        asm volatile ("push %rbx");
+        TRACING_SSC_MARK(222);
+        asm volatile ("pop %rbx");
+    }
+};
+
 // L1 and L2 hints
 #define L1_HINT _MM_HINT_T0
 #define L2_HINT _MM_HINT_T1
