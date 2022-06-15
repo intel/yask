@@ -63,6 +63,7 @@ YC_CXXOPT	:= 	-O2
 YC_CXXFLAGS 	:=	-g -std=c++17 -Wall
 YC_CXXFLAGS	+=	-Wno-unknown-pragmas -Wno-unused-variable
 YC_CXXFLAGS	+=	$(INC_CXXFLAGS)
+YC_CXXFLAGS	+=	$(YC_CXXOPT)
 YC_INC_CXXFLAGS :=	$(addprefix -I,$(YC_INC_DIRS))
 
 # Add user-defined flags.
@@ -79,7 +80,7 @@ VPATH	:=	$(patsubst $space,$colon,$(YC_STENCIL_DIRS) $(COMM_DIR) $(COEFF_DIR) $(
 
 $(YC_OBJ_DIR)/%.o: %.cpp $(YC_INC_FILES)
 	$(call MK_DIR,$(dir $@))
-	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXOPT) $(YC_CXXFLAGS) $(YC_INC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) $(YC_INC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
 
 # Compile rules for example stencils,
@@ -88,7 +89,7 @@ $(YC_OBJ_DIR)/%.o: %.cpp $(YC_INC_FILES)
 
 $(YC_STENCIL_OBJ_DIR)/%.o: %.cpp $(INC_FILES) $(YC_STENCIL_INC_FILES)
 	$(call MK_DIR,$(dir $@))
-	$(CXX_PREFIX) $(YC_CXX) -O0 $(YC_CXXFLAGS) -x c++ -DUSE_INTERNAL_DSL -c -o $@ $<
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -O0 -x c++ -DUSE_INTERNAL_DSL -c -o $@ $<
 	@ls -l $@
 
 ######## Primary targets.
