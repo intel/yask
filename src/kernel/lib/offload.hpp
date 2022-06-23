@@ -59,6 +59,32 @@ namespace yask {
         }
         return dp;
     }
+
+    // Allocate space for 'num' 'T' objects on host.
+    inline void* offload_alloc_host(size_t nbytes) {
+        auto devn = KernelEnv::_omp_devn;
+
+        #ifdef INTEL_OMP
+        TRACE_MSG("allocating " << make_byte_str(nbytes) << " on host, specifying OMP dev " << devn);
+        void* p = omp_target_alloc_host(nbytes, devn);
+        #else
+        TRACE_MSG("allocating " << make_byte_str(nbytes) << " on host");
+        void* p = yask_aligned_alloc(nbytes, devn);
+        #endif
+        if (!p)
+            THROW_YASK_EXCEPTION("error: cannot allocate " + make_byte_str(nbytes) + " on host");
+        return p;
+    }
+
+    // Free memory allocated with offload_alloc_host().
+    inline void offload_free_host(void* p) {
+        auto devn = KernelEnv::_omp_devn;
+        #ifdef INTEL_OMP
+        omp_target_free(p, devn); // frees after omp_target_alloc_*().
+        #else
+        free(p);
+        #endif
+    }
         
     // Allocate space for 'num' 'T' objects on offload device.
     // Map 'hostp' to allocated mem.
@@ -69,16 +95,23 @@ namespace yask {
             assert(hostp);
             auto nb = sizeof(T) * num;
             auto devn = KernelEnv::_omp_devn;
+
             TRACE_MSG("allocating " << make_byte_str(nb) << " on OMP dev " << devn);
+            #ifdef INTEL_OMP
+            void* devp = omp_target_alloc_device(nb, devn);
+            #else
             void* devp = omp_target_alloc(nb, devn);
+            #endif
             if (!devp)
                 THROW_YASK_EXCEPTION("error: cannot allocate " + make_byte_str(nb) + " on OMP device");
+
             TRACE_MSG("mapping " << (void*)hostp << " to " << devp << " on OMP dev " << devn);
             auto res = omp_target_associate_ptr(hostp, devp, nb, 0, devn);
             if (res)
                 THROW_YASK_EXCEPTION("error: cannot map OMP device ptr");
             assert(omp_target_is_present(hostp, devn));
             assert(get_dev_ptr(hostp) == devp);
+
             TRACE_MSG("done allocating and mapping");
             return devp;
         }
@@ -185,6 +218,15 @@ namespace yask {
     void _offload_copy_from_device(void* devp, T* hostp, size_t num) { }
     template <typename T>
     void offload_copy_from_device(T* hostp, size_t num) { }
+
+    // TODO: update for SHM.
+    inline void* offload_alloc_host(size_t nbytes) {
+        return malloc(nbytes);
+    }
+    inline void offload_free_host(void* p) {
+        if (p)
+            free(p);
+    }
     #endif
 
     // Non-typed versions.
@@ -204,6 +246,9 @@ namespace yask {
     }
     inline void offload_copy_from_device(void* hostp, size_t nbytes) {
         offload_copy_from_device((char*)hostp, nbytes);
+    }
+    inline void* offload_map_alloc(void* hostp, size_t nbytes) {
+        return offload_map_alloc((char*)hostp, nbytes);
     }
 
     // Type to track and sync pointers on target device.

@@ -86,6 +86,7 @@ and Intel(R) graphics processors.
     The looping behaviors, including any temporal tiling, of mega-blocks,
     blocks, and micro-blocks are handled by the CPU.
     The `get_region_size()` and `set_region_size()` APIs have been removed.
+    The `-r` and `-sb` options, e.g., `-rx` and `-sbx`, have also been removed.
   - Regarding CPU threads, "region threads" are now referred to as "outer threads",
     and "block threads" are now referred to as "inner threads".
     The options `-block_threads` and `-thread_divisor` have been removed.

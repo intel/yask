@@ -299,8 +299,6 @@ namespace yask {
         _add_domain_option(parser, _nano_block_str, "Nano-block size", _nano_block_sizes);
         _add_domain_option(parser, _pico_block_str, "Pico-block size", _pico_block_sizes);
         _add_domain_option(parser, "d", "[Deprecated] Use local-domain size options", _rank_sizes);
-        _add_domain_option(parser, "r", "[Deprecated] Use mega-block size options", _mega_block_sizes, true);
-        _add_domain_option(parser, "sb", "[Deprecated] Use nano-block size options", _nano_block_sizes);
         #ifdef USE_TILING
         _add_domain_option(parser, "l_tile", "[Advanced] Local-domain-tile size", _rank_tile_sizes);
         _add_domain_option(parser, "Mb_tile", "[Advanced] Mega-Block-tile size", _mega_block_tile_sizes);
@@ -405,16 +403,19 @@ namespace yask {
                            "a single large chunk when possible. "
                            "If 'false', allocate each YASK var separately.",
                            _bundle_allocs));
-        #ifdef USE_NUMA
         parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("numa_pref",
-                           "[Advanced] Preferred NUMA node on which to allocate data for "
-                           "vars and MPI buffers. Alternatively, use special values " +
-                           to_string(yask_numa_local) + " for explicit local-node allocation, " +
-                           to_string(yask_numa_interleave) + " for interleaving pages across all nodes, or " +
-                           to_string(yask_numa_none) + " for no NUMA policy.",
+                           string("[Advanced] Specify allocation policy for vars and MPI buffers. ") +
+                           #ifdef USE_NUMA
+                           " Use values >= 0 to specify the preferred NUMA node. "
+                           " Use " + to_string(yask_numa_local) + " for local NUMA-node allocation. " +
+                           " Use " + to_string(yask_numa_interleave) + " for interleaving pages across NUMA nodes. " +
+                           #endif
+                           #ifdef USE_OFFLOAD
+                           " Use " + to_string(yask_numa_offload) + " for allocation optimized for offloading. " +
+                           #endif
+                           " Use " + to_string(yask_numa_none) + " for default allocator.",
                            _numa_pref));
-        #endif
         #ifdef USE_PMEM
         parser.add_option(make_shared<CommandLineParser::IntOption>
                          ("pmem_threshold",
@@ -633,7 +634,7 @@ namespace yask {
             "\nControlling OpenMP CPU threading:\n"
             " For stencil evaluation, threads are allocated using nested OpenMP:\n"
             "  Num outer_threads = max_threads / inner_threads if not specified.\n"
-            "  Num CPU threads per mega-block = outer_threads.\n"
+            "  Num CPU threads per rank and mega-block = outer_threads.\n"
             "  Num CPU threads per block = inner_threads.\n"
             "  Num CPU threads per micro-block, nano-block, and pico-block = 1.\n"
            << app_notes;

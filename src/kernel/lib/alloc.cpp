@@ -83,6 +83,9 @@ namespace yask {
         if (numa_pref == yask_numa_none)
             return yask_aligned_alloc(nbytes);
 
+        else if (numa_pref == yask_numa_offload)
+            return (char*)offload_alloc_host(nbytes);
+
         #ifdef USE_NUMA
 
         // Should we use the numa policy library?
@@ -170,6 +173,10 @@ namespace yask {
 
         if (p && _numa_pref == yask_numa_none) {
             free(p);
+            p = NULL;
+        }
+        else if (p && _numa_pref == yask_numa_offload) {
+            offload_free_host(p);
             p = NULL;
         }
 
@@ -400,6 +407,8 @@ namespace yask {
             else {
                 if (mem_key == yask_numa_none)
                     msg += "using default allocator";
+                else if (mem_key == yask_numa_offload)
+                    msg += "using default allocator for offloading";
                 else if (mem_key == yask_numa_local)
                     msg += "preferring local NUMA node";
                 else if (mem_key == yask_numa_interleave)
@@ -530,7 +539,7 @@ namespace yask {
 
                     if (pass == 0)
                         TRACE_MSG(" var '" << gname << "' needs " << make_byte_str(nbytes) <<
-                                  " on NUMA node " << numa_pref);
+                                  " w/numa-pref " << numa_pref);
                 }
 
                 // Otherwise, just print existing var info.

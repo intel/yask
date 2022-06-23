@@ -206,7 +206,10 @@ typedef std::uint64_t bit_mask_t;
 #define YASK_PAD_BYTES (CACHELINE_BYTES * YASK_PAD)
 #define YASK_HUGE_ALIGNMENT (2 * 1024 * 1024) // 2MiB-page for large allocs.
 #define CACHE_ALIGNED __attribute__ ((aligned (CACHELINE_BYTES)))
-#ifndef USE_NUMA
+#ifdef USE_OFFLOAD
+#undef NUMA_PREF
+#define NUMA_PREF yask_numa_offload
+#elif !defined USE_NUMA
 #undef NUMA_PREF
 #define NUMA_PREF yask_numa_none
 #elif !defined NUMA_PREF

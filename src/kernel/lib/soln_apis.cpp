@@ -476,25 +476,25 @@ namespace yask {
             #ifdef USE_MPI
             if (etime > 0.0)
                 DEBUG_MSG(" Compute-time breakdown by halo area:\n"
-                          "  rank-exterior compute (sec):         " << make_num_str(etime) <<
+                          "  rank-exterior compute (sec):           " << make_num_str(etime) <<
                           print_pct(etime, ctime) << endl <<
-                          "  rank-interior compute (sec):         " << make_num_str(itime) <<
+                          "  rank-interior compute (sec):           " << make_num_str(itime) <<
                           print_pct(itime, ctime));
             double hotime = max(hetime - hwtime - hptime - hutime - hctime, 0.);
             DEBUG_MSG(" Halo-time breakdown:\n"
-                      "  MPI waits (sec):                     " << make_num_str(hwtime) <<
+                      "  MPI waits (sec):                       " << make_num_str(hwtime) <<
                       print_pct(hwtime, htime) << endl <<
-                      "  MPI tests (sec):                     " << make_num_str(ttime) <<
+                      "  MPI tests (sec):                       " << make_num_str(ttime) <<
                       print_pct(ttime, htime) << endl <<
-                      "  buffer packing (sec):                " << make_num_str(hptime) <<
+                      "  buffer packing (sec):                  " << make_num_str(hptime) <<
                       print_pct(hptime, htime) << endl <<
-                      "  buffer unpacking (sec):              " << make_num_str(hutime) <<
+                      "  buffer unpacking (sec):                " << make_num_str(hutime) <<
                       print_pct(hutime, htime) << endl <<
                       #ifdef USE_OFFLOAD
-                      "  buffer copying to/from device (sec): " << make_num_str(hctime) <<
+                      "  explicit copying to/from device (sec): " << make_num_str(hctime) <<
                       print_pct(hctime, htime) << endl <<
                       #endif
-                      "  other halo time (sec):               " << make_num_str(hotime) <<
+                      "  other halo time (sec):                 " << make_num_str(hotime) <<
                       print_pct(hotime, htime));
             #endif
 

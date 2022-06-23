@@ -709,15 +709,11 @@ namespace yask {
         }
         virtual bool set_default_numa_preferred(int numa_node) {
             STATE_VARS(this);
-#ifdef USE_NUMA
+
+            // TODO: fix this when NUMA APIs are not available.
             req_opts->_numa_pref = numa_node;
             actl_opts->_numa_pref = numa_node;
             return true;
-#else
-            req_opts->_numa_pref = yask_numa_none;
-            actl_opts->_numa_pref = yask_numa_none;
-            return numa_node == yask_numa_none;
-#endif
         }
         virtual int get_default_numa_preferred() const {
             STATE_VARS_CONST(this);

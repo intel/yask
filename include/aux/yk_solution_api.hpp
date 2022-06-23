@@ -64,6 +64,14 @@ namespace yask {
     */
     const int yask_numa_none = -9;
 
+    /// Do not specify any NUMA binding and use allocations optimized for offloading.
+    /**
+       This is used in yk_solution::set_default_numa_preferred
+       and yk_var::set_numa_preferred.
+       In Python, specify as `yask_kernel.cvar.yask_numa_host`.
+    */
+    const int yask_numa_offload = -11;
+
     /// Stencil solution as defined by the generated code from the YASK stencil compiler.
     /**
        Objects of this type contain all the vars and equations

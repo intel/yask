@@ -123,7 +123,8 @@ ifeq ($(TARGET),knl)
  # either flat or cache memory modes, but these configurations are uncommon.
  ICC_ISA	?=	-xMIC-AVX512
  GXX_ISA	?=	-march=knl
- VEC_MACROS	?=	USE_INTRIN512 USE_RCP28 NUMA_PREF=1
+ VEC_MACROS	?=	USE_INTRIN512 USE_RCP28
+ MACROS		+=	NUMA_PREF=1
  pfd_l1		?=	1
 
 else ifeq ($(TARGET),avx512)
@@ -425,6 +426,7 @@ ifeq ($(cxx_is_llvm_intel),1)
 			-Wno-unused-const-variable -fno-color-diagnostics
  OMPFLAG	:=	-fiopenmp
  SWIG_CXXFLAGS	+=	-Wno-deprecated-declarations
+ MACROS		+=	INTEL_OMP
  VEC_MACROS	+=	NO_PRAGMA_VEC2
 
 # Clang compiler (clang++, not Intel version).
