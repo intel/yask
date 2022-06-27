@@ -595,12 +595,12 @@ namespace yask {
                 // settings when enough time has passed.
                 // FIXME: in-situ AT will not work properly with temporal conditions
                 // because not all sequences of N steps will do the same amount of work.
-                _at.timer.stop();
+                auto this_time = _at.timer.stop();
                 _at.steps_done += this_num_t;
                 eval_auto_tuner();
+                TRACE_MSG("did " << this_num_t << " step(s) in " << this_time << " secs.");
 
-                TRACE_MSG("did " << this_num_t << " step(s)");
-           } // step loop.
+            } // step loop.
 
             #ifdef MODEL_CACHE
             // Print cache stats, then disable.

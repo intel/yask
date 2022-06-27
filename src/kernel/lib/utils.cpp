@@ -35,35 +35,26 @@ Cache cache_model(MODEL_CACHE);
 namespace yask {
 
     // Timer.
-    void YaskTimer::start(TimeSpec* ts) {
+    void YaskTimer::start(const TimeSpec& ts) {
 
         // Make sure timer was stopped.
         assert(_begin.tv_sec == 0);
         assert(_begin.tv_nsec == 0);
 
-        if (ts)
-            _begin = *ts;
-        else {
-            auto cts = get_timespec();
-            _begin = cts;
-        }
+        _begin = ts;
     }
-    double YaskTimer::stop(TimeSpec* ts) {
-        TimeSpec end, delta;
-        if (ts)
-            end = *ts;
-        else {
-            auto cts = get_timespec();
-            end = cts;
-        }
+    double YaskTimer::stop(const TimeSpec& ts) {
 
         // Make sure timer was started.
         assert(_begin.tv_sec != 0);
 
+        TimeSpec end = ts;
+        
         // Make sure time is going forward.
         assert(end.tv_sec >= _begin.tv_sec);
 
         // Elapsed time is just end - begin times.
+        TimeSpec delta;
         delta.tv_sec = end.tv_sec - _begin.tv_sec;
         _elapsed.tv_sec += delta.tv_sec;
 

@@ -162,6 +162,13 @@ namespace yask {
 
     // A class for maintaining elapsed time.
     // NOT a virtual class.
+    // Example:
+    //   time --->
+    //     start() ... stop() ... start() ... stop() ... get_elapsed_time()
+    //     |   A secs  |          |   B secs  |
+    // 1st call to stop() returns A.
+    // 2nd call to stop() returns B.
+    // Call to get_elapsed_time() returns A + B.
     class YaskTimer {
 
         /* struct timespec {
@@ -184,7 +191,8 @@ namespace yask {
             _begin.tv_nsec = _elapsed.tv_nsec = 0;
         }
 
-        // Make a timespec that can be used for mutiple calls.
+        // Make a current timespec to be provided to start() or stop().
+        // This allows multiple timers to use the same timespec.
         static TimeSpec get_timespec() {
             TimeSpec ts;
             clock_gettime(CLOCK_REALTIME, &ts);
@@ -195,15 +203,24 @@ namespace yask {
         // start() and stop() can be called multiple times in
         // pairs before calling get_elapsed_secs(), which
         // will return the cumulative time over all timed regions.
-        void start(TimeSpec* ts = NULL);
+        void start(const TimeSpec& ts);
+        void start() {
+            auto ts = get_timespec();
+            start(ts);
+        }
 
         // End a timed region.
         // Return time since previous call to start(); this is *not*
         // generally the same as the value returned by get_elapsed_secs().
-        double stop(TimeSpec* ts = NULL);
+        double stop(const TimeSpec& ts);
+        double stop() {
+            auto ts = get_timespec();
+            return stop(ts);
+        }
 
-        // Get elapsed time between preceding start/stop pairs.
-        // Does not reset value, so it may be used for cumulative time.
+        // Get elapsed time between all preceding start/stop pairs since
+        // object creation or previous call to clear().  Does not reset
+        // value, so it may be used for querying cumulative time.
         double get_elapsed_secs() const {
 
             // Make sure timer was stopped.
@@ -212,7 +229,7 @@ namespace yask {
             return double(_elapsed.tv_sec) + double(_elapsed.tv_nsec) * 1e-9;
         }
 
-        // Get elapsed time since last start.
+        // Get elapsed time since previous start.
         // Used to check time w/o stopping timer.
         double get_secs_since_start() const;
     };

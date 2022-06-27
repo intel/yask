@@ -371,13 +371,13 @@ namespace yask {
     // Start and stop stage timers for final stats and auto-tuners.
     void Stage::start_timers() {
         auto ts = YaskTimer::get_timespec();
-        timer.start(&ts);
-        get_at().timer.start(&ts);
+        timer.start(ts);
+        get_at().timer.start(ts);
     }
     void Stage::stop_timers() {
         auto ts = YaskTimer::get_timespec();
-        timer.stop(&ts);
-        get_at().timer.stop(&ts);
+        timer.stop(ts);
+        get_at().timer.stop(ts);
     }
     void Stage::add_steps(idx_t num_steps) {
         steps_done += num_steps;
