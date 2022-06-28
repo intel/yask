@@ -49,9 +49,9 @@ namespace yask {
         bool verbose = false;
 
         // AT parameters.
-        double warmup_steps = 100;
-        double warmup_secs = 0.5; // end warmup when either warmup_steps OR warmup_secs is reached.
-        idx_t trial_steps = 100;
+        double warmup_steps = 1000;
+        double warmup_secs = 1.0; // end warmup when either warmup_steps OR warmup_secs is reached.
+        idx_t trial_steps = 500;
         double trial_secs = 0.5; // end trial when either trial_steps OR trial_secs is reached.
         double cutoff = 0.8;   // can stop eval if current rate < best rate * cutoff;
         idx_t min_dist = 1;     // min distance to move in any direction per trial.
