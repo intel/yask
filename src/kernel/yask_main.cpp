@@ -495,6 +495,7 @@ int main(int argc, char** argv)
                 " mid-throughput (num-points/sec):  " << make_num_str(mid_trial->pts_ps) << endl <<
                 div_line <<
                 "Performance stats across trials:\n"
+                " num-trials:                          " << n << endl <<
                 " min-throughput (num-points/sec):     " << make_num_str(min_pps) << endl <<
                 " max-throughput (num-points/sec):     " << make_num_str(max_pps) << endl <<
                 " ave-throughput (num-points/sec):     " << make_num_str(ave_pps) << endl;
