@@ -460,6 +460,22 @@ int main(int argc, char** argv)
             auto& best_trial = trial_stats.front();
             auto r50 = trial_stats.size() / 2;
             auto& mid_trial = trial_stats.at(r50);
+
+            // Additional stats.
+            double sum_pps = 0., sum2_pps = 0., max_pps = 0., min_pps = 0.;
+            for (auto ts : trial_stats) {
+                auto pps = ts->pts_ps;
+                sum_pps += pps;
+                sum2_pps += pps * pps;
+                if (max_pps == 0. || pps > max_pps)
+                    max_pps = pps;
+                if (min_pps == 0. || pps < min_pps)
+                    min_pps = pps;
+            }
+            auto n = trial_stats.size();
+            double ave_pps = sum_pps / n;
+            double var_pps = (sum2_pps - (sum_pps * sum_pps) / n) / (n - 1.);
+            double sd_pps = sqrt(var_pps);
             
             os << div_line <<
                 "Performance stats of best trial:\n"
@@ -478,12 +494,20 @@ int main(int argc, char** argv)
                 " mid-throughput (est-FLOPS):       " << make_num_str(mid_trial->flops) << endl <<
                 " mid-throughput (num-points/sec):  " << make_num_str(mid_trial->pts_ps) << endl <<
                 div_line <<
+                "Performance stats across trials:\n"
+                " min-throughput (num-points/sec):     " << make_num_str(min_pps) << endl <<
+                " max-throughput (num-points/sec):     " << make_num_str(max_pps) << endl <<
+                " ave-throughput (num-points/sec):     " << make_num_str(ave_pps) << endl;
+            if (n > 2)
+                os << 
+                    " std-dev-throughput (num-points/sec): " << make_num_str(sd_pps) << endl;
+            os << div_line <<
                 "Notes:\n";
-            if (trial_stats.size() == 1)
+            if (n == 1)
                 os << " Since there was only one trial, the best trial and the\n"
                     "  50th-percentile trial are the one and only trial.\n";
             else {
-                if (trial_stats.size() % 2)
+                if (n % 2 == 1)
                     os << " Since there was an odd number of trials, the\n"
                         "  50th-percentile trial is the trial with the median performance:\n";
                 else
