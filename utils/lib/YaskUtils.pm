@@ -51,6 +51,12 @@ our @log_keys =
    'best elapsed time (sec)',
    'best num-steps-done',
 
+   'num-trials',
+   'min-throughput (num-points/sec)',
+   'max-throughput (num-points/sec)',
+   'ave-throughput (num-points/sec)',
+   'std-dev-throughput (num-points/sec)',
+
    'stencil name',
    'stencil description',
    'element size',
