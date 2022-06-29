@@ -180,7 +180,7 @@ namespace yask {
         const char* nptr = args[argi].c_str();
         char* endptr = 0;
         double val = strtod(nptr, &endptr);
-        if (!isnormal(val) || *endptr != '\0') {
+        if (!isfinite(val) || *endptr != '\0') {
             THROW_YASK_EXCEPTION("Error: argument for option '" + args[argi - 1] +
                                  "' is not a valid floating-point number");
         }

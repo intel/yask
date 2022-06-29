@@ -32,6 +32,8 @@ using namespace yask;
 // Add some command-line options for this application in addition to the
 // default ones provided by YASK.
 struct MySettings {
+    static constexpr double def_init_val = -99.;
+    
     bool help = false;          // help requested.
     bool do_warmup = true;       // whether to do warmup run.
     bool do_pre_auto_tune = true;  // whether to do pre-auto-tuning.
@@ -44,7 +46,7 @@ struct MySettings {
     int debug_sleep = 0;          // sec to sleep for debug attach.
     bool do_trace = false;         // tracing.
     int msg_rank = 0;              // rank to print debug msgs.
-    int init_val = 0;        // value to init all points.
+    double init_val = def_init_val;        // value to init all points.
 
     // Ptr to the soln.
     yk_solution_ptr _ksoln;
@@ -104,10 +106,11 @@ struct MySettings {
                           ("dt",
                            "[Deprecated] Use '-trial_steps'.",
                            trial_steps));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<CommandLineParser::DoubleOption>
                           ("init_val",
-                           "Initialize all points in all stencil vars to given value. "
-                           "If zero, points are set to different values.",
+                           string("Initialize all points in all stencil vars to given value. ") +
+                           "If value is " + to_string(MySettings::def_init_val) +
+                           ", points are set to varying values.",
                            init_val));
         parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("trial_time",
@@ -216,7 +219,7 @@ void alloc_steps(yk_solution_ptr soln, const MySettings& opts) {
 
 // Init values in vars.
 void init_vars(MySettings& opts, std::shared_ptr<yask::StencilContext> context) {
-    if (opts.init_val != 0)
+    if (opts.init_val != MySettings::def_init_val)
         context->init_same(opts.init_val);
     else {
         double seed = opts.validate ? 1.0 : 0.1;
@@ -418,7 +421,7 @@ int main(int argc, char** argv)
             if (ksoln->is_auto_tuner_enabled())
                 os << "auto-tuner is active during this trial, so results may not be representative.\n";
 
-            // Stabilize.
+            // Pause before trial.
             if (opts.pre_trial_sleep_time > 0) {
                 os << flush;
                 sleep(opts.pre_trial_sleep_time);
