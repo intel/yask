@@ -409,7 +409,7 @@ int main(int argc, char** argv)
             opts.trial_steps << " step(s) each...\n" << flush;
         for (idx_t tr = 0; tr < opts.num_trials; tr++) {
             os << div_line <<
-                "Trial number:                      " << (tr + 1) << endl << flush;
+                "Trial number:  " << (tr + 1) << endl << flush;
 
             // re-init data before each trial for comparison if validating.
             if (opts.validate) {
