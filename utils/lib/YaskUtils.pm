@@ -92,6 +92,7 @@ our @log_keys =
    'min padding',
 
    # values from compiler report
+   'YASK compiler invocation',
    'YC_STENCIL',
    'YC_TARGET',
    'YK_CXXVER',
@@ -263,7 +264,7 @@ sub getResultsFromLine($$) {
   }
 
   # Substitutions to handle old formats.
-  $line =~ s/^Invocation/Script invocation/g;
+  $line =~ s/^Invocation/Script invocation/g if $line !~ /yask_compiler/;
   $line =~ s/overall.problem/global-domain/g;
   $line =~ s/rank.domain/local-domain/g;
   $line =~ s/grid/var/g;

@@ -238,12 +238,15 @@ void usage(const string& cmd,
 // Parse command-line and set global cmd-line option vars.
 // Exits on error.
 void parse_opts(int argc, const char* argv[],
-               CompilerSettings& settings)
+                CompilerSettings& settings,
+                bool show_invo = false)
 {
-    cout << "Invocation:";
-    for (int argi = 0; argi < argc; argi++)
-        cout << " " << argv[argi];
-    cout << endl;
+    if (show_invo) {
+        cout << "YASK compiler invocation:";
+        for (int argi = 0; argi < argc; argi++)
+            cout << " " << argv[argi];
+        cout << endl;
+    }
 
     if (argc <= 1)
         usage(argv[0], settings);
@@ -439,7 +442,7 @@ int main(int argc, const char* argv[]) {
     try {
         // Parse options.
         CompilerSettings settings;
-        parse_opts(argc, argv, settings);
+        parse_opts(argc, argv, settings, true);
 
         // Find the requested stencil in the registry.
         auto& stencils = yc_solution_base::get_registry();
