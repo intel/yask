@@ -56,7 +56,9 @@ struct MySettings {
 
     // Parse options from the command-line and set corresponding vars.
     // Exit with message on error or request for help.
-    void parse(int argc, char** argv) {
+    // Return settings.
+    string parse(int argc, char** argv) {
+        string values;
 
         // Create a parser and add options to it.
         CommandLineParser parser;
@@ -138,33 +140,63 @@ struct MySettings {
 
         // Handle additional knobs and help if there is a soln.
         if (_ksoln) {
+
+            // TODO: make an API for this.
+            auto context = dynamic_pointer_cast<StencilContext>(_ksoln);
+            assert(context.get());
+            auto& req_opts = context->get_req_opts();
         
             // Parse standard args not handled by this parser.
             rem_args = _ksoln->apply_command_line_options(rem_args);
 
             if (help) {
-                string app_notes =
+                string pgm_name(argv[0]);
+                cout << "Usage: " << pgm_name << " [options]\n"
+                    "Options from the binary:\n";
+                parser.print_help(cout);
+
+                cout << "Options from the YASK library:\n";
+                req_opts->print_usage(cout);
+                cout << 
                     "\nValidation is very slow and uses 2x memory,\n"
                     " so run with very small sizes and number of time-steps.\n"
                     " If validation fails, it may be due to rounding error;\n"
                     " try building with 8-byte reals.\n";
-                vector<string> app_examples;
-                app_examples.push_back("-g 768 -num_trials 2");
-                app_examples.push_back("-v");
-                
-                // TODO: make an API for this.
-                auto context = dynamic_pointer_cast<StencilContext>(_ksoln);
-                assert(context.get());
-                auto& req_opts = context->get_req_opts();
-                req_opts->print_usage(cout, parser, argv[0], app_notes, app_examples);
+
+                // Make example knobs across dims.
+                string exg, exnr, exb;
+                int i = 1;
+                for (auto& dname : _ksoln->get_domain_dim_names()) {
+                    exg += " -g" + dname + " " + to_string(i * 128);
+                    exb += " -b" + dname + " " + to_string(i * 16);
+                    exnr += " -nr" + dname + " " + to_string(i + 1);
+                    i++;
+                }
+                cout <<
+                    "\nExamples:\n"
+                    " " << pgm_name << " -g 768  # global-domain size in all dims same.\n"
+                    " " << pgm_name << exg << "  # global-domain size in each dim separately.\n"
+                    " " << pgm_name << " -l 128  # local-domain (per-rank) size.\n"
+                    " " << pgm_name << " -g 512" << exnr << "  # number of ranks in each dim.\n" <<
+                    " " << pgm_name << " -g 512" << exb << " -no-pre_auto_tune  # manual block size.\n" <<
+                    flush;
                 exit_yask(1);
             }
 
+            // Add settings.
+            ostringstream oss;
+            oss << "Options from the binary:\n";
+            parser.print_values(oss);
+            oss << "Options from the YASK library:\n";
+            req_opts->print_values(oss);
+            values = oss.str();
+            
             if (rem_args.length())
                 THROW_YASK_EXCEPTION("Error: extraneous parameter(s): '" +
                                      rem_args +
                                      "'; run with '-help' option for usage");
         }
+        return values;
     }
 
     // Print splash banner and invocation string.
@@ -190,14 +222,6 @@ struct MySettings {
         for (int argi = 0; argi < argc; argi++)
             os << " " << argv[argi];
         os << endl;
-
-        os << "PID: " << getpid() << endl;
-        if (debug_sleep) {
-            os << "Sleeping " << debug_sleep <<
-                " second(s) to allow debug attach...\n";
-            sleep(debug_sleep);
-            os << "Resuming...\n";
-        }
     }
 };                              // AppSettings.
 
@@ -245,7 +269,7 @@ int main(int argc, char** argv)
         yk_factory kfac;
         yask_output_factory yof;
 
-        // Parse custom options once just to get vars needed for env.
+        // Parse only custom options just to get vars needed to set up env.
         MySettings opts1(nullptr);
         opts1.parse(argc, argv);
         yk_env::set_trace_enabled(opts1.do_trace);
@@ -274,18 +298,24 @@ int main(int argc, char** argv)
         // exit on -help or error.
         // TODO: do this through APIs.
         MySettings opts(ksoln);
-        opts.parse(argc, argv);
-
-        // Make sure warmup is on if needed.
-        if (opts.trial_steps <= 0 && opts.trial_time > 0)
-            opts.do_warmup = true;
+        auto opts_str = opts.parse(argc, argv);
 
         // Make sure any MPI/OMP debug data is dumped from all ranks before continuing.
         kenv->global_barrier();
 
         // Print splash banner and related info.
         opts.splash(os, argc, argv);
+        os << "\n" << opts_str;
 
+        // Print PID and sleep for debug if needed.
+        os << "\nPID: " << getpid() << endl;
+        if (opts.debug_sleep) {
+            os << "Sleeping " << opts.debug_sleep <<
+                " second(s) to allow debug attach...\n";
+            sleep(opts.debug_sleep);
+            os << "Resuming...\n";
+        }
+        
         // Override alloc if requested.
         alloc_steps(ksoln, opts);
 
@@ -309,6 +339,10 @@ int main(int argc, char** argv)
 
         // Enable/disable further auto-tuning.
         ksoln->reset_auto_tuner(copts->_do_auto_tune);
+
+        // Make sure warmup is on if needed.
+        if (opts.trial_steps <= 0 && opts.trial_time > 0)
+            opts.do_warmup = true;
 
         // Warmup caches, threading, etc.
         // Measure time to change number of steps.

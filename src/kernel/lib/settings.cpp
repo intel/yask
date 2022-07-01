@@ -476,15 +476,8 @@ namespace yask {
     }
 
     // Print usage message.
-    void KernelSettings::print_usage(ostream& os,
-                                     CommandLineParser& app_parser,
-                                     const string& pgm_name,
-                                     const string& app_notes,
-                                     const vector<string>& app_examples)
+    void KernelSettings::print_usage(ostream& os)
     {
-        os << "Usage: " << pgm_name << " [options]\n"
-            "Options:\n";
-        app_parser.print_help(os);
         CommandLineParser soln_parser;
         add_options(soln_parser);
         soln_parser.print_help(os);
@@ -636,27 +629,15 @@ namespace yask {
             "  Num outer_threads = max_threads / inner_threads if not specified.\n"
             "  Num CPU threads per rank and mega-block = outer_threads.\n"
             "  Num CPU threads per block = inner_threads.\n"
-            "  Num CPU threads per micro-block, nano-block, and pico-block = 1.\n"
-           << app_notes;
-
-        // Make example knobs.
-        string ex1, ex2;
-        DOMAIN_VAR_LOOP(i, j) {
-            auto& dname = _dims->_domain_dims.get_dim_name(j);
-            ex1 += " -g" + dname + " " + to_string(i * 128);
-            ex2 += " -nr" + dname + " " + to_string(i + 1);
-        }
-        os <<
-            "\nExamples:\n"
-            " " << pgm_name << " -g 768  # global-domain size in all dims.\n"
-            " " << pgm_name << ex1 << "  # global-domain size in each dim.\n"
-            " " << pgm_name << " -l 2048 -r 512 -rt 10  # local-domain size and temporal rank tiling.\n"
-            " " << pgm_name << " -g 512" << ex2 << "  # number of ranks in each dim.\n";
-        for (auto ae : app_examples)
-            os << " " << pgm_name << " " << ae << endl;
-        os << flush;
+            "  Num CPU threads per micro-block, nano-block, and pico-block = 1.\n";
     }
-
+    void KernelSettings::print_values(ostream& os)
+    {
+        CommandLineParser soln_parser;
+        add_options(soln_parser);
+        soln_parser.print_values(os);
+    }
+    
     // For each one of 'inner_sizes' dim that is zero,
     // make it equal to same dim in 'outer_sizes'.
     // Round up each of 'inner_sizes' dim to be a multiple of same dim in 'mults'.

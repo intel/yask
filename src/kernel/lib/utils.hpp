@@ -292,6 +292,9 @@ namespace yask {
                 _print_help(os, _name, width);
             }
 
+            // Print current value of this option.
+            virtual std::ostream& print_value(std::ostream& os) const =0;
+
             // Check for matching option and any needed args at args[argi].
             // Return true, set val, and increment argi if match.
             virtual bool check_arg(const std::vector<std::string>& args, int& argi) =0;
@@ -310,6 +313,10 @@ namespace yask {
 
             virtual void print_help(std::ostream& os,
                                     int width) const override;
+            virtual std::ostream& print_value(std::ostream& os) const override {
+                os << (_val ? "true" : "false");
+                return os;
+            }
             virtual bool check_arg(const std::vector<std::string>& args, int& argi) override;
         };
 
@@ -325,6 +332,10 @@ namespace yask {
 
             virtual void print_help(std::ostream& os,
                                     int width) const override;
+            virtual std::ostream& print_value(std::ostream& os) const override {
+                os << _val;
+                return os;
+            }
             virtual bool check_arg(const std::vector<std::string>& args, int& argi) override;
         };
 
@@ -340,6 +351,10 @@ namespace yask {
 
             virtual void print_help(std::ostream& os,
                                     int width) const override;
+            virtual std::ostream& print_value(std::ostream& os) const override {
+                os << _val;
+                return os;
+            }
             virtual bool check_arg(const std::vector<std::string>& args, int& argi) override;
         };
 
@@ -355,6 +370,10 @@ namespace yask {
 
             virtual void print_help(std::ostream& os,
                                     int width) const override;
+            virtual std::ostream& print_value(std::ostream& os) const override {
+                os << _val;
+                return os;
+            }
             virtual bool check_arg(const std::vector<std::string>& args, int& argi) override;
         };
 
@@ -372,6 +391,14 @@ namespace yask {
 
             virtual void print_help(std::ostream& os,
                                     int width) const override;
+            virtual std::ostream& print_value(std::ostream& os) const override {
+                for (size_t i = 0; i < _vals.size(); i++) {
+                    if (i > 0)
+                        os << ", ";
+                    os << *_vals[i];
+                }
+                return os;
+            }
             virtual bool check_arg(const std::vector<std::string>& args,
                                    int& argi) override;
         };
@@ -388,6 +415,10 @@ namespace yask {
 
             virtual void print_help(std::ostream& os,
                                     int width) const override;
+            virtual std::ostream& print_value(std::ostream& os) const override {
+                os << _val;
+                return os;
+            }
             virtual bool check_arg(const std::vector<std::string>& args, int& argi) override;
         };
 
@@ -406,6 +437,16 @@ namespace yask {
 
             virtual void print_help(std::ostream& os,
                                     int width) const override;
+            virtual std::ostream& print_value(std::ostream& os) const override {
+                int n = 0;
+                for (auto& v : _val) {
+                    if (n)
+                        os << ",";
+                    os << v;
+                    n++;
+                }
+                return os;
+            }
             virtual bool check_arg(const std::vector<std::string>& args, int& argi) override;
         };
 
@@ -436,6 +477,9 @@ namespace yask {
 
         // Print help info on all options.
         virtual void print_help(std::ostream& os) const;
+
+        // Print current settings of all options.
+        virtual void print_values(std::ostream& os) const;
 
         // Parse options from 'args' and set corresponding vars.
         // Recognized strings from args are consumed, and unused ones

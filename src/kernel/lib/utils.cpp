@@ -151,6 +151,10 @@ namespace yask {
             pos += words[i].length();
         }
         os << endl;
+
+        // Print current value.
+        os << _help_leader << _current_value_str;
+        print_value(os) << ".\n";
     }
 
     // Check for matching option to "-"str at args[argi].
@@ -243,8 +247,6 @@ namespace yask {
     void CommandLineParser::BoolOption::print_help(ostream& os,
                                                    int width) const {
         _print_help(os, string("[no-]" + _name), width);
-        os << _help_leader << _current_value_str <<
-            (_val ? "true" : "false") << "." << endl;
     }
 
     // Check for a double option.
@@ -261,8 +263,6 @@ namespace yask {
     void CommandLineParser::DoubleOption::print_help(ostream& os,
                                                      int width) const {
         _print_help(os, _name + " <floating-point number>", width);
-        os << _help_leader << _current_value_str <<
-            _val << "." << endl;
     }
 
     // Check for an int option.
@@ -279,8 +279,6 @@ namespace yask {
     void CommandLineParser::IntOption::print_help(ostream& os,
                                                   int width) const {
         _print_help(os, _name + " <integer>", width);
-        os << _help_leader << _current_value_str <<
-            _val << "." << endl;
     }
 
     // Check for an idx_t option.
@@ -297,21 +295,12 @@ namespace yask {
     void CommandLineParser::IdxOption::print_help(ostream& os,
                                                   int width) const {
         _print_help(os, _name + " <integer>", width);
-        os << _help_leader << _current_value_str <<
-            _val << "." << endl;
     }
 
     // Print help on an multi-idx_t option.
     void CommandLineParser::MultiIdxOption::print_help(ostream& os,
                                                   int width) const {
         _print_help(os, _name + " <integer>", width);
-        os << _help_leader << _current_value_str;
-        for (size_t i = 0; i < _vals.size(); i++) {
-            if (i > 0)
-                os << ", ";
-            os << *_vals[i];
-        }
-        os << "." << endl;
     }
 
     // Check for an multi-idx_t option.
@@ -340,8 +329,6 @@ namespace yask {
     void CommandLineParser::StringOption::print_help(ostream& os,
                                                      int width) const {
         _print_help(os, _name + " <string>", width);
-        os << _help_leader << _current_value_str <<
-            _val << "." << endl;
     }
 
     // Check for a string-list option.
@@ -368,15 +355,6 @@ namespace yask {
     void CommandLineParser::StringListOption::print_help(ostream& os,
                                                          int width) const {
         _print_help(os, _name + " <string[,string[,...]]>", width);
-        os << _help_leader << _current_value_str;
-        int n = 0;
-        for (auto& v : _val) {
-            if (n)
-                os << ",";
-            os << v;
-            n++;
-        }
-        os << endl;
     }
 
     // Print help on all options.
@@ -384,6 +362,20 @@ namespace yask {
         for (auto oi : _opts) {
             const auto opt = oi.second;
             opt->print_help(os, _width);
+        }
+    }
+
+    // Print settings of all options.
+    void CommandLineParser::print_values(ostream& os) const {
+        const size_t name_wid = 22;
+        for (auto oi : _opts) {
+            const auto& name = oi.first;
+            const auto& opt = oi.second;
+            os << "  " << name << ":  ";
+            if (name.length() < name_wid)
+                for (size_t i = 0; i < name_wid - name.length(); i++)
+                    os << " ";
+            opt->print_value(os) << endl;
         }
     }
 
