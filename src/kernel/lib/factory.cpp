@@ -54,6 +54,7 @@ namespace yask {
                                              const yk_solution_ptr source) const {
         TRACE_MSG("creating new YASK solution...");
 
+        // Make sure JIT compiliation has happened.
         #ifdef USE_OFFLOAD
         {
             DEBUG_MSG("Initializing OpenMP offload; there may be a delay for JIT compilation...");

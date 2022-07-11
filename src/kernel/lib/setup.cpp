@@ -32,6 +32,9 @@ using namespace std;
 namespace yask {
 
     // Init MPI, OMP.
+    // This function can have some calls to TRACE_MSG(), but it shouldn't
+    // call DEBUG_MSG(), because the user might not want debug messages
+    // before setting up the env.
     void KernelEnv::init_env(int* argc, char*** argv, MPI_Comm existing_comm)
     {
         TRACE_MSG("Initializing YASK environment...");

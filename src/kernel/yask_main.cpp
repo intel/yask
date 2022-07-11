@@ -270,9 +270,8 @@ int main(int argc, char** argv)
         opts1.parse(argc, argv);
         yk_env::set_trace_enabled(opts1.do_trace);
 
-        // Bootstrap factories from kernel API.
+        // Bootstrap factory from kernel API.
         yk_factory kfac;
-        yask_output_factory yof;
 
         // Set up the environment.
         auto kenv = kfac.new_env();
@@ -280,10 +279,8 @@ int main(int argc, char** argv)
         auto num_ranks = kenv->get_num_ranks();
 
         // Enable debug only on requested rank.
-        if (opts1.msg_rank == kenv->get_rank_index())
-            yk_env::set_debug_output(yof.new_stdout_output());
-        else
-            yk_env::disable_debug_output();
+        if (opts1.msg_rank != kenv->get_rank_index())
+           yk_env::disable_debug_output();
         auto& os = kenv->get_debug_output()->get_ostream();
         
         // Make solution object containing data and parameters for stencil eval.
@@ -350,7 +347,7 @@ int main(int argc, char** argv)
 
             // Turn off debug.
             auto dbg_out = context->get_debug_output();
-            context->set_debug_output(yof.new_null_output());
+            context->disable_debug_output();
             os << endl << div_line;
 
             // Warmup and calibration phases.
@@ -613,7 +610,7 @@ int main(int argc, char** argv)
 
             // Discard perf report.
             auto dbg_out = ref_context->get_debug_output();
-            ref_context->set_debug_output(yof.new_null_output());
+            ref_context->disable_debug_output();
             auto rstats = ref_context->get_stats();
             ref_context->set_debug_output(dbg_out);
             os << "  Done in " << make_num_str(rstats->get_elapsed_secs()) << " secs.\n" << flush;
