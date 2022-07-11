@@ -265,14 +265,14 @@ int main(int argc, char** argv)
     div_line += "\n";
 
     try {
-        // Bootstrap factories from kernel API.
-        yk_factory kfac;
-        yask_output_factory yof;
-
         // Parse only custom options just to get vars needed to set up env.
         MySettings opts1(nullptr);
         opts1.parse(argc, argv);
         yk_env::set_trace_enabled(opts1.do_trace);
+
+        // Bootstrap factories from kernel API.
+        yk_factory kfac;
+        yask_output_factory yof;
 
         // Set up the environment.
         auto kenv = kfac.new_env();
@@ -283,7 +283,7 @@ int main(int argc, char** argv)
         if (opts1.msg_rank == kenv->get_rank_index())
             yk_env::set_debug_output(yof.new_stdout_output());
         else
-            yk_env::set_debug_output(yof.new_null_output());
+            yk_env::disable_debug_output();
         auto& os = kenv->get_debug_output()->get_ostream();
         
         // Make solution object containing data and parameters for stencil eval.

@@ -83,6 +83,10 @@ namespace yask {
     void yk_env::set_debug_output(yask_output_ptr debug) {
         KernelEnv::_debug = debug;
     }
+    void yk_env::disable_debug_output() {
+        yask_output_factory yof;
+        KernelEnv::_debug = yof.new_null_output();
+    }
     void yk_env::set_trace_enabled(bool enable) {
         KernelEnv::_trace = enable;
     }

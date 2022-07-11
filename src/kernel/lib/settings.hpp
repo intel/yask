@@ -688,6 +688,9 @@ namespace yask {
         void set_debug_output(yask_output_ptr debug) {
             _state->_env->set_debug_output(debug);
         }
+        void disable_debug_output() {
+            _state->_env->disable_debug_output();
+        }
 
         // Set number of threads w/o using thread-divisor.
         // Return number of threads.

@@ -179,6 +179,13 @@ namespace yask {
                          /**< [out] Pointer to object to receive debug output.
                             See \ref yask_output_factory. */ );
 
+        /// Disable the debug output.
+        /**
+           Shortcut for calling `set_debug_output()` with a `yask_null_output_ptr`;
+         */
+        static void
+        disable_debug_output();
+
         /// Get object to receive debug output.
         /**
            This is a static method, implying the following:

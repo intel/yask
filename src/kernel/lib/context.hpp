@@ -610,6 +610,9 @@ namespace yask {
         virtual void set_debug_output(yask_output_ptr debug) {
             KernelStateBase::set_debug_output(debug);
         }
+        virtual void disable_debug_output() {
+            KernelStateBase::disable_debug_output();
+        }
 
         virtual int get_num_vars() const {
             return int(all_var_ptrs.size());
