@@ -41,11 +41,6 @@ envs+=" OMP_PLACES=cores KMP_HOT_TEAMS_MODE=1 KMP_HOT_TEAMS_MAX_LEVEL=3"
 envs+=" I_MPI_PRINT_VERSION=1 I_MPI_DEBUG=5"
 #envs+=" I_MPI_HBW_POLICY=hbw_preferred,hbw_preferred"
 
-# On Cygwin, need to put lib dir in path to load .dll's.
-if [[ `uname -o` == "Cygwin" ]]; then
-	envs+=" PATH='$PATH':"`dirname $0`/../lib
-fi
-
 # Default arch.
 cpu_flags=`grep -m1 '^flags' /proc/cpuinfo`
 if [[ $cpu_flags =~ avx512dq ]]; then
