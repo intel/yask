@@ -186,9 +186,14 @@ void run_tests(int argc, char* argv[]) {
 
                 // Copy data to device; invalidate host data; copy data back.
                 gb3f->copy_data_to_device();
+
+                #ifndef USE_OFFLOAD_USM
                 gb3f->set_all_elements_same(-2.0);
                 gb3f->get_coh()._force_state(Coherency::dev_mod);
+                #endif
+
                 gb3f->copy_data_from_device();
+                
                 break;
             }
                 #if 1
@@ -201,8 +206,11 @@ void run_tests(int argc, char* argv[]) {
                 gb3->get_elements_in_slice(buf, firsti, lasti, false);
                 gb3f->set_elements_in_slice(buf, firsti, lasti, false);
                 gb3f->get_vecs_in_slice(buf, firsti, lasti, false);
+
+                #ifndef USE_OFFLOAD_USM
                 gb3f->set_all_elements_same(-2.0);
                 gb3f->get_coh()._force_state(Coherency::dev_mod);
+                #endif
 
                 // Copy buffer to dev.
                 offload_copy_to_device(buf, sz);

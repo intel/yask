@@ -31,34 +31,44 @@ IN THE SOFTWARE.
 
 namespace yask {
 
-    #ifdef USE_OFFLOAD_NO_USM
+    // Definitions to use when offloading WITH unified shared memory.
+    // Not offloading:       0
+    // Offloading w/USM:     1
+    // Offloading w/o USM:   0
+    #ifdef USE_OFFLOAD_USM
 
-    // Get device addr from any mapped host addr 'hostp'.
-    // If 'must_be_mapped' is true, assertion will fail if not mapped.
-    // If 'enable_trace' is true, host and device addrs will be printed when
-    // tracing. Make sure 'enable_trace' is false if called from 'TRACE_MSG'
-    // to avoid deadlock.
-    template <typename T>
-    T* get_dev_ptr(const T* hostp,
-                   bool must_be_mapped = true,
-                   bool enable_trace = true) {
-        if (!hostp)
-            return NULL;
+    // Allocate space for 'num' 'T' objects on host.
+    inline void* offload_alloc_host(size_t nbytes) {
         auto devn = KernelEnv::_omp_devn;
-        bool is_present = omp_target_is_present((void*)hostp, devn);
-        if (!is_present && !must_be_mapped)
-            return NULL;
-        assert(is_present);
 
-        void* mp = omp_get_mapped_ptr(hostp, devn);
-        T* dp = (T*)mp;
-        
-        if (enable_trace) {
-            TRACE_MSG("host addr == " << (void*)hostp <<
-                      "; dev addr == " << (void*)dp);
-        }
-        return dp;
+        #ifdef INTEL_OMP
+        TRACE_MSG("allocating " << make_byte_str(nbytes) << " shared, specifying OMP dev " << devn);
+        void* p = omp_target_alloc_shared(nbytes, devn);
+        #else
+        TRACE_MSG("allocating " << make_byte_str(nbytes) << " on host");
+        void* p = yask_aligned_alloc(nbytes, devn);
+        #endif
+        if (!p)
+            THROW_YASK_EXCEPTION("error: cannot allocate " + make_byte_str(nbytes) + " on host");
+        return p;
     }
+
+    // Free memory allocated with offload_alloc_host().
+    inline void offload_free_host(void* p) {
+        auto devn = KernelEnv::_omp_devn;
+        #ifdef INTEL_OMP
+        omp_target_free(p, devn); // frees after omp_target_alloc_*().
+        #else
+        free(p);
+        #endif
+    }
+    #endif
+    
+    // Definitions to use when offloading but NOT using unified shared memory.
+    // Not offloading:       0
+    // Offloading w/USM:     0
+    // Offloading w/o USM:   1
+    #ifdef USE_OFFLOAD_NO_USM
 
     // Allocate space for 'num' 'T' objects on host.
     inline void* offload_alloc_host(size_t nbytes) {
@@ -84,6 +94,33 @@ namespace yask {
         #else
         free(p);
         #endif
+    }
+    
+    // Get device addr from any mapped host addr 'hostp'.
+    // If 'must_be_mapped' is true, assertion will fail if not mapped.
+    // If 'enable_trace' is true, host and device addrs will be printed when
+    // tracing. Make sure 'enable_trace' is false if called from 'TRACE_MSG'
+    // to avoid deadlock.
+    template <typename T>
+    T* get_dev_ptr(const T* hostp,
+                   bool must_be_mapped = true,
+                   bool enable_trace = true) {
+        if (!hostp)
+            return NULL;
+        auto devn = KernelEnv::_omp_devn;
+        bool is_present = omp_target_is_present((void*)hostp, devn);
+        if (!is_present && !must_be_mapped)
+            return NULL;
+        assert(is_present);
+
+        void* mp = omp_get_mapped_ptr(hostp, devn);
+        T* dp = (T*)mp;
+        
+        if (enable_trace) {
+            TRACE_MSG("host addr == " << (void*)hostp <<
+                      "; dev addr == " << (void*)dp);
+        }
+        return dp;
     }
         
     // Allocate space for 'num' 'T' objects on offload device.
@@ -196,10 +233,13 @@ namespace yask {
             _offload_copy_from_device(devp, hostp, num);
         }
     }
-
-    #else
-
-    // Stub functions when not offloading or when using USM.
+    #endif
+    
+    // Definitions to use when offloading with unified shared memory OR not offloading.
+    // Not offloading:       1
+    // Offloading w/USM:     1
+    // Offloading w/o USM:   0
+    #ifndef USE_OFFLOAD_NO_USM
     template <typename T>
     T* get_dev_ptr(T* hostp,
                    bool must_be_mapped = true,
@@ -218,8 +258,14 @@ namespace yask {
     void _offload_copy_from_device(void* devp, T* hostp, size_t num) { }
     template <typename T>
     void offload_copy_from_device(T* hostp, size_t num) { }
+    #endif
 
-    // TODO: update for SHM.
+    // Definitions to use when not offloading.
+    // Not offloading:       1
+    // Offloading w/USM:     0
+    // Offloading w/o USM:   0
+    #ifndef USE_OFFLOAD
+
     inline void* offload_alloc_host(size_t nbytes) {
         return malloc(nbytes);
     }
@@ -227,6 +273,7 @@ namespace yask {
         if (p)
             free(p);
     }
+
     #endif
 
     // Non-typed versions.
@@ -363,14 +410,14 @@ namespace yask {
             return _state;
         }
 
+        #ifdef USE_OFFLOAD_NO_USM
+        
         // Set state directly (not recommended).
         void _force_state(coh_state state) {
             TRACE_MSG("coherency state forced to " << state);
             _state = state;
         }
 
-        #ifdef USE_OFFLOAD_NO_USM
-        
     protected:
         coh_state _state = host_mod;
 
@@ -438,6 +485,12 @@ namespace yask {
         #else
         // Stubs for no offload or USM.
 
+        // Set state directly (not recommended).
+        void _force_state(coh_state state) {
+            TRACE_MSG("attempt to force coherency state to " << state <<
+                      " ignored because of offload build state");
+        }
+        
     protected:
         coh_state _state = in_sync;
 
