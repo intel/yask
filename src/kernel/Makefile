@@ -82,7 +82,6 @@ else
 endif
 
 # Enable offload if offload with unified shared mem is enabled.
-# FIXME: offload_usm is not currently enabled.
 offload_usm		?=	0
 ifeq ($(offload_usm),1)
  offload		:=	1
@@ -865,21 +864,22 @@ code-stats: $(YK_LIB)
 # Print some usage info.
 help:
 	@echo "Example builds of kernel cmd-line tool:"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd           # Build iso3dfd stencil with default settings"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg               # Build ssg stencil with default settings"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd           # Build ISO3DFD stencil with default settings"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg               # Build SSG stencil with default settings"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg offload=1     # Device offload support"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg offload_usm=1 # Device offload support with unified shared memory"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg vtune=1       # Add VTune start/stop instrumentation"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg mpi=0         # No MPI support"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd radius=4  # Specify stencil radius"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd radius=2 YK_STENCIL=iso3dfd_r2 # Specify binary stencil name"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd arch=knl  # Specify arch target"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd radius=2 YK_STENCIL=iso3d_r2 # Specify binary stencil name"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd arch=avx512    # Specify arch target"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg fold='x=1,y=2,z=4' # Specify folding (data layout)"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg cluster='x=2' # Specify clustering (unrolling)"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg real_bytes=8  # Use 8-byte (double) floats"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg mpi=0         # No MPI support"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=awp vtune=1       # Add VTune start/stop instrumentation"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=fsg YK_CXXOPT='-O2' # Use O2 optimization"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=fsg YK_CXX=icpc   # Use classic Intel compiler"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg YK_CXXOPT='-O2' # Use O2 optimization"; \
+	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg YK_CXX=icpc   # Use classic Intel compiler"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg YK_CXX=g++    # Use gnu compiler"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg MPI_CXX=mpiCC # Specify MPI compiler"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=awp YK_CXX=icpc EXTRA_YK_CXXFLAGS='-qopt-report -Fa' # Emit opt-report and asm file"; \
 	echo " "
 	@echo "Example builds of kernel API for C++ and Python apps:"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd yk-api"; \
@@ -1024,9 +1024,9 @@ DEF_TEST_ARGS := -log_dir $(TEST_LOG_OUT_DIR) \
 DEF_MPI_TEST_ARGS := $(DEF_TEST_ARGS) -min_exterior 0
 
 # Test args for 1 and >1 ranks.
-test_args0	:=	$(DEF_TEST_ARGS) -l 48 -Mb 32 -b 24 -rt 0 $(EXTRA_TEST_ARGS)
-test_args1	:=	$(DEF_TEST_ARGS) -l 64 -b 48 -mb 32 -nb 24 -pb 16 -rt 1 $(EXTRA_TEST_ARGS)
-test_args2	:=	$(DEF_TEST_ARGS) -l 63 -Mb 32 -b 24 -mb 16 -rt 2 -bundle_allocs $(EXTRA_TEST_ARGS)
+test_args0	:=	$(DEF_TEST_ARGS) -l 48 -Mb 32 -b 24 -Mbt 0 $(EXTRA_TEST_ARGS)
+test_args1	:=	$(DEF_TEST_ARGS) -l 64 -b 48 -mb 32 -nb 24 -pb 16 -Mbt 1 $(EXTRA_TEST_ARGS)
+test_args2	:=	$(DEF_TEST_ARGS) -l 63 -Mb 32 -b 24 -mb 16 -Mbt 2 -bundle_allocs $(EXTRA_TEST_ARGS)
 test_args3	:=	$(DEF_TEST_ARGS) -l 63 -Mb 48 -b 24 -mb 16 -bt 2 -no-bundle_allocs $(EXTRA_TEST_ARGS)
 test_args4	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -bind_inner_threads $(EXTRA_TEST_ARGS)
 
