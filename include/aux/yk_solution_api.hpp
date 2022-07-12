@@ -543,24 +543,32 @@ namespace yask {
 
         /// Update data on the device.
         /**
-           If the stencil kernel will be offloaded, copies any YASK var data that
-           has been modified on the host but not on the device from the host
-           to the device.
+           Copies any YASK var data that has been modified on the host but
+           not on the device from the host to the device.
 
            This is done automatically as needed, so calling this function is only
            needed when you want to control when the copy is done.
+
+           If the kernel has been compiled for offloading using unified shared memory,
+           calling this function will have no effect. 
+           Similarly, if the kernel has not been compiled for offloading,
+           calling this function will have no effect. 
         */
         virtual void
         copy_vars_to_device() const =0;
 
         /// Update data on the host.
         /**
-           If the stencil kernel will be offloaded, copies any YASK var data that
-           has been modified on the device but not on the host from the device
-           to the host.
+           Copies any YASK var data that has been modified on the device but
+           not on the host from the device to the host.
 
            This is done automatically as needed, so calling this function is only
            needed when you want to control when the copy is done.
+
+           If the kernel has been compiled for offloading using unified shared memory,
+           calling this function will have no effect. 
+           Similarly, if the kernel has not been compiled for offloading,
+           calling this function will have no effect. 
         */
         virtual void
         copy_vars_from_device() const =0;

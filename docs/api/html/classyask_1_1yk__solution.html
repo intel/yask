@@ -1370,8 +1370,9 @@ virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc
 </div><div class="memdoc">
 
 <p>Update data on the device. </p>
-<p>If the stencil kernel will be offloaded, copies any YASK var data that has been modified on the host but not on the device from the host to the device.</p>
-<p>This is done automatically as needed, so calling this function is only needed when you want to control when the copy is done. </p>
+<p>Copies any YASK var data that has been modified on the host but not on the device from the host to the device.</p>
+<p>This is done automatically as needed, so calling this function is only needed when you want to control when the copy is done.</p>
+<p>If the kernel has been compiled for offloading using unified shared memory, calling this function will have no effect. Similarly, if the kernel has not been compiled for offloading, calling this function will have no effect. </p>
 
 </div>
 </div>
@@ -1399,8 +1400,9 @@ virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc
 </div><div class="memdoc">
 
 <p>Update data on the host. </p>
-<p>If the stencil kernel will be offloaded, copies any YASK var data that has been modified on the device but not on the host from the device to the host.</p>
-<p>This is done automatically as needed, so calling this function is only needed when you want to control when the copy is done. </p>
+<p>Copies any YASK var data that has been modified on the device but not on the host from the device to the host.</p>
+<p>This is done automatically as needed, so calling this function is only needed when you want to control when the copy is done.</p>
+<p>If the kernel has been compiled for offloading using unified shared memory, calling this function will have no effect. Similarly, if the kernel has not been compiled for offloading, calling this function will have no effect. </p>
 
 </div>
 </div>
