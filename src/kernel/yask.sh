@@ -346,10 +346,11 @@ fi
 dir=`pwd`
 libpath=":$HOME/lib"
 
-# Setup to run on specified host.
+# Setup paths to run on specified host.
+envs2="LD_LIBRARY_PATH=$bindir/../lib:$LD_LIBRARY_PATH$libpath"
 if [[ -n "$host" ]]; then
     sh_prefix="ssh $host $sh_prefix"
-    envs+=" PATH=$PATH LD_LIBRARY_PATH=$bindir/../lib:$LD_LIBRARY_PATH$libpath"
+    envs2+=" PATH=$PATH"
 
     nm=1
     while true; do
@@ -358,8 +359,6 @@ if [[ -n "$host" ]]; then
         echo "Waiting $nm min before trying again..."
         sleep $(( nm++ * 60 ))
     done
-else
-    envs+=" LD_LIBRARY_PATH=$bindir/../lib:$LD_LIBRARY_PATH$libpath"
 fi
 
 # Set OMP threads to number of cores per rank if not already specified and not KNL.
@@ -395,7 +394,7 @@ fi
 
 # Command sequence to be run in a shell.
 exe_str="$mpi_cmd $exe_prefix $exe $opts"
-cmds="cd $dir; ulimit -s unlimited; $config_cmds; ldd $exe; date; $pre_cmd; env $envs $exe_str"
+cmds="cd $dir; ulimit -s unlimited; $config_cmds; ldd $exe; date; $pre_cmd; env $envs $envs2 $exe_str"
 if [[ -n "$post_cmd" ]]; then
     cmds+="; $post_cmd"
 fi
@@ -422,34 +421,35 @@ function finish {
         rm $tmplog
     else
         echo "Log saved in '$logfile'."
-        echo "Run 'utils/bin/yask_log_to_csv.pl $logfile' to output in CSV format."
+        echo "Run './utils/bin/yask_log_to_csv.pl $logfile' to output in CSV format."
     fi
     exit $1
 }
 
 # Print invocation again.
 echo $invo
-exe_str="'$exe_str'"
+binvo="Binary invocation: $envs $exe_str"
+echo $binvo | tee -a $logfile
 
 # Return a non-zero exit condition if test failed.
 if [[ `grep -c 'TEST FAILED' $logfile` > 0 ]]; then
-    echo $exe_str did not pass internal validation test. | tee -a $logfile
+    echo YASK did not pass internal validation test. | tee -a $logfile
     finish 1
 fi
 
 # Return a non-zero exit condition if executable didn't exit cleanly.
 if [[ `grep -c 'YASK DONE' $logfile` == 0 ]]; then
-    echo $exe_str did not exit cleanly. | tee -a $logfile
+    echo YASK did not exit cleanly. | tee -a $logfile
     finish 1
 fi
 
 # Print a message if test passed on at least one rank.
 # (Script would have exited above if any rank failed.)
-if [[ `grep -c 'TEST PASSED' $logfile` > 0 ]]; then
-    echo $exe_str passed internal validation test. | tee -a $logfile
+if [[ `grep -c 'TEST PASSED' $logfile` == $nranks ]]; then
+    echo YASK passed internal validation test. | tee -a $logfile
 fi
 
 # Print a final message, which will print if not validated or passed validation.
-echo $exe_str ran successfully. | tee -a $logfile
+echo YASK ran successfully. | tee -a $logfile
 finish 0
 
