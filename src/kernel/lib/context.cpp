@@ -1648,22 +1648,18 @@ namespace yask {
 
     // Copy vars from host to device as needed.
     void StencilContext::copy_vars_to_device() const {
-        #ifdef USE_OFFLOAD_NO_USM
-        for (auto gp : orig_var_ptrs) {
+         for (auto gp : orig_var_ptrs) {
             assert(gp);
             gp->gb().const_copy_data_to_device();
         }
-        #endif
-    }
+     }
     
     // Copy vars from device to host as needed.
     void StencilContext::copy_vars_from_device() const {
-        #ifdef USE_OFFLOAD_NO_USM
-        for (auto gp : orig_var_ptrs) {
+         for (auto gp : orig_var_ptrs) {
             assert(gp);
             gp->gb().const_copy_data_from_device();
         }
-        #endif
     }
     
 } // namespace yask.

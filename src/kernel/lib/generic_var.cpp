@@ -53,7 +53,7 @@ namespace yask {
                 _var_dims.make_dim_val_str(" * ") << ")";
         if (_elems) {
             oss << " with storage at " << _elems;
-            #ifdef USE_OFFLOAD
+            #ifdef USE_OFFLOAD_NO_USM
             if (KernelEnv::_use_offload)
                 oss << " (" << (void*)get_dev_ptr(_elems, false, false) <<
                     " on device)";

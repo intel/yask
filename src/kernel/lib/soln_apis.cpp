@@ -175,7 +175,12 @@ namespace yask {
             DEBUG_MSG("Num OpenMP devices:        " << omp_get_num_devices() <<
                       "\nOpenMP host device:        " << KernelEnv::_omp_hostn <<
                       "\nOpenMP offload device:     " << KernelEnv::_omp_devn <<
-                      "\ndevice thread limit:       " << actl_opts->thread_limit);
+                      "\nDevice thread limit:       " << actl_opts->thread_limit);
+            #ifdef USE_OFFLOAD_USM
+            DEBUG_MSG("Using unified shared mem:  true");
+            #else
+            DEBUG_MSG("Using unified shared mem:  false");
+            #endif
             #endif
         }
 

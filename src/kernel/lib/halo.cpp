@@ -53,23 +53,16 @@ namespace yask {
                host_local_buf ---------> host_local_buf
                         MPI_isend   MPI_irecv
 
-      Device halo exchange w/o direct device copy w/shm:
-      rank I                              rank J (neighbor of I)
-      -----------------------             -----------------------
-      var A --> dev_local_buf             dev_local_buf --> var A
-            pack      | copy to host            ^     unpack
-                      |                         | copy to dev
-                      +----> shared_buf --------+
-              ** Not yet implemented because each device rank
-                 needs a separate buffer, but the host shares one.
-                 TODO: modify allocator to support this.
-
       Device halo exchange w/direct device copy w/o shm:
       rank I                             rank J (neighbor of I)
       ---------------------------        -----------------------------
       dev var A --> dev_local_buf -----> dev_local_buf ----> dev var A
                pack       MPI_isend    MPI_irecv      unpack
              (may still be implicitly routed through host.)
+
+      Options not yet implemented:
+      * Device halo exchange w/o direct device copy w/shm.
+      * Device halo exchange w/direct device copy w/shm.
     */
     
     // Exchange dirty halo data for all vars and all steps.
@@ -260,9 +253,10 @@ namespace yask {
                                  char* bufp = (char*)buf;
                                  
                                  // Pack one step at a time.
-                                 // TODO: develop mechanism to allow only dirty steps
+                                 // TODO: develop mechanism to allow only truly dirty steps
                                  // to be packed and sent; this would involve sending
-                                 // the step indices.
+                                 // the step indices. Currently, all possibly dirty steps
+                                 // are exchanged.
                                  if (is_mine_dirty) {
                                      halo_pack_time.start();
                                      for (auto t : si.steps) {
@@ -426,7 +420,8 @@ namespace yask {
                                  else {
 
                                      // Wait for send to finish.
-                                     // TODO: consider using MPI_WaitAll.
+                                     // TODO: consider using MPI_WaitAll. Would need to do
+                                     // it outside the loops.
                                      // TODO: strictly, we don't have to wait on the
                                      // send to finish until we want to reuse this buffer,
                                      // so we could wait on the *previous* send right before

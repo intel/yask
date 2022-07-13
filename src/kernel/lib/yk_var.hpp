@@ -1451,8 +1451,8 @@ namespace yask {
             // Use the core for efficiency and to allow offload.
             core_t* core_p = &_core;
             
-            #ifdef USE_OFFLOAD
             auto devn = KernelEnv::_omp_devn;
+            #ifdef USE_OFFLOAD_NO_USM
             if (on_device) {
 
                 // 'buffer_ptr' and 'core_p' should exist on device.
