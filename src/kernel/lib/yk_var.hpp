@@ -55,8 +55,8 @@ namespace yask {
     YkElemVarCore<LF> YkVecVarCore<LF> YkElemVar  YkVecVar           |
          |     ^           ^      |        |        |                |
          |     |           |      |        |        |                |
-         |     |           +-------------- | --ptr--+                |
-         |     +----------------------ptr--+                         |
+         |     |           +---------------|--has-a-+                |
+         |     +--------------------has-a--+                         |
          |                        |                                  |
        has-a                    has-a                                |
          |                        |                                  |
@@ -161,9 +161,9 @@ namespace yask {
         // We do this to reduce the number of structs that need to be
         // copied to the offload device.
         typedef GenericVarCore<real_t, LayoutFn> _data_t;
-        _data_t _data;
         static_assert(std::is_trivially_copyable<_data_t>::value,
                       "Needed for OpenMP offload");
+        _data_t _data;
 
         // Ctor.
         YkElemVarCore(int ndims) :
@@ -306,9 +306,9 @@ namespace yask {
 
         // Storage core is owned here by composition.
         typedef GenericVarCore<real_vec_t, LayoutFn> _data_t;
-        _data_t _data;
         static_assert(std::is_trivially_copyable<_data_t>::value,
                       "Needed for OpenMP offload");
+        _data_t _data;
 
         // Ctor.
         YkVecVarCore(int ndims) :
@@ -1081,14 +1081,14 @@ namespace yask {
     public:
         // Type for core data.
         typedef YkElemVarCore<LayoutFn, _use_step_idx> core_t;
+        static_assert(std::is_trivially_copyable<core_t>::value,
+                      "Needed for OpenMP offload");
 
     protected:
 
         // Core data.
         // This also contains the storage core: _core._data.
         core_t _core;
-        static_assert(std::is_trivially_copyable<core_t>::value,
-                      "Needed for OpenMP offload");
 
         // Storage meta-data.
         // Owned here via composition.
@@ -1240,14 +1240,14 @@ namespace yask {
     public:
         // Type for core data.
         typedef YkVecVarCore<LayoutFn, _use_step_idx, _templ_vec_lens...> core_t;
+        static_assert(std::is_trivially_copyable<core_t>::value,
+                      "Needed for OpenMP offload");
         
     protected:
 
         // Core data.
         // This also contains the storage core.
         core_t _core;
-        static_assert(std::is_trivially_copyable<core_t>::value,
-                      "Needed for OpenMP offload");
 
         // Storage meta-data.
         // Owned here via composition.
@@ -1451,9 +1451,9 @@ namespace yask {
             // Use the core for efficiency and to allow offload.
             core_t* core_p = &_core;
             
-            auto devn = KernelEnv::_omp_devn;
             #ifdef USE_OFFLOAD_NO_USM
             if (on_device) {
+                auto devn = KernelEnv::_omp_devn;
 
                 // 'buffer_ptr' and 'core_p' should exist on device.
                 assert(omp_target_is_present(buffer_ptr, devn));
@@ -1469,7 +1469,7 @@ namespace yask {
             auto vec_range = get_slice_range(firstv, lastv);
             auto nv = vec_range.product();
             auto ne = nv * VLEN;
-            TRACE_MSG("copy_vecs_in_slice: " << nv << " vec(s) in " <<
+            TRACE_MSG("copying " << nv << " vec(s) in " <<
                       make_info_string() << " [" <<
                       make_index_string(firstv) << " ... " <<
                       make_index_string(lastv) << "] with buffer at " <<
@@ -1525,6 +1525,7 @@ namespace yask {
 
                 if (on_device) {
                     #ifdef USE_OFFLOAD
+                    auto devn = KernelEnv::_omp_devn;
                     auto nj = vec_range.product();
 
                     // Run outer loop on device in parallel.

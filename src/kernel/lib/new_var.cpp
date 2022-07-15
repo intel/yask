@@ -98,8 +98,12 @@ namespace yask {
             }
 
             // Scalar?
-            if (ndims == 0)
-                gp = make_shared<YkElemVar<Layout_0d, false>>(*this, name, gdims);
+            if (ndims == 0) {
+                //gp = make_shared<YkElemVar<Layout_0d, false>>(*this, name, gdims);
+                typedef YkElemVar<Layout_0d, false> scalar_t;
+                gp = allocate_shared<scalar_t>(yask_allocator<scalar_t>(),
+                                               *this, name, gdims);
+            }
 
             // Include auto-gen code for all other cases.
 #include "yask_var_code.hpp"

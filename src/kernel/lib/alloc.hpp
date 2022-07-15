@@ -61,6 +61,23 @@ extern "C" {
 
 namespace yask {
 
+    // Customer allocator for objects that may need to be offloaded.
+    template <class T>
+    struct yask_allocator {
+        typedef T value_type;
+        yask_allocator() noexcept {}
+
+        template<typename U>
+        yask_allocator(const yask_allocator<U>& other) throw() {};
+    
+        T* allocate (std::size_t n) {
+            return static_cast<T*>(offload_alloc_host(n * sizeof(T)));
+        }
+        void deallocate (T* p, std::size_t n) {
+            offload_free_host(p);
+        }
+    };
+
     // Generic deleter.
     struct DeleterBase {
         std::size_t _nbytes;
@@ -87,6 +104,8 @@ namespace yask {
     // Alloc aligned data as a shared ptr.
     template<typename T>
     std::shared_ptr<T> shared_aligned_alloc(size_t nbytes) {
+
+        // Alloc mem.
         char* cp = yask_aligned_alloc(nbytes);
 
         // Map alloc to device.
@@ -115,6 +134,8 @@ namespace yask {
     // Allocate NUMA memory from preferred node.
     template<typename T>
     std::shared_ptr<T> shared_numa_alloc(size_t nbytes, int numa_pref) {
+
+        // Alloc mem.
         char* cp = numa_alloc(nbytes, numa_pref);
 
         // Map alloc to device.
@@ -141,6 +162,8 @@ namespace yask {
     // Allocate PMEM memory from given device.
     template<typename T>
     std::shared_ptr<T> shared_pmem_alloc(size_t nbytes, int pmem_dev) {
+
+        // Alloc mem.
         char* cp = pmem_alloc(nbytes, pmem_dev);
 
         // Map alloc to device.
@@ -174,6 +197,8 @@ namespace yask {
     template<typename T>
     std::shared_ptr<T> shared_shm_alloc(size_t nbytes,
                                         const MPI_Comm* shm_comm, MPI_Win* shm_win) {
+
+        // Alloc mem.
         char* cp = shm_alloc(nbytes, shm_comm, shm_win);
 
         // Map alloc to device.

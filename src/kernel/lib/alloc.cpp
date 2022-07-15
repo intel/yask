@@ -73,6 +73,7 @@ namespace yask {
     
     // NUMA allocation.
     // 'numa_pref' == yask_numa_none: use default aligned alloc.
+    // 'numa_pref' == yask_numa_offload: use default offload alloc.
     // 'numa_pref' >= 0: preferred NUMA node.
     // 'numa_pref' < 0: use NUMA policy corresponding to value.
     // TODO: get rid of magic-number scheme.

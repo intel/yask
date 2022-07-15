@@ -795,8 +795,9 @@ namespace yask {
 
             // Code to create a local base ptr and set pre-defined generic ptr.
             string init_code =
-                " " + ptr_t + " " + base_ptr + " = std::make_shared<" + base_t + ">"
-                "(*this, \"" + var + "\", " + var_dim_names + ");\n"
+                " " + ptr_t + " " + base_ptr +
+                " = std::allocate_shared<" + base_t + ">"
+                "(yask_allocator<" + base_t + ">(), *this, \"" + var + "\", " + var_dim_names + ");\n"
                 " host_assert(" + base_ptr + ");\n"
                 " " + var_ptr + " = std::make_shared<YkVarImpl>(" + base_ptr + ");\n"
                 " host_assert(" + var_ptr + "->gbp());\n";
@@ -954,13 +955,15 @@ namespace yask {
                 if (!first_var)
                     new_var_code += " else";
                 new_var_code += " if (dims == " + var_dim_names + ")\n"
-                    " gp = std::make_shared<" + base_t + ">(*this, name, dims);\n";
+                    " gp = std::allocate_shared<" + base_t +
+                    ">(yask_allocator<" + base_t + ">(), *this, name, dims);\n";
             }
         } // vars.
 
         os << "\n // Core data used in kernel(s).\n"
             " " << _core_t << " _core_data;\n" <<
-            " std::vector<" << _thread_core_t << "> _thread_cores;\n";
+            " std::vector<" << _thread_core_t << ", yask_allocator<" <<
+            _thread_core_t << ">> _thread_cores;\n";
 
         // Stencil eq_bundle objects.
         os << endl << " // Stencil equation-bundles." << endl;

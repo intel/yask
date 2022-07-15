@@ -333,13 +333,6 @@ namespace yask {
                            "Applicable only when overlap_comms is enabled.",
                            _min_exterior));
         parser.add_option(make_shared<CommandLineParser::BoolOption>
-                          ("use_shm",
-                           "Directly use shared memory for halo-exchange buffers "
-                           "between ranks on the same node when possible. "
-                           "Otherwise, use the same non-blocking MPI send and receive calls "
-                           "that are used between nodes.",
-                           use_shm));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("exchange_halos",
                            "[Debug] Perform halo packs/unpacks/sends/receives. "
                            "Will not give correct results if disabled.",
@@ -348,6 +341,21 @@ namespace yask {
                           ("force_scalar_exchange",
                            "[Debug] Do not allow vectorized halo exchanges.",
                            force_scalar_exchange));
+        #ifdef USE_OFFLOAD
+        parser.add_option(make_shared<CommandLineParser::BoolOption>
+                          ("use_device_mpi",
+                           "Enable device-to-device MPI transfers using device addresses. "
+                           "Must be supported by MPI library and hardware.",
+                           use_device_mpi));
+        #else
+        parser.add_option(make_shared<CommandLineParser::BoolOption>
+                          ("use_shm",
+                           "Directly use shared memory for halo-exchange buffers "
+                           "between ranks on the same node when possible. "
+                           "Otherwise, use the same non-blocking MPI send and receive calls "
+                           "that are used between nodes.",
+                           use_shm));
+        #endif
         #endif
         parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("force_scalar",
@@ -383,14 +391,8 @@ namespace yask {
                           ("device_thread_limit",
                            "Set the maximum number of OpenMP device threads used within a team.",
                            thread_limit));
-        #ifdef USE_MPI
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
-                          ("use_device_mpi",
-                           "Enable device-to-device MPI transfers using device addresses. "
-                           "Must be supported by MPI library and hardware.",
-                           use_device_mpi));
         #endif
-        #endif
+        #ifndef USE_OFFLOAD
         parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("bind_inner_threads",
                            "[Advanced] Divide micro-blocks into nano-blocks of slabs along the first valid dimension "
@@ -401,6 +403,7 @@ namespace yask {
                            "when temporal blocking is active. "
                            "This option is ignored if there are fewer than two inner threads.",
                            bind_inner_threads));
+        #endif
         parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("bundle_allocs",
                            "[Advanced] Allocate memory for multiple YASK vars in "

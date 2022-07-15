@@ -252,11 +252,12 @@ namespace yask {
                                  size_t npbytes = 0;
                                  char* bufp = (char*)buf;
                                  
-                                 // Pack one step at a time.
-                                 // TODO: develop mechanism to allow only truly dirty steps
-                                 // to be packed and sent; this would involve sending
-                                 // the step indices. Currently, all possibly dirty steps
-                                 // are exchanged.
+                                 // Pack one step at a time.  TODO: develop
+                                 // mechanism to allow only dirty steps to
+                                 // be packed and sent; this would involve
+                                 // sending the dirty step
+                                 // indices. Currently, all steps are sent
+                                 // if any is dirty.
                                  if (is_mine_dirty) {
                                      halo_pack_time.start();
                                      for (auto t : si.steps) {
@@ -286,11 +287,18 @@ namespace yask {
                                          TRACE_MSG("exchange_halos:    copying buffer from device");
                                          halo_copy_time.start();
                                          offload_copy_from_device(buf, npbytes);
+
+                                         if (npbytes) {
+                                             real_t v0 = *((real_t*)buf);
+                                             TRACE_MSG("exchange_halos:    got " << v0 << " ... from device");
+                                         }
+                                         
                                          halo_copy_time.stop();
                                          assert(!using_shm);
                                      }
                                  }
 
+                                 // Send data (might be 0 bytes, but still need to send).
                                  if (using_shm) {
                                      TRACE_MSG("exchange_halos:    put " << make_byte_str(npbytes) <<
                                                " into shm");
@@ -368,6 +376,10 @@ namespace yask {
                                          TRACE_MSG("exchange_halos:    copying buffer to device");
                                          halo_copy_time.start();
                                          offload_copy_to_device(buf, nbytes);
+                                         
+                                         real_t v0 = *((real_t*)buf);
+                                         TRACE_MSG("exchange_halos:    sent " << v0 << " ... to device");
+                                         
                                          halo_copy_time.stop();
                                      }
 
