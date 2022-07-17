@@ -1099,8 +1099,8 @@ STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 2d-tests:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_empty step_dim=t domain_dims=d1,d2
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_empty_2d
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d $(call FOLD,x=2 y=2) inner_loop_dim=2
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d $(call FOLD,x=2 y=2) inner_loop_dim=1
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d $(call FOLD,x=2 y=2) inner_loop_dim=2
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d $(call FOLD,x=2 y=2) $(call CLUSTER,y=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d $(call FOLD,x=2 y=2) $(call CLUSTER,x=3 y=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d $(call FOLD,x=2 y=2) mpi=0 ranks=1
