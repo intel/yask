@@ -892,10 +892,12 @@ help:
 	echo " "
 	@echo "Example regression tests (run before any git push or pull request):"; \
 	echo " $(MAKE) -j all                           # Normal full API and stencil tests"; \
-	echo " $(MAKE) -j all offload=1 max_threads=1   # Test device offload with one CPU thread"; \
+	echo " $(MAKE) -j all offload=1                 # Test device offload"; \
+	echo " $(MAKE) -j all offload_usm=1             # Test device offload with unified shared memory"; \
 	echo " $(MAKE) -j all ranks=8                   # Test with 8 MPI ranks"; \
 	echo " $(MAKE) -j all YK_CXXOPT=-O1             # Test at O1 optimization"; \
-	echo " $(MAKE) -j all YK_CXX=g++ mpi=0          # Test g++ w/o MPI"; \
+	echo " $(MAKE) -j all YK_CXX=g++                # Test w/g++"; \
+	echo " $(MAKE) -j all mpi=0                     # Test w/o MPI"; \
 	echo " $(MAKE) -j all YASK_OUTPUT_DIR=test-dir  # Test using alternate output dir"
 
 
@@ -950,7 +952,7 @@ cxx-yk-omp-test:
 	rm -f $(YK_OMP_TEST_EXEC)
 	$(TEST_MAKE) $(YK_OMP_TEST_EXEC)
 	@echo '*** Running the C++ YASK OpenMP test...'
-	$(RUN_PREFIX) $(YK_OMP_TEST_EXEC) $(max_threads)
+	$(RUN_PREFIX) $(YK_OMP_TEST_EXEC)
 
 $(YK_VAR_TEST_EXEC): $(YK_TEST_SRC_DIR)/var_test.cpp $(YK_LIB)
 	$(call MK_DIR,$(dir $@))
@@ -1085,10 +1087,10 @@ STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 
 1d-tests:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stream_1d $(call FOLD,x=4)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_1d $(call FOLD,x=4)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_1d $(call FOLD,x=4) $(call CLUSTER,x=2)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_1d $(call FOLD,x=4) $(call CLUSTER,x=5)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_1d $(call FOLD,x=4) $(call CLUSTER,x=5) read_ahead_dist=3
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_1d YK_STENCIL_SUFFIX=-t1 $(call FOLD,x=4)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_1d YK_STENCIL_SUFFIX=-t2 $(call FOLD,x=4) $(call CLUSTER,x=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_1d YK_STENCIL_SUFFIX=-t3 $(call FOLD,x=4) $(call CLUSTER,x=5)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_1d YK_STENCIL_SUFFIX=-t4 $(call FOLD,x=4) $(call CLUSTER,x=5) read_ahead_dist=3
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stages_1d $(call FOLD,x=4)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_func_1d $(call FOLD,x=4)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_step_cond_1d $(call FOLD,x=4)
@@ -1099,40 +1101,40 @@ STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 2d-tests:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_empty step_dim=t domain_dims=d1,d2
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_empty_2d
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d $(call FOLD,x=2 y=2) inner_loop_dim=1
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d $(call FOLD,x=2 y=2) inner_loop_dim=2
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d $(call FOLD,x=2 y=2) $(call CLUSTER,y=2)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d $(call FOLD,x=2 y=2) $(call CLUSTER,x=3 y=2)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d $(call FOLD,x=2 y=2) mpi=0 ranks=1
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d arch=intel64 $(call FOLD,x=3 y=2) domain_dims=y,x
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_reverse_2d radius=1
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_reverse_2d radius=1 read_ahead_dist=2
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d YK_STENCIL_SUFFIX=-t1 $(call FOLD,x=2 y=2) inner_loop_dim=1
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d YK_STENCIL_SUFFIX=-t2 $(call FOLD,x=2 y=2) inner_loop_dim=2
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d YK_STENCIL_SUFFIX=-t3 $(call FOLD,x=2 y=2) $(call CLUSTER,y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d YK_STENCIL_SUFFIX=-t4 $(call FOLD,x=2 y=2) $(call CLUSTER,x=3 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d YK_STENCIL_SUFFIX=-t5 $(call FOLD,x=2 y=2) mpi=0 ranks=1
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d YK_STENCIL_SUFFIX=-t6 arch=intel64 $(call FOLD,x=3 y=2) domain_dims=y,x
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_reverse_2d YK_STENCIL_SUFFIX=-t1 radius=1
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_reverse_2d YK_STENCIL_SUFFIX=-t2 radius=1 read_ahead_dist=2
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stages_2d $(call FOLD,x=2 y=2)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d $(call FOLD,x=2 y=2) inner_misc_layout=0 outer_domain_layout=0
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d $(call FOLD,x=2 y=2) inner_misc_layout=0 outer_domain_layout=1
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d $(call FOLD,x=2 y=2) inner_misc_layout=1 outer_domain_layout=0
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d $(call FOLD,x=2 y=2) inner_misc_layout=1 outer_domain_layout=1
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d YK_STENCIL_SUFFIX=-t1 $(call FOLD,x=2 y=2) inner_misc_layout=0 outer_domain_layout=0
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d YK_STENCIL_SUFFIX=-t2 $(call FOLD,x=2 y=2) inner_misc_layout=0 outer_domain_layout=1
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d YK_STENCIL_SUFFIX=-t3 $(call FOLD,x=2 y=2) inner_misc_layout=1 outer_domain_layout=0
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d YK_STENCIL_SUFFIX=-t4 $(call FOLD,x=2 y=2) inner_misc_layout=1 outer_domain_layout=1
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_2d $(call FOLD,x=2 y=2) read_ahead_dist=2
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_2d $(call FOLD,x=2 y=2)
 
 3d-tests:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stream_3d radius=5
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d $(call FOLD,x=2 y=2 z=2) EXTRA_YC_FLAGS=-fus
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d $(call FOLD,x=2 y=2 z=2) EXTRA_YC_FLAGS=-no-fus
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d $(call FOLD,x=2 z=2) domain_dims=z,y,x
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d $(call FOLD,x=2 z=2) inner_loop_dim=2
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d $(call FOLD,x=2 z=2) NANO_BLOCK_LOOP_MODS=serpentine
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d YK_STENCIL_SUFFIX=-t1 $(call FOLD,x=2 y=2 z=2) EXTRA_YC_FLAGS=-fus
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d YK_STENCIL_SUFFIX=-t2 $(call FOLD,x=2 y=2 z=2) EXTRA_YC_FLAGS=-no-fus
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d YK_STENCIL_SUFFIX=-t3 $(call FOLD,x=2 z=2) domain_dims=z,y,x
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d YK_STENCIL_SUFFIX=-t4 $(call FOLD,x=2 z=2) inner_loop_dim=2
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d YK_STENCIL_SUFFIX=-t5 $(call FOLD,x=2 z=2) NANO_BLOCK_LOOP_MODS=serpentine
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stages_3d $(call FOLD,y=2 x=2) domain_dims=x,z,y
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_partial_3d $(call FOLD,x=2 z=2) read_ahead_dist=2
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_partial_3d $(call FOLD,x=2 z=2) inner_loop_dim=1
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_partial_3d $(call FOLD,x=2 z=2) domain_dims=x,z,y
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_partial_3d YK_STENCIL_SUFFIX=-t1 $(call FOLD,x=2 z=2) read_ahead_dist=2
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_partial_3d YK_STENCIL_SUFFIX=-t2 $(call FOLD,x=2 z=2) inner_loop_dim=1
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_partial_3d YK_STENCIL_SUFFIX=-t3 $(call FOLD,x=2 z=2) domain_dims=x,z,y
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_3d $(call FOLD,x=2 y=2) inner_loop_dim=1
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_3d $(call FOLD,x=2 z=2) inner_loop_dim=x
 
 # 3D tests w/specific shapes.
 3d-tests2:
-	$(MAKE) clean; $(STENCIL_TEST) stencil=3axis $(call FOLD,x=2 y=2) $(call CLUSTER,x=2)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=3axis $(call FOLD,x=2 y=2) $(call CLUSTER,z=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=3axis YK_STENCIL_SUFFIX=-t1 $(call FOLD,x=2 y=2) $(call CLUSTER,x=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=3axis YK_STENCIL_SUFFIX=-t2 $(call FOLD,x=2 y=2) $(call CLUSTER,z=2 y=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=3axis_with_diags $(call FOLD,x=2 z=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=3plane $(call FOLD,y=2 z=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=cube $(call FOLD,x=2 y=2)
