@@ -1003,7 +1003,7 @@ namespace yask {
                 os << "\n // Configure '" << eg_name << "'.\n";
 
                 // Only want non-scratch bundles in st_bundles.
-                // Each scratch bundles will be added to its
+                // Each scratch bundle will be added to its
                 // parent bundle.
                 if (!eg->is_scratch())
                     os << "  st_bundles.push_back(&" << eg_name << ");\n";
@@ -1080,11 +1080,9 @@ namespace yask {
         os << "\n // Dtor.\n"
             " virtual ~" << _context << "() {\n"
             "  STATE_VARS(this);\n"
+            "  make_scratch_vars(0); // Delete any scratch vars.\n"
             "  auto* cxt_cd = &_core_data;\n"
-            "  offload_map_free(cxt_cd, 1);\n" <<
-            "  auto* tcl = _thread_cores.data();\n"
-            "  auto nt = _thread_cores.size();\n"
-            "  if (tcl && nt) offload_map_free(tcl, nt);\n"
+            "  offload_map_free(cxt_cd, 1);\n"
             " }\n";
 
         // New-var method.
