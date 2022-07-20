@@ -172,7 +172,7 @@ namespace yask {
     class YASKAvx256Printer : public YASKCppPrinter {
     protected:
         virtual CppVecPrintHelper* new_cpp_vec_print_helper(VecInfoVisitor& vv,
-                                                        CounterVisitor& cv) override {
+                                                            CounterVisitor& cv) override {
             return new CppAvx256PrintHelper(vv, _settings, _dims, &cv,
                                             "real_vec_t", " ", ";\n");
         }

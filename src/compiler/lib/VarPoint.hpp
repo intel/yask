@@ -48,7 +48,7 @@ namespace yask {
         // Set via Eqs::analyze_loop().
         enum VarDepType { DOMAIN_VAR_UNSET, // bogus value.
                           DOMAIN_VAR_INVARIANT, // not dependent on any domain dim.
-                          DOMAIN_VAR_DEPENDENT, // dependent some domain dim, but not inner-loop dim.
+                          DOMAIN_VAR_DEPENDENT, // dependent on some domain dim, but not inner-loop dim.
                           INNER_LOOP_OFFSET, // dependent on simple offset in inner-loop dim.
                           INNER_LOOP_COMPLEX  // dependent on inner-loop dim in another way.
         };

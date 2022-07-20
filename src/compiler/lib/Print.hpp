@@ -42,7 +42,7 @@ namespace yask {
         const CompilerSettings& _settings; // compiler settings.
         const Dimensions& _dims;    // problem dims.
         const CounterVisitor* _cv;  // counter info.
-        string _var_type;            // type, if any, of var.
+        string _var_type;            // type of vars to be created.
         string _line_prefix;         // prefix for each line.
         string _line_suffix;         // suffix for each line.
         VarMap _local_vars;          // map from expression strings to local var names.

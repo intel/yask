@@ -587,7 +587,7 @@ PICO_BLOCK_LOOP_FLAGS	?=	-no-align -prefix pico_block_
 PICO_BLOCK_LOOP_ORDER	?=	PICO_BLOCK_OUTER_LOOP_DIMS
 ifeq ($(offload),1)
 PICO_BLOCK_LOOP_MODS	?=	omp nested
-PICO_BLOCK_LOOP_OMP	?=	omp parallel for simd
+PICO_BLOCK_LOOP_OMP	?=	omp parallel for
 PICO_BLOCK_LOOP_FLAGS	+=	-omp '$(PICO_BLOCK_LOOP_OMP)'
 else
 PICO_BLOCK_LOOP_MODS	?=	nested

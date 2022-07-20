@@ -180,8 +180,10 @@ namespace yask {
         isimd_t mi;
         #endif
     };
+    static_assert(std::is_trivially_copyable<real_vec_t_data>::value);
+    static_assert(std::is_aggregate<real_vec_t_data>::value);
 
-    // Type for a vector block.
+    // Type for a SIMD vector w/operator overloading.
     struct real_vec_t {
 
         // union of data types.
@@ -215,11 +217,6 @@ namespace yask {
         }
         ALWAYS_INLINE real_vec_t(long val) {
             operator=(val);
-        }
-
-        // get length.
-        ALWAYS_INLINE int get_num_elems() const {
-            return VLEN;
         }
 
         // copy whole vector.
@@ -270,6 +267,10 @@ namespace yask {
             operator=(real_t(val));
         }
 
+        // get length.
+        ALWAYS_INLINE int get_num_elems() const {
+            return VLEN;
+        }
 
         // access a real_t linearly.
         ALWAYS_INLINE real_t& operator[](idx_t l) {

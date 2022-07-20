@@ -256,8 +256,8 @@ namespace yask {
                                  // mechanism to allow only dirty steps to
                                  // be packed and sent; this would involve
                                  // sending the dirty step
-                                 // indices. Currently, all steps are sent
-                                 // if any is dirty.
+                                 // indices. Currently, all possibly-dirty
+                                 // steps are sent if any is dirty.
                                  if (is_mine_dirty) {
                                      halo_pack_time.start();
                                      for (auto t : si.steps) {
