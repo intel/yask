@@ -255,9 +255,10 @@ namespace yask {
                                  // Pack one step at a time.  TODO: develop
                                  // mechanism to allow only dirty steps to
                                  // be packed and sent; this would involve
-                                 // sending the dirty step
-                                 // indices. Currently, all possibly-dirty
-                                 // steps are sent if any is dirty.
+                                 // sending the dirty step indices and/or a
+                                 // list of sizes. Currently, all
+                                 // possibly-dirty steps are sent if any is
+                                 // dirty.
                                  if (is_mine_dirty) {
                                      halo_pack_time.start();
                                      for (auto t : si.steps) {
@@ -266,9 +267,9 @@ namespace yask {
                                              last.set_val(step_dim, t);
                                          }
                                          TRACE_MSG("exchange_halos:    packing [" << first.make_dim_val_str() <<
-                                                   " ... " << last.make_dim_val_str() << "] " <<
-                                                   (send_vec_ok ? "with" : "without") <<
-                                                   " vector copy into " << (void*)bufp <<
+                                                   " ... " << last.make_dim_val_str() << "] with " <<
+                                                   (send_vec_ok ? "vector" : "scalar") <<
+                                                   " copy into " << (void*)bufp <<
                                                    (use_offload ? " on device" : " on host"));
                                          idx_t nelems = 0;
                                          if (send_vec_ok)
@@ -396,9 +397,9 @@ namespace yask {
                                          }
                                          TRACE_MSG("exchange_halos:    unpacking into [" <<
                                                    first.make_dim_val_str() <<
-                                                   " ... " << last.make_dim_val_str() << "] " <<
-                                                   (recv_vec_ok ? "with" : "without") <<
-                                                   " vector copy from " << (void*)bufp <<
+                                                   " ... " << last.make_dim_val_str() << "] with " <<
+                                                   (recv_vec_ok ? "vector" : "scalar") <<
+                                                   " copy from " << (void*)bufp <<
                                                    (use_offload ? " on device" : " on host"));
                                          idx_t nelems = 0;
                                          if (recv_vec_ok)

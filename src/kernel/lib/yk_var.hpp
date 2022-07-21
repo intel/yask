@@ -1513,6 +1513,9 @@ namespace yask {
             idx_t ni = vec_range[ip];
             vec_range[ip] = 1; // Do whole range in each iter.
 
+            // Inner-loop stride.
+            idx_t si = core_p->_vec_strides[ip];
+
             // Outer loop through each step.
             for (idx_t t = first_t; t <= last_t; t++) {
 
@@ -1531,19 +1534,22 @@ namespace yask {
                     // Run outer loop on device in parallel.
                     _Pragma("omp target teams distribute parallel for device(devn)")
                     for (idx_t j = 0; j < nj; j++) {
+
+                        // Init vars for first point.
                         Indices ofs = vec_range.unlayout(false, j);
                         Indices pt = firstv.add_elements(ofs);
+                        auto* vp = core_p->get_vec_ptr_norm(pt, ti);
+                        idx_t bofs = tofs + j * ni;
 
                         // Inner loop. 
-                        // TODO: use SIMT model for offload.
                         for (idx_t i = 0; i < ni; i++) {
-                            pt[ip] = firstv[ip] + i;
-                            idx_t bofs = tofs + j * ni + i;
                             
                             // Do the copy operation specified in visitor.
-                            Visitor::do_copy(core_p,
-                                             ((real_vec_t*)buffer_ptr), bofs,
-                                             pt, ti);
+                            Visitor::do_copy(((real_vec_t*)buffer_ptr), bofs, vp);
+
+                            // Next point in buffer and var.
+                            vp += si;
+                            bofs++;
                         }
                     }
                     #else
@@ -1557,17 +1563,21 @@ namespace yask {
                 vec_range.visit_all_points_in_parallel
                     (false,
                      [&](const Indices& ofs, size_t idx) {
+
+                         // Init vars for first point.
                          auto pt = firstv.add_elements(ofs);
-                         
+                         auto* vp = core_p->get_vec_ptr_norm(pt, ti);
+                         idx_t bofs = tofs + idx * ni;
+ 
                          // Inner loop.
                          for (idx_t i = 0; i < ni; i++) {
-                             pt[ip] = firstv[ip] + i;
-                             idx_t bofs = tofs + idx * ni + i;
                              
                              // Do the copy operation specified in visitor.
-                             Visitor::do_copy(core_p,
-                                              ((real_vec_t*)buffer_ptr), bofs,
-                                              pt, ti);
+                             Visitor::do_copy(((real_vec_t*)buffer_ptr), bofs, vp);
+                             
+                             // Next point in buffer and var.
+                             vp += si;
+                             bofs++;
                          }
                          return true;    // keep going.
                      });
@@ -1594,15 +1604,14 @@ namespace yask {
             // Could have used a lambda, but this avoids possible conversion to std::function.
             struct SetVec {
                 ALWAYS_INLINE
-                static void do_copy(core_t* cp,
-                                    real_vec_t* p, idx_t pofs,
-                                    const Indices& pt, idx_t ti) {
+                static void do_copy(real_vec_t* p, idx_t pofs,
+                                    real_vec_t* vp) {
                     
                     // Read vec from buffer.
                     real_vec_t val = p[pofs];
                     
                     // Write to var.
-                    cp->write_vec_norm(val, pt, ti);
+                    val.store_to(vp);
                 }
             };
 
@@ -1637,15 +1646,15 @@ namespace yask {
             // Could have used a lambda, but this avoids possible conversion to std::function.
             struct GetVec {
                 ALWAYS_INLINE
-                static void do_copy(core_t* cp,
-                                    real_vec_t* p, idx_t pofs,
-                                    const Indices& pt, idx_t ti) {
+                static void do_copy(real_vec_t* p, idx_t pofs,
+                                    real_vec_t* vp) {
 
                     // Read vec from var.
-                    real_vec_t val = cp->read_vec_norm(pt, ti);
+                    real_vec_t res;
+                    res.load_from(vp);
 
                     // Write to buffer at proper index.
-                    p[pofs] = val;
+                    p[pofs] = res;
                 }
             };
 
