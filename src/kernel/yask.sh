@@ -329,6 +329,12 @@ tag=$stencil.$arch
 make_report="$bindir/../build/yask_kernel.$tag.make-report.txt"
 yc_report="$bindir/../build/yask_kernel.$tag.yask_compiler-report.txt"
 
+# Heuristic to determine if this is an offload kernel.
+is_offload=0
+if [[ $arch =~ "offload" ]]; then
+    is_offload=1
+fi
+
 # Double-check that exe exists.
 if [[ ! -x $exe ]]; then
     echo "error: '$exe' not found or not executable." | tee -a $logfile
@@ -361,9 +367,9 @@ if [[ -n "$host" ]]; then
     done
 fi
 
-# Set OMP threads to number of cores per rank if not already specified and not KNL.
+# Set OMP threads to number of cores per rank if not already specified and not special.
 # TODO: extend to work on multiple nodes.
-if [[ ( $using_opt_outer_threads == 0 ) && ( $arch != "knl" ) ]]; then
+if [[ ( $using_opt_outer_threads == 0 ) && ( $arch != "knl" ) && ( $is_offload == 0) ]]; then
     if command -v lscpu >/dev/null; then
         nsocks=`lscpu | awk -F: '/Socket.s.:/ { print $2 }'`
         ncores=`lscpu | awk -F: '/Core.s. per socket:/ { print $2 }'`
@@ -382,8 +388,8 @@ fi
 # Commands to capture some important system status and config info for benchmark documentation.
 config_cmds="sleep 1; uptime; lscpu; cpuinfo -A; sed '/^$/q' /proc/cpuinfo; cpupower frequency-info; uname -a; $dump /etc/system-release; $dump /proc/cmdline; $dump /proc/meminfo; free -gt; numactl -H; ulimit -a; ipcs -l; env | awk '/YASK/ { print \"env:\", \$1 }'"
 
-# Heuristic to determine if this is an offload kernel.
-if [[ $arch =~ "offload" ]]; then
+# Add settings for offload kernel.
+if [[ $is_offload == 1 ]]; then
     config_cmds+="; clinfo -l";
     if [[ $nranks > 1 ]]; then
         envs+=" I_MPI_OFFLOAD_TOPOLIB=level_zero I_MPI_OFFLOAD=2"
