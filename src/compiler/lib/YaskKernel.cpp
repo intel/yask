@@ -1080,9 +1080,11 @@ namespace yask {
         os << "\n // Dtor.\n"
             " virtual ~" << _context << "() {\n"
             "  STATE_VARS(this);\n"
-            "  make_scratch_vars(0); // Delete any scratch vars.\n"
             "  auto* cxt_cd = &_core_data;\n"
-            "  offload_map_free(cxt_cd, 1);\n"
+            "  offload_map_free(cxt_cd, 1);\n" <<
+            "  auto* tcl = _thread_cores.data();\n"
+            "  auto nt = _thread_cores.size();\n"
+            "  if (tcl && nt) offload_map_free(tcl, nt);\n"
             " }\n";
 
         // New-var method.
@@ -1115,8 +1117,8 @@ namespace yask {
             " // Does not allocate data for vars.\n"
             " // Must call set_core() before this.\n"
             " void make_scratch_vars(int num_threads) override {\n"
-            " STATE_VARS(this);\n"
-            " TRACE_MSG(\"make_scratch_vars(\" << num_threads << \")\");\n"
+            "  STATE_VARS(this);\n"
+            "  TRACE_MSG(\"num threads: \" << num_threads);\n"
             "\n  // Release old device data for thread array.\n"
             "  auto* tcl = _thread_cores.data();\n"
             "  auto old_nt = _thread_cores.size();\n"
@@ -1124,6 +1126,7 @@ namespace yask {
           "\n  // Make new array.\n"
             "  _thread_cores.resize(num_threads);\n"
             "  tcl = num_threads ? _thread_cores.data() : 0;\n"
+            "  TRACE_MSG(\"data at \" << (void*)tcl);\n"
             "  if (tcl)\n"
             "    offload_map_alloc(tcl, num_threads);\n"
             "  _core_data._thread_core_list.set_and_sync(tcl);\n"
