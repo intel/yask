@@ -167,15 +167,19 @@ namespace yask {
             return;
         auto nb = sizeof(T) * num;
         auto devn = KernelEnv::_omp_devn;
-        TRACE_MSG("unmapping " << (void*)hostp << " from " << devp << " on OMP dev " << devn);
-        assert(omp_target_is_present(hostp, devn));
-        assert(get_dev_ptr(hostp) == devp);
-        auto res = omp_target_disassociate_ptr(hostp, devn);
-        if (res)
-            THROW_YASK_EXCEPTION("error: cannot unmap OMP device ptr");
-        TRACE_MSG("freeing " << make_byte_str(nb) << " on OMP dev " << devn);
-        omp_target_free(devp, devn);
-        TRACE_MSG("done unmapping and freeing");
+        if (devp == (void*)hostp)
+            TRACE_MSG("not unmapping " << devp << " because host and OMP dev ptr are same");
+        else {
+            TRACE_MSG("unmapping " << (void*)hostp << " from " << devp << " on OMP dev " << devn);
+            assert(omp_target_is_present(hostp, devn));
+            assert(get_dev_ptr(hostp) == devp);
+            auto res = omp_target_disassociate_ptr(hostp, devn);
+            if (res)
+                THROW_YASK_EXCEPTION("error: cannot unmap OMP device ptr");
+            TRACE_MSG("freeing " << make_byte_str(nb) << " on OMP dev " << devn);
+            omp_target_free(devp, devn);
+            TRACE_MSG("done unmapping and freeing");
+        }
     }
 
     // Unmap 'hostp' on offload device.
