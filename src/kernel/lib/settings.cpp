@@ -337,10 +337,6 @@ namespace yask {
                            "[Debug] Perform halo packs/unpacks/sends/receives. "
                            "Will not give correct results if disabled.",
                            do_halo_exchange));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
-                          ("force_scalar_exchange",
-                           "[Debug] Do not allow vectorized halo exchanges.",
-                           force_scalar_exchange));
         #ifdef USE_OFFLOAD
         parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("use_device_mpi",
@@ -355,6 +351,10 @@ namespace yask {
                            "Otherwise, use the same non-blocking MPI send and receive calls "
                            "that are used between nodes.",
                            use_shm));
+        parser.add_option(make_shared<CommandLineParser::BoolOption>
+                          ("force_scalar_exchange",
+                           "[Debug] Do not allow vectorized halo exchanges.",
+                           force_scalar_exchange));
         #endif
         #endif
         parser.add_option(make_shared<CommandLineParser::BoolOption>
