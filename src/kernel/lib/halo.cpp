@@ -207,8 +207,10 @@ namespace yask {
                                      TRACE_MSG("exchange_halos:    requesting up to " <<
                                                make_byte_str(nbbytes) << " into " << rbuf);
                                      auto& r = var_recv_reqs[ni];
-                                     MPI_Irecv(rbuf, nbbytes, MPI_BYTE,
-                                               neighbor_rank, gi,
+                                     if (nbbytes != int(nbbytes))
+                                         THROW_YASK_EXCEPTION("error: int overflow in MPI_Isend()");
+                                     MPI_Irecv(rbuf, int(nbbytes), MPI_BYTE,
+                                               neighbor_rank, int(gi),
                                                env->comm, &r);
                                      num_recv_reqs++;
                                  }
@@ -313,7 +315,9 @@ namespace yask {
                                      void* sbuf = use_device_mpi ? get_dev_ptr(buf) : buf;
                                      TRACE_MSG("exchange_halos:    sending " << make_byte_str(npbytes) <<
                                                " from " << sbuf);
-                                     MPI_Isend(sbuf, npbytes, MPI_BYTE,
+                                     if (npbytes != int(npbytes))
+                                         THROW_YASK_EXCEPTION("error: int overflow in MPI_Isend()");
+                                     MPI_Isend(sbuf, int(npbytes), MPI_BYTE,
                                                neighbor_rank, int(gi), env->comm, &r);
                                      num_send_reqs++;
                                  }
