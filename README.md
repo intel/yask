@@ -89,7 +89,8 @@ and Intel(R) graphics processors.
     The `-r` and `-sb` options, e.g., `-rx` and `-sbx`, have also been removed.
   - Regarding CPU threads, "region threads" are now referred to as "outer threads",
     and "block threads" are now referred to as "inner threads".
-    The options `-block_threads` and `-thread_divisor` have been removed.
+    The option `-block_threads` is deprecated.
+    The option `-thread_divisor` has been removed.
     See the `-help` documentation for new options `-outer_threads` and `-inner_threads`.
     The `-max_threads` option remains.
   - Only one thread per core is now used by default on most CPU models.

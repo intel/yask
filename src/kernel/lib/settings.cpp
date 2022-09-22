@@ -317,7 +317,7 @@ namespace yask {
         parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("allow_addl_padding",
                            "[Advanced] Allow automatic extension of padding for"
-                           " additional performance on any or all YASK vars",
+                           " additional performance on any or all YASK vars.",
                            _allow_addl_pad));
         #ifdef USE_MPI
         _add_domain_option(parser, "nr", "Num ranks", _num_ranks);
@@ -369,22 +369,25 @@ namespace yask {
                            max_threads));
         parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("outer_threads",
-                           "Number of CPU threads to use in an OpenMP region within each rank. "
+                           "Number of CPU threads to use in the outer OpenMP region. "
+                           "Specifies how many blocks may be executed concurrently within each mega-block. "
                            "Will be restricted to a value less than or equal to "
                            "the maximum number of OpenMP threads specified by -max_threads "
                            "divided by the number specified by -inner_threads. "
-                           "Each thread is used to execute a block of stencils. "
                            "If zero (0), set to the value specified by -max_threads "
                            "divided by the number specified by -inner_threads.",
                            num_outer_threads));
         parser.add_option(make_shared<CommandLineParser::IntOption>
                           ("inner_threads",
-                           "Number of CPU threads to use in a nested OpenMP region within each block. "
+                           "Number of CPU threads to use in each inner (nested) OpenMP region. "
+                           "Specifies how many nano-blocks may be executed concurrently within each micro-block. "
                            "Will be restricted to a value less than or equal to "
                            "the maximum number of OpenMP threads specified by -max_threads. "
-                           "Each thread is used to execute stencils within a nano-block, and "
-                           "nano-blocks are executed in parallel within micro-blocks. "
                            "If zero (0), set to one (1).",
+                           num_inner_threads));
+        parser.add_option(make_shared<CommandLineParser::IntOption>
+                          ("block_threads",
+                           "[Deprecated] Use 'inner_threads' option.",
                            num_inner_threads));
         #ifdef USE_OFFLOAD
         parser.add_option(make_shared<CommandLineParser::IntOption>
@@ -497,32 +500,30 @@ namespace yask {
             "   so the global-domain is equivalent to the single local-domain.\n"
             #endif
             " A 'local-domain' or 'rank-domain' is the work done in one MPI rank.\n"
+            "  Ranks may be evaluated in parallel in separate MPI processes.\n"
             "  The purpose of local-domains is to control the amount of work done in one\n"
             "   entire MPI rank.\n"
-            "  Ranks are evaluated in parallel in separate MPI processes.\n"
             "  Each local-domain is composed of one or more mega-blocks.\n"
             " A 'mega-block' is a sub-division of work within a local-domain.\n"
+            "  Mega-blocks are evaluated sequentially within ranks.\n"
             "  The purpose of mega-blocks is to control the amount of work done across an\n"
             "   entire MPI rank while sharing a large cache.\n"
             "  If using temporal wave-front rank tiling (see mega-block-size guidelines),\n"
             "   then this is the work done in each wave-front rank tile;\n"
             "   else, there is typically only one mega-block the size of the local-domain.\n"
-            "  Mega-blocks are evaluated sequentially within ranks.\n"
             "  Each mega-block is composed of one or more blocks.\n"
             " A 'block' is a sub-division of work within a mega-block.\n"
+            "  Blocks may be evaluated in parallel within mega-blocks.\n"
             "  The purpose of blocking is to provide control over the amount of\n"
-            "   work done by each concurrent OpenMP thread.\n"
-            "  If the number of threads is greater than one (typical),\n"
-            "   then this is the unit of work for one OpenMP thread,\n"
-            "   and blocks are evaluated concurrently within each mega-block;\n"
-            "   else, blocks are evaluated sequentially within each mega-block.\n"
+            "   work done by each outer OpenMP thread.\n"
             "  This is the most commonly-tuned work-size for many stencils, especially\n"
             "   when not using any sort of temporal tiling.\n"
             "  Each block is composed of one or more micro-blocks.\n"
             " A 'micro-block' is a sub-division of work within a block.\n"
+            "  Micro-blocks are evaluated sequentially within blocks.\n"
             "  The purpose of micro-blocking is to allow distinction between the amount\n"
-            "   of work done by a thread (via blocking) and the amount of work done for\n"
-            "   cache locality (via micro-blocking).\n"
+            "   of work done by an outer thread (via blocking) and the amount of work done\n"
+            "   for cache locality (via micro-blocking).\n"
             "  If using temporal wave-front block tiling (see micro-block-size guidelines),\n"
             "   then this is the work done for each wave-front block tile,\n"
             "   and the number temporal steps in the micro-block is always equal\n"
@@ -531,14 +532,14 @@ namespace yask {
             "  If micro-block sizes are not specified, a micro-block is the same size\n"
             "   as a block, and the amount of work done by a thread and the amount of\n"
             "   work done for cache locality is the same.\n"
-            "  Micro-blocks are evaluated sequentially within blocks.\n"
             "  Each micro-block is composed of one or more nano-blocks.\n"
             " A 'nano-block' is a sub-division of work within a micro-block.\n"
-            "  The purpose of nano-blocking is to allow multiple OpenMP threads\n"
+            "  Nano-blocks may be evaluated in parallel within micro-blocks.\n"
+            "  The purpose of nano-blocking is to allow multiple inner OpenMP threads\n"
             "   to cooperatively work on a micro-block, sharing cached values--\n"
             "   this is particularly useful when using hyper-threads on a CPU.\n"
-            "  If the number of block-threads is greater than one,\n"
-            "   then this is the unit of work for one nested OpenMP thread,\n"
+            "  If the number of inner OpenMP threads is greater than one,\n"
+            "   then this is the unit of work for each nested thread,\n"
             "   and nano-blocks are evaluated concurrently within each micro-block;\n"
             "   else, nano-blocks are evaluated sequentially within each micro-block.\n"
             #ifdef USE_OFFLOAD
@@ -548,6 +549,11 @@ namespace yask {
             "  There is no temporal tiling at the nano-block level.\n"
             "  Each nano-block is composed of one or more pico-blocks.\n"
             " A 'pico-block' is a sub-division of work within a nano-block.\n"
+            #ifdef USE_OFFLOAD
+            " Pico-blocks may be evaluated in parallel within nano-blocks on the device.\n"
+            #else
+            " Pico-blocks are evaluated sequentially within nano-blocks.\n"
+            #endif
             "  The purpose of a pico-block is to allow additional cache-locality\n"
             "   at this low level.\n"
             #ifdef USE_OFFLOAD
@@ -556,15 +562,18 @@ namespace yask {
             #endif
             "  There is no temporal tiling at the pico-block level.\n"
             "  Each pico-block is composed of one or more clusters.\n"
-            " A 'cluster' is the work done in each inner-most loop iteration.\n"
+            " A 'cluster' is the work done in each inner-most pico-loop iteration.\n"
+            "  Clusters are evaluated sequentially within pico-blocks.\n"
             "  The purpose of clustering is to allow more than one vector of\n"
             "   work to be done in each loop iteration, useful for very simple stencils.\n"
             "  Each cluster is composed of one or more vectors.\n"
             " A 'vector' is typically the work done by a SIMD instruction.\n"
+            "  Vectors are evaluated sequentially within clusters.\n"
             "  A 'folded vector' contains points in more than one dimension.\n"
             "  The size of a vector is typically that of a SIMD register.\n"
             "  Each vector is composed of one or more points.\n"
             " A 'point' is a single floating-point (FP) element in a grid.\n"
+            "  Points may be evaluated in parallel within vectors.\n"
             "  This binary uses " << REAL_BYTES << "-byte FP elements.\n"
             "\n"
             "Guidelines for setting work-sizes and their defaults:\n"
