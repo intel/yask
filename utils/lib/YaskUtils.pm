@@ -274,6 +274,8 @@ sub getResultsFromLine($$) {
   $line =~ s/sub([_-])bl/nano${1}bl/g;
   $line =~ s/region/mega-block/g;
   $line =~ s/minimum-padding/min-padding/g;
+  $line =~ s/Num threads per region/num outer threads/g;
+  $line =~ s/Num threads per block/num inner threads/g;
   
   # special cases for manual parsing...
 

@@ -268,8 +268,7 @@ while true; do
         opts+=" $@"
         break
 
-    elif [[ ( "$1" == "-block_threads" ) ||  \
-                ( "$1" == "-thread_divisor" ) ]]; then
+    elif [[ "$1" == "-thread_divisor" ]]; then
         echo "Option '$1' is no longer supported."
         echo "Use '-max_threads', '-outer_threads', and/or '-inner_threads'."
         exit 1

@@ -512,6 +512,16 @@ int main(int argc, char** argv)
             double sd_pps = sqrt(var_pps);
             
             os << div_line <<
+                "Throughput stats across trials:\n"
+                " num-trials:                          " << n << endl <<
+                " min-throughput (num-points/sec):     " << make_num_str(min_pps) << endl <<
+                " max-throughput (num-points/sec):     " << make_num_str(max_pps) << endl <<
+                " ave-throughput (num-points/sec):     " << make_num_str(ave_pps) << endl;
+                if (n > 2)
+                    os << 
+                        " std-dev-throughput (num-points/sec): " << make_num_str(sd_pps) << endl;
+            os <<
+                div_line <<
                 "Performance stats of best trial:\n"
                 " best-num-steps-done:              " << best_trial->nsteps << endl <<
                 " best-elapsed-time (sec):          " << make_num_str(best_trial->run_time) << endl <<
@@ -526,16 +536,7 @@ int main(int argc, char** argv)
                 " mid-throughput (num-reads/sec):   " << make_num_str(mid_trial->reads_ps) << endl <<
                 " mid-throughput (num-writes/sec):  " << make_num_str(mid_trial->writes_ps) << endl <<
                 " mid-throughput (est-FLOPS):       " << make_num_str(mid_trial->flops) << endl <<
-                " mid-throughput (num-points/sec):  " << make_num_str(mid_trial->pts_ps) << endl <<
-                div_line <<
-                "Performance stats across trials:\n"
-                " num-trials:                          " << n << endl <<
-                " min-throughput (num-points/sec):     " << make_num_str(min_pps) << endl <<
-                " max-throughput (num-points/sec):     " << make_num_str(max_pps) << endl <<
-                " ave-throughput (num-points/sec):     " << make_num_str(ave_pps) << endl;
-            if (n > 2)
-                os << 
-                    " std-dev-throughput (num-points/sec): " << make_num_str(sd_pps) << endl;
+                " mid-throughput (num-points/sec):  " << make_num_str(mid_trial->pts_ps) << endl;
             os << div_line <<
                 "Notes:\n";
             if (n == 1)
