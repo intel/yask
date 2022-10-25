@@ -57,6 +57,12 @@ namespace yask {
         IdxTuple bb_end_tuple(const IdxTuple& ddims) const {
             return bb_end.make_tuple(ddims);
         }
+        IdxTuple bb_last_tuple(const IdxTuple& ddims) const {
+            auto res = bb_end.make_tuple(ddims);
+            DOMAIN_VAR_LOOP(i, j)
+                res[j] = res[j] - 1;
+            return res;
+        }
         IdxTuple bb_len_tuple(const IdxTuple& ddims) const {
             return bb_len.make_tuple(ddims);
         }
@@ -650,7 +656,7 @@ namespace yask {
         virtual yk_var_ptr
         new_fixed_size_var(const std::string& name,
                              const std::initializer_list<std::string>& dims,
-                             const std::initializer_list<idx_t>& dim_sizes) {
+                             const idx_t_init_list& dim_sizes) {
             VarDimNames dims2(dims);
             VarDimSizes sizes2(dim_sizes);
             return new_fixed_size_var(name, dims2, sizes2);
@@ -664,17 +670,14 @@ namespace yask {
             STATE_VARS_CONST(this);
             return dims->_domain_dims.get_num_dims();
         }
-        virtual std::vector<std::string> get_domain_dim_names() const {
+        virtual string_vec get_domain_dim_names() const {
             STATE_VARS_CONST(this);
             return domain_dims.get_dim_names();
         }
-        virtual std::vector<std::string> get_misc_dim_names() const {
+        virtual string_vec get_misc_dim_names() const {
             STATE_VARS_CONST(this);
             return misc_dims.get_dim_names();
         }
-
-        virtual idx_t get_first_rank_domain_index(const std::string& dim) const;
-        virtual idx_t get_last_rank_domain_index(const std::string& dim) const;
 
         virtual void run_solution(idx_t first_step_index,
                                   idx_t last_step_index);
@@ -684,23 +687,31 @@ namespace yask {
         virtual void fuse_vars(yk_solution_ptr other);
 
         // APIs that access settings.
-        virtual void set_overall_domain_size(const std::string& dim, idx_t size);
-        virtual void set_rank_domain_size(const std::string& dim, idx_t size);
-        virtual void set_min_pad_size(const std::string& dim, idx_t size);
-        virtual void set_block_size(const std::string& dim, idx_t size);
-        virtual void set_mega_block_size(const std::string& dim, idx_t size);
-        virtual void set_num_ranks(const std::string& dim, idx_t size);
-        virtual void set_rank_index(const std::string& dim, idx_t size);
-        virtual idx_t get_overall_domain_size(const std::string& dim) const;
-        virtual idx_t get_rank_domain_size(const std::string& dim) const;
-        virtual idx_t get_min_pad_size(const std::string& dim) const;
-        virtual idx_t get_block_size(const std::string& dim) const;
-        virtual idx_t get_mega_block_size(const std::string& dim) const;
-        virtual idx_t get_num_ranks(const std::string& dim) const;
-        virtual idx_t get_rank_index(const std::string& dim) const;
+        #define GET_SOLN_API(api_name) \
+            virtual idx_t get_ ## api_name (const std::string& dim) const; \
+            virtual idx_t_vec get_ ## api_name ## _vec() const;
+        #define SET_SOLN_API(api_name) \
+            virtual void set_ ## api_name (const std::string& dim, idx_t size); \
+            virtual void set_ ## api_name ## _vec(const idx_t_vec& vals); \
+            virtual void set_ ## api_name ## _vec(const idx_t_init_list& vals);
+        #define SOLN_API(api_name) \
+            GET_SOLN_API(api_name) \
+            SET_SOLN_API(api_name)
+        SOLN_API(num_ranks)
+        SOLN_API(rank_index)
+        SOLN_API(overall_domain_size)
+        SOLN_API(rank_domain_size)
+        SOLN_API(block_size)
+        SOLN_API(min_pad_size)
+        GET_SOLN_API(first_rank_domain_index)
+        GET_SOLN_API(last_rank_domain_index)
+        #undef SOLN_API
+        #undef SET_SOLN_API
+        #undef GET_SOLN_API
+
         virtual std::string apply_command_line_options(const std::string& args);
         virtual std::string apply_command_line_options(int argc, char* argv[]);
-        virtual std::string apply_command_line_options(const std::vector<std::string>& args);
+        virtual std::string apply_command_line_options(const string_vec& args);
         virtual bool get_step_wrap() const {
             STATE_VARS(this);
             return actl_opts->_step_wrap;

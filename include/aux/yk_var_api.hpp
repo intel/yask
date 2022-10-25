@@ -208,7 +208,7 @@ namespace yask {
            This may include domain, step, and/or miscellaneous dimensions.
            @returns List of names of all the dimensions.
         */
-        virtual std::vector<std::string>
+        virtual string_vec
         get_dim_names() const =0;
 
         /// Determine whether specified dimension exists in this var.
@@ -466,16 +466,16 @@ namespace yask {
            `dim` in the var; `false` otherwise.
         */
         virtual bool
-        are_indices_local(const std::vector<idx_t>& indices
+        are_indices_local(const idx_t_vec& indices
                           /**< [in] List of indices, one for each var dimension. */ ) const =0;
 
 #ifndef SWIG
         /// Determine whether the given indices refer to an accessible element in this rank.
         /**
-           See get_last_misc_index().
+           See are_indices_local().
         */
         virtual bool
-        are_indices_local(const std::initializer_list<idx_t>& indices
+        are_indices_local(const idx_t_init_list& indices
                           /**< [in] List of indices, one for each var dimension. */ ) const =0;
 #endif
 
@@ -489,7 +489,7 @@ namespace yask {
            @returns value in var at given indices.
         */
         virtual double
-        get_element(const std::vector<idx_t>& indices
+        get_element(const idx_t_vec& indices
                     /**< [in] List of indices, one for each var dimension. */ ) const =0;
 
 #ifndef SWIG
@@ -499,7 +499,7 @@ namespace yask {
            @returns value in var at given indices.
         */
         virtual double
-        get_element(const std::initializer_list<idx_t>& indices
+        get_element(const idx_t_init_list& indices
                     /**< [in] List of indices, one for each var dimension. */ ) const =0;
 #endif
 
@@ -525,7 +525,7 @@ namespace yask {
         */
         virtual idx_t
         set_element(double val /**< [in] Element in var will be set to this. */,
-                    const std::vector<idx_t>& indices
+                    const idx_t_vec& indices
                     /**< [in] List of indices, one for each var dimension. */,
                     bool strict_indices = true
                     /**< [in] If true, indices must be within domain or padding.
@@ -540,7 +540,7 @@ namespace yask {
         */
         virtual idx_t
         set_element(double val /**< [in] Element in var will be set to this. */,
-                    const std::initializer_list<idx_t>& indices
+                    const idx_t_init_list& indices
                     /**< [in] List of indices, one for each var dimension. */,
                     bool strict_indices = true
                     /**< [in] If true, indices must be within domain or padding.
@@ -569,9 +569,9 @@ namespace yask {
         virtual idx_t
         get_elements_in_slice(void* buffer_ptr
                               /**< [out] Pointer to buffer where values will be written. */,
-                              const std::vector<idx_t>& first_indices
+                              const idx_t_vec& first_indices
                               /**< [in] List of initial indices, one for each var dimension. */,
-                              const std::vector<idx_t>& last_indices
+                              const idx_t_vec& last_indices
                               /**< [in] List of final indices, one for each var dimension. */ ) const =0;
 
         /// Atomically add to the value of one var element.
@@ -592,7 +592,7 @@ namespace yask {
         */
         virtual idx_t
         add_to_element(double val /**< [in] This value will be added to element in var. */,
-                       const std::vector<idx_t>& indices
+                       const idx_t_vec& indices
                        /**< [in] List of indices, one for each var dimension. */,
                        bool strict_indices = true
                        /**< [in] If true, indices must be within domain or padding.
@@ -607,7 +607,7 @@ namespace yask {
         */
         virtual idx_t
         add_to_element(double val /**< [in] This value will be added to element in var. */,
-                       const std::initializer_list<idx_t>& indices
+                       const idx_t_init_list& indices
                        /**< [in] List of indices, one for each var dimension. */,
                        bool strict_indices = true
                        /**< [in] If true, indices must be within domain or padding.
@@ -643,9 +643,9 @@ namespace yask {
         */
         virtual idx_t
         set_elements_in_slice_same(double val /**< [in] All elements in the slice will be set to this. */,
-                                   const std::vector<idx_t>& first_indices
+                                   const idx_t_vec& first_indices
                                    /**< [in] List of initial indices, one for each var dimension. */,
-                                   const std::vector<idx_t>& last_indices
+                                   const idx_t_vec& last_indices
                                    /**< [in] List of final indices, one for each var dimension. */,
                                    bool strict_indices = true
                                    /**< [in] If true, indices must be within domain or padding.
@@ -675,9 +675,9 @@ namespace yask {
         virtual idx_t
         set_elements_in_slice(const void* buffer_ptr
                               /**< [out] Pointer to buffer where values will be read. */,
-                              const std::vector<idx_t>& first_indices
+                              const idx_t_vec& first_indices
                               /**< [in] List of initial indices, one for each var dimension. */,
-                              const std::vector<idx_t>& last_indices
+                              const idx_t_vec& last_indices
                               /**< [in] List of final indices, one for each var dimension. */ ) =0;
 
 #ifdef COPY_SLICE_IMPLEMENTED
@@ -698,13 +698,13 @@ namespace yask {
         virtual idx_t
         set_elements_in_slice(const yk_var_ptr source
                               /**< [in] Var from which elements will be read. */,
-                              const std::vector<idx_t>& first_source_indices
+                              const idx_t_vec& first_source_indices
                               /**< [in] List of starting indices in the source var,
                                  one for each var dimension. */,
-                              const std::vector<idx_t>& first_target_indices
+                              const idx_t_vec& first_target_indices
                               /**< [in] List of starting indices in this (target) var,
                                  one for each var dimension. */,
-                              const std::vector<idx_t>& last_target_indices
+                              const idx_t_vec& last_target_indices
                               /**< [in] List of final indices in this (target) var,
                                  one for each var dimension. */ ) =0;
 #endif
@@ -715,7 +715,7 @@ namespace yask {
            @returns A string containing the var name and the index values.
         */
         virtual std::string
-        format_indices(const std::vector<idx_t>& indices
+        format_indices(const idx_t_vec& indices
                        /**< [in] List of indices, one for each var dimension. */ ) const =0;
 
 #ifndef SWIG
@@ -725,7 +725,7 @@ namespace yask {
            @returns A string containing the var name and the index values.
         */
         virtual std::string
-        format_indices(const std::initializer_list<idx_t>& indices
+        format_indices(const idx_t_init_list& indices
                        /**< [in] List of indices, one for each var dimension. */ ) const =0;
 #endif
 
@@ -1090,33 +1090,6 @@ namespace yask {
            returns `true` or NULL otherwise.
         */
         virtual void* get_raw_storage_buffer() =0;
-
-        /* Deprecated APIs for yk_var found below should be avoided. */
-
-        /// **[Deprecated]** Use are_indices_local().
-        YASK_DEPRECATED
-        inline bool
-        is_element_allocated(const std::vector<idx_t>& indices
-                             /**< [in] List of indices, one for each var dimension. */ ) const {
-            return are_indices_local(indices);
-        }
-
-#ifndef SWIG
-        /// **[Deprecated]** Use are_indices_local().
-        YASK_DEPRECATED
-        inline bool
-        is_element_allocated(const std::initializer_list<idx_t>& indices
-                             /**< [in] List of indices, one for each var dimension. */ ) const {
-            return are_indices_local(indices);
-        }
-#endif
-
-        /// **[Deprecated]** Use fuse_vars().
-        YASK_DEPRECATED
-        inline void
-        fuse_grids(yk_var_ptr source) {
-            fuse_vars(source);
-        }
 
     }; // yk_var.
 

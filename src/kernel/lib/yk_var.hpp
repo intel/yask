@@ -1758,7 +1758,7 @@ namespace yask {
             return gb().get_dim_name(n);
         }
         virtual VarDimNames get_dim_names() const {
-            std::vector<std::string> dims(get_num_dims());
+            string_vec dims(get_num_dims());
             for (int i = 0; i < get_num_dims(); i++)
                 dims.at(i) = get_dim_name(i);
             return dims;
@@ -1877,7 +1877,7 @@ namespace yask {
             const Indices indices2(indices);
             return format_indices(indices2);
         }
-        virtual std::string format_indices(const std::initializer_list<idx_t>& indices) const {
+        virtual std::string format_indices(const idx_t_init_list& indices) const {
             const Indices indices2(indices);
             return format_indices(indices2);
         }
@@ -1887,7 +1887,7 @@ namespace yask {
             const Indices indices2(indices);
             return are_indices_local(indices2);
         }
-        virtual bool are_indices_local(const std::initializer_list<idx_t>& indices) const {
+        virtual bool are_indices_local(const idx_t_init_list& indices) const {
             const Indices indices2(indices);
             return are_indices_local(indices2);
         }
@@ -1897,7 +1897,7 @@ namespace yask {
             const Indices indices2(indices);
             return get_element(indices2);
         }
-        virtual double get_element(const std::initializer_list<idx_t>& indices) const {
+        virtual double get_element(const idx_t_init_list& indices) const {
             const Indices indices2(indices);
             return get_element(indices2);
         }
@@ -1926,7 +1926,7 @@ namespace yask {
             return set_element(val, indices2, strict_indices);
         }
         virtual idx_t set_element(double val,
-                                  const std::initializer_list<idx_t>& indices,
+                                  const idx_t_init_list& indices,
                                   bool strict_indices = false) {
             const Indices indices2(indices);
             return set_element(val, indices2, strict_indices);
@@ -1941,7 +1941,7 @@ namespace yask {
             return add_to_element(val, indices2, strict_indices);
         }
         virtual idx_t add_to_element(double val,
-                                     const std::initializer_list<idx_t>& indices,
+                                     const idx_t_init_list& indices,
                                      bool strict_indices = false) {
             const Indices indices2(indices);
             return add_to_element(val, indices2, strict_indices);

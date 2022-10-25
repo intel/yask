@@ -76,6 +76,19 @@ namespace yask {
     /** Index types are signed to allow negative indices in padding/halos. */
     typedef YASK_INT64_T idx_t;
 
+    /// Vector of indices.
+    typedef std::vector<idx_t> idx_t_vec;
+
+    /// Initializer list of indices.
+    /**
+       @note This type is not available in the Python API.
+       Use `idx_t_vec` instead.
+    */
+    typedef std::initializer_list<idx_t> idx_t_init_list;
+
+    /// Vector of strings.
+    typedef std::vector<std::string> string_vec;
+
     // Forward declarations of class-pointers.
 
     class yask_output;

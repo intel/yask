@@ -158,7 +158,7 @@ namespace yask {
         }
 
         // Return all dim names.
-        const std::vector<std::string> get_dim_names() const;
+        const string_vec get_dim_names() const;
 
         // Get iteratable contents.
         const std::vector<Scalar<T>>& get_dims() const {
@@ -231,6 +231,14 @@ namespace yask {
         }
         T& operator[](int i) {
             return get_val(i);
+        }
+
+        // Return values in range of dim posns (all must exist).
+        std::vector<T> get_vals(int start, int num) const {
+            std::vector<T> res(num, 0);
+            for (int i = 0; i < num; i++)
+                res[i] = get_val(start + i);
+            return res;
         }
 
         ////// Methods to get things by name.
@@ -377,6 +385,23 @@ namespace yask {
             va_start(args, num_vals);
             set_vals<T2>(num_vals, args);
             va_end(args);
+        }
+
+        // Set values from starting point; positions must exist.
+        // Values before start or after size of vals are unchanged.
+        void set_vals(int start, const std::vector<T>& vals) {
+            int i = 0;
+            for (auto v : vals) {
+                set_val(i + start, v);
+                i++;
+            }
+        }
+        void set_vals(int start, const std::initializer_list<T>& vals) {
+            int i = 0;
+            for (auto v : vals) {
+                set_val(i + start, v);
+                i++;
+            }
         }
 
         // Copy 'this', then add dims and values from 'rhs' that are NOT

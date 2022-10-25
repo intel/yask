@@ -284,7 +284,7 @@ namespace yask {
             assert(dp);
             return dp->_get_name();
         }
-        virtual std::vector<std::string> get_dim_names() const;
+        virtual string_vec get_dim_names() const;
         virtual bool
         is_dynamic_step_alloc() const {
             return !_is_step_alloc_fixed;

@@ -732,7 +732,7 @@ namespace yask {
            in the \ref yc_solution.
            @returns List of names of all the dimensions used in this var.
         */
-        virtual std::vector<std::string>
+        virtual string_vec
         get_dim_names() const =0;
 
         /// Create a reference to a point in this var.

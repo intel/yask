@@ -138,7 +138,7 @@ namespace yask {
            that were defined by yc_node_factory::new_domain_index()
            and used in one or more vars.
         */
-        virtual std::vector<std::string>
+        virtual string_vec
         get_domain_dim_names() const =0;
 
         /// Get all the miscellaneous dimension names.
@@ -150,7 +150,7 @@ namespace yask {
            * Created at run-time by adding a new dimension
            via yk_solution::new_var() or yk_solution::new_fixed_size_var().
         */
-        virtual std::vector<std::string>
+        virtual string_vec
         get_misc_dim_names() const =0;
 
         /// Set the local-domain size in the specified dimension, i.e., the size of the part of the domain that is in this rank.
@@ -170,10 +170,9 @@ namespace yask {
            each dimension.
 
            You should set either the local-domain size or the global-domain size
-           in each dimension. The unspecified (zero) sizes will be calculated based on the 
+           in each dimension; the other should be set to zero (unspecified).
+           The unspecified (zero) sizes will be calculated based on the 
            specified ones when prepare_solution() is called.
-           Setting the local-domain size to a non-zero value will clear the
-           global-domain size in that dimension until prepare_solution() is called.
 
            See the "Detailed Description" for \ref yk_var for more information on var sizes.
         */
@@ -183,12 +182,29 @@ namespace yask {
                                 the names from get_domain_dim_names(). */,
                              idx_t size /**< [in] Elements in the domain in this `dim`. */ ) =0;
 
+        /// Set the local-domain size in all domain dimensions.
+        /**
+           See set_rank_domain_size().
+        */
+        virtual void
+        set_rank_domain_size_vec(const idx_t_vec& vals
+                             /**< [in] Elements in all domain dims. */) = 0;
+
+        #ifndef SWIG
+        /// Set the local-domain size in all domain dimensions.
+        /**
+           See set_rank_domain_size().
+        */
+        virtual void
+        set_rank_domain_size_vec(const idx_t_init_list& vals
+                             /**< [in] Elements in all domain dims. */) = 0;
+        #endif
+
         /// Get the local-domain size in the specified dimension, i.e., the size in this rank.
         /**
            See documentation for set_rank_domain_size().
 
-           If you have called set_overall_domain_size() in a given dimension,
-           get_rank_domain_size() will return zero in that dimension until
+           @note get_rank_domain_size() may return zero in a dimension until
            prepare_solution() is called. After prepare_solution() is called,
            the computed size will be returned.
 
@@ -199,13 +215,20 @@ namespace yask {
                              /**< [in] Name of dimension to get.  Must be one of
                                 the names from get_domain_dim_names(). */) const =0;
 
+        /// Get the local-domain size in all domain dimensions.
+        /**
+           See get_rank_domain_size().
+           @returns Vector of current setting of rank domain sizes.
+        */
+        virtual idx_t_vec
+        get_rank_domain_size_vec() const =0;
+
         /// Get the global-domain size in the specified dimension, i.e., the total size across all MPI ranks.
         /**
            You should set either the local-domain size or the global-domain size
-           in each dimension. The unspecified (zero) sizes will be calculated based on the 
+           in each dimension; the other should be set to zero (unspecified).
+           The unspecified (zero) sizes will be calculated based on the 
            specified ones when prepare_solution() is called.
-           Setting the global-domain size to a non-zero value will clear the
-           local-domain size in that dimension until prepare_solution() is called.
 
            See documentation for set_rank_domain_size().
            See the "Detailed Description" for \ref yk_var for more information on var sizes.
@@ -216,6 +239,24 @@ namespace yask {
                                    the names from get_domain_dim_names(). */,
                                 idx_t size /**< [in] Elements in the domain in this `dim`. */ ) =0;
 
+        /// Set the global-domain size in all domain dimensions.
+        /**
+           See set_overall_domain_size().
+        */
+        virtual void
+        set_overall_domain_size_vec(const idx_t_vec& vals
+                                    /**< [in] Elements in all domain dims. */) = 0;
+
+        #ifndef SWIG
+        /// Set the global-domain size in all domain dimensions.
+        /**
+           See set_overall_domain_size().
+        */
+        virtual void
+        set_overall_domain_size_vec(const idx_t_init_list& vals
+                                    /**< [in] Elements in all domain dims. */) = 0;
+        #endif
+
         /// Get the global-domain size in the specified dimension, i.e., the total size across all MPI ranks.
         /**
            The global-domain indices in the specified dimension will range from
@@ -223,8 +264,7 @@ namespace yask {
            Call get_first_rank_domain_index() and get_last_rank_domain_index()
            to find the subset of this domain in each rank.
 
-           If you have called set_rank_domain_size() in a given dimension,
-           get_overall_domain_size() will return zero in that dimension until
+           @note get_overall_domain_size() may return zero in a dimension until
            prepare_solution() is called. After prepare_solution() is called,
            the computed size will be returned.
 
@@ -234,6 +274,15 @@ namespace yask {
         get_overall_domain_size(const std::string& dim
                                 /**< [in] Name of dimension to get.  Must be one of
                                    the names from get_domain_dim_names(). */ ) const =0;
+
+        /// Get the global-domain size in all domain dimensions.
+        /**
+           See get_overall_domain_size().
+
+           @returns Vector of current setting of global domain sizes.
+        */
+        virtual idx_t_vec
+        get_overall_domain_size_vec() const =0;
 
         /// Set the block size in the given dimension.
         /**
@@ -264,6 +313,32 @@ namespace yask {
                        idx_t size
                        /**< [in] Elements in a block in this `dim`. */ ) =0;
 
+        /// Set the block size in all domain dimensions.
+        /**
+           See set_block_size().
+
+           @note Does _not_ set the block size in the step dim.
+           Call set_block_size() with the name of the step dim to set the
+           temporal block size.
+        */
+        virtual void
+        set_block_size_vec(const idx_t_vec& vals
+                           /**< [in] Elements in all domain dims. */) = 0;
+
+        #ifndef SWIG
+        /// Set the block size in all domain dimensions.
+        /**
+           See set_block_size().
+
+           @note Does _not_ set the block size in the step dim.
+           Call set_block_size() with the name of the step dim to set the
+           temporal block size.
+        */
+        virtual void
+        set_block_size_vec(const idx_t_init_list& vals
+                           /**< [in] Elements in all domain dims. */) = 0;
+        #endif
+
         /// Get the block size.
         /**
            Returned value may be slightly larger than the value provided
@@ -275,6 +350,19 @@ namespace yask {
                         /**< [in] Name of dimension to get.  Must be one of
                            the names from get_step_dim_name() or
                            get_domain_dim_names(). */) const =0;
+
+        /// Get the block size in all domain dimensions.
+        /**
+           See get_block_size().
+
+           @note Does _not_ return the block size in the step domain.
+           Call get_block_size() with the name of the step-domain dimension
+           to get the temporal block size.
+
+           @returns Vector of current setting of block domain sizes.
+        */
+        virtual idx_t_vec
+        get_block_size_vec() const =0;
 
         /// Set the number of MPI ranks in the given dimension.
         /**
@@ -310,14 +398,44 @@ namespace yask {
                          the names from get_domain_dim_names(). */,
                       idx_t num /**< [in] Number of ranks in `dim`. */ ) =0;
 
+        /// Set the number of MPI ranks in all domain dimensions.
+        /**
+           See set_num_ranks().
+        */
+        virtual void
+        set_num_ranks_vec(const idx_t_vec& vals
+                          /**< [in] Number of ranks in all domain dims. */) = 0;
+
+        #ifndef SWIG
+        /// Set the number of all MPI ranks in all domain dimensions.
+        /**
+           See set_num_ranks().
+        */
+        virtual void
+        set_num_ranks_vec(const idx_t_init_list& vals
+                          /**< [in] Number of ranks in all domain dims. */) = 0;
+        #endif
+
         /// Get the number of MPI ranks in the given dimension.
         /**
-           @returns Current setting of rank size.
+           @note get_num_ranks() may return zero in a dimension until
+           prepare_solution() is called. After prepare_solution() is called,
+           the computed number of ranks will be returned.
+
+           @returns Current number of ranks.
         */
         virtual idx_t
         get_num_ranks(const std::string& dim
                       /**< [in] Name of dimension to get.  Must be one of
                          the names from get_domain_dim_names(). */) const =0;
+
+        /// Get the number of MPI ranks in all domain dimensions.
+        /**
+           See get_num_ranks();
+           @returns Vector of current number of ranks in all domain dimensions.
+        */
+        virtual idx_t_vec
+        get_num_ranks_vec() const =0;
 
         /// Set the rank index in the specified dimension.
         /**
@@ -340,12 +458,34 @@ namespace yask {
            </table>
 
            See yk_env::get_num_ranks() and yk_env::get_rank_index() for MPI rank index.
+
+           @note get_rank_index() may return zero in a dimension until
+           prepare_solution() is called. After prepare_solution() is called,
+           the computed index will be returned.
         */
         virtual void
         set_rank_index(const std::string& dim
                        /**< [in] Name of dimension to set.  Must be one of
                           the names from get_domain_dim_names(). */,
                        idx_t num /**< [in] Rank index in `dim`. */ ) =0;
+
+        /// Set the rank index in all domain dimensions.
+        /**
+           See set_rank_index().
+        */
+        virtual void
+        set_rank_index_vec(const idx_t_vec& vals
+                           /**< [in] Index of this rank in all domain dims. */) = 0;
+
+        #ifndef SWIG
+        /// Set the rank index in all domain dimensions.
+        /**
+           See set_rank_index().
+        */
+        virtual void
+        set_rank_index_vec(const idx_t_init_list& vals
+                           /**< [in] Index of this rank in all domain dims. */) = 0;
+        #endif
 
         /// Get the rank index in the specified dimension.
         /**
@@ -357,6 +497,14 @@ namespace yask {
         get_rank_index(const std::string& dim
                        /**< [in] Name of dimension to get.  Must be one of
                          the names from get_domain_dim_names(). */ ) const =0;
+
+        /// Get the rank index in all domain dimensions.
+        /**
+           See get_rank_index();
+           @returns Vector of zero-based indices of this rank in all domain dimensions.
+        */
+        virtual idx_t_vec
+        get_rank_index_vec() const =0;
 
         /// Set kernel options from a string.
         /**
@@ -396,7 +544,7 @@ namespace yask {
            @returns Any parts of `args` that were not recognized by the parser as options.
         */
         virtual std::string
-        apply_command_line_options(const std::vector<std::string>& args) =0;
+        apply_command_line_options(const string_vec& args) =0;
 
         /// Get the number of vars in the solution.
         /**
@@ -455,6 +603,14 @@ namespace yask {
                                     /**< [in] Name of dimension to get.  Must be one of
                                        the names from get_domain_dim_names(). */ ) const =0;
 
+        /// Get the first index of the sub-domain in this rank in all domain dimensions.
+        /**
+           See get_first_rank_domain_index().
+           @returns Vector of first domain indices of this rank in all domain dimensions.
+        */
+        virtual idx_t_vec
+        get_first_rank_domain_index_vec() const =0;
+
         /// Get the last index of the sub-domain in this rank the specified dimension.
         /**
            This returns the last *overall* index within the domain in this rank
@@ -473,6 +629,14 @@ namespace yask {
         get_last_rank_domain_index(const std::string& dim
                                    /**< [in] Name of dimension to get.  Must be one of
                                       the names from get_domain_dim_names(). */ ) const =0;
+
+        /// Get the last index of the sub-domain in this rank in all domain dimensions.
+        /**
+           See get_last_rank_domain_index().
+           @returns Vector of last domain indices of this rank in all domain dimensions.
+        */
+        virtual idx_t_vec
+        get_last_rank_domain_index_vec() const =0;
 
         /// Run the stencil solution for the specified steps.
         /**
@@ -744,7 +908,7 @@ namespace yask {
         new_var(const std::string& name
                  /**< [in] Name of the var; must be unique
                     within the solution. */,
-                 const std::vector<std::string>& dims
+                 const string_vec& dims
                  /**< [in] List of names of all dimensions.
                     Names must be valid C++ identifiers and
                     not repeated within this var. */ ) =0;
@@ -819,11 +983,11 @@ namespace yask {
         new_fixed_size_var(const std::string& name
                        /**< [in] Name of the var; must be unique
                           within the solution. */,
-                       const std::vector<std::string>& dims
+                       const string_vec& dims
                        /**< [in] List of names of all dimensions.
                           Names must be valid C++ identifiers and
                           not repeated within this var. */,
-                       const std::vector<idx_t>& dim_sizes
+                       const idx_t_vec& dim_sizes
                        /**< [in] Initial allocation in each dimension.
                           Must be exatly one size for each dimension. */ ) =0;
 
@@ -843,7 +1007,7 @@ namespace yask {
                        /**< [in] List of names of all dimensions.
                           Names must be valid C++ identifiers and
                           not repeated within this var. */,
-                       const std::initializer_list<idx_t>& dim_sizes
+                       const idx_t_init_list& dim_sizes
                        /**< [in] Initial allocation in each dimension.
                           Must be exatly one size for each dimension. */ ) =0;
 #endif
@@ -998,7 +1162,7 @@ namespace yask {
         YASK_DEPRECATED
         inline yk_var_ptr
         new_grid(const std::string& name,
-                 const std::vector<std::string>& dims) {
+                 const string_vec& dims) {
             return new_var(name, dims);
         }
 
@@ -1016,8 +1180,8 @@ namespace yask {
         YASK_DEPRECATED
         inline yk_var_ptr
         new_fixed_size_grid(const std::string& name,
-                            const std::vector<std::string>& dims,
-                            const std::vector<idx_t>& dim_sizes) {
+                            const string_vec& dims,
+                            const idx_t_vec& dim_sizes) {
             return new_fixed_size_var(name, dims, dim_sizes);
         }
 
@@ -1027,7 +1191,7 @@ namespace yask {
         inline yk_var_ptr
         new_fixed_size_grid(const std::string& name,
                             const std::initializer_list<std::string>& dims,
-                            const std::vector<idx_t>& dim_sizes) {
+                            const idx_t_vec& dim_sizes) {
             return new_fixed_size_var(name, dims, dim_sizes);
         }
 #endif

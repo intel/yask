@@ -52,35 +52,60 @@ int main() {
         // Show output only from last rank.
         // This is an example of using the rank APIs,
         // the yask_output_factory, and set_debug_output().
-        ostream* osp = &cout;
         int rank_num = env->get_rank_index();
         if (rank_num < env->get_num_ranks() - 1) {
-            yask_output_factory ofac;
-            auto null_out = ofac.new_null_output();
-            yk_env::set_debug_output(null_out);
-            osp = &null_out->get_ostream();
+            yk_env::disable_debug_output();
             cout << "Suppressing output on rank " << rank_num << ".\n";
         }
         else
             cout << "Following information from rank " << rank_num << ".\n";
-        ostream& os = *osp;
+        ostream& os = yk_env::get_debug_output()->get_ostream();
 
         // Init solution settings.
         auto soln_dims = soln->get_domain_dim_names();
+        int i = 0;
         for (auto dim_name : soln_dims) {
+            os << "Setting solution dim '" << dim_name << "'...\n";
 
             // Set domain size in each dim.
-            soln->set_overall_domain_size(dim_name, 128);
+            idx_t dsize = 128 + i * 32;
+            soln->set_overall_domain_size(dim_name, dsize);
+
+            // Check that vec API returns same.
+            auto dsizes = soln->get_overall_domain_size_vec();
+            os << "global domain sizes:";
+            for (auto ds : dsizes)
+                os << " " << ds;
+            os << "\n";
+            assert(dsizes[i] == dsize);
+
+            // Set with vec and check again.
+            soln->set_overall_domain_size_vec(dsizes);
+            auto ds = soln->get_overall_domain_size(dim_name);
+            assert(ds == dsize);
 
             // Ensure some minimal padding on all vars.
             soln->set_min_pad_size(dim_name, 1);
 
-            // Set block size to 64 in z dim and 32 in other dims.
+            // Set block size to 64 in last dim and 32 in other dims.
             // NB: just illustrative.
-            if (dim_name == "z")
-                soln->set_block_size(dim_name, 64);
-            else
-                soln->set_block_size(dim_name, 32);
+            idx_t bsize = (i == soln_dims.size() - 1) ? 64 : 32;
+            soln->set_block_size(dim_name, bsize);
+
+            // Check that vec API returns same.
+            auto bsizes = soln->get_block_size_vec();
+            os << "block sizes:";
+            for (auto bs : bsizes)
+                os << " " << bs;
+            os << "\n";
+            assert(bsizes[i] == bsize);
+
+            // Set with vec and check again.
+            soln->set_block_size_vec(bsizes);
+            auto bs = soln->get_block_size(dim_name);
+            assert(bs == bsize);
+            
+            i++;
         }
 
         // Make a test fixed-size var.

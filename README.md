@@ -72,6 +72,7 @@ and Intel(R) graphics processors.
     "offload" and the OpenMP device target name.
     Use `make offload=1 offload_arch=<target>` to change the OpenMP target;
     the default is `spir64`, for GPUs with Intel(R) Architecture (e.g., Gen12).
+    Use `make offload_usm=1` to use the OpenMP Unified Shared Memory model.
   - The default compiler is now the Intel(R) oneAPI C++ compiler, icpx.
     If you want to use a different compiler, use `make YK_CXX=<compiler> ...`
     for the kernel, and/or `make YC_CXX=<compiler> ...` for the YASK compiler,
@@ -101,7 +102,7 @@ and Intel(R) graphics processors.
     Consequently, the default number of inner threads is now one (1)
     to use one core per block.
     This change was made based on observed
-    performance on Intel(R) Xeon(R) Scalable Processors.  Previous versions
+    performance on newer Intel(R) Xeon(R) Processors.  Previous versions
     used two threads per block by default and used both hyper-threads if
     they were enabled.  To configure two hyper-threads to work cooperatively
     on each block, use the option `-inner_threads 2`.
@@ -112,7 +113,8 @@ and Intel(R) graphics processors.
   - Intel(R) Xeon Phi(TM) x100-family processors (KNC) are no longer supported.
     (Intel(R) Xeon Phi(TM) x200-family processors (KNL) are still supported.)
   - Python v2 is no longer supported.
-  - Deprecated `new_relative_var_point()` API.
+  - `new_relative_var_point()` API is deprecated.
+  - APIs that were previously deprecated in the `yk_var` class have been removed.
 
 ### Version 3
 * Version 3.05.00 changed the default setting of `-use_shm` to `true`.

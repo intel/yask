@@ -219,12 +219,14 @@ namespace yask {
         IdxTuple _pico_block_sizes;       // pico-block size (used within nano-blocks, no pico-tiling).
 
         // Global padding applied to all vars by default.
+        // These tuples contain all stencil dims, even though the step dim isn't used.
         IdxTuple _min_pad_sizes;         // minimum spatial padding (including halos).
         IdxTuple _extra_pad_sizes;       // extra spatial padding (outside of halos).
 
         // MPI settings.
-        IdxTuple _num_ranks;       // number of ranks in each dim.
-        IdxTuple _rank_indices;    // my rank index in each dim.
+        // These tuples contain only domain dims.
+        IdxTuple _num_ranks;       // number of ranks in each domain dim.
+        IdxTuple _rank_indices;    // my rank index in each domain dim.
         bool find_loc = true;      // whether my rank index needs to be calculated.
         bool overlap_comms = true; // overlap comms with computation.
         idx_t _min_exterior = 32;   // minimum size of MPI exterior to calculate.
@@ -265,7 +267,7 @@ namespace yask {
         bool _allow_stage_tuners = false; // allow per-stage tuners when possible.
         double _tuner_trial_secs = 0.5;   // time to run tuner for new better setting.
         int _tuner_radius = 16;
-        std::vector<std::string> _tuner_targets; // things to tune from following.
+        string_vec _tuner_targets; // things to tune from following.
 
         // Debug.
         bool force_scalar = false; // Do only scalar ops.

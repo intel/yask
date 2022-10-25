@@ -27,9 +27,9 @@ IN THE SOFTWARE.
 
 namespace yask {
 
-    typedef std::vector<idx_t> VarIndices;
-    typedef std::vector<idx_t> VarDimSizes;
-    typedef std::vector<std::string> VarDimNames;
+    typedef idx_t_vec VarIndices;
+    typedef idx_t_vec VarDimSizes;
+    typedef string_vec VarDimNames;
 
     // Max number of indices that can be held.
     // Note use of "+max_idxs" in code below to avoid compiler
@@ -93,7 +93,7 @@ namespace yask {
                 _idxs[i] = src[i];
             _ndims = n;
         }
-        void set_from_init_list(const std::initializer_list<idx_t>& src) {
+        void set_from_init_list(const idx_t_init_list& src) {
             host_assert(src.size() <= +max_idxs);
             int i = 0;
             for (auto idx : src)
@@ -360,7 +360,7 @@ namespace yask {
         Indices(const VarIndices& src) {
             set_from_vec(src);
         }
-        Indices(const std::initializer_list<idx_t>& src) {
+        Indices(const idx_t_init_list& src) {
             set_from_init_list(src);
         }
         

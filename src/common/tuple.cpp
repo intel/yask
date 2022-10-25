@@ -67,8 +67,8 @@ namespace yask {
     }
     
     template <typename T>
-    const std::vector<std::string> Tuple<T>::get_dim_names() const {
-        std::vector<std::string> names;
+    const string_vec Tuple<T>::get_dim_names() const {
+        string_vec names;
         for (auto& i : _q)
             names.push_back(i._get_name());
         return names;

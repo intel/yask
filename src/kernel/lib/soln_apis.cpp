@@ -34,91 +34,80 @@ namespace yask {
     // APIs.
     // See yask_kernel_api.hpp.
 
-    #define GET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
-        idx_t StencilContext::api_name(const string& dim) const {       \
+    #define GET_SOLN_API(api_name, expr, start_i, step_ok, domain_ok, misc_ok) \
+        idx_t StencilContext::get_ ## api_name(const string& dim) const { \
             STATE_VARS(this);                                           \
-            if (prep_req && !is_prepared())                             \
-                THROW_YASK_EXCEPTION("Error: '" #api_name               \
-                                     "()' called before calling 'prepare_solution()'"); \
             dims->check_dim_type(dim, #api_name, step_ok, domain_ok, misc_ok); \
-            return expr;                                                \
-        }
-    GET_SOLN_API(get_num_ranks,
-                 actl_opts->_num_ranks[dim],
-                 false, true, false, false)
-    GET_SOLN_API(get_overall_domain_size,
-                 actl_opts->_global_sizes[dim],
-                 false, true, false, true)
-    GET_SOLN_API(get_rank_domain_size,
-                 actl_opts->_rank_sizes[dim],
-                 false, true, false, false)
-    GET_SOLN_API(get_mega_block_size,
-                 actl_opts->_mega_block_sizes[dim],
-                 true, true, false, false)
-    GET_SOLN_API(get_block_size,
-                 actl_opts->_block_sizes[dim],
-                 true, true, false, false)
-    GET_SOLN_API(get_min_pad_size,
-                 actl_opts->_min_pad_sizes[dim],
-                 false, true, false, false)
-    GET_SOLN_API(get_rank_index,
-                 actl_opts->_rank_indices[dim],
-                 false, true, false, true)
-
-    GET_SOLN_API(get_first_rank_domain_index,
-                 rank_bb.bb_begin_tuple(domain_dims)[dim],
-                 false, true, false, true)
-    GET_SOLN_API(get_last_rank_domain_index,
-                 rank_bb.bb_end_tuple(domain_dims)[dim] - 1,
-                 false, true, false, true)
-    #undef GET_SOLN_API
-
-    // The var sizes are updated any time these settings are changed.
-    #define SET_SOLN_API(api_name, expr, step_ok, domain_ok, misc_ok, reset_prep) \
-        void StencilContext::api_name(const string& dim, idx_t n) {     \
+            return expr[dim];                                           \
+        }                                                               \
+        idx_t_vec StencilContext::get_ ## api_name ## _vec() const {    \
             STATE_VARS(this);                                           \
-            TRACE_MSG("solution '" << get_name() << "'."                \
+            return expr.get_vals(start_i, NUM_DOMAIN_DIMS);             \
+        }
+    #define SET_SOLN_API(api_name, expr, start_i, step_ok, domain_ok, misc_ok, reset_prep) \
+        void StencilContext::set_ ## api_name(const string& dim, idx_t n) { \
+            STATE_VARS(this);                                           \
+            TRACE_MSG("solution '" << get_name() << "'.set_"            \
                       #api_name "('" << dim << "', " << n << ")");      \
             dims->check_dim_type(dim, #api_name, step_ok, domain_ok, misc_ok); \
-            expr;                                                       \
+            expr[dim] = n;                                              \
+            update_var_info(false);                                     \
+            if (reset_prep) set_prepared(false);                        \
+        }                                                               \
+        void StencilContext::set_ ## api_name ## _vec(const idx_t_vec& vals) { \
+            STATE_VARS(this);                                           \
+            TRACE_MSG("solution '" << get_name() << "'.set_"            \
+                      #api_name "_vec(...)");                           \
+            if (vals.size() != NUM_DOMAIN_DIMS)                         \
+                THROW_YASK_EXCEPTION("Error: set_'" #api_name           \
+                                     "_vec()' called without the proper number of domain dims"); \
+            expr.set_vals(start_i, vals);                               \
+            update_var_info(false);                                     \
+            if (reset_prep) set_prepared(false);                        \
+        }                                                               \
+        void StencilContext::set_ ## api_name ## _vec(const idx_t_init_list& vals) { \
+            STATE_VARS(this);                                           \
+            TRACE_MSG("solution '" << get_name() << "'.set_"            \
+                      #api_name "_vec(...)");                           \
+            if (vals.size() != NUM_DOMAIN_DIMS)                         \
+                THROW_YASK_EXCEPTION("Error: set_'" #api_name           \
+                                     "_vec()' called without the proper number of domain dims"); \
+            expr.set_vals(start_i, vals);                               \
             update_var_info(false);                                     \
             if (reset_prep) set_prepared(false);                        \
         }
-    SET_SOLN_API(set_rank_index,
-                 actl_opts->_rank_indices[dim] = n;
-                 req_opts->_rank_indices[dim] = n;
-                 actl_opts->find_loc = false;
-                 req_opts->find_loc = false,
-                 false, true, false, true)
-    SET_SOLN_API(set_num_ranks,
-                 actl_opts->_num_ranks[dim] = n;
-                 req_opts->_num_ranks[dim] = n,
-                 false, true, false, true)
-    SET_SOLN_API(set_overall_domain_size,
-                 actl_opts->_global_sizes[dim] = n;
-                 req_opts->_global_sizes[dim] = n;
-                 if (n) { actl_opts->_rank_sizes[dim] = 0;
-                     req_opts->_rank_sizes[dim] = 0; },
-                 false, true, false, true)
-    SET_SOLN_API(set_rank_domain_size,
-                 actl_opts->_rank_sizes[dim] = n;
-                 req_opts->_rank_sizes[dim] = n;
-                 if (n) { actl_opts->_global_sizes[dim] = 0;
-                     req_opts->_global_sizes[dim] = 0; },
-                 false, true, false, true)
-    SET_SOLN_API(set_mega_block_size,
-                 actl_opts->_mega_block_sizes[dim] = n;
-                 req_opts->_mega_block_sizes[dim] = n,
-                 true, true, false, true)
-    SET_SOLN_API(set_block_size,
-                 actl_opts->_block_sizes[dim] = n;
-                 req_opts->_block_sizes[dim] = n,
-                 true, true, false, true)
-    SET_SOLN_API(set_min_pad_size,
-                 actl_opts->_min_pad_sizes[dim] = n;
-                 req_opts->_min_pad_sizes[dim] = n,
-                 false, true, false, false)
+    #define SOLN_API(api_name, expr, start_i, step_ok, domain_ok, misc_ok, reset_prep) \
+        GET_SOLN_API(api_name, expr, start_i, step_ok, domain_ok, misc_ok) \
+        SET_SOLN_API(api_name, expr, start_i, step_ok, domain_ok, misc_ok, reset_prep)
+    
+    SOLN_API(num_ranks,
+             actl_opts->_num_ranks, 0,
+             false, true, false, true)
+    SOLN_API(rank_index,
+             actl_opts->_rank_indices, 0,
+             false, true, false, true)
+    SOLN_API(overall_domain_size,
+             actl_opts->_global_sizes, 1,
+             false, true, false, true)
+    SOLN_API(rank_domain_size,
+             actl_opts->_rank_sizes, 1,
+             false, true, false, true)
+    SOLN_API(block_size,
+             actl_opts->_block_sizes, 1,
+             true, true, false, true)
+    SOLN_API(min_pad_size,
+             actl_opts->_min_pad_sizes, 1,
+             false, true, false, false)
+    
+    GET_SOLN_API(first_rank_domain_index,
+                 rank_bb.bb_begin_tuple(domain_dims), 0,
+                 false, true, false)
+    GET_SOLN_API(last_rank_domain_index,
+                 rank_bb.bb_last_tuple(domain_dims), 0,
+                 false, true, false)
+    #undef SOLN_API
     #undef SET_SOLN_API
+    #undef GET_SOLN_API
 
     // Callbacks.
     void StencilContext::call_hooks(hook_fn_vec& hook_fns) {
@@ -265,8 +254,8 @@ namespace yask {
             gp->release_storage();
         }
 
-	// Reset threads to original value.
-	set_max_threads();
+        // Reset threads to original value.
+        set_max_threads();
     }
 
     void StencilContext::fuse_vars(yk_solution_ptr source) {
@@ -289,7 +278,7 @@ namespace yask {
     }
 
     string StencilContext::apply_command_line_options(int argc, char* argv[]) {
-        std::vector<std::string> args;
+        string_vec args;
         for (int i = 1; i < argc; i++)
             args.push_back(argv[i]);
         return apply_command_line_options(args);

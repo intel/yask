@@ -159,7 +159,7 @@ namespace yask {
 
     // Check for matching option to "-"str at args[argi].
     // Return true and increment argi if match.
-    bool CommandLineParser::OptionBase::_is_opt(const std::vector<std::string>& args,
+    bool CommandLineParser::OptionBase::_is_opt(const string_vec& args,
                                                    int& argi,
                                                    const std::string& str) const
     {
@@ -229,7 +229,7 @@ namespace yask {
     }
 
     // Check for a boolean option.
-    bool CommandLineParser::BoolOption::check_arg(const std::vector<std::string>& args,
+    bool CommandLineParser::BoolOption::check_arg(const string_vec& args,
                                                   int& argi) {
         if (_is_opt(args, argi, _name)) {
             _val = true;
@@ -250,7 +250,7 @@ namespace yask {
     }
 
     // Check for a double option.
-    bool CommandLineParser::DoubleOption::check_arg(const std::vector<std::string>& args,
+    bool CommandLineParser::DoubleOption::check_arg(const string_vec& args,
                                                     int& argi) {
         if (_is_opt(args, argi, _name)) {
             _val = _double_val(args, argi);
@@ -266,7 +266,7 @@ namespace yask {
     }
 
     // Check for an int option.
-    bool CommandLineParser::IntOption::check_arg(const std::vector<std::string>& args,
+    bool CommandLineParser::IntOption::check_arg(const string_vec& args,
                                                  int& argi) {
         if (_is_opt(args, argi, _name)) {
             _val = (int)_idx_val(args, argi); // TODO: check for over/underflow.
@@ -282,7 +282,7 @@ namespace yask {
     }
 
     // Check for an idx_t option.
-    bool CommandLineParser::IdxOption::check_arg(const std::vector<std::string>& args,
+    bool CommandLineParser::IdxOption::check_arg(const string_vec& args,
                                                  int& argi) {
         if (_is_opt(args, argi, _name)) {
             _val = _idx_val(args, argi);
@@ -304,7 +304,7 @@ namespace yask {
     }
 
     // Check for an multi-idx_t option.
-    bool CommandLineParser::MultiIdxOption::check_arg(const std::vector<std::string>& args,
+    bool CommandLineParser::MultiIdxOption::check_arg(const string_vec& args,
                                                       int& argi) {
         if (_is_opt(args, argi, _name)) {
             idx_t val = _idx_val(args, argi);
@@ -316,7 +316,7 @@ namespace yask {
     }
 
     // Check for a string option.
-    bool CommandLineParser::StringOption::check_arg(const std::vector<std::string>& args,
+    bool CommandLineParser::StringOption::check_arg(const string_vec& args,
                                                     int& argi) {
         if (_is_opt(args, argi, _name)) {
             _val = _string_val(args, argi);
@@ -332,7 +332,7 @@ namespace yask {
     }
 
     // Check for a string-list option.
-    bool CommandLineParser::StringListOption::check_arg(const std::vector<std::string>& args,
+    bool CommandLineParser::StringListOption::check_arg(const string_vec& args,
                                                         int& argi) {
         if (_is_opt(args, argi, _name)) {
             _val.clear();
@@ -383,7 +383,7 @@ namespace yask {
     // Recognized strings from args are consumed, and unused ones
     // are returned.
     string CommandLineParser::parse_args(const std::string& pgm_name,
-                                         const std::vector<std::string>& args) {
+                                         const string_vec& args) {
         vector<string> non_args;
 
         // Loop through strings in args.
