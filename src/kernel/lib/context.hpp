@@ -330,6 +330,7 @@ namespace yask {
         YaskTimer halo_copy_time;   // time spent on copying buffers in halo exchange.
         YaskTimer halo_wait_time;     // time spent on MPI waits in halo exchange.
         YaskTimer halo_test_time;     // time spent on MPI tests for halo exchange.
+        YaskTimer halo_lock_wait_time; // time spent on shm lock waits in halo exchange.
         idx_t steps_done = 0;   // number of steps that have been run.
 
         // Maximum halos, skewing angles, and work extensions over all vars

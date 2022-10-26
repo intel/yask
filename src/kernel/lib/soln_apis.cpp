@@ -32,7 +32,7 @@ using namespace std;
 namespace yask {
 
     // APIs.
-    // See yask_kernel_api.hpp.
+    // See yask_kernel_api.hpp and context.hpp.
 
     #define GET_SOLN_API(api_name, expr, start_i, step_ok, domain_ok, misc_ok) \
         idx_t StencilContext::get_ ## api_name(const string& dim) const { \
@@ -327,18 +327,20 @@ namespace yask {
         // Measured outside parallel region.
         double hetime = min(halo_time.get_elapsed_secs(), rtime);
 
-        // These are part of 'halo_time'.
-        double hwtime = min(halo_wait_time.get_elapsed_secs(), hetime);
-        double hptime = min(halo_pack_time.get_elapsed_secs(), hetime - hwtime);
-        double hutime = min(halo_unpack_time.get_elapsed_secs(), hetime - hwtime - hptime);
-        double hctime = min(halo_copy_time.get_elapsed_secs(), hetime - hwtime - hptime - hutime);
+        // These are part of 'halo_time', so 'min' calls are used to ensure
+        // constituent times do not exceed overall halo time.
+        double hwtime = min(halo_wait_time.get_elapsed_secs(),      hetime);
+        double hltime = min(halo_lock_wait_time.get_elapsed_secs(), hetime - hwtime);
+        double hptime = min(halo_pack_time.get_elapsed_secs(),      hetime - hwtime - hltime);
+        double hutime = min(halo_unpack_time.get_elapsed_secs(),    hetime - hwtime - hltime - hptime);
+        double hctime = min(halo_copy_time.get_elapsed_secs(),      hetime - hwtime - hltime - hptime - hutime);
 
         // Exterior and interior parts. Measured outside parallel region.
         // Does not include 'halo_time'.
         double etime = min(ext_time.get_elapsed_secs(), rtime - hetime);
         double itime = int_time.get_elapsed_secs();
 
-        // 'test_time' is part of 'int_time', but only on outer thread 0.
+        // 'test_time' is part of measured 'int_time', but only on outer thread 0.
         // It's not part of 'halo_time', since it's done outside of 'halo_exchange'.
         // We calculate an average to distribute this time across threads,
         // although it's just an estimate.
@@ -474,8 +476,10 @@ namespace yask {
                           print_pct(etime, ctime) << endl <<
                           "  rank-interior compute (sec):           " << make_num_str(itime) <<
                           print_pct(itime, ctime));
-            double hotime = max(hetime - hwtime - hptime - hutime - hctime, 0.);
+            double hotime = max(htime - hltime - hwtime - ttime - hptime - hutime - hctime, 0.);
             DEBUG_MSG(" Halo-time breakdown:\n"
+                      "  shm-lock waits (sec):                  " << make_num_str(hltime) <<
+                      print_pct(hltime, htime) << endl <<
                       "  MPI waits (sec):                       " << make_num_str(hwtime) <<
                       print_pct(hwtime, htime) << endl <<
                       "  MPI tests (sec):                       " << make_num_str(ttime) <<
@@ -528,6 +532,7 @@ namespace yask {
         halo_pack_time.clear();
         halo_unpack_time.clear();
         halo_copy_time.clear();
+        halo_lock_wait_time.clear();
         halo_wait_time.clear();
         halo_test_time.clear();
         steps_done = 0;

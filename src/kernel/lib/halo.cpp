@@ -236,9 +236,9 @@ namespace yask {
                                  // Wait until buffer is avail if sharing one.
                                  if (using_shm) {
                                      TRACE_MSG("exchange_halos:    waiting to write to shm buffer");
-                                     halo_wait_time.start();
+                                     halo_lock_wait_time.start();
                                      send_buf.wait_for_ok_to_write();
-                                     wait_delta += halo_wait_time.stop();
+                                     wait_delta += halo_lock_wait_time.stop();
                                  }
 
                                  // Check to see if my var is dirty in any step that the
@@ -335,9 +335,9 @@ namespace yask {
                                  // Wait until data in buffer is avail.
                                  if (using_shm) {
                                      TRACE_MSG("exchange_halos:    waiting for data in shm buffer");
-                                     halo_wait_time.start();
+                                     halo_lock_wait_time.start();
                                      recv_buf.wait_for_ok_to_read();
-                                     wait_delta += halo_wait_time.stop();
+                                     wait_delta += halo_lock_wait_time.stop();
                                      nbytes = recv_buf.get_data(); // Size was stored in lock.
                                  }
                                  else {
@@ -484,7 +484,13 @@ namespace yask {
 
         #if defined(USE_MPI)
         STATE_VARS(this);
+
+        // Exit if no exchanges.
         if (!actl_opts->do_halo_exchange || env->num_ranks < 2)
+            return;
+
+        // Exit if all exchanges are w/shm.
+        if (env->num_shm_ranks == env->num_ranks && actl_opts->use_shm)
             return;
 
         halo_test_time.start();
@@ -500,13 +506,15 @@ namespace yask {
             auto* var_recv_stats = var_mpi_data.recv_stats.data();
             auto* var_send_stats = var_mpi_data.send_stats.data();
 
-            #if 1
+            #ifndef USE_INDIV_MPI_TESTS
+            
             // Bulk testing.
             auto asize = max(var_mpi_data.recv_reqs.size(), var_mpi_data.send_reqs.size());
             int indices[asize];
             MPI_Status stats[asize];
             int n = 0;
             MPI_Testsome(int(var_mpi_data.recv_reqs.size()), var_recv_reqs, &n, indices, stats);
+            num_tests++;
             TRACE_MSG("completed " << n << " recv requests");
             for (int i = 0; i < n; i++) {
                 int loc = indices[i]; // Location of completed recv.
@@ -517,6 +525,7 @@ namespace yask {
                 TRACE_MSG((i+1) << ". got " << make_byte_str(nbytes) << " from req " << loc);
             }
             MPI_Testsome(int(var_mpi_data.send_reqs.size()), var_send_reqs, &n, indices, stats);
+            num_tests++;
             for (int i = 0; i < n; i++) {
                 int loc = indices[i]; // Location of completed send.
                 var_send_stats[loc] = stats[i]; // Update correct stat.
