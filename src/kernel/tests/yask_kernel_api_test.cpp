@@ -135,10 +135,18 @@ int main() {
         // Print out some info about the vars and init their data.
         for (auto var : soln->get_vars()) {
             os << "    var '" << var->get_name() << ":\n";
+            int dimi = 0;
             for (auto dname : var->get_dim_names()) {
                 os << "      '" << dname << "' dim:\n";
                 os << "        alloc-size on this rank: " <<
                     var->get_alloc_size(dname) << endl;
+                os << "        allowed index range on this rank: " <<
+                    var->get_first_local_index(dname) << " ... " <<
+                    var->get_last_local_index(dname) << endl;
+                assert(var->get_alloc_size(dname) ==
+                       var->get_last_local_index(dname) - var->get_first_local_index(dname) + 1);
+                auto asizes = var->get_alloc_size_vec();
+                assert(asizes.at(dimi) == var->get_alloc_size(dname));
                 
                 // Is this a domain dim?
                 if (domain_dim_set.count(dname)) {
@@ -148,9 +156,6 @@ int main() {
                     os << "        domain+halo index range on this rank: " <<
                         var->get_first_rank_halo_index(dname) << " ... " <<
                         var->get_last_rank_halo_index(dname) << endl;
-                    os << "        allowed index range on this rank: " <<
-                        var->get_first_rank_alloc_index(dname) << " ... " <<
-                        var->get_last_rank_alloc_index(dname) << endl;
                 }
 
                 // Step dim?
@@ -166,6 +171,8 @@ int main() {
                         var->get_first_misc_index(dname) << " ... " <<
                         var->get_last_misc_index(dname) << endl;
                 }
+
+                dimi++;
             }
 
             // First, just init all the elements to the same value.

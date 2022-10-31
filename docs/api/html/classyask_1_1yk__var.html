@@ -90,6 +90,9 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:adf2e93317a2e86d80713ad56a46fdc68"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga53bde373152f3af12ba9daa06007eb5f">string_vec</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#adf2e93317a2e86d80713ad56a46fdc68">get_dim_names</a> () const =0</td></tr>
 <tr class="memdesc:adf2e93317a2e86d80713ad56a46fdc68"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get all the dimensions in this var.  <a href="#adf2e93317a2e86d80713ad56a46fdc68">More...</a><br /></td></tr>
 <tr class="separator:adf2e93317a2e86d80713ad56a46fdc68"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:afad8c52ff4cd03e67a097525baeaa56d"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#afad8c52ff4cd03e67a097525baeaa56d">get_num_domain_dims</a> () const =0</td></tr>
+<tr class="memdesc:afad8c52ff4cd03e67a097525baeaa56d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the number of <em>domain</em> dimensions used in this var.  <a href="#afad8c52ff4cd03e67a097525baeaa56d">More...</a><br /></td></tr>
+<tr class="separator:afad8c52ff4cd03e67a097525baeaa56d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ace776bc0e51b07e940b23ebbce7a2232"><td class="memItemLeft" align="right" valign="top">virtual bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#ace776bc0e51b07e940b23ebbce7a2232">is_dim_used</a> (const std::string &amp;dim) const =0</td></tr>
 <tr class="memdesc:ace776bc0e51b07e940b23ebbce7a2232"><td class="mdescLeft">&#160;</td><td class="mdescRight">Determine whether specified dimension exists in this var.  <a href="#ace776bc0e51b07e940b23ebbce7a2232">More...</a><br /></td></tr>
 <tr class="separator:ace776bc0e51b07e940b23ebbce7a2232"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -99,12 +102,21 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:aaf5b3f06b832bbf77b8f722fda8a2998"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#aaf5b3f06b832bbf77b8f722fda8a2998">get_first_local_index</a> (const std::string &amp;dim) const =0</td></tr>
 <tr class="memdesc:aaf5b3f06b832bbf77b8f722fda8a2998"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the first valid index in this rank in the specified dimension.  <a href="#aaf5b3f06b832bbf77b8f722fda8a2998">More...</a><br /></td></tr>
 <tr class="separator:aaf5b3f06b832bbf77b8f722fda8a2998"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3b7117c1479a41c6d5e3b37fbc2309f3"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a3b7117c1479a41c6d5e3b37fbc2309f3">get_first_local_index_vec</a> () const =0</td></tr>
+<tr class="memdesc:a3b7117c1479a41c6d5e3b37fbc2309f3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the first valid index in this rank in all dimensions in this var.  <a href="#a3b7117c1479a41c6d5e3b37fbc2309f3">More...</a><br /></td></tr>
+<tr class="separator:a3b7117c1479a41c6d5e3b37fbc2309f3"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a7266bb36c93cb6ae538a0f081f22fad7"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a7266bb36c93cb6ae538a0f081f22fad7">get_last_local_index</a> (const std::string &amp;dim) const =0</td></tr>
 <tr class="memdesc:a7266bb36c93cb6ae538a0f081f22fad7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the last index in this rank in the specified dimension.  <a href="#a7266bb36c93cb6ae538a0f081f22fad7">More...</a><br /></td></tr>
 <tr class="separator:a7266bb36c93cb6ae538a0f081f22fad7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a00d8f5b744b8da99190764f0b0fc1cf5"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a00d8f5b744b8da99190764f0b0fc1cf5">get_last_local_index_vec</a> () const =0</td></tr>
+<tr class="memdesc:a00d8f5b744b8da99190764f0b0fc1cf5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the last valid index in this rank in all dimensions in this var.  <a href="#a00d8f5b744b8da99190764f0b0fc1cf5">More...</a><br /></td></tr>
+<tr class="separator:a00d8f5b744b8da99190764f0b0fc1cf5"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a1934db25d379b5ae2366e01a88a2c867"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a1934db25d379b5ae2366e01a88a2c867">get_alloc_size</a> (const std::string &amp;dim) const =0</td></tr>
 <tr class="memdesc:a1934db25d379b5ae2366e01a88a2c867"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the number of elements allocated in the specified dimension.  <a href="#a1934db25d379b5ae2366e01a88a2c867">More...</a><br /></td></tr>
 <tr class="separator:a1934db25d379b5ae2366e01a88a2c867"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:af47cbeb07ca7728013e71f31bc00281d"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#af47cbeb07ca7728013e71f31bc00281d">get_alloc_size_vec</a> () const =0</td></tr>
+<tr class="memdesc:af47cbeb07ca7728013e71f31bc00281d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the number of elements allocated in all dimensions in this var.  <a href="#af47cbeb07ca7728013e71f31bc00281d">More...</a><br /></td></tr>
+<tr class="separator:af47cbeb07ca7728013e71f31bc00281d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a6a02011041f38a4d2fe7899d5369511e"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a6a02011041f38a4d2fe7899d5369511e">get_first_valid_step_index</a> () const =0</td></tr>
 <tr class="memdesc:a6a02011041f38a4d2fe7899d5369511e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the first valid index in the step dimension.  <a href="#a6a02011041f38a4d2fe7899d5369511e">More...</a><br /></td></tr>
 <tr class="separator:a6a02011041f38a4d2fe7899d5369511e"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -112,14 +124,23 @@ Public Member Functions</h2></td></tr>
 <tr class="memdesc:a7b346e48cb36b0f304d3b030ac9a1512"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the last valid index in the step dimension.  <a href="#a7b346e48cb36b0f304d3b030ac9a1512">More...</a><br /></td></tr>
 <tr class="separator:a7b346e48cb36b0f304d3b030ac9a1512"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a3eb132fe3e1f813a0c22b1366e5d55ad"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a3eb132fe3e1f813a0c22b1366e5d55ad">get_rank_domain_size</a> (const std::string &amp;dim) const =0</td></tr>
-<tr class="memdesc:a3eb132fe3e1f813a0c22b1366e5d55ad"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the domain size for this rank.  <a href="#a3eb132fe3e1f813a0c22b1366e5d55ad">More...</a><br /></td></tr>
+<tr class="memdesc:a3eb132fe3e1f813a0c22b1366e5d55ad"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the domain size for this rank in the specified dimension.  <a href="#a3eb132fe3e1f813a0c22b1366e5d55ad">More...</a><br /></td></tr>
 <tr class="separator:a3eb132fe3e1f813a0c22b1366e5d55ad"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2f58d9368265fd6f9382ba12f876f0d3"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a2f58d9368265fd6f9382ba12f876f0d3">get_rank_domain_size_vec</a> () const =0</td></tr>
+<tr class="memdesc:a2f58d9368265fd6f9382ba12f876f0d3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the domain size for this rank in all domain dimensions in this var.  <a href="#a2f58d9368265fd6f9382ba12f876f0d3">More...</a><br /></td></tr>
+<tr class="separator:a2f58d9368265fd6f9382ba12f876f0d3"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a60d8b63ef869693d7eeb556e5254d167"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a60d8b63ef869693d7eeb556e5254d167">get_first_rank_domain_index</a> (const std::string &amp;dim) const =0</td></tr>
 <tr class="memdesc:a60d8b63ef869693d7eeb556e5254d167"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the first index of the sub-domain in this rank in the specified dimension.  <a href="#a60d8b63ef869693d7eeb556e5254d167">More...</a><br /></td></tr>
 <tr class="separator:a60d8b63ef869693d7eeb556e5254d167"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a45c2449324430b59811c1c6257cf9a5a"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a45c2449324430b59811c1c6257cf9a5a">get_first_rank_domain_index_vec</a> () const =0</td></tr>
+<tr class="memdesc:a45c2449324430b59811c1c6257cf9a5a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the first index of the sub-domain in this rank in all domain dimensions in this var.  <a href="#a45c2449324430b59811c1c6257cf9a5a">More...</a><br /></td></tr>
+<tr class="separator:a45c2449324430b59811c1c6257cf9a5a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aaf3e835c074a2bdd627f76483727b1dc"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#aaf3e835c074a2bdd627f76483727b1dc">get_last_rank_domain_index</a> (const std::string &amp;dim) const =0</td></tr>
 <tr class="memdesc:aaf3e835c074a2bdd627f76483727b1dc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the last index of the sub-domain in this rank in the specified dimension.  <a href="#aaf3e835c074a2bdd627f76483727b1dc">More...</a><br /></td></tr>
 <tr class="separator:aaf3e835c074a2bdd627f76483727b1dc"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:abdfdb9d4d382fb1c4fe4966e43afb5b2"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#abdfdb9d4d382fb1c4fe4966e43afb5b2">get_last_rank_domain_index_vec</a> () const =0</td></tr>
+<tr class="memdesc:abdfdb9d4d382fb1c4fe4966e43afb5b2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the last index of the sub-domain in this rank in all domain dimensions in this var.  <a href="#abdfdb9d4d382fb1c4fe4966e43afb5b2">More...</a><br /></td></tr>
+<tr class="separator:abdfdb9d4d382fb1c4fe4966e43afb5b2"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:acd8e51e7ee79fcc55a622b3012da63bc"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#acd8e51e7ee79fcc55a622b3012da63bc">get_left_halo_size</a> (const std::string &amp;dim) const =0</td></tr>
 <tr class="memdesc:acd8e51e7ee79fcc55a622b3012da63bc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the left halo size in the specified dimension.  <a href="#acd8e51e7ee79fcc55a622b3012da63bc">More...</a><br /></td></tr>
 <tr class="separator:acd8e51e7ee79fcc55a622b3012da63bc"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -129,9 +150,15 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a363c78d8f7f5b40581fb0cb179058410"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a363c78d8f7f5b40581fb0cb179058410">get_first_rank_halo_index</a> (const std::string &amp;dim) const =0</td></tr>
 <tr class="memdesc:a363c78d8f7f5b40581fb0cb179058410"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the first index of the left halo in this rank in the specified dimension.  <a href="#a363c78d8f7f5b40581fb0cb179058410">More...</a><br /></td></tr>
 <tr class="separator:a363c78d8f7f5b40581fb0cb179058410"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab0ed2e82d463cc3fae2daa395edb78f4"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#ab0ed2e82d463cc3fae2daa395edb78f4">get_first_rank_halo_index_vec</a> () const =0</td></tr>
+<tr class="memdesc:ab0ed2e82d463cc3fae2daa395edb78f4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the first index of the left halo in this rank in all domain dimensions in this var.  <a href="#ab0ed2e82d463cc3fae2daa395edb78f4">More...</a><br /></td></tr>
+<tr class="separator:ab0ed2e82d463cc3fae2daa395edb78f4"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ad3d97b360b0b1e4c5785adf87384c41e"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#ad3d97b360b0b1e4c5785adf87384c41e">get_last_rank_halo_index</a> (const std::string &amp;dim) const =0</td></tr>
 <tr class="memdesc:ad3d97b360b0b1e4c5785adf87384c41e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the last index of the right halo in this rank in the specified dimension.  <a href="#ad3d97b360b0b1e4c5785adf87384c41e">More...</a><br /></td></tr>
 <tr class="separator:ad3d97b360b0b1e4c5785adf87384c41e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aa735497e92513f5796af52e8ddb24353"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#aa735497e92513f5796af52e8ddb24353">get_last_rank_halo_index_vec</a> () const =0</td></tr>
+<tr class="memdesc:aa735497e92513f5796af52e8ddb24353"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the last index of the right halo in this rank in all domain dimensions in this var.  <a href="#aa735497e92513f5796af52e8ddb24353">More...</a><br /></td></tr>
+<tr class="separator:aa735497e92513f5796af52e8ddb24353"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a2a6b515ee0073b8ff35fb8bee47de00e"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a2a6b515ee0073b8ff35fb8bee47de00e">get_left_pad_size</a> (const std::string &amp;dim) const =0</td></tr>
 <tr class="memdesc:a2a6b515ee0073b8ff35fb8bee47de00e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the actual left padding in the specified dimension.  <a href="#a2a6b515ee0073b8ff35fb8bee47de00e">More...</a><br /></td></tr>
 <tr class="separator:a2a6b515ee0073b8ff35fb8bee47de00e"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -231,12 +258,6 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a5beae21df987bf4a93bec2ebf8a423f6"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a5beae21df987bf4a93bec2ebf8a423f6">set_first_misc_index</a> (const std::string &amp;dim, <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> idx)=0</td></tr>
 <tr class="memdesc:a5beae21df987bf4a93bec2ebf8a423f6"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Set the first index of a specified miscellaneous dimension.  <a href="#a5beae21df987bf4a93bec2ebf8a423f6">More...</a><br /></td></tr>
 <tr class="separator:a5beae21df987bf4a93bec2ebf8a423f6"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:adb7ed5c0f513ae7a5480a480f08165b7"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#adb7ed5c0f513ae7a5480a480f08165b7">get_first_rank_alloc_index</a> (const std::string &amp;dim) const =0</td></tr>
-<tr class="memdesc:adb7ed5c0f513ae7a5480a480f08165b7"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Get the first accessible index in this var in this rank in the specified domain dimension.  <a href="#adb7ed5c0f513ae7a5480a480f08165b7">More...</a><br /></td></tr>
-<tr class="separator:adb7ed5c0f513ae7a5480a480f08165b7"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a2919bd783fb240a9d0f43a866bf7f551"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a2919bd783fb240a9d0f43a866bf7f551">get_last_rank_alloc_index</a> (const std::string &amp;dim) const =0</td></tr>
-<tr class="memdesc:a2919bd783fb240a9d0f43a866bf7f551"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Get the last accessible index in this var in this rank in the specified domain dimension.  <a href="#a2919bd783fb240a9d0f43a866bf7f551">More...</a><br /></td></tr>
-<tr class="separator:a2919bd783fb240a9d0f43a866bf7f551"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a3b09855a3cfa7e43c32fc43a24503340"><td class="memItemLeft" align="right" valign="top">virtual bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a3b09855a3cfa7e43c32fc43a24503340">is_storage_allocated</a> () const =0</td></tr>
 <tr class="memdesc:a3b09855a3cfa7e43c32fc43a24503340"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Determine whether storage has been allocated.  <a href="#a3b09855a3cfa7e43c32fc43a24503340">More...</a><br /></td></tr>
 <tr class="separator:a3b09855a3cfa7e43c32fc43a24503340"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -261,6 +282,14 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a4a4e42c4cfc5b3b6a5d998611d0d8602"><td class="memItemLeft" align="right" valign="top">virtual void *&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a4a4e42c4cfc5b3b6a5d998611d0d8602">get_raw_storage_buffer</a> ()=0</td></tr>
 <tr class="memdesc:a4a4e42c4cfc5b3b6a5d998611d0d8602"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Get pointer to raw data storage buffer.  <a href="#a4a4e42c4cfc5b3b6a5d998611d0d8602">More...</a><br /></td></tr>
 <tr class="separator:a4a4e42c4cfc5b3b6a5d998611d0d8602"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a010df6d40b808aa0d7fca274bbf5d2d4"><td class="memItemLeft" align="right" valign="top"><a id="a010df6d40b808aa0d7fca274bbf5d2d4"></a>
+virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#a010df6d40b808aa0d7fca274bbf5d2d4">get_first_rank_alloc_index</a> (const std::string &amp;dim) const</td></tr>
+<tr class="memdesc:a010df6d40b808aa0d7fca274bbf5d2d4"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yk__var.html#aaf5b3f06b832bbf77b8f722fda8a2998" title="Get the first valid index in this rank in the specified dimension.">get_first_local_index()</a>. <br /></td></tr>
+<tr class="separator:a010df6d40b808aa0d7fca274bbf5d2d4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:acb67cbd0ecea35f3f50b435e4b977c53"><td class="memItemLeft" align="right" valign="top"><a id="acb67cbd0ecea35f3f50b435e4b977c53"></a>
+virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__var.html#acb67cbd0ecea35f3f50b435e4b977c53">get_last_rank_alloc_index</a> (const std::string &amp;dim) const</td></tr>
+<tr class="memdesc:acb67cbd0ecea35f3f50b435e4b977c53"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yk__var.html#a7266bb36c93cb6ae538a0f081f22fad7" title="Get the last index in this rank in the specified dimension.">get_last_local_index()</a>. <br /></td></tr>
+<tr class="separator:acb67cbd0ecea35f3f50b435e4b977c53"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>A run-time YASK data container. </p>
@@ -376,7 +405,7 @@ Data Storage</h2>
 </div><div class="memdoc">
 
 <p>Get the number of dimensions used in this var. </p>
-<p>This may include domain, step, and/or miscellaneous dimensions. </p><dl class="section return"><dt>Returns</dt><dd>Number of dimensions created via <a class="el" href="classyask_1_1yc__solution.html#a192b0f12d3943483514e16c82c15a42b" title="Create an n-dimensional variable in the solution.">yc_solution::new_var()</a>, <a class="el" href="classyask_1_1yk__solution.html#a75ba824977414468dd23f0a1d5f9eaf3" title="[Advanced] Add a new var to the solution.">yk_solution::new_var()</a>, or <a class="el" href="classyask_1_1yk__solution.html#a2899b81d090c4a2f468ccc31adfa9d85" title="[Advanced] Add a new var to the solution with a specified size.">yk_solution::new_fixed_size_var()</a>. </dd></dl>
+<p>This may include domain, step, and/or miscellaneous dimensions. </p><dl class="section return"><dt>Returns</dt><dd>Number of dimensions declared in the stencil code or created via <a class="el" href="classyask_1_1yc__solution.html#a192b0f12d3943483514e16c82c15a42b" title="Create an n-dimensional variable in the solution.">yc_solution::new_var()</a>, <a class="el" href="classyask_1_1yk__solution.html#a75ba824977414468dd23f0a1d5f9eaf3" title="[Advanced] Add a new var to the solution.">yk_solution::new_var()</a>, or <a class="el" href="classyask_1_1yk__solution.html#a2899b81d090c4a2f468ccc31adfa9d85" title="[Advanced] Add a new var to the solution with a specified size.">yk_solution::new_fixed_size_var()</a>. </dd></dl>
 
 </div>
 </div>
@@ -405,6 +434,34 @@ Data Storage</h2>
 
 <p>Get all the dimensions in this var. </p>
 <p>This may include domain, step, and/or miscellaneous dimensions. </p><dl class="section return"><dt>Returns</dt><dd>List of names of all the dimensions. </dd></dl>
+
+</div>
+</div>
+<a id="afad8c52ff4cd03e67a097525baeaa56d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#afad8c52ff4cd03e67a097525baeaa56d">&#9670;&nbsp;</a></span>get_num_domain_dims()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual int yask::yk_var::get_num_domain_dims </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get the number of <em>domain</em> dimensions used in this var. </p>
+<dl class="section return"><dt>Returns</dt><dd>Number of domain dimensions declared in the stencil code or created via <a class="el" href="classyask_1_1yc__solution.html#a192b0f12d3943483514e16c82c15a42b" title="Create an n-dimensional variable in the solution.">yc_solution::new_var()</a>, <a class="el" href="classyask_1_1yk__solution.html#a75ba824977414468dd23f0a1d5f9eaf3" title="[Advanced] Add a new var to the solution.">yk_solution::new_var()</a>, or <a class="el" href="classyask_1_1yk__solution.html#a2899b81d090c4a2f468ccc31adfa9d85" title="[Advanced] Add a new var to the solution with a specified size.">yk_solution::new_fixed_size_var()</a>. </dd></dl>
 
 </div>
 </div>
@@ -490,7 +547,7 @@ Data Storage</h2>
 </div><div class="memdoc">
 
 <p>Get the first valid index in this rank in the specified dimension. </p>
-<p>This is a convenience function that provides the first possible index in any var dimension regardless of the dimension type. It is equivalent to get_first_rank_alloc_index(dim) when <code>dim</code> is a domain dimension, get_first_misc_index(dim) for a misc dimension, and <a class="el" href="classyask_1_1yk__var.html#a6a02011041f38a4d2fe7899d5369511e" title="Get the first valid index in the step dimension.">get_first_valid_step_index()</a> for the step dimension. </p><dl class="section note"><dt>Note</dt><dd>This function should be called only <em>after</em> calling prepare_solution() because prepare_solution() assigns this rank's position in the problem domain. </dd></dl>
+<p>This is a convenience function that provides the first possible index in any var dimension regardless of the dimension type. If <code>dim</code> is a domain dimension, returns the first accessible index in the left padding area. It is equivalent to get_first_misc_index(dim) for a misc dimension, and <a class="el" href="classyask_1_1yk__var.html#a6a02011041f38a4d2fe7899d5369511e" title="Get the first valid index in the step dimension.">get_first_valid_step_index()</a> for the step dimension. </p><dl class="section note"><dt>Note</dt><dd>This function should be called only <em>after</em> calling prepare_solution() because prepare_solution() assigns this rank's position in the problem domain. </dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>the first valid index. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
@@ -498,6 +555,34 @@ Data Storage</h2>
   </table>
   </dd>
 </dl>
+
+</div>
+</div>
+<a id="a3b7117c1479a41c6d5e3b37fbc2309f3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a3b7117c1479a41c6d5e3b37fbc2309f3">&#9670;&nbsp;</a></span>get_first_local_index_vec()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> yask::yk_var::get_first_local_index_vec </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get the first valid index in this rank in all dimensions in this var. </p>
+<p>See <a class="el" href="classyask_1_1yk__var.html#aaf5b3f06b832bbf77b8f722fda8a2998" title="Get the first valid index in this rank in the specified dimension.">get_first_local_index()</a>. </p><dl class="section return"><dt>Returns</dt><dd>vector of first valid indices. </dd></dl>
 
 </div>
 </div>
@@ -526,7 +611,7 @@ Data Storage</h2>
 </div><div class="memdoc">
 
 <p>Get the last index in this rank in the specified dimension. </p>
-<p>This is a convenience function that provides the last possible index in any var dimension regardless of the dimension type. It is equivalent to get_last_rank_alloc_index(dim) when <code>dim</code> is a domain dimension, get_last_misc_index(dim) for a misc dimension, and <a class="el" href="classyask_1_1yk__var.html#a7b346e48cb36b0f304d3b030ac9a1512" title="Get the last valid index in the step dimension.">get_last_valid_step_index()</a> for the step dimension. </p><dl class="section note"><dt>Note</dt><dd>This function should be called only <em>after</em> calling prepare_solution() because prepare_solution() assigns this rank's position in the problem domain. </dd></dl>
+<p>This is a convenience function that provides the last possible index in any var dimension regardless of the dimension type. If <code>dim</code> is a domain dimension, returns the last accessible index in the right padding area. It is equivalent to get_last_misc_index(dim) for a misc dimension, and <a class="el" href="classyask_1_1yk__var.html#a7b346e48cb36b0f304d3b030ac9a1512" title="Get the last valid index in the step dimension.">get_last_valid_step_index()</a> for the step dimension. </p><dl class="section note"><dt>Note</dt><dd>This function should be called only <em>after</em> calling prepare_solution() because prepare_solution() assigns this rank's position in the problem domain. </dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>the last valid index. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
@@ -534,6 +619,34 @@ Data Storage</h2>
   </table>
   </dd>
 </dl>
+
+</div>
+</div>
+<a id="a00d8f5b744b8da99190764f0b0fc1cf5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a00d8f5b744b8da99190764f0b0fc1cf5">&#9670;&nbsp;</a></span>get_last_local_index_vec()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> yask::yk_var::get_last_local_index_vec </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get the last valid index in this rank in all dimensions in this var. </p>
+<p>See <a class="el" href="classyask_1_1yk__var.html#a7266bb36c93cb6ae538a0f081f22fad7" title="Get the last index in this rank in the specified dimension.">get_last_local_index()</a>. </p><dl class="section return"><dt>Returns</dt><dd>vector of last valid indices. </dd></dl>
 
 </div>
 </div>
@@ -562,13 +675,41 @@ Data Storage</h2>
 </div><div class="memdoc">
 
 <p>Get the number of elements allocated in the specified dimension. </p>
-<p>For the domain dimensions, this includes the rank-domain and padding sizes. See the "Detailed Description" for <a class="el" href="classyask_1_1yk__var.html">yk_var</a> for information on var sizes. For any dimension <code>dim</code>, <code>get_alloc_size(dim) == get_last_local_index(dim) - get_first_local_index(dim) + 1</code>; </p><dl class="section return"><dt>Returns</dt><dd>allocation in number of elements (not bytes). </dd></dl>
+<p>For the domain dimensions, this includes the rank-domain and padding sizes. See the "Detailed Description" for <a class="el" href="classyask_1_1yk__var.html">yk_var</a> for information on var sizes. For any dimension <code>dim</code>, <code>get_alloc_size(dim) == get_last_local_index(dim) - get_first_local_index(dim) + 1</code>; </p><dl class="section return"><dt>Returns</dt><dd>allocation size in number of elements (not bytes). </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to get. Must be one of the names from <a class="el" href="classyask_1_1yk__var.html#adf2e93317a2e86d80713ad56a46fdc68" title="Get all the dimensions in this var.">get_dim_names()</a>. </td></tr>
   </table>
   </dd>
 </dl>
+
+</div>
+</div>
+<a id="af47cbeb07ca7728013e71f31bc00281d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#af47cbeb07ca7728013e71f31bc00281d">&#9670;&nbsp;</a></span>get_alloc_size_vec()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> yask::yk_var::get_alloc_size_vec </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get the number of elements allocated in all dimensions in this var. </p>
+<p>See <a class="el" href="classyask_1_1yk__var.html#a1934db25d379b5ae2366e01a88a2c867" title="Get the number of elements allocated in the specified dimension.">get_alloc_size()</a>. </p><dl class="section return"><dt>Returns</dt><dd>vector of allocation sizes in number of elements (not bytes). </dd></dl>
 
 </div>
 </div>
@@ -652,7 +793,8 @@ Data Storage</h2>
 </table>
 </div><div class="memdoc">
 
-<p>Get the domain size for this rank. </p>
+<p>Get the domain size for this rank in the specified dimension. </p>
+<dl class="section note"><dt>Note</dt><dd>This function should be called only <em>after</em> calling prepare_solution() because prepare_solution() assigns this rank's size. </dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>The same value as <a class="el" href="classyask_1_1yk__solution.html#a56ba31268cb0098b64e4503c8996300f" title="Get the local-domain size in the specified dimension, i.e., the size in this rank.">yk_solution::get_rank_domain_size()</a> if <a class="el" href="classyask_1_1yk__var.html#a420e0dde2114ba663069b16d579072eb" title="Determine whether this var is not automatically resized based on the solution.">is_fixed_size()</a> returns <code>false</code> or the fixed sized provided via <a class="el" href="classyask_1_1yk__solution.html#a2899b81d090c4a2f468ccc31adfa9d85" title="[Advanced] Add a new var to the solution with a specified size.">yk_solution::new_fixed_size_var()</a> otherwise. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
@@ -660,6 +802,34 @@ Data Storage</h2>
   </table>
   </dd>
 </dl>
+
+</div>
+</div>
+<a id="a2f58d9368265fd6f9382ba12f876f0d3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2f58d9368265fd6f9382ba12f876f0d3">&#9670;&nbsp;</a></span>get_rank_domain_size_vec()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> yask::yk_var::get_rank_domain_size_vec </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get the domain size for this rank in all domain dimensions in this var. </p>
+<p>See <a class="el" href="classyask_1_1yk__var.html#a3eb132fe3e1f813a0c22b1366e5d55ad" title="Get the domain size for this rank in the specified dimension.">get_rank_domain_size()</a>. </p><dl class="section return"><dt>Returns</dt><dd>vector of values, one for each domain dimension in this var. </dd></dl>
 
 </div>
 </div>
@@ -688,7 +858,7 @@ Data Storage</h2>
 </div><div class="memdoc">
 
 <p>Get the first index of the sub-domain in this rank in the specified dimension. </p>
-<dl class="section note"><dt>Note</dt><dd>This function should be called only <em>after</em> calling prepare_solution() because prepare_solution() assigns this rank's position in the problem domain. </dd></dl>
+<p>Does <em>not</em> include indices of padding area. </p><dl class="section note"><dt>Note</dt><dd>This function should be called only <em>after</em> calling prepare_solution() because prepare_solution() assigns this rank's position in the problem domain. </dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>The same value as <a class="el" href="classyask_1_1yk__solution.html#a03bdef5ba9b0b0e37f9b7be2e2e457a4" title="Get the first index of the sub-domain in this rank in the specified dimension.">yk_solution::get_first_rank_domain_index()</a> if <a class="el" href="classyask_1_1yk__var.html#a420e0dde2114ba663069b16d579072eb" title="Determine whether this var is not automatically resized based on the solution.">is_fixed_size()</a> returns <code>false</code> or zero (0) otherwise. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
@@ -696,6 +866,34 @@ Data Storage</h2>
   </table>
   </dd>
 </dl>
+
+</div>
+</div>
+<a id="a45c2449324430b59811c1c6257cf9a5a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a45c2449324430b59811c1c6257cf9a5a">&#9670;&nbsp;</a></span>get_first_rank_domain_index_vec()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> yask::yk_var::get_first_rank_domain_index_vec </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get the first index of the sub-domain in this rank in all domain dimensions in this var. </p>
+<p>See <a class="el" href="classyask_1_1yk__var.html#a60d8b63ef869693d7eeb556e5254d167" title="Get the first index of the sub-domain in this rank in the specified dimension.">get_first_rank_domain_index()</a>. </p><dl class="section return"><dt>Returns</dt><dd>vector of values, one for each domain dimension in this var. </dd></dl>
 
 </div>
 </div>
@@ -724,7 +922,7 @@ Data Storage</h2>
 </div><div class="memdoc">
 
 <p>Get the last index of the sub-domain in this rank in the specified dimension. </p>
-<dl class="section note"><dt>Note</dt><dd>This function should be called only <em>after</em> calling prepare_solution() because prepare_solution() assigns this rank's position in the problem domain. </dd></dl>
+<p>Does <em>not</em> include indices of padding area. </p><dl class="section note"><dt>Note</dt><dd>This function should be called only <em>after</em> calling prepare_solution() because prepare_solution() assigns this rank's position in the problem domain. </dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>The same value as <a class="el" href="classyask_1_1yk__solution.html#a58f2ce95e150787bc8235e85298dcd01" title="Get the last index of the sub-domain in this rank the specified dimension.">yk_solution::get_last_rank_domain_index()</a> if <a class="el" href="classyask_1_1yk__var.html#a420e0dde2114ba663069b16d579072eb" title="Determine whether this var is not automatically resized based on the solution.">is_fixed_size()</a> returns <code>false</code> or one less than the fixed sized provided via <a class="el" href="classyask_1_1yk__solution.html#a2899b81d090c4a2f468ccc31adfa9d85" title="[Advanced] Add a new var to the solution with a specified size.">yk_solution::new_fixed_size_var()</a> otherwise. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
@@ -732,6 +930,34 @@ Data Storage</h2>
   </table>
   </dd>
 </dl>
+
+</div>
+</div>
+<a id="abdfdb9d4d382fb1c4fe4966e43afb5b2"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abdfdb9d4d382fb1c4fe4966e43afb5b2">&#9670;&nbsp;</a></span>get_last_rank_domain_index_vec()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> yask::yk_var::get_last_rank_domain_index_vec </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get the last index of the sub-domain in this rank in all domain dimensions in this var. </p>
+<p>See <a class="el" href="classyask_1_1yk__var.html#aaf3e835c074a2bdd627f76483727b1dc" title="Get the last index of the sub-domain in this rank in the specified dimension.">get_last_rank_domain_index()</a>. </p><dl class="section return"><dt>Returns</dt><dd>vector of values, one for each domain dimension in this var. </dd></dl>
 
 </div>
 </div>
@@ -841,6 +1067,34 @@ Data Storage</h2>
 
 </div>
 </div>
+<a id="ab0ed2e82d463cc3fae2daa395edb78f4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab0ed2e82d463cc3fae2daa395edb78f4">&#9670;&nbsp;</a></span>get_first_rank_halo_index_vec()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> yask::yk_var::get_first_rank_halo_index_vec </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get the first index of the left halo in this rank in all domain dimensions in this var. </p>
+<p>See <a class="el" href="classyask_1_1yk__var.html#a363c78d8f7f5b40581fb0cb179058410" title="Get the first index of the left halo in this rank in the specified dimension.">get_first_rank_halo_index()</a>. </p><dl class="section return"><dt>Returns</dt><dd>vector of values, one for each domain dimension in this var. </dd></dl>
+
+</div>
+</div>
 <a id="ad3d97b360b0b1e4c5785adf87384c41e"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ad3d97b360b0b1e4c5785adf87384c41e">&#9670;&nbsp;</a></span>get_last_rank_halo_index()</h2>
 
@@ -874,6 +1128,34 @@ Data Storage</h2>
   </table>
   </dd>
 </dl>
+
+</div>
+</div>
+<a id="aa735497e92513f5796af52e8ddb24353"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa735497e92513f5796af52e8ddb24353">&#9670;&nbsp;</a></span>get_last_rank_halo_index_vec()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> yask::yk_var::get_last_rank_halo_index_vec </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get the last index of the right halo in this rank in all domain dimensions in this var. </p>
+<p>See <a class="el" href="classyask_1_1yk__var.html#ad3d97b360b0b1e4c5785adf87384c41e" title="Get the last index of the right halo in this rank in the specified dimension.">get_last_rank_halo_index()</a>. </p><dl class="section return"><dt>Returns</dt><dd>vector of values, one for each domain dimension in this var. </dd></dl>
 
 </div>
 </div>
@@ -1769,7 +2051,7 @@ Data Storage</h2>
 </div><div class="memdoc">
 
 <p><b>[Advanced]</b> Set the maximum L1-norm of a neighbor rank for halo exchange. </p>
-<dl class="section see"><dt>See also</dt><dd><a class="el" href="classyask_1_1yk__var.html#a2de3a290dae76a40b3c208074ebbdb89" title="[Advanced] Get the maximum L1-norm of a neighbor rank for halo exchange.">get_halo_exchange_l1_norm()</a>. </dd></dl>
+<p>This should only be used to override the value calculated automatically by the YASK compiler. </p><dl class="section see"><dt>See also</dt><dd><a class="el" href="classyask_1_1yk__var.html#a2de3a290dae76a40b3c208074ebbdb89" title="[Advanced] Get the maximum L1-norm of a neighbor rank for halo exchange.">get_halo_exchange_l1_norm()</a>. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[in]</td><td class="paramname">norm</td><td>Maximum L1-norm of neighbor rank with which to exchange halos. </td></tr>
@@ -2252,76 +2534,6 @@ Data Storage</h2>
   <table class="params">
     <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to get. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a4184ac69b5e5af07e8cfc0317d6bd759" title="Get all the miscellaneous dimension names.">yk_solution::get_misc_dim_names()</a>. </td></tr>
     <tr><td class="paramdir">[in]</td><td class="paramname">idx</td><td>New value for first index. May be negative. </td></tr>
-  </table>
-  </dd>
-</dl>
-
-</div>
-</div>
-<a id="adb7ed5c0f513ae7a5480a480f08165b7"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#adb7ed5c0f513ae7a5480a480f08165b7">&#9670;&nbsp;</a></span>get_first_rank_alloc_index()</h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> yask::yk_var::get_first_rank_alloc_index </td>
-          <td>(</td>
-          <td class="paramtype">const std::string &amp;&#160;</td>
-          <td class="paramname"><em>dim</em></td><td>)</td>
-          <td> const</td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-
-<p><b>[Advanced]</b> Get the first accessible index in this var in this rank in the specified domain dimension. </p>
-<p>Equivalent to get_first_local_index(dim), where <code>dim</code> is a domain dimension. </p><dl class="section return"><dt>Returns</dt><dd>First valid index in this var. </dd></dl>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to get. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a24c2619b5f0471bcfe8eeb5aed769fec" title="Get all the domain dimension names.">yk_solution::get_domain_dim_names()</a>. </td></tr>
-  </table>
-  </dd>
-</dl>
-
-</div>
-</div>
-<a id="a2919bd783fb240a9d0f43a866bf7f551"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a2919bd783fb240a9d0f43a866bf7f551">&#9670;&nbsp;</a></span>get_last_rank_alloc_index()</h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> yask::yk_var::get_last_rank_alloc_index </td>
-          <td>(</td>
-          <td class="paramtype">const std::string &amp;&#160;</td>
-          <td class="paramname"><em>dim</em></td><td>)</td>
-          <td> const</td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-
-<p><b>[Advanced]</b> Get the last accessible index in this var in this rank in the specified domain dimension. </p>
-<p>Equivalent to get_last_local_index(dim), where <code>dim</code> is a domain dimension. </p><dl class="section return"><dt>Returns</dt><dd>Last valid index in this var. </dd></dl>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to get. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a24c2619b5f0471bcfe8eeb5aed769fec" title="Get all the domain dimension names.">yk_solution::get_domain_dim_names()</a>. </td></tr>
   </table>
   </dd>
 </dl>

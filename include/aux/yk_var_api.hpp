@@ -198,7 +198,8 @@ namespace yask {
         /// Get the number of dimensions used in this var.
         /**
            This may include domain, step, and/or miscellaneous dimensions.
-           @returns Number of dimensions created via yc_solution::new_var(),
+           @returns Number of dimensions declared in the stencil code
+           or created via yc_solution::new_var(),
            yk_solution::new_var(), or yk_solution::new_fixed_size_var().
         */
         virtual int get_num_dims() const =0;
@@ -210,6 +211,14 @@ namespace yask {
         */
         virtual string_vec
         get_dim_names() const =0;
+
+        /// Get the number of _domain_ dimensions used in this var.
+        /**
+           @returns Number of domain dimensions declared in the stencil code
+           or created via yc_solution::new_var(),
+           yk_solution::new_var(), or yk_solution::new_fixed_size_var().
+        */
+        virtual int get_num_domain_dims() const =0;
 
         /// Determine whether specified dimension exists in this var.
         /**
@@ -230,9 +239,9 @@ namespace yask {
         /**
            This is a convenience function that provides the first possible
            index in any var dimension regardless of the dimension type.
-           It is equivalent to
-           get_first_rank_alloc_index(dim) when `dim` is
-           a domain dimension, get_first_misc_index(dim)
+           If `dim` is a domain dimension, returns the first accessible index
+           in the left padding area.
+           It is equivalent to get_first_misc_index(dim)
            for a misc dimension, and get_first_valid_step_index()
            for the step dimension.
            @note This function should be called only *after* calling prepare_solution()
@@ -244,13 +253,21 @@ namespace yask {
                                 /**< [in] Name of dimension to get.  Must be one of
                                    the names from get_dim_names(). */ ) const =0;
 
+        /// Get the first valid index in this rank in all dimensions in this var.
+        /**
+           See get_first_local_index().
+           @returns vector of first valid indices.
+        */
+        virtual idx_t_vec
+        get_first_local_index_vec() const =0;
+
         /// Get the last index in this rank in the specified dimension.
         /**
            This is a convenience function that provides the last possible
            index in any var dimension regardless of the dimension type.
-           It is equivalent to
-           get_last_rank_alloc_index(dim) when `dim` is
-           a domain dimension, get_last_misc_index(dim)
+           If `dim` is a domain dimension, returns the last accessible index
+           in the right padding area.
+           It is equivalent to get_last_misc_index(dim)
            for a misc dimension, and get_last_valid_step_index()
            for the step dimension.
            @note This function should be called only *after* calling prepare_solution()
@@ -262,18 +279,34 @@ namespace yask {
                                /**< [in] Name of dimension to get.  Must be one of
                                   the names from get_dim_names(). */ ) const =0;
 
+        /// Get the last valid index in this rank in all dimensions in this var.
+        /**
+           See get_last_local_index().
+           @returns vector of last valid indices.
+        */
+        virtual idx_t_vec
+        get_last_local_index_vec() const =0;
+
         /// Get the number of elements allocated in the specified dimension.
         /**
            For the domain dimensions, this includes the rank-domain and padding sizes.
            See the "Detailed Description" for \ref yk_var for information on var sizes.
            For any dimension `dim`, `get_alloc_size(dim) ==
            get_last_local_index(dim) - get_first_local_index(dim) + 1`;
-           @returns allocation in number of elements (not bytes).
+           @returns allocation size in number of elements (not bytes).
         */
         virtual idx_t
         get_alloc_size(const std::string& dim
                        /**< [in] Name of dimension to get. Must be one of
                           the names from get_dim_names(). */ ) const =0;
+
+        /// Get the number of elements allocated in all dimensions in this var.
+        /**
+           See get_alloc_size().
+           @returns vector of allocation sizes in number of elements (not bytes).
+        */
+        virtual idx_t_vec
+        get_alloc_size_vec() const =0;
 
         /// Get the first valid index in the step dimension.
         /**
@@ -299,8 +332,10 @@ namespace yask {
         virtual idx_t
         get_last_valid_step_index() const =0;
         
-        /// Get the domain size for this rank.
+        /// Get the domain size for this rank in the specified dimension.
         /**
+           @note This function should be called only *after* calling prepare_solution()
+           because prepare_solution() assigns this rank's size.
            @returns The same value as yk_solution::get_rank_domain_size() if
            is_fixed_size() returns `false` or the fixed sized provided via
            yk_solution::new_fixed_size_var() otherwise.
@@ -310,8 +345,17 @@ namespace yask {
                              /**< [in] Name of dimension to get.  Must be one of
                                 the names from yk_solution::get_domain_dim_names(). */) const =0;
 
+        /// Get the domain size for this rank in all domain dimensions in this var.
+        /**
+           See get_rank_domain_size().
+           @returns vector of values, one for each domain dimension in this var.
+        */
+        virtual idx_t_vec
+        get_rank_domain_size_vec() const =0;
+
         /// Get the first index of the sub-domain in this rank in the specified dimension.
         /**
+           Does _not_ include indices of padding area.
            @note This function should be called only *after* calling prepare_solution()
            because prepare_solution() assigns this rank's position in the problem domain.
            @returns The same value as yk_solution::get_first_rank_domain_index() if
@@ -322,8 +366,17 @@ namespace yask {
                                     /**< [in] Name of dimension to get.  Must be one of
                                        the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
+        /// Get the first index of the sub-domain in this rank in all domain dimensions in this var.
+        /**
+           See get_first_rank_domain_index().
+           @returns vector of values, one for each domain dimension in this var.
+        */
+        virtual idx_t_vec
+        get_first_rank_domain_index_vec() const =0;
+
         /// Get the last index of the sub-domain in this rank in the specified dimension.
         /**
+           Does _not_ include indices of padding area.
            @note This function should be called only *after* calling prepare_solution()
            because prepare_solution() assigns this rank's position in the problem domain.
            @returns The same value as yk_solution::get_last_rank_domain_index() if
@@ -334,6 +387,14 @@ namespace yask {
         get_last_rank_domain_index(const std::string& dim
                                     /**< [in] Name of dimension to get.  Must be one of
                                        the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+
+        /// Get the last index of the sub-domain in this rank in all domain dimensions in this var.
+        /**
+           See get_last_rank_domain_index().
+           @returns vector of values, one for each domain dimension in this var.
+        */
+        virtual idx_t_vec
+        get_last_rank_domain_index_vec() const =0;
 
         /// Get the left halo size in the specified dimension.
         /**
@@ -370,6 +431,14 @@ namespace yask {
                                     /**< [in] Name of dimension to get.  Must be one of
                                        the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
+        /// Get the first index of the left halo in this rank in all domain dimensions in this var.
+        /**
+           See get_first_rank_halo_index().
+           @returns vector of values, one for each domain dimension in this var.
+        */
+        virtual idx_t_vec
+        get_first_rank_halo_index_vec() const =0;
+        
         /// Get the last index of the right halo in this rank in the specified dimension.
         /**
            @note This function should be called only *after* calling prepare_solution()
@@ -382,6 +451,14 @@ namespace yask {
         get_last_rank_halo_index(const std::string& dim
                                     /**< [in] Name of dimension to get.  Must be one of
                                        the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+
+        /// Get the last index of the right halo in this rank in all domain dimensions in this var.
+        /**
+           See get_last_rank_halo_index().
+           @returns vector of values, one for each domain dimension in this var.
+        */
+        virtual idx_t_vec
+        get_last_rank_halo_index_vec() const =0;
 
         /// Get the actual left padding in the specified dimension.
         /**
@@ -754,6 +831,8 @@ namespace yask {
         
         /// **[Advanced]** Set the maximum L1-norm of a neighbor rank for halo exchange.
         /**
+           This should only be used to override the value calculated automatically by
+           the YASK compiler.
            @see get_halo_exchange_l1_norm().
         */
         virtual void
@@ -937,28 +1016,6 @@ namespace yask {
                              idx_t idx /**< [in] New value for first index.
                                         May be negative. */ ) =0;
 
-        /// **[Advanced]** Get the first accessible index in this var in this rank in the specified domain dimension.
-        /**
-           Equivalent to get_first_local_index(dim), where `dim` is a domain dimension.
-           @returns First valid index in this var.
-        */
-        virtual idx_t
-        get_first_rank_alloc_index(const std::string& dim
-                                   /**< [in] Name of dimension to get.
-                                      Must be one of
-                                      the names from yk_solution::get_domain_dim_names(). */ ) const =0;
-
-        /// **[Advanced]** Get the last accessible index in this var in this rank in the specified domain dimension.
-        /**
-           Equivalent to get_last_local_index(dim), where `dim` is a domain dimension.
-           @returns Last valid index in this var.
-        */
-        virtual idx_t
-        get_last_rank_alloc_index(const std::string& dim
-                                  /**< [in] Name of dimension to get.
-                                     Must be one of
-                                     the names from yk_solution::get_domain_dim_names(). */ ) const =0;
-
         /// **[Advanced]** Determine whether storage has been allocated.
         /**
            @returns `true` if storage has been allocated,
@@ -1090,6 +1147,21 @@ namespace yask {
            returns `true` or NULL otherwise.
         */
         virtual void* get_raw_storage_buffer() =0;
+
+
+        /// **[Deprecated]** Use get_first_local_index().
+        YASK_DEPRECATED
+        virtual idx_t
+        get_first_rank_alloc_index(const std::string& dim) const {
+            return get_first_local_index(dim);
+        }
+
+        /// **[Deprecated]** Use get_last_local_index().
+        YASK_DEPRECATED
+        virtual idx_t
+        get_last_rank_alloc_index(const std::string& dim) const {
+            return get_last_local_index(dim);
+        }
 
     }; // yk_var.
 

@@ -31,112 +31,63 @@ using namespace std;
 namespace yask {
 
     // APIs to get info from vars: one with name of dim with a lot
-    // of checking, and one with index of dim with no checking.
+    // of checking, one with index of dim with no checking.
     #define GET_VAR_API(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
         idx_t YkVarImpl::api_name(const string& dim) const {            \
             STATE_VARS(gbp());                                          \
             dims->check_dim_type(dim, #api_name, step_ok, domain_ok, misc_ok); \
             int posn = gb().get_dim_posn(dim, true, #api_name);         \
-            idx_t mbit = 1LL << posn;                                   \
             if (prep_req && corep()->_rank_offsets[posn] < 0)           \
                 THROW_YASK_EXCEPTION("Error: '" #api_name "()' called on var '" + \
                                      get_name() + "' before calling 'prepare_solution()'"); \
+            auto cp = corep();                                          \
             auto rtn = expr;                                            \
             return rtn;                                                 \
         }                                                               \
         idx_t YkVarImpl::api_name(int posn) const {                     \
             STATE_VARS(gbp());                                          \
-            idx_t mbit = 1LL << posn;                                   \
+            auto cp = corep();                                          \
             auto rtn = expr;                                            \
             return rtn;                                                 \
         }
 
-    // Internal APIs.
-    GET_VAR_API(_get_left_wf_ext,
-                corep()->_left_wf_exts[posn],
-                true, true, true, false)
-    GET_VAR_API(_get_right_wf_ext,
-                corep()->_right_wf_exts[posn],
-                true, true, true, false)
-    GET_VAR_API(_get_soln_vec_len,
-                corep()->_soln_vec_lens[posn],
-                true, true, true, true)
-    GET_VAR_API(_get_var_vec_len,
-                corep()->_var_vec_lens[posn],
-                true, true, true, true)
-    GET_VAR_API(_get_rank_offset,
-                corep()->_rank_offsets[posn],
-                true, true, true, true)
-    GET_VAR_API(_get_local_offset,
-                corep()->_local_offsets[posn],
-                true, true, true, false)
-
-    // Exposed APIs.
-    GET_VAR_API(get_first_local_index,
-                corep()->get_first_local_index(posn),
-                true, true, true, true)
-    GET_VAR_API(get_last_local_index,
-                corep()->get_last_local_index(posn),
-                true, true, true, true)
-    GET_VAR_API(get_first_misc_index,
-                corep()->_local_offsets[posn],
-                false, false, true, false)
-    GET_VAR_API(get_last_misc_index,
-                corep()->_local_offsets[posn] + corep()->_domains[posn] - 1,
-                false, false, true, false)
-    GET_VAR_API(get_rank_domain_size,
-                corep()->_domains[posn],
-                false, true, false, false)
-    GET_VAR_API(get_left_pad_size,
-                corep()->_actl_left_pads[posn],
-                false, true, false, false)
-    GET_VAR_API(get_right_pad_size,
-                corep()->_actl_right_pads[posn],
-                false, true, false, false)
-    GET_VAR_API(get_left_halo_size,
-                corep()->_left_halos[posn],
-                false, true, false, false)
-    GET_VAR_API(get_right_halo_size,
-                corep()->_right_halos[posn],
-                false, true, false, false)
-    GET_VAR_API(get_left_extra_pad_size,
-                corep()->_actl_left_pads[posn] - corep()->_left_halos[posn],
-                false, true, false, false)
-    GET_VAR_API(get_right_extra_pad_size,
-                corep()->_actl_right_pads[posn] - corep()->_right_halos[posn],
-                false, true, false, false)
-    GET_VAR_API(get_alloc_size,
-                corep()->_allocs[posn],
-                true, true, true, false)
-    GET_VAR_API(get_first_rank_domain_index,
-                corep()->_rank_offsets[posn],
-                false, true, false, true)
-    GET_VAR_API(get_last_rank_domain_index,
-                corep()->_rank_offsets[posn] + corep()->_domains[posn] - 1,
-                false, true, false, true)
-    GET_VAR_API(get_first_rank_halo_index,
-                corep()->_rank_offsets[posn] - corep()->_left_halos[posn],
-                false, true, false, true)
-    GET_VAR_API(get_last_rank_halo_index,
-                corep()->_rank_offsets[posn] + corep()->_domains[posn] + corep()->_right_halos[posn] - 1,
-                false, true, false, true)
-    GET_VAR_API(get_first_rank_alloc_index,
-                corep()->get_first_local_index(posn),
-                false, true, false, true)
-    GET_VAR_API(get_last_rank_alloc_index,
-                corep()->get_last_local_index(posn),
-                false, true, false, true)
-    #undef GET_VAR_API
+    // Add vector version that retuns only allowed results.
+    #define GET_VAR_API2(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
+        GET_VAR_API(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
+        idx_t_vec YkVarImpl::api_name ## _vec() const {                 \
+            STATE_VARS(gbp());                                          \
+            if (prep_req && corep()->_rank_offsets[0] < 0)              \
+                THROW_YASK_EXCEPTION("Error: '" #api_name "_vec()' called on var '" + \
+                                     get_name() + "' before calling 'prepare_solution()'"); \
+            auto cp = corep();                                          \
+            auto nvdims = get_num_dims();                               \
+            auto nadims = 0;                                            \
+            if (step_ok) nadims += cp->_num_step_dims;                  \
+            if (domain_ok) nadims += cp->_num_domain_dims;              \
+            if (misc_ok) nadims += cp->_num_misc_dims;                  \
+            idx_t_vec res(nadims, 0);                                   \
+            int i = 0;                                                  \
+            for (int posn = 0; posn < nvdims; posn++) {                 \
+                idx_t mbit = idx_t(1) << posn;                          \
+                if ((step_ok && (mbit & cp->_step_dim_mask) != 0) ||    \
+                    (domain_ok && (mbit & cp->_domain_dim_mask) != 0) || \
+                    (misc_ok && (mbit & cp->_misc_dim_mask) != 0)) {    \
+                    res.at(i++) = expr;                                 \
+                }                                                       \
+            }                                                           \
+            assert(i == nadims);                                        \
+            return res;                                                 \
+        }
 
     // APIs to set vars.
-    #define SET_VAR_API(api_name, expr, need_resize, step_ok, domain_ok, misc_ok) \
+    #define SET_VAR_API(api_name, expr, step_ok, domain_ok, misc_ok, need_resize) \
         void YkVarImpl::api_name(const string& dim, idx_t n) {          \
             STATE_VARS(gbp());                                          \
             TRACE_MSG("var '" << get_name() << "'."                     \
                       #api_name "('" << dim << "', " << n << ")");      \
             dims->check_dim_type(dim, #api_name, step_ok, domain_ok, misc_ok); \
             int posn = gb().get_dim_posn(dim, true, #api_name);         \
-            idx_t mbit = 1LL << posn;                                   \
+            auto cp = corep();                                          \
             expr;                                                       \
             if (need_resize) resize();                                  \
             else sync_core();                                           \
@@ -145,98 +96,210 @@ namespace yask {
             STATE_VARS(gbp());                                          \
             TRACE_MSG("var '" << get_name() << "'."                     \
                       #api_name "('" << posn << "', " << n << ")");     \
-            idx_t mbit = 1LL << posn;                                   \
+            auto cp = corep();                                          \
             expr;                                                       \
             if (need_resize) resize();                                  \
             else sync_core();                                           \
         }
 
+    // Add vector versions that take only domain-dim vals.
+    #define SET_VAR_API2(api_name, expr, step_ok, domain_ok, misc_ok, need_resize) \
+        SET_VAR_API(api_name, expr, step_ok, domain_ok, misc_ok, need_resize) \
+        void YkVarImpl::api_name ## _vec(idx_t_vec vals) {              \
+            STATE_VARS(gbp());                                          \
+            TRACE_MSG("var '" << get_name() << "'."                     \
+                      #api_name "_vec(...)");                           \
+            auto cp = corep();                                          \
+            auto nvdims = get_num_dims();                               \
+            auto nadims = 0;                                            \
+            if (step_ok) nadims += cp->_num_step_dims;                  \
+            if (domain_ok) nadims += cp->_num_domain_dims;              \
+            if (misc_ok) nadims += cp->_num_misc_dims;                  \
+            if (vals.size() != nadims)                                  \
+                THROW_YASK_EXCEPTION("Error: '" #api_name               \
+                                     "_vec()' called on var '" +        \
+                                     get_name() + "' without the proper number of values"); \
+            int i = 0;                                                  \
+            for (int posn = 0; posn < nvdims; posn++) {                 \
+                idx_t mbit = idx_t(1) << posn;                          \
+                if ((step_ok && (mbit & cp->_step_dim_mask) != 0) ||    \
+                    (domain_ok && (mbit & cp->_domain_dim_mask) != 0) || \
+                    (misc_ok && (mbit & cp->_misc_dim_mask) != 0)) {    \
+                    auto n = vals.at(i++);                              \
+                    expr;                                               \
+                }                                                       \
+            }                                                           \
+            if (need_resize) resize();                                  \
+            else sync_core();                                           \
+        }                                                               \
+        void YkVarImpl::api_name ## _vec(idx_t_init_list vals) {        \
+            idx_t_vec vec(vals);                                            \
+            api_name ## _vec(vec);                                      \
+        }
+    
+    // Internal APIs.
+    GET_VAR_API(_get_left_wf_ext,
+                cp->_left_wf_exts[posn],
+                true, true, true, false)
+    GET_VAR_API(_get_right_wf_ext,
+                cp->_right_wf_exts[posn],
+                true, true, true, false)
+    GET_VAR_API(_get_soln_vec_len,
+                cp->_soln_vec_lens[posn],
+                true, true, true, true)
+    GET_VAR_API(_get_var_vec_len,
+                cp->_var_vec_lens[posn],
+                true, true, true, true)
+    GET_VAR_API(_get_rank_offset,
+                cp->_rank_offsets[posn],
+                true, true, true, true)
+    GET_VAR_API(_get_local_offset,
+                cp->_local_offsets[posn],
+                true, true, true, false)
+
+    // Exposed APIs.
+    GET_VAR_API(get_first_misc_index,
+                cp->_local_offsets[posn],
+                false, false, true, false)
+    GET_VAR_API(get_last_misc_index,
+                cp->_local_offsets[posn] + cp->_domains[posn] - 1,
+                false, false, true, false)
+
+    GET_VAR_API2(get_alloc_size,
+                cp->_allocs[posn],
+                true, true, true, false)
+    GET_VAR_API2(get_first_local_index,
+                cp->get_first_local_index(posn),
+                true, true, true, true)
+    GET_VAR_API2(get_last_local_index,
+                cp->get_last_local_index(posn),
+                true, true, true, true)
+
+    GET_VAR_API2(get_left_pad_size,
+                cp->_actl_left_pads[posn],
+                false, true, false, false)
+    GET_VAR_API2(get_right_pad_size,
+                cp->_actl_right_pads[posn],
+                false, true, false, false)
+    GET_VAR_API2(get_left_halo_size,
+                cp->_left_halos[posn],
+                false, true, false, false)
+    GET_VAR_API2(get_right_halo_size,
+                cp->_right_halos[posn],
+                false, true, false, false)
+    GET_VAR_API2(get_left_extra_pad_size,
+                cp->_actl_left_pads[posn] - cp->_left_halos[posn],
+                false, true, false, false)
+    GET_VAR_API2(get_right_extra_pad_size,
+                cp->_actl_right_pads[posn] - cp->_right_halos[posn],
+                false, true, false, false)
+
+    GET_VAR_API2(get_rank_domain_size,
+                cp->_domains[posn],
+                false, true, false, !gb()._fixed_size)
+    GET_VAR_API2(get_first_rank_domain_index,
+                cp->_rank_offsets[posn],
+                false, true, false, true)
+    GET_VAR_API2(get_last_rank_domain_index,
+                cp->_rank_offsets[posn] + cp->_domains[posn] - 1,
+                false, true, false, true)
+    GET_VAR_API2(get_first_rank_halo_index,
+                cp->_rank_offsets[posn] - cp->_left_halos[posn],
+                false, true, false, true)
+    GET_VAR_API2(get_last_rank_halo_index,
+                cp->_rank_offsets[posn] + cp->_domains[posn] + cp->_right_halos[posn] - 1,
+                false, true, false, true)
+
     // These are the internal, unchecked access functions that allow
     // changes prohibited thru the APIs.
     SET_VAR_API(_set_rank_offset,
-                corep()->_rank_offsets[posn] = n,
-                false, true, true, true)
+                cp->_rank_offsets[posn] = n,
+                true, true, true, false)
     SET_VAR_API(_set_local_offset,
-                corep()->_local_offsets[posn] = n;
-                assert(imod_flr(n, corep()->_var_vec_lens[posn]) == 0);
-                corep()->_vec_local_offsets[posn] = n / corep()->_var_vec_lens[posn],
-                false, true, true, true)
+                cp->_local_offsets[posn] = n;
+                assert(imod_flr(n, cp->_var_vec_lens[posn]) == 0);
+                cp->_vec_local_offsets[posn] = n / cp->_var_vec_lens[posn],
+                true, true, true, false)
     SET_VAR_API(_set_domain_size,
-                corep()->_domains[posn] = n,
+                cp->_domains[posn] = n,
                 true, true, true, true)
     SET_VAR_API(_set_left_pad_size,
-                corep()->_actl_left_pads[posn] = n,
+                cp->_actl_left_pads[posn] = n,
                 true, true, true, true)
     SET_VAR_API(_set_right_pad_size,
-                corep()->_actl_right_pads[posn] = n,
+                cp->_actl_right_pads[posn] = n,
                 true, true, true, true)
     SET_VAR_API(_set_left_wf_ext,
-                corep()->_left_wf_exts[posn] = n,
+                cp->_left_wf_exts[posn] = n,
                 true, true, true, true)
     SET_VAR_API(_set_right_wf_ext,
-                corep()->_right_wf_exts[posn] = n,
+                cp->_right_wf_exts[posn] = n,
                 true, true, true, true)
     SET_VAR_API(_set_alloc_size,
-                corep()->_domains[posn] = n,
+                cp->_domains[posn] = n,
                 true, true, true, true)
+    SET_VAR_API(update_left_min_pad_size,
+                cp->_req_left_pads[posn] = max(n, cp->_req_left_pads[posn]),
+                false, true, false, true)
+    SET_VAR_API(update_right_min_pad_size,
+                cp->_req_right_pads[posn] = max(n, cp->_req_right_pads[posn]),
+                false, true, false, true)
+    SET_VAR_API(update_min_pad_size,
+                cp->_req_left_pads[posn] = max(n, cp->_req_left_pads[posn]);
+                cp->_req_right_pads[posn] = max(n, cp->_req_right_pads[posn]),
+                false, true, false, true)
+    SET_VAR_API(update_left_extra_pad_size,
+                cp->_req_left_epads[posn] = max(n, cp->_req_left_epads[posn]),
+                false, true, false, true)
+    SET_VAR_API(update_right_extra_pad_size,
+                cp->_req_right_epads[posn] = max (n, cp->_req_right_epads[posn]),
+                false, true, false, true)
+    SET_VAR_API(update_extra_pad_size,
+                cp->_req_left_epads[posn] = max(n, cp->_req_left_epads[posn]);
+                cp->_req_right_epads[posn] = max (n, cp->_req_right_epads[posn]),
+                false, true, false, true)
 
     // These are the safer ones used in the APIs.
-    SET_VAR_API(set_left_halo_size,
-                corep()->_left_halos[posn] = n,
-                true, false, true, false)
-    SET_VAR_API(set_right_halo_size,
-                corep()->_right_halos[posn] = n,
-                true, false, true, false)
-    SET_VAR_API(set_halo_size,
-                corep()->_left_halos[posn] = corep()->_right_halos[posn] = n,
-                true, false, true, false)
-    SET_VAR_API(set_alloc_size,
-                corep()->_domains[posn] = n,
-                true, gb()._is_dynamic_step_alloc, gb()._fixed_size, gb()._is_dynamic_misc_alloc)
-    SET_VAR_API(set_left_min_pad_size,
-                corep()->_req_left_pads[posn] = n,
-                true, false, true, false)
-    SET_VAR_API(set_right_min_pad_size,
-                corep()->_req_right_pads[posn] = n,
-                true, false, true, false)
-    SET_VAR_API(set_min_pad_size,
-                corep()->_req_left_pads[posn] = n;
-                corep()->_req_right_pads[posn] = n,
-                true, false, true, false)
-    SET_VAR_API(update_left_min_pad_size,
-                corep()->_req_left_pads[posn] = max(n, corep()->_req_left_pads[posn]),
-                true, false, true, false)
-    SET_VAR_API(update_right_min_pad_size,
-                corep()->_req_right_pads[posn] = max(n, corep()->_req_right_pads[posn]),
-                true, false, true, false)
-    SET_VAR_API(update_min_pad_size,
-                corep()->_req_left_pads[posn] = max(n, corep()->_req_left_pads[posn]);
-                corep()->_req_right_pads[posn] = max(n, corep()->_req_right_pads[posn]),
-                true, false, true, false)
-    SET_VAR_API(set_left_extra_pad_size,
-                corep()->_req_left_epads[posn] = n,
-                true, false, true, false)
-    SET_VAR_API(set_right_extra_pad_size,
-                corep()->_req_right_epads[posn] = n,
-                true, false, true, false)
-    SET_VAR_API(set_extra_pad_size,
-                corep()->_req_left_epads[posn] = n;
-                corep()->_req_right_epads[posn] = n,
-                true, false, true, false)
-    SET_VAR_API(update_left_extra_pad_size,
-                corep()->_req_left_epads[posn] = max(n, corep()->_req_left_epads[posn]),
-                true, false, true, false)
-    SET_VAR_API(update_right_extra_pad_size,
-                corep()->_req_right_epads[posn] = max (n, corep()->_req_right_epads[posn]),
-                true, false, true, false)
-    SET_VAR_API(update_extra_pad_size,
-                corep()->_req_left_epads[posn] = max(n, corep()->_req_left_epads[posn]);
-                corep()->_req_right_epads[posn] = max (n, corep()->_req_right_epads[posn]),
-                true, false, true, false)
     SET_VAR_API(set_first_misc_index,
-                corep()->_local_offsets[posn] = n,
-                false, false, false, gb()._is_user_var)
+                cp->_local_offsets[posn] = n,
+                false, false, gb()._is_user_var, false)
+    SET_VAR_API(set_alloc_size,
+                cp->_domains[posn] = n,
+                gb()._is_dynamic_step_alloc, gb()._fixed_size, gb()._is_dynamic_misc_alloc, true)
+
+    SET_VAR_API(set_left_halo_size,
+                cp->_left_halos[posn] = n,
+                false, true, false, true)
+    SET_VAR_API(set_right_halo_size,
+                cp->_right_halos[posn] = n,
+                false, true, false, true)
+    SET_VAR_API(set_halo_size,
+                cp->_left_halos[posn] = cp->_right_halos[posn] = n,
+                false, true, false, true)
+    SET_VAR_API(set_left_min_pad_size,
+                cp->_req_left_pads[posn] = n,
+                false, true, false, true)
+    SET_VAR_API(set_right_min_pad_size,
+                cp->_req_right_pads[posn] = n,
+                false, true, false, true)
+    SET_VAR_API(set_min_pad_size,
+                cp->_req_left_pads[posn] = n;
+                cp->_req_right_pads[posn] = n,
+                false, true, false, true)
+    SET_VAR_API(set_left_extra_pad_size,
+                cp->_req_left_epads[posn] = n,
+                false, true, false, true)
+    SET_VAR_API(set_right_extra_pad_size,
+                cp->_req_right_epads[posn] = n,
+                false, true, false, true)
+    SET_VAR_API(set_extra_pad_size,
+                cp->_req_left_epads[posn] = n;
+                cp->_req_right_epads[posn] = n,
+                false, true, false, true)
     #undef SET_VAR_API
+    #undef SET_VAR_API2
+    #undef GET_VAR_API
+    #undef GET_VAR_API2
 
     bool YkVarImpl::is_storage_layout_identical(const YkVarImpl* op,
                                                 bool check_sizes) const {

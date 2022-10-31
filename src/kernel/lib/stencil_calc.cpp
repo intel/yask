@@ -346,10 +346,10 @@ namespace yask {
                               gp->get_name() << "' with halos " <<
                               gp->get_left_halo_size(posn) << " and " <<
                               gp->get_right_halo_size(posn) << " allocated [" <<
-                              gp->get_first_rank_alloc_index(posn) << "..." <<
-                              gp->get_last_rank_alloc_index(posn) << "] in dim '" << dname << "'");
-                    assert(adj_idxs.begin[i] >= gp->get_first_rank_alloc_index(posn));
-                    assert(adj_idxs.end[i] <= gp->get_last_rank_alloc_index(posn) + 1);
+                              gp->get_first_local_index(posn) << "..." <<
+                              gp->get_last_local_index(posn) << "] in dim '" << dname << "'");
+                    assert(adj_idxs.begin[i] >= gp->get_first_local_index(posn));
+                    assert(adj_idxs.end[i] <= gp->get_last_local_index(posn) + 1);
 
                     // If existing stride is >= whole tile, adjust it also.
                     idx_t width = idxs.end[i] - idxs.begin[i];

@@ -37,7 +37,7 @@ namespace yask {
     #define GET_SOLN_API(api_name, expr, start_i, step_ok, domain_ok, misc_ok) \
         idx_t StencilContext::get_ ## api_name(const string& dim) const { \
             STATE_VARS(this);                                           \
-            dims->check_dim_type(dim, #api_name, step_ok, domain_ok, misc_ok); \
+            dims->check_dim_type(dim, "get_" #api_name, step_ok, domain_ok, misc_ok); \
             return expr[dim];                                           \
         }                                                               \
         idx_t_vec StencilContext::get_ ## api_name ## _vec() const {    \
@@ -49,7 +49,7 @@ namespace yask {
             STATE_VARS(this);                                           \
             TRACE_MSG("solution '" << get_name() << "'.set_"            \
                       #api_name "('" << dim << "', " << n << ")");      \
-            dims->check_dim_type(dim, #api_name, step_ok, domain_ok, misc_ok); \
+            dims->check_dim_type(dim, "set_" #api_name, step_ok, domain_ok, misc_ok); \
             expr[dim] = n;                                              \
             update_var_info(false);                                     \
             if (reset_prep) set_prepared(false);                        \

@@ -113,6 +113,8 @@ and Intel(R) graphics processors.
   - Intel(R) Xeon Phi(TM) x100-family processors (KNC) are no longer supported.
     (Intel(R) Xeon Phi(TM) x200-family processors (KNL) are still supported.)
   - Python v2 is no longer supported.
+  - New vector APIs were added to `yk_solution` and `yk_var` to allow getting
+    or setting multiple dimensions in one API call.
   - `new_relative_var_point()` API is deprecated.
   - APIs that were previously deprecated in the `yk_var` class have been removed.
 

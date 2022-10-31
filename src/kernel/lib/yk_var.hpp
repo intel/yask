@@ -117,6 +117,11 @@ namespace yask {
         idx_t _domain_dim_mask;
         idx_t _misc_dim_mask;
 
+        // Counts of each dim type.
+        idx_t _num_step_dims;
+        idx_t _num_domain_dims;
+        idx_t _num_misc_dims;
+
         // Ctor.
         YkVarBaseCore(int ndims);
         
@@ -669,20 +674,31 @@ namespace yask {
             KernelStateBase(stateb), _corep(corep) {
             STATE_VARS(&stateb);
 
-            // Set masks in core.
+            // Set masks & counts in core.
             _corep->_step_dim_mask = 0;
             _corep->_domain_dim_mask = 0;
             _corep->_misc_dim_mask = 0;
+            _corep->_num_step_dims = 0;
+            _corep->_num_domain_dims = 0;
+            _corep->_num_misc_dims = 0;
             for (size_t i = 0; i < dim_names.size(); i++) {
                 idx_t mbit = 1LL << i;
                 auto& dname = dim_names[i];
-                if (dname == step_dim)
+                if (dname == step_dim) {
                     _corep->_step_dim_mask |= mbit;
-                else if (domain_dims.lookup(dname))
+                    _corep->_num_step_dims++;
+                }
+                else if (domain_dims.lookup(dname)) {
                     _corep->_domain_dim_mask |= mbit;
-                else
+                    _corep->_num_domain_dims++;
+                }
+                else {
                     _corep->_misc_dim_mask |= mbit;
+                    _corep->_num_misc_dims++;
+                }
             }
+            assert(dim_names.size() ==
+                   _corep->_num_step_dims + _corep->_num_domain_dims + _corep->_num_misc_dims);
         }
 
         // Dtor.
@@ -746,6 +762,11 @@ namespace yask {
         // Not necessarily same as stencil problem.
         inline int get_num_dims() const {
             return _corep->_domains.get_num_dims();
+        }
+
+        // Num domain dims in this var.
+        inline int get_num_domain_dims() const {
+            return _corep->_num_domain_dims;
         }
 
         // Dims same?
@@ -1749,6 +1770,9 @@ namespace yask {
         virtual int get_num_dims() const {
             return gb().get_num_dims();
         }
+        virtual int get_num_domain_dims() const {
+            return gb().get_num_domain_dims();
+        }
         virtual bool is_dim_used(const std::string& dim) const {
             return gb().is_dim_used(dim);
         }
@@ -1801,12 +1825,20 @@ namespace yask {
             gb()._l1_dist = norm;
         }
 
+        // See yk_var_apis.cpp for corresponding definition macros.
         #define GET_VAR_API(api_name)                                   \
             virtual idx_t api_name(const std::string& dim) const;       \
             virtual idx_t api_name(int posn) const;
+        #define GET_VAR_API2(api_name)                                  \
+            GET_VAR_API(api_name)                                       \
+            virtual idx_t_vec api_name ## _vec() const;
         #define SET_VAR_API(api_name)                                   \
             virtual void api_name(const std::string& dim, idx_t n);     \
             virtual void api_name(int posn, idx_t n);
+        #define SET_VAR_API2(api_name)                                  \
+            SET_VAR_API(api_name)                                       \
+            virtual void api_name ## _vec(idx_t_vec);                   \
+            virtual void api_name ## _vec(idx_t_init_list);
 
         // Settings that should never be exposed as APIs because
         // they can break the usage model.
@@ -1827,47 +1859,47 @@ namespace yask {
         SET_VAR_API(_set_rank_offset)
         SET_VAR_API(_set_right_pad_size)
         SET_VAR_API(_set_right_wf_ext)
+        SET_VAR_API(update_left_min_pad_size)
+        SET_VAR_API(update_right_min_pad_size)
+        SET_VAR_API(update_min_pad_size)
+        SET_VAR_API(update_left_extra_pad_size)
+        SET_VAR_API(update_right_extra_pad_size)
+        SET_VAR_API(update_extra_pad_size)
 
         // Exposed APIs.
-        GET_VAR_API(get_first_local_index)
-        GET_VAR_API(get_last_local_index)
-        GET_VAR_API(get_rank_domain_size)
-        GET_VAR_API(get_first_rank_domain_index)
-        GET_VAR_API(get_last_rank_domain_index)
-        GET_VAR_API(get_left_halo_size)
-        GET_VAR_API(get_right_halo_size)
-        GET_VAR_API(get_first_rank_halo_index)
-        GET_VAR_API(get_last_rank_halo_index)
-        GET_VAR_API(get_left_extra_pad_size)
-        GET_VAR_API(get_right_extra_pad_size)
-        GET_VAR_API(get_left_pad_size)
-        GET_VAR_API(get_right_pad_size)
-        GET_VAR_API(get_alloc_size)
-        GET_VAR_API(get_first_rank_alloc_index)
-        GET_VAR_API(get_last_rank_alloc_index)
         GET_VAR_API(get_first_misc_index)
         GET_VAR_API(get_last_misc_index)
+        GET_VAR_API2(get_first_local_index)
+        GET_VAR_API2(get_last_local_index)
+        GET_VAR_API2(get_rank_domain_size)
+        GET_VAR_API2(get_first_rank_domain_index)
+        GET_VAR_API2(get_last_rank_domain_index)
+        GET_VAR_API2(get_left_halo_size)
+        GET_VAR_API2(get_right_halo_size)
+        GET_VAR_API2(get_first_rank_halo_index)
+        GET_VAR_API2(get_last_rank_halo_index)
+        GET_VAR_API2(get_left_extra_pad_size)
+        GET_VAR_API2(get_right_extra_pad_size)
+        GET_VAR_API2(get_left_pad_size)
+        GET_VAR_API2(get_right_pad_size)
+        GET_VAR_API2(get_alloc_size)
 
+        SET_VAR_API(set_first_misc_index)
         SET_VAR_API(set_left_halo_size)
         SET_VAR_API(set_right_halo_size)
         SET_VAR_API(set_halo_size)
         SET_VAR_API(set_left_min_pad_size)
         SET_VAR_API(set_right_min_pad_size)
         SET_VAR_API(set_min_pad_size)
-        SET_VAR_API(update_left_min_pad_size)
-        SET_VAR_API(update_right_min_pad_size)
-        SET_VAR_API(update_min_pad_size)
         SET_VAR_API(set_left_extra_pad_size)
         SET_VAR_API(set_right_extra_pad_size)
         SET_VAR_API(set_extra_pad_size)
-        SET_VAR_API(update_left_extra_pad_size)
-        SET_VAR_API(update_right_extra_pad_size)
-        SET_VAR_API(update_extra_pad_size)
         SET_VAR_API(set_alloc_size)
-        SET_VAR_API(set_first_misc_index)
 
         #undef GET_VAR_API
+        #undef GET_VAR_API2
         #undef SET_VAR_API
+        #undef SET_VAR_API2
 
         virtual std::string format_indices(const Indices& indices) const {
             std::string str = get_name() + "(" + gb().make_index_string(indices) + ")";

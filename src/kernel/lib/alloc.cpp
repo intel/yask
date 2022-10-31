@@ -666,9 +666,9 @@ namespace yask {
                              // Need +1 and then -1 trick for last.
                              fidx = round_down_flr(fidx, vlen);
                              lidx = round_up_flr(lidx + 1, vlen) - 1;
-                             if (fidx < gp->get_first_rank_alloc_index(dname))
+                             if (fidx < gp->get_first_local_index(dname))
                                  var_vec_ok = false;
-                             if (lidx > gp->get_last_rank_alloc_index(dname))
+                             if (lidx > gp->get_last_local_index(dname))
                                  var_vec_ok = false;
 
                              // Determine size of exchange in this dim. This
