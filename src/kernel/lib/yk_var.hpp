@@ -94,9 +94,9 @@ namespace yask {
         Indices _actl_left_pads, _actl_right_pads; // actual space around domains | zero.
         Indices _left_halos, _right_halos; // space within pads for halo exchange | zero.
         Indices _left_wf_exts, _right_wf_exts; // additional halos for wave-fronts | zero.
-        Indices _rank_offsets;   // offsets of this var domain in overall problem | zero.
-        Indices _local_offsets; // offsets of this var domain in this rank | first index.
-        Indices _allocs;    // actual var alloc in reals | same.
+        Indices _rank_offsets;   // offsets of this rank in global space | zero.
+        Indices _local_offsets; // offsets of this var's domain in this rank | first index.
+        Indices _allocs;    // actual var alloc | same.
 
         // Each entry in _soln_vec_lens is same as the corresponding dim in dims->_fold_pts.
         Indices _soln_vec_lens;  // num reals in each elem in soln fold | one.
@@ -670,36 +670,7 @@ namespace yask {
         // Important: *corep exists but is NOT yet constructed.
         YkVarBase(KernelStateBase& stateb,
                   YkVarBaseCore* corep,
-                  const VarDimNames& dim_names) :
-            KernelStateBase(stateb), _corep(corep) {
-            STATE_VARS(&stateb);
-
-            // Set masks & counts in core.
-            _step_dim_mask = 0;
-            _domain_dim_mask = 0;
-            _misc_dim_mask = 0;
-            _num_step_dims = 0;
-            _num_domain_dims = 0;
-            _num_misc_dims = 0;
-            for (size_t i = 0; i < dim_names.size(); i++) {
-                idx_t mbit = 1LL << i;
-                auto& dname = dim_names[i];
-                if (dname == step_dim) {
-                    _step_dim_mask |= mbit;
-                    _num_step_dims++;
-                }
-                else if (domain_dims.lookup(dname)) {
-                    _domain_dim_mask |= mbit;
-                    _num_domain_dims++;
-                }
-                else {
-                    _misc_dim_mask |= mbit;
-                    _num_misc_dims++;
-                }
-            }
-            assert(dim_names.size() ==
-                   _num_step_dims + _num_domain_dims + _num_misc_dims);
-        }
+                  const VarDimNames& dim_names);
 
         // Dtor.
         virtual ~YkVarBase() { }

@@ -58,6 +58,42 @@ namespace yask {
         _vec_strides.set_from_const(0, n);
     }
 
+    // Ctor.
+    // Important: *corep exists but is NOT yet constructed.
+    YkVarBase::YkVarBase(KernelStateBase& stateb,
+                         YkVarBaseCore* corep,
+                         const VarDimNames& dim_names) :
+            KernelStateBase(stateb), _corep(corep) {
+        STATE_VARS(&stateb);
+
+        // Set masks & counts in core.
+        _step_dim_mask = 0;
+        _domain_dim_mask = 0;
+        _misc_dim_mask = 0;
+        _num_step_dims = 0;
+        _num_domain_dims = 0;
+        _num_misc_dims = 0;
+        for (size_t i = 0; i < dim_names.size(); i++) {
+            idx_t mbit = 1LL << i;
+            auto& dname = dim_names[i];
+            if (dname == step_dim) {
+                _step_dim_mask |= mbit;
+                _num_step_dims++;
+            }
+            else if (domain_dims.lookup(dname)) {
+                _domain_dim_mask |= mbit;
+                _num_domain_dims++;
+            }
+            else {
+                _misc_dim_mask |= mbit;
+                _num_misc_dims++;
+            }
+        }
+        assert(dim_names.size() ==
+               _num_step_dims + _num_domain_dims + _num_misc_dims);
+    }
+    
+
     // Convenience function to format indices like
     // "x=5, y=3".
     std::string YkVarBase::make_index_string(const Indices& idxs,
