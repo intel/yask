@@ -237,7 +237,7 @@ namespace yask {
             new_allocs[i] = _corep->_domains[i];
 
             // Adjust padding only for domain dims.
-            if (_corep->_domain_dim_mask & mbit) {
+            if (_domain_dim_mask & mbit) {
 
                 // Add more padding.
                 new_left_pads[i] += _corep->_req_left_epads[i];
@@ -314,7 +314,7 @@ namespace yask {
             set_dim_size(i, _corep->_vec_allocs[i]);
 
             // Number of dirty bits is number of steps.
-            if (_corep->_step_dim_mask & mbit)
+            if (_step_dim_mask & mbit)
                 new_dirty = _corep->_allocs[i];
         }
         
@@ -398,7 +398,7 @@ namespace yask {
 
                     // Convert to API index.
                     opt[i] = val;
-                    if (!(_corep->_step_dim_mask & mbit))
+                    if (!(_step_dim_mask & mbit))
                         opt[i] += _corep->_rank_offsets[i] + _corep->_local_offsets[i];
 
                     // Don't compare points outside the domain.
@@ -465,7 +465,7 @@ namespace yask {
             *clipped_indices = indices;
         for (int i = 0; i < n; i++) {
             idx_t mbit = 1LL << i;
-            bool is_step_dim = _corep->_step_dim_mask & mbit;
+            bool is_step_dim = _step_dim_mask & mbit;
             idx_t idx = indices[i];
             bool ok = false;
             auto& dname = get_dim_name(i);
@@ -506,7 +506,7 @@ namespace yask {
 
             // Normalize?
             if (clipped_indices && normalize) {
-                if (_corep->_domain_dim_mask & mbit) {
+                if (_domain_dim_mask & mbit) {
                     (*clipped_indices)[i] -= _corep->_rank_offsets[i]; // rank-local.
                     (*clipped_indices)[i] = idiv_flr((*clipped_indices)[i], _corep->_var_vec_lens[i]);
                 }

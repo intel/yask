@@ -107,20 +107,10 @@ namespace yask {
 
         // Sizes in vectors for sizes that are always vec lens.
         // These are pre-calculated to avoid division later.
-        Indices _vec_left_pads; // _actl_left_pads / _var_vec_lens.
-        Indices _vec_allocs; // _allocs / _var_vec_lens.
-        Indices _vec_local_offsets; // _local_offsets / _var_vec_lens.
-        Indices _vec_strides; // num vecs between consecutive indices.
-
-        // The following masks have one bit for each dim in the var.
-        idx_t _step_dim_mask;
-        idx_t _domain_dim_mask;
-        idx_t _misc_dim_mask;
-
-        // Counts of each dim type.
-        idx_t _num_step_dims;
-        idx_t _num_domain_dims;
-        idx_t _num_misc_dims;
+        Indices _vec_left_pads; // _actl_left_pads / _var_vec_lens | zero.
+        Indices _vec_allocs; // _allocs / _var_vec_lens | _allocs.
+        Indices _vec_local_offsets; // _local_offsets / _var_vec_lens | first index.
+        Indices _vec_strides; // num vecs between consecutive indices | one.
 
         // Ctor.
         YkVarBaseCore(int ndims);
@@ -206,7 +196,7 @@ namespace yask {
                 adj_idxs[i] = uidx_t(ai);
             }
 
-            // Recurse until done.
+            // Recurse (during compilation) until done.
             if constexpr (i > 0)
                              _get_adj_idx<is_global, i - 1>(adj_idxs, idxs, alloc_step_idx);
         }
@@ -360,7 +350,7 @@ namespace yask {
                 host_assert(elem_ofs[i] == idx_t(adj_idx % _var_vec_lens[i]));
             }
 
-            // Recurse until done.
+            // Recurse (during compilation) until done.
             if constexpr (i > 0)
                              _get_adj_idx<i - 1>(vec_idxs, elem_ofs, idxs, alloc_step_idx);
         }
@@ -375,7 +365,7 @@ namespace yask {
             int j = _vec_fold_posns[i];
             fold_ofs[i] = elem_ofs[j];
             
-            // Recurse until done.
+            // Recurse (during compilation) until done.
             if constexpr (i > 0)
                              _get_fold_ofs<i - 1>(fold_ofs, elem_ofs);
         }
@@ -473,7 +463,7 @@ namespace yask {
                 adj_idxs[i] = vec_idxs[i] + _vec_left_pads[i] - _vec_local_offsets[i];
             }
 
-            // Recurse until done.
+            // Recurse (during compilation) until done.
             if constexpr (i > 0)
                              _get_adj_idx<i - 1>(adj_idxs, vec_idxs, alloc_step_idx);
             
@@ -574,8 +564,18 @@ namespace yask {
 
         // Ptr to the core data.
         YkVarBaseCore* _corep = 0;
-        
-        // Whether step dim is used.
+
+        // The following masks have one bit for each dim in the var.
+        idx_t _step_dim_mask;
+        idx_t _domain_dim_mask;
+        idx_t _misc_dim_mask;
+
+        // Counts of each dim type.
+        idx_t _num_step_dims;
+        idx_t _num_domain_dims;
+        idx_t _num_misc_dims;
+
+         // Whether step dim is used.
         // If true, will always be in step_posn.
         bool _has_step_dim = false;
 
@@ -675,30 +675,30 @@ namespace yask {
             STATE_VARS(&stateb);
 
             // Set masks & counts in core.
-            _corep->_step_dim_mask = 0;
-            _corep->_domain_dim_mask = 0;
-            _corep->_misc_dim_mask = 0;
-            _corep->_num_step_dims = 0;
-            _corep->_num_domain_dims = 0;
-            _corep->_num_misc_dims = 0;
+            _step_dim_mask = 0;
+            _domain_dim_mask = 0;
+            _misc_dim_mask = 0;
+            _num_step_dims = 0;
+            _num_domain_dims = 0;
+            _num_misc_dims = 0;
             for (size_t i = 0; i < dim_names.size(); i++) {
                 idx_t mbit = 1LL << i;
                 auto& dname = dim_names[i];
                 if (dname == step_dim) {
-                    _corep->_step_dim_mask |= mbit;
-                    _corep->_num_step_dims++;
+                    _step_dim_mask |= mbit;
+                    _num_step_dims++;
                 }
                 else if (domain_dims.lookup(dname)) {
-                    _corep->_domain_dim_mask |= mbit;
-                    _corep->_num_domain_dims++;
+                    _domain_dim_mask |= mbit;
+                    _num_domain_dims++;
                 }
                 else {
-                    _corep->_misc_dim_mask |= mbit;
-                    _corep->_num_misc_dims++;
+                    _misc_dim_mask |= mbit;
+                    _num_misc_dims++;
                 }
             }
             assert(dim_names.size() ==
-                   _corep->_num_step_dims + _corep->_num_domain_dims + _corep->_num_misc_dims);
+                   _num_step_dims + _num_domain_dims + _num_misc_dims);
         }
 
         // Dtor.
@@ -766,7 +766,7 @@ namespace yask {
 
         // Num domain dims in this var.
         inline int get_num_domain_dims() const {
-            return _corep->_num_domain_dims;
+            return _num_domain_dims;
         }
 
         // Dims same?

@@ -62,16 +62,16 @@ namespace yask {
             auto cp = corep();                                          \
             auto nvdims = get_num_dims();                               \
             auto nadims = 0;                                            \
-            if (step_ok) nadims += cp->_num_step_dims;                  \
-            if (domain_ok) nadims += cp->_num_domain_dims;              \
-            if (misc_ok) nadims += cp->_num_misc_dims;                  \
+            if (step_ok) nadims += gb()._num_step_dims;                  \
+            if (domain_ok) nadims += gb()._num_domain_dims;              \
+            if (misc_ok) nadims += gb()._num_misc_dims;                  \
             idx_t_vec res(nadims, 0);                                   \
             int i = 0;                                                  \
             for (int posn = 0; posn < nvdims; posn++) {                 \
                 idx_t mbit = idx_t(1) << posn;                          \
-                if ((step_ok && (mbit & cp->_step_dim_mask) != 0) ||    \
-                    (domain_ok && (mbit & cp->_domain_dim_mask) != 0) || \
-                    (misc_ok && (mbit & cp->_misc_dim_mask) != 0)) {    \
+                if ((step_ok && (mbit & gb()._step_dim_mask) != 0) ||    \
+                    (domain_ok && (mbit & gb()._domain_dim_mask) != 0) || \
+                    (misc_ok && (mbit & gb()._misc_dim_mask) != 0)) {    \
                     res.at(i++) = expr;                                 \
                 }                                                       \
             }                                                           \
@@ -112,9 +112,9 @@ namespace yask {
             auto cp = corep();                                          \
             auto nvdims = get_num_dims();                               \
             auto nadims = 0;                                            \
-            if (step_ok) nadims += cp->_num_step_dims;                  \
-            if (domain_ok) nadims += cp->_num_domain_dims;              \
-            if (misc_ok) nadims += cp->_num_misc_dims;                  \
+            if (step_ok) nadims += gb()._num_step_dims;                  \
+            if (domain_ok) nadims += gb()._num_domain_dims;              \
+            if (misc_ok) nadims += gb()._num_misc_dims;                  \
             if (vals.size() != nadims)                                  \
                 THROW_YASK_EXCEPTION("Error: '" #api_name               \
                                      "_vec()' called on var '" +        \
@@ -122,9 +122,9 @@ namespace yask {
             int i = 0;                                                  \
             for (int posn = 0; posn < nvdims; posn++) {                 \
                 idx_t mbit = idx_t(1) << posn;                          \
-                if ((step_ok && (mbit & cp->_step_dim_mask) != 0) ||    \
-                    (domain_ok && (mbit & cp->_domain_dim_mask) != 0) || \
-                    (misc_ok && (mbit & cp->_misc_dim_mask) != 0)) {    \
+                if ((step_ok && (mbit & gb()._step_dim_mask) != 0) ||    \
+                    (domain_ok && (mbit & gb()._domain_dim_mask) != 0) || \
+                    (misc_ok && (mbit & gb()._misc_dim_mask) != 0)) {    \
                     auto n = vals.at(i++);                              \
                     expr;                                               \
                 }                                                       \
