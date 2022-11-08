@@ -87,21 +87,21 @@ typedef std::function&lt; void(<a class="el" href="classyask_1_1yk__solution.htm
 <tr class="memdesc:a913e7b208c46bbad2115784332bc303d"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Callback type with <a class="el" href="classyask_1_1yk__solution.html">yk_solution</a> parameter. <br /></td></tr>
 <tr class="separator:a913e7b208c46bbad2115784332bc303d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a1c2a4d0fdf7e975885eb638a3e192cf3"><td class="memItemLeft" align="right" valign="top"><a id="a1c2a4d0fdf7e975885eb638a3e192cf3"></a>
-typedef std::function&lt; void(<a class="el" href="classyask_1_1yk__solution.html">yk_solution</a> &amp;soln, <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> first_step_index, <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> last_step_index)&gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a1c2a4d0fdf7e975885eb638a3e192cf3">hook_fn_2idx_t</a></td></tr>
+typedef std::function&lt; void(<a class="el" href="classyask_1_1yk__solution.html">yk_solution</a> &amp;soln, <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> first_step_index, <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> last_step_index)&gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a1c2a4d0fdf7e975885eb638a3e192cf3">hook_fn_2idx_t</a></td></tr>
 <tr class="memdesc:a1c2a4d0fdf7e975885eb638a3e192cf3"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Callback type with <a class="el" href="classyask_1_1yk__solution.html">yk_solution</a> and step-index parameters. <br /></td></tr>
 <tr class="separator:a1c2a4d0fdf7e975885eb638a3e192cf3"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-methods"></a>
 Public Member Functions</h2></td></tr>
-<tr class="memitem:aa315469b5836e531425836f4fc5eff1c"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#aa315469b5836e531425836f4fc5eff1c">set_debug_output</a> (<a class="el" href="group__yask.html#ga605185252a3f3f917593c83b7dde4b66">yask_output_ptr</a> debug)=0</td></tr>
-<tr class="memdesc:aa315469b5836e531425836f4fc5eff1c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set object to receive debug output.  <a href="#aa315469b5836e531425836f4fc5eff1c">More...</a><br /></td></tr>
-<tr class="separator:aa315469b5836e531425836f4fc5eff1c"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aaafc0aa636a3d306e29771d5440c4aa4"><td class="memItemLeft" align="right" valign="top">virtual const std::string &amp;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#aaafc0aa636a3d306e29771d5440c4aa4">get_name</a> () const =0</td></tr>
 <tr class="memdesc:aaafc0aa636a3d306e29771d5440c4aa4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the name of the solution.  <a href="#aaafc0aa636a3d306e29771d5440c4aa4">More...</a><br /></td></tr>
 <tr class="separator:aaafc0aa636a3d306e29771d5440c4aa4"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ab25bbfab5dffc379bfb8c55ac64d6898"><td class="memItemLeft" align="right" valign="top">virtual std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ab25bbfab5dffc379bfb8c55ac64d6898">get_target</a> () const =0</td></tr>
 <tr class="memdesc:ab25bbfab5dffc379bfb8c55ac64d6898"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the target ISA.  <a href="#ab25bbfab5dffc379bfb8c55ac64d6898">More...</a><br /></td></tr>
 <tr class="separator:ab25bbfab5dffc379bfb8c55ac64d6898"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2978fb8fd701fe35ae8a8b19e23e5544"><td class="memItemLeft" align="right" valign="top">virtual bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a2978fb8fd701fe35ae8a8b19e23e5544">is_offloaded</a> () const =0</td></tr>
+<tr class="memdesc:a2978fb8fd701fe35ae8a8b19e23e5544"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get whether the stencil kernel will be offloaded to a device.  <a href="#a2978fb8fd701fe35ae8a8b19e23e5544">More...</a><br /></td></tr>
+<tr class="separator:a2978fb8fd701fe35ae8a8b19e23e5544"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a50e565487b7175447cc9f6489221eef4"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a50e565487b7175447cc9f6489221eef4">get_element_bytes</a> () const =0</td></tr>
 <tr class="memdesc:a50e565487b7175447cc9f6489221eef4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the floating-point precision size.  <a href="#a50e565487b7175447cc9f6489221eef4">More...</a><br /></td></tr>
 <tr class="separator:a50e565487b7175447cc9f6489221eef4"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -111,51 +111,96 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a40a13017d8c3a599d00b99561405dd3c"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a40a13017d8c3a599d00b99561405dd3c">get_num_domain_dims</a> () const =0</td></tr>
 <tr class="memdesc:a40a13017d8c3a599d00b99561405dd3c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the number of domain dimensions used in this solution.  <a href="#a40a13017d8c3a599d00b99561405dd3c">More...</a><br /></td></tr>
 <tr class="separator:a40a13017d8c3a599d00b99561405dd3c"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a665968c18b2f70467dbc7decaeeb1a1f"><td class="memItemLeft" align="right" valign="top">virtual std::vector&lt; std::string &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a665968c18b2f70467dbc7decaeeb1a1f">get_domain_dim_names</a> () const =0</td></tr>
-<tr class="memdesc:a665968c18b2f70467dbc7decaeeb1a1f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get all the domain dimension names.  <a href="#a665968c18b2f70467dbc7decaeeb1a1f">More...</a><br /></td></tr>
-<tr class="separator:a665968c18b2f70467dbc7decaeeb1a1f"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:af895e7366f7f224c4e6fc780b0dd7a2f"><td class="memItemLeft" align="right" valign="top">virtual std::vector&lt; std::string &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#af895e7366f7f224c4e6fc780b0dd7a2f">get_misc_dim_names</a> () const =0</td></tr>
-<tr class="memdesc:af895e7366f7f224c4e6fc780b0dd7a2f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get all the miscellaneous dimension names.  <a href="#af895e7366f7f224c4e6fc780b0dd7a2f">More...</a><br /></td></tr>
-<tr class="separator:af895e7366f7f224c4e6fc780b0dd7a2f"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a155d8f4a38da9da11488a18cca50bae8"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a155d8f4a38da9da11488a18cca50bae8">set_rank_domain_size</a> (const std::string &amp;dim, <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> size)=0</td></tr>
+<tr class="memitem:a24c2619b5f0471bcfe8eeb5aed769fec"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga53bde373152f3af12ba9daa06007eb5f">string_vec</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a24c2619b5f0471bcfe8eeb5aed769fec">get_domain_dim_names</a> () const =0</td></tr>
+<tr class="memdesc:a24c2619b5f0471bcfe8eeb5aed769fec"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get all the domain dimension names.  <a href="#a24c2619b5f0471bcfe8eeb5aed769fec">More...</a><br /></td></tr>
+<tr class="separator:a24c2619b5f0471bcfe8eeb5aed769fec"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4184ac69b5e5af07e8cfc0317d6bd759"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga53bde373152f3af12ba9daa06007eb5f">string_vec</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a4184ac69b5e5af07e8cfc0317d6bd759">get_misc_dim_names</a> () const =0</td></tr>
+<tr class="memdesc:a4184ac69b5e5af07e8cfc0317d6bd759"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get all the miscellaneous dimension names.  <a href="#a4184ac69b5e5af07e8cfc0317d6bd759">More...</a><br /></td></tr>
+<tr class="separator:a4184ac69b5e5af07e8cfc0317d6bd759"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a155d8f4a38da9da11488a18cca50bae8"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a155d8f4a38da9da11488a18cca50bae8">set_rank_domain_size</a> (const std::string &amp;dim, <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> size)=0</td></tr>
 <tr class="memdesc:a155d8f4a38da9da11488a18cca50bae8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the local-domain size in the specified dimension, i.e., the size of the part of the domain that is in this rank.  <a href="#a155d8f4a38da9da11488a18cca50bae8">More...</a><br /></td></tr>
 <tr class="separator:a155d8f4a38da9da11488a18cca50bae8"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a56ba31268cb0098b64e4503c8996300f"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a56ba31268cb0098b64e4503c8996300f">get_rank_domain_size</a> (const std::string &amp;dim) const =0</td></tr>
+<tr class="memitem:a31a653082530e1049c3030b408bc3fa1"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a31a653082530e1049c3030b408bc3fa1">set_rank_domain_size_vec</a> (const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;vals)=0</td></tr>
+<tr class="memdesc:a31a653082530e1049c3030b408bc3fa1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the local-domain size in all domain dimensions.  <a href="#a31a653082530e1049c3030b408bc3fa1">More...</a><br /></td></tr>
+<tr class="separator:a31a653082530e1049c3030b408bc3fa1"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9d75b7f78aaba21fcbe0583c79106fb7"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a9d75b7f78aaba21fcbe0583c79106fb7">set_rank_domain_size_vec</a> (const <a class="el" href="group__yask.html#ga9a86862ece2cddc8fb77fac850c44161">idx_t_init_list</a> &amp;vals)=0</td></tr>
+<tr class="memdesc:a9d75b7f78aaba21fcbe0583c79106fb7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the local-domain size in all domain dimensions.  <a href="#a9d75b7f78aaba21fcbe0583c79106fb7">More...</a><br /></td></tr>
+<tr class="separator:a9d75b7f78aaba21fcbe0583c79106fb7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a56ba31268cb0098b64e4503c8996300f"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a56ba31268cb0098b64e4503c8996300f">get_rank_domain_size</a> (const std::string &amp;dim) const =0</td></tr>
 <tr class="memdesc:a56ba31268cb0098b64e4503c8996300f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the local-domain size in the specified dimension, i.e., the size in this rank.  <a href="#a56ba31268cb0098b64e4503c8996300f">More...</a><br /></td></tr>
 <tr class="separator:a56ba31268cb0098b64e4503c8996300f"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a7f9a22d8d2b760a05307e90147d18d8c"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a7f9a22d8d2b760a05307e90147d18d8c">set_overall_domain_size</a> (const std::string &amp;dim, <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> size)=0</td></tr>
+<tr class="memitem:a50034edeb397bb0285ea4363178de803"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a50034edeb397bb0285ea4363178de803">get_rank_domain_size_vec</a> () const =0</td></tr>
+<tr class="memdesc:a50034edeb397bb0285ea4363178de803"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the local-domain size in all domain dimensions.  <a href="#a50034edeb397bb0285ea4363178de803">More...</a><br /></td></tr>
+<tr class="separator:a50034edeb397bb0285ea4363178de803"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7f9a22d8d2b760a05307e90147d18d8c"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a7f9a22d8d2b760a05307e90147d18d8c">set_overall_domain_size</a> (const std::string &amp;dim, <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> size)=0</td></tr>
 <tr class="memdesc:a7f9a22d8d2b760a05307e90147d18d8c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the global-domain size in the specified dimension, i.e., the total size across all MPI ranks.  <a href="#a7f9a22d8d2b760a05307e90147d18d8c">More...</a><br /></td></tr>
 <tr class="separator:a7f9a22d8d2b760a05307e90147d18d8c"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aaba39cb06c9f61d408695009667fe8cd"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#aaba39cb06c9f61d408695009667fe8cd">get_overall_domain_size</a> (const std::string &amp;dim) const =0</td></tr>
+<tr class="memitem:a156fa79121b033516028c391db968a17"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a156fa79121b033516028c391db968a17">set_overall_domain_size_vec</a> (const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;vals)=0</td></tr>
+<tr class="memdesc:a156fa79121b033516028c391db968a17"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the global-domain size in all domain dimensions.  <a href="#a156fa79121b033516028c391db968a17">More...</a><br /></td></tr>
+<tr class="separator:a156fa79121b033516028c391db968a17"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4540f5a7990503a4f2c1a336188197eb"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a4540f5a7990503a4f2c1a336188197eb">set_overall_domain_size_vec</a> (const <a class="el" href="group__yask.html#ga9a86862ece2cddc8fb77fac850c44161">idx_t_init_list</a> &amp;vals)=0</td></tr>
+<tr class="memdesc:a4540f5a7990503a4f2c1a336188197eb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the global-domain size in all domain dimensions.  <a href="#a4540f5a7990503a4f2c1a336188197eb">More...</a><br /></td></tr>
+<tr class="separator:a4540f5a7990503a4f2c1a336188197eb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:aaba39cb06c9f61d408695009667fe8cd"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#aaba39cb06c9f61d408695009667fe8cd">get_overall_domain_size</a> (const std::string &amp;dim) const =0</td></tr>
 <tr class="memdesc:aaba39cb06c9f61d408695009667fe8cd"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the global-domain size in the specified dimension, i.e., the total size across all MPI ranks.  <a href="#aaba39cb06c9f61d408695009667fe8cd">More...</a><br /></td></tr>
 <tr class="separator:aaba39cb06c9f61d408695009667fe8cd"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:abd3c7317bf1b397f332962d658f38839"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#abd3c7317bf1b397f332962d658f38839">set_block_size</a> (const std::string &amp;dim, <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> size)=0</td></tr>
+<tr class="memitem:aa141292fbfb8fcd075ea7192b03b6c43"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#aa141292fbfb8fcd075ea7192b03b6c43">get_overall_domain_size_vec</a> () const =0</td></tr>
+<tr class="memdesc:aa141292fbfb8fcd075ea7192b03b6c43"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the global-domain size in all domain dimensions.  <a href="#aa141292fbfb8fcd075ea7192b03b6c43">More...</a><br /></td></tr>
+<tr class="separator:aa141292fbfb8fcd075ea7192b03b6c43"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:abd3c7317bf1b397f332962d658f38839"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#abd3c7317bf1b397f332962d658f38839">set_block_size</a> (const std::string &amp;dim, <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> size)=0</td></tr>
 <tr class="memdesc:abd3c7317bf1b397f332962d658f38839"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the block size in the given dimension.  <a href="#abd3c7317bf1b397f332962d658f38839">More...</a><br /></td></tr>
 <tr class="separator:abd3c7317bf1b397f332962d658f38839"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a601aeebc023d430a311788c3ce73c190"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a601aeebc023d430a311788c3ce73c190">get_block_size</a> (const std::string &amp;dim) const =0</td></tr>
+<tr class="memitem:a191580e8eab142bbf5eeb7573546c9c9"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a191580e8eab142bbf5eeb7573546c9c9">set_block_size_vec</a> (const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;vals)=0</td></tr>
+<tr class="memdesc:a191580e8eab142bbf5eeb7573546c9c9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the block size in all domain dimensions.  <a href="#a191580e8eab142bbf5eeb7573546c9c9">More...</a><br /></td></tr>
+<tr class="separator:a191580e8eab142bbf5eeb7573546c9c9"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a98ae9c07fbc60e4323fa16ee4a2400b5"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a98ae9c07fbc60e4323fa16ee4a2400b5">set_block_size_vec</a> (const <a class="el" href="group__yask.html#ga9a86862ece2cddc8fb77fac850c44161">idx_t_init_list</a> &amp;vals)=0</td></tr>
+<tr class="memdesc:a98ae9c07fbc60e4323fa16ee4a2400b5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the block size in all domain dimensions.  <a href="#a98ae9c07fbc60e4323fa16ee4a2400b5">More...</a><br /></td></tr>
+<tr class="separator:a98ae9c07fbc60e4323fa16ee4a2400b5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a601aeebc023d430a311788c3ce73c190"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a601aeebc023d430a311788c3ce73c190">get_block_size</a> (const std::string &amp;dim) const =0</td></tr>
 <tr class="memdesc:a601aeebc023d430a311788c3ce73c190"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the block size.  <a href="#a601aeebc023d430a311788c3ce73c190">More...</a><br /></td></tr>
 <tr class="separator:a601aeebc023d430a311788c3ce73c190"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ac4cd27d412b6fe013db58b167999a362"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ac4cd27d412b6fe013db58b167999a362">set_num_ranks</a> (const std::string &amp;dim, <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> num)=0</td></tr>
+<tr class="memitem:a75d10347e75c1e01e9592a3cb0fc42a0"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a75d10347e75c1e01e9592a3cb0fc42a0">get_block_size_vec</a> () const =0</td></tr>
+<tr class="memdesc:a75d10347e75c1e01e9592a3cb0fc42a0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the block size in all domain dimensions.  <a href="#a75d10347e75c1e01e9592a3cb0fc42a0">More...</a><br /></td></tr>
+<tr class="separator:a75d10347e75c1e01e9592a3cb0fc42a0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac4cd27d412b6fe013db58b167999a362"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ac4cd27d412b6fe013db58b167999a362">set_num_ranks</a> (const std::string &amp;dim, <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> num)=0</td></tr>
 <tr class="memdesc:ac4cd27d412b6fe013db58b167999a362"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the number of MPI ranks in the given dimension.  <a href="#ac4cd27d412b6fe013db58b167999a362">More...</a><br /></td></tr>
 <tr class="separator:ac4cd27d412b6fe013db58b167999a362"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a4449fe8902881c9a61ad12fd20a5a866"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a4449fe8902881c9a61ad12fd20a5a866">get_num_ranks</a> (const std::string &amp;dim) const =0</td></tr>
+<tr class="memitem:a85aebdf4bf311ed1b9d293fa4404f76e"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a85aebdf4bf311ed1b9d293fa4404f76e">set_num_ranks_vec</a> (const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;vals)=0</td></tr>
+<tr class="memdesc:a85aebdf4bf311ed1b9d293fa4404f76e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the number of MPI ranks in all domain dimensions.  <a href="#a85aebdf4bf311ed1b9d293fa4404f76e">More...</a><br /></td></tr>
+<tr class="separator:a85aebdf4bf311ed1b9d293fa4404f76e"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7c4b880c34659d731ae133f7ae1bd273"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a7c4b880c34659d731ae133f7ae1bd273">set_num_ranks_vec</a> (const <a class="el" href="group__yask.html#ga9a86862ece2cddc8fb77fac850c44161">idx_t_init_list</a> &amp;vals)=0</td></tr>
+<tr class="memdesc:a7c4b880c34659d731ae133f7ae1bd273"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the number of all MPI ranks in all domain dimensions.  <a href="#a7c4b880c34659d731ae133f7ae1bd273">More...</a><br /></td></tr>
+<tr class="separator:a7c4b880c34659d731ae133f7ae1bd273"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4449fe8902881c9a61ad12fd20a5a866"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a4449fe8902881c9a61ad12fd20a5a866">get_num_ranks</a> (const std::string &amp;dim) const =0</td></tr>
 <tr class="memdesc:a4449fe8902881c9a61ad12fd20a5a866"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the number of MPI ranks in the given dimension.  <a href="#a4449fe8902881c9a61ad12fd20a5a866">More...</a><br /></td></tr>
 <tr class="separator:a4449fe8902881c9a61ad12fd20a5a866"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ac0eccaa1d228d7f3408e3c2b0881f279"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ac0eccaa1d228d7f3408e3c2b0881f279">set_rank_index</a> (const std::string &amp;dim, <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> num)=0</td></tr>
+<tr class="memitem:a743acbc4b86f9a65f3fcef1a35fee2d7"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a743acbc4b86f9a65f3fcef1a35fee2d7">get_num_ranks_vec</a> () const =0</td></tr>
+<tr class="memdesc:a743acbc4b86f9a65f3fcef1a35fee2d7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the number of MPI ranks in all domain dimensions.  <a href="#a743acbc4b86f9a65f3fcef1a35fee2d7">More...</a><br /></td></tr>
+<tr class="separator:a743acbc4b86f9a65f3fcef1a35fee2d7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac0eccaa1d228d7f3408e3c2b0881f279"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ac0eccaa1d228d7f3408e3c2b0881f279">set_rank_index</a> (const std::string &amp;dim, <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> num)=0</td></tr>
 <tr class="memdesc:ac0eccaa1d228d7f3408e3c2b0881f279"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the rank index in the specified dimension.  <a href="#ac0eccaa1d228d7f3408e3c2b0881f279">More...</a><br /></td></tr>
 <tr class="separator:ac0eccaa1d228d7f3408e3c2b0881f279"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a3268e5e7e2f0e45f951f1c38063bc59f"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a3268e5e7e2f0e45f951f1c38063bc59f">get_rank_index</a> (const std::string &amp;dim) const =0</td></tr>
+<tr class="memitem:abcdcb3024837aa125c5218a618e0db94"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#abcdcb3024837aa125c5218a618e0db94">set_rank_index_vec</a> (const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;vals)=0</td></tr>
+<tr class="memdesc:abcdcb3024837aa125c5218a618e0db94"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the rank index in all domain dimensions.  <a href="#abcdcb3024837aa125c5218a618e0db94">More...</a><br /></td></tr>
+<tr class="separator:abcdcb3024837aa125c5218a618e0db94"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a921f09751c36b56509d2bf2e3d3f05a0"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a921f09751c36b56509d2bf2e3d3f05a0">set_rank_index_vec</a> (const <a class="el" href="group__yask.html#ga9a86862ece2cddc8fb77fac850c44161">idx_t_init_list</a> &amp;vals)=0</td></tr>
+<tr class="memdesc:a921f09751c36b56509d2bf2e3d3f05a0"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the rank index in all domain dimensions.  <a href="#a921f09751c36b56509d2bf2e3d3f05a0">More...</a><br /></td></tr>
+<tr class="separator:a921f09751c36b56509d2bf2e3d3f05a0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a3268e5e7e2f0e45f951f1c38063bc59f"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a3268e5e7e2f0e45f951f1c38063bc59f">get_rank_index</a> (const std::string &amp;dim) const =0</td></tr>
 <tr class="memdesc:a3268e5e7e2f0e45f951f1c38063bc59f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the rank index in the specified dimension.  <a href="#a3268e5e7e2f0e45f951f1c38063bc59f">More...</a><br /></td></tr>
 <tr class="separator:a3268e5e7e2f0e45f951f1c38063bc59f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a64ce6c3bb5a4a467e6a23e4aa619881d"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a64ce6c3bb5a4a467e6a23e4aa619881d">get_rank_index_vec</a> () const =0</td></tr>
+<tr class="memdesc:a64ce6c3bb5a4a467e6a23e4aa619881d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the rank index in all domain dimensions.  <a href="#a64ce6c3bb5a4a467e6a23e4aa619881d">More...</a><br /></td></tr>
+<tr class="separator:a64ce6c3bb5a4a467e6a23e4aa619881d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ac111abbade055c4923cd0044360ec3b7"><td class="memItemLeft" align="right" valign="top">virtual std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ac111abbade055c4923cd0044360ec3b7">apply_command_line_options</a> (const std::string &amp;args)=0</td></tr>
 <tr class="memdesc:ac111abbade055c4923cd0044360ec3b7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set kernel options from a string.  <a href="#ac111abbade055c4923cd0044360ec3b7">More...</a><br /></td></tr>
 <tr class="separator:ac111abbade055c4923cd0044360ec3b7"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ad0947c4ad4ed06d8a7d5058daecd5dc7"><td class="memItemLeft" align="right" valign="top">virtual std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ad0947c4ad4ed06d8a7d5058daecd5dc7">apply_command_line_options</a> (int argc, char *argv[])=0</td></tr>
 <tr class="memdesc:ad0947c4ad4ed06d8a7d5058daecd5dc7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set kernel options from standard C or C++ <code>argc</code> and <code>argv</code> parameters to <code>main()</code>.  <a href="#ad0947c4ad4ed06d8a7d5058daecd5dc7">More...</a><br /></td></tr>
 <tr class="separator:ad0947c4ad4ed06d8a7d5058daecd5dc7"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a6c128cbf16d4d4ab36c30654cd0e9818"><td class="memItemLeft" align="right" valign="top">virtual std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a6c128cbf16d4d4ab36c30654cd0e9818">apply_command_line_options</a> (const std::vector&lt; std::string &gt; &amp;args)=0</td></tr>
-<tr class="memdesc:a6c128cbf16d4d4ab36c30654cd0e9818"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set kernel options from a vector of strings.  <a href="#a6c128cbf16d4d4ab36c30654cd0e9818">More...</a><br /></td></tr>
-<tr class="separator:a6c128cbf16d4d4ab36c30654cd0e9818"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a550b24bc0f81de69619ba3029ca79e7f"><td class="memItemLeft" align="right" valign="top">virtual std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a550b24bc0f81de69619ba3029ca79e7f">apply_command_line_options</a> (const <a class="el" href="group__yask.html#ga53bde373152f3af12ba9daa06007eb5f">string_vec</a> &amp;args)=0</td></tr>
+<tr class="memdesc:a550b24bc0f81de69619ba3029ca79e7f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set kernel options from a vector of strings.  <a href="#a550b24bc0f81de69619ba3029ca79e7f">More...</a><br /></td></tr>
+<tr class="separator:a550b24bc0f81de69619ba3029ca79e7f"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a9e0947f98bcea19c6400bcdf95ddf585"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a9e0947f98bcea19c6400bcdf95ddf585">get_num_vars</a> () const =0</td></tr>
 <tr class="memdesc:a9e0947f98bcea19c6400bcdf95ddf585"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the number of vars in the solution.  <a href="#a9e0947f98bcea19c6400bcdf95ddf585">More...</a><br /></td></tr>
 <tr class="separator:a9e0947f98bcea19c6400bcdf95ddf585"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -168,57 +213,63 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:aa0edfde033c251e3f8d2d184a682d4cb"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb">prepare_solution</a> ()=0</td></tr>
 <tr class="memdesc:aa0edfde033c251e3f8d2d184a682d4cb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Prepare the solution for stencil application.  <a href="#aa0edfde033c251e3f8d2d184a682d4cb">More...</a><br /></td></tr>
 <tr class="separator:aa0edfde033c251e3f8d2d184a682d4cb"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a03bdef5ba9b0b0e37f9b7be2e2e457a4"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a03bdef5ba9b0b0e37f9b7be2e2e457a4">get_first_rank_domain_index</a> (const std::string &amp;dim) const =0</td></tr>
+<tr class="memitem:a03bdef5ba9b0b0e37f9b7be2e2e457a4"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a03bdef5ba9b0b0e37f9b7be2e2e457a4">get_first_rank_domain_index</a> (const std::string &amp;dim) const =0</td></tr>
 <tr class="memdesc:a03bdef5ba9b0b0e37f9b7be2e2e457a4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the first index of the sub-domain in this rank in the specified dimension.  <a href="#a03bdef5ba9b0b0e37f9b7be2e2e457a4">More...</a><br /></td></tr>
 <tr class="separator:a03bdef5ba9b0b0e37f9b7be2e2e457a4"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a58f2ce95e150787bc8235e85298dcd01"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a58f2ce95e150787bc8235e85298dcd01">get_last_rank_domain_index</a> (const std::string &amp;dim) const =0</td></tr>
+<tr class="memitem:a79492e63f435ac8a93d8815a3ca4729c"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a79492e63f435ac8a93d8815a3ca4729c">get_first_rank_domain_index_vec</a> () const =0</td></tr>
+<tr class="memdesc:a79492e63f435ac8a93d8815a3ca4729c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the first index of the sub-domain in this rank in all domain dimensions.  <a href="#a79492e63f435ac8a93d8815a3ca4729c">More...</a><br /></td></tr>
+<tr class="separator:a79492e63f435ac8a93d8815a3ca4729c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a58f2ce95e150787bc8235e85298dcd01"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a58f2ce95e150787bc8235e85298dcd01">get_last_rank_domain_index</a> (const std::string &amp;dim) const =0</td></tr>
 <tr class="memdesc:a58f2ce95e150787bc8235e85298dcd01"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the last index of the sub-domain in this rank the specified dimension.  <a href="#a58f2ce95e150787bc8235e85298dcd01">More...</a><br /></td></tr>
 <tr class="separator:a58f2ce95e150787bc8235e85298dcd01"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a14cc5625fc524fe8eb8d3cedc66778aa"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a14cc5625fc524fe8eb8d3cedc66778aa">run_solution</a> (<a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> first_step_index, <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> last_step_index)=0</td></tr>
+<tr class="memitem:a9d571ca2f9e1309d3af73c9d8fe7a084"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a9d571ca2f9e1309d3af73c9d8fe7a084">get_last_rank_domain_index_vec</a> () const =0</td></tr>
+<tr class="memdesc:a9d571ca2f9e1309d3af73c9d8fe7a084"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the last index of the sub-domain in this rank in all domain dimensions.  <a href="#a9d571ca2f9e1309d3af73c9d8fe7a084">More...</a><br /></td></tr>
+<tr class="separator:a9d571ca2f9e1309d3af73c9d8fe7a084"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a14cc5625fc524fe8eb8d3cedc66778aa"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a14cc5625fc524fe8eb8d3cedc66778aa">run_solution</a> (<a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> first_step_index, <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> last_step_index)=0</td></tr>
 <tr class="memdesc:a14cc5625fc524fe8eb8d3cedc66778aa"><td class="mdescLeft">&#160;</td><td class="mdescRight">Run the stencil solution for the specified steps.  <a href="#a14cc5625fc524fe8eb8d3cedc66778aa">More...</a><br /></td></tr>
 <tr class="separator:a14cc5625fc524fe8eb8d3cedc66778aa"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a46dc15b38732b30c820ffd7765292342"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a46dc15b38732b30c820ffd7765292342">run_solution</a> (<a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> step_index)=0</td></tr>
+<tr class="memitem:a46dc15b38732b30c820ffd7765292342"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a46dc15b38732b30c820ffd7765292342">run_solution</a> (<a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> step_index)=0</td></tr>
 <tr class="memdesc:a46dc15b38732b30c820ffd7765292342"><td class="mdescLeft">&#160;</td><td class="mdescRight">Run the stencil solution for the specified step.  <a href="#a46dc15b38732b30c820ffd7765292342">More...</a><br /></td></tr>
 <tr class="separator:a46dc15b38732b30c820ffd7765292342"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2cdea230253b47bd16c1a0c326a78df8"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a2cdea230253b47bd16c1a0c326a78df8">copy_vars_to_device</a> () const =0</td></tr>
+<tr class="memdesc:a2cdea230253b47bd16c1a0c326a78df8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Update data on the device.  <a href="#a2cdea230253b47bd16c1a0c326a78df8">More...</a><br /></td></tr>
+<tr class="separator:a2cdea230253b47bd16c1a0c326a78df8"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a105c993241498d9c2a98cbec353fc61a"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a105c993241498d9c2a98cbec353fc61a">copy_vars_from_device</a> () const =0</td></tr>
+<tr class="memdesc:a105c993241498d9c2a98cbec353fc61a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Update data on the host.  <a href="#a105c993241498d9c2a98cbec353fc61a">More...</a><br /></td></tr>
+<tr class="separator:a105c993241498d9c2a98cbec353fc61a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:afac6a33fe5d098d31a844f4eba654b19"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#afac6a33fe5d098d31a844f4eba654b19">end_solution</a> ()=0</td></tr>
 <tr class="memdesc:afac6a33fe5d098d31a844f4eba654b19"><td class="mdescLeft">&#160;</td><td class="mdescRight">Finish using a solution.  <a href="#afac6a33fe5d098d31a844f4eba654b19">More...</a><br /></td></tr>
 <tr class="separator:afac6a33fe5d098d31a844f4eba654b19"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ab2755703f0d90aa4e3ef36093a1976f5"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yk.html#ga12d1d46aeb01bd7509a8dc3251657f75">yk_stats_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ab2755703f0d90aa4e3ef36093a1976f5">get_stats</a> ()=0</td></tr>
 <tr class="memdesc:ab2755703f0d90aa4e3ef36093a1976f5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get performance statistics associated with preceding calls to <a class="el" href="classyask_1_1yk__solution.html#a14cc5625fc524fe8eb8d3cedc66778aa" title="Run the stencil solution for the specified steps.">run_solution()</a>.  <a href="#ab2755703f0d90aa4e3ef36093a1976f5">More...</a><br /></td></tr>
 <tr class="separator:ab2755703f0d90aa4e3ef36093a1976f5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a932fad2ede1aecef168189c0aa972b0b"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a932fad2ede1aecef168189c0aa972b0b">reset_auto_tuner</a> (bool enable, bool verbose=false)=0</td></tr>
+<tr class="memdesc:a932fad2ede1aecef168189c0aa972b0b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Start or stop the online auto-tuner on this rank.  <a href="#a932fad2ede1aecef168189c0aa972b0b">More...</a><br /></td></tr>
+<tr class="separator:a932fad2ede1aecef168189c0aa972b0b"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a0f7eea6bfc844adcc584c2ca5c1f2ba4"><td class="memItemLeft" align="right" valign="top">virtual bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a0f7eea6bfc844adcc584c2ca5c1f2ba4">is_auto_tuner_enabled</a> () const =0</td></tr>
-<tr class="memdesc:a0f7eea6bfc844adcc584c2ca5c1f2ba4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Determine whether the auto-tuner is enabled on this rank.  <a href="#a0f7eea6bfc844adcc584c2ca5c1f2ba4">More...</a><br /></td></tr>
+<tr class="memdesc:a0f7eea6bfc844adcc584c2ca5c1f2ba4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Determine whether the online auto-tuner is enabled on this rank.  <a href="#a0f7eea6bfc844adcc584c2ca5c1f2ba4">More...</a><br /></td></tr>
 <tr class="separator:a0f7eea6bfc844adcc584c2ca5c1f2ba4"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a923afb4530ef5f0370f8bf55856fa040"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a923afb4530ef5f0370f8bf55856fa040">set_region_size</a> (const std::string &amp;dim, <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> size)=0</td></tr>
-<tr class="memdesc:a923afb4530ef5f0370f8bf55856fa040"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Set the region size in the given dimension.  <a href="#a923afb4530ef5f0370f8bf55856fa040">More...</a><br /></td></tr>
-<tr class="separator:a923afb4530ef5f0370f8bf55856fa040"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ac048a52035e60e2cc4e070da0e68181e"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ac048a52035e60e2cc4e070da0e68181e">get_region_size</a> (const std::string &amp;dim) const =0</td></tr>
-<tr class="memdesc:ac048a52035e60e2cc4e070da0e68181e"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Get the region size.  <a href="#ac048a52035e60e2cc4e070da0e68181e">More...</a><br /></td></tr>
-<tr class="separator:ac048a52035e60e2cc4e070da0e68181e"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ab3bd7e95ea13631954d92a638badfb2d"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ab3bd7e95ea13631954d92a638badfb2d">set_min_pad_size</a> (const std::string &amp;dim, <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> size)=0</td></tr>
+<tr class="memitem:a8e92afeb1d201ea0174fa04029ec0077"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a8e92afeb1d201ea0174fa04029ec0077">run_auto_tuner_now</a> (bool verbose=true)=0</td></tr>
+<tr class="memdesc:a8e92afeb1d201ea0174fa04029ec0077"><td class="mdescLeft">&#160;</td><td class="mdescRight">Run the offline auto-tuner immediately, not preserving variable data.  <a href="#a8e92afeb1d201ea0174fa04029ec0077">More...</a><br /></td></tr>
+<tr class="separator:a8e92afeb1d201ea0174fa04029ec0077"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab3bd7e95ea13631954d92a638badfb2d"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ab3bd7e95ea13631954d92a638badfb2d">set_min_pad_size</a> (const std::string &amp;dim, <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> size)=0</td></tr>
 <tr class="memdesc:ab3bd7e95ea13631954d92a638badfb2d"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Set the minimum amount of padding for all vars.  <a href="#ab3bd7e95ea13631954d92a638badfb2d">More...</a><br /></td></tr>
 <tr class="separator:ab3bd7e95ea13631954d92a638badfb2d"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a193d7c6e708c1ece4d78b39800a7d5fa"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a193d7c6e708c1ece4d78b39800a7d5fa">get_min_pad_size</a> (const std::string &amp;dim) const =0</td></tr>
+<tr class="memitem:a193d7c6e708c1ece4d78b39800a7d5fa"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a193d7c6e708c1ece4d78b39800a7d5fa">get_min_pad_size</a> (const std::string &amp;dim) const =0</td></tr>
 <tr class="memdesc:a193d7c6e708c1ece4d78b39800a7d5fa"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Get the minimum amount of padding for all vars.  <a href="#a193d7c6e708c1ece4d78b39800a7d5fa">More...</a><br /></td></tr>
 <tr class="separator:a193d7c6e708c1ece4d78b39800a7d5fa"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a932fad2ede1aecef168189c0aa972b0b"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a932fad2ede1aecef168189c0aa972b0b">reset_auto_tuner</a> (bool enable, bool verbose=false)=0</td></tr>
-<tr class="memdesc:a932fad2ede1aecef168189c0aa972b0b"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Restart or disable the auto-tuner on this rank.  <a href="#a932fad2ede1aecef168189c0aa972b0b">More...</a><br /></td></tr>
-<tr class="separator:a932fad2ede1aecef168189c0aa972b0b"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a8e92afeb1d201ea0174fa04029ec0077"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a8e92afeb1d201ea0174fa04029ec0077">run_auto_tuner_now</a> (bool verbose=true)=0</td></tr>
-<tr class="memdesc:a8e92afeb1d201ea0174fa04029ec0077"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Automatically tune selected settings immediately.  <a href="#a8e92afeb1d201ea0174fa04029ec0077">More...</a><br /></td></tr>
-<tr class="separator:a8e92afeb1d201ea0174fa04029ec0077"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a076e1cc78d96e7cc77ec62d58e289131"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yk.html#ga95f75e2b515e5455b570ae705115696a">yk_var_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a076e1cc78d96e7cc77ec62d58e289131">new_var</a> (const std::string &amp;name, const std::vector&lt; std::string &gt; &amp;dims)=0</td></tr>
-<tr class="memdesc:a076e1cc78d96e7cc77ec62d58e289131"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Add a new var to the solution.  <a href="#a076e1cc78d96e7cc77ec62d58e289131">More...</a><br /></td></tr>
-<tr class="separator:a076e1cc78d96e7cc77ec62d58e289131"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a75ba824977414468dd23f0a1d5f9eaf3"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yk.html#ga95f75e2b515e5455b570ae705115696a">yk_var_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a75ba824977414468dd23f0a1d5f9eaf3">new_var</a> (const std::string &amp;name, const <a class="el" href="group__yask.html#ga53bde373152f3af12ba9daa06007eb5f">string_vec</a> &amp;dims)=0</td></tr>
+<tr class="memdesc:a75ba824977414468dd23f0a1d5f9eaf3"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Add a new var to the solution.  <a href="#a75ba824977414468dd23f0a1d5f9eaf3">More...</a><br /></td></tr>
+<tr class="separator:a75ba824977414468dd23f0a1d5f9eaf3"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ae2774f810be2d57a878884111cbd36e9"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yk.html#ga95f75e2b515e5455b570ae705115696a">yk_var_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ae2774f810be2d57a878884111cbd36e9">new_var</a> (const std::string &amp;name, const std::initializer_list&lt; std::string &gt; &amp;dims)=0</td></tr>
 <tr class="memdesc:ae2774f810be2d57a878884111cbd36e9"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Add a new var to the solution.  <a href="#ae2774f810be2d57a878884111cbd36e9">More...</a><br /></td></tr>
 <tr class="separator:ae2774f810be2d57a878884111cbd36e9"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a70c44ba3941aa5682e381c7c36dcf453"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yk.html#ga95f75e2b515e5455b570ae705115696a">yk_var_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a70c44ba3941aa5682e381c7c36dcf453">new_fixed_size_var</a> (const std::string &amp;name, const std::vector&lt; std::string &gt; &amp;dims, const std::vector&lt; <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> &gt; &amp;dim_sizes)=0</td></tr>
-<tr class="memdesc:a70c44ba3941aa5682e381c7c36dcf453"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Add a new var to the solution with a specified size.  <a href="#a70c44ba3941aa5682e381c7c36dcf453">More...</a><br /></td></tr>
-<tr class="separator:a70c44ba3941aa5682e381c7c36dcf453"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a0b682d609950a4d9b9d8fb497aad9971"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yk.html#ga95f75e2b515e5455b570ae705115696a">yk_var_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a0b682d609950a4d9b9d8fb497aad9971">new_fixed_size_var</a> (const std::string &amp;name, const std::initializer_list&lt; std::string &gt; &amp;dims, const std::initializer_list&lt; <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> &gt; &amp;dim_sizes)=0</td></tr>
-<tr class="memdesc:a0b682d609950a4d9b9d8fb497aad9971"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Add a new var to the solution with a specified size.  <a href="#a0b682d609950a4d9b9d8fb497aad9971">More...</a><br /></td></tr>
-<tr class="separator:a0b682d609950a4d9b9d8fb497aad9971"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a2899b81d090c4a2f468ccc31adfa9d85"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yk.html#ga95f75e2b515e5455b570ae705115696a">yk_var_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a2899b81d090c4a2f468ccc31adfa9d85">new_fixed_size_var</a> (const std::string &amp;name, const <a class="el" href="group__yask.html#ga53bde373152f3af12ba9daa06007eb5f">string_vec</a> &amp;dims, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;dim_sizes)=0</td></tr>
+<tr class="memdesc:a2899b81d090c4a2f468ccc31adfa9d85"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Add a new var to the solution with a specified size.  <a href="#a2899b81d090c4a2f468ccc31adfa9d85">More...</a><br /></td></tr>
+<tr class="separator:a2899b81d090c4a2f468ccc31adfa9d85"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a8cff251e3f20d961e0a11752857dd28a"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yk.html#ga95f75e2b515e5455b570ae705115696a">yk_var_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a8cff251e3f20d961e0a11752857dd28a">new_fixed_size_var</a> (const std::string &amp;name, const std::initializer_list&lt; std::string &gt; &amp;dims, const <a class="el" href="group__yask.html#ga9a86862ece2cddc8fb77fac850c44161">idx_t_init_list</a> &amp;dim_sizes)=0</td></tr>
+<tr class="memdesc:a8cff251e3f20d961e0a11752857dd28a"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Add a new var to the solution with a specified size.  <a href="#a8cff251e3f20d961e0a11752857dd28a">More...</a><br /></td></tr>
+<tr class="separator:a8cff251e3f20d961e0a11752857dd28a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ac8bde8dfc73219cec84ad3033faabb90"><td class="memItemLeft" align="right" valign="top">virtual bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ac8bde8dfc73219cec84ad3033faabb90">set_default_numa_preferred</a> (int numa_node)=0</td></tr>
 <tr class="memdesc:ac8bde8dfc73219cec84ad3033faabb90"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Set the default preferred NUMA node on which to allocate data.  <a href="#ac8bde8dfc73219cec84ad3033faabb90">More...</a><br /></td></tr>
 <tr class="separator:ac8bde8dfc73219cec84ad3033faabb90"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -246,79 +297,48 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:ad9cf6be2225ae2273b921b85dd8c7ac5"><td class="memItemLeft" align="right" valign="top">virtual bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ad9cf6be2225ae2273b921b85dd8c7ac5">get_step_wrap</a> () const =0</td></tr>
 <tr class="memdesc:ad9cf6be2225ae2273b921b85dd8c7ac5"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Get whether invalid step indices alias to valid ones.  <a href="#ad9cf6be2225ae2273b921b85dd8c7ac5">More...</a><br /></td></tr>
 <tr class="separator:ad9cf6be2225ae2273b921b85dd8c7ac5"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ab36a4f206704861958ac280e774f7e03"><td class="memItemLeft" align="right" valign="top"><a id="ab36a4f206704861958ac280e774f7e03"></a>
-int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ab36a4f206704861958ac280e774f7e03">get_num_grids</a> () const</td></tr>
-<tr class="memdesc:ab36a4f206704861958ac280e774f7e03"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yk__solution.html#a9e0947f98bcea19c6400bcdf95ddf585" title="Get the number of vars in the solution.">get_num_vars()</a>. <br /></td></tr>
-<tr class="separator:ab36a4f206704861958ac280e774f7e03"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:aadd360ab1d09bfcf603f0345793ba586"><td class="memItemLeft" align="right" valign="top"><a id="aadd360ab1d09bfcf603f0345793ba586"></a>
-<a class="el" href="group__yk.html#ga95f75e2b515e5455b570ae705115696a">yk_var_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#aadd360ab1d09bfcf603f0345793ba586">get_grid</a> (const std::string &amp;name)</td></tr>
-<tr class="memdesc:aadd360ab1d09bfcf603f0345793ba586"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yk__solution.html#a068d8968ac1846a9ea5af7ca2defaf79" title="Get the specified var.">get_var()</a>. <br /></td></tr>
-<tr class="separator:aadd360ab1d09bfcf603f0345793ba586"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a418199548c44f5c9d7d90305350cf34b"><td class="memItemLeft" align="right" valign="top"><a id="a418199548c44f5c9d7d90305350cf34b"></a>
-std::vector&lt; <a class="el" href="group__yk.html#ga95f75e2b515e5455b570ae705115696a">yk_var_ptr</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a418199548c44f5c9d7d90305350cf34b">get_grids</a> ()</td></tr>
-<tr class="memdesc:a418199548c44f5c9d7d90305350cf34b"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yk__solution.html#a0d1cd86caa28951a816f8c7959351155" title="Get all the vars.">get_vars()</a>. <br /></td></tr>
-<tr class="separator:a418199548c44f5c9d7d90305350cf34b"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a1f74cc62244dc8e3e893160b1a5a76d4"><td class="memItemLeft" align="right" valign="top"><a id="a1f74cc62244dc8e3e893160b1a5a76d4"></a>
-<a class="el" href="group__yk.html#ga95f75e2b515e5455b570ae705115696a">yk_var_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a1f74cc62244dc8e3e893160b1a5a76d4">new_grid</a> (const std::string &amp;name, const std::vector&lt; std::string &gt; &amp;dims)</td></tr>
-<tr class="memdesc:a1f74cc62244dc8e3e893160b1a5a76d4"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yk__solution.html#a076e1cc78d96e7cc77ec62d58e289131" title="[Advanced] Add a new var to the solution.">new_var()</a>. <br /></td></tr>
-<tr class="separator:a1f74cc62244dc8e3e893160b1a5a76d4"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a4c229f530c340ca9d7ad37418fe3b6fd"><td class="memItemLeft" align="right" valign="top"><a id="a4c229f530c340ca9d7ad37418fe3b6fd"></a>
-<a class="el" href="group__yk.html#ga95f75e2b515e5455b570ae705115696a">yk_var_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a4c229f530c340ca9d7ad37418fe3b6fd">new_grid</a> (const std::string &amp;name, const std::initializer_list&lt; std::string &gt; &amp;dims)</td></tr>
-<tr class="memdesc:a4c229f530c340ca9d7ad37418fe3b6fd"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yk__solution.html#a076e1cc78d96e7cc77ec62d58e289131" title="[Advanced] Add a new var to the solution.">new_var()</a>. <br /></td></tr>
-<tr class="separator:a4c229f530c340ca9d7ad37418fe3b6fd"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a5c86f62c9b5ed883da0642e83095bb6d"><td class="memItemLeft" align="right" valign="top"><a id="a5c86f62c9b5ed883da0642e83095bb6d"></a>
-<a class="el" href="group__yk.html#ga95f75e2b515e5455b570ae705115696a">yk_var_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a5c86f62c9b5ed883da0642e83095bb6d">new_fixed_size_grid</a> (const std::string &amp;name, const std::vector&lt; std::string &gt; &amp;dims, const std::vector&lt; <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> &gt; &amp;dim_sizes)</td></tr>
-<tr class="memdesc:a5c86f62c9b5ed883da0642e83095bb6d"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yk__solution.html#a70c44ba3941aa5682e381c7c36dcf453" title="[Advanced] Add a new var to the solution with a specified size.">new_fixed_size_var()</a>. <br /></td></tr>
-<tr class="separator:a5c86f62c9b5ed883da0642e83095bb6d"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ab746b975b9929508188aee45b35ba176"><td class="memItemLeft" align="right" valign="top"><a id="ab746b975b9929508188aee45b35ba176"></a>
-<a class="el" href="group__yk.html#ga95f75e2b515e5455b570ae705115696a">yk_var_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ab746b975b9929508188aee45b35ba176">new_fixed_size_grid</a> (const std::string &amp;name, const std::initializer_list&lt; std::string &gt; &amp;dims, const std::vector&lt; <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> &gt; &amp;dim_sizes)</td></tr>
-<tr class="memdesc:ab746b975b9929508188aee45b35ba176"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yk__solution.html#a70c44ba3941aa5682e381c7c36dcf453" title="[Advanced] Add a new var to the solution with a specified size.">new_fixed_size_var()</a>. <br /></td></tr>
-<tr class="separator:ab746b975b9929508188aee45b35ba176"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a2c600b5537983349a50462a90dc73291"><td class="memItemLeft" align="right" valign="top"><a id="a2c600b5537983349a50462a90dc73291"></a>
-void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a2c600b5537983349a50462a90dc73291">fuse_grids</a> (<a class="el" href="group__yk.html#ga2debaa7135bb46dfc295ca623bee2876">yk_solution_ptr</a> source)</td></tr>
-<tr class="memdesc:a2c600b5537983349a50462a90dc73291"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yk__solution.html#a563794842445fcd96d77b463f674a60b" title="[Advanced] Merge YASK variables with another solution.">fuse_vars()</a>. <br /></td></tr>
-<tr class="separator:a2c600b5537983349a50462a90dc73291"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a7e8ce77d85b54ebaf15ddf11009066c4"><td class="memItemLeft" align="right" valign="top"><a id="a7e8ce77d85b54ebaf15ddf11009066c4"></a>
+virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a7e8ce77d85b54ebaf15ddf11009066c4">set_debug_output</a> (<a class="el" href="group__yask.html#ga605185252a3f3f917593c83b7dde4b66">yask_output_ptr</a> debug)=0</td></tr>
+<tr class="memdesc:a7e8ce77d85b54ebaf15ddf11009066c4"><td class="mdescLeft">&#160;</td><td class="mdescRight"><em><b>[Deprecated]</b></em> Use <a class="el" href="classyask_1_1yk__env.html#aa5cf0e8d885f4d9ebde6539d5246cda1" title="Set object to receive debug output.">yk_env::set_debug_output()</a>. <br /></td></tr>
+<tr class="separator:a7e8ce77d85b54ebaf15ddf11009066c4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a4a510dff4e18c716baeec707affd0124"><td class="memItemLeft" align="right" valign="top"><a id="a4a510dff4e18c716baeec707affd0124"></a>
+<a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a4a510dff4e18c716baeec707affd0124">get_num_grids</a> () const</td></tr>
+<tr class="memdesc:a4a510dff4e18c716baeec707affd0124"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yk__solution.html#a9e0947f98bcea19c6400bcdf95ddf585" title="Get the number of vars in the solution.">get_num_vars()</a>. <br /></td></tr>
+<tr class="separator:a4a510dff4e18c716baeec707affd0124"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a561517d815dd1004e1c39557554eee16"><td class="memItemLeft" align="right" valign="top"><a id="a561517d815dd1004e1c39557554eee16"></a>
+<a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> <a class="el" href="group__yk.html#ga95f75e2b515e5455b570ae705115696a">yk_var_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a561517d815dd1004e1c39557554eee16">get_grid</a> (const std::string &amp;name)</td></tr>
+<tr class="memdesc:a561517d815dd1004e1c39557554eee16"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yk__solution.html#a068d8968ac1846a9ea5af7ca2defaf79" title="Get the specified var.">get_var()</a>. <br /></td></tr>
+<tr class="separator:a561517d815dd1004e1c39557554eee16"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a9a0269a914a3e4e5465a7e3643785544"><td class="memItemLeft" align="right" valign="top"><a id="a9a0269a914a3e4e5465a7e3643785544"></a>
+<a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> std::vector&lt; <a class="el" href="group__yk.html#ga95f75e2b515e5455b570ae705115696a">yk_var_ptr</a> &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a9a0269a914a3e4e5465a7e3643785544">get_grids</a> ()</td></tr>
+<tr class="memdesc:a9a0269a914a3e4e5465a7e3643785544"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yk__solution.html#a0d1cd86caa28951a816f8c7959351155" title="Get all the vars.">get_vars()</a>. <br /></td></tr>
+<tr class="separator:a9a0269a914a3e4e5465a7e3643785544"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac5b391babd6897c314f5ba5e3c0b2605"><td class="memItemLeft" align="right" valign="top"><a id="ac5b391babd6897c314f5ba5e3c0b2605"></a>
+<a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> <a class="el" href="group__yk.html#ga95f75e2b515e5455b570ae705115696a">yk_var_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ac5b391babd6897c314f5ba5e3c0b2605">new_grid</a> (const std::string &amp;name, const <a class="el" href="group__yask.html#ga53bde373152f3af12ba9daa06007eb5f">string_vec</a> &amp;dims)</td></tr>
+<tr class="memdesc:ac5b391babd6897c314f5ba5e3c0b2605"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yk__solution.html#a75ba824977414468dd23f0a1d5f9eaf3" title="[Advanced] Add a new var to the solution.">new_var()</a>. <br /></td></tr>
+<tr class="separator:ac5b391babd6897c314f5ba5e3c0b2605"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a30606c931e4b30a1d4d1b515dc4c5926"><td class="memItemLeft" align="right" valign="top"><a id="a30606c931e4b30a1d4d1b515dc4c5926"></a>
+<a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> <a class="el" href="group__yk.html#ga95f75e2b515e5455b570ae705115696a">yk_var_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a30606c931e4b30a1d4d1b515dc4c5926">new_grid</a> (const std::string &amp;name, const std::initializer_list&lt; std::string &gt; &amp;dims)</td></tr>
+<tr class="memdesc:a30606c931e4b30a1d4d1b515dc4c5926"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yk__solution.html#a75ba824977414468dd23f0a1d5f9eaf3" title="[Advanced] Add a new var to the solution.">new_var()</a>. <br /></td></tr>
+<tr class="separator:a30606c931e4b30a1d4d1b515dc4c5926"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a86f50f2b0851eb969322956258d459d0"><td class="memItemLeft" align="right" valign="top"><a id="a86f50f2b0851eb969322956258d459d0"></a>
+<a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> <a class="el" href="group__yk.html#ga95f75e2b515e5455b570ae705115696a">yk_var_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a86f50f2b0851eb969322956258d459d0">new_fixed_size_grid</a> (const std::string &amp;name, const <a class="el" href="group__yask.html#ga53bde373152f3af12ba9daa06007eb5f">string_vec</a> &amp;dims, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;dim_sizes)</td></tr>
+<tr class="memdesc:a86f50f2b0851eb969322956258d459d0"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yk__solution.html#a2899b81d090c4a2f468ccc31adfa9d85" title="[Advanced] Add a new var to the solution with a specified size.">new_fixed_size_var()</a>. <br /></td></tr>
+<tr class="separator:a86f50f2b0851eb969322956258d459d0"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a106ecadbbd0a7fa2ddb8ce6b14e14451"><td class="memItemLeft" align="right" valign="top"><a id="a106ecadbbd0a7fa2ddb8ce6b14e14451"></a>
+<a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> <a class="el" href="group__yk.html#ga95f75e2b515e5455b570ae705115696a">yk_var_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a106ecadbbd0a7fa2ddb8ce6b14e14451">new_fixed_size_grid</a> (const std::string &amp;name, const std::initializer_list&lt; std::string &gt; &amp;dims, const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;dim_sizes)</td></tr>
+<tr class="memdesc:a106ecadbbd0a7fa2ddb8ce6b14e14451"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yk__solution.html#a2899b81d090c4a2f468ccc31adfa9d85" title="[Advanced] Add a new var to the solution with a specified size.">new_fixed_size_var()</a>. <br /></td></tr>
+<tr class="separator:a106ecadbbd0a7fa2ddb8ce6b14e14451"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac20126eb21acf5e61ac2c94d823a34e1"><td class="memItemLeft" align="right" valign="top"><a id="ac20126eb21acf5e61ac2c94d823a34e1"></a>
+<a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ac20126eb21acf5e61ac2c94d823a34e1">fuse_grids</a> (<a class="el" href="group__yk.html#ga2debaa7135bb46dfc295ca623bee2876">yk_solution_ptr</a> source)</td></tr>
+<tr class="memdesc:ac20126eb21acf5e61ac2c94d823a34e1"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yk__solution.html#a563794842445fcd96d77b463f674a60b" title="[Advanced] Merge YASK variables with another solution.">fuse_vars()</a>. <br /></td></tr>
+<tr class="separator:ac20126eb21acf5e61ac2c94d823a34e1"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
 <div class="textblock"><p>Stencil solution as defined by the generated code from the YASK stencil compiler. </p>
 <p>Objects of this type contain all the vars and equations that comprise a solution.</p>
 <p>Created via <a class="el" href="classyask_1_1yk__factory.html#a755b1bfc0dd9bfddfe80d924a188b350" title="Create a stencil solution.">yk_factory::new_solution()</a>. </p>
 </div><h2 class="groupheader">Member Function Documentation</h2>
-<a id="aa315469b5836e531425836f4fc5eff1c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#aa315469b5836e531425836f4fc5eff1c">&#9670;&nbsp;</a></span>set_debug_output()</h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">virtual void yask::yk_solution::set_debug_output </td>
-          <td>(</td>
-          <td class="paramtype"><a class="el" href="group__yask.html#ga605185252a3f3f917593c83b7dde4b66">yask_output_ptr</a>&#160;</td>
-          <td class="paramname"><em>debug</em></td><td>)</td>
-          <td></td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-
-<p>Set object to receive debug output. </p>
-<p>Just a shortcut for setting the debug output in the <a class="el" href="classyask_1_1yk__env.html">yk_env</a> used to create the solution. </p>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramdir">[out]</td><td class="paramname">debug</td><td>Pointer to object to receive debug output. See <a class="el" href="classyask_1_1yask__output__factory.html">yask_output_factory</a>. </td></tr>
-  </table>
-  </dd>
-</dl>
-
-</div>
-</div>
 <a id="aaafc0aa636a3d306e29771d5440c4aa4"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#aaafc0aa636a3d306e29771d5440c4aa4">&#9670;&nbsp;</a></span>get_name()</h2>
 
@@ -371,7 +391,35 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 </div><div class="memdoc">
 
 <p>Get the target ISA. </p>
-<dl class="section return"><dt>Returns</dt><dd>String describing the instruction-set architecture targeted during kernel compilation. See the allowed YASK kernel targets in <a class="el" href="classyask_1_1yc__solution.html#a1c03fc69e306a700de8c5ae3973229c2" title="Set the output target.">yc_solution::set_target()</a>. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>String describing the instruction-set architecture of the CPU targeted during kernel compilation. See the allowed YASK kernel targets in <a class="el" href="classyask_1_1yc__solution.html#a1c03fc69e306a700de8c5ae3973229c2" title="Set the output target.">yc_solution::set_target()</a>. </dd></dl>
+
+</div>
+</div>
+<a id="a2978fb8fd701fe35ae8a8b19e23e5544"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2978fb8fd701fe35ae8a8b19e23e5544">&#9670;&nbsp;</a></span>is_offloaded()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual bool yask::yk_solution::is_offloaded </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get whether the stencil kernel will be offloaded to a device. </p>
+<dl class="section return"><dt>Returns</dt><dd><em>true</em> if kernel will be offloaded or <em>false</em> if not. </dd></dl>
 
 </div>
 </div>
@@ -459,8 +507,8 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 
 </div>
 </div>
-<a id="a665968c18b2f70467dbc7decaeeb1a1f"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a665968c18b2f70467dbc7decaeeb1a1f">&#9670;&nbsp;</a></span>get_domain_dim_names()</h2>
+<a id="a24c2619b5f0471bcfe8eeb5aed769fec"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a24c2619b5f0471bcfe8eeb5aed769fec">&#9670;&nbsp;</a></span>get_domain_dim_names()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -469,7 +517,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">virtual std::vector&lt;std::string&gt; yask::yk_solution::get_domain_dim_names </td>
+          <td class="memname">virtual <a class="el" href="group__yask.html#ga53bde373152f3af12ba9daa06007eb5f">string_vec</a> yask::yk_solution::get_domain_dim_names </td>
           <td>(</td>
           <td class="paramname"></td><td>)</td>
           <td> const</td>
@@ -487,8 +535,8 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 
 </div>
 </div>
-<a id="af895e7366f7f224c4e6fc780b0dd7a2f"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#af895e7366f7f224c4e6fc780b0dd7a2f">&#9670;&nbsp;</a></span>get_misc_dim_names()</h2>
+<a id="a4184ac69b5e5af07e8cfc0317d6bd759"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4184ac69b5e5af07e8cfc0317d6bd759">&#9670;&nbsp;</a></span>get_misc_dim_names()</h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -497,7 +545,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">virtual std::vector&lt;std::string&gt; yask::yk_solution::get_misc_dim_names </td>
+          <td class="memname">virtual <a class="el" href="group__yask.html#ga53bde373152f3af12ba9daa06007eb5f">string_vec</a> yask::yk_solution::get_misc_dim_names </td>
           <td>(</td>
           <td class="paramname"></td><td>)</td>
           <td> const</td>
@@ -511,7 +559,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 </div><div class="memdoc">
 
 <p>Get all the miscellaneous dimension names. </p>
-<dl class="section return"><dt>Returns</dt><dd>List of all dimension names that were either Defined by <a class="el" href="classyask_1_1yc__node__factory.html#aef5fed8db0e1798b421c4a8cb8da77ff" title="Create a new miscellaneous index.">yc_node_factory::new_misc_index()</a> and used in one or more vars, or Created at run-time by adding a new dimension via <a class="el" href="classyask_1_1yk__solution.html#a076e1cc78d96e7cc77ec62d58e289131" title="[Advanced] Add a new var to the solution.">yk_solution::new_var()</a> or <a class="el" href="classyask_1_1yk__solution.html#a70c44ba3941aa5682e381c7c36dcf453" title="[Advanced] Add a new var to the solution with a specified size.">yk_solution::new_fixed_size_var()</a>. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>List of all dimension names that were either Defined by <a class="el" href="classyask_1_1yc__node__factory.html#aef5fed8db0e1798b421c4a8cb8da77ff" title="Create a new miscellaneous index.">yc_node_factory::new_misc_index()</a> and used in one or more vars, or Created at run-time by adding a new dimension via <a class="el" href="classyask_1_1yk__solution.html#a75ba824977414468dd23f0a1d5f9eaf3" title="[Advanced] Add a new var to the solution.">yk_solution::new_var()</a> or <a class="el" href="classyask_1_1yk__solution.html#a2899b81d090c4a2f468ccc31adfa9d85" title="[Advanced] Add a new var to the solution with a specified size.">yk_solution::new_fixed_size_var()</a>. </dd></dl>
 
 </div>
 </div>
@@ -533,7 +581,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a>&#160;</td>
+          <td class="paramtype"><a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td>
           <td class="paramname"><em>size</em>&#160;</td>
         </tr>
         <tr>
@@ -551,12 +599,82 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 
 <p>Set the local-domain size in the specified dimension, i.e., the size of the part of the domain that is in this rank. </p>
 <p>The domain defines the number of elements that will be evaluated with the stencil(s). If MPI is not enabled, this is equivalent to the global-domain size. If MPI is enabled, this is the domain size for the current rank only, and the global-domain size is the sum of all local-domain sizes in each dimension. The local-domain size in each rank does not have to be the same, but all local-domains in the same column of ranks must have the same width, all local-domains in the same row must have the same height, and so forth, for each domain dimension. The local-domain size does <em>not</em> include the halo area or any padding. For best performance, set the local-domain size to a multiple of the number of elements in a vector-cluster in each dimension.</p>
-<p>You should set either the local-domain size or the global-domain size in each dimension. The unspecified (zero) sizes will be calculated based on the specified ones when <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a> is called. Setting the local-domain size to a non-zero value will clear the global-domain size in that dimension until <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a> is called.</p>
+<p>You should set either the local-domain size or the global-domain size in each dimension; the other should be set to zero (unspecified). The unspecified (zero) sizes will be calculated based on the specified ones when <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a> is called.</p>
 <p>See the "Detailed Description" for <a class="el" href="classyask_1_1yk__var.html">yk_var</a> for more information on var sizes. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to set. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a665968c18b2f70467dbc7decaeeb1a1f" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to set. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a24c2619b5f0471bcfe8eeb5aed769fec" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
     <tr><td class="paramdir">[in]</td><td class="paramname">size</td><td>Elements in the domain in this `dim`. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a31a653082530e1049c3030b408bc3fa1"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a31a653082530e1049c3030b408bc3fa1">&#9670;&nbsp;</a></span>set_rank_domain_size_vec() <span class="overload">[1/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual void yask::yk_solution::set_rank_domain_size_vec </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;&#160;</td>
+          <td class="paramname"><em>vals</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Set the local-domain size in all domain dimensions. </p>
+<p>See <a class="el" href="classyask_1_1yk__solution.html#a155d8f4a38da9da11488a18cca50bae8" title="Set the local-domain size in the specified dimension, i.e., the size of the part of the domain that i...">set_rank_domain_size()</a>. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in]</td><td class="paramname">vals</td><td>Elements in all domain dims. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a9d75b7f78aaba21fcbe0583c79106fb7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9d75b7f78aaba21fcbe0583c79106fb7">&#9670;&nbsp;</a></span>set_rank_domain_size_vec() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual void yask::yk_solution::set_rank_domain_size_vec </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#ga9a86862ece2cddc8fb77fac850c44161">idx_t_init_list</a> &amp;&#160;</td>
+          <td class="paramname"><em>vals</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Set the local-domain size in all domain dimensions. </p>
+<p>See <a class="el" href="classyask_1_1yk__solution.html#a155d8f4a38da9da11488a18cca50bae8" title="Set the local-domain size in the specified dimension, i.e., the size of the part of the domain that i...">set_rank_domain_size()</a>. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in]</td><td class="paramname">vals</td><td>Elements in all domain dims. </td></tr>
   </table>
   </dd>
 </dl>
@@ -573,7 +691,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">virtual <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> yask::yk_solution::get_rank_domain_size </td>
+          <td class="memname">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> yask::yk_solution::get_rank_domain_size </td>
           <td>(</td>
           <td class="paramtype">const std::string &amp;&#160;</td>
           <td class="paramname"><em>dim</em></td><td>)</td>
@@ -589,14 +707,42 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 
 <p>Get the local-domain size in the specified dimension, i.e., the size in this rank. </p>
 <p>See documentation for <a class="el" href="classyask_1_1yk__solution.html#a155d8f4a38da9da11488a18cca50bae8" title="Set the local-domain size in the specified dimension, i.e., the size of the part of the domain that i...">set_rank_domain_size()</a>.</p>
-<p>If you have called <a class="el" href="classyask_1_1yk__solution.html#a7f9a22d8d2b760a05307e90147d18d8c" title="Get the global-domain size in the specified dimension, i.e., the total size across all MPI ranks.">set_overall_domain_size()</a> in a given dimension, <a class="el" href="classyask_1_1yk__solution.html#a56ba31268cb0098b64e4503c8996300f" title="Get the local-domain size in the specified dimension, i.e., the size in this rank.">get_rank_domain_size()</a> will return zero in that dimension until <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a> is called. After <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a> is called, the computed size will be returned.</p>
+<dl class="section note"><dt>Note</dt><dd><a class="el" href="classyask_1_1yk__solution.html#a56ba31268cb0098b64e4503c8996300f" title="Get the local-domain size in the specified dimension, i.e., the size in this rank.">get_rank_domain_size()</a> may return zero in a dimension until <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a> is called. After <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a> is called, the computed size will be returned.</dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>Current setting of rank domain size in specified dimension. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to get. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a665968c18b2f70467dbc7decaeeb1a1f" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to get. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a24c2619b5f0471bcfe8eeb5aed769fec" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
   </table>
   </dd>
 </dl>
+
+</div>
+</div>
+<a id="a50034edeb397bb0285ea4363178de803"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a50034edeb397bb0285ea4363178de803">&#9670;&nbsp;</a></span>get_rank_domain_size_vec()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> yask::yk_solution::get_rank_domain_size_vec </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get the local-domain size in all domain dimensions. </p>
+<p>See <a class="el" href="classyask_1_1yk__solution.html#a56ba31268cb0098b64e4503c8996300f" title="Get the local-domain size in the specified dimension, i.e., the size in this rank.">get_rank_domain_size()</a>. </p><dl class="section return"><dt>Returns</dt><dd>Vector of current setting of rank domain sizes. </dd></dl>
 
 </div>
 </div>
@@ -618,7 +764,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a>&#160;</td>
+          <td class="paramtype"><a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td>
           <td class="paramname"><em>size</em>&#160;</td>
         </tr>
         <tr>
@@ -635,12 +781,82 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 </div><div class="memdoc">
 
 <p>Get the global-domain size in the specified dimension, i.e., the total size across all MPI ranks. </p>
-<p>You should set either the local-domain size or the global-domain size in each dimension. The unspecified (zero) sizes will be calculated based on the specified ones when <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a> is called. Setting the global-domain size to a non-zero value will clear the local-domain size in that dimension until <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a> is called.</p>
+<p>You should set either the local-domain size or the global-domain size in each dimension; the other should be set to zero (unspecified). The unspecified (zero) sizes will be calculated based on the specified ones when <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a> is called.</p>
 <p>See documentation for <a class="el" href="classyask_1_1yk__solution.html#a155d8f4a38da9da11488a18cca50bae8" title="Set the local-domain size in the specified dimension, i.e., the size of the part of the domain that i...">set_rank_domain_size()</a>. See the "Detailed Description" for <a class="el" href="classyask_1_1yk__var.html">yk_var</a> for more information on var sizes. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to set. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a665968c18b2f70467dbc7decaeeb1a1f" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to set. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a24c2619b5f0471bcfe8eeb5aed769fec" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
     <tr><td class="paramdir">[in]</td><td class="paramname">size</td><td>Elements in the domain in this `dim`. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a156fa79121b033516028c391db968a17"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a156fa79121b033516028c391db968a17">&#9670;&nbsp;</a></span>set_overall_domain_size_vec() <span class="overload">[1/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual void yask::yk_solution::set_overall_domain_size_vec </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;&#160;</td>
+          <td class="paramname"><em>vals</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Set the global-domain size in all domain dimensions. </p>
+<p>See <a class="el" href="classyask_1_1yk__solution.html#a7f9a22d8d2b760a05307e90147d18d8c" title="Get the global-domain size in the specified dimension, i.e., the total size across all MPI ranks.">set_overall_domain_size()</a>. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in]</td><td class="paramname">vals</td><td>Elements in all domain dims. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a4540f5a7990503a4f2c1a336188197eb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a4540f5a7990503a4f2c1a336188197eb">&#9670;&nbsp;</a></span>set_overall_domain_size_vec() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual void yask::yk_solution::set_overall_domain_size_vec </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#ga9a86862ece2cddc8fb77fac850c44161">idx_t_init_list</a> &amp;&#160;</td>
+          <td class="paramname"><em>vals</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Set the global-domain size in all domain dimensions. </p>
+<p>See <a class="el" href="classyask_1_1yk__solution.html#a7f9a22d8d2b760a05307e90147d18d8c" title="Get the global-domain size in the specified dimension, i.e., the total size across all MPI ranks.">set_overall_domain_size()</a>. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in]</td><td class="paramname">vals</td><td>Elements in all domain dims. </td></tr>
   </table>
   </dd>
 </dl>
@@ -657,7 +873,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">virtual <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> yask::yk_solution::get_overall_domain_size </td>
+          <td class="memname">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> yask::yk_solution::get_overall_domain_size </td>
           <td>(</td>
           <td class="paramtype">const std::string &amp;&#160;</td>
           <td class="paramname"><em>dim</em></td><td>)</td>
@@ -673,14 +889,43 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 
 <p>Get the global-domain size in the specified dimension, i.e., the total size across all MPI ranks. </p>
 <p>The global-domain indices in the specified dimension will range from zero (0) to <a class="el" href="classyask_1_1yk__solution.html#aaba39cb06c9f61d408695009667fe8cd" title="Get the global-domain size in the specified dimension, i.e., the total size across all MPI ranks.">get_overall_domain_size()</a> - 1, inclusive. Call <a class="el" href="classyask_1_1yk__solution.html#a03bdef5ba9b0b0e37f9b7be2e2e457a4" title="Get the first index of the sub-domain in this rank in the specified dimension.">get_first_rank_domain_index()</a> and <a class="el" href="classyask_1_1yk__solution.html#a58f2ce95e150787bc8235e85298dcd01" title="Get the last index of the sub-domain in this rank the specified dimension.">get_last_rank_domain_index()</a> to find the subset of this domain in each rank.</p>
-<p>If you have called <a class="el" href="classyask_1_1yk__solution.html#a155d8f4a38da9da11488a18cca50bae8" title="Set the local-domain size in the specified dimension, i.e., the size of the part of the domain that i...">set_rank_domain_size()</a> in a given dimension, <a class="el" href="classyask_1_1yk__solution.html#aaba39cb06c9f61d408695009667fe8cd" title="Get the global-domain size in the specified dimension, i.e., the total size across all MPI ranks.">get_overall_domain_size()</a> will return zero in that dimension until <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a> is called. After <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a> is called, the computed size will be returned.</p>
+<dl class="section note"><dt>Note</dt><dd><a class="el" href="classyask_1_1yk__solution.html#aaba39cb06c9f61d408695009667fe8cd" title="Get the global-domain size in the specified dimension, i.e., the total size across all MPI ranks.">get_overall_domain_size()</a> may return zero in a dimension until <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a> is called. After <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a> is called, the computed size will be returned.</dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>Sum of all ranks' domain sizes in the given dimension. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to get. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a665968c18b2f70467dbc7decaeeb1a1f" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to get. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a24c2619b5f0471bcfe8eeb5aed769fec" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
   </table>
   </dd>
 </dl>
+
+</div>
+</div>
+<a id="aa141292fbfb8fcd075ea7192b03b6c43"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#aa141292fbfb8fcd075ea7192b03b6c43">&#9670;&nbsp;</a></span>get_overall_domain_size_vec()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> yask::yk_solution::get_overall_domain_size_vec </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get the global-domain size in all domain dimensions. </p>
+<p>See <a class="el" href="classyask_1_1yk__solution.html#aaba39cb06c9f61d408695009667fe8cd" title="Get the global-domain size in the specified dimension, i.e., the total size across all MPI ranks.">get_overall_domain_size()</a>.</p>
+<dl class="section return"><dt>Returns</dt><dd>Vector of current setting of global domain sizes. </dd></dl>
 
 </div>
 </div>
@@ -702,7 +947,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a>&#160;</td>
+          <td class="paramtype"><a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td>
           <td class="paramname"><em>size</em>&#160;</td>
         </tr>
         <tr>
@@ -720,11 +965,84 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 
 <p>Set the block size in the given dimension. </p>
 <p>This sets the approximate number of elements that are evaluated in each "block". This is a performance setting and should not affect the functional correctness or total number of elements evaluated. A block is typically the unit of work done by a top-level OpenMP thread. The actual number of elements evaluated in a block may be greater than the specified size due to rounding up to fold-cluster sizes. The number of elements in a block may also be smaller than the specified size when the block is at the edge of the domain. The block size cannot be set in the solution-step dimension (because temporal blocking is not yet enabled).</p>
-<p>Unless auto-tuning is disabled, the block size will be used as a starting point for an automated search for a higher-performing block size. </p>
+<p>Unless auto-tuning is disabled, the block size will be used as a starting point for an automated search for a higher-performing block size.</p>
+<p>This and all other tile sizes (Mega-blocks, blocks, micro-blocks, etc.) can be set via <a class="el" href="classyask_1_1yk__solution.html#ac111abbade055c4923cd0044360ec3b7" title="Set kernel options from a string.">apply_command_line_options()</a>. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to set. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a7039e7151857e2652592a585c6d00931" title="Get the solution step dimension.">get_step_dim_name()</a> or <a class="el" href="classyask_1_1yk__solution.html#a665968c18b2f70467dbc7decaeeb1a1f" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to set. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a7039e7151857e2652592a585c6d00931" title="Get the solution step dimension.">get_step_dim_name()</a> or <a class="el" href="classyask_1_1yk__solution.html#a24c2619b5f0471bcfe8eeb5aed769fec" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
     <tr><td class="paramdir">[in]</td><td class="paramname">size</td><td>Elements in a block in this `dim`. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a191580e8eab142bbf5eeb7573546c9c9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a191580e8eab142bbf5eeb7573546c9c9">&#9670;&nbsp;</a></span>set_block_size_vec() <span class="overload">[1/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual void yask::yk_solution::set_block_size_vec </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;&#160;</td>
+          <td class="paramname"><em>vals</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Set the block size in all domain dimensions. </p>
+<p>See <a class="el" href="classyask_1_1yk__solution.html#abd3c7317bf1b397f332962d658f38839" title="Set the block size in the given dimension.">set_block_size()</a>.</p>
+<dl class="section note"><dt>Note</dt><dd>Does <em>not</em> set the block size in the step dim. Call <a class="el" href="classyask_1_1yk__solution.html#abd3c7317bf1b397f332962d658f38839" title="Set the block size in the given dimension.">set_block_size()</a> with the name of the step dim to set the temporal block size. </dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in]</td><td class="paramname">vals</td><td>Elements in all domain dims. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a98ae9c07fbc60e4323fa16ee4a2400b5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a98ae9c07fbc60e4323fa16ee4a2400b5">&#9670;&nbsp;</a></span>set_block_size_vec() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual void yask::yk_solution::set_block_size_vec </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#ga9a86862ece2cddc8fb77fac850c44161">idx_t_init_list</a> &amp;&#160;</td>
+          <td class="paramname"><em>vals</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Set the block size in all domain dimensions. </p>
+<p>See <a class="el" href="classyask_1_1yk__solution.html#abd3c7317bf1b397f332962d658f38839" title="Set the block size in the given dimension.">set_block_size()</a>.</p>
+<dl class="section note"><dt>Note</dt><dd>Does <em>not</em> set the block size in the step dim. Call <a class="el" href="classyask_1_1yk__solution.html#abd3c7317bf1b397f332962d658f38839" title="Set the block size in the given dimension.">set_block_size()</a> with the name of the step dim to set the temporal block size. </dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in]</td><td class="paramname">vals</td><td>Elements in all domain dims. </td></tr>
   </table>
   </dd>
 </dl>
@@ -741,7 +1059,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">virtual <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> yask::yk_solution::get_block_size </td>
+          <td class="memname">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> yask::yk_solution::get_block_size </td>
           <td>(</td>
           <td class="paramtype">const std::string &amp;&#160;</td>
           <td class="paramname"><em>dim</em></td><td>)</td>
@@ -759,10 +1077,40 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 <p>Returned value may be slightly larger than the value provided via <a class="el" href="classyask_1_1yk__solution.html#abd3c7317bf1b397f332962d658f38839" title="Set the block size in the given dimension.">set_block_size()</a> due to rounding. </p><dl class="section return"><dt>Returns</dt><dd>Current settings of block size. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to get. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a7039e7151857e2652592a585c6d00931" title="Get the solution step dimension.">get_step_dim_name()</a> or <a class="el" href="classyask_1_1yk__solution.html#a665968c18b2f70467dbc7decaeeb1a1f" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to get. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a7039e7151857e2652592a585c6d00931" title="Get the solution step dimension.">get_step_dim_name()</a> or <a class="el" href="classyask_1_1yk__solution.html#a24c2619b5f0471bcfe8eeb5aed769fec" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
   </table>
   </dd>
 </dl>
+
+</div>
+</div>
+<a id="a75d10347e75c1e01e9592a3cb0fc42a0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a75d10347e75c1e01e9592a3cb0fc42a0">&#9670;&nbsp;</a></span>get_block_size_vec()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> yask::yk_solution::get_block_size_vec </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get the block size in all domain dimensions. </p>
+<p>See <a class="el" href="classyask_1_1yk__solution.html#a601aeebc023d430a311788c3ce73c190" title="Get the block size.">get_block_size()</a>.</p>
+<dl class="section note"><dt>Note</dt><dd>Does <em>not</em> return the block size in the step domain. Call <a class="el" href="classyask_1_1yk__solution.html#a601aeebc023d430a311788c3ce73c190" title="Get the block size.">get_block_size()</a> with the name of the step-domain dimension to get the temporal block size.</dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Vector of current setting of block domain sizes. </dd></dl>
 
 </div>
 </div>
@@ -784,7 +1132,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a>&#160;</td>
+          <td class="paramtype"><a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td>
           <td class="paramname"><em>num</em>&#160;</td>
         </tr>
         <tr>
@@ -807,8 +1155,78 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 <p>In fact, a practical definition of a domain dimension is one that is decomposable across MPI ranks. Specifically, a domain dimension does not have to correspond to a spatial dimension in the physical problem description. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to set. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a665968c18b2f70467dbc7decaeeb1a1f" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to set. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a24c2619b5f0471bcfe8eeb5aed769fec" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
     <tr><td class="paramdir">[in]</td><td class="paramname">num</td><td>Number of ranks in `dim`. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a85aebdf4bf311ed1b9d293fa4404f76e"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a85aebdf4bf311ed1b9d293fa4404f76e">&#9670;&nbsp;</a></span>set_num_ranks_vec() <span class="overload">[1/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual void yask::yk_solution::set_num_ranks_vec </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;&#160;</td>
+          <td class="paramname"><em>vals</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Set the number of MPI ranks in all domain dimensions. </p>
+<p>See <a class="el" href="classyask_1_1yk__solution.html#ac4cd27d412b6fe013db58b167999a362" title="Set the number of MPI ranks in the given dimension.">set_num_ranks()</a>. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in]</td><td class="paramname">vals</td><td>Number of ranks in all domain dims. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a7c4b880c34659d731ae133f7ae1bd273"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a7c4b880c34659d731ae133f7ae1bd273">&#9670;&nbsp;</a></span>set_num_ranks_vec() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual void yask::yk_solution::set_num_ranks_vec </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#ga9a86862ece2cddc8fb77fac850c44161">idx_t_init_list</a> &amp;&#160;</td>
+          <td class="paramname"><em>vals</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Set the number of all MPI ranks in all domain dimensions. </p>
+<p>See <a class="el" href="classyask_1_1yk__solution.html#ac4cd27d412b6fe013db58b167999a362" title="Set the number of MPI ranks in the given dimension.">set_num_ranks()</a>. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in]</td><td class="paramname">vals</td><td>Number of ranks in all domain dims. </td></tr>
   </table>
   </dd>
 </dl>
@@ -825,7 +1243,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">virtual <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> yask::yk_solution::get_num_ranks </td>
+          <td class="memname">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> yask::yk_solution::get_num_ranks </td>
           <td>(</td>
           <td class="paramtype">const std::string &amp;&#160;</td>
           <td class="paramname"><em>dim</em></td><td>)</td>
@@ -840,13 +1258,42 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 </div><div class="memdoc">
 
 <p>Get the number of MPI ranks in the given dimension. </p>
-<dl class="section return"><dt>Returns</dt><dd>Current setting of rank size. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd><a class="el" href="classyask_1_1yk__solution.html#a4449fe8902881c9a61ad12fd20a5a866" title="Get the number of MPI ranks in the given dimension.">get_num_ranks()</a> may return zero in a dimension until <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a> is called. After <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a> is called, the computed number of ranks will be returned.</dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Current number of ranks. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to get. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a665968c18b2f70467dbc7decaeeb1a1f" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to get. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a24c2619b5f0471bcfe8eeb5aed769fec" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
   </table>
   </dd>
 </dl>
+
+</div>
+</div>
+<a id="a743acbc4b86f9a65f3fcef1a35fee2d7"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a743acbc4b86f9a65f3fcef1a35fee2d7">&#9670;&nbsp;</a></span>get_num_ranks_vec()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> yask::yk_solution::get_num_ranks_vec </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get the number of MPI ranks in all domain dimensions. </p>
+<p>See <a class="el" href="classyask_1_1yk__solution.html#a4449fe8902881c9a61ad12fd20a5a866" title="Get the number of MPI ranks in the given dimension.">get_num_ranks()</a>; </p><dl class="section return"><dt>Returns</dt><dd>Vector of current number of ranks in all domain dimensions. </dd></dl>
 
 </div>
 </div>
@@ -868,7 +1315,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a>&#160;</td>
+          <td class="paramtype"><a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td>
           <td class="paramname"><em>num</em>&#160;</td>
         </tr>
         <tr>
@@ -895,11 +1342,82 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 <tr>
 <td>MPI rank index = 4, x rank index = 0, y rank index = 2 </td><td>MPI rank index = 5, x rank index = 1, y rank index = 2 </td></tr>
 </table>
-<p>See <a class="el" href="classyask_1_1yk__env.html#add8b12cd6d10f964665a41acedbb9b14" title="Get number of MPI ranks.">yk_env::get_num_ranks()</a> and <a class="el" href="classyask_1_1yk__env.html#a93deb7b62612742f5a85fd8e319df38c" title="Get MPI rank index.">yk_env::get_rank_index()</a> for MPI rank index. </p>
+<p>See <a class="el" href="classyask_1_1yk__env.html#add8b12cd6d10f964665a41acedbb9b14" title="Get number of MPI ranks.">yk_env::get_num_ranks()</a> and <a class="el" href="classyask_1_1yk__env.html#a93deb7b62612742f5a85fd8e319df38c" title="Get MPI rank index.">yk_env::get_rank_index()</a> for MPI rank index.</p>
+<dl class="section note"><dt>Note</dt><dd><a class="el" href="classyask_1_1yk__solution.html#a3268e5e7e2f0e45f951f1c38063bc59f" title="Get the rank index in the specified dimension.">get_rank_index()</a> may return zero in a dimension until <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a> is called. After <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a> is called, the computed index will be returned. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to set. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a665968c18b2f70467dbc7decaeeb1a1f" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to set. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a24c2619b5f0471bcfe8eeb5aed769fec" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
     <tr><td class="paramdir">[in]</td><td class="paramname">num</td><td>Rank index in `dim`. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="abcdcb3024837aa125c5218a618e0db94"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abcdcb3024837aa125c5218a618e0db94">&#9670;&nbsp;</a></span>set_rank_index_vec() <span class="overload">[1/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual void yask::yk_solution::set_rank_index_vec </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;&#160;</td>
+          <td class="paramname"><em>vals</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Set the rank index in all domain dimensions. </p>
+<p>See <a class="el" href="classyask_1_1yk__solution.html#ac0eccaa1d228d7f3408e3c2b0881f279" title="Set the rank index in the specified dimension.">set_rank_index()</a>. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in]</td><td class="paramname">vals</td><td>Index of this rank in all domain dims. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a921f09751c36b56509d2bf2e3d3f05a0"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a921f09751c36b56509d2bf2e3d3f05a0">&#9670;&nbsp;</a></span>set_rank_index_vec() <span class="overload">[2/2]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual void yask::yk_solution::set_rank_index_vec </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#ga9a86862ece2cddc8fb77fac850c44161">idx_t_init_list</a> &amp;&#160;</td>
+          <td class="paramname"><em>vals</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Set the rank index in all domain dimensions. </p>
+<p>See <a class="el" href="classyask_1_1yk__solution.html#ac0eccaa1d228d7f3408e3c2b0881f279" title="Set the rank index in the specified dimension.">set_rank_index()</a>. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in]</td><td class="paramname">vals</td><td>Index of this rank in all domain dims. </td></tr>
   </table>
   </dd>
 </dl>
@@ -916,7 +1434,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">virtual <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> yask::yk_solution::get_rank_index </td>
+          <td class="memname">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> yask::yk_solution::get_rank_index </td>
           <td>(</td>
           <td class="paramtype">const std::string &amp;&#160;</td>
           <td class="paramname"><em>dim</em></td><td>)</td>
@@ -934,10 +1452,38 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 <p>The overall rank index in the specified dimension will range from zero (0) to <a class="el" href="classyask_1_1yk__solution.html#a4449fe8902881c9a61ad12fd20a5a866" title="Get the number of MPI ranks in the given dimension.">get_num_ranks()</a> - 1, inclusive. </p><dl class="section return"><dt>Returns</dt><dd>Zero-based index of this rank. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to get. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a665968c18b2f70467dbc7decaeeb1a1f" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to get. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a24c2619b5f0471bcfe8eeb5aed769fec" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
   </table>
   </dd>
 </dl>
+
+</div>
+</div>
+<a id="a64ce6c3bb5a4a467e6a23e4aa619881d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a64ce6c3bb5a4a467e6a23e4aa619881d">&#9670;&nbsp;</a></span>get_rank_index_vec()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> yask::yk_solution::get_rank_index_vec </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get the rank index in all domain dimensions. </p>
+<p>See <a class="el" href="classyask_1_1yk__solution.html#a3268e5e7e2f0e45f951f1c38063bc59f" title="Get the rank index in the specified dimension.">get_rank_index()</a>; </p><dl class="section return"><dt>Returns</dt><dd>Vector of zero-based indices of this rank in all domain dimensions. </dd></dl>
 
 </div>
 </div>
@@ -966,7 +1512,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 </div><div class="memdoc">
 
 <p>Set kernel options from a string. </p>
-<p>Parses the string for options as if from a command-line. Example: "-bx 64 -block_threads 4" sets the block-size in the <em>x</em> dimension to 64 and the number of threads used to process each block to 4. See the help message from the YASK kernel binary for documentation on the command-line options. Used to set less-common options not directly supported by the APIs above (<a class="el" href="classyask_1_1yk__solution.html#abd3c7317bf1b397f332962d658f38839" title="Set the block size in the given dimension.">set_block_size()</a>, etc.).</p>
+<p>Parses the string for options as if from a command-line. Example: "-bx 64 -inner_threads 4" sets the block-size in the <em>x</em> dimension to 64 and the number of nested OpenMp threads to 4. See the help message from the YASK kernel binary for documentation on the command-line options. Used to set less-common options not directly supported by the APIs above (<a class="el" href="classyask_1_1yk__solution.html#abd3c7317bf1b397f332962d658f38839" title="Set the block size in the given dimension.">set_block_size()</a>, etc.).</p>
 <dl class="section return"><dt>Returns</dt><dd>Any parts of <code>args</code> that were not recognized by the parser as options. Thus, a non-empty returned string may be used to signal an error or interpreted by a custom application in another way. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
@@ -1017,8 +1563,8 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 
 </div>
 </div>
-<a id="a6c128cbf16d4d4ab36c30654cd0e9818"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a6c128cbf16d4d4ab36c30654cd0e9818">&#9670;&nbsp;</a></span>apply_command_line_options() <span class="overload">[3/3]</span></h2>
+<a id="a550b24bc0f81de69619ba3029ca79e7f"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a550b24bc0f81de69619ba3029ca79e7f">&#9670;&nbsp;</a></span>apply_command_line_options() <span class="overload">[3/3]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -1029,7 +1575,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
         <tr>
           <td class="memname">virtual std::string yask::yk_solution::apply_command_line_options </td>
           <td>(</td>
-          <td class="paramtype">const std::vector&lt; std::string &gt; &amp;&#160;</td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#ga53bde373152f3af12ba9daa06007eb5f">string_vec</a> &amp;&#160;</td>
           <td class="paramname"><em>args</em></td><td>)</td>
           <td></td>
         </tr>
@@ -1071,7 +1617,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 </div><div class="memdoc">
 
 <p>Get the number of vars in the solution. </p>
-<p>Vars may be pre-defined by the stencil compiler (e.g., via <a class="el" href="classyask_1_1yc__solution.html#a192b0f12d3943483514e16c82c15a42b" title="Create an n-dimensional variable in the solution.">yc_solution::new_var()</a>) or created explicitly via <a class="el" href="classyask_1_1yk__solution.html#a076e1cc78d96e7cc77ec62d58e289131" title="[Advanced] Add a new var to the solution.">yk_solution::new_var()</a> or <a class="el" href="classyask_1_1yk__solution.html#a70c44ba3941aa5682e381c7c36dcf453" title="[Advanced] Add a new var to the solution with a specified size.">yk_solution::new_fixed_size_var()</a>. </p><dl class="section return"><dt>Returns</dt><dd>Number of YASK vars that have been created. </dd></dl>
+<p>Vars may be pre-defined by the stencil compiler (e.g., via <a class="el" href="classyask_1_1yc__solution.html#a192b0f12d3943483514e16c82c15a42b" title="Create an n-dimensional variable in the solution.">yc_solution::new_var()</a>) or created explicitly via <a class="el" href="classyask_1_1yk__solution.html#a75ba824977414468dd23f0a1d5f9eaf3" title="[Advanced] Add a new var to the solution.">yk_solution::new_var()</a> or <a class="el" href="classyask_1_1yk__solution.html#a2899b81d090c4a2f468ccc31adfa9d85" title="[Advanced] Add a new var to the solution with a specified size.">yk_solution::new_fixed_size_var()</a>. </p><dl class="section return"><dt>Returns</dt><dd>Number of YASK vars that have been created. </dd></dl>
 
 </div>
 </div>
@@ -1162,7 +1708,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 </div><div class="memdoc">
 
 <p>Prepare the solution for stencil application. </p>
-<p>Allocates data in vars that do not already have storage allocated. Calculates the position of each rank in the overall problem domain. Sets many other data structures needed for proper stencil application. Since this function initiates MPI communication, it must be called on all MPI ranks, and it will block until all ranks have completed. Must be called before applying any stencils. </p>
+<p>Calculates the position of each rank in the overall problem domain if not previsouly specified. Calculates the sizes of each rank if not previsously specified. Allocates data in vars that do not already have storage allocated. Sets many other data structures needed for proper stencil application. Since this function initiates MPI communication, it must be called on all MPI ranks, and it will block until all ranks have completed. Must be called before applying any stencils. </p>
 
 </div>
 </div>
@@ -1176,7 +1722,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">virtual <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> yask::yk_solution::get_first_rank_domain_index </td>
+          <td class="memname">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> yask::yk_solution::get_first_rank_domain_index </td>
           <td>(</td>
           <td class="paramtype">const std::string &amp;&#160;</td>
           <td class="paramname"><em>dim</em></td><td>)</td>
@@ -1196,10 +1742,38 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 <dl class="section return"><dt>Returns</dt><dd>First domain index in this rank. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to get. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a665968c18b2f70467dbc7decaeeb1a1f" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to get. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a24c2619b5f0471bcfe8eeb5aed769fec" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
   </table>
   </dd>
 </dl>
+
+</div>
+</div>
+<a id="a79492e63f435ac8a93d8815a3ca4729c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a79492e63f435ac8a93d8815a3ca4729c">&#9670;&nbsp;</a></span>get_first_rank_domain_index_vec()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> yask::yk_solution::get_first_rank_domain_index_vec </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get the first index of the sub-domain in this rank in all domain dimensions. </p>
+<p>See <a class="el" href="classyask_1_1yk__solution.html#a03bdef5ba9b0b0e37f9b7be2e2e457a4" title="Get the first index of the sub-domain in this rank in the specified dimension.">get_first_rank_domain_index()</a>. </p><dl class="section return"><dt>Returns</dt><dd>Vector of first domain indices of this rank in all domain dimensions. </dd></dl>
 
 </div>
 </div>
@@ -1213,7 +1787,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
   <td class="mlabels-left">
       <table class="memname">
         <tr>
-          <td class="memname">virtual <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> yask::yk_solution::get_last_rank_domain_index </td>
+          <td class="memname">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> yask::yk_solution::get_last_rank_domain_index </td>
           <td>(</td>
           <td class="paramtype">const std::string &amp;&#160;</td>
           <td class="paramname"><em>dim</em></td><td>)</td>
@@ -1233,10 +1807,38 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 <dl class="section return"><dt>Returns</dt><dd>Last index in this rank. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to get. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a665968c18b2f70467dbc7decaeeb1a1f" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to get. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a24c2619b5f0471bcfe8eeb5aed769fec" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
   </table>
   </dd>
 </dl>
+
+</div>
+</div>
+<a id="a9d571ca2f9e1309d3af73c9d8fe7a084"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a9d571ca2f9e1309d3af73c9d8fe7a084">&#9670;&nbsp;</a></span>get_last_rank_domain_index_vec()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> yask::yk_solution::get_last_rank_domain_index_vec </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get the last index of the sub-domain in this rank in all domain dimensions. </p>
+<p>See <a class="el" href="classyask_1_1yk__solution.html#a58f2ce95e150787bc8235e85298dcd01" title="Get the last index of the sub-domain in this rank the specified dimension.">get_last_rank_domain_index()</a>. </p><dl class="section return"><dt>Returns</dt><dd>Vector of last domain indices of this rank in all domain dimensions. </dd></dl>
 
 </div>
 </div>
@@ -1252,13 +1854,13 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
         <tr>
           <td class="memname">virtual void yask::yk_solution::run_solution </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a>&#160;</td>
+          <td class="paramtype"><a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td>
           <td class="paramname"><em>first_step_index</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype"><a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a>&#160;</td>
+          <td class="paramtype"><a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td>
           <td class="paramname"><em>last_step_index</em>&#160;</td>
         </tr>
         <tr>
@@ -1276,7 +1878,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 
 <p>Run the stencil solution for the specified steps. </p>
 <p>The stencil(s) in the solution are applied to the var data, setting the index variables as follows:</p><ol type="1">
-<li>If temporal wave-front tiling is <em>not</em> used (the default):<ul>
+<li>If temporal tiling is <em>not</em> used (the default):<ul>
 <li>The step index (e.g., <code>t</code> for "time") will be sequentially set to values from <code>first_step_index</code> to <code>last_step_index</code>, inclusive.<ul>
 <li>If the stencil equations were defined with dependencies on lower-valued steps, e.g., <code>t+1</code> depends on <code>t</code>, then <code>last_step_index</code> should be greater than or equal to <code>first_step_index</code> (forward solution).</li>
 <li>If the stencil equations were defined with dependencies on higher-valued steps, e.g., <code>t-1</code> depends on <code>t</code>, then <code>last_step_index</code> should be less than or equal to <code>first_step_index</code> (reverse solution).</li>
@@ -1284,21 +1886,21 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 </li>
 <li>For each step index, the domain indices will be set to values across the entire domain as returned by <a class="el" href="classyask_1_1yk__solution.html#aaba39cb06c9f61d408695009667fe8cd" title="Get the global-domain size in the specified dimension, i.e., the total size across all MPI ranks.">yk_solution::get_overall_domain_size()</a> (not necessarily sequentially).</li>
 <li>MPI halo exchanges will occur as necessary before or during each step.</li>
-<li>Since this function initiates MPI communication, it must be called on all MPI ranks, and it will block until all ranks have completed.</li>
 </ul>
 </li>
-<li><b>[Advanced]</b> If temporal wave-front tiling <em>is</em> enabled via <a class="el" href="classyask_1_1yk__solution.html#a923afb4530ef5f0370f8bf55856fa040" title="[Advanced] Set the region size in the given dimension.">set_region_size()</a>:<ul>
-<li>The step index (e.g., <code>t</code> for "time") will be sequentially set to values from <code>first_step_index</code> to <code>last_step_index</code>, inclusive, within each region.<ul>
-<li>The number of steps in a region may also be restricted by the size of the region in the step dimension. In that case, tiles will be done in slices of that size.</li>
+<li><b>[Advanced]</b> If temporal wave-front tiling <em>is</em> enabled:<ul>
+<li>The step index (e.g., <code>t</code> for "time") will be sequentially set to values from <code>first_step_index</code> to <code>last_step_index</code>, inclusive, within each area configured for temporal tiling.<ul>
+<li>The number of steps in an area may also be restricted by the size of the area in the step dimension. In that case, tiles will be done in temporal slices of that size.</li>
 </ul>
 </li>
-<li>For each step index within each region, the domain indices will be set to values across the entire region (not necessarily sequentially).</li>
+<li>For each step index within each area, the domain indices will be set to values across the entire area (not necessarily sequentially).</li>
 <li>Ultimately, the stencil(s) will be applied to same the elements in both the step and domain dimensions as when wave-front tiling is not used.</li>
-<li>MPI halo exchanges will occur before each number of steps in a region.</li>
+<li>MPI halo exchanges may occur at less frequent intervals.</li>
 </ul>
 </li>
 </ol>
-<p>This function should be called only <em>after</em> calling <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a>. </p>
+<p>This function should be called only <em>after</em> calling <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a>.</p>
+<p>Since this function initiates MPI communication, it must be called on all MPI ranks, and it will block until all ranks have completed. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[in]</td><td class="paramname">first_step_index</td><td>First index in the step dimension </td></tr>
@@ -1321,7 +1923,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
         <tr>
           <td class="memname">virtual void yask::yk_solution::run_solution </td>
           <td>(</td>
-          <td class="paramtype"><a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a>&#160;</td>
+          <td class="paramtype"><a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td>
           <td class="paramname"><em>step_index</em></td><td>)</td>
           <td></td>
         </tr>
@@ -1336,15 +1938,75 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 <p>Run the stencil solution for the specified step. </p>
 <p>This function is simply an alias for <code>run_solution(step_index, step_index)</code>, i.e., the solution will be applied for exactly one step across the domain.</p>
 <p>Typical C++ usage:</p>
-<div class="fragment"><div class="line">soln-&gt;prepare_solution();</div><div class="line"><span class="keywordflow">for</span> (<a class="code" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> t = 1; t &lt;= num_steps; t++)</div><div class="line">    soln-&gt;run_solution(t);</div><div class="line">soln-&gt;end_solution();</div></div><!-- fragment --><p>As written, the above loop is identical to</p>
+<div class="fragment"><div class="line">soln-&gt;prepare_solution();</div><div class="line"><span class="keywordflow">for</span> (<a class="code" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> t = 1; t &lt;= num_steps; t++)</div><div class="line">    soln-&gt;run_solution(t);</div><div class="line">soln-&gt;end_solution();</div></div><!-- fragment --><p>As written, the above loop is identical to</p>
 <div class="fragment"><div class="line">soln-&gt;prepare_solution();</div><div class="line">soln-&gt;run_solution(1, num_steps);</div><div class="line">soln-&gt;end_solution();</div></div><!-- fragment --><dl class="section note"><dt>Note</dt><dd>The parameter is <em>not</em> the number of steps to run. </dd></dl>
-<dl class="section warning"><dt>Warning</dt><dd>Since only one step is taken per call, using this function effectively disables wave-front tiling. </dd></dl>
+<dl class="section warning"><dt>Warning</dt><dd>Since only one step is taken per call, using this function effectively disables wave-front tiling (except in the special case of tiling only across stages within a step). </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[in]</td><td class="paramname">step_index</td><td>Index in the step dimension </td></tr>
   </table>
   </dd>
 </dl>
+
+</div>
+</div>
+<a id="a2cdea230253b47bd16c1a0c326a78df8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2cdea230253b47bd16c1a0c326a78df8">&#9670;&nbsp;</a></span>copy_vars_to_device()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual void yask::yk_solution::copy_vars_to_device </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Update data on the device. </p>
+<p>Copies any YASK var data that has been modified on the host but not on the device from the host to the device.</p>
+<p>This is done automatically as needed, so calling this function is only needed when you want to control when the copy is done.</p>
+<p>If the kernel has been compiled for offloading using unified shared memory, calling this function will have no effect. Similarly, if the kernel has not been compiled for offloading, calling this function will have no effect. </p>
+
+</div>
+</div>
+<a id="a105c993241498d9c2a98cbec353fc61a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a105c993241498d9c2a98cbec353fc61a">&#9670;&nbsp;</a></span>copy_vars_from_device()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual void yask::yk_solution::copy_vars_from_device </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Update data on the host. </p>
+<p>Copies any YASK var data that has been modified on the device but not on the host from the device to the host.</p>
+<p>This is done automatically as needed, so calling this function is only needed when you want to control when the copy is done.</p>
+<p>If the kernel has been compiled for offloading using unified shared memory, calling this function will have no effect. Similarly, if the kernel has not been compiled for offloading, calling this function will have no effect. </p>
 
 </div>
 </div>
@@ -1400,206 +2062,10 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 </div><div class="memdoc">
 
 <p>Get performance statistics associated with preceding calls to <a class="el" href="classyask_1_1yk__solution.html#a14cc5625fc524fe8eb8d3cedc66778aa" title="Run the stencil solution for the specified steps.">run_solution()</a>. </p>
-<dl class="section note"><dt>Note</dt><dd>Side effect: resets all statistics, so each call returns only the elapsed time and counts since the previous call. </dd></dl>
+<dl class="section note"><dt>Note</dt><dd>Side effect: resets all statistics, so each call returns only the elapsed time and counts since the previous call. </dd>
+<dd>
+Side effect: outputs stats in human-readable format to current debug output object. </dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>Pointer to statistics object. </dd></dl>
-
-</div>
-</div>
-<a id="a0f7eea6bfc844adcc584c2ca5c1f2ba4"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a0f7eea6bfc844adcc584c2ca5c1f2ba4">&#9670;&nbsp;</a></span>is_auto_tuner_enabled()</h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">virtual bool yask::yk_solution::is_auto_tuner_enabled </td>
-          <td>(</td>
-          <td class="paramname"></td><td>)</td>
-          <td> const</td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-
-<p>Determine whether the auto-tuner is enabled on this rank. </p>
-<p>The auto-tuner is enabled by default. It will become disabled after it has converged or after reset_auto_tuner(false) has been called. </p><dl class="section return"><dt>Returns</dt><dd>Whether the auto-tuner is still searching. </dd></dl>
-
-</div>
-</div>
-<a id="a923afb4530ef5f0370f8bf55856fa040"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a923afb4530ef5f0370f8bf55856fa040">&#9670;&nbsp;</a></span>set_region_size()</h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">virtual void yask::yk_solution::set_region_size </td>
-          <td>(</td>
-          <td class="paramtype">const std::string &amp;&#160;</td>
-          <td class="paramname"><em>dim</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype"><a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a>&#160;</td>
-          <td class="paramname"><em>size</em>&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td></td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-
-<p><b>[Advanced]</b> Set the region size in the given dimension. </p>
-<p>This sets the approximate number of elements that are evaluated in each "region". This is a performance setting and should not affect the functional correctness or total number of elements evaluated. A region is typically the unit of work done by each top-level OpenMP parallel region. The actual number of elements evaluated in a region may be greater than the specified size due to rounding. The number of elements in a region may also be smaller than the specified size when the region is at the edge of the domain.</p>
-<p>A region is most often used to specify the size of a temporal wave-front tile. Thus, you will normally specify the size of the region in the step dimension as well as all the domain dimensions. For example, <code>set_region_size("t", 4)</code> specifies that four time-steps will be executed in each region. The sizes of regions in the domain dimensions are typically set to fit within a large cache structure such as MCDRAM cache in an Intel(R) Xeon Phi(TM) processor.</p>
-<p>In order to get the benefit of regions with multiple steps, you must also call <a class="el" href="classyask_1_1yk__solution.html#a14cc5625fc524fe8eb8d3cedc66778aa" title="Run the stencil solution for the specified steps.">run_solution()</a> where the number of steps between its <code>first_step_index</code> and <code>last_step_index</code> arguments is greater than or equal to the step-size of the regions. </p>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to set. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a7039e7151857e2652592a585c6d00931" title="Get the solution step dimension.">get_step_dim_name()</a> or <a class="el" href="classyask_1_1yk__solution.html#a665968c18b2f70467dbc7decaeeb1a1f" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
-    <tr><td class="paramdir">[in]</td><td class="paramname">size</td><td>Elements in a region in this `dim`. </td></tr>
-  </table>
-  </dd>
-</dl>
-
-</div>
-</div>
-<a id="ac048a52035e60e2cc4e070da0e68181e"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ac048a52035e60e2cc4e070da0e68181e">&#9670;&nbsp;</a></span>get_region_size()</h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">virtual <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> yask::yk_solution::get_region_size </td>
-          <td>(</td>
-          <td class="paramtype">const std::string &amp;&#160;</td>
-          <td class="paramname"><em>dim</em></td><td>)</td>
-          <td> const</td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-
-<p><b>[Advanced]</b> Get the region size. </p>
-<p>Returned value may be slightly larger than the value provided via <a class="el" href="classyask_1_1yk__solution.html#a923afb4530ef5f0370f8bf55856fa040" title="[Advanced] Set the region size in the given dimension.">set_region_size()</a> due to rounding. </p><dl class="section return"><dt>Returns</dt><dd>Current settings of region size. </dd></dl>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to get. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a7039e7151857e2652592a585c6d00931" title="Get the solution step dimension.">get_step_dim_name()</a> or <a class="el" href="classyask_1_1yk__solution.html#a665968c18b2f70467dbc7decaeeb1a1f" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
-  </table>
-  </dd>
-</dl>
-
-</div>
-</div>
-<a id="ab3bd7e95ea13631954d92a638badfb2d"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ab3bd7e95ea13631954d92a638badfb2d">&#9670;&nbsp;</a></span>set_min_pad_size()</h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">virtual void yask::yk_solution::set_min_pad_size </td>
-          <td>(</td>
-          <td class="paramtype">const std::string &amp;&#160;</td>
-          <td class="paramname"><em>dim</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype"><a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a>&#160;</td>
-          <td class="paramname"><em>size</em>&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td></td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-
-<p><b>[Advanced]</b> Set the minimum amount of padding for all vars. </p>
-<p>This sets the minimum number of elements in each var that is reserved outside of the rank domain in the given dimension. This padding area can be used for required halo areas. At least the specified number of elements will be added to both sides, i.e., both "before" and "after" the domain.</p>
-<p>The <em>actual</em> padding size will be the largest of the following values, additionally rounded up based on the vector-folding dimensions, cache-line alignment, and/or extensions needed for wave-front tiles:</p><ul>
-<li>Halo size.</li>
-<li>Value provided by any of the pad-size setting functions.</li>
-</ul>
-<p>The padding size cannot be changed after data storage has been allocated for a given var; attempted changes to the pad size for such vars will be ignored.</p>
-<p>Use <a class="el" href="classyask_1_1yk__var.html#a370adca271068bd8952bbe9d1696a78a" title="[Advanced] Set the minimum left padding in the specified dimension.">yk_var::set_left_min_pad_size</a> and <a class="el" href="classyask_1_1yk__var.html#a02ee27a0c922e55def701d6efffc725c" title="[Advanced] Set the minimum right padding in the specified dimension.">yk_var::set_right_min_pad_size()</a> for individual setting of each var. Call <a class="el" href="classyask_1_1yk__var.html#a2a6b515ee0073b8ff35fb8bee47de00e" title="Get the actual left padding in the specified dimension.">yk_var::get_left_pad_size()</a> and <a class="el" href="classyask_1_1yk__var.html#a44d13a6f6925574545bd5594cecece43" title="Get the actual right padding in the specified dimension.">yk_var::get_right_pad_size()</a> to determine the actual padding sizes for a given var. See the "Detailed Description" for <a class="el" href="classyask_1_1yk__var.html">yk_var</a> for more information on var sizes. Padding is only allowed in the domain dimensions. </p>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to set. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a665968c18b2f70467dbc7decaeeb1a1f" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
-    <tr><td class="paramdir">[in]</td><td class="paramname">size</td><td>Elements in this `dim` applied to both sides of the domain. </td></tr>
-  </table>
-  </dd>
-</dl>
-
-</div>
-</div>
-<a id="a193d7c6e708c1ece4d78b39800a7d5fa"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a193d7c6e708c1ece4d78b39800a7d5fa">&#9670;&nbsp;</a></span>get_min_pad_size()</h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">virtual <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> yask::yk_solution::get_min_pad_size </td>
-          <td>(</td>
-          <td class="paramtype">const std::string &amp;&#160;</td>
-          <td class="paramname"><em>dim</em></td><td>)</td>
-          <td> const</td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-
-<p><b>[Advanced]</b> Get the minimum amount of padding for all vars. </p>
-<dl class="section return"><dt>Returns</dt><dd>Current setting of minimum amount of padding for all vars. </dd></dl>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to get. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a665968c18b2f70467dbc7decaeeb1a1f" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
-  </table>
-  </dd>
-</dl>
 
 </div>
 </div>
@@ -1637,15 +2103,44 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 </table>
 </div><div class="memdoc">
 
-<p><b>[Advanced]</b> Restart or disable the auto-tuner on this rank. </p>
-<p>Under normal operation, an auto-tuner is invoked automatically during calls to <a class="el" href="classyask_1_1yk__solution.html#a14cc5625fc524fe8eb8d3cedc66778aa" title="Run the stencil solution for the specified steps.">run_solution()</a>. Currently, only the block size is set by the auto-tuner, and the search begins from the sizes set via <a class="el" href="classyask_1_1yk__solution.html#abd3c7317bf1b397f332962d658f38839" title="Set the block size in the given dimension.">set_block_size()</a> or the default size if <a class="el" href="classyask_1_1yk__solution.html#abd3c7317bf1b397f332962d658f38839" title="Set the block size in the given dimension.">set_block_size()</a> has not been called. This function is used to apply the current best-known settings if the tuner has been running, reset the state of the auto-tuner, and either restart its search or disable it from running. This call must be made on each rank where the change is desired. </p>
+<p>Start or stop the online auto-tuner on this rank. </p>
+<p>This function is used to apply the current best-known settings if the tuner is currently running, reset the state of the auto-tuner, and either restart its search (if <code>enable==true</code>) or stop it (if <code>enable==false</code>). This call must be made on each rank where the change is desired.</p>
+<p>This mode of running the auto-tuner is called "online" or "in-situ" because changes are made to the tile sizes between calls to <a class="el" href="classyask_1_1yk__solution.html#a14cc5625fc524fe8eb8d3cedc66778aa" title="Run the stencil solution for the specified steps.">run_solution()</a>. It will stop automatically when it converges. Call <a class="el" href="classyask_1_1yk__solution.html#a0f7eea6bfc844adcc584c2ca5c1f2ba4" title="Determine whether the online auto-tuner is enabled on this rank.">is_auto_tuner_enabled()</a> to determine if it has converged. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">enable</td><td>If _true_, start or restart the auto-tuner search. If _false_, disable the auto-tuner from running. </td></tr>
-    <tr><td class="paramdir">[in]</td><td class="paramname">verbose</td><td>If _true_, print progress information to the debug object set via <a class="el" href="classyask_1_1yk__solution.html#aa315469b5836e531425836f4fc5eff1c" title="Set object to receive debug output.">set_debug_output()</a>. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">enable</td><td>If _true_, start or restart the auto-tuner search on this rank. If _false_, stop the auto-tuner. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">verbose</td><td>If _true_, print progress information to the debug object set via <a class="el" href="classyask_1_1yk__solution.html#a7e8ce77d85b54ebaf15ddf11009066c4" title="[Deprecated] Use yk_env::set_debug_output().">set_debug_output()</a>. </td></tr>
   </table>
   </dd>
 </dl>
+
+</div>
+</div>
+<a id="a0f7eea6bfc844adcc584c2ca5c1f2ba4"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a0f7eea6bfc844adcc584c2ca5c1f2ba4">&#9670;&nbsp;</a></span>is_auto_tuner_enabled()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual bool yask::yk_solution::is_auto_tuner_enabled </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Determine whether the online auto-tuner is enabled on this rank. </p>
+<p>The "online" or "in-situ" auto-tuner is disabled by default. It can be enabled by calling reset_auto_tuner(true). It will also become disabled after it has converged or after reset_auto_tuner(false) has been called. Auto-tuners run independently on each rank, so they will not generally finish at the same step across all ranks. </p><dl class="section return"><dt>Returns</dt><dd>Whether the auto-tuner is still searching. </dd></dl>
 
 </div>
 </div>
@@ -1673,19 +2168,108 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 </table>
 </div><div class="memdoc">
 
-<p><b>[Advanced]</b> Automatically tune selected settings immediately. </p>
-<p>Executes a search algorithm to find [locally] optimum values for some of the settings. Under normal operation, an auto-tuner is invoked during calls to <a class="el" href="classyask_1_1yk__solution.html#a14cc5625fc524fe8eb8d3cedc66778aa" title="Run the stencil solution for the specified steps.">run_solution()</a>. See <a class="el" href="classyask_1_1yk__solution.html#a932fad2ede1aecef168189c0aa972b0b" title="[Advanced] Restart or disable the auto-tuner on this rank.">reset_auto_tuner()</a> for more information. This function causes the stencil solution to be run immediately until the auto-tuner converges on all ranks. It is useful for benchmarking, where performance is to be timed for a given number of steps after the best settings are found. This function should be called only <em>after</em> calling <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a>. This call must be made on each rank. </p><dl class="section warning"><dt>Warning</dt><dd>Modifies the contents of the vars by calling <a class="el" href="classyask_1_1yk__solution.html#a14cc5625fc524fe8eb8d3cedc66778aa" title="Run the stencil solution for the specified steps.">run_solution()</a> an arbitrary number of times, but without halo exchange. (See <a class="el" href="classyask_1_1yk__solution.html#a14cc5625fc524fe8eb8d3cedc66778aa" title="Run the stencil solution for the specified steps.">run_solution()</a> for other restrictions and warnings.) Thus, var data should be set <em>after</em> calling this function when used in a production or test setting where correct results are expected. </dd></dl>
+<p>Run the offline auto-tuner immediately, not preserving variable data. </p>
+<p>This runs the auto-tuner in "offline" mode. (Under "online" operation, an auto-tuner is invoked during calls to <a class="el" href="classyask_1_1yk__solution.html#a14cc5625fc524fe8eb8d3cedc66778aa" title="Run the stencil solution for the specified steps.">run_solution()</a>; see <a class="el" href="classyask_1_1yk__solution.html#a932fad2ede1aecef168189c0aa972b0b" title="Start or stop the online auto-tuner on this rank.">reset_auto_tuner()</a> and <a class="el" href="classyask_1_1yk__solution.html#a0f7eea6bfc844adcc584c2ca5c1f2ba4" title="Determine whether the online auto-tuner is enabled on this rank.">is_auto_tuner_enabled()</a> for more information on running in online mode.)</p>
+<p>This function causes the stencil solution to be run immediately until the auto-tuner converges on all ranks. It is useful for benchmarking, where performance is to be timed for a given number of steps after the best settings are found. This function should be called only <em>after</em> calling <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a>. This call must be made on each rank.</p>
+<dl class="section warning"><dt>Warning</dt><dd>Modifies the contents of the YASK vars by automatically calling <a class="el" href="classyask_1_1yk__solution.html#a14cc5625fc524fe8eb8d3cedc66778aa" title="Run the stencil solution for the specified steps.">run_solution()</a> an arbitrary number of times, but without halo exchanges. (See <a class="el" href="classyask_1_1yk__solution.html#a14cc5625fc524fe8eb8d3cedc66778aa" title="Run the stencil solution for the specified steps.">run_solution()</a> for other restrictions and warnings.) Thus, var data should be set or reset <em>after</em> calling this function when used in a production or test setting where correct results are expected. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">verbose</td><td>If _true_, print progress information to the debug object set via <a class="el" href="classyask_1_1yk__solution.html#aa315469b5836e531425836f4fc5eff1c" title="Set object to receive debug output.">set_debug_output()</a>. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">verbose</td><td>If _true_, print progress information to the debug object set via <a class="el" href="classyask_1_1yk__solution.html#a7e8ce77d85b54ebaf15ddf11009066c4" title="[Deprecated] Use yk_env::set_debug_output().">set_debug_output()</a>. </td></tr>
   </table>
   </dd>
 </dl>
 
 </div>
 </div>
-<a id="a076e1cc78d96e7cc77ec62d58e289131"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a076e1cc78d96e7cc77ec62d58e289131">&#9670;&nbsp;</a></span>new_var() <span class="overload">[1/2]</span></h2>
+<a id="ab3bd7e95ea13631954d92a638badfb2d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab3bd7e95ea13631954d92a638badfb2d">&#9670;&nbsp;</a></span>set_min_pad_size()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual void yask::yk_solution::set_min_pad_size </td>
+          <td>(</td>
+          <td class="paramtype">const std::string &amp;&#160;</td>
+          <td class="paramname"><em>dim</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype"><a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td>
+          <td class="paramname"><em>size</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p><b>[Advanced]</b> Set the minimum amount of padding for all vars. </p>
+<p>This sets the minimum number of elements in each var that is reserved outside of the rank domain in the given dimension. This padding area can be used for required halo areas. At least the specified number of elements will be added to both sides, i.e., both "before" and "after" the domain.</p>
+<p>The <em>actual</em> padding size will be the largest of the following values, additionally rounded up based on the vector-folding dimensions, cache-line alignment, and/or extensions needed for wave-front tiles:</p><ul>
+<li>Halo size.</li>
+<li>Value provided by any of the pad-size setting functions.</li>
+</ul>
+<p>The padding size cannot be changed after data storage has been allocated for a given var; attempted changes to the pad size for such vars will be ignored.</p>
+<p>Use <a class="el" href="classyask_1_1yk__var.html#a370adca271068bd8952bbe9d1696a78a" title="[Advanced] Set the minimum left padding in the specified dimension.">yk_var::set_left_min_pad_size</a> and <a class="el" href="classyask_1_1yk__var.html#a02ee27a0c922e55def701d6efffc725c" title="[Advanced] Set the minimum right padding in the specified dimension.">yk_var::set_right_min_pad_size()</a> for individual setting of each var. Call <a class="el" href="classyask_1_1yk__var.html#a2a6b515ee0073b8ff35fb8bee47de00e" title="Get the actual left padding in the specified dimension.">yk_var::get_left_pad_size()</a> and <a class="el" href="classyask_1_1yk__var.html#a44d13a6f6925574545bd5594cecece43" title="Get the actual right padding in the specified dimension.">yk_var::get_right_pad_size()</a> to determine the actual padding sizes for a given var. See the "Detailed Description" for <a class="el" href="classyask_1_1yk__var.html">yk_var</a> for more information on var sizes. Padding is only allowed in the domain dimensions. </p>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to set. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a24c2619b5f0471bcfe8eeb5aed769fec" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
+    <tr><td class="paramdir">[in]</td><td class="paramname">size</td><td>Elements in this `dim` applied to both sides of the domain. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a193d7c6e708c1ece4d78b39800a7d5fa"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a193d7c6e708c1ece4d78b39800a7d5fa">&#9670;&nbsp;</a></span>get_min_pad_size()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> yask::yk_solution::get_min_pad_size </td>
+          <td>(</td>
+          <td class="paramtype">const std::string &amp;&#160;</td>
+          <td class="paramname"><em>dim</em></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p><b>[Advanced]</b> Get the minimum amount of padding for all vars. </p>
+<dl class="section return"><dt>Returns</dt><dd>Current setting of minimum amount of padding for all vars. </dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to get. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a24c2619b5f0471bcfe8eeb5aed769fec" title="Get all the domain dimension names.">get_domain_dim_names()</a>. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a75ba824977414468dd23f0a1d5f9eaf3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a75ba824977414468dd23f0a1d5f9eaf3">&#9670;&nbsp;</a></span>new_var() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -1702,7 +2286,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const std::vector&lt; std::string &gt; &amp;&#160;</td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#ga53bde373152f3af12ba9daa06007eb5f">string_vec</a> &amp;&#160;</td>
           <td class="paramname"><em>dims</em>&#160;</td>
         </tr>
         <tr>
@@ -1732,9 +2316,9 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 </ul>
 <p>Some behaviors are different from pre-defined vars. For example,</p><ul>
 <li>You can create new "misc" dimensions during var creation simply by naming them in the <code>dims</code> argument. Any dimension name that is not a step or domain dimension will become a misc dimension, whether or not it was defined via <a class="el" href="classyask_1_1yc__node__factory.html#aef5fed8db0e1798b421c4a8cb8da77ff" title="Create a new miscellaneous index.">yc_node_factory::new_misc_index()</a>.</li>
-<li>Vars created via <a class="el" href="classyask_1_1yk__solution.html#a076e1cc78d96e7cc77ec62d58e289131" title="[Advanced] Add a new var to the solution.">new_var()</a> cannot be direct inputs or outputs of stencil equations. However, data in a var created via <a class="el" href="classyask_1_1yk__solution.html#a076e1cc78d96e7cc77ec62d58e289131" title="[Advanced] Add a new var to the solution.">new_var()</a> can be merged with a pre-defined var via <a class="el" href="classyask_1_1yk__var.html#aa095607d5493fcba38cb332053155b7f" title="[Advanced] Merge this var with another var.">yk_var::fuse_vars()</a> if the vars are compatible.</li>
+<li>Vars created via <a class="el" href="classyask_1_1yk__solution.html#a75ba824977414468dd23f0a1d5f9eaf3" title="[Advanced] Add a new var to the solution.">new_var()</a> cannot be direct inputs or outputs of stencil equations. However, data in a var created via <a class="el" href="classyask_1_1yk__solution.html#a75ba824977414468dd23f0a1d5f9eaf3" title="[Advanced] Add a new var to the solution.">new_var()</a> can be merged with a pre-defined var via <a class="el" href="classyask_1_1yk__var.html#aa095607d5493fcba38cb332053155b7f" title="[Advanced] Merge this var with another var.">yk_var::fuse_vars()</a> if the vars are compatible.</li>
 </ul>
-<p>If you want a var that is not automatically resized based on the solution settings, use <a class="el" href="classyask_1_1yk__solution.html#a70c44ba3941aa5682e381c7c36dcf453" title="[Advanced] Add a new var to the solution with a specified size.">new_fixed_size_var()</a> instead.</p>
+<p>If you want a var that is not automatically resized based on the solution settings, use <a class="el" href="classyask_1_1yk__solution.html#a2899b81d090c4a2f468ccc31adfa9d85" title="[Advanced] Add a new var to the solution with a specified size.">new_fixed_size_var()</a> instead.</p>
 <dl class="section note"><dt>Note</dt><dd>A new var contains only the meta-data for the var; data storage is not yet allocated. Storage may be allocated in any of the methods listed in the "Detailed Description" for <a class="el" href="classyask_1_1yk__var.html">yk_var</a>. </dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>Pointer to the new var. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
@@ -1782,7 +2366,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 </div><div class="memdoc">
 
 <p><b>[Advanced]</b> Add a new var to the solution. </p>
-<p>See documentation for the version of <a class="el" href="classyask_1_1yk__solution.html#a076e1cc78d96e7cc77ec62d58e289131" title="[Advanced] Add a new var to the solution.">new_var()</a> with a vector of dimension names as a parameter. </p><dl class="section note"><dt>Note</dt><dd>This version is not available (or needed) in the Python API. </dd></dl>
+<p>See documentation for the version of <a class="el" href="classyask_1_1yk__solution.html#a75ba824977414468dd23f0a1d5f9eaf3" title="[Advanced] Add a new var to the solution.">new_var()</a> with a vector of dimension names as a parameter. </p><dl class="section note"><dt>Note</dt><dd>This version is not available (or needed) in the Python API. </dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>Pointer to the new var. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
@@ -1794,8 +2378,8 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 
 </div>
 </div>
-<a id="a70c44ba3941aa5682e381c7c36dcf453"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a70c44ba3941aa5682e381c7c36dcf453">&#9670;&nbsp;</a></span>new_fixed_size_var() <span class="overload">[1/2]</span></h2>
+<a id="a2899b81d090c4a2f468ccc31adfa9d85"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a2899b81d090c4a2f468ccc31adfa9d85">&#9670;&nbsp;</a></span>new_fixed_size_var() <span class="overload">[1/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -1812,13 +2396,13 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const std::vector&lt; std::string &gt; &amp;&#160;</td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#ga53bde373152f3af12ba9daa06007eb5f">string_vec</a> &amp;&#160;</td>
           <td class="paramname"><em>dims</em>, </td>
         </tr>
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const std::vector&lt; <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> &gt; &amp;&#160;</td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a> &amp;&#160;</td>
           <td class="paramname"><em>dim_sizes</em>&#160;</td>
         </tr>
         <tr>
@@ -1836,20 +2420,20 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 
 <p><b>[Advanced]</b> Add a new var to the solution with a specified size. </p>
 <p>This is typically not needed because vars used by the stencils are pre-defined by the solution itself via the stencil compiler. However, a var may be created explicitly via this function in order to use it for purposes other than by the pre-defined stencils within the current solution.</p>
-<p>The following behaviors are different from both pre-defined vars and those created via <a class="el" href="classyask_1_1yk__solution.html#a076e1cc78d96e7cc77ec62d58e289131" title="[Advanced] Add a new var to the solution.">new_var()</a>:</p><ul>
+<p>The following behaviors are different from both pre-defined vars and those created via <a class="el" href="classyask_1_1yk__solution.html#a75ba824977414468dd23f0a1d5f9eaf3" title="[Advanced] Add a new var to the solution.">new_var()</a>:</p><ul>
 <li>Calls to <a class="el" href="classyask_1_1yk__solution.html#a155d8f4a38da9da11488a18cca50bae8" title="Set the local-domain size in the specified dimension, i.e., the size of the part of the domain that i...">set_rank_domain_size()</a> will <em>not</em> automatically resize the corresponding local-domain size in this var&ndash;this is where the term "fixed" applies.</li>
 <li>In contrast, for each domain dimension of the var, the new var's local-domain size can be changed independently of the domain size of the solution.</li>
 <li>This var's first domain index in this rank will be fixed at zero (0) in each domain dimension regardless of this rank's position. In other words, this var does not participate in "domain decomposition".</li>
 <li>This var's padding size will be affected only by calls to <a class="el" href="classyask_1_1yk__var.html#a16aad88dc481991cbe83da7a55cb3799" title="[Advanced] Set the minimum padding in the specified dimension.">yk_var::set_min_pad_size()</a>, etc., i.e., <em>not</em> via <a class="el" href="classyask_1_1yk__solution.html#ab3bd7e95ea13631954d92a638badfb2d" title="[Advanced] Set the minimum amount of padding for all vars.">yk_solution::set_min_pad_size()</a>.</li>
 </ul>
-<p>The following behaviors are the same as those of a pre-defined var and those created via <a class="el" href="classyask_1_1yk__solution.html#a076e1cc78d96e7cc77ec62d58e289131" title="[Advanced] Add a new var to the solution.">new_var()</a>:</p><ul>
+<p>The following behaviors are the same as those of a pre-defined var and those created via <a class="el" href="classyask_1_1yk__solution.html#a75ba824977414468dd23f0a1d5f9eaf3" title="[Advanced] Add a new var to the solution.">new_var()</a>:</p><ul>
 <li>For step and misc dimensions, you can change the desired size <a class="el" href="classyask_1_1yk__var.html#a7bc339345cc04bb349e2f6bf586a29f1" title="[Advanced] Set the number of elements to allocate in the specified dimension.">yk_var::set_alloc_size()</a>.</li>
 <li>Storage may be allocated via <a class="el" href="classyask_1_1yk__var.html#aa3b479a98b425c3a8d504145972198e0" title="[Advanced] Explicitly allocate data-storage memory for this var.">yk_var::alloc_storage()</a> or <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">yk_solution::prepare_solution()</a>.</li>
 </ul>
 <p>See <a class="el" href="classyask_1_1yk__var.html#a7bc339345cc04bb349e2f6bf586a29f1" title="[Advanced] Set the number of elements to allocate in the specified dimension.">yk_var::set_alloc_size()</a>.</p>
-<p>The following behaviors are different than a pre-defined var but the same as those created via <a class="el" href="classyask_1_1yk__solution.html#a076e1cc78d96e7cc77ec62d58e289131" title="[Advanced] Add a new var to the solution.">new_var()</a>:</p><ul>
+<p>The following behaviors are different than a pre-defined var but the same as those created via <a class="el" href="classyask_1_1yk__solution.html#a75ba824977414468dd23f0a1d5f9eaf3" title="[Advanced] Add a new var to the solution.">new_var()</a>:</p><ul>
 <li>You can create new "misc" dimensions during var creation simply by naming them in the <code>dims</code> argument. Any dimension name that is not a step or domain dimension will become a misc dimension, whether or not it was defined via <a class="el" href="classyask_1_1yc__node__factory.html#aef5fed8db0e1798b421c4a8cb8da77ff" title="Create a new miscellaneous index.">yc_node_factory::new_misc_index()</a>.</li>
-<li>Vars created via <a class="el" href="classyask_1_1yk__solution.html#a70c44ba3941aa5682e381c7c36dcf453" title="[Advanced] Add a new var to the solution with a specified size.">new_fixed_size_var()</a> cannot be direct inputs or outputs of stencil equations. However, data in a var created via <a class="el" href="classyask_1_1yk__solution.html#a70c44ba3941aa5682e381c7c36dcf453" title="[Advanced] Add a new var to the solution with a specified size.">new_fixed_size_var()</a> can be shared with a pre-defined var via <a class="el" href="classyask_1_1yk__var.html#aa095607d5493fcba38cb332053155b7f" title="[Advanced] Merge this var with another var.">yk_var::fuse_vars()</a> if the vars are compatible.</li>
+<li>Vars created via <a class="el" href="classyask_1_1yk__solution.html#a2899b81d090c4a2f468ccc31adfa9d85" title="[Advanced] Add a new var to the solution with a specified size.">new_fixed_size_var()</a> cannot be direct inputs or outputs of stencil equations. However, data in a var created via <a class="el" href="classyask_1_1yk__solution.html#a2899b81d090c4a2f468ccc31adfa9d85" title="[Advanced] Add a new var to the solution with a specified size.">new_fixed_size_var()</a> can be shared with a pre-defined var via <a class="el" href="classyask_1_1yk__var.html#aa095607d5493fcba38cb332053155b7f" title="[Advanced] Merge this var with another var.">yk_var::fuse_vars()</a> if the vars are compatible.</li>
 </ul>
 <dl class="section note"><dt>Note</dt><dd>A new var contains only the meta-data for the var; data storage is not yet allocated. Storage may be allocated in any of the methods listed in the "Detailed Description" for <a class="el" href="classyask_1_1yk__var.html">yk_var</a>. </dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>Pointer to the new var. </dd></dl>
@@ -1864,8 +2448,8 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 
 </div>
 </div>
-<a id="a0b682d609950a4d9b9d8fb497aad9971"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a0b682d609950a4d9b9d8fb497aad9971">&#9670;&nbsp;</a></span>new_fixed_size_var() <span class="overload">[2/2]</span></h2>
+<a id="a8cff251e3f20d961e0a11752857dd28a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a8cff251e3f20d961e0a11752857dd28a">&#9670;&nbsp;</a></span>new_fixed_size_var() <span class="overload">[2/2]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -1888,7 +2472,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
         <tr>
           <td class="paramkey"></td>
           <td></td>
-          <td class="paramtype">const std::initializer_list&lt; <a class="el" href="group__yask.html#ga3820f8c6b5f6a92c0df31746b7d2891b">idx_t</a> &gt; &amp;&#160;</td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#ga9a86862ece2cddc8fb77fac850c44161">idx_t_init_list</a> &amp;&#160;</td>
           <td class="paramname"><em>dim_sizes</em>&#160;</td>
         </tr>
         <tr>
@@ -1905,7 +2489,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="clas
 </div><div class="memdoc">
 
 <p><b>[Advanced]</b> Add a new var to the solution with a specified size. </p>
-<p>See documentation for the version of <a class="el" href="classyask_1_1yk__solution.html#a70c44ba3941aa5682e381c7c36dcf453" title="[Advanced] Add a new var to the solution with a specified size.">new_fixed_size_var()</a> with a vector of dimension names as a parameter. </p><dl class="section note"><dt>Note</dt><dd>This version is not available (or needed) in the Python API. </dd></dl>
+<p>See documentation for the version of <a class="el" href="classyask_1_1yk__solution.html#a2899b81d090c4a2f468ccc31adfa9d85" title="[Advanced] Add a new var to the solution with a specified size.">new_fixed_size_var()</a> with a vector of dimension names as a parameter. </p><dl class="section note"><dt>Note</dt><dd>This version is not available (or needed) in the Python API. </dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>Pointer to the new var. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">

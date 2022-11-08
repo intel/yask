@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -45,6 +45,8 @@ using namespace yask;
 #define DO_ABOVE_SURFACE
 
 // Set the following macro to use intermediate scratch vars.
+// This is a compute/memory tradeoff: using scratch vars reduces
+// compute and increases memory accesses.
 //#define USE_SCRATCH_VARS
 
 // For the surface stress conditions, we need to write into 2 points
@@ -521,11 +523,7 @@ namespace {
                         soln->set_prefetch_dist(1, 1);
                         soln->set_prefetch_dist(2, 0);
                     }
-                    else if (target == "avx512") {
-                        soln->set_prefetch_dist(1, 1);
-                        soln->set_prefetch_dist(2, 0);
-                    }
-                    else {
+                    else if (target == "avx2") {
                         soln->set_prefetch_dist(1, 1);
                         soln->set_prefetch_dist(2, 2);
                     }
@@ -535,29 +533,28 @@ namespace {
                 // This code is run immediately after 'kernel_soln' is created.
                 soln->CALL_AFTER_NEW_SOLUTION
                     (
-                     // Add extra padding in all dimensions.
-                     kernel_soln.apply_command_line_options("-ep 1");
-                     
-                     // Check target at kernel run-time.
-                     auto isa = kernel_soln.get_target();
-                     if (isa == "knl") {
+                     // Check CPU target at kernel run-time.
+                     if (!kernel_soln.is_offloaded()) {
+                         auto isa = kernel_soln.get_target();
+                         if (isa == "knl") {
 
-                         // Use half the threads: 2 threads on 2 cores per block.
-                         kernel_soln.apply_command_line_options("-thread_divisor 2 -block_threads 4");
+                             // Use half the threads: 2 threads on 2 cores per block.
+                             kernel_soln.apply_command_line_options("-thread_divisor 2 -block_threads 4");
                          
-                         kernel_soln.set_block_size("x", 48);
-                         kernel_soln.set_block_size("y", 48);
-                         kernel_soln.set_block_size("z", 112);
-                     }
-                     else if (isa == "avx512") {
-                         kernel_soln.set_block_size("x", 64);
-                         kernel_soln.set_block_size("y", 8);
-                         kernel_soln.set_block_size("z", 108);
-                     }
-                     else {
-                         kernel_soln.set_block_size("x", 64);
-                         kernel_soln.set_block_size("y", 8);
-                         kernel_soln.set_block_size("z", 64);
+                             kernel_soln.set_block_size("x", 48);
+                             kernel_soln.set_block_size("y", 48);
+                             kernel_soln.set_block_size("z", 112);
+                         }
+                         else if (isa == "avx2") {
+                             kernel_soln.set_block_size("x", 64);
+                             kernel_soln.set_block_size("y", 8);
+                             kernel_soln.set_block_size("z", 64);
+                         }
+                         else {
+                             kernel_soln.set_block_size("x", 116);
+                             kernel_soln.set_block_size("y", 8);
+                             kernel_soln.set_block_size("z", 128);
+                         }
                      }
                      );
             }

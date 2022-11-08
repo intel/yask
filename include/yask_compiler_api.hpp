@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -182,7 +182,7 @@ namespace yask {
             avx     | YASK kernel for CORE AVX ISA.
             avx2    | YASK kernel for CORE AVX2 ISA.
             avx512  | YASK kernel for CORE AVX-512 ISA.
-            avx512lo| YASK kernel for CORE AVX-512 ISA with 256-bit SIMD.
+            avx512-ymm | YASK kernel for CORE AVX-512 ISA with 256-bit SIMD.
             knl     | YASK kernel for MIC AVX-512 ISA.
             knc     | YASK kernel for Knights Corner ISA.
             dot     | DOT-language description.
@@ -251,7 +251,7 @@ namespace yask {
                  /**< [in] Dimensions of the var.
                     Each dimension is identified by an associated index. */ ) =0;
 
-#ifndef SWIG
+        #ifndef SWIG
         /// Create an n-dimensional variable in the solution.
         /**
            C++ initializer-list version with same semantics as
@@ -266,7 +266,7 @@ namespace yask {
                  const std::initializer_list<yc_index_node_ptr>& dims
                  /**< [in] Dimensions of the var.
                     Each dimension is identified by an associated index. */ ) =0;
-#endif
+        #endif
 
         /// Create an n-dimensional scratch variable in the solution.
         /**
@@ -292,7 +292,7 @@ namespace yask {
                          /**< [in] Dimensions of the var.
                             Each dimension is identified by an associated index. */ ) =0;
 
-#ifndef SWIG
+        #ifndef SWIG
         /// Create an n-dimensional scratch variable in the solution.
         /**
            C++ initializer-list version with same semantics as
@@ -308,7 +308,7 @@ namespace yask {
                          const std::initializer_list<yc_index_node_ptr>& dims
                          /**< [in] Dimensions of the var.
                             Each dimension is identified by an associated index. */ ) =0;
-#endif
+        #endif
 
         /// Get the number of vars in the solution.
         /** 
@@ -409,10 +409,6 @@ namespace yask {
                           int level) =0;
 
         /// Set the prefetch distance for the given cache.
-        /**
-           If the prefetch distance is not set for a given cache,
-           a default will be used based on the target format.
-         */
         virtual void
         set_prefetch_dist(/** [in] Cache level: 1 or 2. */
                           int level,
@@ -437,7 +433,7 @@ namespace yask {
                         /**< [out] Pointer to object to receive formatted output.
                            See \ref yask_output_factory. */) =0;
 
-#ifndef SWIG
+        #ifndef SWIG
         /// **[Advanced]** Callback type for call_before_output().
         typedef std::function<void(yc_solution& soln,
                                    yask_output_ptr output)> output_hook_t;
@@ -458,7 +454,7 @@ namespace yask {
         virtual void
         call_before_output(/** [in] callback function */
                            output_hook_t hook_fn) =0;
-#endif
+        #endif
 
         /// **[Advanced]** Add block of custom C++ code to the kernel solution.
         /**
@@ -495,7 +491,7 @@ namespace yask {
            Allows writing the code without the surrounding quotes, making it easier
            to format in many editors and IDEs (and perhaps look somewhat like a lambda function).
         */
-#define CALL_AFTER_NEW_SOLUTION(...) call_after_new_solution(#__VA_ARGS__)
+        #define CALL_AFTER_NEW_SOLUTION(...) call_after_new_solution(#__VA_ARGS__)
         
         /// **[Advanced]** Explicitly define and order the domain dimensions used in the solution.
         /**
@@ -511,7 +507,7 @@ namespace yask {
         set_domain_dims(const std::vector<yc_index_node_ptr>& dims
                         /**< [in] Domain dimensions of the solution. */ ) =0;
 
-#ifndef SWIG
+        #ifndef SWIG
         /// **[Advanced]** Explicitly define and order the domain dimensions used in the solution.
         /**
            C++ initializer-list version with same semantics as
@@ -521,7 +517,7 @@ namespace yask {
         virtual void
         set_domain_dims(const std::initializer_list<yc_index_node_ptr>& dims
                         /**< [in] Domain dimensions of the solution. */ ) =0;
-#endif
+        #endif
         
         /// **[Advanced]** Explicitly identify the step dimension in the solution.
         /** 
@@ -640,6 +636,7 @@ namespace yask {
         clear_dependencies() =0;
 
         /// **[Deprecated]** Use set_target() and output_solution().
+        YASK_DEPRECATED
         inline void
         format(const std::string& format_type,
                yask_output_ptr output) {
@@ -648,50 +645,57 @@ namespace yask {
         }
 
         /// **[Deprecated]** Use new_var().
+        YASK_DEPRECATED
         inline yc_var_ptr
         new_grid(const std::string& name,
                  const std::vector<yc_index_node_ptr>& dims) {
             return new_var(name, dims);
         }
 
-#ifndef SWIG
+        #ifndef SWIG
         /// **[Deprecated]** Use new_var().
-        inline yc_var_ptr
+         YASK_DEPRECATED
+       inline yc_var_ptr
         new_grid(const std::string& name,
                  const std::initializer_list<yc_index_node_ptr>& dims) {
             return new_var(name, dims);
         }
-#endif
+        #endif
 
         /// **[Deprecated]** Use new_scratch_var().
+        YASK_DEPRECATED
         inline yc_var_ptr
         new_scratch_grid(const std::string& name,
                          const std::vector<yc_index_node_ptr>& dims) {
             return new_scratch_var(name, dims);
         }
 
-#ifndef SWIG
+        #ifndef SWIG
         /// **[Deprecated]** Use new_scratch_var().
+        YASK_DEPRECATED
         inline yc_var_ptr
         new_scratch_grid(const std::string& name,
                          const std::initializer_list<yc_index_node_ptr>& dims) {
             return new_scratch_var(name, dims);
         }
-#endif
+        #endif
 
         /// **[Deprecated]** Use get_num_vars().
+        YASK_DEPRECATED
         inline int
         get_num_grids() const {
             return get_num_vars();
         }
 
         /// **[Deprecated]** Use get_vars().
+        YASK_DEPRECATED
         inline std::vector<yc_var_ptr>
         get_grids() {
             return get_vars();
         }
 
         /// **[Deprecated]** Use get_var().
+        YASK_DEPRECATED
         inline yc_var_ptr
         get_grid(const std::string& name) {
             return get_var(name);
@@ -728,7 +732,7 @@ namespace yask {
            in the \ref yc_solution.
            @returns List of names of all the dimensions used in this var.
         */
-        virtual std::vector<std::string>
+        virtual string_vec
         get_dim_names() const =0;
 
         /// Create a reference to a point in this var.
@@ -743,7 +747,7 @@ namespace yask {
                           These must appear in the same order as when the
                           var was created. */ ) =0;
 
-#ifndef SWIG
+        #ifndef SWIG
         /// Create a reference to a point in this var.
         /**
            C++ initializer-list version with same semantics as
@@ -756,38 +760,7 @@ namespace yask {
         */
         virtual yc_var_point_node_ptr
         new_var_point(const std::initializer_list<yc_number_node_ptr>& index_exprs) = 0;
-#endif
-
-        /// Create a reference to a point in this var using relative offsets.
-        /**
-           A shorthand function for calling new_var_point() when
-           all index expressions are constant offsets.
-           Each offset refers to the dimensions defined when the
-           var was created via yc_solution::new_var().
-
-           Example: if `g = new_var("data", {t, x, y})` with step-dimension `t`
-           and domain-dimensions `x` and `y`,
-           `g->new_relative_var_point({1, -1, 0})` refers to the same point as
-           `g->new_var_point({t + 1, x - 1, y})`.
-
-           @warning This convenience function can only be used when every
-           dimension of the var is either the step dimension or a domain dimension.
-           If this is not the case, use new_var_point().
-           @returns Pointer to AST node used to read from or write to point in var. */
-        virtual yc_var_point_node_ptr
-        new_relative_var_point(const std::vector<int>& dim_offsets
-                                /**< [in] offset from evaluation index in each dim. */ ) =0;
-
-#ifndef SWIG
-        /// Create a reference to a point in this var using relative offsets.
-        /**
-           C++ initializer-list version with same semantics as
-           the vector version of new_relative_var_point().
-           @note Not available in the Python API. Use the vector version.
-           @returns Pointer to AST node used to read or write from point in var. */
-        virtual yc_var_point_node_ptr
-        new_relative_var_point(const std::initializer_list<int>& dim_offsets) = 0;
-#endif
+        #endif
 
         /// **[Advanced]** Get whether the allocation of the step dimension of this var can be modified at run-time.
         /**
@@ -824,25 +797,45 @@ namespace yask {
                             /**< [in] Number of elements to allocate in the step dimension. */) =0;
 
         /// **[Deprecated]** Use new_var_point().
+        YASK_DEPRECATED
+        virtual yc_var_point_node_ptr
+        new_relative_var_point(const std::vector<int>& dim_offsets) =0;
+        #ifndef SWIG
+        /// **[Deprecated]** Use new_var_point().
+        YASK_DEPRECATED
+        virtual yc_var_point_node_ptr
+        new_relative_var_point(const std::initializer_list<int>& dim_offsets) = 0;
+        #endif
+        
+        /// **[Deprecated]** Use new_var_point().
+        YASK_DEPRECATED
         inline yc_var_point_node_ptr
         new_grid_point(const std::vector<yc_number_node_ptr>& index_exprs) {
             return new_var_point(index_exprs);
         }
+        #ifndef SWIG
         /// **[Deprecated]** Use new_var_point().
+        YASK_DEPRECATED
         inline yc_var_point_node_ptr
         new_grid_point(const std::initializer_list<yc_number_node_ptr>& index_exprs) {
             return new_var_point(index_exprs);
         }
+        #endif
+        
         /// **[Deprecated]** Use new_relative_var_point().
+        YASK_DEPRECATED
         inline yc_var_point_node_ptr
         new_relative_grid_point(const std::vector<int>& dim_offsets) {
             return new_relative_var_point(dim_offsets);
         }
+        #ifndef SWIG
         /// **[Deprecated]** Use new_relative_var_point().
+        YASK_DEPRECATED
         inline yc_var_point_node_ptr
         new_relative_grid_point(const std::initializer_list<int>& dim_offsets) {
             return new_relative_var_point(dim_offsets);
         }
+        #endif
         
     };                      // yc_var.
 
@@ -906,7 +899,7 @@ namespace yask {
                 _var = soln->new_var(name, dims);
         }
 
-#ifndef SWIG
+        #ifndef SWIG
         /// Contructor taking an initializer_list of index vars.
         /**
            A wrapper around yc_solution::new_var() and
@@ -928,7 +921,7 @@ namespace yask {
             else
                 _var = soln->new_var(name, dims);
         }
-#endif
+        #endif
         
         /// Contructor for a simple scalar value.
         /**
@@ -974,7 +967,7 @@ namespace yask {
             return _var->new_var_point(index_exprs);
         }
 
-#ifndef SWIG
+        #ifndef SWIG
         /// Create an expression for a point in a var.
         /**
            A wrapper around yc_var::new_var_point().
@@ -1043,18 +1036,22 @@ namespace yask {
             return _var->new_var_point({i1});
         }
         
-#endif
+        #endif
         
     };                          // yc_var_proxy.
     /** @}*/
 
     /// **[Deprecated]** Use yc_var.
+    YASK_DEPRECATED
     typedef yc_var yc_grid;
     /// **[Deprecated]** Use yc_var_ptr.
+    YASK_DEPRECATED
     typedef yc_var_ptr yc_grid_ptr;
     /// **[Deprecated]** Use yc_var_point_node.
+    YASK_DEPRECATED
     typedef yc_var_point_node yc_grid_point_node;
     /// **[Deprecated]** Use yc_var_point_node_ptr.
+    YASK_DEPRECATED
     typedef yc_var_point_node_ptr yc_grid_point_node_ptr;
 
 } // namespace yask.

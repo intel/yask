@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -24,6 +24,8 @@ IN THE SOFTWARE.
 *****************************************************************************/
 
 ///////// Tuple implementation.
+
+// See tuple.hpp for method documentation.
 
 #include "yask_common_api.hpp"
 #include "tuple.hpp"
@@ -65,8 +67,8 @@ namespace yask {
     }
     
     template <typename T>
-    const std::vector<std::string> Tuple<T>::get_dim_names() const {
-        std::vector<std::string> names;
+    const string_vec Tuple<T>::get_dim_names() const {
+        string_vec names;
         for (auto& i : _q)
             names.push_back(i._get_name());
         return names;
@@ -83,13 +85,15 @@ namespace yask {
         }
     }
     template <typename T>
-    void Tuple<T>::add_dim_front(const std::string& dim, const T& val) {
+    void Tuple<T>::add_dim_at(int posn, const std::string& dim, const T& val) {
         auto* p = lookup(dim);
         if (p)
             *p = val;
         else {
+            assert(posn >= 0);
+            assert(posn <= int(_q.size()));
             Scalar<T> sv(dim, val);
-            _q.insert(_q.begin(), sv);
+            _q.insert(_q.begin() + posn, sv);
         }
     }
 
@@ -145,6 +149,7 @@ namespace yask {
         return true;
     }
 
+    // Returns true only if all dims and values are same.
     template <typename T>
     bool Tuple<T>::operator==(const Tuple& rhs) const {
 
@@ -160,6 +165,8 @@ namespace yask {
         return true;
     }
 
+    // Not necessarily a meaningful less-than operator, but
+    // works for ordering sets, map keys, etc.
     template <typename T>
     bool Tuple<T>::operator<(const Tuple& rhs) const {
         if (size() < rhs.size()) return true;
@@ -236,9 +243,9 @@ namespace yask {
 
         // Loop thru dims.
         int start_dim = _first_inner ? 0 : size()-1;
-        int end_dim = _first_inner ? size() : -1;
+        int stop_dim = _first_inner ? size() : -1;
         int step_dim = _first_inner ? 1 : -1;
-        for (int di = start_dim; di != end_dim; di += step_dim) {
+        for (int di = start_dim; di != stop_dim; di += step_dim) {
             auto& i = _q.at(di);
             //auto& dim = i._get_name();
             size_t dsize = size_t(i.get_val());
@@ -265,7 +272,7 @@ namespace yask {
         // For some reason, copying *this and erasing
         // the element in newt._q causes an exception.
         Tuple newt;
-        for (int i = 0; i < _get_num_dims(); i++) {
+        for (int i = 0; i < get_num_dims(); i++) {
             if (i != posn)
                 newt.add_dim_back(get_dim_name(i), get_val(i));
         }
@@ -323,8 +330,8 @@ namespace yask {
 
     template <typename T>
     std::string Tuple<T>::make_dim_val_offset_str(std::string separator,
-                                              std::string prefix,
-                                              std::string suffix) const {
+                                                  std::string prefix,
+                                                  std::string suffix) const {
         std::ostringstream oss;
         int n = 0;
         for (auto i : _q) {
@@ -345,8 +352,8 @@ namespace yask {
 
     // Return a "compact" set of K factors of N.
     template <typename T>
-    Tuple<T> Tuple<T>::get_compact_factors(idx_t N) const {
-        int K = _get_num_dims();
+    Tuple<T> Tuple<T>::get_compact_factors(T N) const {
+        T K = get_num_dims();
         
         // Keep track of "best" result, where the best is most compact.
         Tuple best;
@@ -363,8 +370,8 @@ namespace yask {
             return *this;       // already done.
 
         // Make list of factors of N.
-        vector<idx_t> facts;
-        for (idx_t n = 1; n <= N; n++)
+        vector<T> facts;
+        for (T n = 1; n <= N; n++)
             if (N % n == 0)
                 facts.push_back(n);
 
@@ -430,7 +437,7 @@ namespace yask {
                 break;          // done.
 
         } // keep or not.
-        assert(best.size() == K);
+        assert(best.get_num_dims() == int(K));
         assert(best.product() == N);
         return best;
     }

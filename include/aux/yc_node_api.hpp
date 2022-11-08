@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -289,6 +289,7 @@ namespace yask {
         get_var() =0;
 
         /// **[Deprecated]** Use get_var().
+        YASK_DEPRECATED
         inline yc_var_ptr
         get_grid() {
             return get_var();

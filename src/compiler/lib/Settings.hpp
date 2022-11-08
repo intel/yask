@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -41,16 +41,20 @@ namespace yask {
         int _elem_bytes = 4;    // bytes in an FP element.
         string _step_dim;        // explicit step dim.
         vector<string> _domain_dims; // explicit domain dims.
+        string _inner_loop_dim;      // explicit inner-loop dim.
+        int _min_buffer_len = 1;     // min length of an inner-loop buffer.
+        int _read_ahead_dist = 0;    // iterations to read ahead.
         IntTuple _fold_options;    // vector fold.
         IntTuple _cluster_options; // cluster multipliers.
         map<int, int> _prefetch_dists;
         bool _first_inner = true; // first dimension of fold is unit step.
-        string _eq_bundle_basename_default = "stencil_bundle";
+        string _eq_bundle_basename_default = "bundle";
         bool _allow_unaligned_loads = false;
         bool _bundle_scratch = true;
         int _halo_size = 0;      // 0 => calculate each halo automatically.
         int _step_alloc = 0;     // 0 => calculate each step allocation automatically.
-        bool _inner_misc = false;
+        bool _inner_misc = true;
+        bool _outer_domain = false;
         int _max_expr_size = 50;
         int _min_expr_size = 2;
         bool _do_cse = true;      // do common-subexpr elim.
@@ -62,6 +66,10 @@ namespace yask {
         string _var_regex;       // vars to update.
         bool _find_deps = true;
         bool _print_eqs = false;
+        bool _use_ptrs = true;  // enable access via pointers & strides.
+        bool _use_many_ptrs = false;  // make pointer for almost every point.
+        bool _use_offsets = false; // compute offsets from var alloc start.
+        bool _early_loads = true; // issue loads early in the inner loop.
     };
 
     // Stencil dimensions.
@@ -69,9 +77,11 @@ namespace yask {
         string _step_dim;         // step dimension, usually time.
         IntTuple _domain_dims;    // domain dims, usually spatial (with zero value).
         IntTuple _stencil_dims;   // both step and domain dims.
-        string _inner_dim;        // domain dim that will be used in the inner loop.
-        string _outer_dim;        // domain dim that will be used in the outer loop.
         IntTuple _misc_dims;      // misc dims that are not the step or domain.
+        int _inner_loop_dim_num = 0; // stencil-dim index of inner-loop-dim.
+        string _inner_layout_dim;        // inner-most domain dim in mem array layout.
+        string _outer_layout_dim;        // outer-most domain dim in mem array layout.
+        IntTuple _layout_dims;           // all dims in array-layout order.
 
         // Following contain only domain dims.
         IntTuple _scalar;       // points in scalar (value 1 in each).

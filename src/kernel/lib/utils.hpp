@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -25,42 +25,13 @@ IN THE SOFTWARE.
 
 #pragma once
 
-// Provide the needed definitions for NUMA support.
-// This is fairly convoluted because of the inconsistency of
-// support on various OS releases.
-// The USE_NUMA* vars are set in the Makefile.
-#ifdef USE_NUMA
-
-// Use numa policy library?
-#ifdef USE_NUMA_POLICY_LIB
-#include <numa.h>
-
-// Use <numaif.h> if available.
-#elif defined(USE_NUMAIF_H)
-#include <numaif.h>
-
-// This is a hack, but some systems are missing <numaif.h>.
-#elif !defined(NUMAIF_H)
-extern "C" {
-    extern long get_mempolicy(int *policy, const unsigned long *nmask,
-                              unsigned long maxnode, void *addr, int flags);
-    extern long mbind(void *start, unsigned long len, int mode,
-                      const unsigned long *nmask, unsigned long maxnode, unsigned flags);
-}
-
-// Conservatively don't define MPOL_LOCAL.
-#define MPOL_DEFAULT     0
-#define MPOL_PREFERRED   1
-#define MPOL_BIND        2
-#define MPOL_INTERLEAVE  3
-
-#endif
-#endif
+// Misc utilities.
 
 namespace yask {
 
     // Fatal error.
-    inline void exit_yask(int code) {
+    [[noreturn]] inline
+    void exit_yask(int code) {
 
 #ifdef USE_MPI
         int flag;
@@ -75,108 +46,21 @@ namespace yask {
         exit(code);
     }
 
+    // Get an int from an env var.
+    inline int get_env_int(const std::string& name, int def) {
+        int res = def;
+        char* s = getenv(name.c_str());
+        if (s)
+            res = atoi(s);
+        return res;
+    }
+
     // Find sum of rank_vals over all ranks.
     extern idx_t sum_over_ranks(idx_t rank_val, MPI_Comm comm);
 
     // Make sure rank_val is same over all ranks.
     extern void assert_equality_over_ranks(idx_t rank_val, MPI_Comm comm,
-                                        const std::string& descr);
-
-    // Helpers for aligned malloc and free.
-    extern char* yask_aligned_alloc(std::size_t nbytes);
-    class AlignedDeleter {
-    public:
-        void operator()(char* p) {
-            if (p) {
-                std::free(p);
-                p = NULL;
-            }
-        }
-    };
-
-    // Alloc aligned data as a shared ptr.
-    template<typename T>
-    std::shared_ptr<T> shared_aligned_alloc(size_t sz) {
-        auto _base = std::shared_ptr<T>(yask_aligned_alloc(sz), AlignedDeleter());
-        return _base;
-    }
-
-    // Helpers for NUMA malloc and free.
-    extern char* numa_alloc(std::size_t nbytes, int numa_pref);
-    struct NumaDeleter {
-        std::size_t _nbytes;
-        int _numa_pref;
-
-        // Ctor saves data needed for freeing.
-        NumaDeleter(std::size_t nbytes, int numa_pref) :
-            _nbytes(nbytes),
-            _numa_pref(numa_pref)
-        { }
-
-        // Free p.
-        void operator()(char* p);
-    };
-
-    // Allocate NUMA memory from preferred node.
-    template<typename T>
-    std::shared_ptr<T> shared_numa_alloc(size_t sz, int numa_pref) {
-        auto _base = std::shared_ptr<T>(numa_alloc(sz, numa_pref),
-                                        NumaDeleter(sz, numa_pref));
-        return _base;
-    }
-
-    // Helpers for PMEM malloc and free.
-    extern char* pmem_alloc(std::size_t nbytes, int dev_num);
-    struct PmemDeleter {
-        std::size_t _nbytes;
-        int _dev_num;
-
-        // Ctor saves data needed for freeing.
-        PmemDeleter(std::size_t nbytes, int dev_num) :
-            _nbytes(nbytes),
-            _dev_num(dev_num)
-        { }
-
-        // Free p.
-        void operator()(char* p);
-    };
-
-    // Allocate PMEM memory from given device.
-    template<typename T>
-    std::shared_ptr<T> shared_pmem_alloc(size_t sz, int dev_num) {
-        auto _base = std::shared_ptr<T>(pmem_alloc(sz, dev_num),
-                                        PmemDeleter(sz, dev_num));
-        return _base;
-    }
-
-    // Helpers for MPI shm malloc and free.
-    extern char* shm_alloc(std::size_t nbytes,
-                          const MPI_Comm* shm_comm, MPI_Win* shm_win);
-    struct ShmDeleter {
-        std::size_t _nbytes;
-        const MPI_Comm* _shm_comm;
-        MPI_Win* _shm_win;
-
-        // Ctor saves data needed for freeing.
-        ShmDeleter(std::size_t nbytes,
-                   const MPI_Comm* shm_comm, MPI_Win* shm_win):
-            _nbytes(nbytes),
-            _shm_comm(shm_comm),
-            _shm_win(shm_win)
-        { }
-
-        // Free p.
-        void operator()(char* p);
-    };
-
-    // Allocate MPI shm memory.
-    template<typename T>
-    std::shared_ptr<T> shared_shm_alloc(size_t sz,
-                                        const MPI_Comm* shm_comm, MPI_Win* shm_win) {
-        auto _base = std::shared_ptr<T>(shm_alloc(sz, shm_comm, shm_win),
-                                        ShmDeleter(sz, shm_comm, shm_win));
-        return _base;
-    }
+                                           const std::string& descr);
 
     // A class for a simple producer-consumer memory lock on one item.
     class SimpleLock {
@@ -192,6 +76,7 @@ namespace yask {
         };
 
         LockVal _write_count, _read_count;
+        LockVal _data; // Optional simple data field.
 
         static constexpr idx_t _ival = 1000;
 
@@ -264,9 +149,26 @@ namespace yask {
             _write_count.val++;
             _check("mark_write_done");
         }
+
+        // Access data value.
+        // Of course, other data can be gated w/this lock.
+        idx_t get_data() const {
+            return _data.val;
+        }
+        void set_data(idx_t v) {
+            _data.val = v;
+        }
     };
 
     // A class for maintaining elapsed time.
+    // NOT a virtual class.
+    // Example:
+    //   time --->
+    //     start() ... stop() ... start() ... stop() ... get_elapsed_time()
+    //     |   A secs  |          |   B secs  |
+    // 1st call to stop() returns A.
+    // 2nd call to stop() returns B.
+    // Call to get_elapsed_time() returns A + B.
     class YaskTimer {
 
         /* struct timespec {
@@ -281,7 +183,7 @@ namespace yask {
         typedef struct timespec TimeSpec;
 
         YaskTimer() { clear(); }
-        virtual ~YaskTimer() { }
+        ~YaskTimer() { }
 
         // Reset elapsed time to zero.
         void clear() {
@@ -289,7 +191,8 @@ namespace yask {
             _begin.tv_nsec = _elapsed.tv_nsec = 0;
         }
 
-        // Make a timespec that can be used for mutiple calls.
+        // Make a current timespec to be provided to start() or stop().
+        // This allows multiple timers to use the same timespec.
         static TimeSpec get_timespec() {
             TimeSpec ts;
             clock_gettime(CLOCK_REALTIME, &ts);
@@ -300,15 +203,24 @@ namespace yask {
         // start() and stop() can be called multiple times in
         // pairs before calling get_elapsed_secs(), which
         // will return the cumulative time over all timed regions.
-        void start(TimeSpec* ts = NULL);
+        void start(const TimeSpec& ts);
+        void start() {
+            auto ts = get_timespec();
+            start(ts);
+        }
 
         // End a timed region.
         // Return time since previous call to start(); this is *not*
         // generally the same as the value returned by get_elapsed_secs().
-        double stop(TimeSpec* ts = NULL);
+        double stop(const TimeSpec& ts);
+        double stop() {
+            auto ts = get_timespec();
+            return stop(ts);
+        }
 
-        // Get elapsed time between preceding start/stop pairs.
-        // Does not reset value, so it may be used for cumulative time.
+        // Get elapsed time between all preceding start/stop pairs since
+        // object creation or previous call to clear().  Does not reset
+        // value, so it may be used for querying cumulative time.
         double get_elapsed_secs() const {
 
             // Make sure timer was stopped.
@@ -317,7 +229,7 @@ namespace yask {
             return double(_elapsed.tv_sec) + double(_elapsed.tv_nsec) * 1e-9;
         }
 
-        // Get elapsed time since last start.
+        // Get elapsed time since previous start.
         // Used to check time w/o stopping timer.
         double get_secs_since_start() const;
     };
@@ -327,7 +239,7 @@ namespace yask {
 
     public:
 
-        // Base class for an allowed option.
+        // Base class for a command-line option.
         class OptionBase {
         protected:
             std::string _name;
@@ -342,16 +254,20 @@ namespace yask {
 
             // Check for matching option to str at args[argi].
             // Return true and increment argi if match.
-            virtual bool _check_arg(const std::vector<std::string>& args, int& argi,
-                                    const std::string& str) const;
+            virtual bool _is_opt(const string_vec& args, int& argi,
+                                 const std::string& str) const;
 
             // Get one double value from args[argi++].
             // Exit on failure.
-            virtual double _double_val(const std::vector<std::string>& args, int& argi);
+            virtual double _double_val(const string_vec& args, int& argi);
 
             // Get one idx_t value from args[argi++].
             // Exit on failure.
-            virtual idx_t _idx_val(const std::vector<std::string>& args, int& argi);
+            virtual idx_t _idx_val(const string_vec& args, int& argi);
+
+            // Get one string value from args[argi++].
+            // Exit on failure.
+            virtual std::string _string_val(const string_vec& args, int& argi);
 
         public:
             OptionBase(const std::string& name,
@@ -376,12 +292,16 @@ namespace yask {
                 _print_help(os, _name, width);
             }
 
+            // Print current value of this option.
+            virtual std::ostream& print_value(std::ostream& os) const =0;
+
             // Check for matching option and any needed args at args[argi].
             // Return true, set val, and increment argi if match.
-            virtual bool check_arg(const std::vector<std::string>& args, int& argi) =0;
+            virtual bool check_arg(const string_vec& args, int& argi) =0;
         };
+        typedef std::shared_ptr<OptionBase> OptionPtr;
 
-        // An allowed boolean option.
+        // A boolean option.
         class BoolOption : public OptionBase {
             bool& _val;
 
@@ -392,11 +312,15 @@ namespace yask {
                 OptionBase(name, help_msg), _val(val) { }
 
             virtual void print_help(std::ostream& os,
-                                    int width) const;
-            virtual bool check_arg(const std::vector<std::string>& args, int& argi);
+                                    int width) const override;
+            virtual std::ostream& print_value(std::ostream& os) const override {
+                os << (_val ? "true" : "false");
+                return os;
+            }
+            virtual bool check_arg(const string_vec& args, int& argi) override;
         };
 
-        // An allowed int option.
+        // An int option.
         class IntOption : public OptionBase {
             int& _val;
 
@@ -407,11 +331,15 @@ namespace yask {
                 OptionBase(name, help_msg), _val(val) { }
 
             virtual void print_help(std::ostream& os,
-                                    int width) const;
-            virtual bool check_arg(const std::vector<std::string>& args, int& argi);
+                                    int width) const override;
+            virtual std::ostream& print_value(std::ostream& os) const override {
+                os << _val;
+                return os;
+            }
+            virtual bool check_arg(const string_vec& args, int& argi) override;
         };
 
-        // An allowed double option.
+        // A double option.
         class DoubleOption : public OptionBase {
             double& _val;
 
@@ -422,11 +350,15 @@ namespace yask {
                 OptionBase(name, help_msg), _val(val) { }
 
             virtual void print_help(std::ostream& os,
-                                    int width) const;
-            virtual bool check_arg(const std::vector<std::string>& args, int& argi);
+                                    int width) const override;
+            virtual std::ostream& print_value(std::ostream& os) const override {
+                os << _val;
+                return os;
+            }
+            virtual bool check_arg(const string_vec& args, int& argi) override;
         };
 
-        // An allowed idx_t option.
+        // An idx_t option.
         class IdxOption : public OptionBase {
             idx_t& _val;
 
@@ -437,11 +369,15 @@ namespace yask {
                 OptionBase(name, help_msg), _val(val) { }
 
             virtual void print_help(std::ostream& os,
-                                    int width) const;
-            virtual bool check_arg(const std::vector<std::string>& args, int& argi);
+                                    int width) const override;
+            virtual std::ostream& print_value(std::ostream& os) const override {
+                os << _val;
+                return os;
+            }
+            virtual bool check_arg(const string_vec& args, int& argi) override;
         };
 
-        // An allowed idx_t option that sets multiple vars.
+        // An idx_t option that sets multiple vars.
         class MultiIdxOption : public OptionBase {
             std::vector<idx_t*> _vals;
 
@@ -454,31 +390,80 @@ namespace yask {
             }
 
             virtual void print_help(std::ostream& os,
-                                    int width) const;
-            virtual bool check_arg(const std::vector<std::string>& args,
-                                   int& argi);
+                                    int width) const override;
+            virtual std::ostream& print_value(std::ostream& os) const override {
+                for (size_t i = 0; i < _vals.size(); i++) {
+                    if (i > 0)
+                        os << ", ";
+                    os << *_vals[i];
+                }
+                return os;
+            }
+            virtual bool check_arg(const string_vec& args,
+                                   int& argi) override;
+        };
+
+        // A string option.
+        class StringOption : public OptionBase {
+            std::string& _val;
+
+        public:
+            StringOption(const std::string& name,
+                         const std::string& help_msg,
+                         std::string& val) :
+                OptionBase(name, help_msg), _val(val) { }
+
+            virtual void print_help(std::ostream& os,
+                                    int width) const override;
+            virtual std::ostream& print_value(std::ostream& os) const override {
+                os << _val;
+                return os;
+            }
+            virtual bool check_arg(const string_vec& args, int& argi) override;
+        };
+
+        // A list-of-strings option.
+        class StringListOption : public OptionBase {
+            std::set<std::string> _allowed_strs; // empty to allow any strings.
+            string_vec& _val;
+
+        public:
+            StringListOption(const std::string& name,
+                             const std::string& help_msg,
+                             std::set<std::string> allowed_strs,
+                             string_vec& val) :
+                OptionBase(name, help_msg),
+                _allowed_strs(allowed_strs), _val(val) { }
+
+            virtual void print_help(std::ostream& os,
+                                    int width) const override;
+            virtual std::ostream& print_value(std::ostream& os) const override {
+                int n = 0;
+                for (auto& v : _val) {
+                    if (n)
+                        os << ",";
+                    os << v;
+                    n++;
+                }
+                return os;
+            }
+            virtual bool check_arg(const string_vec& args, int& argi) override;
         };
 
     protected:
-        std::map<std::string, OptionBase*> _opts;
-        int _width;
+        std::map<std::string, OptionPtr> _opts;
+        int _width = 78;
 
     public:
 
         // Ctor.
-        CommandLineParser() : _width(78) { }
+        CommandLineParser() { }
 
         // Dtor.
-        ~CommandLineParser() {
-
-            // Delete options.
-            for (auto i : _opts) {
-                delete i.second;
-            }
-        }
+        virtual ~CommandLineParser() { }
 
         // Tokenize args from a string.
-        static std::vector<std::string> set_args(const std::string& arg_string);
+        static string_vec set_args(const std::string& arg_string);
 
         // Set help width.
         virtual void set_width(int width) {
@@ -486,19 +471,21 @@ namespace yask {
         }
 
         // Add an allowed option.
-        // Options will be deleted upon destruction.
-        virtual void add_option(OptionBase* opt) {
+        virtual void add_option(OptionPtr opt) {
             _opts[opt->get_name()] = opt;
         }
 
         // Print help info on all options.
         virtual void print_help(std::ostream& os) const;
 
+        // Print current settings of all options.
+        virtual void print_values(std::ostream& os) const;
+
         // Parse options from 'args' and set corresponding vars.
         // Recognized strings from args are consumed, and unused ones
         // remain for further processing by the application.
         virtual std::string parse_args(const std::string& pgm_name,
-                                       const std::vector<std::string>& args);
+                                       const string_vec& args);
 
         // Same as above, but splits 'arg_string' into tokens.
         virtual std::string parse_args(const std::string& pgm_name,
@@ -511,7 +498,7 @@ namespace yask {
         // and rest of argv is parsed.
         virtual std::string parse_args(int argc, char** argv) {
             std::string pgm_name = argv[0];
-            std::vector<std::string> args;
+            string_vec args;
             for (int i = 1; i < argc; i++)
                 args.push_back(argv[i]);
             return parse_args(pgm_name, args);

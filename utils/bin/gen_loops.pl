@@ -3,7 +3,7 @@
 
 ##############################################################################
 ## YASK: Yet Another Stencil Kit
-## Copyright (c) 2014-2021, Intel Corporation
+## Copyright (c) 2014-2022, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -24,7 +24,7 @@
 ## IN THE SOFTWARE.
 ##############################################################################
 
-# Purpose: Create loop code.
+# Purpose: Create area-scanning code.
 
 use strict;
 use File::Basename;
@@ -39,20 +39,34 @@ use CmdLine;
 
 $| = 1;                         # autoflush.
 
+##########
 # Globals.
 my %OPT;                        # cmd-line options.
-my @dims;                       # indices of dimensions.
-my $inputVar;                   # input var.
+my %macros;                     # macros from file.
+my $inputVar = "LOOP_INDICES";  # input var macro.
+my $outputVar = "BODY_INDICES"; # output var.
+my $loopPart = "USE_LOOP_PART_"; # macro to enable specified loop part.
+my $macroPrefix = "";           # prefix for macros.
+my $varPrefix = "";             # prefix for vars.
+my $doAlign = 1;                # generate alignment code.
+my @fixed_exprs = ("begin", "end", "stride", "tile_size");
+my @align_exprs = ("align", "align_ofs");
+my @var_exprs = ("start", "stop", "index");
+my $indent = dirname($0)."/yask_indent.sh";
 
 # loop-feature bit fields.
 my $bSerp = 0x1;                # serpentine path
 my $bSquare = 0x2;              # square_wave path
-my $bGroup = 0x4;               # group path
-my $bSimd = 0x8;                # simd prefix
+my $bTile = 0x4;                # tile path
+my $bOmpPar = 0x8;              # OpenMP parallel
+my $bManual = 0x10;             # use manual scheduling
+my $bNested = 0x20;             # use "normal" nested loops
+my $bSimd = 0x40;               # OpenMP SIMD
 
 ##########
-# Function to make names of variables based on dimension string(s).
+# Various functions to create variable references.
 
+# Create indices from args.
 # 'idx()' => "".
 # 'idx(3)' => "[3]".
 # 'idx(3,5)' => "[3][5]".
@@ -63,86 +77,98 @@ sub idx {
 # Accessors for input struct.
 # Examples if $inputVar == "block_idxs":
 # inVar() => "block_idxs".
-# inVar("foo") => "block_idxs.foo".
-# inVar("foo", 5) => "block_idxs.foo[5]".
+# inVar("foo", 5) => "FOO(5)" (using macro).
 sub inVar {
     my $vname = shift;
-    my $part = (defined $vname) ? ".$vname" : "";
-    return "$inputVar$part".idx(@_);
+    if (defined $vname) {
+        die unless scalar(@_) == 1;
+        my $em = $macroPrefix.(uc $vname);
+        return "$em(@_)";
+    }
+    return "$macroPrefix$inputVar";
 }
 
-# Accessors for local struct.
-# locVar("foo", 5) => "local_indices.foo[5]".
-sub locVar {
+# Accessors for output struct.
+# Examples if $outputVar == "local_indices":
+# outVar() => "local_indices".
+# outVar("foo", 5) => "local_indices.foo[5]".
+sub outVar {
     my $vname = shift;
-    my $part = (defined $vname) ? ".$vname" : "";
-    return "local_indices$part".idx(@_);
+    if (defined $vname) {
+        die unless scalar(@_) == 1;
+        return "$macroPrefix$outputVar.$vname".idx(@_);
+    }
+    return "$macroPrefix$outputVar";
 }
 
-# Access values in input struct.
+# Make a local var.
+sub locVar {
+    return $varPrefix . join('_', @_);
+}
+
+# Names for vars used in the generated code.
+# Arg(s) are loop dim(s).
 sub beginVar {
-    return inVar("begin", @_);
+    return locVar("begin", @_);
 }
 sub endVar {
-    return inVar("end", @_);
+    return locVar("end", @_);
 }
 sub strideVar {
-    return inVar("stride", @_);
+    return locVar("stride", @_);
 }
 sub alignVar {
-    return inVar("align", @_);
+    return locVar("align", @_);
 }
 sub alignOfsVar {
-    return inVar("align_ofs", @_);
+    return locVar("align_ofs", @_);
 }
-sub groupSizeVar {
-    return inVar("group_size", @_);
+sub tileSizeVar {
+    return locVar("tile_size", @_);
 }
-
-# These are generated scalars.
 sub adjAlignVar {
-    return join('_', 'adj_align', @_);
+    return locVar('adj_align', @_);
 }
 sub alignBeginVar {
-    return join('_', 'aligned_begin', @_);
+    return locVar('aligned_begin', @_);
 }
 sub numItersVar {
-    return join('_', 'num_iters', @_);
+    return locVar('num_iters', @_);
 }
-sub numGroupsVar {
-    return join('_', 'num_full_groups', @_);
+sub numTilesVar {
+    return locVar('num_full_tiles', @_);
 }
-sub numFullGroupItersVar {
-    return join('_', 'num_iters_in_full_group', @_);
+sub numFullTileItersVar {
+    return locVar('num_iters_in_full_tile', @_);
 }
-sub numGroupSetItersVar {
-    return scalar @_ ? join('_', 'num_iters_in_group_set', @_) :
-        'num_iters_in_full_group';
+sub numTileSetItersVar {
+    return scalar @_ ? locVar('num_iters_in_tile_set', @_) :
+        locVar('num_iters_in_full_tile');
 }
 sub indexVar {
-    return join('_', 'index', @_);
+    return locVar('index', @_);
 }
-sub groupIndexVar {
-    return join('_', 'index_of_group', @_);
+sub tileIndexVar {
+    return locVar('index_of_tile', @_);
 }
-sub groupSetOffsetVar {
-    return scalar @_ ? join('_', 'index_offset_within_group_set', @_) :
-        'index_offset_within_this_group';
+sub tileSetOffsetVar {
+    return scalar @_ ? locVar('index_offset_within_tile_set', @_) :
+        locVar('index_offset_within_this_tile');
 }
-sub groupOffsetVar {
-    return join('_', 'index_offset_within_this_group', @_);
+sub tileOffsetVar {
+    return locVar('index_offset_within_this_tile', @_);
 }
-sub numLocalGroupItersVar {
-    return join('_', 'num_iters_in_group', @_);
+sub numLocalTileItersVar {
+    return locVar('num_iters_in_tile', @_);
 }
 sub loopIndexVar {
-    return join('_', 'loop_index', @_);
+    return locVar('loop_index', @_);
 }
 sub startVar {
-    return join('_', 'start', @_);
+    return locVar('start', @_);
 }
 sub stopVar {
-    return join('_', 'stop', @_);
+    return locVar('stop', @_);
 }
 
 # return string of all non-empty args separated by commas.
@@ -159,21 +185,87 @@ sub dimStr {
     return $s;
 }
 
-# make args for a call.
-sub makeArgs {
-    my @loopDims = @_;
+# Conditionally define a macro.
+sub macroDef($$$) {
+    my $mname = shift;
+    my $margs = shift;
+    my $mdef = shift;
+
+    $mname = uc $mname;
+    $margs = (defined $margs) ? "($margs)" : "";
+    return
+        "#ifndef ${macroPrefix}$mname",
+        "#define ${macroPrefix}$mname$margs $mdef",
+        "#endif";
+}
+sub macroUndef($) {
+    my $mname = shift;
+
+    $mname = uc $mname;
+    return
+        "#ifdef ${macroPrefix}$mname",
+        "#undef ${macroPrefix}$mname",
+        "#endif";
+}
+
+# copy vars from the input.
+sub getInVars {
+    my $tiledDims = shift;      # ref to hash.
+    my @ldims = @_;
+
+    my $itype = indexType();
+    my @stmts;
+    for my $dim (@ldims) {
+
+        # Vars for input values.
+        my $bvar = beginVar($dim);
+        my $evar = endVar($dim);
+        my $svar = strideVar($dim);
+        my $tsvar = tileSizeVar($dim);
+        my $avar = alignVar($dim);
+        my $aovar = alignOfsVar($dim);
+        push @stmts,
+            "// Create input vars for dim $dim.",
+            "const $itype $bvar = ".inVar("begin", $dim).";",
+            "const $itype $evar = ".inVar("end", $dim).";",
+            "const $itype $svar = ".inVar("stride", $dim).";";
+        push @stmts,
+            "const $itype $avar = ".inVar("align", $dim).";",
+            "const $itype $aovar = ".inVar("align_ofs", $dim).";"
+            if $doAlign;
+        push @stmts,
+            "const $itype $tsvar = ".inVar("tile_size", $dim).";"
+            if defined $$tiledDims{$dim};
+    }
+    return @stmts;
+}
+
+# make macros for the body.
+sub makeOutMacros {
+    my @ldims = @_;
 
     my @stmts;
-    map {
-        push @stmts,
-            " ".locVar("start", $_)." = ".startVar($_).";",
-            " ".locVar("stop", $_)." = ".stopVar($_).";",
-            " ".locVar("index", $_)." = ".indexVar($_).";",
-            " ".locVar("num_indices", $_)." = ".numItersVar($_).";";
-    } @loopDims;
-    push @stmts,
-        " ".locVar("linear_indices")." = ".numItersVar(@loopDims).";",
-        " ".locVar("linear_index")." = ".loopIndexVar(@loopDims).";";
+    for my $expr (@var_exprs) {
+        my $base = "BODY_".uc($expr);
+        push @stmts, macroDef($base, "dim_num", "YCAT(".locVar($expr)."_, dim_num)");
+    }
+
+    return @stmts;
+}
+
+# set var for the body.
+sub setOutVars {
+    my @ldims = @_;
+
+    my $itype = indexType();
+    my @stmts;
+
+    for my $expr (@var_exprs) {
+        for my $dim (@ldims) {
+            my $macro = "${macroPrefix}BODY_".uc($expr)."($dim)";
+            push @stmts, outVar($expr, $dim)." = $macro;";
+        }
+    }
     return @stmts;
 }
 
@@ -181,21 +273,73 @@ sub makeArgs {
 # Loop-constructing functions.
 
 # return type of var needed for loop index.
-# args: dimension(s) -- currently ignored.
-sub indexType {
+sub indexType() {
     return 'idx_t';
 }
 
-# Create and init vars *before* beginning of simple or collapsed loop.
-sub addIndexVars1($$$) {
+# Adjust features.
+# Returns new set of features.
+sub adjFeatures($$$) {
+    my $loopDims = shift;       # ref to list of dimensions in loop.
+    my $features = shift;             # feature bits for path types.
+    my $loopStack = shift;      # whole stack at this point, including enclosing dims.
+
+    my $ndims = scalar @$loopDims;
+    my $outerDim = $loopDims->[0];        # outer dim of these loops.
+    my $innerDim = $loopDims->[$#$loopDims]; # inner dim of these loops.
+
+    # find enclosing dim outside of these loops if avail.
+    my $encDim;
+    map { $encDim = $loopStack->[$_]
+              if $loopStack->[$_ + 1] eq $outerDim; } 0..($#$loopStack-1);
+
+    if (($features & $bManual) && !($features & $bOmpPar)) {
+        warn "notice: manual ignored for non-OpenMP parallel loop.\n";
+        $features &= ~$bManual;    # clear bits.
+    }
+    if ($ndims < 2 && ($features & ($bSquare | $bNested))) {
+        warn "notice: square-wave and nested ignored for loop with only $ndims dim.\n";
+        $features &= ~($bSquare | $bNested);     # clear bits.
+    }
+    if ($ndims < 2 && !defined $encDim && ($features & $bSerp)) {
+        warn "notice: serpentine ignored for outer loop.\n";
+        $features &= ~$bSerp;     # clear bit.
+    }
+    
+    if ($features & $bTile) {
+
+        if ($ndims < 2) {
+            warn "notice: tiling ignored for loop with only $ndims dim.\n";
+            $features &= ~$bTile;     # clear bit.
+        }
+        die "error: serpentine not compatible with tiling.\n"
+            if $features & $bSerp;
+        die "error: square-wave not compatible with tiling.\n"
+            if $features & $bSquare;
+    }
+    if ($features & ($bManual | $bNested)) {
+        die "error: serpentine not compatible with manual or nested.\n"
+            if $features & $bSerp;
+        die "error: square-wave not compatible with manual or nested.\n"
+            if $features & $bSquare;
+        die "error: tiling not compatible with manual or nested.\n"
+            if $features & $bTile;
+    }
+    return $features;
+}
+
+# Create and init vars *before* beginning of loop(s) in given dim(s).
+# These compute loop-invariant values like number of iterations.
+sub addIndexVars1($$$$) {
     my $code = shift;           # ref to list of code lines.
-    my $loopDims = shift;       # ref to list of dimensions.
+    my $loopDims = shift;       # ref to list of dimensions in this loop.
     my $features = shift;       # bits for path types.
+    my $loopStack = shift;      # whole stack at this point, including enclosing dims.
 
     push @$code,
-        " // ** Begin scan over ".dimStr(@$loopDims).". **";
+        "// ** Begin scan over ".dimStr(@$loopDims).". **";
 
-    my $itype = indexType(@$loopDims);
+    my $itype = indexType();
 
     for my $pass (0..1) {
         for my $i (0..$#$loopDims) {
@@ -204,17 +348,21 @@ sub addIndexVars1($$$) {
 
             # Pass 0: iterations.
             if ($pass == 0) {
+
+                # Vars from the struct.
                 my $bvar = beginVar($dim);
                 my $evar = endVar($dim);
                 my $svar = strideVar($dim);
                 my $avar = alignVar($dim);
                 my $aovar = alignOfsVar($dim);
+                my $tsvar = tileSizeVar($dim);
+
+                # New vars.
                 my $aavar = adjAlignVar($dim);
                 my $abvar = alignBeginVar($dim);
                 my $nvar = numItersVar($dim);
-                my $ntvar = numGroupsVar($dim);
-                my $tsvar = groupSizeVar($dim);
-                my $ntivar = numFullGroupItersVar($dim);
+                my $ntvar = numTilesVar($dim);
+                my $ntivar = numFullTileItersVar($dim);
 
                 # Example alignment:
                 # bvar = 20.
@@ -225,30 +373,37 @@ sub addIndexVars1($$$) {
                 # aavar = min(4, 8) = 4.
                 # abvar = round_down_flr(20 - 15, 4) + 15 = 4 + 15 = 19.
 
-                push @$code,
-                    " // Alignment must be less than or equal to stride size.",
-                    " const $itype $aavar = std::min($avar, $svar);",
-                    " // Aligned beginning point such that ($bvar - $svar) < $abvar <= $bvar.",
-                    " const $itype $abvar = yask::round_down_flr($bvar - $aovar, $aavar) + $aovar;",
-                    " // Number of iterations to get from $abvar to (but not including) $evar, striding by $svar.".
-                    " This value is rounded up because the last iteration may cover fewer than $svar strides.",
-                    " const $itype $nvar = yask::ceil_idiv_flr($evar - $abvar, $svar);";
-
-                # For grouped loops.
-                if ($features & $bGroup) {
-
-                    # loop iterations within one group.
+                if ($doAlign) {
                     push @$code,
-                        " // Number of iterations in one full group in dimension $dim.".
-                        " This value is rounded up, effectively increasing the group size if needed".
-                        " to a multiple of $svar.".
-                        " A group is considered 'full' if it has the max number of iterations.",
-                        " const $itype $ntivar = std::min(yask::ceil_idiv_flr($tsvar, $svar), $nvar);";
+                        "// Alignment must be less than or equal to stride size.",
+                        "const $itype $aavar = std::min($avar, $svar);",
+                        "// Aligned beginning point such that ($bvar - $svar) < $abvar <= $bvar.",
+                        "const $itype $abvar = yask::round_down_flr($bvar - $aovar, $aavar) + $aovar;",
+                        "// Number of iterations to get from $abvar to (but not including) $evar, striding by $svar.".
+                        "This value is rounded up because the last iteration may cover fewer than $svar strides.",
+                        "const $itype $nvar = yask::ceil_idiv_flr($evar - $abvar, $svar);";
+                } else {
+                    push @$code,
+                        "// Number of iterations to get from $bvar to (but not including) $evar, striding by $svar.".
+                        "This value is rounded up because the last iteration may cover fewer than $svar strides.",
+                        "const $itype $nvar = yask::ceil_idiv_flr($evar - $bvar, $svar);";
+                }
 
-                    # number of full groups.
+                # For tiled loops.
+                if ($features & $bTile) {
+
+                    # loop iterations within one tile.
+                    push @$code,
+                        "// Number of iterations in one full tile in dimension $dim.".
+                        "This value is rounded up, effectively increasing the tile size if needed".
+                        "to a multiple of $svar.".
+                        "A tile is considered 'full' if it has the max number of iterations.",
+                        "const $itype $ntivar = std::min(yask::ceil_idiv_flr($tsvar, $svar), $nvar);";
+
+                    # number of full tiles.
                     push @$code, 
-                        " // Number of full groups in dimension $dim.",
-                        " const $itype $ntvar = $ntivar ? $nvar / $ntivar : 0;";
+                        "// Number of full tiles in dimension $dim.",
+                        "const $itype $ntvar = $ntivar ? $nvar / $ntivar : 0;";
                 }
             }
 
@@ -261,8 +416,8 @@ sub addIndexVars1($$$) {
                 my $snvar = numItersVar(@subDims);
                 my $snval = join(' * ', map { numItersVar($_) } @subDims);
                 push @$code,
-                    " // Number of iterations in $loopStr",
-                    " const $itype $snvar = $snval;";
+                    "// Number of iterations in $loopStr",
+                    "const $itype $snvar = $snval;";
             }
         }
     }
@@ -273,35 +428,30 @@ sub addIndexVars2($$$$) {
     my $code = shift;           # ref to list of code lines.
     my $loopDims = shift;       # ref to list of dimensions in loop.
     my $features = shift;       # bits for path types.
-    my $loopStack = shift;      # whole stack, including enclosing dims.
+    my $loopStack = shift;      # whole stack at this point, including enclosing dims.
 
-    my $itype = indexType(@$loopDims);
-    my $civar = loopIndexVar(@$loopDims); # collapsed index var; everything based on this.
+    my $itype = indexType();
+    my $civar = loopIndexVar(@$loopDims); # multi-dim index var; everything based on this.
+    my $ndims = scalar @$loopDims;
     my $outerDim = $loopDims->[0];        # outer dim of these loops.
     my $innerDim = $loopDims->[$#$loopDims]; # inner dim of these loops.
 
-    # Grouping.
-    if ($features & $bGroup) {
-
-        die "error: serpentine not compatible with grouping.\n"
-            if $features & $bSerp;
-        die "error: square-wave not compatible with grouping.\n"
-            if $features & $bSquare;
-
-        my $ndims = scalar @$loopDims;
+    # Tiling.
+    if ($features & $bTile) {
 
         # declare local size vars.
-        push @$code, " // Working vars for iterations in groups.".
-            " These are initialized to full-group counts and then".
-            " reduced if we are in a partial group.";
+        push @$code,
+            "// Working vars for iterations in tiles.".
+            "These are initialized to full-tile counts and then".
+            "reduced if/when in a partial tile.";
         for my $i (0 .. $ndims-1) {
             my $dim = $loopDims->[$i];
-            my $ltvar = numLocalGroupItersVar($dim);
-            my $ltval = numFullGroupItersVar($dim);
-            push @$code, " $itype $ltvar = $ltval;";
+            my $ltvar = numLocalTileItersVar($dim);
+            my $ltval = numFullTileItersVar($dim);
+            push @$code, "$itype $ltvar = $ltval;";
         }
 
-        # calculate group indices and sizes and 1D offsets within groups.
+        # calculate tile indices and sizes and 1D offsets within tiles.
         my $prevOvar = $civar;  # previous offset.
         for my $i (0 .. $ndims-1) {
 
@@ -318,84 +468,84 @@ sub addIndexVars2($$$$) {
             my @inDims = @$loopDims[$i + 1 .. $ndims - 1];
             my $inStr = dimStr(@inDims);
 
-            # Size of group set.
-            my $tgvar = numGroupSetItersVar(@inDims);
+            # Size of tile set.
+            my $tgvar = numTileSetItersVar(@inDims);
             my $tgval = join(' * ', 
-                             (map { numLocalGroupItersVar($_) } @dims),
+                             (map { numLocalTileItersVar($_) } @dims),
                              (map { numItersVar($_) } @inDims));
             my $tgStr = @inDims ?
-                "the set of groups across $inStr" : "this group";
+                "the set of tiles across $inStr" : "this tile";
             push @$code,
-                " // Number of iterations in $tgStr.",
-                " $itype $tgvar = $tgval;";
+                "// Number of iterations in $tgStr.",
+                "$itype $tgvar = $tgval;";
 
-            # Index of this group in this dim.
-            my $tivar = groupIndexVar($dim);
+            # Index of this tile in this dim.
+            my $tivar = tileIndexVar($dim);
             my $tival = "$tgvar ? $prevOvar / $tgvar : 0";
             push @$code,
-                " // Index of this group in dimension $dim.",
-                " $itype $tivar = $tival;";
+                "// Index of this tile in dimension $dim.",
+                "$itype $tivar = $tival;";
 
-            # 1D offset within group set.
-            my $ovar = groupSetOffsetVar(@inDims);
+            # 1D offset within tile set.
+            my $ovar = tileSetOffsetVar(@inDims);
             my $oval = "$prevOvar % $tgvar";
             push @$code,
-                " // Linear offset within $tgStr.",
-                " $itype $ovar = $oval;";
+                "// Linear offset within $tgStr.",
+                "$itype $ovar = $oval;";
 
-            # Size of this group in this dim.
-            my $ltvar = numLocalGroupItersVar($dim);
+            # Size of this tile in this dim.
+            my $ltvar = numLocalTileItersVar($dim);
             my $ltval = numItersVar($dim).
-                " - (".numGroupsVar($dim)." * ".numFullGroupItersVar($dim).")";
+                " - (".numTilesVar($dim)." * ".numFullTileItersVar($dim).")";
             push @$code,
-                " // Adjust number of iterations in this group in dimension $dim.",
-                " if ($tivar >= ".numGroupsVar($dim).")".
+                "// Adjust number of iterations in this tile in dimension $dim.",
+                "if ($tivar >= ".numTilesVar($dim).")".
                 "  $ltvar = $ltval;";
 
             # for next dim.
             $prevOvar = $ovar;
         }
 
-        # Calculate nD indices within group and overall.
-        # TODO: allow different paths *within* group.
+        # Calculate nD indices within tile and overall.
+        # TODO: allow different paths *within* tile.
         for my $i (0 .. $ndims-1) {
             my $dim = $loopDims->[$i];
-            my $tivar = groupIndexVar($dim);
-            my $ovar = groupSetOffsetVar(); # last one calculated above.
+            my $tivar = tileIndexVar($dim);
+            my $ovar = tileSetOffsetVar(); # last one calculated above.
 
             # dims after (inside of) $i (empty for inner dim)
             my @inDims = @$loopDims[$i + 1 .. $ndims - 1];
 
-            # Determine offset within this group.
-            my $dovar = groupOffsetVar($dim);
+            # Determine offset within this tile.
+            my $dovar = tileOffsetVar($dim);
             my $doval = $ovar;
 
             # divisor of index is product of sizes of remaining nested dimensions.
             if (@inDims) {
-                my $subVal = join(' * ', map { numLocalGroupItersVar($_) } @inDims);
+                my $subVal = join(' * ', map { numLocalTileItersVar($_) } @inDims);
                 $doval .= " / ($subVal)";
             }
 
             # mod by size of this dimension (not needed for outer-most dim).
             if ($i > 0) {
-                $doval = "($doval) % ".numLocalGroupItersVar($dim);
+                $doval = "($doval) % ".numLocalTileItersVar($dim);
             }
 
             # output offset in this dim.
             push @$code,
-                " // Offset within this group in dimension $dim.",
-                " $itype $dovar = $doval;";
+                "// Offset within this tile in dimension $dim.",
+                "$itype $dovar = $doval;";
 
             # final index in this dim.
             my $divar = indexVar($dim);
-            my $dival = numFullGroupItersVar($dim)." * $tivar + $dovar";
+            my $dival = numFullTileItersVar($dim)." * $tivar + $dovar";
             push @$code,
-                " // Zero-based, unit-stride index for ".dimStr($dim).".",
-                " $itype $divar = $dival;";
+                "// Zero-based, unit-stride index for ".dimStr($dim).".",
+                "$itype $divar = $dival;";
         }
     }
 
-    # No grouping.
+    # No tiling.
     else {
 
         # find enclosing dim outside of these loops if avail.
@@ -439,27 +589,27 @@ sub addIndexVars2($$$$) {
 
             # output $divar.
             push @$code,
-                " // Zero-based, unit-stride index for ".dimStr($dim).".",
-                " idx_t $divar = $dival;";
+                "// Zero-based, unit-stride index for ".dimStr($dim).".",
+                "$itype $divar = $dival;";
 
             # apply square-wave to inner 2 dimensions if requested.
-            my $isInnerSquare = @$loopDims >=2 && $isInner && ($features & $bSquare);
+            my $isInnerSquare = $ndims >=2 && $isInner && ($features & $bSquare);
             if ($isInnerSquare) {
 
                 my $divar2 = "index_x2";
-                my $avar = "lsb";
+                my $bvar = "lsb";
                 push @$code, 
-                    " // Modify $prevDivar and $divar for 'square_wave' path.",
-                    " if (($innerNvar > 1) && ($prevDivar/2 < $prevNvar/2)) {",
+                    "// Modify $prevDivar and $divar for 'square_wave' path.",
+                    "if (($innerNvar > 1) && ($prevDivar/2 < $prevNvar/2)) {",
                     "  // Compute extended index over 2 iterations of $prevDivar.",
-                    "  idx_t $divar2 = $divar + ($nvar * ($prevDivar & 1));",
+                    "  $itype $divar2 = $divar + ($nvar * ($prevDivar & 1));",
                     "  // Select $divar from 0,0,1,1,2,2,... sequence",
                     "  $divar = $divar2 / 2;",
                     "  // Select $prevDivar adjustment value from 0,1,1,0,0,1,1, ... sequence.",
-                    "  idx_t $avar = ($divar2 & 0x1) ^ (($divar2 & 0x2) >> 1);",
+                    "  $itype $bvar = ($divar2 & 0x1) ^ (($divar2 & 0x2) >> 1);",
                     "  // Adjust $prevDivar +/-1 by replacing bit 0.",
-                    "  $prevDivar = ($prevDivar & (idx_t)-2) | $avar;",
-                    " } // square-wave.";
+                    "  $prevDivar = ($prevDivar & $itype(-2)) | $bvar;",
+                    "} // square-wave.";
             }
 
             # reverse order of every-other traversal if requested.
@@ -467,12 +617,12 @@ sub addIndexVars2($$$$) {
             if (($features & $bSerp) && defined $prevDivar) {
                 if ($isInnerSquare) {
                     push @$code,
-                        " // Reverse direction of $divar after every-other iteration of $prevDivar for 'square_wave serpentine' path.",
-                        " if (($prevDivar & 2) == 2) $divar = $nvar - $divar - 1;";
+                        "// Reverse direction of $divar after every-other iteration of $prevDivar for 'square_wave serpentine' path.",
+                        "if (($prevDivar & 2) == 2) $divar = $nvar - $divar - 1;";
                 } else {
                     push @$code,
-                        " // Reverse direction of $divar after every iteration of $prevDivar for  'serpentine' path.",
-                        " if (($prevDivar & 1) == 1) $divar = $nvar - $divar - 1;";
+                        "// Reverse direction of $divar after every iteration of $prevDivar for  'serpentine' path.",
+                        "if (($prevDivar & 1) == 1) $divar = $nvar - $divar - 1;";
                 }
             }
 
@@ -481,6 +631,16 @@ sub addIndexVars2($$$$) {
             $prevNvar = $nvar;
         }
     }
+}
+
+# Add start/stop variables *inside* the loop.
+sub addIndexVars3($$$$) {
+    my $code = shift;           # ref to list of code lines.
+    my $loopDims = shift;       # ref to list of dimensions in loop.
+    my $features = shift;       # bits for path types.
+    my $loopStack = shift;      # whole stack at this point, including enclosing dims.
+
+    my $itype = indexType();
 
     # start and stop vars based on individual begin, end, stride, and index vars.
     for my $dim (@$loopDims) {
@@ -491,38 +651,114 @@ sub addIndexVars2($$$$) {
         my $abvar = alignBeginVar($dim);
         my $evar = endVar($dim);
         my $svar = strideVar($dim);
-        push @$code,
-            " // This value of $divar covers ".dimStr($dim)." from $stvar to (but not including) $spvar.",
-            " idx_t $stvar = std::max($abvar + ($divar * $svar), $bvar);",
-            " idx_t $spvar = std::min($abvar + (($divar+1) * $svar), $evar);";
+        if ($doAlign) {
+            push @$code,
+                "// This value of $divar covers ".dimStr($dim)." from $stvar to (but not including) $spvar.",
+                "$itype $stvar = std::max($abvar + ($divar * $svar), $bvar);",
+                "$itype $spvar = std::min($abvar + (($divar+1) * $svar), $evar);";
+        } else {
+            push @$code,
+                "// This value of $divar covers ".dimStr($dim)." from $stvar to (but not including) $spvar.",
+                "$itype $stvar = $bvar + ($divar * $svar);",
+                "$itype $spvar = std::min($bvar + (($divar+1) * $svar), $evar);";
+        }
     }
 }
 
-# start simple or collapsed loop body.
+# Start of loop(s) over given dim(s).
+# Every loop starts with 2 "{"'s to make ending easy.
+# TODO: keep track of number of "{"'s used.
 sub beginLoop($$$$$$$) {
-    my $code = shift;           # ref to list of code lines.
-    my $loopDims = shift;       # ref to list of dimensions.
-    my $prefix = shift;         # ref to list of prefix code. May be undef.
-    my $beginVal = shift;       # beginning of loop.
-    my $endVal = shift;         # end of loop (undef to use default).
+    my $code = shift;           # ref to list of code lines to be added to.
+    my $loopDims = shift;       # ref to list of dimensions for this loop.
     my $features = shift;       # bits for path types.
-    my $loopStack = shift;      # whole stack, including enclosing dims.
+    my $loopStack = shift;      # whole stack of dims so far, including enclosing dims.
+    my $prefix = shift;         # ref to list of prefix code. May be undef.
+    my $beginVal = shift;       # beginning of loop (undef for default).
+    my $endVal = shift;         # end of loop (undef for default).
 
+    $beginVal = 0 if !defined $beginVal;
     $endVal = numItersVar(@$loopDims) if !defined $endVal;
-    my $itype = indexType(@$loopDims);
+    $features = adjFeatures($loopDims, $features, $loopStack);
+    my $itype = indexType();
     my $ivar = loopIndexVar(@$loopDims);
-    push @$code, @$prefix if defined $prefix;
-    push @$code, " for ($itype $ivar = $beginVal; $ivar < $endVal; $ivar++) {";
+    my $ndims = scalar @$loopDims;
 
-    # add inner index vars.
-    addIndexVars2($code, $loopDims, $features, $loopStack);
+    # Add pre-loop index vars.
+    addIndexVars1($code, $loopDims, $features, $loopStack);
+
+    # Start "normal" nested loops.
+    if ($features & $bNested) {
+        push @$code, @$prefix if defined $prefix;
+        for my $i (0 .. $ndims-1) {
+            my $dim = $loopDims->[$i];
+            my $nvar = numItersVar($dim);
+            my $divar = indexVar($dim);
+            push @$code,
+                "for ($itype $divar = 0; $divar < $nvar; $divar++)";
+        }
+        push @$code, "{ {";
+    }
+
+    # Start a parallel region if using manual distribution.
+    elsif ($features & $bManual) {
+        push @$code,
+            "// Start parallel section.", @$prefix
+            if defined $prefix;
+        push @$code,
+            "{",
+            "// Number of threads in this parallel section.",
+            "$itype nthreads = ${macroPrefix}OMP_NUM_THREADS;",
+            "// Unique 0-based thread index in this parallel section.",
+            "$itype thread_num = ${macroPrefix}OMP_THREAD_NUM;",
+            "host_assert(thread_num < nthreads);",
+            "// Begin and end indices for this thread.",
+            "$itype thread_begin = $beginVal + ".
+            "yask::div_equally_cumu_size_n($endVal - $beginVal, nthreads, thread_num - 1);",
+            "$itype thread_end = $beginVal + ".
+            "yask::div_equally_cumu_size_n($endVal - $beginVal, nthreads, thread_num);",
+            "// Starting index.",
+            "$itype $ivar = thread_begin;";
+
+        # Add initial-loop index vars for this thread.
+        addIndexVars2($code, $loopDims, $features, $loopStack);
+
+        # Add sequential loops for this thread thread.
+        # TODO: use one loop and increment-and-wrap-around code.
+        push @$code,
+            "\n // Loop through the ranges of $ndims dim(s) in this thread.";
+        for my $i (0 .. $ndims-1) {
+            my $dim = $loopDims->[$i];
+            my $nvar = numItersVar($dim);
+            my $divar = indexVar($dim);
+            push @$code,
+                "for (; $divar < $nvar && $ivar < thread_end; $divar++, ".
+                ($i < $ndims-1 ? indexVar($loopDims->[$i+1])."=0" : "$ivar++").
+                ")";
+        }
+        push @$code, " {";
+    }
+    
+    # Start manually-flattened loop.
+    else {
+        push @$code, @$prefix if defined $prefix;
+        push @$code,
+            "for ($itype $ivar = $beginVal; $ivar < $endVal; $ivar++) { {";
+        
+        # Add inner-loop index vars for this iteration.
+        addIndexVars2($code, $loopDims, $features, $loopStack);
+    }
+
+    # Add start/stop vars for this iteration.
+    addIndexVars3($code, $loopDims, $features, $loopStack);
 }
 
-# end simple or collapsed loop body.
+# End loops.
+# Every loop ends with 2 "{"'s.
 sub endLoop($) {
     my $code = shift;           # ref to list of code lines.
 
-    push @$code, " }";
+    push @$code, "} }";
 }
 
 ##########
@@ -531,8 +767,9 @@ sub endLoop($) {
 # Split a string into tokens, ignoring whitespace.
 sub tokenize($) {
     my $str = shift;
-    my @toks;
 
+    # Find tokens.
+    my @toks;
     while (length($str)) {
 
         # default is 1 char.
@@ -552,7 +789,7 @@ sub tokenize($) {
         my $tok = substr($str, 0, $len, '');
 
         # keep unless WS.
-        push @toks, $tok unless $tok =~ /^\s$/;
+        push @toks, $tok unless $tok =~ /^\s+$/;
     }
     return @toks;
 }
@@ -606,9 +843,8 @@ sub getNextArg($$) {
   my $toks = shift;             # ref to token array.
   my $ti = shift;               # ref to token index (starting at paren).
 
-  my $N = scalar(@dims);
   while (1) {
-    my $tok = checkToken($toks->[$$ti++], '\w+|N[-+]|\,|\.+|\)', 1);
+    my $tok = checkToken($toks->[$$ti++], '\w+|\,|\.+|\)', 1);
 
     # comma (ignore).
     if ($tok eq ',') {
@@ -621,18 +857,6 @@ sub getNextArg($$) {
 
     # actual token.
     else {
-
-        # Handle, e.g., 'N+1', 'N-2'.
-        if ($tok eq 'N') {
-            my $oper = checkToken($toks->[$$ti++], '[-+]', 1);
-            my $tok2 = checkToken($toks->[$$ti++], '\d+', 1);
-            if ($oper eq '+') {
-                $tok = $N + $tok2;
-            } else {
-                $tok = $N - $tok2;
-            }
-        }
-
         return $tok;
     }
   }
@@ -654,22 +878,35 @@ sub getArgs($$) {
         }
 
         # Handle '..'.
-        elsif ($arg =~ /^\.+$/) {
+        elsif ($arg =~ /^\.\.+$/) {
             die "Error: missing token before '$arg'.\n"
                 if !defined $prevArg;
             die "Error: non-numerical token before '$arg'.\n"
-                if $prevArg !~ /^\d+$/;
+                if $prevArg !~ /^[-]?\d+$/;
+            pop @args;
             my $arg2 = getNextArg($toks, $ti);
             die "Error: missing token after '$arg'.\n"
                 if !defined $arg2;
             die "Error: non-numerical token after '$arg'.\n"
-                if $arg2 !~ /^\d+$/;
-            for my $i ($prevArg+1 .. $arg2) {
-                push @args, $i;
+                if $arg2 !~ /^[-]?\d+$/;
+            if ($prevArg == $arg2) {
+                push @args, $arg2;
+            }
+            elsif ($prevArg < $arg2) {
+                for my $i ($prevArg .. $arg2) {
+                    push @args, $i;
+                }
+            }
+            else {
+                # Something like 2..1, so return empty list.
+                # TODO: add an operator to allow reverse ordering.
             }
         }
 
+        # Should be a number.
         else {
+            die "Error: non-numerical token '$arg'.\n"
+                if $arg !~ /^[-]?\d+$/;
             push @args, $arg;
             $prevArg = $arg;
         }
@@ -677,64 +914,74 @@ sub getArgs($$) {
     return @args;
 }
 
+# Generate a pragma w/given text.
+sub pragma($) {
+    my $codeString = shift;
+    return (length($codeString) > 0) ?
+        "_Pragma(\"$codeString\")" : "";
+}
+
 # Process the loop-code string.
 # This is where most of the work is done.
 sub processCode($) {
     my $codeString = shift;
 
-    my @toks = tokenize($codeString);
-    ##print join "\n", @toks;
+    # vars across loops.
+    my $partNum = 0;            # macro-part counter.
+    my %dims;                   # all dims seen.
+    my %tiledDims;              # dims needing tiles.
+    my @code;                   # code to output.
 
-    # vars to track loops.
+    # vars to track one loop.
     # set at beginning of loop() statements.
     my @loopStack;              # current nesting of dimensions.
     my @loopCounts;             # number of dimensions in each loop.
     my @loopDims;               # dimension(s) of current loop.
-    my $curInnerDim;            # iteration dimension of inner loop (undef if not in inner loop).
 
     # modifiers before loop() statements.
-    my @loopPrefix;             # string(s) to put before loop body.
     my $features = 0;           # bits for loop features.
 
-    # lists of code parts to be output.
-    # set at call() statements.
-    my @callStmts;              # calculation statements.
+    # Subst macros.
+    while (my ($key, $value) = each (%macros)) {
+        $codeString =~ s/\b$key\b/$value/g;
+    }
 
-    # Lines of code to output.
-    my @code;
-
-    # Front matter.
-    push @code,
-        "#ifndef OMP_PRAGMA",
-        "#define OMP_PRAGMA _Pragma(\"$OPT{ompConstruct}\")",
-        "#endif",
-        "// 'ScanIndices $inputVar' must be set before the following code.",
-        "{";
-    
-    # loop thru all the tokens ni the input.
+    # loop thru all the tokens in the input.
+    my @toks = tokenize($codeString);
     for (my $ti = 0; $ti <= $#toks; ) {
         my $tok = checkToken($toks[$ti++], '.*', 1);
 
-        # use OpenMP on next loop.
-        if (lc $tok eq 'omp') {
-
-            push @loopPrefix,
-                " // Distribute iterations among OpenMP threads.", 
-                " OMP_PRAGMA";
-            print "info: using OpenMP on following loop.\n";
-        }
-
         # generate simd in next loop.
-        elsif (lc $tok eq 'simd') {
+        if (lc $tok eq 'simd') {
 
-            push @loopPrefix, '_Pragma("simd")';
             $features |= $bSimd;
             print "info: generating SIMD in following loop.\n";
         }
 
-        # use grouped path in next loop if possible.
-        elsif (lc $tok eq 'grouped') {
-            $features |= $bGroup;
+        # use OpenMP on next loop.
+        elsif (lc $tok eq 'omp') {
+
+            $features |= $bOmpPar;
+            print "info: using OpenMP on following loop(s).\n";
+        }
+
+        # generate manual-scheduling optimizations in next loop.
+        elsif (lc $tok eq 'manual') {
+
+            $features |= $bManual;
+            print "info: using manual-scheduling optimizations.\n";
+        }
+
+        # generate nested loops.
+        elsif (lc $tok eq 'nested') {
+
+            $features |= $bNested;
+            print "info: using traditional nested loops.\n";
+        }
+
+        # use tiled path in next loop if possible.
+        elsif (lc $tok eq 'tiled') {
+            $features |= $bTile;
         }
         
         # use serpentine path in next loop if possible.
@@ -747,141 +994,128 @@ sub processCode($) {
             $features |= $bSquare;
         }
         
-        # beginning of a loop.
-        # also eats the args in parens and the following '{'.
+        # Beginning of a loop.
+        # Also eats the args in parens and the following '{'.
         elsif (lc $tok eq 'loop') {
 
-            # get loop dimension(s).
+            # Get loop dimension(s).
             checkToken($toks[$ti++], '\(', 1);
-            @loopDims = getArgs(\@toks, \$ti);
-            die "error: no args for '$tok'.\n" if @loopDims == 0;
+            @loopDims = getArgs(\@toks, \$ti);  # might be empty.
             checkToken($toks[$ti++], '\{', 1); # eat the '{'.
+            my $ndims = scalar(@loopDims);     # num dims in this loop.
 
-            push @loopStack, @loopDims;          # all dims including outer loops.
-            push @loopCounts, scalar(@loopDims); # number of dims in this loop.
-
-            # check for existence of all vars.
+            # Check index consistency.
             for my $ld (@loopDims) {
-                die "Error: loop variable '$ld' not in ".dimStr(@dims).".\n"
-                    if !grep($_ eq $ld, @dims);
+                $dims{$ld} = 1;
+                $tiledDims{$ld} = 1 if ($features & $bTile);
+                for my $ls (@loopStack) {
+                    die "Error: loop variable '$ld' already used.\n"
+                        if $ld == $ls;
+                }
             }
+
+            push @loopStack, @loopDims; # all dims so far.
+            push @loopCounts, $ndims; # number of dims in each loop.
+            my @loopPrefix;     # string(s) to put before loop body.
+
+            # In inner loop?
+            my $is_inner = $ndims && isInInner(\@toks, \$ti);
+            push @loopPrefix, "${macroPrefix}INNER_LOOP_PREFIX" if $is_inner;
+
+            # Add OMP pragma(s).
+            my $is_omp_nested = 0;
+            if ($features & $bOmpPar) {
+                if (($features & $bNested) && $ndims) {
+                    push @code, 
+                        macroDef('OMP_NESTED_PRAGMA', undef, pragma("$OPT{omp} collapse($ndims)"));
+                    push @loopPrefix, "${macroPrefix}OMP_NESTED_PRAGMA";
+                    $is_omp_nested = 1;
+                } else {
+                    push @loopPrefix, "${macroPrefix}OMP_PRAGMA";
+                }
+            }
+            if ($features & $bSimd) {
+                push @loopPrefix, '${macroPrefix}OMP_SIMD';
+            }
+                
+            # Start the loop unless there are no indices.
+            if ($ndims) {
+                print "info: generating scan over ".dimStr(@loopDims)."...\n";
+
+                # Start the loop.
+                beginLoop(\@code, \@loopDims, $features, \@loopStack, \@loopPrefix, undef, undef);
+
+                # Inner-loop-specific code.
+                if ($is_inner) {
+
+                    # Start-stop indices for body.
+                    push @code,
+                        "// Indices for loop body.",
+                        makeOutMacros(@loopStack),
+                        "#ifdef ".outVar(),
+                        "#ifndef ".inVar(),
+                        "#error Cannot create ".outVar()." without ".inVar(),
+                        "#endif";
+                    if ($features & $bOmpPar) {
+                        
+                        # Make a new var so it will become OMP private.
+                        push @code,
+                            "ScanIndices ".outVar()."(false);",
+                            outVar()." = ".inVar().";",
+                            setOutVars(@loopStack);
+                    } else {
+                        
+                        # Just a reference if no OMP.
+                        push @code,
+                            "ScanIndices& ".outVar()." = ".inVar().";",
+                            setOutVars(@loopStack);
+                    }
+                    push @code, "#endif // ".outVar();
+                }
+
+            } else {
+
+                # Dummy loop needed when there are no indices in the loop.
+                # Needed to get nesting and other assumptions right.
+                print "info: generating dummy loop for empty $tok args...\n";
+                my $ivar = "dummy" . scalar(@loopCounts);
+                push @code,
+                    "// Dummy loop.",
+                    @loopPrefix,
+                    "for (int $ivar = 0; $ivar < 1; $ivar++) { {";
+            }
+
+            # Remove temp pragma.
+            push @code, macroUndef('OMP_NESTED_PRAGMA') if $is_omp_nested;
             
-            # set inner dim if applicable.
-            undef $curInnerDim;
-            if (isInInner(\@toks, \$ti)) {
-                $curInnerDim = $loopDims[$#loopDims];
-            }
-
-            # print more info.
-            print "info: generating scan over ".dimStr(@loopDims)."...\n";
-
-            # add initial code for index vars, but don't start loop body yet.
-            addIndexVars1(\@code, \@loopDims, $features);
+            # Macro break for inserting code: end one and start next one.
+            push @code,
+                macroUndef($loopPart.$partNum),
+                "#endif // Part $partNum.\n";
+            $partNum++;
+            push @code,
+                "// Enable part $loopPart by defining the following macro.",
+                "#ifdef ${macroPrefix}$loopPart$partNum\n";
             
-            # if *not* the inner loop, start the loop body.
-            # if it is the inner loop, we might need more than one loop body, so
-            # it will not be generated until the '}' is seen.
-            if (!defined $curInnerDim) {
-                beginLoop(\@code, \@loopDims, \@loopPrefix, 0, undef, $features, \@loopStack);
-
-                # clear data for this loop.
-                undef @loopDims;
-                undef @loopPrefix;
-                $features = 0;
-            }
+            # clear data for this loop so we'll be ready for a nested loop.
+            undef @loopDims;
+            undef @loopPrefix;
+            $features = 0;
         }
 
-        # Function(s) to call.
-        # Set @*Stmts* vars.
-        elsif (lc $tok eq 'call') {
-
-            die "error: '$tok' attempted outside of inner loop.\n"
-                if !defined $curInnerDim;
-
-            # Process funcs (args to call).
-            checkToken($toks[$ti++], '\(', 1);
-            my $ncall = 0;
-            while (1) {
-                my $arg = getNextArg(\@toks, \$ti);
-                last if !defined($arg);
-                $ncall++;
-
-                # standard args to functions.
-                my $callArgs = $OPT{comArgs};
-
-                # get optional args from input.
-                if (checkToken($toks[$ti], '\(', 0)) {
-                    $ti++;
-                    my @oargs = getArgs(\@toks, \$ti);
-                    $callArgs = joinArgs($callArgs, @oargs) if (@oargs);
-                }
-                
-                # Code for calls.
-                # e.g., prefix_fn(...);
-                push @callStmts, makeArgs(@loopStack)
-                    if $ncall == 1;
-                push @callStmts,
-                    "  $OPT{callPrefix}$arg(".
-                    joinArgs($callArgs, locVar()). ");";
-
-            }                   # args
-        }                       # call
-
         # End of loop.
-        # This is where most of @code is created for inner loops.
         elsif ($tok eq '}') {
-            die "error: attempt to end loop w/o beginning\n" if !@loopStack;
-
-            # not inner loop?
-            # just need to end it.
-            if (!defined $curInnerDim) {
-
-                endLoop(\@code);
-            }
-
-            # inner loop.
-            # for each part of loop, need to
-            # - start it,
-            # - add to @code,
-            # - end it.
-            else {
-                my $beginVal = 0;
-                my $endVal = numItersVar(@loopDims);
-                my $comment = " // Inner loop.";
-
-                # beginning of loop.
-                push @code, $comment;
-                push @code, $OPT{innerMod};
-                beginLoop(\@code, \@loopDims, \@loopPrefix, 
-                          $beginVal, $endVal, $features, \@loopStack);
-
-                # Indices to pass to call.
-                push @code, 
-                    " // Local copy of indices for function calls.",
-                    " ScanIndices ".locVar()."($inputVar);";
-
-                # loop body.
-                push @code, @callStmts;
-
-                # end of loop.
-                endLoop(\@code);
-
-                # clear code buffers.
-                undef @callStmts;
-
-                # clear other data for this loop.
-                undef $curInnerDim;
-                undef @loopDims;
-                undef @loopPrefix;
-                $features = 0;
-            }                   # inner loop.
+            die "error: attempt to end loop w/o beginning\n" if !@loopCounts;
 
             # pop stacks.
-            my $ndims = pop @loopCounts;
+            my $ndims = pop @loopCounts; # How many indices in this loop?
             for my $i (1..$ndims) {
                 my $sdim = pop @loopStack;
-                #push @code, " // End of $sdim loop.";
+                push @code, "// End of scan over dim $sdim.";
             }
+
+            # Emit code.
+            endLoop(\@code);
         }                       # end of a loop.
 
         # separator (ignore).
@@ -893,57 +1127,79 @@ sub processCode($) {
         }
 
         else {
-            die "error: unrecognized token '$tok'\n";
+            die "error: unrecognized or unexpected token '$tok'\n";
         }
     }                           # token-handling loop.
 
     die "error: ".(scalar @loopStack)." loop(s) not closed.\n"
         if @loopStack;
 
+    # Sorted list of dims scanned.
+    my @dims = sort { $a <=> $b } keys %dims;
+    
+    # Front matter.
+    my @fcode;
+    push @fcode,
+        "// Enable part 0 by defining the following macro.",
+        "#ifdef ${macroPrefix}${loopPart}0\n",
+        "// These macros must be re-defined for each generated loop-nest.",
+        macroDef('SIMD_PRAGMA', undef, pragma($OPT{simd})),
+        macroDef('INNER_LOOP_PREFIX', undef, pragma($OPT{inner})),
+        macroDef('OMP_PRAGMA', undef, pragma($OPT{omp})),
+        macroDef('OMP_NUM_THREADS', undef, 'omp_get_num_threads()'),
+        macroDef('OMP_THREAD_NUM', undef, 'omp_get_thread_num()'),
+        "// Define ".inVar()." to initialize loop from a ScanIndices struct with that name.",
+        "// Any element of the struct may be overridden by defining the corresponding macro.",
+        "#ifdef ".inVar();
+    for my $expr (@fixed_exprs) {
+        push @fcode, macroDef($expr, "dim_num", inVar().'.'.$expr.'[dim_num]');
+    }
+    push @fcode,
+        "#endif //".inVar(),
+        "{",
+        getInVars(\%tiledDims, @dims);
+    unshift @code, @fcode;
+    
     # Back matter.
     push @code,
         "}",
-        "#undef OMP_PRAGMA",
-        "// End of generated code.";
-    
-    # indent program avail?
-    my $indent = 'indent';
-    if (!defined which($indent)) {
-        $indent = 'gindent';
-        if (!defined which($indent)) {
-            print "note: cannot find [g]indent utility--output will be unformatted.\n";
-            undef $indent;
-        }
+        macroUndef($inputVar),
+        macroUndef($outputVar),
+        macroUndef('OMP_PRAGMA'),
+        macroUndef('OMP_NUM_THREADS'),
+        macroUndef('OMP_THREAD_NUM'),
+        macroUndef('SIMD_PRAGMA'),
+        macroUndef('INNER_LOOP_PREFIX');
+    for my $expr (@fixed_exprs, @var_exprs) {
+        push @code,
+            macroUndef($expr),
+            macroUndef("BODY_$expr");
     }
-
+    push @code,
+        macroUndef($loopPart.$partNum),
+        "#endif";
+    
     # open output stream.
-    my $cmd = defined $indent ? "$indent -fca -o $OPT{output} -" :
-        "cat > $OPT{output}";
-    open OUT, "| $cmd" or die "error: cannot run '$cmd'.\n";
+    open OUT, "> $OPT{output}" or die;
 
     # header.
-    print OUT "/*\n",
-        " * ".scalar(@dims)."-D var-scanning code.\n",
+    print OUT
+        "/*\n",
+        " * Var-scanning code.\n",
         " * Generated automatically from the following pseudo-code:\n",
         " *\n",
-        " * N = ",$#dims,";\n";
-
-    # format input to show in the header.
-    my $cmd2 = "echo '$codeString'";
-    $cmd2 .= " | $indent -" if (defined $indent);
-    open IN, "$cmd2 |" or die "error: cannot run '$cmd2'.\n";
-    while (<IN>) {
-        print OUT " * $_";
-    }
-    close IN;
-    print OUT " *\n */";
+        " * $codeString\n",
+        " *\n */";
 
     # print out code.
     for my $line (@code) {
         print OUT "\n" if $line =~ m=^\s*//=; # blank line before comment.
-        print OUT " $line\n";
+        print OUT " $line\n"; # add space at beginning of every line.
     }
+    print OUT "// End of generated code.\n";
     close OUT;
+    system("$indent $OPT{output}") if -x $indent;
+
     print "info: output in '$OPT{output}'.\n";
 }
 
@@ -952,13 +1208,13 @@ sub main() {
 
     my(@KNOBS) = (
         # knob,        description,   optional default
-        [ "ndims=i", "Value of N.", 1],
-        [ "inVar=s", "Name of input index vars.", 'scanVars'],
-        [ "comArgs=s", "Common arguments to all calls.", ''],
-        [ "callPrefix=s", "Common prefix for function call(s).", ''],
-        [ "ompConstruct=s", "Pragma to use before 'omp' loop(s).", "omp parallel for"],
-        [ "innerMod=s", "Code to insert before inner loops.", ''],
-        [ "output=s", "Name of output file.", 'loops.h'],
+        [ "prefix=s", "Common prefix of generated macros and vars", ''],
+        [ "inner=s", "Set default INNER_LOOP_PREFIX macro used before inner loop(s)", ''],
+        [ "omp=s", "Set default OMP_PRAGMA macro used before 'omp' loop(s)", "omp parallel for"],
+        [ "simd=s", "Set default SIMD_PRAGMA macro used before 'simd' loop(s)", "omp simd"],
+        [ "align!", "Generate peel code for alignment", 1],
+        [ "macro_file=s", "Name of input file containing '#define' macros that can be used in <code-string>", ''],
+        [ "output=s", "Name of output file", 'loops.h'],
         );
     my($command_line) = process_command_line(\%OPT, \@KNOBS);
     print "$command_line\n" if $OPT{verbose};
@@ -968,49 +1224,83 @@ sub main() {
         print "Outputs C++ code to scan N-D vars.\n",
             "Usage: $script [options] <code-string>\n",
             "The <code-string> contains optionally-nested scans across the given\n",
-            "  indices between 0 and N-1 indicated by 'loop(<indices>)'\n",
-            "Indices may be specified as a comma-separated list or <first..last> range,\n",
-            "  using the variable 'N' as needed.\n",
-            "Inner loops should contain call statements that generate calls to calculation functions.\n",
-            "A loop statement with more than one argument will generate a single collapsed loop.\n",
+            "  indices indicated by 'loop(<indices>)'\n",
+            "Indices may be specified as a comma-separated list or <first..last> range.\n",
+            "The generated code will contain a macro-guarded part before the first loop body\n",
+            "  and a part after each loop body.\n",
             "Optional loop modifiers:\n",
-            "  omp:             generate an OpenMP for loop (distribute work across SW threads).*\n",
-            "  grouped:         generate grouped scan within a collapsed loop.\n",
-            "  serpentine:      generate reverse scan when enclosing loop dimension is odd.*\n",
-            "  square_wave:     generate 2D square-wave scan for two innermost dimensions of a collapsed loop.*\n",
+            "  simd:            add SIMD_PRAMA before loop (distribute work across SIMD HW).\n",
+            "  omp:             add OMP_PRAGMA before loop (distribute work across SW threads).\n",
+            "  nested:          use traditional nested loops instead of generating one flattened loop;\n",
+            "                     automatically adds 'collapse' clause to OpenMP loops.\n",
+            "  manual:          create optimized index calculation for manually-scheduled OpenMP loops;\n",
+            "                     must set OMP_PRAGMA to something like 'parallel', not 'parallel for'.\n",
+            "  tiled:           generate tiled scan within a >1D loop.\n",
+            "  serpentine:      generate reverse scan when enclosing loop index is odd.*\n",
+            "  square_wave:     generate 2D square-wave scan for two innermost dims of >1D loop.*\n",
             "      * Do not use these modifiers for YASK rank or block loops because they must\n",
             "        execute with strictly-increasing indices when using temporal tiling.\n",
-            "A 'ScanIndices' var must be defined in C++ code prior to including the generated code.\n",
+            "        Also, do not combile these modifiers with 'tiled' or 'manual'.\n",
+            "A 'ScanIndices' type must be defined in C++ code prior to including the generated code.\n",
             "  This struct contains the following 'Indices' elements:\n",
             "  'begin':       [in] first index to scan in each dim.\n",
             "  'end':         [in] value beyond last index to scan in each dim.\n",
             "  'stride':      [in] distance between each scan point in each dim.\n",
             "  'align':       [in] alignment of strides after first one.\n",
             "  'align_ofs':   [in] value to subtract from 'start' before applying alignment.\n",
-            "  'group_size':  [in] min size of each group of points visisted first in a multi-dim loop.\n",
-            "  'start':       [out] set to first scan point in called function(s) in inner loop(s).\n",
-            "  'stop':        [out] set to one past last scan point in called function(s) in inner loop(s).\n",
+            "  'tile_size':   [in] size of each tile in each tiled dim (ignored if not tiled).\n",
+            "  'start':       [out] set to first scan point in body of inner loop(s).\n",
+            "  'stop':        [out] set to one past last scan point in body of inner loop(s).\n",
             "  'index':       [out] set to zero on first iteration of loop; increments each iteration.\n",
-            "  Each called function has a 'ScanIndices' variable as a parameter.\n",
-            "  Values in the 'in' arrays in all dimensions are copied from the input.\n",
-            "  Values in the 'out' arrays in any dimension not scanned are copied from the input.\n",
             "  Each array should be the length specified by the largest index used (typically same as -ndims).\n",
-            "  The 'ScanIndices' input var is named with the -inVar option.\n",
+            "  The 'align' and 'align_ofs' elements are ignored if '-no-align' is used.\n",
+            "A 'ScanIndices' input var must be defined in C++ code prior to including the generated code.\n",
+            "  The 'in' indices control the range of the generaged loop(s).\n",
+            "  The 'ScanIndices' input var is named with the LOOP_INDICES macro.\n",
+            "Loop indices will be available in the body of the loop in a new 'ScanIndices' var.\n",
+            "  Values in the 'out' indices are set to indicate the range to be covered by the loop body.\n",
+            "  Any values in the struct not explicity set are copied from the input.\n",
+            "  The 'ScanIndices' output var is named with the BODY_INDICES macro.\n",
             "Options:\n";
         print_options_help(\@KNOBS);
         print "Examples:\n",
-            "  $script -ndims 2 'loop(0,1) { call(f); }'\n",
-            "  $script -ndims 3 'omp loop(0,1) { loop(2) { call(f); } }'\n",
-            "  $script -ndims 3 'omp loop(0) { loop(1,2) { call(f); } }'\n",
-            "  $script -ndims 3 'grouped omp loop(0..N-1) { call(f); }'\n",
-            "  $script -ndims 3 'omp loop(0) { square_wave loop(1..N-1) { call(f); } }'\n",
-            "  $script -ndims 4 'omp loop(0..N+1) { loop(N+2,N-1) { call(f); } }'\n";
+            "  $script 'loop(0,1) { }'\n",
+            "  $script 'omp loop(0,1) { }'\n",
+            "  $script 'omp nested loop(0,1) { }'\n",
+            "  $script 'omp serpentine loop(0,1) { }'\n",
+            "  $script 'omp tiled loop(0,1,2) { }'\n",
+            "  $script 'omp loop(0,1) { loop(2) { } }'\n",
+            "  $script 'omp loop(0) { loop(1,2) { } }'\n",
+            "  $script 'omp loop(0) { square_wave loop(1..2) { } }'\n",
+            "  $script 'omp loop(0,1,2) { loop(3) { } }'\n";
         exit 1;
     }
 
-    @dims = 0 .. ($OPT{ndims} - 1);
-    print "info: generating scanning code for ".scalar(@dims)."-D vars...\n";
-    $inputVar = $OPT{inVar};
+    $macroPrefix = uc $OPT{prefix};
+    $varPrefix = lc $OPT{prefix};
+    $doAlign = $OPT{align};
+    push @fixed_exprs, @align_exprs if $doAlign;
+
+    # Read macros.
+    if ($OPT{macro_file}) {
+        open MF, "< $OPT{macro_file}" or die "cannot open '$OPT{macro_file}'\n";
+        while (<MF>) {
+            chomp;
+            s/\s+$//;
+
+            # Macro with name and value.
+            if (/^\s*#define\s+(\w+)\s+(.*)/) {
+                $macros{$1} = $2;
+            }
+
+            # Macro with name only.
+            elsif (/^\s*#define\s+(\w+)/) {
+                $macros{$1} = '';
+            }
+        }
+        close MF;
+        print "".(scalar keys %macros)." macro(s) read from '$OPT{macro_file}'\n";
+    }
 
     my $codeString = join(' ', @ARGV); # just concat all non-options params together.
     processCode($codeString);

@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -144,7 +144,7 @@ namespace yask {
          <td colspan="4"><center>overall problem domain</center>
          <td colspan="2"><center>right padding of rank Z</center>
        </table>
-       The intermediate halos and paddings also exist, but are not shown in the above diagram.
+       Halos and paddings between ranks also exist, but are not shown in the above diagram.
        The halos overlap the domains of adjacent ranks.
        For example, the left halo of rank B in the diagram would overlap the domain of rank A.
        Data in these overlapped areas are exchanged as needed during stencil application
@@ -198,7 +198,8 @@ namespace yask {
         /// Get the number of dimensions used in this var.
         /**
            This may include domain, step, and/or miscellaneous dimensions.
-           @returns Number of dimensions created via yc_solution::new_var(),
+           @returns Number of dimensions declared in the stencil code
+           or created via yc_solution::new_var(),
            yk_solution::new_var(), or yk_solution::new_fixed_size_var().
         */
         virtual int get_num_dims() const =0;
@@ -208,8 +209,16 @@ namespace yask {
            This may include domain, step, and/or miscellaneous dimensions.
            @returns List of names of all the dimensions.
         */
-        virtual std::vector<std::string>
+        virtual string_vec
         get_dim_names() const =0;
+
+        /// Get the number of _domain_ dimensions used in this var.
+        /**
+           @returns Number of domain dimensions declared in the stencil code
+           or created via yc_solution::new_var(),
+           yk_solution::new_var(), or yk_solution::new_fixed_size_var().
+        */
+        virtual int get_num_domain_dims() const =0;
 
         /// Determine whether specified dimension exists in this var.
         /**
@@ -230,9 +239,9 @@ namespace yask {
         /**
            This is a convenience function that provides the first possible
            index in any var dimension regardless of the dimension type.
-           It is equivalent to
-           get_first_rank_alloc_index(dim) when `dim` is
-           a domain dimension, get_first_misc_index(dim)
+           If `dim` is a domain dimension, returns the first accessible index
+           in the left padding area.
+           It is equivalent to get_first_misc_index(dim)
            for a misc dimension, and get_first_valid_step_index()
            for the step dimension.
            @note This function should be called only *after* calling prepare_solution()
@@ -244,13 +253,21 @@ namespace yask {
                                 /**< [in] Name of dimension to get.  Must be one of
                                    the names from get_dim_names(). */ ) const =0;
 
+        /// Get the first valid index in this rank in all dimensions in this var.
+        /**
+           See get_first_local_index().
+           @returns vector of first valid indices.
+        */
+        virtual idx_t_vec
+        get_first_local_index_vec() const =0;
+
         /// Get the last index in this rank in the specified dimension.
         /**
            This is a convenience function that provides the last possible
            index in any var dimension regardless of the dimension type.
-           It is equivalent to
-           get_last_rank_alloc_index(dim) when `dim` is
-           a domain dimension, get_last_misc_index(dim)
+           If `dim` is a domain dimension, returns the last accessible index
+           in the right padding area.
+           It is equivalent to get_last_misc_index(dim)
            for a misc dimension, and get_last_valid_step_index()
            for the step dimension.
            @note This function should be called only *after* calling prepare_solution()
@@ -262,18 +279,34 @@ namespace yask {
                                /**< [in] Name of dimension to get.  Must be one of
                                   the names from get_dim_names(). */ ) const =0;
 
+        /// Get the last valid index in this rank in all dimensions in this var.
+        /**
+           See get_last_local_index().
+           @returns vector of last valid indices.
+        */
+        virtual idx_t_vec
+        get_last_local_index_vec() const =0;
+
         /// Get the number of elements allocated in the specified dimension.
         /**
            For the domain dimensions, this includes the rank-domain and padding sizes.
            See the "Detailed Description" for \ref yk_var for information on var sizes.
            For any dimension `dim`, `get_alloc_size(dim) ==
            get_last_local_index(dim) - get_first_local_index(dim) + 1`;
-           @returns allocation in number of elements (not bytes).
+           @returns allocation size in number of elements (not bytes).
         */
         virtual idx_t
         get_alloc_size(const std::string& dim
                        /**< [in] Name of dimension to get. Must be one of
                           the names from get_dim_names(). */ ) const =0;
+
+        /// Get the number of elements allocated in all dimensions in this var.
+        /**
+           See get_alloc_size().
+           @returns vector of allocation sizes in number of elements (not bytes).
+        */
+        virtual idx_t_vec
+        get_alloc_size_vec() const =0;
 
         /// Get the first valid index in the step dimension.
         /**
@@ -299,8 +332,10 @@ namespace yask {
         virtual idx_t
         get_last_valid_step_index() const =0;
         
-        /// Get the domain size for this rank.
+        /// Get the domain size for this rank in the specified dimension.
         /**
+           @note This function should be called only *after* calling prepare_solution()
+           because prepare_solution() assigns this rank's size.
            @returns The same value as yk_solution::get_rank_domain_size() if
            is_fixed_size() returns `false` or the fixed sized provided via
            yk_solution::new_fixed_size_var() otherwise.
@@ -310,8 +345,17 @@ namespace yask {
                              /**< [in] Name of dimension to get.  Must be one of
                                 the names from yk_solution::get_domain_dim_names(). */) const =0;
 
+        /// Get the domain size for this rank in all domain dimensions in this var.
+        /**
+           See get_rank_domain_size().
+           @returns vector of values, one for each domain dimension in this var.
+        */
+        virtual idx_t_vec
+        get_rank_domain_size_vec() const =0;
+
         /// Get the first index of the sub-domain in this rank in the specified dimension.
         /**
+           Does _not_ include indices of padding area.
            @note This function should be called only *after* calling prepare_solution()
            because prepare_solution() assigns this rank's position in the problem domain.
            @returns The same value as yk_solution::get_first_rank_domain_index() if
@@ -322,8 +366,17 @@ namespace yask {
                                     /**< [in] Name of dimension to get.  Must be one of
                                        the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
+        /// Get the first index of the sub-domain in this rank in all domain dimensions in this var.
+        /**
+           See get_first_rank_domain_index().
+           @returns vector of values, one for each domain dimension in this var.
+        */
+        virtual idx_t_vec
+        get_first_rank_domain_index_vec() const =0;
+
         /// Get the last index of the sub-domain in this rank in the specified dimension.
         /**
+           Does _not_ include indices of padding area.
            @note This function should be called only *after* calling prepare_solution()
            because prepare_solution() assigns this rank's position in the problem domain.
            @returns The same value as yk_solution::get_last_rank_domain_index() if
@@ -334,6 +387,14 @@ namespace yask {
         get_last_rank_domain_index(const std::string& dim
                                     /**< [in] Name of dimension to get.  Must be one of
                                        the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+
+        /// Get the last index of the sub-domain in this rank in all domain dimensions in this var.
+        /**
+           See get_last_rank_domain_index().
+           @returns vector of values, one for each domain dimension in this var.
+        */
+        virtual idx_t_vec
+        get_last_rank_domain_index_vec() const =0;
 
         /// Get the left halo size in the specified dimension.
         /**
@@ -370,6 +431,14 @@ namespace yask {
                                     /**< [in] Name of dimension to get.  Must be one of
                                        the names from yk_solution::get_domain_dim_names(). */ ) const =0;
 
+        /// Get the first index of the left halo in this rank in all domain dimensions in this var.
+        /**
+           See get_first_rank_halo_index().
+           @returns vector of values, one for each domain dimension in this var.
+        */
+        virtual idx_t_vec
+        get_first_rank_halo_index_vec() const =0;
+        
         /// Get the last index of the right halo in this rank in the specified dimension.
         /**
            @note This function should be called only *after* calling prepare_solution()
@@ -382,6 +451,14 @@ namespace yask {
         get_last_rank_halo_index(const std::string& dim
                                     /**< [in] Name of dimension to get.  Must be one of
                                        the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+
+        /// Get the last index of the right halo in this rank in all domain dimensions in this var.
+        /**
+           See get_last_rank_halo_index().
+           @returns vector of values, one for each domain dimension in this var.
+        */
+        virtual idx_t_vec
+        get_last_rank_halo_index_vec() const =0;
 
         /// Get the actual left padding in the specified dimension.
         /**
@@ -466,16 +543,16 @@ namespace yask {
            `dim` in the var; `false` otherwise.
         */
         virtual bool
-        are_indices_local(const std::vector<idx_t>& indices
+        are_indices_local(const idx_t_vec& indices
                           /**< [in] List of indices, one for each var dimension. */ ) const =0;
 
 #ifndef SWIG
         /// Determine whether the given indices refer to an accessible element in this rank.
         /**
-           See get_last_misc_index().
+           See are_indices_local().
         */
         virtual bool
-        are_indices_local(const std::initializer_list<idx_t>& indices
+        are_indices_local(const idx_t_init_list& indices
                           /**< [in] List of indices, one for each var dimension. */ ) const =0;
 #endif
 
@@ -489,7 +566,7 @@ namespace yask {
            @returns value in var at given indices.
         */
         virtual double
-        get_element(const std::vector<idx_t>& indices
+        get_element(const idx_t_vec& indices
                     /**< [in] List of indices, one for each var dimension. */ ) const =0;
 
 #ifndef SWIG
@@ -499,7 +576,7 @@ namespace yask {
            @returns value in var at given indices.
         */
         virtual double
-        get_element(const std::initializer_list<idx_t>& indices
+        get_element(const idx_t_init_list& indices
                     /**< [in] List of indices, one for each var dimension. */ ) const =0;
 #endif
 
@@ -525,7 +602,7 @@ namespace yask {
         */
         virtual idx_t
         set_element(double val /**< [in] Element in var will be set to this. */,
-                    const std::vector<idx_t>& indices
+                    const idx_t_vec& indices
                     /**< [in] List of indices, one for each var dimension. */,
                     bool strict_indices = true
                     /**< [in] If true, indices must be within domain or padding.
@@ -540,7 +617,7 @@ namespace yask {
         */
         virtual idx_t
         set_element(double val /**< [in] Element in var will be set to this. */,
-                    const std::initializer_list<idx_t>& indices
+                    const idx_t_init_list& indices
                     /**< [in] List of indices, one for each var dimension. */,
                     bool strict_indices = true
                     /**< [in] If true, indices must be within domain or padding.
@@ -569,9 +646,9 @@ namespace yask {
         virtual idx_t
         get_elements_in_slice(void* buffer_ptr
                               /**< [out] Pointer to buffer where values will be written. */,
-                              const std::vector<idx_t>& first_indices
+                              const idx_t_vec& first_indices
                               /**< [in] List of initial indices, one for each var dimension. */,
-                              const std::vector<idx_t>& last_indices
+                              const idx_t_vec& last_indices
                               /**< [in] List of final indices, one for each var dimension. */ ) const =0;
 
         /// Atomically add to the value of one var element.
@@ -592,7 +669,7 @@ namespace yask {
         */
         virtual idx_t
         add_to_element(double val /**< [in] This value will be added to element in var. */,
-                       const std::vector<idx_t>& indices
+                       const idx_t_vec& indices
                        /**< [in] List of indices, one for each var dimension. */,
                        bool strict_indices = true
                        /**< [in] If true, indices must be within domain or padding.
@@ -607,7 +684,7 @@ namespace yask {
         */
         virtual idx_t
         add_to_element(double val /**< [in] This value will be added to element in var. */,
-                       const std::initializer_list<idx_t>& indices
+                       const idx_t_init_list& indices
                        /**< [in] List of indices, one for each var dimension. */,
                        bool strict_indices = true
                        /**< [in] If true, indices must be within domain or padding.
@@ -643,9 +720,9 @@ namespace yask {
         */
         virtual idx_t
         set_elements_in_slice_same(double val /**< [in] All elements in the slice will be set to this. */,
-                                   const std::vector<idx_t>& first_indices
+                                   const idx_t_vec& first_indices
                                    /**< [in] List of initial indices, one for each var dimension. */,
-                                   const std::vector<idx_t>& last_indices
+                                   const idx_t_vec& last_indices
                                    /**< [in] List of final indices, one for each var dimension. */,
                                    bool strict_indices = true
                                    /**< [in] If true, indices must be within domain or padding.
@@ -675,9 +752,9 @@ namespace yask {
         virtual idx_t
         set_elements_in_slice(const void* buffer_ptr
                               /**< [out] Pointer to buffer where values will be read. */,
-                              const std::vector<idx_t>& first_indices
+                              const idx_t_vec& first_indices
                               /**< [in] List of initial indices, one for each var dimension. */,
-                              const std::vector<idx_t>& last_indices
+                              const idx_t_vec& last_indices
                               /**< [in] List of final indices, one for each var dimension. */ ) =0;
 
 #ifdef COPY_SLICE_IMPLEMENTED
@@ -698,34 +775,34 @@ namespace yask {
         virtual idx_t
         set_elements_in_slice(const yk_var_ptr source
                               /**< [in] Var from which elements will be read. */,
-                              const std::vector<idx_t>& first_source_indices
+                              const idx_t_vec& first_source_indices
                               /**< [in] List of starting indices in the source var,
                                  one for each var dimension. */,
-                              const std::vector<idx_t>& first_target_indices
+                              const idx_t_vec& first_target_indices
                               /**< [in] List of starting indices in this (target) var,
                                  one for each var dimension. */,
-                              const std::vector<idx_t>& last_target_indices
+                              const idx_t_vec& last_target_indices
                               /**< [in] List of final indices in this (target) var,
                                  one for each var dimension. */ ) =0;
 #endif
         
-        /// Format the indices for pretty-printing.
+        /// Format the indices for human-readable display.
         /**
            Provide indices in a list in the same order returned by get_dim_names().
            @returns A string containing the var name and the index values.
         */
         virtual std::string
-        format_indices(const std::vector<idx_t>& indices
+        format_indices(const idx_t_vec& indices
                        /**< [in] List of indices, one for each var dimension. */ ) const =0;
 
 #ifndef SWIG
-        /// Format the indices for pretty-printing.
+        /// Format the indices for human-readable display.
         /**
            See format_indices().
            @returns A string containing the var name and the index values.
         */
         virtual std::string
-        format_indices(const std::initializer_list<idx_t>& indices
+        format_indices(const idx_t_init_list& indices
                        /**< [in] List of indices, one for each var dimension. */ ) const =0;
 #endif
 
@@ -754,6 +831,8 @@ namespace yask {
         
         /// **[Advanced]** Set the maximum L1-norm of a neighbor rank for halo exchange.
         /**
+           This should only be used to override the value calculated automatically by
+           the YASK compiler.
            @see get_halo_exchange_l1_norm().
         */
         virtual void
@@ -937,28 +1016,6 @@ namespace yask {
                              idx_t idx /**< [in] New value for first index.
                                         May be negative. */ ) =0;
 
-        /// **[Advanced]** Get the first accessible index in this var in this rank in the specified domain dimension.
-        /**
-           Equivalent to get_first_local_index(dim), where `dim` is a domain dimension.
-           @returns First valid index in this var.
-        */
-        virtual idx_t
-        get_first_rank_alloc_index(const std::string& dim
-                                   /**< [in] Name of dimension to get.
-                                      Must be one of
-                                      the names from yk_solution::get_domain_dim_names(). */ ) const =0;
-
-        /// **[Advanced]** Get the last accessible index in this var in this rank in the specified domain dimension.
-        /**
-           Equivalent to get_last_local_index(dim), where `dim` is a domain dimension.
-           @returns Last valid index in this var.
-        */
-        virtual idx_t
-        get_last_rank_alloc_index(const std::string& dim
-                                  /**< [in] Name of dimension to get.
-                                     Must be one of
-                                     the names from yk_solution::get_domain_dim_names(). */ ) const =0;
-
         /// **[Advanced]** Determine whether storage has been allocated.
         /**
            @returns `true` if storage has been allocated,
@@ -1070,7 +1127,7 @@ namespace yask {
            all elements of a var via its raw buffer, e.g., add some constant
            value to all elements.
            - If the layouts of two vars are identical, you can use their
-           raw buffers to copy or compare the var contents for equality or
+           raw buffers to copy all data from one to the other or
            perform element-wise binary mathematical operations on them,
            e.g., add all elements from one var to another.
 
@@ -1079,6 +1136,7 @@ namespace yask {
            index and that element's offset from the beginning of the buffer
            such as row-major or column-major layout.
            - All elements in the buffer are part of the rank domain or halo.
+           - All elements in the buffer contain valid floating-point values.
 
            Thus,
            - You should not perform any operations dependent on
@@ -1090,50 +1148,25 @@ namespace yask {
         */
         virtual void* get_raw_storage_buffer() =0;
 
-        /* Deprecated APIs for yk_var found below should be avoided.
-           Use the more explicit form found in the documentation. */
 
-        /// **[Deprecated]** Use get_left_halo_size() and get_right_halo_size().
-        inline idx_t
-        get_halo_size(const std::string& dim) const {
-            return get_left_halo_size(dim);
-        }
-        /// **[Deprecated]** Use get_left_pad_size() and get_right_pad_size().
-        inline idx_t
-        get_pad_size(const std::string& dim) const {
-            return get_left_pad_size(dim);
-        }
-        /// **[Deprecated]** Use get_left_extra_pad_size() and get_right_extra_pad_size().
-        inline idx_t
-        get_extra_pad_size(const std::string& dim) const {
-            return get_left_extra_pad_size(dim);
+        /// **[Deprecated]** Use get_first_local_index().
+        YASK_DEPRECATED
+        virtual idx_t
+        get_first_rank_alloc_index(const std::string& dim) const {
+            return get_first_local_index(dim);
         }
 
-        /// **[Deprecated]** Use are_indices_local().
-        inline bool
-        is_element_allocated(const std::vector<idx_t>& indices
-                             /**< [in] List of indices, one for each var dimension. */ ) const {
-            return are_indices_local(indices);
-        }
-
-#ifndef SWIG
-        /// **[Deprecated]** Use are_indices_local().
-        inline bool
-        is_element_allocated(const std::initializer_list<idx_t>& indices
-                             /**< [in] List of indices, one for each var dimension. */ ) const {
-            return are_indices_local(indices);
-        }
-#endif
-
-        /// **[Deprecated]** Use fuse_vars().
-        inline void
-        fuse_grids(yk_var_ptr source) {
-            fuse_vars(source);
+        /// **[Deprecated]** Use get_last_local_index().
+        YASK_DEPRECATED
+        virtual idx_t
+        get_last_rank_alloc_index(const std::string& dim) const {
+            return get_last_local_index(dim);
         }
 
     }; // yk_var.
 
     /// **[Deprecated]** Use yk_var.
+    YASK_DEPRECATED
     typedef yk_var yk_grid;
     
     /** @}*/

@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -41,6 +41,8 @@ namespace yask {
     typedef std::vector<VarPtrs*> ScratchVecs;
 
     // Environmental settings.
+    // Several member vars are static because they are considered global
+    // and set/get can be called w/o an obj.
     class KernelEnv :
         public virtual yk_env {
 
@@ -50,11 +52,18 @@ namespace yask {
 
     public:
 
-        // Output stream for messages.
-        yask_output_ptr _debug;
+        // Output stream for debug & trace messages.
+        static yask_output_ptr _debug;
 
         // Is tracing enabled?
-        bool _trace = false;
+        static bool _trace;
+
+        // OMP offload devices.
+        static bool _use_offload;
+        #ifdef USE_OFFLOAD
+        static int _omp_hostn;
+        static int _omp_devn;
+        #endif
 
         // MPI vars.
         MPI_Comm comm = MPI_COMM_NULL; // global communicator.
@@ -71,10 +80,7 @@ namespace yask {
         // OMP vars.
         int max_threads=0;      // initial value from OMP.
 
-        KernelEnv() {
-            yask_output_factory yof;
-            set_debug_output(yof.new_stdout_output());
-        }
+        KernelEnv() { }
         virtual ~KernelEnv() { }
 
         // Init MPI, OMP, etc.
@@ -104,34 +110,26 @@ namespace yask {
         virtual void global_barrier() const {
             MPI_Barrier(comm);
         }
-        virtual yask_output_ptr get_debug_output() const {
-            return _debug;
-        }
-        virtual void set_debug_output(yask_output_ptr debug) {
-            _debug = debug;
-        }
-        virtual bool is_trace_enabled() const {
-            return _trace;
-        }
-        virtual void set_trace_enabled(bool enable) {
-            _trace = enable;
-        }
     };
     typedef std::shared_ptr<KernelEnv> KernelEnvPtr;
 
     // Dimensions for a solution.
     // Similar to the Dimensions class in the YASK compiler
     // from which these values are set.
+    // These are not changed after initialization.
     struct Dims {
 
         // Algorithm for vec dims in fold layout.
         VEC_FOLD_LAYOUT_CLASS _vec_fold_layout;
 
-        // Dimensions with 0 values.
+        // Special dims.
         std::string _step_dim;  // usually time, 't'.
-        std::string _inner_dim; // the domain dim used in the inner loop.
-        IdxTuple _domain_dims;
-        IdxTuple _stencil_dims; // step & domain dims.
+        std::string _inner_layout_dim; // innermost index in layout.
+        std::string _inner_loop_dim; // innermost index in pico loops.
+        
+        // Dimensions with 0 values.
+        IdxTuple _domain_dims;  // e.g., 'x', 'y'.
+        IdxTuple _stencil_dims; // union of step & domain dims.
         IdxTuple _misc_dims;
 
         // Dimensions and sizes.
@@ -139,6 +137,9 @@ namespace yask {
         IdxTuple _vec_fold_pts; // just those with >1 pts.
         IdxTuple _cluster_pts;  // all domain dims.
         IdxTuple _cluster_mults; // all domain dims.
+
+        // Just sizes.
+        Indices _fold_sizes;    // all domain dims.
 
         // Direction of step.
         // This is a heuristic value used only for stepping the
@@ -156,7 +157,7 @@ namespace yask {
         // Get linear index into a vector given 'fold_ofs', which are
         // element offsets that must be *exactly* those in _vec_fold_pts.
         idx_t get_elem_index_in_vec(const Indices& fold_ofs) const {
-            assert(fold_ofs._get_num_dims() == NUM_VEC_FOLD_DIMS);
+            host_assert(fold_ofs.get_num_dims() == NUM_VEC_FOLD_DIMS);
 
             // Use compiler-generated fold macro.
             idx_t i = VEC_FOLD_LAYOUT(fold_ofs);
@@ -164,43 +165,19 @@ namespace yask {
 #ifdef DEBUG_LAYOUT
             // Use compiler-generated fold layout class.
             idx_t j = _vec_fold_layout.layout(fold_ofs);
-            assert(i == j);
+            host_assert(i == j);
 #endif
 
-            return i;
-        }
-
-        // Get linear index into a vector given 'elem_ofs', which are
-        // element offsets that may include other dimensions.
-        idx_t get_elem_index_in_vec(const IdxTuple& elem_ofs) const {
-            assert(_vec_fold_pts._get_num_dims() == NUM_VEC_FOLD_DIMS);
-            if (NUM_VEC_FOLD_DIMS == 0)
-                return 0;
-
-            // Get required offsets into an Indices obj.
-            IdxTuple fold_ofs(_vec_fold_pts);
-            fold_ofs.set_vals_same(0);
-            fold_ofs.set_vals(elem_ofs, false); // copy only fold offsets.
-            Indices fofs(fold_ofs);
-
-            // Call version that requires vec-fold offsets only.
-            idx_t i = get_elem_index_in_vec(fofs);
-
-            // Use fold layout to find element index.
-#ifdef DEBUG_LAYOUT
-            idx_t i2 = _vec_fold_pts.layout(fold_ofs, false);
-            assert(i == i2);
-#endif
             return i;
         }
     };
     typedef std::shared_ptr<Dims> DimsPtr;
 
-    // Utility to determine number of points in a "sizes" var.
+    // Utility to determine number of spatial points in a "sizes" var.
     inline idx_t get_num_domain_points(const IdxTuple& sizes) {
-        assert(sizes._get_num_dims() == NUM_STENCIL_DIMS);
+        host_assert(sizes.get_num_dims() == NUM_STENCIL_DIMS);
         idx_t pts = 1;
-        DOMAIN_VAR_LOOP(i, j)
+        DOMAIN_VAR_LOOP_FAST(i, j)
             pts *= sizes[i];
         return pts;
     }
@@ -209,65 +186,90 @@ namespace yask {
     // of these vars can be set via cmd-line options and/or APIs.
     class KernelSettings {
 
-         // Null stream to throw away debug info.
-        yask_output_factory yof;
-        yask_output_ptr nullop = yof.new_null_output();
+        // Default block size on CPU.
+        int def_blk_size = 0;
 
    public:
+
+        // Abbreviations for sizes.
+        static const std::string _mega_block_str;
+        static const std::string _block_str;
+        static const std::string _micro_block_str;
+        static const std::string _nano_block_str;
+        static const std::string _pico_block_str;
 
         // Ptr to problem dimensions (NOT sizes), folding, etc.
         // This is solution info from the YASK compiler.
         DimsPtr _dims;
 
         // Sizes in elements (points).
-        // All these tuples contain stencil dims, even the ones that
-        // don't strictly need them.
+        // All these tuples contain step dims, even the ones that
+        // don't use them, for consistency.
         IdxTuple _global_sizes;     // Overall problem domain sizes.
-        IdxTuple _rank_sizes;     // This rank's domain sizes.
-        IdxTuple _region_sizes;   // region size (used for wave-front tiling).
-        IdxTuple _block_group_sizes; // block-group size (only used for 'grouped' region loops).
+        IdxTuple _rank_sizes;     // This rank's domain (local) sizes.
+        IdxTuple _rank_tile_sizes; // rank-tile size (only used for 'tiled' rank loops).
+        IdxTuple _mega_block_sizes;   // mega-block size (used for wave-front tiling).
+        IdxTuple _mega_block_tile_sizes; // mega-block-tile size (only used for 'tiled' mega-block loops).
         IdxTuple _block_sizes;       // block size (used for each outer thread).
-        IdxTuple _mini_block_group_sizes; // mini-block-group size (only used for 'grouped' block loops).
-        IdxTuple _mini_block_sizes;       // mini-block size (used for wave-fronts in blocks).
-        IdxTuple _sub_block_group_sizes; // sub-block-group size (only used for 'grouped' mini-block loops).
-        IdxTuple _sub_block_sizes;       // sub-block size (used for each nested thread).
+        IdxTuple _block_tile_sizes; // block-tile size (only used for 'tiled' block loops).
+        IdxTuple _micro_block_sizes;       // micro-block size (used for wave-fronts in blocks).
+        IdxTuple _micro_block_tile_sizes; // micro-block-tile size (only used for 'tiled' micro-block loops).
+        IdxTuple _nano_block_sizes;       // nano-block size (used for each nested thread).
+        IdxTuple _nano_block_tile_sizes; // nano-block-tile size (only used for 'tiled' nano-block loops).
+        IdxTuple _pico_block_sizes;       // pico-block size (used within nano-blocks, no pico-tiling).
+
+        // Global padding applied to all vars by default.
+        // These tuples contain all stencil dims, even though the step dim isn't used.
         IdxTuple _min_pad_sizes;         // minimum spatial padding (including halos).
         IdxTuple _extra_pad_sizes;       // extra spatial padding (outside of halos).
 
         // MPI settings.
-        IdxTuple _num_ranks;       // number of ranks in each dim.
-        IdxTuple _rank_indices;    // my rank index in each dim.
+        // These tuples contain only domain dims.
+        IdxTuple _num_ranks;       // number of ranks in each domain dim.
+        IdxTuple _rank_indices;    // my rank index in each domain dim.
         bool find_loc = true;      // whether my rank index needs to be calculated.
         bool overlap_comms = true; // overlap comms with computation.
-        bool use_shm = true;      // use shared memory if possible.
-        idx_t _min_exterior = 0;   // minimum size of MPI exterior to calculate.
+        idx_t _min_exterior = 32;   // minimum size of MPI exterior to calculate.
+        #ifdef USE_OFFLOAD
+        bool use_device_mpi = true; // transfer data directly between devices.
+        bool use_shm = false;       // transfer data using shared memory (w/o MPI calls) on same node.
+        #else
+        bool use_device_mpi = false;
+        bool use_shm = true;
+        #endif
 
         // OpenMP settings.
-        int max_threads = 0;      // Initial number of threads to use overall; 0=>OMP default.
-        int thread_divisor = 1;   // Reduce number of threads by this amount.
-        int num_block_threads = 1; // Number of threads to use for a block.
-        bool bind_block_threads = false; // Bind block threads to indices.
+        int max_threads = 0;      // Initial number of host threads to use overall; 0=>OMP default.
+        int num_outer_threads = 0; // Number of threads to use for blocks.
+        int num_inner_threads = 1; // Number of threads to use within a block.
+        bool bind_inner_threads = false; // Bind inner threads to global indices.
+        #ifdef USE_OFFLOAD
+        int thread_limit = 32;           // Offload threads per team.
+        #else
+        int thread_limit = 1;
+        #endif
 
-        // Var behavior.
+        // Var behavior, including allocation.
         bool _step_wrap = false; // Allow invalid step indices to alias to valid ones (set via APIs only).
         bool _allow_addl_pad = true; // Allow extending padding beyond what's needed for alignment.
+        bool _bundle_allocs = !KernelEnv::_use_offload; // Group allocations together.
+        int _numa_pref = NUMA_PREF;
 
         // Stencil-dim posn in which to apply block-thread binding.
         // TODO: make this a cmd-line parameter.
         int _bind_posn = 1;
 
         // Tuning.
-        bool _do_auto_tune = false;    // whether to do auto-tuning.
-        bool _tune_mini_blks = false; // auto-tune mini-blks instead of blks.
+        bool _do_auto_tune = false;    // whether to do "online" auto-tuning.
         bool _allow_stage_tuners = false; // allow per-stage tuners when possible.
-        double _tuner_min_secs = 0.25;   // min time to run tuner for new better setting.
+        double _tuner_trial_secs = 0.5;   // time to run tuner for new better setting.
+        int _tuner_radius = 16;
+        string_vec _tuner_targets; // things to tune from following.
 
         // Debug.
         bool force_scalar = false; // Do only scalar ops.
-
-        // NUMA settings.
-        int _numa_pref = NUMA_PREF;
-        int _numa_pref_max = 128; // GiB to alloc before using PMEM.
+        bool do_halo_exchange = true; // False => skip halo exchanges.
+        bool force_scalar_exchange = false; // Don't allow vec exchanges.
 
         // Ctor/dtor.
         KernelSettings(DimsPtr dims, KernelEnvPtr env);
@@ -281,26 +283,17 @@ namespace yask {
                                         IdxTuple& var,
                                         bool allow_step = false);
 
-        idx_t find_num_subsets(std::ostream& os,
-                             IdxTuple& inner_sizes, const std::string& inner_name,
-                             const IdxTuple& outer_sizes, const std::string& outer_name,
-                             const IdxTuple& mults, const std::string& step_dim);
-
     public:
         // Add options to a cmd-line parser to set the settings.
         virtual void add_options(CommandLineParser& parser);
 
-        // Print usage message.
-        void print_usage(std::ostream& os,
-                         CommandLineParser& parser,
-                         const std::string& pgm_name,
-                         const std::string& app_notes,
-                         const std::vector<std::string>& app_examples);
-
+        // Print informational messages.
+        void print_usage(std::ostream& os);
+        void print_values(std::ostream& os);
+        
         // Make sure all user-provided settings are valid by rounding-up
-        // values as needed.
-        // Called from prepare_solution(), so it doesn't normally need to be called from user code.
-        // Prints informational info to 'os'.
+        // values as needed.  Called from prepare_solution().
+        // Prints informational info to debug output in *ksb.
         virtual void adjust_settings(KernelStateBase* ksb = 0);
 
         // Determine if this is the first or last rank in given dim.
@@ -349,7 +342,7 @@ namespace yask {
 
         // What get_neighbor_index() returns for myself.
         // Example: trunc(3^3 / 2) = 13 for 3D problem.
-        int my_neighbor_index;
+        idx_t my_neighbor_index;
 
         // MPI rank of each neighbor.
         // MPI_PROC_NULL => no neighbor.
@@ -382,7 +375,7 @@ namespace yask {
             // Max neighbors.
             neighborhood_sizes = dims->_domain_dims; // copy dims from domain.
             neighborhood_sizes.set_vals_same(num_offsets); // set sizes in each domain dim.
-            neighborhood_size = neighborhood_sizes.product(); // neighbors in all dims.
+            neighborhood_size = neighborhood_sizes.product(); // num neighbors in all dims.
 
             // Myself.
             IdxTuple noffsets(neighborhood_sizes);
@@ -403,8 +396,8 @@ namespace yask {
         // Input 'offsets': tuple of NeighborOffset vals.
         virtual idx_t get_neighbor_index(const IdxTuple& offsets) const {
             idx_t i = neighborhood_sizes.layout(offsets); // 1D index.
-            assert(i >= 0);
-            assert(i < neighborhood_size);
+            host_assert(i >= 0);
+            host_assert(i < neighborhood_size);
             return i;
         }
 
@@ -475,6 +468,15 @@ namespace yask {
             if (_shm_lock)
                 _shm_lock->mark_write_done();
         }
+        idx_t get_data() const {
+            if (_shm_lock)
+                return _shm_lock->get_data();
+            return 0;
+        }
+        void set_data(idx_t v) {
+            if (_shm_lock)
+                _shm_lock->set_data(v);
+        }
 
         // Number of points overall.
         idx_t get_size() const {
@@ -482,7 +484,7 @@ namespace yask {
                 return 0;
             return num_pts.product();
         }
-        idx_t get_bytes() const {
+        size_t get_bytes() const {
             return get_size() * sizeof(real_t);
         }
 
@@ -545,6 +547,8 @@ namespace yask {
         // These are used for async comms.
         std::vector<MPI_Request> recv_reqs;
         std::vector<MPI_Request> send_reqs;
+        std::vector<MPI_Status> recv_stats;
+        std::vector<MPI_Status> send_stats;
 
         MPIData(MPIInfoPtr mpi_info) :
             _mpi_info(mpi_info) {
@@ -557,6 +561,10 @@ namespace yask {
             // Init handles.
             recv_reqs.resize(n, MPI_REQUEST_NULL);
             send_reqs.resize(n, MPI_REQUEST_NULL);
+            MPI_Status nullst;
+            memset(&nullst, 0, sizeof(nullst));
+            recv_stats.resize(n, nullst);
+            send_stats.resize(n, nullst);
         }
 
         void reset_locks() {
@@ -584,21 +592,12 @@ namespace yask {
         KernelEnvPtr _env;
 
         // User settings.
-        KernelSettingsPtr _opts;
+        KernelSettingsPtr _actl_opts; // Actual settings to use.
+        KernelSettingsPtr _req_opts; // Settings specified by user and/or tuner.
         bool _use_stage_tuners = false;
 
         // Problem dims.
         DimsPtr _dims;
-
-        // Position of inner domain dim in stencil-dims tuple.
-        // Misc dims will follow this if/when using interleaving.
-        // TODO: move to Dims.
-        int _inner_posn = -1;   // -1 => not set.
-
-        // Position of outer domain dim in stencil-dims tuple.
-        // For 1D stencils, _outer_posn == _inner_posn.
-        // TODO: move to Dims.
-        int _outer_posn = -1;   // -1 => not set.
 
         // MPI neighbor info.
         MPIInfoPtr _mpi_info;
@@ -614,30 +613,31 @@ namespace yask {
     // functions with side-effects.
 #define STATE_VARS0(_ksbp, pfx)                                         \
     pfx auto* ksbp = _ksbp;                                             \
-    assert(ksbp);                                                       \
+    host_assert(ksbp);                                                  \
     pfx auto* state = ksbp->get_state().get();                          \
-    assert(state);                                                      \
+    host_assert(state);                                                 \
     pfx auto* env = state->_env.get();                                  \
-    assert(env);                                                        \
-    pfx auto* opts = state->_opts.get();                                \
-    assert(opts);                                                       \
+    host_assert(env);                                                   \
+    pfx auto* actl_opts = state->_actl_opts.get();                      \
+    host_assert(actl_opts);                                             \
+    pfx auto* req_opts = state->_req_opts.get();                        \
+    host_assert(req_opts);                                              \
     pfx auto* dims = state->_dims.get();                                \
-    assert(dims);                                                       \
-    pfx auto* mpi_info = state->_mpi_info.get();                          \
-    assert(mpi_info);                                                    \
+    host_assert(dims);                                                  \
+    pfx auto* mpi_info = state->_mpi_info.get();                        \
+    host_assert(mpi_info);                                              \
     const auto& step_dim = dims->_step_dim;                             \
-    const auto& inner_dim = dims->_inner_dim;                           \
+    const auto& inner_layout_dim = dims->_inner_layout_dim;             \
+    const auto& inner_loop_dim = dims->_inner_loop_dim;                 \
     const auto& domain_dims = dims->_domain_dims;                       \
     constexpr int nddims = NUM_DOMAIN_DIMS;                             \
-    assert(nddims == domain_dims.size());                               \
+    host_assert(nddims == domain_dims.size());                          \
     const auto& stencil_dims = dims->_stencil_dims;                     \
     constexpr int nsdims = NUM_STENCIL_DIMS;                            \
-    assert(nsdims == stencil_dims.size());                              \
+    host_assert(nsdims == stencil_dims.size());                         \
     auto& misc_dims = dims->_misc_dims;                                 \
     constexpr int step_posn = 0;                                        \
-    assert(step_posn == +Indices::step_posn);                           \
-    constexpr int outer_posn = 1;                                       \
-    const int inner_posn = state->_inner_posn
+    host_assert(step_posn == +step_posn);
 #define STATE_VARS(_ksbp) STATE_VARS0(_ksbp,)
 #define STATE_VARS_CONST(_ksbp) STATE_VARS0(_ksbp, const)
 
@@ -655,22 +655,25 @@ namespace yask {
     public:
         KernelStateBase(KernelStatePtr& state) :
             _state(state) {}
-        KernelStateBase(KernelEnvPtr& env,
-                        KernelSettingsPtr& settings);
+        KernelStateBase(KernelEnvPtr& kenv,
+                        KernelSettingsPtr& kactl_opts,
+                        KernelSettingsPtr& kreq_opts);
         KernelStateBase(KernelStateBase* p) :
             _state(p->_state) { }
 
         // Access to state.
         ALWAYS_INLINE KernelStatePtr& get_state() {
-            assert(_state);
+            host_assert(_state);
             return _state;
         }
         ALWAYS_INLINE const KernelStatePtr& get_state() const {
-            assert(_state);
+            host_assert(_state);
             return _state;
         }
-        KernelSettingsPtr& get_settings() { return _state->_opts; }
-        const KernelSettingsPtr& get_settings() const { return _state->_opts; }
+        KernelSettingsPtr& get_actl_opts() { return _state->_actl_opts; }
+        const KernelSettingsPtr& get_actl_opts() const { return _state->_actl_opts; }
+        KernelSettingsPtr& get_req_opts() { return _state->_req_opts; }
+        const KernelSettingsPtr& get_req_opts() const { return _state->_req_opts; }
         KernelEnvPtr& get_env() { return _state->_env; }
         const KernelEnvPtr& get_env() const { return _state->_env; }
         DimsPtr& get_dims() { return _state->_dims; }
@@ -684,6 +687,9 @@ namespace yask {
         void set_debug_output(yask_output_ptr debug) {
             _state->_env->set_debug_output(debug);
         }
+        void disable_debug_output() {
+            _state->_env->disable_debug_output();
+        }
 
         // Set number of threads w/o using thread-divisor.
         // Return number of threads.
@@ -691,21 +697,20 @@ namespace yask {
         int set_max_threads();
 
         // Get total number of computation threads to use.
-        int get_num_comp_threads(int& region_threads, int& blk_threads) const;
+        int get_num_comp_threads(int& outer_threads, int& inner_threads) const;
 
-        // Set number of threads to use for a region.
+        // Set number of threads to use for a mega-block.
         // Enable nested OMP if there are >1 block threads,
         // disable otherwise.
         // Return number of threads.
         // Do nothing and return 0 if not properly initialized.
-        int set_region_threads();
+        int set_num_outer_threads();
 
         // Set number of threads for a block.
-        // Must be called from within a top-level OMP parallel region.
+        // Must be called from within a top-level OMP parallel mega-block.
         // Return number of threads.
         // Do nothing and return 0 if not properly initialized.
-        int set_block_threads();
-
+        int set_num_inner_threads();
     };
 
     // An object that is created from a context, shares ownership of the

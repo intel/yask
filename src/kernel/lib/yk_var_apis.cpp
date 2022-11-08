@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -30,113 +30,279 @@ using namespace std;
 
 namespace yask {
 
-#define DEPRECATED(api_name) \
-    cerr << "\n*** WARNING: call to deprecated YASK API '"              \
-    #api_name "' that will be removed in a future release ***\n"
-
     // APIs to get info from vars: one with name of dim with a lot
-    // of checking, and one with index of dim with no checking.
-#define GET_VAR_API(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
-    idx_t YkVarImpl::api_name(const string& dim) const {               \
-        STATE_VARS(gbp());                                              \
-        dims->check_dim_type(dim, #api_name, step_ok, domain_ok, misc_ok); \
-        int posn = gb().get_dim_posn(dim, true, #api_name);             \
-        idx_t mbit = 1LL << posn;                                       \
-        if (prep_req && gb()._rank_offsets[posn] < 0)                   \
-            THROW_YASK_EXCEPTION("Error: '" #api_name "()' called on var '" + \
-                                 get_name() + "' before calling 'prepare_solution()'"); \
-        auto rtn = expr;                                                \
-        return rtn;                                                     \
-    }                                                                   \
-    idx_t YkVarImpl::api_name(int posn) const {                        \
-        STATE_VARS(gbp());                                              \
-        idx_t mbit = 1LL << posn;                                       \
-        auto rtn = expr;                                                \
-        return rtn;                                                     \
-    }
+    // of checking, one with index of dim with no checking.
+    #define GET_VAR_API(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
+        idx_t YkVarImpl::api_name(const string& dim) const {            \
+            STATE_VARS(gbp());                                          \
+            dims->check_dim_type(dim, #api_name, step_ok, domain_ok, misc_ok); \
+            int posn = gb().get_dim_posn(dim, true, #api_name);         \
+            if (prep_req && corep()->_rank_offsets[posn] < 0)           \
+                THROW_YASK_EXCEPTION("Error: '" #api_name "()' called on var '" + \
+                                     get_name() + "' before calling 'prepare_solution()'"); \
+            auto cp = corep();                                          \
+            auto rtn = expr;                                            \
+            return rtn;                                                 \
+        }                                                               \
+        idx_t YkVarImpl::api_name(int posn) const {                     \
+            STATE_VARS(gbp());                                          \
+            auto cp = corep();                                          \
+            auto rtn = expr;                                            \
+            return rtn;                                                 \
+        }
 
-    // Internal APIs.
-    GET_VAR_API(_get_left_wf_ext, gb()._left_wf_exts[posn], true, true, true, false)
-    GET_VAR_API(_get_right_wf_ext, gb()._right_wf_exts[posn], true, true, true, false)
-    GET_VAR_API(_get_soln_vec_len, gb()._soln_vec_lens[posn], true, true, true, true)
-    GET_VAR_API(_get_var_vec_len, gb()._var_vec_lens[posn], true, true, true, true)
-    GET_VAR_API(_get_rank_offset, gb()._rank_offsets[posn], true, true, true, true)
-    GET_VAR_API(_get_local_offset, gb()._local_offsets[posn], true, true, true, false)
-
-    // Exposed APIs.
-    GET_VAR_API(get_first_local_index, gb().get_first_local_index(posn), true, true, true, true)
-    GET_VAR_API(get_last_local_index, gb().get_last_local_index(posn), true, true, true, true)
-    GET_VAR_API(get_first_misc_index, gb()._local_offsets[posn], false, false, true, false)
-    GET_VAR_API(get_last_misc_index, gb()._local_offsets[posn] + gb()._domains[posn] - 1, false, false, true, false)
-    GET_VAR_API(get_rank_domain_size, gb()._domains[posn], false, true, false, false)
-    GET_VAR_API(get_left_pad_size, gb()._actl_left_pads[posn], false, true, false, false)
-    GET_VAR_API(get_right_pad_size, gb()._actl_right_pads[posn], false, true, false, false)
-    GET_VAR_API(get_left_halo_size, gb()._left_halos[posn], false, true, false, false)
-    GET_VAR_API(get_right_halo_size, gb()._right_halos[posn], false, true, false, false)
-    GET_VAR_API(get_left_extra_pad_size, gb()._actl_left_pads[posn] - gb()._left_halos[posn], false, true, false, false)
-    GET_VAR_API(get_right_extra_pad_size, gb()._actl_right_pads[posn] - gb()._right_halos[posn], false, true, false, false)
-    GET_VAR_API(get_alloc_size, gb()._allocs[posn], true, true, true, false)
-    GET_VAR_API(get_first_rank_domain_index, gb()._rank_offsets[posn], false, true, false, true)
-    GET_VAR_API(get_last_rank_domain_index, gb()._rank_offsets[posn] + gb()._domains[posn] - 1, false, true, false, true)
-    GET_VAR_API(get_first_rank_halo_index, gb()._rank_offsets[posn] - gb()._left_halos[posn], false, true, false, true)
-    GET_VAR_API(get_last_rank_halo_index, gb()._rank_offsets[posn] + gb()._domains[posn] +
-                 gb()._right_halos[posn] - 1, false, true, false, true)
-    GET_VAR_API(get_first_rank_alloc_index, gb().get_first_local_index(posn), false, true, false, true)
-    GET_VAR_API(get_last_rank_alloc_index, gb().get_last_local_index(posn), false, true, false, true)
-#undef GET_VAR_API
+    // Add vector version that retuns only allowed results.
+    #define GET_VAR_API2(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
+        GET_VAR_API(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
+        idx_t_vec YkVarImpl::api_name ## _vec() const {                 \
+            STATE_VARS(gbp());                                          \
+            if (prep_req && corep()->_rank_offsets[0] < 0)              \
+                THROW_YASK_EXCEPTION("Error: '" #api_name "_vec()' called on var '" + \
+                                     get_name() + "' before calling 'prepare_solution()'"); \
+            auto cp = corep();                                          \
+            auto nvdims = get_num_dims();                               \
+            auto nadims = 0;                                            \
+            if (step_ok) nadims += gb()._num_step_dims;                  \
+            if (domain_ok) nadims += gb()._num_domain_dims;              \
+            if (misc_ok) nadims += gb()._num_misc_dims;                  \
+            idx_t_vec res(nadims, 0);                                   \
+            int i = 0;                                                  \
+            for (int posn = 0; posn < nvdims; posn++) {                 \
+                idx_t mbit = idx_t(1) << posn;                          \
+                if ((step_ok && (mbit & gb()._step_dim_mask) != 0) ||    \
+                    (domain_ok && (mbit & gb()._domain_dim_mask) != 0) || \
+                    (misc_ok && (mbit & gb()._misc_dim_mask) != 0)) {    \
+                    res.at(i++) = expr;                                 \
+                }                                                       \
+            }                                                           \
+            assert(i == nadims);                                        \
+            return res;                                                 \
+        }
 
     // APIs to set vars.
-#define COMMA ,
-#define SET_VAR_API(api_name, expr, step_ok, domain_ok, misc_ok)       \
-    void YkVarImpl::api_name(const string& dim, idx_t n) {             \
-        STATE_VARS(gbp());                                              \
-        TRACE_MSG("var '" << get_name() << "'."                        \
-                   #api_name "('" << dim << "', " << n << ")");         \
-        dims->check_dim_type(dim, #api_name, step_ok, domain_ok, misc_ok); \
-        int posn = gb().get_dim_posn(dim, true, #api_name);              \
-        idx_t mbit = 1LL << posn;                                       \
-        expr;                                                           \
-    }                                                                   \
-    void YkVarImpl::api_name(int posn, idx_t n) {                      \
-        STATE_VARS(gbp());                                              \
-        idx_t mbit = 1LL << posn;                                       \
-        int dim = posn;                                                 \
-        expr;                                                           \
-    }
+    #define SET_VAR_API(api_name, expr, step_ok, domain_ok, misc_ok, need_resize) \
+        void YkVarImpl::api_name(const string& dim, idx_t n) {          \
+            STATE_VARS(gbp());                                          \
+            TRACE_MSG("var '" << get_name() << "'."                     \
+                      #api_name "('" << dim << "', " << n << ")");      \
+            dims->check_dim_type(dim, #api_name, step_ok, domain_ok, misc_ok); \
+            int posn = gb().get_dim_posn(dim, true, #api_name);         \
+            auto cp = corep();                                          \
+            expr;                                                       \
+            if (need_resize) resize();                                  \
+            else sync_core();                                           \
+        }                                                               \
+        void YkVarImpl::api_name(int posn, idx_t n) {                   \
+            STATE_VARS(gbp());                                          \
+            TRACE_MSG("var '" << get_name() << "'."                     \
+                      #api_name "('" << posn << "', " << n << ")");     \
+            auto cp = corep();                                          \
+            expr;                                                       \
+            if (need_resize) resize();                                  \
+            else sync_core();                                           \
+        }
+
+    // Add vector versions that take only domain-dim vals.
+    #define SET_VAR_API2(api_name, expr, step_ok, domain_ok, misc_ok, need_resize) \
+        SET_VAR_API(api_name, expr, step_ok, domain_ok, misc_ok, need_resize) \
+        void YkVarImpl::api_name ## _vec(idx_t_vec vals) {              \
+            STATE_VARS(gbp());                                          \
+            TRACE_MSG("var '" << get_name() << "'."                     \
+                      #api_name "_vec(...)");                           \
+            auto cp = corep();                                          \
+            auto nvdims = get_num_dims();                               \
+            auto nadims = 0;                                            \
+            if (step_ok) nadims += gb()._num_step_dims;                  \
+            if (domain_ok) nadims += gb()._num_domain_dims;              \
+            if (misc_ok) nadims += gb()._num_misc_dims;                  \
+            if (vals.size() != nadims)                                  \
+                THROW_YASK_EXCEPTION("Error: '" #api_name               \
+                                     "_vec()' called on var '" +        \
+                                     get_name() + "' without the proper number of values"); \
+            int i = 0;                                                  \
+            for (int posn = 0; posn < nvdims; posn++) {                 \
+                idx_t mbit = idx_t(1) << posn;                          \
+                if ((step_ok && (mbit & gb()._step_dim_mask) != 0) ||    \
+                    (domain_ok && (mbit & gb()._domain_dim_mask) != 0) || \
+                    (misc_ok && (mbit & gb()._misc_dim_mask) != 0)) {    \
+                    auto n = vals.at(i++);                              \
+                    expr;                                               \
+                }                                                       \
+            }                                                           \
+            if (need_resize) resize();                                  \
+            else sync_core();                                           \
+        }                                                               \
+        void YkVarImpl::api_name ## _vec(idx_t_init_list vals) {        \
+            idx_t_vec vec(vals);                                            \
+            api_name ## _vec(vec);                                      \
+        }
+    
+    // Internal APIs.
+    GET_VAR_API(_get_left_wf_ext,
+                cp->_left_wf_exts[posn],
+                true, true, true, false)
+    GET_VAR_API(_get_right_wf_ext,
+                cp->_right_wf_exts[posn],
+                true, true, true, false)
+    GET_VAR_API(_get_soln_vec_len,
+                cp->_soln_vec_lens[posn],
+                true, true, true, true)
+    GET_VAR_API(_get_var_vec_len,
+                cp->_var_vec_lens[posn],
+                true, true, true, true)
+    GET_VAR_API(_get_rank_offset,
+                cp->_rank_offsets[posn],
+                true, true, true, true)
+    GET_VAR_API(_get_local_offset,
+                cp->_local_offsets[posn],
+                true, true, true, false)
+
+    // Exposed APIs.
+    GET_VAR_API(get_first_misc_index,
+                cp->_local_offsets[posn],
+                false, false, true, false)
+    GET_VAR_API(get_last_misc_index,
+                cp->_local_offsets[posn] + cp->_domains[posn] - 1,
+                false, false, true, false)
+
+    GET_VAR_API2(get_alloc_size,
+                cp->_allocs[posn],
+                true, true, true, false)
+    GET_VAR_API2(get_first_local_index,
+                cp->get_first_local_index(posn),
+                true, true, true, true)
+    GET_VAR_API2(get_last_local_index,
+                cp->get_last_local_index(posn),
+                true, true, true, true)
+
+    GET_VAR_API2(get_left_pad_size,
+                cp->_actl_left_pads[posn],
+                false, true, false, false)
+    GET_VAR_API2(get_right_pad_size,
+                cp->_actl_right_pads[posn],
+                false, true, false, false)
+    GET_VAR_API2(get_left_halo_size,
+                cp->_left_halos[posn],
+                false, true, false, false)
+    GET_VAR_API2(get_right_halo_size,
+                cp->_right_halos[posn],
+                false, true, false, false)
+    GET_VAR_API2(get_left_extra_pad_size,
+                cp->_actl_left_pads[posn] - cp->_left_halos[posn],
+                false, true, false, false)
+    GET_VAR_API2(get_right_extra_pad_size,
+                cp->_actl_right_pads[posn] - cp->_right_halos[posn],
+                false, true, false, false)
+
+    GET_VAR_API2(get_rank_domain_size,
+                cp->_domains[posn],
+                false, true, false, !gb()._fixed_size)
+    GET_VAR_API2(get_first_rank_domain_index,
+                cp->_rank_offsets[posn],
+                false, true, false, true)
+    GET_VAR_API2(get_last_rank_domain_index,
+                cp->_rank_offsets[posn] + cp->_domains[posn] - 1,
+                false, true, false, true)
+    GET_VAR_API2(get_first_rank_halo_index,
+                cp->_rank_offsets[posn] - cp->_left_halos[posn],
+                false, true, false, true)
+    GET_VAR_API2(get_last_rank_halo_index,
+                cp->_rank_offsets[posn] + cp->_domains[posn] + cp->_right_halos[posn] - 1,
+                false, true, false, true)
 
     // These are the internal, unchecked access functions that allow
     // changes prohibited thru the APIs.
-    SET_VAR_API(_set_rank_offset, gb()._rank_offsets[posn] = n, true, true, true)
-    SET_VAR_API(_set_local_offset, gb()._local_offsets[posn] = n;
-                 assert(imod_flr(n, gb()._var_vec_lens[posn]) == 0);
-                 gb()._vec_local_offsets[posn] = n / gb()._var_vec_lens[posn], true, true, true)
-    SET_VAR_API(_set_domain_size, gb()._domains[posn] = n; resize(), true, true, true)
-    SET_VAR_API(_set_left_pad_size, gb()._actl_left_pads[posn] = n; resize(), true, true, true)
-    SET_VAR_API(_set_right_pad_size, gb()._actl_right_pads[posn] = n; resize(), true, true, true)
-    SET_VAR_API(_set_left_wf_ext, gb()._left_wf_exts[posn] = n; resize(), true, true, true)
-    SET_VAR_API(_set_right_wf_ext, gb()._right_wf_exts[posn] = n; resize(), true, true, true)
-    SET_VAR_API(_set_alloc_size, gb()._domains[posn] = n; resize(), true, true, true)
+    SET_VAR_API(_set_rank_offset,
+                cp->_rank_offsets[posn] = n,
+                true, true, true, false)
+    SET_VAR_API(_set_local_offset,
+                cp->_local_offsets[posn] = n;
+                assert(imod_flr(n, cp->_var_vec_lens[posn]) == 0);
+                cp->_vec_local_offsets[posn] = n / cp->_var_vec_lens[posn],
+                true, true, true, false)
+    SET_VAR_API(_set_domain_size,
+                cp->_domains[posn] = n,
+                true, true, true, true)
+    SET_VAR_API(_set_left_pad_size,
+                cp->_actl_left_pads[posn] = n,
+                true, true, true, true)
+    SET_VAR_API(_set_right_pad_size,
+                cp->_actl_right_pads[posn] = n,
+                true, true, true, true)
+    SET_VAR_API(_set_left_wf_ext,
+                cp->_left_wf_exts[posn] = n,
+                true, true, true, true)
+    SET_VAR_API(_set_right_wf_ext,
+                cp->_right_wf_exts[posn] = n,
+                true, true, true, true)
+    SET_VAR_API(_set_alloc_size,
+                cp->_domains[posn] = n,
+                true, true, true, true)
+    SET_VAR_API(update_left_min_pad_size,
+                cp->_req_left_pads[posn] = max(n, cp->_req_left_pads[posn]),
+                false, true, false, true)
+    SET_VAR_API(update_right_min_pad_size,
+                cp->_req_right_pads[posn] = max(n, cp->_req_right_pads[posn]),
+                false, true, false, true)
+    SET_VAR_API(update_min_pad_size,
+                cp->_req_left_pads[posn] = max(n, cp->_req_left_pads[posn]);
+                cp->_req_right_pads[posn] = max(n, cp->_req_right_pads[posn]),
+                false, true, false, true)
+    SET_VAR_API(update_left_extra_pad_size,
+                cp->_req_left_epads[posn] = max(n, cp->_req_left_epads[posn]),
+                false, true, false, true)
+    SET_VAR_API(update_right_extra_pad_size,
+                cp->_req_right_epads[posn] = max (n, cp->_req_right_epads[posn]),
+                false, true, false, true)
+    SET_VAR_API(update_extra_pad_size,
+                cp->_req_left_epads[posn] = max(n, cp->_req_left_epads[posn]);
+                cp->_req_right_epads[posn] = max (n, cp->_req_right_epads[posn]),
+                false, true, false, true)
 
     // These are the safer ones used in the APIs.
-    SET_VAR_API(set_left_halo_size, gb()._left_halos[posn] = n; resize(), false, true, false)
-    SET_VAR_API(set_right_halo_size, gb()._right_halos[posn] = n; resize(), false, true, false)
-    SET_VAR_API(set_halo_size, gb()._left_halos[posn] = gb()._right_halos[posn] = n; resize(), false, true, false)
-    SET_VAR_API(set_alloc_size, gb()._domains[posn] = n; resize(),
-                 gb()._is_dynamic_step_alloc, gb()._fixed_size, gb()._is_dynamic_misc_alloc)
-    SET_VAR_API(set_left_min_pad_size, gb()._req_left_pads[posn] = n; resize(), false, true, false)
-    SET_VAR_API(set_right_min_pad_size, gb()._req_right_pads[posn] = n; resize(), false, true, false)
-    SET_VAR_API(set_min_pad_size, gb()._req_left_pads[posn] = gb()._req_right_pads[posn] = n; resize(),
-                 false, true, false)
-    SET_VAR_API(set_left_extra_pad_size, gb()._req_left_epads[posn] = n; resize(), false, true, false)
-    SET_VAR_API(set_right_extra_pad_size, gb()._req_right_epads[posn] = n; resize(), false, true, false)
-    SET_VAR_API(set_extra_pad_size, gb()._req_left_epads[posn] = gb()._req_right_epads[posn] = n; resize(),
-                false, true, false)
-    SET_VAR_API(set_first_misc_index, gb()._local_offsets[posn] = n, false, false, gb()._is_user_var)
-#undef COMMA
-#undef SET_VAR_API
+    SET_VAR_API(set_first_misc_index,
+                cp->_local_offsets[posn] = n,
+                false, false, gb()._is_user_var, false)
+    SET_VAR_API(set_alloc_size,
+                cp->_domains[posn] = n,
+                gb()._is_dynamic_step_alloc, gb()._fixed_size, gb()._is_dynamic_misc_alloc, true)
+
+    SET_VAR_API(set_left_halo_size,
+                cp->_left_halos[posn] = n,
+                false, true, false, true)
+    SET_VAR_API(set_right_halo_size,
+                cp->_right_halos[posn] = n,
+                false, true, false, true)
+    SET_VAR_API(set_halo_size,
+                cp->_left_halos[posn] = cp->_right_halos[posn] = n,
+                false, true, false, true)
+    SET_VAR_API(set_left_min_pad_size,
+                cp->_req_left_pads[posn] = n,
+                false, true, false, true)
+    SET_VAR_API(set_right_min_pad_size,
+                cp->_req_right_pads[posn] = n,
+                false, true, false, true)
+    SET_VAR_API(set_min_pad_size,
+                cp->_req_left_pads[posn] = n;
+                cp->_req_right_pads[posn] = n,
+                false, true, false, true)
+    SET_VAR_API(set_left_extra_pad_size,
+                cp->_req_left_epads[posn] = n,
+                false, true, false, true)
+    SET_VAR_API(set_right_extra_pad_size,
+                cp->_req_right_epads[posn] = n,
+                false, true, false, true)
+    SET_VAR_API(set_extra_pad_size,
+                cp->_req_left_epads[posn] = n;
+                cp->_req_right_epads[posn] = n,
+                false, true, false, true)
+    #undef SET_VAR_API
+    #undef SET_VAR_API2
+    #undef GET_VAR_API
+    #undef GET_VAR_API2
 
     bool YkVarImpl::is_storage_layout_identical(const YkVarImpl* op,
-                                                 bool check_sizes) const {
+                                                bool check_sizes) const {
 
         // Same size?
         if (check_sizes && get_num_storage_bytes() != op->get_num_storage_bytes())
@@ -153,16 +319,16 @@ namespace yask {
                 return false;
 
             // Same folding?
-            if (gb()._var_vec_lens[i] != op->gb()._var_vec_lens[i])
+            if (corep()->_var_vec_lens[i] != op->corep()->_var_vec_lens[i])
                 return false;
 
             // Same dim sizes?
             if (check_sizes) {
-                if (gb()._domains[i] != op->gb()._domains[i])
+                if (corep()->_domains[i] != op->corep()->_domains[i])
                     return false;
-                if (gb()._actl_left_pads[i] != op->gb()._actl_left_pads[i])
+                if (corep()->_actl_left_pads[i] != op->corep()->_actl_left_pads[i])
                     return false;
-                if (gb()._actl_right_pads[i] != op->gb()._actl_right_pads[i])
+                if (corep()->_actl_right_pads[i] != op->corep()->_actl_right_pads[i])
                     return false;
             }
         }
@@ -219,14 +385,17 @@ namespace yask {
                                  get_name() + "'");
         gb().check_indices(indices, "get_element", true, true, false);
         idx_t asi = gb().get_alloc_step_index(indices);
+        
+        gb().const_copy_data_from_device(); // TODO: make more efficient.
         real_t val = gb().read_elem(indices, asi, __LINE__);
+
         TRACE_MSG("get_element({" << gb().make_index_string(indices) << "}) on '" <<
                   get_name() + "' returns " << val);
         return double(val);
     }
     idx_t YkVarImpl::set_element(double val,
-                                  const Indices& indices,
-                                  bool strict_indices) {
+                                 const Indices& indices,
+                                 bool strict_indices) {
         STATE_VARS(gbp());
         TRACE_MSG("set_element(" << val << ", {" <<
                   gb().make_index_string(indices) << "}, " <<
@@ -242,11 +411,14 @@ namespace yask {
             // that updates the step index.
             gb().check_indices(indices, "set_element", strict_indices, false, false)) {
             idx_t asi = gb().get_alloc_step_index(indices);
+
+            gb().copy_data_from_device(); // TODO: make more efficient.
             gb().write_elem(real_t(val), indices, asi, __LINE__);
             nup++;
 
-            // Set appropriate dirty flag.
-            gb().set_dirty_using_alloc_index(true, asi);
+            // Set appropriate dirty flags.
+            gb()._coh.mod_host();
+            gb().set_dirty_using_alloc_index(YkVarBase::self, true, asi);
         }
         TRACE_MSG("set_element(" << val << ", {" <<
                   gb().make_index_string(indices) << "}, " <<
@@ -255,8 +427,8 @@ namespace yask {
         return nup;
     }
     idx_t YkVarImpl::add_to_element(double val,
-                                     const Indices& indices,
-                                     bool strict_indices) {
+                                    const Indices& indices,
+                                    bool strict_indices) {
         STATE_VARS(gbp());
         TRACE_MSG("add_to_element(" << val << ", {" <<
                   gb().make_index_string(indices) <<  "}, " <<
@@ -271,11 +443,20 @@ namespace yask {
             // Check step index because this API must read before writing.
             gb().check_indices(indices, "add_to_element", strict_indices, true, false)) {
             idx_t asi = gb().get_alloc_step_index(indices);
+
+            #ifdef USE_OFFLOAD_NO_USM
+            if (gb()._coh.need_to_update_host()) {
+                #pragma omp critical
+                gb().copy_data_from_device(); // TODO: make more efficient.
+             }
+            #endif
+
             gb().add_to_elem(real_t(val), indices, asi, __LINE__);
             nup++;
 
-            // Set appropriate dirty flag.
-            gb().set_dirty_using_alloc_index(true, asi);
+            // Set appropriate dirty flags.
+            gb()._coh.mod_host();
+            gb().set_dirty_using_alloc_index(YkVarBase::self, true, asi);
         }
         TRACE_MSG("add_to_element(" << val << ", {" <<
                   gb().make_index_string(indices) <<  "}, " <<
@@ -284,134 +465,142 @@ namespace yask {
         return nup;
     }
 
+    // Read into buffer from *this.
     idx_t YkVarBase::get_elements_in_slice(void* buffer_ptr,
-                                            const Indices& first_indices,
-                                            const Indices& last_indices) const {
-        STATE_VARS(this);
-        TRACE_MSG("get_elements_in_slice(" << buffer_ptr << ", {" <<
-                  make_index_string(first_indices) << "}, {" <<
-                  make_index_string(last_indices) << "}) on " <<
-                  make_info_string());
-        if (get_storage() == 0)
-            THROW_YASK_EXCEPTION("Error: call to 'get_elements_in_slice' with no storage allocated for var '" +
-                                 get_name() + "'");
-        check_indices(first_indices, "get_elements_in_slice", true, true, false);
-        check_indices(last_indices, "get_elements_in_slice", true, true, false);
+                                           const Indices& first_indices,
+                                           const Indices& last_indices,
+                                           bool on_device) const {
+        // A specialized visitor.
+        struct GetElem {
+            static const char* fname() {
+                return "get_elements_in_slice";
+            }
 
-        // Find range.
-        IdxTuple num_elems_tuple = get_slice_range(first_indices, last_indices);
+            // Copy from the var to the buffer.
+            ALWAYS_INLINE
+            static void visit(YkVarBase* varp,
+                              real_t* p, idx_t pofs,
+                              const Indices& pt, idx_t ti) {
 
-        // Visit points in slice.
-        num_elems_tuple.visit_all_points_in_parallel
-            ([&](const IdxTuple& ofs, size_t idx) {
-                Indices pt = first_indices.add_elements(ofs);
+                // Read from var.
+                real_t val = varp->read_elem(pt, ti, __LINE__);
 
-                // TODO: move this outside of loop for const step index.
-                idx_t asi = get_alloc_step_index(pt);
+                // Write to buffer at proper index.
+                p[pofs] = val;
+            }
+        };
 
-                real_t val = read_elem(pt, asi, __LINE__);
-                ((real_t*)buffer_ptr)[idx] = val;
-                return true;    // keep going.
-            });
-        auto nup = num_elems_tuple.product();
-        TRACE_MSG("get_elements_in_slice(" << buffer_ptr << ", {" <<
-                  make_index_string(first_indices) << "}, {" <<
-                  make_index_string(last_indices) << "}) on '" <<
-                  get_name() + "' returns " << nup);
-        return nup;
+        if (on_device)
+            const_copy_data_to_device();
+        else
+            const_copy_data_from_device();
+        
+        // Call the generic visit.
+        auto n = const_cast<YkVarBase*>(this)->
+            _visit_elements_in_slice<GetElem>(true, (void*)buffer_ptr,
+                                              first_indices, last_indices, on_device);
+
+        // Return number of writes.
+        return n;
     }
-    idx_t YkVarBase::set_elements_in_slice_same(double val,
-                                                 const Indices& first_indices,
-                                                 const Indices& last_indices,
-                                                 bool strict_indices) {
-        STATE_VARS(this);
-        TRACE_MSG("set_elements_in_slice_same(" << val << ", {" <<
-                  make_index_string(first_indices) << "}, {" <<
-                  make_index_string(last_indices) <<  "}, " <<
-                  strict_indices << ") on " <<
-                  make_info_string());
-        if (get_storage() == 0) {
-            if (strict_indices)
-                THROW_YASK_EXCEPTION("Error: call to 'set_elements_in_slice_same' with no storage allocated for var '" +
-                                     get_name() + "'");
-            return 0;
-        }
 
-        // 'Fixed' copy of indices.
-        Indices first, last;
-        check_indices(first_indices, "set_elements_in_slice_same",
-                     strict_indices, false, false, &first);
-        check_indices(last_indices, "set_elements_in_slice_same",
-                     strict_indices, false, false, &last);
-
-        // Find range.
-        IdxTuple num_elems_tuple = get_slice_range(first, last);
-
-        // Visit points in slice.
-        // TODO: optimize by setting vectors when possible.
-        num_elems_tuple.visit_all_points_in_parallel([&](const IdxTuple& ofs,
-                                                   size_t idx) {
-                Indices pt = first.add_elements(ofs);
-
-                // TODO: move this outside of loop for const step index.
-                idx_t asi = get_alloc_step_index(pt);
-
-                write_elem(real_t(val), pt, asi, __LINE__);
-                return true;    // keep going.
-            });
-
-        // Set appropriate dirty flag(s).
-        set_dirty_in_slice(first, last);
-
-        auto nup = num_elems_tuple.product();
-        TRACE_MSG("set_elements_in_slice_same(" << val << ", {" <<
-                  make_index_string(first_indices) << "}, {" <<
-                  make_index_string(last_indices) <<  "}, " <<
-                  strict_indices << ") on '" <<
-                  get_name() + "' returns " << nup);
-        return nup;
-    }
+    // Write to *this from buffer.
     idx_t YkVarBase::set_elements_in_slice(const void* buffer_ptr,
-                                            const Indices& first_indices,
-                                            const Indices& last_indices) {
-        STATE_VARS(this);
-        TRACE_MSG("set_elements_in_slice(" << buffer_ptr << ", {" <<
-                  make_index_string(first_indices) << "}, {" <<
-                  make_index_string(last_indices) <<  "}) on " <<
-                  make_info_string());
-        if (get_storage() == 0)
-            THROW_YASK_EXCEPTION("Error: call to 'set_elements_in_slice' with no storage allocated for var '" +
-                                 get_name() + "'");
-        check_indices(first_indices, "set_elements_in_slice", true, false, false);
-        check_indices(last_indices, "set_elements_in_slice", true, false, false);
+                                           const Indices& first_indices,
+                                           const Indices& last_indices,
+                                           bool on_device) {
+        // A specialized visitor.
+        struct SetElem {
+            static const char* fname() {
+                return "set_elements_in_slice";
+            }
 
-        // Find range.
-        IdxTuple num_elems_tuple = get_slice_range(first_indices, last_indices);
+            // Copy from the buffer to the var.
+            ALWAYS_INLINE
+            static void visit(YkVarBase* varp,
+                              real_t* p, idx_t pofs,
+                              const Indices& pt, idx_t ti) {
 
-        // Visit points in slice.
-        num_elems_tuple.visit_all_points_in_parallel
-            ([&](const IdxTuple& ofs,
-                 size_t idx) {
-                Indices pt = first_indices.add_elements(ofs);
+                // Read from buffer.
+                real_t val = p[pofs];
 
-                // TODO: move this outside of loop for const step index.
-                idx_t asi = get_alloc_step_index(pt);
+                // Write to var
+                varp->write_elem(val, pt, ti, __LINE__);
+            }
+        };
 
-                real_t val = ((real_t*)buffer_ptr)[idx];
-                write_elem(val, pt, asi, __LINE__);
-                return true;    // keep going.
-            });
-
-        // Set appropriate dirty flag(s).
+        if (on_device)
+            const_copy_data_to_device();
+        else
+            const_copy_data_from_device();
+        
+        // Call the generic visit.
+        auto n = 
+            _visit_elements_in_slice<SetElem>(true, (void*)buffer_ptr,
+                                              first_indices, last_indices, on_device);
+            
+        // Set appropriate dirty flags.
+        if (on_device)
+            _coh.mod_dev();
+        else
+            _coh.mod_host();
         set_dirty_in_slice(first_indices, last_indices);
 
-        auto nup = num_elems_tuple.product();
-        TRACE_MSG("set_elements_in_slice(" << buffer_ptr << ", {" <<
-                  make_index_string(first_indices) << "}, {" <<
-                  make_index_string(last_indices) <<  "}) on '" <<
-                  get_name() + "' returns " << nup);
-        return nup;
+        // Return number of writes.
+        return n;
     }
 
+    // Write to *this from 'val'.
+    idx_t YkVarBase::set_elements_in_slice_same(double val,
+                                                const Indices& first_indices,
+                                                const Indices& last_indices,
+                                                bool strict_indices,
+                                                bool on_device) {
+        // A specialized visitor.
+        struct SetElem {
+            static const char* fname() {
+                return "set_elements_in_slice_same";
+            }
+
+            // Set the var.
+            ALWAYS_INLINE
+            static void visit(YkVarBase* varp,
+                              real_t* p, idx_t pofs,
+                              const Indices& pt, idx_t ti) {
+
+                // Get const value, ignoring offset.
+                real_t val = *p;
+
+                // Write to var
+                varp->write_elem(val, pt, ti, __LINE__);
+            }
+        };
+
+        if (on_device)
+            const_copy_data_to_device();
+        else
+            const_copy_data_from_device();
+        
+        // Set up pointer to val for visitor.
+        // Requires casting if real_t is a float.
+        real_t v = real_t(val);
+        auto* buffer_ptr = &v;
+        
+        // Call the generic visit.
+        auto n = 
+            _visit_elements_in_slice<SetElem>(strict_indices, (void*)buffer_ptr,
+                                              first_indices, last_indices, on_device);
+            
+        // Set appropriate dirty flags.
+        if (on_device)
+            _coh.mod_dev();
+        else
+            _coh.mod_host();
+        set_dirty_in_slice(first_indices, last_indices);
+
+        // Return number of writes.
+        return n;
+    }
+    
 } // namespace.
 

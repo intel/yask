@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -129,40 +129,51 @@ namespace yask {
         _dims = dims;
     }
 
+    // Simple accessors.
+    CompilerSettings& Var::get_settings() { return _soln->get_settings(); }
+    const Dimensions& Var::get_soln_dims() { return _soln->get_dims(); }
+
     // Determine whether var can be folded.
-    void Var::set_folding(const Dimensions& dims) {
+    void Var::set_dim_counts(const Dimensions& dims) {
 
+        // Find num of dim types in this var.
+        _num_step_dims = 0;
+        _num_domain_dims = 0;
+        _num_misc_dims = 0;
         _num_foldable_dims = 0;
+        for (auto gdim : _dims) {
+            auto& dname = gdim->_get_name();
+            auto dtype = gdim->get_type();
 
-        // Never fold scalars, even if there is no vectorization.
-        if (get_num_dims() == 0) {
-            _is_foldable = false;
-            return;
-        }
+            if (dtype == STEP_INDEX)
+                _num_step_dims++;
 
-        // Find the number of folded dims used in this var.
-        for (auto fdim : dims._fold_gt1) {
-            auto& fdname = fdim._get_name();
-
-            // Search for dim in var.
-            bool found = false;
-            for (auto gdim : _dims) {
-                auto& gdname = gdim->_get_name();
-                if (fdname == gdname) {
-                    found = true;
-                    break;
-                }
+            else if (dtype == DOMAIN_INDEX) {
+                _num_domain_dims++;
+                if (dims._fold_gt1.lookup(dname))
+                    _num_foldable_dims++;
             }
-            if (found)
-                _num_foldable_dims++;
+
+            else if (dtype == MISC_INDEX) {
+                _num_misc_dims++;
+            }
+
+            else
+                assert("internal error: unknown dim type");
         }
 
-        // Can fold if ALL fold dims >1 are used in this var.
+        // Never fold vars without domain dims, even if there is no vectorization.
+        if (_num_domain_dims == 0)
+            _is_foldable = false;
 
-        // NB: this will always be true if there is no vectorization, i.e.,
-        // both are zero.  We do this because the compiler expects stencils
-        // to be vectorizable.
-        _is_foldable = _num_foldable_dims == int(dims._fold_gt1.size());
+        // Otherwise, can fold if ALL vec dims are used in this var.
+        else {
+
+            // NB: this will be true if there is no vectorization, i.e.,
+            // both are zero.  We do this because the compiler expects stencils
+            // to be vectorizable.
+            _is_foldable = _num_foldable_dims == int(dims._fold_gt1.size());
+        }
     }
     
     // Determine whether halo sizes are equal.
@@ -280,6 +291,14 @@ namespace yask {
         update_l1_dist(l1_dist);
     }
 
+    // Update write stages and offsets.
+    void Var::update_write_points(const string& stage_name, const IntTuple& offsets) {
+        auto& sdims = get_soln_dims();
+        auto* sofs = offsets.lookup(sdims._step_dim);
+        if (sofs)
+            _write_points[stage_name] = *sofs;
+    }
+    
     // Update const indices based on 'indices'.
     void Var::update_const_indices(const IntTuple& indices) {
 
@@ -304,36 +323,31 @@ namespace yask {
     }
 
     // Determine how many values in step-dim are needed.
-    int Var::get_step_dim_size() const
+    Var::StepDimInfo Var::get_step_dim_info() const
     {
-        // Specified by API.
-        if (_step_alloc > 0)
-            return _step_alloc;
-
+        StepDimInfo sdi;
+        
         // No step-dim index used.
         auto step_dim = get_step_dim();
         if (!step_dim)
-            return 1;
+            return sdi;
 
-        // Specified on cmd line.
-        if (_soln->get_settings()._step_alloc > 0)
-            return _soln->get_settings()._step_alloc;
-        
         // No info stored?
         if (_halos.size() == 0)
-            return 1;
+            return sdi;
 
         // Need the max across all stages.
         int max_sz = 1;
 
-        // Loop thru each stage w/halos.
+        // Loop thru each stage w/halos, including halos w/size zero.
         for (auto& hi : _halos) {
-#ifdef DEBUG_HALOS
-            auto& pname = hi.first;
-#endif
+            auto& stage_name = hi.first;
             auto& h2 = hi.second;
 
-            // First and last step-dim found.
+            // Written?
+            bool is_written = false;
+
+            // First (lowest) and last (highest) step-dim offset.
             const int unset = -9999;
             int first_ofs = unset, last_ofs = unset;
 
@@ -347,11 +361,15 @@ namespace yask {
                     auto ofs = j.first;
                     auto& halo = j.second; // halo tuple at step-val 'ofs'.
 
+                    // Written here?
+                    if (_write_points.count(stage_name) && _write_points.at(stage_name) == ofs)
+                        is_written = true;
+
                     // Any existing value?
                     if (halo.size()) {
 #ifdef DEBUG_HALOS
                         cout << "** var " << _name << " has halo " << halo.make_dim_val_str() <<
-                            " at ofs " << ofs << " in stage " << pname << endl;
+                            " at ofs " << ofs << " in stage " << stage_name << endl;
 #endif
 
                         // Update vars.
@@ -373,26 +391,38 @@ namespace yask {
             if (last_ofs != unset && first_ofs != unset && last_ofs != first_ofs) {
 
                 // Default step-dim size is range of step offsets.
-                // For example, if equation touches 't' through 't+2',
-                // 'sz' is 3.
+                // For example, if equation touches 't-1' through 't+2',
+                // 'sz' is 4.
                 int sz = last_ofs - first_ofs + 1;
 
-                // First and last largest halos.
-                int first_max_halo = 0, last_max_halo = 0;
-                for (auto& i : h2) {
-                    //auto left = i.first;
-                    auto& h3 = i.second; // map of step-dims to halos.
+                // Check for possible writeback.
+                if (is_written) {
 
-                    if (h3.count(first_ofs) && h3.at(first_ofs).size())
-                        first_max_halo = max(first_max_halo, h3.at(first_ofs).max());
-                    if (h3.count(last_ofs) && h3.at(last_ofs).size())
-                        last_max_halo = max(last_max_halo, h3.at(last_ofs).max());
+                    // First and last largest halos.
+                    int first_max_halo = 0, last_max_halo = 0;
+                    for (auto& i : h2) {
+                        //auto left = i.first;
+                        auto& h3 = i.second; // map of step-dims to halos.
+                        
+                        if (h3.count(first_ofs) && h3.at(first_ofs).size())
+                            first_max_halo = max(first_max_halo, h3.at(first_ofs).max());
+                        if (h3.count(last_ofs) && h3.at(last_ofs).size())
+                            last_max_halo = max(last_max_halo, h3.at(last_ofs).max());
+                    }
+
+                    // If first and last halos are zero, we can further optimize
+                    // storage by immediately reusing memory location.
+                    if (sz > 1 && first_max_halo == 0 && last_max_halo == 0) {
+                        int write_ofs = _write_points.at(stage_name);
+                        sz--;
+                        if (last_ofs == write_ofs) // forward step.
+                            sdi.writeback_ofs[stage_name] = first_ofs; // replace lowest read.
+                        else if (first_ofs == write_ofs) // backward step.
+                            sdi.writeback_ofs[stage_name] = last_ofs; // replace lowest read.
+                        else
+                            assert("write ofs is neither first or last");
+                    }
                 }
-
-                // If first and last halos are zero, we can further optimize storage by
-                // immediately reusing memory location.
-                if (sz > 1 && first_max_halo == 0 && last_max_halo == 0)
-                    sz--;
 
                 // Keep max so far.
                 max_sz = max(max_sz, sz);
@@ -400,7 +430,16 @@ namespace yask {
 
         } // stages.
 
-        return max_sz;
+        // Override by API.
+        if (_step_alloc > 0)
+            sdi.step_dim_size = _step_alloc;
+
+        // Specified on cmd line.
+        if (_soln->get_settings()._step_alloc > 0)
+            sdi.step_dim_size = _soln->get_settings()._step_alloc;
+
+        sdi.step_dim_size = max_sz;
+        return sdi;
     }
 
     // Description of this var.

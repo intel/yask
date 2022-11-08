@@ -2,7 +2,7 @@
 
 ##############################################################################
 ## YASK: Yet Another Stencil Kit
-## Copyright (c) 2014-2021, Intel Corporation
+## Copyright (c) 2014-2022, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -72,8 +72,8 @@ def make_ndarray(var, timestep) :
         point += (0, )
 
     # Create a NumPy ndarray to hold the extracted data.
-    print("Creating a NumPy ndarray with shape " + repr(shape) + " and " +
-          repr(nelems) + " element(s)...")
+    print("Creating a NumPy ndarray with shape ", shape, " and ",
+          nelems, " element(s)...")
     ndarray = np.zeros(shape, dtype, 'C');
     return ndarray, first_indices, last_indices, point
 
@@ -83,12 +83,12 @@ def read_var(var, timestep) :
     # Ignore with fixed-sized vars.
     if var.is_fixed_size():
         return
-    print("Testing reading var '" + var.get_name() + "' at time " + repr(timestep) + "...")
+    print("Testing reading var '", var.get_name(), "' at time ", timestep, "...")
     ndarray, first_indices, last_indices, point = make_ndarray(var, timestep)
 
     print("Reading 1 element...")
     val1 = var.get_element(first_indices)
-    print("Read value " + repr(val1))
+    print("Read value ", val1)
 
     print("Reading all element(s) in ndarray...")
     nread = var.get_elements_in_slice(ndarray.data, first_indices, last_indices)
@@ -102,11 +102,11 @@ def read_var(var, timestep) :
     raw_ptr = var.get_raw_storage_buffer()
     fp_ptr = ct.cast(int(raw_ptr), ptype)
     num_elems = var.get_num_storage_elements()
-    print("Raw data: " + repr(fp_ptr[0]) + ", ..., " + repr(fp_ptr[num_elems-1]))
+    print("Raw data: ", fp_ptr[0], ", ..., ", fp_ptr[num_elems-1])
 
 # Init var using NumPy ndarray.
 def init_var(var, timestep) :
-    print("Initializing var '" + var.get_name() + "' at time " + repr(timestep) + "...")
+    print("Initializing var '", var.get_name(), "' at time ", timestep, "...")
     ndarray, first_indices, last_indices, point = make_ndarray(var, timestep)
 
     # Set one point to a non-zero value.
@@ -116,7 +116,7 @@ def init_var(var, timestep) :
 
     print("Setting var from all element(s) in ndarray...")
     nset = var.set_elements_in_slice(ndarray.data, first_indices, last_indices)
-    print("Set " + repr(nset) + " element(s) in rank " + repr(env.get_rank_index()))
+    print("Set ", nset, " element(s) in rank ", env.get_rank_index())
 
     # Check that set worked.
     print("Reading those element(s)...")
@@ -135,7 +135,7 @@ def init_var(var, timestep) :
     assert ndarray2.sum() == val1  # One point is val1; others are zero.
 
     # Test element set.
-    print("Testing setting 1 point at " + repr(last_indices) + "...")
+    print("Testing setting 1 point at ", last_indices, "...")
     val1 += 1.0
     nset = var.set_element(val1, last_indices);
     assert nset == 1
@@ -144,7 +144,7 @@ def init_var(var, timestep) :
 
     # Test add.
     val3 = 2.0
-    print("Testing adding to 1 point at " + repr(last_indices) + "...")
+    print("Testing adding to 1 point at ", last_indices, "...")
     nset = var.add_to_element(val3, last_indices);
     assert nset == 1
     val2 = var.get_element(last_indices)
@@ -162,8 +162,8 @@ if __name__ == "__main__":
 
     # Create solution.
     soln = kfac.new_solution(env)
-    debug_output = ofac.new_string_output()
-    soln.set_debug_output(debug_output)
+    #debug_output = ofac.new_string_output()
+    #env.set_debug_output(debug_output)
     name = soln.get_name()
 
     # NB: At this point, the vars' meta-data exists, but the vars have no
@@ -207,25 +207,25 @@ if __name__ == "__main__":
     soln.prepare_solution()
 
     # Print some info about the solution.
-    print("Stencil-solution '" + name + "':")
-    print("  Step dimension: " + repr(soln.get_step_dim_name()))
-    print("  Domain dimensions: " + repr(soln.get_domain_dim_names()))
+    print("Stencil-solution '", name, "':")
+    print("  Step dimension: ", soln.get_step_dim_name())
+    print("  Domain dimensions: ", soln.get_domain_dim_names())
     print("  Vars:")
     for var in soln.get_vars() :
-        print("    " + var.get_name() + repr(var.get_dim_names()))
+        print("    ", var.get_name(), var.get_dim_names())
         for dname in var.get_dim_names() :
             if dname in soln.get_domain_dim_names() :
-                print("      '" + dname + "' allowed domain index range in this rank: " +
-                      repr(var.get_first_rank_alloc_index(dname)) + " ... " +
-                      repr(var.get_last_rank_alloc_index(dname)))
+                print("      '", dname, "' allowed domain index range in this rank: ",
+                      var.get_first_rank_alloc_index(dname), " ... ",
+                      var.get_last_rank_alloc_index(dname))
             elif dname == soln.get_step_dim_name() :
-                print("      '" + dname + "' allowed step index range: " +
-                      repr(var.get_first_valid_step_index()) + " ... " +
-                      repr(var.get_last_valid_step_index()))
+                print("      '", dname, "' allowed step index range: ",
+                      var.get_first_valid_step_index(), " ... ",
+                      var.get_last_valid_step_index())
             else :
-                print("      '" + dname + "' allowed misc index range: " +
-                      repr(var.get_first_misc_index(dname)) + " ... " +
-                      repr(var.get_last_misc_index(dname)))
+                print("      '", dname, "' allowed misc index range: ",
+                      var.get_first_misc_index(dname), " ... ",
+                      var.get_last_misc_index(dname))
 
     # Init the vars.
     for var in soln.get_vars() :
@@ -293,11 +293,11 @@ if __name__ == "__main__":
 
         # Init value at one point.
         nset = var.set_element(15.0, one_indices)
-        print("Set " + repr(nset) + " element(s) in rank " + repr(env.get_rank_index()))
+        print("Set ", nset, " element(s) in rank ", env.get_rank_index())
 
         # Init the values within the small cube.
         nset = var.set_elements_in_slice_same(0.5, first_indices, last_indices, False)
-        print("Set " + repr(nset) + " element(s) in rank " + repr(env.get_rank_index()))
+        print("Set ", nset, " element(s) in rank ", env.get_rank_index())
 
         # Print the initial contents of the var.
         read_var(var, 0)
@@ -318,5 +318,8 @@ if __name__ == "__main__":
     for var in soln.get_vars() :
         read_var(var, 11)
 
-    print("Debug output captured:\n" + debug_output.get_string())
-    print("End of YASK kernel API test.")
+    soln.end_solution()
+    soln.get_stats()
+
+    #print("Debug output captured:\n", debug_output.get_string())
+    print("End of YASK Python kernel API test.")

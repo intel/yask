@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -64,6 +64,14 @@ namespace yask {
     */
     const int yask_numa_none = -9;
 
+    /// Do not specify any NUMA binding and use allocations optimized for offloading.
+    /**
+       This is used in yk_solution::set_default_numa_preferred
+       and yk_var::set_numa_preferred.
+       In Python, specify as `yask_kernel.cvar.yask_numa_host`.
+    */
+    const int yask_numa_offload = -11;
+
     /// Stencil solution as defined by the generated code from the YASK stencil compiler.
     /**
        Objects of this type contain all the vars and equations
@@ -75,16 +83,6 @@ namespace yask {
     public:
         virtual ~yk_solution() {}
 
-        /// Set object to receive debug output.
-        /**
-           Just a shortcut for setting the debug output in the \ref yk_env
-           used to create the solution.
-        */
-        virtual void
-        set_debug_output(yask_output_ptr debug
-                         /**< [out] Pointer to object to receive debug output.
-                            See \ref yask_output_factory. */ ) =0;
-
         /// Get the name of the solution.
         /**
            @returns String containing the solution name provided during stencil compilation.
@@ -94,12 +92,19 @@ namespace yask {
 
         /// Get the target ISA.
         /**
-           @returns String describing the instruction-set architecture targeted
+           @returns String describing the instruction-set architecture of the CPU targeted
            during kernel compilation.
            See the allowed YASK kernel targets in yc_solution::set_target().
         */
         virtual std::string
         get_target() const =0;
+
+        /// Get whether the stencil kernel will be offloaded to a device.
+        /**
+           @returns _true_ if kernel will be offloaded or _false_ if not.
+        */
+        virtual bool
+        is_offloaded() const =0;
 
         /// Get the floating-point precision size.
         /**
@@ -133,7 +138,7 @@ namespace yask {
            that were defined by yc_node_factory::new_domain_index()
            and used in one or more vars.
         */
-        virtual std::vector<std::string>
+        virtual string_vec
         get_domain_dim_names() const =0;
 
         /// Get all the miscellaneous dimension names.
@@ -145,7 +150,7 @@ namespace yask {
            * Created at run-time by adding a new dimension
            via yk_solution::new_var() or yk_solution::new_fixed_size_var().
         */
-        virtual std::vector<std::string>
+        virtual string_vec
         get_misc_dim_names() const =0;
 
         /// Set the local-domain size in the specified dimension, i.e., the size of the part of the domain that is in this rank.
@@ -165,10 +170,9 @@ namespace yask {
            each dimension.
 
            You should set either the local-domain size or the global-domain size
-           in each dimension. The unspecified (zero) sizes will be calculated based on the 
+           in each dimension; the other should be set to zero (unspecified).
+           The unspecified (zero) sizes will be calculated based on the 
            specified ones when prepare_solution() is called.
-           Setting the local-domain size to a non-zero value will clear the
-           global-domain size in that dimension until prepare_solution() is called.
 
            See the "Detailed Description" for \ref yk_var for more information on var sizes.
         */
@@ -178,12 +182,29 @@ namespace yask {
                                 the names from get_domain_dim_names(). */,
                              idx_t size /**< [in] Elements in the domain in this `dim`. */ ) =0;
 
+        /// Set the local-domain size in all domain dimensions.
+        /**
+           See set_rank_domain_size().
+        */
+        virtual void
+        set_rank_domain_size_vec(const idx_t_vec& vals
+                             /**< [in] Elements in all domain dims. */) = 0;
+
+        #ifndef SWIG
+        /// Set the local-domain size in all domain dimensions.
+        /**
+           See set_rank_domain_size().
+        */
+        virtual void
+        set_rank_domain_size_vec(const idx_t_init_list& vals
+                             /**< [in] Elements in all domain dims. */) = 0;
+        #endif
+
         /// Get the local-domain size in the specified dimension, i.e., the size in this rank.
         /**
            See documentation for set_rank_domain_size().
 
-           If you have called set_overall_domain_size() in a given dimension,
-           get_rank_domain_size() will return zero in that dimension until
+           @note get_rank_domain_size() may return zero in a dimension until
            prepare_solution() is called. After prepare_solution() is called,
            the computed size will be returned.
 
@@ -194,13 +215,20 @@ namespace yask {
                              /**< [in] Name of dimension to get.  Must be one of
                                 the names from get_domain_dim_names(). */) const =0;
 
+        /// Get the local-domain size in all domain dimensions.
+        /**
+           See get_rank_domain_size().
+           @returns Vector of current setting of rank domain sizes.
+        */
+        virtual idx_t_vec
+        get_rank_domain_size_vec() const =0;
+
         /// Get the global-domain size in the specified dimension, i.e., the total size across all MPI ranks.
         /**
            You should set either the local-domain size or the global-domain size
-           in each dimension. The unspecified (zero) sizes will be calculated based on the 
+           in each dimension; the other should be set to zero (unspecified).
+           The unspecified (zero) sizes will be calculated based on the 
            specified ones when prepare_solution() is called.
-           Setting the global-domain size to a non-zero value will clear the
-           local-domain size in that dimension until prepare_solution() is called.
 
            See documentation for set_rank_domain_size().
            See the "Detailed Description" for \ref yk_var for more information on var sizes.
@@ -211,6 +239,24 @@ namespace yask {
                                    the names from get_domain_dim_names(). */,
                                 idx_t size /**< [in] Elements in the domain in this `dim`. */ ) =0;
 
+        /// Set the global-domain size in all domain dimensions.
+        /**
+           See set_overall_domain_size().
+        */
+        virtual void
+        set_overall_domain_size_vec(const idx_t_vec& vals
+                                    /**< [in] Elements in all domain dims. */) = 0;
+
+        #ifndef SWIG
+        /// Set the global-domain size in all domain dimensions.
+        /**
+           See set_overall_domain_size().
+        */
+        virtual void
+        set_overall_domain_size_vec(const idx_t_init_list& vals
+                                    /**< [in] Elements in all domain dims. */) = 0;
+        #endif
+
         /// Get the global-domain size in the specified dimension, i.e., the total size across all MPI ranks.
         /**
            The global-domain indices in the specified dimension will range from
@@ -218,8 +264,7 @@ namespace yask {
            Call get_first_rank_domain_index() and get_last_rank_domain_index()
            to find the subset of this domain in each rank.
 
-           If you have called set_rank_domain_size() in a given dimension,
-           get_overall_domain_size() will return zero in that dimension until
+           @note get_overall_domain_size() may return zero in a dimension until
            prepare_solution() is called. After prepare_solution() is called,
            the computed size will be returned.
 
@@ -229,6 +274,15 @@ namespace yask {
         get_overall_domain_size(const std::string& dim
                                 /**< [in] Name of dimension to get.  Must be one of
                                    the names from get_domain_dim_names(). */ ) const =0;
+
+        /// Get the global-domain size in all domain dimensions.
+        /**
+           See get_overall_domain_size().
+
+           @returns Vector of current setting of global domain sizes.
+        */
+        virtual idx_t_vec
+        get_overall_domain_size_vec() const =0;
 
         /// Set the block size in the given dimension.
         /**
@@ -247,6 +301,9 @@ namespace yask {
            Unless auto-tuning is disabled, the block size will be used as
            a starting point for an automated search for a higher-performing
            block size.
+
+           This and all other tile sizes (Mega-blocks, blocks, micro-blocks, etc.)
+           can be set via apply_command_line_options().
         */
         virtual void
         set_block_size(const std::string& dim
@@ -255,6 +312,32 @@ namespace yask {
                           get_domain_dim_names(). */,
                        idx_t size
                        /**< [in] Elements in a block in this `dim`. */ ) =0;
+
+        /// Set the block size in all domain dimensions.
+        /**
+           See set_block_size().
+
+           @note Does _not_ set the block size in the step dim.
+           Call set_block_size() with the name of the step dim to set the
+           temporal block size.
+        */
+        virtual void
+        set_block_size_vec(const idx_t_vec& vals
+                           /**< [in] Elements in all domain dims. */) = 0;
+
+        #ifndef SWIG
+        /// Set the block size in all domain dimensions.
+        /**
+           See set_block_size().
+
+           @note Does _not_ set the block size in the step dim.
+           Call set_block_size() with the name of the step dim to set the
+           temporal block size.
+        */
+        virtual void
+        set_block_size_vec(const idx_t_init_list& vals
+                           /**< [in] Elements in all domain dims. */) = 0;
+        #endif
 
         /// Get the block size.
         /**
@@ -267,6 +350,19 @@ namespace yask {
                         /**< [in] Name of dimension to get.  Must be one of
                            the names from get_step_dim_name() or
                            get_domain_dim_names(). */) const =0;
+
+        /// Get the block size in all domain dimensions.
+        /**
+           See get_block_size().
+
+           @note Does _not_ return the block size in the step domain.
+           Call get_block_size() with the name of the step-domain dimension
+           to get the temporal block size.
+
+           @returns Vector of current setting of block domain sizes.
+        */
+        virtual idx_t_vec
+        get_block_size_vec() const =0;
 
         /// Set the number of MPI ranks in the given dimension.
         /**
@@ -302,14 +398,44 @@ namespace yask {
                          the names from get_domain_dim_names(). */,
                       idx_t num /**< [in] Number of ranks in `dim`. */ ) =0;
 
+        /// Set the number of MPI ranks in all domain dimensions.
+        /**
+           See set_num_ranks().
+        */
+        virtual void
+        set_num_ranks_vec(const idx_t_vec& vals
+                          /**< [in] Number of ranks in all domain dims. */) = 0;
+
+        #ifndef SWIG
+        /// Set the number of all MPI ranks in all domain dimensions.
+        /**
+           See set_num_ranks().
+        */
+        virtual void
+        set_num_ranks_vec(const idx_t_init_list& vals
+                          /**< [in] Number of ranks in all domain dims. */) = 0;
+        #endif
+
         /// Get the number of MPI ranks in the given dimension.
         /**
-           @returns Current setting of rank size.
+           @note get_num_ranks() may return zero in a dimension until
+           prepare_solution() is called. After prepare_solution() is called,
+           the computed number of ranks will be returned.
+
+           @returns Current number of ranks.
         */
         virtual idx_t
         get_num_ranks(const std::string& dim
                       /**< [in] Name of dimension to get.  Must be one of
                          the names from get_domain_dim_names(). */) const =0;
+
+        /// Get the number of MPI ranks in all domain dimensions.
+        /**
+           See get_num_ranks();
+           @returns Vector of current number of ranks in all domain dimensions.
+        */
+        virtual idx_t_vec
+        get_num_ranks_vec() const =0;
 
         /// Set the rank index in the specified dimension.
         /**
@@ -332,12 +458,34 @@ namespace yask {
            </table>
 
            See yk_env::get_num_ranks() and yk_env::get_rank_index() for MPI rank index.
+
+           @note get_rank_index() may return zero in a dimension until
+           prepare_solution() is called. After prepare_solution() is called,
+           the computed index will be returned.
         */
         virtual void
         set_rank_index(const std::string& dim
                        /**< [in] Name of dimension to set.  Must be one of
                           the names from get_domain_dim_names(). */,
                        idx_t num /**< [in] Rank index in `dim`. */ ) =0;
+
+        /// Set the rank index in all domain dimensions.
+        /**
+           See set_rank_index().
+        */
+        virtual void
+        set_rank_index_vec(const idx_t_vec& vals
+                           /**< [in] Index of this rank in all domain dims. */) = 0;
+
+        #ifndef SWIG
+        /// Set the rank index in all domain dimensions.
+        /**
+           See set_rank_index().
+        */
+        virtual void
+        set_rank_index_vec(const idx_t_init_list& vals
+                           /**< [in] Index of this rank in all domain dims. */) = 0;
+        #endif
 
         /// Get the rank index in the specified dimension.
         /**
@@ -350,12 +498,19 @@ namespace yask {
                        /**< [in] Name of dimension to get.  Must be one of
                          the names from get_domain_dim_names(). */ ) const =0;
 
+        /// Get the rank index in all domain dimensions.
+        /**
+           See get_rank_index();
+           @returns Vector of zero-based indices of this rank in all domain dimensions.
+        */
+        virtual idx_t_vec
+        get_rank_index_vec() const =0;
+
         /// Set kernel options from a string.
         /**
            Parses the string for options as if from a command-line.
-           Example: "-bx 64 -block_threads 4" sets the block-size in the *x*
-           dimension to 64 and the number of threads used to process each
-           block to 4.
+           Example: "-bx 64 -inner_threads 4" sets the block-size in the *x*
+           dimension to 64 and the number of nested OpenMp threads to 4.
            See the help message from the YASK kernel binary for documentation
            on the command-line options.
            Used to set less-common options not directly supported by the
@@ -388,7 +543,7 @@ namespace yask {
            @returns Any parts of `args` that were not recognized by the parser as options.
         */
         virtual std::string
-        apply_command_line_options(const std::vector<std::string>& args) =0;
+        apply_command_line_options(const string_vec& args) =0;
 
         /// Get the number of vars in the solution.
         /**
@@ -419,8 +574,10 @@ namespace yask {
 
         /// Prepare the solution for stencil application.
         /**
+           Calculates the position of each rank in the overall problem domain
+           if not previsouly specified.
+           Calculates the sizes of each rank if not previsously specified.
            Allocates data in vars that do not already have storage allocated.
-           Calculates the position of each rank in the overall problem domain.
            Sets many other data structures needed for proper stencil application.
            Since this function initiates MPI communication, it must be called
            on all MPI ranks, and it will block until all ranks have completed.
@@ -447,6 +604,14 @@ namespace yask {
                                     /**< [in] Name of dimension to get.  Must be one of
                                        the names from get_domain_dim_names(). */ ) const =0;
 
+        /// Get the first index of the sub-domain in this rank in all domain dimensions.
+        /**
+           See get_first_rank_domain_index().
+           @returns Vector of first domain indices of this rank in all domain dimensions.
+        */
+        virtual idx_t_vec
+        get_first_rank_domain_index_vec() const =0;
+
         /// Get the last index of the sub-domain in this rank the specified dimension.
         /**
            This returns the last *overall* index within the domain in this rank
@@ -466,11 +631,19 @@ namespace yask {
                                    /**< [in] Name of dimension to get.  Must be one of
                                       the names from get_domain_dim_names(). */ ) const =0;
 
+        /// Get the last index of the sub-domain in this rank in all domain dimensions.
+        /**
+           See get_last_rank_domain_index().
+           @returns Vector of last domain indices of this rank in all domain dimensions.
+        */
+        virtual idx_t_vec
+        get_last_rank_domain_index_vec() const =0;
+
         /// Run the stencil solution for the specified steps.
         /**
            The stencil(s) in the solution are applied to the var data, setting the
            index variables as follows:
-           1. If temporal wave-front tiling is *not* used (the default):
+           1. If temporal tiling is *not* used (the default):
             - The step index (e.g., `t` for "time") will be sequentially set to values
             from `first_step_index` to `last_step_index`, inclusive.
              + If the stencil equations were defined with dependencies on lower-valued steps,
@@ -483,20 +656,23 @@ namespace yask {
             to values across the entire domain as returned by yk_solution::get_overall_domain_size()
             (not necessarily sequentially).
             - MPI halo exchanges will occur as necessary before or during each step.
-            - Since this function initiates MPI communication, it must be called
-              on all MPI ranks, and it will block until all ranks have completed.
-           2. **[Advanced]** If temporal wave-front tiling *is* enabled via set_region_size():
+           2. **[Advanced]** If temporal wave-front tiling *is* enabled:
             - The step index (e.g., `t` for "time") will be sequentially set to values
-            from `first_step_index` to `last_step_index`, inclusive, within each region.
-             + The number of steps in a region may also be restricted by the size
-             of the region in the step dimension. In that case, tiles will be done in slices of that size.
-            - For each step index within each region, the domain indices will be set
-            to values across the entire region (not necessarily sequentially).
+            from `first_step_index` to `last_step_index`, inclusive, within each area configured
+            for temporal tiling.
+             + The number of steps in an area may also be restricted by the size
+             of the area in the step dimension. 
+             In that case, tiles will be done in temporal slices of that size.
+            - For each step index within each area, the domain indices will be set
+            to values across the entire area (not necessarily sequentially).
             - Ultimately, the stencil(s) will be applied to same the elements in both the step
             and domain dimensions as when wave-front tiling is not used.
-            - MPI halo exchanges will occur before each number of steps in a region.
+            - MPI halo exchanges may occur at less frequent intervals.
 
            This function should be called only *after* calling prepare_solution().
+
+           Since this function initiates MPI communication, it must be called
+           on all MPI ranks, and it will block until all ranks have completed.
         */
         virtual void
         run_solution(idx_t first_step_index /**< [in] First index in the step dimension */,
@@ -526,10 +702,42 @@ namespace yask {
 
            @note The parameter is *not* the number of steps to run.
            @warning Since only one step is taken per call, using this function effectively disables
-           wave-front tiling.
+           wave-front tiling (except in the special case of tiling only across stages within a step).
         */
         virtual void
         run_solution(idx_t step_index /**< [in] Index in the step dimension */ ) =0;
+
+        /// Update data on the device.
+        /**
+           Copies any YASK var data that has been modified on the host but
+           not on the device from the host to the device.
+
+           This is done automatically as needed, so calling this function is only
+           needed when you want to control when the copy is done.
+
+           If the kernel has been compiled for offloading using unified shared memory,
+           calling this function will have no effect. 
+           Similarly, if the kernel has not been compiled for offloading,
+           calling this function will have no effect. 
+        */
+        virtual void
+        copy_vars_to_device() const =0;
+
+        /// Update data on the host.
+        /**
+           Copies any YASK var data that has been modified on the device but
+           not on the host from the device to the host.
+
+           This is done automatically as needed, so calling this function is only
+           needed when you want to control when the copy is done.
+
+           If the kernel has been compiled for offloading using unified shared memory,
+           calling this function will have no effect. 
+           Similarly, if the kernel has not been compiled for offloading,
+           calling this function will have no effect. 
+        */
+        virtual void
+        copy_vars_from_device() const =0;
 
         /// Finish using a solution.
         /**
@@ -545,69 +753,71 @@ namespace yask {
         /**
            @note Side effect: resets all statistics, so each call
            returns only the elapsed time and counts since the previous call.
+           @note Side effect: outputs stats in human-readable format
+           to current debug output object.
            @returns Pointer to statistics object.
         */
         virtual yk_stats_ptr
         get_stats() =0;
 
-        /// Determine whether the auto-tuner is enabled on this rank.
+        /// Start or stop the online auto-tuner on this rank.
         /**
-           The auto-tuner is enabled by default.
-           It will become disabled after it has converged or after reset_auto_tuner(false) has been called.
+           This function is used to apply the current best-known settings if the tuner is
+           currently running, reset the state of the auto-tuner, and either
+           restart its search (if `enable==true`) or stop it (if `enable==false`).
+           This call must be made on each rank where the change is desired.
+
+           This mode of running the auto-tuner is called "online" or "in-situ" because
+           changes are made to the tile sizes between calls to run_solution().
+           It will stop automatically when it converges.
+           Call is_auto_tuner_enabled() to determine if it has converged.
+        */
+        virtual void
+        reset_auto_tuner(bool enable
+                         /**< [in] If _true_, start or restart the auto-tuner search on this rank.
+                            If _false_, stop the auto-tuner. */,
+                         bool verbose = false
+                         /**< [in] If _true_, print progress information to the debug object
+                            set via set_debug_output(). */ ) =0;
+
+        /// Determine whether the online auto-tuner is enabled on this rank.
+        /**
+           The "online" or "in-situ" auto-tuner is disabled by default.
+           It can be enabled by calling reset_auto_tuner(true).
+           It will also become disabled after it has converged or after reset_auto_tuner(false) has been called.
+           Auto-tuners run independently on each rank, so they will not generally finish at the same step
+           across all ranks.
            @returns Whether the auto-tuner is still searching.
         */
         virtual bool
         is_auto_tuner_enabled() const =0;
 
-        /* Advanced APIs for yk_solution found below are not needed for most applications. */
-
-        /// **[Advanced]** Set the region size in the given dimension.
+        /// Run the offline auto-tuner immediately, not preserving variable data.
         /**
-           This sets the approximate number of elements that are evaluated in
-           each "region".
-           This is a performance setting and should not affect the functional
-           correctness or total number of elements evaluated.
-           A region is typically the unit of work done by each
-           top-level OpenMP parallel region.  The actual number of elements evaluated
-           in a region may be greater than the specified size due to rounding.
-           The number of elements in a region may
-           also be smaller than the specified size when the region is at the
-           edge of the domain.
+           This runs the auto-tuner in "offline" mode.
+           (Under "online" operation, an auto-tuner is invoked during calls to
+           run_solution(); see reset_auto_tuner() and is_auto_tuner_enabled()
+           for more information on running in online mode.)
 
-           A region is most often used to specify the size of a temporal
-           wave-front tile. Thus, you will normally specify the size of the
-           region in the step dimension as well as all the domain dimensions.
-           For example, `set_region_size("t", 4)` specifies that four
-           time-steps will be executed in each region.
-           The sizes of regions in the domain dimensions are typically
-           set to fit within a large cache structure such as MCDRAM cache
-           in an Intel(R) Xeon Phi(TM) processor.
+           This function causes the stencil solution to be run immediately
+           until the auto-tuner converges on all ranks.
+           It is useful for benchmarking, where performance is to be timed
+           for a given number of steps after the best settings are found.
+           This function should be called only *after* calling prepare_solution().
+           This call must be made on each rank.
 
-           In order to get the benefit of regions with multiple steps,
-           you must also call run_solution() where the number of steps
-           between its `first_step_index` and `last_step_index`
-           arguments is greater than or equal to the step-size of the
-           regions.
+           @warning Modifies the contents of the YASK vars by automatically calling run_solution()
+           an arbitrary number of times, but without halo exchanges.
+           (See run_solution() for other restrictions and warnings.)
+           Thus, var data should be set or reset *after* calling this function when
+           used in a production or test setting where correct results are expected.
         */
         virtual void
-        set_region_size(const std::string& dim
-                        /**< [in] Name of dimension to set.  Must be one of
-                           the names from get_step_dim_name() or
-                           get_domain_dim_names(). */,
-                        idx_t size
-                        /**< [in] Elements in a region in this `dim`. */ ) =0;
+        run_auto_tuner_now(bool verbose = true
+                           /**< [in] If _true_, print progress information to the debug object
+                              set via set_debug_output(). */ ) =0;
 
-        /// **[Advanced]** Get the region size.
-        /**
-           Returned value may be slightly larger than the value provided
-           via set_region_size() due to rounding.
-           @returns Current settings of region size.
-        */
-        virtual idx_t
-        get_region_size(const std::string& dim
-                        /**< [in] Name of dimension to get.  Must be one of
-                           the names from get_step_dim_name() or
-                           get_domain_dim_names(). */) const =0;
+        /* Advanced APIs for yk_solution found below are not needed for most applications. */
 
         /// **[Advanced]** Set the minimum amount of padding for all vars.
         /**
@@ -650,50 +860,6 @@ namespace yask {
         get_min_pad_size(const std::string& dim
                          /**< [in] Name of dimension to get.  Must be one of
                             the names from get_domain_dim_names(). */) const =0;
-
-        /// **[Advanced]** Restart or disable the auto-tuner on this rank.
-        /**
-           Under normal operation, an auto-tuner is invoked automatically during calls to
-           run_solution().
-           Currently, only the block size is set by the auto-tuner, and the search begins from the
-           sizes set via set_block_size() or the default size if set_block_size() has
-           not been called.
-           This function is used to apply the current best-known settings if the tuner has
-           been running, reset the state of the auto-tuner, and either
-           restart its search or disable it from running.
-           This call must be made on each rank where the change is desired.
-        */
-        virtual void
-        reset_auto_tuner(bool enable
-                         /**< [in] If _true_, start or restart the auto-tuner search.
-                            If _false_, disable the auto-tuner from running. */,
-                         bool verbose = false
-                         /**< [in] If _true_, print progress information to the debug object
-                            set via set_debug_output(). */ ) =0;
-
-        /// **[Advanced]** Automatically tune selected settings immediately.
-        /**
-           Executes a search algorithm to find [locally] optimum values for some of the
-           settings.
-           Under normal operation, an auto-tuner is invoked during calls to
-           run_solution().
-           See reset_auto_tuner() for more information.
-           This function causes the stencil solution to be run immediately
-           until the auto-tuner converges on all ranks.
-           It is useful for benchmarking, where performance is to be timed
-           for a given number of steps after the best settings are found.
-           This function should be called only *after* calling prepare_solution().
-           This call must be made on each rank.
-           @warning Modifies the contents of the vars by calling run_solution()
-           an arbitrary number of times, but without halo exchange.
-           (See run_solution() for other restrictions and warnings.)
-           Thus, var data should be set *after* calling this function when
-           used in a production or test setting where correct results are expected.
-        */
-        virtual void
-        run_auto_tuner_now(bool verbose = true
-                           /**< [in] If _true_, print progress information to the debug object
-                              set via set_debug_output(). */ ) =0;
 
         /// **[Advanced]** Add a new var to the solution.
         /**
@@ -748,7 +914,7 @@ namespace yask {
         new_var(const std::string& name
                  /**< [in] Name of the var; must be unique
                     within the solution. */,
-                 const std::vector<std::string>& dims
+                 const string_vec& dims
                  /**< [in] List of names of all dimensions.
                     Names must be valid C++ identifiers and
                     not repeated within this var. */ ) =0;
@@ -823,11 +989,11 @@ namespace yask {
         new_fixed_size_var(const std::string& name
                        /**< [in] Name of the var; must be unique
                           within the solution. */,
-                       const std::vector<std::string>& dims
+                       const string_vec& dims
                        /**< [in] List of names of all dimensions.
                           Names must be valid C++ identifiers and
                           not repeated within this var. */,
-                       const std::vector<idx_t>& dim_sizes
+                       const idx_t_vec& dim_sizes
                        /**< [in] Initial allocation in each dimension.
                           Must be exatly one size for each dimension. */ ) =0;
 
@@ -847,7 +1013,7 @@ namespace yask {
                        /**< [in] List of names of all dimensions.
                           Names must be valid C++ identifiers and
                           not repeated within this var. */,
-                       const std::initializer_list<idx_t>& dim_sizes
+                       const idx_t_init_list& dim_sizes
                        /**< [in] Initial allocation in each dimension.
                           Must be exatly one size for each dimension. */ ) =0;
 #endif
@@ -972,33 +1138,43 @@ namespace yask {
         virtual bool
         get_step_wrap() const =0;
 
+        /// ***[Deprecated]*** Use yk_env::set_debug_output().
+        YASK_DEPRECATED
+        virtual void
+        set_debug_output(yask_output_ptr debug) =0;
+
         /// **[Deprecated]** Use get_num_vars().
+        YASK_DEPRECATED
         inline int
         get_num_grids() const {
             return get_num_vars();
         }
 
         /// **[Deprecated]** Use get_var().
+        YASK_DEPRECATED
         inline yk_var_ptr
         get_grid(const std::string& name) {
             return get_var(name);
         }
                 
         /// **[Deprecated]** Use get_vars().
+        YASK_DEPRECATED
         inline std::vector<yk_var_ptr>
         get_grids() {
             return get_vars();
         }
 
         /// **[Deprecated]** Use new_var().
+        YASK_DEPRECATED
         inline yk_var_ptr
         new_grid(const std::string& name,
-                 const std::vector<std::string>& dims) {
+                 const string_vec& dims) {
             return new_var(name, dims);
         }
 
 #ifndef SWIG
         /// **[Deprecated]** Use new_var().
+        YASK_DEPRECATED
         inline yk_var_ptr
         new_grid(const std::string& name,
                  const std::initializer_list<std::string>& dims) {
@@ -1007,24 +1183,27 @@ namespace yask {
 #endif
 
         /// **[Deprecated]** Use new_fixed_size_var().
+        YASK_DEPRECATED
         inline yk_var_ptr
         new_fixed_size_grid(const std::string& name,
-                            const std::vector<std::string>& dims,
-                            const std::vector<idx_t>& dim_sizes) {
+                            const string_vec& dims,
+                            const idx_t_vec& dim_sizes) {
             return new_fixed_size_var(name, dims, dim_sizes);
         }
 
 #ifndef SWIG
         /// **[Deprecated]** Use new_fixed_size_var().
+        YASK_DEPRECATED
         inline yk_var_ptr
         new_fixed_size_grid(const std::string& name,
                             const std::initializer_list<std::string>& dims,
-                            const std::vector<idx_t>& dim_sizes) {
+                            const idx_t_vec& dim_sizes) {
             return new_fixed_size_var(name, dims, dim_sizes);
         }
 #endif
         
         /// **[Deprecated]** Use fuse_vars().
+        YASK_DEPRECATED
         inline void
         fuse_grids(yk_solution_ptr source) {
             fuse_vars(source);

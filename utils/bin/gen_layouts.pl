@@ -2,7 +2,7 @@
 
 ##############################################################################
 ## YASK: Yet Another Stencil Kit
-## Copyright (c) 2014-2021, Intel Corporation
+## Copyright (c) 2014-2022, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -44,7 +44,8 @@ use File::Basename;
 use lib dirname($0)."/lib";
 use lib dirname($0)."/../lib";
 
-print "// Automatically generated; do not edit.\n\n" if $opt ne '-p';
+print "// Automatically generated; do not edit.\n".
+  "#pragma once\n" if $opt ne '-p';
 
 # permute items in a list.
 # args: block of code to run on each permutation and list to permute.
@@ -172,17 +173,17 @@ END
  public:
   Layout_$name() { }
   Layout_$name(const Indices& sizes) : ${basename}(sizes) { }
-  inline int get_num_sizes() const {
+  static constexpr int get_num_sizes() {
     return $n;
   }
 
   // Return 1-D offset from $n-D 'j' indices.
-  inline idx_t layout(const Indices& j) const {
+  ALWAYS_INLINE idx_t layout(const Indices& j) const {
     return $layout;
   }
 
   // Return $n index(indices) based on 1-D 'ai' input.
-  inline Indices unlayout(idx_t ai) const {
+  ALWAYS_INLINE Indices unlayout(idx_t ai) const {
     Indices j(_sizes);
     $unlayout;
     return j;

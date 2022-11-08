@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -45,12 +45,11 @@ namespace yask {
                              const CompilerSettings& settings,
                              const Dimensions& dims,
                              const CounterVisitor* cv,
-                             const string& var_prefix,
                              const string& var_type,
                              const string& line_prefix,
                              const string& line_suffix) :
             CppVecPrintHelper(vv, settings, dims, cv,
-                              var_prefix, var_type, line_prefix, line_suffix) { }
+                              var_type, line_prefix, line_suffix) { }
 
         // Dtor.
         virtual ~CppIntrinPrintHelper() { }
@@ -115,34 +114,6 @@ namespace yask {
 
     };
 
-    // Specialization for KNC.
-    class CppKncPrintHelper : public CppIntrinPrintHelper {
-    protected:
-
-        // Try all applicable strategies.
-        virtual void try_strategies(ostream& os,
-                                   const string& pv_name,
-                                   size_t nelems_target,
-                                   const VecElemList& elems,
-                                   set<size_t>& done_elems,
-                                   const VarPointSet& aligned_vecs) {
-            try_align(os, pv_name, nelems_target, elems, done_elems, aligned_vecs, true);
-            try_perm1(os, pv_name, nelems_target, elems, done_elems, aligned_vecs);
-        }
-
-    public:
-        CppKncPrintHelper(VecInfoVisitor& vv,
-                          const CompilerSettings& settings,
-                          const Dimensions& dims,
-                          const CounterVisitor* cv,
-                          const string& var_prefix,
-                          const string& var_type,
-                          const string& line_prefix,
-                          const string& line_suffix) :
-            CppIntrinPrintHelper(vv, settings, dims, cv,
-                                 var_prefix, var_type, line_prefix, line_suffix) { }
-    };
-
     // Specialization for KNL, SKX, etc.
     class CppAvx512PrintHelper : public CppIntrinPrintHelper {
     protected:
@@ -164,12 +135,11 @@ namespace yask {
                              const CompilerSettings& settings,
                              const Dimensions& dims,
                              const CounterVisitor* cv,
-                             const string& var_prefix,
                              const string& var_type,
                              const string& line_prefix,
                              const string& line_suffix) :
             CppIntrinPrintHelper(vv, settings, dims, cv,
-                                 var_prefix, var_type, line_prefix, line_suffix) { }
+                                 var_type, line_prefix, line_suffix) { }
     };
 
     // Specialization for AVX, AVX2.
@@ -191,43 +161,20 @@ namespace yask {
                              const CompilerSettings& settings,
                              const Dimensions& dims,
                              const CounterVisitor* cv,
-                             const string& var_prefix,
                              const string& var_type,
                              const string& line_prefix,
                              const string& line_suffix) :
             CppIntrinPrintHelper(vv, settings, dims, cv,
-                                 var_prefix, var_type, line_prefix, line_suffix) { }
-    };
-
-    // Print KNC intrinsic code.
-    class YASKKncPrinter : public YASKCppPrinter {
-    protected:
-        virtual CppVecPrintHelper* new_cpp_vec_print_helper(VecInfoVisitor& vv,
-                                                        CounterVisitor& cv) {
-            return new CppKncPrintHelper(vv, _settings, _dims, &cv,
-                                         "temp", "real_vec_t", " ", ";\n");
-        }
-
-    public:
-        YASKKncPrinter(StencilSolution& stencil,
-                       EqBundles& eq_bundles,
-                       EqStages& eq_stages,
-                       EqBundles& cluster_eq_bundles) :
-            YASKCppPrinter(stencil, eq_bundles, eq_stages, cluster_eq_bundles) { }
-
-        virtual int num_vec_elems() const { return 64 / _settings._elem_bytes; }
-
-        // Whether multi-dim folding is efficient.
-        virtual bool is_folding_efficient() const { return true; }
+                                 var_type, line_prefix, line_suffix) { }
     };
 
     // Print 256-bit AVX intrinsic code.
     class YASKAvx256Printer : public YASKCppPrinter {
     protected:
         virtual CppVecPrintHelper* new_cpp_vec_print_helper(VecInfoVisitor& vv,
-                                                        CounterVisitor& cv) {
+                                                            CounterVisitor& cv) override {
             return new CppAvx256PrintHelper(vv, _settings, _dims, &cv,
-                                            "temp", "real_vec_t", " ", ";\n");
+                                            "real_vec_t", " ", ";\n");
         }
 
     public:
@@ -237,7 +184,9 @@ namespace yask {
                           EqBundles& cluster_eq_bundles) :
             YASKCppPrinter(stencil, eq_bundles, eq_stages, cluster_eq_bundles) { }
 
-        virtual int num_vec_elems() const { return 32 / _settings._elem_bytes; }
+        virtual int num_vec_elems() const override {
+            return 32 / _settings._elem_bytes;
+        }
     };
 
     // Print 512-bit AVX intrinsic code.
@@ -245,9 +194,9 @@ namespace yask {
     protected:
         bool _is_lo;
         virtual CppVecPrintHelper* new_cpp_vec_print_helper(VecInfoVisitor& vv,
-                                                        CounterVisitor& cv) {
+                                                        CounterVisitor& cv) override {
             return new CppAvx512PrintHelper(vv, _settings, _dims, &cv,
-                                            "temp", "real_vec_t", " ", ";\n");
+                                            "real_vec_t", " ", ";\n");
         }
 
     public:
@@ -259,12 +208,12 @@ namespace yask {
             YASKCppPrinter(stencil, eq_bundles, eq_stages, cluster_eq_bundles),
             _is_lo(is_lo) { }
 
-        virtual int num_vec_elems() const {
+        virtual int num_vec_elems() const override {
             return (_is_lo ? 32 : 64) / _settings._elem_bytes;
         }
 
         // Whether multi-dim folding is efficient.
-        virtual bool is_folding_efficient() const { return true; }
+        virtual bool is_folding_efficient() const override { return true; }
     };
 
 } // namespace yask.

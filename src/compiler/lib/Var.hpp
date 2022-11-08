@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -28,6 +28,7 @@ IN THE SOFTWARE.
 #pragma once
 
 #include "Expr.hpp"
+#include "VarPoint.hpp"
 
 using namespace std;
 
@@ -35,16 +36,18 @@ namespace yask {
 
     // Fwd decl.
     struct Dimensions;
+    class CompilerSettings;
 
     // A class for a Var.
     // This is a generic container for all variables to be accessed
     // from the kernel. A 0-D var is a scalar, a 1-D var is an array, etc.
-    // Dims can be the step dim, a domain dim, or anything else.
+    // Dims can be the step dim, a domain dim, or a misc dim.
     class Var : public virtual yc_var {
 
     protected:
         string _name;           // name of this var.
-        index_expr_ptr_vec _dims;  // dimensions of this var.
+        index_expr_ptr_vec _dims;  // dimensions of this var in param order.
+        index_expr_ptr_vec _layout_dims;  // dimensions of this var in layout order.
         bool _is_scratch = false; // true if a temp var.
 
         // Step-dim info.
@@ -54,8 +57,12 @@ namespace yask {
         // Ptr to solution that this var belongs to (its parent).
         StencilSolution* _soln = 0;
 
-        // How many dims are foldable.
-        int _num_foldable_dims = -1; // -1 => unknown.
+        // How many dims of various types.
+        // -1 => unknown.
+        int _num_step_dims = -1;
+        int _num_domain_dims = -1;
+        int _num_misc_dims = -1;
+        int _num_foldable_dims = -1;
 
         // Whether this var can be vector-folded.
         bool _is_foldable = false;
@@ -72,8 +79,24 @@ namespace yask {
         // int key: step-dim offset or 0 if no step-dim.
         map<string, map<bool, map<int, IntTuple>>> _halos;
 
+        // Extra padding needed for read-ahead.
+        int _read_ahead_pad = 0;
+
+        // Key: stage.
+        // Val: step-index for write in stage.
+        map<string, int> _write_points;
+
         // Greatest L1 dist of any halo point that accesses this var.
         int _l1_dist = 0;
+
+        virtual void _check_ok() const {
+            assert(_num_step_dims >= 0);
+            assert(_num_step_dims <= 1);
+            assert(_num_domain_dims >= 0);
+            assert(_num_misc_dims >= 0);
+            assert(_num_foldable_dims >= 0);
+            assert(_num_foldable_dims <= _num_domain_dims);
+        }
 
     public:
         // Ctors.
@@ -90,14 +113,29 @@ namespace yask {
         void set_name(const string& name) { _name = name; }
         string get_descr() const;
 
-        // Access dims.
+        // Access dims for this var (not for soln).
+        // The are returned in declaration order (not necessarily layout order).
         virtual const index_expr_ptr_vec& get_dims() const { return _dims; }
+        IntTuple get_dims_tuple() const {
+            IntTuple gdims;
+            for (const auto& dim : _dims) {
+                const auto& dname = dim->_get_name();
+                gdims.add_dim_back(dname, 0);
+            }
+            return gdims;
+        }
+        virtual const index_expr_ptr_vec& get_layout_dims() const { return _layout_dims; }
+        virtual index_expr_ptr_vec& get_layout_dims() { return _layout_dims; }
 
         // Step dim or null if none.
         virtual const index_expr_ptr get_step_dim() const {
-            for (auto d : _dims)
-                if (d->get_type() == STEP_INDEX)
-                    return d;
+            _check_ok();
+            if (_num_step_dims > 0) {
+                for (auto d : _dims)
+                    if (d->get_type() == STEP_INDEX)
+                        return d;
+                assert("internal error: step dim not found");
+            }
             return nullptr;
         }
 
@@ -107,14 +145,30 @@ namespace yask {
         // Access to solution.
         virtual StencilSolution* _get_soln() { return _soln; }
         virtual void set_soln(StencilSolution* soln) { _soln = soln; }
+        virtual CompilerSettings& get_settings();
+        virtual const Dimensions& get_soln_dims();
 
+        // Get dim-type counts.
+        virtual int get_num_step_dims() const {
+            _check_ok();
+            return _num_step_dims;
+        }
+        virtual int get_num_domain_dims() const {
+            _check_ok();
+            return _num_domain_dims;
+        }
+        virtual int get_num_misc_dims() const {
+            _check_ok();
+            return _num_misc_dims;
+        }
+        
         // Get foldablity.
         virtual int get_num_foldable_dims() const {
-            assert(_num_foldable_dims >= 0);
+            _check_ok();
             return _num_foldable_dims;
         }
         virtual bool is_foldable() const {
-            assert(_num_foldable_dims >= 0);
+            _check_ok();
             return _is_foldable;
         }
 
@@ -153,12 +207,23 @@ namespace yask {
             return h;
         }
 
+        // Extra padding.
+        virtual void set_read_ahead_pad(int n) {
+            _read_ahead_pad = n;
+        }
+        virtual void update_read_ahead_pad(int n) {
+            _read_ahead_pad = max(_read_ahead_pad, n);
+        }
+        virtual int get_read_ahead_pad() const {
+            return _read_ahead_pad;
+        }
+
         // Get max L1 dist of halos.
         virtual int get_l1_dist() const {
             return _l1_dist;
         }
 
-        // Determine whether dims are same.
+        // Determine whether dims are same as 'other' var.
         virtual bool are_dims_same(const Var& other) const {
             if (_dims.size() != other._dims.size())
                 return false;
@@ -173,10 +238,14 @@ namespace yask {
         }
 
         // Determine how many values in step-dim are needed.
-        virtual int get_step_dim_size() const;
+        struct StepDimInfo {
+            int step_dim_size = 1;
+            map<string, int> writeback_ofs;
+        };
+        virtual StepDimInfo get_step_dim_info() const;
 
-        // Determine whether var can be folded.
-        virtual void set_folding(const Dimensions& dims);
+        // Determine dim-type counts and whether var can be folded.
+        virtual void set_dim_counts(const Dimensions& dims);
 
         // Determine whether halo sizes are equal.
         virtual bool is_halo_same(const Var& other) const;
@@ -186,6 +255,12 @@ namespace yask {
 
         // Update halos and L1 dist based on each value in 'offsets'.
         virtual void update_halo(const string& stage_name, const IntTuple& offsets);
+
+        // Stage(s) with writes.
+        virtual const map<string, int>& get_write_points() const {
+            return _write_points;
+        }
+        virtual void update_write_points(const string& stage_name, const IntTuple& offsets);
 
         // Update L1 dist.
         virtual void update_l1_dist(int l1_dist) {
@@ -209,7 +284,7 @@ namespace yask {
             assert(dp);
             return dp->_get_name();
         }
-        virtual std::vector<std::string> get_dim_names() const;
+        virtual string_vec get_dim_names() const;
         virtual bool
         is_dynamic_step_alloc() const {
             return !_is_step_alloc_fixed;
@@ -220,7 +295,8 @@ namespace yask {
         }
         virtual idx_t
         get_step_alloc_size() const {
-            return get_step_dim_size();
+            auto sdi = get_step_dim_info();
+            return sdi.step_dim_size;
         }
         virtual void
         set_step_alloc_size(idx_t size) {
@@ -279,10 +355,10 @@ namespace yask {
             _vars.insert(p);
         }
 
-        // Determine whether each var can be folded.
-        virtual void set_folding(const Dimensions& dims) {
+        // Determine dim-type counts and whether each var can be folded.
+        virtual void set_dim_counts(const Dimensions& dims) {
             for (auto gp : _vars)
-                gp->set_folding(dims);
+                gp->set_dim_counts(dims);
         }
     };
 

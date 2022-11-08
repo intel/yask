@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -23,47 +23,122 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// This file contains implementations of StencilContext and
-// StencilBundleBase methods specific to the preparation steps.
+// This file contains implementations of configuration-related methods
+// from several classes.
 
 #include "yask_stencil.hpp"
 using namespace std;
 
 namespace yask {
 
-    // Stop collecting VTune data when a factory is defined.
-    // Even better to use -start-paused option.
-    yk_factory::yk_factory() {
-        VTUNE_PAUSE;
+    // Init MPI, OMP.
+    // This function can have some calls to TRACE_MSG(), but it shouldn't
+    // call DEBUG_MSG(), because the user might not want debug messages
+    // before setting up the env.
+    void KernelEnv::init_env(int* argc, char*** argv, MPI_Comm existing_comm)
+    {
+        TRACE_MSG("Initializing YASK environment...");
+        YaskTimer init_timer;
+        init_timer.start();
+         
+        // MPI init.
+        my_rank = 0;
+        num_ranks = 1;
+
+        #ifdef USE_MPI
+        TRACE_MSG("Initializing MPI...");
+        int is_init = false;
+        MPI_Initialized(&is_init);
+
+        // No MPI communicator provided.
+        if (existing_comm == MPI_COMM_NULL ||
+            existing_comm == MPI_COMM_WORLD) {
+            if (!is_init) {
+
+                int provided = 0;
+                MPI_Init_thread(argc, argv, MPI_THREAD_MULTIPLE, &provided);
+                if (provided < MPI_THREAD_SERIALIZED) {
+                    THROW_YASK_EXCEPTION("error: MPI_THREAD_SERIALIZED or MPI_THREAD_MULTIPLE not provided");
+                }
+                is_init = true;
+            }
+            comm = MPI_COMM_WORLD;
+        }
+
+        // MPI communicator provided.
+        else {
+            if (!is_init)
+                THROW_YASK_EXCEPTION("error: YASK environment created with"
+                                     " an existing MPI communicator, but MPI is not initialized");
+            comm = existing_comm;
+        }
+
+        // Get some info on this communicator.
+        MPI_Comm_rank(comm, &my_rank);
+        MPI_Comm_group(comm, &group);
+        MPI_Comm_size(comm, &num_ranks);
+        if (num_ranks < 1)
+            THROW_YASK_EXCEPTION("error: MPI_Comm_size() returns less than one rank");
+
+        // Create a shm communicator.
+        MPI_Comm_split_type(comm, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &shm_comm);
+        MPI_Comm_rank(shm_comm, &my_shm_rank);
+        MPI_Comm_group(shm_comm, &shm_group);
+        MPI_Comm_size(shm_comm, &num_shm_ranks);
+
+        #else
+        comm = MPI_COMM_NULL;
+        #endif
+
+        // Turn off denormals unless the USE_DENORMALS macro is set.
+        #ifndef USE_DENORMALS
+        // Enable FTZ
+        _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
+
+        //Enable DAZ
+        _MM_SET_DENORMALS_ZERO_MODE(_MM_DENORMALS_ZERO_ON);
+        #endif
+
+        #ifdef _OPENMP
+        TRACE_MSG("Initializing OpenMP...");
+
+        // Set env vars needed by OMP.
+        // TODO: make this visible to the user.
+        int ret = setenv("OMP_PLACES", "cores", 0); // default placement for outer loop.
+        assert(ret == 0);
+        ret = setenv("KMP_HOT_TEAMS_MODE", "1", 0); // more efficient nesting.
+        assert(ret == 0);
+        ret = setenv("KMP_HOT_TEAMS_MAX_LEVEL", "3", 0); // nesting.
+
+        // Check initial value of OMP max threads.
+        // Side effect: causes OMP to dump debug info if env var set.
+        int mt = omp_get_max_threads();
+        if (!max_threads)
+            max_threads = mt;
+
+        #ifdef USE_OFFLOAD
+        _omp_hostn = omp_get_initial_device();
+        _omp_devn = omp_get_default_device();
+        #endif
+
+        #else
+        max_threads = 1;
+        #endif
+
+        init_timer.stop();
+        TRACE_MSG("Environment initialization done in " <<
+                  make_num_str(init_timer.get_elapsed_secs()) << " secs.");
     }
 
-    // ScanIndices ctor.
-    ScanIndices::ScanIndices(const Dims& dims, bool use_vec_align) :
-        ndims(NUM_STENCIL_DIMS),
-        begin(idx_t(0), ndims),
-        end(idx_t(0), ndims),
-        stride(idx_t(1), ndims),
-        align(idx_t(1), ndims),
-        align_ofs(idx_t(0), ndims),
-        group_size(idx_t(1), ndims),
-        num_indices(idx_t(1), ndims),
-        start(idx_t(0), ndims),
-        stop(idx_t(0), ndims),
-        index(idx_t(0), ndims) {
-
-        // i: index for stencil dims, j: index for domain dims.
-        DOMAIN_VAR_LOOP(i, j) {
-
-            // Set alignment to vector lengths.
-            if (use_vec_align)
-                align[i] = fold_pts[j];
-        }
+    // Bootstrap factory ctor.
+    yk_factory::yk_factory() {
     }
 
     // Context ctor.
     StencilContext::StencilContext(KernelEnvPtr& kenv,
-                                   KernelSettingsPtr& ksettings) :
-        KernelStateBase(kenv, ksettings),
+                                   KernelSettingsPtr& ksettings,
+                                   KernelSettingsPtr& user_settings) :
+        KernelStateBase(kenv, ksettings, user_settings),
         _at(this, ksettings.get())
     {
         STATE_VARS(this);
@@ -93,17 +168,17 @@ namespace yask {
 
         // All ranks should have the same settings for certain options.
         assert_equality_over_ranks(nr, env->comm, "total number of MPI ranks");
-        assert_equality_over_ranks(idx_t(opts->use_shm), env->comm, "use_shm setting");
-        assert_equality_over_ranks(idx_t(opts->find_loc), env->comm, "defined rank indices");
+        assert_equality_over_ranks(idx_t(actl_opts->use_shm), env->comm, "use_shm setting");
+        assert_equality_over_ranks(idx_t(actl_opts->find_loc), env->comm, "defined rank indices");
         DOMAIN_VAR_LOOP(i, j) {
             auto& dname = domain_dims.get_dim_name(j);
-            assert_equality_over_ranks(opts->_global_sizes[i], env->comm,
-                                    "global-domain size in '" + dname + "' dimension");
-            assert_equality_over_ranks(opts->_num_ranks[j], env->comm,
-                                    "number of ranks in '" + dname + "' dimension");
+            assert_equality_over_ranks(actl_opts->_global_sizes[i], env->comm,
+                                       "global-domain size in '" + dname + "' dimension");
+            assert_equality_over_ranks(actl_opts->_num_ranks[j], env->comm,
+                                       "number of ranks in '" + dname + "' dimension");
 
             // Check that either local or global size is set.
-            if (!opts->_global_sizes[i] && !opts->_rank_sizes[i])
+            if (!actl_opts->_global_sizes[i] && !actl_opts->_rank_sizes[i])
                 THROW_YASK_EXCEPTION("Error: both local-domain size and "
                                      "global-domain size are zero in '" +
                                      dname + "' dimension on rank " +
@@ -111,11 +186,11 @@ namespace yask {
                                      "and the other will be calculated");
         }
 
-#ifndef USE_MPI
+        #ifndef USE_MPI
 
         // Simple settings.
-        opts->_num_ranks.set_vals_same(1);
-        opts->_rank_indices.set_vals_same(0);
+        actl_opts->_num_ranks.set_vals_same(1);
+        actl_opts->_rank_indices.set_vals_same(0);
         rank_domain_offsets.set_vals_same(0);
         assert(nr == 1);
 
@@ -123,51 +198,51 @@ namespace yask {
         DOMAIN_VAR_LOOP(i, j) {
 
             // Need to set local size.
-            if (!opts->_rank_sizes[i])
-                opts->_rank_sizes[i] = opts->_global_sizes[i];
+            if (!actl_opts->_rank_sizes[i])
+                actl_opts->_rank_sizes[i] = actl_opts->_global_sizes[i];
 
             // Need to set global size.
-            else if (!opts->_global_sizes[i])
-                opts->_global_sizes[i] = opts->_rank_sizes[i];
+            else if (!actl_opts->_global_sizes[i])
+                actl_opts->_global_sizes[i] = actl_opts->_rank_sizes[i];
 
             // Check that settings are equal.
-            else if (opts->_global_sizes[i] != opts->_rank_sizes[i]) {
+            else if (actl_opts->_global_sizes[i] != actl_opts->_rank_sizes[i]) {
                 auto& dname = domain_dims.get_dim_name(j);
                 FORMAT_AND_THROW_YASK_EXCEPTION("Error: specified local-domain size of " <<
-                                                opts->_rank_sizes[i] <<
+                                                actl_opts->_rank_sizes[i] <<
                                                 " does not equal specified global-domain size of " <<
-                                                opts->_global_sizes[i] << " in '" << dname <<
+                                                actl_opts->_global_sizes[i] << " in '" << dname <<
                                                 "' dimension");
             }
         }
 
-#else
+        #else
         // Set number of ranks in each dim if any is unset (zero).
-        TRACE_MSG("rank layout " << opts->_num_ranks.make_dim_val_str(" * ") << " requested");
-        opts->_num_ranks = opts->_num_ranks.get_compact_factors(nr);
-        TRACE_MSG("rank layout " << opts->_num_ranks.make_dim_val_str(" * ") << " selected");
+        TRACE_MSG("rank layout " << actl_opts->_num_ranks.make_dim_val_str(" * ") << " requested");
+        actl_opts->_num_ranks = actl_opts->_num_ranks.get_compact_factors(nr);
+        TRACE_MSG("rank layout " << actl_opts->_num_ranks.make_dim_val_str(" * ") << " selected");
 
         // Check ranks.
-        idx_t req_ranks = opts->_num_ranks.product();
+        idx_t req_ranks = actl_opts->_num_ranks.product();
         if (req_ranks != nr)
             FORMAT_AND_THROW_YASK_EXCEPTION("error: " << req_ranks << " rank(s) requested (" +
-                                            opts->_num_ranks.make_dim_val_str(" * ") + "), but " <<
+                                            actl_opts->_num_ranks.make_dim_val_str(" * ") + "), but " <<
                                             nr << " rank(s) are active");
 
         // Determine my coordinates if not provided already.
         // TODO: do this more intelligently based on proximity.
-        if (opts->find_loc)
-            opts->_rank_indices = opts->_num_ranks.unlayout(me);
+        if (actl_opts->find_loc)
+            actl_opts->_rank_indices = actl_opts->_num_ranks.unlayout(me);
 
         // Check rank indices.
         DOMAIN_VAR_LOOP(i, j) {
             auto& dname = domain_dims.get_dim_name(j);
-            if (opts->_rank_indices[j] < 0 ||
-                opts->_rank_indices[j] >= opts->_num_ranks[j])
+            if (actl_opts->_rank_indices[j] < 0 ||
+                actl_opts->_rank_indices[j] >= actl_opts->_num_ranks[j])
                 THROW_YASK_EXCEPTION("Error: rank index of " +
-                                     to_string(opts->_rank_indices[j]) +
+                                     to_string(actl_opts->_rank_indices[j]) +
                                      " is not within allowed range [0 ... " +
-                                     to_string(opts->_num_ranks[j] - 1) +
+                                     to_string(actl_opts->_num_ranks[j] - 1) +
                                      "] in '" + dname + "' dimension on rank " +
                                      to_string(me));
         }
@@ -190,8 +265,8 @@ namespace yask {
 
             // Init tables for this rank.
             DOMAIN_VAR_LOOP(i, j) {
-                coords[me][j] = opts->_rank_indices[j];
-                rsizes[me][j] = opts->_rank_sizes[i];
+                coords[me][j] = actl_opts->_rank_indices[j];
+                rsizes[me][j] = actl_opts->_rank_sizes[i];
             }
 
             // Exchange coord and size info between all ranks.
@@ -330,7 +405,7 @@ namespace yask {
 
                         // Determine whether neighbor is in my shm group.
                         // If so, record rank number in shmcomm.
-                        if (opts->use_shm && env->shm_comm != MPI_COMM_NULL) {
+                        if (actl_opts->use_shm && env->shm_comm != MPI_COMM_NULL) {
                             int g_rank = rn;
                             int s_rank = MPI_PROC_NULL;
                             MPI_Group_translate_ranks(env->group, 1, &g_rank,
@@ -349,8 +424,8 @@ namespace yask {
                     bool vlen_mults = true;
                     DOMAIN_VAR_LOOP(i, j) {
                         auto& dname = domain_dims.get_dim_name(j);
-                        auto nranks = opts->_num_ranks[j];
-                        bool is_last = (opts->_rank_indices[j] == nranks - 1);
+                        auto nranks = actl_opts->_num_ranks[j];
+                        bool is_last = (actl_opts->_rank_indices[j] == nranks - 1);
 
                         // Does rn have all VLEN-multiple sizes?
                         // TODO: allow last rank in each dim to be non-conformant.
@@ -375,12 +450,12 @@ namespace yask {
             if (pass == 0) {
                 DOMAIN_VAR_LOOP(i, j) {
                     auto& dname = domain_dims.get_dim_name(j);
-                    auto nranks = opts->_num_ranks[j];
-                    auto gsz = opts->_global_sizes[i];
-                    bool is_last = (opts->_rank_indices[j] == nranks - 1);
+                    auto nranks = actl_opts->_num_ranks[j];
+                    auto gsz = actl_opts->_global_sizes[i];
+                    bool is_last = (actl_opts->_rank_indices[j] == nranks - 1);
 
                     // Need to determine my rank size.
-                    if (!opts->_rank_sizes[i]) {
+                    if (!actl_opts->_rank_sizes[i]) {
                         if (rank_domain_sums[j] != 0)
                             FORMAT_AND_THROW_YASK_EXCEPTION
                                 ("Error: local-domain size is not specified in the '" <<
@@ -405,14 +480,14 @@ namespace yask {
                             rsz = rem;
 
                         // Set rank size depending on whether it is last one.
-                        opts->_rank_sizes[i] = rsz;
+                        actl_opts->_rank_sizes[i] = rsz;
                         TRACE_MSG("local-domain-size[" << dname << "] = " << rem);
                     }
 
                     // Need to determine global size.
                     // Set it to sum of rank sizes.
-                    else if (!opts->_global_sizes[i])
-                        opts->_global_sizes[i] = rank_domain_sums[j];
+                    else if (!actl_opts->_global_sizes[i])
+                        actl_opts->_global_sizes[i] = rank_domain_sums[j];
                 }
             }
 
@@ -420,21 +495,159 @@ namespace yask {
             else {
                 DOMAIN_VAR_LOOP(i, j) {
                     auto& dname = domain_dims.get_dim_name(j);
-                    if (opts->_global_sizes[i] != rank_domain_sums[j]) {
+                    if (actl_opts->_global_sizes[i] != rank_domain_sums[j]) {
                         FORMAT_AND_THROW_YASK_EXCEPTION("Error: sum of local-domain sizes across " <<
                                                         nr << " ranks is " <<
                                                         rank_domain_sums[j] <<
                                                         ", which does not equal global-domain size of " <<
-                                                        opts->_global_sizes[i] << " in '" << dname <<
+                                                        actl_opts->_global_sizes[i] << " in '" << dname <<
                                                         "' dimension");
                     }
                 }
             }
 
         } // passes.
-#endif
+        #endif
 
     } // setup_rank().
+
+    void StencilContext::print_warnings() const {
+        STATE_VARS(this);
+#ifdef CHECK
+        DEBUG_MSG("*** WARNING: YASK compiled with CHECK; ignore performance.");
+#endif
+#if defined(NO_INTRINSICS) && (VLEN > 1)
+        DEBUG_MSG("*** WARNING: YASK compiled with NO_INTRINSICS; ignore performance.");
+#endif
+#ifdef MODEL_CACHE
+        DEBUG_MSG("*** WARNING: YASK compiled with MODEL_CACHE; ignore performance.");
+#endif
+#ifdef TRACE_MEM
+        DEBUG_MSG("*** WARNING: YASK compiled with TRACE_MEM; ignore performance.");
+#endif
+#ifdef TRACE_INTRINSICS
+        DEBUG_MSG("*** WARNING: YASK compiled with TRACE_INTRINSICS; ignore performance.");
+#endif
+        TRACE_MSG("***  WARNING: YASK run with -trace; ignore performance");
+        if (!actl_opts->do_halo_exchange)
+            DEBUG_MSG("*** WARNING: YASK run without halo exchanges; ignore performance; invalid results.");
+    }
+
+    void StencilContext::print_temporal_tiling_info(string prefix) const {
+        STATE_VARS(this);
+
+        DEBUG_MSG(prefix << "num-wave-front-steps:      " << wf_steps << endl <<
+                  prefix << "num-temporal-block-steps:  " << tb_steps);
+
+        // Print detailed info only if temporal tiling enabled.
+        if (wf_steps > 0 || tb_steps > 0) {
+            DEBUG_MSG(prefix << "wave-front-angles:         " << wf_angles.make_dim_val_str() << endl <<
+                      prefix << "num-wave-front-shifts:     " << num_wf_shifts << endl <<
+                      prefix << "wave-front-shift-amounts:  " << wf_shift_pts.make_dim_val_str() << endl <<
+                      prefix << "left-wave-front-exts:      " << left_wf_exts.make_dim_val_str() << endl <<
+                      prefix << "right-wave-front-exts:     " << right_wf_exts.make_dim_val_str() << endl <<
+                      prefix << "ext-local-domain:          " << ext_bb.make_range_string(domain_dims) << endl <<
+                      prefix << "temporal-block-angles:     " << tb_angles.make_dim_val_str() << endl <<
+                      prefix << "num-temporal-block-shifts: " << num_tb_shifts << endl <<
+                      prefix << "temporal-block-long-base:  " << tb_widths.make_dim_val_str(" * ") << endl <<
+                      prefix << "temporal-block-short-base: " << tb_tops.make_dim_val_str(" * ") << endl <<
+                      prefix << "micro-block-angles:        " << mb_angles.make_dim_val_str());
+        }
+    }
+
+    void StencilContext::print_sizes(string prefix) const {
+        STATE_VARS(this);
+#ifdef USE_TILING
+        DEBUG_MSG(prefix << "local-domain-tile-size: " <<
+                  actl_opts->_rank_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+#endif
+        DEBUG_MSG(prefix << "mega-block-size:        " <<
+                  actl_opts->_mega_block_sizes.make_dim_val_str(" * "));
+#ifdef USE_TILING
+        DEBUG_MSG(prefix << "mega-block-tile-size:   " <<
+                  actl_opts->_mega_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+#endif
+        DEBUG_MSG(prefix << "block-size:             " <<
+                  actl_opts->_block_sizes.make_dim_val_str(" * "));
+#ifdef USE_TILING
+        DEBUG_MSG(prefix << "block-tile-size:        " <<
+                  actl_opts->_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+#endif
+        DEBUG_MSG(prefix << "micro-block-size:       " <<
+                  actl_opts->_micro_block_sizes.make_dim_val_str(" * "));
+#ifdef USE_TILING
+        DEBUG_MSG(prefix << "micro-block-tile-size:  " <<
+                  actl_opts->_micro_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+#endif
+        DEBUG_MSG(prefix << "nano-block-size:        " <<
+                  actl_opts->_nano_block_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+#ifdef USE_TILING
+        DEBUG_MSG(prefix << "nano-block-tile-size:   " <<
+                  actl_opts->_nano_block_tile_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+#endif
+        DEBUG_MSG(prefix << "pico-block-size:        " <<
+                  actl_opts->_pico_block_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+    }
+
+    void StencilContext::init_stats() {
+        STATE_VARS(this);
+
+        // Calc and report total allocation and domain sizes.
+        rank_nbytes = get_num_bytes();
+        tot_nbytes = sum_over_ranks(rank_nbytes, env->comm);
+        rank_domain_pts = rank_bb.bb_num_points;
+        tot_domain_pts = sum_over_ranks(rank_domain_pts, env->comm);
+        DEBUG_MSG("\nDomain size in this rank (points):          " << make_num_str(rank_domain_pts) <<
+                  "\nTotal allocation in this rank:              " << make_byte_str(rank_nbytes) <<
+                  "\nOverall problem size in " << env->num_ranks << " rank(s) (points): " <<
+                  make_num_str(tot_domain_pts) <<
+                  "\nTotal overall allocation in " << env->num_ranks << " rank(s):      " <<
+                  make_byte_str(tot_nbytes));
+
+        // Report some sizes and settings.
+        DEBUG_MSG("\nWork-unit sizes in grid points (from largest to smallest):");
+        DEBUG_MSG(" global-domain-size:     " <<
+                  actl_opts->_global_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+        DEBUG_MSG(" local-domain-size:      " <<
+                  actl_opts->_rank_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+        print_sizes(" ");
+        DEBUG_MSG(" cluster-size:           " << dims->_cluster_pts.make_dim_val_str(" * "));
+        DEBUG_MSG(" vector-size:            " << dims->_fold_pts.make_dim_val_str(" * "));
+        DEBUG_MSG("\nOther settings:\n"
+                  " yask-version:           " << yask_get_version_string() << endl <<
+                  " target:                 " << get_target() << endl <<
+                  " stencil-name:           " << get_name() << endl <<
+                  " stencil-description:    " << get_description() << endl <<
+                  " element-size:           " << make_byte_str(get_element_bytes()) << endl <<
+                  " inner-layout dim:       " << dims->_inner_layout_dim << endl <<
+                  " inner-loop dim:         " << dims->_inner_loop_dim);
+#ifdef USE_MPI
+        DEBUG_MSG(" num-ranks:              " << actl_opts->_num_ranks.make_dim_val_str(" * ") << endl <<
+                  " rank-indices:           " << actl_opts->_rank_indices.make_dim_val_str() << endl <<
+                  " local-domain-offsets:   " << rank_domain_offsets.make_dim_val_str(dims->_domain_dims));
+        if (actl_opts->overlap_comms)
+            DEBUG_MSG(" mpi-interior:           " << mpi_interior.make_range_string(domain_dims));
+#endif
+        DEBUG_MSG(" vector-len:             " << VLEN << endl <<
+                  " extra-padding:          " << actl_opts->_extra_pad_sizes.remove_dim(step_posn).make_dim_val_str() << endl <<
+                  " min-padding:            " << actl_opts->_min_pad_sizes.remove_dim(step_posn).make_dim_val_str() << endl <<
+                  " allow-addl-padding:     " << actl_opts->_allow_addl_pad << endl <<
+                  " L1-prefetch-distance:   " << PFD_L1 << endl <<
+                  " L2-prefetch-distance:   " << PFD_L2 << endl <<
+                  " max-halos:              " << max_halos.make_dim_val_str());
+        print_temporal_tiling_info(" ");
+
+        // Info about eqs, stages and bundles.
+        DEBUG_MSG("\n"
+                  "Num stages:              " << st_stages.size() << endl <<
+                  "Num stencil bundles:     " << st_bundles.size() << endl <<
+                  "Num stencil equations:   " << NUM_STENCIL_EQS);
+
+        // Info on work in stages.
+        DEBUG_MSG("\nBreakdown of work stats in this rank:");
+        for (auto& sp : st_stages)
+            sp->init_work_stats();
+    }
 
     // Set non-scratch var sizes and offsets based on settings.
     // Set wave-front settings.
@@ -456,7 +669,7 @@ namespace yask {
             auto& dname = dim._get_name();
 
             // Each non-scratch var.
-            for (auto gp : var_ptrs) {
+            for (auto gp : all_var_ptrs) {
                 assert(gp);
                 if (!gp->is_dim_used(dname))
                     continue;
@@ -468,12 +681,12 @@ namespace yask {
                     (!gb.is_user_var() && force)) {
 
                     // Rank domains.
-                    gp->_set_domain_size(dname, opts->_rank_sizes[dname]);
+                    gp->_set_domain_size(dname, actl_opts->_rank_sizes[dname]);
 
                     // Pads.
                     // Set via both 'extra' and 'min'; larger result will be used.
-                    gp->set_extra_pad_size(dname, opts->_extra_pad_sizes[dname]);
-                    gp->set_min_pad_size(dname, opts->_min_pad_sizes[dname]);
+                    gp->update_extra_pad_size(dname, actl_opts->_extra_pad_sizes[dname]);
+                    gp->update_min_pad_size(dname, actl_opts->_min_pad_sizes[dname]);
 
                     // Offsets.
                     auto dp = dims->_domain_dims.lookup_posn(dname);
@@ -492,9 +705,9 @@ namespace yask {
         // Calculate wave-front shifts.
         // See the wavefront diagram in run_solution() for description
         // of angles and extensions.
-        idx_t tb_steps = opts->_block_sizes[step_dim]; // use requested size; actual may be less.
+        idx_t tb_steps = actl_opts->_block_sizes[step_dim]; // use requested size; actual may be less.
         assert(tb_steps >= 0);
-        wf_steps = opts->_region_sizes[step_dim];
+        wf_steps = actl_opts->_mega_block_sizes[step_dim];
         wf_steps = max(wf_steps, tb_steps); // round up WF steps if less than TB steps.
         assert(wf_steps >= 0);
         num_wf_shifts = 0;
@@ -511,22 +724,23 @@ namespace yask {
         assert(num_wf_shifts >= 0);
 
         // Determine whether separate tuners can be used.
-        state->_use_stage_tuners = opts->_allow_stage_tuners && (tb_steps == 0) && (st_stages.size() > 1);
+        // Only allowed when no TB and >1 stage.
+        state->_use_stage_tuners = actl_opts->_allow_stage_tuners && (tb_steps == 0) && (st_stages.size() > 1);
 
         // Calculate angles and related settings.
         for (auto& dim : domain_dims) {
             auto& dname = dim._get_name();
-            auto rnsize = opts->_region_sizes[dname];
-            auto rksize = opts->_rank_sizes[dname];
-            auto nranks = opts->_num_ranks[dname];
+            auto rnsize = actl_opts->_mega_block_sizes[dname];
+            auto rksize = actl_opts->_rank_sizes[dname];
+            auto nranks = actl_opts->_num_ranks[dname];
 
             // Req'd shift in this dim based on max halos.
             idx_t angle = ROUND_UP(max_halos[dname], dims->_fold_pts[dname]);
 
             // Determine the spatial skewing angles for WF tiling.  We
-            // only need non-zero angles if the region size is less than the
+            // only need non-zero angles if the mega-block size is less than the
             // rank size or there are other ranks in this dim, i.e., if
-            // the region covers the *global* domain in a given dim, no
+            // the mega-block covers the *global* domain in a given dim, no
             // wave-front shifting is needed in that dim.
             idx_t wf_angle = 0;
             if (rnsize < rksize || nranks > 1)
@@ -542,7 +756,7 @@ namespace yask {
             // Is domain size at least as large as halo + wf_ext in direction
             // when there are multiple ranks?
             auto min_size = max_halos[dname] + shifts;
-            if (opts->_num_ranks[dname] > 1 && rksize < min_size) {
+            if (actl_opts->_num_ranks[dname] > 1 && rksize < min_size) {
                 FORMAT_AND_THROW_YASK_EXCEPTION
                     ("Error: local-domain size of " << rksize << " in '" <<
                      dname << "' dim is less than minimum size of " << min_size <<
@@ -551,11 +765,11 @@ namespace yask {
 
             // If there is another rank to the left, set wave-front
             // extension on the left.
-            left_wf_exts[dname] = opts->is_first_rank(dname) ? 0 : shifts;
+            left_wf_exts[dname] = actl_opts->is_first_rank(dname) ? 0 : shifts;
 
             // If there is another rank to the right, set wave-front
             // extension on the right.
-            right_wf_exts[dname] = opts->is_last_rank(dname) ? 0 : shifts;
+            right_wf_exts[dname] = actl_opts->is_last_rank(dname) ? 0 : shifts;
         }
 
         // Now that wave-front settings are known, we can push this info
@@ -592,7 +806,7 @@ namespace yask {
         TRACE_MSG("update_tb_info()...");
 
         // Get requested size.
-        tb_steps = opts->_block_sizes[step_dim];
+        tb_steps = actl_opts->_block_sizes[step_dim];
 
         // Reset all TB and MB vars.
         num_tb_shifts = 0;
@@ -617,13 +831,13 @@ namespace yask {
             DOMAIN_VAR_LOOP(i, j) {
                 auto& dim = domain_dims.get_dim(j);
                 auto& dname = dim._get_name();
-                auto rnsize = opts->_region_sizes[i];
+                auto rnsize = actl_opts->_mega_block_sizes[i];
 
                 // There must be only one block size when using TB, so get
                 // sizes from context settings instead of stages.
                 assert(state->_use_stage_tuners == false);
-                auto blksize = opts->_block_sizes[i];
-                auto mblksize = opts->_mini_block_sizes[i];
+                auto blksize = actl_opts->_block_sizes[i];
+                auto mblksize = actl_opts->_micro_block_sizes[i];
 
                 // Req'd shift in this dim based on max halos.
                 // Can't use separate L & R shift because of possible data reuse in vars.
@@ -640,7 +854,7 @@ namespace yask {
                 mb_angles[j] = mb_angle;
 
                 // Determine the max spatial skewing angles for TB.
-                // If blk covers whole region, no shifting is needed in that dim.
+                // If blk covers whole mega-block, no shifting is needed in that dim.
                 idx_t tb_angle = 0;
                 if (blksize < rnsize)
                     tb_angle = angle;
@@ -721,7 +935,7 @@ namespace yask {
         // TODO: use actual number of shifts dynamically instead of this
         // max.
         DOMAIN_VAR_LOOP(i, j) {
-            auto blk_sz = opts->_block_sizes[i];
+            auto blk_sz = actl_opts->_block_sizes[i];
             auto tb_angle = tb_angles[j];
             tb_widths[j] = blk_sz;
             tb_tops[j] = blk_sz;
@@ -747,17 +961,19 @@ namespace yask {
     } // update_tb_info().
 
     // Init all vars & params by calling init_fn.
-    void StencilContext::init_values(function<void (YkVarPtr gp,
-                                                   real_t seed)> real_init_fn) {
+    void StencilContext::init_values(real_t seed0,
+                                     function<void (YkVarPtr gp,
+                                                    real_t seed)> real_init_fn) {
         STATE_VARS(this);
 
-        real_t seed = 0.1;
-        DEBUG_MSG("Initializing vars...");
+        real_t seed = seed0;
+        DEBUG_MSG("Initializing stencil vars...");
         YaskTimer itimer;
         itimer.start();
-        for (auto gp : var_ptrs) {
+        for (auto gp : orig_var_ptrs) {
             real_init_fn(gp, seed);
-            seed += 0.01;
+            gp->gb().get_coh().mod_host();
+            seed += seed0;
         }
         itimer.stop();
         DEBUG_MSG("Var initialization done in " <<
@@ -775,7 +991,7 @@ namespace yask {
 
         // Rank BB is based only on rank offsets and rank domain sizes.
         rank_bb.bb_begin = rank_domain_offsets;
-        rank_bb.bb_end = rank_bb.bb_begin_tuple(domain_dims).add_elements(opts->_rank_sizes, false);
+        rank_bb.bb_end = rank_bb.bb_begin_tuple(domain_dims).add_elements(actl_opts->_rank_sizes, false);
         rank_bb.update_bb("rank", this, true, true);
 
         // BB may be extended for wave-fronts.
@@ -831,7 +1047,7 @@ namespace yask {
     void StencilBundleBase::copy_bounding_box(const StencilBundleBase* src) {
         STATE_VARS(this);
         TRACE_MSG("copy_bounding_box for '" << get_name() << "' from '" <<
-                   src->get_name() << "'...");
+                  src->get_name() << "'...");
 
         _bundle_bb = src->_bundle_bb;
         assert(_bundle_bb.bb_valid);
@@ -870,21 +1086,20 @@ namespace yask {
 
         // Divide the overall BB into a slice for each thread
         // across the outer dim.
-        const int odim = 0;     // Use 0 instead of outer_posn because BB lens are in domain dims.
+        const int odim = 0;     // Split across first domain dim; TODO: pick smarter.
         idx_t outer_len = _bundle_bb.bb_len[odim];
         idx_t nthreads = yask_get_num_threads();
         idx_t len_per_thr = CEIL_DIV(outer_len, nthreads);
         TRACE_MSG("find_bounding_box: running " << nthreads << " thread(s) over " <<
-                   outer_len << " point(s) in outer dim");
+                  outer_len << " point(s) in outer dim");
 
         // Struct w/padding to avoid false sharing.
         struct BBL_t {
             BBList bbl;
-            char pad[CACHELINE_BYTES];
+            char pad[CACHELINE_BYTES - sizeof(BBList)];
         };
 
         // List of full BBs for each thread.
-        // TODO: remove false sharing.
         vector<BBL_t> bb_lists(nthreads);
 
         // Run rect-finding code on each thread.
@@ -893,139 +1108,140 @@ namespace yask {
         yask_parallel_for
             (0, nthreads, 1,
              [&](idx_t start, idx_t stop, idx_t thread_num) {
-                auto& cur_bb_list = bb_lists[start].bbl;
+                 auto& cur_bb_list = bb_lists[start].bbl;
 
-                // Begin and end of this slice.
-                // These Indices contain domain dims.
-                Indices islice_begin(_bundle_bb.bb_begin);
-                islice_begin[odim] += start * len_per_thr;
-                Indices islice_end(_bundle_bb.bb_end);
-                islice_end[odim] = min(islice_end[odim], islice_begin[odim] + len_per_thr);
-                if (islice_end[odim] <= islice_begin[odim])
-                    return; // from lambda.
+                 // Begin and end of this slice.
+                 // These Indices contain domain dims.
+                 Indices islice_begin(_bundle_bb.bb_begin);
+                 islice_begin[odim] += start * len_per_thr;
+                 Indices islice_end(_bundle_bb.bb_end);
+                 islice_end[odim] = min(islice_end[odim], islice_begin[odim] + len_per_thr);
+                 if (islice_end[odim] <= islice_begin[odim])
+                     return; // from lambda.
 
-                // Construct len of slice in all dims.
-                Indices islice_len = islice_end.sub_elements(islice_begin);
-                auto slice_len = islice_len.make_tuple(domain_dims);
+                 // Construct len of slice in all dims.
+                 Indices islice_len = islice_end.sub_elements(islice_begin);
 
-                // Visit all points in slice, looking for a new
-                // valid beginning point, 'ib*pt'.
-                Indices ibspt(stencil_dims); // in stencil dims.
-                ibspt[step_posn] = 0;
-                Indices ibdpt(domain_dims);  // in domain dims.
-                slice_len.visit_all_points
-                    ([&](const IdxTuple& ofs, size_t idx) {
+                 // Visit all points in slice, looking for a new
+                 // valid beginning point, 'ib*pt'.
+                 Indices ibspt(stencil_dims); // in stencil dims.
+                 ibspt[step_posn] = 0;
+                 Indices ibdpt(domain_dims);  // in domain dims.
+                 islice_len.visit_all_points
+                     (true,
+                      [&](const Indices& iofs, size_t idx) {
 
-                        // Find global point from 'ofs' in domain
-                        // and stencil dims.
-                        Indices iofs(ofs);
-                        ibdpt = islice_begin.add_elements(iofs); // domain indices.
-                        DOMAIN_VAR_LOOP(i, j)
-                            ibspt[i] = ibdpt[j];            // stencil indices.
+                          // Find global point from 'iofs' in domain
+                          // and stencil dims.
+                          ibdpt = islice_begin.add_elements(iofs); // domain indices.
+                          DOMAIN_VAR_LOOP(i, j)
+                              ibspt[i] = ibdpt[j];            // stencil indices.
 
-                        // Valid point must be in sub-domain and
-                        // not seen before in this slice.
-                        bool is_valid = is_in_valid_domain(ibspt);
-                        if (is_valid) {
-                            for (auto& bb : cur_bb_list) {
-                                if (bb.is_in_bb(ibdpt)) {
-                                    is_valid = false;
-                                    break;
-                                }
-                            }
-                        }
+                          // Valid point must be in sub-domain and
+                          // not seen before in this slice.
+                          bool is_valid = is_in_valid_domain(ibspt);
+                          if (is_valid) {
+                              for (auto& bb : cur_bb_list) {
+                                  if (bb.is_in_bb(ibdpt)) {
+                                      is_valid = false;
+                                      break;
+                                  }
+                              }
+                          }
 
-                        // Process this new rect starting at 'ib*pt'.
-                        if (is_valid) {
+                          // Process this new rect starting at 'ib*pt'.
+                          if (is_valid) {
 
-                            // Scan from 'ib*pt' to end of this slice
-                            // looking for end of rect.
-                            auto iscan_len = islice_end.sub_elements(ibdpt);
-                            auto scan_len = iscan_len.make_tuple(domain_dims);
+                              // Scan from 'ib*pt' to end of this slice
+                              // looking for end of rect.
+                              auto iscan_len = islice_end.sub_elements(ibdpt);
 
-                            // End point to be found, 'ie*pt'.
-                            Indices iespt(stencil_dims); // stencil dims.
-                            iespt[step_posn] = 0;
-                            Indices iedpt(domain_dims);  // domain dims.
+                              // End point to be found, 'ie*pt'.
+                              Indices iespt(stencil_dims); // stencil dims.
+                              iespt[step_posn] = 0;
+                              Indices iedpt(domain_dims);  // domain dims.
 
-                            // Repeat scan until no adjustment is made.
-                            bool do_scan = true;
-                            while (do_scan) {
-                                do_scan = false;
+                              // Repeat scan until no adjustment is made.
+                              bool do_scan = true;
+                              while (do_scan) {
+                                  do_scan = false;
 
-                                TRACE_MSG("scanning " << scan_len.make_dim_val_str(" * ") <<
-                                           " starting at " << ibdpt.make_dim_val_str(domain_dims));
-                                scan_len.visit_all_points
-                                    ([&](const IdxTuple& eofs, size_t eidx) {
+                                  TRACE_MSG("scanning " <<
+                                            iscan_len.make_dim_val_str(domain_dims, " * ") <<
+                                            " starting at " <<
+                                            ibdpt.make_dim_val_str(domain_dims) <<
+                                            " in thread " << thread_num);
+                                  iscan_len.visit_all_points
+                                      (true,
+                                       [&](const Indices& ieofs, size_t eidx) {
 
-                                        // Make sure scan_len range is observed.
-                                        DOMAIN_VAR_LOOP(i, j)
-                                            assert(eofs[j] < scan_len[j]);
+                                           // Make sure iscan_len range is observed.
+                                           DOMAIN_VAR_LOOP(i, j)
+                                               assert(ieofs[j] < iscan_len[j]);
 
-                                        // Find global point from 'eofs'.
-                                        Indices ieofs(eofs);
-                                        iedpt = ibdpt.add_elements(ieofs); // domain tuple.
-                                        DOMAIN_VAR_LOOP(i, j)
-                                            iespt[i] = iedpt[j];            // stencil tuple.
+                                           // Find global point from 'ieofs'.
+                                           iedpt = ibdpt.add_elements(ieofs); // domain tuple.
+                                           DOMAIN_VAR_LOOP(i, j)
+                                               iespt[i] = iedpt[j];            // stencil tuple.
 
-                                        // Valid point must be in sub-domain and
-                                        // not seen before in this slice.
-                                        bool is_evalid = is_in_valid_domain(iespt);
-                                        if (is_evalid) {
-                                            for (auto& bb : cur_bb_list) {
-                                                if (bb.is_in_bb(iedpt)) {
-                                                    is_evalid = false;
-                                                    break;
-                                                }
-                                            }
-                                        }
+                                           // Valid point must be in sub-domain and
+                                           // not seen before in this slice.
+                                           bool is_evalid = is_in_valid_domain(iespt);
+                                           if (is_evalid) {
+                                               for (auto& bb : cur_bb_list) {
+                                                   if (bb.is_in_bb(iedpt)) {
+                                                       is_evalid = false;
+                                                       break;
+                                                   }
+                                               }
+                                           }
 
-                                        // If this is an invalid point, adjust
-                                        // scan range appropriately.
-                                        if (!is_evalid) {
+                                           // If this is an invalid point, adjust
+                                           // scan range appropriately.
+                                           if (!is_evalid) {
 
-                                            // Adjust 1st dim that is beyond its starting pt.
-                                            // This will reduce the range of the scan.
-                                            DOMAIN_VAR_LOOP(i, j) {
+                                               // Adjust 1st dim that is beyond its starting pt.
+                                               // This will reduce the range of the scan.
+                                               DOMAIN_VAR_LOOP(i, j) {
 
-                                                // Beyond starting point in this dim?
-                                                if (iedpt[j] > ibdpt[j]) {
-                                                    scan_len[j] = iedpt[j] - ibdpt[j];
+                                                   // Beyond starting point in this dim?
+                                                   if (iedpt[j] > ibdpt[j]) {
+                                                       iscan_len[j] = iedpt[j] - ibdpt[j];
 
-                                                    // restart scan for
-                                                    // remaining dims.
-                                                    // TODO: be smarter
-                                                    // about where to
-                                                    // restart scan.
-                                                    if (j < nddims - 1)
-                                                        do_scan = true;
+                                                       // restart scan for
+                                                       // remaining dims.
+                                                       // TODO: be smarter
+                                                       // about where to
+                                                       // restart scan.
+                                                       if (j < nddims - 1)
+                                                           do_scan = true;
 
-                                                    return false; // stop this scan.
-                                                }
-                                            }
-                                        }
+                                                       return false; // stop this scan.
+                                                   }
+                                               }
+                                           }
 
-                                        return true; // keep looking for invalid point.
-                                    }); // Looking for invalid point.
-                            } // while scan is adjusted.
-                            TRACE_MSG("found BB " << scan_len.make_dim_val_str(" * ") <<
-                                       " starting at " << ibdpt.make_dim_val_str(domain_dims));
-                            iscan_len.set_from_tuple(scan_len);
+                                           return true; // keep looking for invalid point.
+                                       }); // Looking for invalid point.
+                              } // while scan is adjusted.
+                              TRACE_MSG("found BB " << iscan_len.make_dim_val_str(domain_dims, " * ") <<
+                                        " starting at " << ibdpt.make_dim_val_str(domain_dims) <<
+                                        " in thread " << thread_num);
 
-                            // 'scan_len' now contains sizes of the new BB.
-                            BoundingBox new_bb;
-                            new_bb.bb_begin = ibdpt;
-                            new_bb.bb_end = ibdpt.add_elements(iscan_len);
-                            new_bb.update_bb("sub-bb", _context, true);
-                            cur_bb_list.push_back(new_bb);
+                              // 'iscan_len' now contains sizes of the new BB.
+                              BoundingBox new_bb;
+                              new_bb.bb_begin = ibdpt;
+                              new_bb.bb_end = ibdpt.add_elements(iscan_len);
+                              new_bb.update_bb("sub-bb", _context, true);
+                              cur_bb_list.push_back(new_bb);
 
-                        } // new rect found.
+                          } // new rect found.
 
-                        return true;  // from labmda; keep looking.
-                    }); // Looking for new rects.
-            }); // threads/slices.
+                          return true;  // from labmda; keep looking.
+                      }); // Looking for new rects.
+             }); // threads/slices.
         TRACE_MSG("sub-bbs found in " <<
-                   bbtimer.get_secs_since_start() << " secs.");
+                  bbtimer.get_secs_since_start() << " secs.");
         // At this point, we have a set of full BBs.
 
         // Reset overall BB.
@@ -1036,8 +1252,8 @@ namespace yask {
         for (int n = 0; n < nthreads; n++) {
             auto& cur_bb_list = bb_lists[n].bbl;
             TRACE_MSG("processing " << cur_bb_list.size() <<
-                       " sub-BB(s) in bundle '" << get_name() <<
-                       "' from thread " << n);
+                      " sub-BB(s) in bundle '" << get_name() <<
+                      "' from thread " << n);
 
             // BBs in slice 'n'.
             for (auto& bbn : cur_bb_list) {
@@ -1100,7 +1316,7 @@ namespace yask {
         _bundle_bb.update_bb(get_name(), _context, false);
         bbtimer.stop();
         TRACE_MSG("find-bounding-box: done in " <<
-                   bbtimer.get_elapsed_secs() << " secs.");
+                  bbtimer.get_elapsed_secs() << " secs.");
     }
 
     // Compute convenience values for a bounding-box.
@@ -1136,7 +1352,7 @@ namespace yask {
                 if (print_info)
                     DEBUG_MSG("Note: '" << name << "' domain"
                               " has one or more starting edges not on vector boundaries;"
-                              " masked calculations will be used in peel and remainder sub-blocks.");
+                              " masked calculations will be used in peel and remainder nano-blocks.");
                 bb_is_aligned = false;
                 break;
             }
@@ -1152,7 +1368,7 @@ namespace yask {
                     if (print_info && bb_is_aligned)
                         DEBUG_MSG("Note: '" << name << "' domain"
                                   " has one or more sizes that are not vector-cluster multiples;"
-                                  " masked calculations will be used in peel and remainder sub-blocks.");
+                                  " masked calculations will be used in peel and remainder nano-blocks.");
                 bb_is_cluster_mult = false;
                 break;
             }
@@ -1162,4 +1378,28 @@ namespace yask {
         bb_valid = true;
     }
 
+    // Add a new non-scratch var to the containers.
+    void StencilContext::add_var(YkVarPtr gp, bool is_orig, bool is_output) {
+        STATE_VARS(this);
+        assert(gp);
+        auto& gname = gp->get_name();
+        if (all_var_map.count(gname))
+            THROW_YASK_EXCEPTION("Error: var '" + gname + "' already exists");
+
+        // Add to list and map.
+        all_var_ptrs.push_back(gp);
+        all_var_map[gname] = gp;
+
+        // Add to orig list and map if 'is_orig'.
+        if (is_orig) {
+            orig_var_ptrs.push_back(gp);
+            orig_var_map[gname] = gp;
+        }
+
+        // Add to output list and map if 'is_output'.
+        if (is_output) {
+            output_var_ptrs.push_back(gp);
+            output_var_map[gname] = gp;
+        }
+    }
 } // namespace yask.

@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -92,13 +92,12 @@ void usage(const string& cmd,
         " -target <format>\n"
         "    Set the output format (required).\n"
         "    Supported formats:\n"
-        "      avx         YASK stencil classes for CORE AVX ISA (256-bit HW SIMD vectors).\n"
-        "      avx2        YASK stencil classes for CORE AVX2 ISA (256-bit HW SIMD vectors).\n"
-        "      avx512      YASK stencil classes for CORE AVX-512 ISA (512-bit HW SIMD vectors).\n"
-        "      avx512lo    YASK stencil classes for CORE AVX-512 ISA (256-bit HW SIMD vectors).\n"
-        "      knc         YASK stencil classes for Knights-Corner ISA (512-bit HW SIMD vectors).\n"
-        "      knl         YASK stencil classes for Knights-Landing (MIC) AVX-512 ISA (512-bit HW SIMD vectors).\n"
-        "      intel64     YASK stencil classes for generic C++ (no explicit HW SIMD vectors).\n"
+        "      avx         YASK code for CORE AVX ISA (256-bit HW SIMD vectors).\n"
+        "      avx2        YASK code for CORE AVX2 ISA (256-bit HW SIMD vectors).\n"
+        "      avx512      YASK code classes for CORE AVX-512 ISA (512-bit HW SIMD vectors).\n"
+        "      avx512-ymm  YASK code for CORE AVX-512 ISA (256-bit HW SIMD vectors).\n"
+        "      knl         YASK code for Knights-Landing (MIC) AVX-512 ISA (512-bit HW SIMD vectors).\n"
+        "      intel64     YASK code for generic C++ with 64-bit indices (no explicit HW SIMD vectors).\n"
         "      pseudo      Human-readable scalar pseudo-code.\n"
         "      pseudo-long Human-readable scalar pseudo-code with intermediate variables.\n"
         "      dot         DOT-language description.\n"
@@ -107,25 +106,62 @@ void usage(const string& cmd,
         " -elem-bytes <n>\n"
         "    Set number of bytes in each FP element (default=" << settings._elem_bytes << ").\n"
         "      Currently, only 4 (single-precision) and 8 (double) are allowed.\n"
-        " -domain-dims <dim>,<dim>,...\n"
-        "    Explicitly name the domain dimensions and set their order.\n"
-        "    In addition, domain dimensions are added when YASK variables are encountered\n"
-        "      in the stencil DSL code.\n"
-        "    Either way, the last unique domain dimension specified will become the 'inner' or\n"
-        "      'unit-stride' dimension in memory layouts. Thus, this option can be used to override\n"
-        "      the default layout order.\n"
-        "    The domain-dimension order also affects loop nesting and default rank layout.\n"
-        " -step-dim <dim>\n"
-        "    Explicitly set the step dimension.\n"
-        "    By default, the step dimension is defined when YASK variables are encountered\n"
-        "      in the stencil DSL code.\n"
         " -fold <dim>=<size>,...\n"
         "    Set number of elements in each given dimension in a vector block.\n"
         "    Default depends on -elem-bytes setting, domain-dimension order, and print format (below).\n"
         "    If product of fold lengths does not equal SIMD vector length for print\n"
         "      formats with explicit lengths, lengths will adjusted as needed.\n"
         " -cluster <dim>=<size>,...\n"
-        "    Set number of vectors to evaluate in each dimension.\n"
+        "    Set number of vectors to evaluate per inner-loop iteration in each dimension.\n"
+        " -p <filename>\n"
+        "    Write formatted output to <filename>.\n"
+        //" -ps <vec-len>         Print stats for all folding options for given vector length.\n"
+        "\n"
+        "Advanced options for experimentation or debug:\n"
+        " -step-dim <dim>\n"
+        "    Explicitly set the name of the step dimension, e.g., 't'.\n"
+        "    By default, the step dimension is defined implicitly when YASK variables are encountered\n"
+        "      in the stencil DSL code.\n"
+        " -domain-dims <dim>,<dim>,...\n"
+        "    Explicitly name the domain dimensions and set their order, e.g., 'x,y,z'.\n"
+        "    In addition, domain dimensions are added implicitly when YASK variables are encountered\n"
+        "      in the stencil DSL code.\n"
+        "    The domain-dimension order determines array memory layout, default loop nesting, and\n"
+        "      MPI rank layout. Thus, this option can be used to override those traits compared to\n"
+        "      what would be obtained from the DSL code only.\n"
+        " -inner-loop-dim <dim>\n"
+        "    Specify the domain dimension used for the inner-most stencil-computation loop.\n"
+        "      The default is the last domain dimension specified via -domain_dims or in the\n"
+        "        stencil DSL code.\n"
+        "      For this option, a numerical index is allowed: '1' is the first domain-dim, etc.\n"
+        " -min-buffer-len <n>\n"
+        "    Create buffers in the inner loop if at least <n> points could be stored in it\n"
+        "      (default=" << settings._min_buffer_len << ").\n"
+        " -read-ahead-dist <n>\n"
+        "    Number of iterations to read ahead into the inner-loop buffers\n"
+        "      (default=" << settings._read_ahead_dist << ").\n"
+        " [-no]-inner-misc-layout\n"
+        "    Set YASK-var memory layout so that the misc dim(s) are the inner-most dim(s)\n"
+        "      instead of the outer-most (default=" << settings._inner_misc << ").\n"
+        "      This effectively creates an AoSoA-style layout instead of an SoAoA one,\n"
+        "      where the last 'A' is the SIMD vector.\n"
+        "      If the SIMD-vector length is 1, the last domain dim will always be in\n"
+        "      the inner-most layout dim, even if this contradicts this setting.\n"
+        "      This setting may help decrease the number of memory streams for complex\n"
+        "      kernels when misc dims are used to consolidate vars.\n"
+        "      This disallows dynamically changing the 'misc' dim sizes from the kernel APIs.\n"
+        " [-no]-outer-domain-layout\n"
+        "    Set YASK-var memory layout so that the first domain dim is the outer-most\n"
+        "      dim, even if the var contains step or misc dims (default=" << settings._outer_domain << ").\n"
+        "      This setting may be useful for run-time allocators that automatically partition\n"
+        "      array layouts across NUMA nodes.\n"
+        "      If the SIMD-vector length is 1, the last domain dim will always be in\n"
+        "      the inner-most layout dim, possibly overriding this setting.\n"
+        " -[no]-fus\n"
+        "    Make first dimension of fold unit stride (default=" << settings._first_inner << ").\n"
+        "      This controls the intra-vector memory layout.\n"
+        "      The order of dimensions within a folded vector is not necessarily the same as the\n"
+        "        order of the dimensions in the YASK-var memory layouts as described above.\n"
         " -l1-prefetch-dist <n>\n"
         "    Set L1 prefetch distance to <n> iterations ahead. Use zero (0) to disable.\n"
         " -l2-prefetch-dist <n>\n"
@@ -142,11 +178,11 @@ void usage(const string& cmd,
         "        names are '" << settings._eq_bundle_basename_default << "_0', " <<
         settings._eq_bundle_basename_default << "_1', etc.\n"
         "      This option allows more control over this bundling.\n"
-        "      Example: \"-eq-bundles a=foo,b=b[aeiou]r\" creates one or more eq-bundles named 'a_0', 'a_1', etc.\n"
+        "      Example: \"-eq-bundles a=foo,b=b[ae]r\" creates one or more eq-bundles named 'a_0', 'a_1', etc.\n"
         "        containing updates to each var whose name contains 'foo' and one or more eq-bundles\n"
-        "        named 'b_0', 'b_1', etc. containing updates to each var whose name matches 'b[aeiou]r'.\n"
+        "        named 'b_0', 'b_1', etc. containing updates to each var whose name contains 'bar' or 'ber'.\n"
         "      Standard regex-format tokens in <name> will be replaced based on matches to <regex>.\n"
-        "      Example: \"-eq-bundles 'g_$&=b[aeiou]r'\" with vars 'bar_x', 'bar_y', 'ber_x', and 'ber_y'\n"
+        "      Example: \"-eq-bundles 'g_$&=b[ae]r'\" with vars 'bar_x', 'bar_y', 'ber_x', and 'ber_y'\n"
         "        would create eq-bundle 'g_bar_0' for vars 'bar_x' and 'bar_y' and eq-bundle 'g_ber_0' for\n"
         "        vars 'ber_x' and 'ber_y' because '$&' is substituted by the string that matches the regex.\n"
         " [-no]-bundle-scratch\n"
@@ -158,19 +194,10 @@ void usage(const string& cmd,
         " -step-alloc <size>\n"
         "    Specify the size of the step-dimension memory allocation on all vars.\n"
         "      By default, allocations are calculated automatically for each var.\n"
-        " [-no]-interleave-misc\n"
-        "    Allocate YASK vars with the 'misc' dims as the inner-most dims (default=" << settings._inner_misc << ").\n"
-        "      This disallows dynamcally changing the 'misc' dim sizes during run-time.\n"
-        " -fus\n"
-        "    Make first dimension of fold unit stride (default=" << settings._first_inner << ").\n"
-        "      This controls the intra-vector memory layout.\n"
-        " -lus\n"
-        "    Make last dimension of fold unit stride (default=" << (!settings._first_inner) << ").\n"
-        "      This controls the intra-vector memory layout.\n"
         " [-no]-ul\n"
-        "    Do [not] generate simple unaligned loads (default=" << settings._allow_unaligned_loads << ").\n"
-        "      [Advanced] To use this correctly, only 1D folds are allowed, and\n"
-        "        the memory layout used by YASK must have that same dimension in unit stride.\n"
+        "    [Advanced] Do [not] generate simple unaligned loads (default=" << settings._allow_unaligned_loads << ").\n"
+        "      To use this correctly, only 1D folds are allowed, and\n"
+        "        the array memory layout must have that same dimension in unit stride.\n"
         " [-no]-opt-comb\n"
         "    Do [not] combine commutative operations (default=" << settings._do_comb << ").\n"
         " [-no]-opt-reorder\n"
@@ -186,14 +213,20 @@ void usage(const string& cmd,
         "    Set heuristic for max single expression-size (default=" << settings._max_expr_size << ").\n"
         " -min-es <num-nodes>\n"
         "    Set heuristic for min expression-size for reuse (default=" << settings._min_expr_size << ").\n"
+        " [-no]-use-ptrs\n"
+        "    Generate inner-loop kernel code using data pointers & strides, avoiding function calls\n"
+        "      (default=" << settings._use_ptrs << ").\n"
+        " [-no]-use-safe-ptrs\n"
+        "    Generate kernel code with pointer parameters to base addresses for each YASK var\n"
+        "      (default=" << settings._use_offsets << ").\n"
+        "      This is a workaround for offload-device drivers that don't allow negative indices from\n"
+        "      a pointer that is a kernel argument.\n"
+        " [-no]-early-loads\n"
+        "    Generate aligned loads before they are needed (default=" << settings._early_loads << ").\n"
         " [-no]-find-deps\n"
         "    Find dependencies between stencil equations (default=" << settings._find_deps << ").\n"
         " [-no]-print-eqs\n"
         "    Print each equation when defined (default=" << settings._print_eqs << ").\n"
-        "\n"
-        " -p <filename>\n"
-        "    Write formatted output to <filename>.\n"
-        //" -ps <vec-len>         Print stats for all folding options for given vector length.\n"
         "\n"
         "Examples:\n"
         " " << cmd << " -stencil 3axis -radius 2 -fold x=4,y=4 -target pseudo -p -  # '-' for stdout\n"
@@ -205,8 +238,16 @@ void usage(const string& cmd,
 // Parse command-line and set global cmd-line option vars.
 // Exits on error.
 void parse_opts(int argc, const char* argv[],
-               CompilerSettings& settings)
+                CompilerSettings& settings,
+                bool show_invo = false)
 {
+    if (show_invo) {
+        cout << "YASK compiler invocation:";
+        for (int argi = 0; argi < argc; argi++)
+            cout << " " << argv[argi];
+        cout << endl;
+    }
+
     if (argc <= 1)
         usage(argv[0], settings);
 
@@ -221,7 +262,7 @@ void parse_opts(int argc, const char* argv[],
 
             else if (opt == "-fus")
                 settings._first_inner = true;
-            else if (opt == "-lus")
+            else if (opt == "-no-fus")
                 settings._first_inner = false;
             else if (opt == "-ul")
                 settings._allow_unaligned_loads = true;
@@ -259,11 +300,27 @@ void parse_opts(int argc, const char* argv[],
                 settings._print_eqs = true;
             else if (opt == "-no-print-eqs")
                 settings._print_eqs = false;
-            else if (opt == "-interleave-misc")
+            else if (opt == "-inner-misc-layout")
                 settings._inner_misc = true;
-            else if (opt == "-no-interleave-misc")
+            else if (opt == "-no-inner-misc-layout")
                 settings._inner_misc = false;
-    
+            else if (opt == "-outer-domain-layout")
+                settings._outer_domain = true;
+            else if (opt == "-no-outer-domain-layout")
+                settings._outer_domain = false;
+            else if (opt == "-use-ptrs")
+                settings._use_ptrs = true;
+            else if (opt == "-no-use-ptrs")
+                settings._use_ptrs = false;
+            else if (opt == "-use-safe-ptrs")
+                settings._use_offsets = true;
+            else if (opt == "-no-use-safe-ptrs")
+                settings._use_offsets = false;
+            else if (opt == "-early-loads")
+                settings._early_loads = true;
+            else if (opt == "-no-early-loads")
+                settings._early_loads = false;
+            
             // add any more options w/o values above.
 
             // options w/a value.
@@ -289,6 +346,8 @@ void parse_opts(int argc, const char* argv[],
                     settings._eq_bundle_targets = argop;
                 else if (opt == "-step-dim")
                     settings._step_dim = argop;
+                else if (opt == "-inner-loop-dim")
+                    settings._inner_loop_dim = argop;
                 else if (opt == "-domain-dims") {
                     settings._domain_dims.clear();
                     
@@ -342,6 +401,10 @@ void parse_opts(int argc, const char* argv[],
                         settings._halo_size = val;
                     else if (opt == "-step-alloc")
                         settings._step_alloc = val;
+                    else if (opt == "-min-buffer-len")
+                        settings._min_buffer_len = val;
+                    else if (opt == "-read-ahead-dist")
+                        settings._read_ahead_dist = val;
 
                     // add any more options w/int values here.
 
@@ -373,13 +436,13 @@ int main(int argc, const char* argv[]) {
 
     cout << "YASK -- Yet Another Stencil Kit\n"
         "YASK Stencil Compiler Utility\n"
-        "Copyright (c) 2014-2021, Intel Corporation.\n"
+        "Copyright (c) 2014-2022, Intel Corporation.\n"
         "Version: " << yask_get_version_string() << endl;
 
     try {
         // Parse options.
         CompilerSettings settings;
-        parse_opts(argc, argv, settings);
+        parse_opts(argc, argv, settings, true);
 
         // Find the requested stencil in the registry.
         auto& stencils = yc_solution_base::get_registry();

@@ -2,7 +2,7 @@
 
 ##############################################################################
 ## YASK: Yet Another Stencil Kit
-## Copyright (c) 2014-2021, Intel Corporation
+## Copyright (c) 2014-2022, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -51,7 +51,6 @@ my $arch;                      # target architecture.
 my $sweep = 0;                 # if true, sweep instead of search.
 my $testing = 0;               # if true, don't run real trials.
 my $checking = 0;              # if true, don't run at all.
-my $mic;                       # set to 0, 1, etc. for KNC mic.
 my $host;                      # set to run on a different host.
 my $sde = 0;                   # run under sde (for testing).
 my $sim = 0;                   # run under any simulator/emulator.
@@ -91,9 +90,8 @@ sub usage {
       " -debugCheck        Print detailed results of sanity-checks.\n".
       " -killCmd=<PATH>    Command to kill runaway jobs (default is '$killCmd').\n".
       "\ntarget options:\n".
-      " -arch=<ARCH>       Specify target architecture: knc, knl, hsw, ... (default is '$arch').\n".
+      " -arch=<ARCH>       Specify target architecture: avx512, avx3, ... (default is '$arch').\n".
       " -host=<NAME>       Run binary on host <NAME> using ssh.\n".
-      " -mic=<N>           Set hostname to current hostname appended with -mic<N>; sets arch to 'knc'.\n".
       " -sde               Run binary on SDE (for testing only).\n".
       " -makePrefix=<CMD>  Prefix make command with <CMD>.*\n".
       " -makeArgs=<ARGS>   Pass additional <ARGS> to make command.*\n".
@@ -110,13 +108,13 @@ sub usage {
       " -sweep             Use exhausitive search instead of GA.\n".
       " -<gene_name>=<N>   Force <gene_name> to fixed value <N>.\n".
       "                    Run with -check for list of genes and default ranges.\n".
-      "                    Setting local-domain size (l) also sets upper block and region sizes.\n".
+      "                    Setting local-domain size (l) also sets upper block and mega-block sizes.\n".
       "                    Leave off 'x', 'y', 'z' suffix to set these 3 vars to same val.\n".
       "                    Examples: '-l=512'      Set local-domain size to 512^3.\n".
       "                              '-bx=64'      Set block size to 64 in 'x' dim.\n".
       "                              '-ep=0'       Disable extra padding.\n".
       "                              '-c=1'        Allow only one vector in a cluster.\n".
-      "                              '-r=0'        Allow only one OpenMP region (region size=0 => local-domain size).\n".
+      "                              '-Mb=0'       Allow only one Mega-block (Mb=0 => Mb=local-domain size).\n".
       " -<gene_name>=<N>-<M> Restrict <gene_name> between <N> and <M>, inclusive.\n".
       "                    Example:  '-bx=8-128'.\n".
       "                    See the notes above on <gene_name> specification.\n".
@@ -136,7 +134,7 @@ sub usage {
       "* indicates options that are invalid if -noBuild is used.\n".
       "\n".
       "examples:\n".
-      " $0 -stencil=iso3dfd -l=768 -r=0 -noPrefetch\n".
+      " $0 -stencil=iso3dfd -l=768 -Mb=0 -noPrefetch\n".
       " $0 -stencil=awp -lx=512 -ly=512 -lz=256 -b=4-512:4\n".
       " $0 -stencil=3axis -mem=8-10 -noBuild\n";
 
@@ -150,9 +148,9 @@ sub usage {
 my %geneRanges;
 my $autoKey = 'def_';          # prefix for default setting.
 
-# control groups.
+# control tiles.
 # TODO: make an option.
-my $showGroups = 0;
+my $showTiles = 0;
 
 # autoflush.
 $| = 1;
@@ -200,11 +198,6 @@ for my $origOpt (@ARGV) {
   }
   elsif ($opt =~ '^-?ranks=(\d+)$') {
     $nranks = $rhs;
-  }
-  elsif ($opt =~ '^-?mic=(\d+)$') {
-    $mic = $rhs;
-    $arch = 'knc';
-    $host = hostname()."-mic$mic";
   }
   elsif ($opt =~ '^-?arch=(\S+)$') {
     $arch = $rhs;
@@ -272,8 +265,8 @@ for my $origOpt (@ARGV) {
 
     # special case for local-domain size: also set default for other max sizes.
     if ($key =~ /^l[xyz]?$/ && $max > 0) {
-      my @szs = qw(r b mb sb);
-      push @szs, qw(bg mbg sbg) if $showGroups;
+      my @szs = qw(Mb b mb nb);
+      push @szs, qw(b_tile mb_tile nb_tile) if $showTiles;
       for my $i (@szs) {
         my $key2 = $key;
         $key2 =~ s/^l/$i/;
@@ -298,9 +291,6 @@ my $velems = $vbits / 8 / $realBytes;
 
 # radius.
 $radius = 8 if !defined $radius;
-
-# disable folding for DP MIC (no valignq).
-$folding = 0 if (defined $mic && $dp);
 
 # dir name.
 my $searchTypeStr = $sweep ? 'sweep' : 'tuner';
@@ -328,11 +318,11 @@ $outFH->open(">$outFile") or die "error: cannot write to '$outFile'\n"
   unless $checking;
 
 # things to get from the run.
-if ($showGroups) {
+if ($showTiles) {
   push @YaskUtils::log_keys,
-    'block-group-size',
-    'mini-block-group-size';
-    'sub-block-group-size';
+    'block-tile-size',
+    'micro-block-tile-size';
+    'nano-block-tile-size';
 }
 
 # how many individuals to create randomly and then keep at any given time.
@@ -358,21 +348,21 @@ my $maxCluster = 4;
 my $minPoints;
 my $maxPoints;
 my $minClustersInBlock = 10;
-my $minBlocksInRegion = 10;
+my $minBlocksInMegaBlock = 10;
 
 # Threads.
-my $minThreadDivisor = 1;
-my $maxThreadDivisor = 4;
-my $minBlockThreads = 1;
-my $maxBlockThreads = 32;       # TODO: set to number of CPUs.
+my $minOuterThreads = 8;
+my $maxOuterThreads = 64;
+my $minInnerThreads = 1;
+my $maxInnerThreads = 4;
 
 # List of possible loop orders.
 my @loopOrders =
   ('123', '132', '213', '231', '312', '321');
 
 # Possible space-filling curve modifiers.
-my @pathNamesIncreasing =
-  ('', 'grouped');
+my @pathNamesIncreasing = ('');
+push @pathNamesIncreasing, 'tiled' if $showTiles;
 my @pathNames =
   (@pathNamesIncreasing, 'serpentine', 'square_wave serpentine', 'square_wave');
 
@@ -400,15 +390,11 @@ if ( !@folds ) {
     if $folding;
 }
 
-# OMP.
-my @schedules =
-  ( 'static,1', 'dynamic,1', 'guided,1' );
-
 # Data structure to describe each gene in the genome.
 # 2-D array. Each outer array element contains the following elements:
 # 0. min allowed value; '0' is a special case handled by YASK.
 # 1. max allowed value.
-# 2. step size between values (usually 1).
+# 2. step size between values.
 # 3. name.
 my @rangesAll = 
   (
@@ -417,27 +403,27 @@ my @rangesAll =
    [ $minDim, $maxDim, 16, 'ly' ],
    [ $minDim, $maxDim, 16, 'lz' ],
 
-   # region size.
-   [ 1, $maxTimeBlock, 1, 'rt' ],
-   [ 0, $maxDim, 1, 'rx' ],
-   [ 0, $maxDim, 1, 'ry' ],
-   [ 0, $maxDim, 1, 'rz' ],
+   # mega-block size.
+   [ 1, $maxTimeBlock, 1, 'Mbt' ],
+   [ 0, $maxDim, 4, 'Mbx' ],
+   [ 0, $maxDim, 4, 'Mby' ],
+   [ 0, $maxDim, 4, 'Mbz' ],
 
    # block size.
    [ 1, $maxTimeBlock, 1, 'bt' ],
-   [ 0, $maxDim, 1, 'bx' ],
-   [ 0, $maxDim, 1, 'by' ],
-   [ 0, $maxDim, 1, 'bz' ],
+   [ 0, $maxDim, 4, 'bx' ],
+   [ 0, $maxDim, 4, 'by' ],
+   [ 0, $maxDim, 4, 'bz' ],
 
-   # mini-block size.
-   [ 0, $maxDim, 1, 'mbx' ],
-   [ 0, $maxDim, 1, 'mby' ],
-   [ 0, $maxDim, 1, 'mbz' ],
+   # micro-block size.
+   [ 0, $maxDim, 4, 'mbx' ],
+   [ 0, $maxDim, 4, 'mby' ],
+   [ 0, $maxDim, 4, 'mbz' ],
 
-   # sub-block size.
-   [ 0, $maxDim, 1, 'sbx' ],
-   [ 0, $maxDim, 1, 'sby' ],
-   [ 0, $maxDim, 1, 'sbz' ],
+   # nano-block size.
+   [ 0, $maxDim, 4, 'nbx' ],
+   [ 0, $maxDim, 4, 'nby' ],
+   [ 0, $maxDim, 4, 'nbz' ],
 
    # extra padding.
    [ 0, $maxPad, 1, 'epx' ],
@@ -445,23 +431,28 @@ my @rangesAll =
    [ 0, $maxPad, 1, 'epz' ],
 
    # threads.
-   [ $minThreadDivisor, $maxThreadDivisor, 1, 'thread_divisor' ],
-   [ $minBlockThreads, $maxBlockThreads, 1, 'block_threads' ],
-   [ 0, 1, 1, 'bind_block_threads' ],
+   [ $minOuterThreads, $maxOuterThreads, 1, 'outer_threads' ],
+   [ $minInnerThreads, $maxInnerThreads, 1, 'inner_threads' ],
+   [ 0, 1, 1, 'bind_inner_threads' ],
   );
 
-if ($showGroups) {
+if ($showTiles) {
   push @rangesAll,
     (
-     # block-group size.
-     [ 0, $maxDim, 1, 'bgx' ],
-     [ 0, $maxDim, 1, 'bgy' ],
-     [ 0, $maxDim, 1, 'bgz' ],
+     # block-tile size.
+     [ 0, $maxDim, 4, 'b_tilex' ],
+     [ 0, $maxDim, 4, 'b_tiley' ],
+     [ 0, $maxDim, 4, 'b_tilez' ],
      
-     # sub-block-group size.
-     [ 0, $maxDim, 1, 'sbgx' ],
-     [ 0, $maxDim, 1, 'sbgy' ],
-     [ 0, $maxDim, 1, 'sbgz' ],
+     # micro-block-tile size.
+     [ 0, $maxDim, 4, 'mb_tilex' ],
+     [ 0, $maxDim, 4, 'mb_tiley' ],
+     [ 0, $maxDim, 4, 'mb_tilez' ],
+     
+     # nano-block-tile size.
+     [ 0, $maxDim, 4, 'sb_tilex' ],
+     [ 0, $maxDim, 4, 'sb_tiley' ],
+     [ 0, $maxDim, 4, 'sb_tilez' ],
     );
 }
 
@@ -473,14 +464,14 @@ if ($doBuild) {
      # Loops, from the list above.
      # Each loop consists of index order and path mods.
      # Block and rank paths require increasing indices.
-     [ 0, $#loopOrders, 1, 'subBlockOrder' ],
-     [ 0, $#pathNames, 1, 'subBlockPath' ],
-     [ 0, $#loopOrders, 1, 'miniBlockOrder' ],
-     [ 0, $#pathNames, 1, 'miniBlockPath' ],
+     [ 0, $#loopOrders, 1, 'nanoBlockOrder' ],
+     [ 0, $#pathNames, 1, 'nanoBlockPath' ],
+     [ 0, $#loopOrders, 1, 'microBlockOrder' ],
+     [ 0, $#pathNames, 1, 'microBlockPath' ],
      [ 0, $#loopOrders, 1, 'blockOrder' ],
      [ 0, $#pathNamesIncreasing, 1, 'blockPath' ],
-     [ 0, $#loopOrders, 1, 'regionOrder' ],
-     [ 0, $#pathNames, 1, 'regionPath' ],
+     [ 0, $#loopOrders, 1, 'MegaBlockOrder' ],
+     [ 0, $#pathNames, 1, 'MegaBlockPath' ],
      [ 0, $#loopOrders, 1, 'rankOrder' ],
      [ 0, $#pathNamesIncreasing, 1, 'rankPath' ],
 
@@ -496,10 +487,6 @@ if ($doBuild) {
      # all non-pos numbers => no prefetching, so ~50% chance of being enabled.
      [ -$maxPfd_l1, $maxPfd_l1, 1, 'pfd_l1' ],
      [ -$maxPfd_l2, $maxPfd_l2, 1, 'pfd_l2' ],
-
-     # other build options.
-     [ 0, $#schedules, 1, 'ompRegionSchedule' ], # OMP schedule for region loop.
-     [ 0, $#schedules, 1, 'ompBlockSchedule' ], # OMP schedule for mini-block loop.
 
     );
 }
@@ -678,7 +665,7 @@ sub readHashes($$$) {
 
   my @vals;
   for my $d (@dirs) {
-    if ($key =~ /bg$/ && !$showGroups) {
+    if ($key =~ /bg$/ && !$showTiles) {
       push @vals, 1;
     } else {
       push @vals, readHash($hash, "$key$d", $isBuildVar);
@@ -765,12 +752,8 @@ sub getRunCmd($) {
   my $exePrefix = $timeCmd;
   $exePrefix .= " sde -$arch --" if $sde;
 
-  my $runCmd = "bin/yask.sh -log $outDir/yask.$stencil.$arch.run".sprintf("%06d",$run).".log";
-  if (defined $mic) {
-    $runCmd .= " -mic $mic";
-  } else {
-    $runCmd .= " -host $host" if defined $host;
-  }
+  my $runCmd = "bin/yask.sh -log_dir $outDir/logs -log yask.$stencil.$arch.run".sprintf("%06d",$run).".log";
+  $runCmd .= " -host $host" if defined $host;
   $runCmd .= " -exe_prefix '$exePrefix' -stencil $tag -arch $arch -no-pre_auto_tune -no-print_suffixes";
   $runCmd .= " -ranks $nranks" if defined $nranks;
   return $runCmd;
@@ -1037,19 +1020,17 @@ sub makeLoopVars($$$$) {
   # vars to create.
   my $order = join(',', @dims);  # e.g., '2, 1'.
   my $outerMods = '';
-  my $innerMods = '';
 
   # path gene?
   my $pathKey = $tunerPrefix."Path";
   if (exists $h->{$pathKey}) {
     my $path = readHash($h, $pathKey, 1);
-    my $pathStr = @pathNames[$path];                # e.g., 'grouped'.
+    my $pathStr = @pathNames[$path];                # e.g., 'tiled'.
     $outerMods = $pathStr;
   }
   
   my $loopVars = " ".$makePrefix."_LOOP_ORDER='$order'";
-  $loopVars .= " ".$makePrefix."_LOOP_OUTER_MODS='$outerMods'";
-  $loopVars .= " ".$makePrefix."_LOOP_INNER_MODS='$innerMods'";
+  $loopVars .= " ".$makePrefix."_LOOP_MODS='$outerMods'";
   return $loopVars;
 }
 
@@ -1143,24 +1124,26 @@ sub fitness {
   # get individual vars from hash or fixed values.
   my $h = makeHash($values);
   my @ds = readHashes($h, 'l', 0);
-  my $rt = readHash($h, 'rt', 1);
-  my @rs = readHashes($h, 'r', 0);
+  my $Mbt = readHash($h, 'Mbt', 1);
+  my @Mbs = readHashes($h, 'Mb', 0);
   my $bt = readHash($h, 'bt', 1);
   my @bs = readHashes($h, 'b', 0);
   my @mbs = readHashes($h, 'mb', 0);
-  my @sbs = readHashes($h, 'sb', 0);
-  my @bgs = readHashes($h, 'bg', 0);
-  my @sbgs = readHashes($h, 'sbg', 0);
+  my @nbs = readHashes($h, 'nb', 0);
+  my (@b_tiles, @mb_tiles, @nb_tiles);
+  if ($showTiles) {
+    @b_tiles = readHashes($h, 'b_tile', 0);
+    @mb_tiles = readHashes($h, 'mb_tile', 0);
+    @nb_tiles = readHashes($h, 'nb_tile', 0);
+  }
   my @cvs = readHashes($h, 'c', 1); # in vectors, not in points!
   my @ps = readHashes($h, 'ep', 0);
   my $fold = readHash($h, 'fold', 1);
-  my $thread_divisor = readHash($h, 'thread_divisor', 0);
-  my $block_threads = readHash($h, 'block_threads', 0);
-  my $bind_block_threads = readHash($h, 'bind_block_threads', 0);
+  my $outer_threads = readHash($h, 'outer_threads', 0);
+  my $inner_threads = readHash($h, 'inner_threads', 0);
+  my $bind_inner_threads = readHash($h, 'bind_inner_threads', 0);
   my $pfd_l1 = readHash($h, 'pfd_l1', 1);
   my $pfd_l2 = readHash($h, 'pfd_l2', 1);
-  my $ompRegionSchedule = readHash($h, 'ompRegionSchedule', 1);
-  my $ompBlockSchedule = readHash($h, 'ompBlockSchedule', 1);
 
   # fold numbers.
   my $foldNums = $folds[$fold];
@@ -1178,39 +1161,46 @@ sub fitness {
   my @cs = map { $fs[$_] * $cvs[$_] } 0..$#dirs;
 
   # adjust inner sizes to fit in their enclosing sizes.
-  adjSizes(\@rs, \@ds);         # region <= domain.
-  adjSizes(\@bs, \@rs);         # block <= region.
-  adjSizes(\@mbs, \@bs);        # mini-block <= block.
-  adjSizes(\@sbs, \@mbs);       # sub-block <= mini-block.
-  adjSizes(\@bgs, \@rs);        # block-group <= region.
-  adjSizes(\@sbgs, \@mbs);      # sub-block-group <= mini-block.
+  adjSizes(\@Mbs, \@ds);         # Mega-block <= domain.
+  adjSizes(\@bs, \@Mbs);         # block <= Mega-block.
+  adjSizes(\@mbs, \@bs);        # micro-block <= block.
+  adjSizes(\@nbs, \@mbs);       # nano-block <= micro-block.
+  if ($showTiles) {
+    adjSizes(\@b_tiles, \@bs);        # block-tile <= block.
+    adjSizes(\@mb_tiles, \@mbs);        # micro-block-tile <= micro-block.
+    adjSizes(\@nb_tiles, \@nbs);      # nano-block-tile <= nano-block.
+  }
 
   # 3d sizes in points.
   my $dPts = mult(@ds);
-  my $rPts = mult(@rs);
+  my $MbPts = mult(@Mbs);
   my $bPts = mult(@bs);
   my $mbPts = mult(@mbs);
-  my $sbPts = mult(@sbs);
+  my $nbPts = mult(@nbs);
   my $cPts = mult(@cs);
   my $fPts = mult(@fs);
-  my $bgPts = mult(@bgs);
-  my $sbgPts = mult(@sbgs);
+  my ($b_tilePts, $mb_tilePts, $nb_tilePts);
+  if ($showTiles) {
+    $b_tilePts = mult(@b_tiles);
+    $mb_tilePts = mult(@mb_tiles);
+    $nb_tilePts = mult(@nb_tiles);
+  }
 
   # Clusters per block.
   my @bcs = map { ceil($bs[$_] / $cs[$_]) } 0..$#dirs;
-  my $bCls = mult(@bcs);
+  my $bcs = mult(@bcs);
 
-  # Mini-blocks per block.
+  # Micro-blocks per block.
   my @bmbs = map { ceil($bs[$_] / $mbs[$_]) } 0..$#dirs;
-  my $bMbs = mult(@bmbs);
+  my $bmbs = mult(@bmbs);
 
-  # Blocks per region.
-  my @rbs = map { ceil($rs[$_] / $bs[$_]) } 0..$#dirs;
-  my $rBlks = mult(@rbs);
+  # Blocks per Mega-block.
+  my @Mbbs = map { ceil($Mbs[$_] / $bs[$_]) } 0..$#dirs;
+  my $Mbbs = mult(@Mbbs);
 
-  # Regions per rank.
-  my @drs = map { ceil($ds[$_] / $rs[$_]) } 0..$#dirs;
-  my $dRegs = mult(@drs);
+  # Mega-blocks per rank.
+  my @dMbs = map { ceil($ds[$_] / $Mbs[$_]) } 0..$#dirs;
+  my $dMbs = mult(@dMbs);
 
   # mem usage estimate.
   my $overallSize = calcSize(\@ds, \@ps, \@cs);
@@ -1218,19 +1208,20 @@ sub fitness {
   if ($debugCheck) {
     print "Sizes:\n";
     print "  local-domain size = $dPts\n";
-    print "  region size = $rPts\n";
+    print "  Mega-block size = $MbPts\n";
     print "  block size = $bPts\n";
-    print "  sub-block size = $sbPts\n";
+    print "  nano-block size = $nbPts\n";
     print "  cluster size = $cPts\n";
     print "  fold size = $fPts\n";
-    print "  regions per local-domain = $dRegs\n";
-    print "  blocks per region = $rBlks\n";
-    print "  clusters per block = $bCls\n";
-    print "  mini-blocks per block = $bMbs\n";
+    print "  Mega-blocks per local-domain = $dMbs\n";
+    print "  blocks per Mega-block = $Mbbs\n";
+    print "  clusters per block = $bcs\n";
+    print "  micro-blocks per block = $bmbs\n";
     print "  mem estimate = ".($overallSize/$YaskUtils::oneGi)." GB\n";
-    if ($showGroups) {
-      print "  block-group size = $bgPts\n";
-      print "  sub-block-group size = $sbgPts\n";
+    if ($showTiles) {
+      print "  block-tile size = $b_tilePts\n";
+      print "  micro-block-tile size = $mb_tilePts\n";
+      print "  nano-block-tile size = $nb_tilePts\n";
     }
   }
 
@@ -1257,16 +1248,16 @@ sub fitness {
   }
 
   # Each block should do minimal work.
-  if ($bCls < $minClustersInBlock) {
-    print "  $bCls clusters per block < $minClustersInBlock\n" if $debugCheck;
+  if ($bcs < $minClustersInBlock) {
+    print "  $bcs clusters per block < $minClustersInBlock\n" if $debugCheck;
     $checkStats{'block size too small'}++;
     $ok = 0;
   }
 
   # Should be min number of blocks.
-  if ($rBlks < $minBlocksInRegion) {
-    print "  $rBlks blocks per region < $minBlocksInRegion\n" if $debugCheck;
-    $checkStats{'too few blocks per region'}++;
+  if ($Mbbs < $minBlocksInMegaBlock) {
+    print "  $Mbbs blocks per Mega-block < $minBlocksInMegaBlock\n" if $debugCheck;
+    $checkStats{'too few blocks per Mega-block'}++;
     $ok = 0;
   }
 
@@ -1276,27 +1267,24 @@ sub fitness {
   $checkStats{'ok'} += $ok;
   addStat($ok, 'mem estimate', $overallSize);
   addStat($ok, 'local-domain size', $dPts);
-  addStat($ok, 'region size', $rPts);
+  addStat($ok, 'Mega-block size', $MbPts);
   addStat($ok, 'block size', $bPts);
-  addStat($ok, 'mini-block size', $mbPts);
-  addStat($ok, 'sub-block size', $sbPts);
+  addStat($ok, 'micro-block size', $mbPts);
+  addStat($ok, 'nano-block size', $nbPts);
   addStat($ok, 'cluster size', $cPts);
-  addStat($ok, 'regions per local-domain', $dRegs);
-  addStat($ok, 'blocks per region', $rBlks);
-  addStat($ok, 'clusters per block', $bCls);
-  addStat($ok, 'mini-blocks per block', $bMbs);
+  addStat($ok, 'Mega-blocks per local-domain', $dMbs);
+  addStat($ok, 'blocks per Mega-block', $Mbbs);
+  addStat($ok, 'clusters per block', $bcs);
+  addStat($ok, 'micro-blocks per block', $bmbs);
   addStat($ok, 'vectors per cluster', $cvs);
-  if ($showGroups) {
-    addStat($ok, 'block-group size', $bgPts);
-    addStat($ok, 'sub-block-group size', $sbgPts);
+  if ($showTiles) {
+    addStat($ok, 'block-tile size', $b_tilePts);
+    addStat($ok, 'micro-block-tile size', $mb_tilePts);
+    addStat($ok, 'nano-block-tile size', $nb_tilePts);
   }
 
   # exit here if just checking.
   return $ok if $justChecking;
-
-  # OMP settings.
-  my $regionScheduleStr = $schedules[$ompRegionSchedule];
-  my $blockScheduleStr = $schedules[$ompBlockSchedule];
 
   # compile-time settings.
   my $macros = '';              # string of macros.
@@ -1318,13 +1306,10 @@ sub fitness {
 
   # gen-loops vars.
   $mvars .= makeLoopVars($h, 'RANK', 'rank', 3);
-  $mvars .= makeLoopVars($h, 'REGION', 'region', 3);
+  $mvars .= makeLoopVars($h, 'MEGA_BLOCK', 'MegaBlock', 3);
   $mvars .= makeLoopVars($h, 'BLOCK', 'block', 3);
-  $mvars .= makeLoopVars($h, 'MINI_BLOCK', 'miniBlock', 3);
-  $mvars .= makeLoopVars($h, 'SUB_BLOCK', 'subBlock', 2);
-
-  # other vars.
-  $mvars .= " omp_region_schedule=$regionScheduleStr omp_block_schedule=$blockScheduleStr";
+  $mvars .= makeLoopVars($h, 'MICRO_BLOCK', 'microBlock', 3);
+  $mvars .= makeLoopVars($h, 'NANO_BLOCK', 'nanoBlock', 3);
 
   # how to make.
   my ( $makeCmd, $tag ) = getMakeCmd($macros, $mvars);
@@ -1332,20 +1317,20 @@ sub fitness {
   # how to run.
   my $runCmd = getRunCmd($tag);     # shell command plus any initial args.
   my $args = "";             # exe args.
-  $args .= " -thread_divisor $thread_divisor";
-  $args .= " -block_threads $block_threads";
-  $args .= ($bind_block_threads ? " " : " -no"). "-bind_block_threads";
+  $args .= " -outer_threads $outer_threads -inner_threads $inner_threads -max_threads ".($outer_threads * $inner_threads);
+  $args .= ($bind_inner_threads ? " " : " -no"). "-bind_inner_threads";
 
   # sizes.
   $args .= " -lx $ds[0] -ly $ds[1] -lz $ds[2]";
-  $args .= " -rt $rt -rx $rs[0] -ry $rs[1] -rz $rs[2]";
+  $args .= " -Mbt $Mbt -Mbx $Mbs[0] -Mby $Mbs[1] -Mbz $Mbs[2]";
   $args .= " -bt $bt -bx $bs[0] -by $bs[1] -bz $bs[2]";
   $args .= " -mbx $mbs[0] -mby $mbs[1] -mbz $mbs[2]";
-  $args .= " -sbx $sbs[0] -sby $sbs[1] -sbz $sbs[2]";
+  $args .= " -nbx $nbs[0] -nby $nbs[1] -nbz $nbs[2]";
   $args .= " -epx $ps[0] -epy $ps[1] -epz $ps[2]";
-  if ($showGroups) {
-    $args .= " -bgx $bgs[0] -bgy $bgs[1] -bgz $bgs[2]";
-    $args .= " -sbgx $sbgs[0] -sbgy $sbgs[1] -sbgz $sbgs[2]";
+  if ($showTiles) {
+    $args .= " -b_tilex $b_tiles[0] -b_tiley $b_tiles[1] -b_tilez $b_tiles[2]";
+    $args .= " -mb_tilex $mb_tiles[0] -mb_tiley $mb_tiles[1] -mb_tilez $mb_tiles[2]";
+    $args .= " -nb_tilex $nb_tiles[0] -nb_tiley $nb_tiles[1] -nb_tilez $nb_tiles[2]";
   }
 
   # num of secs and trials.
@@ -1371,13 +1356,13 @@ sub fitness {
 
       # Kill time is some overhead plus allocated time multipled by temporal blocking and num runs.
       my $maxOHead = 60 * 10;
-      my $killTime = $maxOHead + ($shortTime * max($rt, $bt) * $shortTrials);
+      my $killTime = $maxOHead + ($shortTime * max($Mbt, $bt) * $shortTrials);
 
       # Inject kill command into '-exe_prefix' part of run commands.
       $shortRunCmd =~ s/$timeCmd/$timeCmd $killCmd $killTime/;
 
       # Repeat for long run.
-      $killTime = $maxOHead + ($longTime * max($rt, $bt) * $longTrials);
+      $killTime = $maxOHead + ($longTime * max($Mbt, $bt) * $longTrials);
       $longRunCmd =~ s/$timeCmd/$timeCmd $killCmd $killTime/;
     }
   }

@@ -1,6 +1,6 @@
 ##############################################################################
 ## YASK: Yet Another Stencil Kit
-## Copyright (c) 2014-2021, Intel Corporation
+## Copyright (c) 2014-2022, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -37,7 +37,9 @@ YC_TEST_SRC_DIR	:=	$(abspath ./tests)
 YC_OUT_BASE	:=	$(BUILD_OUT_DIR)/compiler
 YC_SWIG_OUT_DIR	:=	$(YC_OUT_BASE)/swig
 YC_OBJ_DIR	:=	$(YC_OUT_BASE)/obj
-YC_STENCIL_DIR	:= 	$(SRC_DIR)/stencils
+YC_STENCIL_DIR		:= 	$(SRC_DIR)/stencils
+YC_STENCIL_DIRS		:=	$(shell find -L $(YC_STENCIL_DIR) -type d)
+YC_STENCIL_OBJ_DIR	:=	$(YC_OUT_BASE)/obj/stencils
 
 # Compiler files.
 YC_MODULE	:=	$(YC_BASE)
@@ -46,20 +48,22 @@ YC_PY_LIB	:=	$(PY_OUT_DIR)/_$(YC_MODULE)$(SO_SUFFIX)
 YC_PY_MOD	:=	$(PY_OUT_DIR)/$(YC_MODULE).py
 YC_TEST_EXEC	:=	$(BIN_OUT_DIR)/$(YC_BASE)_api_test.exe
 YC_TEST_EXEC_WITH_EXCEPTION	:=	$(BIN_OUT_DIR)/$(YC_BASE)_api_exception_test.exe
-YC_SRC_NAMES	:=	Expr ExprUtils Var Settings Eqs Print Vec Cpp CppIntrin YaskKernel Solution
-YC_STENCIL_NAMES:=	$(notdir $(patsubst %.cpp,%,$(wildcard $(YC_STENCIL_DIR)/*.cpp)))
+YC_SRC_NAMES	:=	Expr VarPoint ExprUtils Var Settings Eqs Print Vec Cpp CppIntrin YaskKernel Solution
 YC_OBJS		:=	$(addprefix $(YC_OBJ_DIR)/,$(addsuffix .o,$(YC_SRC_NAMES) $(COMM_SRC_NAMES)))
-YC_STENCIL_OBJS	:=	$(addprefix $(YC_OBJ_DIR)/,$(addsuffix .o,$(YC_STENCIL_NAMES)))
 YC_INC_DIRS	:=	$(INC_DIR) $(YC_LIB_SRC_DIR) $(COMM_DIR) $(COEFF_DIR)
-YC_INC_GLOB	:=	$(wildcard $(addsuffix /*.hpp,$(YC_INC_DIRS)))
-YC_STENCIL_INC_GLOB :=	$(wildcard $(YC_STENCIL_DIR)/*.hpp $(YC_STENCIL_DIR)/*/*.hpp)
+YC_INC_FILES	:=	$(wildcard $(addsuffix /*.hpp,$(YC_INC_DIRS)))
+YC_STENCIL_SRC_FILES	:=	$(foreach dir,$(YC_STENCIL_DIRS),$(wildcard $(dir)/*.cpp))
+YC_STENCIL_INC_FILES	:=	$(foreach dir,$(YC_STENCIL_DIRS),$(wildcard $(dir)/*.hpp))
+YC_STENCIL_NAMES	:=	$(notdir $(basename $(YC_STENCIL_SRC_FILES)))
+YC_STENCIL_OBJS		:=	$(addprefix $(YC_STENCIL_OBJ_DIR)/,$(addsuffix .o,$(YC_STENCIL_NAMES)))
 
 # Compiler and default flags.
-YC_CXX    	?=	g++  # usually faster than icpc for building the compiler.
+YC_CXX    	:=	$(CXX)
 YC_CXXOPT	:= 	-O2
-YC_CXXFLAGS 	:=	-g -std=c++11 $(YC_CXXOPT) -Wall
-YC_CXXFLAGS	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable
+YC_CXXFLAGS 	:=	-g -std=c++17 -Wall
+YC_CXXFLAGS	+=	-Wno-unknown-pragmas -Wno-unused-variable
 YC_CXXFLAGS	+=	$(INC_CXXFLAGS)
+YC_CXXFLAGS	+=	$(YC_CXXOPT)
 YC_INC_CXXFLAGS :=	$(addprefix -I,$(YC_INC_DIRS))
 
 # Add user-defined flags.
@@ -69,29 +73,23 @@ YC_CXXFLAGS	+=	$(EXTRA_YC_CXXFLAGS)
 YC_LD		:=	$(YC_CXX)
 YC_LFLAGS	:=	-lrt -Wl,-rpath=$(LIB_OUT_DIR) -L$(LIB_OUT_DIR) -l$(YC_BASE)
 
-# Compile rules.
-# For example stencils,
+# Source dirs.
+VPATH	:=	$(patsubst $space,$colon,$(YC_STENCIL_DIRS) $(COMM_DIR) $(COEFF_DIR) $(YC_LIB_SRC_DIR))
+
+# Compile rules for non-stencil files.
+
+$(YC_OBJ_DIR)/%.o: %.cpp $(YC_INC_FILES)
+	$(call MK_DIR,$(dir $@))
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) $(YC_INC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
+	@ls -l $@
+
+# Compile rules for example stencils,
 # - Build at O0 to avoid C++ compiler wasting time optimizing them.
 # - Set macro to use internal DSL instead of conflicting API operators.
 
-$(YC_OBJ_DIR)/%.o: $(YC_STENCIL_DIR)/%.cpp $(INC_GLOB) $(YC_STENCIL_INC_GLOB)
-	$(MKDIR) $(YC_OBJ_DIR)
-	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -x c++ -DUSE_INTERNAL_DSL -O0 -c -o $@ $<
-	@ls -l $@
-
-$(YC_OBJ_DIR)/%.o: $(COMM_DIR)/%.cpp $(YC_INC_GLOB)
-	$(MKDIR) $(YC_OBJ_DIR)
-	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) $(YC_INC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
-	@ls -l $@
-
-$(YC_OBJ_DIR)/%.o: $(COEFF_DIR)/%.cpp $(YC_INC_GLOB)
-	$(MKDIR) $(YC_OBJ_DIR)
-	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) $(YC_INC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
-	@ls -l $@
-
-$(YC_OBJ_DIR)/%.o: $(YC_LIB_SRC_DIR)/%.cpp $(YC_INC_GLOB)
-	$(MKDIR) $(YC_OBJ_DIR)
-	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) $(YC_INC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
+$(YC_STENCIL_OBJ_DIR)/%.o: %.cpp $(INC_FILES) $(YC_STENCIL_INC_FILES)
+	$(call MK_DIR,$(dir $@))
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -O0 -x c++ -DUSE_INTERNAL_DSL -c -o $@ $<
 	@ls -l $@
 
 ######## Primary targets.
@@ -104,12 +102,12 @@ compiler: $(YC_EXEC)
 	$(MAKE) old-code-check
 
 $(YC_LIB): $(YC_OBJS)
-	$(MKDIR) $(dir $@)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
 	@ls -l $@
 
 $(YC_EXEC): compiler_main.cpp $(YC_STENCIL_OBJS) $(YC_LIB)
-	$(MKDIR) $(dir $@)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YC_LD) $(YC_CXXFLAGS) $(YC_INC_CXXFLAGS) $^ $(YC_LFLAGS) -o $@
 	@ls -l $@
 	$(MAKE) echo-settings
@@ -125,21 +123,23 @@ api: compiler $(YC_PY_LIB)
 # Also builds $(YC_PY_MOD)
 $(YC_SWIG_OUT_DIR)/yask_compiler_api_wrap.cpp: $(YC_SWIG_DIR)/yask*.i $(INC_DIR)/*.hpp
 	$(SWIG) -version
-	$(MKDIR) $(YC_SWIG_OUT_DIR) $(PY_OUT_DIR)
+	$(call MK_DIR,$(dir $@))
+	$(call MK_DIR,$(PY_OUT_DIR))
 	$(SWIG) -v -DYC_MODULE=$(YC_MODULE) -cppext cpp \
 	  -I$(INC_DIR) -I$(COMM_DIR) -I$(COMM_DIR)/swig -I$(COEFF_DIR) \
 	  -c++ -python -o $@ -outdir $(PY_OUT_DIR) -builtin $<
+	$(SWIG_PATCH) $<
 
 # Turn off asserts to work around known SWIG issue:
 # https://github.com/swig/swig/issues/773
 $(YC_OBJ_DIR)/yask_compiler_api_wrap.o: $(YC_SWIG_OUT_DIR)/yask_compiler_api_wrap.cpp
-	$(MKDIR) $(YC_OBJ_DIR)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -x c++ \
 	  $(SWIG_GCCFLAGS) $(DBL_EPSILON_CXXFLAG) -DNDEBUG $(PYINC) -fPIC -c -o $@ $<
 	@ls -l $@
 
 $(YC_PY_LIB): $(YC_OBJS) $(YC_OBJ_DIR)/yask_compiler_api_wrap.o
-	$(MKDIR) $(dir $@)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -shared -o $@ $^
 	@ls -l $@
 
@@ -147,7 +147,7 @@ $(YC_PY_LIB): $(YC_OBJS) $(YC_OBJ_DIR)/yask_compiler_api_wrap.o
 
 # Build C++ compiler API test.
 $(YC_TEST_EXEC): $(YC_TEST_SRC_DIR)/yask_compiler_api_test.cpp $(YC_LIB)
-	$(MKDIR) $(dir $@)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) $< $(YC_LFLAGS) -o $@
 	@ls -l $@
 
@@ -169,7 +169,7 @@ cxx-yc-api-test: $(YC_TEST_EXEC)
 
 # Build C++ compiler API test with exception.
 $(YC_TEST_EXEC_WITH_EXCEPTION): $(YC_TEST_SRC_DIR)/yask_compiler_api_exception_test.cpp $(YC_LIB)
-	$(MKDIR) $(dir $@)
+	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) $< $(YC_LFLAGS) -o $@
 	@ls -l $@
 

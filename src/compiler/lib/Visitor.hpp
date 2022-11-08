@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -28,6 +28,7 @@ IN THE SOFTWARE.
 #pragma once
 
 #include "Expr.hpp"
+#include "VarPoint.hpp"
 
 namespace yask {
 
@@ -99,7 +100,8 @@ namespace yask {
             return res;
         }
 
-        // Visit RHS of equals and LHS and conditions per flags.
+        // Visit RHS of equals always.
+        // Visit LHS and/or conditions per flags.
         virtual string visit(EqualsExpr* ee) {
             if (_visit_equals_lhs)
                 ee->_get_lhs()->accept(this);

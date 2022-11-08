@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -31,6 +31,10 @@ IN THE SOFTWARE.
 
 #pragma once
 
+#include <cstdint>
+#include <cinttypes>
+#include <climits>
+#include <type_traits>
 #include <string>
 #include <vector>
 #include <map>
@@ -38,6 +42,21 @@ IN THE SOFTWARE.
 #include <ostream>
 #include <memory>
 #include <functional>
+
+// Things SWIG can't handle.
+#ifdef SWIG
+#ifndef YASK_DEPRECATED
+#define YASK_DEPRECATED
+#endif
+#define YASK_INT64_T long int
+#else
+/// Deprecated attribute.
+#ifndef YASK_DEPRECATED
+#define YASK_DEPRECATED [[deprecated]]
+#endif
+/// Signed 64-bit int.
+#define YASK_INT64_T std::int64_t
+#endif
 
 namespace yask {
 
@@ -55,11 +74,20 @@ namespace yask {
 
     /// Type to use for indexing grids.
     /** Index types are signed to allow negative indices in padding/halos. */
-#ifdef SWIG
-    typedef long int idx_t;     // SWIG doesn't seem to understand int64_t.
-#else
-    typedef std::int64_t idx_t;
-#endif
+    typedef YASK_INT64_T idx_t;
+
+    /// Vector of indices.
+    typedef std::vector<idx_t> idx_t_vec;
+
+    /// Initializer list of indices.
+    /**
+       @note This type is not available in the Python API.
+       Use `idx_t_vec` instead.
+    */
+    typedef std::initializer_list<idx_t> idx_t_init_list;
+
+    /// Vector of strings.
+    typedef std::vector<std::string> string_vec;
 
     // Forward declarations of class-pointers.
 

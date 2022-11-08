@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -24,6 +24,7 @@ IN THE SOFTWARE.
 *****************************************************************************/
 
 // This file defines a union to use for optionally-folded vectors of floats or doubles.
+// It uses a macro scheme to generate intrinsic calls for various SIMD lengths and precisions.
 
 #pragma once
 
@@ -116,31 +117,38 @@ namespace yask {
     // Emulate instrinsics for unsupported VLEN.
     // Only 256 and 512-bit vectors supported.
     // VLEN == 1 also supported as scalar.
+    #ifndef NO_INTRINSICS
     #if VLEN == 1
     #define NO_INTRINSICS
     // note: no warning here because intrinsics aren't wanted in this case.
 
     #elif !defined(INAME)
-    #warning "Emulating intrinsics because HW vector length not defined; check setting of USE_INTRIN256, USE_INTRIN512LO or USE_INTRIN512 in kernel Makefile"
+    #warning "Emulating intrinsics because HW vector length not defined; set NO_INTRINSICS to avoid this warning"
     #define NO_INTRINSICS
 
     #elif VLEN != VEC_ELEMS
-    #warning "Emulating intrinsics because VLEN != HW vector length"
+    #warning "Emulating intrinsics because VLEN != HW vector length; set NO_INTRINSICS to avoid this warning"
     #define NO_INTRINSICS
+    #endif
     #endif
 
     // Macro for looping through an aligned real_vec_t.
-    #if defined(CHECK) || (VLEN==1)
+    #if VLEN==1
+    #define REAL_VEC_LOOP(i)                    \
+        constexpr int i=0;
+    #define REAL_VEC_LOOP_UNALIGNED(i)          \
+        constexpr int i=0;
+    #elif defined(CHECK)
     #define REAL_VEC_LOOP(i)                    \
         for (int i=0; i<VLEN; i++)
     #define REAL_VEC_LOOP_UNALIGNED(i)          \
         for (int i=0; i<VLEN; i++)
     #else
     #define REAL_VEC_LOOP(i)                    \
-        _VEC_ALIGNED _VEC_ALWAYS _SIMD          \
+        _SIMD _VEC_ALIGNED _VEC_ALWAYS          \
         for (int i=0; i<VLEN; i++)
     #define REAL_VEC_LOOP_UNALIGNED(i)          \
-        _VEC_UNALIGNED _VEC_ALWAYS _SIMD        \
+        _SIMD _VEC_UNALIGNED _VEC_ALWAYS        \
         for (int i=0; i<VLEN; i++)
     #endif
 
@@ -172,9 +180,10 @@ namespace yask {
         isimd_t mi;
         #endif
     };
+    static_assert(std::is_trivially_copyable<real_vec_t_data>::value);
+    static_assert(std::is_aggregate<real_vec_t_data>::value);
 
-
-    // Type for a vector block.
+    // Type for a SIMD vector w/operator overloading.
     struct real_vec_t {
 
         // union of data types.
@@ -208,11 +217,6 @@ namespace yask {
         }
         ALWAYS_INLINE real_vec_t(long val) {
             operator=(val);
-        }
-
-        // get length.
-        ALWAYS_INLINE int get_num_elems() const {
-            return VLEN;
         }
 
         // copy whole vector.
@@ -263,16 +267,20 @@ namespace yask {
             operator=(real_t(val));
         }
 
+        // get length.
+        ALWAYS_INLINE int get_num_elems() const {
+            return VLEN;
+        }
 
         // access a real_t linearly.
         ALWAYS_INLINE real_t& operator[](idx_t l) {
-            assert(l >= 0);
-            assert(l < VLEN);
+            host_assert(l >= 0);
+            host_assert(l < VLEN);
             return u.r[l];
         }
         ALWAYS_INLINE const real_t& operator[](idx_t l) const {
-            assert(l >= 0);
-            assert(l < VLEN);
+            host_assert(l >= 0);
+            host_assert(l < VLEN);
             return u.r[l];
         }
 
@@ -288,7 +296,7 @@ namespace yask {
             return res;
         }
 
-        // unary plus.
+        // unary plus (no-op).
         ALWAYS_INLINE real_vec_t operator+() const {
 	  return *this;
         }
@@ -405,7 +413,7 @@ namespace yask {
         // masked copy: copy only the selected elements of 'from'
         // into 'this', keeping the existing ones.
         ALWAYS_INLINE void copy_from_masked(const real_vec_t& from,
-                                           uidx_t k1) {
+                                            uidx_t k1) {
             #if defined(NO_INTRINSICS) || !defined(USE_AVX512)
             REAL_VEC_LOOP(i) if ((k1 >> i) & 1) u.r[i] = from[i];
             #else
@@ -422,7 +430,7 @@ namespace yask {
             #endif
         }
         ALWAYS_INLINE void load_from_masked(const real_vec_t* __restrict from,
-                                           uidx_t k1) {
+                                            uidx_t k1) {
             #if defined(NO_INTRINSICS) || defined(NO_LOAD_INTRINSICS) || !defined(USE_AVX512)
             REAL_VEC_LOOP(i) if ((k1 >> i) & 1) u.r[i] = (*from)[i];
             #else
@@ -457,8 +465,6 @@ namespace yask {
             REAL_VEC_LOOP(i) (*to)[i] = u.r[i];
             #elif !defined(USE_STREAMING_STORE)
             INAME(store)((imem_t*)to, u.mr);
-            #elif defined(ARCH_KNC)
-            INAME(storenrngo)((imem_t*)to, u.mr);
             #else
             INAME(stream)((imem_t*)to, u.mr);
             #endif
@@ -705,8 +711,8 @@ namespace yask {
         std::cout << " b: ";
         b.print_reals(std::cout);
         #endif
-        assert(count >= 0);
-        assert(count <= VLEN);
+        host_assert(count >= 0);
+        host_assert(count <= VLEN);
         if (count == 0)
             res.u = b.u;
         else if (count == VLEN)
@@ -758,10 +764,6 @@ namespace yask {
             *((real_vec_t*)(&r2[VLEN])) = a;
             real_vec_t* p = (real_vec_t*)(&r2[count]); // not usually aligned.
             res.u.mr = INAME(loadu)((imem_t const*)p);
-
-            // For DP on KNC, use 32-bit op w/2x count.
-            #elif REAL_BYTES == 8 && defined(ARCH_KNC) && defined(USE_INTRIN512)
-            res.u.mi = _mm512_alignr_epi32(a.u.mi, b.u.mi, count*2);
 
             // Everything else.
             #else
@@ -825,7 +827,7 @@ namespace yask {
         #if defined(NO_INTRINSICS) || !defined(USE_AVX512)
         // must make a temp copy in case &res == &a.
         real_vec_t tmp = a;
-        for (int i = 0; i < VLEN; i++)
+        REAL_VEC_LOOP_UNALIGNED(i)
             res.u.r[i] = tmp.u.r[ctrl.u.ci[i]];
         #else
         res.u.mi = INAMEI(permutexvar)(ctrl.u.mi, a.u.mi);
@@ -855,7 +857,7 @@ namespace yask {
         #if defined(NO_INTRINSICS) || !defined(USE_AVX512)
         // must make a temp copy in case &res == &a.
         real_vec_t tmp = a;
-        for (int i = 0; i < VLEN; i++) {
+        REAL_VEC_LOOP_UNALIGNED(i) {
             if ((k1 >> i) & 1)
                 res.u.r[i] = tmp.u.r[ctrl.u.ci[i]];
         }
@@ -887,18 +889,11 @@ namespace yask {
         #if defined(NO_INTRINSICS) || !defined(USE_AVX512)
         // must make temp copies in case &res == &a or &b.
         real_vec_t tmpa = a, tmpb = b;
-        for (int i = 0; i < VLEN; i++) {
+        REAL_VEC_LOOP_UNALIGNED(i) {
             int sel = ctrl.u.ci[i] & ctrl_sel_bit; // 0 => a, 1 => b.
             int idx = ctrl.u.ci[i] & ctrl_idx_mask; // index.
             res.u.r[i] = sel ? tmpb.u.r[idx] : tmpa.u.r[idx];
         }
-
-        #elif defined(ARCH_KNC)
-        yask_exception e;
-        std::stringstream err;
-        err << "error: 2-input permute not supported on KNC" << std::endl;
-        e.add_message(err.str());
-        throw e;
 
         #else
         res.u.mi = INAMEI(permutex2var)(a.u.mi, ctrl.u.mi, b.u.mi);
@@ -946,11 +941,11 @@ namespace yask {
 
     // Compare two real_vec_t's.
     inline bool within_tolerance(const real_vec_t& val, const real_vec_t& ref,
-                                 const real_vec_t& epsilon) {
+                                 const real_t epsilon) {
         if (val == ref)
             return true;
         for (int j = 0; j < VLEN; j++) {
-            if (!within_tolerance(val.u.r[j], ref.u.r[j], epsilon.u.r[j]))
+            if (!within_tolerance(val.u.r[j], ref.u.r[j], epsilon))
                 return false;
         }
         return true;

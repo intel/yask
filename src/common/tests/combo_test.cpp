@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -30,42 +30,43 @@ IN THE SOFTWARE.
 
 #include "combo.hpp"
 #include <iostream>
+#include <vector>
 
 using namespace std;
 using namespace yask;
 
 int main(int argc, char** argv) {
-    int n = 5;
-
-    int exnc[n+2] = { 1, 5, 10, 10, 5, 1, 0 };
+    constexpr int n = 5;
+    int exnc[n+2] = { 1, 5, 10, 10, 5, 1, 0 }; // expected num combos.
     
     for (int k = 0; k <= n+1; k++) {
-        int nc = n_choose_k(n,k);
+
+        // Num combos.
+        int nc = n_choose_k(n, k);
         cout << "choose(" << n << ", " << k << ") = " << nc << endl;
         assert(nc == exnc[k]);
-        
-        vector<vector<int>> cvv;
-        for (int r = 0; r < nc; r++) {
-            auto cv = n_choose_k_set(n, k, r);
-            cout << " combo #" << r << " = ";
-            assert(cv.size() == (size_t)k);
-            for (int i = 0; i < k; i++) {
-                cout << " " << cv[i];
-                assert(cv[i] >= 0);
-                assert(cv[i] < n);
 
-                // Make sure this element is unique and in order.
-                if (i > 0)
-                    assert(cv[i] > cv[i-1]);
+        // Each combo.
+        vector<size_t> cv;
+        for (int r = 0; r < nc; r++) {
+            auto cmask = n_choose_k_set(n, k, r);
+            cout << " combo #" << r << " =";
+            int nset = 0;
+            for (int i = 0; i < n; i++) {
+                if (is_bit_set(cmask, i)) {
+                    cout << " " << i;
+                    nset++;
+                }
             }
-            cout << endl;
+            cout << " (0x" << hex << cmask << dec << ")\n";
+            assert(nset == k);
 
             // Make sure this set is unique.
-            for (size_t i = 0; i < cvv.size(); i++) {
-                auto& cvi = cvv[i];
-                assert(cv != cvi);
+            for (size_t i = 0; i < cv.size(); i++) {
+                auto& cvi = cv[i];
+                assert(cmask != cvi);
             }
-            cvv.push_back(cv);
+            cv.push_back(cmask);
         }
     }
     return 0;

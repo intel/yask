@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -64,20 +64,25 @@ namespace {
         // Define RHS expression for p at t+1 based on values from v and p at t.
         virtual yc_number_node_ptr get_next_p() {
 
-            // yc_var_proxy spacing.
+            // Grid spacing.
             // In this implementation, it's a constant.
-            // Could make this a YASK variable to allow setting at run-time.
+            // Could make this a scalar YASK variable to allow setting at run-time.
             double delta_xyz = 50.0;
             double d2 = delta_xyz * delta_xyz;
         
             // Spatial FD coefficients for 2nd derivative.
-            auto coeff = get_center_fd_coefficients(2, get_radius());
-            size_t c0i = get_radius();      // index of center sample.
+            vector<double> coeff;
+            size_t rad = get_radius();
+            if (rad > 0)
+                coeff = get_center_fd_coefficients(2, get_radius());
+            else
+                coeff.push_back(1.0); // Dummy value for zero radius (not FD).
 
             for (size_t i = 0; i < coeff.size(); i++) {
 
                 // Need 3 copies of center sample for x, y, and z FDs.
-                if (i == c0i)
+                // Center coeff is at index 'rad'.
+                if (i == rad)
                     coeff[i] *= 3.0;
 
                 // Divide each by delta_xyz^2.
@@ -86,7 +91,7 @@ namespace {
 
             // Calculate FDx + FDy + FDz.
             // Start with center value multiplied by coeff 0.
-            auto fd_sum = p(t, x, y, z) * coeff[c0i];
+            auto fd_sum = p(t, x, y, z) * coeff[rad];
 
             // Add values from x, y, and z axes multiplied by the
             // coeff for the given radius.
@@ -106,7 +111,7 @@ namespace {
                            p(t, x, y, z-r) +
                            p(t, x, y, z+r)
 
-                           ) * coeff[c0i + r]; // R & L coeffs are identical.
+                           ) * coeff[rad + r]; // R & L coeffs are identical.
             }
 
             // Wave equation is:
@@ -167,11 +172,7 @@ namespace {
                         soln->set_prefetch_dist(1, 1);
                         soln->set_prefetch_dist(2, 0);
                     }
-                    else if (target == "avx512") {
-                        soln->set_prefetch_dist(1, 0);
-                        soln->set_prefetch_dist(2, 2);
-                    }
-                    else {
+                    else if (target == "avx2") {
                         soln->set_prefetch_dist(1, 0);
                         soln->set_prefetch_dist(2, 0);
                     }
@@ -181,25 +182,24 @@ namespace {
                 // This code is run immediately after 'kernel_soln' is created.
                 soln->CALL_AFTER_NEW_SOLUTION
                     (
-                     // Add extra padding in all dimensions.
-                     kernel_soln.apply_command_line_options("-ep 1");
-                     
-                     // Check target at kernel run-time.
-                     auto isa = kernel_soln.get_target();
-                     if (isa == "knl") {
-                         kernel_soln.set_block_size("x", 160);
-                         kernel_soln.set_block_size("y", 256);
-                         kernel_soln.set_block_size("z", 96);
-                     }
-                     else if (isa == "avx512") {
-                         kernel_soln.set_block_size("x", 108);
-                         kernel_soln.set_block_size("y", 28);
-                         kernel_soln.set_block_size("z", 132);
-                     }
-                     else {
-                         kernel_soln.set_block_size("x", 48);
-                         kernel_soln.set_block_size("y", 64);
-                         kernel_soln.set_block_size("z", 112);
+                     // Check CPU target at kernel run-time.
+                     if (!kernel_soln.is_offloaded()) {
+                         auto isa = kernel_soln.get_target();
+                         if (isa == "knl") {
+                             kernel_soln.set_block_size("x", 160);
+                             kernel_soln.set_block_size("y", 256);
+                             kernel_soln.set_block_size("z", 96);
+                         }
+                         else if (isa == "avx2") {
+                             kernel_soln.set_block_size("x", 48);
+                             kernel_soln.set_block_size("y", 64);
+                             kernel_soln.set_block_size("z", 112);
+                         }
+                         else {
+                             kernel_soln.set_block_size("x", 96);
+                             kernel_soln.set_block_size("y", 28);
+                             kernel_soln.set_block_size("z", 96);
+                         }
                      }
                      );
             }

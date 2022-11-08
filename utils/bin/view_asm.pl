@@ -2,7 +2,7 @@
 
 ##############################################################################
 ## YASK: Yet Another Stencil Kit
-## Copyright (c) 2014-2021, Intel Corporation
+## Copyright (c) 2014-2022, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -46,7 +46,7 @@ sub usage {
     "options:\n".
     " -p           print instrs in addition to stats\n".
     " -l           view only inner loops\n".
-    " -s           view funcs/loops only with SIMD code\n".
+    " -s           view only funcs/loops using SIMD regs\n".
     " -f=<regex>   view only in matching function\n".
     " -t=<regex>   view only if containing matching text\n";
 }
@@ -105,12 +105,13 @@ sub printLines() {
       (!$targetFn || $curFn =~ /$targetFn/) &&
       (!$targetText || grep(/$targetText/, @lines))) {
     print "\n";
+    print "Function '$curFn'\n" if defined $curFn;
     if ($loopsOnly) {
       print "non-" if !scalar %rstats;
-      print "SIMD loop:\n";
+      print "SIMD inner loop:\n";
     }
-    print "Function '$curFn'\n" if defined $curFn;
     print @lines if $printAsm;
+    print "\n".($loopsOnly ? "Inner loop" : "Function")." summary:\n";
     print "$ninstrs total instrs\n";
     print "Instr counts per instr type (FLOP count is a subtotal):\n";
     for my $key (sort keys %istats) {
@@ -165,9 +166,11 @@ for my $fname (@fnames) {
       chomp;
 
       # file name, e.g.,
-      #  .file   40 "src/stencil_block_loops.hpp"
+      #  .file   4 "myfile.cpp"
+      #  .file   13 "foo/bar" "src/stencil_block_loops.hpp"
       if (/^\s*\.file\s+(\d+)\s+"(.*)"/) {
         my ($fi, $fn) = ($1, $2);
+        $fn =~ s=" "=/=g;
         $files{$fi} = basename($fn);
         my $dir = dirname($fn);
         $dirs{$fi} = dirname($fn);
@@ -177,15 +180,17 @@ for my $fname (@fnames) {
       }
 
       # location, e.g.,
-      #    .loc    40  23  prologue_end  is_stmt 1
-      elsif (/^\s*\.loc\s+(\d+)\s+(.*)/) {
-        my ($fi, $info) = ($1, $2);
+      #    .loc    40  23 19 ...
+      elsif (/^\s*\.loc\s+(\d+)\s+(\d+)?\s+(\d+)?\s+(.*)/) {
+        my ($fi, $line, $col, $info) = ($1, $2, $3, $4);
         if (exists $files{$fi}) {
           $srcFile = $files{$fi};
-          $locInfo = "$srcFile:$info";
+          $locInfo = "$srcFile";
+          $locInfo .= ":$line" if defined $line && $line > 0;
+          $locInfo .= ":$col" if defined $col && $col > 0;
           my $srcDir = $dirs{$fi};
           if ($srcDir && exists($dirIndices{$srcDir})) {
-            $locInfo = "<dir$dirIndices{$srcDir}>/$locInfo";
+            $locInfo = "# <dir$dirIndices{$srcDir}>/$locInfo";
           }
         } else {
           $srcFile = "";
@@ -194,13 +199,14 @@ for my $fname (@fnames) {
       }
 
       # begin function.
-      elsif (/^\#\s+[-]+\s+Begin\s+(.+)/) {
-        $curFn = $1;
+      elsif (/#\s+\-+\s+Begin( function)?\s+(.+)/) {
+        $curFn = $2;
+        #print ">> function $2\n";
         clearStats();
       }
 
       # end function.
-      elsif (/^\#\s+[-]+\s+End /) {
+      elsif (/(^\#\s+\-+\s+End)|(\-\- End function)/) {
         printLines() if $pass && !$loopsOnly;
         clearStats();
       }
@@ -218,7 +224,7 @@ for my $fname (@fnames) {
 
       # label, e.g.,
       #..B1.39:                        # Preds ..B1.54 ..B1.38
-      elsif (/^\s*(\S+):/) {
+      elsif (/^\s*([\w.]+):/) {
         my $lab = $1;
         $labels{$lab} = $asmLine;
 
@@ -228,13 +234,15 @@ for my $fname (@fnames) {
           # clear previous loop data.
           clearStats();
         }
-        push @lines, "$_\n" if $lab =~ /\.\.B/;
+        push @lines, "$_\n" unless $lab =~ /tmp/;
       }
 
-      # line of code, e.g.,
+      # line of asm code, e.g.,
       #   kmovw     %r10d, %k7                                    #137.17
-      elsif (/^\s+(\w+)\s+(.*)\#(.*)/) {
-        my ($instr, $args, $comment) = ($1, $2, $3);
+      elsif (/^\s+(\w+)(\s+(.*))?(\#(.*))?/) {
+        my ($instr, $args, $comment) = ($1, $3, $5);
+        $args = "" if !defined $args;
+        $comment = "" if !defined $comment;
         $asmLine++;
         push @lines, "$_\t$locInfo\n";
         $ninstrs++;
@@ -266,7 +274,7 @@ for my $fname (@fnames) {
           
           # arg stats. (dest is last arg.)
           my $type = ($args =~ /[xyz]mm/) ? $& : 'non-SIMD';
-          #$type .= ' "spill"' if $comment =~ /spill/;
+          #$type .= ' "spill"' if $comment =~ /spill/i;
           if ($args =~ /\(.*r[bs]p.*\).*,/) {
             $astats{"$type stack load"}++;
           } elsif ($args =~ /,.*\(.*r[bs]p.*\)/) {

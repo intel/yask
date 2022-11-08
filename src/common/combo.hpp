@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -28,7 +28,7 @@ IN THE SOFTWARE.
 // Include this first to assure NDEBUG is set properly.
 #include "yask_assert.hpp"
 
-#include <vector>
+#include <cstddef>
 
 namespace yask {
 
@@ -36,7 +36,27 @@ namespace yask {
     int n_choose_k(int n, int k);
 
     // Get the 'r'th set of 'k' elements from set of integers between '0' and 'n-1'.
-    // Returns vector of 'k' values.
+    // Returns bitmask with 'k' bits set, where bit 'b' = 1 indicates integer 'b' is in set.
     // 'r' must be between '0' and 'n_choose_k(n, k)-1'.
-    std::vector<int> n_choose_k_set(int n, int k, int r);
+    size_t n_choose_k_set(int n, int k, int r);
+
+    // Handle bits in a bitset.
+    template<typename T>
+    inline bool is_bit_set(const T set, int i) {
+        assert(i >= 0);
+        assert(size_t(i) <= sizeof(T) * 8);
+        return (set & (T(1) << i)) != 0;
+    }
+    template<typename T>
+    inline void set_bit(T& set, int i) {
+        assert(i >= 0);
+        assert(size_t(i) <= sizeof(T) * 8);
+        set |= (T(1) << i);
+    }
+    template<typename T>
+    inline void clear_bit(T& set, int i) {
+        assert(i >= 0);
+        assert(size_t(i) <= sizeof(T) * 8);
+        set &= ~(T(1) << i);
+    }
 }

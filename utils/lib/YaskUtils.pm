@@ -1,6 +1,6 @@
 ##############################################################################
 ## YASK: Yet Another Stencil Kit
-## Copyright (c) 2014-2021, Intel Corporation
+## Copyright (c) 2014-2022, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -28,15 +28,7 @@ package YaskUtils;
 use strict;
 use FileHandle;
 use Carp;
-
-# Special keys.
-my $linux_key = "Linux kernel";
-my $nodes_key = "MPI node(s)";
-our @special_log_keys =
-  (
-   $linux_key,
-   $nodes_key,
-   );
+use Scalar::Util qw(looks_like_number);
 
 # Values to get from log file.
 # First one should be overall "fitness".
@@ -51,45 +43,112 @@ our @log_keys =
    'mid throughput (est-FLOPS)',
    'mid elapsed time (sec)',
    'mid num-steps-done',
+
    'best throughput (num-points/sec)',
    'best throughput (num-reads/sec)',
    'best throughput (num-writes/sec)',
    'best throughput (est-FLOPS)',
    'best elapsed time (sec)',
    'best num-steps-done',
-   'yask version',
-   'target',
+
+   'num-trials',
+   'min-throughput (num-points/sec)',
+   'max-throughput (num-points/sec)',
+   'ave-throughput (num-points/sec)',
+   'std-dev-throughput (num-points/sec)',
+
    'stencil name',
    'stencil description',
    'element size',
-   'invocation',
+   'script invocation',
    'binary invocation',
+   'yask version',
+   'target',
+
    'num MPI ranks',
-   'num ranks',
    'num OpenMP threads', # also matches 'Num OpenMP threads used'.
-   'num threads per region',
-   'num threads per block',
+   'num outer threads',
+   'num inner threads',
+   'device thread limit',
+
+   'domain size in this rank',
+   'total allocation in this rank',
+   'overall problem size',
    'total overall allocation',
-   'global-domain size',
-   'local-domain size',
-   'region size',
-   'block size',
-   'mini-block size',
-   'sub-block size',
-   'cluster size',
-   'vector size',
-   'num regions per local-domain per step',
-   'num blocks per region per step',
-   'num mini-blocks per block per step',
-   'num sub-blocks per mini-block per step',
-   'extra padding',
-   'minimum padding',
+   'inner-layout dim',
+   'inner-loop dim',
+
+   'num mega-blocks per local-domain per step',
+   'num blocks per mega-block per step',
+   'num micro-blocks per block per step',
+   'num nano-blocks per micro-block per step',
+   'num pico-blocks per nano-block per step',
+
    'L1 prefetch distance',
    'L2 prefetch distance',
    'num temporal block steps',
    'num wave front steps',
+   'extra padding',
+   'min padding',
 
-   # other values from log file.
+   # values from compiler report
+   'YASK compiler invocation',
+   'YC_STENCIL',
+   'YC_TARGET',
+   'YK_CXXVER',
+   'YK_CXXCMD',
+   'YK_CXXOPT',
+   'YK_CXXFLAGS',
+   'YK_STENCIL',
+   'YK_ARCH',
+   'YK_TAG',
+   'YK_EXEC',
+ );
+
+# Keys set with custom code.
+my $linux_key = "Linux kernel";
+my $hostname_key = "hostname";
+my $nodes_key = "MPI node(s)";
+my $auto_tuner_key = "Auto-tuner used";
+my $val_key = "validation results";
+my $yask_key = "YASK vars";
+our @special_log_keys =
+  (
+   $hostname_key,
+   $linux_key,
+   $nodes_key,
+   $auto_tuner_key,
+   $val_key,
+   $yask_key,
+  );
+
+#  Sizes.
+our @size_log_keys =
+  (
+   'global-domain size',
+   'local-domain size',
+   'mega-block size',
+   'block size',
+   'micro-block size',
+   'nano-block size',
+   'pico-block size',
+   'cluster size',
+   'vector size',
+  );
+if (0) {
+  push @size_log_keys,
+    (
+     'local-domain tile size',
+     'mega-block tile size',
+     'block tile size',
+     'micro-block tile size',
+     'nano-block tile size',
+     );
+}
+
+# System settings.
+our @sys_log_keys =
+  (
    'model name',
    'CPU(s)',
    'core(s) per socket',
@@ -100,8 +159,7 @@ our @log_keys =
    'ShMem',
   );
 
-our @all_log_keys = ( @log_keys, @special_log_keys );
-
+our @all_log_keys = ( @log_keys, @size_log_keys, @sys_log_keys, @special_log_keys );
 
 our $oneKi = 1024;
 our $oneMi = $oneKi * $oneKi;
@@ -123,7 +181,7 @@ our $onef = 1e-15;
 
 # Return a number from a number w/suffix.
 # Examples:
-# - removeSuf("2.34K") => 2300.
+# - removeSuf("2.34K") => 2340.
 # - removeSuf("2KiB") => 2048.
 # - removeSuf("foo") => "foo".
 sub removeSuf($) {
@@ -185,9 +243,9 @@ sub getResultsFromLine($$) {
   # pre-process keys one time.
   if (scalar keys %proc_keys == 0) {
     undef %proc_keys;
-    for my $m (@log_keys) {
+    for my $k (@log_keys, @size_log_keys, @sys_log_keys) {
 
-      my $pm = lc $m;
+      my $pm = lc $k;
       $pm =~ s/^\s+//;
       $pm =~ s/\s+$//;
 
@@ -196,29 +254,49 @@ sub getResultsFromLine($$) {
 
       # short key.
       my $sk = substr $pm,0,$klen;
-      
+
       # escape regex chars.
       $pm =~ s/\(/\\(/g;
       $pm =~ s/\)/\\)/g;
 
-      $proc_keys{$sk}{$pm} = $m;
+      $proc_keys{$sk}{$pm} = $k;
     }
   }
 
   # Substitutions to handle old formats.
+  $line =~ s/^Invocation/Script invocation/g if $line !~ /yask_compiler/;
   $line =~ s/overall.problem/global-domain/g;
   $line =~ s/rank.domain/local-domain/g;
   $line =~ s/grid/var/g;
   $line =~ s/Grid/Var/g;
   $line =~ s/target.ISA/target/g;
+  $line =~ s/mini([_-])bl/micro${1}bl/g;
+  $line =~ s/sub([_-])bl/nano${1}bl/g;
+  $line =~ s/region/mega-block/g;
+  $line =~ s/minimum-padding/min-padding/g;
+  $line =~ s/Num threads per region/num outer threads/g;
+  $line =~ s/Num threads per block/num inner threads/g;
   
   # special cases for manual parsing...
-  # TODO: catch output of auto-tuner and update relevant results.
 
+  # Validation.
+  if ($line =~ /did not pass internal validation test/i) {
+    $results->{$val_key} = 'failed';
+  }
+  elsif ($line =~ /passed internal validation test/i) {
+    $results->{$val_key} = 'passed';
+  }
+  elsif ($line =~ /Results NOT VERIFIED/i) {
+    $results->{$val_key} = 'not verified';
+  }
+  
   # Output of 'uname -a'
-  if ($line =~ /^\s*Linux\s/) {
+  elsif ($line =~ /^\s*Linux\s/) {
     my @w = split ' ', $line;
-    $results->{$linux_key} = $w[2]; # 'Linux' hostname kernel ...
+
+    # 'Linux' hostname kernel ...
+    $results->{$hostname_key} = $w[1];
+    $results->{$linux_key} = $w[2];
   }
 
   # MPI node names.
@@ -229,19 +307,25 @@ sub getResultsFromLine($$) {
     $results->{$nodes_key} .= $nname;
   }
 
+  # Vars containing "YASK".
+  elsif ($line =~ /^env:\s+(\w*YASK\w*=.*)/) {
+    $results->{$yask_key} .= '; ' if
+      exists $results->{$yask_key};
+    $results->{$yask_key} .= $1;
+  }
+
   # If auto-tuner is run globally, capture updated values.
   # Invalidate settings overridden by auto-tuner on multiple stages.
-  elsif ($line =~ /^auto-tuner(.).*size:/) {
+  elsif ($line =~ /^\s*auto-tuner(.).*size:/) {
     my $c = $1;
+    $results->{$auto_tuner_key} = 'TRUE';
 
-    # If colon found above, tuner is global.
+    # If colon found immediately after "auto-tuner", tuner is global.
     my $onep = ($c eq ':');
     
-    for my $k ('block size',
-               'mini-block size',
-               'sub-block size',) {
+    for my $k (@size_log_keys) {
       $line =~ s/-size/ size/;
-      if ($line =~ / (best-)?$k:\s*(t=.*)/i) {
+      if ($line =~ / (best-)?$k:\s*(.*)/i) {
         my $val = $onep ? $2 : 'auto-tuned';
         $results->{$k} = $val;
       }
@@ -250,23 +334,27 @@ sub getResultsFromLine($$) {
 
   # look for matches to all other keys.
   else {
-    my ($key, $val) = split /:/,$line,2;
+    my ($key, $val) = split /[=:]/,$line,2;
     if (defined $val) {
       $key = lc $key;
       $key =~ s/^\s+//;
+      $key =~ s/\s+$//;
       $key =~ s/[- ]+/-/g;      # relax hyphen and space match.
+      $val =~ s/^\s+//;
+      $val =~ s/\s+$//;
 
-      # short key.
+      # short key for quick match.
       my $sk = substr $key,0,$klen;
 
-      # match to short key?
+      # return if no match to short key.
       return if !exists $proc_keys{$sk};
-      
+
       # look for exact key.
       for my $m (keys %{$proc_keys{$sk}}) {
 
         # match?
-        # only check that beginning of key matches.
+        # Only compares found key to beginning of target,
+        # so beginning of target must be unique.
         if ($key =~ /^$m/) {
           $val =~ s/^\s+//;
           $val =~ s/\s+$//;
@@ -275,6 +363,19 @@ sub getResultsFromLine($$) {
           # Save value w/converted suffix.
           my $k = $proc_keys{$sk}{$m};
           $results->{$k} = $val;
+
+          # More special processing to get env-vars set via script.
+          # TODO: remove overridden vars.
+          if ($k eq 'script invocation') {
+            for my $w (split /\s+/, $val) {
+              if ($w =~ /(\w*YASK\w*=.*)/) {
+                $results->{$yask_key} .= '; ' if
+                  exists $results->{$yask_key};
+                $results->{$yask_key} .= $1;
+              }
+            }
+          }
+          
           last;
         }
       }
@@ -311,20 +412,28 @@ sub printCsvHeader($) {
 # Does NOT print newline.
 sub printCsvValues($$) {
   my $results = shift;          # ref to hash.
-  my $fh = shift;
+  my $fh = shift;               # file handle.
 
   my @cols;
   for my $m (@all_log_keys) {
     my $r = $results->{$m};
-    $r = '' if !defined $r;
-    $r = '"'.$r.'"'  # add quotes if not a number.
-      if $r !~ /^[0-9.e+-]+$/ || $r =~ /[.].*[.]/;
+
+    $r = '' if
+      !defined $r;
+
+    # special-case fix for bogus Excel cell reference.
+    $r =~ s/-/ -/ if
+      $r =~ /^"?-[a-zA-Z]/;
+
+    # add quotes if not a number, etc.
+    $r = '"'.$r.'"' if
+      !looks_like_number($r) &&
+      $r !~ /^"/ &&
+      $r ne 'TRUE' && $r ne 'FALSE';
     push @cols, $r;
   }
   print $fh join(',', @cols);
 }
 
-# return with a 1 so require() will not fail...
-#
+# return with a 1 so require() will not fail.
 1;
-

@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -33,7 +33,6 @@ IN THE SOFTWARE.
 #include <sys/types.h>
 #include <unistd.h>
 
-
 using namespace std;
 using namespace yask;
 
@@ -53,35 +52,60 @@ int main() {
         // Show output only from last rank.
         // This is an example of using the rank APIs,
         // the yask_output_factory, and set_debug_output().
-        ostream* osp = &cout;
         int rank_num = env->get_rank_index();
         if (rank_num < env->get_num_ranks() - 1) {
-            yask_output_factory ofac;
-            auto null_out = ofac.new_null_output();
-            soln->set_debug_output(null_out);
-            osp = &null_out->get_ostream();
+            yk_env::disable_debug_output();
             cout << "Suppressing output on rank " << rank_num << ".\n";
         }
         else
             cout << "Following information from rank " << rank_num << ".\n";
-        ostream& os = *osp;
+        ostream& os = yk_env::get_debug_output()->get_ostream();
 
         // Init solution settings.
         auto soln_dims = soln->get_domain_dim_names();
+        int i = 0;
         for (auto dim_name : soln_dims) {
+            os << "Setting solution dim '" << dim_name << "'...\n";
 
             // Set domain size in each dim.
-            soln->set_overall_domain_size(dim_name, 128);
+            idx_t dsize = 128 + i * 32;
+            soln->set_overall_domain_size(dim_name, dsize);
+
+            // Check that vec API returns same.
+            auto dsizes = soln->get_overall_domain_size_vec();
+            os << "global domain sizes:";
+            for (auto ds : dsizes)
+                os << " " << ds;
+            os << "\n";
+            assert(dsizes[i] == dsize);
+
+            // Set with vec and check again.
+            soln->set_overall_domain_size_vec(dsizes);
+            auto ds = soln->get_overall_domain_size(dim_name);
+            assert(ds == dsize);
 
             // Ensure some minimal padding on all vars.
             soln->set_min_pad_size(dim_name, 1);
 
-            // Set block size to 64 in z dim and 32 in other dims.
+            // Set block size to 64 in last dim and 32 in other dims.
             // NB: just illustrative.
-            if (dim_name == "z")
-                soln->set_block_size(dim_name, 64);
-            else
-                soln->set_block_size(dim_name, 32);
+            idx_t bsize = (i == soln_dims.size() - 1) ? 64 : 32;
+            soln->set_block_size(dim_name, bsize);
+
+            // Check that vec API returns same.
+            auto bsizes = soln->get_block_size_vec();
+            os << "block sizes:";
+            for (auto bs : bsizes)
+                os << " " << bs;
+            os << "\n";
+            assert(bsizes[i] == bsize);
+
+            // Set with vec and check again.
+            soln->set_block_size_vec(bsizes);
+            auto bs = soln->get_block_size(dim_name);
+            assert(bs == bsize);
+            
+            i++;
         }
 
         // Make a test fixed-size var.
@@ -111,10 +135,18 @@ int main() {
         // Print out some info about the vars and init their data.
         for (auto var : soln->get_vars()) {
             os << "    var '" << var->get_name() << ":\n";
+            int dimi = 0;
             for (auto dname : var->get_dim_names()) {
                 os << "      '" << dname << "' dim:\n";
                 os << "        alloc-size on this rank: " <<
                     var->get_alloc_size(dname) << endl;
+                os << "        allowed index range on this rank: " <<
+                    var->get_first_local_index(dname) << " ... " <<
+                    var->get_last_local_index(dname) << endl;
+                assert(var->get_alloc_size(dname) ==
+                       var->get_last_local_index(dname) - var->get_first_local_index(dname) + 1);
+                auto asizes = var->get_alloc_size_vec();
+                assert(asizes.at(dimi) == var->get_alloc_size(dname));
                 
                 // Is this a domain dim?
                 if (domain_dim_set.count(dname)) {
@@ -124,9 +156,6 @@ int main() {
                     os << "        domain+halo index range on this rank: " <<
                         var->get_first_rank_halo_index(dname) << " ... " <<
                         var->get_last_rank_halo_index(dname) << endl;
-                    os << "        allowed index range on this rank: " <<
-                        var->get_first_rank_alloc_index(dname) << " ... " <<
-                        var->get_last_rank_alloc_index(dname) << endl;
                 }
 
                 // Step dim?
@@ -142,6 +171,8 @@ int main() {
                         var->get_first_misc_index(dname) << " ... " <<
                         var->get_last_misc_index(dname) << endl;
                 }
+
+                dimi++;
             }
 
             // First, just init all the elements to the same value.
@@ -246,7 +277,7 @@ int main() {
         soln->run_solution(1, 10);
 
         soln->end_solution();
-
+        soln->get_stats();
         os << "End of YASK kernel API test.\n";
         return 0;
     }

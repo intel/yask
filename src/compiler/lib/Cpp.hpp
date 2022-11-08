@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -33,7 +33,7 @@ IN THE SOFTWARE.
 #include "Var.hpp"
 
 namespace yask {
-
+    
     /////////// Scalar code /////////////
 
     // Outputs C++ scalar code for YASK.
@@ -47,12 +47,10 @@ namespace yask {
         CppPrintHelper(const CompilerSettings& settings,
                        const Dimensions& dims,
                        const CounterVisitor* cv,
-                       const string& var_prefix,
                        const string& var_type,
                        const string& line_prefix,
                        const string& line_suffix) :
-            PrintHelper(settings, dims, cv, var_prefix, var_type,
-                        line_prefix, line_suffix) { }
+            PrintHelper(settings, dims, cv, var_type, line_prefix, line_suffix) { }
         virtual ~CppPrintHelper() { }
 
         // Format a real, preserving precision.
@@ -65,31 +63,35 @@ namespace yask {
         }
 
         // Format a pointer to a var.
-        virtual string get_var_ptr(const VarPoint& gp) {
-            const auto* var = gp._get_var();
-            string gname = var->_get_name();
-            string expr = "(static_cast<_context_type::" + gname + "_type*>(_context_data->";
-            if (var->is_scratch())
-                expr += gname + "_list[region_thread_idx]";
+        virtual string get_var_ptr(const Var& var) {
+            string gname = var._get_name();
+            string expr;
+            if (var.is_scratch())
+                expr = "thread_core_data.";
             else
-                expr += gname + "_ptr";
-            expr += ".get()->gbp()))";
+                expr = "core_data->";
+            expr += "var_" + gname + "_core_p.get()";
             return expr;
         }
+        virtual string get_var_ptr(const VarPoint& gp) {
+            const auto* var = gp._get_var();
+            assert(var);
+            return get_var_ptr(*var);
+        }        
         
         // Make call for a point.
         // This is a utility function used for both reads and writes.
         virtual string make_point_call(ostream& os,
-                                     const VarPoint& gp,
-                                     const string& fname,
-                                     string opt_arg = "");
+                                       const VarPoint& gp,
+                                       const string& fname,
+                                       string opt_arg = "");
 
         // Return a var-point reference.
         virtual string read_from_point(ostream& os, const VarPoint& gp) override;
 
         // Return code to update a var point.
         virtual string write_to_point(ostream& os, const VarPoint& gp,
-                                    const string& val) override;
+                                      const string& val) override;
     };
 
     /////////// Vector code /////////////
@@ -98,31 +100,54 @@ namespace yask {
     class CppVecPrintHelper : public CppPrintHelper,
                               public VecPrintHelper {
 
-    public:
-        CppVecPrintHelper(VecInfoVisitor& vv,
-                          const CompilerSettings& settings,
-                          const Dimensions& dims,
-                          const CounterVisitor* cv,
-                          const string& var_prefix,
-                          const string& var_type,
-                          const string& line_prefix,
-                          const string& line_suffix) :
-            CppPrintHelper(settings, dims, cv,
-                           var_prefix, var_type, line_prefix, line_suffix),
-            VecPrintHelper(vv) { }
-        
     protected:
 
-        // Vars for tracking pointers to var values.
-        map<VarPoint, string> _vec_ptrs; // pointers to var vecs. value: ptr-var name.
-        map<string, int> _ptr_ofs_lo; // lowest read offset from _vec_ptrs in inner dim.
-        map<string, int> _ptr_ofs_hi; // highest read offset from _vec_ptrs in inner dim.
+        // Name of current stage;
+        string _stage_name;
+
+        // Name of ptr to lowest-allocated vec for a given point in that var.
+        // There is a unique ptr for each step-arg per var.
+        // Thus, there is a many->one mapping for points that vary only by domain and/or misc indices.
+        // Key: point expr; value: ptr-var name.
+        map<VarPoint, string> _var_base_ptrs;
+
+        // Name of ptr to current point in inner-loop dim.
+        // Inner-layout dim index has no offset, and misc-dim indices are at min-value.
+        // Key: point expr; value: ptr-var name.
+        map<VarPoint, string> _inner_loop_base_ptrs;
+ 
+        // Vars for tracking other info about vars.
+        typedef pair<string, string> VarDimKey; // var and dim names.
+        map<VarDimKey, string> _strides; // var containing stride expr for given dim in var.
+        map<VarDimKey, string> _offsets; // var containing offset expr for given dim in var.
+        map<string, string> _ptr_ofs; // var containing offset expr for key var.
+        map<VarPoint, var_point_ptr> _inner_loop_key; // offsets perpendicular to inner-loop dim for var.
+        VarPointSet _aligned_reads;                   // _vv._aligned_vecs plus those for read-ahead.
+
+        // Read stats.
+        // Key: point w/no inner-loop offset.
+        // Offsets and legths in vec-lengths in inner-loop dim.
+        // TODO: convert to one map with struct value.
+        map<VarPoint, int> _pt_inner_loop_lo; // lowest read offset in inner-loop dim.
+        map<VarPoint, int> _pt_inner_loop_hi; // highest read offset in inner-loop dim.
+        map<VarPoint, int> _pt_buf_len;       // buffer length (only exists if needed).
+        map<VarPoint, string> _pt_buf_name;   // buffer name.
 
         // Element indices.
-        string _elem_suffix = "_elem";
-        VarMap _vec2elem_map; // maps vector indices to elem indices; filled by print_elem_indices.
+        string _elem_suffix_global = "_global_elem";
+        string _elem_suffix_local = "_local_elem";
+        VarMap _vec2elem_local_map, _vec2elem_global_map;
 
-        bool _use_masked_writes = true;
+        // Rank vars.
+        string _rank_domain_offset_prefix = "rank_domain_offset_";
+
+        // Set to var name of write mask if/when used.
+        string _write_mask = "";
+
+        // Inner-loop steps.
+        bool _is_using_cluster = false;
+        int _inner_loop_vec_step = 1;
+        int _inner_loop_elem_step = 1;
 
         // A simple constant.
         virtual string add_const_expr(ostream& os, double v) override {
@@ -137,20 +162,21 @@ namespace yask {
         // Print a comment about a point.
         // This is a utility function used for both reads and writes.
         virtual void print_point_comment(ostream& os, const VarPoint& gp,
-                                       const string& verb) const {
+                                         const string& verb) const {
 
-            os << endl << " // " << verb << " vector starting at " <<
+            os << endl << " // " << verb << " at " <<
                 gp.make_str() << "." << endl;
         }
 
-        // Return code for a vectorized point.
+        // Return code for a var function call at a point.
         // This is a utility function used for both reads and writes.
-        virtual string print_vec_point_call(ostream& os,
-                                         const VarPoint& gp,
-                                         const string& func_name,
-                                         const string& first_arg,
-                                         const string& last_arg,
-                                         bool is_norm);
+        virtual string make_point_call_vec(ostream& os,
+                                           const VarPoint& gp,
+                                           const string& func_name,
+                                           const string& first_arg,
+                                           const string& last_arg,
+                                           bool is_vector_normalized,
+                                           const VarMap* var_map = 0);
 
         // Print aligned memory read.
         virtual string print_aligned_vec_read(ostream& os, const VarPoint& gp) override;
@@ -160,8 +186,8 @@ namespace yask {
         virtual string print_unaligned_vec_read(ostream& os, const VarPoint& gp) override;
 
         // Print aligned memory write.
-        virtual string print_aligned_vec_write(ostream& os, const VarPoint& gp,
-                                            const string& val) override;
+        virtual void print_aligned_vec_write(ostream& os, const VarPoint& gp,
+                                             const string& val) override;
 
         // Print conversion from memory vars to point var gp if needed.
         // This calls print_unaligned_vec_ctor(), which can be overloaded
@@ -176,11 +202,11 @@ namespace yask {
         // Read from a single point to be broadcast to a vector.
         // Return code for read.
         virtual string read_from_scalar_point(ostream& os, const VarPoint& gp,
-                                           const VarMap* v_map=0) override;
+                                              const VarMap* var_map) override;
 
         // Read from multiple points that are not vectorizable.
         // Return var name.
-        virtual string print_non_vec_read(ostream& os, const VarPoint& gp) override;
+        virtual string print_partial_vec_read(ostream& os, const VarPoint& gp) override;
 
         // Print construction for one point var pv_name from elems.
         // This version prints inefficient element-by-element assignment.
@@ -190,20 +216,51 @@ namespace yask {
         }
 
         // Get offset from base pointer.
-        virtual string get_ptr_offset(const VarPoint& gp,
-                                    const string& inner_expr = "");
+        virtual string get_var_base_ptr_offset(ostream& os, const VarPoint& gp,
+                                               const VarMap* var_map = 0);
+        virtual string get_inner_loop_ptr_offset(ostream& os, const VarPoint& gp,
+                                                 const VarMap* var_map = 0,
+                                                 const string& inner_ofs = "");
 
     public:
-
+        CppVecPrintHelper(VecInfoVisitor& vv,
+                          const CompilerSettings& settings,
+                          const Dimensions& dims,
+                          const CounterVisitor* cv,
+                          const string& var_type,
+                          const string& line_prefix,
+                          const string& line_suffix) :
+            CppPrintHelper(settings, dims, cv,
+                           var_type, line_prefix, line_suffix),
+            VecPrintHelper(vv) {
+            set_using_cluster(false);
+        }
+        
         // Whether to use masks during write.
-        virtual void set_use_masked_writes(bool do_use) {
-            _use_masked_writes = do_use;
+        virtual void set_write_mask(string mask_var) {
+            _write_mask = mask_var;
         }
-        virtual bool get_use_masked_writes() const {
-            return _use_masked_writes;
+        virtual string get_write_mask() const {
+            return _write_mask;
         }
 
-        // Print any needed memory reads and/or constructions to 'os'.
+        // Set step lengths.
+        virtual void set_using_cluster(bool use) {
+            _is_using_cluster = use;
+            const string& ildim = _settings._inner_loop_dim;
+            _inner_loop_vec_step = use ? _dims._cluster_mults[ildim] : 1;
+            _inner_loop_elem_step = _inner_loop_vec_step * _dims._fold[ildim];
+        }
+
+        // Set stage name.
+        virtual void set_stage_name(const string& sname) {
+            _stage_name = sname;
+        }
+
+        // Collect some stats on points.
+        virtual void get_point_stats();
+        
+         // Print any needed memory reads and/or constructions to 'os'.
         // Return code containing a vector of var points.
         virtual string read_from_point(ostream& os, const VarPoint& gp) override;
 
@@ -212,69 +269,116 @@ namespace yask {
         // if all writes were printed.
         virtual string write_to_point(ostream& os, const VarPoint& gp, const string& val) override;
 
-        // Print code to set pointers of aligned reads.
-        virtual void print_base_ptrs(ostream& os);
+        // Make var base point (first allocated point).
+        virtual var_point_ptr make_var_base_point(const VarPoint& gp);
 
-        // Make base point (misc & inner-dim indices = 0).
-        virtual var_point_ptr make_base_point(const VarPoint& gp);
+        // Make inner-loop base point (no inner-layout offset; misc-dim indices = min-val).
+        virtual var_point_ptr make_inner_loop_base_point(const VarPoint& gp);
 
-        // Print prefetches for each base pointer.
-        // Print only 'ptr_var' if provided.
-        virtual void print_prefetches(ostream& os, bool ahead, string ptr_var = "");
+        // Print code to create base pointers for aligned reads.
+        virtual void print_var_base_ptr(ostream& os, const VarPoint& gp);
 
+        // Print things needed before inner loop.
+        virtual void print_inner_loop_prefix(ostream& os);
+
+        // Print all aligned loads before they're needed.
+        virtual void print_early_loads(ostream& os);
+
+        // Print prefetches for each inner-loop base pointer.
+        // 'in_loop': prefetch PF distance ahead instead of up to PF dist.
+        virtual void print_prefetches(ostream& os, bool in_loop);
+
+        // Print buffer-code for each inner-loop base pointer.
+        // 'in_loop': just shift and load last one.
+        virtual void print_buffer_code(ostream& os, bool in_loop);
+
+        // print init of rank constants.
+        virtual void print_rank_data(ostream& os);
+        
         // print init of un-normalized indices.
         virtual void print_elem_indices(ostream& os);
 
+        // print increments of indices & pointers.
+        virtual void print_end_inner_loop(ostream& os);
+
         // get un-normalized index.
-        virtual const string& get_elem_index(const string& dname) const {
-            return _vec2elem_map.at(dname);
+        virtual const string& get_local_elem_index(const string& dname) const {
+            return _vec2elem_local_map.at(dname);
+        }
+        virtual const string& get_global_elem_index(const string& dname) const {
+            return _vec2elem_global_map.at(dname);
         }
 
-        // Print code to set ptr_name to gp.
-        virtual void print_point_ptr(ostream& os, const string& ptr_name, const VarPoint& gp);
+        // Print strides for 'gp'.
+        virtual void print_strides(ostream& os, const VarPoint& gp);
 
         // Access cached values.
-        virtual void save_point_ptr(const VarPoint& gp, string var) {
-            _vec_ptrs[gp] = var;
+        virtual string* lookup_var_base_ptr(const VarPoint& gp) {
+            auto bgp = make_var_base_point(gp);
+            if (_var_base_ptrs.count(*bgp))
+                return &_var_base_ptrs.at(*bgp);
+            return 0;
         }
-        virtual string* lookup_point_ptr(const VarPoint& gp) {
-            if (_vec_ptrs.count(gp))
-                return &_vec_ptrs.at(gp);
+        virtual string* lookup_inner_loop_base_ptr(const VarPoint& gp) {
+            auto bgp = make_inner_loop_base_point(gp);
+            if (_inner_loop_base_ptrs.count(*bgp))
+                return &_inner_loop_base_ptrs.at(*bgp);
+            return 0;
+        }
+        virtual string* lookup_stride(const Var& var, const string& dim) {
+            auto key = VarDimKey(var.get_name(), dim);
+            if (_strides.count(key))
+                return &_strides.at(key);
+            return 0;
+        }
+        virtual string* lookup_offset(const Var& var, const string& dim) {
+            auto key = VarDimKey(var.get_name(), dim);
+            if (_offsets.count(key))
+                return &_offsets.at(key);
             return 0;
         }
     };
 
-    // Outputs the time-invariant variables.
-    class CppStepVarPrintVisitor : public PrintVisitorBase {
+    // Outputs loop-invariant values.
+    class CppPreLoopPrintVisitor : public PrintVisitorBase {
     protected:
         CppVecPrintHelper& _cvph;
 
     public:
-        CppStepVarPrintVisitor(ostream& os,
+        CppPreLoopPrintVisitor(ostream& os,
                                CppVecPrintHelper& ph,
                                const VarMap* var_map = 0) :
             PrintVisitorBase(os, ph, var_map),
-            _cvph(ph) { }
-
-        // A var access.
-        virtual string visit(VarPoint* gp);
+            _cvph(ph) {
+            _visit_equals_lhs = true;
+            _visit_var_point_args = true;
+            _visit_conds = true;
+        }
 
         virtual string get_var_ptr(VarPoint& gp) {
             return _cvph.get_var_ptr(gp);
         }
-};
+    };
 
-    // Outputs the loop-invariant variables for an inner loop.
-    class CppLoopVarPrintVisitor : public PrintVisitorBase {
-    protected:
-        CppVecPrintHelper& _cvph;
-
+    // Meta values such as strides and pointers.
+    class CppPreLoopPrintMetaVisitor : public CppPreLoopPrintVisitor {
     public:
-        CppLoopVarPrintVisitor(ostream& os,
-                               CppVecPrintHelper& ph,
-                               const VarMap* var_map = 0) :
-            PrintVisitorBase(os, ph, var_map),
-            _cvph(ph) { }
+        CppPreLoopPrintMetaVisitor(ostream& os,
+                                   CppVecPrintHelper& ph,
+                                   const VarMap* var_map = 0) :
+            CppPreLoopPrintVisitor(os, ph, var_map) { }
+
+        // A var access.
+        virtual string visit(VarPoint* gp);
+    };
+
+    // Data values.
+    class CppPreLoopPrintDataVisitor : public CppPreLoopPrintVisitor {
+    public:
+        CppPreLoopPrintDataVisitor(ostream& os,
+                                   CppVecPrintHelper& ph,
+                                   const VarMap* var_map = 0) :
+            CppPreLoopPrintVisitor(os, ph, var_map) { }
 
         // A var access.
         virtual string visit(VarPoint* gp);
@@ -285,7 +389,9 @@ namespace yask {
     protected:
         EqStages& _eq_stages; // stages of bundles w/o inter-dependencies.
         EqBundles& _cluster_eq_bundles;  // eq-bundles for scalar and vector.
-        string _context, _context_base, _context_hook; // class names;
+        string _stencil_prefix;
+        string _context, _context_hook; // class names;
+        string _core_t, _thread_core_t; // core struct names;
 
         // Print an expression as a one-line C++ comment.
         void add_comment(ostream& os, EqBundle& eq);
@@ -296,18 +402,21 @@ namespace yask {
         virtual CppVecPrintHelper* new_cpp_vec_print_helper(VecInfoVisitor& vv,
                                                         CounterVisitor& cv) {
             return new CppVecPrintHelper(vv, _settings, _dims, &cv,
-                                         "temp", "real_vec_t", " ", ";\n");
+                                         "real_vec_t", " ", ";\n");
         }
 
         // Print extraction of indices.
-        virtual void print_indices(ostream& os) const;
+        virtual void print_indices(ostream& os,
+                                   bool print_step = true,
+                                   bool print_domain = true,
+                                   const string prefix = "",
+                                   const string inner_var_prefix = "") const;
 
         // Print pieces of YASK output.
         virtual void print_macros(ostream& os);
         virtual void print_data(ostream& os);
         virtual void print_eq_bundles(ostream& os);
         virtual void print_context(ostream& os);
-
 
     public:
         YASKCppPrinter(StencilSolution& stencil,
@@ -319,9 +428,11 @@ namespace yask {
             _cluster_eq_bundles(cluster_eq_bundles)
         {
             // name of C++ struct.
-            _context = "StencilContext_" + _stencil._get_name();
-            _context_base = _context + "_data";
-            _context_hook = _context + "_hook";
+            _stencil_prefix = "stencil_" + _stencil._get_name() + "_";
+            _context = _stencil_prefix + "context_t";
+            _context_hook = _stencil_prefix + "hook_t";
+            _core_t = _stencil_prefix + "core_t";
+            _thread_core_t = _stencil_prefix + "thread_core_t";
         }
         virtual ~YASKCppPrinter() { }
 

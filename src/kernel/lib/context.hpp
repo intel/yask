@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -57,6 +57,12 @@ namespace yask {
         IdxTuple bb_end_tuple(const IdxTuple& ddims) const {
             return bb_end.make_tuple(ddims);
         }
+        IdxTuple bb_last_tuple(const IdxTuple& ddims) const {
+            auto res = bb_end.make_tuple(ddims);
+            DOMAIN_VAR_LOOP(i, j)
+                res[j] = res[j] - 1;
+            return res;
+        }
         IdxTuple bb_len_tuple(const IdxTuple& ddims) const {
             return bb_len.make_tuple(ddims);
         }
@@ -78,8 +84,8 @@ namespace yask {
         // Is point in BB?
         // 'pt' must have same dims as BB.
         bool is_in_bb(const IdxTuple& pt) const {
-            assert(pt._get_num_dims() == bb_begin._get_num_dims());
-            for (int i = 0; i < pt._get_num_dims(); i++) {
+            assert(pt.get_num_dims() == bb_begin.get_num_dims());
+            for (int i = 0; i < pt.get_num_dims(); i++) {
                 if (pt[i] < bb_begin[i])
                     return false;
                 if (pt[i] >= bb_end[i])
@@ -88,8 +94,8 @@ namespace yask {
             return true;
         }
         bool is_in_bb(const Indices& pt) const {
-            assert(pt._get_num_dims() == bb_begin._get_num_dims());
-            for (int i = 0; i < pt._get_num_dims(); i++) {
+            assert(pt.get_num_dims() == bb_begin.get_num_dims());
+            for (int i = 0; i < pt.get_num_dims(); i++) {
                 if (pt[i] < bb_begin[i])
                     return false;
                 if (pt[i] >= bb_end[i])
@@ -168,7 +174,23 @@ namespace yask {
     typedef std::set<StencilBundleBase*> StencilBundleSet;
     typedef std::shared_ptr<Stage> StagePtr;
     typedef std::vector<StagePtr> StageList;
-    typedef std::vector<bool> BridgeMask;
+
+    // Common data needed in the kernel(s).
+    struct CommonCoreData {
+
+        // Copies of context info.
+        Indices _global_sizes;
+        Indices _rank_sizes;
+        Indices _rank_domain_offsets;
+
+        void set_core(const StencilContext *cxt);
+    };
+
+    // Base of core data needed in the kernel(s).
+    // Other data is added via inheritance by the YASK compiler.
+    struct StencilCoreBase {
+        CommonCoreData _common_core;
+    };
 
     // Data and hierarchical sizes.
     // This is a pure-virtual class that must be implemented
@@ -187,9 +209,7 @@ namespace yask {
         static constexpr size_t _data_buf_pad = YASK_PAD_BYTES;
 
         // Alloc given bytes on each NUMA node.
-        virtual void _alloc_data(const std::map <int, size_t>& nbytes,
-                                 const std::map <int, size_t>& nvars,
-                                 std::map <int, std::shared_ptr<char>>& _data_buf,
+        virtual void _alloc_data(AllocMap& alloc_reqs,
                                  const std::string& type);
 
         // Callbacks.
@@ -219,20 +239,49 @@ namespace yask {
         // include any extensions needed for WF.
         BoundingBox mpi_interior;
 
-        // Flags to calculate the interior and/or exterior.
+        // Flags to track state of calculating the interior and/or exterior.
         bool do_mpi_interior = true;
         bool do_mpi_left = true;        // left exterior in given dim.
         bool do_mpi_right = true;        // right exterior in given dim.
         idx_t mpi_exterior_dim = -1;      // which domain dim in left/right.
 
-        // Is overlap currently enabled?
+        // Set MPI flag to defaults.
+        inline void init_mpi_flags() {
+            do_mpi_interior = do_mpi_left = do_mpi_right = true;
+            mpi_exterior_dim = -1;
+        }
+
+        // Is overlapping-comms mode currently enabled?
         inline bool is_overlap_active() const {
+            assert(do_mpi_interior || do_mpi_left || do_mpi_right);
+            if (!do_mpi_interior)
+                assert(do_mpi_left || do_mpi_right); // one or both.
+            else {
+                assert(do_mpi_left == do_mpi_right); // both or neither.
+                if (do_mpi_left != do_mpi_right)
+                    assert(mpi_exterior_dim >= 0); // must specify dim.
+            }
             bool active = !do_mpi_interior || !do_mpi_left || !do_mpi_right;
             if (active) {
-                assert(do_mpi_interior || do_mpi_left || do_mpi_right);
                 assert(mpi_interior.bb_valid);
             }
             return active;
+        }
+
+        // Describe MPI flag setting.
+        std::string make_mpi_section_descr() {
+            STATE_VARS(this);
+            if (is_overlap_active())
+                return std::string("MPI ") +
+                    (do_mpi_interior ? "interior" :
+                     (do_mpi_left && do_mpi_right) ? "exterior" :
+                     do_mpi_left ?
+                     ("exterior left-" +
+                      domain_dims.get_dim_name(mpi_exterior_dim)) :
+                     ("exterior right-" +
+                      domain_dims.get_dim_name(mpi_exterior_dim))) +
+                    " section";
+            return std::string("all MPI sections");
         }
 
         // Is there a non-zero exterior in the given section?
@@ -251,14 +300,14 @@ namespace yask {
         StageList st_stages;
 
         // All non-scratch vars, including those created by APIs.
-        VarPtrs var_ptrs;
-        VarPtrMap var_map;
+        VarPtrs all_var_ptrs;
+        VarPtrMap all_var_map;
 
-        // Only vars defined by the YASK compiler.
+        // Only non-scratch vars defined by the YASK compiler.
         VarPtrs orig_var_ptrs;
         VarPtrMap orig_var_map;
 
-        // Only vars defined by the YASK compiler that are updated by the stencils.
+        // Only non-scratch vars defined by the YASK compiler that are updated by the stencils.
         VarPtrs output_var_ptrs;
         VarPtrMap output_var_map;
 
@@ -275,9 +324,13 @@ namespace yask {
         YaskTimer run_time;     // time in run_solution(), including halo exchange.
         YaskTimer ext_time;     // time in exterior stencil calculation.
         YaskTimer int_time;     // time in interior stencil calculation.
-        YaskTimer halo_time;     // time spent just doing halo exchange, including MPI waits.
-        YaskTimer wait_time;     // time spent just doing MPI waits.
-        YaskTimer test_time;     // time spent just doing MPI tests.
+        YaskTimer halo_time;    // time spent in halo exchange.
+        YaskTimer halo_pack_time;     // time spent on packing in halo exchange.
+        YaskTimer halo_unpack_time; // time spent on unpacking in halo exchange.
+        YaskTimer halo_copy_time;   // time spent on copying buffers in halo exchange.
+        YaskTimer halo_wait_time;     // time spent on MPI waits in halo exchange.
+        YaskTimer halo_test_time;     // time spent on MPI tests for halo exchange.
+        YaskTimer halo_lock_wait_time; // time spent on shm lock waits in halo exchange.
         idx_t steps_done = 0;   // number of steps that have been run.
 
         // Maximum halos, skewing angles, and work extensions over all vars
@@ -290,7 +343,7 @@ namespace yask {
         IdxTuple left_wf_exts;    // WF extension needed on left side of rank for halo exch.
         IdxTuple right_wf_exts;    // WF extension needed on right side of rank.
 
-        // Settings for temporal blocking and mini-blocks.
+        // Settings for temporal blocking and micro-blocks.
         idx_t tb_steps = 0;  // max number of steps in a TB. 0 => no TB.
         IdxTuple tb_angles;  // TB skewing angles for each shift (in points).
         idx_t num_tb_shifts = 0; // number of TB shifts required in tb_steps.
@@ -298,20 +351,7 @@ namespace yask {
         IdxTuple tb_tops;      // top of TB trapezoid.
         IdxTuple mb_angles;  // MB skewing angles for each shift (in points).
 
-        // MPI settings.
-        // TODO: move to settings or MPI info object.
-#ifdef NO_VEC_EXCHANGE
-        bool allow_vec_exchange = false;
-#else
-        bool allow_vec_exchange = true; // allow vectorized halo exchange.
-#endif
-#ifdef NO_HALO_EXCHANGE
-        bool enable_halo_exchange = false;
-#else
-        bool enable_halo_exchange = true;
-#endif
-
-        // Clear this to ignore step conditions.
+        // Clear this to ignore step conditions during auto-tuning.
         bool check_step_conds = true;
 
         // MPI buffers for each var.
@@ -319,8 +359,9 @@ namespace yask {
         std::map<std::string, MPIData> mpi_data;
 
         // Constructor.
-        StencilContext(KernelEnvPtr& env,
-                       KernelSettingsPtr& settings);
+        StencilContext(KernelEnvPtr& kenv,
+                       KernelSettingsPtr& ksettings,
+                       KernelSettingsPtr& user_settings);
 
         // Destructor.
         virtual ~StencilContext() {
@@ -330,18 +371,15 @@ namespace yask {
                 get_stats();
         }
 
+        // Access core data.
+        virtual StencilCoreBase* corep() =0;
+
         // Ready?
         bool is_prepared() const {
             return rank_bb.bb_valid;
         }
         void set_prepared(bool prep) {
             rank_bb.bb_valid = prep;
-        }
-
-        // Modify settings in shared state and auto-tuner.
-        void set_settings(KernelSettingsPtr opts) {
-            _state->_opts = opts;
-            _at.set_settings(opts.get());
         }
 
         // Reset elapsed times to zero.
@@ -391,7 +429,8 @@ namespace yask {
         virtual void reset_locks();
 
         // Print info about the soln.
-        virtual void print_temporal_tiling_info() const;
+        virtual void print_temporal_tiling_info(std::string prefix = "") const;
+        virtual void print_sizes(std::string prefix = "") const;
         virtual void print_warnings() const;
 
         /// Get statistics associated with preceding calls to run_solution().
@@ -410,15 +449,21 @@ namespace yask {
 
         // Adjust offsets of scratch vars based
         // on thread and scan indices.
-        virtual void update_scratch_var_info(int region_thread_idx,
+        virtual void update_scratch_var_info(int outer_thread_idx,
                                               const Indices& idxs);
 
+        // Copy non-scratch vars to device as needed.
+        void copy_vars_to_device() const;
+
+        // Copy non-scratch output vars from device as needed.
+        void copy_vars_from_device() const;
+        
         // Get total memory allocation required by vars.
         // Does not include MPI buffers.
         // TODO: add MPI buffers.
         virtual size_t get_num_bytes() {
             size_t sz = 0;
-            for (auto gp : var_ptrs) {
+            for (auto gp : all_var_ptrs) {
                 if (gp)
                     sz += gp->get_num_storage_bytes() + _data_buf_pad;
             }
@@ -431,25 +476,22 @@ namespace yask {
         }
 
         // Init all vars & params by calling real_init_fn.
-        virtual void init_values(std::function<void (YkVarPtr gp,
-                                                    real_t seed)> real_init_fn);
+        virtual void init_values(real_t seed0,
+                                 std::function<void (YkVarPtr gp,
+                                                     real_t seed)> real_init_fn);
 
         // Init all vars & params to same value within vars,
         // but different for each var.
-        virtual void init_same() {
-            init_values([&](YkVarPtr gp, real_t seed){ gp->set_all_elements_same(seed); });
+        virtual void init_same(real_t seed0) {
+            init_values(seed0, [&](YkVarPtr gp, real_t seed)
+                               { gp->set_all_elements_same(seed); });
         }
 
         // Init all vars & params to different values within vars,
         // and different for each var.
-        virtual void init_diff() {
-            init_values([&](YkVarPtr gp, real_t seed){ gp->set_all_elements_in_seq(seed); });
-        }
-
-        // Init all vars & params.
-        // By default it uses the init_same initialization routine.
-        virtual void init_data() {
-            init_diff();         // Safer than init_same() to avoid NaNs due to div-by-zero.
+        virtual void init_diff(real_t seed0) {
+            init_values(seed0, [&](YkVarPtr gp, real_t seed)
+                               { gp->set_all_elements_in_seq(seed); });
         }
 
         // Compare vars in contexts for validation.
@@ -461,73 +503,89 @@ namespace yask {
         void run_ref(idx_t first_step_index,
                      idx_t last_step_index);
 
-        // Calculate results within a region.
-        void calc_region(StagePtr& sel_bp,
+        // Calculate results within a mega-block.
+        void calc_mega_block(StagePtr& sel_bp,
                          const ScanIndices& rank_idxs);
 
         // Calculate results within a block.
         void calc_block(StagePtr& sel_bp,
-                        idx_t region_shift_num,
+                        idx_t mega_block_shift_num,
                         idx_t nphases, idx_t phase,
                         const ScanIndices& rank_idxs,
-                        const ScanIndices& region_idxs);
+                        const ScanIndices& mega_block_idxs);
 
-        // Calculate results within a mini-block.
-        void calc_mini_block(int region_thread_idx,
+        // Calculate results within a micro-block.
+        void calc_micro_block(int outer_thread_idx,
                              StagePtr& sel_bp,
-                             idx_t region_shift_num,
+                             idx_t mega_block_shift_num,
                              idx_t nphases, idx_t phase,
                              idx_t nshapes, idx_t shape,
-                             const BridgeMask& bridge_mask,
+                             const bit_mask_t& bridge_mask,
                              const ScanIndices& rank_idxs,
-                             const ScanIndices& base_region_idxs,
+                             const ScanIndices& base_mega_block_idxs,
                              const ScanIndices& base_block_idxs,
                              const ScanIndices& adj_block_idxs);
 
         // Exchange all dirty halo data for all stencil bundles.
         void exchange_halos();
 
-        // Call MPI_Test() on all unfinished requests to promote MPI progress.
-        void poke_halo_exchange();
+        // Call MPI_Test() on all unfinished requests to advance MPI progress.
+        void adv_halo_exchange();
 
         // Update valid steps in vars that have been written to by stage 'sel_bp'.
         // If sel_bp==null, use all bundles.
         // If 'mark_dirty', also mark as needing halo exchange.
-        void update_vars(const StagePtr& sel_bp,
-                          idx_t start, idx_t stop,
-                          bool mark_dirty);
+        void update_var_info(const StagePtr& sel_bp,
+                             idx_t start, idx_t stop,
+                             bool mark_dirty,
+                             bool mod_dev_data = true);
 
-        // Set various limits in 'idxs' based on current step in region.
-        bool shift_region(const Indices& base_start, const Indices& base_stop,
+        // Mark all exchangable vars as possibly dirty in other ranks. This
+        // should be called anytime APIs could have been called and before
+        // running any steps.
+        void set_all_neighbor_vars_dirty() {
+            for (auto& gp : orig_var_ptrs) {
+                gp->gb().set_dirty_all(YkVarBase::others, true);
+            }
+        }
+
+        // Set various limits in 'idxs' based on current step in mega-block.
+        bool shift_mega_block(const Indices& base_start, const Indices& base_stop,
                             idx_t shift_num,
                             StagePtr& bp,
                             ScanIndices& idxs);
 
         // Set various limits in 'idxs' based on current step in block.
-        bool shift_mini_block(const Indices& mb_base_start,
+        bool shift_micro_block(const Indices& mb_base_start,
                               const Indices& mb_base_stop,
                               const Indices& adj_block_base_start,
                               const Indices& adj_block_base_stop,
                               const Indices& block_base_start,
                               const Indices& block_base_stop,
-                              const Indices& region_base_start,
-                              const Indices& region_base_stop,
+                              const Indices& mega_block_base_start,
+                              const Indices& mega_block_base_stop,
                               idx_t mb_shift_num,
                               idx_t nphases, idx_t phase,
                               idx_t nshapes, idx_t shape,
-                              const BridgeMask& bridge_mask,
+                              const bit_mask_t& bridge_mask,
                               ScanIndices& idxs);
 
         // Set the bounding-box around all stencil bundles.
         void find_bounding_boxes();
 
+        // Set data needed by the kernels.
+        // Implemented by the YASK compiler-generated code.
+        virtual void set_core() =0;
+            
         // Make new scratch vars.
-        virtual void make_scratch_vars (int num_threads) =0;
-
+        // Implemented by the YASK compiler-generated code.
+        virtual void make_scratch_vars(int num_threads) =0;
+        
         // Make a new var iff its dims match any in the stencil.
         // Returns pointer to the new var or nullptr if no match.
-        virtual VarBasePtr new_stencil_var (const std::string & name,
-                                            const VarDimNames & dims) =0;
+        // Implemented by the YASK compiler-generated code.
+        virtual VarBasePtr new_stencil_var(const std::string & name,
+                                           const VarDimNames & dims) =0;
 
         // Make a new var with 'name' and 'dims'.
         // Set sizes if 'sizes' is non-null.
@@ -549,24 +607,34 @@ namespace yask {
         virtual const std::string& get_description() const {
             return long_name;
         }
+        virtual bool is_offloaded() const {
+            #if USE_OFFLOAD
+            return true;
+            #else
+            return false;
+            #endif
+        }
         virtual void set_debug_output(yask_output_ptr debug) {
             KernelStateBase::set_debug_output(debug);
         }
+        virtual void disable_debug_output() {
+            KernelStateBase::disable_debug_output();
+        }
 
         virtual int get_num_vars() const {
-            return int(var_ptrs.size());
+            return int(all_var_ptrs.size());
         }
 
         virtual yk_var_ptr get_var(const std::string& name) {
-            auto i = var_map.find(name);
-            if (i != var_map.end())
+            auto i = all_var_map.find(name);
+            if (i != all_var_map.end())
                 return i->second;
             return nullptr;
         }
         virtual std::vector<yk_var_ptr> get_vars() {
             std::vector<yk_var_ptr> vars;
-            for (int i = 0; i < get_num_vars(); i++)
-                vars.push_back(var_ptrs.at(i));
+            for (auto& vp : all_var_ptrs)
+                vars.push_back(vp);
             return vars;
         }
         virtual yk_var_ptr
@@ -589,7 +657,7 @@ namespace yask {
         virtual yk_var_ptr
         new_fixed_size_var(const std::string& name,
                              const std::initializer_list<std::string>& dims,
-                             const std::initializer_list<idx_t>& dim_sizes) {
+                             const idx_t_init_list& dim_sizes) {
             VarDimNames dims2(dims);
             VarDimSizes sizes2(dim_sizes);
             return new_fixed_size_var(name, dims2, sizes2);
@@ -601,19 +669,16 @@ namespace yask {
         }
         virtual int get_num_domain_dims() const {
             STATE_VARS_CONST(this);
-            return dims->_domain_dims._get_num_dims();
+            return dims->_domain_dims.get_num_dims();
         }
-        virtual std::vector<std::string> get_domain_dim_names() const {
+        virtual string_vec get_domain_dim_names() const {
             STATE_VARS_CONST(this);
             return domain_dims.get_dim_names();
         }
-        virtual std::vector<std::string> get_misc_dim_names() const {
+        virtual string_vec get_misc_dim_names() const {
             STATE_VARS_CONST(this);
             return misc_dims.get_dim_names();
         }
-
-        virtual idx_t get_first_rank_domain_index(const std::string& dim) const;
-        virtual idx_t get_last_rank_domain_index(const std::string& dim) const;
 
         virtual void run_solution(idx_t first_step_index,
                                   idx_t last_step_index);
@@ -623,44 +688,51 @@ namespace yask {
         virtual void fuse_vars(yk_solution_ptr other);
 
         // APIs that access settings.
-        virtual void set_overall_domain_size(const std::string& dim, idx_t size);
-        virtual void set_rank_domain_size(const std::string& dim, idx_t size);
-        virtual void set_min_pad_size(const std::string& dim, idx_t size);
-        virtual void set_block_size(const std::string& dim, idx_t size);
-        virtual void set_region_size(const std::string& dim, idx_t size);
-        virtual void set_num_ranks(const std::string& dim, idx_t size);
-        virtual void set_rank_index(const std::string& dim, idx_t size);
-        virtual idx_t get_overall_domain_size(const std::string& dim) const;
-        virtual idx_t get_rank_domain_size(const std::string& dim) const;
-        virtual idx_t get_min_pad_size(const std::string& dim) const;
-        virtual idx_t get_block_size(const std::string& dim) const;
-        virtual idx_t get_region_size(const std::string& dim) const;
-        virtual idx_t get_num_ranks(const std::string& dim) const;
-        virtual idx_t get_rank_index(const std::string& dim) const;
+        #define GET_SOLN_API(api_name) \
+            virtual idx_t get_ ## api_name (const std::string& dim) const; \
+            virtual idx_t_vec get_ ## api_name ## _vec() const;
+        #define SET_SOLN_API(api_name) \
+            virtual void set_ ## api_name (const std::string& dim, idx_t size); \
+            virtual void set_ ## api_name ## _vec(const idx_t_vec& vals); \
+            virtual void set_ ## api_name ## _vec(const idx_t_init_list& vals);
+        #define SOLN_API(api_name) \
+            GET_SOLN_API(api_name) \
+            SET_SOLN_API(api_name)
+        SOLN_API(num_ranks)
+        SOLN_API(rank_index)
+        SOLN_API(overall_domain_size)
+        SOLN_API(rank_domain_size)
+        SOLN_API(block_size)
+        SOLN_API(min_pad_size)
+        GET_SOLN_API(first_rank_domain_index)
+        GET_SOLN_API(last_rank_domain_index)
+        #undef SOLN_API
+        #undef SET_SOLN_API
+        #undef GET_SOLN_API
+
         virtual std::string apply_command_line_options(const std::string& args);
         virtual std::string apply_command_line_options(int argc, char* argv[]);
-        virtual std::string apply_command_line_options(const std::vector<std::string>& args);
+        virtual std::string apply_command_line_options(const string_vec& args);
         virtual bool get_step_wrap() const {
             STATE_VARS(this);
-            return opts->_step_wrap;
+            return actl_opts->_step_wrap;
         }
         virtual void set_step_wrap(bool do_wrap) {
             STATE_VARS(this);
-            opts->_step_wrap = do_wrap;
+            req_opts->_step_wrap = do_wrap;
+            actl_opts->_step_wrap = do_wrap;
         }
         virtual bool set_default_numa_preferred(int numa_node) {
             STATE_VARS(this);
-#ifdef USE_NUMA
-            opts->_numa_pref = numa_node;
+
+            // TODO: fix this when NUMA APIs are not available.
+            req_opts->_numa_pref = numa_node;
+            actl_opts->_numa_pref = numa_node;
             return true;
-#else
-            opts->_numa_pref = yask_numa_none;
-            return numa_node == yask_numa_none;
-#endif
         }
         virtual int get_default_numa_preferred() const {
             STATE_VARS_CONST(this);
-            return opts->_numa_pref;
+            return actl_opts->_numa_pref;
         }
         virtual void
         call_before_prepare_solution(hook_fn_t hook_fn) {
@@ -680,7 +752,9 @@ namespace yask {
         }
 
         // Auto-tuner methods.
-        virtual void eval_auto_tuner(idx_t num_steps);
+        void visit_auto_tuners(std::function<void (AutoTuner& at)> visitor);
+        void visit_auto_tuners(std::function<void (const AutoTuner& at)> visitor) const;
+        virtual void eval_auto_tuner();
 
         // Auto-tuner APIs.
         virtual void reset_auto_tuner(bool enable, bool verbose = false);

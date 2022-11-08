@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -24,6 +24,7 @@ IN THE SOFTWARE.
 *****************************************************************************/
 
 // Tests for various YASK DSL features.
+// Most tests use whole-number calculations for more robust error-checking.
 
 // YASK stencil solution(s) in this file will be integrated into the YASK compiler utility.
 #include "yask_compiler_api.hpp"
@@ -47,28 +48,29 @@ namespace {
         yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
 
         // Define some stencils in different dimensions.
-        // These will be asymmetrical if any of the '*_ext' params are not 0;
+        // The size is based on the 'radius' option.
+        // These will be asymmetrical if any of the '*_ext' params are not the same;
     
         // Define simple stencil from var 'V' at 't0' centered around 'x0'.
         // Extend given radius left and/or right w/'*_ext'.
         virtual yc_number_node_ptr def_1d(yc_var_proxy& V, const yc_number_node_ptr& t0, const yc_number_node_ptr& x0,
                                           int left_ext, int right_ext) {
+            auto r = get_radius();
             yc_number_node_ptr v;
-            int n = 0;
-            for (int i = -get_radius() - left_ext; i <= get_radius() + right_ext; i++, n++)
+            for (int i = -r - left_ext; i <= r + right_ext; i++)
                 v += V(t0, x0+i);
-            return v / n;
+            return v;
         }
 
         // Define simple stencil from scratch or read-only var 'V' centered
         // around 'x0'.  Similar to 'def_1d()', but doesn't use step var.
         virtual yc_number_node_ptr def_no_t_1d(yc_var_proxy& V, const yc_number_node_ptr& x0,
                                                int left_ext, int right_ext) {
+            auto r = get_radius();
             yc_number_node_ptr v;
-            int n = 0;
-            for (int i = -get_radius() - left_ext; i <= get_radius() + right_ext; i++, n++)
+            for (int i = -r - left_ext; i <= r + right_ext; i++)
                 v += V(x0+i);
-            return v / n;
+            return v;
         }
 
         // Define simple stencil from var 'V' at 't0' centered around 'x0', 'y0'.
@@ -79,14 +81,12 @@ namespace {
                                           int x_left_ext, int x_right_ext,
                                           const yc_number_node_ptr& y0,
                                           int y_left_ext, int y_right_ext) {
+            auto r = get_radius();
             yc_number_node_ptr v;
-            int n = 0;
-            for (int i : { -get_radius() - x_left_ext, 0, get_radius() + x_right_ext })
-                for (int j : { -get_radius() - y_left_ext, 0, get_radius() + y_right_ext }) {
+            for (int i : { -r - x_left_ext, 0, r + x_right_ext })
+                for (int j : { -r - y_left_ext, 0, r + y_right_ext })
                     v += V(t0, x0+i, y0+j);
-                    n++;
-                }
-            return v / n;
+            return v;
         }    
 
         // Define simple stencil from scratch or read-only var 'V' at 't0'
@@ -97,14 +97,12 @@ namespace {
                                                int x_left_ext, int x_right_ext,
                                                const yc_number_node_ptr& y0,
                                                int y_left_ext, int y_right_ext) {
+            auto r = get_radius();
             yc_number_node_ptr v;
-            int n = 0;
-            for (int i : { -get_radius() - x_left_ext, 0, get_radius() + x_right_ext })
-                for (int j : { -get_radius() - y_left_ext, 0, get_radius() + y_right_ext }) {
+            for (int i : { -r - x_left_ext, 0, r + x_right_ext })
+                for (int j : { -r - y_left_ext, 0, r + y_right_ext })
                     v += V(x0+i, y0+j);
-                    n++;
-                }
-            return v / n;
+            return v;
         }    
 
         // Define simple stencil from var 'V' at 't0' centered around 'x0', 'y0', 'z0'.
@@ -117,15 +115,13 @@ namespace {
                                           int y_left_ext, int y_right_ext,
                                           const yc_number_node_ptr& z0,
                                           int z_left_ext, int z_right_ext) {
-            yc_number_node_ptr v;
-            int n = 0;
-            for (int i : { -get_radius() - x_left_ext, 0, get_radius() + x_right_ext })
-                for (int j : { -get_radius() - y_left_ext, 0, get_radius() + y_right_ext })
-                    for (int k : { -get_radius() - z_left_ext, 0, get_radius() + z_right_ext }) {
+            auto r = get_radius();
+            yc_number_node_ptr v = V(t0, x0, y0, z0);
+            for (int i : { -r - x_left_ext, r + x_right_ext })
+                for (int j : { -r - y_left_ext, r + y_right_ext })
+                    for (int k : { -r - z_left_ext, r + z_right_ext })
                         v += V(t0, x0+i, y0+j, z0+k);
-                        n++;
-                    }
-            return v / n;
+            return v;
         }
 
         // Define simple stencil from scratch or read-only var 'V' centered
@@ -138,15 +134,13 @@ namespace {
                                                int y_left_ext, int y_right_ext,
                                                const yc_number_node_ptr& z0,
                                                int z_left_ext, int z_right_ext) {
-            yc_number_node_ptr v;
-            int n = 0;
-            for (int i : { -get_radius() - x_left_ext, 0, get_radius() + x_right_ext })
-                for (int j : { -get_radius() - y_left_ext, 0, get_radius() + y_right_ext })
-                    for (int k : { -get_radius() - z_left_ext, 0, get_radius() + z_right_ext }) {
+            auto r = get_radius();
+            yc_number_node_ptr v = V(x0, y0, z0);
+            for (int i : { -r - x_left_ext, r + x_right_ext })
+                for (int j : { -r - y_left_ext, r + y_right_ext })
+                    for (int k : { -r - z_left_ext, r + z_right_ext })
                         v += V(x0+i, y0+j, z0+k);
-                        n++;
-                    }
-            return v / n;
+            return v;
         }    
 
         // Define simple stencil from var 'V' at 't0' centered around 'w0', 'x0', 'y0', 'z0'.
@@ -161,16 +155,14 @@ namespace {
                                           int y_left_ext, int y_right_ext,
                                           const yc_number_node_ptr& z0,
                                           int z_left_ext, int z_right_ext) {
-            yc_number_node_ptr v;
-            int n = 0;
-            for (int h : { -get_radius() - w_left_ext, 0, get_radius() + w_right_ext })
-                for (int i : { -get_radius() - x_left_ext, 0, get_radius() + x_right_ext })
-                    for (int j : { -get_radius() - y_left_ext, 0, get_radius() + y_right_ext })
-                        for (int k : { -get_radius() - z_left_ext, 0, get_radius() + z_right_ext }) {
+            auto r = get_radius();
+            yc_number_node_ptr v = V(t0, w0, x0, y0, z0);
+            for (int h : { -r - w_left_ext, r + w_right_ext })
+                for (int i : { -r - x_left_ext, r + x_right_ext })
+                    for (int j : { -r - y_left_ext, r + y_right_ext })
+                        for (int k : { -r - z_left_ext, r + z_right_ext })
                             v += V(t0, w0+h, x0+i, y0+j, z0+k);
-                            n++;
-                        }
-            return v / n;
+            return v;
         }    
 
     public:
@@ -340,7 +332,10 @@ namespace {
     
         // Time-varying var. Intermix last domain dim with misc dims to make
         // sure compiler creates correct layout.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, a, y, b, c }); 
+        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, a, y, b, c });
+
+        // Misc-only var.
+        yc_var_proxy B = yc_var_proxy("B", get_soln(), { c, b });
 
     public:
 
@@ -352,16 +347,17 @@ namespace {
 
             // Define the value at t+1 using asymmetric stencil
             // with various pos & neg indices in misc dims.
-            yc_number_node_ptr v = A(t, x, 0, y, -1, 2) + 1.0;
-            for (int r = 1; r <= get_radius(); r++)
-                v += A(t, x + r, 3, y, 0, 1);
-            for (int r = 1; r <= get_radius() + 1; r++)
-                v += A(t, x - r, 4, y, 2, 1);
-            for (int r = 1; r <= get_radius() + 2; r++)
-                v += A(t, x, -2, y + r, 2, 0);
-            for (int r = 1; r <= get_radius() + 3; r++)
-                v += A(t, x, 0, y - r, 0, -1);
-            A(t+1, x, 1, y, 2, 3) EQUALS v;
+            auto r = get_radius();
+            yc_number_node_ptr v = A(t, x, 0, y, 1, 2) + 1.0;
+            for (int i = 1; i <= r; i++)
+                v += A(t, x + i, 3, y,     0, 3);
+            for (int i = 1; i <= r + 1; i++)
+                v += A(t, x - i, 4, y,     2, 2);
+            for (int i = 1; i <= r + 2; i++)
+                v += A(t, x,    -2, y + i, 2, 2);
+            for (int i = 1; i <= r + 3; i++)
+                v += A(t, x,     0, y - i, 0, 3);
+            A(t+1, x, 1, y, 2, 3) EQUALS v + B(-2, 3) - B(4, -2);
         }
     };
 
@@ -370,14 +366,86 @@ namespace {
     // '-stencil' commmand-line option or the 'stencil=' build option.
     static TestMisc2dStencil TestMisc2dStencil_instance;
 
-
-    // A "stream-like" stencil that just reads and writes
+    // "Stream-like" stencils that just read and write
     // with no spatial offsets.
     // The radius controls how many reads are done in the time domain.
     // Running with radius=2 should give performance comparable to
     // (but not identical to) the stream 'triad' benchmark.
+    class StreamStencil1 : public yc_solution_with_radius_base {
 
-    class StreamStencil : public yc_solution_with_radius_base {
+    protected:
+
+        // Indices & dimensions.
+        yc_index_node_ptr t = new_step_index("t");           // step in time dim.
+        yc_index_node_ptr x = new_domain_index("x");         // spatial dim.
+
+        // Vars.
+        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x }); // time-varying 3D var.
+
+    public:
+
+        StreamStencil1(int radius=2) :
+            yc_solution_with_radius_base("test_stream_1d", radius) { }
+        virtual ~StreamStencil1() { }
+
+        // Define equation to read 'get_radius()' values and write one.
+        virtual void define() {
+
+            yc_number_node_ptr v;
+
+            // Add 'get_radius()' values from past time-steps.
+            for (int r = 0; r < get_radius(); r++)
+                v += A(t-r, x);
+
+            // define the value at t+1 to be equivalent to v + 1.
+            A(t+1, x) EQUALS v + 1;
+        }
+    };
+
+    // Create an object of type 'StreamStencil1',
+    // making it available in the YASK compiler utility via the
+    // '-stencil' commmand-line option or the 'stencil=' build option.
+    static StreamStencil1 StreamStencil1_instance;
+
+    class StreamStencil2 : public yc_solution_with_radius_base {
+
+    protected:
+
+        // Indices & dimensions.
+        yc_index_node_ptr t = new_step_index("t");           // step in time dim.
+        yc_index_node_ptr x = new_domain_index("x");         // spatial dim.
+        yc_index_node_ptr y = new_domain_index("y");         // spatial dim.
+
+        // Vars.
+        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y }); // time-varying 3D var.
+
+    public:
+
+        StreamStencil2(int radius=2) :
+            yc_solution_with_radius_base("test_stream_2d", radius) { }
+        virtual ~StreamStencil2() { }
+
+        // Define equation to read 'get_radius()' values and write one.
+        virtual void define() {
+
+            yc_number_node_ptr v;
+
+            // Add 'get_radius()' values from past time-steps.
+            for (int r = 0; r < get_radius(); r++)
+                v += A(t-r, x, y);
+
+            // define the value at t+1 to be equivalent to v + 1.
+            A(t+1, x, y) EQUALS v + 1;
+        }
+    };
+
+    // Create an object of type 'StreamStencil2',
+    // making it available in the YASK compiler utility via the
+    // '-stencil' commmand-line option or the 'stencil=' build option.
+    static StreamStencil2 StreamStencil2_instance;
+
+
+    class StreamStencil3 : public yc_solution_with_radius_base {
 
     protected:
 
@@ -392,9 +460,9 @@ namespace {
 
     public:
 
-        StreamStencil(int radius=2) :
+        StreamStencil3(int radius=2) :
             yc_solution_with_radius_base("test_stream_3d", radius) { }
-        virtual ~StreamStencil() { }
+        virtual ~StreamStencil3() { }
 
         // Define equation to read 'get_radius()' values and write one.
         virtual void define() {
@@ -410,14 +478,13 @@ namespace {
         }
     };
 
-    // Create an object of type 'StreamStencil',
+    // Create an object of type 'StreamStencil3',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static StreamStencil StreamStencil_instance;
+    static StreamStencil3 StreamStencil3_instance;
 
     // Reverse-time stencil.
     // In this test, A(t-1) depends on A(t).
-
     class TestReverseStencil : public TestBase {
 
     protected:
@@ -444,15 +511,16 @@ namespace {
     static TestReverseStencil TestReverseStencil_instance;
 
     // Test dependent equations.
-    // These will create 2 stages that will be applied in sequence
+    // These will create >= 2 stages that will be applied in sequence
     // for each time-step.
     class TestDepStencil1 : public TestBase {
 
     protected:
 
         // Vars.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x }); // time-varying var.
-        yc_var_proxy B = yc_var_proxy("B", get_soln(), { t, x }); // time-varying var.
+        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x });
+        yc_var_proxy B = yc_var_proxy("B", get_soln(), { t, x });
+        yc_var_proxy C = yc_var_proxy("C", get_soln(), { t, x });
 
     public:
 
@@ -462,11 +530,12 @@ namespace {
         // Define equation to apply to all points in 'A' and 'B' vars.
         virtual void define() {
 
-            // Define A(t+1) from A(t) & stencil at B(t).
-            A(t+1, x) EQUALS A(t, x) - def_1d(B, t, x, 0, 1);
+            // Define A(t+1) and B(t+1).
+            A(t+1, x) EQUALS -2 * A(t, x);
+            B(t+1, x) EQUALS def_1d(B, t, x, 0, 1);
 
-            // Define B(t+1) from B(t) & stencil at A(t+1).
-            B(t+1, x) EQUALS B(t, x) - def_1d(A, t+1, x, 3, 2);
+            // 'C(t+1)' depends on 'A(t+1)', creating a 2nd stage.
+            C(t+1, x) EQUALS def_1d(A, t+1, x, 1, 0) + C(t, x+1);
         }
     };
 
@@ -482,6 +551,7 @@ namespace {
         // Vars.
         yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y }); // time-varying var.
         yc_var_proxy B = yc_var_proxy("B", get_soln(), { t, x, y }); // time-varying var.
+        yc_var_proxy C = yc_var_proxy("C", get_soln(), { t, x, y }); // time-varying var.
 
     public:
 
@@ -491,11 +561,14 @@ namespace {
         // Define equation to apply to all points in 'A' and 'B' vars.
         virtual void define() {
 
-            // Define A(t+1) from A(t) & stencil at B(t).
+            // Define A(t+1) from A(t) & B(t).
             A(t+1, x, y) EQUALS A(t, x, y) - def_2d(B, t, x, 0, 1, y, 2, 1);
 
-            // Define B(t+1) from B(t) & stencil at A(t+1).
+            // Define B(t+1) from B(t) & A(t+1), creating a 2nd stage.
             B(t+1, x, y) EQUALS B(t, x, y) - def_2d(A, t+1, x, 3, 2, y, 0, 1);
+
+            // Define C(t+1) from B(t+1), creating a 3rd stage.
+            C(t+1, x, y) EQUALS B(t+1, x-1, y+2);
         }
     };
 
@@ -555,7 +628,7 @@ namespace {
         // Define equation to apply to all points in 'A' var.
         virtual void define() {
 
-            // Define values in scratch var 'B'.
+            // Define values in scratch var 'B' based on 'A'.
             B(x) EQUALS def_1d(A, t, x, 1, 0);
 
             // Set 'A' from scratch var values.
@@ -567,6 +640,43 @@ namespace {
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
     static TestScratchStencil1 TestScratchStencil1_instance;
+
+    class TestScratchStencil2 : public TestBase {
+
+    protected:
+
+        // Vars.
+        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y }); // time-varying var.
+
+        // Temporary storage.
+        yc_var_proxy t1 = yc_var_proxy("t1", get_soln(), { x, y }, true);
+        yc_var_proxy t2 = yc_var_proxy("t2", get_soln(), { x, y }, true);
+
+    public:
+
+        TestScratchStencil2(int radius=2) :
+            TestBase("test_scratch_2d", radius) { }
+
+        // Define equation to apply to all points in 'A' var.
+        virtual void define() {
+
+            // Set scratch var.
+            t1(x, y) EQUALS def_2d(A, t, x, 0, 1, y, 2, 1);
+
+            // Set one scratch var from other scratch var.
+            t2(x, y) EQUALS t1(x, y+1);
+
+            // Update A from scratch vars.
+            A(t+1, x, y) EQUALS A(t, x, y) +
+                def_no_t_2d(t1, x, 2, 0, y, 1, 0) +
+                def_no_t_2d(t2, x, 1, 0, y, 0, 1);
+        }
+    };
+
+    // Create an object of type 'TestScratchStencil2',
+    // making it available in the YASK compiler utility via the
+    // '-stencil' commmand-line option or the 'stencil=' build option.
+    static TestScratchStencil2 TestScratchStencil2_instance;
 
     class TestScratchStencil3 : public TestBase {
 
@@ -723,10 +833,10 @@ namespace {
         // Define equation to apply to all points in 'A' var.
         virtual void define() {
 
-            // Time condition.
+            // Step condition based on step value.
             auto tc0 = (t % 2 == 0);
 
-            // Var condition.
+            // Step condition based on misc-var contents.
             auto vc0 = (B(0) > B(1));
         
             // Set A w/different stencils depending on the conditions.  It is
@@ -787,7 +897,9 @@ namespace {
     // '-stencil' commmand-line option or the 'stencil=' build option.
     static TestScratchBoundaryStencil1 TestScratchBoundaryStencil1_instance;
 
-    // A stencil that uses svml math functions.
+    // A stencil that uses math functions.
+    // This stencil is an exception to the integer-result calculations
+    // used in most test stencils.
     class TestFuncStencil1 : public TestBase {
 
     protected:
@@ -803,8 +915,12 @@ namespace {
             TestBase("test_func_1d", radius) { }
 
         virtual void define() {
+
+            // Define 'A(t+1)' and 'B(t+1)' based on values at 't'.
             A(t+1, x) EQUALS cos(A(t, x)) - 2 * sin(A(t, x));
             B(t+1, x) EQUALS pow(def_1d(B, t, x, 0, 1), 1.0/2.5);
+
+            // 'C(t+1)' depends on 'A(t+1)', creating a 2nd stage.
             C(t+1, x) EQUALS atan(def_1d(A, t+1, x, 1, 0) + cbrt(C(t, x+1)));
         }
     };
@@ -813,6 +929,25 @@ namespace {
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
     static TestFuncStencil1 TestFuncStencil1_instance;
+
+    // A stencil that no vars and no stencil equation.
+    // Kernel must be built with domain_dims and step_dim options.
+    class TestEmptyStencil0: public TestBase {
+
+    protected:
+
+    public:
+
+        TestEmptyStencil0(int radius=1) :
+            TestBase("test_empty", radius) { }
+
+        virtual void define() { }
+    };
+
+    // Create an object of type 'TestEmptyStencil0',
+    // making it available in the YASK compiler utility via the
+    // '-stencil' commmand-line option or the 'stencil=' build option.
+    static TestEmptyStencil0 TestEmptyStencil0_instance;
 
     // A stencil that has vars but no stencil equation.
     class TestEmptyStencil2 : public TestBase {
@@ -834,24 +969,5 @@ namespace {
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
     static TestEmptyStencil2 TestEmptyStencil2_instance;
-
-    // A stencil that no vars and no stencil equation.
-    // Kernel must be built with domain_dims and step_dim options.
-    class TestEmptyStencil0: public TestBase {
-
-    protected:
-
-    public:
-
-        TestEmptyStencil0(int radius=1) :
-            TestBase("test_empty", radius) { }
-
-        virtual void define() { }
-    };
-
-    // Create an object of type 'TestEmptyStencil0',
-    // making it available in the YASK compiler utility via the
-    // '-stencil' commmand-line option or the 'stencil=' build option.
-    static TestEmptyStencil0 TestEmptyStencil0_instance;
 
 } // namespace.

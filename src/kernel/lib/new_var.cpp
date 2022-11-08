@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -98,8 +98,12 @@ namespace yask {
             }
 
             // Scalar?
-            if (ndims == 0)
-                gp = make_shared<YkElemVar<Layout_0d, false>>(*this, name, gdims);
+            if (ndims == 0) {
+                //gp = make_shared<YkElemVar<Layout_0d, false>>(*this, name, gdims);
+                typedef YkElemVar<Layout_0d, false> scalar_t;
+                gp = allocate_shared<scalar_t>(yask_allocator<scalar_t>(),
+                                               *this, name, gdims);
+            }
 
             // Include auto-gen code for all other cases.
 #include "yask_var_code.hpp"
@@ -142,8 +146,8 @@ namespace yask {
                 // Pads.
                 // Set via both 'extra' and 'min'; larger result will be used.
                 if (domain_dims.lookup(gdim)) {
-                    ygp->set_extra_pad_size(i, opts->_extra_pad_sizes[gdim]);
-                    ygp->set_min_pad_size(i, opts->_min_pad_sizes[gdim]);
+                    ygp->update_extra_pad_size(i, actl_opts->_extra_pad_sizes[gdim]);
+                    ygp->update_min_pad_size(i, actl_opts->_min_pad_sizes[gdim]);
                 }
 
                 // Offsets.

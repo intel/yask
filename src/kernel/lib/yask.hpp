@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -44,6 +44,7 @@ typedef int MPI_Comm;
 typedef int MPI_Win;
 typedef int MPI_Group;
 typedef int MPI_Request;
+typedef int MPI_Status;
 #define MPI_PROC_NULL     (-1)
 #define MPI_COMM_NULL     ((MPI_Comm)0x04000000)
 #define MPI_REQUEST_NULL  ((MPI_Request)0x2c000000)
@@ -66,38 +67,28 @@ typedef int MPI_Request;
 #include <functional>
 #include <initializer_list>
 #include <iostream>
-#include <limits.h>
-#include <malloc.h>
+#include <vector>
 #include <map>
 #include <unordered_map>
 #include <set>
 #include <sstream>
-#include <stddef.h>
 #include <stdexcept>
+#include <malloc.h>
+#include <stddef.h>
+#include <time.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <string>
-#include <time.h>
-#include <vector>
 #include <unistd.h>
 #include <stdint.h>
 #include <immintrin.h>
 #include <sys/mman.h>
-#ifdef USE_PMEM
-#include <memkind.h>
-#include <sys/syscall.h>
-#endif
 
-// Conditional inlining
-#if defined(USE_ALWAYS_INLINE) && !defined(CHECK)
-#define ALWAYS_INLINE __attribute__((always_inline)) inline
-#else
-#define ALWAYS_INLINE inline
-#endif
-
-// Additional type for unsigned indices.
+// Type for unsigned indices.
 typedef std::uint64_t uidx_t;
+
+// Type for bitmasks.
+typedef std::uint64_t bit_mask_t;
 
 // Common utilities.
 #include "common_utils.hpp"
@@ -110,27 +101,78 @@ typedef std::uint64_t uidx_t;
 
 // Simple macros and stubs.
 
-#ifndef NO_VEC
+// OMP offload (cannot be in offload.hpp because it's needed earlier).
+#ifdef USE_OFFLOAD
+#ifndef _OPENMP
+#error Offload enabled without OpenMP enabled
+#endif
+
+#ifdef USE_OFFLOAD_USM
+#pragma omp requires unified_shared_memory
+#else
+#define USE_OFFLOAD_NO_USM
+#endif
+
+#define OMP_DECL_TARGET  _Pragma("omp declare target")
+#define OMP_END_DECL_TARGET _Pragma("omp end declare target")
+
+#else
+#define OMP_DECL_TARGET
+#define OMP_END_DECL_TARGET
+
+#endif
+
+// Conditional inlining
+#if !defined(NO_INLINE) && !defined(CHECK)
+#ifndef ALWAYS_INLINE
+#define ALWAYS_INLINE __attribute__((always_inline)) inline
+#endif
+#ifndef FORCE_INLINE
+#define FORCE_INLINE _Pragma("forceinline")
+#endif
+#ifndef FORCE_INLINE_RECURSIVE
+#define FORCE_INLINE_RECURSIVE _Pragma("forceinline recursive")
+#endif
+
+#else
+#ifndef ALWAYS_INLINE
+#define ALWAYS_INLINE inline
+#endif
+#ifndef FORCE_INLINE
+#define FORCE_INLINE
+#endif
+#ifndef FORCE_INLINE_RECURSIVE
+#define FORCE_INLINE_RECURSIVE
+#endif
+#endif
+
+// Vector pragmas supported by classic and LLVM-based Intel compilers.
+#ifndef NO_PRAGMA_VEC1
 #define _NO_VECTOR _Pragma("novector")
-#define _VEC_ALIGNED _Pragma("vector aligned")
-#define _VEC_UNALIGNED _Pragma("vector unaligned")
 #define _VEC_ALWAYS _Pragma("vector always")
+#define _VEC_ALIGNED _Pragma("vector aligned")
 #define _VEC_STREAMING _Pragma("vector nontemporal")
 #else
 #define _NO_VECTOR
-#define _VEC_ALIGNED
-#define _VEC_UNALIGNED
 #define _VEC_ALWAYS
+#define _VEC_ALIGNED
 #define _VEC_STREAMING
 #endif
 
-#ifndef NO_SIMD
+// Vector pragmas supported by classic but not LLVM-based Intel compiler.
+#ifndef NO_PRAGMA_VEC2
+#define _VEC_UNALIGNED _Pragma("vector unaligned")
+#else
+#define _VEC_UNALIGNED
+#endif
+
+#ifndef NO_PRAGMA_SIMD
 #define _SIMD _Pragma("omp simd")
 #else
 #define _SIMD
 #endif
 
-#ifndef NO_UNROLL
+#ifndef NO_PRAGMA_UNROLL
 #define _UNROLL _Pragma("unroll")
 #else
 #define _UNROLL
@@ -142,18 +184,17 @@ typedef std::uint64_t uidx_t;
 #endif
 
 // VTune or stubs.
+// https://www.intel.com/content/www/us/en/develop/documentation/vtune-help/top/api-support/instrumentation-and-tracing-technology-apis/instrumentation-tracing-technology-api-reference/collection-control-api.html
 #ifdef USE_VTUNE
 #include "ittnotify.h"
 #define VTUNE_PAUSE  __itt_pause()
 #define VTUNE_RESUME __itt_resume()
+#define VTUNE_DETACH __itt_detach()
 #else
 #define VTUNE_PAUSE ((void)0)
 #define VTUNE_RESUME ((void)0)
+#define VTUNE_DETACH ((void)0)
 #endif
-
-// Stringizing hacks for the C preprocessor.
-#define YSTR1(s) #s
-#define YSTR2(s) YSTR1(s)
 
 // Default alloc settings.
 #define CACHELINE_BYTES  (64)
@@ -161,7 +202,10 @@ typedef std::uint64_t uidx_t;
 #define YASK_PAD_BYTES (CACHELINE_BYTES * YASK_PAD)
 #define YASK_HUGE_ALIGNMENT (2 * 1024 * 1024) // 2MiB-page for large allocs.
 #define CACHE_ALIGNED __attribute__ ((aligned (CACHELINE_BYTES)))
-#ifndef USE_NUMA
+#ifdef USE_OFFLOAD
+#undef NUMA_PREF
+#define NUMA_PREF yask_numa_offload
+#elif !defined USE_NUMA
 #undef NUMA_PREF
 #define NUMA_PREF yask_numa_none
 #elif !defined NUMA_PREF
@@ -178,49 +222,68 @@ typedef std::uint64_t uidx_t;
         KernelEnv::unset_debug_lock();                      \
     } while(0)
 
-// 'state' is a pointer to a KernelState.
-#define DEBUG_MSG1(state, msg) do {                            \
-    if (state->_env->_debug.get()) {                           \
-        auto& os = state->_env->_debug.get()->get_ostream();   \
-        DEBUG_MSG0(os, msg);                                   \
-    } } while(0)
-
-// Macro for debug message when 'state' is defined.
-#define DEBUG_MSG(msg) DEBUG_MSG1(state, msg)
+#define DEBUG_MSG(msg) do {                                             \
+        auto dbg = yk_env::get_debug_output();                          \
+        auto& os = dbg.get()->get_ostream();                            \
+        DEBUG_MSG0(os, msg);                                            \
+    } while(0)
 
 // Macro for trace message.
 // Enabled only if compiled with TRACE macro and run with -trace option.
 #ifdef TRACE
-
-// 'os is an ostream.
-#define TRACE_MSG0(os, msg) do {                            \
-        if (state->_env->_trace) {                          \
-            DEBUG_MSG0(os, "YASK: " << msg);                \
-        } } while(0)
-
-// 'state' is a pointer to a KernelState.
-#define TRACE_MSG1(state, msg) do {                         \
-        if (state->_env->_trace) {                          \
-            DEBUG_MSG1(state, "YASK: " << msg);             \
+#ifdef TRACE_FULL_FN
+# if defined __cplusplus ? __GNUC_PREREQ (2, 6) : __GNUC_PREREQ (2, 4)
+#   define __TRACE_FN	__PRETTY_FUNCTION__
+# else
+#   define __TRACE_FN	" unknown function"
+# endif
+#else
+# define __TRACE_FN __func__
+#endif
+#define TRACE_MSG(msg) do {                                             \
+        if (KernelEnv::_trace) {                                        \
+            std::string fname(__FILE__);                                \
+            const auto last_slash_idx = fname.find_last_of("/");        \
+            if (std::string::npos != last_slash_idx)                    \
+                fname.erase(0, last_slash_idx + 1);                     \
+            DEBUG_MSG("YASK: " << __TRACE_FN << ": " << msg <<          \
+                      " at " << fname << ":" << __LINE__);              \
         } } while(0)
 #else
-#define TRACE_MSG0(os, msg) ((void)0)
-#define TRACE_MSG1(state, msg) ((void)0)
+#define TRACE_MSG(msg) ((void)0)
 #endif
 
-// Macro for trace message when 'state' is defined.
-#define TRACE_MSG(msg) TRACE_MSG1(state, msg)
-
-// Macro for mem-trace when 'state' is defined.
+// Macro for mem-trace.
 // Enabled only if compiled with TRACE_MEM macro and run with -trace option.
 #ifdef TRACE_MEM
-#define TRACE_MEM_MSG(msg) TRACE_MSG1(state, msg)
+#define TRACE_MEM_MSG(msg) TRACE_MSG(msg)
 #else
 #define TRACE_MEM_MSG(msg) ((void)0)
 #endif
 
-// breakpoint.
+// Debug breakpoint.
 #define INT3 asm volatile("int $3")
+
+// SSC marks for emulator instrumentation.
+#define TRACING_SSC_MARK( MARK_ID )     \
+        __asm__ __volatile__ (          \
+        "\n\t  movl $"#MARK_ID", %%ebx" \
+        "\n\t  .byte 0x64, 0x67, 0x90"  \
+        : : : "%ebx" );
+namespace yask {
+    inline void ssc_start()
+    {
+        asm volatile ("push %rbx");
+        TRACING_SSC_MARK(111);
+        asm volatile ("pop %rbx");
+    }
+    inline void ssc_stop()
+    {
+        asm volatile ("push %rbx");
+        TRACING_SSC_MARK(222);
+        asm volatile ("pop %rbx");
+    }
+};
 
 // L1 and L2 hints
 #define L1_HINT _MM_HINT_T0
@@ -242,5 +305,4 @@ extern yask::Cache cache_model;
 // Other utilities.
 #include "utils.hpp"
 #include "tuple.hpp"
-
 

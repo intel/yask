@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -35,35 +35,26 @@ Cache cache_model(MODEL_CACHE);
 namespace yask {
 
     // Timer.
-    void YaskTimer::start(TimeSpec* ts) {
+    void YaskTimer::start(const TimeSpec& ts) {
 
         // Make sure timer was stopped.
         assert(_begin.tv_sec == 0);
         assert(_begin.tv_nsec == 0);
 
-        if (ts)
-            _begin = *ts;
-        else {
-            auto cts = get_timespec();
-            _begin = cts;
-        }
+        _begin = ts;
     }
-    double YaskTimer::stop(TimeSpec* ts) {
-        TimeSpec end, delta;
-        if (ts)
-            end = *ts;
-        else {
-            auto cts = get_timespec();
-            end = cts;
-        }
+    double YaskTimer::stop(const TimeSpec& ts) {
 
         // Make sure timer was started.
         assert(_begin.tv_sec != 0);
 
+        TimeSpec end = ts;
+        
         // Make sure time is going forward.
         assert(end.tv_sec >= _begin.tv_sec);
 
         // Elapsed time is just end - begin times.
+        TimeSpec delta;
         delta.tv_sec = end.tv_sec - _begin.tv_sec;
         _elapsed.tv_sec += delta.tv_sec;
 
@@ -93,270 +84,8 @@ namespace yask {
         return double(delta.tv_sec) + double(delta.tv_nsec) * 1e-9;
     }
 
-    // Aligned allocation.
-    char* yask_aligned_alloc(std::size_t nbytes) {
-
-        // Alignment to use based on size.
-        const size_t _def_alignment = CACHELINE_BYTES;
-        const size_t _def_big_alignment = YASK_HUGE_ALIGNMENT;
-        size_t align = (nbytes >= _def_big_alignment) ?
-            _def_big_alignment : _def_alignment;
-        void *p = 0;
-
-        // Some envs have posix_memalign(), some have aligned_alloc().
-#if _POSIX_C_SOURCE >= 200112L || _XOPEN_SOURCE >= 600
-        int ret = posix_memalign(&p, align, nbytes);
-        if (ret) p = 0;
-#else
-        p = aligned_alloc(align, nbytes);
-#endif
-
-        if (!p)
-            THROW_YASK_EXCEPTION("error: cannot allocate " + make_byte_str(nbytes) +
-                                 " aligned to " + make_byte_str(align));
-        return static_cast<char*>(p);
-    }
-
-#ifdef USE_PMEM
-    static int pmem_tmpfile(const char *dir, size_t size, int *fd, void **addr)
-    {
-        static char tmpl[] = "/appdirect_mem_xxxxxx";
-        int err = 0;
-
-        char fullname[strlen(dir) + sizeof (tmpl)];
-        (void) strcpy(fullname, dir);
-        (void) strcat(fullname, tmpl);
-
-        if ((*fd = mkstemp(fullname)) < 0) {
-            perror("mkstemp()");
-            err = MEMKIND_ERROR_RUNTIME;
-            THROW_YASK_EXCEPTION("Error: MEMKIND_ERROR_RUNTIME - mkstemp()\n");
-        }
-
-        (void) unlink(dir);
-
-        if (ftruncate(*fd, size) != 0) {
-            err = MEMKIND_ERROR_RUNTIME;
-            THROW_YASK_EXCEPTION("Error: MEMKIND_ERROR_RUNTIME - ftruncate()\n");
-        }
-
-        *addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *fd, 0);
-        if (*addr == MAP_FAILED) {
-            err = MEMKIND_ERROR_RUNTIME;
-            THROW_YASK_EXCEPTION("Error: MEMKIND_ERROR_RUNTIME - mmap()\n");
-        }
-
-        return err;
-    }
-#endif
-
-    // NUMA allocation.
-    // 'numa_pref' == yask_numa_none: use default aligned alloc.
-    // 'numa_pref' >= 0: preferred NUMA node.
-    // 'numa_pref' < 0: use NUMA policy corresponding to value.
-    // TODO: get rid of magic-number scheme.
-    char* numa_alloc(std::size_t nbytes, int numa_pref) {
-
-        void *p = 0;
-
-        if (numa_pref == yask_numa_none)
-            return yask_aligned_alloc(nbytes);
-
-#ifdef USE_NUMA
-
-        // Should we use the numa policy library?
-#ifdef USE_NUMA_POLICY_LIB
-#pragma omp single
-        else if (numa_available() != -1) {
-            numa_set_bind_policy(0);
-            if (numa_pref >= 0 && numa_pref <= numa_max_node())
-                numa_alloc_onnode(nbytes, numa_pref);
-            else
-                numa_alloc_local(nbytes);
-            // Interleaved not available.
-        }
-        else
-            THROW_YASK_EXCEPTION("Error: explicit NUMA policy allocation is not available");
-
-        // Use mmap/mbind explicitly.
-#else
-        else if (get_mempolicy(NULL, NULL, 0, 0, 0) == 0) {
-
-            // Set mmap flags.
-            int mmprot = PROT_READ | PROT_WRITE;
-            int mmflags = MAP_PRIVATE | MAP_ANONYMOUS;
-
-            // Get an anonymous R/W memory map.
-            p = mmap(0, nbytes, mmprot, mmflags, -1, 0);
-
-            // If successful, apply the desired binding.
-            if (p && p != MAP_FAILED) {
-                if (numa_pref >= 0) {
-
-                    // Prefer given node.
-                    unsigned long nodemask = 0x1UL << numa_pref;
-                    mbind(p, nbytes, MPOL_PREFERRED, &nodemask, sizeof(nodemask) * 8, 0);
-                }
-                else if (numa_pref == yask_numa_interleave) {
-
-                    // Use all nodes.
-                    unsigned long nodemask = (unsigned long)-1;
-                    mbind(p, nbytes, MPOL_INTERLEAVE, &nodemask, sizeof(nodemask) * 8, 0);
-                }
-
-                else{
-
-                    // Use local node.
-                    // MPOL_LOCAL was defined in Linux 3.8, so use
-                    // MPOL_DEFAULT as backup on old systems.
-#ifdef MPOL_LOCAL
-                    mbind(p, nbytes, MPOL_LOCAL, 0, 0, 0);
-#else
-                    mbind(p, nbytes, MPOL_DEFAULT, 0, 0, 0);
-#endif
-                }
-            }
-            else
-                THROW_YASK_EXCEPTION("Error: anonymous mmap of " + make_byte_str(nbytes) +
-                                     " failed");
-        }
-        else
-            THROW_YASK_EXCEPTION("Error: explicit NUMA policy allocation is not available");
-
-#endif // not USE_NUMA_POLICY_LIB.
-
-#else
-        THROW_YASK_EXCEPTION("Error: NUMA allocation is not enabled; build with numa=1");
-#endif // USE_NUMA.
-
-        // Should not get here w/null p; throw exception.
-        if (!p)
-            THROW_YASK_EXCEPTION("Error: cannot allocate " + make_byte_str(nbytes) +
-                                 " using numa-node (or policy) " + to_string(numa_pref));
-
-        // Check alignment.
-        if ((size_t(p) & (CACHELINE_BYTES - 1)) != 0)
-            FORMAT_AND_THROW_YASK_EXCEPTION("Error: NUMA-allocated " << p << " is not " <<
-                                            CACHELINE_BYTES << "-byte aligned");
-
-        // Return as a char* as required for shared_ptr ctor.
-        return static_cast<char*>(p);
-    }
-
-    // Reverse numa_alloc().
-    void NumaDeleter::operator()(char* p) {
-
-        if (p && _numa_pref == yask_numa_none) {
-            free(p);
-            p = NULL;
-        }
-
-#ifdef USE_NUMA
-#ifdef USE_NUMA_POLICY_LIB
-        if (p && numa_available() != -1) {
-            numa_free(p, _nbytes);
-            p = NULL;
-        }
-#else
-        if (p && get_mempolicy(NULL, NULL, 0, 0, 0) == 0) {
-            munmap(p, _nbytes);
-            p = NULL;
-        }
-#endif
-#endif
-        if (p) {
-            free(p);
-            p = NULL;
-        }
-    }
-
-    // PMEM allocation.
-    char* pmem_alloc(std::size_t nbytes, int dev_num) {
-
-        void *p = 0;
-
-        // Allocate into pmem.
-#ifdef USE_PMEM
-        int err = 0;
-        int fd;
-        // 'X' of pmem_x should be matched with the NUMA node.
-        string pmem_name("/mnt/pmem");
-        pmem_name += to_string(dev_num);
-        err = pmem_tmpfile(pmem_name.c_str(), nbytes, &fd, &p);
-        if (err)
-            THROW_YASK_EXCEPTION("Error: Unable to create temporary file for PMEM");
-#else
-        THROW_YASK_EXCEPTION("Error: PMEM allocation is not enabled; build with pmem=1");
-#endif
-
-        if (!p)
-            THROW_YASK_EXCEPTION("Error: cannot allocate " + make_byte_str(nbytes) +
-                                 " on pmem dev " + to_string(dev_num));
-
-        // Check alignment.
-        if ((size_t(p) & (CACHELINE_BYTES - 1)) != 0)
-            FORMAT_AND_THROW_YASK_EXCEPTION("Error: PMEM-allocated " << p << " is not " <<
-                                            CACHELINE_BYTES << "-byte aligned");
-
-        // Return as a char* as required for shared_ptr ctor.
-        return static_cast<char*>(p);
-    }
-
-    // Reverse pmem_alloc().
-    void PmemDeleter::operator()(char* p) {
-        if (p) {
-            munmap(p, _nbytes);
-            p = NULL;
-        }
-    }
-
-    // MPI shm allocation.
-    char* shm_alloc(std::size_t nbytes,
-                   const MPI_Comm* shm_comm, MPI_Win* shm_win) {
-
-        void *p = 0;
-
-        // Allocate using MPI shm.
-#ifdef USE_MPI
-        assert(shm_comm);
-        assert(shm_win);
-        MPI_Info win_info;
-        MPI_Info_create(&win_info);
-        MPI_Info_set(win_info, "alloc_shared_noncontig", "true");
-        MPI_Win_allocate_shared(nbytes, 1, win_info, *shm_comm, &p, shm_win);
-        MPI_Info_free(&win_info);
-        MPI_Win_lock_all(0, *shm_win);
-#else
-        THROW_YASK_EXCEPTION("Error: MPI shm allocation is not enabled; build with mpi=1");
-#endif
-
-        if (!p)
-            THROW_YASK_EXCEPTION("Error: cannot allocate " + make_byte_str(nbytes) +
-                                 " using MPI shm");
-
-        // Check alignment.
-        if ((size_t(p) & (CACHELINE_BYTES - 1)) != 0)
-            FORMAT_AND_THROW_YASK_EXCEPTION("Error: MPI shm-allocated " << p << " is not " <<
-                                            CACHELINE_BYTES << "-byte aligned");
-
-        // Return as a char* as required for shared_ptr ctor.
-        return static_cast<char*>(p);
-    }
-
-    // Reverse shm_alloc().
-    void ShmDeleter::operator()(char* p) {
-
-#ifdef USE_MPI
-        assert(_shm_comm);
-        assert(_shm_win);
-        MPI_Win_unlock_all(*_shm_win);
-        MPI_Win_free(_shm_win);
-        p = NULL;
-#else
-        THROW_YASK_EXCEPTION("Error: MPI shm deallocation is not enabled; build with mpi=1");
-#endif
-    }
-
+    ////// MPI utils //////
+    
     // Find sum of rank_vals over all ranks.
     idx_t sum_over_ranks(idx_t rank_val, MPI_Comm comm) {
         idx_t sum_val = rank_val;
@@ -422,11 +151,15 @@ namespace yask {
             pos += words[i].length();
         }
         os << endl;
+
+        // Print current value.
+        os << _help_leader << _current_value_str;
+        print_value(os) << ".\n";
     }
 
     // Check for matching option to "-"str at args[argi].
     // Return true and increment argi if match.
-    bool CommandLineParser::OptionBase::_check_arg(const std::vector<std::string>& args,
+    bool CommandLineParser::OptionBase::_is_opt(const string_vec& args,
                                                    int& argi,
                                                    const std::string& str) const
     {
@@ -451,7 +184,7 @@ namespace yask {
         const char* nptr = args[argi].c_str();
         char* endptr = 0;
         double val = strtod(nptr, &endptr);
-        if (val == HUGE_VAL || val == -HUGE_VAL || *endptr != '\0') {
+        if (!isfinite(val) || *endptr != '\0') {
             THROW_YASK_EXCEPTION("Error: argument for option '" + args[argi - 1] +
                                  "' is not a valid floating-point number");
         }
@@ -481,15 +214,29 @@ namespace yask {
         return idx_t(val);
     }
 
+    // Get one string value from args[argi].
+    // On failure, print msg using string from args[argi-1] and exit.
+    // On success, increment argi and return value.
+    string CommandLineParser::OptionBase::_string_val(const vector<string>& args,
+                                                      int& argi)
+    {
+        if (size_t(argi) >= args.size())
+            THROW_YASK_EXCEPTION("Error: no argument for option '" + args[argi - 1] + "'");
+
+        auto v = args[argi];
+        argi++;
+        return v;
+    }
+
     // Check for a boolean option.
-    bool CommandLineParser::BoolOption::check_arg(const std::vector<std::string>& args,
+    bool CommandLineParser::BoolOption::check_arg(const string_vec& args,
                                                   int& argi) {
-        if (_check_arg(args, argi, _name)) {
+        if (_is_opt(args, argi, _name)) {
             _val = true;
             return true;
         }
         string false_name = string("no-") + _name;
-        if (_check_arg(args, argi, false_name)) {
+        if (_is_opt(args, argi, false_name)) {
             _val = false;
             return true;
         }
@@ -500,14 +247,12 @@ namespace yask {
     void CommandLineParser::BoolOption::print_help(ostream& os,
                                                    int width) const {
         _print_help(os, string("[no-]" + _name), width);
-        os << _help_leader << _current_value_str <<
-            (_val ? "true" : "false") << "." << endl;
     }
 
     // Check for a double option.
-    bool CommandLineParser::DoubleOption::check_arg(const std::vector<std::string>& args,
+    bool CommandLineParser::DoubleOption::check_arg(const string_vec& args,
                                                     int& argi) {
-        if (_check_arg(args, argi, _name)) {
+        if (_is_opt(args, argi, _name)) {
             _val = _double_val(args, argi);
             return true;
         }
@@ -518,14 +263,12 @@ namespace yask {
     void CommandLineParser::DoubleOption::print_help(ostream& os,
                                                      int width) const {
         _print_help(os, _name + " <floating-point number>", width);
-        os << _help_leader << _current_value_str <<
-            _val << "." << endl;
     }
 
     // Check for an int option.
-    bool CommandLineParser::IntOption::check_arg(const std::vector<std::string>& args,
+    bool CommandLineParser::IntOption::check_arg(const string_vec& args,
                                                  int& argi) {
-        if (_check_arg(args, argi, _name)) {
+        if (_is_opt(args, argi, _name)) {
             _val = (int)_idx_val(args, argi); // TODO: check for over/underflow.
             return true;
         }
@@ -536,14 +279,12 @@ namespace yask {
     void CommandLineParser::IntOption::print_help(ostream& os,
                                                   int width) const {
         _print_help(os, _name + " <integer>", width);
-        os << _help_leader << _current_value_str <<
-            _val << "." << endl;
     }
 
     // Check for an idx_t option.
-    bool CommandLineParser::IdxOption::check_arg(const std::vector<std::string>& args,
+    bool CommandLineParser::IdxOption::check_arg(const string_vec& args,
                                                  int& argi) {
-        if (_check_arg(args, argi, _name)) {
+        if (_is_opt(args, argi, _name)) {
             _val = _idx_val(args, argi);
             return true;
         }
@@ -554,27 +295,18 @@ namespace yask {
     void CommandLineParser::IdxOption::print_help(ostream& os,
                                                   int width) const {
         _print_help(os, _name + " <integer>", width);
-        os << _help_leader << _current_value_str <<
-            _val << "." << endl;
     }
 
     // Print help on an multi-idx_t option.
     void CommandLineParser::MultiIdxOption::print_help(ostream& os,
                                                   int width) const {
         _print_help(os, _name + " <integer>", width);
-        os << _help_leader << _current_value_str;
-        for (size_t i = 0; i < _vals.size(); i++) {
-            if (i > 0)
-                os << ", ";
-            os << *_vals[i];
-        }
-        os << "." << endl;
     }
 
     // Check for an multi-idx_t option.
-    bool CommandLineParser::MultiIdxOption::check_arg(const std::vector<std::string>& args,
+    bool CommandLineParser::MultiIdxOption::check_arg(const string_vec& args,
                                                       int& argi) {
-        if (_check_arg(args, argi, _name)) {
+        if (_is_opt(args, argi, _name)) {
             idx_t val = _idx_val(args, argi);
             for (size_t i = 0; i < _vals.size(); i++)
                 *_vals[i] = val;
@@ -583,11 +315,67 @@ namespace yask {
         return false;
     }
 
+    // Check for a string option.
+    bool CommandLineParser::StringOption::check_arg(const string_vec& args,
+                                                    int& argi) {
+        if (_is_opt(args, argi, _name)) {
+            _val = _string_val(args, argi);
+            return true;
+        }
+        return false;
+    }
+
+    // Print help on a string option.
+    void CommandLineParser::StringOption::print_help(ostream& os,
+                                                     int width) const {
+        _print_help(os, _name + " <string>", width);
+    }
+
+    // Check for a string-list option.
+    bool CommandLineParser::StringListOption::check_arg(const string_vec& args,
+                                                        int& argi) {
+        if (_is_opt(args, argi, _name)) {
+            _val.clear();
+            string strs = _string_val(args, argi);
+            stringstream ss(strs);
+            string str;
+            while (getline(ss, str, ',')) {
+                if (_allowed_strs.size() && _allowed_strs.count(str) == 0) {
+                    THROW_YASK_EXCEPTION("Error: illegal argument '" + str + "' to option '" +
+                                         args[argi - 2] + "'");
+                }
+                _val.push_back(str);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    // Print help on a string-list option.
+    void CommandLineParser::StringListOption::print_help(ostream& os,
+                                                         int width) const {
+        _print_help(os, _name + " <string[,string[,...]]>", width);
+    }
+
     // Print help on all options.
     void CommandLineParser::print_help(ostream& os) const {
         for (auto oi : _opts) {
-            const auto* opt = oi.second;
+            const auto opt = oi.second;
             opt->print_help(os, _width);
+        }
+    }
+
+    // Print settings of all options.
+    void CommandLineParser::print_values(ostream& os) const {
+        const size_t name_wid = 22;
+        for (auto oi : _opts) {
+            const auto& name = oi.first;
+            const auto& opt = oi.second;
+            os << "  " << name << ":  ";
+            if (name.length() < name_wid)
+                for (size_t i = 0; i < name_wid - name.length(); i++)
+                    os << " ";
+            opt->print_value(os) << endl;
         }
     }
 
@@ -595,7 +383,7 @@ namespace yask {
     // Recognized strings from args are consumed, and unused ones
     // are returned.
     string CommandLineParser::parse_args(const std::string& pgm_name,
-                                         const std::vector<std::string>& args) {
+                                         const string_vec& args) {
         vector<string> non_args;
 
         // Loop through strings in args.
@@ -604,7 +392,7 @@ namespace yask {
             // Compare against all registered options.
             bool matched = false;
             for (auto oi : _opts) {
-                auto* opt = oi.second;
+                auto opt = oi.second;
 
                 // If a match is found, argi will be incremeted
                 // as needed beyond option and/or its arg.
@@ -635,39 +423,46 @@ namespace yask {
 
     // Tokenize args from a string.
     vector<string> CommandLineParser::set_args(const string& arg_string) {
-        string tmp;
-        bool in_quotes = false;
+        string tmp;            // current arg.
+        char in_quote = '\0';  // current string delimiter or null if none.
         vector<string> args;
         for (char c : arg_string) {
 
-            // If WS, start a new string unless in quotes.
-            if (isspace(c)) {
-                if (in_quotes)
-                    tmp += c;
-                else {
-                    if (tmp.length())
-                        args.push_back(tmp);
+            // If in quotes, add to string or handle end.
+            if (in_quote != '\0') {
+
+                // End of quoted string, i.e., this char
+                // matches opening quote.
+                if (in_quote == c) {
+                    args.push_back(tmp); // may be empty string.
                     tmp.clear();
+                    in_quote = '\0';
                 }
+
+                else
+                    tmp += c;
             }
 
-            // If quote, start or end double-quotes.
-            // TODO: handle single-quotes.
-            else if (c == '"') {
-                if (in_quotes) {
-                    if (tmp.length())
-                        args.push_back(tmp);
-                    tmp.clear();
-                    in_quotes = false;
-                }
-                else
-                    in_quotes = true;
+            // If WS, save old string and start a new string.
+            else if (isspace(c)) {
+                if (tmp.length())
+                    args.push_back(tmp);
+                tmp.clear();
+            }
+
+            // If quote, remember delimiter.
+            else if (c == '"' || c == '\'') {
+                in_quote = c;
             }
 
             // Otherwise, just add to tmp.
             else
                 tmp += c;
         }
+
+        if (in_quote != '\0')
+            THROW_YASK_EXCEPTION("Error: unterminated quote in '" +
+                                 arg_string + "'");
 
         // Last string.
         if (tmp.length())

@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -84,12 +84,7 @@ namespace yask {
         void _free(bool free_printer);
 
     public:
-        StencilSolution(const string& name) :
-            _name(name) {
-            yask_output_factory ofac;
-            auto so = ofac.new_stdout_output();
-            set_debug_output(so);
-        }
+        StencilSolution(const string& name) : _name(name) { }
         virtual ~StencilSolution() { _free(true); }
 
         // Identification.
@@ -125,7 +120,13 @@ namespace yask {
             _debug_output = debug;     // to share ownership of referent.
             _dos = &_debug_output->get_ostream();
         }
-        virtual yask_output_ptr get_debug_output() const {
+        virtual yask_output_ptr get_debug_output() {
+            if (!_debug_output.get()) {
+                yask_output_factory ofac;
+                auto so = ofac.new_stdout_output();
+                set_debug_output(so);
+            }
+            assert(_debug_output.get());
             return _debug_output;
         }
         virtual void set_name(std::string name) override {

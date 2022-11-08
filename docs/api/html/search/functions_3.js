@@ -10,5 +10,7 @@ var searchData=
   ['clear_5fdependencies',['clear_dependencies',['../classyask_1_1yc__solution.html#a42cd08d7a26c93d5073134f3b76dcc38',1,'yask::yc_solution']]],
   ['clear_5ffolding',['clear_folding',['../classyask_1_1yc__solution.html#afaf489e67ed8cc753e999b1495dd4dde',1,'yask::yc_solution']]],
   ['clone_5fast',['clone_ast',['../classyask_1_1yc__equation__node.html#a02121980dc7dcae2a18b38340579e8ca',1,'yask::yc_equation_node::clone_ast()'],['../classyask_1_1yc__number__node.html#a85093ab8031538e55c2213aacb843faf',1,'yask::yc_number_node::clone_ast()'],['../classyask_1_1yc__bool__node.html#a724e70472b59661feb96ea3a53cab8c7',1,'yask::yc_bool_node::clone_ast()']]],
-  ['close',['close',['../classyask_1_1yask__file__output.html#ad05306df06c5965659eda39ddfeb0d38',1,'yask::yask_file_output']]]
+  ['close',['close',['../classyask_1_1yask__file__output.html#ad05306df06c5965659eda39ddfeb0d38',1,'yask::yask_file_output']]],
+  ['copy_5fvars_5ffrom_5fdevice',['copy_vars_from_device',['../classyask_1_1yk__solution.html#a105c993241498d9c2a98cbec353fc61a',1,'yask::yk_solution']]],
+  ['copy_5fvars_5fto_5fdevice',['copy_vars_to_device',['../classyask_1_1yk__solution.html#a2cdea230253b47bd16c1a0c326a78df8',1,'yask::yk_solution']]]
 ];

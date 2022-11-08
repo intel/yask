@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -81,29 +81,6 @@ namespace yask {
                                  " is not 1 or 2.");
         if (_settings._prefetch_dists.count(level))
             return _settings._prefetch_dists.at(level);
-        else if (is_target_set()) {
-            auto target = get_target();
-
-            // Defaults for various targets.
-            if (target == "knc") {
-                if (level == 1)
-                    return 1;
-                else
-                    return 2;
-            }
-            else if (target == "knl") {
-                if (level == 1)
-                    return 1;
-                else
-                    return 0;
-            }
-            else {
-                if (level == 1)
-                    return 0;
-                else
-                    return 2;
-            }
-        }
         return 0;
     }
     void StencilSolution::set_prefetch_dist(int level,
@@ -112,7 +89,7 @@ namespace yask {
         if (distance < 0)
             THROW_YASK_EXCEPTION("Error: prefetch-distance " +
                                  to_string(distance) +
-                                 " is not positive.");
+                                 " is not zero or positive.");
         _settings._prefetch_dists[level] = distance;
     }
     yc_solution_base::soln_map& yc_solution_base::get_registry() {
@@ -161,16 +138,16 @@ namespace yask {
     void StencilSolution::analyze_solution(int vlen,
                                            bool is_folding_efficient) {
 
-        // Find all the stencil dimensions from the vars.
-        // Create the final folds and clusters from the cmd-line options.
+        // Find all the stencil dimensions in the settings and/or vars.
+        // Create the final folds and clusters.
         _dims.set_dims(_vars, _settings, vlen, is_folding_efficient, *_dos);
 
-        // Determine which vars can be folded.
-        _vars.set_folding(_dims);
+        // Count dim types in each var and determine foldability.
+        _vars.set_dim_counts(_dims);
 
         // Determine which var points can be vectorized and analyze inner-loop accesses.
-        _eqs.analyze_vec(_dims);
-        _eqs.analyze_loop(_dims);
+        _eqs.analyze_vec(_settings, _dims);
+        _eqs.analyze_loop(_settings, _dims);
 
         // Find dependencies between equations.
         _eqs.analyze_eqs(_settings, _dims, *_dos);
@@ -219,8 +196,11 @@ namespace yask {
         else if (target == "hsw" || target == "bdw")
             target = "avx2";
         else if (target == "avx512f" || target == "skx" ||
-                 target == "skl" || target == "clx")
+                 target == "skl" || target == "clx" ||
+                 target == "avx512-zmm" || target == "avx512hi")
             target = "avx512";
+        else if (target == "avx512lo")
+            target = "avx512-ymm";
 
         // Ensure all intermediate data is clean.
         _free(true);
@@ -233,13 +213,11 @@ namespace yask {
         // Data itself will be created in analyze_solution().
         if (target == "intel64")
             _printer = new YASKCppPrinter(*this, *_eq_bundles, *_eq_stages, *_cluster_eq_bundles);
-        else if (target == "knc")
-            _printer = new YASKKncPrinter(*this, *_eq_bundles, *_eq_stages, *_cluster_eq_bundles);
         else if (target == "avx" || target == "avx2")
             _printer = new YASKAvx256Printer(*this, *_eq_bundles, *_eq_stages, *_cluster_eq_bundles);
         else if (target == "avx512" || target == "knl")
             _printer = new YASKAvx512Printer(*this, *_eq_bundles, *_eq_stages, *_cluster_eq_bundles);
-        else if (target == "avx512lo")
+        else if (target == "avx512-ymm")
             _printer = new YASKAvx512Printer(*this, *_eq_bundles, *_eq_stages, *_cluster_eq_bundles, true);
         else if (target == "dot")
             _printer = new DOTPrinter(*this, *_cluster_eq_bundles, false);

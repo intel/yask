@@ -1,6 +1,6 @@
 ##############################################################################
 ## YASK: Yet Another Stencil Kit
-## Copyright (c) 2014-2021, Intel Corporation
+## Copyright (c) 2014-2022, Intel Corporation
 ## 
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -23,6 +23,17 @@
 
 # Common Makefile settings.
 # YASK_BASE should be set before including this.
+# YASK_BASE and all the dirs based on it should be set with full (not relative) paths.
+
+# Name strings.
+TIMESTAMP	:=	$(shell date '+%Y-%m-%d')
+HOSTNAME	:= 	$(shell hostname)
+
+# Vars for special strings.
+empty		:=
+space		:=	$(empty) $(empty)
+comma		:=	,
+colon		:=	:
 
 # Set YASK_OUTPUT_DIR to change where all output files go.
 YASK_OUTPUT_DIR	?=	$(YASK_BASE)
@@ -41,17 +52,19 @@ LIB_OUT_DIR	:=	$(YASK_OUT_BASE)/lib
 BIN_OUT_DIR	:=	$(YASK_OUT_BASE)/bin
 BUILD_OUT_DIR	:=	$(YASK_OUT_BASE)/build
 PY_OUT_DIR	:=	$(YASK_OUT_BASE)/yask
+TEST_LOG_OUT_DIR :=	$(YASK_OUT_BASE)/logs/tests.$(HOSTNAME).$(TIMESTAMP)
 
 # OS-specific
 ifeq ($(shell uname -o),Cygwin)
   SO_SUFFIX	:=	.dll
-  RUN_PREFIX	:=	env PATH="${PATH}:$(LIB_DIR):$(LIB_OUT_DIR):$(YASK_DIR):$(PY_OUT_DIR)"
+  RUN_PREFIX	:=	env PATH="${PATH}:$(LIB_DIR):$(LIB_OUT_DIR):$(PY_OUT_DIR):$(YASK_DIR)"
   PYTHON	:=	python3
 else
   SO_SUFFIX	:=	.so
   RUN_PREFIX	:=	env I_MPI_DEBUG=+5 I_MPI_PRINT_VERSION=1 OMP_DISPLAY_ENV=VERBOSE KMP_VERSION=1
-  PYTHON	:=	python
+  PYTHON	:=	python3
 endif
+SHELL		:=	/bin/bash
 
 # Common source.
 COMM_DIR	:=	$(SRC_DIR)/common
@@ -71,24 +84,43 @@ YC_EXEC		:=	$(BIN_OUT_DIR)/$(YC_BASE).exe
 YC_SRC_DIR	:=	$(SRC_DIR)/compiler
 
 # Tools.
+CXX		:=	icpx
 SWIG		:=	swig
 PERL		:=	perl
 MKDIR		:=	mkdir -p -v
 BASH		:=	bash
+INDENT		:=	$(UTILS_BIN_DIR)/yask_indent.sh
 
 # Find include path needed for python interface.
 # NB: constructing string inside print() to work for python 2 or 3.
 PYINC		:= 	$(addprefix -I,$(shell $(PYTHON) -c 'import distutils.sysconfig; print(distutils.sysconfig.get_python_inc() + " " + distutils.sysconfig.get_python_inc(plat_specific=1))'))
 
 RUN_PYTHON	:= 	$(RUN_PREFIX) \
-	env PYTHONPATH=$(LIB_DIR):$(LIB_OUT_DIR):$(YASK_DIR):$(PY_OUT_DIR):$(PYTHONPATH) $(PYTHON)
+	env PYTHONPATH=$(LIB_DIR):$(LIB_OUT_DIR):$(PY_OUT_DIR):$(YASK_DIR):$(PYTHONPATH) $(PYTHON)
 
 # Function to check for pre-defined compiler macro.
+# Invokes compiler using 1st arg.
+# Returns '1' if 2nd arg is defined, '0' if not.
 # Ex: "ifeq ($(call MACRO_DEF,$(CXX),__clang__),1)"...
 MACRO_DEF	=	$(shell $(1) -x c++ /dev/null -dM -E | grep -m 1 -c $(2))
 
-# Options to avoid warnings when compiling SWIG-generated code w/gcc.
-SWIG_GCCFLAGS	:=	-Wno-class-memaccess -Wno-stringop-overflow -Wno-stringop-truncation
+# Function to run a command serially, even with parallel build.
+SERIALIZE	= 	exec {fd}>/tmp/$$USER.YASK.build-lock; \
+			flock -x $$fd; \
+			$(1)
+
+# Function to create a directory.
+# Tries to avoid the possible race condition when calling mkdir in parallel.
+# 1st arg is dir name.
+# Ex: "$(call MK_DIR,path)"
+MK_DIR		=	@ if [ \! -d $(1) ]; then \
+			  $(call SERIALIZE,$(MKDIR) $(1)); fi
+
+# Script to remove unsupported function in python 3.8+.
+SWIG_PATCH	:= perl -i -n -e 'print unless /_PyObject_GC_UNTRACK/'
+
+# Options for compiling SWIG-generated code w/gcc.
+SWIG_GCCFLAGS	:= -DYASK_DEPRECATED=''
 
 # Define deprecated macro used by SWIG.
 DBL_EPSILON_CXXFLAG	:=	-DDBL_EPSILON=2.2204460492503131e-16

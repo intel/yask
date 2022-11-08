@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2021, Intel Corporation
+Copyright (c) 2014-2022, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -299,25 +299,27 @@ namespace fsg {
                 // This code is run immediately after 'kernel_soln' is created.
                 soln->CALL_AFTER_NEW_SOLUTION
                     (
-                     // Check target at kernel run-time.
-                     auto isa = kernel_soln.get_target();
-                     if (isa == "knl") {
-                         // Use only 1 thread per core.
-                         kernel_soln.apply_command_line_options("-thread_divisor 4 -block_threads 2");
+                     // Check CPU target at kernel run-time.
+                     if (!kernel_soln.is_offloaded()) {
+                         auto isa = kernel_soln.get_target();
+                         if (isa == "knl") {
+                             // Use only 1 thread per core.
+                             kernel_soln.apply_command_line_options("-thread_divisor 4 -block_threads 2");
 
-                         kernel_soln.set_block_size("x", 16);
-                         kernel_soln.set_block_size("y", 16);
-                         kernel_soln.set_block_size("z", 16);
-                     }
-                     else if (isa == "avx512") {
-                         kernel_soln.set_block_size("x", 188);
-                         kernel_soln.set_block_size("y", 12);
-                         kernel_soln.set_block_size("z", 24);
-                     }
-                     else {
-                         kernel_soln.set_block_size("x", 48);
-                         kernel_soln.set_block_size("y", 4);
-                         kernel_soln.set_block_size("z", 128);
+                             kernel_soln.set_block_size("x", 16);
+                             kernel_soln.set_block_size("y", 16);
+                             kernel_soln.set_block_size("z", 16);
+                         }
+                         else if (isa == "avx2") {
+                             kernel_soln.set_block_size("x", 48);
+                             kernel_soln.set_block_size("y", 4);
+                             kernel_soln.set_block_size("z", 128);
+                         }
+                         else {
+                             kernel_soln.set_block_size("x", 188);
+                             kernel_soln.set_block_size("y", 12);
+                             kernel_soln.set_block_size("z", 24);
+                         }
                      }
                      );
             }
