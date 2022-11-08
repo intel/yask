@@ -509,9 +509,8 @@ namespace yask {
         /// Set kernel options from a string.
         /**
            Parses the string for options as if from a command-line.
-           Example: "-bx 64 -block_threads 4" sets the block-size in the *x*
-           dimension to 64 and the number of threads used to process each
-           block to 4.
+           Example: "-bx 64 -inner_threads 4" sets the block-size in the *x*
+           dimension to 64 and the number of nested OpenMp threads to 4.
            See the help message from the YASK kernel binary for documentation
            on the command-line options.
            Used to set less-common options not directly supported by the
@@ -575,8 +574,10 @@ namespace yask {
 
         /// Prepare the solution for stencil application.
         /**
+           Calculates the position of each rank in the overall problem domain
+           if not previsouly specified.
+           Calculates the sizes of each rank if not previsously specified.
            Allocates data in vars that do not already have storage allocated.
-           Calculates the position of each rank in the overall problem domain.
            Sets many other data structures needed for proper stencil application.
            Since this function initiates MPI communication, it must be called
            on all MPI ranks, and it will block until all ranks have completed.
@@ -655,8 +656,6 @@ namespace yask {
             to values across the entire domain as returned by yk_solution::get_overall_domain_size()
             (not necessarily sequentially).
             - MPI halo exchanges will occur as necessary before or during each step.
-            - Since this function initiates MPI communication, it must be called
-              on all MPI ranks, and it will block until all ranks have completed.
            2. **[Advanced]** If temporal wave-front tiling *is* enabled:
             - The step index (e.g., `t` for "time") will be sequentially set to values
             from `first_step_index` to `last_step_index`, inclusive, within each area configured
@@ -671,6 +670,9 @@ namespace yask {
             - MPI halo exchanges may occur at less frequent intervals.
 
            This function should be called only *after* calling prepare_solution().
+
+           Since this function initiates MPI communication, it must be called
+           on all MPI ranks, and it will block until all ranks have completed.
         */
         virtual void
         run_solution(idx_t first_step_index /**< [in] First index in the step dimension */,
@@ -700,7 +702,7 @@ namespace yask {
 
            @note The parameter is *not* the number of steps to run.
            @warning Since only one step is taken per call, using this function effectively disables
-           wave-front tiling.
+           wave-front tiling (except in the special case of tiling only across stages within a step).
         */
         virtual void
         run_solution(idx_t step_index /**< [in] Index in the step dimension */ ) =0;
@@ -758,14 +760,62 @@ namespace yask {
         virtual yk_stats_ptr
         get_stats() =0;
 
-        /// Determine whether the auto-tuner is enabled on this rank.
+        /// Start or stop the online auto-tuner on this rank.
         /**
-           The auto-tuner is enabled by default.
-           It will become disabled after it has converged or after reset_auto_tuner(false) has been called.
+           This function is used to apply the current best-known settings if the tuner is
+           currently running, reset the state of the auto-tuner, and either
+           restart its search (if `enable==true`) or stop it (if `enable==false`).
+           This call must be made on each rank where the change is desired.
+
+           This mode of running the auto-tuner is called "online" or "in-situ" because
+           changes are made to the tile sizes between calls to run_solution().
+           It will stop automatically when it converges.
+           Call is_auto_tuner_enabled() to determine if it has converged.
+        */
+        virtual void
+        reset_auto_tuner(bool enable
+                         /**< [in] If _true_, start or restart the auto-tuner search on this rank.
+                            If _false_, stop the auto-tuner. */,
+                         bool verbose = false
+                         /**< [in] If _true_, print progress information to the debug object
+                            set via set_debug_output(). */ ) =0;
+
+        /// Determine whether the online auto-tuner is enabled on this rank.
+        /**
+           The "online" or "in-situ" auto-tuner is disabled by default.
+           It can be enabled by calling reset_auto_tuner(true).
+           It will also become disabled after it has converged or after reset_auto_tuner(false) has been called.
+           Auto-tuners run independently on each rank, so they will not generally finish at the same step
+           across all ranks.
            @returns Whether the auto-tuner is still searching.
         */
         virtual bool
         is_auto_tuner_enabled() const =0;
+
+        /// Run the offline auto-tuner immediately, not preserving variable data.
+        /**
+           This runs the auto-tuner in "offline" mode.
+           (Under "online" operation, an auto-tuner is invoked during calls to
+           run_solution(); see reset_auto_tuner() and is_auto_tuner_enabled()
+           for more information on running in online mode.)
+
+           This function causes the stencil solution to be run immediately
+           until the auto-tuner converges on all ranks.
+           It is useful for benchmarking, where performance is to be timed
+           for a given number of steps after the best settings are found.
+           This function should be called only *after* calling prepare_solution().
+           This call must be made on each rank.
+
+           @warning Modifies the contents of the YASK vars by automatically calling run_solution()
+           an arbitrary number of times, but without halo exchanges.
+           (See run_solution() for other restrictions and warnings.)
+           Thus, var data should be set or reset *after* calling this function when
+           used in a production or test setting where correct results are expected.
+        */
+        virtual void
+        run_auto_tuner_now(bool verbose = true
+                           /**< [in] If _true_, print progress information to the debug object
+                              set via set_debug_output(). */ ) =0;
 
         /* Advanced APIs for yk_solution found below are not needed for most applications. */
 
@@ -810,50 +860,6 @@ namespace yask {
         get_min_pad_size(const std::string& dim
                          /**< [in] Name of dimension to get.  Must be one of
                             the names from get_domain_dim_names(). */) const =0;
-
-        /// **[Advanced]** Restart or disable the auto-tuner on this rank.
-        /**
-           Under normal operation, an auto-tuner is invoked automatically during calls to
-           run_solution().
-           Currently, only the block size is set by the auto-tuner, and the search begins from the
-           sizes set via set_block_size() or the default size if set_block_size() has
-           not been called.
-           This function is used to apply the current best-known settings if the tuner has
-           been running, reset the state of the auto-tuner, and either
-           restart its search or disable it from running.
-           This call must be made on each rank where the change is desired.
-        */
-        virtual void
-        reset_auto_tuner(bool enable
-                         /**< [in] If _true_, start or restart the auto-tuner search.
-                            If _false_, disable the auto-tuner from running. */,
-                         bool verbose = false
-                         /**< [in] If _true_, print progress information to the debug object
-                            set via set_debug_output(). */ ) =0;
-
-        /// **[Advanced]** Automatically tune selected settings immediately.
-        /**
-           Executes a search algorithm to find [locally] optimum values for some of the
-           settings.
-           Under normal operation, an auto-tuner is invoked during calls to
-           run_solution().
-           See reset_auto_tuner() for more information.
-           This function causes the stencil solution to be run immediately
-           until the auto-tuner converges on all ranks.
-           It is useful for benchmarking, where performance is to be timed
-           for a given number of steps after the best settings are found.
-           This function should be called only *after* calling prepare_solution().
-           This call must be made on each rank.
-           @warning Modifies the contents of the vars by calling run_solution()
-           an arbitrary number of times, but without halo exchange.
-           (See run_solution() for other restrictions and warnings.)
-           Thus, var data should be set *after* calling this function when
-           used in a production or test setting where correct results are expected.
-        */
-        virtual void
-        run_auto_tuner_now(bool verbose = true
-                           /**< [in] If _true_, print progress information to the debug object
-                              set via set_debug_output(). */ ) =0;
 
         /// **[Advanced]** Add a new var to the solution.
         /**
