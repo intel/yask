@@ -45,7 +45,7 @@ namespace yask {
             _name += "(" + name + ")";
         _prefix = string(" ") + _name + ": ";
 
-        clear(settings->_do_auto_tune); // TODO: why is this parameter used?
+        clear(settings->_do_auto_tune);
     }
 
     // Switch target ptr to next one.

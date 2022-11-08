@@ -98,7 +98,7 @@ namespace yask {
 
         // Current state of search.
         AutoTunerState at_state;
-        bool done = false;
+        bool done = true;
         IdxTuple* outerp = 0;
         IdxTuple* targetp = 0;
         size_t targeti = 0;
