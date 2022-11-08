@@ -35,7 +35,6 @@ mpi			?=	1
 offload			?=	0
 offload_arch		?=	spir64
 numa			?=	1
-pmem			?=	0
 
 real_bytes		?=	4
 allow_new_var_types	?=	1
@@ -347,13 +346,6 @@ ifneq ($(shell find /usr/include -name 'numaif.h' | wc -l),0)
 endif
 
 endif # numa.
-
-# Add options for PMEM.
-ifeq ($(pmem),1)
- YK_CXXFLAGS	+=	-I/opt/intel/memkind/include
- YK_LIBS	+=	-L/opt/intel/memkind/lib -lmemkind
- MACROS		+=	USE_PMEM
-endif
 
 # Turn on debug macros.
 ifeq ($(trace_mem),1)

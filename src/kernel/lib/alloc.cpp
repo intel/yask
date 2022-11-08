@@ -211,80 +211,6 @@ namespace yask {
         #endif
     }
 
-    #ifdef USE_PMEM
-    // Make a temp file for PMEM in 'dir'.
-    static int pmem_tmpfile(const char *dir, size_t size, int *fd, void **addr)
-    {
-        static char tmpl[] = "/appdirect_mem_xxxxxx";
-        int err = 0;
-
-        char fullname[strlen(dir) + sizeof (tmpl) + 1];
-        (void) strcpy(fullname, dir);
-        (void) strcat(fullname, tmpl);
-
-        if ((*fd = mkstemp(fullname)) < 0) {
-            perror("mkstemp()");
-            err = MEMKIND_ERROR_RUNTIME;
-            THROW_YASK_EXCEPTION(string("Error: MEMKIND_ERROR_RUNTIME - mkstemp('") +
-                                 fullname + "')");
-        }
-
-        (void) unlink(dir);
-
-        if (ftruncate(*fd, size) != 0) {
-            err = MEMKIND_ERROR_RUNTIME;
-            THROW_YASK_EXCEPTION("Error: MEMKIND_ERROR_RUNTIME - ftruncate()\n");
-        }
-
-        *addr = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, *fd, 0);
-        if (*addr == MAP_FAILED) {
-            err = MEMKIND_ERROR_RUNTIME;
-            THROW_YASK_EXCEPTION("Error: MEMKIND_ERROR_RUNTIME - mmap()\n");
-        }
-
-        return err;
-    }
-    #endif
-    
-    // PMEM allocation.
-    char* pmem_alloc(std::size_t nbytes, int dev) {
-
-        void *p = 0;
-
-        // Allocate into pmem.
-        #ifdef USE_PMEM
-
-        int err = 0;
-        int fd;
-        // 'X' of pmemX should be matched with the NUMA node.
-        string pmem_name("/mnt/pmem");
-        pmem_name += to_string(dev);
-        err = pmem_tmpfile(pmem_name.c_str(), nbytes, &fd, &p);
-        if (err)
-            THROW_YASK_EXCEPTION("Error: Unable to create temporary file for PMEM");
-        if (!p)
-            THROW_YASK_EXCEPTION("Error: cannot allocate " + make_byte_str(nbytes) +
-                                 " on '" + pmem_name + "'");
-        #else
-        THROW_YASK_EXCEPTION("Error: PMEM allocation is not enabled; build with pmem=0");
-        #endif
-
-        // Check alignment.
-        if ((size_t(p) & (CACHELINE_BYTES - 1)) != 0)
-            FORMAT_AND_THROW_YASK_EXCEPTION("Error: PMEM-allocated " << p << " is not " <<
-                                            CACHELINE_BYTES << "-byte aligned");
-
-        // Return as a char* as required for shared_ptr ctor.
-        return static_cast<char*>(p);
-    }
-
-    // Reverse pmem_alloc().
-    void PmemDeleter::operator()(char* p) {
-        free_dev_mem(p);
-        if (p)
-            munmap(p, _nbytes);
-    }
-
     // MPI shm allocation.
     char* shm_alloc(std::size_t nbytes,
                     const MPI_Comm* shm_comm, MPI_Win* shm_win) {
@@ -343,7 +269,6 @@ namespace yask {
     // Magic numbers for memory types in addition to those for NUMA.
     // TODO: get rid of magic-number scheme.
     constexpr int _shmem_key = 1000;
-    constexpr int _pmem_key = 2000;
 
     // Alloc mem for each requested key.
     // 'type' is only used for debug msg.
@@ -391,19 +316,6 @@ namespace yask {
                               baseptr << " for " << make_byte_str(sz));
                 }
                 #endif
-            }
-            else if (mem_key == _pmem_key) {
-
-                int dev_num = getnode();
-                if (dev_num == -1) {
-                    DEBUG_MSG("Warning: cannot get NUMA node information for PMEM allocation;"
-                              " using node zero (0)");
-                    dev_num = 0;
-                }
-
-                msg += "on PMEM device " + to_string(dev_num);
-                DEBUG_MSG(msg << "...");
-                p = shared_pmem_alloc<char>(data.nbytes, dev_num);
             }
             else {
                 if (mem_key == yask_numa_none)
@@ -465,10 +377,6 @@ namespace yask {
         // Requests for allocation.
         AllocMap alloc_reqs;
         
-        #ifdef USE_PMEM
-        auto max_sys_mem = (size_t)opts->_numa_pref_max * 1024*1024*1024;
-        #endif
-
         // Pass 0: count required size for each NUMA node, allocate chunk of memory at end.
         // Pass 1: distribute parts of already-allocated memory chunk.
         for (int pass = 0; pass < 2; pass++) {
@@ -483,7 +391,6 @@ namespace yask {
                 data.nvars = 0;
             }
             int seq_num = 0;
-            size_t sys_mem_used = 0;
 
             // Vars.
             for (auto gp : sorted_var_ptrs) {
@@ -504,15 +411,6 @@ namespace yask {
 
                     // Determine total amount to alloc.
                     auto res_bytes = ROUND_UP(nbytes + _data_buf_pad, CACHELINE_BYTES);
-                    
-                    bool using_sys_mem = true;
-                    #ifdef USE_PMEM
-                    // If too much system memory would be used, switch to pmem.
-                    if (sys_mem_used + res_bytes > max_sys_mem) {
-                        numa_pref = _pmem_key;
-                        using_sys_mem = false;
-                    }
-                    #endif
 
                     // If not bundling allocations, increase sequence number.
                     if (!actl_opts->_bundle_allocs)
@@ -535,8 +433,6 @@ namespace yask {
                     // Running totals.
                     req_data.nvars++;
                     req_data.nbytes += res_bytes;
-                    if (using_sys_mem)
-                        sys_mem_used += res_bytes;
 
                     if (pass == 0)
                         TRACE_MSG(" var '" << gname << "' needs " << make_byte_str(nbytes) <<

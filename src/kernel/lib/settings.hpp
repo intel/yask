@@ -254,9 +254,6 @@ namespace yask {
         bool _allow_addl_pad = true; // Allow extending padding beyond what's needed for alignment.
         bool _bundle_allocs = !KernelEnv::_use_offload; // Group allocations together.
         int _numa_pref = NUMA_PREF;
-        #ifdef USE_PMEM
-        int _numa_pref_max = 128; // GiB to alloc before using PMEM.
-        #endif
 
         // Stencil-dim posn in which to apply block-thread binding.
         // TODO: make this a cmd-line parameter.

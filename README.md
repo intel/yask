@@ -117,6 +117,10 @@ and Intel(R) graphics processors.
     or setting multiple dimensions in one API call.
   - `new_relative_var_point()` API is deprecated.
   - APIs that were previously deprecated in the `yk_var` class have been removed.
+  - Explicit support for persistent-memory devices has been removed.
+    (Persistent-memory accessible via separate NUMA nodes or other standard
+    Linux mechanisms is supported as with any other special memory types,
+    e.g., high-bandwidth memory.)
 
 ### Version 3
 * Version 3.05.00 changed the default setting of `-use_shm` to `true`.

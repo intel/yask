@@ -146,34 +146,6 @@ namespace yask {
         return _base;
     }
 
-    // Helpers for PMEM malloc and free.
-    extern char* pmem_alloc(std::size_t nbytes, int dev);
-    struct PmemDeleter : public DeleterBase {
-
-        // Ctor saves data needed for freeing.
-        PmemDeleter(std::size_t nbytes) :
-            DeleterBase(nbytes)
-        { }
-
-        // Free p.
-        void operator()(char* p);
-    };
-
-    // Allocate PMEM memory from given device.
-    template<typename T>
-    std::shared_ptr<T> shared_pmem_alloc(size_t nbytes, int pmem_dev) {
-
-        // Alloc mem.
-        char* cp = pmem_alloc(nbytes, pmem_dev);
-
-        // Map alloc to device.
-        offload_map_alloc(cp, nbytes);
-
-        // Make shared ptr.
-        auto _base = std::shared_ptr<T>(cp, PmemDeleter(nbytes));
-        return _base;
-    }
-
     // Helpers for MPI shm malloc and free.
     extern char* shm_alloc(std::size_t nbytes,
                           const MPI_Comm* shm_comm, MPI_Win* shm_win);

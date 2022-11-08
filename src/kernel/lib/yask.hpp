@@ -83,10 +83,6 @@ typedef int MPI_Status;
 #include <stdint.h>
 #include <immintrin.h>
 #include <sys/mman.h>
-#ifdef USE_PMEM
-#include <memkind.h>
-#include <sys/syscall.h>
-#endif
 
 // Type for unsigned indices.
 typedef std::uint64_t uidx_t;

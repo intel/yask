@@ -426,14 +426,6 @@ namespace yask {
                            #endif
                            " Use " + to_string(yask_numa_none) + " for default allocator.",
                            _numa_pref));
-        #ifdef USE_PMEM
-        parser.add_option(make_shared<CommandLineParser::IntOption>
-                         ("pmem_threshold",
-                           "[Advanced] First allocate up to this many GiB for vars using system memory, "
-                           "then allocate memory for remaining vars from a PMEM (persistent memory) device "
-                           "named '/mnt/pmemX', where 'X' corresponds to the NUMA node of the YASK process.",
-                           _numa_pref_max));
-        #endif
         parser.add_option(make_shared<CommandLineParser::BoolOption>
                           ("auto_tune",
                            "Adjust specified block and tile sizes *during* normal operation "
