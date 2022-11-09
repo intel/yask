@@ -200,17 +200,6 @@ namespace yask {
         }
     }
 
-    // Get the current NUMA node.
-    static int getnode() {
-        #ifdef SYS_getcpu
-        int node, status;
-        status = syscall(SYS_getcpu, NULL, &node, NULL);
-        return (status == -1) ? status : node;
-        #else
-        return -1; // unavailable
-        #endif
-    }
-
     // MPI shm allocation.
     char* shm_alloc(std::size_t nbytes,
                     const MPI_Comm* shm_comm, MPI_Win* shm_win) {
