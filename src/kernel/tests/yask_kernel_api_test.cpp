@@ -132,11 +132,14 @@ int main() {
         }
         os << endl;
 
-        // Print out some info about the vars and init their data.
+        // For each var, print out some info about it and init its data.
         for (auto var : soln->get_vars()) {
-            os << "    var '" << var->get_name() << ":\n";
+            auto ndims = var->get_num_dims();
+            os << "    var '" << var->get_name() << "' has " <<
+                ndims << " dimension(s):\n";
+            auto dnames = var->get_dim_names();
             int dimi = 0;
-            for (auto dname : var->get_dim_names()) {
+            for (auto dname : dnames) {
                 os << "      '" << dname << "' dim:\n";
                 os << "        alloc-size on this rank: " <<
                     var->get_alloc_size(dname) << endl;
@@ -176,7 +179,8 @@ int main() {
             }
 
             // First, just init all the elements to the same value.
-            var->set_all_elements_same(0.5);
+            double outer_val = 0.5;
+            var->set_all_elements_same(outer_val);
 
             // Done with fixed-size vars.
             if (var->is_fixed_size())
@@ -194,14 +198,15 @@ int main() {
                     // in center of overall problem.
                     // Using global indices.
                     idx_t psize = soln->get_overall_domain_size(dname);
-                    first_idx = psize/2 - 30;
-                    last_idx = psize/2 + 30;
+                    idx_t center = psize/2;
+                    first_idx = center - 30;
+                    last_idx = center + 30;
                 }
 
                 // Step dim?
                 else if (dname == soln->get_step_dim_name()) {
 
-                    // Set indices for valid time-steps.
+                    // Set indices for all valid time-steps.
                     first_idx = var->get_first_valid_step_index();
                     last_idx = var->get_last_valid_step_index();
                     assert(last_idx - first_idx + 1 == var->get_alloc_size(dname));
@@ -210,7 +215,7 @@ int main() {
                 // Misc dim?
                 else {
 
-                    // Set indices to set all allowed values.
+                    // Set indices for all valid misc-index values.
                     first_idx = var->get_first_misc_index(dname);
                     last_idx = var->get_last_misc_index(dname);
                     assert(last_idx - first_idx + 1 == var->get_alloc_size(dname));
@@ -220,42 +225,60 @@ int main() {
                 first_indices.push_back(first_idx);
                 last_indices.push_back(last_idx);
             }
+            assert(first_indices.size() == ndims);
+            assert(last_indices.size() == ndims);
 
-            // Init the values using the indices created above.
-            double val = 2.0;
-            bool strict_indices = false; // because first/last_indices are global.
-            idx_t nset = var->set_elements_in_slice_same(val, first_indices, last_indices, strict_indices);
-            os << "      " << nset << " element(s) set in sub-range from " <<
+            // Print range of inner cube.
+            if (ndims == 0)
+                os << "      inner-cube is a single point for this scalar var.\n";
+            else
+                os << "      range of inner-cube: " <<
                 var->format_indices(first_indices) << " to " <<
                 var->format_indices(last_indices) << ".\n";
+
+            // Check 2 corners of inner-cube to make sure they were set properly.
             if (var->are_indices_local(first_indices)) {
                 auto val2 = var->get_element(first_indices);
-                os << "      first element == " << val2 << ".\n";
-                assert(val2 == val);
+                os << "      first element in inner cube == " << val2 << ".\n";
+                assert(val2 == outer_val);
             }
             else
                 os << "      first element NOT in rank.\n";
             if (var->are_indices_local(last_indices)) {
                 auto val2 = var->get_element(last_indices);
-                os << "      last element == " << val2 << ".\n";
-                assert(val2 == val);
+                os << "      last element in inner cube == " << val2 << ".\n";
+                assert(val2 == outer_val);
             }
             else
                 os << "      last element NOT in rank.\n";
 
-            // Add to a couple of values if they're in this rank.
-            nset = var->add_to_element(1.0, first_indices);
-            nset += var->add_to_element(3.0, last_indices);
-            os << "      " << nset << " element(s) updated.\n";
+            // Re-init the values in the inner cube using the indices created above.
+            double inner_val = 2.0;
+            bool strict_indices = false; // because first/last_indices are global.
+            idx_t nset = var->set_elements_in_slice_same(inner_val, first_indices, last_indices, strict_indices);
+            os << "      " << nset << " element(s) in inner-cube set to " << inner_val << ".\n";
+            
+            // Check values on 2 corners of the inner cube to make sure they were set properly.
             if (var->are_indices_local(first_indices)) {
                 auto val2 = var->get_element(first_indices);
-                os << "      first element == " << val2 << ".\n";
-                assert(val2 == val + 1.0);
+                os << "      first element in inner cube == " << val2 << ".\n";
+                assert(val2 == inner_val);
             }
             if (var->are_indices_local(last_indices)) {
                 auto val2 = var->get_element(last_indices);
-                os << "      last element == " << val2 << ".\n";
-                assert(val2 == val + 3.0);
+                os << "      last element in inner cube == " << val2 << ".\n";
+                assert(val2 == inner_val);
+            }
+
+            // Add to value in first corner of the inner cube if it's in this rank.
+            nset = var->add_to_element(1.0, first_indices);
+            os << "      " << nset << " element(s) updated.\n";
+
+            // Check to make sure they were updated.
+            if (var->are_indices_local(first_indices)) {
+                auto val2 = var->get_element(first_indices);
+                os << "      first element in inner cube == " << val2 << ".\n";
+                assert(val2 == inner_val + 1.0);
             }
 
             // Raw access to this var.
@@ -270,11 +293,12 @@ int main() {
         }
 
         // Apply the stencil solution to the data.
+        soln->reset_auto_tuner(false);
         env->global_barrier();
         os << "Running the solution for 1 step...\n";
         soln->run_solution(0);
-        os << "Running the solution for 10 more steps...\n";
-        soln->run_solution(1, 10);
+        os << "Running the solution for 4 more steps...\n";
+        soln->run_solution(1, 4);
 
         soln->end_solution();
         soln->get_stats();

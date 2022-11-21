@@ -282,14 +282,17 @@ namespace {
 
         // Vars.
         yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y, z }); // time-varying var.
-        yc_var_proxy B = yc_var_proxy("B", get_soln(), { x });
+        yc_var_proxy B = yc_var_proxy("B", get_soln(), { x }); // 1D.
         yc_var_proxy C = yc_var_proxy("C", get_soln(), { y });
         yc_var_proxy D = yc_var_proxy("D", get_soln(), { z });
-        yc_var_proxy E = yc_var_proxy("E", get_soln(), { x, y });
+        yc_var_proxy E = yc_var_proxy("E", get_soln(), { x, y }); // 2D.
         yc_var_proxy F = yc_var_proxy("F", get_soln(), { y, z });
         yc_var_proxy G = yc_var_proxy("G", get_soln(), { z, y });
-        yc_var_proxy H = yc_var_proxy("H", get_soln(), { y, z, x });      // different order.
+        yc_var_proxy H = yc_var_proxy("H", get_soln(), { y, z, x }); // 3D in different order.
         yc_var_proxy I = yc_var_proxy("I", get_soln(), { }); // scalar.
+        yc_var_proxy J = yc_var_proxy("J", get_soln(), { t }); // time-only.
+        yc_var_proxy K = yc_var_proxy("K", get_soln(), { t, y }); // time + 1D.
+        yc_var_proxy L = yc_var_proxy("L", get_soln(), { t, y, z }); // time + 2D.
 
     public:
 
@@ -308,7 +311,11 @@ namespace {
                 def_no_t_2d(E, x, 0, 0, y, 1, 0) +
                 def_no_t_2d(F, y, 0, 1, z, 0, 0) +
                 def_no_t_2d(G, z, 1, 0, y, 0, 1) +
-                def_no_t_3d(H, y, 1, 0, z, 0, 1, x, 1, 0) + I;
+                def_no_t_3d(H, y, 1, 0, z, 0, 1, x, 1, 0) +
+                I +
+                J(t) +
+                def_1d(K, t, y, 0, 1) +
+                def_2d(L, t, y, 1, 0, z, 0, 1);
         }
     };
 
@@ -337,6 +344,9 @@ namespace {
         // Misc-only var.
         yc_var_proxy B = yc_var_proxy("B", get_soln(), { c, b });
 
+        // Time-and-misc var.
+        yc_var_proxy C = yc_var_proxy("C", get_soln(), { t, b, a });
+
     public:
 
         TestMisc2dStencil(int radius=2) :
@@ -357,6 +367,7 @@ namespace {
                 v += A(t, x,    -2, y + i, 2, 2);
             for (int i = 1; i <= r + 3; i++)
                 v += A(t, x,     0, y - i, 0, 3);
+            v += C(t, 1, 2);
             A(t+1, x, 1, y, 2, 3) EQUALS v + B(-2, 3) - B(4, -2);
         }
     };

@@ -987,10 +987,12 @@ namespace yask {
             // This avoids calling _wrap_step(t) at every point.
             const auto sp = +step_posn;
             idx_t first_t = 0, last_t = 0;
+            int ndims_left = get_num_dims();
             if (_has_step_dim) {
                 first_t = first_indices[sp];
                 last_t = last_indices[sp];
                 range[sp] = 1; // Do one step per iter.
+                ndims_left--;
             }
 
             // Amount to advance pointer each step.
@@ -998,12 +1000,15 @@ namespace yask {
             idx_t tofs = 0;
             TRACE_MSG(Visitor::fname() << ": " << tsz << " element(s) in shape " <<
                       make_index_string(range) << " for each step");
+            if (ndims_left == 0)
+                assert(tsz == 1);
             
             // Iterate through inner index in inner loop.
             // This enables more optimization.
             const auto ip = get_num_dims() - 1;
-            idx_t ni = range[ip];
-            range[ip] = 1; // Do whole range in each iter.
+            idx_t ni = ndims_left ? range[ip] : 1;
+            if (ndims_left)
+                range[ip] = 1; // Do whole range in each iter.
             TRACE_MSG(Visitor::fname() << ": " << ni <<
                       " element(s) for each starting-point in shape " <<
                       make_index_string(range) << " for each inner loop");
@@ -1039,7 +1044,8 @@ namespace yask {
                              
                                  // Call visitor.
                                  Visitor::visit(this, (real_t*)buffer_ptr, bofs, pt, ti);
-                                 pt[ip]++;
+                                 if (ndims_left)
+                                     pt[ip]++;
                              }
 
                              return true;    // keep going.
@@ -1219,7 +1225,7 @@ namespace yask {
             return _data.get_strides();
         }
 
-   };                          // YkElemVar.
+    };                          // YkElemVar.
 
     // YASK var of real vectors.
     // Used for vars that contain all the folded dims.
