@@ -70,6 +70,7 @@ namespace yask {
         MPI_Group group = MPI_GROUP_NULL;
         int num_ranks = 1;        // total number of ranks.
         int my_rank = 0;          // MPI-assigned index.
+        bool finalize_needed = false;
 
         // Vars for shared-mem ranks.
         MPI_Comm shm_comm = MPI_COMM_NULL; // shm communicator.
@@ -81,11 +82,23 @@ namespace yask {
         int max_threads=0;      // initial value from OMP.
 
         KernelEnv() { }
-        virtual ~KernelEnv() { }
+        virtual ~KernelEnv() {
+            finalize();
+        }
 
         // Init MPI, OMP, etc.
         // This is normally called very early in the program.
         virtual void init_env(int* argc, char*** argv, MPI_Comm comm);
+
+        virtual void finalize() {
+            TRACE_MSG("finalize_needed = " << finalize_needed);
+            if (comm != MPI_COMM_NULL && finalize_needed) {
+                MPI_Finalize();
+                comm = MPI_COMM_NULL;
+                shm_comm = MPI_COMM_NULL;
+            }
+            finalize_needed = false;
+        }
 
         // Lock.
         static void set_debug_lock() {

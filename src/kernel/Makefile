@@ -973,9 +973,11 @@ cxx-yk-api-test:
 	if (( $(ranks) > 1 )); then $(RUN_PREFIX) mpirun -np $(ranks) $(YK_API_TEST_EXEC); fi
 
 # Run Python kernel API test.
+# First run on 1 rank, then multiple ranks if ranks>1.
 py-yk-api-test: $(YK_TEST_SRC_DIR)/yask_kernel_api_test.py $(YK_PY_LIB)
 	@echo '*** Running the Python YASK kernel API test...'
 	$(RUN_PYTHON) $<
+	if (( $(ranks) > 1 )); then mpirun -np $(ranks) $(RUN_PYTHON) $<; fi
 
 # Build C++ kernel tests with exceptions.
 $(YK_API_TEST_EXEC_WITH_EXCEPTION): $(YK_TEST_SRC_DIR)/yask_kernel_api_exception_test.cpp $(YK_LIB)

@@ -318,8 +318,8 @@ int main(int argc, char** argv) {
 
         soln->end_solution();
         soln->get_stats();
-        env->global_barrier();
-        os << "End of YASK kernel API test.\n";
+        env->finalize();
+        os << "End of YASK C++ kernel API test.\n";
         return 0;
     }
     catch (yask_exception e) {

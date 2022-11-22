@@ -263,6 +263,7 @@ void run_tests(int argc, char* argv[]) {
         offload_map_free(buf, sz);
         os << "Exiting 3-D test\n";
     }
+    kenv->finalize();
 }
 
 int main(int argc, char* argv[]) {
