@@ -36,23 +36,30 @@ IN THE SOFTWARE.
 using namespace std;
 using namespace yask;
 
-int main() {
+int main(int argc, char** argv) {
 
-    // The factory from which all other kernel objects are made.
-    yk_factory kfac;
-
-    // Initalize MPI, etc.
-    auto env = kfac.new_env();
-
+    int rank_num = -1;
     try {
 
+        // The factory from which all other kernel objects are made.
+        yk_factory kfac;
+        
+        // Initalize MPI, etc.
+        auto env = kfac.new_env();
+        rank_num = env->get_rank_index();
+
+        // Local options.
+        for (int i = 1; i < argc; i++)
+            if (string(argv[i]) == "-trace")
+                env->set_trace_enabled(true);
+        
         // Create solution.
         auto soln = kfac.new_solution(env);
 
+        // Apply any YASK command-line options.
+        soln->apply_command_line_options(argc, argv);
+
         // Show output only from last rank.
-        // This is an example of using the rank APIs,
-        // the yask_output_factory, and set_debug_output().
-        int rank_num = env->get_rank_index();
         if (rank_num < env->get_num_ranks() - 1) {
             yk_env::disable_debug_output();
             cout << "Suppressing output on rank " << rank_num << ".\n";
@@ -187,7 +194,7 @@ int main() {
                 continue;
 
             // Create indices describing a subset of the overall domain.
-            vector<idx_t> first_indices, last_indices;
+            vector<idx_t> first_cube_indices, last_cube_indices;
             for (auto dname : var->get_dim_names()) {
                 idx_t first_idx = 0, last_idx = 0;
 
@@ -222,61 +229,69 @@ int main() {
                 }
 
                 // Add indices to index vectors.
-                first_indices.push_back(first_idx);
-                last_indices.push_back(last_idx);
+                first_cube_indices.push_back(first_idx);
+                last_cube_indices.push_back(last_idx);
             }
-            assert(first_indices.size() == ndims);
-            assert(last_indices.size() == ndims);
+            assert(first_cube_indices.size() == ndims);
+            assert(last_cube_indices.size() == ndims);
 
             // Print range of inner cube.
             if (ndims == 0)
                 os << "      inner-cube is a single point for this scalar var.\n";
             else
                 os << "      range of inner-cube: " <<
-                var->format_indices(first_indices) << " to " <<
-                var->format_indices(last_indices) << ".\n";
+                var->format_indices(first_cube_indices) << " to " <<
+                var->format_indices(last_cube_indices) << ".\n";
 
             // Check 2 corners of inner-cube to make sure they were set properly.
-            if (var->are_indices_local(first_indices)) {
-                auto val2 = var->get_element(first_indices);
+            if (var->are_indices_local(first_cube_indices)) {
+                auto val2 = var->get_element(first_cube_indices);
                 os << "      first element in inner cube == " << val2 << ".\n";
                 assert(val2 == outer_val);
             }
             else
-                os << "      first element NOT in rank.\n";
-            if (var->are_indices_local(last_indices)) {
-                auto val2 = var->get_element(last_indices);
+                os << "      first element NOT in this rank.\n";
+            if (var->are_indices_local(last_cube_indices)) {
+                auto val2 = var->get_element(last_cube_indices);
                 os << "      last element in inner cube == " << val2 << ".\n";
                 assert(val2 == outer_val);
             }
             else
-                os << "      last element NOT in rank.\n";
+                os << "      last element NOT in this rank.\n";
 
             // Re-init the values in the inner cube using the indices created above.
+            // Use 'strict_indices = false' because first/last_cube_indices are global,
+            // so part or all of cube may be outside this rank.
             double inner_val = 2.0;
-            bool strict_indices = false; // because first/last_indices are global.
-            idx_t nset = var->set_elements_in_slice_same(inner_val, first_indices, last_indices, strict_indices);
+            bool strict_indices = false;
+            idx_t nset = var->set_elements_in_slice_same(inner_val, first_cube_indices,
+                                                         last_cube_indices, strict_indices);
             os << "      " << nset << " element(s) in inner-cube set to " << inner_val << ".\n";
             
-            // Check values on 2 corners of the inner cube to make sure they were set properly.
-            if (var->are_indices_local(first_indices)) {
-                auto val2 = var->get_element(first_indices);
+            // Check values on 2 corners of the inner cube to make sure they
+            // were set properly.  Only check if element is in this rank.
+            if (var->are_indices_local(first_cube_indices)) {
+                auto val2 = var->get_element(first_cube_indices);
                 os << "      first element in inner cube == " << val2 << ".\n";
                 assert(val2 == inner_val);
             }
-            if (var->are_indices_local(last_indices)) {
-                auto val2 = var->get_element(last_indices);
+            if (var->are_indices_local(last_cube_indices)) {
+                auto val2 = var->get_element(last_cube_indices);
                 os << "      last element in inner cube == " << val2 << ".\n";
                 assert(val2 == inner_val);
             }
 
-            // Add to value in first corner of the inner cube if it's in this rank.
-            nset = var->add_to_element(1.0, first_indices);
-            os << "      " << nset << " element(s) updated.\n";
+            // Add to value in first corner of the inner cube if it's in
+            // this rank.  Here, we can use the default 'strict_indices =
+            // true' parameter to add_to_element() because the call is
+            // inside the check for local indices.
+            if (var->are_indices_local(first_cube_indices)) {
+                nset = var->add_to_element(1.0, first_cube_indices);
+                os << "      " << nset << " element(s) updated.\n";
+                assert(nset == 1);
 
-            // Check to make sure they were updated.
-            if (var->are_indices_local(first_indices)) {
-                auto val2 = var->get_element(first_indices);
+                // Check to make sure they were updated.
+                auto val2 = var->get_element(first_cube_indices);
                 os << "      first element in inner cube == " << val2 << ".\n";
                 assert(val2 == inner_val + 1.0);
             }
@@ -295,19 +310,21 @@ int main() {
         // Apply the stencil solution to the data.
         soln->reset_auto_tuner(false);
         env->global_barrier();
-        os << "Running the solution for 1 step...\n";
+        os << "Running the solution on " << env->get_num_ranks() << " rank(s)...\n";
+        os << "Running for 1 step...\n";
         soln->run_solution(0);
-        os << "Running the solution for 4 more steps...\n";
+        os << "Running for 4 more steps...\n";
         soln->run_solution(1, 4);
 
         soln->end_solution();
         soln->get_stats();
+        env->global_barrier();
         os << "End of YASK kernel API test.\n";
         return 0;
     }
     catch (yask_exception e) {
         cerr << "YASK kernel API test: " << e.get_message() <<
-            " on rank " << env->get_rank_index() << ".\n";
+            " on rank " << rank_num << ".\n";
         return 1;
     }
 }

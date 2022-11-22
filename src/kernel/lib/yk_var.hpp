@@ -654,7 +654,11 @@ namespace yask {
         // Find sizes needed for slicing.
         inline Indices get_slice_range(const Indices& first_indices,
                                        const Indices& last_indices) const {
-            return last_indices.add_const(1).sub_elements(first_indices);
+            host_assert(first_indices.get_num_dims() == last_indices.get_num_dims());
+            Indices range = first_indices;
+            for (int i = 0; i < first_indices.get_num_dims(); i++)
+                range[i] = std::max(idx_t(0), last_indices[i] + 1 - first_indices[i]);
+            return range;
         }
 
         // Accessors to GenericVar.
@@ -955,8 +959,8 @@ namespace yask {
         template<typename Visitor>
         idx_t _visit_elements_in_slice(bool strict_indices,
                                        void* buffer_ptr,
-                                       const Indices& first_indices,
-                                       const Indices& last_indices,
+                                       const Indices& in_first_indices,
+                                       const Indices& in_last_indices,
                                        bool on_device) {
             STATE_VARS(this);
             if (get_storage() == 0) {
@@ -969,11 +973,17 @@ namespace yask {
             }
 
             TRACE_MSG(Visitor::fname() << ": " << make_info_string() << " [" <<
-                      make_index_string(first_indices) << " ... " <<
-                      make_index_string(last_indices) << "] with buffer at " <<
+                      make_index_string(in_first_indices) << " ... " <<
+                      make_index_string(in_last_indices) << "] with buffer at " <<
                       buffer_ptr << " on " << (on_device ? "OMP device" : "host"));
-            check_indices(first_indices, Visitor::fname(), strict_indices, true, false);
-            check_indices(last_indices, Visitor::fname(), strict_indices, true, false);
+            Indices first_indices, last_indices;
+            check_indices(in_first_indices, Visitor::fname(), strict_indices,
+                          true, false, &first_indices);
+            check_indices(in_last_indices, Visitor::fname(), strict_indices,
+                          true, false, &last_indices);
+            TRACE_MSG(Visitor::fname() << ": clipped to  [" <<
+                      make_index_string(first_indices) << " ... " <<
+                      make_index_string(last_indices) << "]");
 
             // Find range.
             auto range = get_slice_range(first_indices, last_indices);
@@ -1927,31 +1937,31 @@ namespace yask {
         }
         virtual idx_t set_element(double val,
                                   const Indices& indices,
-                                  bool strict_indices = false);
+                                  bool strict_indices);
         virtual idx_t set_element(double val,
                                   const VarIndices& indices,
-                                  bool strict_indices = false) {
+                                  bool strict_indices) {
             const Indices indices2(indices);
             return set_element(val, indices2, strict_indices);
         }
         virtual idx_t set_element(double val,
                                   const idx_t_init_list& indices,
-                                  bool strict_indices = false) {
+                                  bool strict_indices) {
             const Indices indices2(indices);
             return set_element(val, indices2, strict_indices);
         }
         virtual idx_t add_to_element(double val,
                                      const Indices& indices,
-                                     bool strict_indices = false);
+                                     bool strict_indices);
         virtual idx_t add_to_element(double val,
                                      const VarIndices& indices,
-                                     bool strict_indices = false) {
+                                     bool strict_indices) {
             const Indices indices2(indices);
             return add_to_element(val, indices2, strict_indices);
         }
         virtual idx_t add_to_element(double val,
                                      const idx_t_init_list& indices,
-                                     bool strict_indices = false) {
+                                     bool strict_indices) {
             const Indices indices2(indices);
             return add_to_element(val, indices2, strict_indices);
         }
