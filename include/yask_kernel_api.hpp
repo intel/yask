@@ -238,6 +238,18 @@ namespace yask {
         virtual void
         global_barrier() const =0;
 
+        /// Finalize the environment.
+        /**
+           If MPI is enabled and YASK initialized the MPI communicator,
+           calls `MPI_Finalize()`.
+           This function is automatically called when a yk_env object
+           is destroyed.
+           Cannot call global_barrier() or any MPI-dependent API after
+           calling this.
+        */
+        virtual void
+        finalize() =0;
+
     }; // yk_env.
 
     /// **[Deprecated]** Use yk_var.

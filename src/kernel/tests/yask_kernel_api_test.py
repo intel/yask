@@ -86,11 +86,13 @@ def read_var(var, timestep) :
     print("Testing reading var '", var.get_name(), "' at time ", timestep, "...")
     ndarray, first_indices, last_indices, point = make_ndarray(var, timestep)
 
-    print("Reading 1 element...")
+    print("Reading corner elements...")
     val1 = var.get_element(first_indices)
     print("Read value ", val1)
+    val2 = var.get_element(last_indices)
+    print("Read value ", val2)
 
-    print("Reading all element(s) in ndarray...")
+    print("Reading element(s) in ndarray from ", first_indices, " to ", last_indices, "...")
     nread = var.get_elements_in_slice(ndarray.data, first_indices, last_indices)
     print(ndarray)
 
@@ -159,6 +161,10 @@ if __name__ == "__main__":
 
     # Initalize MPI, etc.
     env = kfac.new_env()
+    if env.get_rank_index() > 0:
+        env.disable_debug_output();
+    else:
+        env.set_trace_enabled(True);
 
     # Create solution.
     soln = kfac.new_solution(env)
@@ -208,24 +214,27 @@ if __name__ == "__main__":
 
     # Print some info about the solution.
     print("Stencil-solution '", name, "':")
-    print("  Step dimension: ", soln.get_step_dim_name())
-    print("  Domain dimensions: ", soln.get_domain_dim_names())
+    print("  Step dimension:", soln.get_step_dim_name())
+    print("  Domain dimensions:", soln.get_domain_dim_names())
     print("  Vars:")
     for var in soln.get_vars() :
         print("    ", var.get_name(), var.get_dim_names())
         for dname in var.get_dim_names() :
             if dname in soln.get_domain_dim_names() :
                 print("      '", dname, "' allowed domain index range in this rank: ",
-                      var.get_first_rank_alloc_index(dname), " ... ",
+                      var.get_first_rank_alloc_index(dname), "...",
                       var.get_last_rank_alloc_index(dname))
             elif dname == soln.get_step_dim_name() :
                 print("      '", dname, "' allowed step index range: ",
-                      var.get_first_valid_step_index(), " ... ",
+                      var.get_first_valid_step_index(), "...",
                       var.get_last_valid_step_index())
             else :
                 print("      '", dname, "' allowed misc index range: ",
-                      var.get_first_misc_index(dname), " ... ",
+                      var.get_first_misc_index(dname), "...",
                       var.get_last_misc_index(dname))
+        print("      allowed range in all dims: ",
+              var.get_first_local_index_vec(), "...",
+              var.get_last_local_index_vec())
 
     # Init the vars.
     for var in soln.get_vars() :
@@ -292,7 +301,7 @@ if __name__ == "__main__":
                 last_indices += [var.get_last_misc_index(dname)]
 
         # Init value at one point.
-        nset = var.set_element(15.0, one_indices)
+        nset = var.set_element(15.0, one_indices, False)
         print("Set ", nset, " element(s) in rank ", env.get_rank_index())
 
         # Init the values within the small cube.
@@ -304,22 +313,24 @@ if __name__ == "__main__":
 
     # Apply the stencil solution to the data.
     env.global_barrier()
-    print("Running the solution for 1 step...")
+    print("Running the solution on", env.get_num_ranks(), "rank(s)");
+    print("Running for 1 step...")
     soln.run_solution(0)
 
     # Print result at timestep 1.
     for var in soln.get_vars() :
         read_var(var, 1)
 
-    print("Running the solution for 10 more steps...")
-    soln.run_solution(1, 10)
+    print("Running for 4 more steps...")
+    soln.run_solution(1, 4)
 
-    # Print final result at timestep 11, assuming update was to t+1.
+    # Print final result at timestep 5, assuming last update was to t+1.
     for var in soln.get_vars() :
-        read_var(var, 11)
+        read_var(var, 5)
 
     soln.end_solution()
     soln.get_stats()
+    env.finalize()
 
     #print("Debug output captured:\n", debug_output.get_string())
     print("End of YASK Python kernel API test.")

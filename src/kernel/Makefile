@@ -965,15 +965,19 @@ $(YK_API_TEST_EXEC): $(YK_TEST_SRC_DIR)/yask_kernel_api_test.cpp $(YK_LIB)
 	@ls -l $@
 
 # Build and run C++ tests.
+# First run on 1 rank, then multiple ranks if ranks>1.
 cxx-yk-api-test:
 	$(TEST_MAKE) $(YK_API_TEST_EXEC) allow_new_var_types=1
 	@echo '*** Running the C++ YASK kernel API test...'
 	$(RUN_PREFIX) $(YK_API_TEST_EXEC)
+	if (( $(ranks) > 1 )); then $(RUN_PREFIX) mpirun -np $(ranks) $(YK_API_TEST_EXEC); fi
 
 # Run Python kernel API test.
+# First run on 1 rank, then multiple ranks if ranks>1.
 py-yk-api-test: $(YK_TEST_SRC_DIR)/yask_kernel_api_test.py $(YK_PY_LIB)
 	@echo '*** Running the Python YASK kernel API test...'
 	$(RUN_PYTHON) $<
+	if (( $(ranks) > 1 )); then mpirun -np $(ranks) $(RUN_PYTHON) $<; fi
 
 # Build C++ kernel tests with exceptions.
 $(YK_API_TEST_EXEC_WITH_EXCEPTION): $(YK_TEST_SRC_DIR)/yask_kernel_api_exception_test.cpp $(YK_LIB)
@@ -1063,10 +1067,10 @@ yk-test-no-yc: kernel-no-yc $(YK_SCRIPT)
 
 # Run the kernel API tests for C++ and Python with and w/o expected exceptions.
 api-tests:
-	$(MAKE) clean; $(MAKE) cxx-yk-api-test real_bytes=8 stencil=iso3dfd
-	$(MAKE) clean; $(MAKE) py-yk-api-test stencil=iso3dfd
-	$(MAKE) clean; $(MAKE) cxx-yk-api-test-with-exception real_bytes=8 stencil=iso3dfd
-	$(MAKE) clean; $(MAKE) py-yk-api-test-with-exception stencil=iso3dfd
+	$(MAKE) clean; $(MAKE) cxx-yk-api-test real_bytes=8
+	$(MAKE) clean; $(MAKE) py-yk-api-test
+	$(MAKE) clean; $(MAKE) cxx-yk-api-test-with-exception real_bytes=8
+	$(MAKE) clean; $(MAKE) py-yk-api-test-with-exception
 
 # Run several stencils using built-in validation.
 # NB: set arch var as applicable.

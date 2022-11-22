@@ -87,8 +87,8 @@ void run_tests(int argc, char* argv[]) {
 
         double val = 3.14;
         os << "Testing with " << val << endl;
-        g0->set_element(val, {});
-        g1->set_element(val, {});
+        g0->set_element(val, {}, true);
+        g1->set_element(val, {}, true);
         auto v0 = g0->get_element({});
         auto v1 = g1->get_element({});
         assert(v0 == v1);
@@ -133,8 +133,8 @@ void run_tests(int argc, char* argv[]) {
 
         IdxTuple first, last;
         for (auto dname : gdims) {
-            first.add_dim_back(dname, g3->get_first_rank_alloc_index(dname));
-            last.add_dim_back(dname, g3->get_last_rank_alloc_index(dname));
+            first.add_dim_back(dname, g3->get_first_local_index(dname));
+            last.add_dim_back(dname, g3->get_last_local_index(dname));
         }
         Indices firsti(first), lasti(last);
 
@@ -263,6 +263,7 @@ void run_tests(int argc, char* argv[]) {
         offload_map_free(buf, sz);
         os << "Exiting 3-D test\n";
     }
+    kenv->finalize();
 }
 
 int main(int argc, char* argv[]) {

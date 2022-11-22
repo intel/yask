@@ -105,9 +105,10 @@ if __name__ == "__main__":
     soln.end_solution()
     soln.get_stats()
     #print("Debug output captured:\n", debug_output.get_string())
-
+    env.finalize()
+    
     if num_exception != 2:
         print("There is a problem in exception test.")
         exit(1)
     else:
-        print("End of YASK kernel API test with exception.")
+        print("End of YASK Python kernel API test with exception.")

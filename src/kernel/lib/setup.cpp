@@ -61,6 +61,7 @@ namespace yask {
                     THROW_YASK_EXCEPTION("error: MPI_THREAD_SERIALIZED or MPI_THREAD_MULTIPLE not provided");
                 }
                 is_init = true;
+                finalize_needed = true;
             }
             comm = MPI_COMM_WORLD;
         }

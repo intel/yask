@@ -652,7 +652,7 @@ int main(int argc, char** argv)
         if (!ok)
             exit_yask(1);
 
-        MPI_Finalize();
+        kenv->finalize();
         os << "YASK DONE." << endl << div_line << flush;
     }
     catch (yask_exception& e) {

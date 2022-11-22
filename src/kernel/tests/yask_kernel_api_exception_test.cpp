@@ -99,6 +99,7 @@ int main() {
     soln->run_solution(1, 10);
     soln->end_solution();
     soln->get_stats();
+    env->finalize();
 
     // TODO: add exception tests for the methods below:
     // StencilContext::calc_region
@@ -128,7 +129,7 @@ int main() {
         exit(1);
     }
     else
-        cout << "End of YASK kernel API test with exception.\n";
+        cout << "End of YASK kernel C++ API test with exception.\n";
 
     return 0;
 }

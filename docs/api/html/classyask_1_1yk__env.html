@@ -91,6 +91,9 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a2384185b4d346418a62db1310a3dddca"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__env.html#a2384185b4d346418a62db1310a3dddca">global_barrier</a> () const =0</td></tr>
 <tr class="memdesc:a2384185b4d346418a62db1310a3dddca"><td class="mdescLeft">&#160;</td><td class="mdescRight">Wait until all ranks have reached this element.  <a href="#a2384185b4d346418a62db1310a3dddca">More...</a><br /></td></tr>
 <tr class="separator:a2384185b4d346418a62db1310a3dddca"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab2d17018fe9fadd9bfdc091d8bf32feb"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__env.html#ab2d17018fe9fadd9bfdc091d8bf32feb">finalize</a> ()=0</td></tr>
+<tr class="memdesc:ab2d17018fe9fadd9bfdc091d8bf32feb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Finalize the environment.  <a href="#ab2d17018fe9fadd9bfdc091d8bf32feb">More...</a><br /></td></tr>
+<tr class="separator:ab2d17018fe9fadd9bfdc091d8bf32feb"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a name="pub-static-methods"></a>
 Static Public Member Functions</h2></td></tr>
@@ -356,6 +359,34 @@ Static Public Member Functions</h2></td></tr>
 
 <p>Wait until all ranks have reached this element. </p>
 <p>If MPI is enabled, calls <code>MPI_Barrier()</code>. Otherwise, has no effect. </p>
+
+</div>
+</div>
+<a id="ab2d17018fe9fadd9bfdc091d8bf32feb"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab2d17018fe9fadd9bfdc091d8bf32feb">&#9670;&nbsp;</a></span>finalize()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual void yask::yk_env::finalize </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Finalize the environment. </p>
+<p>If MPI is enabled and YASK initialized the MPI communicator, calls <code>MPI_Finalize()</code>. This function is automatically called when a <a class="el" href="classyask_1_1yk__env.html" title="Kernel environment.">yk_env</a> object is destroyed. Cannot call <a class="el" href="classyask_1_1yk__env.html#a2384185b4d346418a62db1310a3dddca" title="Wait until all ranks have reached this element.">global_barrier()</a> or any MPI-dependent API after calling this. </p>
 
 </div>
 </div>

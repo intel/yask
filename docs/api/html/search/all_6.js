@@ -1,5 +1,6 @@
 var searchData=
 [
+  ['finalize',['finalize',['../classyask_1_1yk__env.html#ab2d17018fe9fadd9bfdc091d8bf32feb',1,'yask::yk_env']]],
   ['first_5fdomain_5findex',['first_domain_index',['../classyask_1_1yc__solution__base.html#a56f644e7e6b4e96619245f217b3763b5',1,'yask::yc_solution_base']]],
   ['format',['format',['../classyask_1_1yc__solution.html#a5f3624ded964c465724fd0221d5a2aaa',1,'yask::yc_solution']]],
   ['format_5findices',['format_indices',['../classyask_1_1yk__var.html#a55d6c585b8384881065c01bb067c96dd',1,'yask::yk_var::format_indices(const idx_t_vec &amp;indices) const =0'],['../classyask_1_1yk__var.html#ae929dea5359d07e7541abab78ca7b139',1,'yask::yk_var::format_indices(const idx_t_init_list &amp;indices) const =0']]],
