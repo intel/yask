@@ -53,8 +53,9 @@ namespace {
     
         // Define simple stencil from var 'V' at 't0' centered around 'x0'.
         // Extend given radius left and/or right w/'*_ext'.
-        virtual yc_number_node_ptr def_1d(yc_var_proxy& V, const yc_number_node_ptr& t0, const yc_number_node_ptr& x0,
-                                          int left_ext, int right_ext) {
+        virtual yc_number_node_ptr def_t1d(yc_var_proxy& V, const yc_number_node_ptr& t0,
+                                           const yc_number_node_ptr& x0,
+                                           int left_ext, int right_ext) {
             auto r = get_radius();
             yc_number_node_ptr v;
             for (int i = -r - left_ext; i <= r + right_ext; i++)
@@ -63,9 +64,10 @@ namespace {
         }
 
         // Define simple stencil from scratch or read-only var 'V' centered
-        // around 'x0'.  Similar to 'def_1d()', but doesn't use step var.
-        virtual yc_number_node_ptr def_no_t_1d(yc_var_proxy& V, const yc_number_node_ptr& x0,
-                                               int left_ext, int right_ext) {
+        // around 'x0'.  Similar to 'def_t1d()', but doesn't use step var.
+        virtual yc_number_node_ptr def_1d(yc_var_proxy& V,
+                                          const yc_number_node_ptr& x0,
+                                          int left_ext, int right_ext) {
             auto r = get_radius();
             yc_number_node_ptr v;
             for (int i = -r - left_ext; i <= r + right_ext; i++)
@@ -76,11 +78,11 @@ namespace {
         // Define simple stencil from var 'V' at 't0' centered around 'x0', 'y0'.
         // Extend given radius left and/or right w/'*_ext'.
         // Use some points from the entire rectangle, not just on the axes.
-        virtual yc_number_node_ptr def_2d(yc_var_proxy& V, const yc_number_node_ptr& t0,
-                                          const yc_number_node_ptr& x0,
-                                          int x_left_ext, int x_right_ext,
-                                          const yc_number_node_ptr& y0,
-                                          int y_left_ext, int y_right_ext) {
+        virtual yc_number_node_ptr def_t2d(yc_var_proxy& V, const yc_number_node_ptr& t0,
+                                           const yc_number_node_ptr& x0,
+                                           int x_left_ext, int x_right_ext,
+                                           const yc_number_node_ptr& y0,
+                                           int y_left_ext, int y_right_ext) {
             auto r = get_radius();
             yc_number_node_ptr v;
             for (int i : { -r - x_left_ext, 0, r + x_right_ext })
@@ -89,14 +91,14 @@ namespace {
             return v;
         }    
 
-        // Define simple stencil from scratch or read-only var 'V' at 't0'
+        // Define simple stencil from scratch or read-only var 'V'
         // centered around 'x0', 'y0'.  Extend given radius left and/or right
         // w/'*_ext'.
-        virtual yc_number_node_ptr def_no_t_2d(yc_var_proxy& V,
-                                               const yc_number_node_ptr& x0,
-                                               int x_left_ext, int x_right_ext,
-                                               const yc_number_node_ptr& y0,
-                                               int y_left_ext, int y_right_ext) {
+        virtual yc_number_node_ptr def_2d(yc_var_proxy& V,
+                                          const yc_number_node_ptr& x0,
+                                          int x_left_ext, int x_right_ext,
+                                          const yc_number_node_ptr& y0,
+                                          int y_left_ext, int y_right_ext) {
             auto r = get_radius();
             yc_number_node_ptr v;
             for (int i : { -r - x_left_ext, 0, r + x_right_ext })
@@ -108,13 +110,13 @@ namespace {
         // Define simple stencil from var 'V' at 't0' centered around 'x0', 'y0', 'z0'.
         // Extend given radius left and/or right w/'*_ext'.
         // Use some points from the entire rectangular polytope, not just on the axes.
-        virtual yc_number_node_ptr def_3d(yc_var_proxy& V, const yc_number_node_ptr& t0,
-                                          const yc_number_node_ptr& x0,
-                                          int x_left_ext, int x_right_ext,
-                                          const yc_number_node_ptr& y0,
-                                          int y_left_ext, int y_right_ext,
-                                          const yc_number_node_ptr& z0,
-                                          int z_left_ext, int z_right_ext) {
+        virtual yc_number_node_ptr def_t3d(yc_var_proxy& V, const yc_number_node_ptr& t0,
+                                           const yc_number_node_ptr& x0,
+                                           int x_left_ext, int x_right_ext,
+                                           const yc_number_node_ptr& y0,
+                                           int y_left_ext, int y_right_ext,
+                                           const yc_number_node_ptr& z0,
+                                           int z_left_ext, int z_right_ext) {
             auto r = get_radius();
             yc_number_node_ptr v = V(t0, x0, y0, z0);
             for (int i : { -r - x_left_ext, r + x_right_ext })
@@ -127,13 +129,13 @@ namespace {
         // Define simple stencil from scratch or read-only var 'V' centered
         // around 'x0', 'y0', 'z0'.  Extend given radius left and/or right
         // w/'*_ext'.
-        virtual yc_number_node_ptr def_no_t_3d(yc_var_proxy& V,
-                                               const yc_number_node_ptr& x0,
-                                               int x_left_ext, int x_right_ext,
-                                               const yc_number_node_ptr& y0,
-                                               int y_left_ext, int y_right_ext,
-                                               const yc_number_node_ptr& z0,
-                                               int z_left_ext, int z_right_ext) {
+        virtual yc_number_node_ptr def_3d(yc_var_proxy& V,
+                                          const yc_number_node_ptr& x0,
+                                          int x_left_ext, int x_right_ext,
+                                          const yc_number_node_ptr& y0,
+                                          int y_left_ext, int y_right_ext,
+                                          const yc_number_node_ptr& z0,
+                                          int z_left_ext, int z_right_ext) {
             auto r = get_radius();
             yc_number_node_ptr v = V(x0, y0, z0);
             for (int i : { -r - x_left_ext, r + x_right_ext })
@@ -146,15 +148,15 @@ namespace {
         // Define simple stencil from var 'V' at 't0' centered around 'w0', 'x0', 'y0', 'z0'.
         // Extend given radius left and/or right w/'*_ext'.
         // Use some points from the entire rectangular polytope, not just on the axes.
-        virtual yc_number_node_ptr def_4d(yc_var_proxy& V, const yc_number_node_ptr& t0,
-                                          const yc_number_node_ptr& w0,
-                                          int w_left_ext, int w_right_ext,
-                                          const yc_number_node_ptr& x0,
-                                          int x_left_ext, int x_right_ext,
-                                          const yc_number_node_ptr& y0,
-                                          int y_left_ext, int y_right_ext,
-                                          const yc_number_node_ptr& z0,
-                                          int z_left_ext, int z_right_ext) {
+        virtual yc_number_node_ptr def_t4d(yc_var_proxy& V, const yc_number_node_ptr& t0,
+                                           const yc_number_node_ptr& w0,
+                                           int w_left_ext, int w_right_ext,
+                                           const yc_number_node_ptr& x0,
+                                           int x_left_ext, int x_right_ext,
+                                           const yc_number_node_ptr& y0,
+                                           int y_left_ext, int y_right_ext,
+                                           const yc_number_node_ptr& z0,
+                                           int z_left_ext, int z_right_ext) {
             auto r = get_radius();
             yc_number_node_ptr v = V(t0, w0, x0, y0, z0);
             for (int h : { -r - w_left_ext, r + w_right_ext })
@@ -188,7 +190,7 @@ namespace {
         virtual void define() {
 
             // define the value at t+1 using asymmetric stencil.
-            A(t+1, x) EQUALS def_1d(A, t, x, 0, 2);
+            A(t+1, x) EQUALS def_t1d(A, t, x, 0, 2);
         }
     };
 
@@ -214,7 +216,7 @@ namespace {
         virtual void define() {
 
             // define the value at t+1 using asymmetric stencil.
-            A(t+1, x, y) EQUALS def_2d(A, t, x, 0, 2, y, 4, 3);
+            A(t+1, x, y) EQUALS def_t2d(A, t, x, 0, 2, y, 4, 3);
         }
     };
 
@@ -240,7 +242,7 @@ namespace {
         virtual void define() {
 
             // define the value at t+1 using asymmetric stencil.
-            A(t+1, x, y, z) EQUALS def_3d(A, t, x, 0, 2, y, 4, 3, z, 2, 1);
+            A(t+1, x, y, z) EQUALS def_t3d(A, t, x, 0, 2, y, 4, 3, z, 2, 1);
         }
     };
 
@@ -266,7 +268,7 @@ namespace {
         virtual void define() {
 
             // define the value at t+1 using asymmetric stencil.
-            A(t+1, w, x, y, z) EQUALS def_4d(A, t, w, 1, 2, x, 0, 2, y, 2, 1, z, 1, 0);
+            A(t+1, w, x, y, z) EQUALS def_t4d(A, t, w, 1, 2, x, 0, 2, y, 2, 1, z, 1, 0);
         }
     };
 
@@ -304,18 +306,18 @@ namespace {
 
             // define the value at t+1 using asymmetric stencil.
             A(t+1, x, y, z) EQUALS
-                def_3d(A, t, x, 0, 2, y, 4, 3, z, 2, 1) +
-                def_no_t_1d(B, x, 0, 1) +
-                def_no_t_1d(C, y, 1, 0) +
-                def_no_t_1d(D, z, 0, 0) +
-                def_no_t_2d(E, x, 0, 0, y, 1, 0) +
-                def_no_t_2d(F, y, 0, 1, z, 0, 0) +
-                def_no_t_2d(G, z, 1, 0, y, 0, 1) +
-                def_no_t_3d(H, y, 1, 0, z, 0, 1, x, 1, 0) +
+                def_t3d(A, t, x, 0, 2, y, 4, 3, z, 2, 1) +
+                def_1d(B, x, 0, 1) +
+                def_1d(C, y, 1, 0) +
+                def_1d(D, z, 0, 0) +
+                def_2d(E, x, 0, 0, y, 1, 0) +
+                def_2d(F, y, 0, 1, z, 0, 0) +
+                def_2d(G, z, 1, 0, y, 0, 1) +
+                def_3d(H, y, 1, 0, z, 0, 1, x, 1, 0) +
                 I +
                 J(t) +
-                def_1d(K, t, y, 0, 1) +
-                def_2d(L, t, y, 1, 0, z, 0, 1);
+                def_t1d(K, t, y, 0, 1) +
+                def_t2d(L, t, y, 1, 0, z, 0, 1);
         }
     };
 
@@ -512,7 +514,7 @@ namespace {
         virtual void define() {
 
             // Like the previous 2D test, but defines value at 't-1'.
-            A(t-1, x, y) EQUALS def_2d(A, t, x, 0, 2, y, 4, 3);
+            A(t-1, x, y) EQUALS def_t2d(A, t, x, 0, 2, y, 4, 3);
         }
     };
 
@@ -543,10 +545,10 @@ namespace {
 
             // Define A(t+1) and B(t+1).
             A(t+1, x) EQUALS -2 * A(t, x);
-            B(t+1, x) EQUALS def_1d(B, t, x, 0, 1);
+            B(t+1, x) EQUALS def_t1d(B, t, x, 0, 1);
 
             // 'C(t+1)' depends on 'A(t+1)', creating a 2nd stage.
-            C(t+1, x) EQUALS def_1d(A, t+1, x, 1, 0) + C(t, x+1);
+            C(t+1, x) EQUALS def_t1d(A, t+1, x, 1, 0) + C(t, x+1);
         }
     };
 
@@ -573,10 +575,10 @@ namespace {
         virtual void define() {
 
             // Define A(t+1) from A(t) & B(t).
-            A(t+1, x, y) EQUALS A(t, x, y) - def_2d(B, t, x, 0, 1, y, 2, 1);
+            A(t+1, x, y) EQUALS A(t, x, y) - def_t2d(B, t, x, 0, 1, y, 2, 1);
 
             // Define B(t+1) from B(t) & A(t+1), creating a 2nd stage.
-            B(t+1, x, y) EQUALS B(t, x, y) - def_2d(A, t+1, x, 3, 2, y, 0, 1);
+            B(t+1, x, y) EQUALS B(t, x, y) - def_t2d(A, t+1, x, 3, 2, y, 0, 1);
 
             // Define C(t+1) from B(t+1), creating a 3rd stage.
             C(t+1, x, y) EQUALS B(t+1, x-1, y+2);
@@ -606,11 +608,11 @@ namespace {
 
             // Define A(t+1) from A(t) & stencil at B(t).
             A(t+1, x, y, z) EQUALS A(t, x, y, z) -
-                def_3d(B, t, x, 0, 1, y, 2, 1, z, 1, 0);
+                def_t3d(B, t, x, 0, 1, y, 2, 1, z, 1, 0);
 
             // Define B(t+1) from B(t) & stencil at A(t+1).
             B(t+1, x, y, z) EQUALS B(t, x, y, z) -
-                def_3d(A, t+1, x, 1, 0, y, 0, 1, z, 2, 1);
+                def_t3d(A, t+1, x, 1, 0, y, 0, 1, z, 2, 1);
         }
     };
 
@@ -640,10 +642,10 @@ namespace {
         virtual void define() {
 
             // Define values in scratch var 'B' based on 'A'.
-            B(x) EQUALS def_1d(A, t, x, 1, 0);
+            B(x) EQUALS def_t1d(A, t, x, 1, 0);
 
             // Set 'A' from scratch var values.
-            A(t+1, x) EQUALS def_no_t_1d(B, x-4, 2, 3) + def_no_t_1d(B, x+6, 0, 1);
+            A(t+1, x) EQUALS def_1d(B, x-4, 2, 3) + def_1d(B, x+6, 0, 1);
         }
     };
 
@@ -672,15 +674,15 @@ namespace {
         virtual void define() {
 
             // Set scratch var.
-            t1(x, y) EQUALS def_2d(A, t, x, 0, 1, y, 2, 1);
+            t1(x, y) EQUALS def_t2d(A, t, x, 0, 1, y, 2, 1);
 
             // Set one scratch var from other scratch var.
             t2(x, y) EQUALS t1(x, y+1);
 
             // Update A from scratch vars.
             A(t+1, x, y) EQUALS A(t, x, y) +
-                def_no_t_2d(t1, x, 2, 0, y, 1, 0) +
-                def_no_t_2d(t2, x, 1, 0, y, 0, 1);
+                def_2d(t1, x, 2, 0, y, 1, 0) +
+                def_2d(t2, x, 1, 0, y, 0, 1);
         }
     };
 
@@ -710,16 +712,16 @@ namespace {
         virtual void define() {
 
             // Set scratch vars.
-            t1(x, y, z) EQUALS def_3d(A, t, x, 0, 1, y, 2, 1, z, 1, 0);
-            t2(x, y, z) EQUALS def_3d(A, t, x, 1, 0, y, 0, 2, z, 0, 1);
+            t1(x, y, z) EQUALS def_t3d(A, t, x, 0, 1, y, 2, 1, z, 1, 0);
+            t2(x, y, z) EQUALS def_t3d(A, t, x, 1, 0, y, 0, 2, z, 0, 1);
 
             // Set a scratch var from other scratch vars.
             t3(x, y, z) EQUALS t1(x-1, y+1, z) + t2(x, y, z-1);
 
             // Update A from scratch vars.
             A(t+1, x, y, z) EQUALS A(t, x, y, z) +
-                def_no_t_3d(t1, x, 2, 0, y, 0, 1, z, 1, 0) +
-                def_no_t_3d(t3, x, 1, 0, y, 0, 1, z, 0, 2);
+                def_3d(t1, x, 2, 0, y, 0, 1, z, 1, 0) +
+                def_3d(t3, x, 1, 0, y, 0, 1, z, 0, 2);
         }
     };
 
@@ -748,7 +750,7 @@ namespace {
             auto sd0 = (x >= first_domain_index(x) + 5) && (x <= last_domain_index(x) - 3);
         
             // Define interior points.
-            auto u = def_1d(A, t, x, 0, 1);
+            auto u = def_t1d(A, t, x, 0, 1);
             A(t+1, x) EQUALS u IF_DOMAIN sd0;
 
             // Define exterior points.
@@ -782,8 +784,8 @@ namespace {
                 (y >= first_domain_index(y) + 4) && (y <= last_domain_index(y) - 6);
         
             // Set A w/different stencils depending on condition.
-            A(t+1, x, y) EQUALS def_2d(A, t, x, 0, 2, y, 1, 0) IF_DOMAIN sd0;
-            A(t+1, x, y) EQUALS def_2d(A, t, x, 1, 0, y, 0, 2) IF_DOMAIN !sd0;
+            A(t+1, x, y) EQUALS def_t2d(A, t, x, 0, 2, y, 1, 0) IF_DOMAIN sd0;
+            A(t+1, x, y) EQUALS def_t2d(A, t, x, 1, 0, y, 0, 2) IF_DOMAIN !sd0;
         }
     };
 
@@ -814,8 +816,8 @@ namespace {
                 (z >= first_domain_index(z) + 6) && (z <= last_domain_index(z) - 4);
         
             // Set A w/different stencils depending on condition.
-            A(t+1, x, y, z) EQUALS def_3d(A, t, x, 0, 2, y, 1, 0, z, 0, 1) IF_DOMAIN sd0;
-            A(t+1, x, y, z) EQUALS def_3d(A, t, x, 1, 0, y, 0, 2, z, 1, 0) IF_DOMAIN !sd0;
+            A(t+1, x, y, z) EQUALS def_t3d(A, t, x, 0, 2, y, 1, 0, z, 0, 1) IF_DOMAIN sd0;
+            A(t+1, x, y, z) EQUALS def_t3d(A, t, x, 1, 0, y, 0, 2, z, 1, 0) IF_DOMAIN !sd0;
         }
     };
 
@@ -856,13 +858,13 @@ namespace {
             // run-time.
 
             // Use this equation when t is even.
-            A(t+1, x) EQUALS def_1d(A, t, x, 0, 0) IF_STEP tc0;
+            A(t+1, x) EQUALS def_t1d(A, t, x, 0, 0) IF_STEP tc0;
 
             // Use this equation when t is odd and B(0) > B(1).
-            A(t+1, x) EQUALS def_1d(A, t, x, 1, 2) IF_STEP !tc0 && vc0;
+            A(t+1, x) EQUALS def_t1d(A, t, x, 1, 2) IF_STEP !tc0 && vc0;
 
             // Use this equation when t is even and B(0) <= B(1).
-            A(t+1, x) EQUALS def_1d(A, t, x, 2, 0) IF_STEP !tc0 && !vc0;
+            A(t+1, x) EQUALS def_t1d(A, t, x, 2, 0) IF_STEP !tc0 && !vc0;
         }
     };
 
@@ -891,13 +893,13 @@ namespace {
         virtual void define() {
 
             // Define values in scratch var 'B' using current values from 'A'.
-            B(x) EQUALS def_1d(A, t, x, 1, 0);
+            B(x) EQUALS def_t1d(A, t, x, 1, 0);
 
             // Define sub-domain.
             auto sd0 = (x >= first_domain_index(x) + 5) && (x <= last_domain_index(x) - 3);
         
             // Define next values for 'A' from scratch var values.
-            auto v = def_no_t_1d(B, x-6, 2, 3) - def_no_t_1d(B, x+7, 0, 2);
+            auto v = def_1d(B, x-6, 2, 3) - def_1d(B, x+7, 0, 2);
             A(t+1, x) EQUALS v IF_DOMAIN sd0;
             A(t+1, x) EQUALS -v IF_DOMAIN !sd0;
         }
@@ -929,10 +931,10 @@ namespace {
 
             // Define 'A(t+1)' and 'B(t+1)' based on values at 't'.
             A(t+1, x) EQUALS cos(A(t, x)) - 2 * sin(A(t, x));
-            B(t+1, x) EQUALS pow(def_1d(B, t, x, 0, 1), 1.0/2.5);
+            B(t+1, x) EQUALS pow(def_t1d(B, t, x, 0, 1), 1.0/2.5);
 
             // 'C(t+1)' depends on 'A(t+1)', creating a 2nd stage.
-            C(t+1, x) EQUALS atan(def_1d(A, t+1, x, 1, 0) + cbrt(C(t, x+1)));
+            C(t+1, x) EQUALS atan(def_t1d(A, t+1, x, 1, 0) + cbrt(C(t, x+1)));
         }
     };
 
