@@ -887,7 +887,7 @@ namespace yask {
                     /**< [in] Name of the new var; must be a valid C++
                        identifier and unique across vars. */,
                     yc_solution_ptr soln
-                    /**< [in] Shared pointer to solution that will share ownership of the \ref yc_var. */,
+                    /**< [in] Shared pointer to solution that will share ownership of the \ref yc_var object. */,
                     const std::vector< yc_index_node_ptr > &dims
                     /**< [in] Dimensions of the var.
                        Each dimension is identified by an associated index. */,
