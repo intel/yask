@@ -367,10 +367,6 @@ namespace {
                      if (!kernel_soln.is_offloaded()) {
                          auto isa = kernel_soln.get_target();
                          if (isa == "knl") {
-
-                             // Use half the threads: 2 threads on 2 cores per block.
-                             kernel_soln.apply_command_line_options("-thread_divisor 2 -block_threads 4");
-                         
                              kernel_soln.set_block_size("x", 48);
                              kernel_soln.set_block_size("y", 48);
                              kernel_soln.set_block_size("z", 112);
