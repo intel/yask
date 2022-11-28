@@ -23,7 +23,7 @@
   <td id="projectalign">
    <div id="projectname">YASK
    </div>
-   <div id="projectbrief">Yet Another Stencil Kit: a software framework for creating HPC stencil code. Copyright 2014-2019 Intel Corporation.</div>
+   <div id="projectbrief">Yet Another Stencil Kit: a software framework for creating HPC stencil code. Copyright 2014-2022 Intel Corporation.</div>
   </td>
  </tr>
  </tbody>
@@ -100,6 +100,9 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a8f366d84d0a159c55a6ae97c05209687"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__var__proxy.html#a8f366d84d0a159c55a6ae97c05209687">yc_var_proxy</a> (<a class="el" href="group__yc.html#ga90f589d7fb0dc32e895384b65140f4a3">yc_var_ptr</a> &amp;var)</td></tr>
 <tr class="memdesc:a8f366d84d0a159c55a6ae97c05209687"><td class="mdescLeft">&#160;</td><td class="mdescRight">Contructor taking an existing var.  <br /></td></tr>
 <tr class="separator:a8f366d84d0a159c55a6ae97c05209687"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ab9ef3d151169284945bb7694ef5795a6"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__var__proxy.html#ab9ef3d151169284945bb7694ef5795a6">yc_var_proxy</a> (<a class="el" href="classyask_1_1yc__var__proxy.html">yc_var_proxy</a> &amp;proxy)</td></tr>
+<tr class="memdesc:ab9ef3d151169284945bb7694ef5795a6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Contructor taking an existing proxy.  <br /></td></tr>
+<tr class="separator:ab9ef3d151169284945bb7694ef5795a6"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a824f9fd9990442e462dc5b72ec8e53e2"><td class="memItemLeft" align="right" valign="top"><a id="a824f9fd9990442e462dc5b72ec8e53e2" name="a824f9fd9990442e462dc5b72ec8e53e2"></a>
 virtual&#160;</td><td class="memItemRight" valign="bottom"><b>~yc_var_proxy</b> ()</td></tr>
 <tr class="memdesc:a824f9fd9990442e462dc5b72ec8e53e2"><td class="mdescLeft">&#160;</td><td class="mdescRight">Provide a virtual destructor. <br /></td></tr>
@@ -139,9 +142,9 @@ virtual <a class="el" href="group__yc.html#ga90f589d7fb0dc32e895384b65140f4a3">y
 <div class="line"><span class="keyword">auto</span> x = nfac.<a class="code hl_function" href="classyask_1_1yc__node__factory.html#afaa80f553161f4cc4b14b5858f85e315">new_domain_index</a>(<span class="stringliteral">&quot;x&quot;</span>);</div>
 <div class="line"><span class="keyword">auto</span> y = nfac.<a class="code hl_function" href="classyask_1_1yc__node__factory.html#afaa80f553161f4cc4b14b5858f85e315">new_domain_index</a>(<span class="stringliteral">&quot;y&quot;</span>);</div>
 <div class="line"><a class="code hl_class" href="classyask_1_1yc__var__proxy.html">yc_var_proxy</a> a(<span class="stringliteral">&quot;A&quot;</span>, my_soln, { t, x, y });</div>
-<div class="line">a({t+1, x, y}) <a class="code hl_define" href="group__yc.html#gab2a4ef94be4de8ea1367833c9b783038">EQUALS</a> (a({t, x, y}) + </div>
-<div class="line">                       a({t, x+1, y}) + </div>
-<div class="line">                       a({t, x, y+1})) * (1.0/3.0);</div>
+<div class="line">a(t+1, x, y) <a class="code hl_define" href="group__yc.html#gab2a4ef94be4de8ea1367833c9b783038">EQUALS</a> (a(t, x, y) + </div>
+<div class="line">                     a(t, x+1, y) + </div>
+<div class="line">                     a(t, x, y+1)) * (1.0/3.0);</div>
 <div class="ttc" id="aclassyask_1_1yc__factory_html"><div class="ttname"><a href="classyask_1_1yc__factory.html">yask::yc_factory</a></div><div class="ttdoc">Bootstrap factory to create objects needed to define a stencil solution.</div><div class="ttdef"><b>Definition:</b> yask_compiler_api.hpp:96</div></div>
 <div class="ttc" id="aclassyask_1_1yc__factory_html_adce155773c9b0d469263303919681d69"><div class="ttname"><a href="classyask_1_1yc__factory.html#adce155773c9b0d469263303919681d69">yask::yc_factory::new_solution</a></div><div class="ttdeci">virtual yc_solution_ptr new_solution(const std::string &amp;name) const</div><div class="ttdoc">Create a stencil solution.</div></div>
 <div class="ttc" id="aclassyask_1_1yc__node__factory_html"><div class="ttname"><a href="classyask_1_1yc__node__factory.html">yask::yc_node_factory</a></div><div class="ttdoc">Factory to create AST nodes.</div><div class="ttdef"><b>Definition:</b> yc_node_api.hpp:607</div></div>
@@ -153,7 +156,7 @@ virtual <a class="el" href="group__yc.html#ga90f589d7fb0dc32e895384b65140f4a3">y
 <p><em>Scoping and lifetime:</em> Since the <a class="el" href="classyask_1_1yc__var.html">yc_var</a> pointer in a <a class="el" href="classyask_1_1yc__var__proxy.html">yc_var_proxy</a> object is a shared pointer also owned by the <a class="el" href="classyask_1_1yc__solution.html">yc_solution</a> object used to construct the <a class="el" href="classyask_1_1yc__var__proxy.html">yc_var_proxy</a> object, the underlying YASK var will not be destroyed until both the <a class="el" href="classyask_1_1yc__var__proxy.html">yc_var_proxy</a> object and the <a class="el" href="classyask_1_1yc__solution.html">yc_solution</a> object are destroyed. A <a class="el" href="classyask_1_1yc__var__proxy.html">yc_var_proxy</a> object created from an existing <a class="el" href="classyask_1_1yc__var.html">yc_var</a> object will have the same properties. </p>
 </div><h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="ab7427519551000a4f4727a2cf41d4a00" name="ab7427519551000a4f4727a2cf41d4a00"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ab7427519551000a4f4727a2cf41d4a00">&#9670;&#160;</a></span>yc_var_proxy() <span class="overload">[1/4]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ab7427519551000a4f4727a2cf41d4a00">&#9670;&#160;</a></span>yc_var_proxy() <span class="overload">[1/5]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -213,7 +216,7 @@ virtual <a class="el" href="group__yc.html#ga90f589d7fb0dc32e895384b65140f4a3">y
 </div>
 </div>
 <a id="a9929e2bff733245da5f29e51657ffabc" name="a9929e2bff733245da5f29e51657ffabc"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a9929e2bff733245da5f29e51657ffabc">&#9670;&#160;</a></span>yc_var_proxy() <span class="overload">[2/4]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a9929e2bff733245da5f29e51657ffabc">&#9670;&#160;</a></span>yc_var_proxy() <span class="overload">[2/5]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -273,7 +276,7 @@ virtual <a class="el" href="group__yc.html#ga90f589d7fb0dc32e895384b65140f4a3">y
 </div>
 </div>
 <a id="a41f0001297570d999a965243f6a1d852" name="a41f0001297570d999a965243f6a1d852"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a41f0001297570d999a965243f6a1d852">&#9670;&#160;</a></span>yc_var_proxy() <span class="overload">[3/4]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a41f0001297570d999a965243f6a1d852">&#9670;&#160;</a></span>yc_var_proxy() <span class="overload">[3/5]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -319,7 +322,7 @@ virtual <a class="el" href="group__yc.html#ga90f589d7fb0dc32e895384b65140f4a3">y
 </div>
 </div>
 <a id="a8f366d84d0a159c55a6ae97c05209687" name="a8f366d84d0a159c55a6ae97c05209687"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a8f366d84d0a159c55a6ae97c05209687">&#9670;&#160;</a></span>yc_var_proxy() <span class="overload">[4/4]</span></h2>
+<h2 class="memtitle"><span class="permalink"><a href="#a8f366d84d0a159c55a6ae97c05209687">&#9670;&#160;</a></span>yc_var_proxy() <span class="overload">[4/5]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -344,6 +347,35 @@ virtual <a class="el" href="group__yc.html#ga90f589d7fb0dc32e895384b65140f4a3">y
 
 <p>Contructor taking an existing var. </p>
 <p>Creates a new <a class="el" href="classyask_1_1yc__var__proxy.html">yc_var_proxy</a> wrapper around an existing var. </p>
+
+</div>
+</div>
+<a id="ab9ef3d151169284945bb7694ef5795a6" name="ab9ef3d151169284945bb7694ef5795a6"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab9ef3d151169284945bb7694ef5795a6">&#9670;&#160;</a></span>yc_var_proxy() <span class="overload">[5/5]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">yask::yc_var_proxy::yc_var_proxy </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="classyask_1_1yc__var__proxy.html">yc_var_proxy</a> &amp;&#160;</td>
+          <td class="paramname"><em>proxy</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Contructor taking an existing proxy. </p>
+<p>Creates a new <a class="el" href="classyask_1_1yc__var__proxy.html">yc_var_proxy</a> wrapper around a var from an existing proxy. </p>
 
 </div>
 </div>

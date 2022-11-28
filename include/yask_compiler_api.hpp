@@ -858,9 +858,9 @@ namespace yask {
        auto x = nfac.new_domain_index("x");
        auto y = nfac.new_domain_index("y");
        yc_var_proxy a("A", my_soln, { t, x, y });
-       a({t+1, x, y}) EQUALS (a({t, x, y}) + 
-                              a({t, x+1, y}) + 
-                              a({t, x, y+1})) * (1.0/3.0);
+       a(t+1, x, y) EQUALS (a(t, x, y) + 
+                            a(t, x+1, y) + 
+                            a(t, x, y+1)) * (1.0/3.0);
        ~~~
        Compare to the example shown in yc_solution::new_var().
        
@@ -941,6 +941,13 @@ namespace yask {
            existing var.
         */
         yc_var_proxy(yc_var_ptr& var) : _var(var) { }
+                    
+        /// Contructor taking an existing proxy.
+        /**
+           Creates a new \ref yc_var_proxy wrapper around a
+           var from an existing proxy.
+        */
+        yc_var_proxy(yc_var_proxy& proxy) : _var(proxy.get_var()) { }
                     
         /// Provide a virtual destructor.
         virtual ~yc_var_proxy() { }
