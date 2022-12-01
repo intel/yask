@@ -446,15 +446,6 @@ namespace yask {
                            "[Advanced] Starting search radius for tuning block sizes. "
                            "A power of 2 is recommended.",
                            _tuner_radius));
-        #ifdef ALLOW_STAGE_TUNERS
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
-                          ("auto_tune_each_stage",
-                           "[Advanced] Apply the auto-tuner separately to each stage. "
-                           "Will only be used if stages are applied in separate "
-                           "passes across the entire grid, "
-                           "i.e., when no temporal tiling is used.",
-                           _allow_stage_tuners));
-        #endif
 
         // Make set of allowed auto-tune targets.
         set<string> allowed_targets;
@@ -808,8 +799,9 @@ namespace yask {
         os << "enabled.\n";
 
         // Adjust defaults for nano-blocks to be slab if we are using more
-        // than one block thread.  Otherwise, find_num_subsets() would set
-        // default to entire block, and we wouldn't use multiple threads.
+        // than one inner thread.  Otherwise, find_num_subsets() would set
+        // default to entire block, and we wouldn't effectively use multiple
+        // threads.
         if (num_inner_threads > 1 && _nano_block_sizes.sum() == 0) {
 
             // Default dim is outer one.

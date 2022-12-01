@@ -33,16 +33,13 @@ namespace yask {
 
     // Ctor.
     AutoTuner::AutoTuner(StencilContext* context,
-                         KernelSettings* settings,
-                         const std::string& name) :
+                         KernelSettings* settings) :
         ContextLinker(context),
         _settings(settings),
         _name("auto-tuner")
     {
         STATE_VARS(this);
         assert(settings);
-        if (name.length())
-            _name += "(" + name + ")";
         _prefix = string(" ") + _name + ": ";
 
         clear(settings->_do_auto_tune);
@@ -513,54 +510,21 @@ namespace yask {
     }
 
     ///// StencilContext methods to control the auto-tuner(s).
-    void StencilContext::visit_auto_tuners(std::function<void (AutoTuner& at)> visitor) {
-        STATE_VARS(this);
-        
-        if (state->_use_stage_tuners) {
-            for (auto& sp : st_stages)
-                visitor(sp->get_at());
-        } else
-            visitor(_at);
-    }
-    void StencilContext::visit_auto_tuners(std::function<void (const AutoTuner& at)> visitor) const {
-        STATE_VARS(this);
-        
-        if (state->_use_stage_tuners) {
-            for (auto& sp : st_stages)
-                visitor(sp->get_at());
-        } else
-            visitor(_at);
-    }
 
     // Eval auto-tuner for given number of steps.
     void StencilContext::eval_auto_tuner() {
-        visit_auto_tuners
-            ([&](AutoTuner& at)
-             {
-                 at.eval();
-             });
+        _at.eval();
     }
 
     // Reset auto-tuners.
     void StencilContext::reset_auto_tuner(bool enable, bool verbose) {
-        visit_auto_tuners
-            ([&](AutoTuner& at)
-             {
-                 at.clear(!enable, verbose);
-             });
+        _at.clear(!enable, verbose);
     }
 
     // Determine if any auto tuners are running.
     bool StencilContext::is_auto_tuner_enabled() const {
-        bool done = true;
-        visit_auto_tuners
-            ([&](const AutoTuner& at)
-             {
-                 if (!at.is_done())
-                     done = false;
-             });
-        return !done;
-    }
+        return !_at.is_done();
+   }
 
     // Apply auto-tuning immediately, i.e., not as part of normal processing.
     // Will alter data in vars.
@@ -625,11 +589,7 @@ namespace yask {
         DEBUG_MSG("Auto-tuner done after " <<
                   make_num_str(at_timer.get_elapsed_secs()) << " secs");
         DEBUG_MSG("Final settings:");
-        if (state->_use_stage_tuners) {
-            for (auto& sp : st_stages)
-                sp->get_at().print_settings();
-        } else
-            _at.print_settings();
+        _at.print_settings();
 
         // Reset stats.
         clear_timers();

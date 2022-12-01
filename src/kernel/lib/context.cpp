@@ -88,9 +88,7 @@ namespace yask {
         actl_opts->adjust_settings(); // Don't print settings.
         update_var_info(true);
 
-        // Copy these settings to stages and realloc scratch vars.
-        for (auto& sp : st_stages)
-            sp->get_local_settings() = *actl_opts;
+        // Realloc scratch vars.
         alloc_scratch_data();
 
         // Indices to loop through.
@@ -698,14 +696,12 @@ namespace yask {
                         continue;
                     }
 
-                    // Strides within a mega-block are based on stage block sizes.
-                    // These may be different when per-stage auto-tuning has been done.
-                    auto& settings = bp->get_active_settings();
-                    mega_block_idxs.stride = settings._block_sizes;
+                    // Strides within a mega-block are based on block sizes.
+                    mega_block_idxs.stride = actl_opts->_block_sizes;
                     mega_block_idxs.stride[step_posn] = stride_t;
 
                     // Tiles in mega-block loops.
-                    mega_block_idxs.tile_size = settings._mega_block_tile_sizes;
+                    mega_block_idxs.tile_size = actl_opts->_mega_block_tile_sizes;
                     
                     // Set mega_block_idxs begin & end based on shifted rank
                     // start & stop (original mega-block begin & end), rank
@@ -714,9 +710,9 @@ namespace yask {
                     bool ok = shift_mega_block(rank_idxs.start, rank_idxs.stop,
                                            mega_block_shift_num, bp,
                                            mega_block_idxs);
-                    mega_block_idxs.adjust_from_settings(settings._mega_block_sizes,
-                                                     settings._mega_block_tile_sizes,
-                                                     settings._block_sizes);
+                    mega_block_idxs.adjust_from_settings(actl_opts->_mega_block_sizes,
+                                                         actl_opts->_mega_block_tile_sizes,
+                                                         actl_opts->_block_sizes);
 
                     // Only need to loop through the span of the mega-block if it is
                     // at least partly inside the extended BB. For overlapping
@@ -896,13 +892,12 @@ namespace yask {
             block_idxs.start[step_posn] = begin_t;
             block_idxs.stop[step_posn] = end_t;
 
-            // Strides within a block are based on stage micro-block sizes.
-            auto& settings = bp->get_active_settings();
-            block_idxs.stride = settings._micro_block_sizes;
+            // Strides within a block are based on micro-block sizes.
+            block_idxs.stride = actl_opts->_micro_block_sizes;
             block_idxs.stride[step_posn] = stride_t;
 
             // Tiles in block loops.
-            block_idxs.tile_size = settings._block_tile_sizes;
+            block_idxs.tile_size = actl_opts->_block_tile_sizes;
 
             // Default settings for no TB.
             StagePtr bp = sel_bp;
@@ -912,9 +907,9 @@ namespace yask {
             idx_t shift_num = 0;
             bit_mask_t bridge_mask = 0;
             ScanIndices adj_block_idxs = block_idxs;
-            adj_block_idxs.adjust_from_settings(settings._block_sizes,
-                                                settings._block_tile_sizes,
-                                                settings._micro_block_sizes);
+            adj_block_idxs.adjust_from_settings(actl_opts->_block_sizes,
+                                                actl_opts->_block_tile_sizes,
+                                                actl_opts->_micro_block_sizes);
 
             // Include automatically-generated loop code to
             // call calc_micro_block() for each micro-block in this block.
@@ -1120,12 +1115,11 @@ namespace yask {
 
                 // Strides within a micro-blk are based on nano-blk sizes.
                 // This will get overridden later if thread binding is enabled.
-                auto& settings = bp->get_active_settings();
-                micro_block_idxs.stride = settings._nano_block_sizes;
+                micro_block_idxs.stride = actl_opts->_nano_block_sizes;
                 micro_block_idxs.stride[step_posn] = stride_t;
 
                 // Tiles in micro-blk loops.
-                micro_block_idxs.tile_size = settings._micro_block_tile_sizes;
+                micro_block_idxs.tile_size = actl_opts->_micro_block_tile_sizes;
 
                 // Set micro_block_idxs begin & end based on shifted rank
                 // start & stop (original mega-block begin & end), rank
@@ -1133,8 +1127,8 @@ namespace yask {
                 // within a mega-block WF, so we need to add the mega-block and
                 // local micro-block shift counts.
                 bool ok = shift_mega_block(rank_idxs.start, rank_idxs.stop,
-                                       mega_block_shift_num + shift_num, bp,
-                                       micro_block_idxs);
+                                           mega_block_shift_num + shift_num, bp,
+                                           micro_block_idxs);
 
                 // Set micro_block_idxs begin & end based on shifted begin &
                 // end of block for given phase & shape.  This will be the
@@ -1142,19 +1136,19 @@ namespace yask {
                 // tiling.
                 if (ok)
                     ok = shift_micro_block(adj_block_idxs.start, adj_block_idxs.stop,
-                                          adj_block_idxs.begin, adj_block_idxs.end,
-                                          base_block_idxs.begin, base_block_idxs.end,
-                                          base_mega_block_idxs.begin, base_mega_block_idxs.end,
-                                          shift_num,
-                                          nphases, phase,
-                                          nshapes, shape,
-                                          bridge_mask,
-                                          micro_block_idxs);
+                                           adj_block_idxs.begin, adj_block_idxs.end,
+                                           base_block_idxs.begin, base_block_idxs.end,
+                                           base_mega_block_idxs.begin, base_mega_block_idxs.end,
+                                           shift_num,
+                                           nphases, phase,
+                                           nshapes, shape,
+                                           bridge_mask,
+                                           micro_block_idxs);
 
                 if (ok) {
-                    micro_block_idxs.adjust_from_settings(settings._micro_block_sizes,
-                                                         settings._micro_block_tile_sizes,
-                                                         settings._nano_block_sizes);
+                    micro_block_idxs.adjust_from_settings(actl_opts->_micro_block_sizes,
+                                                          actl_opts->_micro_block_tile_sizes,
+                                                          actl_opts->_nano_block_sizes);
 
                     // Update offsets of scratch vars based on the current
                     // micro-block location.
@@ -1164,7 +1158,7 @@ namespace yask {
                     // Call calc_micro_block() for each non-scratch bundle.
                     for (auto* sb : *bp)
                         if (sb->get_bb().bb_num_points)
-                            sb->calc_micro_block(outer_thread_idx, settings, micro_block_idxs);
+                            sb->calc_micro_block(outer_thread_idx, *actl_opts, micro_block_idxs);
 
                     // Make sure streaming stores are visible for later loads.
                     make_stores_visible();

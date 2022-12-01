@@ -137,10 +137,10 @@ namespace yask {
 
     // Context ctor.
     StencilContext::StencilContext(KernelEnvPtr& kenv,
-                                   KernelSettingsPtr& ksettings,
-                                   KernelSettingsPtr& user_settings) :
-        KernelStateBase(kenv, ksettings, user_settings),
-        _at(this, ksettings.get())
+                                   KernelSettingsPtr& actl_settings,
+                                   KernelSettingsPtr& req_settings) :
+        KernelStateBase(kenv, actl_settings, req_settings),
+        _at(this, actl_settings.get())
     {
         STATE_VARS(this);
 
@@ -724,10 +724,6 @@ namespace yask {
         }
         assert(num_wf_shifts >= 0);
 
-        // Determine whether separate tuners can be used.
-        // Only allowed when no TB and >1 stage.
-        state->_use_stage_tuners = actl_opts->_allow_stage_tuners && (tb_steps == 0) && (st_stages.size() > 1);
-
         // Calculate angles and related settings.
         for (auto& dim : domain_dims) {
             auto& dname = dim._get_name();
@@ -833,10 +829,6 @@ namespace yask {
                 auto& dim = domain_dims.get_dim(j);
                 auto& dname = dim._get_name();
                 auto rnsize = actl_opts->_mega_block_sizes[i];
-
-                // There must be only one block size when using TB, so get
-                // sizes from context settings instead of stages.
-                assert(state->_use_stage_tuners == false);
                 auto blksize = actl_opts->_block_sizes[i];
                 auto mblksize = actl_opts->_micro_block_sizes[i];
 

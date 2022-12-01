@@ -360,8 +360,8 @@ namespace yask {
 
         // Constructor.
         StencilContext(KernelEnvPtr& kenv,
-                       KernelSettingsPtr& ksettings,
-                       KernelSettingsPtr& user_settings);
+                       KernelSettingsPtr& actl_settings,
+                       KernelSettingsPtr& req_settings);
 
         // Destructor.
         virtual ~StencilContext() {
@@ -752,8 +752,6 @@ namespace yask {
         }
 
         // Auto-tuner methods.
-        void visit_auto_tuners(std::function<void (AutoTuner& at)> visitor);
-        void visit_auto_tuners(std::function<void (const AutoTuner& at)> visitor) const;
         virtual void eval_auto_tuner();
 
         // Auto-tuner APIs.

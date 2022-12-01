@@ -274,7 +274,6 @@ namespace yask {
 
         // Tuning.
         bool _do_auto_tune = false;    // whether to do "online" auto-tuning.
-        bool _allow_stage_tuners = false; // allow per-stage tuners when possible.
         double _tuner_trial_secs = 0.5;   // time to run tuner for new better setting.
         int _tuner_radius = 16;
         string_vec _tuner_targets; // things to tune from following.
@@ -604,10 +603,13 @@ namespace yask {
         // Environment (mostly MPI).
         KernelEnvPtr _env;
 
-        // User settings.
+        // Settings.
+        // Actual settings may be different than those requested because
+        // settings are adjusted to comply with constraints. Also, some
+        // requested options maybe be zero (0), indicating that a default
+        // should be used. That default will be set in the actual options.
+        KernelSettingsPtr _req_opts; // Settings requested by user and/or tuner.
         KernelSettingsPtr _actl_opts; // Actual settings to use.
-        KernelSettingsPtr _req_opts; // Settings specified by user and/or tuner.
-        bool _use_stage_tuners = false;
 
         // Problem dims.
         DimsPtr _dims;
@@ -693,7 +695,6 @@ namespace yask {
         const DimsPtr& get_dims() const { return _state->_dims; }
         MPIInfoPtr& get_mpi_info() { return _state->_mpi_info; }
         const MPIInfoPtr& get_mpi_info() const { return _state->_mpi_info; }
-        bool use_stage_tuners() const { return _state->_use_stage_tuners; }
         yask_output_ptr get_debug_output() const {
             return _state->_env->get_debug_output();
         }

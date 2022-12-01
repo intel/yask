@@ -173,7 +173,7 @@ namespace yask {
             #endif
         }
 
-        // Set the number of threads for a region. The number of threads
+        // Set the number of outer threads. The number of threads
         // used in top-level OpenMP parallel sections should not change
         // during execution.
         int rthreads = set_num_outer_threads();
@@ -208,13 +208,6 @@ namespace yask {
         // after finding WF extensions.  And, this must be done after
         // set_core() because is_in_valid_domain() needs the core data.
         find_bounding_boxes();
-
-        // Copy current settings to stages.  Needed here because settings may
-        // have been changed via APIs or from call to setup_rank() since last
-        // call to prepare_solution().  FIXME: This will wipe out any previous
-        // stage-specific auto-tuning.
-        for (auto& sp : st_stages)
-            sp->get_local_settings() = *actl_opts;
 
         // Free the scratch and MPI data first to give vars preference.
         // Alloc vars (if needed), scratch vars, MPI bufs.
