@@ -97,10 +97,10 @@ namespace yask {
     // Convenience function to format indices like
     // "x=5, y=3".
     std::string YkVarBase::make_index_string(const Indices& idxs,
-                                            std::string separator,
-                                            std::string infix,
-                                            std::string prefix,
-                                            std::string suffix) const {
+                                             std::string separator,
+                                             std::string infix,
+                                             std::string prefix,
+                                             std::string suffix) const {
         auto& tmp = get_dim_tuple();
         return idxs.make_dim_val_str(tmp, separator, infix, prefix, suffix);
     }
@@ -477,6 +477,7 @@ namespace yask {
     }
 
     // Make sure indices are in range.
+    // Returns true if they are.
     // Side-effect: If clipped_indices is not NULL,
     // 0) copy indices to *clipped_indices, and
     // 1) set them to in-range if out-of-range, and
@@ -493,9 +494,12 @@ namespace yask {
         bool all_ok = true;
         auto n = get_num_dims();
         if (indices.get_num_dims() != n) {
+            auto dimt = get_dim_tuple();
             FORMAT_AND_THROW_YASK_EXCEPTION("Error: '" << fn << "' called with " <<
                                             indices.get_num_dims() <<
-                                            " indices instead of " << n);
+                                            " indices instead of " << n <<
+                                            " on var '" << get_name() << "' with indices " <<
+                                            dimt.make_dim_str());
         }
         if (clipped_indices)
             *clipped_indices = indices;

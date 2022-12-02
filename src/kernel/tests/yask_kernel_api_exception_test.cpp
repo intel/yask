@@ -70,7 +70,7 @@ int main() {
         soln->run_solution(0);
     } catch (yask_exception& e) {
         cout << "YASK throws an exception.\n";
-        cout << e.get_message();
+        cout << e.get_message() << endl;
         cout << "Exception Test: Caught exception correctly.\n";
         num_exception++;
     }
@@ -81,22 +81,35 @@ int main() {
         soln->run_auto_tuner_now(false);
     } catch (yask_exception& e) {
         cout << "YASK throws an exception.\n";
-        cout << e.get_message();
+        cout << e.get_message() << endl;
         cout << "Exception Test: Caught exception correctly.\n";
         num_exception++;
     }
-
 
     // Allocate memory for any vars that do not have storage set.
     // Set other data structures needed for stencil application.
     soln->prepare_solution();
 
+    // Exception test
+    cout << "Exception Test: Call 'set_element' with wrong number of indices.\n";
+    try {
+
+        // Make a vector with one extra index.
+        auto idxs = fvar_sizes;
+        idxs.push_back(10);
+        fvar->set_element(3.14, idxs);
+    }  catch (yask_exception& e) {
+        cout << "YASK throws an exception.\n";
+        cout << e.get_message() << endl;
+        cout << "Exception Test: Caught exception correctly.\n";
+        num_exception++;
+    }
+
     // Apply the stencil solution to the data.
     env->global_barrier();
     cout << "Running the solution for 1 step...\n";
     soln->run_solution(0);
-    cout << "Running the solution for 10 more steps...\n";
-    soln->run_solution(1, 10);
+
     soln->end_solution();
     soln->get_stats();
     env->finalize();
@@ -124,8 +137,8 @@ int main() {
     // CommandLineParser::OptionBase::_idx_val
 
     // Check whether program handles exceptions or not.
-    if (num_exception != 2) {
-        cout << "There is a problem in exception test.\n";
+    if (num_exception != 3) {
+        cout << "Error: unexpected number of exceptions: " << num_exception << endl;
         exit(1);
     }
     else

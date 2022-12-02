@@ -641,7 +641,7 @@ namespace yask {
                            const std::string& fn,    // name for error msg.
                            bool strict_indices, // die if out-of-range.
                            bool check_step,     // check step index.
-                           bool normalize,      // div by vec lens.
+                           bool normalize = false,      // div by vec lens.
                            Indices* fixed_indices = NULL) const;
 
         // Resize or fail if already allocated.
@@ -1889,6 +1889,7 @@ namespace yask {
         #undef SET_VAR_API2
 
         virtual std::string format_indices(const Indices& indices) const {
+            gb().check_indices(indices, "format_indices", false, false);
             std::string str = get_name() + "(" + gb().make_index_string(indices) + ")";
             return str;
         }
