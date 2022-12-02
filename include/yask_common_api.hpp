@@ -120,9 +120,9 @@ namespace yask {
 
     public:
 
-        /// Construct a YASK exception with no message.
+        /// Construct a YASK exception with default message.
     	yask_exception() :
-            _msg("YASK exception") { };
+            _msg("YASK error") { };
 
         /// Construct a YASK exception with `message`.
     	yask_exception(const std::string& message) :

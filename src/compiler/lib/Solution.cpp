@@ -76,7 +76,7 @@ namespace yask {
     }
     int StencilSolution::get_prefetch_dist(int level) {
         if (level < 1 || level > 2)
-            THROW_YASK_EXCEPTION("Error: cache-level " +
+            THROW_YASK_EXCEPTION("cache-level " +
                                  to_string(level) +
                                  " is not 1 or 2.");
         if (_settings._prefetch_dists.count(level))
@@ -87,7 +87,7 @@ namespace yask {
                                             int distance) {
         get_prefetch_dist(level); // check legality.
         if (distance < 0)
-            THROW_YASK_EXCEPTION("Error: prefetch-distance " +
+            THROW_YASK_EXCEPTION("prefetch-distance " +
                                  to_string(distance) +
                                  " is not zero or positive.");
         _settings._prefetch_dists[level] = distance;
@@ -232,7 +232,7 @@ namespace yask {
         else {
             _printer = 0;
             target = "";
-            THROW_YASK_EXCEPTION("Error: format-target '" + format +
+            THROW_YASK_EXCEPTION("format-target '" + format +
                                  "' is not recognized");
         }
         assert(_printer);
@@ -243,7 +243,7 @@ namespace yask {
         auto& target = _settings._target;
 
         if (!is_target_set())
-            THROW_YASK_EXCEPTION("Error: output_solution() called before set_target()");
+            THROW_YASK_EXCEPTION("output_solution() called before set_target()");
 
         // Call set_target() to ensure intermediate data is clean
         // before calling analyze_solution().

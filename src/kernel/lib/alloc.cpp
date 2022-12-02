@@ -57,7 +57,7 @@ namespace yask {
         #endif
 
         if (!p)
-            THROW_YASK_EXCEPTION("error: cannot allocate " + make_byte_str(nbytes) +
+            THROW_YASK_EXCEPTION("cannot allocate " + make_byte_str(nbytes) +
                                  " aligned to " + make_byte_str(align));
 
         // Return as a char* as required for shared_ptr ctor.
@@ -101,7 +101,7 @@ namespace yask {
             // Interleaved not available.
         }
         else
-            THROW_YASK_EXCEPTION("Error: explicit NUMA policy allocation is not available");
+            THROW_YASK_EXCEPTION("explicit NUMA policy allocation is not available");
 
         // Use mmap/mbind explicitly.
         #else
@@ -142,26 +142,26 @@ namespace yask {
                 }
             }
             else
-                THROW_YASK_EXCEPTION("Error: anonymous mmap of " + make_byte_str(nbytes) +
+                THROW_YASK_EXCEPTION("anonymous mmap of " + make_byte_str(nbytes) +
                                      " failed");
         }
         else
-            THROW_YASK_EXCEPTION("Error: explicit NUMA policy allocation is not available");
+            THROW_YASK_EXCEPTION("explicit NUMA policy allocation is not available");
 
         #endif // not USE_NUMA_POLICY_LIB.
 
         #else
-        THROW_YASK_EXCEPTION("Error: NUMA allocation is not enabled; build with numa=1");
+        THROW_YASK_EXCEPTION("NUMA allocation is not enabled; build with numa=1");
         #endif // USE_NUMA.
 
         // Should not get here w/null p; throw exception.
         if (!p)
-            THROW_YASK_EXCEPTION("Error: cannot allocate " + make_byte_str(nbytes) +
+            THROW_YASK_EXCEPTION("cannot allocate " + make_byte_str(nbytes) +
                                  " using numa-node (or policy) " + to_string(numa_pref));
 
         // Check alignment.
         if ((size_t(p) & (CACHELINE_BYTES - 1)) != 0)
-            FORMAT_AND_THROW_YASK_EXCEPTION("Error: NUMA-allocated " << p << " is not " <<
+            FORMAT_AND_THROW_YASK_EXCEPTION("NUMA-allocated " << p << " is not " <<
                                             CACHELINE_BYTES << "-byte aligned");
 
         // Return as a char* as required for shared_ptr ctor.
@@ -217,20 +217,20 @@ namespace yask {
         MPI_Info_free(&win_info);
         MPI_Win_lock_all(0, *shm_win);
         #else
-        THROW_YASK_EXCEPTION("Error: MPI shm allocation is not enabled; build with mpi=1");
+        THROW_YASK_EXCEPTION("MPI shm allocation is not enabled; build with mpi=1");
         #endif
 
         if (!p)
-            THROW_YASK_EXCEPTION("Error: cannot allocate " + make_byte_str(nbytes) +
+            THROW_YASK_EXCEPTION("cannot allocate " + make_byte_str(nbytes) +
                                  " using MPI shm");
 
         // Check alignment.
         if ((size_t(p) & (CACHELINE_BYTES - 1)) != 0)
-            FORMAT_AND_THROW_YASK_EXCEPTION("Error: MPI shm-allocated " << p << " is not " <<
+            FORMAT_AND_THROW_YASK_EXCEPTION("MPI shm-allocated " << p << " is not " <<
                                             CACHELINE_BYTES << "-byte aligned");
 
         #ifdef USE_OFFLOAD
-        THROW_YASK_EXCEPTION("Error: mapping offload device memory to shm not yet supported; "
+        THROW_YASK_EXCEPTION("mapping offload device memory to shm not yet supported; "
                              "use '-no-use_shm'");
         #endif
         
@@ -249,7 +249,7 @@ namespace yask {
         MPI_Win_free(_shm_win);
         p = NULL;
         #else
-        THROW_YASK_EXCEPTION("Error: MPI shm deallocation is not enabled; build with mpi=1");
+        THROW_YASK_EXCEPTION("MPI shm deallocation is not enabled; build with mpi=1");
         #endif
     }
 

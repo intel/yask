@@ -41,7 +41,7 @@ namespace yask {
         // Check for correct number of args.
         size_t nd = var->get_dims().size();
         if (nd != args.size()) {
-            FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to create a var point in " <<
+            FORMAT_AND_THROW_YASK_EXCEPTION("attempt to create a var point in " <<
                 nd << "-D var '" << get_var_name() << "' with " <<
                 args.size() << " indices");
         }

@@ -90,7 +90,7 @@ namespace yask {
                 wcnt < rcnt || wcnt - rcnt > 1 ||
                 wchk != _ival || rchk != _ival)
                 FORMAT_AND_THROW_YASK_EXCEPTION
-                     ("Internal error: " << fn << "() w/lock @ " << (void*)this <<
+                     ("(internal fault) " << fn << "() w/lock @ " << (void*)this <<
                       " writes=" << wcnt << ", reads=" << rcnt <<
                       ", w-chk=" << wchk << ", r-chk=" << rchk);
         }

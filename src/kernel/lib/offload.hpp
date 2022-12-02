@@ -50,7 +50,7 @@ namespace yask {
         void* p = yask_aligned_alloc(nbytes, devn);
         #endif
         if (!p)
-            THROW_YASK_EXCEPTION("error: cannot allocate " + make_byte_str(nbytes) + " on host");
+            THROW_YASK_EXCEPTION("cannot allocate " + make_byte_str(nbytes) + " on host");
         return p;
     }
 
@@ -83,7 +83,7 @@ namespace yask {
         void* p = yask_aligned_alloc(nbytes, devn);
         #endif
         if (!p)
-            THROW_YASK_EXCEPTION("error: cannot allocate " + make_byte_str(nbytes) + " on host");
+            THROW_YASK_EXCEPTION("cannot allocate " + make_byte_str(nbytes) + " on host");
         return p;
     }
 
@@ -141,12 +141,12 @@ namespace yask {
             void* devp = omp_target_alloc(nb, devn);
             #endif
             if (!devp)
-                THROW_YASK_EXCEPTION("error: cannot allocate " + make_byte_str(nb) + " on OMP device");
+                THROW_YASK_EXCEPTION("cannot allocate " + make_byte_str(nb) + " on OMP device");
 
             TRACE_MSG("mapping " << (void*)hostp << " to " << devp << " on OMP dev " << devn);
             auto res = omp_target_associate_ptr(hostp, devp, nb, 0, devn);
             if (res)
-                THROW_YASK_EXCEPTION("error: cannot map OMP device ptr");
+                THROW_YASK_EXCEPTION("cannot map OMP device ptr");
             assert(omp_target_is_present(hostp, devn));
             assert(get_dev_ptr(hostp) == devp);
 
@@ -175,7 +175,7 @@ namespace yask {
             assert(get_dev_ptr(hostp) == devp);
             auto res = omp_target_disassociate_ptr(hostp, devn);
             if (res)
-                THROW_YASK_EXCEPTION("error: cannot unmap OMP device ptr");
+                THROW_YASK_EXCEPTION("cannot unmap OMP device ptr");
             TRACE_MSG("freeing " << make_byte_str(nb) << " on OMP dev " << devn);
             omp_target_free(devp, devn);
             TRACE_MSG("done unmapping and freeing");
@@ -442,7 +442,7 @@ namespace yask {
         // Call when host copy is modified, but dev copy is not.
         coh_state mod_host() {
             if (_state == dev_mod)
-                THROW_YASK_EXCEPTION("internal error: "
+                THROW_YASK_EXCEPTION("(internal fault) "
                                      "host copy modified, but device copy was newer");
             _state = host_mod;
             return _state;
@@ -451,7 +451,7 @@ namespace yask {
         // Call when dev copy is modified, but host copy is not.
         coh_state mod_dev() {
             if (_state == host_mod)
-                THROW_YASK_EXCEPTION("internal error: "
+                THROW_YASK_EXCEPTION("(internal fault) "
                                      "device copy modified, but host copy was newer");
             _state = dev_mod;
             return _state;
@@ -460,10 +460,10 @@ namespace yask {
         // Call when both dev and host copies are modified w/the same changes.
         coh_state mod_both() {
             if (_state == dev_mod)
-                THROW_YASK_EXCEPTION("internal error: "
+                THROW_YASK_EXCEPTION("(internal fault) "
                                      "host copy modified, but device copy was newer");
             if (_state == host_mod)
-                THROW_YASK_EXCEPTION("internal error: "
+                THROW_YASK_EXCEPTION("(internal fault) "
                                      "device copy modified, but host copy was newer");
             assert(_state == in_sync);
             return _state;
@@ -472,7 +472,7 @@ namespace yask {
         // Call when host data is copied to dev.
         coh_state host_copied_to_dev() {
             if (_state == dev_mod)
-                THROW_YASK_EXCEPTION("internal error: "
+                THROW_YASK_EXCEPTION("(internal fault) "
                                      "host data copied to dev, but device copy was newer");
             _state = in_sync;
             return _state;
@@ -481,7 +481,7 @@ namespace yask {
         // Call when dev data is copied to host.
         coh_state dev_copied_to_host() {
             if (_state == host_mod)
-                THROW_YASK_EXCEPTION("internal error: "
+                THROW_YASK_EXCEPTION("(internal fault) "
                                      "device data copied to host, but host copy was newer");
             _state = in_sync;
             return _state;

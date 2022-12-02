@@ -239,7 +239,7 @@ namespace yask {
                   end.make_dim_val_str() << ") by " <<
                   stride.make_dim_val_str());
         if (!is_prepared())
-            THROW_YASK_EXCEPTION("Error: run_solution() called without calling prepare_solution() first");
+            THROW_YASK_EXCEPTION("run_solution() called without calling prepare_solution() first");
         if (ext_bb.bb_size < 1) {
             TRACE_MSG("nothing to do in solution");
         }

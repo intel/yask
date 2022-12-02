@@ -159,7 +159,7 @@ namespace yask {
         auto& dims = get_dim_tuple();
         int posn = dims.lookup_posn(dim);
         if (posn < 0 && die_on_failure) {
-            THROW_YASK_EXCEPTION("Error: " + die_msg + ": dimension '" +
+            THROW_YASK_EXCEPTION(die_msg + ": dimension '" +
                                  dim + "' not found in " + make_info_string());
         }
         return posn;
@@ -245,21 +245,21 @@ namespace yask {
         // Check settings.
         for (int i = 0; i < get_num_dims(); i++) {
             if (_corep->_left_halos[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative left halo in var '" + get_name() + "'");
+                THROW_YASK_EXCEPTION("negative left halo in var '" + get_name() + "'");
             if (_corep->_right_halos[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative right halo in var '" + get_name() + "'");
+                THROW_YASK_EXCEPTION("negative right halo in var '" + get_name() + "'");
             if (_corep->_left_wf_exts[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative left wave-front ext in var '" + get_name() + "'");
+                THROW_YASK_EXCEPTION("negative left wave-front ext in var '" + get_name() + "'");
             if (_corep->_right_wf_exts[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative right wave-front ext in var '" + get_name() + "'");
+                THROW_YASK_EXCEPTION("negative right wave-front ext in var '" + get_name() + "'");
             if (_corep->_req_left_pads[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative left padding in var '" + get_name() + "'");
+                THROW_YASK_EXCEPTION("negative left padding in var '" + get_name() + "'");
             if (_corep->_req_right_pads[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative right padding in var '" + get_name() + "'");
+                THROW_YASK_EXCEPTION("negative right padding in var '" + get_name() + "'");
             if (_corep->_req_left_epads[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative left extra padding in var '" + get_name() + "'");
+                THROW_YASK_EXCEPTION("negative left extra padding in var '" + get_name() + "'");
             if (_corep->_req_right_epads[i] < 0)
-                THROW_YASK_EXCEPTION("Error: negative right extra padding in var '" + get_name() + "'");
+                THROW_YASK_EXCEPTION("negative right extra padding in var '" + get_name() + "'");
         }
 
         // Increase padding as needed and calculate new allocs.
@@ -327,7 +327,7 @@ namespace yask {
 
         // Attempt to change alloc with existing storage?
         if (p && old_allocs != new_allocs) {
-            THROW_YASK_EXCEPTION("Error: attempt to change allocation size of var '" +
+            THROW_YASK_EXCEPTION("attempt to change allocation size of var '" +
                 get_name() + "' from " +
                 make_index_string(old_allocs, " * ") + " to " +
                 make_index_string(new_allocs, " * ") +
@@ -391,7 +391,7 @@ namespace yask {
                                   bool misc_ok) const {
         STATE_VARS(this);
         if (!is_dim_used(dim))
-            THROW_YASK_EXCEPTION("Error in " + fn_name + "(): dimension '" +
+            THROW_YASK_EXCEPTION(fn_name + "(): dimension '" +
                                  dim + "' not found in " + make_info_string());
         dims->check_dim_type(dim, fn_name, step_ok, domain_ok, misc_ok);
     }
@@ -495,7 +495,7 @@ namespace yask {
         auto n = get_num_dims();
         if (indices.get_num_dims() != n) {
             auto dimt = get_dim_tuple();
-            FORMAT_AND_THROW_YASK_EXCEPTION("Error: '" << fn << "' called with " <<
+            FORMAT_AND_THROW_YASK_EXCEPTION("'" << fn << "' called with " <<
                                             indices.get_num_dims() <<
                                             " indices instead of " << n <<
                                             " on var '" << get_name() << "' with indices " <<
@@ -527,7 +527,7 @@ namespace yask {
                 // Handle outliers.
                 if (!ok) {
                     if (strict_indices) {
-                        THROW_YASK_EXCEPTION("Error: " + fn + ": index in dim '" + dname +
+                        THROW_YASK_EXCEPTION(fn + ": index in dim '" + dname +
                                              "' is " + to_string(idx) + ", which is not in allowed range [" +
                                              to_string(first_ok) + "..." + to_string(last_ok) +
                                              "] of var '" + get_name() + "'");

@@ -965,7 +965,7 @@ namespace yask {
             STATE_VARS(this);
             if (get_storage() == 0) {
                 if (strict_indices)
-                    THROW_YASK_EXCEPTION(std::string("Error: call to '") +
+                    THROW_YASK_EXCEPTION(std::string("call to '") +
                                          Visitor::fname() +
                                          "' with no storage allocated for var '" +
                                          get_name() + "'");
@@ -1064,7 +1064,7 @@ namespace yask {
         
                 // Visit points in slice on device.
                 else {
-                    THROW_YASK_EXCEPTION(std::string("Internal error: '") +
+                    THROW_YASK_EXCEPTION(std::string("(internal fault) '") +
                                          Visitor::fname() + "' for var '" +
                                          get_name() + "' not implemented for offload device");
                 }
@@ -1561,7 +1561,7 @@ namespace yask {
                         }
                     }
                     #else
-                    THROW_YASK_EXCEPTION("internal error: call to _copy_vecs_in_slice on device"
+                    THROW_YASK_EXCEPTION("(internal fault) call to _copy_vecs_in_slice on device"
                                          " in non-offload build");
                     #endif
                 }
@@ -1792,13 +1792,13 @@ namespace yask {
 
         virtual idx_t get_first_valid_step_index() const {
             if (!gb()._has_step_dim)
-                THROW_YASK_EXCEPTION("Error: 'get_first_valid_step_index()' called on var '" +
+                THROW_YASK_EXCEPTION("'get_first_valid_step_index()' called on var '" +
                                      get_name() + "' that does not use the step dimension");
             return corep()->_local_offsets[+step_posn];
         }
         virtual idx_t get_last_valid_step_index() const {
             if (!gb()._has_step_dim)
-                THROW_YASK_EXCEPTION("Error: 'get_last_valid_step_index()' called on var '" +
+                THROW_YASK_EXCEPTION("'get_last_valid_step_index()' called on var '" +
                                      get_name() + "' that does not use the step dimension");
             return corep()->_local_offsets[+step_posn] +
                 corep()->_domains[+step_posn] - 1;

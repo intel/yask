@@ -58,7 +58,7 @@ namespace yask {
                 int provided = 0;
                 MPI_Init_thread(argc, argv, MPI_THREAD_MULTIPLE, &provided);
                 if (provided < MPI_THREAD_SERIALIZED) {
-                    THROW_YASK_EXCEPTION("error: MPI_THREAD_SERIALIZED or MPI_THREAD_MULTIPLE not provided");
+                    THROW_YASK_EXCEPTION("MPI_THREAD_SERIALIZED or MPI_THREAD_MULTIPLE not provided");
                 }
                 is_init = true;
                 finalize_needed = true;
@@ -69,7 +69,7 @@ namespace yask {
         // MPI communicator provided.
         else {
             if (!is_init)
-                THROW_YASK_EXCEPTION("error: YASK environment created with"
+                THROW_YASK_EXCEPTION("YASK environment created with"
                                      " an existing MPI communicator, but MPI is not initialized");
             comm = existing_comm;
         }
@@ -79,7 +79,7 @@ namespace yask {
         MPI_Comm_group(comm, &group);
         MPI_Comm_size(comm, &num_ranks);
         if (num_ranks < 1)
-            THROW_YASK_EXCEPTION("error: MPI_Comm_size() returns less than one rank");
+            THROW_YASK_EXCEPTION("MPI_Comm_size() returns less than one rank");
 
         // Create a shm communicator.
         MPI_Comm_split_type(comm, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &shm_comm);
@@ -180,7 +180,7 @@ namespace yask {
 
             // Check that either local or global size is set.
             if (!actl_opts->_global_sizes[i] && !actl_opts->_rank_sizes[i])
-                THROW_YASK_EXCEPTION("Error: both local-domain size and "
+                THROW_YASK_EXCEPTION("both local-domain size and "
                                      "global-domain size are zero in '" +
                                      dname + "' dimension on rank " +
                                      to_string(me) + "; specify one, "
@@ -209,7 +209,7 @@ namespace yask {
             // Check that settings are equal.
             else if (actl_opts->_global_sizes[i] != actl_opts->_rank_sizes[i]) {
                 auto& dname = domain_dims.get_dim_name(j);
-                FORMAT_AND_THROW_YASK_EXCEPTION("Error: specified local-domain size of " <<
+                FORMAT_AND_THROW_YASK_EXCEPTION("specified local-domain size of " <<
                                                 actl_opts->_rank_sizes[i] <<
                                                 " does not equal specified global-domain size of " <<
                                                 actl_opts->_global_sizes[i] << " in '" << dname <<
@@ -226,7 +226,7 @@ namespace yask {
         // Check ranks.
         idx_t req_ranks = actl_opts->_num_ranks.product();
         if (req_ranks != nr)
-            FORMAT_AND_THROW_YASK_EXCEPTION("error: " << req_ranks << " rank(s) requested (" +
+            FORMAT_AND_THROW_YASK_EXCEPTION(req_ranks << " rank(s) requested (" +
                                             actl_opts->_num_ranks.make_dim_val_str(" * ") + "), but " <<
                                             nr << " rank(s) are active");
 
@@ -240,7 +240,7 @@ namespace yask {
             auto& dname = domain_dims.get_dim_name(j);
             if (actl_opts->_rank_indices[j] < 0 ||
                 actl_opts->_rank_indices[j] >= actl_opts->_num_ranks[j])
-                THROW_YASK_EXCEPTION("Error: rank index of " +
+                THROW_YASK_EXCEPTION("rank index of " +
                                      to_string(actl_opts->_rank_indices[j]) +
                                      " is not within allowed range [0 ... " +
                                      to_string(actl_opts->_num_ranks[j] - 1) +
@@ -306,14 +306,14 @@ namespace yask {
                 if (rn == me) {
                     if (mandist != 0)
                         FORMAT_AND_THROW_YASK_EXCEPTION
-                            ("Internal error: distance to own rank == " << mandist);
+                            ("(internal fault) distance to own rank == " << mandist);
                 }
 
                 // Someone else.
                 else {
                     if (mandist == 0)
                         FORMAT_AND_THROW_YASK_EXCEPTION
-                            ("Error: ranks " << me <<
+                            ("ranks " << me <<
                              " and " << rn << " at same coordinates");
                 }
 
@@ -349,7 +349,7 @@ namespace yask {
                                     auto rnsz = rsizes[rn][dj];
                                     if (mysz != rnsz) {
                                         FORMAT_AND_THROW_YASK_EXCEPTION
-                                            ("Error: rank " << rn << " and " << me <<
+                                            ("rank " << rn << " and " << me <<
                                              " are both at rank-index " << coords[me][di] <<
                                              " in the '" << dname <<
                                              "' dimension, but their local-domain sizes are " <<
@@ -459,7 +459,7 @@ namespace yask {
                     if (!actl_opts->_rank_sizes[i]) {
                         if (rank_domain_sums[j] != 0)
                             FORMAT_AND_THROW_YASK_EXCEPTION
-                                ("Error: local-domain size is not specified in the '" <<
+                                ("local-domain size is not specified in the '" <<
                                  dname << "' dimension on rank " << me <<
                                  ", but it is specified on another rank; "
                                  "it must be specified or unspecified consistently across all ranks");
@@ -474,7 +474,7 @@ namespace yask {
                         auto rem = gsz - (rsz * (nranks - 1));
                         if (rem <= 0)
                             FORMAT_AND_THROW_YASK_EXCEPTION
-                                ("Error: global-domain size of " << gsz <<
+                                ("global-domain size of " << gsz <<
                                  " is not large enough to split across " << nranks <<
                                  " ranks in the '" << dname << "' dimension");
                         if (is_last)
@@ -497,7 +497,7 @@ namespace yask {
                 DOMAIN_VAR_LOOP(i, j) {
                     auto& dname = domain_dims.get_dim_name(j);
                     if (actl_opts->_global_sizes[i] != rank_domain_sums[j]) {
-                        FORMAT_AND_THROW_YASK_EXCEPTION("Error: sum of local-domain sizes across " <<
+                        FORMAT_AND_THROW_YASK_EXCEPTION("sum of local-domain sizes across " <<
                                                         nr << " ranks is " <<
                                                         rank_domain_sums[j] <<
                                                         ", which does not equal global-domain size of " <<
@@ -755,7 +755,7 @@ namespace yask {
             auto min_size = max_halos[dname] + shifts;
             if (actl_opts->_num_ranks[dname] > 1 && rksize < min_size) {
                 FORMAT_AND_THROW_YASK_EXCEPTION
-                    ("Error: local-domain size of " << rksize << " in '" <<
+                    ("local-domain size of " << rksize << " in '" <<
                      dname << "' dim is less than minimum size of " << min_size <<
                      ", which is based on stencil halos and temporal wave-front sizes");
             }
@@ -1377,7 +1377,7 @@ namespace yask {
         assert(gp);
         auto& gname = gp->get_name();
         if (all_var_map.count(gname))
-            THROW_YASK_EXCEPTION("Error: var '" + gname + "' already exists");
+            THROW_YASK_EXCEPTION("var '" + gname + "' already exists");
 
         // Add to list and map.
         all_var_ptrs.push_back(gp);

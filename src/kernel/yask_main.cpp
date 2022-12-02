@@ -192,7 +192,7 @@ struct MySettings {
             values = oss.str();
             
             if (rem_args.length())
-                THROW_YASK_EXCEPTION("Error: extraneous parameter(s): '" +
+                THROW_YASK_EXCEPTION("extraneous parameter(s): '" +
                                      rem_args +
                                      "'; run with '-help' option for usage");
         }

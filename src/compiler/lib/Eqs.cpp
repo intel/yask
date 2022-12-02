@@ -393,10 +393,10 @@ namespace yask {
 
             // Scratch var must not have a condition.
             if (cond1 && og1->is_scratch())
-                THROW_YASK_EXCEPTION("Error: scratch-var equation " + eq1->make_quoted_str() +
+                THROW_YASK_EXCEPTION("scratch-var equation " + eq1->make_quoted_str() +
                                      " cannot have a domain condition");
             if (stcond1 && og1->is_scratch())
-                THROW_YASK_EXCEPTION("Error: scratch-var equation " + eq1->make_quoted_str() +
+                THROW_YASK_EXCEPTION("scratch-var equation " + eq1->make_quoted_str() +
                                      " cannot have a step condition");
 
             // LHS must have all domain dims.
@@ -404,7 +404,7 @@ namespace yask {
                 auto& dname = dd._get_name();
                 auto dexpr = op1->get_arg(dname);
                 if (!dexpr)
-                    THROW_YASK_EXCEPTION("Error: var equation " + eq1->make_quoted_str() +
+                    THROW_YASK_EXCEPTION("var equation " + eq1->make_quoted_str() +
                                          " does not use domain-dimension '" + dname +
                                          "' on LHS");
             }
@@ -412,12 +412,12 @@ namespace yask {
             // LHS of non-scratch must have step dim and vice-versa.
             if (!og1->is_scratch()) {
                 if (!step_expr1)
-                    THROW_YASK_EXCEPTION("Error: non-scratch var equation " + eq1->make_quoted_str() +
+                    THROW_YASK_EXCEPTION("non-scratch var equation " + eq1->make_quoted_str() +
                                          " does not use step-dimension '" + step_dim +
                                          "' on LHS");
             } else {
                 if (step_expr1)
-                    THROW_YASK_EXCEPTION("Error: scratch-var equation " + eq1->make_quoted_str() +
+                    THROW_YASK_EXCEPTION("scratch-var equation " + eq1->make_quoted_str() +
                                          " cannot use step-dimension '" + step_dim + "'");
             }
 
@@ -439,7 +439,7 @@ namespace yask {
 
                     // Compare to actual.
                     if (!argn->is_same(earg))
-                        THROW_YASK_EXCEPTION("Error: LHS of equation " + eq1->make_quoted_str() +
+                        THROW_YASK_EXCEPTION("LHS of equation " + eq1->make_quoted_str() +
                                              " contains expression " + argn->make_quoted_str() +
                                              " for domain dimension '" + dn +
                                              "' where " + earg->make_quoted_str() +
@@ -452,7 +452,7 @@ namespace yask {
                 else {
 
                     if (!argn->is_const_val())
-                        THROW_YASK_EXCEPTION("Error: LHS of equation " + eq1->make_quoted_str() +
+                        THROW_YASK_EXCEPTION("LHS of equation " + eq1->make_quoted_str() +
                                              " contains expression " + argn->make_quoted_str() +
                                              " for misc dimension '" + dn +
                                              "' where kernel-run-time constant integer is expected");
@@ -506,7 +506,7 @@ namespace yask {
             // LHS of equation must be vectorizable.
             // TODO: relax this restriction.
             if (op1->get_vec_type() != VarPoint::VEC_FULL) {
-                THROW_YASK_EXCEPTION("Error: LHS of equation " + eq1->make_quoted_str() +
+                THROW_YASK_EXCEPTION("LHS of equation " + eq1->make_quoted_str() +
                                      " is not fully vectorizable because not all folded"
                                      " dimensions are accessed via simple offsets from their respective indices");
             }
@@ -528,7 +528,7 @@ namespace yask {
                     else if (dims._domain_dims.lookup(dn)) {
                         auto* rsi1p = i1->get_arg_offsets().lookup(dn);
                         if (!rsi1p)
-                            THROW_YASK_EXCEPTION("Error: RHS of equation " + eq1->make_quoted_str() +
+                            THROW_YASK_EXCEPTION("RHS of equation " + eq1->make_quoted_str() +
                                                  " contains expression " + argn->make_quoted_str() +
                                                  " for domain dimension '" + dn +
                                                  "' where constant-integer offset from '" + dn +
@@ -538,7 +538,7 @@ namespace yask {
                     // Misc dim must be a const.
                     else {
                         if (!argn->is_const_val())
-                            THROW_YASK_EXCEPTION("Error: RHS of equation " + eq1->make_quoted_str() +
+                            THROW_YASK_EXCEPTION("RHS of equation " + eq1->make_quoted_str() +
                                                  " contains expression " + argn->make_quoted_str() +
                                                  " for misc dimension '" + dn +
                                                  "' where constant integer is expected");
@@ -598,7 +598,7 @@ namespace yask {
                         "without domain conditions";
                     string stcdesc = stcond1 ? "with step condition " + stcond1->make_quoted_str() :
                         "without step conditions";
-                    THROW_YASK_EXCEPTION("Error: two equations " + cdesc +
+                    THROW_YASK_EXCEPTION("two equations " + cdesc +
                                          " and " + stcdesc +
                                          " have the same LHS: " +
                                          eq1->make_quoted_str() + " and " +
@@ -622,7 +622,7 @@ namespace yask {
                     if (same_eq) {
 
                         // Exit with error.
-                        THROW_YASK_EXCEPTION("Error: illegal dependency: LHS of equation " +
+                        THROW_YASK_EXCEPTION("illegal dependency: LHS of equation " +
                                              eq1->make_quoted_str() + " also appears on its RHS");
                     }
 
@@ -686,7 +686,7 @@ namespace yask {
 
                                 // Exit with error.
                                 string stepmsg = same_step ? " at '" + step_expr1->make_quoted_str() + "'" : "";
-                                THROW_YASK_EXCEPTION("Error: disallowed dependency: var '" +
+                                THROW_YASK_EXCEPTION("disallowed dependency: var '" +
                                                      op1->make_logical_var_str() + "' on LHS of equation " +
                                                      eq1->make_quoted_str() + " also appears on its RHS" +
                                                      stepmsg);
@@ -858,7 +858,7 @@ namespace yask {
                         // areas somewhere else, maybe in the equation or
                         // bundle. Would require changes to kernel as well.
                         if (scratches_seen.count(og2))
-                            THROW_YASK_EXCEPTION("Error: scratch-var '" +
+                            THROW_YASK_EXCEPTION("scratch-var '" +
                                                  og2->get_name() + "' depends upon itself");
                         scratches_seen.insert(og2);
                     }

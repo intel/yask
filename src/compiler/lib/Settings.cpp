@@ -84,14 +84,14 @@ namespace yask {
 
                 case STEP_INDEX:
                     if (_step_dim.length() && _step_dim != dname) {
-                        THROW_YASK_EXCEPTION("Error: step dimensions '" + _step_dim +
+                        THROW_YASK_EXCEPTION("step dimensions '" + _step_dim +
                                              "' and '" + dname + "' found; only one allowed");
                     }
                     add_step_dim(dname);
 
                     // Scratch vars cannot use step dim.
                     if (gp->is_scratch())
-                        THROW_YASK_EXCEPTION("Error: scratch var '" + gname +
+                        THROW_YASK_EXCEPTION("scratch var '" + gname +
                                              "' cannot use step dimension '" +
                                              dname + "'.\n");
                     break;
@@ -105,15 +105,15 @@ namespace yask {
                     break;
 
                 default:
-                    THROW_YASK_EXCEPTION("Error: unexpected dim type " + to_string(type));
+                    THROW_YASK_EXCEPTION("unexpected dim type " + to_string(type));
                 }
             }
         }
         if (_step_dim.length() == 0) {
-            THROW_YASK_EXCEPTION("Error: no step dimension defined");
+            THROW_YASK_EXCEPTION("no step dimension defined");
         }
         if (!_domain_dims.get_num_dims()) {
-            THROW_YASK_EXCEPTION("Error: no domain dimension(s) defined");
+            THROW_YASK_EXCEPTION("no domain dimension(s) defined");
         }
 
         // Set specific positional dims.
@@ -249,7 +249,7 @@ namespace yask {
 
             // Check it.
             if (_fold.product() != vlen)
-                THROW_YASK_EXCEPTION("Internal error: failed to set folding for VLEN " +
+                THROW_YASK_EXCEPTION("(internal fault) failed to set folding for VLEN " +
                                      to_string(vlen));
         }
 
@@ -310,7 +310,7 @@ namespace yask {
         // Checks for unaligned loads.
         if (settings._allow_unaligned_loads) {
             if (_fold_gt1.size() > 1) {
-                FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to allow "
+                FORMAT_AND_THROW_YASK_EXCEPTION("attempt to allow "
                                                 "unaligned loads when there are " <<
                                                 _fold_gt1.size() <<
                                                 " dimensions in the vector-fold that are > 1");

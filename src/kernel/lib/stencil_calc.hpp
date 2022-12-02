@@ -733,7 +733,7 @@ namespace yask {
                           ") by outer thread " << outer_thread_idx <<
                           " and inner thread " << inner_thread_idx);
                 #if CPTS == 1
-                THROW_YASK_EXCEPTION("Internal error: vector border-code not expected with cluster-size==1");
+                THROW_YASK_EXCEPTION("(internal fault) vector border-code not expected with cluster-size==1");
                 #else
 
                 // Normalized vector indices.
@@ -945,7 +945,7 @@ namespace yask {
                           bit_mask_t mask) {
 
             #if CPTS == 1
-            THROW_YASK_EXCEPTION("Internal error: masked-vector code not expected with cluster-size==1");
+            THROW_YASK_EXCEPTION("(internal fault) masked-vector code not expected with cluster-size==1");
             #else
             
             // Call code from stencil compiler.

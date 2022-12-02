@@ -157,7 +157,7 @@ namespace yask {
     template<typename T> shared_ptr<T> cast_expr(expr_ptr ep, const string& descrip) {
         auto tp = dynamic_pointer_cast<T>(ep);
         if (!tp) {
-            THROW_YASK_EXCEPTION("Error: expression '" + ep->make_str() +
+            THROW_YASK_EXCEPTION("expression '" + ep->make_str() +
                                  "' is not a " + descrip);
         }
         return tp;
@@ -189,7 +189,7 @@ namespace yask {
         // Get the current value.
         // Exit with error if not known.
         virtual double get_num_val() const {
-            THROW_YASK_EXCEPTION("Error: cannot evaluate '" + make_str() +
+            THROW_YASK_EXCEPTION("cannot evaluate '" + make_str() +
                 "' for a known numerical value");
         }
 
@@ -199,7 +199,7 @@ namespace yask {
             double val = get_num_val();
             int ival = int(val);
             if (val != double(ival)) {
-                THROW_YASK_EXCEPTION("Error: '" + make_str() +
+                THROW_YASK_EXCEPTION("'" + make_str() +
                     "' does not evaluate to an integer");
             }
             return ival;
@@ -286,7 +286,7 @@ namespace yask {
         // Get the current value.
         // Exit with error if not known.
         virtual bool get_bool_val() const {
-            THROW_YASK_EXCEPTION("Error: cannot evaluate '" + make_str() +
+            THROW_YASK_EXCEPTION("cannot evaluate '" + make_str() +
                                  "' for a known boolean value");
         }
 
@@ -310,8 +310,8 @@ namespace yask {
         ConstExpr(double f) : _f(f) { }
         ConstExpr(idx_t i) : _f(i) {
             if (idx_t(_f) != i)
-                FORMAT_AND_THROW_YASK_EXCEPTION("Error: integer value " << i <<
-                                     " cannot be stored accurately as a double");
+                FORMAT_AND_THROW_YASK_EXCEPTION("integer value " << i <<
+                                                " cannot be stored accurately as a double");
         }
         ConstExpr(int i) : ConstExpr(idx_t(i)) { }
         ConstExpr(const ConstExpr& src) : _f(src._f) { }

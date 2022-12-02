@@ -38,7 +38,7 @@ namespace yask {
         bool got_sizes = sizes != NULL;
         if (got_sizes) {
             if (gdims.size() != sizes->size()) {
-                FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to create var '" << name << "' with " <<
+                FORMAT_AND_THROW_YASK_EXCEPTION("attempt to create var '" << name << "' with " <<
                                                 gdims.size() << " dimension names but " << sizes->size() <<
                                                 " dimension sizes");
             }
@@ -68,7 +68,7 @@ namespace yask {
 
                 // Already used?
                 if (seen_dims.count(gdim)) {
-                    THROW_YASK_EXCEPTION("Error: cannot create var '" + name +
+                    THROW_YASK_EXCEPTION("cannot create var '" + name +
                                          "' because dimension '" + gdim +
                                          "' is used more than once");
                 }
@@ -77,7 +77,7 @@ namespace yask {
                 if (gdim == step_dim) {
                     step_used = true;
                     if (i != step_posn) {
-                        THROW_YASK_EXCEPTION("Error: cannot create var '" + name +
+                        THROW_YASK_EXCEPTION("cannot create var '" + name +
                                              "' because step dimension '" + gdim +
                                              "' is not first dimension");
                     }
@@ -110,13 +110,13 @@ namespace yask {
 
             // Failed.
             if (!gp)
-                FORMAT_AND_THROW_YASK_EXCEPTION("Error: cannot create new var '" << name <<
+                FORMAT_AND_THROW_YASK_EXCEPTION("cannot create new var '" << name <<
                                                 "' with dimensions '" << dtup.make_dim_str() <<
                                                 "'; only up to " << MAX_DIMS <<
                                                 " dimensions supported");
 #else
             // Don't allow new var types.
-            FORMAT_AND_THROW_YASK_EXCEPTION("Error: cannot create new var '" << name <<
+            FORMAT_AND_THROW_YASK_EXCEPTION("cannot create new var '" << name <<
                                             "' with dimensions '" << dtup.make_dim_str() <<
                                             "'; this list of dimensions is not in any existing var");
 #endif

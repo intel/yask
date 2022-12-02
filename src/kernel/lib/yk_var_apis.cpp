@@ -38,7 +38,7 @@ namespace yask {
             dims->check_dim_type(dim, #api_name, step_ok, domain_ok, misc_ok); \
             int posn = gb().get_dim_posn(dim, true, #api_name);         \
             if (prep_req && corep()->_rank_offsets[posn] < 0)           \
-                THROW_YASK_EXCEPTION("Error: '" #api_name "()' called on var '" + \
+                THROW_YASK_EXCEPTION("'" #api_name "()' called on var '" + \
                                      get_name() + "' before calling 'prepare_solution()'"); \
             auto cp = corep();                                          \
             auto rtn = expr;                                            \
@@ -57,7 +57,7 @@ namespace yask {
         idx_t_vec YkVarImpl::api_name ## _vec() const {                 \
             STATE_VARS(gbp());                                          \
             if (prep_req && corep()->_rank_offsets[0] < 0)              \
-                THROW_YASK_EXCEPTION("Error: '" #api_name "_vec()' called on var '" + \
+                THROW_YASK_EXCEPTION("'" #api_name "_vec()' called on var '" + \
                                      get_name() + "' before calling 'prepare_solution()'"); \
             auto cp = corep();                                          \
             auto nvdims = get_num_dims();                               \
@@ -116,7 +116,7 @@ namespace yask {
             if (domain_ok) nadims += gb()._num_domain_dims;              \
             if (misc_ok) nadims += gb()._num_misc_dims;                  \
             if (vals.size() != nadims)                                  \
-                THROW_YASK_EXCEPTION("Error: '" #api_name               \
+                THROW_YASK_EXCEPTION("'" #api_name                      \
                                      "_vec()' called on var '" +        \
                                      get_name() + "' without the proper number of values"); \
             int i = 0;                                                  \
@@ -349,7 +349,7 @@ namespace yask {
         if (gb().is_user_var()) {
             force_native = true;
             if (!is_storage_layout_identical(sp, false))
-                THROW_YASK_EXCEPTION("Error: fuse_vars(): attempt to replace meta-data"
+                THROW_YASK_EXCEPTION("fuse_vars(): attempt to replace meta-data"
                                      " of " + gb().make_info_string() +
                                      " used in solution with incompatible " +
                                      sp->gb().make_info_string());
@@ -381,7 +381,7 @@ namespace yask {
         TRACE_MSG("get_element({" << gb().make_index_string(indices) << "}) on " <<
                   gb().make_info_string());
         if (!is_storage_allocated())
-            THROW_YASK_EXCEPTION("Error: call to 'get_element' with no storage allocated for var '" +
+            THROW_YASK_EXCEPTION("call to 'get_element' with no storage allocated for var '" +
                                  get_name() + "'");
         gb().check_indices(indices, "get_element", true, true, false);
         idx_t asi = gb().get_alloc_step_index(indices);
@@ -403,7 +403,7 @@ namespace yask {
                   gb().make_info_string());
         idx_t nup = 0;
         if (!get_raw_storage_buffer() && strict_indices)
-            THROW_YASK_EXCEPTION("Error: call to 'set_element' with no storage allocated for var '" +
+            THROW_YASK_EXCEPTION("call to 'set_element' with no storage allocated for var '" +
                                  get_name() + "'");
         if (get_raw_storage_buffer() &&
 
@@ -436,7 +436,7 @@ namespace yask {
                   gb().make_info_string());
         idx_t nup = 0;
         if (!get_raw_storage_buffer() && strict_indices)
-            THROW_YASK_EXCEPTION("Error: call to 'add_to_element' with no storage allocated for var '" +
+            THROW_YASK_EXCEPTION("call to 'add_to_element' with no storage allocated for var '" +
                                  get_name() + "'");
         if (get_raw_storage_buffer() &&
 

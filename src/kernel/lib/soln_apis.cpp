@@ -59,7 +59,7 @@ namespace yask {
             TRACE_MSG("solution '" << get_name() << "'.set_"            \
                       #api_name "_vec(...)");                           \
             if (vals.size() != NUM_DOMAIN_DIMS)                         \
-                THROW_YASK_EXCEPTION("Error: set_'" #api_name           \
+                THROW_YASK_EXCEPTION("set_'" #api_name                  \
                                      "_vec()' called without the proper number of domain dims"); \
             expr.set_vals(start_i, vals);                               \
             update_var_info(false);                                     \
@@ -70,7 +70,7 @@ namespace yask {
             TRACE_MSG("solution '" << get_name() << "'.set_"            \
                       #api_name "_vec(...)");                           \
             if (vals.size() != NUM_DOMAIN_DIMS)                         \
-                THROW_YASK_EXCEPTION("Error: set_'" #api_name           \
+                THROW_YASK_EXCEPTION("set_'" #api_name                  \
                                      "_vec()' called without the proper number of domain dims"); \
             expr.set_vals(start_i, vals);                               \
             update_var_info(false);                                     \

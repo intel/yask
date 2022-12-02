@@ -120,7 +120,7 @@ namespace yask {
         }
 
         else {
-            THROW_YASK_EXCEPTION("Error: unrecognized auto-tuner target '" +
+            THROW_YASK_EXCEPTION("unrecognized auto-tuner target '" +
                                  target_str + "'");
         }
         assert(targetp);
@@ -432,7 +432,7 @@ namespace yask {
             } // beyond next neighbor of center.
         } // while(true) search for new setting to try.
 
-        THROW_YASK_EXCEPTION("internal error: exited from infinite loop");
+        THROW_YASK_EXCEPTION("(internal fault) exited from infinite loop");
     } // eval.
 
     // Apply best settings if avail, and adjust other settings.
@@ -531,7 +531,7 @@ namespace yask {
     void StencilContext::run_auto_tuner_now(bool verbose) {
         STATE_VARS(this);
         if (!is_prepared())
-            THROW_YASK_EXCEPTION("Error: run_auto_tuner_now() called without calling prepare_solution() first");
+            THROW_YASK_EXCEPTION("run_auto_tuner_now() called without calling prepare_solution() first");
 
         DEBUG_MSG("\nAuto-tuning...");
         YaskTimer at_timer;

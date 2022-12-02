@@ -39,18 +39,18 @@ namespace yask {
             return;
         if (dim == _step_dim) {
             if (!step_ok) {
-                THROW_YASK_EXCEPTION("Error in " + fn_name + "(): dimension '" +
+                THROW_YASK_EXCEPTION(fn_name + "(): dimension '" +
                                      dim + "' is the step dimension, which is not allowed");
             }
         }
         else if (_domain_dims.lookup(dim)) {
             if (!domain_ok) {
-                THROW_YASK_EXCEPTION("Error in " + fn_name + "(): dimension '" +
+                THROW_YASK_EXCEPTION(fn_name + "(): dimension '" +
                                      dim + "' is a domain dimension, which is not allowed");
             }
         }
         else if (!misc_ok) {
-            THROW_YASK_EXCEPTION("Error in " + fn_name + "(): dimension '" +
+            THROW_YASK_EXCEPTION(fn_name + "(): dimension '" +
                                  dim + "' is a misc dimension, which is not allowed");
         }
     }

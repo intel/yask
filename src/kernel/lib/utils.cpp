@@ -107,7 +107,7 @@ namespace yask {
 #endif
 
         if (min_val != rank_val || max_val != rank_val) {
-            FORMAT_AND_THROW_YASK_EXCEPTION("error: " << descr << " ranges from " << min_val << " to " <<
+            FORMAT_AND_THROW_YASK_EXCEPTION(descr << " ranges from " << min_val << " to " <<
                                             max_val << " across the ranks; they should all be identical");
         }
     }
@@ -178,14 +178,14 @@ namespace yask {
                                                      int& argi)
     {
         if (size_t(argi) >= args.size() || args[argi].length() == 0) {
-            THROW_YASK_EXCEPTION("Error: no argument for option '" + args[argi - 1] + "'");
+            THROW_YASK_EXCEPTION("no argument for option '" + args[argi - 1] + "'");
         }
 
         const char* nptr = args[argi].c_str();
         char* endptr = 0;
         double val = strtod(nptr, &endptr);
         if (!isfinite(val) || *endptr != '\0') {
-            THROW_YASK_EXCEPTION("Error: argument for option '" + args[argi - 1] +
+            THROW_YASK_EXCEPTION("argument for option '" + args[argi - 1] +
                                  "' is not a valid floating-point number");
         }
 
@@ -200,14 +200,14 @@ namespace yask {
                                                   int& argi)
     {
         if (size_t(argi) >= args.size() || args[argi].length() == 0) {
-            THROW_YASK_EXCEPTION("Error: no argument for option '" + args[argi - 1] + "'");
+            THROW_YASK_EXCEPTION("no argument for option '" + args[argi - 1] + "'");
         }
 
         const char* nptr = args[argi].c_str();
         char* endptr = 0;
         long long int val = strtoll(nptr, &endptr, 0);
         if (val == LLONG_MIN || val == LLONG_MAX || *endptr != '\0') {
-            THROW_YASK_EXCEPTION("Error: argument for option '" + args[argi - 1] + "' is not an integer");
+            THROW_YASK_EXCEPTION("argument for option '" + args[argi - 1] + "' is not an integer");
         }
 
         argi++;
@@ -221,7 +221,7 @@ namespace yask {
                                                       int& argi)
     {
         if (size_t(argi) >= args.size())
-            THROW_YASK_EXCEPTION("Error: no argument for option '" + args[argi - 1] + "'");
+            THROW_YASK_EXCEPTION("no argument for option '" + args[argi - 1] + "'");
 
         auto v = args[argi];
         argi++;
@@ -341,7 +341,7 @@ namespace yask {
             string str;
             while (getline(ss, str, ',')) {
                 if (_allowed_strs.size() && _allowed_strs.count(str) == 0) {
-                    THROW_YASK_EXCEPTION("Error: illegal argument '" + str + "' to option '" +
+                    THROW_YASK_EXCEPTION("illegal argument '" + str + "' to option '" +
                                          args[argi - 2] + "'");
                 }
                 _val.push_back(str);
@@ -461,7 +461,7 @@ namespace yask {
         }
 
         if (in_quote != '\0')
-            THROW_YASK_EXCEPTION("Error: unterminated quote in '" +
+            THROW_YASK_EXCEPTION("unterminated quote in '" +
                                  arg_string + "'");
 
         // Last string.

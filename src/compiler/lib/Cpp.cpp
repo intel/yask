@@ -939,7 +939,7 @@ namespace yask {
             }
 
             else {
-                THROW_YASK_EXCEPTION("Internal error: type unknown for point " + gp.make_str());
+                THROW_YASK_EXCEPTION("(internal fault) type unknown for point " + gp.make_str());
             }
         }
 

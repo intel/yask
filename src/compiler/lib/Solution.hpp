@@ -226,7 +226,7 @@ namespace yask {
         }
         virtual std::string get_target() override {
             if (!is_target_set())
-                THROW_YASK_EXCEPTION("Error: call to get_target() before set_target()");
+                THROW_YASK_EXCEPTION("call to get_target() before set_target()");
             return _settings._target;
         }
         virtual void set_target(const std::string& format) override;
@@ -257,7 +257,7 @@ namespace yask {
                 assert(dp);
                 auto& dname = d->get_name();
                 if (dp->get_type() != DOMAIN_INDEX)
-                    THROW_YASK_EXCEPTION("Error: set_domain_dims() called with non-domain index '" +
+                    THROW_YASK_EXCEPTION("set_domain_dims() called with non-domain index '" +
                                          dname + "'");
                 _settings._domain_dims.push_back(dname);
             }
@@ -273,7 +273,7 @@ namespace yask {
             assert(dp);
             auto& dname = dim->get_name();
             if (dp->get_type() != STEP_INDEX)
-                    THROW_YASK_EXCEPTION("Error: set_step_dim() called with non-step index '" +
+                    THROW_YASK_EXCEPTION("set_step_dim() called with non-step index '" +
                                          dname + "'");
             _settings._step_dim = dname;
         }

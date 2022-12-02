@@ -292,7 +292,7 @@ namespace yask {
 
                             // Error if also back-dep.
                             if (_deps.is_dep_on(oj, oi)) {
-                                THROW_YASK_EXCEPTION("Error: circular dependency between " +
+                                THROW_YASK_EXCEPTION("circular dependency between " +
                                                      oi->get_descr() + " and " +
                                                      oj->get_descr());
                             }

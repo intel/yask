@@ -87,7 +87,7 @@ namespace yask {
                      // split by equal sign.
                      size_t ep = p_str.find("=");
                      if (ep == string::npos) {
-                         THROW_YASK_EXCEPTION("Error: no equal sign in '" + p_str + "'");
+                         THROW_YASK_EXCEPTION("no equal sign in '" + p_str + "'");
                      }
                      string key = p_str.substr(0, ep);
                      string value = p_str.substr(ep+1);

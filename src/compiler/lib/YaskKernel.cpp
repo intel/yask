@@ -333,7 +333,7 @@ namespace yask {
                             if (dtype == STEP_INDEX) {
                                 assert(dname == _dims._step_dim);
                                 if (dn > 0) {
-                                    THROW_YASK_EXCEPTION("Error: cannot create var '" + var +
+                                    THROW_YASK_EXCEPTION("cannot create var '" + var +
                                                          "' with dimensions '" + gdims.make_dim_str() +
                                                          "' because '" + dname + "' must be first dimension");
                                 }
