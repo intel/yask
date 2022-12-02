@@ -69,7 +69,8 @@ inline void omp_unset_lock(omp_lock_t* p) { }
 // Macro for throwing yask_exception with a string.
 // Example: THROW_YASK_EXCEPTION("all your base are belong to us");
 #define THROW_YASK_EXCEPTION(message) do {                          \
-        yask_exception e(message);                                  \
+        auto msg = std::string("YASK: ") + message;                 \
+        yask_exception e(msg);                                      \
         throw e;                                                    \
     } while(0)
 
