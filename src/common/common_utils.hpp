@@ -76,11 +76,9 @@ inline void omp_unset_lock(omp_lock_t* p) { }
 // Macro for creating a string and throwing yask_exception with it.
 // Example: FORMAT_AND_THROW_YASK_EXCEPTION("bad value: x = " << x);
 #define FORMAT_AND_THROW_YASK_EXCEPTION(message) do {               \
-        yask_exception e;                                           \
         std::stringstream err;                                      \
         err << message;                                             \
-        e.add_message(err.str());                                   \
-        throw e;                                                    \
+        THROW_YASK_EXCEPTION(err.str());                            \
     } while(0)
 
 namespace yask {
