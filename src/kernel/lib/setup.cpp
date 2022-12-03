@@ -690,9 +690,10 @@ namespace yask {
                     gp->update_min_pad_size(dname, actl_opts->_min_pad_sizes[dname]);
 
                     // Offsets.
-                    auto dp = dims->_domain_dims.lookup_posn(dname);
-                    gp->_set_rank_offset(dname, rank_domain_offsets[dp]);
                     gp->_set_local_offset(dname, 0);
+                    auto dp = dims->_domain_dims.lookup_posn(dname);
+                    auto rofs = rank_domain_offsets[dp];
+                    gp->_set_rank_offset(dname, rofs);
                 }
 
                 // Update max halo across vars, used for temporal angles.
@@ -792,6 +793,57 @@ namespace yask {
         update_tb_info();
 
     } // update_var_info().
+
+    // Adjust offsets of scratch vars based on thread number 'thread_idx'
+    // and beginning point of micro-block 'idxs'.  Each scratch-var is
+    // assigned to a thread, so it must "move around" as the thread is
+    // assigned to each micro-block.  This move is accomplished by changing
+    // the vars' local offsets.
+    void StencilContext::update_scratch_var_info(int thread_idx,
+                                                 const Indices& idxs) {
+        STATE_VARS(this);
+
+        // Loop thru vecs of scratch vars.
+        for (auto* sv : scratch_vecs) {
+            assert(sv);
+
+            // Get ptr to the scratch var for this thread.
+            auto& gp = sv->at(thread_idx);
+            assert(gp);
+            auto& gb = gp->gb();
+            assert(gb.is_scratch());
+
+            // i: index for stencil dims, j: index for domain dims.
+            DOMAIN_VAR_LOOP(i, j) {
+
+                auto& dim = stencil_dims.get_dim(i);
+                auto& dname = dim._get_name();
+
+                // Is this dim used in this var?
+                int posn = gb.get_dim_posn(dname);
+                if (posn >= 0) {
+
+                    // Set rank offset of var based on starting point of rank.
+                    // Thus, it it not necessarily a vec mult.
+                    auto rofs = rank_domain_offsets[j];
+                    gp->_set_rank_offset(posn, rofs);
+
+                    // Must use the vector len in this var, which may
+                    // not be the same as soln fold length because var
+                    // may not be vectorized.
+                    auto vlen = gp->_get_var_vec_len(posn);
+
+                    // See diagram in yk_var defn.  Local offset is the
+                    // offset of this var relative to the beginning of the
+                    // current rank.  Set local offset to diff between
+                    // global offset and rank offset.  Round down to make
+                    // sure it's vec-aligned.
+                    auto lofs = round_down_flr(idxs[i] - rofs, vlen);
+                    gp->_set_local_offset(posn, lofs);
+                }
+            }
+        }
+    }
 
     // Set temporal blocking data.  This should be called anytime a block
     // size is changed.  Must be called after update_var_info() to ensure

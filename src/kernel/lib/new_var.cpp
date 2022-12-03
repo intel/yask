@@ -149,10 +149,6 @@ namespace yask {
                     ygp->update_extra_pad_size(i, actl_opts->_extra_pad_sizes[gdim]);
                     ygp->update_min_pad_size(i, actl_opts->_min_pad_sizes[gdim]);
                 }
-
-                // Offsets.
-                ygp->_set_rank_offset(i, 0);
-                ygp->_set_local_offset(i, 0);
             }
         }
 

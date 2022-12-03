@@ -32,14 +32,11 @@ namespace yask {
 
     // APIs to get info from vars: one with name of dim with a lot
     // of checking, one with index of dim with no checking.
-    #define GET_VAR_API(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
+    #define GET_VAR_API(api_name, expr, step_ok, domain_ok, misc_ok) \
         idx_t YkVarImpl::api_name(const string& dim) const {            \
             STATE_VARS(gbp());                                          \
             dims->check_dim_type(dim, #api_name, step_ok, domain_ok, misc_ok); \
             int posn = gb().get_dim_posn(dim, true, #api_name);         \
-            if (prep_req && corep()->_rank_offsets[posn] < 0)           \
-                THROW_YASK_EXCEPTION("'" #api_name "()' called on var '" + \
-                                     get_name() + "' before calling 'prepare_solution()'"); \
             auto cp = corep();                                          \
             auto rtn = expr;                                            \
             return rtn;                                                 \
@@ -52,19 +49,14 @@ namespace yask {
         }
 
     // Add vector version that retuns only allowed results.
-    // FIXME: find better way to check whether prepare_solution() has been called--
-    // this one doesn't work for scalars.
-    #define GET_VAR_API2(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
-        GET_VAR_API(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
+    #define GET_VAR_API2(api_name, expr, step_ok, domain_ok, misc_ok) \
+        GET_VAR_API(api_name, expr, step_ok, domain_ok, misc_ok) \
         idx_t_vec YkVarImpl::api_name ## _vec() const {                 \
             STATE_VARS(gbp());                                          \
             TRACE_MSG("var '" << get_name() << "'."                     \
                       #api_name "_vec(...)");                           \
             auto cp = corep();                                          \
             auto nvdims = get_num_dims();                               \
-            if (prep_req && nvdims && corep()->_rank_offsets[0] < 0)    \
-                THROW_YASK_EXCEPTION("'" #api_name "_vec()' called on var '" + \
-                                     get_name() + "' before calling 'prepare_solution()'"); \
             auto nadims = 0;                                            \
             if (step_ok) nadims += gb()._num_step_dims;                 \
             if (domain_ok) nadims += gb()._num_domain_dims;             \
@@ -144,75 +136,75 @@ namespace yask {
     // Internal APIs.
     GET_VAR_API(_get_left_wf_ext,
                 cp->_left_wf_exts[posn],
-                true, true, true, false)
+                true, true, true)
     GET_VAR_API(_get_right_wf_ext,
                 cp->_right_wf_exts[posn],
-                true, true, true, false)
+                true, true, true)
     GET_VAR_API(_get_soln_vec_len,
                 cp->_soln_vec_lens[posn],
-                true, true, true, true)
+                true, true, true)
     GET_VAR_API(_get_var_vec_len,
                 cp->_var_vec_lens[posn],
-                true, true, true, true)
+                true, true, true)
     GET_VAR_API(_get_rank_offset,
                 cp->_rank_offsets[posn],
-                true, true, true, true)
+                true, true, true)
     GET_VAR_API(_get_local_offset,
                 cp->_local_offsets[posn],
-                true, true, true, false)
+                true, true, true)
 
     // Exposed APIs.
     GET_VAR_API(get_first_misc_index,
                 cp->_local_offsets[posn],
-                false, false, true, false)
+                false, false, true)
     GET_VAR_API(get_last_misc_index,
                 cp->_local_offsets[posn] + cp->_domains[posn] - 1,
-                false, false, true, false)
+                false, false, true)
 
     GET_VAR_API2(get_alloc_size,
                 cp->_allocs[posn],
-                true, true, true, false)
+                true, true, true)
     GET_VAR_API2(get_first_local_index,
                 cp->get_first_local_index(posn),
-                true, true, true, true)
+                true, true, true)
     GET_VAR_API2(get_last_local_index,
                 cp->get_last_local_index(posn),
-                true, true, true, true)
+                true, true, true)
 
     GET_VAR_API2(get_left_pad_size,
                 cp->_actl_left_pads[posn],
-                false, true, false, false)
+                false, true, false)
     GET_VAR_API2(get_right_pad_size,
                 cp->_actl_right_pads[posn],
-                false, true, false, false)
+                false, true, false)
     GET_VAR_API2(get_left_halo_size,
                 cp->_left_halos[posn],
-                false, true, false, false)
+                false, true, false)
     GET_VAR_API2(get_right_halo_size,
                 cp->_right_halos[posn],
-                false, true, false, false)
+                false, true, false)
     GET_VAR_API2(get_left_extra_pad_size,
                 cp->_actl_left_pads[posn] - cp->_left_halos[posn],
-                false, true, false, false)
+                false, true, false)
     GET_VAR_API2(get_right_extra_pad_size,
                 cp->_actl_right_pads[posn] - cp->_right_halos[posn],
-                false, true, false, false)
+                false, true, false)
 
     GET_VAR_API2(get_rank_domain_size,
-                cp->_domains[posn],
-                false, true, false, !gb()._fixed_size)
+                 cp->_domains[posn],
+                 false, true, false)
     GET_VAR_API2(get_first_rank_domain_index,
-                cp->_rank_offsets[posn],
-                false, true, false, true)
+                 cp->_rank_offsets[posn],
+                 false, true, false)
     GET_VAR_API2(get_last_rank_domain_index,
-                cp->_rank_offsets[posn] + cp->_domains[posn] - 1,
-                false, true, false, true)
+                 cp->_rank_offsets[posn] + cp->_domains[posn] - 1,
+                 false, true, false)
     GET_VAR_API2(get_first_rank_halo_index,
-                cp->_rank_offsets[posn] - cp->_left_halos[posn],
-                false, true, false, true)
+                 cp->_rank_offsets[posn] - cp->_left_halos[posn],
+                 false, true, false)
     GET_VAR_API2(get_last_rank_halo_index,
-                cp->_rank_offsets[posn] + cp->_domains[posn] + cp->_right_halos[posn] - 1,
-                false, true, false, true)
+                 cp->_rank_offsets[posn] + cp->_domains[posn] + cp->_right_halos[posn] - 1,
+                 false, true, false)
 
     // These are the internal, unchecked access functions that allow
     // changes prohibited thru the APIs.

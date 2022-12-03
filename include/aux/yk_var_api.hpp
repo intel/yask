@@ -246,6 +246,7 @@ namespace yask {
            for the step dimension.
            @note This function should be called only *after* calling prepare_solution()
            because prepare_solution() assigns this rank's position in the problem domain.
+           If called before prepare_solution(), zero (0) will be returned.
            @returns the first valid index.
         */
         virtual idx_t
@@ -272,6 +273,7 @@ namespace yask {
            for the step dimension.
            @note This function should be called only *after* calling prepare_solution()
            because prepare_solution() assigns this rank's position in the problem domain.
+           If called before prepare_solution(), zero (0) will be returned.
            @returns the last valid index.
         */
         virtual idx_t
@@ -313,9 +315,9 @@ namespace yask {
            The valid step indices in a var are updated by calling yk_solution::run_solution()
            or one of the element-setting API functions.
            Equivalient to get_first_local_index(dim), where `dim` is the step dimension.
+           This var must use the step index.
            @returns the first index in the step dimension that can be used in one of the
            element-getting API functions.
-           This var must use the step index.
         */
         virtual idx_t
         get_first_valid_step_index() const =0;
@@ -325,9 +327,9 @@ namespace yask {
            The valid step indices in a var are updated by calling yk_solution::run_solution()
            or one of the element-setting API functions.
            Equivalient to get_last_local_index(dim), where `dim` is the step dimension.
+           This var must use the step index.
            @returns the last index in the step dimension that can be used in one of the
            element-getting API functions.
-           This var must use the step index.
         */
         virtual idx_t
         get_last_valid_step_index() const =0;
@@ -336,6 +338,7 @@ namespace yask {
         /**
            @note This function should be called only *after* calling prepare_solution()
            because prepare_solution() assigns this rank's size.
+           If called before prepare_solution(), zero (0) will be returned.
            @returns The same value as yk_solution::get_rank_domain_size() if
            is_fixed_size() returns `false` or the fixed sized provided via
            yk_solution::new_fixed_size_var() otherwise.
@@ -343,7 +346,8 @@ namespace yask {
         virtual idx_t
         get_rank_domain_size(const std::string& dim
                              /**< [in] Name of dimension to get.  Must be one of
-                                the names from yk_solution::get_domain_dim_names(). */) const =0;
+                                the names from get_dim_names() and also
+                                yk_solution::get_domain_dim_names(). */) const =0;
 
         /// Get the domain size for this rank in all domain dimensions in this var.
         /**
@@ -358,13 +362,15 @@ namespace yask {
            Does _not_ include indices of padding area.
            @note This function should be called only *after* calling prepare_solution()
            because prepare_solution() assigns this rank's position in the problem domain.
+           If called before prepare_solution(), zero (0) will be returned.
            @returns The same value as yk_solution::get_first_rank_domain_index() if
            is_fixed_size() returns `false` or zero (0) otherwise.
         */
         virtual idx_t
         get_first_rank_domain_index(const std::string& dim
                                     /**< [in] Name of dimension to get.  Must be one of
-                                       the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+                                       the names from get_dim_names() and also
+                                       yk_solution::get_domain_dim_names(). */ ) const =0;
 
         /// Get the first index of the sub-domain in this rank in all domain dimensions in this var.
         /**
@@ -379,6 +385,7 @@ namespace yask {
            Does _not_ include indices of padding area.
            @note This function should be called only *after* calling prepare_solution()
            because prepare_solution() assigns this rank's position in the problem domain.
+           If called before prepare_solution(), zero (0) will be returned.
            @returns The same value as yk_solution::get_last_rank_domain_index() if
            is_fixed_size() returns `false` or one less than the fixed sized provided via
            yk_solution::new_fixed_size_var() otherwise.
@@ -386,7 +393,8 @@ namespace yask {
         virtual idx_t
         get_last_rank_domain_index(const std::string& dim
                                     /**< [in] Name of dimension to get.  Must be one of
-                                       the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+                                       the names from get_dim_names() and also
+                                       yk_solution::get_domain_dim_names(). */ ) const =0;
 
         /// Get the last index of the sub-domain in this rank in all domain dimensions in this var.
         /**
@@ -403,9 +411,10 @@ namespace yask {
         */
         virtual idx_t
         get_left_halo_size(const std::string& dim
-                      /**< [in] Name of dimension to get.
-                         Must be one of
-                         the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+                           /**< [in] Name of dimension to get.
+                              Must be one of
+                              the names from get_dim_names() and also
+                              yk_solution::get_domain_dim_names(). */ ) const =0;
 
         /// Get the right halo size in the specified dimension.
         /**
@@ -414,22 +423,25 @@ namespace yask {
         */
         virtual idx_t
         get_right_halo_size(const std::string& dim
-                      /**< [in] Name of dimension to get.
-                         Must be one of
-                         the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+                            /**< [in] Name of dimension to get.
+                               Must be one of
+                               the names from get_dim_names() and also
+                               yk_solution::get_domain_dim_names(). */ ) const =0;
 
         /// Get the first index of the left halo in this rank in the specified dimension.
         /**
            @note This function should be called only *after* calling prepare_solution()
            because prepare_solution() assigns this rank's position in the problem domain.
+           If called before prepare_solution(), zero (0) will be returned.
            @returns The first index of left halo in this rank or
            the same value as yk_var::get_first_rank_domain_index()
            if the left halo has zero size.
         */
         virtual idx_t
         get_first_rank_halo_index(const std::string& dim
-                                    /**< [in] Name of dimension to get.  Must be one of
-                                       the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+                                  /**< [in] Name of dimension to get.  Must be one of
+                                     the names from get_dim_names() and also
+                                     yk_solution::get_domain_dim_names(). */ ) const =0;
 
         /// Get the first index of the left halo in this rank in all domain dimensions in this var.
         /**
@@ -443,14 +455,16 @@ namespace yask {
         /**
            @note This function should be called only *after* calling prepare_solution()
            because prepare_solution() assigns this rank's position in the problem domain.
+           If called before prepare_solution(), zero (0) will be returned.
            @returns The last index of right halo in this rank or
            the same value as yk_var::get_last_rank_domain_index()
            if the right halo has zero size.
         */
         virtual idx_t
         get_last_rank_halo_index(const std::string& dim
-                                    /**< [in] Name of dimension to get.  Must be one of
-                                       the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+                                 /**< [in] Name of dimension to get.  Must be one of
+                                    the names from get_dim_names() and also
+                                    yk_solution::get_domain_dim_names(). */ ) const =0;
 
         /// Get the last index of the right halo in this rank in all domain dimensions in this var.
         /**
@@ -471,9 +485,10 @@ namespace yask {
         */
         virtual idx_t
         get_left_pad_size(const std::string& dim
-                     /**< [in] Name of dimension to get.
-                         Must be one of
-                         the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+                          /**< [in] Name of dimension to get.
+                             Must be one of
+                             the names from get_dim_names() and also
+                             yk_solution::get_domain_dim_names(). */ ) const =0;
 
         /// Get the actual right padding in the specified dimension.
         /**
@@ -486,9 +501,10 @@ namespace yask {
         */
         virtual idx_t
         get_right_pad_size(const std::string& dim
-                     /**< [in] Name of dimension to get.
-                         Must be one of
-                         the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+                           /**< [in] Name of dimension to get.
+                              Must be one of
+                              the names from get_dim_names() and also
+                              yk_solution::get_domain_dim_names(). */ ) const =0;
 
         /// Get the actual extra left padding in the specified dimension.
         /**
@@ -498,9 +514,10 @@ namespace yask {
         */
         virtual idx_t
         get_left_extra_pad_size(const std::string& dim
-                           /**< [in] Name of dimension to get.
-                              Must be one of
-                              the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+                                /**< [in] Name of dimension to get.
+                                   Must be one of
+                                   the names from get_dim_names() and also
+                                   yk_solution::get_domain_dim_names(). */ ) const =0;
 
         /// Get the actual extra right padding in the specified dimension.
         /**
@@ -510,9 +527,10 @@ namespace yask {
         */
         virtual idx_t
         get_right_extra_pad_size(const std::string& dim
-                           /**< [in] Name of dimension to get.
-                              Must be one of
-                              the names from yk_solution::get_domain_dim_names(). */ ) const =0;
+                                 /**< [in] Name of dimension to get.
+                                    Must be one of
+                                    the names from get_dim_names() and also
+                                    yk_solution::get_domain_dim_names(). */ ) const =0;
 
         /// Get the first index of a specified miscellaneous dimension.
         /**
@@ -532,7 +550,8 @@ namespace yask {
         virtual idx_t
         get_last_misc_index(const std::string& dim
                             /**< [in] Name of dimension to get.  Must be one of
-                               the names from yk_solution::get_misc_dim_names(). */ ) const =0;
+                               the names from get_dim_names() and also
+                               yk_solution::get_misc_dim_names(). */ ) const =0;
 
         /// Determine whether the given indices refer to an accessible element in this rank.
         /**
