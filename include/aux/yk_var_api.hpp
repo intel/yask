@@ -25,8 +25,8 @@ IN THE SOFTWARE.
 
 ///////// API for the YASK stencil kernel var. ////////////
 
-// This file uses Doxygen 1.8 markup for API documentation-generation.
-// See http://www.stack.nl/~dimitri/doxygen.
+// This file uses Doxygen markup for API documentation-generation.
+// See https://www.doxygen.nl/manual/index.html.
 /** @file yk_var_api.hpp */
 
 #pragma once

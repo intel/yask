@@ -53,8 +53,8 @@ and Intel(R) graphics processors.
       http://www.swig.org, for creating the Python interface.
     * Python 3 (3.6.1 or later, recommended):
       https://www.python.org/downloads, for creating and using the Python interface.
-    * Doxygen (1.8.11 or later):
-      http://doxygen.org, for creating updated API documentation.
+    * Doxygen (1.9.0 or later):
+      https://www.doxygen.nl, for creating updated API documentation.
       If you're not changing the API documentation, you can view the existing documentation
       at the link at the top of this page.
     * Graphviz (2.30.1 or later):
