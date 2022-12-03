@@ -52,26 +52,30 @@ namespace yask {
         }
 
     // Add vector version that retuns only allowed results.
+    // FIXME: find better way to check whether prepare_solution() has been called--
+    // this one doesn't work for scalars.
     #define GET_VAR_API2(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
         GET_VAR_API(api_name, expr, step_ok, domain_ok, misc_ok, prep_req) \
         idx_t_vec YkVarImpl::api_name ## _vec() const {                 \
             STATE_VARS(gbp());                                          \
-            if (prep_req && corep()->_rank_offsets[0] < 0)              \
-                THROW_YASK_EXCEPTION("'" #api_name "_vec()' called on var '" + \
-                                     get_name() + "' before calling 'prepare_solution()'"); \
+            TRACE_MSG("var '" << get_name() << "'."                     \
+                      #api_name "_vec(...)");                           \
             auto cp = corep();                                          \
             auto nvdims = get_num_dims();                               \
+            if (prep_req && nvdims && corep()->_rank_offsets[0] < 0)    \
+                THROW_YASK_EXCEPTION("'" #api_name "_vec()' called on var '" + \
+                                     get_name() + "' before calling 'prepare_solution()'"); \
             auto nadims = 0;                                            \
-            if (step_ok) nadims += gb()._num_step_dims;                  \
-            if (domain_ok) nadims += gb()._num_domain_dims;              \
-            if (misc_ok) nadims += gb()._num_misc_dims;                  \
+            if (step_ok) nadims += gb()._num_step_dims;                 \
+            if (domain_ok) nadims += gb()._num_domain_dims;             \
+            if (misc_ok) nadims += gb()._num_misc_dims;                 \
             idx_t_vec res(nadims, 0);                                   \
             int i = 0;                                                  \
             for (int posn = 0; posn < nvdims; posn++) {                 \
                 idx_t mbit = idx_t(1) << posn;                          \
-                if ((step_ok && (mbit & gb()._step_dim_mask) != 0) ||    \
+                if ((step_ok && (mbit & gb()._step_dim_mask) != 0) ||   \
                     (domain_ok && (mbit & gb()._domain_dim_mask) != 0) || \
-                    (misc_ok && (mbit & gb()._misc_dim_mask) != 0)) {    \
+                    (misc_ok && (mbit & gb()._misc_dim_mask) != 0)) {   \
                     res.at(i++) = expr;                                 \
                 }                                                       \
             }                                                           \

@@ -971,6 +971,10 @@ namespace yask {
                                          get_name() + "'");
                 return 0;
             }
+            if (buffer_ptr == 0) {
+                THROW_YASK_EXCEPTION(std::string("call to '") +
+                                     Visitor::fname() + "' with NULL buffer pointer");
+            }
 
             TRACE_MSG(Visitor::fname() << ": " << make_info_string() << " [" <<
                       make_index_string(in_first_indices) << " ... " <<

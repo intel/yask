@@ -632,8 +632,11 @@ namespace yask {
            Indices in the buffer progress in row-major order, i.e.,
            traditional C-language layout.
            The buffer pointed to must contain the number of bytes equal to
-           yk_solution::get_element_bytes() multiplied by the number of
-           elements in the specified slice.
+           yk_solution::get_element_bytes(), i.e., the size of a FP element,
+           multiplied by the total number of elements in the specified slice.
+           Thus, the buffer must be a simple flat array of data, not containing
+           pointers; for example, for a 2-D YASK var created with indices `{ x, y }`,
+           the buffer could be declared as `float A[xsize][ysize]`, but not as `float** A`.
            Since the reads proceed in row-major order, the last index is "unit-stride"
            in the buffer.
 
@@ -734,13 +737,17 @@ namespace yask {
            Reads elements from consecutive memory locations,
            starting at `buffer_ptr`
            and writes them from `first_indices` to `last_indices` in each dimension.
-           Indices in the buffer progress in row-major order.
-           The buffer pointed to must contain either 4 or 8 byte FP values per element in the
-           subset, depending on the FP precision of the solution.
-           The buffer pointed to must contain the number of FP values in the specified slice,
-           where each FP value is the size of yk_solution::get_element_bytes().
+           Indices in the buffer progress in row-major order, i.e.,
+           traditional C-language layout.
+           The buffer pointed to must contain the number of bytes equal to
+           yk_solution::get_element_bytes(), i.e., the size of a FP element,
+           multiplied by the total number of elements in the specified slice.
+           Thus, the buffer must be a simple flat array of data, not containing
+           pointers; for example, for a 2-D YASK var created with indices `{ x, y }`,
+           the buffer could be declared as `float A[xsize][ysize]`, but not as `float** A`.
            Since the writes proceed in row-major order, the last index is "unit-stride"
            in the buffer.
+
            Provide indices in two lists in the same order returned by get_dim_names().
            Indices are relative to the *overall* problem domain.
            Index values must fall between the values returned by

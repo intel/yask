@@ -37,6 +37,7 @@ int main() {
 
     // Counter for exception test
     int num_exception = 0;
+    int num_expected = 0;
 
     // The factory from which all other kernel objects are made.
     yk_factory kfac;
@@ -66,23 +67,21 @@ int main() {
 
     // Exception test
     cout << "Exception Test: Call 'run_solution' without calling prepare_solution().\n";
+    num_expected++;
     try {
         soln->run_solution(0);
     } catch (yask_exception& e) {
-        cout << "YASK throws an exception.\n";
         cout << e.get_message() << endl;
-        cout << "Exception Test: Caught exception correctly.\n";
         num_exception++;
     }
 
     // Exception test
     cout << "Exception Test: Call 'run_auto_tuner_now' without calling prepare_solution().\n";
+    num_expected++;
     try {
         soln->run_auto_tuner_now(false);
     } catch (yask_exception& e) {
-        cout << "YASK throws an exception.\n";
         cout << e.get_message() << endl;
-        cout << "Exception Test: Caught exception correctly.\n";
         num_exception++;
     }
 
@@ -92,6 +91,7 @@ int main() {
 
     // Exception test
     cout << "Exception Test: Call 'set_element' with wrong number of indices.\n";
+    num_expected++;
     try {
 
         // Make a vector with one extra index.
@@ -99,9 +99,24 @@ int main() {
         idxs.push_back(10);
         fvar->set_element(3.14, idxs);
     }  catch (yask_exception& e) {
-        cout << "YASK throws an exception.\n";
         cout << e.get_message() << endl;
-        cout << "Exception Test: Caught exception correctly.\n";
+        num_exception++;
+    }
+
+    cout << "Exception Test: Call 'set_elements_in_slice' with wrong number of indices.\n";
+    num_expected++;
+    try {
+
+        // Make a vector with one extra index.
+        auto first_idxs = fvar_sizes;
+        auto last_idxs = fvar_sizes;
+        first_idxs.push_back(10);
+
+        void* a = malloc(1024); // Bogus, but not used.
+        fvar->set_elements_in_slice(a, first_idxs, last_idxs);
+        free(a);
+    }  catch (yask_exception& e) {
+        cout << e.get_message() << endl;
         num_exception++;
     }
 
@@ -137,12 +152,12 @@ int main() {
     // CommandLineParser::OptionBase::_idx_val
 
     // Check whether program handles exceptions or not.
-    if (num_exception != 3) {
+    if (num_exception != num_expected) {
         cout << "Error: unexpected number of exceptions: " << num_exception << endl;
         exit(1);
     }
     else
-        cout << "End of YASK kernel C++ API test with exception.\n";
+        cout << "End of YASK kernel C++ API test with exceptions.\n";
 
     return 0;
 }
