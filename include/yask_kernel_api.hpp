@@ -222,13 +222,15 @@ namespace yask {
         /**
            @returns Number of ranks in MPI communicator or one (1) if MPI is not enabled.
         */
-        virtual int get_num_ranks() const =0;
+        virtual int
+        get_num_ranks() const =0;
 
         /// Get MPI rank index.
         /**
            @returns Index of this MPI rank or zero (0) if MPI is not enabled.
         */
-        virtual int get_rank_index() const =0;
+        virtual int
+        get_rank_index() const =0;
 
         /// Wait until all ranks have reached this element.
         /**

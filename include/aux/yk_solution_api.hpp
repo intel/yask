@@ -833,6 +833,20 @@ namespace yask {
            - Halo size.
            - Value provided by any of the pad-size setting functions.
 
+           Setting the minimum pad size is useful when an application needs
+           to copy data back and forth between YASK vars and legacy C-style
+           arrays that include a certain halo size that may be larger than
+           the halo calculated by the YASK compiler. For example, for a
+           given stencil problem, one or more YASK variables might need a
+           halo of width 2 in the x dimension, but only 1 in the y dimension
+           due to the stencil radii in the respective dimensions. However,
+           an application might have an existing C-style array with halo
+           data of width 2 in both x and y dimensions. By calling
+           `set_min_pad_size("y", 2)`, all YASK vars will be created with
+           padding widths of at least 2 in the y dimension, making it easier
+           to copy data to and from the C-style arrays using 
+           yk_var::get_elements_in_slice() and yk_var::set_elements_in_slice().
+
            The padding size cannot be changed after data storage
            has been allocated for a given var; attempted changes to the pad size for such
            vars will be ignored.
@@ -852,8 +866,10 @@ namespace yask {
                          /**< [in] Elements in this `dim` applied
                             to both sides of the domain. */ ) =0;
 
-        /// **[Advanced]** Get the minimum amount of padding for all vars.
+        /// **[Advanced]** Get the minimum requested amount of padding for all vars.
         /**
+           @note The actual padding for any given var may be greater than
+           this minimum requested amount as described in set_min_pad_size().
            @returns Current setting of minimum amount of padding for all vars.
         */
         virtual idx_t
