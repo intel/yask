@@ -38,25 +38,25 @@ IN THE SOFTWARE.
 // Control assert() by turning on with CHECK instead of turning off with
 // NDEBUG. This makes it off by default.
 #ifdef CHECK
-
-// Temporarily replace assert() with printf() when offloading, but
-// this doesn't cause program to halt.
-// Also define host_assert() to be a stub.
-#if defined(USE_OFFLOAD) && !defined(USE_OFFLOAD_X86)
-#define assert(expr)                                                    \
-    ((expr) ?                                                           \
-     ((void)0) :                                                        \
-     ((void)printf("YASK: ***** assertion '%s' failed at %s:%i\n",      \
-                   YSTR1(expr), __FILE__, __LINE__)))
-#define host_assert(expr) ((void)0)
-#else
 #include <cassert>
+
+// Offloading to a device.
+// Define host_assert() to be a stub.
+#if defined(USE_OFFLOAD) && !defined(USE_OFFLOAD_X86)
+#define host_assert(expr) ((void)0)
+
+// Not offloading to device.
+// Define host_assert() to be same as assert().
+#else
 #define host_assert(expr) assert(expr)
 #endif
 
+// Performance build.
+// Not enabling any asserts.
 #else
 #define assert(expr) ((void)0)
 #define host_assert(expr) ((void)0)
 #define NDEBUG
+
 #endif
 
