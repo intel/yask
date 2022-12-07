@@ -47,7 +47,7 @@ namespace yask {
         void* p = omp_target_alloc_shared(nbytes, devn);
         #else
         TRACE_MSG("allocating " << make_byte_str(nbytes) << " on host");
-        void* p = yask_aligned_alloc(nbytes, devn);
+        void* p = malloc(nbytes);
         #endif
         if (!p)
             THROW_YASK_EXCEPTION("cannot allocate " + make_byte_str(nbytes) + " on host");
@@ -80,7 +80,7 @@ namespace yask {
         void* p = omp_target_alloc_host(nbytes, devn);
         #else
         TRACE_MSG("allocating " << make_byte_str(nbytes) << " on host");
-        void* p = yask_aligned_alloc(nbytes, devn);
+        void* p = malloc(nbytes);
         #endif
         if (!p)
             THROW_YASK_EXCEPTION("cannot allocate " + make_byte_str(nbytes) + " on host");
