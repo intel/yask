@@ -101,9 +101,8 @@ $(function() {
 <table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-types" name="pub-types"></a>
 Public Types</h2></td></tr>
-<tr class="memitem:ab5607f329a35a073145389a4f8cb06b5"><td class="memItemLeft" align="right" valign="top"><a id="ab5607f329a35a073145389a4f8cb06b5" name="ab5607f329a35a073145389a4f8cb06b5"></a>
-typedef std::map&lt; std::string, <a class="el" href="classyask_1_1yc__solution__base.html">yc_solution_base</a> * &gt;&#160;</td><td class="memItemRight" valign="bottom"><b>soln_map</b></td></tr>
-<tr class="memdesc:ab5607f329a35a073145389a4f8cb06b5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Type for a common registry shared among all <a class="el" href="classyask_1_1yc__solution__base.html" title="A base class for defining solutions to be kept in a common registry.">yc_solution_base</a> objects. <br /></td></tr>
+<tr class="memitem:ab5607f329a35a073145389a4f8cb06b5"><td class="memItemLeft" align="right" valign="top">typedef std::map&lt; std::string, <a class="el" href="classyask_1_1yc__solution__base.html">yc_solution_base</a> * &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__solution__base.html#ab5607f329a35a073145389a4f8cb06b5">soln_map</a></td></tr>
+<tr class="memdesc:ab5607f329a35a073145389a4f8cb06b5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Type for a common registry shared among all <a class="el" href="classyask_1_1yc__solution__base.html" title="A base class for defining solutions to be kept in a common registry.">yc_solution_base</a> objects.  <br /></td></tr>
 <tr class="separator:ab5607f329a35a073145389a4f8cb06b5"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="pub-methods" name="pub-methods"></a>
@@ -160,7 +159,25 @@ Static Public Member Functions</h2></td></tr>
 <div class="textblock"><p>A base class for defining solutions to be kept in a common registry. </p>
 <p>This is a wrapper around a <a class="el" href="classyask_1_1yc__solution.html">yc_solution</a> pointer and a static registry used to hold all <a class="el" href="classyask_1_1yc__solution__base.html">yc_solution_base</a> objects.</p>
 <p>This base class must be extended via inheritance. When using the provided YASK compiler utility, the <code><a class="el" href="classyask_1_1yc__solution__base.html#abd34ca7ae7a89fc4a051376a612f494a" title="Define all functionality of this solution.">define()</a></code> method must be overloaded to add stencil equations and other functionality needed to implement the concrete solution. </p>
-</div><h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
+</div><h2 class="groupheader">Member Typedef Documentation</h2>
+<a id="ab5607f329a35a073145389a4f8cb06b5" name="ab5607f329a35a073145389a4f8cb06b5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ab5607f329a35a073145389a4f8cb06b5">&#9670;&#160;</a></span>soln_map</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">typedef std::map&lt;std::string, <a class="el" href="classyask_1_1yc__solution__base.html">yc_solution_base</a>*&gt; <a class="el" href="classyask_1_1yc__solution__base.html#ab5607f329a35a073145389a4f8cb06b5">yask::yc_solution_base::soln_map</a></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Type for a common registry shared among all <a class="el" href="classyask_1_1yc__solution__base.html" title="A base class for defining solutions to be kept in a common registry.">yc_solution_base</a> objects. </p>
+<p>The map key is the name of the solution. </p>
+
+</div>
+</div>
+<h2 class="groupheader">Constructor &amp; Destructor Documentation</h2>
 <a id="ac7674504b3f78a6c41f5007ad8e925b1" name="ac7674504b3f78a6c41f5007ad8e925b1"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ac7674504b3f78a6c41f5007ad8e925b1">&#9670;&#160;</a></span>yc_solution_base() <span class="overload">[1/2]</span></h2>
 

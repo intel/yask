@@ -407,13 +407,18 @@ namespace yask {
                 _print_help(os, _name, width);
             }
 
-            // Print current value of this option.
+            /// Print current value of this option.
             virtual std::ostream& print_value(std::ostream& os) const =0;
 
-            // Check for matching option and any needed args at args[argi].
-            // Return true, set val, and increment argi if match.
+            /// Check for matching option and any needed args at args[argi].
+            /**
+               @returns `true`, sets value of option, and increments `argi` if match;
+               `false` if no match, and doesn't modify `argi`.
+            */
             virtual bool check_arg(const string_vec& args, int& argi) =0;
         };
+
+        /// Pointer to an option handler.
         typedef std::shared_ptr<option_base> option_ptr;
 
         /// A boolean option.
@@ -427,12 +432,17 @@ namespace yask {
                        bool& val) :
                 option_base(name, help_msg), _val(val) { }
 
+            /// Print help message for a boolean option.
             virtual void print_help(std::ostream& os,
                                     int width) const override;
+
+            /// Print current value of the boolean.
             virtual std::ostream& print_value(std::ostream& os) const override {
                 os << (_val ? "true" : "false");
                 return os;
             }
+
+            /// Check for a boolean option (set or unset variants).
             virtual bool check_arg(const string_vec& args, int& argi) override;
         };
 
@@ -441,17 +451,23 @@ namespace yask {
             int& _val;
 
         public:
+            /// Constructor.
             int_option(const std::string& name,
                       const std::string& help_msg,
                       int& val) :
                 option_base(name, help_msg), _val(val) { }
 
+            /// Print help message for an int option.
             virtual void print_help(std::ostream& os,
                                     int width) const override;
+
+            /// Print the current value of the int.
             virtual std::ostream& print_value(std::ostream& os) const override {
                 os << _val;
                 return os;
             }
+
+            /// Check for the option and its integer argument.
             virtual bool check_arg(const string_vec& args, int& argi) override;
         };
 
@@ -466,12 +482,17 @@ namespace yask {
                       double& val) :
                 option_base(name, help_msg), _val(val) { }
 
+            /// Print help message for a double option.
             virtual void print_help(std::ostream& os,
                                     int width) const override;
+
+            /// Print the current value of the double.
             virtual std::ostream& print_value(std::ostream& os) const override {
                 os << _val;
                 return os;
             }
+
+            /// Check for the option and its double argument.
             virtual bool check_arg(const string_vec& args, int& argi) override;
         };
 
@@ -486,12 +507,17 @@ namespace yask {
                        idx_t& val) :
                 option_base(name, help_msg), _val(val) { }
 
+            /// Print help message for an int_t option.
             virtual void print_help(std::ostream& os,
                                     int width) const override;
+
+            /// Print the current value of the int_t.
             virtual std::ostream& print_value(std::ostream& os) const override {
                 os << _val;
                 return os;
             }
+
+            /// Check for the option and its int_t argument.
             virtual bool check_arg(const string_vec& args, int& argi) override;
         };
 
@@ -506,12 +532,17 @@ namespace yask {
                          std::string& val) :
                 option_base(name, help_msg), _val(val) { }
 
+            /// Print help message for a string option.
             virtual void print_help(std::ostream& os,
                                     int width) const override;
+
+            /// Print the current value of the string.
             virtual std::ostream& print_value(std::ostream& os) const override {
                 os << "'" << _val << "'";
                 return os;
             }
+
+            /// Check for the option and its string argument.
             virtual bool check_arg(const string_vec& args,
                                    int& argi) override;
         };
@@ -541,8 +572,11 @@ namespace yask {
                 _allowed_strs(allowed_strs),
                 _val(val) { }
 
+            /// Print help message for a list-of-strings option.
             virtual void print_help(std::ostream& os,
                                     int width) const override;
+
+            /// Print the current value of the strings.
             virtual std::ostream& print_value(std::ostream& os) const override {
                 int n = 0;
                 for (auto& v : _val) {
@@ -553,6 +587,8 @@ namespace yask {
                 }
                 return os;
             }
+
+            /// Check for the option and its string-list argument.
             virtual bool check_arg(const string_vec& args, int& argi) override;
         };
 
@@ -619,6 +655,14 @@ namespace yask {
             return parse_args(pgm_name, args);
         }
     };
+
+    /// Print a YASK spash message to `os`.
+    /**
+       Splash message contains the YASK copyright, URL, and version.
+       If `argc > 1`, also prints the program invocation string.
+    */
+    void yask_print_splash(std::ostream& os, int argc, char** argv);
+    
     #endif
     
     /** @}*/

@@ -169,6 +169,9 @@ Functions</h2></td></tr>
 <tr class="memitem:ga740e6f9a571fd160f22940dfacba127c"><td class="memItemLeft" align="right" valign="top">std::vector&lt; double &gt;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__yask.html#ga740e6f9a571fd160f22940dfacba127c">yask::get_arbitrary_fd_coefficients</a> (int derivative_order, double eval_point, const std::vector&lt; double &gt; sample_points)</td></tr>
 <tr class="memdesc:ga740e6f9a571fd160f22940dfacba127c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create finite-difference (FD) coefficients at arbitrary evaluation and sample points.  <br /></td></tr>
 <tr class="separator:ga740e6f9a571fd160f22940dfacba127c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ga4294631602623f18b52232820523a91c"><td class="memItemLeft" align="right" valign="top">void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__yask.html#ga4294631602623f18b52232820523a91c">yask::yask_print_splash</a> (std::ostream &amp;os, int argc, char **argv)</td></tr>
+<tr class="memdesc:ga4294631602623f18b52232820523a91c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Print a YASK spash message to <code>os</code>.  <br /></td></tr>
+<tr class="separator:ga4294631602623f18b52232820523a91c"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table>
 <a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
 <p>Types, clases, and functions used in both the <a class="el" href="index.html#sec_yc">YASK Stencil Compiler API</a> and <a class="el" href="index.html#sec_yk">YASK Stencil Kernel API</a>. </p>
@@ -437,6 +440,43 @@ Functions</h2></td></tr>
   </table>
   </dd>
 </dl>
+
+</div>
+</div>
+<a id="ga4294631602623f18b52232820523a91c" name="ga4294631602623f18b52232820523a91c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ga4294631602623f18b52232820523a91c">&#9670;&#160;</a></span>yask_print_splash()</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">void yask::yask_print_splash </td>
+          <td>(</td>
+          <td class="paramtype">std::ostream &amp;&#160;</td>
+          <td class="paramname"><em>os</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>argc</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">char **&#160;</td>
+          <td class="paramname"><em>argv</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Print a YASK spash message to <code>os</code>. </p>
+<p>Splash message contains the YASK copyright, URL, and version. If <code>argc &gt; 1</code>, also prints the program invocation string. </p>
 
 </div>
 </div>

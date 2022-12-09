@@ -58,6 +58,9 @@ namespace yask {
 
     public:
         /// Type for a common registry shared among all yc_solution_base objects.
+        /**
+           The map key is the name of the solution.
+        */
         typedef std::map<std::string, yc_solution_base*> soln_map;
         
     private:

@@ -130,12 +130,10 @@ struct MySettings {
 
     // Parse options from the command-line and set corresponding vars.
     // Exit with message on error or request for help.
-    // Return settings.
-    string parse(int argc, char** argv, yk_solution_ptr ksoln) {
-        string values;
+    void parse(int argc, char** argv, yk_solution_ptr ksoln) {
         string pgm_name(argv[0]);
 
-        // Parse 'args' and 'argv' cmd-line options, which sets values.
+        // Parse 'args' and 'argv' cmd-line options, which sets option values.
         // Any remaining strings will be returned.
         auto rem_args = parser.parse_args(argc, argv);
 
@@ -189,31 +187,8 @@ struct MySettings {
                                      rem_args +
                                      "'; run with '-help' option for usage");
         }
-        return values;
     }
-
-    // Print splash banner and invocation string.
-    // Exit with help message if requested.
-    void splash(ostream& os, int argc, char** argv)
-    {
-        // See https://en.wikipedia.org/wiki/Box-drawing_character.
-        os <<
-            " \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n"
-            " \u2502     Y.A.S.K. \u2500\u2500 Yet Another Stencil Kit    \u2502\n"
-            " \u2502       https://github.com/intel/yask        \u2502\n"
-            " \u2502 Copyright (c) 2014-2022, Intel Corporation \u2502\n"
-            " \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n"
-            "\n"
-            "Version: " << yask_get_version_string() << endl <<
-            "Stencil name: " YASK_STENCIL_NAME << endl;
-
-        // Echo invocation parameters for record-keeping.
-        os << "Binary invocation:";
-        for (int argi = 0; argi < argc; argi++)
-            os << " " << argv[argi];
-        os << endl;
-    }
-};                              // MySettings.
+}; // MySettings
 
 // Override step allocation.
 void alloc_steps(yk_solution_ptr soln, const MySettings& opts) {
@@ -285,14 +260,15 @@ int main(int argc, char** argv)
         // Parse custom and library-provided cmd-line options and
         // exit on -help or error.
         // TODO: do this through APIs.
-        auto opts_str = opts.parse(argc, argv, ksoln);
+        opts.parse(argc, argv, ksoln);
 
         // Make sure any MPI/OMP debug data is dumped from all ranks before continuing.
         kenv->global_barrier();
 
         // Print splash banner and related info.
-        opts.splash(os, argc, argv);
-        os << "\n" << opts_str;
+        yask_print_splash(os, argc, argv);
+        os << "\nYASK performance and validation utility\n"
+            "Stencil name: " YASK_STENCIL_NAME << endl;
 
         // Print PID and sleep for debug if needed.
         os << "\nPID: " << getpid() << endl;

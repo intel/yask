@@ -594,5 +594,25 @@ namespace yask {
             args.push_back(tmp);
         return args;
     }
+
+    // Print a spash message.
+    void yask_print_splash(ostream& os, int argc, char** argv) {
+        // See https://en.wikipedia.org/wiki/Box-drawing_character.
+        os <<
+            "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n"
+            "\u2502     Y*A*S*K \u2500\u2500 Yet Another Stencil Kit     \u2502\n"
+            "\u2502       https://github.com/intel/yask        \u2502\n"
+            "\u2502 Copyright (c) 2014-2022, Intel Corporation \u2502\n"
+            "\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n"
+            "Version: " << yask_get_version_string() << endl;
+
+        // Echo invocation parameters for record-keeping.
+        if (argc) {
+            os << "Binary invocation:";
+            for (int argi = 0; argi < argc; argi++)
+                os << " " << argv[argi];
+            os << endl;
+        }
+    }
     
-}
+} // namespace.

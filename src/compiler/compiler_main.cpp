@@ -160,28 +160,6 @@ struct MySettings {
     }
 };                              // MySettings.
 
-// Print splash banner and invocation string.
-// Exit with help message if requested.
-static void splash(ostream& os, int argc, char** argv)
-{
-    // See https://en.wikipedia.org/wiki/Box-drawing_character.
-    os <<
-        " \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n"
-        " \u2502     Y.A.S.K. \u2500\u2500 Yet Another Stencil Kit    \u2502\n"
-        " \u2502       https://github.com/intel/yask        \u2502\n"
-        " \u2502 Copyright (c) 2014-2022, Intel Corporation \u2502\n"
-        " \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n"
-        "\n"
-        "Version: " << yask_get_version_string() << endl;
-            
-    // Echo invocation parameters for record-keeping.
-    os << "YASK compiler invocation:";
-    for (int argi = 0; argi < argc; argi++)
-        os << " " << argv[argi];
-    os << endl;
-}
-
-
 // Main program.
 int main(int argc, char* argv[]) {
 
@@ -189,14 +167,18 @@ int main(int argc, char* argv[]) {
     yc_factory factory;
 
     try {
-        splash(cout, argc, argv);
+        yask_print_splash(cout, argc, argv);
+        cout << "\nYASK Stencil Compiler\n";
 
-        // Start with an empty solution to allow option parsing.
-        auto null_soln = factory.new_solution("temp");
-        
-        // Parse options.
+        // Option parser.
         MySettings my_settings;
-        my_settings.parse(argc, argv, null_soln);
+        
+        // First, use an empty solution to allow option parsing
+        // before the requested solution is chosen.
+        {
+            auto null_soln = factory.new_solution("temp");
+            my_settings.parse(argc, argv, null_soln);
+        }
        
         // Find the requested stencil in the registry.
         auto& stencils = yc_solution_base::get_registry();
