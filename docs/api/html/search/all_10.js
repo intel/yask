@@ -1,4 +1,4 @@
 var searchData=
 [
-  ['unary_5fmath_5fexpr_0',['UNARY_MATH_EXPR',['../group__yc.html#ga68044db7711ff9ff8fcd69316151381c',1,'UNARY_MATH_EXPR():&#160;yc_node_api.hpp'],['../group__yc.html#gad51675d49c4974ff8c89bc3a0b4af690',1,'yask::UNARY_MATH_EXPR(sqrt)'],['../group__yc.html#ga8c5c49d1b07e5b76c2fda90712d1b3c0',1,'yask::UNARY_MATH_EXPR(cbrt)'],['../group__yc.html#ga3a0c545a5fee6c0c5d0cd29f53b80d7e',1,'yask::UNARY_MATH_EXPR(fabs)'],['../group__yc.html#gae13001071c95bc733e31c542e90fb7df',1,'yask::UNARY_MATH_EXPR(erf)'],['../group__yc.html#gaf012d2e7c65b55f98f6ab54aff70ee10',1,'yask::UNARY_MATH_EXPR(exp)'],['../group__yc.html#ga4db8274dbc5672d543a5dcc62e679556',1,'yask::UNARY_MATH_EXPR(log)'],['../group__yc.html#ga90b9d199356ab56a3af428308da53d04',1,'yask::UNARY_MATH_EXPR(sin)'],['../group__yc.html#ga88fba7c8485e8f1ff3b1dd5f32f7033a',1,'yask::UNARY_MATH_EXPR(cos)'],['../group__yc.html#ga95278d8aebf7a1b13dd8e5e8709748f4',1,'yask::UNARY_MATH_EXPR(atan)']]]
+  ['throw_5fyask_5fexception_0',['THROW_YASK_EXCEPTION',['../group__yask.html#ga7bbf16a9e81cad71d7bb30f960fdfbe5',1,'yask_common_api.hpp']]]
 ];

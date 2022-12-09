@@ -88,9 +88,11 @@ $(function() {
 <code>#include &lt;type_traits&gt;</code><br />
 <code>#include &lt;string&gt;</code><br />
 <code>#include &lt;vector&gt;</code><br />
+<code>#include &lt;set&gt;</code><br />
 <code>#include &lt;map&gt;</code><br />
 <code>#include &lt;iostream&gt;</code><br />
 <code>#include &lt;ostream&gt;</code><br />
+<code>#include &lt;sstream&gt;</code><br />
 <code>#include &lt;memory&gt;</code><br />
 <code>#include &lt;functional&gt;</code><br />
 </div>
@@ -119,6 +121,30 @@ Classes</h2></td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yask__null__output.html">yask::yask_null_output</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Null output.  <a href="classyask_1_1yask__null__output.html#details">More...</a><br /></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1command__line__parser.html">yask::command_line_parser</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A class to parse command-line arguments.  <a href="classyask_1_1command__line__parser.html#details">More...</a><br /></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1command__line__parser_1_1option__base.html">yask::command_line_parser::option_base</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Base class for a command-line option.  <a href="classyask_1_1command__line__parser_1_1option__base.html#details">More...</a><br /></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1command__line__parser_1_1bool__option.html">yask::command_line_parser::bool_option</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A boolean option.  <a href="classyask_1_1command__line__parser_1_1bool__option.html#details">More...</a><br /></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1command__line__parser_1_1int__option.html">yask::command_line_parser::int_option</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">An integer option.  <a href="classyask_1_1command__line__parser_1_1int__option.html#details">More...</a><br /></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1command__line__parser_1_1double__option.html">yask::command_line_parser::double_option</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A double option.  <a href="classyask_1_1command__line__parser_1_1double__option.html#details">More...</a><br /></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1command__line__parser_1_1idx__option.html">yask::command_line_parser::idx_option</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">An idx_t option.  <a href="classyask_1_1command__line__parser_1_1idx__option.html#details">More...</a><br /></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1command__line__parser_1_1string__option.html">yask::command_line_parser::string_option</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A string option.  <a href="classyask_1_1command__line__parser_1_1string__option.html#details">More...</a><br /></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1command__line__parser_1_1string__list__option.html">yask::command_line_parser::string_list_option</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A list-of-strings option.  <a href="classyask_1_1command__line__parser_1_1string__list__option.html#details">More...</a><br /></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="define-members" name="define-members"></a>
 Macros</h2></td></tr>
@@ -130,6 +156,12 @@ Macros</h2></td></tr>
 #define&#160;</td><td class="memItemRight" valign="bottom"><b>YASK_INT64_T</b>&#160;&#160;&#160;std::int64_t</td></tr>
 <tr class="memdesc:a39f516516145bef523f3309b72959cdb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Signed 64-bit int. <br /></td></tr>
 <tr class="separator:a39f516516145bef523f3309b72959cdb"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ga7bbf16a9e81cad71d7bb30f960fdfbe5"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__yask.html#ga7bbf16a9e81cad71d7bb30f960fdfbe5">THROW_YASK_EXCEPTION</a>(message)</td></tr>
+<tr class="memdesc:ga7bbf16a9e81cad71d7bb30f960fdfbe5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Macro for creating and throwing a yask_exception with a string.  <br /></td></tr>
+<tr class="separator:ga7bbf16a9e81cad71d7bb30f960fdfbe5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ga43063607f9419deb39327a01a108bf0c"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__yask.html#ga43063607f9419deb39327a01a108bf0c">FORMAT_AND_THROW_YASK_EXCEPTION</a>(message)</td></tr>
+<tr class="memdesc:ga43063607f9419deb39327a01a108bf0c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Macro for creating and throwing a yask_exception using stream operators.  <br /></td></tr>
+<tr class="separator:ga43063607f9419deb39327a01a108bf0c"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="typedef-members" name="typedef-members"></a>
 Typedefs</h2></td></tr>

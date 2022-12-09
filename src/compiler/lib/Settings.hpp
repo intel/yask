@@ -71,7 +71,7 @@ namespace yask {
         bool _early_loads = true; // issue loads early in the inner loop.
 
         // Add options to a cmd-line parser to set the settings.
-        virtual void add_options(CommandLineParser& parser);
+        virtual void add_options(command_line_parser& parser);
 
         // Print informational messages.
         void print_usage(std::ostream& os);

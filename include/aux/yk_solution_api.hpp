@@ -545,6 +545,23 @@ namespace yask {
         virtual std::string
         apply_command_line_options(const string_vec& args) =0;
 
+        /// Return a help-string for the command-line options.
+        /**
+           @returns A multi-line string.
+        */
+        virtual std::string
+        get_command_line_help() =0;
+
+        /// Return a description of the current settings of the command-line options.
+        /**
+           If options have been modified from the originally-requrested ones
+           to legal ones, the updated ones will be shown. This occurs most
+           frequently with tile-size options.
+           @returns A multi-line string.
+        */
+        virtual std::string
+        get_command_line_values() =0;
+
         /// Get the number of vars in the solution.
         /**
            Vars may be pre-defined by the stencil compiler

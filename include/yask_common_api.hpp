@@ -37,9 +37,11 @@ IN THE SOFTWARE.
 #include <type_traits>
 #include <string>
 #include <vector>
+#include <set>
 #include <map>
 #include <iostream>
 #include <ostream>
+#include <sstream>
 #include <memory>
 #include <functional>
 
@@ -145,6 +147,32 @@ namespace yask {
     	virtual const char* get_message() const;
     };
 
+    #ifndef SWIG
+    
+    /// Macro for creating and throwing a yask_exception with a string.
+    /**
+       Example: THROW_YASK_EXCEPTION("all your base are belong to us");
+       @note Not available in the Python API.
+    */
+    #define THROW_YASK_EXCEPTION(message) do {                      \
+            auto msg = std::string("YASK error: ") + message;       \
+            yask_exception e(msg);                                  \
+            throw e;                                                \
+        } while(0)
+    
+    /// Macro for creating and throwing a yask_exception using stream operators.
+    /**
+       Example: FORMAT_AND_THROW_YASK_EXCEPTION("bad value: x = " << x);
+       @note Not available in the Python API.
+    */
+    #define FORMAT_AND_THROW_YASK_EXCEPTION(message) do {           \
+            std::stringstream err;                                  \
+            err << message;                                         \
+            THROW_YASK_EXCEPTION(err.str());                        \
+        } while(0)
+
+    #endif
+    
     /// Factory to create output objects.
     class yask_output_factory {
     public:
@@ -284,6 +312,314 @@ namespace yask {
                                   /**< [in] Location of evaluation point. */,
                                   const std::vector<double> sample_points
                                   /**< [in] Locations of sampled points. Must have at least 2. */ );
+
+    #ifndef SWIG
+    
+    /// A class to parse command-line arguments.
+    /**
+       This is the class used to parse command-line arguments for the YASK kernel
+       and compiler libraries.
+       It is provided as a convenience for API programmers who want
+       to parse application options in a consistent manner.
+
+       @note Not available in the Python API.
+    */
+    class command_line_parser {
+
+    public:
+
+        /// Base class for a command-line option.
+        /**
+           The API programmer can extend this class to add new option types.
+        */
+        class option_base {
+
+        private:
+            std::string _name;
+            std::string _help;
+            std::string _help_leader;
+            std::string _current_value_str;
+
+        protected:
+
+            /// Format and print help for option named `display_name` to `os`.
+            virtual void _print_help(std::ostream& os,
+                                     const std::string& display_name,
+                                     int width) const;
+
+            /// Check for matching option to `str` at `args[argi]`.
+            /**
+               @returns `true` and increments argi if match,
+               `false` if not a match.
+            */
+            virtual bool _is_opt(const string_vec& args, int& argi,
+                                 const std::string& str) const;
+
+            /// Get one double value from `args[argi++]`.
+            /**
+               @returns the value at `args[argi]` and increments `argi`.
+
+               Throws an exception if `args[argi]` is not a double.
+            */
+            virtual double _double_val(const string_vec& args, int& argi);
+
+            /// Get one idx_t value from args[argi++].
+            /**
+               @returns the value at `args[argi]` and increments `argi`.
+
+               Throws an exception if `args[argi]` is not an integer.
+            */
+            virtual idx_t _idx_val(const string_vec& args, int& argi);
+
+            /// Get one string value from args[argi++].
+            /**
+               @returns the value at `args[argi]` and increments `argi`.
+
+               Throws an exception if `args[argi]` does not exist.
+            */
+            virtual std::string _string_val(const string_vec& args, int& argi);
+
+        public:
+            /// Constructor.
+            option_base(const std::string& name,
+                        const std::string& help_msg,
+                        const std::string& current_value_prefix = std::string("Current value = "),
+                        const std::string& help_line_prefix = std::string("    ")) :
+                _name(name), _help(help_msg),
+                _help_leader(help_line_prefix),
+                _current_value_str(current_value_prefix) 
+            { }
+            virtual ~option_base() { }
+
+            /// Get the current option name.
+            virtual const std::string& get_name() const {
+                return _name;
+            }
+
+            /// Get the unformatted help string.
+            virtual const std::string& get_help() const {
+                return _help;
+            }
+            
+            /// Print help on this option.
+            virtual void print_help(std::ostream& os,
+                                    int width) const {
+                _print_help(os, _name, width);
+            }
+
+            // Print current value of this option.
+            virtual std::ostream& print_value(std::ostream& os) const =0;
+
+            // Check for matching option and any needed args at args[argi].
+            // Return true, set val, and increment argi if match.
+            virtual bool check_arg(const string_vec& args, int& argi) =0;
+        };
+        typedef std::shared_ptr<option_base> option_ptr;
+
+        /// A boolean option.
+        class bool_option : public option_base {
+            bool& _val;
+
+        public:
+            /// Constructor.
+            bool_option(const std::string& name,
+                       const std::string& help_msg,
+                       bool& val) :
+                option_base(name, help_msg), _val(val) { }
+
+            virtual void print_help(std::ostream& os,
+                                    int width) const override;
+            virtual std::ostream& print_value(std::ostream& os) const override {
+                os << (_val ? "true" : "false");
+                return os;
+            }
+            virtual bool check_arg(const string_vec& args, int& argi) override;
+        };
+
+        /// An integer option.
+        class int_option : public option_base {
+            int& _val;
+
+        public:
+            int_option(const std::string& name,
+                      const std::string& help_msg,
+                      int& val) :
+                option_base(name, help_msg), _val(val) { }
+
+            virtual void print_help(std::ostream& os,
+                                    int width) const override;
+            virtual std::ostream& print_value(std::ostream& os) const override {
+                os << _val;
+                return os;
+            }
+            virtual bool check_arg(const string_vec& args, int& argi) override;
+        };
+
+        /// A double option.
+        class double_option : public option_base {
+            double& _val;
+
+        public:
+            /// Constructor.
+            double_option(const std::string& name,
+                      const std::string& help_msg,
+                      double& val) :
+                option_base(name, help_msg), _val(val) { }
+
+            virtual void print_help(std::ostream& os,
+                                    int width) const override;
+            virtual std::ostream& print_value(std::ostream& os) const override {
+                os << _val;
+                return os;
+            }
+            virtual bool check_arg(const string_vec& args, int& argi) override;
+        };
+
+        /// An idx_t option.
+        class idx_option : public option_base {
+            idx_t& _val;
+
+        public:
+            /// Constructor.
+            idx_option(const std::string& name,
+                       const std::string& help_msg,
+                       idx_t& val) :
+                option_base(name, help_msg), _val(val) { }
+
+            virtual void print_help(std::ostream& os,
+                                    int width) const override;
+            virtual std::ostream& print_value(std::ostream& os) const override {
+                os << _val;
+                return os;
+            }
+            virtual bool check_arg(const string_vec& args, int& argi) override;
+        };
+
+        /// A string option.
+        class string_option : public option_base {
+            std::string& _val;
+
+        public:
+            /// Constructor.
+            string_option(const std::string& name,
+                         const std::string& help_msg,
+                         std::string& val) :
+                option_base(name, help_msg), _val(val) { }
+
+            virtual void print_help(std::ostream& os,
+                                    int width) const override;
+            virtual std::ostream& print_value(std::ostream& os) const override {
+                os << "'" << _val << "'";
+                return os;
+            }
+            virtual bool check_arg(const string_vec& args,
+                                   int& argi) override;
+        };
+
+        /// A list-of-strings option.
+        /**
+           Strings are separated by commas (without spaces).
+        */
+        class string_list_option : public option_base {
+            std::set<std::string> _allowed_strs; // empty to allow any strings.
+            string_vec& _val;
+
+        public:
+            /// Constructor allowing any strings.
+            string_list_option(const std::string& name,
+                               const std::string& help_msg,
+                               string_vec& val) :
+                option_base(name, help_msg),
+                _val(val) { }
+
+            /// Constructor with set of allowed strings.
+            string_list_option(const std::string& name,
+                               const std::string& help_msg,
+                               const std::set<std::string>& allowed_strs,
+                               string_vec& val) :
+                option_base(name, help_msg),
+                _allowed_strs(allowed_strs),
+                _val(val) { }
+
+            virtual void print_help(std::ostream& os,
+                                    int width) const override;
+            virtual std::ostream& print_value(std::ostream& os) const override {
+                int n = 0;
+                for (auto& v : _val) {
+                    if (n)
+                        os << ",";
+                    os << v;
+                    n++;
+                }
+                return os;
+            }
+            virtual bool check_arg(const string_vec& args, int& argi) override;
+        };
+
+    private:
+        std::map<std::string, option_ptr> _opts;
+        int _width = 78;
+
+    public:
+
+        /// Constructor.
+        command_line_parser() { }
+
+        /// Destructor.
+        virtual ~command_line_parser() { }
+
+        /// Convenience funcion to tokenize args from a string.
+        static string_vec set_args(const std::string& arg_string);
+
+        /// Set help width.
+        virtual void set_width(int width) {
+            _width = width;
+        }
+
+        /// Get help width.
+        virtual int get_width() const {
+            return _width;
+        }
+
+        /// Add an allowed option to the parser.
+        virtual void add_option(option_ptr opt) {
+            _opts[opt->get_name()] = opt;
+        }
+
+        /// Print help info on all options to `os`.
+        virtual void print_help(std::ostream& os) const;
+
+        /// Print current settings of all options to `os`.
+        virtual void print_values(std::ostream& os) const;
+
+        /// Parse options from 'args' and set corresponding vars.
+        /**
+           Recognized strings from args are consumed, and unused ones
+           remain for further processing by the application.
+
+           @returns string of unused args.
+        */
+        virtual std::string parse_args(const std::string& pgm_name,
+                                       const string_vec& args);
+
+        /// Same as parse_args(), but splits 'arg_string' into tokens.
+        virtual std::string parse_args(const std::string& pgm_name,
+                                       const std::string& arg_string) {
+            auto args = set_args(arg_string);
+            return parse_args(pgm_name, args);
+        }
+
+        /// Same as parse_args(), but pgm_name is populated from `argv[0]`
+        /// and rest of `argv` is parsed.
+        virtual std::string parse_args(int argc, char** argv) {
+            std::string pgm_name = argv[0];
+            string_vec args;
+            for (int i = 1; i < argc; i++)
+                args.push_back(argv[i]);
+            return parse_args(pgm_name, args);
+        }
+    };
+    #endif
     
     /** @}*/
 

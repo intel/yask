@@ -23,10 +23,9 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-/////////////// Main vector-folding code-generation code. /////////////
-
-// TODO: remove these non-API includes.
-#include "common_utils.hpp"
+// An application built around the YASK compiler API to allow users
+// to easily generate YASK stencil code. This application is linked with
+// stencil descriptions found in src/stencils/*.cpp.
 
 // Standard includes.
 #include <iostream>
@@ -49,30 +48,30 @@ struct MySettings {
     string output_filename;     // output code file.
     string solution_name;       // stencil name.
 
-    CommandLineParser parser;
+    command_line_parser parser;
 
     MySettings() {
 
         // Add options to parser.
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("help",
                            "Print help message.",
                            help));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("h",
                            "Print help message.",
                            help));
-        parser.add_option(make_shared<CommandLineParser::StringOption>
+        parser.add_option(make_shared<command_line_parser::string_option>
                           ("p",
                            "Write formatted output to file <string>. "
                            "If <string> is '-', write to standard output.",
                            output_filename));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("radius",
                            "Radius for stencils marked with '*' in the list below. "
                            "If value is negative, stencil-specific default is used.",
                            radius));
-        parser.add_option(make_shared<CommandLineParser::StringOption>
+        parser.add_option(make_shared<command_line_parser::string_option>
                           ("stencil",
                            "YASK stencil solution from the list below (required)",
                            solution_name));
@@ -110,6 +109,8 @@ struct MySettings {
             cout << "Options from the YASK compiler library:\n" <<
                 chelp;
 
+            cout << "\nAvailable solutions that can be specified with the '-stencil' option:\n"
+                "  (Solutions that allow the '-radius' option are marked with '*'.)\n";
             for (bool show_test : { false, true }) {
                 if (show_test)
                     cout << "Built-in test solutions:\n";
@@ -213,9 +214,9 @@ int main(int argc, char* argv[]) {
             if (my_settings.radius >= 0) {
                 bool r_ok = srp->set_radius(my_settings.radius);
                 if (!r_ok)
-                    FORMAT_AND_THROW_YASK_EXCEPTION("invalid radius=" <<
-                                                    my_settings.radius << " for stencil type '" <<
-                                                    soln->get_name() << "'.");
+                    THROW_YASK_EXCEPTION(string("invalid radius = ") +
+                                         to_string(my_settings.radius) + " for stencil type '" +
+                                         soln->get_name() + "'.");
             }
             cout << "Stencil radius: " << srp->get_radius() << endl;
         }

@@ -269,7 +269,7 @@ namespace yask {
     }
 
     string StencilContext::apply_command_line_options(const string& argstr) {
-        auto args = CommandLineParser::set_args(argstr);
+        auto args = command_line_parser::set_args(argstr);
         return apply_command_line_options(args);
     }
 
@@ -288,7 +288,7 @@ namespace yask {
         for (auto& cur_opts : { actl_opts, req_opts }) {
         
             // Create a parser and add base options to it.
-            CommandLineParser parser;
+            command_line_parser parser;
             cur_opts->add_options(parser);
 
             // Parse cmd-line options, which sets values in opts.
@@ -298,6 +298,30 @@ namespace yask {
         return rem;
     }
 
+    // Get help.
+    std::string StencilContext::get_command_line_help() {
+        STATE_VARS(this);
+
+        // Create a parser and add options to it.
+        command_line_parser parser;
+        actl_opts->add_options(parser);
+
+        std::stringstream sstr;
+        parser.print_help(sstr);
+        return sstr.str();
+    }
+    std::string StencilContext::get_command_line_values() {
+        STATE_VARS(this);
+
+        // Create a parser and add options to it.
+        command_line_parser parser;
+        actl_opts->add_options(parser);
+
+        std::stringstream sstr;
+        parser.print_values(sstr);
+        return sstr.str();
+    }
+    
     static string print_pct(double ntime, double dtime) {
         string msg;
         if (dtime > 0.) {

@@ -289,7 +289,7 @@ namespace yask {
 
     protected:
         // Add options to set one domain var to a cmd-line parser.
-        virtual void _add_domain_option(CommandLineParser& parser,
+        virtual void _add_domain_option(command_line_parser& parser,
                                         const std::string& prefix,
                                         const std::string& descrip,
                                         IdxTuple& var,
@@ -297,7 +297,7 @@ namespace yask {
 
     public:
         // Add options to a cmd-line parser to set the settings.
-        virtual void add_options(CommandLineParser& parser);
+        virtual void add_options(command_line_parser& parser);
 
         // Print informational messages.
         void print_usage(std::ostream& os);

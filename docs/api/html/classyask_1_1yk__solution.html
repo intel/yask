@@ -208,6 +208,12 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a550b24bc0f81de69619ba3029ca79e7f"><td class="memItemLeft" align="right" valign="top">virtual std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a550b24bc0f81de69619ba3029ca79e7f">apply_command_line_options</a> (const <a class="el" href="group__yask.html#ga53bde373152f3af12ba9daa06007eb5f">string_vec</a> &amp;args)=0</td></tr>
 <tr class="memdesc:a550b24bc0f81de69619ba3029ca79e7f"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set kernel options from a vector of strings.  <br /></td></tr>
 <tr class="separator:a550b24bc0f81de69619ba3029ca79e7f"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac01bb38958403df5d2112f8c9a4492a3"><td class="memItemLeft" align="right" valign="top">virtual std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ac01bb38958403df5d2112f8c9a4492a3">get_command_line_help</a> ()=0</td></tr>
+<tr class="memdesc:ac01bb38958403df5d2112f8c9a4492a3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return a help-string for the command-line options.  <br /></td></tr>
+<tr class="separator:ac01bb38958403df5d2112f8c9a4492a3"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a46e2f3ed217eff7667fdef26aecbe4bc"><td class="memItemLeft" align="right" valign="top">virtual std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a46e2f3ed217eff7667fdef26aecbe4bc">get_command_line_values</a> ()=0</td></tr>
+<tr class="memdesc:a46e2f3ed217eff7667fdef26aecbe4bc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return a description of the current settings of the command-line options.  <br /></td></tr>
+<tr class="separator:a46e2f3ed217eff7667fdef26aecbe4bc"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a9e0947f98bcea19c6400bcdf95ddf585"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a9e0947f98bcea19c6400bcdf95ddf585">get_num_vars</a> () const =0</td></tr>
 <tr class="memdesc:a9e0947f98bcea19c6400bcdf95ddf585"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the number of vars in the solution.  <br /></td></tr>
 <tr class="separator:a9e0947f98bcea19c6400bcdf95ddf585"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -1600,6 +1606,62 @@ virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc
 
 </div>
 </div>
+<a id="ac01bb38958403df5d2112f8c9a4492a3" name="ac01bb38958403df5d2112f8c9a4492a3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac01bb38958403df5d2112f8c9a4492a3">&#9670;&#160;</a></span>get_command_line_help()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual std::string yask::yk_solution::get_command_line_help </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Return a help-string for the command-line options. </p>
+<dl class="section return"><dt>Returns</dt><dd>A multi-line string. </dd></dl>
+
+</div>
+</div>
+<a id="a46e2f3ed217eff7667fdef26aecbe4bc" name="a46e2f3ed217eff7667fdef26aecbe4bc"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a46e2f3ed217eff7667fdef26aecbe4bc">&#9670;&#160;</a></span>get_command_line_values()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual std::string yask::yk_solution::get_command_line_values </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Return a description of the current settings of the command-line options. </p>
+<p>If options have been modified from the originally-requrested ones to legal ones, the updated ones will be shown. This occurs most frequently with tile-size options. </p><dl class="section return"><dt>Returns</dt><dd>A multi-line string. </dd></dl>
+
+</div>
+</div>
 <a id="a9e0947f98bcea19c6400bcdf95ddf585" name="a9e0947f98bcea19c6400bcdf95ddf585"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a9e0947f98bcea19c6400bcdf95ddf585">&#9670;&#160;</a></span>get_num_vars()</h2>
 
@@ -1949,7 +2011,7 @@ virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc
 <div class="line"><span class="keywordflow">for</span> (<a class="code hl_typedef" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> t = 1; t &lt;= num_steps; t++)</div>
 <div class="line">    soln-&gt;run_solution(t);</div>
 <div class="line">soln-&gt;end_solution();</div>
-<div class="ttc" id="agroup__yask_html_ga1dd7066686ff93559a0f28979be12d81"><div class="ttname"><a href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">yask::idx_t</a></div><div class="ttdeci">YASK_INT64_T idx_t</div><div class="ttdoc">Type to use for indexing grids.</div><div class="ttdef"><b>Definition:</b> yask_common_api.hpp:77</div></div>
+<div class="ttc" id="agroup__yask_html_ga1dd7066686ff93559a0f28979be12d81"><div class="ttname"><a href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">yask::idx_t</a></div><div class="ttdeci">YASK_INT64_T idx_t</div><div class="ttdoc">Type to use for indexing grids.</div><div class="ttdef"><b>Definition:</b> yask_common_api.hpp:79</div></div>
 </div><!-- fragment --><p>As written, the above loop is identical to</p>
 <div class="fragment"><div class="line">soln-&gt;prepare_solution();</div>
 <div class="line">soln-&gt;run_solution(1, num_steps);</div>

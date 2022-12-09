@@ -245,8 +245,48 @@ namespace yask {
         #endif
     }
 
+    // An idx_t option that sets multiple vars.
+    class mult_idx_option : public command_line_parser::option_base {
+        std::vector<idx_t*> _vals;
+
+    public:
+        mult_idx_option(const std::string& name,
+                        const std::string& help_msg,
+                        std::vector<idx_t*> vals) :
+            option_base(name, help_msg, "Current values = "),
+            _vals(vals) { }
+
+        // Print help on an multi-idx_t option.
+        virtual void print_help(ostream& os,
+                                int width) const override {
+            _print_help(os, get_name() + " <integer>", width);
+        }
+
+        // Check for an multi-idx_t option.
+        virtual bool check_arg(const string_vec& args,
+                               int& argi) override {
+            if (_is_opt(args, argi, get_name())) {
+                idx_t val = _idx_val(args, argi);
+                for (size_t i = 0; i < _vals.size(); i++)
+                    *_vals[i] = val;
+                return true;
+            }
+            return false;
+        }
+
+        // Print the current value.
+        virtual std::ostream& print_value(std::ostream& os) const override {
+            for (size_t i = 0; i < _vals.size(); i++) {
+                if (i > 0)
+                    os << ", ";
+                os << *_vals[i];
+            }
+            return os;
+        }
+    };
+    
     // Add options to set one domain var to a cmd-line parser.
-    void KernelSettings::_add_domain_option(CommandLineParser& parser,
+    void KernelSettings::_add_domain_option(command_line_parser& parser,
                                             const std::string& prefix,
                                             const std::string& descrip,
                                             IdxTuple& var,
@@ -262,7 +302,7 @@ namespace yask {
             idx_t* dp = var.lookup(dname); // use lookup() to get non-const ptr.
 
             // Option for individual dim.
-            parser.add_option(make_shared<CommandLineParser::IdxOption>
+            parser.add_option(make_shared<command_line_parser::idx_option>
                               (prefix + dname,
                                descrip + " in '" + dname + "' dimension.",
                                *dp));
@@ -278,17 +318,17 @@ namespace yask {
         auto shortcut = prefix;
         if (shortcut.back() == '_')
             shortcut.pop_back();
-        parser.add_option(make_shared<CommandLineParser::MultiIdxOption>
+        parser.add_option(make_shared<mult_idx_option>
                           (shortcut,
                            "Shortcut for" + multi_help,
                            multi_vars));
     }
 
     // Add access to these options from a cmd-line parser.
-    void KernelSettings::add_options(CommandLineParser& parser)
+    void KernelSettings::add_options(command_line_parser& parser)
     {
         // Following options are in the 'yask' namespace, i.e., no object.
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("print_suffixes",
                            "Format output with suffixes for human readibility, e.g., 6.15K, 12.3GiB, 7.45m."
                            " If disabled, prints without suffixes for computer parsing, e.g., 6150, 1.23e+10, 7.45e-3.",
@@ -314,7 +354,7 @@ namespace yask {
                            " applied to all YASK vars", _min_pad_sizes);
         _add_domain_option(parser, "ep", "[Advanced] Extra padding size (beyond halo)"
                            " applied to all YASK vars", _extra_pad_sizes);
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("allow_addl_padding",
                            "[Advanced] Allow automatic extension of padding for"
                            " additional performance on any or all YASK vars.",
@@ -322,52 +362,52 @@ namespace yask {
         #ifdef USE_MPI
         _add_domain_option(parser, "nr", "Num ranks", _num_ranks);
         _add_domain_option(parser, "ri", "This rank's logical index (0-based)", _rank_indices);
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("overlap_comms",
                            "Overlap MPI communication with calculation of interior elements whenever possible.",
                            overlap_comms));
-        parser.add_option(make_shared<CommandLineParser::IdxOption>
+        parser.add_option(make_shared<command_line_parser::idx_option>
                           ("min_exterior",
                            "[Advanced] Minimum width of exterior section to"
                            " compute before starting MPI communication. "
                            "Applicable only when overlap_comms is enabled.",
                            _min_exterior));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("exchange_halos",
                            "[Debug] Perform halo packs/unpacks/sends/receives. "
                            "Will not give correct results if disabled.",
                            do_halo_exchange));
         #ifdef USE_OFFLOAD
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("use_device_mpi",
                            "Enable device-to-device MPI transfers using device addresses. "
                            "Must be supported by MPI library and hardware.",
                            use_device_mpi));
         #else
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("use_shm",
                            "Directly use shared memory for halo-exchange buffers "
                            "between ranks on the same node when possible. "
                            "Otherwise, use the same non-blocking MPI send and receive calls "
                            "that are used between nodes.",
                            use_shm));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("force_scalar_exchange",
                            "[Debug] Do not allow vectorized halo exchanges.",
                            force_scalar_exchange));
         #endif
         #endif
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("force_scalar",
                            "[Debug] Evaluate every var point with scalar stencil operations "
                            "and exchange halos using only scalar packing and unpacking.",
                            force_scalar));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("max_threads",
                            "Maximum number of OpenMP CPU threads to use for both outer and inner threads. "
                            "If zero (0), the default value from the OpenMP library is used.",
                            max_threads));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("outer_threads",
                            "Number of CPU threads to use in the outer OpenMP region. "
                            "Specifies how many blocks may be executed concurrently within each mega-block. "
@@ -377,7 +417,7 @@ namespace yask {
                            "If zero (0), set to the value specified by -max_threads "
                            "divided by the number specified by -inner_threads.",
                            num_outer_threads));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("inner_threads",
                            "Number of CPU threads to use in each inner (nested) OpenMP region. "
                            "Specifies how many nano-blocks may be executed concurrently within each micro-block. "
@@ -385,18 +425,18 @@ namespace yask {
                            "the maximum number of OpenMP threads specified by -max_threads. "
                            "If zero (0), set to one (1).",
                            num_inner_threads));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("block_threads",
                            "[Deprecated] Use 'inner_threads' option.",
                            num_inner_threads));
         #ifdef USE_OFFLOAD
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("device_thread_limit",
                            "Set the maximum number of OpenMP device threads used within a team.",
                            thread_limit));
         #endif
         #ifndef USE_OFFLOAD
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("bind_inner_threads",
                            "[Advanced] Divide micro-blocks into nano-blocks of slabs along the first valid dimension "
                            "(usually the outer-domain dimension), ignoring other nano-block sizes. "
@@ -407,13 +447,13 @@ namespace yask {
                            "This option is ignored if there are fewer than two inner threads.",
                            bind_inner_threads));
         #endif
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("bundle_allocs",
                            "[Advanced] Allocate memory for multiple YASK vars in "
                            "a single large chunk when possible. "
                            "If 'false', allocate each YASK var separately.",
                            _bundle_allocs));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("numa_pref",
                            string("[Advanced] Specify allocation policy for vars and MPI buffers. ") +
                            #ifdef USE_NUMA
@@ -426,7 +466,7 @@ namespace yask {
                            #endif
                            " Use " + to_string(yask_numa_none) + " for default allocator.",
                            _numa_pref));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("auto_tune",
                            "Adjust specified block and tile sizes *during* normal operation "
                            "to tune for performance, i.e., 'online' or 'in-situ' tuning. "
@@ -436,12 +476,12 @@ namespace yask {
                            "However, this can be a useful tool for deployment of YASK stencils "
                            "onto unknown and/or varied systems where 'offline' tuning is not practical.",
                            _do_auto_tune));
-        parser.add_option(make_shared<CommandLineParser::DoubleOption>
+        parser.add_option(make_shared<command_line_parser::double_option>
                           ("auto_tune_trial_secs",
                            "[Advanced] Seconds to run new trial during auto-tuning "
                            "for new trial to be considered better than the existing best.",
                            _tuner_trial_secs));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("auto_tune_radius",
                            "[Advanced] Starting search radius for tuning block sizes. "
                            "A power of 2 is recommended.",
@@ -454,7 +494,7 @@ namespace yask {
         allowed_targets.insert(_micro_block_str);
         allowed_targets.insert(_nano_block_str);
         allowed_targets.insert(_pico_block_str);
-        parser.add_option(make_shared<CommandLineParser::StringListOption>
+        parser.add_option(make_shared<command_line_parser::string_list_option>
                           ("auto_tune_targets",
                            "[Advanced] Apply the auto-tuner to adjust the sizes of the listed targets. "
                            "Allowed targets are\n"
@@ -471,7 +511,7 @@ namespace yask {
     // Print usage message.
     void KernelSettings::print_usage(ostream& os)
     {
-        CommandLineParser soln_parser;
+        command_line_parser soln_parser;
         add_options(soln_parser);
         soln_parser.print_help(os);
         os <<
@@ -632,7 +672,7 @@ namespace yask {
     }
     void KernelSettings::print_values(ostream& os)
     {
-        CommandLineParser soln_parser;
+        command_line_parser soln_parser;
         add_options(soln_parser);
         soln_parser.print_values(os);
     }

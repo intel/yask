@@ -713,6 +713,8 @@ namespace yask {
         virtual std::string apply_command_line_options(const std::string& args);
         virtual std::string apply_command_line_options(int argc, char* argv[]);
         virtual std::string apply_command_line_options(const string_vec& args);
+        virtual std::string get_command_line_help();
+        virtual std::string get_command_line_values();
         virtual bool get_step_wrap() const {
             STATE_VARS(this);
             return actl_opts->_step_wrap;

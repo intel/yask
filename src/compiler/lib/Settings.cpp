@@ -385,16 +385,16 @@ namespace yask {
     }
 
     // A class to add fold and cluster options.
-    class IntTupleOption : public CommandLineParser::OptionBase {
+    class IntTupleOption : public command_line_parser::option_base {
         IntTuple& _val;
         string_vec _strvec;
-        CommandLineParser::StringListOption _slo;
+        command_line_parser::string_list_option _slo;
 
     public:
         IntTupleOption(const std::string& name,
                        const std::string& help_msg,
                        IntTuple& val) :
-            CommandLineParser::OptionBase(name, help_msg),
+            command_line_parser::option_base(name, help_msg),
             _val(val),
             _slo(name, help_msg, _strvec) { }
 
@@ -437,14 +437,14 @@ namespace yask {
 
         virtual void print_help(ostream& os,
                                 int width) const override {
-            _print_help(os, _name + " <dim_name=value[,dim_name=value[,...]]>", width);
+            _print_help(os, get_name() + " <dim_name=value[,dim_name=value[,...]]>", width);
         }
     };
 
     // Add access to the compiler options from a cmd-line parser.
-    void CompilerSettings::add_options(CommandLineParser& parser)
+    void CompilerSettings::add_options(command_line_parser& parser)
     {
-        parser.add_option(make_shared<CommandLineParser::StringOption>
+        parser.add_option(make_shared<command_line_parser::string_option>
                           ("target",
                            "Output format (required).\n"
                            "Supported formats:\n"
@@ -459,19 +459,19 @@ namespace yask {
                            "- dot:    DOT-language description.\n"
                            "- dot-lite:  DOT-language description of var accesses only.",
                            _target));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("elem-bytes",
                            "Number of bytes in each FP element. "
                            "Currently, only 4 (single-precision) and 8 (double) are allowed.",
                            _elem_bytes));
-        parser.add_option(make_shared<CommandLineParser::StringOption>
+        parser.add_option(make_shared<command_line_parser::string_option>
                           ("step-dim",
                            "[Advanced] "
                            "Name of the step dimension, e.g., 't'. "
                            "By default, the step dimension is defined implicitly when YASK variables are encountered "
                            "in the stencil DSL code.",
                            _step_dim));
-        parser.add_option(make_shared<CommandLineParser::StringListOption>
+        parser.add_option(make_shared<command_line_parser::string_list_option>
                           ("domain-dims",
                            "[Advanced] "
                            "Name and order of the domain dimensions, e.g., 'x,y,z'. "
@@ -481,7 +481,7 @@ namespace yask {
                            "MPI rank layout. Thus, this option can be used to override those traits compared to "
                            "what would be obtained from the DSL code only.",
                            _domain_dims));
-        parser.add_option(make_shared<CommandLineParser::StringOption>
+        parser.add_option(make_shared<command_line_parser::string_option>
                           ("inner-loop-dim",
                            "[Advanced] "
                            "Name of the dimension used for the inner-most stencil-computation loop. "
@@ -489,20 +489,20 @@ namespace yask {
                            "stencil DSL code. "
                            "For this option, a numerical index is allowed: '1' is the first domain-dim, etc.",
                            _inner_loop_dim));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("min-buffer-len",
                            "[Advanced] "
                            "Create inter-loop buffers used in the inner kernel loop if at least <n> points could be stored in it. "
                            "This may result in more values stored in registers rather than being re-read in each loop iteration "
                            "when multiple stencil inputs must be read along the inner-loop dimension",
                            _min_buffer_len));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("read-ahead-dist",
                            "[Advanced] "
                            "Number of iterations to read ahead into the inter-loop buffers. "
                            "This may be used as an alternative to prefetch hints.",
                            _read_ahead_dist));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("inner-misc-layout",
                            "[Advanced] "
                            "Set YASK-var memory layout so that the misc dim(s) are the inner-most dim(s) "
@@ -515,7 +515,7 @@ namespace yask {
                            "kernels when misc dims are used to consolidate vars. "
                            "This disallows dynamically changing the 'misc' dim sizes from the kernel APIs.",
                            _inner_misc));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("outer-domain-layout",
                            "[Advanced] "
                            "Set YASK-var memory layout so that the first domain dim is the outer-most "
@@ -525,7 +525,7 @@ namespace yask {
                            "If the SIMD-vector length is 1, the last domain dim will always be in "
                            "the inner-most layout dim, possibly overriding this setting.",
                            _outer_domain));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("first-inner",
                            "[Advanced] "
                            "If true, each vector is saved in memory with the first given fold dimension as unit-stride "
@@ -533,44 +533,44 @@ namespace yask {
                            "If false, each vector is saved in memory with the last fold dimension as unit-stride "
                            "and so on until the first given fold dimension is the outer-most in the layout. ",
                            _first_inner));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("fus",
                            "[Deprecated] Use -[no]-first-inner.",
                            _first_inner));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("l1-prefetch-dist",
                            "[Advanced] "
                            "Prefetch reads into the level-1 cache <integer> iterations "
                            "ahead of their usage in the inner kernel loop. "
                            "Use zero (0) to disable.",
                            _prefetch_dists[1]));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("l2-prefetch-dist",
                            "[Advanced] "
                            "Prefetch reads into the level-2 cache <integer> iterations "
                            "ahead of their usage in the inner kernel loop. "
                            "Use zero (0) to disable.",
                            _prefetch_dists[2]));
-        parser.add_option(make_shared<CommandLineParser::StringOption>
+        parser.add_option(make_shared<command_line_parser::string_option>
                           ("vars",
                            "[Advanced] "
                            "Only process updates to vars whose names match regular expression defined in <string>. "
                            "This can be used to generate code for a subset of the stencil equations.",
                            _var_regex));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("bundle-scratch",
                            "[Advanced] "
                            "Bundle scratch equations together even if the sizes of their scratch vars must be increased "
                            "in order to do so.",
                            _bundle_scratch));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("halo",
                            "[Advanced] "
                            "If non-zero, override the calculation of the required halo sizes and force them to <integer>. "
                            "May cause memory-access faults and/or incorrect calculations "
                            "if specified to be less than the actual minimum. ",
                            _halo_size));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("step-alloc",
                            "[Advanced] "
                            "If non-zero, override the calculation of the required allocation of each variable in the "
@@ -578,7 +578,7 @@ namespace yask {
                            "May cause memory-access faults and/or incorrect calculations "
                            "if specified to be less than the actual minimum. ",
                            _step_alloc));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("ul",
                            "[Advanced] "
                            "Generate simple unaligned loads instead of aligned loads followed by "
@@ -586,63 +586,63 @@ namespace yask {
                            "To use this correctly, only 1D folds are allowed, and "
                            "the array memory layout must have that same dimension in unit stride.",
                            _allow_unaligned_loads));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("opt-comb",
                            "[Advanced] "
                            "Combine a sequence of commutative operations, e.g., 'a + b + c' into a single parse-tree node.",
                            _do_comb));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("opt-reorder",
                            "[Advanced] "
                            "Allow reordering of commutative operations in a single parse-tree node.",
                            _do_reorder));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("opt-cse",
                            "[Advanced] "
                            "Eliminate common subexpressions in the parse-tree.",
                            _do_cse));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("opt-pair",
                            "[Advanced] "
                            "Combine matching pairs of eligible function calls into a single parse-tree node. "
                            "Currently enables 'sin(x)' and 'cos(x)' to be replaced with 'sincos(x)'.",
                            _do_pairs));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("opt-cluster",
                            "[Advanced] "
                            "Apply optimizations across a cluster of stencil equations. "
                            "Only has an effect if there are more than one vector in a cluster.",
                            _do_opt_cluster));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("max-es",
                            "[Advanced] "
                            "Heuristic for maximum expression-size threshold when outputting code from a parse-tree.",
                            _max_expr_size));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("min-es",
                            "[Advanced] "
                            "Heuristic for minimum expression-size threshold for creating a temporary variable for reuse "
                            "when outputting code from a parse-tree.",
                            _min_expr_size));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("use-ptrs",
                            "[Advanced] "
                            "Generate inner-kernel loop code using data pointers & strides, avoiding function calls.",
                            _use_ptrs));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("use-safe-ptrs",
                            "[Advanced] "
                            "Generate kernel code with pointer parameters to base addresses for each YASK var. "
                            "This is a workaround for offload-device drivers that don't allow negative indices from "
                            "a pointer that is a kernel argument",
                            _use_offsets));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("early-loads",
                            "[Advanced] "
                            "Generate code to load variables early in the inner-kernel loop instead of "
                            "immediately before they are needed.",
                            _early_loads));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("print-eqs",
                            "[Debug] "
                            "Print each equation when defined",

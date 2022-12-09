@@ -29,6 +29,7 @@ IN THE SOFTWARE.
 #include "yask_assert.hpp"
 
 #include <sstream>
+#include <regex>
 #include "common_utils.hpp"
 
 using namespace std;
@@ -213,7 +214,7 @@ namespace yask {
     ///////////// Command-line parsing methods. /////////////
 
     // Internal function to print help for one option.
-    void CommandLineParser::OptionBase::_print_help(ostream& os,
+    void command_line_parser::option_base::_print_help(ostream& os,
                                                     const string& str,
                                                     int width) const
     {
@@ -234,6 +235,7 @@ namespace yask {
             lines.push_back(_help.substr(lprev)); // last line.
 
         // Split lines into words.
+        // Uses only spaces, not tabs.
         for (auto& line : lines) {
             vector<string> words;
             size_t pos = 0, prev = 0;
@@ -283,7 +285,7 @@ namespace yask {
 
     // Check for matching option to "-"str at args[argi].
     // Return true and increment argi if match.
-    bool CommandLineParser::OptionBase::_is_opt(const string_vec& args,
+    bool command_line_parser::option_base::_is_opt(const string_vec& args,
                                                    int& argi,
                                                    const std::string& str) const
     {
@@ -298,7 +300,7 @@ namespace yask {
     // Get one double value from args[argi].
     // On failure, print msg using string from args[argi-1] and exit.
     // On success, increment argi and return value.
-    double CommandLineParser::OptionBase::_double_val(const vector<string>& args,
+    double command_line_parser::option_base::_double_val(const vector<string>& args,
                                                      int& argi)
     {
         if (size_t(argi) >= args.size() || args[argi].length() == 0) {
@@ -320,7 +322,7 @@ namespace yask {
     // Get one idx_t value from args[argi].
     // On failure, print msg using string from args[argi-1] and exit.
     // On success, increment argi and return value.
-    idx_t CommandLineParser::OptionBase::_idx_val(const vector<string>& args,
+    idx_t command_line_parser::option_base::_idx_val(const vector<string>& args,
                                                   int& argi)
     {
         if (size_t(argi) >= args.size() || args[argi].length() == 0) {
@@ -341,7 +343,7 @@ namespace yask {
     // Get one string value from args[argi].
     // On failure, print msg using string from args[argi-1] and exit.
     // On success, increment argi and return value.
-    string CommandLineParser::OptionBase::_string_val(const vector<string>& args,
+    string command_line_parser::option_base::_string_val(const vector<string>& args,
                                                       int& argi)
     {
         if (size_t(argi) >= args.size())
@@ -353,13 +355,13 @@ namespace yask {
     }
 
     // Check for a boolean option.
-    bool CommandLineParser::BoolOption::check_arg(const string_vec& args,
+    bool command_line_parser::bool_option::check_arg(const string_vec& args,
                                                   int& argi) {
-        if (_is_opt(args, argi, _name)) {
+        if (_is_opt(args, argi, get_name())) {
             _val = true;
             return true;
         }
-        string false_name = string("no-") + _name;
+        string false_name = string("no-") + get_name();
         if (_is_opt(args, argi, false_name)) {
             _val = false;
             return true;
@@ -368,15 +370,15 @@ namespace yask {
     }
 
     // Print help on a boolean option.
-    void CommandLineParser::BoolOption::print_help(ostream& os,
+    void command_line_parser::bool_option::print_help(ostream& os,
                                                    int width) const {
-        _print_help(os, string("[no-]" + _name), width);
+        _print_help(os, string("[no-]" + get_name()), width);
     }
 
     // Check for a double option.
-    bool CommandLineParser::DoubleOption::check_arg(const string_vec& args,
+    bool command_line_parser::double_option::check_arg(const string_vec& args,
                                                     int& argi) {
-        if (_is_opt(args, argi, _name)) {
+        if (_is_opt(args, argi, get_name())) {
             _val = _double_val(args, argi);
             return true;
         }
@@ -384,15 +386,15 @@ namespace yask {
     }
 
     // Print help on a double option.
-    void CommandLineParser::DoubleOption::print_help(ostream& os,
+    void command_line_parser::double_option::print_help(ostream& os,
                                                      int width) const {
-        _print_help(os, _name + " <floating-point number>", width);
+        _print_help(os, get_name() + " <floating-point number>", width);
     }
 
     // Check for an int option.
-    bool CommandLineParser::IntOption::check_arg(const string_vec& args,
+    bool command_line_parser::int_option::check_arg(const string_vec& args,
                                                  int& argi) {
-        if (_is_opt(args, argi, _name)) {
+        if (_is_opt(args, argi, get_name())) {
             _val = (int)_idx_val(args, argi); // TODO: check for over/underflow.
             return true;
         }
@@ -400,15 +402,15 @@ namespace yask {
     }
 
     // Print help on an int option.
-    void CommandLineParser::IntOption::print_help(ostream& os,
+    void command_line_parser::int_option::print_help(ostream& os,
                                                   int width) const {
-        _print_help(os, _name + " <integer>", width);
+        _print_help(os, get_name() + " <integer>", width);
     }
 
     // Check for an idx_t option.
-    bool CommandLineParser::IdxOption::check_arg(const string_vec& args,
+    bool command_line_parser::idx_option::check_arg(const string_vec& args,
                                                  int& argi) {
-        if (_is_opt(args, argi, _name)) {
+        if (_is_opt(args, argi, get_name())) {
             _val = _idx_val(args, argi);
             return true;
         }
@@ -416,33 +418,15 @@ namespace yask {
     }
 
     // Print help on an idx_t option.
-    void CommandLineParser::IdxOption::print_help(ostream& os,
+    void command_line_parser::idx_option::print_help(ostream& os,
                                                   int width) const {
-        _print_help(os, _name + " <integer>", width);
-    }
-
-    // Print help on an multi-idx_t option.
-    void CommandLineParser::MultiIdxOption::print_help(ostream& os,
-                                                       int width) const {
-        _print_help(os, _name + " <integer>", width);
-    }
-
-    // Check for an multi-idx_t option.
-    bool CommandLineParser::MultiIdxOption::check_arg(const string_vec& args,
-                                                      int& argi) {
-        if (_is_opt(args, argi, _name)) {
-            idx_t val = _idx_val(args, argi);
-            for (size_t i = 0; i < _vals.size(); i++)
-                *_vals[i] = val;
-            return true;
-        }
-        return false;
+        _print_help(os, get_name() + " <integer>", width);
     }
 
     // Check for a string option.
-    bool CommandLineParser::StringOption::check_arg(const string_vec& args,
+    bool command_line_parser::string_option::check_arg(const string_vec& args,
                                                     int& argi) {
-        if (_is_opt(args, argi, _name)) {
+        if (_is_opt(args, argi, get_name())) {
             _val = _string_val(args, argi);
             return true;
         }
@@ -450,15 +434,15 @@ namespace yask {
     }
 
     // Print help on a string option.
-    void CommandLineParser::StringOption::print_help(ostream& os,
+    void command_line_parser::string_option::print_help(ostream& os,
                                                      int width) const {
-        _print_help(os, _name + " <string>", width);
+        _print_help(os, get_name() + " <string>", width);
     }
 
     // Check for a string-list option.
-    bool CommandLineParser::StringListOption::check_arg(const string_vec& args,
+    bool command_line_parser::string_list_option::check_arg(const string_vec& args,
                                                         int& argi) {
-        if (_is_opt(args, argi, _name)) {
+        if (_is_opt(args, argi, get_name())) {
             _val.clear();
             string strs = _string_val(args, argi);
             stringstream ss(strs);
@@ -476,13 +460,13 @@ namespace yask {
     }
 
     // Print help on a string-list option.
-    void CommandLineParser::StringListOption::print_help(ostream& os,
+    void command_line_parser::string_list_option::print_help(ostream& os,
                                                          int width) const {
-        _print_help(os, _name + " <string[,string[,...]]>", width);
+        _print_help(os, get_name() + " <string[,string[,...]]>", width);
     }
 
     // Print help on all options.
-    void CommandLineParser::print_help(ostream& os) const {
+    void command_line_parser::print_help(ostream& os) const {
         for (auto oi : _opts) {
             const auto opt = oi.second;
             opt->print_help(os, _width);
@@ -490,7 +474,7 @@ namespace yask {
     }
 
     // Print settings of all options.
-    void CommandLineParser::print_values(ostream& os) const {
+    void command_line_parser::print_values(ostream& os) const {
         const size_t name_wid = 22;
         for (auto oi : _opts) {
             const auto& name = oi.first;
@@ -506,7 +490,7 @@ namespace yask {
     // Parse options from the command-line and set corresponding vars.
     // Recognized strings from args are consumed, and unused ones
     // are returned.
-    string CommandLineParser::parse_args(const std::string& pgm_name,
+    string command_line_parser::parse_args(const std::string& pgm_name,
                                          const string_vec& args) {
         vector<string> non_args;
 
@@ -538,15 +522,32 @@ namespace yask {
         string rem;
         for (auto r : non_args) {
             if (rem.length())
-                rem += " ";
-            // TODO: add quotes around 'r' if it has a space.
+                rem += " "; // Space between words.
+
+            // Add quotes around 'r' if it has whitespace.
+            auto pos = r.find_first_not_of(" \t\r\n");
+            if (pos != string::npos) {
+
+                // Must not use chars already in the string.
+                auto apos = r.find('\'');
+                auto qpos = r.find('"');
+                if (apos == string::npos) // No apostrophes.
+                    r = string("\"") + r + '"'; // Add quotes.
+                else if (qpos == string::npos) // No quotes.
+                    r = string("'") + r + "'"; // Add apostrophes.
+                else { // Has both :(.
+                    r = regex_replace(r, regex("'"), "\\'"); // Escape apostrophes.
+                    r = string("'") + r + "'"; // Add apostrophes.
+                }
+            }
+                
             rem += r;
         }
         return rem;
     }
 
     // Tokenize args from a string.
-    vector<string> CommandLineParser::set_args(const string& arg_string) {
+    vector<string> command_line_parser::set_args(const string& arg_string) {
         string tmp;            // current arg.
         char in_quote = '\0';  // current string delimiter or null if none.
         vector<string> args;

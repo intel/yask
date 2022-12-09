@@ -33,7 +33,8 @@ using namespace yask;
 // default ones provided by YASK library.
 struct MySettings {
     static constexpr double def_init_val = -99.;
-    
+
+    // Local options.
     bool help = false;          // help requested.
     bool do_warmup = true;       // whether to do warmup run.
     bool do_pre_auto_tune = true;  // whether to do pre-auto-tuning.
@@ -41,122 +42,115 @@ struct MySettings {
     int num_trials = 3;         // number of trials.
     bool validate = false;      // whether to do validation run.
     int trial_steps = 0;        // number of steps in each trial.
-    int trial_time = 10;        // sec to run each trial if trial_steps == 0.
+    double trial_time = 10.0;        // sec to run each trial if trial_steps == 0.
     int pre_trial_sleep_time = 1; // sec to sleep before each trial.
     int debug_sleep = 0;          // sec to sleep for debug attach.
     bool do_trace = false;         // tracing.
     int msg_rank = 0;              // rank to print debug msgs.
     double init_val = def_init_val;        // value to init all points.
 
-    // Ptr to the soln.
-    yk_solution_ptr _ksoln;
+    // Parser for local options.
+    command_line_parser parser;
 
-    MySettings(yk_solution_ptr ksoln) :
-        _ksoln(ksoln) { }
-
-    // Parse options from the command-line and set corresponding vars.
-    // Exit with message on error or request for help.
-    // Return settings.
-    string parse(int argc, char** argv) {
-        string values;
-
-        // Create a parser and add options to it.
-        CommandLineParser parser;
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+    MySettings() {
+        
+        // Add options to parser.
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("help",
                            "Print help message.",
                            help));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("msg_rank",
                            "Index of MPI rank that will print informational messages.",
                            msg_rank));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("trace",
                            "Print internal debug messages if compiled with"
                            " general and/or memory-access tracing enabled.",
                            do_trace));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("pre_auto_tune",
                            "Run iteration(s) *before* performance trial(s) to find good-performing "
                            "values for block sizes. "
                            "Uses default values or command-line-provided values as a starting point.",
                            do_pre_auto_tune));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("warmup",
                            "Run warmup iteration(s) before performance "
                            "trial(s) and after auto-tuning iterations, if enabled.",
                            do_warmup));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("step_alloc",
                            "Number of steps to allocate in relevant vars, "
                            "overriding default value from YASK compiler.",
                            step_alloc));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("num_trials",
                            "Number of performance trials.",
                            num_trials));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("t",
                            "[Deprecated] Use '-num_trials'.",
                            num_trials));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("trial_steps",
                            "Number of steps to run each performance trial. "
                            "If zero, the 'trial_time' value is used to determine the number of steps to run.",
                            trial_steps));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("dt",
                            "[Deprecated] Use '-trial_steps'.",
                            trial_steps));
-        parser.add_option(make_shared<CommandLineParser::DoubleOption>
+        parser.add_option(make_shared<command_line_parser::double_option>
                           ("init_val",
                            string("Initialize all points in all stencil vars to given value. ") +
                            "If value is " + to_string(MySettings::def_init_val) +
                            ", points are set to varying values.",
                            init_val));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::double_option>
                           ("trial_time",
                            "Approximate number of seconds to run each performance trial. "
                            "When the 'trial_steps' value is zero, the number of steps is "
                            "based on the rate measured in the warmup phase. "
                            "(Thus, warmup cannot be disabled when the number of steps is zero.)",
                            trial_time));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("sleep",
                            "Number of seconds to sleep before each performance trial.",
                            pre_trial_sleep_time));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("debug_delay",
                            "[Debug] Number of seconds to sleep for debug attach.",
                            debug_sleep));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("validate",
                            "Run validation iteration(s) after performance trial(s).",
                            validate));
+    }
+
+    // Parse options from the command-line and set corresponding vars.
+    // Exit with message on error or request for help.
+    // Return settings.
+    string parse(int argc, char** argv, yk_solution_ptr ksoln) {
+        string values;
+        string pgm_name(argv[0]);
 
         // Parse 'args' and 'argv' cmd-line options, which sets values.
         // Any remaining strings will be returned.
         auto rem_args = parser.parse_args(argc, argv);
-        string pgm_name(argv[0]);
 
         // Handle additional knobs and help if there is a soln.
-        if (_ksoln) {
+        if (ksoln) {
 
-            // TODO: make an API for this.
-            auto context = dynamic_pointer_cast<StencilContext>(_ksoln);
-            assert(context.get());
-            auto& req_opts = context->get_req_opts();
-        
             // Parse standard args not handled by this parser.
-            rem_args = _ksoln->apply_command_line_options(rem_args);
+            rem_args = ksoln->apply_command_line_options(rem_args);
 
             if (help) {
                 cout << "Usage: " << pgm_name << " [options]\n"
                     "Options from the '" << pgm_name << "' binary:\n";
                 parser.print_help(cout);
-
-                cout << "Options from the YASK library:\n";
-                req_opts->print_usage(cout);
+                cout << "Options from the YASK library:\n" <<
+                    ksoln->get_command_line_help();
                 cout << 
                     "\nValidation is very slow and uses 2x memory,\n"
                     " so run with very small sizes and number of time-steps.\n"
@@ -166,7 +160,7 @@ struct MySettings {
                 // Make example knobs across dims.
                 string exg, exnr, exb;
                 int i = 1;
-                for (auto& dname : _ksoln->get_domain_dim_names()) {
+                for (auto& dname : ksoln->get_domain_dim_names()) {
                     exg += " -g" + dname + " " + to_string(i * 128);
                     exb += " -b" + dname + " " + to_string(i * 16);
                     exnr += " -nr" + dname + " " + to_string(i + 1);
@@ -187,9 +181,8 @@ struct MySettings {
             ostringstream oss;
             oss << "Options from the '" << pgm_name << "' binary:\n";
             parser.print_values(oss);
-            oss << "Options from the YASK library:\n";
-            req_opts->print_values(oss);
-            values = oss.str();
+            oss << "Options from the YASK library:\n" <<
+                ksoln->get_command_line_values();
             
             if (rem_args.length())
                 THROW_YASK_EXCEPTION("extraneous parameter(s): '" +
@@ -263,9 +256,10 @@ int main(int argc, char** argv)
 
     try {
         // Parse only custom options just to get vars needed to set up env.
-        MySettings opts1(nullptr);
-        opts1.parse(argc, argv);
-        yk_env::set_trace_enabled(opts1.do_trace);
+        // Ignore YASK library options for now.
+        MySettings opts;
+        opts.parse(argc, argv, nullptr);
+        yk_env::set_trace_enabled(opts.do_trace);
 
         // Bootstrap factory from kernel API.
         yk_factory kfac;
@@ -276,7 +270,7 @@ int main(int argc, char** argv)
         auto num_ranks = kenv->get_num_ranks();
 
         // Enable debug only on requested rank.
-        if (opts1.msg_rank != kenv->get_rank_index())
+        if (opts.msg_rank != kenv->get_rank_index())
            yk_env::disable_debug_output();
         auto& os = kenv->get_debug_output()->get_ostream();
         
@@ -291,8 +285,7 @@ int main(int argc, char** argv)
         // Parse custom and library-provided cmd-line options and
         // exit on -help or error.
         // TODO: do this through APIs.
-        MySettings opts(ksoln);
-        auto opts_str = opts.parse(argc, argv);
+        auto opts_str = opts.parse(argc, argv, ksoln);
 
         // Make sure any MPI/OMP debug data is dumped from all ranks before continuing.
         kenv->global_barrier();
@@ -335,7 +328,7 @@ int main(int argc, char** argv)
         ksoln->reset_auto_tuner(copts->_do_auto_tune);
 
         // Make sure warmup is on if needed.
-        if (opts.trial_steps <= 0 && opts.trial_time > 0)
+        if (opts.trial_steps <= 0 && opts.trial_time > 0.)
             opts.do_warmup = true;
 
         // Warmup caches, threading, etc.
@@ -573,8 +566,7 @@ int main(int argc, char** argv)
             assert(ref_context.get());
 
             // Reapply cmd-line options to override default settings.
-            MySettings my_ref_opts(ref_soln);
-            my_ref_opts.parse(argc, argv);
+            opts.parse(argc, argv, ref_soln);
 
             // Change some settings.
             ref_context->name += "-reference";
@@ -586,7 +578,7 @@ int main(int argc, char** argv)
             ref_opts->_numa_pref = yask_numa_none;
 
             // Override allocations and prep solution as with ref soln.
-            alloc_steps(ref_soln, my_ref_opts);
+            alloc_steps(ref_soln, opts);
             ref_soln->prepare_solution();
 
             // init to same value used in context.

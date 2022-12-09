@@ -72,6 +72,7 @@ $(function() {
 <div class="header">
   <div class="summary">
 <a href="#nested-classes">Classes</a> &#124;
+<a href="#define-members">Macros</a> &#124;
 <a href="#typedef-members">Typedefs</a> &#124;
 <a href="#func-members">Functions</a>  </div>
   <div class="headertitle"><div class="title">YASK Common</div></div>
@@ -101,6 +102,18 @@ Classes</h2></td></tr>
 <tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yask__null__output.html">yask::yask_null_output</a></td></tr>
 <tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">Null output.  <a href="classyask_1_1yask__null__output.html#details">More...</a><br /></td></tr>
 <tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:"><td class="memItemLeft" align="right" valign="top">class &#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1command__line__parser.html">yask::command_line_parser</a></td></tr>
+<tr class="memdesc:"><td class="mdescLeft">&#160;</td><td class="mdescRight">A class to parse command-line arguments.  <a href="classyask_1_1command__line__parser.html#details">More...</a><br /></td></tr>
+<tr class="separator:"><td class="memSeparator" colspan="2">&#160;</td></tr>
+</table><table class="memberdecls">
+<tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="define-members" name="define-members"></a>
+Macros</h2></td></tr>
+<tr class="memitem:ga7bbf16a9e81cad71d7bb30f960fdfbe5"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__yask.html#ga7bbf16a9e81cad71d7bb30f960fdfbe5">THROW_YASK_EXCEPTION</a>(message)</td></tr>
+<tr class="memdesc:ga7bbf16a9e81cad71d7bb30f960fdfbe5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Macro for creating and throwing a yask_exception with a string.  <br /></td></tr>
+<tr class="separator:ga7bbf16a9e81cad71d7bb30f960fdfbe5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ga43063607f9419deb39327a01a108bf0c"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__yask.html#ga43063607f9419deb39327a01a108bf0c">FORMAT_AND_THROW_YASK_EXCEPTION</a>(message)</td></tr>
+<tr class="memdesc:ga43063607f9419deb39327a01a108bf0c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Macro for creating and throwing a yask_exception using stream operators.  <br /></td></tr>
+<tr class="separator:ga43063607f9419deb39327a01a108bf0c"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="typedef-members" name="typedef-members"></a>
 Typedefs</h2></td></tr>
@@ -159,6 +172,59 @@ Functions</h2></td></tr>
 </table>
 <a name="details" id="details"></a><h2 class="groupheader">Detailed Description</h2>
 <p>Types, clases, and functions used in both the <a class="el" href="index.html#sec_yc">YASK Stencil Compiler API</a> and <a class="el" href="index.html#sec_yk">YASK Stencil Kernel API</a>. </p>
+<h2 class="groupheader">Macro Definition Documentation</h2>
+<a id="ga7bbf16a9e81cad71d7bb30f960fdfbe5" name="ga7bbf16a9e81cad71d7bb30f960fdfbe5"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ga7bbf16a9e81cad71d7bb30f960fdfbe5">&#9670;&#160;</a></span>THROW_YASK_EXCEPTION</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define THROW_YASK_EXCEPTION</td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname">message</td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<b>Value:</b><div class="fragment"><div class="line">            <span class="keywordflow">do</span> {                      \</div>
+<div class="line">            <span class="keyword">auto</span> msg = std::string(<span class="stringliteral">&quot;YASK error: &quot;</span>) + message;       \</div>
+<div class="line">            yask_exception e(msg);                                  \</div>
+<div class="line">            <span class="keywordflow">throw</span> e;                                                \</div>
+<div class="line">        } <span class="keywordflow">while</span>(0)</div>
+</div><!-- fragment -->
+<p>Macro for creating and throwing a yask_exception with a string. </p>
+<p>Example: THROW_YASK_EXCEPTION("all your base are belong to us"); </p><dl class="section note"><dt>Note</dt><dd>Not available in the Python API. </dd></dl>
+
+</div>
+</div>
+<a id="ga43063607f9419deb39327a01a108bf0c" name="ga43063607f9419deb39327a01a108bf0c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ga43063607f9419deb39327a01a108bf0c">&#9670;&#160;</a></span>FORMAT_AND_THROW_YASK_EXCEPTION</h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">#define FORMAT_AND_THROW_YASK_EXCEPTION</td>
+          <td>(</td>
+          <td class="paramtype">&#160;</td>
+          <td class="paramname">message</td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+<b>Value:</b><div class="fragment"><div class="line">            <span class="keywordflow">do</span> {           \</div>
+<div class="line">            std::stringstream err;                                  \</div>
+<div class="line">            err &lt;&lt; message;                                         \</div>
+<div class="line">            THROW_YASK_EXCEPTION(err.str());                        \</div>
+<div class="line">        } <span class="keywordflow">while</span>(0)</div>
+</div><!-- fragment -->
+<p>Macro for creating and throwing a yask_exception using stream operators. </p>
+<p>Example: FORMAT_AND_THROW_YASK_EXCEPTION("bad value: x = " &lt;&lt; x); </p><dl class="section note"><dt>Note</dt><dd>Not available in the Python API. </dd></dl>
+
+</div>
+</div>
 <h2 class="groupheader">Typedef Documentation</h2>
 <a id="ga1dd7066686ff93559a0f28979be12d81" name="ga1dd7066686ff93559a0f28979be12d81"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#ga1dd7066686ff93559a0f28979be12d81">&#9670;&#160;</a></span>idx_t</h2>

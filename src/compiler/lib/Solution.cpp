@@ -184,7 +184,7 @@ namespace yask {
 
     // Set options as if command-line.
     string StencilSolution::apply_command_line_options(const string& argstr) {
-        auto args = CommandLineParser::set_args(argstr);
+        auto args = command_line_parser::set_args(argstr);
         return apply_command_line_options(args);
     }
 
@@ -199,7 +199,7 @@ namespace yask {
         string rem;
 
         // Create a parser and add options to it.
-        CommandLineParser parser;
+        command_line_parser parser;
         _settings.add_options(parser);
         
         // Parse cmd-line options, which sets values in _settings.
@@ -211,7 +211,7 @@ namespace yask {
     std::string StencilSolution::get_command_line_help() {
 
         // Create a parser and add options to it.
-        CommandLineParser parser;
+        command_line_parser parser;
         _settings.add_options(parser);
 
         std::stringstream sstr;
@@ -221,7 +221,7 @@ namespace yask {
     std::string StencilSolution::get_command_line_values() {
 
         // Create a parser and add options to it.
-        CommandLineParser parser;
+        command_line_parser parser;
         _settings.add_options(parser);
 
         std::stringstream sstr;
