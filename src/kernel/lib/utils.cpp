@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-#include "yask.hpp"
+#include "yask_stencil.hpp"
 using namespace std;
 
 // Set MODEL_CACHE to 1 or 2 to model that cache level
@@ -35,9 +35,19 @@ Cache cache_model(MODEL_CACHE);
 namespace yask {
 
     ////// MPI utils //////
+
+    void KernelEnv::finalize() {
+        TRACE_MSG("finalize_needed = " << finalize_needed);
+        if (comm != MPI_COMM_NULL && finalize_needed) {
+            MPI_Finalize();
+            comm = MPI_COMM_NULL;
+            shm_comm = MPI_COMM_NULL;
+        }
+        finalize_needed = false;
+    }
     
     // Find sum of rank_vals over all ranks.
-    idx_t sum_over_ranks(idx_t rank_val, MPI_Comm comm) {
+    idx_t KernelEnv::sum_over_ranks(idx_t rank_val) const {
         idx_t sum_val = rank_val;
 #ifdef USE_MPI
         MPI_Allreduce(&rank_val, &sum_val, 1, MPI_INTEGER8, MPI_SUM, comm);
@@ -46,9 +56,8 @@ namespace yask {
     }
 
     // Make sure rank_val is same over all ranks.
-    void assert_equality_over_ranks(idx_t rank_val,
-                                 MPI_Comm comm,
-                                 const string& descr) {
+    void KernelEnv::assert_equality_over_ranks(idx_t rank_val,
+                                               const string& descr) const {
         idx_t min_val = rank_val;
         idx_t max_val = rank_val;
 #ifdef USE_MPI

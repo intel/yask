@@ -89,16 +89,7 @@ namespace yask {
         // Init MPI, OMP, etc.
         // This is normally called very early in the program.
         virtual void init_env(int* argc, char*** argv, MPI_Comm comm);
-
-        virtual void finalize() {
-            TRACE_MSG("finalize_needed = " << finalize_needed);
-            if (comm != MPI_COMM_NULL && finalize_needed) {
-                MPI_Finalize();
-                comm = MPI_COMM_NULL;
-                shm_comm = MPI_COMM_NULL;
-            }
-            finalize_needed = false;
-        }
+        virtual void finalize();
 
         // Lock.
         static void set_debug_lock() {
@@ -123,6 +114,11 @@ namespace yask {
         virtual void global_barrier() const {
             MPI_Barrier(comm);
         }
+        virtual idx_t
+        sum_over_ranks(idx_t rank_val) const;
+        virtual void
+        assert_equality_over_ranks(idx_t rank_val,
+                                   const std::string& descr) const;
     };
     typedef std::shared_ptr<KernelEnv> KernelEnvPtr;
 

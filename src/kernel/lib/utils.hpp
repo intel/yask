@@ -55,13 +55,6 @@ namespace yask {
         return res;
     }
 
-    // Find sum of rank_vals over all ranks.
-    extern idx_t sum_over_ranks(idx_t rank_val, MPI_Comm comm);
-
-    // Make sure rank_val is same over all ranks.
-    extern void assert_equality_over_ranks(idx_t rank_val, MPI_Comm comm,
-                                           const std::string& descr);
-
     // A class for a simple producer-consumer memory lock on one item.
     class SimpleLock {
 

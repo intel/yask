@@ -240,6 +240,29 @@ namespace yask {
         virtual void
         global_barrier() const =0;
 
+        /// Find sum of an `idx_t` value over all ranks.
+        /**
+           Must be called from all ranks.
+           @returns sum of `rank_val` over all ranks or
+           simply `rank_val` if MPI is not enabled.
+        */
+        virtual idx_t
+        sum_over_ranks(idx_t rank_val) const =0;
+
+        /// Makes sure an `idx_t` values is the same over all ranks.
+        /**
+           Must be called from all ranks.
+           
+           Throws an exception if `rank_val` does not have the same
+           value across all ranks. Exception contains message with `descr`
+           description of the value.
+
+           Does nothing if MPI is not enabled.
+        */
+        virtual void
+        assert_equality_over_ranks(idx_t rank_val,
+                                   const std::string& descr) const =0;
+
         /// Finalize the environment.
         /**
            If MPI is enabled and YASK initialized the MPI communicator,

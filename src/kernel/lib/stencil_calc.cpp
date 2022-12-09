@@ -514,9 +514,9 @@ namespace yask {
         } // bundles.
 
         // Sum across ranks.
-        tot_reads_per_step = sum_over_ranks(num_reads_per_step, env->comm);
-        tot_writes_per_step = sum_over_ranks(num_writes_per_step, env->comm);
-        tot_fpops_per_step = sum_over_ranks(num_fpops_per_step, env->comm);
+        tot_reads_per_step = env->sum_over_ranks(num_reads_per_step);
+        tot_writes_per_step = env->sum_over_ranks(num_writes_per_step);
+        tot_fpops_per_step = env->sum_over_ranks(num_fpops_per_step);
 
     } // init_work_stats().
 

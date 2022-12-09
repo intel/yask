@@ -11,7 +11,7 @@ var searchData=
   ['set_5fdefault_5fnuma_5fpreferred_8',['set_default_numa_preferred',['../classyask_1_1yk__solution.html#ac8bde8dfc73219cec84ad3033faabb90',1,'yask::yk_solution']]],
   ['set_5fdependency_5fchecker_5fenabled_9',['set_dependency_checker_enabled',['../classyask_1_1yc__solution.html#ac181c24ab7af945318a055cef3b52ee6',1,'yask::yc_solution']]],
   ['set_5fdescription_10',['set_description',['../classyask_1_1yc__solution.html#a3cc13f5daf402805f9b1f66996d9d6d3',1,'yask::yc_solution']]],
-  ['set_5fdomain_5fdims_11',['set_domain_dims',['../classyask_1_1yc__solution.html#ab798850bc3a6bf88322a2f39765ee831',1,'yask::yc_solution::set_domain_dims(const std::initializer_list&lt; yc_index_node_ptr &gt; &amp;dims)=0'],['../classyask_1_1yc__solution.html#a3dc810afcb4ef91c10aa5e0e7092476f',1,'yask::yc_solution::set_domain_dims(const std::vector&lt; yc_index_node_ptr &gt; &amp;dims)=0']]],
+  ['set_5fdomain_5fdims_11',['set_domain_dims',['../classyask_1_1yc__solution.html#a3dc810afcb4ef91c10aa5e0e7092476f',1,'yask::yc_solution::set_domain_dims(const std::vector&lt; yc_index_node_ptr &gt; &amp;dims)=0'],['../classyask_1_1yc__solution.html#ab798850bc3a6bf88322a2f39765ee831',1,'yask::yc_solution::set_domain_dims(const std::initializer_list&lt; yc_index_node_ptr &gt; &amp;dims)=0']]],
   ['set_5fdynamic_5fstep_5falloc_12',['set_dynamic_step_alloc',['../classyask_1_1yc__var.html#a528a6e79000ffc8addefd7519cc58ad6',1,'yask::yc_var']]],
   ['set_5felement_13',['set_element',['../classyask_1_1yk__var.html#ac509cdab014c58033c15b5c92f4bb7d6',1,'yask::yk_var::set_element(double val, const idx_t_vec &amp;indices, bool strict_indices=true)=0'],['../classyask_1_1yk__var.html#a42a5e0c4f28ef714f1de855ddb81877d',1,'yask::yk_var::set_element(double val, const idx_t_init_list &amp;indices, bool strict_indices=true)=0']]],
   ['set_5felement_5fbytes_14',['set_element_bytes',['../classyask_1_1yc__solution.html#a6ce565febd97f50efae59c37d7d5ef4f',1,'yask::yc_solution']]],
@@ -23,7 +23,7 @@ var searchData=
   ['set_5fhalo_5fsize_20',['set_halo_size',['../classyask_1_1yk__var.html#a722269d4ddc542181858eec462afd38f',1,'yask::yk_var']]],
   ['set_5fleft_5fhalo_5fsize_21',['set_left_halo_size',['../classyask_1_1yk__var.html#a89147504cd60e15520e1fa96c2ad5b76',1,'yask::yk_var']]],
   ['set_5fleft_5fmin_5fpad_5fsize_22',['set_left_min_pad_size',['../classyask_1_1yk__var.html#a370adca271068bd8952bbe9d1696a78a',1,'yask::yk_var']]],
-  ['set_5fmin_5fpad_5fsize_23',['set_min_pad_size',['../classyask_1_1yk__var.html#a16aad88dc481991cbe83da7a55cb3799',1,'yask::yk_var::set_min_pad_size()'],['../classyask_1_1yk__solution.html#ab3bd7e95ea13631954d92a638badfb2d',1,'yask::yk_solution::set_min_pad_size()']]],
+  ['set_5fmin_5fpad_5fsize_23',['set_min_pad_size',['../classyask_1_1yk__solution.html#ab3bd7e95ea13631954d92a638badfb2d',1,'yask::yk_solution::set_min_pad_size()'],['../classyask_1_1yk__var.html#a16aad88dc481991cbe83da7a55cb3799',1,'yask::yk_var::set_min_pad_size()']]],
   ['set_5fname_24',['set_name',['../classyask_1_1yc__solution.html#a1dfefccda72a3560e6664471a9ab451a',1,'yask::yc_solution']]],
   ['set_5fnum_5franks_25',['set_num_ranks',['../classyask_1_1yk__solution.html#ac4cd27d412b6fe013db58b167999a362',1,'yask::yk_solution']]],
   ['set_5fnum_5franks_5fvec_26',['set_num_ranks_vec',['../classyask_1_1yk__solution.html#a85aebdf4bf311ed1b9d293fa4404f76e',1,'yask::yk_solution::set_num_ranks_vec(const idx_t_vec &amp;vals)=0'],['../classyask_1_1yk__solution.html#a7c4b880c34659d731ae133f7ae1bd273',1,'yask::yk_solution::set_num_ranks_vec(const idx_t_init_list &amp;vals)=0']]],
@@ -35,7 +35,7 @@ var searchData=
   ['set_5frank_5fdomain_5fsize_32',['set_rank_domain_size',['../classyask_1_1yk__solution.html#a155d8f4a38da9da11488a18cca50bae8',1,'yask::yk_solution']]],
   ['set_5frank_5fdomain_5fsize_5fvec_33',['set_rank_domain_size_vec',['../classyask_1_1yk__solution.html#a31a653082530e1049c3030b408bc3fa1',1,'yask::yk_solution::set_rank_domain_size_vec(const idx_t_vec &amp;vals)=0'],['../classyask_1_1yk__solution.html#a9d75b7f78aaba21fcbe0583c79106fb7',1,'yask::yk_solution::set_rank_domain_size_vec(const idx_t_init_list &amp;vals)=0']]],
   ['set_5frank_5findex_34',['set_rank_index',['../classyask_1_1yk__solution.html#ac0eccaa1d228d7f3408e3c2b0881f279',1,'yask::yk_solution']]],
-  ['set_5frank_5findex_5fvec_35',['set_rank_index_vec',['../classyask_1_1yk__solution.html#abcdcb3024837aa125c5218a618e0db94',1,'yask::yk_solution::set_rank_index_vec(const idx_t_vec &amp;vals)=0'],['../classyask_1_1yk__solution.html#a921f09751c36b56509d2bf2e3d3f05a0',1,'yask::yk_solution::set_rank_index_vec(const idx_t_init_list &amp;vals)=0']]],
+  ['set_5frank_5findex_5fvec_35',['set_rank_index_vec',['../classyask_1_1yk__solution.html#a921f09751c36b56509d2bf2e3d3f05a0',1,'yask::yk_solution::set_rank_index_vec(const idx_t_init_list &amp;vals)=0'],['../classyask_1_1yk__solution.html#abcdcb3024837aa125c5218a618e0db94',1,'yask::yk_solution::set_rank_index_vec(const idx_t_vec &amp;vals)=0']]],
   ['set_5fright_5fhalo_5fsize_36',['set_right_halo_size',['../classyask_1_1yk__var.html#a6d43cc66c47eb773c0e8aa043ec76099',1,'yask::yk_var']]],
   ['set_5fright_5fmin_5fpad_5fsize_37',['set_right_min_pad_size',['../classyask_1_1yk__var.html#a02ee27a0c922e55def701d6efffc725c',1,'yask::yk_var']]],
   ['set_5fstep_5falloc_5fsize_38',['set_step_alloc_size',['../classyask_1_1yc__var.html#ae287dc53eb486e8dbf1a3f6ecec9cafb',1,'yask::yc_var']]],
@@ -47,5 +47,6 @@ var searchData=
   ['set_5fvalue_44',['set_value',['../classyask_1_1yc__const__number__node.html#a8e1cf3c96519e6f9f8729e5736d791e3',1,'yask::yc_const_number_node']]],
   ['set_5fwidth_45',['set_width',['../classyask_1_1command__line__parser.html#a56a28d93c532b8c3f80e547e781b9d05',1,'yask::command_line_parser']]],
   ['string_5flist_5foption_46',['string_list_option',['../classyask_1_1command__line__parser_1_1string__list__option.html#aa60beefb4f15365ffb66305a58d74c2e',1,'yask::command_line_parser::string_list_option::string_list_option(const std::string &amp;name, const std::string &amp;help_msg, string_vec &amp;val)'],['../classyask_1_1command__line__parser_1_1string__list__option.html#a3c93927b1582cc1110729bf955d89265',1,'yask::command_line_parser::string_list_option::string_list_option(const std::string &amp;name, const std::string &amp;help_msg, const std::set&lt; std::string &gt; &amp;allowed_strs, string_vec &amp;val)']]],
-  ['string_5foption_47',['string_option',['../classyask_1_1command__line__parser_1_1string__option.html#a6d7c290a208d622b4a516d76dec0d29b',1,'yask::command_line_parser::string_option']]]
+  ['string_5foption_47',['string_option',['../classyask_1_1command__line__parser_1_1string__option.html#a6d7c290a208d622b4a516d76dec0d29b',1,'yask::command_line_parser::string_option']]],
+  ['sum_5fover_5franks_48',['sum_over_ranks',['../classyask_1_1yk__env.html#a1e466b0a698e11b55142d14190688733',1,'yask::yk_env']]]
 ];

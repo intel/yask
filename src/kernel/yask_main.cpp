@@ -82,7 +82,8 @@ struct MySettings {
         parser.add_option(make_shared<command_line_parser::int_option>
                           ("step_alloc",
                            "Number of steps to allocate in relevant vars, "
-                           "overriding default value from YASK compiler.",
+                           "overriding default value from YASK compiler. "
+                           "Ignored for vars that weren't compiled with dynamic step-allocation enabled.",
                            step_alloc));
         parser.add_option(make_shared<command_line_parser::int_option>
                           ("num_trials",
@@ -199,7 +200,7 @@ void alloc_steps(yk_solution_ptr soln, const MySettings& opts) {
     auto step_dim = soln->get_step_dim_name();
     auto vars = soln->get_vars();
     for (auto var : vars) {
-        if (var->is_dim_used(step_dim))
+        if (var->is_dim_used(step_dim) && var->is_dynamic_step_alloc())
 
             // override num steps.
             var->set_alloc_size(step_dim, opts.step_alloc);
@@ -230,18 +231,17 @@ int main(int argc, char** argv)
     div_line += "\n";
 
     try {
+        // Bootstrap factory from kernel API.
+        yk_factory kfac;
+
         // Parse only custom options just to get vars needed to set up env.
         // Ignore YASK library options for now.
         MySettings opts;
         opts.parse(argc, argv, nullptr);
         yk_env::set_trace_enabled(opts.do_trace);
 
-        // Bootstrap factory from kernel API.
-        yk_factory kfac;
-
         // Set up the environment.
         auto kenv = kfac.new_env();
-        auto ep = dynamic_pointer_cast<KernelEnv>(kenv);
         auto num_ranks = kenv->get_num_ranks();
 
         // Enable debug only on requested rank.
@@ -262,8 +262,12 @@ int main(int argc, char** argv)
         // TODO: do this through APIs.
         opts.parse(argc, argv, ksoln);
 
-        // Make sure any MPI/OMP debug data is dumped from all ranks before continuing.
+        // Make sure any MPI/OMP debug data is dumped from all ranks before continuing
+        // and check option consistency.
         kenv->global_barrier();
+        kenv->assert_equality_over_ranks(opts.num_trials, "number of trials");
+        kenv->assert_equality_over_ranks(opts.trial_steps, "number of steps per trial");
+        kenv->assert_equality_over_ranks(opts.validate ? 0 : 1, "validation");
 
         // Print splash banner and related info.
         yask_print_splash(os, argc, argv);
@@ -349,7 +353,8 @@ int main(int argc, char** argv)
 
                     // Average across all ranks because it is critical that
                     // all ranks use the same number of steps to avoid deadlock.
-                    warmup_steps = CEIL_DIV(sum_over_ranks(warmup_steps, ep->comm), num_ranks);
+                    auto sum_warmup_steps = kenv->sum_over_ranks(warmup_steps);
+                    warmup_steps = CEIL_DIV(sum_warmup_steps, num_ranks);
 
                     // Done if only 1 step to do.
                     if (warmup_steps <= 1)
@@ -360,7 +365,10 @@ int main(int argc, char** argv)
             // Set final number of steps.
             if (opts.trial_steps <= 0) {
                 idx_t tsteps = ceil(rate * opts.trial_time);
-                tsteps = CEIL_DIV(sum_over_ranks(tsteps, ep->comm), num_ranks);
+
+                // Average over ranks.
+                auto sum_tsteps = kenv->sum_over_ranks(tsteps);
+                tsteps = CEIL_DIV(sum_tsteps, num_ranks);
 
                 // Round up to multiple of temporal tiling if not too big.
                 auto step_dim = ksoln->get_step_dim_name();

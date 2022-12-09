@@ -98,6 +98,12 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a2384185b4d346418a62db1310a3dddca"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__env.html#a2384185b4d346418a62db1310a3dddca">global_barrier</a> () const =0</td></tr>
 <tr class="memdesc:a2384185b4d346418a62db1310a3dddca"><td class="mdescLeft">&#160;</td><td class="mdescRight">Wait until all ranks have reached this element.  <br /></td></tr>
 <tr class="separator:a2384185b4d346418a62db1310a3dddca"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a1e466b0a698e11b55142d14190688733"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__env.html#a1e466b0a698e11b55142d14190688733">sum_over_ranks</a> (<a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> rank_val) const =0</td></tr>
+<tr class="memdesc:a1e466b0a698e11b55142d14190688733"><td class="mdescLeft">&#160;</td><td class="mdescRight">Find sum of an <code>idx_t</code> value over all ranks.  <br /></td></tr>
+<tr class="separator:a1e466b0a698e11b55142d14190688733"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:abb2589d4c5b4573d5eb4154674053e9a"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__env.html#abb2589d4c5b4573d5eb4154674053e9a">assert_equality_over_ranks</a> (<a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> rank_val, const std::string &amp;descr) const =0</td></tr>
+<tr class="memdesc:abb2589d4c5b4573d5eb4154674053e9a"><td class="mdescLeft">&#160;</td><td class="mdescRight">Makes sure an <code>idx_t</code> values is the same over all ranks.  <br /></td></tr>
+<tr class="separator:abb2589d4c5b4573d5eb4154674053e9a"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ab2d17018fe9fadd9bfdc091d8bf32feb"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__env.html#ab2d17018fe9fadd9bfdc091d8bf32feb">finalize</a> ()=0</td></tr>
 <tr class="memdesc:ab2d17018fe9fadd9bfdc091d8bf32feb"><td class="mdescLeft">&#160;</td><td class="mdescRight">Finalize the environment.  <br /></td></tr>
 <tr class="separator:ab2d17018fe9fadd9bfdc091d8bf32feb"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -366,6 +372,76 @@ Static Public Member Functions</h2></td></tr>
 
 <p>Wait until all ranks have reached this element. </p>
 <p>If MPI is enabled, calls <code>MPI_Barrier()</code>. Otherwise, has no effect. </p>
+
+</div>
+</div>
+<a id="a1e466b0a698e11b55142d14190688733" name="a1e466b0a698e11b55142d14190688733"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a1e466b0a698e11b55142d14190688733">&#9670;&#160;</a></span>sum_over_ranks()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual <a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a> yask::yk_env::sum_over_ranks </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td>
+          <td class="paramname"><em>rank_val</em></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Find sum of an <code>idx_t</code> value over all ranks. </p>
+<p>Must be called from all ranks. </p><dl class="section return"><dt>Returns</dt><dd>sum of <code>rank_val</code> over all ranks or simply <code>rank_val</code> if MPI is not enabled. </dd></dl>
+
+</div>
+</div>
+<a id="abb2589d4c5b4573d5eb4154674053e9a" name="abb2589d4c5b4573d5eb4154674053e9a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#abb2589d4c5b4573d5eb4154674053e9a">&#9670;&#160;</a></span>assert_equality_over_ranks()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual void yask::yk_env::assert_equality_over_ranks </td>
+          <td>(</td>
+          <td class="paramtype"><a class="el" href="group__yask.html#ga1dd7066686ff93559a0f28979be12d81">idx_t</a>&#160;</td>
+          <td class="paramname"><em>rank_val</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">const std::string &amp;&#160;</td>
+          <td class="paramname"><em>descr</em>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Makes sure an <code>idx_t</code> values is the same over all ranks. </p>
+<p>Must be called from all ranks.</p>
+<p>Throws an exception if <code>rank_val</code> does not have the same value across all ranks. Exception contains message with <code>descr</code> description of the value.</p>
+<p>Does nothing if MPI is not enabled. </p>
 
 </div>
 </div>

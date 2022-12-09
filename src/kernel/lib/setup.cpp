@@ -168,15 +168,15 @@ namespace yask {
         auto nr = env->num_ranks;
 
         // All ranks should have the same settings for certain options.
-        assert_equality_over_ranks(nr, env->comm, "total number of MPI ranks");
-        assert_equality_over_ranks(idx_t(actl_opts->use_shm), env->comm, "use_shm setting");
-        assert_equality_over_ranks(idx_t(actl_opts->find_loc), env->comm, "defined rank indices");
+        env->assert_equality_over_ranks(nr, "total number of MPI ranks");
+        env->assert_equality_over_ranks(idx_t(actl_opts->use_shm), "use_shm setting");
+        env->assert_equality_over_ranks(idx_t(actl_opts->find_loc), "defined rank indices");
         DOMAIN_VAR_LOOP(i, j) {
             auto& dname = domain_dims.get_dim_name(j);
-            assert_equality_over_ranks(actl_opts->_global_sizes[i], env->comm,
-                                       "global-domain size in '" + dname + "' dimension");
-            assert_equality_over_ranks(actl_opts->_num_ranks[j], env->comm,
-                                       "number of ranks in '" + dname + "' dimension");
+            env->assert_equality_over_ranks(actl_opts->_global_sizes[i],
+                                            "global-domain size in '" + dname + "' dimension");
+            env->assert_equality_over_ranks(actl_opts->_num_ranks[j],
+                                            "number of ranks in '" + dname + "' dimension");
 
             // Check that either local or global size is set.
             if (!actl_opts->_global_sizes[i] && !actl_opts->_rank_sizes[i])
@@ -595,9 +595,9 @@ namespace yask {
 
         // Calc and report total allocation and domain sizes.
         rank_nbytes = get_num_bytes();
-        tot_nbytes = sum_over_ranks(rank_nbytes, env->comm);
+        tot_nbytes = env->sum_over_ranks(rank_nbytes);
         rank_domain_pts = rank_bb.bb_num_points;
-        tot_domain_pts = sum_over_ranks(rank_domain_pts, env->comm);
+        tot_domain_pts = env->sum_over_ranks(rank_domain_pts);
         DEBUG_MSG("\nDomain size in this rank (points):          " << make_num_str(rank_domain_pts) <<
                   "\nTotal allocation in this rank:              " << make_byte_str(rank_nbytes) <<
                   "\nOverall problem size in " << env->num_ranks << " rank(s) (points): " <<
