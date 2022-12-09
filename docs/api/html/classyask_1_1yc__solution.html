@@ -179,6 +179,21 @@ virtual void&#160;</td><td class="memItemRight" valign="bottom"><b>clear_cluster
 <tr class="memitem:aa849ba0ae1af7890d8f6f5c0b095ff25"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__solution.html#aa849ba0ae1af7890d8f6f5c0b095ff25">set_prefetch_dist</a> (int level, int distance)=0</td></tr>
 <tr class="memdesc:aa849ba0ae1af7890d8f6f5c0b095ff25"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the prefetch distance for the given cache.  <br /></td></tr>
 <tr class="separator:aa849ba0ae1af7890d8f6f5c0b095ff25"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a78703aff6120f9430a92cedec09ae146"><td class="memItemLeft" align="right" valign="top">virtual std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__solution.html#a78703aff6120f9430a92cedec09ae146">apply_command_line_options</a> (const std::string &amp;args)=0</td></tr>
+<tr class="memdesc:a78703aff6120f9430a92cedec09ae146"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set compiler options from a string.  <br /></td></tr>
+<tr class="separator:a78703aff6120f9430a92cedec09ae146"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6c0137be6f880a56cbe1c2e9ce6ce43c"><td class="memItemLeft" align="right" valign="top">virtual std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__solution.html#a6c0137be6f880a56cbe1c2e9ce6ce43c">apply_command_line_options</a> (int argc, char *argv[])=0</td></tr>
+<tr class="memdesc:a6c0137be6f880a56cbe1c2e9ce6ce43c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set compiler options from standard C or C++ <code>argc</code> and <code>argv</code> parameters to <code>main()</code>.  <br /></td></tr>
+<tr class="separator:a6c0137be6f880a56cbe1c2e9ce6ce43c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a79bfdc89077a2f01b1715872f05d4ff9"><td class="memItemLeft" align="right" valign="top">virtual std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__solution.html#a79bfdc89077a2f01b1715872f05d4ff9">apply_command_line_options</a> (const <a class="el" href="group__yask.html#ga53bde373152f3af12ba9daa06007eb5f">string_vec</a> &amp;args)=0</td></tr>
+<tr class="memdesc:a79bfdc89077a2f01b1715872f05d4ff9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set compiler options from a vector of strings.  <br /></td></tr>
+<tr class="separator:a79bfdc89077a2f01b1715872f05d4ff9"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a04670dda839fa58f500c4b289a163884"><td class="memItemLeft" align="right" valign="top">virtual std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__solution.html#a04670dda839fa58f500c4b289a163884">get_command_line_help</a> ()=0</td></tr>
+<tr class="memdesc:a04670dda839fa58f500c4b289a163884"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return a help-string for the command-line options.  <br /></td></tr>
+<tr class="separator:a04670dda839fa58f500c4b289a163884"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ad134497e9f88b88669ce69f34b919bbf"><td class="memItemLeft" align="right" valign="top">virtual std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__solution.html#ad134497e9f88b88669ce69f34b919bbf">get_command_line_values</a> ()=0</td></tr>
+<tr class="memdesc:ad134497e9f88b88669ce69f34b919bbf"><td class="mdescLeft">&#160;</td><td class="mdescRight">Return a description of the current settings of the command-line options.  <br /></td></tr>
+<tr class="separator:ad134497e9f88b88669ce69f34b919bbf"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a9c18b4c2eba024a830d5e43c83df958b"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__solution.html#a9c18b4c2eba024a830d5e43c83df958b">output_solution</a> (<a class="el" href="group__yask.html#ga605185252a3f3f917593c83b7dde4b66">yask_output_ptr</a> output)=0</td></tr>
 <tr class="memdesc:a9c18b4c2eba024a830d5e43c83df958b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Optimize and the current equation(s) and write to given output object.  <br /></td></tr>
 <tr class="separator:a9c18b4c2eba024a830d5e43c83df958b"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -486,6 +501,7 @@ virtual void&#160;</td><td class="memItemRight" valign="bottom"><b>clear_cluster
 <tr class="markdownTableRowOdd">
 <td class="markdownTableBodyNone">pseudo-long   </td><td class="markdownTableBodyNone">Human-readable pseudo-code with intermediate variables.   </td></tr>
 </table>
+<dl class="section warning"><dt>Warning</dt><dd>If the target is not valid, an exception will be thrown when <a class="el" href="classyask_1_1yc__solution.html#a9c18b4c2eba024a830d5e43c83df958b" title="Optimize and the current equation(s) and write to given output object.">output_solution()</a> is called. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[in]</td><td class="paramname">format</td><td>Output-file format from above list </td></tr>
@@ -519,7 +535,7 @@ virtual void&#160;</td><td class="memItemRight" valign="bottom"><b>clear_cluster
 </div><div class="memdoc">
 
 <p>Determine whether target has been set. </p>
-<dl class="section return"><dt>Returns</dt><dd><code>true</code> if <a class="el" href="classyask_1_1yc__solution.html#a1c03fc69e306a700de8c5ae3973229c2" title="Set the output target.">set_target()</a> has been called with a valid format; <code>false</code> otherwise. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd><code>true</code> if <a class="el" href="classyask_1_1yc__solution.html#a1c03fc69e306a700de8c5ae3973229c2" title="Set the output target.">set_target()</a> has been called with a non-empty string; <code>false</code> otherwise. </dd></dl>
 
 </div>
 </div>
@@ -847,7 +863,7 @@ virtual void&#160;</td><td class="memItemRight" valign="bottom"><b>clear_cluster
 </div><div class="memdoc">
 
 <p>Get all the vars in the solution. </p>
-<dl class="section return"><dt>Returns</dt><dd>Vector containing pointer to all vars. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Vector containing pointers to all vars. </dd></dl>
 
 </div>
 </div>
@@ -1172,6 +1188,168 @@ Default is one (1) in each dimension. </dd></dl>
   </table>
   </dd>
 </dl>
+
+</div>
+</div>
+<a id="a78703aff6120f9430a92cedec09ae146" name="a78703aff6120f9430a92cedec09ae146"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a78703aff6120f9430a92cedec09ae146">&#9670;&#160;</a></span>apply_command_line_options() <span class="overload">[1/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual std::string yask::yc_solution::apply_command_line_options </td>
+          <td>(</td>
+          <td class="paramtype">const std::string &amp;&#160;</td>
+          <td class="paramname"><em>args</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Set compiler options from a string. </p>
+<p>Parses the string for options as if from a command-line. Example: passing "-elem_bytes 4" sets the solution for floats. See the help message from the YASK compiler binary for documentation on the command-line options. Used to set less-common options not directly supported by the APIs above (-min-buffer-len, etc.).</p>
+<dl class="section return"><dt>Returns</dt><dd>Any parts of <code>args</code> that were not recognized by the parser as options. Thus, a non-empty returned string may be used to signal an error or interpreted by a custom application in another way. </dd></dl>
+<dl class="params"><dt>Parameters</dt><dd>
+  <table class="params">
+    <tr><td class="paramdir">[in]</td><td class="paramname">args</td><td>String of arguments to parse. </td></tr>
+  </table>
+  </dd>
+</dl>
+
+</div>
+</div>
+<a id="a6c0137be6f880a56cbe1c2e9ce6ce43c" name="a6c0137be6f880a56cbe1c2e9ce6ce43c"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6c0137be6f880a56cbe1c2e9ce6ce43c">&#9670;&#160;</a></span>apply_command_line_options() <span class="overload">[2/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual std::string yask::yc_solution::apply_command_line_options </td>
+          <td>(</td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>argc</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">char *&#160;</td>
+          <td class="paramname"><em>argv</em>[]&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Set compiler options from standard C or C++ <code>argc</code> and <code>argv</code> parameters to <code>main()</code>. </p>
+<p>Discards <code>argv[0]</code>, which is the executable name. Then, parses the remaining <code>argv</code> values for options as described in <a class="el" href="classyask_1_1yc__solution.html#a78703aff6120f9430a92cedec09ae146" title="Set compiler options from a string.">apply_command_line_options()</a> with a string argument.</p>
+<dl class="section return"><dt>Returns</dt><dd>Any parts of <code>argv</code> that were not recognized by the parser as options. </dd></dl>
+
+</div>
+</div>
+<a id="a79bfdc89077a2f01b1715872f05d4ff9" name="a79bfdc89077a2f01b1715872f05d4ff9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a79bfdc89077a2f01b1715872f05d4ff9">&#9670;&#160;</a></span>apply_command_line_options() <span class="overload">[3/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual std::string yask::yc_solution::apply_command_line_options </td>
+          <td>(</td>
+          <td class="paramtype">const <a class="el" href="group__yask.html#ga53bde373152f3af12ba9daa06007eb5f">string_vec</a> &amp;&#160;</td>
+          <td class="paramname"><em>args</em></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Set compiler options from a vector of strings. </p>
+<p>Parses <code>args</code> values for options as described in <a class="el" href="classyask_1_1yc__solution.html#a78703aff6120f9430a92cedec09ae146" title="Set compiler options from a string.">apply_command_line_options()</a> with a string argument.</p>
+<dl class="section return"><dt>Returns</dt><dd>Any parts of <code>args</code> that were not recognized by the parser as options. </dd></dl>
+
+</div>
+</div>
+<a id="a04670dda839fa58f500c4b289a163884" name="a04670dda839fa58f500c4b289a163884"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a04670dda839fa58f500c4b289a163884">&#9670;&#160;</a></span>get_command_line_help()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual std::string yask::yc_solution::get_command_line_help </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Return a help-string for the command-line options. </p>
+<dl class="section return"><dt>Returns</dt><dd>A multi-line string. </dd></dl>
+
+</div>
+</div>
+<a id="ad134497e9f88b88669ce69f34b919bbf" name="ad134497e9f88b88669ce69f34b919bbf"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ad134497e9f88b88669ce69f34b919bbf">&#9670;&#160;</a></span>get_command_line_values()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual std::string yask::yc_solution::get_command_line_values </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Return a description of the current settings of the command-line options. </p>
+<dl class="section return"><dt>Returns</dt><dd>A multi-line string. </dd></dl>
 
 </div>
 </div>

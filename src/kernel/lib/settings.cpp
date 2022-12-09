@@ -457,12 +457,12 @@ namespace yask {
         parser.add_option(make_shared<CommandLineParser::StringListOption>
                           ("auto_tune_targets",
                            "[Advanced] Apply the auto-tuner to adjust the sizes of the listed targets. "
-                           "Allowed targets are "
-                           "'" + _mega_block_str + "' for mega-block sizes, "
-                           "'" + _block_str + "' for block sizes, "
-                           "'" + _micro_block_str + "' for micro-block sizes, "
-                           "'" + _nano_block_str + "' for nano-block sizes, and "
-                           "'" + _pico_block_str + "' for pico-block sizes. "
+                           "Allowed targets are\n"
+                           "- '" + _mega_block_str + "' for mega-block sizes,\n"
+                           "- '" + _block_str + "' for block sizes,\n"
+                           "- '" + _micro_block_str + "' for micro-block sizes,\n"
+                           "- '" + _nano_block_str + "' for nano-block sizes, and\n"
+                           "- '" + _pico_block_str + "' for pico-block sizes.\n"
                            "Targets must be separated by a single comma (','). "
                            "Targets will be tuned in the order given and may be repeated.",
                            allowed_targets, _tuner_targets));

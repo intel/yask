@@ -50,7 +50,8 @@ namespace yask {
             TRACE_MSG("solution '" << get_name() << "'.set_"            \
                       #api_name "('" << dim << "', " << n << ")");      \
             dims->check_dim_type(dim, "set_" #api_name, step_ok, domain_ok, misc_ok); \
-            expr[dim] = n;                                              \
+            req_opts->expr[dim] = n;                                    \
+            actl_opts->expr[dim] = n;                                   \
             update_var_info(false);                                     \
             if (reset_prep) set_prepared(false);                        \
         }                                                               \
@@ -61,7 +62,8 @@ namespace yask {
             if (vals.size() != NUM_DOMAIN_DIMS)                         \
                 THROW_YASK_EXCEPTION("set_'" #api_name                  \
                                      "_vec()' called without the proper number of domain dims"); \
-            expr.set_vals(start_i, vals);                               \
+            req_opts->expr.set_vals(start_i, vals);                     \
+            actl_opts->expr.set_vals(start_i, vals);                     \
             update_var_info(false);                                     \
             if (reset_prep) set_prepared(false);                        \
         }                                                               \
@@ -72,31 +74,32 @@ namespace yask {
             if (vals.size() != NUM_DOMAIN_DIMS)                         \
                 THROW_YASK_EXCEPTION("set_'" #api_name                  \
                                      "_vec()' called without the proper number of domain dims"); \
-            expr.set_vals(start_i, vals);                               \
+            req_opts->expr.set_vals(start_i, vals);                     \
+            actl_opts->expr.set_vals(start_i, vals);                    \
             update_var_info(false);                                     \
             if (reset_prep) set_prepared(false);                        \
         }
     #define SOLN_API(api_name, expr, start_i, step_ok, domain_ok, misc_ok, reset_prep) \
-        GET_SOLN_API(api_name, expr, start_i, step_ok, domain_ok, misc_ok) \
+        GET_SOLN_API(api_name, actl_opts->expr, start_i, step_ok, domain_ok, misc_ok) \
         SET_SOLN_API(api_name, expr, start_i, step_ok, domain_ok, misc_ok, reset_prep)
     
     SOLN_API(num_ranks,
-             actl_opts->_num_ranks, 0,
+             _num_ranks, 0,
              false, true, false, true)
     SOLN_API(rank_index,
-             actl_opts->_rank_indices, 0,
+             _rank_indices, 0,
              false, true, false, true)
     SOLN_API(overall_domain_size,
-             actl_opts->_global_sizes, 1,
+             _global_sizes, 1,
              false, true, false, true)
     SOLN_API(rank_domain_size,
-             actl_opts->_rank_sizes, 1,
+             _rank_sizes, 1,
              false, true, false, true)
     SOLN_API(block_size,
-             actl_opts->_block_sizes, 1,
+             _block_sizes, 1,
              true, true, false, true)
     SOLN_API(min_pad_size,
-             actl_opts->_min_pad_sizes, 1,
+             _min_pad_sizes, 1,
              false, true, false, false)
     
     GET_SOLN_API(first_rank_domain_index,

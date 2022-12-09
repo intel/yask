@@ -27,7 +27,6 @@ IN THE SOFTWARE.
 
 #include "Print.hpp"
 #include "ExprUtils.hpp"
-#include "Parse.hpp"
 #include "Eqs.hpp"
 #include "Print.hpp"
 #include "CppIntrin.hpp"
@@ -1345,10 +1344,9 @@ namespace yask {
 
     // Divide all equations into eq_bundles.
     // Only process updates to vars in 'var_regex'.
-    // 'targets': string provided by user to specify bundleing.
     void EqBundles::make_eq_bundles(Eqs& all_eqs,
-                                  const CompilerSettings& settings,
-                                  ostream& os)
+                                    const CompilerSettings& settings,
+                                    ostream& os)
     {
         os << "\nPartitioning " << all_eqs.get_num() << " equation(s) into bundles...\n";
         //auto& step_dim = _dims->_step_dim;
@@ -1364,41 +1362,6 @@ namespace yask {
 
         // Make a regex for the allowed vars.
         regex varx(settings._var_regex);
-
-        // Handle each key-value pair in 'targets' string.
-        // Key is eq-bundle name (with possible format strings); value is regex pattern.
-        ArgParser ap;
-        ap.parse_key_value_pairs
-            (settings._eq_bundle_targets,
-             [&](const string& egfmt, const string& pattern) {
-
-                // Make a regex for the pattern.
-                regex patx(pattern);
-
-                // Search all_eqs for matches to current value.
-                for (auto eq : all_eqs.get_all()) {
-
-                    // Get name of updated var.
-                    auto gp = eq->_get_var();
-                    assert(gp);
-                    string gname = gp->_get_name();
-
-                    // Match to varx?
-                    if (!regex_search(gname, varx))
-                        continue;
-
-                    // Match to patx?
-                    smatch mr;
-                    if (!regex_search(gname, mr, patx))
-                        continue;
-
-                    // Substitute special tokens with match.
-                    string egname = mr.format(egfmt);
-
-                    // Add equation if allowed.
-                    add_eq_to_bundle(all_eqs, eq, egname, settings);
-                }
-            });
 
         // Add all remaining equations.
         for (auto eq : all_eqs.get_all()) {

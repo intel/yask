@@ -30,7 +30,7 @@ using namespace std;
 using namespace yask;
 
 // Add some command-line options for this application in addition to the
-// default ones provided by YASK.
+// default ones provided by YASK library.
 struct MySettings {
     static constexpr double def_init_val = -99.;
     
@@ -137,6 +137,7 @@ struct MySettings {
         // Parse 'args' and 'argv' cmd-line options, which sets values.
         // Any remaining strings will be returned.
         auto rem_args = parser.parse_args(argc, argv);
+        string pgm_name(argv[0]);
 
         // Handle additional knobs and help if there is a soln.
         if (_ksoln) {
@@ -150,9 +151,8 @@ struct MySettings {
             rem_args = _ksoln->apply_command_line_options(rem_args);
 
             if (help) {
-                string pgm_name(argv[0]);
                 cout << "Usage: " << pgm_name << " [options]\n"
-                    "Options from the binary:\n";
+                    "Options from the '" << pgm_name << "' binary:\n";
                 parser.print_help(cout);
 
                 cout << "Options from the YASK library:\n";
@@ -185,7 +185,7 @@ struct MySettings {
 
             // Add settings.
             ostringstream oss;
-            oss << "Options from the binary:\n";
+            oss << "Options from the '" << pgm_name << "' binary:\n";
             parser.print_values(oss);
             oss << "Options from the YASK library:\n";
             req_opts->print_values(oss);
@@ -215,15 +215,12 @@ struct MySettings {
             "Stencil name: " YASK_STENCIL_NAME << endl;
 
         // Echo invocation parameters for record-keeping.
-        #ifdef DEF_ARGS
-        os << "Default arguments: " DEF_ARGS << endl;
-        #endif
         os << "Binary invocation:";
         for (int argi = 0; argi < argc; argi++)
             os << " " << argv[argi];
         os << endl;
     }
-};                              // AppSettings.
+};                              // MySettings.
 
 // Override step allocation.
 void alloc_steps(yk_solution_ptr soln, const MySettings& opts) {

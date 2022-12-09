@@ -229,7 +229,9 @@ namespace yask {
                 THROW_YASK_EXCEPTION("call to get_target() before set_target()");
             return _settings._target;
         }
-        virtual void set_target(const std::string& format) override;
+        virtual void set_target(const std::string& format) override {
+            _settings._target = format;
+        }
         virtual void set_element_bytes(int nbytes) override {
             _settings._elem_bytes = nbytes;
         }
@@ -243,6 +245,12 @@ namespace yask {
         virtual void set_dependency_checker_enabled(bool enable) override {
             _settings._find_deps = enable;
         }
+
+        virtual std::string apply_command_line_options(const std::string& args) override;
+        virtual std::string apply_command_line_options(int argc, char* argv[]) override;
+        virtual std::string apply_command_line_options(const string_vec& args) override;
+        virtual std::string get_command_line_help() override;
+        virtual std::string get_command_line_values() override;
 
         virtual void output_solution(yask_output_ptr output) override;
         virtual void

@@ -363,11 +363,6 @@ ifeq ($(streaming_stores),1)
 endif
 MACROS		+=	ALLOW_NEW_VARS=$(allow_new_var_types)
 
-# Default cmd-line args.
-ifneq ($(DEF_ARGS),)
- YK_CXXFLAGS	+=	-DDEF_ARGS='"$(DEF_ARGS)"'
-endif
-
 # VTUNE settings.
 ifeq ($(vtune),1)
  MACROS		+=	USE_VTUNE
@@ -778,7 +773,6 @@ realclean: clean
 echo-settings:
 	@echo "Build environment, `date`"; \
 	echo TARGET=$(TARGET); \
-	echo DEF_ARGS="\"$(DEF_ARGS)\""; \
 	echo EXTRA_MACROS="\"$(EXTRA_MACROS)\""; \
 	echo EXTRA_YC_FLAGS="\"$(EXTRA_YC_FLAGS)\""; \
 	echo EXTRA_YK_CXXFLAGS="\"$(EXTRA_YK_CXXFLAGS)\""; \
@@ -929,8 +923,8 @@ FOLD		=	fold=$(subst $(space),$(comma),$(1))
 CLUSTER		=	cluster=$(subst $(space),$(comma),$(1))
 endif
 
-TEST_ARGS	:=	real_bytes=8 allow_new_var_types=0 check=1 trace=1
-TEST_MAKE 	:=	$(MAKE) $(TEST_ARGS)
+TEST_MAKE_ARGS	:=	real_bytes=8 allow_new_var_types=0 check=1 trace=1
+TEST_MAKE 	:=	$(MAKE) $(TEST_MAKE_ARGS)
 
 ### Unit tests.
 
@@ -1067,9 +1061,9 @@ yk-test-no-yc: kernel-no-yc $(YK_SCRIPT)
 
 # Run the kernel API tests for C++ and Python with and w/o expected exceptions.
 api-tests:
-	$(MAKE) clean; $(MAKE) cxx-yk-api-test real_bytes=8
+	$(MAKE) clean; $(MAKE) cxx-yk-api-test
 	$(MAKE) clean; $(MAKE) py-yk-api-test
-	$(MAKE) clean; $(MAKE) cxx-yk-api-test-with-exception real_bytes=8
+	$(MAKE) clean; $(MAKE) cxx-yk-api-test-with-exception
 	$(MAKE) clean; $(MAKE) py-yk-api-test-with-exception
 
 # Run several stencils using built-in validation.
@@ -1114,8 +1108,8 @@ STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 
 3d-tests:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stream_3d radius=5
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d YK_STENCIL_SUFFIX=-t1 $(call FOLD,x=2 y=2 z=2) EXTRA_YC_FLAGS=-fus
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d YK_STENCIL_SUFFIX=-t2 $(call FOLD,x=2 y=2 z=2) EXTRA_YC_FLAGS=-no-fus
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d YK_STENCIL_SUFFIX=-t1 $(call FOLD,x=2 y=2 z=2) EXTRA_YC_FLAGS=-first-inner
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d YK_STENCIL_SUFFIX=-t2 $(call FOLD,x=2 y=2 z=2) EXTRA_YC_FLAGS=-no-first-inner
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d YK_STENCIL_SUFFIX=-t3 $(call FOLD,x=2 z=2) domain_dims=z,y,x
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d YK_STENCIL_SUFFIX=-t4 $(call FOLD,x=2 z=2) inner_loop_dim=2
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d YK_STENCIL_SUFFIX=-t5 $(call FOLD,x=2 z=2) NANO_BLOCK_LOOP_MODS=serpentine

@@ -62,7 +62,6 @@ namespace yask {
         bool _do_pairs = true;   // find equation pairs.
         bool _do_opt_cluster = true; // apply optimizations also to cluster.
         bool _do_reorder = false;   // reorder commutative operations.
-        string _eq_bundle_targets;  // how to bundle equations.
         string _var_regex;       // vars to update.
         bool _find_deps = true;
         bool _print_eqs = false;
@@ -70,6 +69,13 @@ namespace yask {
         bool _use_many_ptrs = false;  // make pointer for almost every point.
         bool _use_offsets = false; // compute offsets from var alloc start.
         bool _early_loads = true; // issue loads early in the inner loop.
+
+        // Add options to a cmd-line parser to set the settings.
+        virtual void add_options(CommandLineParser& parser);
+
+        // Print informational messages.
+        void print_usage(std::ostream& os);
+        void print_values(std::ostream& os);
     };
 
     // Stencil dimensions.

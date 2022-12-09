@@ -99,12 +99,6 @@ namespace yask {
         auto sp = make_shared<YASK_STENCIL_CONTEXT>(ep, actl_opts, req_opts);
         assert(sp);
 
-#ifdef DEF_ARGS
-        // If no source, init settings from default args.
-        if (!source.get())
-            sp->apply_command_line_options(DEF_ARGS);
-#endif
-
         return sp;
     }
     yk_solution_ptr yk_factory::new_solution(yk_env_ptr env) const {

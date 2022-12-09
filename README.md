@@ -65,6 +65,11 @@ and Intel(R) graphics processors.
 
 ## Backward-compatibility notices
 ### Version 4
+* Version 4.01.00 made the following changes to the YASK compiler:
+    removed the `-eq_bundles` option,
+    an exception is now thrown from `output_solution()` if the
+    format string is unrecognized, and APIs were added for accessing
+    the command-line parser programmatically.
 * Version 4.00.00 was a major release with a number of notices:
   - Support has been added for GPU offloading via the OpenMP device model.
     Build any YASK stencil kernel with `make offload=1 ...`. This will create

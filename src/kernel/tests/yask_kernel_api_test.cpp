@@ -54,12 +54,6 @@ int main(int argc, char** argv) {
             if (string(argv[i]) == "-trace")
                 env->set_trace_enabled(true);
         
-        // Create solution.
-        auto soln = kfac.new_solution(env);
-
-        // Apply any YASK command-line options.
-        soln->apply_command_line_options(argc, argv);
-
         // Show output only from last rank.
         if (rank_num < env->get_num_ranks() - 1) {
             yk_env::disable_debug_output();
@@ -68,6 +62,12 @@ int main(int argc, char** argv) {
         else
             cout << "Following information from rank " << rank_num << ".\n";
         ostream& os = yk_env::get_debug_output()->get_ostream();
+        
+        // Create solution.
+        auto soln = kfac.new_solution(env);
+
+        // Apply any YASK command-line options.
+        soln->apply_command_line_options(argc, argv);
 
         // Init solution settings.
         auto soln_dims = soln->get_domain_dim_names();
