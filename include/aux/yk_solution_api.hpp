@@ -90,6 +90,14 @@ namespace yask {
         virtual const std::string&
         get_name() const =0;
 
+        /// Get the description (long name) of the solution.
+        /**
+           @returns String containing the solution description provided during stencil compilation
+           or the name if no description was provided.
+        */
+        virtual const std::string&
+        get_description() const =0;
+
         /// Get the target ISA.
         /**
            @returns String describing the instruction-set architecture of the CPU targeted
@@ -605,7 +613,7 @@ namespace yask {
 
         /// Get the first index of the sub-domain in this rank in the specified dimension.
         /**
-           This returns the first *overall* index at the beginning of the domain.
+           This returns the first *overall* index at the beginning of the domain in this rank.
            Elements within the domain in this rank lie between the values returned by
            get_first_rank_domain_index() and get_last_rank_domain_index(), inclusive.
            If there is only one MPI rank, this is typically zero (0).
@@ -620,7 +628,7 @@ namespace yask {
         get_first_rank_domain_index(const std::string& dim
                                     /**< [in] Name of dimension to get.  Must be one of
                                        the names from get_domain_dim_names(). */ ) const =0;
-
+        
         /// Get the first index of the sub-domain in this rank in all domain dimensions.
         /**
            See get_first_rank_domain_index().

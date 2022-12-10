@@ -103,6 +103,9 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a27e7ec65c26936f258a8546d0a97cf68"><td class="memItemLeft" align="right" valign="top">virtual const std::string &amp;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a27e7ec65c26936f258a8546d0a97cf68">get_name</a> () const =0</td></tr>
 <tr class="memdesc:a27e7ec65c26936f258a8546d0a97cf68"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the name of the solution.  <br /></td></tr>
 <tr class="separator:a27e7ec65c26936f258a8546d0a97cf68"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a072dfc1bb2bb45d77325bdcb1c303dab"><td class="memItemLeft" align="right" valign="top">virtual const std::string &amp;&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a072dfc1bb2bb45d77325bdcb1c303dab">get_description</a> () const =0</td></tr>
+<tr class="memdesc:a072dfc1bb2bb45d77325bdcb1c303dab"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the description (long name) of the solution.  <br /></td></tr>
+<tr class="separator:a072dfc1bb2bb45d77325bdcb1c303dab"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ab25bbfab5dffc379bfb8c55ac64d6898"><td class="memItemLeft" align="right" valign="top">virtual std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ab25bbfab5dffc379bfb8c55ac64d6898">get_target</a> () const =0</td></tr>
 <tr class="memdesc:ab25bbfab5dffc379bfb8c55ac64d6898"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the target ISA.  <br /></td></tr>
 <tr class="separator:ab25bbfab5dffc379bfb8c55ac64d6898"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -377,6 +380,34 @@ virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc
 
 <p>Get the name of the solution. </p>
 <dl class="section return"><dt>Returns</dt><dd>String containing the solution name provided during stencil compilation. </dd></dl>
+
+</div>
+</div>
+<a id="a072dfc1bb2bb45d77325bdcb1c303dab" name="a072dfc1bb2bb45d77325bdcb1c303dab"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a072dfc1bb2bb45d77325bdcb1c303dab">&#9670;&#160;</a></span>get_description()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual const std::string &amp; yask::yk_solution::get_description </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get the description (long name) of the solution. </p>
+<dl class="section return"><dt>Returns</dt><dd>String containing the solution description provided during stencil compilation or the name if no description was provided. </dd></dl>
 
 </div>
 </div>
@@ -1806,7 +1837,7 @@ virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc
 </div><div class="memdoc">
 
 <p>Get the first index of the sub-domain in this rank in the specified dimension. </p>
-<p>This returns the first <em>overall</em> index at the beginning of the domain. Elements within the domain in this rank lie between the values returned by <a class="el" href="classyask_1_1yk__solution.html#a03bdef5ba9b0b0e37f9b7be2e2e457a4" title="Get the first index of the sub-domain in this rank in the specified dimension.">get_first_rank_domain_index()</a> and <a class="el" href="classyask_1_1yk__solution.html#a58f2ce95e150787bc8235e85298dcd01" title="Get the last index of the sub-domain in this rank the specified dimension.">get_last_rank_domain_index()</a>, inclusive. If there is only one MPI rank, this is typically zero (0). If there is more than one MPI rank, the value depends on the the rank's position within the overall problem domain.</p>
+<p>This returns the first <em>overall</em> index at the beginning of the domain in this rank. Elements within the domain in this rank lie between the values returned by <a class="el" href="classyask_1_1yk__solution.html#a03bdef5ba9b0b0e37f9b7be2e2e457a4" title="Get the first index of the sub-domain in this rank in the specified dimension.">get_first_rank_domain_index()</a> and <a class="el" href="classyask_1_1yk__solution.html#a58f2ce95e150787bc8235e85298dcd01" title="Get the last index of the sub-domain in this rank the specified dimension.">get_last_rank_domain_index()</a>, inclusive. If there is only one MPI rank, this is typically zero (0). If there is more than one MPI rank, the value depends on the the rank's position within the overall problem domain.</p>
 <dl class="section note"><dt>Note</dt><dd>This function should be called only <em>after</em> calling <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a> because <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a> assigns this rank's position in the problem domain. </dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>First domain index in this rank. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>

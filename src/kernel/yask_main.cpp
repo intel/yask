@@ -250,12 +250,7 @@ int main(int argc, char** argv)
         auto& os = kenv->get_debug_output()->get_ostream();
         
         // Make solution object containing data and parameters for stencil eval.
-        // TODO: do everything through API without cast to StencilContext.
         auto ksoln = kfac.new_solution(kenv);
-        auto context = dynamic_pointer_cast<StencilContext>(ksoln);
-        assert(context.get());
-        auto& copts = context->get_actl_opts();
-        assert(copts);
 
         // Parse custom and library-provided cmd-line options and
         // exit on -help or error.
@@ -272,7 +267,7 @@ int main(int argc, char** argv)
         // Print splash banner and related info.
         yask_print_splash(os, argc, argv);
         os << "\nYASK performance and validation utility\n"
-            "Stencil name: " YASK_STENCIL_NAME << endl;
+            "Stencil name: " << ksoln->get_name() << endl;
 
         // Print PID and sleep for debug if needed.
         os << "\nPID: " << getpid() << endl;
@@ -290,22 +285,33 @@ int main(int argc, char** argv)
         ksoln->prepare_solution();
 
         // Exit if nothing to do.
-        if (context->rank_bb.bb_num_points < 1)
+        auto dsizes = ksoln->get_rank_domain_size_vec();
+        idx_t dpts = 1;
+        for (auto ds : dsizes)
+            dpts *= ds;
+        if (dsizes.size() == 0 || dpts == 0)
             THROW_YASK_EXCEPTION("Exiting because there are no points in the domain");
 
+        // Get internal pointers.
+        // TODO: do everything through APIs.
+        auto _context = dynamic_pointer_cast<StencilContext>(ksoln);
+        assert(_context.get());
+        auto& _copts = _context->get_actl_opts();
+        assert(_copts);
+
         // Init data in vars and params.
-        init_vars(opts, context);
+        init_vars(opts, _context);
 
         // Copy vars now instead of waiting for run_solution() to do it
         // automatically. This will remove overhead from first call.
-        context->copy_vars_to_device();
+        ksoln->copy_vars_to_device();
 
         // Invoke auto-tuner.
         if (opts.do_pre_auto_tune)
             ksoln->run_auto_tuner_now();
 
         // Enable/disable further auto-tuning.
-        ksoln->reset_auto_tuner(copts->_do_auto_tune);
+        ksoln->reset_auto_tuner(_copts->_do_auto_tune);
 
         // Make sure warmup is on if needed.
         if (opts.trial_steps <= 0 && opts.trial_time > 0.)
@@ -316,8 +322,8 @@ int main(int argc, char** argv)
         if (opts.do_warmup) {
 
             // Turn off debug.
-            auto dbg_out = context->get_debug_output();
-            context->disable_debug_output();
+            auto dbg_out = kenv->get_debug_output();
+            kenv->disable_debug_output();
             os << endl << div_line;
 
             // Warmup and calibration phases.
@@ -336,7 +342,7 @@ int main(int argc, char** argv)
                     kenv->global_barrier();
                     ksoln->run_solution(0, warmup_steps-1);
                     kenv->global_barrier();
-                    auto stats = context->get_stats();
+                    auto stats = ksoln->get_stats();
                     auto wtime = stats->get_elapsed_secs();
                     os << "  Done in " << make_num_str(wtime) << " secs.\n";
                     rate = (wtime > 0.) ? double(warmup_steps) / wtime : 0;
@@ -372,8 +378,8 @@ int main(int argc, char** argv)
 
                 // Round up to multiple of temporal tiling if not too big.
                 auto step_dim = ksoln->get_step_dim_name();
-                auto rt = copts->_mega_block_sizes[step_dim];
-                auto bt = copts->_block_sizes[step_dim];
+                auto rt = _copts->_mega_block_sizes[step_dim];
+                auto bt = _copts->_block_sizes[step_dim];
                 auto tt = max(rt, bt);
                 const idx_t max_mult = 5;
                 if (tt > 1 && tt < max_mult * tsteps)
@@ -383,7 +389,7 @@ int main(int argc, char** argv)
             }
             
             // Restore debug.
-            context->set_debug_output(dbg_out);
+            kenv->set_debug_output(dbg_out);
         }
         kenv->global_barrier();
 
@@ -403,7 +409,7 @@ int main(int argc, char** argv)
         // Stencils seem to be backward?
         // (This is just a heuristic, but the direction
         // is not usually critical to perf measurement.)
-        if (copts->_dims->_step_dir < 0) {
+        if (_copts->_dims->_step_dir < 0) {
             first_t = last_t;
             last_t = 0;
         }
@@ -418,8 +424,8 @@ int main(int argc, char** argv)
 
             // re-init data before each trial for comparison if validating.
             if (opts.validate) {
-                init_vars(opts, context);
-                context->copy_vars_to_device();
+                init_vars(opts, _context);
+                ksoln->copy_vars_to_device();
             }
 
             // Warn if tuning.
@@ -437,7 +443,7 @@ int main(int argc, char** argv)
             VTUNE_RESUME;
 
             // Actual work.
-            context->clear_timers();
+            _context->clear_timers();
             ksoln->run_solution(first_t, last_t);
             kenv->global_barrier();
 
@@ -445,7 +451,7 @@ int main(int argc, char** argv)
             VTUNE_PAUSE;
 
             // Calc and report perf.
-            auto tstats = context->get_stats();
+            auto tstats = ksoln->get_stats();
             auto stats = dynamic_pointer_cast<Stats>(tstats);
 
             // Remember stats.
@@ -533,7 +539,7 @@ int main(int argc, char** argv)
                 " Num-points/sec is based on the number of results computed and\n"
                 "  is a more reliable performance metric, esp. when comparing\n"
                 "  across architectures and/or implementations.\n";
-            context->print_warnings();
+            _context->print_warnings();
         }
 
         /////// Validation run.
@@ -546,15 +552,15 @@ int main(int argc, char** argv)
             // Make a reference context for comparisons w/new vars.
             // Reuse 'kenv' and copy library settings from 'ksoln'.
             auto ref_soln = kfac.new_solution(kenv, ksoln);
-            auto ref_context = dynamic_pointer_cast<StencilContext>(ref_soln);
-            assert(ref_context.get());
+            auto _ref_context = dynamic_pointer_cast<StencilContext>(ref_soln);
+            assert(_ref_context.get());
 
             // Reapply cmd-line options to override default settings.
             opts.parse(argc, argv, ref_soln);
 
             // Change some settings.
-            ref_context->name += "-reference";
-            auto& ref_opts = ref_context->get_actl_opts();
+            _ref_context->name += "-reference";
+            auto& ref_opts = _ref_context->get_actl_opts();
             ref_opts->force_scalar_exchange = true;
             ref_opts->do_halo_exchange = true;
             ref_opts->overlap_comms = false;
@@ -566,7 +572,7 @@ int main(int argc, char** argv)
             ref_soln->prepare_solution();
 
             // init to same value used in context.
-            init_vars(opts, ref_context);
+            init_vars(opts, _ref_context);
 
             #ifdef CHECK_INIT
 
@@ -580,18 +586,18 @@ int main(int argc, char** argv)
             // Do same number as last perf run.
             os << endl << div_line <<
                 "Running " << opts.trial_steps << " step(s) for validation...\n" << flush;
-            ref_context->run_ref(first_t, last_t);
+            _ref_context->run_ref(first_t, last_t);
 
             // Discard perf report.
-            auto dbg_out = ref_context->get_debug_output();
-            ref_context->disable_debug_output();
-            auto rstats = ref_context->get_stats();
-            ref_context->set_debug_output(dbg_out);
+            auto dbg_out = kenv->get_debug_output();
+            kenv->disable_debug_output();
+            auto rstats = ref_soln->get_stats();
+            kenv->set_debug_output(dbg_out);
             os << "  Done in " << make_num_str(rstats->get_elapsed_secs()) << " secs.\n" << flush;
             #endif
             // check for equality.
             os << "\nChecking results...\n";
-            idx_t errs = context->compare_data(*ref_context);
+            idx_t errs = _context->compare_data(*_ref_context);
             auto ri = kenv->get_rank_index();
 
             // Trick to emulate MPI critical section.
@@ -615,13 +621,14 @@ int main(int argc, char** argv)
                     }
                 }
             }
+            kenv->global_barrier();
             ref_soln->end_solution();
         }
         else
             os << "\nResults NOT VERIFIED.\n";
         ksoln->end_solution();
 
-        os << "Stencil '" << context->get_description() << "'.\n";
+        os << "Stencil '" << ksoln->get_description() << "'.\n";
         if (!ok)
             exit_yask(1);
 
