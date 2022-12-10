@@ -422,8 +422,8 @@ namespace yask {
         // Print lots of stats.
         virtual void prepare_solution();
 
-        // Init perf stats.
-        virtual void init_stats();
+        // Init amount-of-work stats.
+        virtual void init_work_stats();
 
         // Reset any locks, etc.
         virtual void reset_locks();
@@ -435,6 +435,9 @@ namespace yask {
 
         /// Get statistics associated with preceding calls to run_solution().
         virtual yk_stats_ptr get_stats();
+        virtual void clear_stats() {
+            clear_timers();
+        }
 
         // Dealloc vars, etc.
         virtual void end_solution();

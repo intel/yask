@@ -590,7 +590,7 @@ namespace yask {
                   actl_opts->_pico_block_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
     }
 
-    void StencilContext::init_stats() {
+    void StencilContext::init_work_stats() {
         STATE_VARS(this);
 
         // Calc and report total allocation and domain sizes.

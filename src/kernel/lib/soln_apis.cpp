@@ -148,7 +148,7 @@ namespace yask {
         clear_timers();
 
         // Init auto-tuner to run silently during normal operation.
-        reset_auto_tuner(true, false);
+        reset_auto_tuner(actl_opts->_do_auto_tune, false);
 
         // Report ranks.
         DEBUG_MSG("\nNum MPI ranks:             " << env->get_num_ranks() <<
@@ -227,7 +227,7 @@ namespace yask {
         DEBUG_MSG("Allocation done in " <<
                   make_num_str(alloc_timer.get_elapsed_secs()) << " secs.");
 
-        init_stats();
+        init_work_stats();
 
         // User-provided code.
         call_hooks(_after_prepare_solution_hooks);
@@ -543,7 +543,7 @@ namespace yask {
         return p;
     }
 
-    // Reset elapsed times to zero.
+    // Reset elapsed times and step counters to zero.
     void StencilContext::clear_timers() {
         run_time.clear();
         ext_time.clear();

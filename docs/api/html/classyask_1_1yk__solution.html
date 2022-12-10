@@ -259,6 +259,10 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:ab2755703f0d90aa4e3ef36093a1976f5"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yk.html#ga12d1d46aeb01bd7509a8dc3251657f75">yk_stats_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ab2755703f0d90aa4e3ef36093a1976f5">get_stats</a> ()=0</td></tr>
 <tr class="memdesc:ab2755703f0d90aa4e3ef36093a1976f5"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get performance statistics associated with preceding calls to <a class="el" href="classyask_1_1yk__solution.html#a14cc5625fc524fe8eb8d3cedc66778aa" title="Run the stencil solution for the specified steps.">run_solution()</a>.  <br /></td></tr>
 <tr class="separator:ab2755703f0d90aa4e3ef36093a1976f5"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a11b4c61be8b19dd5f1a1177f204bde4d"><td class="memItemLeft" align="right" valign="top"><a id="a11b4c61be8b19dd5f1a1177f204bde4d" name="a11b4c61be8b19dd5f1a1177f204bde4d"></a>
+virtual void&#160;</td><td class="memItemRight" valign="bottom"><b>clear_stats</b> ()=0</td></tr>
+<tr class="memdesc:a11b4c61be8b19dd5f1a1177f204bde4d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Clear the internal stats. <br /></td></tr>
+<tr class="separator:a11b4c61be8b19dd5f1a1177f204bde4d"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a932fad2ede1aecef168189c0aa972b0b"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a932fad2ede1aecef168189c0aa972b0b">reset_auto_tuner</a> (bool enable, bool verbose=false)=0</td></tr>
 <tr class="memdesc:a932fad2ede1aecef168189c0aa972b0b"><td class="mdescLeft">&#160;</td><td class="mdescRight">Start or stop the online auto-tuner on this rank.  <br /></td></tr>
 <tr class="separator:a932fad2ede1aecef168189c0aa972b0b"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -2170,7 +2174,7 @@ virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc
 </div><div class="memdoc">
 
 <p>Get performance statistics associated with preceding calls to <a class="el" href="classyask_1_1yk__solution.html#a14cc5625fc524fe8eb8d3cedc66778aa" title="Run the stencil solution for the specified steps.">run_solution()</a>. </p>
-<dl class="section note"><dt>Note</dt><dd>Side effect: resets all statistics, so each call returns only the elapsed time and counts since the previous call. </dd>
+<dl class="section note"><dt>Note</dt><dd>Side effect: calls <a class="el" href="classyask_1_1yk__solution.html#a11b4c61be8b19dd5f1a1177f204bde4d" title="Clear the internal stats.">clear_stats()</a>, so each call returns only the elapsed time and counts since the previous call. </dd>
 <dd>
 Side effect: outputs stats in human-readable format to current debug output object. </dd></dl>
 <dl class="section return"><dt>Returns</dt><dd>Pointer to statistics object. </dd></dl>
@@ -2279,6 +2283,7 @@ Side effect: outputs stats in human-readable format to current debug output obje
 <p>Run the offline auto-tuner immediately, not preserving variable data. </p>
 <p>This runs the auto-tuner in "offline" mode. (Under "online" operation, an auto-tuner is invoked during calls to <a class="el" href="classyask_1_1yk__solution.html#a14cc5625fc524fe8eb8d3cedc66778aa" title="Run the stencil solution for the specified steps.">run_solution()</a>; see <a class="el" href="classyask_1_1yk__solution.html#a932fad2ede1aecef168189c0aa972b0b" title="Start or stop the online auto-tuner on this rank.">reset_auto_tuner()</a> and <a class="el" href="classyask_1_1yk__solution.html#a0f7eea6bfc844adcc584c2ca5c1f2ba4" title="Determine whether the online auto-tuner is enabled on this rank.">is_auto_tuner_enabled()</a> for more information on running in online mode.)</p>
 <p>This function causes the stencil solution to be run immediately until the auto-tuner converges on all ranks. It is useful for benchmarking, where performance is to be timed for a given number of steps after the best settings are found. This function should be called only <em>after</em> calling <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a>. This call must be made on each rank.</p>
+<dl class="section note"><dt>Note</dt><dd>Calls <a class="el" href="classyask_1_1yk__solution.html#a11b4c61be8b19dd5f1a1177f204bde4d" title="Clear the internal stats.">clear_stats()</a> when complete.</dd></dl>
 <dl class="section warning"><dt>Warning</dt><dd>Modifies the contents of the YASK vars by automatically calling <a class="el" href="classyask_1_1yk__solution.html#a14cc5625fc524fe8eb8d3cedc66778aa" title="Run the stencil solution for the specified steps.">run_solution()</a> an arbitrary number of times, but without halo exchanges. (See <a class="el" href="classyask_1_1yk__solution.html#a14cc5625fc524fe8eb8d3cedc66778aa" title="Run the stencil solution for the specified steps.">run_solution()</a> for other restrictions and warnings.) Thus, var data should be set or reset <em>after</em> calling this function when used in a production or test setting where correct results are expected. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">

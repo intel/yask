@@ -776,7 +776,7 @@ namespace yask {
 
         /// Get performance statistics associated with preceding calls to run_solution().
         /**
-           @note Side effect: resets all statistics, so each call
+           @note Side effect: calls clear_stats(), so each call
            returns only the elapsed time and counts since the previous call.
            @note Side effect: outputs stats in human-readable format
            to current debug output object.
@@ -784,6 +784,10 @@ namespace yask {
         */
         virtual yk_stats_ptr
         get_stats() =0;
+
+        /// Clear the internal stats.
+        virtual void
+        clear_stats() =0;
 
         /// Start or stop the online auto-tuner on this rank.
         /**
@@ -830,6 +834,8 @@ namespace yask {
            for a given number of steps after the best settings are found.
            This function should be called only *after* calling prepare_solution().
            This call must be made on each rank.
+
+           @note Calls clear_stats() when complete.
 
            @warning Modifies the contents of the YASK vars by automatically calling run_solution()
            an arbitrary number of times, but without halo exchanges.

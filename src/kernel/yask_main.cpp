@@ -192,7 +192,7 @@ struct MySettings {
 }; // MySettings
 
 // Override step allocation.
-void alloc_steps(yk_solution_ptr soln, const MySettings& opts) {
+static void alloc_steps(yk_solution_ptr soln, const MySettings& opts) {
     if (opts.step_alloc <= 0)
         return;
 
@@ -208,7 +208,8 @@ void alloc_steps(yk_solution_ptr soln, const MySettings& opts) {
 }
 
 // Init values in vars.
-void init_vars(MySettings& opts, std::shared_ptr<yask::StencilContext> context) {
+static void init_vars(yk_solution_ptr soln, const MySettings& opts,
+                      std::shared_ptr<yask::StencilContext> context) {
     if (opts.init_val != MySettings::def_init_val)
         context->init_same(opts.init_val);
     else {
@@ -284,6 +285,9 @@ int main(int argc, char** argv)
         // Alloc memory, etc.
         ksoln->prepare_solution();
 
+        // Remember whether online auto-tuner is wanted.
+        auto do_online_tuner = ksoln->is_auto_tuner_enabled();
+
         // Exit if nothing to do.
         auto dsizes = ksoln->get_rank_domain_size_vec();
         idx_t dpts = 1;
@@ -300,7 +304,7 @@ int main(int argc, char** argv)
         assert(_copts);
 
         // Init data in vars and params.
-        init_vars(opts, _context);
+        init_vars(ksoln, opts, _context);
 
         // Copy vars now instead of waiting for run_solution() to do it
         // automatically. This will remove overhead from first call.
@@ -311,7 +315,7 @@ int main(int argc, char** argv)
             ksoln->run_auto_tuner_now();
 
         // Enable/disable further auto-tuning.
-        ksoln->reset_auto_tuner(_copts->_do_auto_tune);
+        ksoln->reset_auto_tuner(do_online_tuner);
 
         // Make sure warmup is on if needed.
         if (opts.trial_steps <= 0 && opts.trial_time > 0.)
@@ -424,7 +428,7 @@ int main(int argc, char** argv)
 
             // re-init data before each trial for comparison if validating.
             if (opts.validate) {
-                init_vars(opts, _context);
+                init_vars(ksoln, opts, _context);
                 ksoln->copy_vars_to_device();
             }
 
@@ -438,12 +442,12 @@ int main(int argc, char** argv)
                 sleep(opts.pre_trial_sleep_time);
             }
             kenv->global_barrier();
+            ksoln->clear_stats();
 
             // Start vtune collection.
             VTUNE_RESUME;
 
             // Actual work.
-            _context->clear_timers();
             ksoln->run_solution(first_t, last_t);
             kenv->global_barrier();
 
@@ -572,14 +576,14 @@ int main(int argc, char** argv)
             ref_soln->prepare_solution();
 
             // init to same value used in context.
-            init_vars(opts, _ref_context);
+            init_vars(ref_soln, opts, _ref_context);
 
             #ifdef CHECK_INIT
 
             // Debug code to determine if data compares immediately after init matches.
             os << endl << div_line <<
                 "Reinitializing data for minimal validation...\n" << flush;
-            init_vars(opts, context);
+            init_vars(ref_soln, opts, context);
             #else
 
             // Ref trial.
@@ -588,13 +592,14 @@ int main(int argc, char** argv)
                 "Running " << opts.trial_steps << " step(s) for validation...\n" << flush;
             _ref_context->run_ref(first_t, last_t);
 
-            // Discard perf report.
+            // Discard perf report from reference run.
             auto dbg_out = kenv->get_debug_output();
             kenv->disable_debug_output();
             auto rstats = ref_soln->get_stats();
             kenv->set_debug_output(dbg_out);
             os << "  Done in " << make_num_str(rstats->get_elapsed_secs()) << " secs.\n" << flush;
             #endif
+
             // check for equality.
             os << "\nChecking results...\n";
             idx_t errs = _context->compare_data(*_ref_context);
