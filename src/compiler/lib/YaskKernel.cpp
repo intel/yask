@@ -83,9 +83,9 @@ namespace yask {
         print_macros(os);
         os << "\n#endif // DEFINE_MACROS\n";
 
-        // Stencil-context code.
-        os << "\n#if defined(DEFINE_CONTEXT) && !defined(CONTEXT_DONE)\n"
-            "#define CONTEXT_DONE\n"
+        // Stencil-solution code.
+        os << "\n#if defined(DEFINE_SOLUTION) && !defined(SOLUTION_DONE)\n"
+            "#define SOLUTION_DONE\n"
             "namespace yask {" << endl;
 
         // First, create a class to hold the data (vars).
@@ -94,11 +94,11 @@ namespace yask {
         // A struct for each equation bundle.
         print_eq_bundles(os);
 
-        // Finish the context.
+        // Finish the solution.
         print_context(os);
 
         os << "} // namespace yask.\n"
-            "#endif // DEFINE_CONTEXT\n"
+            "#endif // DEFINE_SOLUTION\n"
             "\n//End of automatically-generated code." << endl;
     }
 
@@ -109,7 +109,7 @@ namespace yask {
         string sname = _stencil._get_name();
         os << "// Stencil solution:\n"
             "#define YASK_STENCIL_NAME \"" << sname << "\"\n"
-            "#define YASK_STENCIL_CONTEXT " << _context << endl;
+            "#define YASK_STENCIL_SOLUTION " << _context << endl;
         os << "\n// Target:\n"
             "#define YASK_TARGET \"" << _settings._target << "\"\n"
             "#define REAL_BYTES " << _settings._elem_bytes << endl;

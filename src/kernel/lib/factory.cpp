@@ -27,9 +27,7 @@ IN THE SOFTWARE.
 using namespace std;
 
 // Auto-generated stencil code that extends base types.
-#define DEFINE_CONTEXT
-#include YSTR2(YK_CODE_FILE)
-#undef DEFINE_CONTEXT
+#include YSTR2(YK_SOLUTION_FILE)
 
 namespace yask {
 
@@ -75,7 +73,7 @@ namespace yask {
 
         auto ep = dynamic_pointer_cast<KernelEnv>(env);
         assert(ep);
-        auto dp = YASK_STENCIL_CONTEXT::new_dims(); // create Dims.
+        auto dp = YASK_STENCIL_SOLUTION::new_dims(); // create Dims.
         assert(dp);
         auto req_opts = make_shared<KernelSettings>(dp, ep);
         assert(req_opts);
@@ -96,7 +94,7 @@ namespace yask {
 
         // Create problem-specific object defined by stencil compiler.
         // TODO: allow more than one type of solution to be created.
-        auto sp = make_shared<YASK_STENCIL_CONTEXT>(ep, actl_opts, req_opts);
+        auto sp = make_shared<YASK_STENCIL_SOLUTION>(ep, actl_opts, req_opts);
         assert(sp);
 
         return sp;
