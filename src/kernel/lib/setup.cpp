@@ -186,6 +186,8 @@ namespace yask {
                                      to_string(me) + "; specify one, "
                                      "and the other will be calculated");
         }
+        env->assert_equality_over_ranks(idx_t(actl_opts->_mega_block_sizes[step_dim]), "Mega-block temporal size");
+        env->assert_equality_over_ranks(idx_t(actl_opts->_block_sizes[step_dim]), "block temporal size");
 
         #ifndef USE_MPI
 
