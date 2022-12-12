@@ -211,7 +211,8 @@ static void alloc_steps(yk_solution_ptr soln, const MySettings& opts) {
 static void init_vars(yk_solution_ptr soln, const MySettings& opts,
                       std::shared_ptr<yask::StencilContext> context) {
     if (opts.init_val != MySettings::def_init_val)
-        context->init_same(opts.init_val);
+        for (auto varp : soln->get_vars())
+            varp->set_all_elements_same(opts.init_val);
     else {
         double seed = opts.validate ? 1.0 : 0.1;
         context->init_diff(seed);
@@ -255,7 +256,6 @@ int main(int argc, char** argv)
 
         // Parse custom and library-provided cmd-line options and
         // exit on -help or error.
-        // TODO: do this through APIs.
         opts.parse(argc, argv, ksoln);
 
         // Make sure any MPI/OMP debug data is dumped from all ranks before continuing
@@ -296,14 +296,12 @@ int main(int argc, char** argv)
         if (dsizes.size() == 0 || dpts == 0)
             THROW_YASK_EXCEPTION("Exiting because there are no points in the domain");
 
-        // Get internal pointers.
+        // Get internal pointer.
         // TODO: do everything through APIs.
         auto _context = dynamic_pointer_cast<StencilContext>(ksoln);
         assert(_context.get());
-        auto& _copts = _context->get_actl_opts();
-        assert(_copts);
 
-        // Init data in vars and params.
+        // Init data in YASK vars.
         init_vars(ksoln, opts, _context);
 
         // Copy vars now instead of waiting for run_solution() to do it
@@ -380,14 +378,16 @@ int main(int argc, char** argv)
                 auto sum_tsteps = kenv->sum_over_ranks(tsteps);
                 tsteps = CEIL_DIV(sum_tsteps, num_ranks);
 
-                // Round up to multiple of temporal tiling if not too big.
+                // Round up to multiple of temporal tiling if it doesn't add
+                // too much.
+                // TODO: also check mega-block temporal size.
                 auto step_dim = ksoln->get_step_dim_name();
-                auto rt = _copts->_mega_block_sizes[step_dim];
-                auto bt = _copts->_block_sizes[step_dim];
-                auto tt = max(rt, bt);
-                const idx_t max_mult = 5;
-                if (tt > 1 && tt < max_mult * tsteps)
-                    tsteps = ROUND_UP(tsteps, tt);
+                auto bt = ksoln->get_block_size(step_dim);
+                if (bt > 1) {
+                    auto req_tsteps = ROUND_UP(tsteps, bt);
+                    if (req_tsteps <= idx_t(1.2 * tsteps))
+                        tsteps = req_tsteps;
+                }
                 
                 opts.trial_steps = tsteps;
             }
@@ -407,16 +407,9 @@ int main(int argc, char** argv)
         vector<shared_ptr<Stats>> trial_stats;
 
         // First & last steps.
+        // TODO: determine if solution is reverse-time; if so, switch first and last;
         idx_t first_t = 0;
         idx_t last_t = opts.trial_steps - 1;
-
-        // Stencils seem to be backward?
-        // (This is just a heuristic, but the direction
-        // is not usually critical to perf measurement.)
-        if (_copts->_dims->_step_dir < 0) {
-            first_t = last_t;
-            last_t = 0;
-        }
         
         /////// Performance run(s).
         os << endl << div_line <<
@@ -456,10 +449,10 @@ int main(int argc, char** argv)
 
             // Calc and report perf.
             auto tstats = ksoln->get_stats();
-            auto stats = dynamic_pointer_cast<Stats>(tstats);
+            auto _stats = dynamic_pointer_cast<Stats>(tstats);
 
             // Remember stats.
-            trial_stats.push_back(stats);
+            trial_stats.push_back(_stats);
         }
 
         // Done with vtune.
@@ -564,12 +557,19 @@ int main(int argc, char** argv)
 
             // Change some settings.
             _ref_context->name += "-reference";
-            auto& ref_opts = _ref_context->get_actl_opts();
-            ref_opts->force_scalar_exchange = true;
-            ref_opts->do_halo_exchange = true;
-            ref_opts->overlap_comms = false;
-            ref_opts->use_shm = false;
-            ref_opts->_numa_pref = yask_numa_none;
+            auto rem_opts = ref_soln->
+                apply_command_line_options("-force_scalar "
+                                           "-numa_pref -9 ");
+            if (rem_opts.length() != 0)
+                os << "  Unused validation options: '" << rem_opts << "'\n";
+            if (kenv->get_num_ranks() > 1) {
+                rem_opts = ref_soln->
+                    apply_command_line_options("-no-overlap_comms "
+                                               "-no-use_shm "
+                                               "-exchange_halos ");
+                if (rem_opts.length() != 0)
+                    os << "  Unused validation options: '" << rem_opts << "'\n";
+            }
 
             // Override allocations and prep solution as with ref soln.
             alloc_steps(ref_soln, opts);
@@ -577,14 +577,6 @@ int main(int argc, char** argv)
 
             // init to same value used in context.
             init_vars(ref_soln, opts, _ref_context);
-
-            #ifdef CHECK_INIT
-
-            // Debug code to determine if data compares immediately after init matches.
-            os << endl << div_line <<
-                "Reinitializing data for minimal validation...\n" << flush;
-            init_vars(ref_soln, opts, context);
-            #else
 
             // Ref trial.
             // Do same number as last perf run.
@@ -598,7 +590,6 @@ int main(int argc, char** argv)
             auto rstats = ref_soln->get_stats();
             kenv->set_debug_output(dbg_out);
             os << "  Done in " << make_num_str(rstats->get_elapsed_secs()) << " secs.\n" << flush;
-            #endif
 
             // check for equality.
             os << "\nChecking results...\n";

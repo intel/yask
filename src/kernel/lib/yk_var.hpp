@@ -1358,11 +1358,9 @@ namespace yask {
             real_vec_t seedv;
             auto n = seedv.get_num_elems();
 
-            // Init elements to values between seed and 2*seed.
-            // For example if n==4, init to
-            // seed * 1.0, seed * 1.25, seed * 1.5, seed * 1.75.
+            // Init elements to decreasing multiples of seed.
             for (int i = 0; i < n; i++)
-                seedv[i] = seed * (1.0 + double(i) / n);
+                seedv[i] = seed * (double(n - i));
             _data.set_elems_in_seq(seedv);
             set_dirty_all(self, true);
         }

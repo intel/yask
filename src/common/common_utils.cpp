@@ -525,7 +525,7 @@ namespace yask {
                 rem += " "; // Space between words.
 
             // Add quotes around 'r' if it has whitespace.
-            auto pos = r.find_first_not_of(" \t\r\n");
+            auto pos = r.find_first_of(" \t\r\n");
             if (pos != string::npos) {
 
                 // Must not use chars already in the string.
