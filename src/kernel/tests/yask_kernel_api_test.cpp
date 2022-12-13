@@ -32,6 +32,7 @@ IN THE SOFTWARE.
 #include <set>
 #include <sys/types.h>
 #include <unistd.h>
+#include <string.h>
 
 using namespace std;
 using namespace yask;
@@ -53,12 +54,6 @@ int main(int argc, char** argv) {
             if (string(argv[i]) == "-trace")
                 env->set_trace_enabled(true);
         
-        // Create solution.
-        auto soln = kfac.new_solution(env);
-
-        // Apply any YASK command-line options.
-        soln->apply_command_line_options(argc, argv);
-
         // Show output only from last rank.
         if (rank_num < env->get_num_ranks() - 1) {
             yk_env::disable_debug_output();
@@ -67,6 +62,12 @@ int main(int argc, char** argv) {
         else
             cout << "Following information from rank " << rank_num << ".\n";
         ostream& os = yk_env::get_debug_output()->get_ostream();
+        
+        // Create solution.
+        auto soln = kfac.new_solution(env);
+
+        // Apply any YASK command-line options.
+        soln->apply_command_line_options(argc, argv);
 
         // Init solution settings.
         auto soln_dims = soln->get_domain_dim_names();
@@ -75,7 +76,7 @@ int main(int argc, char** argv) {
             os << "Setting solution dim '" << dim_name << "'...\n";
 
             // Set domain size in each dim.
-            idx_t dsize = 128 + i * 32;
+            idx_t dsize = 64 + i * 32;
             soln->set_overall_domain_size(dim_name, dsize);
 
             // Check that vec API returns same.
@@ -184,6 +185,12 @@ int main(int argc, char** argv) {
 
                 dimi++;
             }
+            auto first_indices = var->get_first_local_index_vec();
+            os << "      first local indices: " << var->format_indices(first_indices) << endl;
+            auto last_indices = var->get_last_local_index_vec();
+            os << "      last local indices: " << var->format_indices(last_indices) << endl;
+            auto asizes = var->get_alloc_size_vec();
+            os << "      local allocation sizes: " << var->format_indices(asizes) << endl;
 
             // First, just init all the elements to the same value.
             double outer_val = 0.5;
@@ -194,7 +201,9 @@ int main(int argc, char** argv) {
                 continue;
 
             // Create indices describing a subset of the overall domain.
-            vector<idx_t> first_cube_indices, last_cube_indices;
+            // If running on more than one rank, it's very likely
+            // part of the cube will not be in this rank.
+            idx_t_vec first_cube_indices, last_cube_indices;
             for (auto dname : var->get_dim_names()) {
                 idx_t first_idx = 0, last_idx = 0;
 
@@ -301,10 +310,63 @@ int main(int argc, char** argv) {
             auto num_elems = var->get_num_storage_elements();
             os << "      " << var->get_num_storage_bytes() <<
                 " bytes of raw data at " << raw_p << ": ";
-            if (soln->get_element_bytes() == 4)
+            assert(raw_p);
+            auto esize = soln->get_element_bytes();
+            if (esize == 4)
                 os << ((float*)raw_p)[0] << ", ..., " << ((float*)raw_p)[num_elems-1] << "\n";
-            else
+            else if (esize == 8)
                 os << ((double*)raw_p)[0] << ", ..., " << ((double*)raw_p)[num_elems-1] << "\n";
+            else
+                assert(false);
+
+            // Set values from a buffer.
+            size_t nelems = 1;
+            for (int i = 0; i < ndims; i++)
+                nelems *= asizes[i];
+            size_t bsize = nelems * esize;
+            assert(bsize >= esize);
+            os << "      allocating " << bsize << " byte(s)...\n";
+            void* buf = malloc(bsize);
+            assert(buf);
+            memset(buf, 0, bsize); // Sets all reals to 0.0, whether floats or doubles.
+
+            // Try with all zeros.
+            nset = var->set_elements_in_slice(buf, first_indices, last_indices);
+            assert(nset == nelems);
+            auto v1 = var->get_element(first_indices);
+            assert(v1 == 0.0);
+            auto v2 = var->get_element(last_indices);
+            assert(v2 == 0.0);
+
+            // Try with first element non-zero.
+            double v3 = 123.0;
+            if (esize == 4)
+                ((float*)buf)[0] = float(v3);
+            else
+                ((double*)buf)[0] = v3;
+            nset = var->set_elements_in_slice(buf, first_indices, last_indices);
+            assert(nset == nelems);
+            v1 = var->get_element(first_indices);
+            assert(v1 == v3);
+            if (nelems > 1) {
+                v2 = var->get_element(last_indices);
+                assert(v2 == 0.0);
+            }
+
+            // Try with last element also non-zero.
+            if (esize == 4)
+                ((float*)buf)[nelems-1] = float(v3);
+            else
+                ((double*)buf)[nelems-1] = v3;
+            nset = var->set_elements_in_slice(buf, first_indices, last_indices);
+            assert(nset == nelems);
+            v1 = var->get_element(first_indices);
+            assert(v1 == v3);
+            v2 = var->get_element(last_indices);
+            assert(v2 == v3);
+
+            free(buf);
+            os << "      " << nelems << " element(s) set via set_elements_in_slice()\n";
         }
 
         // Apply the stencil solution to the data.

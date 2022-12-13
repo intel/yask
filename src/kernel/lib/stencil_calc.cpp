@@ -38,8 +38,8 @@ namespace yask {
     // It is also here that the boundaries of the bounding-box(es) of the bundle
     // are respected. There must not be any temporal blocking at this point.
     void StencilBundleBase::calc_micro_block(int outer_thread_idx,
-                                            KernelSettings& settings,
-                                            const ScanIndices& micro_block_idxs) {
+                                             KernelSettings& settings,
+                                             const ScanIndices& micro_block_idxs) {
         STATE_VARS(this);
         TRACE_MSG("calc_micro_block('" << get_name() << "'): [" <<
                    micro_block_idxs.begin.make_val_str() << " ... " <<
@@ -368,20 +368,15 @@ namespace yask {
     } // adjust_span().
 
     // Timer methods.
-    // Start and stop stage timers for final stats and auto-tuners.
+    // Start and stop stage timers for final stats and track steps done.
     void Stage::start_timers() {
-        auto ts = YaskTimer::get_timespec();
-        timer.start(ts);
-        get_at().timer.start(ts);
+        timer.start();
     }
     void Stage::stop_timers() {
-        auto ts = YaskTimer::get_timespec();
-        timer.stop(ts);
-        get_at().timer.stop(ts);
+        timer.stop();
     }
     void Stage::add_steps(idx_t num_steps) {
         steps_done += num_steps;
-        get_at().steps_done += num_steps;
     }
 
     static void print_var_list(ostream& os, const VarPtrs& gps, const string& type) {
@@ -519,9 +514,9 @@ namespace yask {
         } // bundles.
 
         // Sum across ranks.
-        tot_reads_per_step = sum_over_ranks(num_reads_per_step, env->comm);
-        tot_writes_per_step = sum_over_ranks(num_writes_per_step, env->comm);
-        tot_fpops_per_step = sum_over_ranks(num_fpops_per_step, env->comm);
+        tot_reads_per_step = env->sum_over_ranks(num_reads_per_step);
+        tot_writes_per_step = env->sum_over_ranks(num_writes_per_step);
+        tot_fpops_per_step = env->sum_over_ranks(num_fpops_per_step);
 
     } // init_work_stats().
 

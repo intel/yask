@@ -1094,8 +1094,8 @@ sub processCode($) {
                 "#endif // Part $partNum.\n";
             $partNum++;
             push @code,
-                "// Enable part $loopPart by defining the following macro.",
-                "#ifdef ${macroPrefix}$loopPart$partNum\n";
+                "#ifdef ${macroPrefix}${loopPart}$partNum",
+                "// Enable part $partNum by defining the above macro.";
             
             # clear data for this loop so we'll be ready for a nested loop.
             undef @loopDims;
@@ -1140,9 +1140,9 @@ sub processCode($) {
     # Front matter.
     my @fcode;
     push @fcode,
-        "// Enable part 0 by defining the following macro.",
         "#ifdef ${macroPrefix}${loopPart}0\n",
-        "// These macros must be re-defined for each generated loop-nest.",
+        "// Enable part 0 by defining the above macro.",
+        "// The following macros must be re-defined for each generated loop-nest.",
         macroDef('SIMD_PRAGMA', undef, pragma($OPT{simd})),
         macroDef('INNER_LOOP_PREFIX', undef, pragma($OPT{inner})),
         macroDef('OMP_PRAGMA', undef, pragma($OPT{omp})),
@@ -1184,19 +1184,19 @@ sub processCode($) {
 
     # header.
     print OUT
-        "/*\n",
-        " * Var-scanning code.\n",
-        " * Generated automatically from the following pseudo-code:\n",
-        " *\n",
-        " * $codeString\n",
-        " *\n */";
+        " /*\n",
+        "  * Var-scanning code.\n",
+        "  * Generated automatically from the following pseudo-code:\n",
+        "  *\n",
+        "  * $codeString\n",
+        "  *\n */";
 
     # print out code.
     for my $line (@code) {
         print OUT "\n" if $line =~ m=^\s*//=; # blank line before comment.
         print OUT " $line\n"; # add space at beginning of every line.
     }
-    print OUT "// End of generated code.\n";
+    print OUT " // End of generated var-scanning code.\n";
     close OUT;
     system("$indent $OPT{output}") if -x $indent;
 
@@ -1299,7 +1299,7 @@ sub main() {
             }
         }
         close MF;
-        print "".(scalar keys %macros)." macro(s) read from '$OPT{macro_file}'\n";
+        print "info: ".(scalar keys %macros)." macro(s) read from '$OPT{macro_file}'\n";
     }
 
     my $codeString = join(' ', @ARGV); # just concat all non-options params together.

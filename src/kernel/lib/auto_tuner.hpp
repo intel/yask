@@ -33,8 +33,7 @@ namespace yask {
 
     protected:
 
-        // Settings to change. May be pointer to solution settings
-        // or local settings for a stage.
+        // Settings to change.
         KernelSettings* _settings = 0;
 
         // Name of tuner.
@@ -110,8 +109,7 @@ namespace yask {
         static constexpr idx_t max_stride_t = 100;
 
         AutoTuner(StencilContext* context,
-                  KernelSettings* settings,
-                  const std::string& name = "");
+                  KernelSettings* settings);
         virtual ~AutoTuner() {}
 
         // Start & stop this timer to track elapsed time.

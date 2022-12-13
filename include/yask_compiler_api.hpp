@@ -25,8 +25,8 @@ IN THE SOFTWARE.
 
 ///////// API for the YASK stencil compiler. ////////////
 
-// This file uses Doxygen 1.8 markup for API documentation-generation.
-// See http://www.stack.nl/~dimitri/doxygen.
+// This file uses Doxygen markup for API documentation-generation.
+// See https://www.doxygen.nl/manual/index.html.
 /** @file yask_compiler_api.hpp */
 
 #pragma once
@@ -189,6 +189,9 @@ namespace yask {
             dot-lite| DOT-language description of var accesses only.
             pseudo  | Human-readable pseudo-code (for debug).
             pseudo-long  | Human-readable pseudo-code with intermediate variables.
+
+            @warning If the target is not valid, an exception will be thrown
+            when output_solution() is called.
         */
         virtual void
         set_target(/** [in] Output-file format from above list */
@@ -196,7 +199,7 @@ namespace yask {
 
         /// Determine whether target has been set.
         /**
-           @returns `true` if set_target() has been called with a valid format;
+           @returns `true` if set_target() has been called with a non-empty string;
            `false` otherwise.
         */
         virtual bool
@@ -318,7 +321,7 @@ namespace yask {
         get_num_vars() const =0;
 
         /// Get all the vars in the solution.
-        /** @returns Vector containing pointer to all vars. */
+        /** @returns Vector containing pointers to all vars. */
         virtual std::vector<yc_var_ptr>
         get_vars() =0;
 
@@ -415,7 +418,59 @@ namespace yask {
                           /** [in] Number of iterations ahead to prefetch data
                               or zero (0) to disable. */
                           int distance) =0;
-        
+
+        /// Set compiler options from a string.
+        /**
+           Parses the string for options as if from a command-line.
+           Example: passing "-elem_bytes 4" sets the solution for floats.
+           See the help message from the YASK compiler binary for documentation
+           on the command-line options.
+           Used to set less-common options not directly supported by the
+           APIs above (-min-buffer-len, etc.).
+
+           @returns Any parts of `args` that were not recognized by the parser as options.
+           Thus, a non-empty returned string may be used to signal an error or
+           interpreted by a custom application in another way.
+        */
+        virtual std::string
+        apply_command_line_options(const std::string& args
+                                   /**< [in] String of arguments to parse. */ ) =0;
+
+        /// Set compiler options from standard C or C++ `argc` and `argv` parameters to `main()`.
+        /**
+           Discards `argv[0]`, which is the executable name.
+           Then, parses the remaining `argv` values for options as
+           described in apply_command_line_options() with a string argument.
+
+           @returns Any parts of `argv` that were not recognized by the parser as options.
+        */
+        virtual std::string
+        apply_command_line_options(int argc, char* argv[]) =0;
+
+        /// Set compiler options from a vector of strings.
+        /**
+           Parses `args` values for options as
+           described in apply_command_line_options() with a string argument.
+
+           @returns Any parts of `args` that were not recognized by the parser as options.
+        */
+        virtual std::string
+        apply_command_line_options(const string_vec& args) =0;
+
+        /// Return a help-string for the command-line options.
+        /**
+           @returns A multi-line string.
+        */
+        virtual std::string
+        get_command_line_help() =0;
+
+        /// Return a description of the current settings of the command-line options.
+        /**
+           @returns A multi-line string.
+        */
+        virtual std::string
+        get_command_line_values() =0;
+
         /// Optimize and the current equation(s) and write to given output object.
         /** 
             Output will be formatted according to set_target() and all other preceding
@@ -858,9 +913,9 @@ namespace yask {
        auto x = nfac.new_domain_index("x");
        auto y = nfac.new_domain_index("y");
        yc_var_proxy a("A", my_soln, { t, x, y });
-       a({t+1, x, y}) EQUALS (a({t, x, y}) + 
-                              a({t, x+1, y}) + 
-                              a({t, x, y+1})) * (1.0/3.0);
+       a(t+1, x, y) EQUALS (a(t, x, y) + 
+                            a(t, x+1, y) + 
+                            a(t, x, y+1)) * (1.0/3.0);
        ~~~
        Compare to the example shown in yc_solution::new_var().
        
@@ -887,7 +942,7 @@ namespace yask {
                     /**< [in] Name of the new var; must be a valid C++
                        identifier and unique across vars. */,
                     yc_solution_ptr soln
-                    /**< [in] Shared pointer to solution that will share ownership of the \ref yc_var. */,
+                    /**< [in] Shared pointer to solution that will share ownership of the \ref yc_var object. */,
                     const std::vector< yc_index_node_ptr > &dims
                     /**< [in] Dimensions of the var.
                        Each dimension is identified by an associated index. */,
@@ -941,6 +996,13 @@ namespace yask {
            existing var.
         */
         yc_var_proxy(yc_var_ptr& var) : _var(var) { }
+                    
+        /// Contructor taking an existing proxy.
+        /**
+           Creates a new \ref yc_var_proxy wrapper around a
+           var from an existing proxy.
+        */
+        yc_var_proxy(yc_var_proxy& proxy) : _var(proxy.get_var()) { }
                     
         /// Provide a virtual destructor.
         virtual ~yc_var_proxy() { }

@@ -733,7 +733,7 @@ namespace yask {
                           ") by outer thread " << outer_thread_idx <<
                           " and inner thread " << inner_thread_idx);
                 #if CPTS == 1
-                THROW_YASK_EXCEPTION("Internal error: vector border-code not expected with cluster-size==1");
+                THROW_YASK_EXCEPTION("(internal fault) vector border-code not expected with cluster-size==1");
                 #else
 
                 // Normalized vector indices.
@@ -945,7 +945,7 @@ namespace yask {
                           bit_mask_t mask) {
 
             #if CPTS == 1
-            THROW_YASK_EXCEPTION("Internal error: masked-vector code not expected with cluster-size==1");
+            THROW_YASK_EXCEPTION("(internal fault) masked-vector code not expected with cluster-size==1");
             #else
             
             // Call code from stencil compiler.
@@ -970,13 +970,6 @@ namespace yask {
         // Union of bounding boxes for all bundles in this stage.
         BoundingBox _stage_bb;
 
-        // Local stage settings.
-        // Only some of these will be used.
-        KernelSettings _stage_opts;
-
-        // Auto-tuner for stage settings.
-        AutoTuner _at;
-
     public:
 
         // Perf stats for this stage.
@@ -997,9 +990,7 @@ namespace yask {
         Stage(StencilContext* context,
                    const std::string& name) :
             ContextLinker(context),
-            _name(name),
-            _stage_opts(*context->get_state()->_actl_opts), // init w/a copy of the base settings.
-            _at(context, &_stage_opts, name) { }
+            _name(name) { }
         virtual ~Stage() { }
 
         const std::string& get_name() {
@@ -1023,15 +1014,6 @@ namespace yask {
 
         // Accessors.
         BoundingBox& get_bb() { return _stage_bb; }
-        AutoTuner& get_at() { return _at; }
-        KernelSettings& get_local_settings() { return _stage_opts; }
-
-        // If using separate stage tuners, return local settings.
-        // Otherwise, return one in context.
-        KernelSettings& get_active_settings() {
-            STATE_VARS(this);
-            return use_stage_tuners() ? _stage_opts : *actl_opts;
-        }
 
         // Perf-tracking methods.
         void start_timers();

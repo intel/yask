@@ -226,10 +226,12 @@ namespace yask {
         }
         virtual std::string get_target() override {
             if (!is_target_set())
-                THROW_YASK_EXCEPTION("Error: call to get_target() before set_target()");
+                THROW_YASK_EXCEPTION("call to get_target() before set_target()");
             return _settings._target;
         }
-        virtual void set_target(const std::string& format) override;
+        virtual void set_target(const std::string& format) override {
+            _settings._target = format;
+        }
         virtual void set_element_bytes(int nbytes) override {
             _settings._elem_bytes = nbytes;
         }
@@ -244,6 +246,12 @@ namespace yask {
             _settings._find_deps = enable;
         }
 
+        virtual std::string apply_command_line_options(const std::string& args) override;
+        virtual std::string apply_command_line_options(int argc, char* argv[]) override;
+        virtual std::string apply_command_line_options(const string_vec& args) override;
+        virtual std::string get_command_line_help() override;
+        virtual std::string get_command_line_values() override;
+
         virtual void output_solution(yask_output_ptr output) override;
         virtual void
         call_before_output(output_hook_t hook_fn) override {
@@ -257,7 +265,7 @@ namespace yask {
                 assert(dp);
                 auto& dname = d->get_name();
                 if (dp->get_type() != DOMAIN_INDEX)
-                    THROW_YASK_EXCEPTION("Error: set_domain_dims() called with non-domain index '" +
+                    THROW_YASK_EXCEPTION("set_domain_dims() called with non-domain index '" +
                                          dname + "'");
                 _settings._domain_dims.push_back(dname);
             }
@@ -273,7 +281,7 @@ namespace yask {
             assert(dp);
             auto& dname = dim->get_name();
             if (dp->get_type() != STEP_INDEX)
-                    THROW_YASK_EXCEPTION("Error: set_step_dim() called with non-step index '" +
+                    THROW_YASK_EXCEPTION("set_step_dim() called with non-step index '" +
                                          dname + "'");
             _settings._step_dim = dname;
         }

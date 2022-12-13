@@ -30,10 +30,11 @@ using namespace std;
 using namespace yask;
 
 // Add some command-line options for this application in addition to the
-// default ones provided by YASK.
+// default ones provided by YASK library.
 struct MySettings {
     static constexpr double def_init_val = -99.;
-    
+
+    // Local options.
     bool help = false;          // help requested.
     bool do_warmup = true;       // whether to do warmup run.
     bool do_pre_auto_tune = true;  // whether to do pre-auto-tuning.
@@ -41,122 +42,114 @@ struct MySettings {
     int num_trials = 3;         // number of trials.
     bool validate = false;      // whether to do validation run.
     int trial_steps = 0;        // number of steps in each trial.
-    int trial_time = 10;        // sec to run each trial if trial_steps == 0.
+    double trial_time = 10.0;        // sec to run each trial if trial_steps == 0.
     int pre_trial_sleep_time = 1; // sec to sleep before each trial.
     int debug_sleep = 0;          // sec to sleep for debug attach.
     bool do_trace = false;         // tracing.
     int msg_rank = 0;              // rank to print debug msgs.
     double init_val = def_init_val;        // value to init all points.
 
-    // Ptr to the soln.
-    yk_solution_ptr _ksoln;
+    // Parser for local options.
+    command_line_parser parser;
 
-    MySettings(yk_solution_ptr ksoln) :
-        _ksoln(ksoln) { }
-
-    // Parse options from the command-line and set corresponding vars.
-    // Exit with message on error or request for help.
-    // Return settings.
-    string parse(int argc, char** argv) {
-        string values;
-
-        // Create a parser and add options to it.
-        CommandLineParser parser;
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+    MySettings() {
+        
+        // Add options to parser.
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("help",
                            "Print help message.",
                            help));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("msg_rank",
                            "Index of MPI rank that will print informational messages.",
                            msg_rank));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("trace",
                            "Print internal debug messages if compiled with"
                            " general and/or memory-access tracing enabled.",
                            do_trace));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("pre_auto_tune",
                            "Run iteration(s) *before* performance trial(s) to find good-performing "
                            "values for block sizes. "
                            "Uses default values or command-line-provided values as a starting point.",
                            do_pre_auto_tune));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("warmup",
                            "Run warmup iteration(s) before performance "
                            "trial(s) and after auto-tuning iterations, if enabled.",
                            do_warmup));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("step_alloc",
                            "Number of steps to allocate in relevant vars, "
-                           "overriding default value from YASK compiler.",
+                           "overriding default value from YASK compiler. "
+                           "Ignored for vars that weren't compiled with dynamic step-allocation enabled.",
                            step_alloc));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("num_trials",
                            "Number of performance trials.",
                            num_trials));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("t",
                            "[Deprecated] Use '-num_trials'.",
                            num_trials));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("trial_steps",
                            "Number of steps to run each performance trial. "
                            "If zero, the 'trial_time' value is used to determine the number of steps to run.",
                            trial_steps));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("dt",
                            "[Deprecated] Use '-trial_steps'.",
                            trial_steps));
-        parser.add_option(make_shared<CommandLineParser::DoubleOption>
+        parser.add_option(make_shared<command_line_parser::double_option>
                           ("init_val",
                            string("Initialize all points in all stencil vars to given value. ") +
                            "If value is " + to_string(MySettings::def_init_val) +
                            ", points are set to varying values.",
                            init_val));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::double_option>
                           ("trial_time",
                            "Approximate number of seconds to run each performance trial. "
                            "When the 'trial_steps' value is zero, the number of steps is "
                            "based on the rate measured in the warmup phase. "
                            "(Thus, warmup cannot be disabled when the number of steps is zero.)",
                            trial_time));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("sleep",
                            "Number of seconds to sleep before each performance trial.",
                            pre_trial_sleep_time));
-        parser.add_option(make_shared<CommandLineParser::IntOption>
+        parser.add_option(make_shared<command_line_parser::int_option>
                           ("debug_delay",
                            "[Debug] Number of seconds to sleep for debug attach.",
                            debug_sleep));
-        parser.add_option(make_shared<CommandLineParser::BoolOption>
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("validate",
                            "Run validation iteration(s) after performance trial(s).",
                            validate));
+    }
 
-        // Parse 'args' and 'argv' cmd-line options, which sets values.
+    // Parse options from the command-line and set corresponding vars.
+    // Exit with message on error or request for help.
+    void parse(int argc, char** argv, yk_solution_ptr ksoln) {
+        string pgm_name(argv[0]);
+
+        // Parse 'args' and 'argv' cmd-line options, which sets option values.
         // Any remaining strings will be returned.
         auto rem_args = parser.parse_args(argc, argv);
 
         // Handle additional knobs and help if there is a soln.
-        if (_ksoln) {
+        if (ksoln) {
 
-            // TODO: make an API for this.
-            auto context = dynamic_pointer_cast<StencilContext>(_ksoln);
-            assert(context.get());
-            auto& req_opts = context->get_req_opts();
-        
             // Parse standard args not handled by this parser.
-            rem_args = _ksoln->apply_command_line_options(rem_args);
+            rem_args = ksoln->apply_command_line_options(rem_args);
 
             if (help) {
-                string pgm_name(argv[0]);
                 cout << "Usage: " << pgm_name << " [options]\n"
-                    "Options from the binary:\n";
+                    "Options from the '" << pgm_name << "' binary:\n";
                 parser.print_help(cout);
-
-                cout << "Options from the YASK library:\n";
-                req_opts->print_usage(cout);
+                cout << "Options from the YASK library:\n" <<
+                    ksoln->get_command_line_help();
                 cout << 
                     "\nValidation is very slow and uses 2x memory,\n"
                     " so run with very small sizes and number of time-steps.\n"
@@ -166,7 +159,7 @@ struct MySettings {
                 // Make example knobs across dims.
                 string exg, exnr, exb;
                 int i = 1;
-                for (auto& dname : _ksoln->get_domain_dim_names()) {
+                for (auto& dname : ksoln->get_domain_dim_names()) {
                     exg += " -g" + dname + " " + to_string(i * 128);
                     exb += " -b" + dname + " " + to_string(i * 16);
                     exnr += " -nr" + dname + " " + to_string(i + 1);
@@ -185,48 +178,21 @@ struct MySettings {
 
             // Add settings.
             ostringstream oss;
-            oss << "Options from the binary:\n";
+            oss << "Options from the '" << pgm_name << "' binary:\n";
             parser.print_values(oss);
-            oss << "Options from the YASK library:\n";
-            req_opts->print_values(oss);
-            values = oss.str();
+            oss << "Options from the YASK library:\n" <<
+                ksoln->get_command_line_values();
             
             if (rem_args.length())
-                THROW_YASK_EXCEPTION("Error: extraneous parameter(s): '" +
+                THROW_YASK_EXCEPTION("extraneous parameter(s): '" +
                                      rem_args +
                                      "'; run with '-help' option for usage");
         }
-        return values;
     }
-
-    // Print splash banner and invocation string.
-    // Exit with help message if requested.
-    void splash(ostream& os, int argc, char** argv)
-    {
-        // See https://en.wikipedia.org/wiki/Box-drawing_character.
-        os <<
-            " \u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n"
-            " \u2502     Y.A.S.K. \u2500\u2500 Yet Another Stencil Kit    \u2502\n"
-            " \u2502       https://github.com/intel/yask        \u2502\n"
-            " \u2502 Copyright (c) 2014-2022, Intel Corporation \u2502\n"
-            " \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n"
-            "\n"
-            "Version: " << yask_get_version_string() << endl <<
-            "Stencil name: " YASK_STENCIL_NAME << endl;
-
-        // Echo invocation parameters for record-keeping.
-        #ifdef DEF_ARGS
-        os << "Default arguments: " DEF_ARGS << endl;
-        #endif
-        os << "Binary invocation:";
-        for (int argi = 0; argi < argc; argi++)
-            os << " " << argv[argi];
-        os << endl;
-    }
-};                              // AppSettings.
+}; // MySettings
 
 // Override step allocation.
-void alloc_steps(yk_solution_ptr soln, const MySettings& opts) {
+static void alloc_steps(yk_solution_ptr soln, const MySettings& opts) {
     if (opts.step_alloc <= 0)
         return;
 
@@ -234,7 +200,7 @@ void alloc_steps(yk_solution_ptr soln, const MySettings& opts) {
     auto step_dim = soln->get_step_dim_name();
     auto vars = soln->get_vars();
     for (auto var : vars) {
-        if (var->is_dim_used(step_dim))
+        if (var->is_dim_used(step_dim) && var->is_dynamic_step_alloc())
 
             // override num steps.
             var->set_alloc_size(step_dim, opts.step_alloc);
@@ -242,9 +208,11 @@ void alloc_steps(yk_solution_ptr soln, const MySettings& opts) {
 }
 
 // Init values in vars.
-void init_vars(MySettings& opts, std::shared_ptr<yask::StencilContext> context) {
+static void init_vars(yk_solution_ptr soln, const MySettings& opts,
+                      std::shared_ptr<yask::StencilContext> context) {
     if (opts.init_val != MySettings::def_init_val)
-        context->init_same(opts.init_val);
+        for (auto varp : soln->get_vars())
+            varp->set_all_elements_same(opts.init_val);
     else {
         double seed = opts.validate ? 1.0 : 0.1;
         context->init_diff(seed);
@@ -265,44 +233,42 @@ int main(int argc, char** argv)
     div_line += "\n";
 
     try {
-        // Parse only custom options just to get vars needed to set up env.
-        MySettings opts1(nullptr);
-        opts1.parse(argc, argv);
-        yk_env::set_trace_enabled(opts1.do_trace);
-
         // Bootstrap factory from kernel API.
         yk_factory kfac;
 
+        // Parse only custom options just to get vars needed to set up env.
+        // Ignore YASK library options for now.
+        MySettings opts;
+        opts.parse(argc, argv, nullptr);
+        yk_env::set_trace_enabled(opts.do_trace);
+
         // Set up the environment.
         auto kenv = kfac.new_env();
-        auto ep = dynamic_pointer_cast<KernelEnv>(kenv);
         auto num_ranks = kenv->get_num_ranks();
 
         // Enable debug only on requested rank.
-        if (opts1.msg_rank != kenv->get_rank_index())
+        if (opts.msg_rank != kenv->get_rank_index())
            yk_env::disable_debug_output();
         auto& os = kenv->get_debug_output()->get_ostream();
         
         // Make solution object containing data and parameters for stencil eval.
-        // TODO: do everything through API without cast to StencilContext.
         auto ksoln = kfac.new_solution(kenv);
-        auto context = dynamic_pointer_cast<StencilContext>(ksoln);
-        assert(context.get());
-        auto& copts = context->get_actl_opts();
-        assert(copts);
 
         // Parse custom and library-provided cmd-line options and
         // exit on -help or error.
-        // TODO: do this through APIs.
-        MySettings opts(ksoln);
-        auto opts_str = opts.parse(argc, argv);
+        opts.parse(argc, argv, ksoln);
 
-        // Make sure any MPI/OMP debug data is dumped from all ranks before continuing.
+        // Make sure any MPI/OMP debug data is dumped from all ranks before continuing
+        // and check option consistency.
         kenv->global_barrier();
+        kenv->assert_equality_over_ranks(opts.num_trials, "number of trials");
+        kenv->assert_equality_over_ranks(opts.trial_steps, "number of steps per trial");
+        kenv->assert_equality_over_ranks(opts.validate ? 0 : 1, "validation");
 
         // Print splash banner and related info.
-        opts.splash(os, argc, argv);
-        os << "\n" << opts_str;
+        yask_print_splash(os, argc, argv);
+        os << "\nYASK performance and validation utility\n"
+            "Stencil name: " << ksoln->get_name() << endl;
 
         // Print PID and sleep for debug if needed.
         os << "\nPID: " << getpid() << endl;
@@ -319,26 +285,38 @@ int main(int argc, char** argv)
         // Alloc memory, etc.
         ksoln->prepare_solution();
 
+        // Remember whether online auto-tuner is wanted.
+        auto do_online_tuner = ksoln->is_auto_tuner_enabled();
+
         // Exit if nothing to do.
-        if (context->rank_bb.bb_num_points < 1)
+        auto dsizes = ksoln->get_rank_domain_size_vec();
+        idx_t dpts = 1;
+        for (auto ds : dsizes)
+            dpts *= ds;
+        if (dsizes.size() == 0 || dpts == 0)
             THROW_YASK_EXCEPTION("Exiting because there are no points in the domain");
 
-        // Init data in vars and params.
-        init_vars(opts, context);
+        // Get internal pointer.
+        // TODO: do everything through APIs.
+        auto _context = dynamic_pointer_cast<StencilContext>(ksoln);
+        assert(_context.get());
+
+        // Init data in YASK vars.
+        init_vars(ksoln, opts, _context);
 
         // Copy vars now instead of waiting for run_solution() to do it
         // automatically. This will remove overhead from first call.
-        context->copy_vars_to_device();
+        ksoln->copy_vars_to_device();
 
         // Invoke auto-tuner.
         if (opts.do_pre_auto_tune)
             ksoln->run_auto_tuner_now();
 
         // Enable/disable further auto-tuning.
-        ksoln->reset_auto_tuner(copts->_do_auto_tune);
+        ksoln->reset_auto_tuner(do_online_tuner);
 
         // Make sure warmup is on if needed.
-        if (opts.trial_steps <= 0 && opts.trial_time > 0)
+        if (opts.trial_steps <= 0 && opts.trial_time > 0.)
             opts.do_warmup = true;
 
         // Warmup caches, threading, etc.
@@ -346,8 +324,8 @@ int main(int argc, char** argv)
         if (opts.do_warmup) {
 
             // Turn off debug.
-            auto dbg_out = context->get_debug_output();
-            context->disable_debug_output();
+            auto dbg_out = kenv->get_debug_output();
+            kenv->disable_debug_output();
             os << endl << div_line;
 
             // Warmup and calibration phases.
@@ -366,7 +344,7 @@ int main(int argc, char** argv)
                     kenv->global_barrier();
                     ksoln->run_solution(0, warmup_steps-1);
                     kenv->global_barrier();
-                    auto stats = context->get_stats();
+                    auto stats = ksoln->get_stats();
                     auto wtime = stats->get_elapsed_secs();
                     os << "  Done in " << make_num_str(wtime) << " secs.\n";
                     rate = (wtime > 0.) ? double(warmup_steps) / wtime : 0;
@@ -383,7 +361,8 @@ int main(int argc, char** argv)
 
                     // Average across all ranks because it is critical that
                     // all ranks use the same number of steps to avoid deadlock.
-                    warmup_steps = CEIL_DIV(sum_over_ranks(warmup_steps, ep->comm), num_ranks);
+                    auto sum_warmup_steps = kenv->sum_over_ranks(warmup_steps);
+                    warmup_steps = CEIL_DIV(sum_warmup_steps, num_ranks);
 
                     // Done if only 1 step to do.
                     if (warmup_steps <= 1)
@@ -394,22 +373,27 @@ int main(int argc, char** argv)
             // Set final number of steps.
             if (opts.trial_steps <= 0) {
                 idx_t tsteps = ceil(rate * opts.trial_time);
-                tsteps = CEIL_DIV(sum_over_ranks(tsteps, ep->comm), num_ranks);
 
-                // Round up to multiple of temporal tiling if not too big.
+                // Average over ranks.
+                auto sum_tsteps = kenv->sum_over_ranks(tsteps);
+                tsteps = CEIL_DIV(sum_tsteps, num_ranks);
+
+                // Round up to multiple of temporal tiling if it doesn't add
+                // too much.
+                // TODO: also check mega-block temporal size.
                 auto step_dim = ksoln->get_step_dim_name();
-                auto rt = copts->_mega_block_sizes[step_dim];
-                auto bt = copts->_block_sizes[step_dim];
-                auto tt = max(rt, bt);
-                const idx_t max_mult = 5;
-                if (tt > 1 && tt < max_mult * tsteps)
-                    tsteps = ROUND_UP(tsteps, tt);
+                auto bt = ksoln->get_block_size(step_dim);
+                if (bt > 1) {
+                    auto req_tsteps = ROUND_UP(tsteps, bt);
+                    if (req_tsteps <= idx_t(1.2 * tsteps))
+                        tsteps = req_tsteps;
+                }
                 
                 opts.trial_steps = tsteps;
             }
             
             // Restore debug.
-            context->set_debug_output(dbg_out);
+            kenv->set_debug_output(dbg_out);
         }
         kenv->global_barrier();
 
@@ -423,16 +407,9 @@ int main(int argc, char** argv)
         vector<shared_ptr<Stats>> trial_stats;
 
         // First & last steps.
+        // TODO: determine if solution is reverse-time; if so, switch first and last;
         idx_t first_t = 0;
         idx_t last_t = opts.trial_steps - 1;
-
-        // Stencils seem to be backward?
-        // (This is just a heuristic, but the direction
-        // is not usually critical to perf measurement.)
-        if (copts->_dims->_step_dir < 0) {
-            first_t = last_t;
-            last_t = 0;
-        }
         
         /////// Performance run(s).
         os << endl << div_line <<
@@ -444,8 +421,8 @@ int main(int argc, char** argv)
 
             // re-init data before each trial for comparison if validating.
             if (opts.validate) {
-                init_vars(opts, context);
-                context->copy_vars_to_device();
+                init_vars(ksoln, opts, _context);
+                ksoln->copy_vars_to_device();
             }
 
             // Warn if tuning.
@@ -458,12 +435,12 @@ int main(int argc, char** argv)
                 sleep(opts.pre_trial_sleep_time);
             }
             kenv->global_barrier();
+            ksoln->clear_stats();
 
             // Start vtune collection.
             VTUNE_RESUME;
 
             // Actual work.
-            context->clear_timers();
             ksoln->run_solution(first_t, last_t);
             kenv->global_barrier();
 
@@ -471,11 +448,11 @@ int main(int argc, char** argv)
             VTUNE_PAUSE;
 
             // Calc and report perf.
-            auto tstats = context->get_stats();
-            auto stats = dynamic_pointer_cast<Stats>(tstats);
+            auto tstats = ksoln->get_stats();
+            auto _stats = dynamic_pointer_cast<Stats>(tstats);
 
             // Remember stats.
-            trial_stats.push_back(stats);
+            trial_stats.push_back(_stats);
         }
 
         // Done with vtune.
@@ -559,7 +536,7 @@ int main(int argc, char** argv)
                 " Num-points/sec is based on the number of results computed and\n"
                 "  is a more reliable performance metric, esp. when comparing\n"
                 "  across architectures and/or implementations.\n";
-            context->print_warnings();
+            _context->print_warnings();
         }
 
         /////// Validation run.
@@ -572,53 +549,51 @@ int main(int argc, char** argv)
             // Make a reference context for comparisons w/new vars.
             // Reuse 'kenv' and copy library settings from 'ksoln'.
             auto ref_soln = kfac.new_solution(kenv, ksoln);
-            auto ref_context = dynamic_pointer_cast<StencilContext>(ref_soln);
-            assert(ref_context.get());
+            auto _ref_context = dynamic_pointer_cast<StencilContext>(ref_soln);
+            assert(_ref_context.get());
 
             // Reapply cmd-line options to override default settings.
-            MySettings my_ref_opts(ref_soln);
-            my_ref_opts.parse(argc, argv);
+            opts.parse(argc, argv, ref_soln);
 
             // Change some settings.
-            ref_context->name += "-reference";
-            auto& ref_opts = ref_context->get_actl_opts();
-            ref_opts->force_scalar_exchange = true;
-            ref_opts->do_halo_exchange = true;
-            ref_opts->overlap_comms = false;
-            ref_opts->use_shm = false;
-            ref_opts->_numa_pref = yask_numa_none;
+            _ref_context->name += "-reference";
+            auto rem_opts = ref_soln->
+                apply_command_line_options("-force_scalar "
+                                           "-numa_pref -9 ");
+            if (rem_opts.length() != 0)
+                os << "  Unused validation options: '" << rem_opts << "'\n";
+            if (kenv->get_num_ranks() > 1) {
+                rem_opts = ref_soln->
+                    apply_command_line_options("-no-overlap_comms "
+                                               "-no-use_shm "
+                                               "-exchange_halos ");
+                if (rem_opts.length() != 0)
+                    os << "  Unused validation options: '" << rem_opts << "'\n";
+            }
 
             // Override allocations and prep solution as with ref soln.
-            alloc_steps(ref_soln, my_ref_opts);
+            alloc_steps(ref_soln, opts);
             ref_soln->prepare_solution();
 
             // init to same value used in context.
-            init_vars(opts, ref_context);
-
-            #ifdef CHECK_INIT
-
-            // Debug code to determine if data compares immediately after init matches.
-            os << endl << div_line <<
-                "Reinitializing data for minimal validation...\n" << flush;
-            init_vars(opts, context);
-            #else
+            init_vars(ref_soln, opts, _ref_context);
 
             // Ref trial.
             // Do same number as last perf run.
             os << endl << div_line <<
                 "Running " << opts.trial_steps << " step(s) for validation...\n" << flush;
-            ref_context->run_ref(first_t, last_t);
+            _ref_context->run_ref(first_t, last_t);
 
-            // Discard perf report.
-            auto dbg_out = ref_context->get_debug_output();
-            ref_context->disable_debug_output();
-            auto rstats = ref_context->get_stats();
-            ref_context->set_debug_output(dbg_out);
+            // Discard perf report from reference run.
+            auto dbg_out = kenv->get_debug_output();
+            kenv->disable_debug_output();
+            auto rstats = ref_soln->get_stats();
+            kenv->set_debug_output(dbg_out);
             os << "  Done in " << make_num_str(rstats->get_elapsed_secs()) << " secs.\n" << flush;
-            #endif
+
             // check for equality.
             os << "\nChecking results...\n";
-            idx_t errs = context->compare_data(*ref_context);
+            idx_t errs = _context->compare_data(*_ref_context);
             auto ri = kenv->get_rank_index();
 
             // Trick to emulate MPI critical section.
@@ -642,13 +617,14 @@ int main(int argc, char** argv)
                     }
                 }
             }
+            kenv->global_barrier();
             ref_soln->end_solution();
         }
         else
             os << "\nResults NOT VERIFIED.\n";
         ksoln->end_solution();
 
-        os << "Stencil '" << context->get_description() << "'.\n";
+        os << "Stencil '" << ksoln->get_description() << "'.\n";
         if (!ok)
             exit_yask(1);
 

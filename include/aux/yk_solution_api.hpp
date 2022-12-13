@@ -25,8 +25,8 @@ IN THE SOFTWARE.
 
 ///////// API for the YASK stencil kernel solution. ////////////
 
-// This file uses Doxygen 1.8 markup for API documentation-generation.
-// See http://www.stack.nl/~dimitri/doxygen.
+// This file uses Doxygen markup for API documentation-generation.
+// See https://www.doxygen.nl/manual/index.html.
 /** @file yk_solution_api.hpp */
 
 #pragma once
@@ -89,6 +89,14 @@ namespace yask {
         */
         virtual const std::string&
         get_name() const =0;
+
+        /// Get the description (long name) of the solution.
+        /**
+           @returns String containing the solution description provided during stencil compilation
+           or the name if no description was provided.
+        */
+        virtual const std::string&
+        get_description() const =0;
 
         /// Get the target ISA.
         /**
@@ -545,6 +553,23 @@ namespace yask {
         virtual std::string
         apply_command_line_options(const string_vec& args) =0;
 
+        /// Return a help-string for the command-line options.
+        /**
+           @returns A multi-line string.
+        */
+        virtual std::string
+        get_command_line_help() =0;
+
+        /// Return a description of the current settings of the command-line options.
+        /**
+           If options have been modified from the originally-requrested ones
+           to legal ones, the updated ones will be shown. This occurs most
+           frequently with tile-size options.
+           @returns A multi-line string.
+        */
+        virtual std::string
+        get_command_line_values() =0;
+
         /// Get the number of vars in the solution.
         /**
            Vars may be pre-defined by the stencil compiler
@@ -588,7 +613,7 @@ namespace yask {
 
         /// Get the first index of the sub-domain in this rank in the specified dimension.
         /**
-           This returns the first *overall* index at the beginning of the domain.
+           This returns the first *overall* index at the beginning of the domain in this rank.
            Elements within the domain in this rank lie between the values returned by
            get_first_rank_domain_index() and get_last_rank_domain_index(), inclusive.
            If there is only one MPI rank, this is typically zero (0).
@@ -603,7 +628,7 @@ namespace yask {
         get_first_rank_domain_index(const std::string& dim
                                     /**< [in] Name of dimension to get.  Must be one of
                                        the names from get_domain_dim_names(). */ ) const =0;
-
+        
         /// Get the first index of the sub-domain in this rank in all domain dimensions.
         /**
            See get_first_rank_domain_index().
@@ -751,7 +776,7 @@ namespace yask {
 
         /// Get performance statistics associated with preceding calls to run_solution().
         /**
-           @note Side effect: resets all statistics, so each call
+           @note Side effect: calls clear_stats(), so each call
            returns only the elapsed time and counts since the previous call.
            @note Side effect: outputs stats in human-readable format
            to current debug output object.
@@ -759,6 +784,10 @@ namespace yask {
         */
         virtual yk_stats_ptr
         get_stats() =0;
+
+        /// Clear the internal stats.
+        virtual void
+        clear_stats() =0;
 
         /// Start or stop the online auto-tuner on this rank.
         /**
@@ -806,6 +835,8 @@ namespace yask {
            This function should be called only *after* calling prepare_solution().
            This call must be made on each rank.
 
+           @note Calls clear_stats() when complete.
+
            @warning Modifies the contents of the YASK vars by automatically calling run_solution()
            an arbitrary number of times, but without halo exchanges.
            (See run_solution() for other restrictions and warnings.)
@@ -833,6 +864,20 @@ namespace yask {
            - Halo size.
            - Value provided by any of the pad-size setting functions.
 
+           Setting the minimum pad size is useful when an application needs
+           to copy data back and forth between YASK vars and legacy C-style
+           arrays that include a certain halo size that may be larger than
+           the halo calculated by the YASK compiler. For example, for a
+           given stencil problem, one or more YASK variables might need a
+           halo of width 2 in the x dimension, but only 1 in the y dimension
+           due to the stencil radii in the respective dimensions. However,
+           an application might have an existing C-style array with halo
+           data of width 2 in both x and y dimensions. By calling
+           `set_min_pad_size("y", 2)`, all YASK vars will be created with
+           padding widths of at least 2 in the y dimension, making it easier
+           to copy data to and from the C-style arrays using 
+           yk_var::get_elements_in_slice() and yk_var::set_elements_in_slice().
+
            The padding size cannot be changed after data storage
            has been allocated for a given var; attempted changes to the pad size for such
            vars will be ignored.
@@ -852,8 +897,10 @@ namespace yask {
                          /**< [in] Elements in this `dim` applied
                             to both sides of the domain. */ ) =0;
 
-        /// **[Advanced]** Get the minimum amount of padding for all vars.
+        /// **[Advanced]** Get the minimum requested amount of padding for all vars.
         /**
+           @note The actual padding for any given var may be greater than
+           this minimum requested amount as described in set_min_pad_size().
            @returns Current setting of minimum amount of padding for all vars.
         */
         virtual idx_t

@@ -36,10 +36,10 @@ namespace yask {
     // C++-style interface.
     vector<double> get_arbitrary_fd_coefficients(int derivative_order, double eval_point, const vector<double> sample_points) {
         if (derivative_order < 1)
-            THROW_YASK_EXCEPTION("Error: get_fd_coefficients() called with derivative-order less than 1");
+            THROW_YASK_EXCEPTION("get_fd_coefficients() called with derivative-order less than 1");
         int n = int(sample_points.size());
         if (n < 2)
-            THROW_YASK_EXCEPTION("Error: get_fd_coefficients() called with fewer than 2 sample points");
+            THROW_YASK_EXCEPTION("get_fd_coefficients() called with fewer than 2 sample points");
         vector<double> coeffs(n);
         fd_coeff(&coeffs[0], double(eval_point), derivative_order, &sample_points[0], n);
         return coeffs;

@@ -275,18 +275,22 @@ YK_EXT_SRC_NAMES :=	factory soln_apis context halo stencil_calc setup alloc \
 YK_OBJS		:=	$(addprefix $(YK_OBJ_DIR)/,$(addsuffix .o,$(YK_COMM_SRC_NAMES) $(COMM_SRC_NAMES)))
 YK_EXT_OBJS	:=	$(addprefix $(YK_EXT_OBJ_DIR)/,$(addsuffix .o,$(YK_EXT_SRC_NAMES)))
 YK_CODE_FILE	:=	$(YK_GEN_DIR)/yask_stencil_code.hpp
-YK_GEN_HEADERS	:=	$(addprefix $(YK_GEN_DIR)/, \
+YK_SOLUTION_FILE	:=	$(YK_GEN_DIR)/yask_solution_code.hpp
+YK_LOOP_FILES	:=	$(addprefix $(YK_GEN_DIR)/, \
 				yask_rank_loops.hpp \
 				yask_mega_block_loops.hpp \
 				yask_block_loops.hpp \
 				yask_micro_block_loops.hpp \
 				yask_nano_block_loops.hpp \
 				yask_pico_block_loops.hpp \
-				yask_misc_loops.hpp \
+				yask_misc_loops.hpp)
+YK_GEN_HEADERS	:=	$(addprefix $(YK_GEN_DIR)/, \
 				yask_layout_macros.hpp \
 				yask_layouts.hpp \
 				yask_var_code.hpp) \
-				$(YK_CODE_FILE)
+				$(YK_LOOP_FILES) \
+				$(YK_CODE_FILE) \
+				$(YK_SOLUTION_FILE)
 YK_INC_DIRS	:=	$(INC_DIRS) $(YK_LIB_SRC_DIR) $(COMM_DIR) $(COEFF_DIR)
 YK_INC_GLOB	:=	$(addsuffix /*.hpp,$(YK_INC_DIRS))
 YK_API_TEST_EXEC :=	$(BIN_OUT_DIR)/$(YK_BASE)_api_test.exe
@@ -297,7 +301,7 @@ MAKE_REPORT_FILE :=	$(BUILD_OUT_DIR)/$(YK_EXT_BASE).make-report.txt
 YC_REPORT_FILE :=	$(BUILD_OUT_DIR)/$(YK_EXT_BASE).yask_compiler-report.txt
 
 # File-related macros.
-MACROS		+= 	YK_CODE_FILE=$(YK_CODE_FILE)
+MACROS		+= 	YK_CODE_FILE=$(YK_CODE_FILE) YK_SOLUTION_FILE=$(YK_SOLUTION_FILE)
 
 # YASK loop compiler.
 GEN_LOOPS	:=	$(UTILS_BIN_DIR)/gen_loops.pl
@@ -316,7 +320,8 @@ YK_CXXOPT	?=	-O3
 YK_CXXDBG	?=	-g
 YK_CXXFLAGS	:=	-std=c++17
 YK_CXXWARN	:=	-Wall
-YK_CXXFLAGS	+=	$(addprefix -I,$(YK_INC_DIRS) $(YK_GEN_DIR))
+YK_CXX_INCFLAGS	:=	$(addprefix -I,$(YK_INC_DIRS) $(YK_GEN_DIR))
+YK_CXXFLAGS	+=	$(YK_CXX_INCFLAGS)
 SWIG_CXXFLAGS	:= 	$(DBL_EPSILON_CXXFLAG)
 YK_SO_FLAGS	:=	-shared -fPIC
 OMPFLAG 	:=	-fopenmp
@@ -362,11 +367,6 @@ ifeq ($(streaming_stores),1)
  MACROS		+=	USE_STREAMING_STORE
 endif
 MACROS		+=	ALLOW_NEW_VARS=$(allow_new_var_types)
-
-# Default cmd-line args.
-ifneq ($(DEF_ARGS),)
- YK_CXXFLAGS	+=	-DDEF_ARGS='"$(DEF_ARGS)"'
-endif
 
 # VTUNE settings.
 ifeq ($(vtune),1)
@@ -502,7 +502,8 @@ else ifeq ($(model_cache),2)
 endif
 
 # Add in final flags and user-added flags.
-YK_CXXFLAGS	+=	$(YK_CXXDBG) $(YK_CXXOPT) $(OMPFLAGS) $(addprefix -D,$(MACROS) $(subst $(comma),$(space),$(EXTRA_MACROS))) $(YK_CXXWARN) $(EXTRA_YK_CXXFLAGS)
+YK_MACROS	:=	$(addprefix -D,$(MACROS) $(subst $(comma),$(space),$(EXTRA_MACROS)))
+YK_CXXFLAGS	+=	$(YK_CXXDBG) $(YK_CXXOPT) $(OMPFLAGS) $(YK_MACROS) $(YK_CXXWARN) $(EXTRA_YK_CXXFLAGS)
 YK_LIBS		+=	$(EXTRA_YK_LIBS)
 
 # Number of stencil/var dims extracted from YASK compiler output.
@@ -611,7 +612,7 @@ $(YK_EXT_OBJ_DIR)/%.o: %.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
 
 # C++-preprocessor rule.
 %.i: %.cpp $(YK_GEN_HEADERS) $(YK_INC_GLOB)
-	$(YK_CXX) $(YK_CXXFLAGS) -x c++ -EP $< > $@
+	g++ -E -CC $(YK_CXX_INCFLAGS) $< > $@
 	@ls -l $@
 
 ######## Primary targets.
@@ -692,12 +693,21 @@ $(YK_GEN_DIR)/yask_var_code.hpp: $(GEN_LAYOUTS) $(YK_CODE_FILE)
 	$(call MK_DIR,$(dir $@))
 	$(PERL) $< -v $(NVDIMS) > $@
 
+# Run the YASK compiler to create the stencil code.
 # NB: '$(BASH) -o pipefail' ensures failure of command before '| tee' is visible.
 $(YK_CODE_FILE): $(YC_EXEC)
 	$(call MK_DIR,$(dir $@))
 	@- rm -f $@
 	$(BASH) -o pipefail -c \
 	  "$(RUN_PREFIX) $< $(YC_FLAGS) -p $@ $(EXTRA_YC_FLAGS) 2>&1 | tee $(YC_REPORT_FILE)"
+	@- $(INDENT) $@
+
+# Pre-process the stencil code to create the context code.
+# This adds the nano- and pico-loop code to make it easier for humans
+# and performance tools to parse.
+$(YK_SOLUTION_FILE): $(YK_CODE_FILE) $(YK_LOOP_FILES)
+	g++ -E -CC $(YK_CXX_INCFLAGS) $(YK_MACROS) -DDEFINE_SOLUTION $(YK_CODE_FILE) \
+	  | $(PERL) -n -e '$$start=1 if /Automatic/; print if $$start && !/^#/' > $@
 	@- $(INDENT) $@
 
 headers: $(YK_GEN_HEADERS)
@@ -778,7 +788,6 @@ realclean: clean
 echo-settings:
 	@echo "Build environment, `date`"; \
 	echo TARGET=$(TARGET); \
-	echo DEF_ARGS="\"$(DEF_ARGS)\""; \
 	echo EXTRA_MACROS="\"$(EXTRA_MACROS)\""; \
 	echo EXTRA_YC_FLAGS="\"$(EXTRA_YC_FLAGS)\""; \
 	echo EXTRA_YK_CXXFLAGS="\"$(EXTRA_YK_CXXFLAGS)\""; \
@@ -929,8 +938,8 @@ FOLD		=	fold=$(subst $(space),$(comma),$(1))
 CLUSTER		=	cluster=$(subst $(space),$(comma),$(1))
 endif
 
-TEST_ARGS	:=	real_bytes=8 allow_new_var_types=0 check=1 trace=1
-TEST_MAKE 	:=	$(MAKE) $(TEST_ARGS)
+TEST_MAKE_ARGS	:=	real_bytes=8 allow_new_var_types=0 check=1 trace=1
+TEST_MAKE 	:=	$(MAKE) $(TEST_MAKE_ARGS)
 
 ### Unit tests.
 
@@ -1067,9 +1076,9 @@ yk-test-no-yc: kernel-no-yc $(YK_SCRIPT)
 
 # Run the kernel API tests for C++ and Python with and w/o expected exceptions.
 api-tests:
-	$(MAKE) clean; $(MAKE) cxx-yk-api-test real_bytes=8
+	$(MAKE) clean; $(MAKE) cxx-yk-api-test
 	$(MAKE) clean; $(MAKE) py-yk-api-test
-	$(MAKE) clean; $(MAKE) cxx-yk-api-test-with-exception real_bytes=8
+	$(MAKE) clean; $(MAKE) cxx-yk-api-test-with-exception
 	$(MAKE) clean; $(MAKE) py-yk-api-test-with-exception
 
 # Run several stencils using built-in validation.
@@ -1114,8 +1123,8 @@ STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 
 3d-tests:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stream_3d radius=5
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d YK_STENCIL_SUFFIX=-t1 $(call FOLD,x=2 y=2 z=2) EXTRA_YC_FLAGS=-fus
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d YK_STENCIL_SUFFIX=-t2 $(call FOLD,x=2 y=2 z=2) EXTRA_YC_FLAGS=-no-fus
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d YK_STENCIL_SUFFIX=-t1 $(call FOLD,x=2 y=2 z=2) EXTRA_YC_FLAGS=-first-inner
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d YK_STENCIL_SUFFIX=-t2 $(call FOLD,x=2 y=2 z=2) EXTRA_YC_FLAGS=-no-first-inner
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d YK_STENCIL_SUFFIX=-t3 $(call FOLD,x=2 z=2) domain_dims=z,y,x
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d YK_STENCIL_SUFFIX=-t4 $(call FOLD,x=2 z=2) inner_loop_dim=2
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d YK_STENCIL_SUFFIX=-t5 $(call FOLD,x=2 z=2) NANO_BLOCK_LOOP_MODS=serpentine

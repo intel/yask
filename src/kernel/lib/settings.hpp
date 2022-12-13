@@ -89,16 +89,7 @@ namespace yask {
         // Init MPI, OMP, etc.
         // This is normally called very early in the program.
         virtual void init_env(int* argc, char*** argv, MPI_Comm comm);
-
-        virtual void finalize() {
-            TRACE_MSG("finalize_needed = " << finalize_needed);
-            if (comm != MPI_COMM_NULL && finalize_needed) {
-                MPI_Finalize();
-                comm = MPI_COMM_NULL;
-                shm_comm = MPI_COMM_NULL;
-            }
-            finalize_needed = false;
-        }
+        virtual void finalize();
 
         // Lock.
         static void set_debug_lock() {
@@ -123,6 +114,11 @@ namespace yask {
         virtual void global_barrier() const {
             MPI_Barrier(comm);
         }
+        virtual idx_t
+        sum_over_ranks(idx_t rank_val) const;
+        virtual void
+        assert_equality_over_ranks(idx_t rank_val,
+                                   const std::string& descr) const;
     };
     typedef std::shared_ptr<KernelEnv> KernelEnvPtr;
 
@@ -274,7 +270,6 @@ namespace yask {
 
         // Tuning.
         bool _do_auto_tune = false;    // whether to do "online" auto-tuning.
-        bool _allow_stage_tuners = false; // allow per-stage tuners when possible.
         double _tuner_trial_secs = 0.5;   // time to run tuner for new better setting.
         int _tuner_radius = 16;
         string_vec _tuner_targets; // things to tune from following.
@@ -290,7 +285,7 @@ namespace yask {
 
     protected:
         // Add options to set one domain var to a cmd-line parser.
-        virtual void _add_domain_option(CommandLineParser& parser,
+        virtual void _add_domain_option(command_line_parser& parser,
                                         const std::string& prefix,
                                         const std::string& descrip,
                                         IdxTuple& var,
@@ -298,7 +293,7 @@ namespace yask {
 
     public:
         // Add options to a cmd-line parser to set the settings.
-        virtual void add_options(CommandLineParser& parser);
+        virtual void add_options(command_line_parser& parser);
 
         // Print informational messages.
         void print_usage(std::ostream& os);
@@ -604,10 +599,13 @@ namespace yask {
         // Environment (mostly MPI).
         KernelEnvPtr _env;
 
-        // User settings.
+        // Settings.
+        // Actual settings may be different than those requested because
+        // settings are adjusted to comply with constraints. Also, some
+        // requested options maybe be zero (0), indicating that a default
+        // should be used. That default will be set in the actual options.
+        KernelSettingsPtr _req_opts; // Settings requested by user and/or tuner.
         KernelSettingsPtr _actl_opts; // Actual settings to use.
-        KernelSettingsPtr _req_opts; // Settings specified by user and/or tuner.
-        bool _use_stage_tuners = false;
 
         // Problem dims.
         DimsPtr _dims;
@@ -693,7 +691,6 @@ namespace yask {
         const DimsPtr& get_dims() const { return _state->_dims; }
         MPIInfoPtr& get_mpi_info() { return _state->_mpi_info; }
         const MPIInfoPtr& get_mpi_info() const { return _state->_mpi_info; }
-        bool use_stage_tuners() const { return _state->_use_stage_tuners; }
         yask_output_ptr get_debug_output() const {
             return _state->_env->get_debug_output();
         }

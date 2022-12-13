@@ -25,8 +25,8 @@ IN THE SOFTWARE.
 
 ///////// API for the YASK stencil kernel. ////////////
 
-// This file uses Doxygen 1.8 markup for API documentation-generation.
-// See http://www.stack.nl/~dimitri/doxygen.
+// This file uses Doxygen markup for API documentation-generation.
+// See https://www.doxygen.nl/manual/index.html.
 /** @file yask_kernel_api.hpp */
 
 #pragma once
@@ -222,13 +222,15 @@ namespace yask {
         /**
            @returns Number of ranks in MPI communicator or one (1) if MPI is not enabled.
         */
-        virtual int get_num_ranks() const =0;
+        virtual int
+        get_num_ranks() const =0;
 
         /// Get MPI rank index.
         /**
            @returns Index of this MPI rank or zero (0) if MPI is not enabled.
         */
-        virtual int get_rank_index() const =0;
+        virtual int
+        get_rank_index() const =0;
 
         /// Wait until all ranks have reached this element.
         /**
@@ -237,6 +239,29 @@ namespace yask {
          */
         virtual void
         global_barrier() const =0;
+
+        /// Find sum of an `idx_t` value over all ranks.
+        /**
+           Must be called from all ranks.
+           @returns sum of `rank_val` over all ranks or
+           simply `rank_val` if MPI is not enabled.
+        */
+        virtual idx_t
+        sum_over_ranks(idx_t rank_val) const =0;
+
+        /// Makes sure an `idx_t` values is the same over all ranks.
+        /**
+           Must be called from all ranks.
+           
+           Throws an exception if `rank_val` does not have the same
+           value across all ranks. Exception contains message with `descr`
+           description of the value.
+
+           Does nothing if MPI is not enabled.
+        */
+        virtual void
+        assert_equality_over_ranks(idx_t rank_val,
+                                   const std::string& descr) const =0;
 
         /// Finalize the environment.
         /**

@@ -26,8 +26,8 @@ IN THE SOFTWARE.
 // This file contains a base class and macros to create
 // stencils to be included in the YASK compiler binary utility.
 
-// This file uses Doxygen 1.8 markup for API documentation-generation.
-// See http://www.stack.nl/~dimitri/doxygen.
+// This file uses Doxygen markup for API documentation-generation.
+// See https://www.doxygen.nl/manual/index.html.
 /** @file yc_solution_api.hpp */
 
 #pragma once
@@ -58,6 +58,9 @@ namespace yask {
 
     public:
         /// Type for a common registry shared among all yc_solution_base objects.
+        /**
+           The map key is the name of the solution.
+        */
         typedef std::map<std::string, yc_solution_base*> soln_map;
         
     private:

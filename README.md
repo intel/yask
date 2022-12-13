@@ -53,8 +53,8 @@ and Intel(R) graphics processors.
       http://www.swig.org, for creating the Python interface.
     * Python 3 (3.6.1 or later, recommended):
       https://www.python.org/downloads, for creating and using the Python interface.
-    * Doxygen (1.8.11 or later):
-      http://doxygen.org, for creating updated API documentation.
+    * Doxygen (1.9.0 or later):
+      https://www.doxygen.nl, for creating updated API documentation.
       If you're not changing the API documentation, you can view the existing documentation
       at the link at the top of this page.
     * Graphviz (2.30.1 or later):
@@ -65,6 +65,11 @@ and Intel(R) graphics processors.
 
 ## Backward-compatibility notices
 ### Version 4
+* Version 4.01.00 added several new APIs.
+    The following changes were made to to the YASK compiler:
+    removed the `-eq_bundles` option, and
+    an exception is now thrown from `output_solution()` if the
+    format string is unrecognized.
 * Version 4.00.00 was a major release with a number of notices:
   - Support has been added for GPU offloading via the OpenMP device model.
     Build any YASK stencil kernel with `make offload=1 ...`. This will create

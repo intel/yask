@@ -76,7 +76,7 @@ namespace yask {
     }
     int StencilSolution::get_prefetch_dist(int level) {
         if (level < 1 || level > 2)
-            THROW_YASK_EXCEPTION("Error: cache-level " +
+            THROW_YASK_EXCEPTION("cache-level " +
                                  to_string(level) +
                                  " is not 1 or 2.");
         if (_settings._prefetch_dists.count(level))
@@ -87,7 +87,7 @@ namespace yask {
                                             int distance) {
         get_prefetch_dist(level); // check legality.
         if (distance < 0)
-            THROW_YASK_EXCEPTION("Error: prefetch-distance " +
+            THROW_YASK_EXCEPTION("prefetch-distance " +
                                  to_string(distance) +
                                  " is not zero or positive.");
         _settings._prefetch_dists[level] = distance;
@@ -182,12 +182,67 @@ namespace yask {
             _cluster_eq_bundles->optimize_eq_bundles(_settings, "cluster", true, *_dos);
     }
 
-    // Set format.
-    // Create new printer and intermediate data.
-    void StencilSolution::set_target(const std::string& format) {
-        auto& target = _settings._target;
-        target = format;
+    // Set options as if command-line.
+    string StencilSolution::apply_command_line_options(const string& argstr) {
+        auto args = command_line_parser::set_args(argstr);
+        return apply_command_line_options(args);
+    }
+
+    string StencilSolution::apply_command_line_options(int argc, char* argv[]) {
+        string_vec args;
+        for (int i = 1; i < argc; i++)
+            args.push_back(argv[i]);
+        return apply_command_line_options(args);
+    }
+
+    string StencilSolution::apply_command_line_options(const vector<string>& args) {
+        string rem;
+
+        // Create a parser and add options to it.
+        command_line_parser parser;
+        _settings.add_options(parser);
         
+        // Parse cmd-line options, which sets values in _settings.
+        rem = parser.parse_args("YASK", args);
+        return rem;
+    }
+
+    // Get help.
+    std::string StencilSolution::get_command_line_help() {
+
+        // Create a parser and add options to it.
+        command_line_parser parser;
+        _settings.add_options(parser);
+
+        std::stringstream sstr;
+        parser.print_help(sstr);
+        return sstr.str();
+    }
+    std::string StencilSolution::get_command_line_values() {
+
+        // Create a parser and add options to it.
+        command_line_parser parser;
+        _settings.add_options(parser);
+
+        std::stringstream sstr;
+        parser.print_values(sstr);
+        return sstr.str();
+    }
+    
+    
+    // Format in given format-type.
+    void StencilSolution::output_solution(yask_output_ptr output) {
+
+        // Ensure all intermediate data is clean.
+        _free(true);
+        _eq_bundles = new EqBundles;
+        _eq_stages = new EqStages;
+        _cluster_eq_bundles = new EqBundles;
+
+        if (!is_target_set())
+            THROW_YASK_EXCEPTION("output_solution() without format target being set");
+        string target = _settings._target;
+
         // Aliases for backward-compatibility.
         if (target == "cpp")
             target = "intel64";
@@ -197,24 +252,19 @@ namespace yask {
             target = "avx2";
         else if (target == "avx512f" || target == "skx" ||
                  target == "skl" || target == "clx" ||
+                 target == "icx" || target == "spr" ||
                  target == "avx512-zmm" || target == "avx512hi")
             target = "avx512";
         else if (target == "avx512lo")
             target = "avx512-ymm";
 
-        // Ensure all intermediate data is clean.
-        _free(true);
-        _eq_bundles = new EqBundles;
-        _eq_stages = new EqStages;
-        _cluster_eq_bundles = new EqBundles;
-        
         // Create the appropriate printer object based on the format.
         // Most args to the printers just set references to data.
         // Data itself will be created in analyze_solution().
         if (target == "intel64")
             _printer = new YASKCppPrinter(*this, *_eq_bundles, *_eq_stages, *_cluster_eq_bundles);
         else if (target == "avx" || target == "avx2")
-            _printer = new YASKAvx256Printer(*this, *_eq_bundles, *_eq_stages, *_cluster_eq_bundles);
+            _printer = new YASKAvx2Printer(*this, *_eq_bundles, *_eq_stages, *_cluster_eq_bundles);
         else if (target == "avx512" || target == "knl")
             _printer = new YASKAvx512Printer(*this, *_eq_bundles, *_eq_stages, *_cluster_eq_bundles);
         else if (target == "avx512-ymm")
@@ -231,24 +281,11 @@ namespace yask {
             _printer = new POVRayPrinter(*this, *_cluster_eq_bundles);
         else {
             _printer = 0;
-            target = "";
-            THROW_YASK_EXCEPTION("Error: format-target '" + format +
+            THROW_YASK_EXCEPTION("format-target '" + target +
                                  "' is not recognized");
         }
         assert(_printer);
-    }
-    
-    // Format in given format-type.
-    void StencilSolution::output_solution(yask_output_ptr output) {
-        auto& target = _settings._target;
-
-        if (!is_target_set())
-            THROW_YASK_EXCEPTION("Error: output_solution() called before set_target()");
-
-        // Call set_target() to ensure intermediate data is clean
-        // before calling analyze_solution().
-        set_target(target);
-        
+                
         // Set data for equation bundles, dims, etc.
         int vlen = _printer->num_vec_elems();
         bool is_folding_efficient = _printer->is_folding_efficient();

@@ -34,8 +34,7 @@ using namespace std;
 using namespace yask;
 
 // Auto-generated stencil code that extends base types.
-#define DEFINE_CONTEXT
-#include "yask_stencil_code.hpp"
+#include YSTR2(YK_SOLUTION_FILE)
 
 void run_tests(int argc, char* argv[]) {
 
@@ -59,7 +58,7 @@ void run_tests(int argc, char* argv[]) {
     auto settings = context->get_actl_opts();
 
     // Problem dimensions.
-    auto dims = YASK_STENCIL_CONTEXT::new_dims();
+    auto dims = YASK_STENCIL_SOLUTION::new_dims();
     os << "Folding: " << dims->_fold_pts.make_dim_val_str(" * ") << endl;
     os << "Domain dims: " << dims->_domain_dims.make_dim_str() << endl;
 

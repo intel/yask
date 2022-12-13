@@ -27,7 +27,6 @@ IN THE SOFTWARE.
 
 #include "Print.hpp"
 #include "ExprUtils.hpp"
-#include "Parse.hpp"
 #include "Print.hpp"
 #include "CppIntrin.hpp"
 
@@ -60,11 +59,11 @@ namespace yask {
                                        yc_number_node_ptr rexpr,
                                        yc_bool_node_ptr cond) const {
         if (!lhs)
-            THROW_YASK_EXCEPTION("Error: empty LHS of equation");
+            THROW_YASK_EXCEPTION("empty LHS of equation");
         auto gpp = dynamic_pointer_cast<VarPoint>(lhs);
         assert(gpp);
         if (!rexpr)
-            THROW_YASK_EXCEPTION("Error: empty RHS of " +
+            THROW_YASK_EXCEPTION("empty RHS of " +
                                  gpp->make_quoted_str() + " equation");
         auto rhs = dynamic_pointer_cast<NumExpr>(rexpr);
         assert(rhs);
@@ -257,18 +256,18 @@ namespace yask {
     yc_node_factory::new_first_domain_index(yc_index_node_ptr idx) const {
         auto p = dynamic_pointer_cast<IndexExpr>(idx);
         if (!p)
-            THROW_YASK_EXCEPTION("Error: new_first_domain_index() called without index-node argument");
+            THROW_YASK_EXCEPTION("new_first_domain_index() called without index-node argument");
         if (p->get_type() != DOMAIN_INDEX)
-            THROW_YASK_EXCEPTION("Error: new_first_domain_index() called without domain-index-node argument");
+            THROW_YASK_EXCEPTION("new_first_domain_index() called without domain-index-node argument");
         return make_shared<IndexExpr>(p->_get_name(), FIRST_INDEX);
     }
     yc_number_node_ptr
     yc_node_factory::new_last_domain_index(yc_index_node_ptr idx) const {
         auto p = dynamic_pointer_cast<IndexExpr>(idx);
         if (!p)
-            THROW_YASK_EXCEPTION("Error: new_last_domain_index() called without index-node argument");
+            THROW_YASK_EXCEPTION("new_last_domain_index() called without index-node argument");
         if (p->get_type() != DOMAIN_INDEX)
-            THROW_YASK_EXCEPTION("Error: new_last_domain_index() called without domain-index-node argument");
+            THROW_YASK_EXCEPTION("new_last_domain_index() called without domain-index-node argument");
         return make_shared<IndexExpr>(p->_get_name(), LAST_INDEX);
     }
 

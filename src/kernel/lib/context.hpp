@@ -360,8 +360,8 @@ namespace yask {
 
         // Constructor.
         StencilContext(KernelEnvPtr& kenv,
-                       KernelSettingsPtr& ksettings,
-                       KernelSettingsPtr& user_settings);
+                       KernelSettingsPtr& actl_settings,
+                       KernelSettingsPtr& req_settings);
 
         // Destructor.
         virtual ~StencilContext() {
@@ -422,8 +422,8 @@ namespace yask {
         // Print lots of stats.
         virtual void prepare_solution();
 
-        // Init perf stats.
-        virtual void init_stats();
+        // Init amount-of-work stats.
+        virtual void init_work_stats();
 
         // Reset any locks, etc.
         virtual void reset_locks();
@@ -435,6 +435,9 @@ namespace yask {
 
         /// Get statistics associated with preceding calls to run_solution().
         virtual yk_stats_ptr get_stats();
+        virtual void clear_stats() {
+            clear_timers();
+        }
 
         // Dealloc vars, etc.
         virtual void end_solution();
@@ -713,6 +716,8 @@ namespace yask {
         virtual std::string apply_command_line_options(const std::string& args);
         virtual std::string apply_command_line_options(int argc, char* argv[]);
         virtual std::string apply_command_line_options(const string_vec& args);
+        virtual std::string get_command_line_help();
+        virtual std::string get_command_line_values();
         virtual bool get_step_wrap() const {
             STATE_VARS(this);
             return actl_opts->_step_wrap;
@@ -752,8 +757,6 @@ namespace yask {
         }
 
         // Auto-tuner methods.
-        void visit_auto_tuners(std::function<void (AutoTuner& at)> visitor);
-        void visit_auto_tuners(std::function<void (const AutoTuner& at)> visitor) const;
         virtual void eval_auto_tuner();
 
         // Auto-tuner APIs.

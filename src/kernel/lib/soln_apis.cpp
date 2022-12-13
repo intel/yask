@@ -50,7 +50,8 @@ namespace yask {
             TRACE_MSG("solution '" << get_name() << "'.set_"            \
                       #api_name "('" << dim << "', " << n << ")");      \
             dims->check_dim_type(dim, "set_" #api_name, step_ok, domain_ok, misc_ok); \
-            expr[dim] = n;                                              \
+            req_opts->expr[dim] = n;                                    \
+            actl_opts->expr[dim] = n;                                   \
             update_var_info(false);                                     \
             if (reset_prep) set_prepared(false);                        \
         }                                                               \
@@ -59,9 +60,10 @@ namespace yask {
             TRACE_MSG("solution '" << get_name() << "'.set_"            \
                       #api_name "_vec(...)");                           \
             if (vals.size() != NUM_DOMAIN_DIMS)                         \
-                THROW_YASK_EXCEPTION("Error: set_'" #api_name           \
+                THROW_YASK_EXCEPTION("set_'" #api_name                  \
                                      "_vec()' called without the proper number of domain dims"); \
-            expr.set_vals(start_i, vals);                               \
+            req_opts->expr.set_vals(start_i, vals);                     \
+            actl_opts->expr.set_vals(start_i, vals);                     \
             update_var_info(false);                                     \
             if (reset_prep) set_prepared(false);                        \
         }                                                               \
@@ -70,33 +72,34 @@ namespace yask {
             TRACE_MSG("solution '" << get_name() << "'.set_"            \
                       #api_name "_vec(...)");                           \
             if (vals.size() != NUM_DOMAIN_DIMS)                         \
-                THROW_YASK_EXCEPTION("Error: set_'" #api_name           \
+                THROW_YASK_EXCEPTION("set_'" #api_name                  \
                                      "_vec()' called without the proper number of domain dims"); \
-            expr.set_vals(start_i, vals);                               \
+            req_opts->expr.set_vals(start_i, vals);                     \
+            actl_opts->expr.set_vals(start_i, vals);                    \
             update_var_info(false);                                     \
             if (reset_prep) set_prepared(false);                        \
         }
     #define SOLN_API(api_name, expr, start_i, step_ok, domain_ok, misc_ok, reset_prep) \
-        GET_SOLN_API(api_name, expr, start_i, step_ok, domain_ok, misc_ok) \
+        GET_SOLN_API(api_name, actl_opts->expr, start_i, step_ok, domain_ok, misc_ok) \
         SET_SOLN_API(api_name, expr, start_i, step_ok, domain_ok, misc_ok, reset_prep)
     
     SOLN_API(num_ranks,
-             actl_opts->_num_ranks, 0,
+             _num_ranks, 0,
              false, true, false, true)
     SOLN_API(rank_index,
-             actl_opts->_rank_indices, 0,
+             _rank_indices, 0,
              false, true, false, true)
     SOLN_API(overall_domain_size,
-             actl_opts->_global_sizes, 1,
+             _global_sizes, 1,
              false, true, false, true)
     SOLN_API(rank_domain_size,
-             actl_opts->_rank_sizes, 1,
+             _rank_sizes, 1,
              false, true, false, true)
     SOLN_API(block_size,
-             actl_opts->_block_sizes, 1,
+             _block_sizes, 1,
              true, true, false, true)
     SOLN_API(min_pad_size,
-             actl_opts->_min_pad_sizes, 1,
+             _min_pad_sizes, 1,
              false, true, false, false)
     
     GET_SOLN_API(first_rank_domain_index,
@@ -145,7 +148,7 @@ namespace yask {
         clear_timers();
 
         // Init auto-tuner to run silently during normal operation.
-        reset_auto_tuner(true, false);
+        reset_auto_tuner(actl_opts->_do_auto_tune, false);
 
         // Report ranks.
         DEBUG_MSG("\nNum MPI ranks:             " << env->get_num_ranks() <<
@@ -173,7 +176,7 @@ namespace yask {
             #endif
         }
 
-        // Set the number of threads for a region. The number of threads
+        // Set the number of outer threads. The number of threads
         // used in top-level OpenMP parallel sections should not change
         // during execution.
         int rthreads = set_num_outer_threads();
@@ -209,13 +212,6 @@ namespace yask {
         // set_core() because is_in_valid_domain() needs the core data.
         find_bounding_boxes();
 
-        // Copy current settings to stages.  Needed here because settings may
-        // have been changed via APIs or from call to setup_rank() since last
-        // call to prepare_solution().  FIXME: This will wipe out any previous
-        // stage-specific auto-tuning.
-        for (auto& sp : st_stages)
-            sp->get_local_settings() = *actl_opts;
-
         // Free the scratch and MPI data first to give vars preference.
         // Alloc vars (if needed), scratch vars, MPI bufs.
         // This is the order in which preferred NUMA nodes (e.g., HBW mem)
@@ -231,7 +227,7 @@ namespace yask {
         DEBUG_MSG("Allocation done in " <<
                   make_num_str(alloc_timer.get_elapsed_secs()) << " secs.");
 
-        init_stats();
+        init_work_stats();
 
         // User-provided code.
         call_hooks(_after_prepare_solution_hooks);
@@ -273,7 +269,7 @@ namespace yask {
     }
 
     string StencilContext::apply_command_line_options(const string& argstr) {
-        auto args = CommandLineParser::set_args(argstr);
+        auto args = command_line_parser::set_args(argstr);
         return apply_command_line_options(args);
     }
 
@@ -292,7 +288,7 @@ namespace yask {
         for (auto& cur_opts : { actl_opts, req_opts }) {
         
             // Create a parser and add base options to it.
-            CommandLineParser parser;
+            command_line_parser parser;
             cur_opts->add_options(parser);
 
             // Parse cmd-line options, which sets values in opts.
@@ -302,6 +298,30 @@ namespace yask {
         return rem;
     }
 
+    // Get help.
+    std::string StencilContext::get_command_line_help() {
+        STATE_VARS(this);
+
+        // Create a parser and add options to it.
+        command_line_parser parser;
+        actl_opts->add_options(parser);
+
+        std::stringstream sstr;
+        parser.print_help(sstr);
+        return sstr.str();
+    }
+    std::string StencilContext::get_command_line_values() {
+        STATE_VARS(this);
+
+        // Create a parser and add options to it.
+        command_line_parser parser;
+        actl_opts->add_options(parser);
+
+        std::stringstream sstr;
+        parser.print_values(sstr);
+        return sstr.str();
+    }
+    
     static string print_pct(double ntime, double dtime) {
         string msg;
         if (dtime > 0.) {
@@ -523,7 +543,7 @@ namespace yask {
         return p;
     }
 
-    // Reset elapsed times to zero.
+    // Reset elapsed times and step counters to zero.
     void StencilContext::clear_timers() {
         run_time.clear();
         ext_time.clear();

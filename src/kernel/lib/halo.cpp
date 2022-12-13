@@ -162,7 +162,7 @@ namespace yask {
             else if (halo_step == halo_final)
                 TRACE_MSG("waiting for send to finish phase");
             else
-                THROW_YASK_EXCEPTION("internal error: unknown halo-exchange step");
+                THROW_YASK_EXCEPTION("(internal fault) unknown halo-exchange step");
 
             // Loop thru all vars to swap.
             // Use 'gi' as an MPI tag.
@@ -208,7 +208,7 @@ namespace yask {
                                                make_byte_str(nbbytes) << " into " << rbuf);
                                      auto& r = var_recv_reqs[ni];
                                      if (nbbytes != int(nbbytes))
-                                         THROW_YASK_EXCEPTION("error: int overflow in MPI_Isend()");
+                                         THROW_YASK_EXCEPTION("(internal fault) int overflow in MPI_Isend()");
                                      MPI_Irecv(rbuf, int(nbbytes), MPI_BYTE,
                                                neighbor_rank, int(gi),
                                                env->comm, &r);
@@ -316,7 +316,7 @@ namespace yask {
                                      TRACE_MSG("exchange_halos:    sending " << make_byte_str(npbytes) <<
                                                " from " << sbuf);
                                      if (npbytes != int(npbytes))
-                                         THROW_YASK_EXCEPTION("error: int overflow in MPI_Isend()");
+                                         THROW_YASK_EXCEPTION("(internal fault) int overflow in MPI_Isend()");
                                      MPI_Isend(sbuf, int(npbytes), MPI_BYTE,
                                                neighbor_rank, int(gi), env->comm, &r);
                                      num_send_reqs++;

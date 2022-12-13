@@ -66,23 +66,6 @@ inline void omp_unset_lock(omp_lock_t* p) { }
 #define ROUND_UP(n, mult) (CEIL_DIV(n, mult) * (mult))
 #define ROUND_DOWN(n, mult) (((n) / (mult)) * (mult))
 
-// Macro for throwing yask_exception with a string.
-// Example: THROW_YASK_EXCEPTION("all your base are belong to us");
-#define THROW_YASK_EXCEPTION(message) do {                          \
-        yask_exception e(message);                                  \
-        throw e;                                                    \
-    } while(0)
-
-// Macro for creating a string and throwing yask_exception with it.
-// Example: FORMAT_AND_THROW_YASK_EXCEPTION("bad value: x = " << x);
-#define FORMAT_AND_THROW_YASK_EXCEPTION(message) do {               \
-        yask_exception e;                                           \
-        std::stringstream err;                                      \
-        err << message;                                             \
-        e.add_message(err.str());                                   \
-        throw e;                                                    \
-    } while(0)
-
 namespace yask {
 
     // Controls whether make*Str() functions add
@@ -406,5 +389,79 @@ namespace yask {
         }
     };
 
+    // A class for maintaining elapsed time.
+    // NOT a virtual class.
+    // Example:
+    //   time --->
+    //     start() ... stop() ... start() ... stop() ... get_elapsed_time()
+    //     |   A secs  |          |   B secs  |
+    // 1st call to stop() returns A.
+    // 2nd call to stop() returns B.
+    // Call to get_elapsed_time() returns A + B.
+    class YaskTimer {
+
+        /* struct timespec {
+           time_t   tv_sec;        // seconds
+           long     tv_nsec;       // nanoseconds
+           };
+        */
+        struct timespec _begin, _elapsed;
+
+    public:
+
+        typedef struct timespec TimeSpec;
+
+        YaskTimer() { clear(); }
+        ~YaskTimer() { }
+
+        // Reset elapsed time to zero.
+        void clear() {
+            _begin.tv_sec = _elapsed.tv_sec = 0;
+            _begin.tv_nsec = _elapsed.tv_nsec = 0;
+        }
+
+        // Make a current timespec to be provided to start() or stop().
+        // This allows multiple timers to use the same timespec.
+        static TimeSpec get_timespec() {
+            TimeSpec ts;
+            clock_gettime(CLOCK_REALTIME, &ts);
+            return ts;
+        }
+
+        // Start a timed region.
+        // start() and stop() can be called multiple times in
+        // pairs before calling get_elapsed_secs(), which
+        // will return the cumulative time over all timed regions.
+        void start(const TimeSpec& ts);
+        void start() {
+            auto ts = get_timespec();
+            start(ts);
+        }
+
+        // End a timed region.
+        // Return time since previous call to start(); this is *not*
+        // generally the same as the value returned by get_elapsed_secs().
+        double stop(const TimeSpec& ts);
+        double stop() {
+            auto ts = get_timespec();
+            return stop(ts);
+        }
+
+        // Get elapsed time between all preceding start/stop pairs since
+        // object creation or previous call to clear().  Does not reset
+        // value, so it may be used for querying cumulative time.
+        double get_elapsed_secs() const {
+
+            // Make sure timer was stopped.
+            assert(_begin.tv_sec == 0);
+
+            return double(_elapsed.tv_sec) + double(_elapsed.tv_nsec) * 1e-9;
+        }
+
+        // Get elapsed time since previous start.
+        // Used to check time w/o stopping timer.
+        double get_secs_since_start() const;
+    };
+    
 } // namespace.
 

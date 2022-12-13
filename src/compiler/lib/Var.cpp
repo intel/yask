@@ -27,7 +27,6 @@ IN THE SOFTWARE.
 
 #include "Print.hpp"
 #include "ExprUtils.hpp"
-#include "Parse.hpp"
 #include "Var.hpp"
 #include "Print.hpp"
 #include "CppIntrin.hpp"
@@ -41,7 +40,7 @@ namespace yask {
 
         // Check for correct number of indices.
         if (_dims.size() != index_exprs.size()) {
-            FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to create a var point in " <<
+            FORMAT_AND_THROW_YASK_EXCEPTION("attempt to create a var point in " <<
                                             _dims.size() << "D var '" << _name << "' with " <<
                                             index_exprs.size() << " index expressions");
         }
@@ -64,7 +63,7 @@ namespace yask {
 
         // Check for correct number of indices.
         if (_dims.size() != dim_offsets.size()) {
-            FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to create a relative var point in " <<
+            FORMAT_AND_THROW_YASK_EXCEPTION("attempt to create a relative var point in " <<
                                             _dims.size() << "D var '" << _name << "' with " <<
                                             dim_offsets.size() << " indices");
         }
@@ -75,7 +74,7 @@ namespace yask {
         for (size_t i = 0; i < _dims.size(); i++) {
             auto dim = _dims.at(i);
             if (dim->get_type() == MISC_INDEX) {
-                FORMAT_AND_THROW_YASK_EXCEPTION("Error: attempt to create a relative var point in " <<
+                FORMAT_AND_THROW_YASK_EXCEPTION("attempt to create a relative var point in " <<
                                                 _dims.size() << "D var '" << _name <<
                                                 "' containing non-step or non-domain dim '" <<
                                                 dim->_get_name() << "'");
@@ -119,7 +118,7 @@ namespace yask {
         auto& vars = soln->_get_vars();
         for (auto gp : vars) {
             if (gp->_get_name() == name)
-                THROW_YASK_EXCEPTION("Error: var name '" + name + "' already used");
+                THROW_YASK_EXCEPTION("var name '" + name + "' already used");
         }
 
         // Register in soln.

@@ -38,10 +38,7 @@ IN THE SOFTWARE.
 namespace yask {
 
     /// Dummy type for backward-compatibility.
-    class StencilList { };
-
-    /// Dummy object from compiler utility for backward-compatibility.
-    extern StencilList stub_stencils;
+    typedef std::ostream StencilList;
 
     /// **[Deprecated]** Use yc_solution_base.
     class StencilBase : public yc_solution_base {
@@ -102,7 +99,7 @@ namespace yask {
 /** The derived class must implement a constructor that takes only a \ref StencilList
     reference. */
 #define REGISTER_STENCIL(class_name) \
-    static class_name class_name ## _v2instance(stub_stencils)
+    static class_name class_name ## _v2instance(std::cout)
 
 // Convenience macros for declaring dims in a class derived from \ref StencilBase.
 // The 'd' arg is the new var name and the dim name.

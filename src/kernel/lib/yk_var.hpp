@@ -641,7 +641,7 @@ namespace yask {
                            const std::string& fn,    // name for error msg.
                            bool strict_indices, // die if out-of-range.
                            bool check_step,     // check step index.
-                           bool normalize,      // div by vec lens.
+                           bool normalize = false,      // div by vec lens.
                            Indices* fixed_indices = NULL) const;
 
         // Resize or fail if already allocated.
@@ -965,11 +965,15 @@ namespace yask {
             STATE_VARS(this);
             if (get_storage() == 0) {
                 if (strict_indices)
-                    THROW_YASK_EXCEPTION(std::string("Error: call to '") +
+                    THROW_YASK_EXCEPTION(std::string("call to '") +
                                          Visitor::fname() +
                                          "' with no storage allocated for var '" +
                                          get_name() + "'");
                 return 0;
+            }
+            if (buffer_ptr == 0) {
+                THROW_YASK_EXCEPTION(std::string("call to '") +
+                                     Visitor::fname() + "' with NULL buffer pointer");
             }
 
             TRACE_MSG(Visitor::fname() << ": " << make_info_string() << " [" <<
@@ -1064,7 +1068,7 @@ namespace yask {
         
                 // Visit points in slice on device.
                 else {
-                    THROW_YASK_EXCEPTION(std::string("Internal error: '") +
+                    THROW_YASK_EXCEPTION(std::string("(internal fault) '") +
                                          Visitor::fname() + "' for var '" +
                                          get_name() + "' not implemented for offload device");
                 }
@@ -1354,11 +1358,9 @@ namespace yask {
             real_vec_t seedv;
             auto n = seedv.get_num_elems();
 
-            // Init elements to values between seed and 2*seed.
-            // For example if n==4, init to
-            // seed * 1.0, seed * 1.25, seed * 1.5, seed * 1.75.
+            // Init elements to decreasing multiples of seed.
             for (int i = 0; i < n; i++)
-                seedv[i] = seed * (1.0 + double(i) / n);
+                seedv[i] = seed * (double(n - i));
             _data.set_elems_in_seq(seedv);
             set_dirty_all(self, true);
         }
@@ -1561,7 +1563,7 @@ namespace yask {
                         }
                     }
                     #else
-                    THROW_YASK_EXCEPTION("internal error: call to _copy_vecs_in_slice on device"
+                    THROW_YASK_EXCEPTION("(internal fault) call to _copy_vecs_in_slice on device"
                                          " in non-offload build");
                     #endif
                 }
@@ -1792,13 +1794,13 @@ namespace yask {
 
         virtual idx_t get_first_valid_step_index() const {
             if (!gb()._has_step_dim)
-                THROW_YASK_EXCEPTION("Error: 'get_first_valid_step_index()' called on var '" +
+                THROW_YASK_EXCEPTION("'get_first_valid_step_index()' called on var '" +
                                      get_name() + "' that does not use the step dimension");
             return corep()->_local_offsets[+step_posn];
         }
         virtual idx_t get_last_valid_step_index() const {
             if (!gb()._has_step_dim)
-                THROW_YASK_EXCEPTION("Error: 'get_last_valid_step_index()' called on var '" +
+                THROW_YASK_EXCEPTION("'get_last_valid_step_index()' called on var '" +
                                      get_name() + "' that does not use the step dimension");
             return corep()->_local_offsets[+step_posn] +
                 corep()->_domains[+step_posn] - 1;
@@ -1889,6 +1891,7 @@ namespace yask {
         #undef SET_VAR_API2
 
         virtual std::string format_indices(const Indices& indices) const {
+            gb().check_indices(indices, "format_indices", false, false);
             std::string str = get_name() + "(" + gb().make_index_string(indices) + ")";
             return str;
         }

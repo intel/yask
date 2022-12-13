@@ -143,7 +143,7 @@ namespace yask {
     };
 
     // Specialization for AVX, AVX2.
-    class CppAvx256PrintHelper : public CppIntrinPrintHelper {
+    class CppAvx2PrintHelper : public CppIntrinPrintHelper {
     protected:
 
         // Try all applicable strategies.
@@ -157,7 +157,7 @@ namespace yask {
         }
 
     public:
-        CppAvx256PrintHelper(VecInfoVisitor& vv,
+        CppAvx2PrintHelper(VecInfoVisitor& vv,
                              const CompilerSettings& settings,
                              const Dimensions& dims,
                              const CounterVisitor* cv,
@@ -169,16 +169,16 @@ namespace yask {
     };
 
     // Print 256-bit AVX intrinsic code.
-    class YASKAvx256Printer : public YASKCppPrinter {
+    class YASKAvx2Printer : public YASKCppPrinter {
     protected:
         virtual CppVecPrintHelper* new_cpp_vec_print_helper(VecInfoVisitor& vv,
                                                             CounterVisitor& cv) override {
-            return new CppAvx256PrintHelper(vv, _settings, _dims, &cv,
-                                            "real_vec_t", " ", ";\n");
+            return new CppAvx2PrintHelper(vv, _settings, _dims, &cv,
+                                          "real_vec_t", " ", ";\n");
         }
 
     public:
-        YASKAvx256Printer(StencilSolution& stencil,
+        YASKAvx2Printer(StencilSolution& stencil,
                           EqBundles& eq_bundles,
                           EqStages& eq_stages,
                           EqBundles& cluster_eq_bundles) :

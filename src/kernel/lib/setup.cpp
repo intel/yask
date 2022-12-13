@@ -58,7 +58,7 @@ namespace yask {
                 int provided = 0;
                 MPI_Init_thread(argc, argv, MPI_THREAD_MULTIPLE, &provided);
                 if (provided < MPI_THREAD_SERIALIZED) {
-                    THROW_YASK_EXCEPTION("error: MPI_THREAD_SERIALIZED or MPI_THREAD_MULTIPLE not provided");
+                    THROW_YASK_EXCEPTION("MPI_THREAD_SERIALIZED or MPI_THREAD_MULTIPLE not provided");
                 }
                 is_init = true;
                 finalize_needed = true;
@@ -69,7 +69,7 @@ namespace yask {
         // MPI communicator provided.
         else {
             if (!is_init)
-                THROW_YASK_EXCEPTION("error: YASK environment created with"
+                THROW_YASK_EXCEPTION("YASK environment created with"
                                      " an existing MPI communicator, but MPI is not initialized");
             comm = existing_comm;
         }
@@ -79,7 +79,7 @@ namespace yask {
         MPI_Comm_group(comm, &group);
         MPI_Comm_size(comm, &num_ranks);
         if (num_ranks < 1)
-            THROW_YASK_EXCEPTION("error: MPI_Comm_size() returns less than one rank");
+            THROW_YASK_EXCEPTION("MPI_Comm_size() returns less than one rank");
 
         // Create a shm communicator.
         MPI_Comm_split_type(comm, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL, &shm_comm);
@@ -137,10 +137,10 @@ namespace yask {
 
     // Context ctor.
     StencilContext::StencilContext(KernelEnvPtr& kenv,
-                                   KernelSettingsPtr& ksettings,
-                                   KernelSettingsPtr& user_settings) :
-        KernelStateBase(kenv, ksettings, user_settings),
-        _at(this, ksettings.get())
+                                   KernelSettingsPtr& actl_settings,
+                                   KernelSettingsPtr& req_settings) :
+        KernelStateBase(kenv, actl_settings, req_settings),
+        _at(this, actl_settings.get())
     {
         STATE_VARS(this);
 
@@ -168,24 +168,26 @@ namespace yask {
         auto nr = env->num_ranks;
 
         // All ranks should have the same settings for certain options.
-        assert_equality_over_ranks(nr, env->comm, "total number of MPI ranks");
-        assert_equality_over_ranks(idx_t(actl_opts->use_shm), env->comm, "use_shm setting");
-        assert_equality_over_ranks(idx_t(actl_opts->find_loc), env->comm, "defined rank indices");
+        env->assert_equality_over_ranks(nr, "total number of MPI ranks");
+        env->assert_equality_over_ranks(idx_t(actl_opts->use_shm), "use_shm setting");
+        env->assert_equality_over_ranks(idx_t(actl_opts->find_loc), "defined rank indices");
         DOMAIN_VAR_LOOP(i, j) {
             auto& dname = domain_dims.get_dim_name(j);
-            assert_equality_over_ranks(actl_opts->_global_sizes[i], env->comm,
-                                       "global-domain size in '" + dname + "' dimension");
-            assert_equality_over_ranks(actl_opts->_num_ranks[j], env->comm,
-                                       "number of ranks in '" + dname + "' dimension");
+            env->assert_equality_over_ranks(actl_opts->_global_sizes[i],
+                                            "global-domain size in '" + dname + "' dimension");
+            env->assert_equality_over_ranks(actl_opts->_num_ranks[j],
+                                            "number of ranks in '" + dname + "' dimension");
 
             // Check that either local or global size is set.
             if (!actl_opts->_global_sizes[i] && !actl_opts->_rank_sizes[i])
-                THROW_YASK_EXCEPTION("Error: both local-domain size and "
+                THROW_YASK_EXCEPTION("both local-domain size and "
                                      "global-domain size are zero in '" +
                                      dname + "' dimension on rank " +
                                      to_string(me) + "; specify one, "
                                      "and the other will be calculated");
         }
+        env->assert_equality_over_ranks(idx_t(actl_opts->_mega_block_sizes[step_dim]), "Mega-block temporal size");
+        env->assert_equality_over_ranks(idx_t(actl_opts->_block_sizes[step_dim]), "block temporal size");
 
         #ifndef USE_MPI
 
@@ -209,7 +211,7 @@ namespace yask {
             // Check that settings are equal.
             else if (actl_opts->_global_sizes[i] != actl_opts->_rank_sizes[i]) {
                 auto& dname = domain_dims.get_dim_name(j);
-                FORMAT_AND_THROW_YASK_EXCEPTION("Error: specified local-domain size of " <<
+                FORMAT_AND_THROW_YASK_EXCEPTION("specified local-domain size of " <<
                                                 actl_opts->_rank_sizes[i] <<
                                                 " does not equal specified global-domain size of " <<
                                                 actl_opts->_global_sizes[i] << " in '" << dname <<
@@ -226,7 +228,7 @@ namespace yask {
         // Check ranks.
         idx_t req_ranks = actl_opts->_num_ranks.product();
         if (req_ranks != nr)
-            FORMAT_AND_THROW_YASK_EXCEPTION("error: " << req_ranks << " rank(s) requested (" +
+            FORMAT_AND_THROW_YASK_EXCEPTION(req_ranks << " rank(s) requested (" +
                                             actl_opts->_num_ranks.make_dim_val_str(" * ") + "), but " <<
                                             nr << " rank(s) are active");
 
@@ -240,7 +242,7 @@ namespace yask {
             auto& dname = domain_dims.get_dim_name(j);
             if (actl_opts->_rank_indices[j] < 0 ||
                 actl_opts->_rank_indices[j] >= actl_opts->_num_ranks[j])
-                THROW_YASK_EXCEPTION("Error: rank index of " +
+                THROW_YASK_EXCEPTION("rank index of " +
                                      to_string(actl_opts->_rank_indices[j]) +
                                      " is not within allowed range [0 ... " +
                                      to_string(actl_opts->_num_ranks[j] - 1) +
@@ -306,14 +308,14 @@ namespace yask {
                 if (rn == me) {
                     if (mandist != 0)
                         FORMAT_AND_THROW_YASK_EXCEPTION
-                            ("Internal error: distance to own rank == " << mandist);
+                            ("(internal fault) distance to own rank == " << mandist);
                 }
 
                 // Someone else.
                 else {
                     if (mandist == 0)
                         FORMAT_AND_THROW_YASK_EXCEPTION
-                            ("Error: ranks " << me <<
+                            ("ranks " << me <<
                              " and " << rn << " at same coordinates");
                 }
 
@@ -349,7 +351,7 @@ namespace yask {
                                     auto rnsz = rsizes[rn][dj];
                                     if (mysz != rnsz) {
                                         FORMAT_AND_THROW_YASK_EXCEPTION
-                                            ("Error: rank " << rn << " and " << me <<
+                                            ("rank " << rn << " and " << me <<
                                              " are both at rank-index " << coords[me][di] <<
                                              " in the '" << dname <<
                                              "' dimension, but their local-domain sizes are " <<
@@ -459,7 +461,7 @@ namespace yask {
                     if (!actl_opts->_rank_sizes[i]) {
                         if (rank_domain_sums[j] != 0)
                             FORMAT_AND_THROW_YASK_EXCEPTION
-                                ("Error: local-domain size is not specified in the '" <<
+                                ("local-domain size is not specified in the '" <<
                                  dname << "' dimension on rank " << me <<
                                  ", but it is specified on another rank; "
                                  "it must be specified or unspecified consistently across all ranks");
@@ -474,7 +476,7 @@ namespace yask {
                         auto rem = gsz - (rsz * (nranks - 1));
                         if (rem <= 0)
                             FORMAT_AND_THROW_YASK_EXCEPTION
-                                ("Error: global-domain size of " << gsz <<
+                                ("global-domain size of " << gsz <<
                                  " is not large enough to split across " << nranks <<
                                  " ranks in the '" << dname << "' dimension");
                         if (is_last)
@@ -497,7 +499,7 @@ namespace yask {
                 DOMAIN_VAR_LOOP(i, j) {
                     auto& dname = domain_dims.get_dim_name(j);
                     if (actl_opts->_global_sizes[i] != rank_domain_sums[j]) {
-                        FORMAT_AND_THROW_YASK_EXCEPTION("Error: sum of local-domain sizes across " <<
+                        FORMAT_AND_THROW_YASK_EXCEPTION("sum of local-domain sizes across " <<
                                                         nr << " ranks is " <<
                                                         rank_domain_sums[j] <<
                                                         ", which does not equal global-domain size of " <<
@@ -590,14 +592,14 @@ namespace yask {
                   actl_opts->_pico_block_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
     }
 
-    void StencilContext::init_stats() {
+    void StencilContext::init_work_stats() {
         STATE_VARS(this);
 
         // Calc and report total allocation and domain sizes.
         rank_nbytes = get_num_bytes();
-        tot_nbytes = sum_over_ranks(rank_nbytes, env->comm);
+        tot_nbytes = env->sum_over_ranks(rank_nbytes);
         rank_domain_pts = rank_bb.bb_num_points;
-        tot_domain_pts = sum_over_ranks(rank_domain_pts, env->comm);
+        tot_domain_pts = env->sum_over_ranks(rank_domain_pts);
         DEBUG_MSG("\nDomain size in this rank (points):          " << make_num_str(rank_domain_pts) <<
                   "\nTotal allocation in this rank:              " << make_byte_str(rank_nbytes) <<
                   "\nOverall problem size in " << env->num_ranks << " rank(s) (points): " <<
@@ -690,9 +692,10 @@ namespace yask {
                     gp->update_min_pad_size(dname, actl_opts->_min_pad_sizes[dname]);
 
                     // Offsets.
-                    auto dp = dims->_domain_dims.lookup_posn(dname);
-                    gp->_set_rank_offset(dname, rank_domain_offsets[dp]);
                     gp->_set_local_offset(dname, 0);
+                    auto dp = dims->_domain_dims.lookup_posn(dname);
+                    auto rofs = rank_domain_offsets[dp];
+                    gp->_set_rank_offset(dname, rofs);
                 }
 
                 // Update max halo across vars, used for temporal angles.
@@ -723,10 +726,6 @@ namespace yask {
                 num_wf_shifts--;
         }
         assert(num_wf_shifts >= 0);
-
-        // Determine whether separate tuners can be used.
-        // Only allowed when no TB and >1 stage.
-        state->_use_stage_tuners = actl_opts->_allow_stage_tuners && (tb_steps == 0) && (st_stages.size() > 1);
 
         // Calculate angles and related settings.
         for (auto& dim : domain_dims) {
@@ -759,7 +758,7 @@ namespace yask {
             auto min_size = max_halos[dname] + shifts;
             if (actl_opts->_num_ranks[dname] > 1 && rksize < min_size) {
                 FORMAT_AND_THROW_YASK_EXCEPTION
-                    ("Error: local-domain size of " << rksize << " in '" <<
+                    ("local-domain size of " << rksize << " in '" <<
                      dname << "' dim is less than minimum size of " << min_size <<
                      ", which is based on stencil halos and temporal wave-front sizes");
             }
@@ -797,6 +796,57 @@ namespace yask {
 
     } // update_var_info().
 
+    // Adjust offsets of scratch vars based on thread number 'thread_idx'
+    // and beginning point of micro-block 'idxs'.  Each scratch-var is
+    // assigned to a thread, so it must "move around" as the thread is
+    // assigned to each micro-block.  This move is accomplished by changing
+    // the vars' local offsets.
+    void StencilContext::update_scratch_var_info(int thread_idx,
+                                                 const Indices& idxs) {
+        STATE_VARS(this);
+
+        // Loop thru vecs of scratch vars.
+        for (auto* sv : scratch_vecs) {
+            assert(sv);
+
+            // Get ptr to the scratch var for this thread.
+            auto& gp = sv->at(thread_idx);
+            assert(gp);
+            auto& gb = gp->gb();
+            assert(gb.is_scratch());
+
+            // i: index for stencil dims, j: index for domain dims.
+            DOMAIN_VAR_LOOP(i, j) {
+
+                auto& dim = stencil_dims.get_dim(i);
+                auto& dname = dim._get_name();
+
+                // Is this dim used in this var?
+                int posn = gb.get_dim_posn(dname);
+                if (posn >= 0) {
+
+                    // Set rank offset of var based on starting point of rank.
+                    // Thus, it it not necessarily a vec mult.
+                    auto rofs = rank_domain_offsets[j];
+                    gp->_set_rank_offset(posn, rofs);
+
+                    // Must use the vector len in this var, which may
+                    // not be the same as soln fold length because var
+                    // may not be vectorized.
+                    auto vlen = gp->_get_var_vec_len(posn);
+
+                    // See diagram in yk_var defn.  Local offset is the
+                    // offset of this var relative to the beginning of the
+                    // current rank.  Set local offset to diff between
+                    // global offset and rank offset.  Round down to make
+                    // sure it's vec-aligned.
+                    auto lofs = round_down_flr(idxs[i] - rofs, vlen);
+                    gp->_set_local_offset(posn, lofs);
+                }
+            }
+        }
+    }
+
     // Set temporal blocking data.  This should be called anytime a block
     // size is changed.  Must be called after update_var_info() to ensure
     // angles are properly set.  TODO: calculate 'tb_steps' dynamically
@@ -833,10 +883,6 @@ namespace yask {
                 auto& dim = domain_dims.get_dim(j);
                 auto& dname = dim._get_name();
                 auto rnsize = actl_opts->_mega_block_sizes[i];
-
-                // There must be only one block size when using TB, so get
-                // sizes from context settings instead of stages.
-                assert(state->_use_stage_tuners == false);
                 auto blksize = actl_opts->_block_sizes[i];
                 auto mblksize = actl_opts->_micro_block_sizes[i];
 
@@ -1385,7 +1431,7 @@ namespace yask {
         assert(gp);
         auto& gname = gp->get_name();
         if (all_var_map.count(gname))
-            THROW_YASK_EXCEPTION("Error: var '" + gname + "' already exists");
+            THROW_YASK_EXCEPTION("var '" + gname + "' already exists");
 
         // Add to list and map.
         all_var_ptrs.push_back(gp);

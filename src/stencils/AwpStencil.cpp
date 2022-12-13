@@ -23,49 +23,19 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// Stencil equations for AWP numerics.
+// Stencil equations for AWP-ODC numerics.
 // http://hpgeoc.sdsc.edu/AWPODC
-// http://www.sdsc.edu/News%20Items/PR20160209_earthquake_center.html
 
 // YASK stencil solution(s) in this file will be integrated into the YASK compiler utility.
 #include "yask_compiler_api.hpp"
 using namespace std;
 using namespace yask;
 
-// Set the following macro to use a 3D sponge var instead of 3 sponge arrays.
+// Set the following macro to use a 3D sponge var instead of three 1D sponge arrays.
+// Using a 3D sponge var reduces the number of calculations but increases memory usage.
 //#define FULL_SPONGE_VAR
-
-// The remainder of the macros apply only to the "abc" versions.
-
-// Set the following macro to define all points, even those above the
-// surface that are never used.
-#define SET_ALL_POINTS
-
-// Set the following macro to calculate free-surface boundary values.
-#define DO_ABOVE_SURFACE
-
-// Set the following macro to use intermediate scratch vars.
-// This is a compute/memory tradeoff: using scratch vars reduces
-// compute and increases memory accesses.
-//#define USE_SCRATCH_VARS
-
-// For the surface stress conditions, we need to write into 2 points
-// above the surface.  Since we can only write into the "domain", we
-// will define the surface index to be 2 points before the last domain
-// index. Thus, there will be two layers in the domain above the surface.
-#define SURFACE_IDX (last_domain_index(z) - 2)
-
-// Define some sub-domains related to the surface.
-#define BELOW_SURFACE       (z < SURFACE_IDX)
-#define AT_SURFACE          (z == SURFACE_IDX)
-#define AT_OR_BELOW_SURFACE (z <= SURFACE_IDX)
-#define ONE_ABOVE_SURFACE   (z == SURFACE_IDX + 1)
-#define TWO_ABOVE_SURFACE   (z == SURFACE_IDX + 2)
-#define IF_BELOW_SURFACE    IF_DOMAIN BELOW_SURFACE
-#define IF_AT_SURFACE       IF_DOMAIN AT_SURFACE
-#define IF_AT_OR_BELOW_SURFACE IF_DOMAIN AT_OR_BELOW_SURFACE
-#define IF_ONE_ABOVE_SURFACE IF_DOMAIN ONE_ABOVE_SURFACE
-#define IF_TWO_ABOVE_SURFACE IF_DOMAIN TWO_ABOVE_SURFACE
+// See https://reproducibility.org/RSF/book/xjtu/primer/paper_html/node9.html for more
+// info about Cerjan sponge boundaries.
 
 // Create an anonymous namespace to ensure that types are local.
 namespace {
@@ -77,6 +47,7 @@ namespace {
             yc_solution_base(name) { }
 
     protected:
+        friend class AwpAbcFuncs;
 
         // Indices & dimensions.
         yc_index_node_ptr t = new_step_index("t");           // step in time dim.
@@ -109,30 +80,25 @@ namespace {
         // Physical grid spacing in time and space.
         yc_var_proxy delta_t = yc_var_proxy("delta_t", get_soln());
         yc_var_proxy h = yc_var_proxy("h", get_soln());
-        // Sponge coefficients.
-        // (Most of these will be 1.0.)
-#ifdef FULL_SPONGE_VAR
+
+        // Cerjan sponge coefficients.
+        // (Values outside the boundary region will be 1.0.)
+        #ifdef FULL_SPONGE_VAR
         yc_var_proxy sponge = yc_var_proxy("sponge", get_soln(), { x, y, z });
-#else
+        #else
         yc_var_proxy cr_x = yc_var_proxy("cr_x", get_soln(), { x });
         yc_var_proxy cr_y = yc_var_proxy("cr_y", get_soln(), { y });
         yc_var_proxy cr_z = yc_var_proxy("cr_z", get_soln(), { z });
-#endif
-
-#ifdef USE_SCRATCH_VARS
-        yc_var_proxy tmp_vel_x = yc_var_proxy("tmp_vel_x", get_soln(), { x, y, z }, true);
-        yc_var_proxy tmp_vel_y = yc_var_proxy("tmp_vel_y", get_soln(), { x, y, z }, true);
-        yc_var_proxy tmp_vel_z = yc_var_proxy("tmp_vel_z", get_soln(), { x, y, z }, true);
-#endif
+        #endif
 
         // Adjustment for sponge layer.
         void adjust_for_sponge(yc_number_node_ptr& val) {
 
-#ifdef FULL_SPONGE_VAR
+            #ifdef FULL_SPONGE_VAR
             val *= sponge(x, y, z);
-#else
+            #else
             val *= cr_x(x) * cr_y(y) * cr_z(z);
-#endif
+            #endif
         }
 
         // Velocity functions.  For each D in x, y, z, define vel_D
@@ -355,108 +321,6 @@ namespace {
             return next_stress_yz;
         }
 
-        // Free-surface boundary equations for velocity.
-        void define_free_surface_vel() {
-
-            // Since we're defining points when z == surface + 1,
-            // the surface itself will be at z - 1;
-            auto surf = z - 1;
-
-#ifdef USE_SCRATCH_VARS
-
-            // The values for velocity at t+1 will be needed
-            // in multiple free-surface calculations.
-            // Thus, it will reduce the number of FP ops
-            // required if we pre-compute them and store them
-            // in scratch vars. The downside is more memory
-            // and memory accesses.
-#define VEL_X tmp_vel_x
-#define VEL_Y tmp_vel_y
-#define VEL_Z tmp_vel_z
-            VEL_X(x, y, z) EQUALS get_next_vel_x(x, y, z);
-            VEL_Y(x, y, z) EQUALS get_next_vel_y(x, y, z);
-            VEL_Z(x, y, z) EQUALS get_next_vel_z(x, y, z);
-
-#else
-
-            // If not using scratch vars, just call the
-            // functions to calculate each value of velocity
-            // at t+1 every time it's needed.
-#define VEL_X get_next_vel_x
-#define VEL_Y get_next_vel_y
-#define VEL_Z get_next_vel_z
-#endif
-
-            // A couple of intermediate values.
-            auto d_x_val = VEL_X(x+1, y, surf) -
-                (VEL_Z(x+1, y, surf) - VEL_Z(x, y, surf));
-            auto d_y_val = VEL_Y(x, y-1, surf) -
-                (VEL_Z(x, y, surf) - VEL_Z(x, y-1, surf));
-
-            // Following values are valid one layer above the free surface.
-            auto plus1_vel_x = VEL_X(x, y, surf) -
-                (VEL_Z(x, y, surf) - VEL_Z(x-1, y, surf));
-            auto plus1_vel_y = VEL_Y(x, y, surf) -
-                (VEL_Z(x, y+1, surf) - VEL_Z(x, y, surf));
-            auto plus1_vel_z = VEL_Z(x, y, surf) -
-                ((d_x_val - plus1_vel_x) +
-                 (VEL_X(x+1, y, surf) - VEL_X(x, y, surf)) +
-                 (plus1_vel_y - d_y_val) +
-                 (VEL_Y(x, y, surf) - VEL_Y(x, y-1, surf))) /
-                ((mu(x, y, surf) *
-                  (2.0 / mu(x, y, surf) + 1.0 / lambda(x, y, surf))));
-#undef VEL_X
-#undef VEL_Y
-#undef VEL_Z
-
-            // Define layer at one point above surface.
-            vel_x(t+1, x, y, z) EQUALS plus1_vel_x IF_ONE_ABOVE_SURFACE;
-            vel_y(t+1, x, y, z) EQUALS plus1_vel_y IF_ONE_ABOVE_SURFACE;
-            vel_z(t+1, x, y, z) EQUALS plus1_vel_z IF_ONE_ABOVE_SURFACE;
-
-#ifdef SET_ALL_POINTS
-            // Define layer two points above surface for completeness, even
-            // though these aren't input to any stencils.
-            vel_x(t+1, x, y, z) EQUALS 0.0 IF_TWO_ABOVE_SURFACE;
-            vel_y(t+1, x, y, z) EQUALS 0.0 IF_TWO_ABOVE_SURFACE;
-            vel_z(t+1, x, y, z) EQUALS 0.0 IF_TWO_ABOVE_SURFACE;
-#endif
-        }
-
-        // Free-surface boundary equations for stress.
-        void define_free_surface_stress() {
-
-            // When z == surface + 1, the surface will be at z - 1;
-            auto surf = z - 1;
-
-            stress_zz(t+1, x, y, z) EQUALS -get_next_stress_zz(x, y, surf) IF_ONE_ABOVE_SURFACE;
-            stress_xz(t+1, x, y, z) EQUALS -get_next_stress_xz(x, y, surf-1) IF_ONE_ABOVE_SURFACE;
-            stress_yz(t+1, x, y, z) EQUALS -get_next_stress_yz(x, y, surf-1) IF_ONE_ABOVE_SURFACE;
-
-#ifdef SET_ALL_POINTS
-            // Define other 3 stress values for completeness, even
-            // though these aren't input to any stencils.
-            stress_xx(t+1, x, y, z) EQUALS 0.0 IF_ONE_ABOVE_SURFACE;
-            stress_yy(t+1, x, y, z) EQUALS 0.0 IF_ONE_ABOVE_SURFACE;
-            stress_xy(t+1, x, y, z) EQUALS 0.0 IF_ONE_ABOVE_SURFACE;
-#endif
-
-            // When z == surface + 2, the surface will be at z - 2;
-            surf = z - 2;
-
-            stress_zz(t+1, x, y, z) EQUALS -get_next_stress_zz(x, y, surf-1) IF_TWO_ABOVE_SURFACE;
-            stress_xz(t+1, x, y, z) EQUALS -get_next_stress_xz(x, y, surf-2) IF_TWO_ABOVE_SURFACE;
-            stress_yz(t+1, x, y, z) EQUALS -get_next_stress_yz(x, y, surf-2) IF_TWO_ABOVE_SURFACE;
-
-#ifdef SET_ALL_POINTS
-            // Define other 3 stress values for completeness, even
-            // though these aren't input to any stencils.
-            stress_xx(t+1, x, y, z) EQUALS 0.0 IF_TWO_ABOVE_SURFACE;
-            stress_yy(t+1, x, y, z) EQUALS 0.0 IF_TWO_ABOVE_SURFACE;
-            stress_xy(t+1, x, y, z) EQUALS 0.0 IF_TWO_ABOVE_SURFACE;
-#endif
-        }
-
         // Define the t+1 values for all velocity and stress vars.
         virtual void define_base() {
 
@@ -474,40 +338,6 @@ namespace {
             stress_zz(t+1, x, y, z) EQUALS get_next_stress_zz(x, y, z);
         }
         
-        // Define the t+1 values for all velocity and stress vars
-        // with ABC.
-        virtual void define_base_abc() {
-
-            // Define velocity components.
-            vel_x(t+1, x, y, z) EQUALS get_next_vel_x(x, y, z) IF_AT_OR_BELOW_SURFACE;
-            vel_y(t+1, x, y, z) EQUALS get_next_vel_y(x, y, z) IF_AT_OR_BELOW_SURFACE;
-            vel_z(t+1, x, y, z) EQUALS get_next_vel_z(x, y, z) IF_AT_OR_BELOW_SURFACE;
-
-            // Define stress components.  Use non-overlapping sub-domains only,
-            // i.e., AT and BELOW but not AT_OR_BELOW, even though there are some
-            // repeated stencils. This allows the YASK compiler to bundle all
-            // the stress equations together.
-            stress_xx(t+1, x, y, z) EQUALS get_next_stress_xx(x, y, z) IF_BELOW_SURFACE;
-            stress_yy(t+1, x, y, z) EQUALS get_next_stress_yy(x, y, z) IF_BELOW_SURFACE;
-            stress_xy(t+1, x, y, z) EQUALS get_next_stress_xy(x, y, z) IF_BELOW_SURFACE;
-            stress_xz(t+1, x, y, z) EQUALS get_next_stress_xz(x, y, z) IF_BELOW_SURFACE;
-            stress_yz(t+1, x, y, z) EQUALS get_next_stress_yz(x, y, z) IF_BELOW_SURFACE;
-            stress_zz(t+1, x, y, z) EQUALS get_next_stress_zz(x, y, z) IF_BELOW_SURFACE;
-
-            stress_xx(t+1, x, y, z) EQUALS get_next_stress_xx(x, y, z) IF_AT_SURFACE;
-            stress_yy(t+1, x, y, z) EQUALS get_next_stress_yy(x, y, z) IF_AT_SURFACE;
-            stress_xy(t+1, x, y, z) EQUALS get_next_stress_xy(x, y, z) IF_AT_SURFACE;
-            stress_xz(t+1, x, y, z) EQUALS 0.0 IF_AT_SURFACE;
-            stress_yz(t+1, x, y, z) EQUALS 0.0 IF_AT_SURFACE;
-            stress_zz(t+1, x, y, z) EQUALS get_next_stress_zz(x, y, z) IF_AT_SURFACE;
-
-            // Boundary conditions.
-#ifdef DO_ABOVE_SURFACE
-            define_free_surface_vel();
-            define_free_surface_stress();
-#endif
-        }
-
         // Set BKC (best-known configs) found by automated and/or manual
         // tuning. They are only applied for certain target configs.
         virtual void set_configs() {
@@ -537,10 +367,6 @@ namespace {
                      if (!kernel_soln.is_offloaded()) {
                          auto isa = kernel_soln.get_target();
                          if (isa == "knl") {
-
-                             // Use half the threads: 2 threads on 2 cores per block.
-                             kernel_soln.apply_command_line_options("-thread_divisor 2 -block_threads 4");
-                         
                              kernel_soln.set_block_size("x", 48);
                              kernel_soln.set_block_size("y", 48);
                              kernel_soln.set_block_size("z", 112);
@@ -575,24 +401,11 @@ namespace {
         }
     };
 
-    // The elastic version of AWP with free-surface absorbing boundary conditions.
-    class AwpElasticABCStencil : public AwpElasticBase {
-    public:
-        AwpElasticABCStencil() :
-            AwpElasticBase("awp_elastic_abc") { }
-
-        // Define the t+1 values for all velocity and stress vars.
-        virtual void define() override {
-            define_base_abc();
-            set_configs();
-        }
-    };
-
     // The base for the anelastic version of AWP with time-varying
     // attenuation memory vars and the related attenuation constant vars.
-    class AwpBase : public AwpElasticBase {
+    class AwpAnelasticBase : public AwpElasticBase {
     public:
-        AwpBase(const string& name) :
+        AwpAnelasticBase(const string& name) :
             AwpElasticBase(name) { }
 
     protected:
@@ -787,10 +600,10 @@ namespace {
 
     // The anelastic version of AWP with time-varying attenuation memory
     // vars and the related attenuation constant vars.
-    class AwpStencil : public AwpBase {
+    class AwpStencil : public AwpAnelasticBase {
     public:
         AwpStencil() :
-            AwpBase("awp") { }
+            AwpAnelasticBase("awp") { }
 
         // Define the t+1 values for all velocity and stress vars.
         virtual void define() override {
@@ -808,15 +621,240 @@ namespace {
         }
     };
 
-    // The anelastic version of AWP with free-surface absorbing boundary conditions.
-    class AwpABCStencil : public AwpBase {
+    // Create objects for above AWP stencils,
+    // making them available in the YASK compiler utility via the
+    // '-stencil' commmand-line option or the 'stencil=' build option.
+    static AwpElasticStencil AwpElasticStencil_instance;
+    static AwpStencil AwpStencil_instance;
+
+    
+    /////////////////////////////////////////////////////////////////////////
+    // The remainder of this file is for the absorbing-boundary-condition
+    // ("abc") versions of the stencils.  The boundary conditions used here
+    // are no longer used by the AWC-ODC project, but the code is kept for
+    // historical purposes and as an example of complex domain-specific
+    // conditional code.
+    
+    // Macros for the "abc" versions.
+
+    // Set the following macro to define all points, even those above the
+    // surface that are never used. This make error-checking more consistent.
+    #define SET_ALL_POINTS
+
+    // Set the following macro to use intermediate scratch vars.
+    // This is a compute/memory tradeoff: using scratch vars reduces
+    // compute and increases memory accesses.
+    //#define USE_SCRATCH_VARS
+
+    // For the surface stress conditions, we need to write into 2 points
+    // above the surface.  Since we can only write into the "domain", we
+    // will define the surface index to be 2 points less than the last domain
+    // index. Thus, there will be two layers in the domain above the surface.
+    #define SURFACE_IDX (last_domain_index(z) - 2)
+
+    // Define some sub-domains related to the surface.
+    #define BELOW_SURFACE       (z < SURFACE_IDX)
+    #define AT_SURFACE          (z == SURFACE_IDX)
+    #define AT_OR_BELOW_SURFACE (z <= SURFACE_IDX)
+    #define ONE_ABOVE_SURFACE   (z == SURFACE_IDX + 1)
+    #define TWO_ABOVE_SURFACE   (z == SURFACE_IDX + 2)
+    #define IF_BELOW_SURFACE    IF_DOMAIN BELOW_SURFACE
+    #define IF_AT_SURFACE       IF_DOMAIN AT_SURFACE
+    #define IF_AT_OR_BELOW_SURFACE IF_DOMAIN AT_OR_BELOW_SURFACE
+    #define IF_ONE_ABOVE_SURFACE IF_DOMAIN ONE_ABOVE_SURFACE
+    #define IF_TWO_ABOVE_SURFACE IF_DOMAIN TWO_ABOVE_SURFACE
+
+    // Define a class to add free-surface functions.
+    class AwpAbcFuncs {
+
+        // Vars to capture the base class pointer and
+        // its needed YASK vars.
+        AwpElasticBase* _base;
+        yc_index_node_ptr t, x, y, z;
+        yc_var_proxy vel_x, vel_y, vel_z;
+        yc_var_proxy stress_xx, stress_yy, stress_zz;
+        yc_var_proxy stress_xz, stress_yz, stress_xy;
+        yc_var_proxy mu, lambda;
+        
+        #ifdef USE_SCRATCH_VARS
+        yc_var_proxy tmp_vel_x = yc_var_proxy("tmp_vel_x", get_soln(), { x, y, z }, true);
+        yc_var_proxy tmp_vel_y = yc_var_proxy("tmp_vel_y", get_soln(), { x, y, z }, true);
+        yc_var_proxy tmp_vel_z = yc_var_proxy("tmp_vel_z", get_soln(), { x, y, z }, true);
+        #endif
+
+        inline yc_number_node_ptr
+        last_domain_index(yc_index_node_ptr dim) {
+            return _base->last_domain_index(dim);
+        }
+
     public:
-        AwpABCStencil() :
-            AwpBase("awp_abc") { }
+
+        AwpAbcFuncs(AwpElasticBase* base) :
+            _base(base),
+            t(base->t), x(base->x), y(base->y), z(base->z),
+            vel_x(base->vel_x), vel_y(base->vel_y), vel_z(base->vel_z),
+            stress_xx(base->stress_xx), stress_yy(base->stress_yy), stress_zz(base->stress_zz),
+            stress_xz(base->stress_xz), stress_yz(base->stress_yz), stress_xy(base->stress_xy), 
+            mu(base->mu), lambda(base->lambda) { }
+            
+        // Free-surface boundary equations for velocity.
+        void define_free_surface_vel() {
+
+            // Since we're defining points when z == surface + 1,
+            // the surface itself will be at z - 1;
+            auto surf = _base->z - 1;
+
+            #ifdef USE_SCRATCH_VARS
+
+            // The values for velocity at t+1 will be needed
+            // in multiple free-surface calculations.
+            // Thus, it will reduce the number of FP ops
+            // required if we pre-compute them and store them
+            // in scratch vars. The downside is more memory
+            // and memory accesses.
+            #define VEL_X(x, y, z) tmp_vel_x(x, y, z)
+            #define VEL_Y(x, y, z) tmp_vel_y(x, y, z)
+            #define VEL_Z(x, y, z) tmp_vel_z(x, y, z)
+            VEL_X(x, y, z) EQUALS _base->get_next_vel_x(x, y, z);
+            VEL_Y(x, y, z) EQUALS _base->get_next_vel_y(x, y, z);
+            VEL_Z(x, y, z) EQUALS _base->get_next_vel_z(x, y, z);
+
+            #else
+
+            // If not using scratch vars, just call the
+            // functions to calculate each value of velocity
+            // at t+1 every time it's needed.
+            #define VEL_X(x, y, z) _base->get_next_vel_x(x, y, z)
+            #define VEL_Y(x, y, z) _base->get_next_vel_y(x, y, z)
+            #define VEL_Z(x, y, z) _base->get_next_vel_z(x, y, z)
+            #endif
+
+            // A couple of intermediate values.
+            auto d_x_val = VEL_X(x+1, y, surf) -
+                (VEL_Z(x+1, y, surf) - VEL_Z(x, y, surf));
+            auto d_y_val = VEL_Y(x, y-1, surf) -
+                (VEL_Z(x, y, surf) - VEL_Z(x, y-1, surf));
+
+            // Following values are valid one layer above the free surface.
+            auto plus1_vel_x = VEL_X(x, y, surf) -
+                (VEL_Z(x, y, surf) - VEL_Z(x-1, y, surf));
+            auto plus1_vel_y = VEL_Y(x, y, surf) -
+                (VEL_Z(x, y+1, surf) - VEL_Z(x, y, surf));
+            auto plus1_vel_z = VEL_Z(x, y, surf) -
+                ((d_x_val - plus1_vel_x) +
+                 (VEL_X(x+1, y, surf) - VEL_X(x, y, surf)) +
+                 (plus1_vel_y - d_y_val) +
+                 (VEL_Y(x, y, surf) - VEL_Y(x, y-1, surf))) /
+                ((mu(x, y, surf) *
+                  (2.0 / mu(x, y, surf) + 1.0 / lambda(x, y, surf))));
+            #undef VEL_X
+            #undef VEL_Y
+            #undef VEL_Z
+
+            // Define layer at one point above surface.
+            vel_x(t+1, x, y, z) EQUALS plus1_vel_x IF_ONE_ABOVE_SURFACE;
+            vel_y(t+1, x, y, z) EQUALS plus1_vel_y IF_ONE_ABOVE_SURFACE;
+            vel_z(t+1, x, y, z) EQUALS plus1_vel_z IF_ONE_ABOVE_SURFACE;
+
+            #ifdef SET_ALL_POINTS
+            // Define layer two points above surface for completeness, even
+            // though these aren't input to any stencils.
+            vel_x(t+1, x, y, z) EQUALS 0.0 IF_TWO_ABOVE_SURFACE;
+            vel_y(t+1, x, y, z) EQUALS 0.0 IF_TWO_ABOVE_SURFACE;
+            vel_z(t+1, x, y, z) EQUALS 0.0 IF_TWO_ABOVE_SURFACE;
+            #endif
+        }
+
+        // Free-surface boundary equations for stress.
+        void define_free_surface_stress() {
+
+            // When z == surface + 1, the surface will be at z - 1;
+            auto surf = z - 1;
+
+            stress_zz(t+1, x, y, z) EQUALS -_base->get_next_stress_zz(x, y, surf) IF_ONE_ABOVE_SURFACE;
+            stress_xz(t+1, x, y, z) EQUALS -_base->get_next_stress_xz(x, y, surf-1) IF_ONE_ABOVE_SURFACE;
+            stress_yz(t+1, x, y, z) EQUALS -_base->get_next_stress_yz(x, y, surf-1) IF_ONE_ABOVE_SURFACE;
+
+            // When z == surface + 2, the surface will be at z - 2;
+            surf = z - 2;
+
+            stress_zz(t+1, x, y, z) EQUALS -_base->get_next_stress_zz(x, y, surf-1) IF_TWO_ABOVE_SURFACE;
+            stress_xz(t+1, x, y, z) EQUALS -_base->get_next_stress_xz(x, y, surf-2) IF_TWO_ABOVE_SURFACE;
+            stress_yz(t+1, x, y, z) EQUALS -_base->get_next_stress_yz(x, y, surf-2) IF_TWO_ABOVE_SURFACE;
+
+            #ifdef SET_ALL_POINTS
+            // Define other 3 stress values for completeness, even
+            // though these aren't input to any stencils.
+            stress_xx(t+1, x, y, z) EQUALS 0.0 IF_ONE_ABOVE_SURFACE;
+            stress_yy(t+1, x, y, z) EQUALS 0.0 IF_ONE_ABOVE_SURFACE;
+            stress_xy(t+1, x, y, z) EQUALS 0.0 IF_ONE_ABOVE_SURFACE;
+            stress_xx(t+1, x, y, z) EQUALS 0.0 IF_TWO_ABOVE_SURFACE;
+            stress_yy(t+1, x, y, z) EQUALS 0.0 IF_TWO_ABOVE_SURFACE;
+            stress_xy(t+1, x, y, z) EQUALS 0.0 IF_TWO_ABOVE_SURFACE;
+            #endif
+        }
+
+        // Define the t+1 values for all velocity and stress vars
+        // with ABC.
+        virtual void define_base_abc() {
+
+            // Define velocity components.
+            vel_x(t+1, x, y, z) EQUALS _base->get_next_vel_x(x, y, z) IF_AT_OR_BELOW_SURFACE;
+            vel_y(t+1, x, y, z) EQUALS _base->get_next_vel_y(x, y, z) IF_AT_OR_BELOW_SURFACE;
+            vel_z(t+1, x, y, z) EQUALS _base->get_next_vel_z(x, y, z) IF_AT_OR_BELOW_SURFACE;
+
+            // Define stress components.  Use non-overlapping sub-domains only,
+            // i.e., AT and BELOW but not AT_OR_BELOW, even though they are the same
+            // calculation for most vars. This allows the YASK compiler to bundle all
+            // the stress equations together in each sub-domain.
+            stress_xx(t+1, x, y, z) EQUALS _base->get_next_stress_xx(x, y, z) IF_BELOW_SURFACE;
+            stress_yy(t+1, x, y, z) EQUALS _base->get_next_stress_yy(x, y, z) IF_BELOW_SURFACE;
+            stress_xy(t+1, x, y, z) EQUALS _base->get_next_stress_xy(x, y, z) IF_BELOW_SURFACE;
+            stress_xz(t+1, x, y, z) EQUALS _base->get_next_stress_xz(x, y, z) IF_BELOW_SURFACE;
+            stress_yz(t+1, x, y, z) EQUALS _base->get_next_stress_yz(x, y, z) IF_BELOW_SURFACE;
+            stress_zz(t+1, x, y, z) EQUALS _base->get_next_stress_zz(x, y, z) IF_BELOW_SURFACE;
+
+            stress_xx(t+1, x, y, z) EQUALS _base->get_next_stress_xx(x, y, z) IF_AT_SURFACE;
+            stress_yy(t+1, x, y, z) EQUALS _base->get_next_stress_yy(x, y, z) IF_AT_SURFACE;
+            stress_xy(t+1, x, y, z) EQUALS _base->get_next_stress_xy(x, y, z) IF_AT_SURFACE;
+            stress_xz(t+1, x, y, z) EQUALS 0.0 IF_AT_SURFACE;
+            stress_yz(t+1, x, y, z) EQUALS 0.0 IF_AT_SURFACE;
+            stress_zz(t+1, x, y, z) EQUALS _base->get_next_stress_zz(x, y, z) IF_AT_SURFACE;
+
+            // Velocity and stress above the surface layer.
+            define_free_surface_vel();
+            define_free_surface_stress();
+        }
+    };
+
+    // The elastic version of AWP with free-surface absorbing boundary conditions.
+    class AwpElasticABCStencil : public AwpElasticBase {
+        AwpAbcFuncs abc_funcs;
+        
+    public:
+        AwpElasticABCStencil() :
+            AwpElasticBase("awp_elastic_abc"),
+            abc_funcs(this) { }
 
         // Define the t+1 values for all velocity and stress vars.
         virtual void define() override {
-            define_base_abc();
+            abc_funcs.define_base_abc();
+            set_configs();
+        }
+    };
+
+    // The anelastic version of AWP with free-surface absorbing boundary conditions.
+    class AwpABCStencil : public AwpAnelasticBase {
+       AwpAbcFuncs abc_funcs;
+
+    public:
+        AwpABCStencil() :
+            AwpAnelasticBase("awp_abc"),
+            abc_funcs(this) { }
+
+        // Define the t+1 values for all velocity and stress vars.
+        virtual void define() override {
+            abc_funcs.define_base_abc();
 
             // Define memory components using same sub-domains as the stress vars.
             for (auto cond : { BELOW_SURFACE, AT_SURFACE, ONE_ABOVE_SURFACE, TWO_ABOVE_SURFACE }) {
@@ -831,12 +869,10 @@ namespace {
         }
     };
    
-    // Create objects for all AWP stencils,
+    // Create objects for AWP-ABC stencils,
     // making them available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static AwpElasticStencil AwpElasticStencil_instance;
     static AwpElasticABCStencil AwpElasticABCStencil_instance;
-    static AwpStencil AwpStencil_instance;
     static AwpABCStencil AwpABCStencil_instance;
 
 } // namespace.
