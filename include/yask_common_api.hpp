@@ -661,11 +661,12 @@ namespace yask {
        Splash message contains the YASK copyright, URL, and version.
        If `argc > 1`, also prints `invocation_leader` followed by
        the program invocation string.
+
+       @note Not available in the Python API.
     */
     extern void
     yask_print_splash(std::ostream& os, int argc, char** argv,
                       std::string invocation_leader = "invocation: ");
-    
     #endif
     
     /** @}*/

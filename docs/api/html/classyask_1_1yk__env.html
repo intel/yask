@@ -119,6 +119,9 @@ Static Public Member Functions</h2></td></tr>
 <tr class="memitem:a69eac2bb8a841f6259697a7dcc8cf386"><td class="memItemLeft" align="right" valign="top">static <a class="el" href="group__yask.html#ga605185252a3f3f917593c83b7dde4b66">yask_output_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__env.html#a69eac2bb8a841f6259697a7dcc8cf386">get_debug_output</a> ()</td></tr>
 <tr class="memdesc:a69eac2bb8a841f6259697a7dcc8cf386"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get object to receive debug output.  <br /></td></tr>
 <tr class="separator:a69eac2bb8a841f6259697a7dcc8cf386"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a15badb04cf16d9bcf67c8d73cc038cf3"><td class="memItemLeft" align="right" valign="top">static void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__env.html#a15badb04cf16d9bcf67c8d73cc038cf3">print_splash</a> (int argc, char **argv, std::string invocation_leader=&quot;invocation: &quot;)</td></tr>
+<tr class="memdesc:a15badb04cf16d9bcf67c8d73cc038cf3"><td class="mdescLeft">&#160;</td><td class="mdescRight">Print a YASK spash message to debug output.  <br /></td></tr>
+<tr class="separator:a15badb04cf16d9bcf67c8d73cc038cf3"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ac6b39c25ae59e27dcdb405a9fe24e763"><td class="memItemLeft" align="right" valign="top">static void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__env.html#ac6b39c25ae59e27dcdb405a9fe24e763">set_trace_enabled</a> (bool enable)</td></tr>
 <tr class="memdesc:ac6b39c25ae59e27dcdb405a9fe24e763"><td class="mdescLeft">&#160;</td><td class="mdescRight">Enable or disable additional debug tracing.  <br /></td></tr>
 <tr class="separator:ac6b39c25ae59e27dcdb405a9fe24e763"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -224,6 +227,51 @@ Static Public Member Functions</h2></td></tr>
 <li>This method may be called before creating a <code><a class="el" href="classyask_1_1yk__env.html" title="Kernel environment.">yk_env</a></code> object.</li>
 </ul>
 <dl class="section return"><dt>Returns</dt><dd>Pointer to <a class="el" href="classyask_1_1yask__output.html">yask_output</a> set via set_debug_output or pointer to a <a class="el" href="classyask_1_1yask__stdout__output.html">yask_stdout_output</a> if not set. </dd></dl>
+
+</div>
+</div>
+<a id="a15badb04cf16d9bcf67c8d73cc038cf3" name="a15badb04cf16d9bcf67c8d73cc038cf3"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a15badb04cf16d9bcf67c8d73cc038cf3">&#9670;&#160;</a></span>print_splash()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">static void yask::yk_env::print_splash </td>
+          <td>(</td>
+          <td class="paramtype">int&#160;</td>
+          <td class="paramname"><em>argc</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">char **&#160;</td>
+          <td class="paramname"><em>argv</em>, </td>
+        </tr>
+        <tr>
+          <td class="paramkey"></td>
+          <td></td>
+          <td class="paramtype">std::string&#160;</td>
+          <td class="paramname"><em>invocation_leader</em> = <code>&quot;invocation:&#160;&quot;</code>&#160;</td>
+        </tr>
+        <tr>
+          <td></td>
+          <td>)</td>
+          <td></td><td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span><span class="mlabel">static</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Print a YASK spash message to debug output. </p>
+<p>Splash message contains the YASK copyright, URL, and version. If <code>argc &gt; 1</code>, also prints <code>invocation_leader</code> followed by the program invocation string. </p>
 
 </div>
 </div>

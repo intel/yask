@@ -22,7 +22,7 @@ var searchData=
   ['yask_5foutput_19',['yask_output',['../classyask_1_1yask__output.html',1,'yask']]],
   ['yask_5foutput_5ffactory_20',['yask_output_factory',['../classyask_1_1yask__output__factory.html',1,'yask']]],
   ['yask_5foutput_5fptr_21',['yask_output_ptr',['../group__yask.html#ga605185252a3f3f917593c83b7dde4b66',1,'yask']]],
-  ['yask_5fprint_5fsplash_22',['yask_print_splash',['../group__yask.html#ga4294631602623f18b52232820523a91c',1,'yask']]],
+  ['yask_5fprint_5fsplash_22',['yask_print_splash',['../group__yask.html#gaf188d078164baa2d85965bd4282b6620',1,'yask']]],
   ['yask_5fstdout_5foutput_23',['yask_stdout_output',['../classyask_1_1yask__stdout__output.html',1,'yask']]],
   ['yask_5fstdout_5foutput_5fptr_24',['yask_stdout_output_ptr',['../group__yask.html#gadc078067262f58e384b4ed7aaed08917',1,'yask']]],
   ['yask_5fstring_5foutput_25',['yask_string_output',['../classyask_1_1yask__string__output.html',1,'yask']]],

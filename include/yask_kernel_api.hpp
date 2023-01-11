@@ -197,6 +197,19 @@ namespace yask {
         static yask_output_ptr
         get_debug_output();
 
+        /// Print a YASK spash message to debug output.
+        /**
+           Splash message contains the YASK copyright, URL, and version.
+           If `argc > 1`, also prints `invocation_leader` followed by
+           the program invocation string.
+        */
+        static inline void
+        print_splash(int argc, char** argv,
+                     std::string invocation_leader = "invocation: ") {
+            yask_print_splash(get_debug_output()->get_ostream(),
+                              argc, argv, invocation_leader);
+        }
+        
         /// Enable or disable additional debug tracing.
         /**
            This is a static method, implying the following:
