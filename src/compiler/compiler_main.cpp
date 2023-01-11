@@ -167,7 +167,7 @@ int main(int argc, char* argv[]) {
     yc_factory factory;
 
     try {
-        yask_print_splash(cout, argc, argv);
+        yask_print_splash(cout, argc, argv, "YASK compiler invocation: ");
         cout << "\nYASK Stencil Compiler\n";
 
         // Option parser.

@@ -282,7 +282,11 @@ while true; do
         fi
         
         # Pass this option to executable.
-        opts+=" $1"
+        if [[ $1 =~ [[:space:]] ]]; then
+            opts+=" '$1'"
+        else
+            opts+=" $1"
+        fi
         shift
         
     fi

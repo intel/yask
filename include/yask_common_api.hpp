@@ -659,10 +659,12 @@ namespace yask {
     /// Print a YASK spash message to `os`.
     /**
        Splash message contains the YASK copyright, URL, and version.
-       If `argc > 1`, also prints the program invocation string.
+       If `argc > 1`, also prints `invocation_leader` followed by
+       the program invocation string.
     */
     extern void
-    yask_print_splash(std::ostream& os, int argc, char** argv);
+    yask_print_splash(std::ostream& os, int argc, char** argv,
+                      std::string invocation_leader = "invocation: ");
     
     #endif
     

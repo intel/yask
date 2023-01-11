@@ -266,7 +266,7 @@ int main(int argc, char** argv)
         kenv->assert_equality_over_ranks(opts.validate ? 0 : 1, "validation");
 
         // Print splash banner and related info.
-        yask_print_splash(os, argc, argv);
+        yask_print_splash(os, argc, argv, "YASK kernel invocation: ");
         os << "\nYASK performance and validation utility\n"
             "Stencil name: " << ksoln->get_name() << endl;
 

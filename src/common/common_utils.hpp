@@ -81,6 +81,9 @@ namespace yask {
     extern std::string make_num_str(idx_t num);
     extern std::string make_num_str(double num);
 
+    // Add quotes around whitespace in string.
+    extern std::string quote_whitespace(const std::string& str);
+
     // Divide 'num' equally into 'nparts'.
     // Returns the size of the 'n'th part,
     // where 0 <= 'n' < 'nparts'.
