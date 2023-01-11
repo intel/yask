@@ -25,9 +25,23 @@ IN THE SOFTWARE.
 
 // This code implements the YASK stand-alone performance-measurement tool.
 
+// TODO: remove reliance on internal definitions and use only yask_kernel_api.hpp.
 #include "yask_stencil.hpp"
 using namespace std;
 using namespace yask;
+
+// VTune APIs or stubs.
+// https://www.intel.com/content/www/us/en/develop/documentation/vtune-help/top/api-support/instrumentation-and-tracing-technology-apis/instrumentation-tracing-technology-api-reference/collection-control-api.html
+#ifdef USE_VTUNE
+#include "ittnotify.h"
+#define VTUNE_PAUSE  __itt_pause()
+#define VTUNE_RESUME __itt_resume()
+#define VTUNE_DETACH __itt_detach()
+#else
+#define VTUNE_PAUSE ((void)0)
+#define VTUNE_RESUME ((void)0)
+#define VTUNE_DETACH ((void)0)
+#endif
 
 // Add some command-line options for this application in addition to the
 // default ones provided by YASK library.
@@ -608,7 +622,7 @@ int main(int argc, char** argv)
                         cerr << "TEST PASSED on rank " << ri << ".\n" << flush;
                     else {
                         cerr << "TEST FAILED on rank " << ri << ": " << errs << " mismatch(es).\n";
-                        if (REAL_BYTES < 8)
+                        if (soln->get_element_bytes() < 8)
                             cerr << " Small differences are not uncommon for low-precision FP; "
                                 "try with 8-byte reals.\n";
                         cerr << flush;

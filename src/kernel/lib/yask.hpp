@@ -183,19 +183,6 @@ typedef std::uint64_t bit_mask_t;
 #define __assume_aligned(p,n) ((void)0)
 #endif
 
-// VTune or stubs.
-// https://www.intel.com/content/www/us/en/develop/documentation/vtune-help/top/api-support/instrumentation-and-tracing-technology-apis/instrumentation-tracing-technology-api-reference/collection-control-api.html
-#ifdef USE_VTUNE
-#include "ittnotify.h"
-#define VTUNE_PAUSE  __itt_pause()
-#define VTUNE_RESUME __itt_resume()
-#define VTUNE_DETACH __itt_detach()
-#else
-#define VTUNE_PAUSE ((void)0)
-#define VTUNE_RESUME ((void)0)
-#define VTUNE_DETACH ((void)0)
-#endif
-
 // Default alloc settings.
 #define CACHELINE_BYTES  (64)
 #define YASK_PAD (3) // cache-lines between data buffers.
