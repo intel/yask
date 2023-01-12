@@ -622,7 +622,7 @@ int main(int argc, char** argv)
                         cerr << "TEST PASSED on rank " << ri << ".\n" << flush;
                     else {
                         cerr << "TEST FAILED on rank " << ri << ": " << errs << " mismatch(es).\n";
-                        if (soln->get_element_bytes() < 8)
+                        if (ksoln->get_element_bytes() < 8)
                             cerr << " Small differences are not uncommon for low-precision FP; "
                                 "try with 8-byte reals.\n";
                         cerr << flush;
