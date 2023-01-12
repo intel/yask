@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2022, Intel Corporation
+Copyright (c) 2014-2023, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -192,6 +192,9 @@ namespace yask {
         CommonCoreData _common_core;
     };
 
+    // Forward decl.
+    class MpiSection;
+
     // Data and hierarchical sizes.
     // This is a pure-virtual class that must be implemented
     // for a specific problem.
@@ -238,51 +241,6 @@ namespace yask {
         // is valid for the layer that needs to be exchanged, and doesn't
         // include any extensions needed for WF.
         BoundingBox mpi_interior;
-
-        // Flags to track state of calculating the interior and/or exterior.
-        bool do_mpi_interior = true;
-        bool do_mpi_left = true;        // left exterior in given dim.
-        bool do_mpi_right = true;        // right exterior in given dim.
-        idx_t mpi_exterior_dim = -1;      // which domain dim in left/right.
-
-        // Set MPI flag to defaults.
-        inline void init_mpi_flags() {
-            do_mpi_interior = do_mpi_left = do_mpi_right = true;
-            mpi_exterior_dim = -1;
-        }
-
-        // Is overlapping-comms mode currently enabled?
-        inline bool is_overlap_active() const {
-            assert(do_mpi_interior || do_mpi_left || do_mpi_right);
-            if (!do_mpi_interior)
-                assert(do_mpi_left || do_mpi_right); // one or both.
-            else {
-                assert(do_mpi_left == do_mpi_right); // both or neither.
-                if (do_mpi_left != do_mpi_right)
-                    assert(mpi_exterior_dim >= 0); // must specify dim.
-            }
-            bool active = !do_mpi_interior || !do_mpi_left || !do_mpi_right;
-            if (active) {
-                assert(mpi_interior.bb_valid);
-            }
-            return active;
-        }
-
-        // Describe MPI flag setting.
-        std::string make_mpi_section_descr() {
-            STATE_VARS(this);
-            if (is_overlap_active())
-                return std::string("MPI ") +
-                    (do_mpi_interior ? "interior" :
-                     (do_mpi_left && do_mpi_right) ? "exterior" :
-                     do_mpi_left ?
-                     ("exterior left-" +
-                      domain_dims.get_dim_name(mpi_exterior_dim)) :
-                     ("exterior right-" +
-                      domain_dims.get_dim_name(mpi_exterior_dim))) +
-                    " section";
-            return std::string("all MPI sections");
-        }
 
         // Is there a non-zero exterior in the given section?
         inline bool does_exterior_exist(idx_t ddim, bool is_left) const {
@@ -508,29 +466,32 @@ namespace yask {
 
         // Calculate results within a mega-block.
         void calc_mega_block(StagePtr& sel_bp,
-                         const ScanIndices& rank_idxs);
+                             const ScanIndices& rank_idxs,
+                             MpiSection& mpisec);
 
         // Calculate results within a block.
         void calc_block(StagePtr& sel_bp,
                         idx_t mega_block_shift_num,
                         idx_t nphases, idx_t phase,
                         const ScanIndices& rank_idxs,
-                        const ScanIndices& mega_block_idxs);
+                        const ScanIndices& mega_block_idxs,
+                        MpiSection& mpisec);
 
         // Calculate results within a micro-block.
         void calc_micro_block(int outer_thread_idx,
-                             StagePtr& sel_bp,
-                             idx_t mega_block_shift_num,
-                             idx_t nphases, idx_t phase,
-                             idx_t nshapes, idx_t shape,
-                             const bit_mask_t& bridge_mask,
-                             const ScanIndices& rank_idxs,
-                             const ScanIndices& base_mega_block_idxs,
-                             const ScanIndices& base_block_idxs,
-                             const ScanIndices& adj_block_idxs);
+                              StagePtr& sel_bp,
+                              idx_t mega_block_shift_num,
+                              idx_t nphases, idx_t phase,
+                              idx_t nshapes, idx_t shape,
+                              const bit_mask_t& bridge_mask,
+                              const ScanIndices& rank_idxs,
+                              const ScanIndices& base_mega_block_idxs,
+                              const ScanIndices& base_block_idxs,
+                              const ScanIndices& adj_block_idxs,
+                              MpiSection& mpisec);
 
         // Exchange all dirty halo data for all stencil bundles.
-        void exchange_halos();
+        void exchange_halos(MpiSection& mpisec);
 
         // Call MPI_Test() on all unfinished requests to advance MPI progress.
         void adv_halo_exchange();
@@ -554,9 +515,10 @@ namespace yask {
 
         // Set various limits in 'idxs' based on current step in mega-block.
         bool shift_mega_block(const Indices& base_start, const Indices& base_stop,
-                            idx_t shift_num,
-                            StagePtr& bp,
-                            ScanIndices& idxs);
+                              idx_t shift_num,
+                              StagePtr& bp,
+                              ScanIndices& idxs,
+                              const MpiSection& mpisec);
 
         // Set various limits in 'idxs' based on current step in block.
         bool shift_micro_block(const Indices& mb_base_start,
@@ -765,5 +727,63 @@ namespace yask {
         virtual bool is_auto_tuner_enabled() const;
 
     }; // StencilContext.
+
+    // Flags to track state of calculating the interior and/or exterior.
+    class MpiSection {
+        const StencilContext* _scp;
+
+    public:
+        bool do_mpi_interior = true;
+        bool do_mpi_left = true;        // left exterior in given dim.
+        bool do_mpi_right = true;        // right exterior in given dim.
+        idx_t mpi_exterior_dim = -1;      // which domain dim in left/right.
+
+        MpiSection(const StencilContext* scp) :
+            _scp(scp) { }
+
+        void init() {
+            do_mpi_interior = do_mpi_left = do_mpi_right = true;
+            mpi_exterior_dim = -1;
+        }
+
+        // Is overlapping-comms mode currently enabled?
+        // Side-effect: checks for consistency of MPI flags.
+        inline bool is_overlap_active() const {
+            assert(do_mpi_interior || do_mpi_left || do_mpi_right);
+            if (!do_mpi_interior) {
+                assert(do_mpi_left || do_mpi_right); // one or both.
+                if (do_mpi_left != do_mpi_right) // one only.
+                    assert(mpi_exterior_dim >= 0); // must specify dim.
+            }
+            else {
+                assert(do_mpi_left == do_mpi_right); // both or neither.
+            }
+            bool active = !do_mpi_interior || !do_mpi_left || !do_mpi_right;
+            if (active)
+                assert(_scp->mpi_interior.bb_valid);
+            return active;
+        }
+
+        // Currently doing the exterior only?
+        bool is_exterior_active() const {
+            return !do_mpi_interior && (do_mpi_left || do_mpi_right);
+        }
+
+        // Describe MPI flag setting.
+        std::string make_descr() const {
+            STATE_VARS(_scp);
+            if (is_overlap_active())
+                return std::string("MPI ") +
+                    (do_mpi_interior ? "interior" :
+                     (do_mpi_left && do_mpi_right) ? "exterior" :
+                     do_mpi_left ?
+                     ("exterior left-" +
+                      domain_dims.get_dim_name(mpi_exterior_dim)) :
+                     ("exterior right-" +
+                      domain_dims.get_dim_name(mpi_exterior_dim))) +
+                    " section";
+            return std::string("all MPI sections");
+        }
+    };
 
 } // yask namespace.

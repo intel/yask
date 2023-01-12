@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2022, Intel Corporation
+Copyright (c) 2014-2023, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -80,6 +80,9 @@ namespace yask {
     // Return num with SI multiplier, e.g., 4.23M.
     extern std::string make_num_str(idx_t num);
     extern std::string make_num_str(double num);
+
+    // Add quotes around whitespace in string.
+    extern std::string quote_whitespace(const std::string& str);
 
     // Divide 'num' equally into 'nparts'.
     // Returns the size of the 'n'th part,

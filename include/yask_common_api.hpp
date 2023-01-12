@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2022, Intel Corporation
+Copyright (c) 2014-2023, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -659,11 +659,14 @@ namespace yask {
     /// Print a YASK spash message to `os`.
     /**
        Splash message contains the YASK copyright, URL, and version.
-       If `argc > 1`, also prints the program invocation string.
+       If `argc > 1`, also prints `invocation_leader` followed by
+       the program invocation string.
+
+       @note Not available in the Python API.
     */
     extern void
-    yask_print_splash(std::ostream& os, int argc, char** argv);
-    
+    yask_print_splash(std::ostream& os, int argc, char** argv,
+                      std::string invocation_leader = "invocation: ");
     #endif
     
     /** @}*/

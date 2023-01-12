@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2022, Intel Corporation
+Copyright (c) 2014-2023, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -44,7 +44,7 @@ namespace yask {
     // for numbers above 9 (at least up to 99).
 
     // Format: "major.minor.patch[-alpha|-beta]".
-    const string version = "4.01.00";
+    const string version = "4.01.01";
 
     string yask_get_version_string() {
         return version;
@@ -143,6 +143,28 @@ namespace yask {
         else
             os << num;
         return os.str();
+    }
+
+    // Add quotes around whitespace in string.
+    std::string quote_whitespace(const std::string& str) {
+        auto pos = str.find_first_of(" \t\r\n");
+        if (pos != string::npos) {
+            string r = str;
+
+            // Must not use chars already in the string.
+            auto apos = r.find('\'');
+            auto qpos = r.find('"');
+            if (apos == string::npos) // No apostrophes.
+                r = string("\"") + r + '"'; // Add quotes.
+            else if (qpos == string::npos) // No quotes.
+                r = string("'") + r + "'"; // Add apostrophes.
+            else { // Has both :(.
+                r = regex_replace(r, regex("'"), "\\'"); // Escape apostrophes.
+                r = string("'") + r + "'"; // Add apostrophes.
+            }
+            return r;
+        }
+        return str;
     }
 
     // A var that behaves like OMP_NUM_THREADS.
@@ -449,8 +471,8 @@ namespace yask {
             string str;
             while (getline(ss, str, ',')) {
                 if (_allowed_strs.size() && _allowed_strs.count(str) == 0) {
-                    THROW_YASK_EXCEPTION("illegal argument '" + str + "' to option '" +
-                                         args[argi - 2] + "'");
+                    THROW_YASK_EXCEPTION("illegal argument '" + quote_whitespace(str) +
+                                         "' to option '" + args[argi - 2] + "'");
                 }
                 _val.push_back(str);
             }
@@ -525,22 +547,8 @@ namespace yask {
                 rem += " "; // Space between words.
 
             // Add quotes around 'r' if it has whitespace.
-            auto pos = r.find_first_of(" \t\r\n");
-            if (pos != string::npos) {
-
-                // Must not use chars already in the string.
-                auto apos = r.find('\'');
-                auto qpos = r.find('"');
-                if (apos == string::npos) // No apostrophes.
-                    r = string("\"") + r + '"'; // Add quotes.
-                else if (qpos == string::npos) // No quotes.
-                    r = string("'") + r + "'"; // Add apostrophes.
-                else { // Has both :(.
-                    r = regex_replace(r, regex("'"), "\\'"); // Escape apostrophes.
-                    r = string("'") + r + "'"; // Add apostrophes.
-                }
-            }
-                
+            r = quote_whitespace(r);
+            
             rem += r;
         }
         return rem;
@@ -549,6 +557,7 @@ namespace yask {
     // Tokenize args from a string.
     vector<string> command_line_parser::set_args(const string& arg_string) {
         string tmp;            // current arg.
+        bool is_ok = false;    // current arg is valid.
         char in_quote = '\0';  // current string delimiter or null if none.
         vector<string> args;
         for (char c : arg_string) {
@@ -559,8 +568,7 @@ namespace yask {
                 // End of quoted string, i.e., this char
                 // matches opening quote.
                 if (in_quote == c) {
-                    args.push_back(tmp); // may be empty string.
-                    tmp.clear();
+                    is_ok = true; // even if empty.
                     in_quote = '\0';
                 }
 
@@ -570,9 +578,10 @@ namespace yask {
 
             // If WS, save old string and start a new string.
             else if (isspace(c)) {
-                if (tmp.length())
+                if (is_ok)
                     args.push_back(tmp);
                 tmp.clear();
+                is_ok = false;
             }
 
             // If quote, remember delimiter.
@@ -581,8 +590,10 @@ namespace yask {
             }
 
             // Otherwise, just add to tmp.
-            else
+            else {
                 tmp += c;
+                is_ok = true;
+            }
         }
 
         if (in_quote != '\0')
@@ -590,27 +601,31 @@ namespace yask {
                                  arg_string + "'");
 
         // Last string.
-        if (tmp.length())
+        if (is_ok)
             args.push_back(tmp);
         return args;
     }
 
     // Print a spash message.
-    void yask_print_splash(ostream& os, int argc, char** argv) {
+    void yask_print_splash(ostream& os, int argc, char** argv,
+                           string invocation_leader) {
         // See https://en.wikipedia.org/wiki/Box-drawing_character.
         os <<
             "\u250c\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510\n"
             "\u2502     Y*A*S*K \u2500\u2500 Yet Another Stencil Kit     \u2502\n"
             "\u2502       https://github.com/intel/yask        \u2502\n"
-            "\u2502 Copyright (c) 2014-2022, Intel Corporation \u2502\n"
+            "\u2502 Copyright (c) 2014-2023, Intel Corporation \u2502\n"
             "\u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n"
             "Version: " << yask_get_version_string() << endl;
 
         // Echo invocation parameters for record-keeping.
         if (argc) {
-            os << "Binary invocation:";
-            for (int argi = 0; argi < argc; argi++)
-                os << " " << argv[argi];
+            os << invocation_leader;
+            for (int argi = 0; argi < argc; argi++) {
+                if (argi)
+                    os << " ";
+                os << quote_whitespace(argv[argi]);
+            }
             os << endl;
         }
     }

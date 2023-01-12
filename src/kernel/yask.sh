@@ -2,7 +2,7 @@
 
 ##############################################################################
 ## YASK: Yet Another Stencil Kit
-## Copyright (c) 2014-2022, Intel Corporation
+## Copyright (c) 2014-2023, Intel Corporation
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
@@ -282,7 +282,11 @@ while true; do
         fi
         
         # Pass this option to executable.
-        opts+=" $1"
+        if [[ $1 =~ [[:space:]] ]]; then
+            opts+=" '$1'"
+        else
+            opts+=" $1"
+        fi
         shift
         
     fi

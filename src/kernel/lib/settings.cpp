@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2022, Intel Corporation
+Copyright (c) 2014-2023, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -1027,7 +1027,7 @@ namespace yask {
 
     }
 
-    // Set number of threads w/o using thread-divisor.
+    // Set number of threads to max-threads.
     // Return number of threads.
     // Do nothing and return 0 if not properly initialized.
     int KernelStateBase::set_max_threads() {

@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2022, Intel Corporation
+Copyright (c) 2014-2023, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -638,7 +638,7 @@ namespace {
     // Macros for the "abc" versions.
 
     // Set the following macro to define all points, even those above the
-    // surface that are never used. This make error-checking more consistent.
+    // surface that are never used. This makes error-checking more consistent.
     #define SET_ALL_POINTS
 
     // Set the following macro to use intermediate scratch vars.
@@ -702,7 +702,7 @@ namespace {
 
             // Since we're defining points when z == surface + 1,
             // the surface itself will be at z - 1;
-            auto surf = _base->z - 1;
+            auto surf = z - 1;
 
             #ifdef USE_SCRATCH_VARS
 

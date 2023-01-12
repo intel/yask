@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2022, Intel Corporation
+Copyright (c) 2014-2023, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -167,8 +167,7 @@ int main(int argc, char* argv[]) {
     yc_factory factory;
 
     try {
-        yask_print_splash(cout, argc, argv);
-        cout << "\nYASK Stencil Compiler\n";
+        yask_print_splash(cout, argc, argv, "YASK Stencil Compiler invocation: ");
 
         // Option parser.
         MySettings my_settings;

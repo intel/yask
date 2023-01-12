@@ -1,7 +1,7 @@
 /*****************************************************************************
 
 YASK: Yet Another Stencil Kit
-Copyright (c) 2014-2022, Intel Corporation
+Copyright (c) 2014-2023, Intel Corporation
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to
@@ -159,8 +159,9 @@ namespace yask {
         // Calculate results within a micro-block.
         void
         calc_micro_block(int outer_thread_idx,
-                        KernelSettings& settings,
-                        const ScanIndices& micro_block_idxs);
+                         KernelSettings& settings,
+                         const ScanIndices& micro_block_idxs,
+                         MpiSection& mpisec);
 
         // Mark vars dirty that are updated by this bundle and/or
         // update last valid step.
