@@ -1027,7 +1027,7 @@ namespace yask {
 
     }
 
-    // Set number of threads w/o using thread-divisor.
+    // Set number of threads to max-threads.
     // Return number of threads.
     // Do nothing and return 0 if not properly initialized.
     int KernelStateBase::set_max_threads() {
