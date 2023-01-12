@@ -107,12 +107,13 @@ namespace yask {
         update_scratch_var_info(scratch_var_idx, rank_idxs.begin);
 
         // Doing all parts.
-        init_mpi_flags();
+        MpiSection mpisec(this);
+        mpisec.init();
         
         // Initial halo exchange.
         // TODO: get rid of all halo exchanges in this function,
         // and calculate overall problem in one rank.
-        exchange_halos();
+        exchange_halos(mpisec);
 
         // Number of iterations to get from begin_t, stopping before end_t,
         // jumping by stride_t.
@@ -147,7 +148,7 @@ namespace yask {
                 }
 
                 // Exchange all dirty halos.
-                exchange_halos();
+                exchange_halos(mpisec);
 
                 // Find the bundles that need to be processed.
                 // This will be the prerequisite scratch-var
@@ -183,7 +184,7 @@ namespace yask {
         steps_done += abs(end_t - begin_t);
 
         // Final halo exchange.
-        exchange_halos();
+        exchange_halos(mpisec);
 
         run_time.stop();
 
@@ -320,7 +321,8 @@ namespace yask {
             set_num_outer_threads();
 
             // Initial halo exchange.
-            exchange_halos();
+            MpiSection mpisec(this);
+            exchange_halos(mpisec);
 
             // Number of iterations to get from begin_t to end_t-1,
             // jumping by stride_t.
@@ -361,7 +363,7 @@ namespace yask {
 
                         // Do MPI-external parts separately?
                         if (mpi_interior.bb_valid) {
-                            do_mpi_interior = false;
+                            mpisec.do_mpi_interior = false;
 
                             // Overlap comms and computation by restricting
                             // mega-block boundaries.  Make an external pass for
@@ -377,9 +379,10 @@ namespace yask {
 
                                     // Set the proper flags to indicate what
                                     // section we're working on.
-                                    do_mpi_left = is_left;
-                                    do_mpi_right = !is_left;
-                                    mpi_exterior_dim = j;
+                                    mpisec.do_mpi_left = is_left;
+                                    mpisec.do_mpi_right = !is_left;
+                                    mpisec.mpi_exterior_dim = j;
+                                    assert(mpisec.is_overlap_active());
 
                                     // Include automatically-generated loop
                                     // code to call calc_mega_block() for
@@ -398,7 +401,7 @@ namespace yask {
                                     #include "yask_rank_loops.hpp"
 
                                     // Loop body.
-                                    calc_mega_block(bp, mega_block_range);
+                                    calc_mega_block(bp, mega_block_range, mpisec);
 
                                     // Loop suffix.
                                     #define RANK_USE_LOOP_PART_1
@@ -418,12 +421,12 @@ namespace yask {
                             update_var_info(bp, start_t, stop_t, true);
 
                             // Do the appropriate steps for halo exchange of exterior.
-                            do_mpi_left = do_mpi_right = true;
-                            exchange_halos();
+                            mpisec.do_mpi_left = mpisec.do_mpi_right = true;
+                            exchange_halos(mpisec);
 
                             // Do interior only in next pass.
-                            do_mpi_left = do_mpi_right = false;
-                            do_mpi_interior = true;
+                            mpisec.do_mpi_left = mpisec.do_mpi_right = false;
+                            mpisec.do_mpi_interior = true;
 
                         } // Exterior only for overlapping comms.
 
@@ -441,22 +444,22 @@ namespace yask {
                         #include "yask_rank_loops.hpp"
 
                         // Loop body.
-                        calc_mega_block(bp, mega_block_range);
+                        calc_mega_block(bp, mega_block_range, mpisec);
 
                         // Loop suffix.
                         #define RANK_USE_LOOP_PART_1
                         #include "yask_rank_loops.hpp"
  
                         // Mark as dirty only if we just did exterior.
-                        bool mark_dirty = do_mpi_left || do_mpi_right;
+                        bool mark_dirty = mpisec.do_mpi_left || mpisec.do_mpi_right;
                         update_var_info(bp, start_t, stop_t, mark_dirty);
 
                         // Do the appropriate steps for halo exchange depending
                         // on 'do_mpi_*' flags.
-                        exchange_halos();
+                        exchange_halos(mpisec);
 
                         // Set the overlap flags back to default.
-                        init_mpi_flags();
+                        mpisec.init();
 
                     } // stages.
                 } // No WF tiling.
@@ -471,7 +474,7 @@ namespace yask {
 
                     // Do MPI-external parts separately?
                     if (mpi_interior.bb_valid) {
-                        do_mpi_interior = false;
+                        mpisec.do_mpi_interior = false;
 
                         // Overlap comms and computation by restricting
                         // mega-block boundaries.  Make an external pass for
@@ -487,9 +490,10 @@ namespace yask {
 
                                 // Set the proper flags to indicate what
                                 // section we're working on.
-                                do_mpi_left = is_left;
-                                do_mpi_right = !is_left;
-                                mpi_exterior_dim = j;
+                                mpisec.do_mpi_left = is_left;
+                                mpisec.do_mpi_right = !is_left;
+                                mpisec.mpi_exterior_dim = j;
+                                assert(mpisec.is_overlap_active());
 
                                 // Include automatically-generated loop
                                 // code to call calc_mega_block(bp) for
@@ -508,7 +512,7 @@ namespace yask {
                                 #include "yask_rank_loops.hpp"
 
                                 // Loop body.
-                                calc_mega_block(bp, mega_block_range);
+                                calc_mega_block(bp, mega_block_range, mpisec);
 
                                 // Loop suffix.
                                 #define RANK_USE_LOOP_PART_1
@@ -521,12 +525,12 @@ namespace yask {
                         update_var_info(bp, start_t, stop_t, true);
 
                         // Do the appropriate steps for halo exchange of exterior.
-                        do_mpi_left = do_mpi_right = true;
-                        exchange_halos();
+                        mpisec.do_mpi_left = mpisec.do_mpi_right = true;
+                        exchange_halos(mpisec);
 
                         // Do interior only in next pass.
-                        do_mpi_left = do_mpi_right = false;
-                        do_mpi_interior = true;
+                        mpisec.do_mpi_left = mpisec.do_mpi_right = false;
+                        mpisec.do_mpi_interior = true;
 
                     } // Exterior only for overlapping comms.
 
@@ -544,22 +548,22 @@ namespace yask {
                     #include "yask_rank_loops.hpp"
 
                     // Loop body.
-                    calc_mega_block(bp, mega_block_range);
+                    calc_mega_block(bp, mega_block_range, mpisec);
                     
                     // Loop suffix.
                     #define RANK_USE_LOOP_PART_1
                     #include "yask_rank_loops.hpp"
 
                     // Mark as dirty only if we just did exterior.
-                    bool mark_dirty = do_mpi_left || do_mpi_right;
+                    bool mark_dirty = mpisec.do_mpi_left || mpisec.do_mpi_right;
                     update_var_info(bp, start_t, stop_t, mark_dirty);
 
                     // Do the appropriate steps for halo exchange depending
                     // on 'do_mpi_*' flags.
-                    exchange_halos();
+                    exchange_halos(mpisec);
 
                     // Set the overlap flags back to default.
-                    init_mpi_flags();
+                    mpisec.init();
 
                 } // With WF tiling.
 
@@ -622,22 +626,23 @@ namespace yask {
     } // run_solution().
 
     // Calculate results within a mega-block.  Each mega-block is typically computed
-    // in a separate OpenMP 'for' region.  In this function, we loop over
+    // via a separate OpenMP 'for' region.  In this function, we loop over
     // the time steps and stages and evaluate a stage in each of
     // the blocks in the mega-block.  If 'sel_bp' is null, eval all stages; else
     // eval only the one pointed to.
     void StencilContext::calc_mega_block(StagePtr& sel_bp,
-                                     const ScanIndices& rank_idxs) {
+                                         const ScanIndices& rank_idxs,
+                                         MpiSection& mpisec) {
         STATE_VARS(this);
         TRACE_MSG("calc_mega_block: mega-block [" <<
                   rank_idxs.start.make_val_str() << " ... " <<
                   rank_idxs.stop.make_val_str() << ") within possibly-adjusted rank [" <<
                   rank_idxs.begin.make_val_str() << " ... " <<
                   rank_idxs.end.make_val_str() << ") for " <<
-                  make_mpi_section_descr());
+                  mpisec.make_descr());
 
         // Track time separately for MPI exterior and interior.
-        if (!do_mpi_interior && (do_mpi_left || do_mpi_right))
+        if (mpisec.is_exterior_active())
             ext_time.start();
         else
             int_time.start();
@@ -708,8 +713,8 @@ namespace yask {
                     // boundaries, and stage BB. This will be the base of the
                     // mega-block loops.
                     bool ok = shift_mega_block(rank_idxs.start, rank_idxs.stop,
-                                           mega_block_shift_num, bp,
-                                           mega_block_idxs);
+                                               mega_block_shift_num, bp,
+                                               mega_block_idxs, mpisec);
                     mega_block_idxs.adjust_from_settings(actl_opts->_mega_block_sizes,
                                                          actl_opts->_mega_block_tile_sizes,
                                                          actl_opts->_block_sizes);
@@ -736,7 +741,8 @@ namespace yask {
                         #include "yask_mega_block_loops.hpp"
 
                         // Loop body.
-                        calc_block(bp, mega_block_shift_num, nphases, phase, rank_idxs, blk_range);
+                        calc_block(bp, mega_block_shift_num, nphases, phase,
+                                   rank_idxs, blk_range, mpisec);
 
                         // Loop suffix.
                         #define MEGA_BLOCK_USE_LOOP_PART_1
@@ -773,11 +779,11 @@ namespace yask {
                 // loops. The bounds in mega_block_idxs may be outside the
                 // actual rank because we're starting with the expanded rank.
                 bool ok = shift_mega_block(rank_idxs.start, rank_idxs.stop,
-                                       mega_block_shift_num, bp,
-                                       mega_block_idxs);
+                                           mega_block_shift_num, bp,
+                                           mega_block_idxs, mpisec);
                 mega_block_idxs.adjust_from_settings(settings._mega_block_sizes,
-                                                 settings._mega_block_tile_sizes,
-                                                 settings._block_sizes);
+                                                     settings._mega_block_tile_sizes,
+                                                     settings._block_sizes);
 
                 // Should always be valid because we just shifted (no trim).
                 // Trimming will be done at the micro-block level.
@@ -803,7 +809,8 @@ namespace yask {
                     #include "yask_mega_block_loops.hpp"
 
                     // Loop body.
-                    calc_block(bp, mega_block_shift_num, nphases, phase, rank_idxs, blk_range);
+                    calc_block(bp, mega_block_shift_num, nphases, phase,
+                               rank_idxs, blk_range, mpisec);
 
                     // Loop suffix.
                     #define MEGA_BLOCK_USE_LOOP_PART_1
@@ -829,7 +836,7 @@ namespace yask {
             } // with temporal blocking.
         } // time.
 
-        if (!do_mpi_interior && (do_mpi_left || do_mpi_right)) {
+        if (mpisec.is_exterior_active()) {
             double ext_delta = ext_time.stop();
             TRACE_MSG("secs spent in this mega-block for rank-exterior blocks: " << make_num_str(ext_delta));
         }
@@ -849,7 +856,8 @@ namespace yask {
                                     idx_t mega_block_shift_num,
                                     idx_t nphases, idx_t phase,
                                     const ScanIndices& rank_idxs,
-                                    const ScanIndices& mega_block_idxs) {
+                                    const ScanIndices& mega_block_idxs,
+                                    MpiSection& mpisec) {
 
         STATE_VARS(this);
         auto* bp = sel_bp.get();
@@ -922,8 +930,9 @@ namespace yask {
 
             // Loop body.
             calc_micro_block(outer_thread_idx, bp, mega_block_shift_num,
-                            nphases, phase, nshapes, shape, bridge_mask,
-                            rank_idxs, mega_block_idxs, block_idxs, micro_blk_range);
+                             nphases, phase, nshapes, shape, bridge_mask,
+                             rank_idxs, mega_block_idxs, block_idxs, micro_blk_range,
+                             mpisec);
             
             // Loop suffix.
             #define BLOCK_USE_LOOP_PART_1
@@ -1006,8 +1015,9 @@ namespace yask {
 
                 // Loop body.
                 calc_micro_block(outer_thread_idx, bp, mega_block_shift_num,
-                                nphases, phase, nshapes, shape, bridge_mask,
-                                rank_idxs, mega_block_idxs, block_idxs, micro_blk_range);
+                                 nphases, phase, nshapes, shape, bridge_mask,
+                                 rank_idxs, mega_block_idxs, block_idxs, micro_blk_range,
+                                 mpisec);
             
                 // Loop suffix.
                 #define BLOCK_USE_LOOP_PART_1
@@ -1024,15 +1034,16 @@ namespace yask {
     // 'phase' are computed. The starting 'shift_num' is relative
     // to the bottom of the current mega-block and block.
     void StencilContext::calc_micro_block(int outer_thread_idx,
-                                         StagePtr& sel_bp,
-                                         idx_t mega_block_shift_num,
-                                         idx_t nphases, idx_t phase,
-                                         idx_t nshapes, idx_t shape,
-                                         const bit_mask_t& bridge_mask,
-                                         const ScanIndices& rank_idxs,
-                                         const ScanIndices& base_mega_block_idxs,
-                                         const ScanIndices& base_block_idxs,
-                                         const ScanIndices& adj_block_idxs) {
+                                          StagePtr& sel_bp,
+                                          idx_t mega_block_shift_num,
+                                          idx_t nphases, idx_t phase,
+                                          idx_t nshapes, idx_t shape,
+                                          const bit_mask_t& bridge_mask,
+                                          const ScanIndices& rank_idxs,
+                                          const ScanIndices& base_mega_block_idxs,
+                                          const ScanIndices& base_block_idxs,
+                                          const ScanIndices& adj_block_idxs,
+                                          MpiSection& mpisec) {
 
         STATE_VARS(this);
         TRACE_MSG("calc_micro_block: phase " << phase <<
@@ -1049,7 +1060,7 @@ namespace yask {
         // Promote forward progress in MPI when calc'ing interior
         // only. Call from one thread only.
         // Let all other threads continue.
-        if (is_overlap_active() && do_mpi_interior) {
+        if (mpisec.is_overlap_active() && mpisec.do_mpi_interior) {
             if (outer_thread_idx == 0)
                 adv_halo_exchange();
         }
@@ -1128,7 +1139,7 @@ namespace yask {
                 // local micro-block shift counts.
                 bool ok = shift_mega_block(rank_idxs.start, rank_idxs.stop,
                                            mega_block_shift_num + shift_num, bp,
-                                           micro_block_idxs);
+                                           micro_block_idxs, mpisec);
 
                 // Set micro_block_idxs begin & end based on shifted begin &
                 // end of block for given phase & shape.  This will be the
@@ -1158,7 +1169,7 @@ namespace yask {
                     // Call calc_micro_block() for each non-scratch bundle.
                     for (auto* sb : *bp)
                         if (sb->get_bb().bb_num_points)
-                            sb->calc_micro_block(outer_thread_idx, *actl_opts, micro_block_idxs);
+                            sb->calc_micro_block(outer_thread_idx, *actl_opts, micro_block_idxs, mpisec);
 
                     // Make sure streaming stores are visible for later loads.
                     make_stores_visible();
@@ -1185,7 +1196,8 @@ namespace yask {
                                           const Indices& base_stop,
                                           idx_t shift_num,
                                           StagePtr& bp,
-                                          ScanIndices& idxs) {
+                                          ScanIndices& idxs,
+                                          const MpiSection& mpisec) {
         STATE_VARS(this);
 
         // For wavefront adjustments, see conceptual diagram in
@@ -1232,7 +1244,7 @@ namespace yask {
                     rstop = min(rstop, dend + right_wf_exts[j] - shift_amt);
 
                 // Trim mega-block based on current MPI section if overlapping.
-                if (is_overlap_active()) {
+                if (mpisec.is_overlap_active()) {
 
                     // Interior boundaries.
                     idx_t int_begin = mpi_interior.bb_begin[j];
@@ -1270,7 +1282,7 @@ namespace yask {
                     }
 
                     // In interior.
-                    if (do_mpi_interior) {
+                    if (mpisec.do_mpi_interior) {
                         rstart = max(rstart, int_begin);
                         rstop = min(rstop, int_end);
                     }
@@ -1279,11 +1291,11 @@ namespace yask {
                     else {
 
                         // Should be doing either left or right, not both.
-                        assert(do_mpi_left != do_mpi_right);
+                        assert(mpisec.do_mpi_left != mpisec.do_mpi_right);
 
                         // Nothing to do if specified exterior section
                         // doesn't exist.
-                        if (!does_exterior_exist(mpi_exterior_dim, do_mpi_left)) {
+                        if (!does_exterior_exist(mpisec.mpi_exterior_dim, mpisec.do_mpi_left)) {
                             ok = false;
                             break;
                         }
@@ -1305,11 +1317,12 @@ namespace yask {
                         //      mpi_interior.bb_begin[x]
 
                         // Trim left or right for current dim.
-                        if (j == mpi_exterior_dim) {
-                            if (do_mpi_left)
+                        if (j == mpisec.mpi_exterior_dim) {
+                            if (mpisec.do_mpi_left)
                                 rstop = min(rstop, int_begin);
 
                             else {
+                                assert(mpisec.do_mpi_right);
                                 rstart = max(rstart, int_end);
 
                                 // For right, also need to trim to avoid
@@ -1326,7 +1339,7 @@ namespace yask {
                         // trim overlap between 'x' and 'y' from 'y'.
                         // See above diagram. This implies dims need
                         // to be done in ascending numerical order.
-                        if (j < mpi_exterior_dim) {
+                        if (j < mpisec.mpi_exterior_dim) {
                             rstart = max(rstart, int_begin);
                             rstop = min(rstop, int_end);
                         }
@@ -1347,7 +1360,7 @@ namespace yask {
         TRACE_MSG("shift_mega_block: updated span: [" <<
                   idxs.begin.make_val_str() << " ... " <<
                   idxs.end.make_val_str() << ") for " <<
-                  make_mpi_section_descr() << 
+                  mpisec.make_descr() << 
                   " within mega-block base [" <<
                   base_start.make_val_str() << " ... " <<
                   base_stop.make_val_str() << ") shifted " <<

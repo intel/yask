@@ -159,8 +159,9 @@ namespace yask {
         // Calculate results within a micro-block.
         void
         calc_micro_block(int outer_thread_idx,
-                        KernelSettings& settings,
-                        const ScanIndices& micro_block_idxs);
+                         KernelSettings& settings,
+                         const ScanIndices& micro_block_idxs,
+                         MpiSection& mpisec);
 
         // Mark vars dirty that are updated by this bundle and/or
         // update last valid step.

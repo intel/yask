@@ -66,7 +66,7 @@ namespace yask {
     */
     
     // Exchange dirty halo data for all vars and all steps.
-    void StencilContext::exchange_halos() {
+    void StencilContext::exchange_halos(MpiSection& mpisec) {
 
         #if defined(USE_MPI)
         STATE_VARS(this);
@@ -77,7 +77,7 @@ namespace yask {
 
         halo_time.start();
         double wait_delta = 0.;
-        TRACE_MSG("following calc of " << make_mpi_section_descr());
+        TRACE_MSG("following calc of " << mpisec.make_descr());
 
         // Vars that need to be swapped and their step indices.
         struct SwapInfo {
@@ -139,11 +139,11 @@ namespace yask {
         // Flags indicate what part of vars were most recently calc'd.
         // These determine what exchange steps need to be done now.
         if (vars_to_swap.size()) {
-            if (do_mpi_left || do_mpi_right) {
+            if (mpisec.do_mpi_left || mpisec.do_mpi_right) {
                 steps_to_do.push_back(halo_irecv);
                 steps_to_do.push_back(halo_pack_isend);
             }
-            if (do_mpi_interior) {
+            if (mpisec.do_mpi_interior) {
                 steps_to_do.push_back(halo_unpack);
                 steps_to_do.push_back(halo_final);
             }

@@ -39,7 +39,8 @@ namespace yask {
     // are respected. There must not be any temporal blocking at this point.
     void StencilBundleBase::calc_micro_block(int outer_thread_idx,
                                              KernelSettings& settings,
-                                             const ScanIndices& micro_block_idxs) {
+                                             const ScanIndices& micro_block_idxs,
+                                             MpiSection& mpisec) {
         STATE_VARS(this);
         TRACE_MSG("calc_micro_block('" << get_name() << "'): [" <<
                    micro_block_idxs.begin.make_val_str() << " ... " <<
@@ -240,7 +241,7 @@ namespace yask {
             } // bundles.
 
             // Mark exterior dirty for halo exchange if exterior was done.
-            bool mark_dirty = _context->do_mpi_left || _context->do_mpi_right;
+            bool mark_dirty = mpisec.do_mpi_left || mpisec.do_mpi_right;
             update_var_info(YkVarBase::self, t, mark_dirty, true, false);
             
         } // BB list.
