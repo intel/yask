@@ -1189,7 +1189,7 @@ sub processCode($) {
         "  * Generated automatically from the following pseudo-code:\n",
         "  *\n",
         "  * $codeString\n",
-        "  *\n */";
+        "  *\n */\n\n";
 
     # print out code.
     for my $line (@code) {
