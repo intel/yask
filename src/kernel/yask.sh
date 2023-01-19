@@ -39,7 +39,7 @@ done
 envs="OMP_DISPLAY_ENV=VERBOSE KMP_VERSION=1"
 envs+=" OMP_PLACES=cores KMP_HOT_TEAMS_MODE=1 KMP_HOT_TEAMS_MAX_LEVEL=3"
 envs+=" I_MPI_PRINT_VERSION=1 I_MPI_DEBUG=5"
-#envs+=" I_MPI_HBW_POLICY=hbw_preferred,hbw_preferred"
+envs+=" I_MPI_HBW_POLICY=hbw_preferred,hbw_preferred"
 
 # Default arch.
 cpu_flags=`grep -m1 '^flags' /proc/cpuinfo`
