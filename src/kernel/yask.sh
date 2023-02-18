@@ -56,7 +56,13 @@ else
 fi
 arch=$def_arch
 
-# Default ranks.
+# Default nodes.
+nnodes=1
+if [[ ! -z ${SLURM_JOB_NUM_NODES:+x} ]]; then
+    nnodes=$SLURM_JOB_NUM_NODES
+fi
+
+# Default MPI ranks.
 # Try Slurm var, then numactl, then lscpu.
 # For latter two, the goal is to count only NUMA nodes with CPUs.
 # (Systems with HBM may have NUMA nodes without CPUs.)
@@ -73,12 +79,6 @@ elif command -v lscpu >/dev/null; then
     if [[ -n "$nnumas" ]]; then
         nranks=$nnumas
     fi
-fi
-
-# Default nodes.
-nnodes=1
-if [[ ! -z ${SLURM_JOB_NUM_NODES:+x} ]]; then
-    nnodes=$SLURM_JOB_NUM_NODES
 fi
 
 # Other defaults.
@@ -122,7 +122,7 @@ while true; do
         echo "Script options:"
         echo "  -h"
         echo "     Print this help."
-        echo "     To see more options from the YASK kernel executable, run the following command:"
+        echo "     To see options from the YASK kernel executable, run the following command:"
         echo "       $0 -stencil <name> [-arch <name>] -help"
         echo "     This will run the YASK executable with the '-help' option."
         echo "  -arch <name>"
@@ -149,7 +149,8 @@ while true; do
         echo "     Run YASK executable as an argument to <command>, e.g., 'numactl -N 0'."
         echo "  -mpi_cmd <command>"
         echo "     Run YASK executable as an argument to <command>, e.g., 'mpiexec.hydra -n 4'."
-        echo "     If -mpi_cmd is used, the -ranks option is ignored."
+        echo "     If -mpi_cmd is used, the -ranks option is used only for computing the"
+        echo "       default number of OpenMP threads to use."
         echo "     If -mpi_cmd and -exe_prefix are both specified, this one is used first."
         echo "  -ranks <N>"
         echo "     Run the YASK executable on <N> MPI ranks."
@@ -157,7 +158,7 @@ while true; do
         echo "       -mpi_cmd 'mpirun -np <N>'"
         echo "     If a different MPI command is needed, use -mpi_cmd <command> explicitly."
         echo "     If the env var SLURM_NTASKS is set, the default is its value."
-        echo "     Otherwise, the default is based on the number of NUMA nodes, assuming a one-node run."
+        echo "     Otherwise, the default is based on the number of NUMA nodes."
         echo "     The current default is $nranks."
         echo "  -nodes <N>"
         echo "     Set the number of nodes."
