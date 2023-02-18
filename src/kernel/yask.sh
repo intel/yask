@@ -57,11 +57,13 @@ fi
 arch=$def_arch
 
 # Default ranks.
-# Try numactl then lscpu.
-# For either, the goal is to count only NUMA nodes with CPUs.
+# Try Slurm var, then numactl, then lscpu.
+# For latter two, the goal is to count only NUMA nodes with CPUs.
 # (Systems with HBM may have NUMA nodes without CPUs.)
 nranks=1
-if command -v numactl >/dev/null; then
+if [[ ! -z ${SLURM_NTASKS:+x} ]]; then
+    nranks=$SLURM_NTASKS
+elif command -v numactl >/dev/null; then
     ncpubinds=`numactl -s | awk '/^cpubind:/ { print NF-1 }'`
     if [[ -n "$ncpubinds" ]]; then
         nranks=$ncpubinds
@@ -71,6 +73,12 @@ elif command -v lscpu >/dev/null; then
     if [[ -n "$nnumas" ]]; then
         nranks=$nnumas
     fi
+fi
+
+# Default nodes.
+nnodes=1
+if [[ ! -z ${SLURM_JOB_NUM_NODES:+x} ]]; then
+    nnodes=$SLURM_JOB_NUM_NODES
 fi
 
 # Other defaults.
@@ -114,11 +122,11 @@ while true; do
         echo "Script options:"
         echo "  -h"
         echo "     Print this help."
-        echo "     To see more options from the YASK executable, run the following command:"
+        echo "     To see more options from the YASK kernel executable, run the following command:"
         echo "       $0 -stencil <name> [-arch <name>] -help"
-        echo "     This will run the executable with the '-help' option."
+        echo "     This will run the YASK executable with the '-help' option."
         echo "  -arch <name>"
-        echo "     Specify the architecture-name part of the kernel executable."
+        echo "     Specify the architecture-name part of the YASK executable."
         echo "     Overrides the default architecture determined from /proc/cpuinfo flags."
         echo "     The default arch for this host is '$def_arch'."
         echo "     Should correspond to arch=<name> used during compilation"
@@ -127,7 +135,7 @@ while true; do
         echo "     In any case, the '-stencil' and '-arch' args required to launch"
         echo "     any executable are printed at the end of a successful compilation."
         echo "  -host <hostname>"
-        echo "     Specify host to run executable on."
+        echo "     Specify host to run YASK executable on."
         echo "     Run sub-shell under 'ssh <hostname>'."
         echo "  -sh_prefix <command>"
         echo "     Run sub-shell under <command>, e.g., a custom ssh command."
@@ -139,18 +147,28 @@ while true; do
         echo "     <dir>/../lib will also be prepended to the LD_LIBRARY_PATH env var."
         echo "  -exe_prefix <command>"
         echo "     Run YASK executable as an argument to <command>, e.g., 'numactl -N 0'."
+        echo "  -mpi_cmd <command>"
+        echo "     Run YASK executable as an argument to <command>, e.g., 'mpiexec.hydra -n 4'."
+        echo "     If -mpi_cmd is used, the -ranks option is ignored."
+        echo "     If -mpi_cmd and -exe_prefix are both specified, this one is used first."
+        echo "  -ranks <N>"
+        echo "     Run the YASK executable on <N> MPI ranks."
+        echo "     Shortcut for the following option if <N> > 1:"
+        echo "       -mpi_cmd 'mpirun -np <N>'"
+        echo "     If a different MPI command is needed, use -mpi_cmd <command> explicitly."
+        echo "     If the env var SLURM_NTASKS is set, the default is its value."
+        echo "     Otherwise, the default is based on the number of NUMA nodes, assuming a one-node run."
+        echo "     The current default is $nranks."
+        echo "  -nodes <N>"
+        echo "     Set the number of nodes."
+        echo "     This is used to compute the default number of OpenMP threads to use."
+        echo "     If the env var SLURM_JOB_NUM_NODES is set, the default is its value."
+        echo "     Otherwise, the default is one (1)."
+        echo "     The current default is $nnodes."
         echo "  -pre_cmd <command(s)>"
         echo "     One or more commands to run before YASK executable."
         echo "  -post_cmd <command(s)>"
         echo "     One or more commands to run after YASK executable."
-        echo "  -mpi_cmd <command>"
-        echo "     Run <command> before the executable (and before the -exe_prefix argument)."
-        echo "  -ranks <N>"
-        echo "     Simplified MPI run (<N> ranks on current host)."
-        echo "     Shortcut for the following options if <N> > 1:"
-        echo "       -mpi_cmd 'mpirun -np <N>'"
-        echo "     If a different MPI command is needed, use -mpi_cmd <command> explicitly."
-        echo "     The default <N> for this host is '$nranks'."
         echo "  -log <filename>"
         echo "     Write copy of output to <filename>."
         echo "     Default <filename> is based on stencil, arch, hostname, time-stamp, and process ID."
@@ -251,6 +269,11 @@ while true; do
         shift
         shift
 
+    elif [[ "$1" == "-nodes" && -n ${2+set} ]]; then
+        nnodes=$2
+        shift
+        shift
+
     elif [[ "$1" == "-v" ]]; then
         doval=1
         shift
@@ -295,12 +318,12 @@ done                            # parsing options.
 echo $invo
 
 # Check required opt (yes, it's an oxymoron).
-if [[ -z ${stencil:+ok} ]]; then
+if [[ -z ${stencil:+x} ]]; then
     echo "error: missing required option: -stencil <name>"
     show_stencils
 fi
 
-# Simple MPI for one node.
+# Set MPI command default.
 if [[ $nranks > 1 ]]; then
     : ${mpi_cmd="mpirun -np $nranks"}
 fi
@@ -371,13 +394,12 @@ if [[ -n "$host" ]]; then
 fi
 
 # Set OMP threads to number of cores per rank if not already specified and not special.
-# TODO: extend to work on multiple nodes.
 if [[ ( $using_opt_outer_threads == 0 ) && ( $arch != "knl" ) && ( $is_offload == 0) ]]; then
     if command -v lscpu >/dev/null; then
         nsocks=`lscpu | awk -F: '/Socket.s.:/ { print $2 }'`
         ncores=`lscpu | awk -F: '/Core.s. per socket:/ { print $2 }'`
         if [[ -n "$nsocks" && -n "$ncores" ]]; then
-            mthrs=$(( $nsocks * $ncores / $nranks ))
+            mthrs=$(( $nsocks * $ncores * $nnodes / $nranks ))
             opts="-outer_threads $mthrs $opts"
         fi
     fi
