@@ -113,7 +113,7 @@ my $hostname_key = "hostname";
 my $nodes_key = "MPI node(s)";
 my $auto_tuner_key = "Auto-tuner used";
 my $val_key = "validation results";
-my $yask_key = "YASK vars";
+my $yask_key = "YASK env vars";
 our @special_log_keys =
   (
    $hostname_key,
