@@ -235,7 +235,7 @@ sub removeSuf($) {
 
 # set one or more results from one line of output.
 my %proc_keys;
-my $klen = 3;
+my $klen = 6;
 sub getResultsFromLine($$) {
   my $results = shift;          # ref to hash.
   my $line = shift;             # 1 line of output.
@@ -251,7 +251,8 @@ sub getResultsFromLine($$) {
       $pm =~ s/^\s+//;
       $pm =~ s/\s+$//;
 
-      # relax hyphen and space match.
+      # relax hyphen and space match by converting all hyphen-space
+      # sequences to single hyphens.
       $pm =~ s/[- ]+/-/g;
 
       # short key.
@@ -338,10 +339,14 @@ sub getResultsFromLine($$) {
   else {
     my ($key, $val) = split /[=:]/,$line,2;
     if (defined $val) {
+
+      # make canonical version of key.
       $key = lc $key;
       $key =~ s/^\s+//;
       $key =~ s/\s+$//;
       $key =~ s/[- ]+/-/g;      # relax hyphen and space match.
+
+      # trim value.
       $val =~ s/^\s+//;
       $val =~ s/\s+$//;
 
@@ -351,12 +356,13 @@ sub getResultsFromLine($$) {
       # return if no match to short key.
       return if !exists $proc_keys{$sk};
 
-      # look for exact key.
-      for my $m (keys %{$proc_keys{$sk}}) {
+      # Look for matches to each full key for the given short key.
+      # Only compares key to beginning of target,
+      # so compare longer keys first.
+      # Example: must compare "Num MPI ranks per node" before "Num MPI ranks".
+      for my $m (sort { length($b) <=> length($a) } keys %{$proc_keys{$sk}}) {
 
         # match?
-        # Only compares found key to beginning of target,
-        # so beginning of target must be unique.
         if ($key =~ /^$m/) {
           $val =~ s/^\s+//;
           $val =~ s/\s+$//;
@@ -377,8 +383,7 @@ sub getResultsFromLine($$) {
               }
             }
           }
-          
-          last;
+          last;                 # stop after first match.
         }
       }
     }
