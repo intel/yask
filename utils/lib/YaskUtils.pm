@@ -185,12 +185,16 @@ our $onef = 1e-15;
 # Examples:
 # - removeSuf("2.34K") => 2340.
 # - removeSuf("2KiB") => 2048.
+# - removeSuf("34 M") => 34000000.
 # - removeSuf("foo") => "foo".
 sub removeSuf($) {
   my $val = shift;
 
-  # Not a number?
+  # Not starting w/a number?
   return $val if $val !~ /^[0-9]/;
+
+  # Not containing a number followed by a letter?
+  return $val if $val !~ /[0-9]\s*[A-Za-z]/;
 
   # Look for suffix.
   if ($val =~ /^([0-9.e+-]+)B$/i) {
@@ -268,7 +272,7 @@ sub getResultsFromLine($$) {
 
   # Substitutions to handle old formats.
   $line =~ s/^Invocation/Script invocation/g if $line !~ /yask_compiler/;
-  $line =~ s/overall.problem/global-domain/g;
+  $line =~ s/overall.problem/global-domain/g; # Doesn't change "Overall problem size in N rank(s)"
   $line =~ s/rank.domain/local-domain/g;
   $line =~ s/grid/var/g;
   $line =~ s/Grid/Var/g;
