@@ -499,17 +499,15 @@ int main(int argc, char** argv)
             auto n = trial_stats.size();
             double ave_pps = sum_pps / n;
             double var_pps = (sum2_pps - (sum_pps * sum_pps) / n) / (n - 1.);
-            double sd_pps = sqrt(var_pps);
+            double sd_pps = (n > 2) ? sqrt(var_pps) : 0.;
             
             os << div_line <<
                 "Throughput stats across trials:\n"
                 " num-trials:                          " << n << endl <<
                 " min-throughput (num-points/sec):     " << make_num_str(min_pps) << endl <<
                 " max-throughput (num-points/sec):     " << make_num_str(max_pps) << endl <<
-                " ave-throughput (num-points/sec):     " << make_num_str(ave_pps) << endl;
-                if (n > 2)
-                    os << 
-                        " std-dev-throughput (num-points/sec): " << make_num_str(sd_pps) << endl;
+                " ave-throughput (num-points/sec):     " << make_num_str(ave_pps) << endl <<
+                " std-dev-throughput (num-points/sec): " << make_num_str(sd_pps) << endl;
             os <<
                 div_line <<
                 "Performance stats of best trial:\n"
