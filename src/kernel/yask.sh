@@ -162,7 +162,7 @@ while true; do
         echo "     The current default is $nranks."
         echo "  -nodes <N>"
         echo "     Set the number of nodes."
-        echo "     This is used to compute the default number of OpenMP threads to use."
+        echo "     This is used to compute the default number of OpenMP threads to use per rank."
         echo "     If the env var SLURM_JOB_NUM_NODES is set, the default is its value."
         echo "     Otherwise, the default is one (1)."
         echo "     The current default is $nnodes."
@@ -405,6 +405,9 @@ if [[ ( $using_opt_outer_threads == 0 ) && ( $arch != "knl" ) && ( $is_offload =
         fi
     fi
 fi
+echo "Num nodes:" $nnodes | tee -a $logfile
+echo "Num MPI ranks:" $nranks | tee -a $logfile
+echo "Num MPI ranks per node:" $(( $nranks / $nnodes )) | tee -a $logfile
 
 # Add validation opts to beginning.
 if [[ $doval == 1 ]]; then

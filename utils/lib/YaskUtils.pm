@@ -65,7 +65,9 @@ our @log_keys =
    'yask version',
    'target',
 
+   'num nodes',
    'num MPI ranks',
+   'num MPI ranks per node',
    'num OpenMP threads', # also matches 'Num OpenMP threads used'.
    'num outer threads',
    'num inner threads',
