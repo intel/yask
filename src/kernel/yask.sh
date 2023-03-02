@@ -89,6 +89,7 @@ opts=""
 bindir=`dirname $0`
 logdir="./logs"
 tmplog="/tmp/yask-p$$"
+dodry=0
 
 # Validation shortcut (-v) vars.
 doval=0
@@ -183,6 +184,8 @@ while true; do
         echo "     If you want to override any of these values, place them after '-v'."
         echo "  -show_arch"
         echo "     Print the default architecture string and exit."
+        echo "  -dry_run"
+        echo "     Do everything except run the YASK executable."
         echo "  <env-var>=<value>"
         echo "     Set environment variable <env-var> to <value>."
         echo "     Repeat as necessary to set multiple vars."
@@ -277,6 +280,10 @@ while true; do
 
     elif [[ "$1" == "-v" ]]; then
         doval=1
+        shift
+
+    elif [[ "$1" == "-dry_run" ]]; then
+        dodry=1
         shift
 
     elif [[ "$1" =~ ^[A-Za-z0-9_]+= ]]; then
@@ -435,16 +442,17 @@ if [[ -n "$post_cmd" ]]; then
 fi
 cmds+="; date"
 
-echo "===================" | tee -a $logfile
-
 # Finally, invoke the binary in a shell.
-if [[ -z "$sh_prefix" ]]; then
-    sh -c -x "$cmds" 2>&1 | tee -a $logfile
-else
-    echo "Running shell under '$sh_prefix'..."
-    $sh_prefix "sh -c -x '$cmds'" 2>&1 | tee -a $logfile
+if [[ $dodry == 0 ]]; then
+    echo "===================" | tee -a $logfile
+    if [[ -z "$sh_prefix" ]]; then
+        sh -c -x "$cmds" 2>&1 | tee -a $logfile
+    else
+        echo "Running shell under '$sh_prefix'..."
+        $sh_prefix "sh -c -x '$cmds'" 2>&1 | tee -a $logfile
+    fi
+    echo "===================" | tee -a $logfile
 fi
-echo "===================" | tee -a $logfile
 
 # Exit if just getting help.
 if [[ $helping == 1 ]]; then
@@ -456,7 +464,9 @@ function finish {
         rm $tmplog
     else
         echo "Log saved in '$logfile'."
-        echo "Run './utils/bin/yask_log_to_csv.pl $logfile' to output in CSV format."
+        if [[ $dodry == 0 ]]; then
+            echo "Run './utils/bin/yask_log_to_csv.pl $logfile' to output in CSV format."
+        fi
     fi
     exit $1
 }
@@ -465,6 +475,12 @@ function finish {
 echo $invo
 binvo="Binary invocation: $envs $exe_str"
 echo $binvo | tee -a $logfile
+
+# Return if dry-run.
+if [[ $dodry == 1 ]]; then
+    echo YASK not started due to -dry_run option. | tee -a $logfile
+    finish 0
+fi
 
 # Return a non-zero exit condition if test failed.
 if [[ `grep -c 'TEST FAILED' $logfile` > 0 ]]; then
