@@ -73,7 +73,7 @@ struct MySettings {
                            radius));
         parser.add_option(make_shared<command_line_parser::string_option>
                           ("stencil",
-                           "YASK stencil solution from the list below (required)",
+                           "YASK stencil solution from the list below (required).",
                            solution_name));
     }
 
