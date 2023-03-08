@@ -272,7 +272,7 @@ namespace yask {
         bool _do_auto_tune = false;    // whether to do "online" auto-tuning.
         double _tuner_trial_secs = 0.5;   // time to run tuner for new better setting.
         int _tuner_radius = 16;
-        string_vec _tuner_targets; // things to tune from following.
+        string_vec _tuner_targets; // sizes to tune.
 
         // Debug.
         bool force_scalar = false; // Do only scalar ops.

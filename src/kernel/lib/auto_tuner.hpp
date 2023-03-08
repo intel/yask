@@ -49,7 +49,7 @@ namespace yask {
 
         // AT parameters.
         double warmup_steps = 1000;
-        double warmup_secs = 1.0; // end warmup when either warmup_steps OR warmup_secs is reached.
+        double warmup_secs = 4.0; // end warmup when either warmup_steps OR warmup_secs is reached.
         idx_t trial_steps = 500;
         double trial_secs = 0.5; // end trial when either trial_steps OR trial_secs is reached.
         double cutoff = 0.8;   // can stop eval if current rate < best rate * cutoff;
