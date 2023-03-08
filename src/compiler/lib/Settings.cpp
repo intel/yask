@@ -494,7 +494,7 @@ namespace yask {
                            "[Advanced] "
                            "Create inter-loop buffers used in the inner kernel loop if at least <n> points could be stored in it. "
                            "This may result in more values stored in registers rather than being re-read in each loop iteration "
-                           "when multiple stencil inputs must be read along the inner-loop dimension",
+                           "when multiple stencil inputs must be read along the inner-loop dimension.",
                            _min_buffer_len));
         parser.add_option(make_shared<command_line_parser::int_option>
                           ("read-ahead-dist",
@@ -568,7 +568,7 @@ namespace yask {
                            "[Advanced] "
                            "If non-zero, override the calculation of the required halo sizes and force them to <integer>. "
                            "May cause memory-access faults and/or incorrect calculations "
-                           "if specified to be less than the actual minimum. ",
+                           "if specified to be less than the actual minimum.",
                            _halo_size));
         parser.add_option(make_shared<command_line_parser::int_option>
                           ("step-alloc",
@@ -576,7 +576,7 @@ namespace yask {
                            "If non-zero, override the calculation of the required allocation of each variable in the "
                            "step (e.g., 't') dimension and force them to <integer>. "
                            "May cause memory-access faults and/or incorrect calculations "
-                           "if specified to be less than the actual minimum. ",
+                           "if specified to be less than the actual minimum.",
                            _step_alloc));
         parser.add_option(make_shared<command_line_parser::bool_option>
                           ("ul",
@@ -634,7 +634,7 @@ namespace yask {
                            "[Advanced] "
                            "Generate kernel code with pointer parameters to base addresses for each YASK var. "
                            "This is a workaround for offload-device drivers that don't allow negative indices from "
-                           "a pointer that is a kernel argument",
+                           "a pointer that is a kernel argument.",
                            _use_offsets));
         parser.add_option(make_shared<command_line_parser::bool_option>
                           ("early-loads",

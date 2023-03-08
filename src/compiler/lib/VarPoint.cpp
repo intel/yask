@@ -41,40 +41,40 @@ namespace yask {
         size_t nd = var->get_dims().size();
         if (nd != args.size()) {
             FORMAT_AND_THROW_YASK_EXCEPTION("attempt to create a var point in " <<
-                nd << "-D var '" << get_var_name() << "' with " <<
-                args.size() << " indices");
+                                            nd << "-D var '" << get_var_name() << "' with " <<
+                                            args.size() << " indices");
         }
 
         // Eval each arg.
-#ifdef DEBUG_GP
+        #ifdef DEBUG_GP
         cout << "Creating var point " << make_quoted_str() << "...\n";
-#endif
+        #endif
         auto dims = var->get_dims();
         for (size_t i = 0; i < nd; i++) {
             auto dim = dims.at(i);
             auto dname = dim->_get_name();
             auto arg = args.at(i);
             assert(arg);
-#ifdef DEBUG_GP
+            #ifdef DEBUG_GP
             cout << " Arg " << arg->make_quoted_str() <<
                 " at dim '" << dname << "'\n";
-#endif
+            #endif
             int offset = 0;
 
             // A compile-time const?
             if (arg->is_const_val()) {
-#ifdef DEBUG_GP
+                #ifdef DEBUG_GP
                 cout << "  is const val " << arg->get_int_val() << endl;
-#endif
+                #endif
                 IntScalar c(dname, arg->get_int_val());
                 set_arg_const(c);
             }
 
             // A simple offset?
             else if (arg->is_offset_from(dname, offset)) {
-#ifdef DEBUG_GP
+                #ifdef DEBUG_GP
                 cout << "  has offset " << offset << endl;
-#endif
+                #endif
                 IntScalar o(dname, offset);
                 set_arg_offset(o);
             }
@@ -114,7 +114,7 @@ namespace yask {
     }
     string VarPoint::_make_str(const VarMap* var_map) const {
         string str = _var->_get_name() + "(" +
-                             make_arg_str(var_map) + ")";
+            make_arg_str(var_map) + ")";
         return str;
     }
     string VarPoint::make_logical_var_str(const VarMap* var_map) const {

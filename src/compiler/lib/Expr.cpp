@@ -252,7 +252,7 @@ namespace yask {
         assert(rp);
         return make_shared<NotGreaterExpr>(lp, rp);
     }
-    yc_number_node_ptr
+    yc_index_node_ptr
     yc_node_factory::new_first_domain_index(yc_index_node_ptr idx) const {
         auto p = dynamic_pointer_cast<IndexExpr>(idx);
         if (!p)
@@ -261,7 +261,7 @@ namespace yask {
             THROW_YASK_EXCEPTION("new_first_domain_index() called without domain-index-node argument");
         return make_shared<IndexExpr>(p->_get_name(), FIRST_INDEX);
     }
-    yc_number_node_ptr
+    yc_index_node_ptr
     yc_node_factory::new_last_domain_index(yc_index_node_ptr idx) const {
         auto p = dynamic_pointer_cast<IndexExpr>(idx);
         if (!p)
@@ -598,7 +598,7 @@ namespace yask {
 
         // An index expr is an offset if it's a step or domain dim and the
         // dims are the same.
-        if (_type != MISC_INDEX && _dim_name == dim) {
+        if ((_type == DOMAIN_INDEX || _type == STEP_INDEX) && _dim_name == dim) {
             offset = 0;
             return true;
         }

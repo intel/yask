@@ -745,7 +745,7 @@ namespace yask {
             auto* stride = lookup_stride(*vp._get_var(), _settings._inner_loop_dim);
             assert(stride);
             os << _line_prefix << ptr << " += " <<
-               _inner_loop_vec_step << " * " << *stride << _line_suffix;
+                _inner_loop_vec_step << " * " << *stride << _line_suffix;
         }
     }
     
@@ -889,17 +889,17 @@ namespace yask {
 
             // Scalar point?
             if (gp.get_vec_type() == VarPoint::VEC_NONE) {
-#ifdef DEBUG_GP
+                #ifdef DEBUG_GP
                 cout << " //** reading from point " << gp.make_str() << " as scalar.\n";
-#endif
+                #endif
                 code_str = read_from_scalar_point(os, gp, &_vec2elem_local_map);
             }
 
             // Non-scalar but non-vectorizable point?
             else if (gp.get_vec_type() == VarPoint::VEC_PARTIAL) {
-#ifdef DEBUG_GP
+                #ifdef DEBUG_GP
                 cout << " //** reading from point " << gp.make_str() << " as partially vectorized.\n";
-#endif
+                #endif
                 code_str = print_partial_vec_read(os, gp);
             }
 
@@ -907,25 +907,25 @@ namespace yask {
 
             // An aligned vector block?
             else if (_aligned_reads.count(gp)) {
-#ifdef DEBUG_GP
+                #ifdef DEBUG_GP
                 cout << " //** reading from point " << gp.make_str() << " as fully vectorized and aligned.\n";
-#endif
+                #endif
                 code_str = print_aligned_vec_read(os, gp);
             }
 
             // Unaligned loads allowed?
             else if (_settings._allow_unaligned_loads) {
-#ifdef DEBUG_GP
+                #ifdef DEBUG_GP
                 cout << " //** reading from point " << gp.make_str() << " as fully vectorized and unaligned.\n";
-#endif
+                #endif
                 code_str = print_unaligned_vec_read(os, gp);
             }
 
             // Need to construct an unaligned vector block?
             else if (_vv._vblk2elem_lists.count(gp)) {
-#ifdef DEBUG_GP
+                #ifdef DEBUG_GP
                 cout << " //** reading from point " << gp.make_str() << " as fully vectorized and unaligned.\n";
-#endif
+                #endif
 
                 // make sure prerequisites exist by recursing.
                 auto avbs = _vv._vblk2avblks[gp];
@@ -1099,42 +1099,42 @@ namespace yask {
         get_fold().visit_all_points([&](const IntTuple& vec_point,
                                         size_t pelem){
 
-                // Example: vec_point contains x=0, y=2, z=1, where each val
-                // is the offset in the given fold dim.  We want to map
-                // x=>x_elem, y=>(y_elem+2), z=>(z_elem+1) in var-point
-                // index args.
-                VarMap v_map;
-                for (auto& dim : vec_point) {
-                    auto& dname = dim._get_name();
-                    int dofs = dim.get_val();
+                                        // Example: vec_point contains x=0, y=2, z=1, where each val
+                                        // is the offset in the given fold dim.  We want to map
+                                        // x=>x_elem, y=>(y_elem+2), z=>(z_elem+1) in var-point
+                                        // index args.
+                                        VarMap v_map;
+                                        for (auto& dim : vec_point) {
+                                            auto& dname = dim._get_name();
+                                            int dofs = dim.get_val();
 
-                    auto& ename = _vec2elem_local_map.at(dname);
-                    if (dofs == 0)
-                        v_map[dname] = ename;
-                    else {
-                        v_map[dname] = "(" + ename + "+" + to_string(dofs) + ")";
-                    }
-                }
+                                            auto& ename = _vec2elem_local_map.at(dname);
+                                            if (dofs == 0)
+                                                v_map[dname] = ename;
+                                            else {
+                                                v_map[dname] = "(" + ename + "+" + to_string(dofs) + ")";
+                                            }
+                                        }
 
-                // Read or reuse.
-                string stmt = read_from_scalar_point(os, gp, &v_map);
-                auto* varname = lookup_elem_var(stmt);
-                if (!varname) {
+                                        // Read or reuse.
+                                        string stmt = read_from_scalar_point(os, gp, &v_map);
+                                        auto* varname = lookup_elem_var(stmt);
+                                        if (!varname) {
 
-                    // Read val into a new scalar var.
-                    string vname = make_var_name("scalar");
-                    os << _line_prefix << "real_t " << vname <<
-                        " = " << stmt << _line_suffix;
-                    varname = save_elem_var(stmt, vname);
-                }
+                                            // Read val into a new scalar var.
+                                            string vname = make_var_name("scalar");
+                                            os << _line_prefix << "real_t " << vname <<
+                                                " = " << stmt << _line_suffix;
+                                            varname = save_elem_var(stmt, vname);
+                                        }
 
-                // Output translated expression for this element.
-                os << _line_prefix << mv_name << "[" << pelem << "] = " <<
-                    *varname << "; // for offset " << vec_point.make_dim_val_str() <<
-                    _line_suffix;
+                                        // Output translated expression for this element.
+                                        os << _line_prefix << mv_name << "[" << pelem << "] = " <<
+                                            *varname << "; // for offset " << vec_point.make_dim_val_str() <<
+                                            _line_suffix;
 
-                return true;
-            }); // end of lambda.
+                                        return true;
+                                    }); // end of lambda.
         return mv_name;
     }
 
@@ -1217,8 +1217,8 @@ namespace yask {
 
     // Print per-element construction for one point var pv_name from elems.
     void CppVecPrintHelper::print_unaligned_vec_simple(ostream& os, const VarPoint& gp,
-                                                    const string& pv_name, string line_prefix,
-                                                    const set<size_t>* done_elems) {
+                                                       const string& pv_name, string line_prefix,
+                                                       const set<size_t>* done_elems) {
 
         // just assign each element in vector separately.
         auto& elems = _vv._vblk2elem_lists[gp];
@@ -1309,7 +1309,7 @@ namespace yask {
         // Make and print a var-base pointer for this access.
         _cvph.print_var_base_ptr(_os, *gp);
 
-       return "";
+        return "";
     }
 
     // Print loop-invariant data values for each VarPoint.

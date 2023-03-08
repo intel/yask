@@ -72,45 +72,45 @@ namespace yask {
         // Elements can be taken from aligned_vecs.
         // Update done_elems.
         virtual void try_strategies(ostream& os,
-                                   const string& pv_name,
-                                   size_t nelems_target,
-                                   const VecElemList& elems,
-                                   set<size_t>& done_elems,
-                                   const VarPointSet& aligned_vecs) =0;
+                                    const string& pv_name,
+                                    size_t nelems_target,
+                                    const VecElemList& elems,
+                                    set<size_t>& done_elems,
+                                    const VarPointSet& aligned_vecs) =0;
 
         // Try to use align instruction(s) to construct nelems_target elements
         // per instruction.
         virtual void try_align(ostream& os,
-                              const string& pv_name,
-                              size_t nelems_target,
-                              const VecElemList& elems,
-                              set<size_t>& done_elems,
-                              const VarPointSet& aligned_vecs,
-                              bool mask_allowed);
+                               const string& pv_name,
+                               size_t nelems_target,
+                               const VecElemList& elems,
+                               set<size_t>& done_elems,
+                               const VarPointSet& aligned_vecs,
+                               bool mask_allowed);
 
         // Try to use 1-var permute instruction(s) to construct nelems_target elements
         // per instruction.
         virtual void try_perm1(ostream& os,
-                              const string& pv_name,
-                              size_t nelems_target,
-                              const VecElemList& elems,
-                              set<size_t>& done_elems,
-                              const VarPointSet& aligned_vecs);
+                               const string& pv_name,
+                               size_t nelems_target,
+                               const VecElemList& elems,
+                               set<size_t>& done_elems,
+                               const VarPointSet& aligned_vecs);
 
         // Try to use 2-var permute instruction(s) to construct nelems_target elements
         // per instruction.
         virtual void try_perm2(ostream& os,
-                              const string& pv_name,
-                              size_t nelems_target,
-                              const VecElemList& elems,
-                              set<size_t>& done_elems,
-                              const VarPointSet& aligned_vecs);
+                               const string& pv_name,
+                               size_t nelems_target,
+                               const VecElemList& elems,
+                               set<size_t>& done_elems,
+                               const VarPointSet& aligned_vecs);
 
     public:
         // Print construction for one unaligned vector pv_name at gp.
         virtual void print_unaligned_vec_ctor(ostream& os,
-                                           const VarPoint& gp,
-                                           const string& pv_name);
+                                              const VarPoint& gp,
+                                              const string& pv_name);
 
     };
 
@@ -120,11 +120,11 @@ namespace yask {
 
         // Try all applicable strategies.
         virtual void try_strategies(ostream& os,
-                                   const string& pv_name,
-                                   size_t nelems_target,
-                                   const VecElemList& elems,
-                                   set<size_t>& done_elems,
-                                   const VarPointSet& aligned_vecs) {
+                                    const string& pv_name,
+                                    size_t nelems_target,
+                                    const VecElemList& elems,
+                                    set<size_t>& done_elems,
+                                    const VarPointSet& aligned_vecs) {
             try_align(os, pv_name, nelems_target, elems, done_elems, aligned_vecs, true);
             try_perm2(os, pv_name, nelems_target, elems, done_elems, aligned_vecs);
             try_perm1(os, pv_name, nelems_target, elems, done_elems, aligned_vecs);
@@ -148,22 +148,22 @@ namespace yask {
 
         // Try all applicable strategies.
         virtual void try_strategies(ostream& os,
-                                   const string& pv_name,
-                                   size_t nelems_target,
-                                   const VecElemList& elems,
-                                   set<size_t>& done_elems,
-                                   const VarPointSet& aligned_vecs) {
+                                    const string& pv_name,
+                                    size_t nelems_target,
+                                    const VecElemList& elems,
+                                    set<size_t>& done_elems,
+                                    const VarPointSet& aligned_vecs) {
             try_align(os, pv_name, nelems_target, elems, done_elems, aligned_vecs, false);
         }
 
     public:
         CppAvx2PrintHelper(VecInfoVisitor& vv,
-                             const CompilerSettings& settings,
-                             const Dimensions& dims,
-                             const CounterVisitor* cv,
-                             const string& var_type,
-                             const string& line_prefix,
-                             const string& line_suffix) :
+                           const CompilerSettings& settings,
+                           const Dimensions& dims,
+                           const CounterVisitor* cv,
+                           const string& var_type,
+                           const string& line_prefix,
+                           const string& line_suffix) :
             CppIntrinPrintHelper(vv, settings, dims, cv,
                                  var_type, line_prefix, line_suffix) { }
     };
@@ -179,9 +179,9 @@ namespace yask {
 
     public:
         YASKAvx2Printer(StencilSolution& stencil,
-                          EqBundles& eq_bundles,
-                          EqStages& eq_stages,
-                          EqBundles& cluster_eq_bundles) :
+                        EqBundles& eq_bundles,
+                        EqStages& eq_stages,
+                        EqBundles& cluster_eq_bundles) :
             YASKCppPrinter(stencil, eq_bundles, eq_stages, cluster_eq_bundles) { }
 
         virtual int num_vec_elems() const override {
@@ -194,7 +194,7 @@ namespace yask {
     protected:
         bool _is_lo;
         virtual CppVecPrintHelper* new_cpp_vec_print_helper(VecInfoVisitor& vv,
-                                                        CounterVisitor& cv) override {
+                                                            CounterVisitor& cv) override {
             return new CppAvx512PrintHelper(vv, _settings, _dims, &cv,
                                             "real_vec_t", " ", ";\n");
         }

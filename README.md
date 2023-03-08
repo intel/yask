@@ -27,7 +27,7 @@ and Intel(R) graphics processors.
 * 64-bit Linux.
 * Intel(R) Xeon(R) processors supporting the AVX, AVX2, or CORE_AVX512 instruction sets.
 * Intel(R) Xeon Phi(TM) x200-family processors supporting the MIC_AVX512 instruction set (KNL).
-* Intel(R) graphics processors supporting UHD graphics, e.g., "Gen12" GPUs.
+* Intel(R) graphics processors supporting UHD graphics, e.g., Intel(R) Data Center GPU Max Series products.
 
 ### Pre-requisites:
 * Intel(R) [oneAPI](https://software.intel.com/content/www/us/en/develop/tools/oneapi.html)

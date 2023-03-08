@@ -123,7 +123,7 @@ namespace yask {
         // Return a formatted expr.
         virtual string make_str(const VarMap* var_map = 0) const;
         virtual string make_quoted_str(string quote = "'",
-                                     const VarMap* var_map = 0) const {
+                                       const VarMap* var_map = 0) const {
             return quote + make_str(var_map) + quote;
         }
         virtual string get_descr() const {
@@ -177,6 +177,7 @@ namespace yask {
     }
 
     // Real or int value.
+    // A pure-virtual class.
     class NumExpr : public Expr,
                     public virtual yc_number_node {
     public:
@@ -190,7 +191,7 @@ namespace yask {
         // Exit with error if not known.
         virtual double get_num_val() const {
             THROW_YASK_EXCEPTION("cannot evaluate '" + make_str() +
-                "' for a known numerical value");
+                                 "' for a known numerical value");
         }
 
         // Get the value as an integer.
@@ -200,7 +201,7 @@ namespace yask {
             int ival = int(val);
             if (val != double(ival)) {
                 THROW_YASK_EXCEPTION("'" + make_str() +
-                    "' does not evaluate to an integer");
+                                     "' does not evaluate to an integer");
             }
             return ival;
         }
@@ -223,11 +224,11 @@ namespace yask {
 
     // Var index types.
     enum IndexType {
-        STEP_INDEX,             // the step dim.
-        DOMAIN_INDEX,           // a domain dim.
-        MISC_INDEX,             // any other dim.
-        FIRST_INDEX,            // first index value in domain.
-        LAST_INDEX              // last index value in domain.
+                    STEP_INDEX,             // the step dim.
+                    DOMAIN_INDEX,           // a domain dim.
+                    MISC_INDEX,             // any other dim.
+                    FIRST_INDEX,            // first index value in domain.
+                    LAST_INDEX              // last index value in domain.
     };
 
     // Expression based on a dimension index.
@@ -500,29 +501,29 @@ namespace yask {
 
     // Numerical binary operators.
     // TODO: redo this with a template.
-#define BIN_NUM_EXPR(type, impl_type, opstr, oper)       \
-    class type : public BinaryNumExpr,                  \
-                 public virtual impl_type {              \
-    public:                                             \
-        type(num_expr_ptr lhs, num_expr_ptr rhs) :          \
-            BinaryNumExpr(lhs, op_str(), rhs) { }        \
-        type(const type& src) :                         \
-            BinaryNumExpr(src) { }                      \
-        static string op_str() { return opstr; }         \
-        virtual bool is_offset_from(string dim, int& offset); \
-        virtual bool is_const_val() const {               \
-            return _lhs->is_const_val() &&                \
-                _rhs->is_const_val();                     \
-        }                                               \
-        virtual double get_num_val() const {              \
-            double lhs = _lhs->get_num_val();             \
-            double rhs = _rhs->get_num_val();             \
-            return oper;                                \
-        }                                               \
-        virtual num_expr_ptr clone() const {              \
-            return make_shared<type>(*this);            \
-        }                                               \
-    }
+    #define BIN_NUM_EXPR(type, impl_type, opstr, oper)                  \
+        class type : public BinaryNumExpr,                              \
+                     public virtual impl_type {                         \
+        public:                                                         \
+            type(num_expr_ptr lhs, num_expr_ptr rhs) :                  \
+                BinaryNumExpr(lhs, op_str(), rhs) { }                   \
+            type(const type& src) :                                     \
+                BinaryNumExpr(src) { }                                  \
+            static string op_str() { return opstr; }                    \
+            virtual bool is_offset_from(string dim, int& offset);       \
+            virtual bool is_const_val() const {                         \
+                return _lhs->is_const_val() &&                          \
+                    _rhs->is_const_val();                               \
+            }                                                           \
+            virtual double get_num_val() const {                        \
+                double lhs = _lhs->get_num_val();                       \
+                double rhs = _rhs->get_num_val();                       \
+                return oper;                                            \
+            }                                                           \
+            virtual num_expr_ptr clone() const {                        \
+                return make_shared<type>(*this);                        \
+            }                                                           \
+            }
     BIN_NUM_EXPR(SubExpr, yc_subtract_node, "-", lhs - rhs);
 
     // TODO: add check for div-by-0.
@@ -531,71 +532,71 @@ namespace yask {
 
     // TODO: add check for mod-by-0.
     BIN_NUM_EXPR(ModExpr, yc_mod_node, "%", imod_flr(idx_t(lhs), idx_t(rhs)));
-#undef BIN_NUM_EXPR
+    #undef BIN_NUM_EXPR
 
-// Boolean binary operators with numerical inputs.
-// TODO: redo this with a template.
-#define BIN_NUM2BOOL_EXPR(type, impl_type, opstr, oper)  \
-    class type : public BinaryNum2BoolExpr,             \
-                 public virtual impl_type {              \
-    public:                                             \
-    type(num_expr_ptr lhs, num_expr_ptr rhs) :              \
-        BinaryNum2BoolExpr(lhs, op_str(), rhs) { }       \
-    type(const type& src) :                             \
-        BinaryNum2BoolExpr(src) { }                     \
-    static string op_str() { return opstr; }             \
-    virtual bool get_bool_val() const {                   \
-        double lhs = _lhs->get_num_val();                 \
-        double rhs = _rhs->get_num_val();                 \
-        return oper;                                    \
-    }                                                   \
-    virtual bool_expr_ptr clone() const {                 \
-        return make_shared<type>(*this);                \
-    }                                                   \
-    virtual yc_number_node_ptr get_lhs() {              \
-        return _get_lhs();                                \
-    }                                                   \
-    virtual yc_number_node_ptr get_rhs() {              \
-        return _get_rhs();                                \
-    }                                                   \
-    }
+    // Boolean binary operators with numerical inputs.
+    // TODO: redo this with a template.
+    #define BIN_NUM2BOOL_EXPR(type, impl_type, opstr, oper)     \
+        class type : public BinaryNum2BoolExpr,                 \
+                     public virtual impl_type {                 \
+        public:                                                 \
+            type(num_expr_ptr lhs, num_expr_ptr rhs) :          \
+                BinaryNum2BoolExpr(lhs, op_str(), rhs) { }      \
+            type(const type& src) :                             \
+                BinaryNum2BoolExpr(src) { }                     \
+            static string op_str() { return opstr; }            \
+            virtual bool get_bool_val() const {                 \
+                double lhs = _lhs->get_num_val();               \
+                double rhs = _rhs->get_num_val();               \
+                return oper;                                    \
+            }                                                   \
+            virtual bool_expr_ptr clone() const {               \
+                return make_shared<type>(*this);                \
+            }                                                   \
+            virtual yc_number_node_ptr get_lhs() {              \
+                return _get_lhs();                              \
+            }                                                   \
+            virtual yc_number_node_ptr get_rhs() {              \
+                return _get_rhs();                              \
+            }                                                   \
+        }
     BIN_NUM2BOOL_EXPR(IsEqualExpr, yc_equals_node, "==", lhs == rhs);
     BIN_NUM2BOOL_EXPR(NotEqualExpr, yc_not_equals_node, "!=", lhs != rhs);
     BIN_NUM2BOOL_EXPR(IsLessExpr, yc_less_than_node, "<", lhs < rhs);
     BIN_NUM2BOOL_EXPR(NotLessExpr, yc_not_less_than_node, ">=", lhs >= rhs);
     BIN_NUM2BOOL_EXPR(IsGreaterExpr, yc_greater_than_node, ">", lhs > rhs);
     BIN_NUM2BOOL_EXPR(NotGreaterExpr, yc_not_greater_than_node, "<=", lhs <= rhs);
-#undef BIN_NUM2BOOL_EXPR
+    #undef BIN_NUM2BOOL_EXPR
 
     // Boolean binary operators with boolean inputs.
     // TODO: redo this with a template.
-#define BIN_BOOL_EXPR(type, impl_type, opstr, oper)      \
-    class type : public BinaryBoolExpr, \
-                 public virtual impl_type {              \
-    public:                                             \
-    type(bool_expr_ptr lhs, bool_expr_ptr rhs) :            \
-        BinaryBoolExpr(lhs, op_str(), rhs) { }           \
-    type(const type& src) :                             \
-        BinaryBoolExpr(src) { }                         \
-    static string op_str() { return opstr; }             \
-    virtual bool get_bool_val() const {                   \
-        bool lhs = _lhs->get_bool_val();                  \
-        bool rhs = _rhs->get_bool_val();                  \
-        return oper;                                    \
-    }                                                   \
-    virtual bool_expr_ptr clone() const {                 \
-        return make_shared<type>(*this);                \
-    }                                                   \
-    virtual yc_bool_node_ptr get_lhs() {                \
-        return _get_lhs();                                \
-    }                                                   \
-    virtual yc_bool_node_ptr get_rhs() {                \
-        return _get_rhs();                                \
-    }                                                   \
-    }
+    #define BIN_BOOL_EXPR(type, impl_type, opstr, oper)         \
+        class type : public BinaryBoolExpr,                     \
+                     public virtual impl_type {                 \
+        public:                                                 \
+            type(bool_expr_ptr lhs, bool_expr_ptr rhs) :        \
+                BinaryBoolExpr(lhs, op_str(), rhs) { }          \
+            type(const type& src) :                             \
+                BinaryBoolExpr(src) { }                         \
+            static string op_str() { return opstr; }            \
+            virtual bool get_bool_val() const {                 \
+                bool lhs = _lhs->get_bool_val();                \
+                bool rhs = _rhs->get_bool_val();                \
+                return oper;                                    \
+            }                                                   \
+            virtual bool_expr_ptr clone() const {               \
+                return make_shared<type>(*this);                \
+            }                                                   \
+            virtual yc_bool_node_ptr get_lhs() {                \
+                return _get_lhs();                              \
+            }                                                   \
+            virtual yc_bool_node_ptr get_rhs() {                \
+                return _get_rhs();                              \
+            }                                                   \
+        }
     BIN_BOOL_EXPR(AndExpr, yc_and_node, "&&", lhs && rhs);
     BIN_BOOL_EXPR(OrExpr, yc_or_node, "||", lhs || rhs);
-#undef BIN_BOOL_EXPR
+    #undef BIN_BOOL_EXPR
 
     // A list of exprs with a common operator that can be rearranged,
     // e.g., 'a * b * c' or 'a + b + c'.
@@ -686,32 +687,32 @@ namespace yask {
 
     // Commutative operators.
     // TODO: redo this with a template.
-#define COMM_EXPR(type, impl_type, opstr, base_val, oper)                 \
-    class type : public CommutativeExpr, public virtual impl_type  {     \
-    public:                                                             \
-    type()  :                                                           \
-        CommutativeExpr(op_str()) { }                                    \
-    type(num_expr_ptr lhs, num_expr_ptr rhs) :                              \
-        CommutativeExpr(lhs, op_str(), rhs) { }                          \
-    type(const type& src) :                                             \
-        CommutativeExpr(src) { }                                        \
-    virtual ~type() { }                                                 \
-    static string op_str() { return opstr; }                             \
-    virtual bool is_offset_from(string dim, int& offset);                 \
-    virtual double get_num_val() const {                                  \
-        double val = base_val;                                           \
-        for(auto op : _ops) {                                           \
-            double lhs = val;                                           \
-            double rhs = op->get_num_val();                               \
-            val = oper;                                                 \
+    #define COMM_EXPR(type, impl_type, opstr, base_val, oper)           \
+        class type : public CommutativeExpr, public virtual impl_type  { \
+        public:                                                         \
+        type()  :                                                       \
+            CommutativeExpr(op_str()) { }                               \
+        type(num_expr_ptr lhs, num_expr_ptr rhs) :                      \
+            CommutativeExpr(lhs, op_str(), rhs) { }                     \
+        type(const type& src) :                                         \
+            CommutativeExpr(src) { }                                    \
+        virtual ~type() { }                                             \
+        static string op_str() { return opstr; }                        \
+        virtual bool is_offset_from(string dim, int& offset);           \
+        virtual double get_num_val() const {                            \
+            double val = base_val;                                      \
+            for(auto op : _ops) {                                       \
+                double lhs = val;                                       \
+                double rhs = op->get_num_val();                         \
+                val = oper;                                             \
+            }                                                           \
+            return val;                                                 \
         }                                                               \
-        return val;                                                     \
-    }                                                                   \
-    virtual num_expr_ptr clone() const { return make_shared<type>(*this); } \
-    };
+        virtual num_expr_ptr clone() const { return make_shared<type>(*this); } \
+        };
     COMM_EXPR(MultExpr, yc_multiply_node, "*", 1.0, lhs * rhs)
     COMM_EXPR(AddExpr, yc_add_node, "+", 0.0, lhs + rhs)
-#undef COMM_EXPR
+    #undef COMM_EXPR
 
     // An FP function call with an arbitrary number of FP args.
     // e.g., sin(a).
@@ -774,4 +775,4 @@ namespace yask {
         }
     };
 
- } // namespace yask.
+} // namespace yask.

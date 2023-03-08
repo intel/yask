@@ -196,8 +196,8 @@ namespace yask {
 
         // Print per-element construction for one point var pv_name from elems.
         virtual void print_unaligned_vec_simple(ostream& os, const VarPoint& gp,
-                                             const string& pv_name, string line_prefix,
-                                             const set<size_t>* done_elems = 0);
+                                                const string& pv_name, string line_prefix,
+                                                const set<size_t>* done_elems = 0);
 
         // Read from a single point to be broadcast to a vector.
         // Return code for read.
@@ -260,7 +260,7 @@ namespace yask {
         // Collect some stats on points.
         virtual void get_point_stats();
         
-         // Print any needed memory reads and/or constructions to 'os'.
+        // Print any needed memory reads and/or constructions to 'os'.
         // Return code containing a vector of var points.
         virtual string read_from_point(ostream& os, const VarPoint& gp) override;
 
@@ -400,7 +400,7 @@ namespace yask {
         // This can be overridden in derived classes to provide
         // alternative PrintHelpers.
         virtual CppVecPrintHelper* new_cpp_vec_print_helper(VecInfoVisitor& vv,
-                                                        CounterVisitor& cv) {
+                                                            CounterVisitor& cv) {
             return new CppVecPrintHelper(vv, _settings, _dims, &cv,
                                          "real_vec_t", " ", ";\n");
         }

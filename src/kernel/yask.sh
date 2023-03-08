@@ -347,7 +347,7 @@ exe_host=${host:-`hostname`}
 dump="head -v -n -0"
 
 # Init log file.
-: ${logfile:=yask.$stencil.$arch.$exe_host.`date +%Y-%m-%d_%H-%M-%S`_p$$.log}
+: ${logfile:=yask.$stencil.$arch.$exe_host.n$nnodes.r$nranks.`date +%Y-%m-%d_%H-%M-%S`_p$$.log}
 if [[ -n "$logdir" ]]; then
     logfile="$logdir/$logfile"
 fi
@@ -415,6 +415,10 @@ fi
 echo "Num nodes:" $nnodes | tee -a $logfile
 echo "Num MPI ranks:" $nranks | tee -a $logfile
 echo "Num MPI ranks per node:" $(( $nranks / $nnodes )) | tee -a $logfile
+if [[ `env | grep -c SLURM` > 0 ]]; then
+    echo "Slurm vars:" | tee -a $logfile
+    env | grep -E 'SBATCH|SLURM'
+fi
 
 # Add validation opts to beginning.
 if [[ $doval == 1 ]]; then

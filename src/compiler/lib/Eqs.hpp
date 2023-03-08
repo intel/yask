@@ -56,8 +56,8 @@ namespace yask {
 
         // Recursive helper for visit_deps().
         virtual void _visit_deps(Tp a,
-                                std::function<void (Tp b, TpList& path)> visitor,
-                                TpList* seen) const {
+                                 std::function<void (Tp b, TpList& path)> visitor,
+                                 TpList* seen) const {
 
             // Already visited, i.e., a loop?
             bool was_seen = (seen && seen->count(a));
@@ -146,8 +146,8 @@ namespace yask {
         // At each dep node 'b' in graph, 'visitor(b, path)' is called,
         // where 'path' contains all nodes from 'a' thru 'b' in dep order.
         virtual void visit_deps(Tp a,
-                               std::function<void (Tp b,
-                                                   TpList& path)> visitor) const {
+                                std::function<void (Tp b,
+                                                    TpList& path)> visitor) const {
             _visit_deps(a, visitor, NULL);
         }
 
@@ -157,12 +157,12 @@ namespace yask {
             for (auto& a : _all) {
                 os << " For " << a->get_descr() << ":\n";
                 visit_deps(a, [&](Tp b, TpList& path) {
-                        if (a == b)
-                            os << "  depends on self";
-                        else
-                            os << "  depends on " << b->get_descr();
-                        os << " w/path of length " << path.size() << endl;
-                    });
+                                  if (a == b)
+                                      os << "  depends on self";
+                                  else
+                                      os << "  depends on " << b->get_descr();
+                                  os << " w/path of length " << path.size() << endl;
+                              });
             }
         }
 
@@ -174,12 +174,12 @@ namespace yask {
                 if (_full_deps.count(a) == 0)
                     visit_deps(a, [&](Tp b, TpList& path) {
 
-                            // Walk path from ee to b.
-                            // Every 'eq' in 'path' before 'b' depends on 'b'.
-                            for (auto eq : path)
-                                if (eq != b)
-                                    _full_deps[eq].insert(b);
-                        });
+                                      // Walk path from ee to b.
+                                      // Every 'eq' in 'path' before 'b' depends on 'b'.
+                                      for (auto eq : path)
+                                          if (eq != b)
+                                              _full_deps[eq].insert(b);
+                                  });
             _done = true;
         }
     };
@@ -480,7 +480,7 @@ namespace yask {
 
         // Get a string description.
         virtual string get_descr(bool show_cond = true,
-                                string quote = "'") const;
+                                 string quote = "'") const;
 
         // Add an equation to this bundle.
         virtual void add_eq(equals_expr_ptr ee);
@@ -537,9 +537,9 @@ namespace yask {
         // '_indices' will be incremented if a new bundle is created.
         // Returns whether a new bundle was created.
         virtual bool add_eq_to_bundle(Eqs& eqs,
-                                   equals_expr_ptr eq,
-                                   const string& base_name,
-                                   const CompilerSettings& settings);
+                                      equals_expr_ptr eq,
+                                      const string& base_name,
+                                      const CompilerSettings& settings);
 
     public:
         EqBundles() {}
@@ -563,8 +563,8 @@ namespace yask {
         // all eqs updating var names containing 'bar' go in eq_bundle2, and
         // each remaining eq goes into a separate eq_bundle.
         void make_eq_bundles(Eqs& eqs,
-                           const CompilerSettings& settings,
-                           std::ostream& os);
+                             const CompilerSettings& settings,
+                             std::ostream& os);
 
         virtual const Vars& get_output_vars() const {
             return _out_vars;
@@ -588,9 +588,9 @@ namespace yask {
 
         // Apply optimizations requested in settings.
         virtual void optimize_eq_bundles(CompilerSettings& settings,
-                                       const string& descr,
-                                       bool print_sets,
-                                       ostream& os);
+                                         const string& descr,
+                                         bool print_sets,
+                                         ostream& os);
     };
 
     typedef shared_ptr<EqBundle> EqBundlePtr;
@@ -675,13 +675,13 @@ namespace yask {
         // Add 'bp' from 'all_bundles'. Create new stage if needed.  Returns
         // whether a new stage was created.
         bool add_bundle_to_stage(EqBundles& all_bundles,
-                             EqBundlePtr bp);
+                                 EqBundlePtr bp);
 
     public:
 
         // Separate bundles into stages.
         void make_stages(EqBundles& bundles,
-                       std::ostream& os);
+                         std::ostream& os);
 
         // Get all output vars.
         virtual const Vars& get_output_vars() const {

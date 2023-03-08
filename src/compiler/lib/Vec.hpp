@@ -116,8 +116,8 @@ namespace yask {
         // and offset_out is in [0..vec_len-1].
         // Makes proper adjustments for negative inputs.
         virtual void fix_index_offset(int index_in, int offset_in,
-                                    int& index_out, int& offset_out,
-                                    int vec_len) {
+                                      int& index_out, int& offset_out,
+                                      int vec_len) {
             const int ofs = (index_in * vec_len) + offset_in;
             index_out = ofs / vec_len;
             offset_out = ofs % vec_len;
@@ -127,7 +127,7 @@ namespace yask {
             }
         }
 
-#if 0
+        #if 0
         // Print stats header.
         virtual void print_stats_header(ostream& os, string separator) const {
             os << "destination var" <<
@@ -180,7 +180,7 @@ namespace yask {
                 os << separator << footprints[dim._get_name()];
             os << endl;
         }
-#endif
+        #endif
 
         // Equality.
         virtual string visit(EqualsExpr* ee) {
@@ -255,7 +255,7 @@ namespace yask {
         // Access cached values.
         virtual void save_point_var(const VarPoint& gp, const string& var) {
             _vec_vars[gp] = var;
-         }
+        }
         virtual const string* lookup_point_var(const VarPoint& gp) {
             if (_vec_vars.count(gp))
                 return &_vec_vars.at(gp);

@@ -73,7 +73,7 @@ struct MySettings {
                            radius));
         parser.add_option(make_shared<command_line_parser::string_option>
                           ("stencil",
-                           "YASK stencil solution from the list below (required)",
+                           "YASK stencil solution from the list below (required).",
                            solution_name));
     }
 
@@ -131,16 +131,11 @@ struct MySettings {
                 }
             }
 
-            cout << 
-                "\nValidation is very slow and uses 2x memory,\n"
-                " so run with very small sizes and number of time-steps.\n"
-                " If validation fails, it may be due to rounding error;\n"
-                " try building with 8-byte reals.\n";
             cout <<
                 "\nExamples:\n"
-                " " << pgm_name << " -stencil 3axis -radius 2 -fold x=4,y=4 -target pseudo -p -  # '-' for stdout\n"
+                " " << pgm_name << " -stencil 3axis -radius 1 -target pseudo -p -  # '-' for stdout\n"
                 " " << pgm_name << " -stencil awp -elem-bytes 8 -fold x=4,y=2 -target avx2 -p stencil_code.hpp\n"
-                " " << pgm_name << " -stencil iso3dfd -radius 4 -cluster y=2 -target avx512 -p stencil_code.hpp\n" <<
+                " " << pgm_name << " -stencil iso3dfd -radius 4 -cluster x=2 -target avx512 -p stencil_code.hpp\n" <<
                 flush;
             exit(1);
         }
