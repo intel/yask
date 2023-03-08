@@ -133,9 +133,9 @@ struct MySettings {
 
             cout <<
                 "\nExamples:\n"
-                " " << pgm_name << " -stencil 3axis -radius 2 -fold x=4,y=4 -target pseudo -p -  # '-' for stdout\n"
+                " " << pgm_name << " -stencil 3axis -radius 1 -target pseudo -p -  # '-' for stdout\n"
                 " " << pgm_name << " -stencil awp -elem-bytes 8 -fold x=4,y=2 -target avx2 -p stencil_code.hpp\n"
-                " " << pgm_name << " -stencil iso3dfd -radius 4 -cluster y=2 -target avx512 -p stencil_code.hpp\n" <<
+                " " << pgm_name << " -stencil iso3dfd -radius 4 -cluster x=2 -target avx512 -p stencil_code.hpp\n" <<
                 flush;
             exit(1);
         }
