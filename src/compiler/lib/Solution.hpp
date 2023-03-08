@@ -111,8 +111,8 @@ namespace yask {
 
         // Make a new var.
         virtual yc_var_ptr new_var(const std::string& name,
-                                    bool is_scratch,
-                                    const std::vector<yc_index_node_ptr>& dims);
+                                   bool is_scratch,
+                                   const std::vector<yc_index_node_ptr>& dims);
 
         // stencil_solution APIs.
         // See yask_stencil_api.hpp for documentation.
@@ -143,20 +143,20 @@ namespace yask {
         }
 
         virtual yc_var_ptr new_var(const std::string& name,
-                                     const std::vector<yc_index_node_ptr>& dims) override {
+                                   const std::vector<yc_index_node_ptr>& dims) override {
             return new_var(name, false, dims);
         }
         virtual yc_var_ptr new_var(const std::string& name,
-                                     const std::initializer_list<yc_index_node_ptr>& dims) override {
+                                   const std::initializer_list<yc_index_node_ptr>& dims) override {
             std::vector<yc_index_node_ptr> dim_vec(dims);
             return new_var(name, false, dim_vec);
         }
         virtual yc_var_ptr new_scratch_var(const std::string& name,
-                                             const std::vector<yc_index_node_ptr>& dims) override {
+                                           const std::vector<yc_index_node_ptr>& dims) override {
             return new_var(name, true, dims);
         }
         virtual yc_var_ptr new_scratch_var(const std::string& name,
-                                             const std::initializer_list<yc_index_node_ptr>& dims) override {
+                                           const std::initializer_list<yc_index_node_ptr>& dims) override {
             std::vector<yc_index_node_ptr> dim_vec(dims);
             return new_var(name, true, dim_vec);
         }
@@ -255,7 +255,7 @@ namespace yask {
         virtual void output_solution(yask_output_ptr output) override;
         virtual void
         call_before_output(output_hook_t hook_fn) override {
-                _output_hooks.push_back(hook_fn);
+            _output_hooks.push_back(hook_fn);
         }
         virtual void
         set_domain_dims(const std::vector<yc_index_node_ptr>& dims) override {
@@ -281,8 +281,8 @@ namespace yask {
             assert(dp);
             auto& dname = dim->get_name();
             if (dp->get_type() != STEP_INDEX)
-                    THROW_YASK_EXCEPTION("set_step_dim() called with non-step index '" +
-                                         dname + "'");
+                THROW_YASK_EXCEPTION("set_step_dim() called with non-step index '" +
+                                     dname + "'");
             _settings._step_dim = dname;
         }
         

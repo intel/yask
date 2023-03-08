@@ -101,9 +101,9 @@ namespace yask {
     public:
         // Ctors.
         Var(string name,
-             bool is_scratch,
-             StencilSolution* soln,
-             const index_expr_ptr_vec& dims);
+            bool is_scratch,
+            StencilSolution* soln,
+            const index_expr_ptr_vec& dims);
 
         // Dtor.
         virtual ~Var() { }

@@ -158,9 +158,9 @@ namespace yask {
 
         // Visits are considered unique by address, not semantic equivalence.
         virtual bool already_visited(Expr* ep) {
-#if DEBUG_TRACKING >= 1
+            #if DEBUG_TRACKING >= 1
             cout << " //** tracking '" << ep->make_str() << "'@" << ep << endl;
-#endif
+            #endif
             bool seen = _counts.count(ep) > 0;
 
             // Mark as seen for next time and count visits.

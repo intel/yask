@@ -30,12 +30,12 @@ IN THE SOFTWARE.
 // Try to use align instruction(s) to construct nelems_target elements
 // per instruction.
 void CppIntrinPrintHelper::try_align(ostream& os,
-                                    const string& pv_name,
-                                    size_t nelems_target,
-                                    const VecElemList& elems,
-                                    set<size_t>& done_elems,
-                                    const VarPointSet& aligned_vecs,
-                                    bool mask_allowed) {
+                                     const string& pv_name,
+                                     size_t nelems_target,
+                                     const VecElemList& elems,
+                                     set<size_t>& done_elems,
+                                     const VarPointSet& aligned_vecs,
+                                     bool mask_allowed) {
     size_t nelems = elems.size();
 
     // Find case(s) that can use valignd.
@@ -57,10 +57,10 @@ void CppIntrinPrintHelper::try_align(ostream& os,
             // Try all possible shift amounts.
             for (size_t count = 1;
                  done_elems.size() < nelems && count < nelems; count++) {
-#ifdef DEBUG_SHIFT
+                #ifdef DEBUG_SHIFT
                 cout << " //** Checking shift of " << mv1_name <<
                     " and " << mv2_name << " by " << count << " elements." << endl;
-#endif
+                #endif
 
                 // Check each position i in output to see if it's correct.
                 size_t nused1 = 0, nused2 = 0;
@@ -86,10 +86,10 @@ void CppIntrinPrintHelper::try_align(ostream& os,
                                 nused1++;
                                 mask |= (1 << i); // set proper bit.
                                 found_elems.insert(i); // remember bit.
-#ifdef DEBUG_SHIFT
+                                #ifdef DEBUG_SHIFT
                                 cout << " // ** " << pv_name << "[" << i << "] = " <<
                                     mv1_name << "[" << p << "]" << endl;
-#endif
+                                #endif
                             }
                         }
                     }
@@ -106,10 +106,10 @@ void CppIntrinPrintHelper::try_align(ostream& os,
                                 nused2++;
                                 mask |= (1 << i); // set proper bit.
                                 found_elems.insert(i); // remember bit.
-#ifdef DEBUG_SHIFT
+                                #ifdef DEBUG_SHIFT
                                 cout << " // ** " << pv_name << "[" << i << "] = " <<
                                     mv2_name << "[" << p << "]" << endl;
-#endif
+                                #endif
                             }
                         }
                     }
@@ -183,11 +183,11 @@ void CppIntrinPrintHelper::try_align(ostream& os,
 // Try to use 1-var permute instruction(s) to construct nelems_target elements
 // per instruction.
 void CppIntrinPrintHelper::try_perm1(ostream& os,
-                                    const string& pv_name,
-                                    size_t nelems_target,
-                                    const VecElemList& elems,
-                                    set<size_t>& done_elems,
-                                    const VarPointSet& aligned_vecs) {
+                                     const string& pv_name,
+                                     size_t nelems_target,
+                                     const VecElemList& elems,
+                                     set<size_t>& done_elems,
+                                     const VarPointSet& aligned_vecs) {
     size_t nelems = elems.size();
 
     // Try a permute of each aligned vector.
@@ -278,11 +278,11 @@ void CppIntrinPrintHelper::try_perm1(ostream& os,
 // Try to use 2-var permute instruction(s) to construct nelems_target elements
 // per instruction.
 void CppIntrinPrintHelper::try_perm2(ostream& os,
-                                    const string& pv_name,
-                                    size_t nelems_target,
-                                    const VecElemList& elems,
-                                    set<size_t>& done_elems,
-                                    const VarPointSet& aligned_vecs) {
+                                     const string& pv_name,
+                                     size_t nelems_target,
+                                     const VecElemList& elems,
+                                     set<size_t>& done_elems,
+                                     const VarPointSet& aligned_vecs) {
     size_t nelems = elems.size();
 
     // There is no source-preserving mask version of permutex2var, so
@@ -410,8 +410,8 @@ void CppIntrinPrintHelper::try_perm2(ostream& os,
 
 // Print construction for one unaligned vector pv_name at gp.
 void CppIntrinPrintHelper::print_unaligned_vec_ctor(ostream& os,
-                                                 const VarPoint& gp,
-                                                 const string& pv_name) {
+                                                    const VarPoint& gp,
+                                                    const string& pv_name) {
 
     // Create an explanatory comment by printing the straightforward
     // code in a comment.
@@ -438,7 +438,7 @@ void CppIntrinPrintHelper::print_unaligned_vec_ctor(ostream& os,
          nelems_target--) {
 
         try_strategies(os, pv_name,
-                      nelems_target, elems, done_elems, aligned_vecs);
+                       nelems_target, elems, done_elems, aligned_vecs);
 
     } // decreasing number of target elements for next attempt.
 

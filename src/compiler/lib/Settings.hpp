@@ -120,10 +120,10 @@ namespace yask {
         
         // Find the dimensions to be used.
         void set_dims(Vars& vars,
-                     CompilerSettings& settings,
-                     int vlen,
-                     bool is_folding_efficient,
-                     ostream& os);
+                      CompilerSettings& settings,
+                      int vlen,
+                      bool is_folding_efficient,
+                      ostream& os);
 
         // Make string like "+(4/VLEN_X)" or "-(2/VLEN_Y)"
         // given signed offset and direction.

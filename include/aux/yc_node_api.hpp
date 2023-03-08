@@ -264,8 +264,10 @@ namespace yask {
     /**
        This is a leaf node in an AST.
        Created via yc_node_factory::new_step_index(),
-       yc_node_factory::new_domain_index(), and
-       yc_node_factory::new_misc_index().
+       yc_node_factory::new_domain_index(),
+       yc_node_factory::new_misc_index(),
+       yc_node_factory::new_first_domain_index(), or.
+       yc_node_factory::new_last_domain_index().
     */
     class yc_index_node : public virtual yc_number_node {
     public:
@@ -802,7 +804,7 @@ namespace yask {
 
            @returns Pointer to new \ref yc_index_node object.
         */
-        virtual yc_number_node_ptr
+        virtual yc_index_node_ptr
         new_first_domain_index(yc_index_node_ptr idx
                                /**< [in] Domain index. */ ) const;
 
@@ -816,7 +818,7 @@ namespace yask {
 
            @returns Pointer to new \ref yc_index_node object.
         */
-        virtual yc_number_node_ptr
+        virtual yc_index_node_ptr
         new_last_domain_index(yc_index_node_ptr idx
                               /**< [in] Domain index. */ ) const;
 
