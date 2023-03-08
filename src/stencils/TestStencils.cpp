@@ -846,13 +846,13 @@ namespace {
         // Define equation to apply to all points in 'A' var.
         virtual void define() {
 
-            // Step condition based on step value.
+            // Condition based on step value.
             auto tc0 = (t % 2 == 0);
 
-            // Step condition based on misc-var contents.
+            // Condition based on misc-var contents.
             auto vc0 = (B(0) > B(1));
-        
-            // Set A w/different stencils depending on the conditions.  It is
+
+            // Update A w/different stencils depending on the conditions.  It is
             // the programmer's responsibility to ensure that the conditions are
             // exclusive when necessary. It is not checked at compile or
             // run-time.
