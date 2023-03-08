@@ -131,11 +131,6 @@ struct MySettings {
                 }
             }
 
-            cout << 
-                "\nValidation is very slow and uses 2x memory,\n"
-                " so run with very small sizes and number of time-steps.\n"
-                " If validation fails, it may be due to rounding error;\n"
-                " try building with 8-byte reals.\n";
             cout <<
                 "\nExamples:\n"
                 " " << pgm_name << " -stencil 3axis -radius 2 -fold x=4,y=4 -target pseudo -p -  # '-' for stdout\n"
