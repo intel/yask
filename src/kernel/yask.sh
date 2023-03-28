@@ -67,17 +67,17 @@ fi
 # For latter two, the goal is to count only NUMA nodes with CPUs.
 # (Systems with HBM may have NUMA nodes without CPUs.)
 nranks=1
-if [[ ! -z ${SLURM_NTASKS:+x} ]]; then
+if [[ ! -z ${SLURM_NTASKS:+x} && $SLURM_NTASKS > $nnodes ]]; then
     nranks=$SLURM_NTASKS
 elif command -v numactl >/dev/null; then
     ncpubinds=`numactl -s | awk '/^cpubind:/ { print NF-1 }'`
     if [[ -n "$ncpubinds" ]]; then
-        nranks=$ncpubinds
+        nranks=$(( $ncpubinds * $nnodes ))
     fi
 elif command -v lscpu >/dev/null; then
     nnumas=`lscpu | grep -c '^NUMA node.*CPU'`
     if [[ -n "$nnumas" ]]; then
-        nranks=$nnumas
+        nranks=$(( $nnumas * $nnodes ))
     fi
 fi
 
@@ -158,8 +158,9 @@ while true; do
         echo "     Shortcut for the following option if <N> > 1:"
         echo "       -mpi_cmd 'mpirun -np <N>'"
         echo "     If a different MPI command is needed, use -mpi_cmd <command> explicitly."
-        echo "     If the env var SLURM_NTASKS is set, the default is its value."
-        echo "     Otherwise, the default is based on the number of NUMA nodes."
+        echo "     If the env var SLURM_NTASKS is set AND if it greater than the number of nodes,"
+        echo "        the default is its value."
+        echo "     Otherwise, the default is based on the number of NUMA nodes on the current host."
         echo "     The current default is $nranks."
         echo "  -nodes <N>"
         echo "     Set the number of nodes."
@@ -375,14 +376,6 @@ if [[ ! -x $exe ]]; then
     show_stencils
 fi
 
-# Save most recent make report to log if it exists.
-if [[ -e $make_report ]]; then
-    $dump $make_report >> $logfile
-    if  [[ -e $yc_report ]]; then
-        $dump $yc_report >> $logfile
-    fi
-fi
-
 dir=`pwd`
 libpath=":$HOME/lib"
 
@@ -412,12 +405,30 @@ if [[ ( $using_opt_outer_threads == 0 ) && ( $arch != "knl" ) && ( $is_offload =
         fi
     fi
 fi
+
+# Output some vars.
 echo "Num nodes:" $nnodes | tee -a $logfile
 echo "Num MPI ranks:" $nranks | tee -a $logfile
 echo "Num MPI ranks per node:" $(( $nranks / $nnodes )) | tee -a $logfile
+echo "sh_prefix='$sh_prefix'" | tee -a $logfile
+echo "mpi_cmd='$mpi_cmd'" | tee -a $logfile
+echo "exe_prefix='$exe_prefix'" | tee -a $logfile
+echo "exe='$exe'" | tee -a $logfile
+echo "pre_cmd='$pre_cmd'" | tee -a $logfile
+echo "post_cmd='$post_cmd'" | tee -a $logfile
+
+# Output the SLURM env.
 if [[ `env | grep -c SLURM` > 0 ]]; then
     echo "Slurm vars:" | tee -a $logfile
     env | grep -E 'SBATCH|SLURM'
+fi
+
+# Dump most recent reports.
+if [[ -e $make_report ]]; then
+    $dump $make_report >> $logfile
+    if  [[ -e $yc_report ]]; then
+        $dump $yc_report >> $logfile
+    fi
 fi
 
 # Add validation opts to beginning.
