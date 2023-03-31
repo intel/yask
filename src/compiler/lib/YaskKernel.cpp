@@ -478,7 +478,7 @@ namespace yask {
                 {
                     os << "\n // Determine whether " << egs_name << " is valid at the domain indices " <<
                         _dims._stencil_dims.make_dim_str() << ".\n"
-                        " // Return true if indices are within the valid sub-domain or false otherwise.\n"
+                        " // Return 'true' if indices are within the valid sub-domain or false otherwise.\n"
                         " ALWAYS_INLINE static bool is_in_valid_domain(const " <<
                         _core_t << "* core_data, const Indices& idxs) {"
                         " host_assert(core_data);\n";
@@ -507,7 +507,7 @@ namespace yask {
                 {
                     os << endl << " // Determine whether " << egs_name <<
                         " is valid at the step input_step_index.\n" <<
-                        " // Return true if valid or false otherwise.\n"
+                        " // Return 'true' if valid or 'false' otherwise.\n"
                         " ALWAYS_INLINE static bool is_in_valid_step(const " <<
                         _core_t << "* core_data, idx_t input_step_index) {"
                         " host_assert(core_data);\n";
@@ -551,7 +551,7 @@ namespace yask {
                             " occurs when calling one of the calc_*() methods with"
                             " 'input_step_index' and return 'true'.\n";
                     else
-                        os << "// Return 'false' because this bundle does not update"
+                        os << " // Return 'false' because this bundle does not update"
                             " vars with the step dimension.\n";
                     os << " ALWAYS_INLINE static bool get_output_step_index(idx_t input_step_index,"
                         " idx_t& output_step_index) {\n";
@@ -785,7 +785,9 @@ namespace yask {
         for (auto gp : _vars) {
             VAR_DECLS(gp);
 
-            string header = "\n // Var '" + var + "'.\n";
+            string header = "\n // " +
+                (gp->is_scratch() ? string("Scratch var") : string("Var")) +
+                " '" + var + "'.\n";
             os << header;
             ctor_code += header;
 
@@ -1089,7 +1091,7 @@ namespace yask {
 
         // New-var method.
         os << "\n // Make a new var iff its dims match any in the stencil.\n"
-            " // Returns pointer to the new var or nullptr if no match.\n"
+            " // Return pointer to the new var or nullptr if no match.\n"
             " VarBasePtr new_stencil_var(const std::string& name,"
             " const VarDimNames& dims) override {\n"
             " VarBasePtr gp;\n" <<

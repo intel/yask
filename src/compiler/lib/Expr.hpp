@@ -338,6 +338,7 @@ namespace yask {
     };
 
     // Any expression that returns a real (not from a YASK var).
+    // Used only internally, not by the API programmer.
     // This is an expression leaf-node.
     class CodeExpr : public NumExpr {
     protected:

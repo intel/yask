@@ -95,10 +95,10 @@ Public Member Functions</h2></td></tr>
 <tr class="memdesc:a9929e2bff733245da5f29e51657ffabc"><td class="mdescLeft">&#160;</td><td class="mdescRight">Contructor taking an initializer_list of index vars.  <br /></td></tr>
 <tr class="separator:a9929e2bff733245da5f29e51657ffabc"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a41f0001297570d999a965243f6a1d852"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__var__proxy.html#a41f0001297570d999a965243f6a1d852">yc_var_proxy</a> (const std::string &amp;name, <a class="el" href="group__yc.html#ga9d3125ced50de97053e15de0588dc8f9">yc_solution_ptr</a> soln)</td></tr>
-<tr class="memdesc:a41f0001297570d999a965243f6a1d852"><td class="mdescLeft">&#160;</td><td class="mdescRight">Contructor for a simple scalar value.  <br /></td></tr>
+<tr class="memdesc:a41f0001297570d999a965243f6a1d852"><td class="mdescLeft">&#160;</td><td class="mdescRight">Contructor for a simple scalar YASK variable.  <br /></td></tr>
 <tr class="separator:a41f0001297570d999a965243f6a1d852"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a8f366d84d0a159c55a6ae97c05209687"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__var__proxy.html#a8f366d84d0a159c55a6ae97c05209687">yc_var_proxy</a> (<a class="el" href="group__yc.html#ga90f589d7fb0dc32e895384b65140f4a3">yc_var_ptr</a> &amp;var)</td></tr>
-<tr class="memdesc:a8f366d84d0a159c55a6ae97c05209687"><td class="mdescLeft">&#160;</td><td class="mdescRight">Contructor taking an existing var.  <br /></td></tr>
+<tr class="memdesc:a8f366d84d0a159c55a6ae97c05209687"><td class="mdescLeft">&#160;</td><td class="mdescRight">Contructor taking an existing YASK variable.  <br /></td></tr>
 <tr class="separator:a8f366d84d0a159c55a6ae97c05209687"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ab9ef3d151169284945bb7694ef5795a6"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__var__proxy.html#ab9ef3d151169284945bb7694ef5795a6">yc_var_proxy</a> (<a class="el" href="classyask_1_1yc__var__proxy.html">yc_var_proxy</a> &amp;proxy)</td></tr>
 <tr class="memdesc:ab9ef3d151169284945bb7694ef5795a6"><td class="mdescLeft">&#160;</td><td class="mdescRight">Contructor taking an existing proxy.  <br /></td></tr>
@@ -116,7 +116,7 @@ virtual <a class="el" href="group__yc.html#ga90f589d7fb0dc32e895384b65140f4a3">y
 <tr class="memdesc:aa356f798d3a05a1b8a296ae1d5742072"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the underlying <a class="el" href="classyask_1_1yc__var.html">yc_var</a> pointer. <br /></td></tr>
 <tr class="separator:aa356f798d3a05a1b8a296ae1d5742072"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:aad380b22c25e07687a8b15b80438179e"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yc.html#ga9a62b44ca70077bbedfd93527c87c56e">yc_var_point_node_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__var__proxy.html#aad380b22c25e07687a8b15b80438179e">operator()</a> (const std::vector&lt; <a class="el" href="group__yc.html#ga22125cb7af210ef5a3ffad03f544074a">yc_number_node_ptr</a> &gt; &amp;index_exprs)</td></tr>
-<tr class="memdesc:aad380b22c25e07687a8b15b80438179e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create an expression for a point in a var.  <br /></td></tr>
+<tr class="memdesc:aad380b22c25e07687a8b15b80438179e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create an expression for a point in a YASK variable.  <br /></td></tr>
 <tr class="separator:aad380b22c25e07687a8b15b80438179e"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ab1984c605870ae79dcffb07af38207de"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yc.html#ga9a62b44ca70077bbedfd93527c87c56e">yc_var_point_node_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__var__proxy.html#ab1984c605870ae79dcffb07af38207de">operator()</a> (const std::initializer_list&lt; <a class="el" href="group__yc.html#ga22125cb7af210ef5a3ffad03f544074a">yc_number_node_ptr</a> &gt; &amp;index_exprs)</td></tr>
 <tr class="memdesc:ab1984c605870ae79dcffb07af38207de"><td class="mdescLeft">&#160;</td><td class="mdescRight">Create an expression for a point in a var.  <br /></td></tr>
@@ -309,7 +309,7 @@ virtual <a class="el" href="group__yc.html#ga90f589d7fb0dc32e895384b65140f4a3">y
 </table>
 </div><div class="memdoc">
 
-<p>Contructor for a simple scalar value. </p>
+<p>Contructor for a simple scalar YASK variable. </p>
 <p>A wrapper around <a class="el" href="classyask_1_1yc__solution.html#a192b0f12d3943483514e16c82c15a42b" title="Create an n-dimensional variable in the solution.">yc_solution::new_var()</a>. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
@@ -345,7 +345,7 @@ virtual <a class="el" href="group__yc.html#ga90f589d7fb0dc32e895384b65140f4a3">y
 </table>
 </div><div class="memdoc">
 
-<p>Contructor taking an existing var. </p>
+<p>Contructor taking an existing YASK variable. </p>
 <p>Creates a new <a class="el" href="classyask_1_1yc__var__proxy.html">yc_var_proxy</a> wrapper around an existing var. </p>
 
 </div>
@@ -404,7 +404,7 @@ virtual <a class="el" href="group__yc.html#ga90f589d7fb0dc32e895384b65140f4a3">y
 </table>
 </div><div class="memdoc">
 
-<p>Create an expression for a point in a var. </p>
+<p>Create an expression for a point in a YASK variable. </p>
 <p>A wrapper around <a class="el" href="classyask_1_1yc__var.html#aad91c7587f75392db28d7a19bb53b423" title="Create a reference to a point in this var.">yc_var::new_var_point()</a>. The number of arguments must match the dimensionality of the var.</p>
 <p>Example w/2D var <code>B</code>: <code>A(t+1, x) EQUALS A(t, x) + B(vec)</code>, </p>
 

@@ -978,7 +978,7 @@ namespace yask {
         }
         #endif
         
-        /// Contructor for a simple scalar value.
+        /// Contructor for a simple scalar YASK variable.
         /**
            A wrapper around yc_solution::new_var().
         */
@@ -990,7 +990,7 @@ namespace yask {
             _var = soln->new_var(name, { });
         }
 
-        /// Contructor taking an existing var.
+        /// Contructor taking an existing YASK variable.
         /**
            Creates a new \ref yc_var_proxy wrapper around an
            existing var.
@@ -1017,7 +1017,7 @@ namespace yask {
             return _var;
         }
 
-        /// Create an expression for a point in a var.
+        /// Create an expression for a point in a YASK variable.
         /**
            A wrapper around yc_var::new_var_point().
            The number of arguments must match the dimensionality of the var.

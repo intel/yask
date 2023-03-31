@@ -442,7 +442,7 @@ namespace yask {
     // A named equation bundle, which contains one or more var-update
     // equations.  All equations in a bundle must have the same conditions.
     // Equations in a bundle must not have inter-dependencies because they
-    // will be combined into a single expression.
+    // will be combined into a single code block.
     class EqBundle : public EqLot {
     protected:
         const Dimensions* _dims = 0;
@@ -655,7 +655,6 @@ namespace yask {
             }
             return false;
         }
-
     };
 
     // Container for multiple equation stages.

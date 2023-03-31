@@ -390,14 +390,6 @@ namespace yask {
                 eq1->make_quoted_str() << "...\n";
 #endif
 
-            // Scratch var must not have a condition.
-            if (cond1 && og1->is_scratch())
-                THROW_YASK_EXCEPTION("scratch-var equation " + eq1->make_quoted_str() +
-                                     " cannot have a domain condition");
-            if (stcond1 && og1->is_scratch())
-                THROW_YASK_EXCEPTION("scratch-var equation " + eq1->make_quoted_str() +
-                                     " cannot have a step condition");
-
             // LHS must have all domain dims.
             for (auto& dd : dims._domain_dims) {
                 auto& dname = dd._get_name();
@@ -782,7 +774,7 @@ namespace yask {
 
     // Find scratch-var eqs needed for each non-scratch eq.  These will
     // eventually be gathered into bundles and saved as the "scratch
-    // children" for each non-scratch bundles.
+    // children" for each non-scratch bundle.
     void Eqs::analyze_scratch() {
 
         // Example:
@@ -861,7 +853,6 @@ namespace yask {
                                                  og2->get_name() + "' depends upon itself");
                         scratches_seen.insert(og2);
                     }
-
                 });
         }
     }
@@ -882,7 +873,7 @@ namespace yask {
         if (is_scratch())
             des += "scratch ";
         des += "equation-bundle " + quote + _get_name() + quote;
-        if (!is_scratch() && show_cond) {
+        if (show_cond) {
             if (cond.get())
                 des += " w/domain condition " + cond->make_quoted_str(quote);
             else
@@ -1074,7 +1065,10 @@ namespace yask {
             auto ne = make_shared<EqBundle>(*_dims, eq->is_scratch());
             add_item(ne);
             target = ne.get();
-            target->base_name = base_name;
+            if (eq->is_scratch())
+                target->base_name = string("scratch_") + base_name;
+            else
+                target->base_name = base_name;
             target->index = _indices[base_name]++;
             target->cond = cond;
             target->step_cond = stcond;
@@ -1491,7 +1485,7 @@ namespace yask {
         string des;
         if (is_scratch())
             des += "scratch ";
-        des += "equation bundle-stage " + quote + _get_name() + quote;
+        des += "stage " + quote + _get_name() + quote;
         if (!is_scratch()) {
             if (step_cond.get())
                 des += " w/step condition " + step_cond->make_quoted_str(quote);
@@ -1521,7 +1515,7 @@ namespace yask {
     // Add 'bp' from 'all_bundles'. Create new stage if needed.  Returns
     // whether a new stage was created.
     bool EqStages::add_bundle_to_stage(EqBundles& all_bundles,
-                                        EqBundlePtr bp)
+                                       EqBundlePtr bp)
     {
         // Already added?
         if (_bundles_in_stages.count(bp))
@@ -1571,7 +1565,10 @@ namespace yask {
             auto np = make_shared<EqStage>(bp->is_scratch());
             add_item(np);
             target = np.get();
-            target->base_name = _base_name;
+            if (bp->is_scratch())
+                target->base_name = string("scratch_") + _base_name;
+            else
+                target->base_name = _base_name;
             target->index = _idx++;
             target->step_cond = stcond;
             new_stage = true;

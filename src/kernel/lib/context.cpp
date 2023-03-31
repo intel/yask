@@ -102,8 +102,8 @@ namespace yask {
         int scratch_var_idx = 0;
 
         // Set offsets in scratch vars.  For this reference run, scratch
-        // vars are allocated for the whole rank instead of smaller var
-        // size.
+        // vars are allocated for the whole rank instead of smaller 
+        // micro-block size.
         update_scratch_var_info(scratch_var_idx, rank_idxs.begin);
 
         // Doing all parts.
@@ -112,7 +112,8 @@ namespace yask {
         
         // Initial halo exchange.
         // TODO: get rid of all halo exchanges in this function,
-        // and calculate overall problem in one rank.
+        // and calculate overall problem in all ranks, then
+        // compare relevant pieces in each rank.
         exchange_halos(mpisec);
 
         // Number of iterations to get from begin_t, stopping before end_t,
@@ -133,7 +134,7 @@ namespace yask {
             rank_idxs.stop[step_posn] = stop_t;
             rank_idxs.stride[step_posn] = stride_t;
 
-            // Loop thru bundles. We ignore stages here
+            // Loop thru all non-scratch bundles. We ignore stages here
             // because staging is an optional optimization.
             for (auto* asg : st_bundles) {
 
@@ -142,7 +143,7 @@ namespace yask {
                           " in non-scratch bundle '" << asg->get_name());
 
                 // Check step.
-                if (check_step_conds && !asg->is_in_valid_step(start_t)) {
+                if (!asg->is_in_valid_step(start_t)) {
                     TRACE_MSG("run_ref: not valid for step " << start_t);
                     continue;
                 }
@@ -158,9 +159,12 @@ namespace yask {
                 // Loop through all the needed bundles.
                 for (auto* sg : sg_list) {
 
-                    // Indices needed for the generated misc loops.  Will normally be a
-                    // copy of rank_idxs except when updating scratch-vars.
-                    ScanIndices misc_idxs = sg->adjust_span(scratch_var_idx, rank_idxs);
+                    // Indices needed for the generated misc loops.
+                    ScanIndices misc_idxs(rank_idxs);
+
+                    // Adjust for scratch vars.
+                    if (sg->is_scratch())
+                        misc_idxs = sg->adjust_span(scratch_var_idx, rank_idxs);
                     misc_idxs.stride.set_from_const(1); // ensure unit stride.
 
                     // Scan through n-D space.
@@ -354,7 +358,7 @@ namespace yask {
                     for (auto& bp : st_stages) {
 
                         // Check step.
-                        if (check_step_conds && !bp->is_in_valid_step(start_t)) {
+                        if (!bp->is_in_valid_step(start_t)) {
                             TRACE_MSG("step " << start_t <<
                                       " not valid for stage '" <<
                                       bp->get_name() << "'");
@@ -695,7 +699,7 @@ namespace yask {
                               start_t << " ... " << stop_t << ")");
 
                     // Check step.
-                    if (check_step_conds && !bp->is_in_valid_step(start_t)) {
+                    if (!bp->is_in_valid_step(start_t)) {
                         TRACE_MSG("step " << start_t <<
                                   " not valid for stage '" << bp->get_name() << "'");
                         continue;
@@ -826,7 +830,7 @@ namespace yask {
                     for (auto& bp : st_stages) {
 
                         // Check step.
-                        if (check_step_conds && !bp->is_in_valid_step(t))
+                        if (!bp->is_in_valid_step(t))
                             continue;
 
                         // One shift for each stage in each TB step.
@@ -1107,7 +1111,7 @@ namespace yask {
                     continue;
 
                 // Check step.
-                if (check_step_conds && !bp->is_in_valid_step(start_t)) {
+                if (!bp->is_in_valid_step(start_t)) {
                     TRACE_MSG("calc_micro_block: step " << start_t <<
                               " not valid for stage '" <<
                               bp->get_name() << "'");

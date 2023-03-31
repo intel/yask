@@ -356,8 +356,8 @@ namespace yask {
                            " applied to all YASK vars", _extra_pad_sizes);
         parser.add_option(make_shared<command_line_parser::bool_option>
                           ("allow_addl_padding",
-                           "[Advanced] Allow automatic extension of padding for"
-                           " additional performance on any or all YASK vars.",
+                           "[Advanced] Allow automatic extension of padding"
+                           " beyond minimal vector alignment on any or all YASK vars.",
                            _allow_addl_pad));
         #ifdef USE_MPI
         _add_domain_option(parser, "nr", "Num ranks", _num_ranks);

@@ -57,7 +57,7 @@ namespace {
                                            const yc_number_node_ptr& x0,
                                            int left_ext, int right_ext) {
             auto r = get_radius();
-            yc_number_node_ptr v;
+            yc_number_node_ptr v = new_number_node(2.0);
             for (int i = -r - left_ext; i <= r + right_ext; i++)
                 v += V(t0, x0+i);
             return v;
@@ -69,7 +69,7 @@ namespace {
                                           const yc_number_node_ptr& x0,
                                           int left_ext, int right_ext) {
             auto r = get_radius();
-            yc_number_node_ptr v;
+            yc_number_node_ptr v = new_number_node(3.0);
             for (int i = -r - left_ext; i <= r + right_ext; i++)
                 v += V(x0+i);
             return v;
@@ -892,16 +892,18 @@ namespace {
         // Define equation to apply to all points in 'A' var.
         virtual void define() {
 
-            // Define values in scratch var 'B' using current values from 'A'.
-            B(x) EQUALS def_t1d(A, t, x, 1, 0);
-
             // Define sub-domain.
             auto sd0 = (x >= first_domain_index(x) + 5) && (x <= last_domain_index(x) - 3);
         
+            // Define values in scratch var 'B' using current values from 'A'.
+            auto b0 = def_t1d(A, t, x, 1, 0);
+            B(x) EQUALS  b0 IF_DOMAIN sd0;
+            B(x) EQUALS -b0 IF_DOMAIN !sd0;
+
             // Define next values for 'A' from scratch var values.
-            auto v = def_1d(B, x-6, 2, 3) - def_1d(B, x+7, 0, 2);
-            A(t+1, x) EQUALS v IF_DOMAIN sd0;
-            A(t+1, x) EQUALS -v IF_DOMAIN !sd0;
+            auto a1 = def_1d(B, x-6, 2, 3) - def_1d(B, x+7, 0, 2);
+            A(t+1, x) EQUALS  a1 IF_DOMAIN sd0;
+            A(t+1, x) EQUALS -a1 IF_DOMAIN !sd0;
         }
     };
 

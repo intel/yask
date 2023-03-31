@@ -50,20 +50,30 @@ namespace yask {
             bb_end(NUM_DOMAIN_DIMS),
             bb_len(NUM_DOMAIN_DIMS) { }
 
+        // Same?
+        // Only compares indices.
+        inline bool operator==(const BoundingBox& rhs) const {
+            return bb_begin == rhs.bb_begin &&
+                bb_end == rhs.bb_end;
+        }
+        inline bool operator!=(const BoundingBox& rhs) const {
+            return !operator==(rhs);
+        }
+
         // Make Tuples.
-        IdxTuple bb_begin_tuple(const IdxTuple& ddims) const {
+        inline IdxTuple bb_begin_tuple(const IdxTuple& ddims) const {
             return bb_begin.make_tuple(ddims);
         }
-        IdxTuple bb_end_tuple(const IdxTuple& ddims) const {
+        inline IdxTuple bb_end_tuple(const IdxTuple& ddims) const {
             return bb_end.make_tuple(ddims);
         }
-        IdxTuple bb_last_tuple(const IdxTuple& ddims) const {
+        inline IdxTuple bb_last_tuple(const IdxTuple& ddims) const {
             auto res = bb_end.make_tuple(ddims);
             DOMAIN_VAR_LOOP(i, j)
                 res[j] = res[j] - 1;
             return res;
         }
-        IdxTuple bb_len_tuple(const IdxTuple& ddims) const {
+        inline IdxTuple bb_len_tuple(const IdxTuple& ddims) const {
             return bb_len.make_tuple(ddims);
         }
         std::string make_range_string(const IdxTuple& ddims) const {
@@ -102,6 +112,19 @@ namespace yask {
                     return false;
             }
             return true;
+        }
+
+        // Intersection between 'this' and 'other'.
+        BoundingBox intersection_with(const BoundingBox& other,
+                                      StencilContext* context) const {
+            BoundingBox bbi;
+            DOMAIN_VAR_LOOP_FAST(i, j) {
+                bbi.bb_begin[j] = std::max(bb_begin[j], other.bb_begin[j]);
+                bbi.bb_end[j] = std::min(bb_end[j], other.bb_end[j]);
+                bbi.bb_end[j] = std::max(bbi.bb_begin[j], bbi.bb_end[j]);
+            }
+            bbi.update_bb("", context, true);
+            return bbi;
         }
     };
 

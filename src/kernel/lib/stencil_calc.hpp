@@ -55,6 +55,9 @@ namespace yask {
         // any invalid points. These will all be inside '_bundle_bb'.
 	BBList _bb_list;
 
+        // Max write halos for scratch bundles;
+        IdxTuple max_lh, max_rh;
+
         // Normalize the 'orig' indices, i.e., divide by vector len in each dim.
         // Ranks offsets must already be subtracted.
         // Each dim in 'orig' must be a multiple of corresponding vec len.
@@ -100,6 +103,7 @@ namespace yask {
         VarPtrs input_var_ptrs;
 
         // Vectors of scratch vars that are written to/read from.
+        // Vectors contain one entry per outer thread.
         ScratchVecs output_scratch_vecs;
         ScratchVecs input_scratch_vecs;
 
@@ -139,17 +143,21 @@ namespace yask {
             return sg_list;
         }
 
+        // Determine max write halos.
+        void find_write_halos();
+
         // If this bundle is updating scratch var(s),
-        // expand indices to calculate values in halo.
+        // expand indices to calculate values in scratch-halo.
         // Adjust offsets in vars based on original idxs.
         // Return adjusted indices.
         ScanIndices adjust_span(int thread_idx, const ScanIndices& idxs) const;
 
         // Set the bounding-box vars for this bundle in this rank.
-        void find_bounding_box();
+        // This includes the overall-BB and the constituent full-BBs.
+        void find_bounding_boxes();
 
         // Copy BB vars from another.
-        void copy_bounding_box(const StencilBundleBase* src);
+        void copy_bounding_boxes(const StencilBundleBase* src);
 
         // Calculate results for an arbitrary tile for points in the valid domain.
         // Scratch vars, if any, are indexed via 'scratch_var_idx'.
@@ -305,7 +313,8 @@ namespace yask {
 
         // Determine whether step index is enabled.
         bool is_in_valid_step(idx_t input_step_index) const override {
-            return _bundle.is_in_valid_step(_corep(), input_step_index);
+            return !_context->check_step_conds ||
+                _bundle.is_in_valid_step(_corep(), input_step_index);
         }
 
         // If bundle updates var(s) with the step index,
@@ -968,7 +977,7 @@ namespace yask {
     protected:
         std::string _name;
 
-        // Union of bounding boxes for all bundles in this stage.
+        // Union of bounding boxes for all non-scratch bundles in this stage.
         BoundingBox _stage_bb;
 
     public:

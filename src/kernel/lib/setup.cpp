@@ -1027,12 +1027,12 @@ namespace yask {
                   make_num_str(itimer.get_elapsed_secs()) << " secs.");
     }
 
-    // Set the bounding-box for each stencil-bundle and whole domain.
+    // Set the bounding-boxes for each bundle and whole domain.
+    // Also sets max write halos needed for scratch bundles.
     void StencilContext::find_bounding_boxes()
     {
         STATE_VARS(this);
-        DEBUG_MSG("Constructing bounding boxes for " <<
-                  st_bundles.size() << " stencil-bundles(s)...");
+        DEBUG_MSG("Constructing bounding boxes for all bundles...");
         YaskTimer bbtimer;
         bbtimer.start();
 
@@ -1047,39 +1047,47 @@ namespace yask {
         ext_bb.update_bb("extended-rank", this, true);
 
         // Remember sub-domain for each bundle.
-        map<string, StencilBundleBase*> bb_descrs;
+        // TODO: expand to handle scratch bundles.
+        map<string, StencilBundleBase*> bb_cache;
 
-        // Find BB for each stage.
+        // Find BBs for each stage.
         for (auto sp : st_stages) {
             auto& spbb = sp->get_bb();
             spbb.bb_begin = domain_dims;
             spbb.bb_end = domain_dims;
 
-            // Find BB for each bundle in this stage.
+            // Find BBs for each bundle in this stage.
             for (auto sb : *sp) {
+                for (auto rsb : sb->get_reqd_bundles()) {
+                    bool is_scratch = rsb->is_scratch();
 
-                // Already done?
-                auto bb_descr = sb->get_domain_description();
-                if (bb_descrs.count(bb_descr)) {
+                    // Already done for this sub-domain?
+                    auto bb_descr = sb->get_domain_description();
+                    if (bb_cache.count(bb_descr)) {
 
-                    // Copy existing.
-                    auto* src = bb_descrs.at(bb_descr);
-                    sb->copy_bounding_box(src);
+                        // Copy existing.
+                        auto* src = bb_cache.at(bb_descr);
+                        rsb->copy_bounding_boxes(src);
+                    }
+                    
+                    // Find bundle BBs.
+                    else {
+                        rsb->find_bounding_boxes();
+
+                        // Save in cache.
+                        if (!is_scratch)
+                            bb_cache[bb_descr] = rsb;
+                    }
+
+                    // Expand stage BB to encompass bundle BB.
+                    if (!is_scratch) {
+                        auto& sbbb = sb->get_bb();
+                        spbb.bb_begin = spbb.bb_begin.min_elements(sbbb.bb_begin);
+                        spbb.bb_end = spbb.bb_end.max_elements(sbbb.bb_end);
+                    }
                 }
-
-                // Find bundle BB.
-                else {
-                    sb->find_bounding_box();
-                    bb_descrs[bb_descr] = sb;
-                }
-
-                auto& sbbb = sb->get_bb();
-
-                // Expand stage BB to encompass bundle BB.
-                spbb.bb_begin = spbb.bb_begin.min_elements(sbbb.bb_begin);
-                spbb.bb_end = spbb.bb_end.max_elements(sbbb.bb_end);
+                spbb.update_bb(sp->get_name(), this, false);
             }
-            spbb.update_bb(sp->get_name(), this, false);
         }
 
         // Init MPI interior to extended BB.
@@ -1091,10 +1099,10 @@ namespace yask {
     }
 
     // Copy BB vars from another.
-    void StencilBundleBase::copy_bounding_box(const StencilBundleBase* src) {
+    void StencilBundleBase::copy_bounding_boxes(const StencilBundleBase* src) {
         STATE_VARS(this);
-        TRACE_MSG("copy_bounding_box for '" << get_name() << "' from '" <<
-                  src->get_name() << "'...");
+        TRACE_MSG("copying BB from '" <<
+                  src->get_name() << "' to '" << get_name() << "'...");
 
         _bundle_bb = src->_bundle_bb;
         assert(_bundle_bb.bb_valid);
@@ -1105,28 +1113,46 @@ namespace yask {
     // Only tests domain-var values, not step-vars.
     // Step-vars are tested dynamically for each step
     // as it is executed.
-    void StencilBundleBase::find_bounding_box() {
+    void StencilBundleBase::find_bounding_boxes() {
         STATE_VARS(this);
-        TRACE_MSG("find_bounding_box for '" << get_name() << "'...");
+        auto& bname = get_name();
+        TRACE_MSG("finding BB for '" << bname << "'...");
 
-        // Init overall bundle BB to that of parent and clear list.
+        // Init overall bundle BB to that of context and clear list.
+        // FIXME for scratch vars.
         assert(_context);
         _bundle_bb = _context->ext_bb;
         assert(_bundle_bb.bb_valid);
         _bb_list.clear();
+        TRACE_MSG("starting with [" << _bundle_bb.make_range_string(domain_dims) << "]");
+
+        // For scratch vars, add write halos.
+        if (is_scratch()) {
+
+            // Find sizes of write halos.
+            find_write_halos();
+
+            // Add halos.
+            _bundle_bb.bb_begin = _bundle_bb.bb_begin.sub_elements(max_lh);
+            _bundle_bb.bb_end = _bundle_bb.bb_end.add_elements(max_rh);
+            _bundle_bb.update_bb(bname, _context, false, false);
+            TRACE_MSG("expanded by scratch write halos to [" << _bundle_bb.make_range_string(domain_dims) << "]");
+        }
 
         // If BB is empty, we are done.
-        if (!_bundle_bb.bb_size)
+        if (!_bundle_bb.bb_size) {
+            TRACE_MSG("empty BB; done");
             return;
+        }
 
         // If there is no condition, just add full BB to list.
         if (!is_sub_domain_expr()) {
-            TRACE_MSG("adding 1 sub-BB: [" << _bundle_bb.make_range_string(domain_dims) << "]");
+            TRACE_MSG("only 1 full sub-BB: [" << _bundle_bb.make_range_string(domain_dims) << "); done");
             _bb_list.push_back(_bundle_bb);
             return;
         }
 
-        // Goal: Create list of full BBs (non-overlapping & with no invalid
+        // Goal: Create list of full BBs (non-overlapping & w/only valid
         // points) inside overall BB.
         YaskTimer bbtimer;
         bbtimer.start();
@@ -1137,7 +1163,7 @@ namespace yask {
         idx_t outer_len = _bundle_bb.bb_len[odim];
         idx_t nthreads = yask_get_num_threads();
         idx_t len_per_thr = CEIL_DIV(outer_len, nthreads);
-        TRACE_MSG("find_bounding_box: running " << nthreads << " thread(s) over " <<
+        TRACE_MSG("running " << nthreads << " thread(s) over " <<
                   outer_len << " point(s) in outer dim");
 
         // Struct w/padding to avoid false sharing.
