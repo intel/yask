@@ -78,7 +78,7 @@ sub convert($) {
         "// Create an object of type '$cname',\n".
         "// making it available in the YASK compiler utility via the\n".
         "// '-stencil' commmand-line option or the 'stencil=' build option.\n".
-        "static $cname ${cname}_instance;\n";
+        "REGISTER_SOLUTION($cname);\n";
     }
 
     # Include file.
@@ -103,20 +103,14 @@ sub convert($) {
       }
     
       # Node creation.
-      s/MAKE_STEP_INDEX\s*[(]([^)]+)[)]/yc_index_node_ptr $1 = new_step_index("$1")/g;
-      s/MAKE_DOMAIN_INDEX\s*[(]([^)]+)[)]/yc_index_node_ptr $1 = new_domain_index("$1")/g;
-      s/MAKE_MISC_INDEX\s*[(]([^)]+)[)]/yc_index_node_ptr $1 = new_misc_index("$1")/g;
       s/\bconstNum\b/new_number_node/g;
       s/\bfirst_index\b/first_domain_index/g;
       s/\blast_index\b/last_domain_index/g;
 
       # Var creation.
-      s/MAKE_GRID\s*[(]([^,]+),\s*([^)]+)[)]/yc_var_proxy $1 = yc_var_proxy("$1", get_soln(), { $2 })/g;
-      s/MAKE_ARRAY\s*[(]([^,]+),\s*([^)]+)[)]/yc_var_proxy $1 = yc_var_proxy("$1", get_soln(), { $2 })/g;
-      s/MAKE_SCALAR\s*[(]([^,]+)[)]/yc_var_proxy $1 = yc_var_proxy("$1", get_soln(), { })/g;
-      s/MAKE_SCRATCH_GRID\s*[(]([^,]+),\s*([^)]+)[)]/yc_var_proxy $1 = yc_var_proxy("$1", get_soln(), { $2 }, true)/g;
-      s/MAKE_SCRATCH_ARRAY\s*[(]([^,]+),\s*([^)]+)[)]/yc_var_proxy $1 = yc_var_proxy("$1", get_soln(), { $2 }, true)/g;
-      s/MAKE_SCRATCH_SCALAR\s*[(]([^,]+)[)]/yc_var_proxy $1 = yc_var_proxy("$1", get_soln(), { }, true)/g;
+      s/\bMAKE_GRID\b/MAKE_VAR/g;
+      s/\bMAKE_SCALAR(_ARRAY)?\b/MAKE_SCALAR_VAR/g;
+      s/\bMAKE_SCRATCH_(GRID|SCALAR|ARRAY)\b/MAKE_SCRATCH_VAR/g;
 
       # Typenames.
       s/\bStencilBase\b/yc_solution_base/g;

@@ -50,45 +50,45 @@ namespace {
         friend class AwpAbcFuncs;
 
         // Indices & dimensions.
-        yc_index_node_ptr t = new_step_index("t");           // step in time dim.
-        yc_index_node_ptr x = new_domain_index("x");         // spatial dim.
-        yc_index_node_ptr y = new_domain_index("y");         // spatial dim.
-        yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
+        MAKE_STEP_INDEX(t);           // step in time dim.
+        MAKE_DOMAIN_INDEX(x);         // spatial dim.
+        MAKE_DOMAIN_INDEX(y);         // spatial dim.
+        MAKE_DOMAIN_INDEX(z);         // spatial dim.
 
         // Time-varying 3D-spatial velocity vars.
-        yc_var_proxy vel_x = yc_var_proxy("vel_x", get_soln(), { t, x, y, z });
-        yc_var_proxy vel_y = yc_var_proxy("vel_y", get_soln(), { t, x, y, z });
-        yc_var_proxy vel_z = yc_var_proxy("vel_z", get_soln(), { t, x, y, z });
+        MAKE_VAR(vel_x, t, x, y, z);
+        MAKE_VAR(vel_y, t, x, y, z);
+        MAKE_VAR(vel_z, t, x, y, z);
 
         // Time-varying 3D-spatial Stress vars.
-        yc_var_proxy stress_xx = yc_var_proxy("stress_xx", get_soln(), { t, x, y, z });
-        yc_var_proxy stress_yy = yc_var_proxy("stress_yy", get_soln(), { t, x, y, z });
-        yc_var_proxy stress_zz = yc_var_proxy("stress_zz", get_soln(), { t, x, y, z });
-        yc_var_proxy stress_xy = yc_var_proxy("stress_xy", get_soln(), { t, x, y, z });
-        yc_var_proxy stress_xz = yc_var_proxy("stress_xz", get_soln(), { t, x, y, z });
-        yc_var_proxy stress_yz = yc_var_proxy("stress_yz", get_soln(), { t, x, y, z });
+        MAKE_VAR(stress_xx, t, x, y, z);
+        MAKE_VAR(stress_yy, t, x, y, z);
+        MAKE_VAR(stress_zz, t, x, y, z);
+        MAKE_VAR(stress_xy, t, x, y, z);
+        MAKE_VAR(stress_xz, t, x, y, z);
+        MAKE_VAR(stress_yz, t, x, y, z);
 
         // 3D-spatial Lame' coefficients.
-        yc_var_proxy lambda = yc_var_proxy("lambda", get_soln(), { x, y, z });
-        yc_var_proxy rho = yc_var_proxy("rho", get_soln(), { x, y, z });
-        yc_var_proxy mu = yc_var_proxy("mu", get_soln(), { x, y, z });
+        MAKE_VAR(lambda, x, y, z);
+        MAKE_VAR(rho, x, y, z);
+        MAKE_VAR(mu, x, y, z);
 
         // Spatial FD coefficients.
         const double c1 = 9.0/8.0;
         const double c2 = -1.0/24.0;
 
         // Physical grid spacing in time and space.
-        yc_var_proxy delta_t = yc_var_proxy("delta_t", get_soln());
-        yc_var_proxy h = yc_var_proxy("h", get_soln());
+        MAKE_SCALAR_VAR(delta_t);
+        MAKE_SCALAR_VAR(h);
 
         // Cerjan sponge coefficients.
         // (Values outside the boundary region will be 1.0.)
         #ifdef FULL_SPONGE_VAR
-        yc_var_proxy sponge = yc_var_proxy("sponge", get_soln(), { x, y, z });
+        MAKE_VAR(sponge, x, y, z);
         #else
-        yc_var_proxy cr_x = yc_var_proxy("cr_x", get_soln(), { x });
-        yc_var_proxy cr_y = yc_var_proxy("cr_y", get_soln(), { y });
-        yc_var_proxy cr_z = yc_var_proxy("cr_z", get_soln(), { z });
+        MAKE_VAR(cr_x, x);
+        MAKE_VAR(cr_y, y);
+        MAKE_VAR(cr_z, z);
         #endif
 
         // Adjustment for sponge layer.
@@ -411,21 +411,21 @@ namespace {
     protected:
 
         // Time-varying attenuation memory vars.
-        yc_var_proxy stress_mem_xx = yc_var_proxy("stress_mem_xx", get_soln(), { t, x, y, z });
-        yc_var_proxy stress_mem_yy = yc_var_proxy("stress_mem_yy", get_soln(), { t, x, y, z });
-        yc_var_proxy stress_mem_zz = yc_var_proxy("stress_mem_zz", get_soln(), { t, x, y, z });
-        yc_var_proxy stress_mem_xy = yc_var_proxy("stress_mem_xy", get_soln(), { t, x, y, z });
-        yc_var_proxy stress_mem_xz = yc_var_proxy("stress_mem_xz", get_soln(), { t, x, y, z });
-        yc_var_proxy stress_mem_yz = yc_var_proxy("stress_mem_yz", get_soln(), { t, x, y, z });
+        MAKE_VAR(stress_mem_xx, t, x, y, z);
+        MAKE_VAR(stress_mem_yy, t, x, y, z);
+        MAKE_VAR(stress_mem_zz, t, x, y, z);
+        MAKE_VAR(stress_mem_xy, t, x, y, z);
+        MAKE_VAR(stress_mem_xz, t, x, y, z);
+        MAKE_VAR(stress_mem_yz, t, x, y, z);
 
         // 3D vars used for anelastic attenuation
-        yc_var_proxy weight = yc_var_proxy("weight", get_soln(), { x, y, z });
-        yc_var_proxy tau2 = yc_var_proxy("tau2", get_soln(), { x, y, z });
-        yc_var_proxy anelastic_ap = yc_var_proxy("anelastic_ap", get_soln(), { x, y, z });
-        yc_var_proxy anelastic_as_diag = yc_var_proxy("anelastic_as_diag", get_soln(), { x, y, z });
-        yc_var_proxy anelastic_xy = yc_var_proxy("anelastic_xy", get_soln(), { x, y, z });
-        yc_var_proxy anelastic_xz = yc_var_proxy("anelastic_xz", get_soln(), { x, y, z });
-        yc_var_proxy anelastic_yz = yc_var_proxy("anelastic_yz", get_soln(), { x, y, z });
+        MAKE_VAR(weight, x, y, z);
+        MAKE_VAR(tau2, x, y, z);
+        MAKE_VAR(anelastic_ap, x, y, z);
+        MAKE_VAR(anelastic_as_diag, x, y, z);
+        MAKE_VAR(anelastic_xy, x, y, z);
+        MAKE_VAR(anelastic_xz, x, y, z);
+        MAKE_VAR(anelastic_yz, x, y, z);
 
     public:
 
@@ -624,8 +624,8 @@ namespace {
     // Create objects for above AWP stencils,
     // making them available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static AwpElasticStencil AwpElasticStencil_instance;
-    static AwpStencil AwpStencil_instance;
+    REGISTER_SOLUTION(AwpElasticStencil);
+    REGISTER_SOLUTION(AwpStencil);
 
     
     /////////////////////////////////////////////////////////////////////////
@@ -677,9 +677,9 @@ namespace {
         yc_var_proxy mu, lambda;
         
         #ifdef USE_SCRATCH_VARS
-        yc_var_proxy tmp_vel_x = yc_var_proxy("tmp_vel_x", get_soln(), { x, y, z }, true);
-        yc_var_proxy tmp_vel_y = yc_var_proxy("tmp_vel_y", get_soln(), { x, y, z }, true);
-        yc_var_proxy tmp_vel_z = yc_var_proxy("tmp_vel_z", get_soln(), { x, y, z }, true);
+        MAKE_SCRATCH_VAR(tmp_vel_x, x, y, z);
+        MAKE_SCRATCH_VAR(tmp_vel_y, x, y, z);
+        MAKE_SCRATCH_VAR(tmp_vel_z, x, y, z);
         #endif
 
         inline yc_number_node_ptr
@@ -872,7 +872,7 @@ namespace {
     // Create objects for AWP-ABC stencils,
     // making them available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static AwpElasticABCStencil AwpElasticABCStencil_instance;
-    static AwpABCStencil AwpABCStencil_instance;
+    REGISTER_SOLUTION(AwpElasticABCStencil);
+    REGISTER_SOLUTION(AwpABCStencil);
 
 } // namespace.

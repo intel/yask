@@ -211,6 +211,34 @@ Macros</h2></td></tr>
 <tr class="memitem:ga5fabd22dd6b26cd147074d603cb6f367"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__yc.html#ga5fabd22dd6b26cd147074d603cb6f367">IF_STEP</a>&#160;&#160;&#160;|=</td></tr>
 <tr class="memdesc:ga5fabd22dd6b26cd147074d603cb6f367"><td class="mdescLeft">&#160;</td><td class="mdescRight">Recommended macro to make the step-condition operator readable and self-explanatory.  <br /></td></tr>
 <tr class="separator:ga5fabd22dd6b26cd147074d603cb6f367"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ga1b0c986aa4405208ac93d10dc5a1031c"><td class="memItemLeft" align="right" valign="top"><a id="ga1b0c986aa4405208ac93d10dc5a1031c" name="ga1b0c986aa4405208ac93d10dc5a1031c"></a>
+#define&#160;</td><td class="memItemRight" valign="bottom"><b>MAKE_STEP_INDEX</b>(dim_name)&#160;&#160;&#160;yc_index_node_ptr dim_name = new_step_index(#dim_name)</td></tr>
+<tr class="memdesc:ga1b0c986aa4405208ac93d10dc5a1031c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convenience macro for declaring a step index in a class derived from yc_solution. <br /></td></tr>
+<tr class="separator:ga1b0c986aa4405208ac93d10dc5a1031c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ga4ff9e4d0af940392f53c7dc6bf321ee7"><td class="memItemLeft" align="right" valign="top"><a id="ga4ff9e4d0af940392f53c7dc6bf321ee7" name="ga4ff9e4d0af940392f53c7dc6bf321ee7"></a>
+#define&#160;</td><td class="memItemRight" valign="bottom"><b>MAKE_DOMAIN_INDEX</b>(dim_name)&#160;&#160;&#160;yc_index_node_ptr dim_name = new_domain_index(#dim_name)</td></tr>
+<tr class="memdesc:ga4ff9e4d0af940392f53c7dc6bf321ee7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convenience macro for declaring a domain index in a class derived from yc_solution. <br /></td></tr>
+<tr class="separator:ga4ff9e4d0af940392f53c7dc6bf321ee7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ga03ed1eacd8ce2afafd8fb011124f1957"><td class="memItemLeft" align="right" valign="top"><a id="ga03ed1eacd8ce2afafd8fb011124f1957" name="ga03ed1eacd8ce2afafd8fb011124f1957"></a>
+#define&#160;</td><td class="memItemRight" valign="bottom"><b>MAKE_MISC_INDEX</b>(dim_name)&#160;&#160;&#160;yc_index_node_ptr dim_name = new_misc_index(#dim_name)</td></tr>
+<tr class="memdesc:ga03ed1eacd8ce2afafd8fb011124f1957"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convenience macro for declaring a misc index in a class derived from yc_solution. <br /></td></tr>
+<tr class="separator:ga03ed1eacd8ce2afafd8fb011124f1957"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:gae3d7fce5f0ac5dba65bc16ce8a342553"><td class="memItemLeft" align="right" valign="top"><a id="gae3d7fce5f0ac5dba65bc16ce8a342553" name="gae3d7fce5f0ac5dba65bc16ce8a342553"></a>
+#define&#160;</td><td class="memItemRight" valign="bottom"><b>MAKE_VAR</b>(var_name, ...)&#160;&#160;&#160;        yc_var_proxy var_name = yc_var_proxy(#var_name, get_soln(), { __VA_ARGS__ }, false)</td></tr>
+<tr class="memdesc:gae3d7fce5f0ac5dba65bc16ce8a342553"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convenience macro for creating a yc_var_proxy for an n-dimensional YASK variable. <br /></td></tr>
+<tr class="separator:gae3d7fce5f0ac5dba65bc16ce8a342553"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ga88e55b6e366e52e371a6a3335e40ecd4"><td class="memItemLeft" align="right" valign="top"><a id="ga88e55b6e366e52e371a6a3335e40ecd4" name="ga88e55b6e366e52e371a6a3335e40ecd4"></a>
+#define&#160;</td><td class="memItemRight" valign="bottom"><b>MAKE_SCRATCH_VAR</b>(var_name, ...)&#160;&#160;&#160;        yc_var_proxy var_name = yc_var_proxy(#var_name, get_soln(), { __VA_ARGS__ }, true)</td></tr>
+<tr class="memdesc:ga88e55b6e366e52e371a6a3335e40ecd4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convenience macro for creating a yc_var_proxy for an n-dimensional YASK scratch variable. <br /></td></tr>
+<tr class="separator:ga88e55b6e366e52e371a6a3335e40ecd4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:gaeffa30a0f89b2b06f584de318b844b06"><td class="memItemLeft" align="right" valign="top"><a id="gaeffa30a0f89b2b06f584de318b844b06" name="gaeffa30a0f89b2b06f584de318b844b06"></a>
+#define&#160;</td><td class="memItemRight" valign="bottom"><b>MAKE_SCALAR_VAR</b>(var_name)&#160;&#160;&#160;<a class="el" href="group__yc.html#gae3d7fce5f0ac5dba65bc16ce8a342553">MAKE_VAR</a>(var_name)</td></tr>
+<tr class="memdesc:gaeffa30a0f89b2b06f584de318b844b06"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convenience macro for creating a yc_var_proxy for a scalar YASK variable. <br /></td></tr>
+<tr class="separator:gaeffa30a0f89b2b06f584de318b844b06"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ga5da241c3ace73c5bf889aa973ab4a867"><td class="memItemLeft" align="right" valign="top"><a id="ga5da241c3ace73c5bf889aa973ab4a867" name="ga5da241c3ace73c5bf889aa973ab4a867"></a>
+#define&#160;</td><td class="memItemRight" valign="bottom"><b>REGISTER_SOLUTION</b>(class_name)&#160;&#160;&#160;        static class_name class_name ## _instance</td></tr>
+<tr class="memdesc:ga5da241c3ace73c5bf889aa973ab4a867"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convenience macro for declaring an object of a type derived from yc_solution_base. <br /></td></tr>
+<tr class="separator:ga5da241c3ace73c5bf889aa973ab4a867"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="typedef-members" name="typedef-members"></a>
 Typedefs</h2></td></tr>

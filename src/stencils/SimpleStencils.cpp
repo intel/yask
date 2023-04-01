@@ -41,13 +41,13 @@ namespace {
     protected:
 
         // Indices & dimensions.
-        yc_index_node_ptr t = new_step_index("t");           // step in time dim.
-        yc_index_node_ptr x = new_domain_index("x");         // spatial dim.
-        yc_index_node_ptr y = new_domain_index("y");         // spatial dim.
-        yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
+        MAKE_STEP_INDEX(t);           // step in time dim.
+        MAKE_DOMAIN_INDEX(x);         // spatial dim.
+        MAKE_DOMAIN_INDEX(y);         // spatial dim.
+        MAKE_DOMAIN_INDEX(z);         // spatial dim.
 
         // Vars.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y, z }); // time-varying 3D var.
+        MAKE_VAR(A, t, x, y, z); // time-varying 3D var.
 
         // Add additional points to expression v.
         // Returns number of points added.
@@ -112,7 +112,7 @@ namespace {
     // Create an object of type 'AxisStencil',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static AxisStencil AxisStencil_instance;
+    REGISTER_SOLUTION(AxisStencil);
 
     // Add points from x-y, x-z, and y-z diagonals.
     class DiagStencil : public AxisStencil {
@@ -160,7 +160,7 @@ namespace {
     // Create an object of type 'DiagStencil',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static DiagStencil DiagStencil_instance;
+    REGISTER_SOLUTION(DiagStencil);
 
     // Add points from x-y, x-z, and y-z planes not covered by axes or diagonals.
     class PlaneStencil : public DiagStencil {
@@ -222,7 +222,7 @@ namespace {
     // Create an object of type 'PlaneStencil',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static PlaneStencil PlaneStencil_instance;
+    REGISTER_SOLUTION(PlaneStencil);
 
     // Add points from rest of cube.
     class CubeStencil : public PlaneStencil {
@@ -264,6 +264,6 @@ namespace {
     // Create an object of type 'CubeStencil',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static CubeStencil CubeStencil_instance;
+    REGISTER_SOLUTION(CubeStencil);
 
 } // namespace.

@@ -40,38 +40,26 @@ namespace
   protected:
 
     // Indices & dimensions.
-    yc_index_node_ptr t = new_step_index ("t");	// step in time dim.
-    yc_index_node_ptr x = new_domain_index ("x");	// spatial dim.
-    yc_index_node_ptr y = new_domain_index ("y");	// spatial dim.
-    yc_index_node_ptr z = new_domain_index ("z");	// spatial dim.
+    MAKE_STEP_INDEX(t);	// step in time dim.
+    MAKE_DOMAIN_INDEX(x);	// spatial dim.
+    MAKE_DOMAIN_INDEX(y);	// spatial dim.
+    MAKE_DOMAIN_INDEX(z);	// spatial dim.
 
     // Vars.
-    yc_var_proxy u = yc_var_proxy ("u", get_soln (), { t, x, y, z }
-    );				// Time-varying 3D wavefield var.
-    yc_var_proxy v = yc_var_proxy ("v", get_soln (), { t, x, y, z }
-    );				// Time-varying 3D wavefield var.
-    yc_var_proxy m = yc_var_proxy ("m", get_soln (), { x, y, z }
-    );				// Square slowness of the model.
-    yc_var_proxy damp = yc_var_proxy ("damp", get_soln (), { x, y, z }
-    );				// Boundary damping.
-    yc_var_proxy phi = yc_var_proxy ("phi", get_soln (), { x, y, z }
-    );
-    yc_var_proxy theta = yc_var_proxy ("theta", get_soln (), { x, y, z }
-    );
-    yc_var_proxy delta = yc_var_proxy ("delta", get_soln (), { x, y, z }
-    );
-    yc_var_proxy epsilon = yc_var_proxy ("epsilon", get_soln (), { x, y, z }
-    );
+    MAKE_VAR(u, t, x, y, z);				// Time-varying 3D wavefield var.
+    MAKE_VAR(v, t, x, y, z);				// Time-varying 3D wavefield var.
+    MAKE_VAR(m, x, y, z);				// Square slowness of the model.
+    MAKE_VAR(damp, x, y, z);				// Boundary damping.
+    MAKE_VAR(phi, x, y, z);
+    MAKE_VAR(theta, x, y, z);
+    MAKE_VAR(delta, x, y, z);
+    MAKE_VAR(epsilon, x, y, z);
 
     // Hoisted misc time-invariant data.
-    yc_var_proxy ti0 = yc_var_proxy ("ti0", get_soln (), { x, y, z }
-    );
-    yc_var_proxy ti1 = yc_var_proxy ("ti1", get_soln (), { x, y, z }
-    );
-    yc_var_proxy ti2 = yc_var_proxy ("ti2", get_soln (), { x, y, z }
-    );
-    yc_var_proxy ti3 = yc_var_proxy ("ti3", get_soln (), { x, y, z }
-    );
+    MAKE_VAR(ti0, x, y, z);
+    MAKE_VAR(ti1, x, y, z);
+    MAKE_VAR(ti2, x, y, z);
+    MAKE_VAR(ti3, x, y, z);
 
   public:
 
@@ -1951,6 +1939,6 @@ namespace
   // Create an object of type 'TTIStencil',
   // making it available in the YASK compiler utility via the
   // '-stencil' commmand-line option or the 'stencil=' build option.
-  static TTIStencil TTIStencil_instance;
+  REGISTER_SOLUTION(TTIStencil);
 
 }				// namespace.

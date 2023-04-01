@@ -76,8 +76,7 @@ namespace yask {
     }
     int StencilSolution::get_prefetch_dist(int level) {
         if (level < 1 || level > 2)
-            THROW_YASK_EXCEPTION("cache-level " +
-                                 to_string(level) +
+            THROW_YASK_EXCEPTION("cache-level " + to_string(level) +
                                  " is not 1 or 2.");
         if (_settings._prefetch_dists.count(level))
             return _settings._prefetch_dists.at(level);
@@ -105,9 +104,8 @@ namespace yask {
     yc_solution_base::yc_solution_base(const std::string& name) {
         auto& reg = yc_solution_base::get_registry();
         if (reg.count(name)) {
-            yask_exception e("Error: solution '" + name +
-                             "' is already defined");
-            throw e;
+            THROW_YASK_EXCEPTION("solution '" + name +
+                                 "' is already defined");
         }
         _soln = _yc_factory.new_solution(name);
         assert(_soln.get());
@@ -120,18 +118,16 @@ namespace yask {
         assert(_soln.get());
     }
     void yc_solution_base::define() {
-        yask_exception e("Error: no stencil equations are defined in solution '" +
-                         get_soln()->get_name() +
-                         "'. Implement the 'define()' method in the class "
-                         "derived from 'yc_solution_base'");
-        throw e;
+        THROW_YASK_EXCEPTION("no stencil equations are defined in solution '" +
+                             get_soln()->get_name() +
+                             "'. Implement the 'define()' method in the class "
+                             "derived from 'yc_solution_base'");
     }
     void yc_solution_with_radius_base::define() {
-        yask_exception e("Error: no stencil equations are defined in solution '" +
-                         get_soln()->get_name() +
-                         "'. Implement the 'define()' method in the class "
-                         "derived from 'yc_solution_with_radius_base'");
-        throw e;
+        THROW_YASK_EXCEPTION("no stencil equations are defined in solution '" +
+                             get_soln()->get_name() +
+                             "'. Implement the 'define()' method in the class "
+                             "derived from 'yc_solution_with_radius_base'");
     }
     
     // Create the intermediate data for printing.

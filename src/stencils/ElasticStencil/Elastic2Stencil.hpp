@@ -36,9 +36,9 @@ class Elastic2StencilBase : public ElasticStencilBase {
 protected:
 
     // yc_var_proxy selectors.
-    yc_index_node_ptr vidx = new_misc_index("vidx");
-    yc_index_node_ptr sidx = new_misc_index("sidx");
-    yc_index_node_ptr cidx = new_misc_index("cidx");
+    MAKE_MISC_INDEX(vidx);
+    MAKE_MISC_INDEX(sidx);
+    MAKE_MISC_INDEX(cidx);
 
 public:
     Elastic2StencilBase(const string& name,

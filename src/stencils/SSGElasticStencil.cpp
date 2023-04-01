@@ -33,22 +33,22 @@ class SSGElasticStencil : public ElasticStencilBase {
 protected:
 
     // Time-varying 3D-spatial velocity vars.
-    yc_var_proxy v_bl_w = yc_var_proxy("v_bl_w", get_soln(), { t, x, y, z });
-    yc_var_proxy v_tl_v = yc_var_proxy("v_tl_v", get_soln(), { t, x, y, z });
-    yc_var_proxy v_tr_u = yc_var_proxy("v_tr_u", get_soln(), { t, x, y, z });
+    MAKE_VAR(v_bl_w, t, x, y, z);
+    MAKE_VAR(v_tl_v, t, x, y, z);
+    MAKE_VAR(v_tr_u, t, x, y, z);
 
     // Time-varying 3D-spatial Stress vars.
-    yc_var_proxy s_bl_yz = yc_var_proxy("s_bl_yz", get_soln(), { t, x, y, z });
-    yc_var_proxy s_br_xz = yc_var_proxy("s_br_xz", get_soln(), { t, x, y, z });
-    yc_var_proxy s_tl_xx = yc_var_proxy("s_tl_xx", get_soln(), { t, x, y, z });
-    yc_var_proxy s_tl_yy = yc_var_proxy("s_tl_yy", get_soln(), { t, x, y, z });
-    yc_var_proxy s_tl_zz = yc_var_proxy("s_tl_zz", get_soln(), { t, x, y, z });
-    yc_var_proxy s_tr_xy = yc_var_proxy("s_tr_xy", get_soln(), { t, x, y, z });
+    MAKE_VAR(s_bl_yz, t, x, y, z);
+    MAKE_VAR(s_br_xz, t, x, y, z);
+    MAKE_VAR(s_tl_xx, t, x, y, z);
+    MAKE_VAR(s_tl_yy, t, x, y, z);
+    MAKE_VAR(s_tl_zz, t, x, y, z);
+    MAKE_VAR(s_tr_xy, t, x, y, z);
 
     // 3D-spatial coefficients.
-    yc_var_proxy mu = yc_var_proxy("mu", get_soln(), { x, y, z });
-    yc_var_proxy lambda = yc_var_proxy("lambda", get_soln(), { x, y, z });
-    yc_var_proxy lambdamu2 = yc_var_proxy("lambdamu2", get_soln(), { x, y, z });
+    MAKE_VAR(mu, x, y, z);
+    MAKE_VAR(lambda, x, y, z);
+    MAKE_VAR(lambdamu2, x, y, z);
 
 public:
 
@@ -192,4 +192,4 @@ public:
 // Create an object of type 'SSGElasticStencil',
 // making it available in the YASK compiler utility via the
 // '-stencil' commmand-line option or the 'stencil=' build option.
-static SSGElasticStencil SSGElasticStencil_instance;
+REGISTER_SOLUTION(SSGElasticStencil);
