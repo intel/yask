@@ -449,15 +449,15 @@ namespace yask {
                            "Output format (required).\n"
                            "Supported formats:\n"
                            "- avx:     YASK code for CORE AVX ISA (256-bit HW SIMD vectors).\n"
-                           "- avx2:        YASK code for CORE AVX2 ISA (256-bit HW SIMD vectors).\n"
-                           "- avx512: YASK code classes for CORE AVX-512 ISA (512-bit HW SIMD vectors).\n"
+                           "- avx2:    YASK code for CORE AVX2 ISA (256-bit HW SIMD vectors).\n"
+                           "- avx512:  YASK code classes for CORE AVX-512 ISA (512-bit HW SIMD vectors).\n"
                            "- avx512-ymm:  YASK code for CORE AVX-512 ISA (256-bit HW SIMD vectors).\n"
-                           "- knl:   YASK code for Knights-Landing (MIC) AVX-512 ISA (512-bit HW SIMD vectors).\n"
-                           "- intel64:  YASK code for generic C++ with 64-bit indices (no explicit HW SIMD vectors).\n"
+                           "- knl:     YASK code for Knights-Landing (MIC) AVX-512 ISA (512-bit HW SIMD vectors).\n"
+                           "- intel64: YASK code for generic C++ with 64-bit indices (no explicit HW SIMD vectors).\n"
                            "- pseudo:  Human-readable scalar pseudo-code.\n"
                            "- pseudo-long: Human-readable scalar pseudo-code with intermediate variables.\n"
-                           "- dot:    DOT-language description.\n"
-                           "- dot-lite:  DOT-language description of var accesses only.",
+                           "- dot:      DOT-language description.\n"
+                           "- dot-lite: DOT-language description of var accesses only.",
                            _target));
         parser.add_option(make_shared<command_line_parser::int_option>
                           ("elem-bytes",
@@ -558,9 +558,14 @@ namespace yask {
                            "This can be used to generate code for a subset of the stencil equations.",
                            _var_regex));
         parser.add_option(make_shared<command_line_parser::bool_option>
+                          ("bundle",
+                           "[Advanced] "
+                           "Bundle multiple equations together for evaluation in a single code block when possible.",
+                           _bundle));
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("bundle-scratch",
                            "[Advanced] "
-                           "Bundle scratch equations together even if the sizes of their scratch vars must be increased "
+                           "Bundle scratch equations together even if the sizes of some scratch vars must be increased "
                            "in order to do so.",
                            _bundle_scratch));
         parser.add_option(make_shared<command_line_parser::int_option>
@@ -589,7 +594,7 @@ namespace yask {
         parser.add_option(make_shared<command_line_parser::bool_option>
                           ("opt-comb",
                            "[Advanced] "
-                           "Combine a sequence of commutative operations, e.g., 'a + b + c' into a single parse-tree node.",
+                           "Combine a sequence of commutative operations, e.g., 'a + b + c', into a single parse-tree node.",
                            _do_comb));
         parser.add_option(make_shared<command_line_parser::bool_option>
                           ("opt-reorder",

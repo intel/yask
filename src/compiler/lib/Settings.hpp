@@ -50,6 +50,7 @@ namespace yask {
         bool _first_inner = true; // first dimension of fold is unit step.
         string _eq_bundle_basename_default = "bundle";
         bool _allow_unaligned_loads = false;
+        bool _bundle = true;
         bool _bundle_scratch = true;
         int _halo_size = 0;      // 0 => calculate each halo automatically.
         int _step_alloc = 0;     // 0 => calculate each step allocation automatically.

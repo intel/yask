@@ -975,9 +975,9 @@ namespace yask {
     // be incremented if a new bundle is created.  Returns whether a new
     // bundle was created.
     bool EqBundles::add_eq_to_bundle(Eqs& all_eqs,
-                                  equals_expr_ptr eq,
-                                  const string& base_name,
-                                  const CompilerSettings& settings) {
+                                     equals_expr_ptr eq,
+                                     const string& base_name,
+                                     const CompilerSettings& settings) {
         assert(_dims);
         auto& step_dim = _dims->_step_dim;
         
@@ -998,67 +998,65 @@ namespace yask {
         // Loop through existing bundles, looking for one that
         // 'eq' can be added to.
         EqBundle* target = 0;
-        auto eqg = eq->_get_var();
-        for (auto& eg : get_all()) {
+        if (settings._bundle) {
+            auto eqg = eq->_get_var();
+            for (auto& eg : get_all()) {
 
-            // Must be same scratch-ness.
-            if (eg->is_scratch() != eq->is_scratch())
-                continue;
+                // Must be same scratch-ness.
+                if (eg->is_scratch() != eq->is_scratch())
+                    continue;
 
-            // Names must match.
-            if (eg->base_name != base_name)
-                continue;
+                // Conditions must match (both may be null).
+                if (!are_exprs_same(eg->cond, cond))
+                    continue;
+                if (!are_exprs_same(eg->step_cond, stcond))
+                    continue;
 
-            // Conditions must match (both may be null).
-            if (!are_exprs_same(eg->cond, cond))
-                continue;
-            if (!are_exprs_same(eg->step_cond, stcond))
-                continue;
+                // LHS step exprs must match (both may be null).
+                if (!are_exprs_same(eg->step_expr, step_expr))
+                    continue;
 
-            // LHS step exprs must match (both may be null).
-            if (!are_exprs_same(eg->step_expr, step_expr))
-                continue;
+                // Look for any condition or dependencies that would prevent
+                // adding 'eq' to 'eg'.
+                bool is_ok = true;
+                for (auto& eq2 : eg->get_eqs()) {
+                    auto eq2g = eq2->_get_var();
+                    assert (eqg);
+                    assert (eq2g);
 
-            // Look for any condition or dependencies that would prevent
-            // adding 'eq' to 'eg'.
-            bool is_ok = true;
-            for (auto& eq2 : eg->get_eqs()) {
-                auto eq2g = eq2->_get_var();
-                assert (eqg);
-                assert (eq2g);
+                    // If scratch, 'eq' and 'eq2' must have same halo.
+                    // This is because scratch halos are written to.
+                    // If dims are same, halos can be adjusted if allowed.
+                    if (eq->is_scratch()) {
+                        if (!eq2g->are_dims_same(*eqg))
+                            is_ok = false;
+                        else if (!settings._bundle_scratch && !eq2g->is_halo_same(*eqg))
+                            is_ok = false;
+                    }
 
-                // If scratch, 'eq' and 'eq2' must have same halo.
-                // This is because scratch halos are written to.
-                // If dims are same, halos can be adjusted if allowed.
-                if (eq->is_scratch()) {
-                    if (!eq2g->are_dims_same(*eqg))
+                    // Look for any dependency between 'eq' and 'eq2'.
+                    if (is_ok && eq_deps.is_dep(eq, eq2)) {
+                        #if DEBUG_ADD_EXPRS
+                        cout << "add_eq_from_var: not adding equation " <<
+                            eq->make_quoted_str() << " to " << eg.get_descr() <<
+                            " because of dependency w/equation " <<
+                            eq2->make_quoted_str() << endl;
+                        #endif
                         is_ok = false;
-                    else if (!settings._bundle_scratch && !eq2g->is_halo_same(*eqg))
-                        is_ok = false;
+                    }
+
+                    if (!is_ok)
+                        break;
                 }
 
-                // Look for any dependency between 'eq' and 'eq2'.
-                if (is_ok && eq_deps.is_dep(eq, eq2)) {
-#if DEBUG_ADD_EXPRS
-                    cout << "add_eq_from_var: not adding equation " <<
-                        eq->make_quoted_str() << " to " << eg.get_descr() <<
-                        " because of dependency w/equation " <<
-                        eq2->make_quoted_str() << endl;
-#endif
-                    is_ok = false;
-                }
-
-                if (!is_ok)
+                // Remember target bundle if ok and stop looking.
+                if (is_ok) {
+                    target = eg.get();
                     break;
-            }
-
-            // Remember target bundle if ok and stop looking.
-            if (is_ok) {
-                target = eg.get();
-                break;
+                }
             }
         }
-
+        
         // Make new bundle if no target bundle found.
         bool new_bundle = false;
         if (!target) {
@@ -1346,6 +1344,7 @@ namespace yask {
         //auto& step_dim = _dims->_step_dim;
 
         // Add scratch equations.
+        // TODO: add only scratch eqs needed for eqs that match regex.
         for (auto eq : all_eqs.get_all()) {
             if (eq->is_scratch()) {
 
@@ -1366,8 +1365,11 @@ namespace yask {
             string gname = gp->_get_name();
 
             // Match to varx?
-            if (!regex_search(gname, varx))
+            if (!regex_search(gname, varx)) {
+                os << "Equation updating '" << gname <<
+                    "' not added because it does not match regex '" << settings._var_regex << "'.\n";
                 continue;
+            }
 
             // Add equation.
             add_eq_to_bundle(all_eqs, eq, _basename_default, settings);
