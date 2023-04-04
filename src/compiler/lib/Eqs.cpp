@@ -970,13 +970,11 @@ namespace yask {
         assert(_eqs.size() == eqs.size() * dims._cluster_mults.product());
     }
 
-    // Add 'eq' from 'all_eqs' to eq-bundle with 'base_name' unless
-    // alread added or illegal.  The corresponding index in '_indices' will
+    // Add 'eq' from 'eqs' to an eq-bundle if possible.  The index will
     // be incremented if a new bundle is created.  Returns whether a new
     // bundle was created.
     bool EqBundles::add_eq_to_bundle(Eqs& all_eqs,
                                      equals_expr_ptr eq,
-                                     const string& base_name,
                                      const CompilerSettings& settings) {
         assert(_dims);
         auto& step_dim = _dims->_step_dim;
@@ -1064,10 +1062,10 @@ namespace yask {
             add_item(ne);
             target = ne.get();
             if (eq->is_scratch())
-                target->base_name = string("scratch_") + base_name;
+                target->base_name = string("scratch_") + _base_name;
             else
-                target->base_name = base_name;
-            target->index = _indices[base_name]++;
+                target->base_name = _base_name;
+            target->index = _idx++;
             target->cond = cond;
             target->step_cond = stcond;
             target->step_expr = step_expr;
@@ -1349,7 +1347,7 @@ namespace yask {
             if (eq->is_scratch()) {
 
                 // Add equation.
-                add_eq_to_bundle(all_eqs, eq, _basename_default, settings);
+                add_eq_to_bundle(all_eqs, eq, settings);
             }
         }
 
@@ -1372,7 +1370,7 @@ namespace yask {
             }
 
             // Add equation.
-            add_eq_to_bundle(all_eqs, eq, _basename_default, settings);
+            add_eq_to_bundle(all_eqs, eq, settings);
         }
 
         os << "Collapsing dependencies from equations and finding transitive closure...\n";

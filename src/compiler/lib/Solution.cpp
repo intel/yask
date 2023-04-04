@@ -153,7 +153,6 @@ namespace yask {
 
         // Create equation bundles based on dependencies and/or target strings.
         // This process may alter the halos in scratch vars.
-        _eq_bundles->set_basename_default(_settings._eq_bundle_basename_default);
         _eq_bundles->set_dims(_dims);
         _eq_bundles->make_eq_bundles(_eqs, _settings, *_dos);
 

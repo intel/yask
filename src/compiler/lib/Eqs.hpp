@@ -518,39 +518,33 @@ namespace yask {
     // Container for multiple equation bundles.
     class EqBundles : public DepGroup<EqBundle> {
     protected:
+        string _base_name = "bundle";
 
         // Copy of some global data.
-        string _basename_default;
         Dimensions* _dims = 0;
 
         // Track vars that are updated.
         Vars _out_vars;
 
-        // Map to track indices per eq-bundle name.
-        map<string, int> _indices;
+        // Bundle index;
+        int _idx = 0;
 
         // Track equations that have been added already.
         set<equals_expr_ptr> _eqs_in_bundles;
 
-        // Add 'eq' from 'eqs' to eq-bundle with 'base_name'
-        // unless already added or illegal.  The corresponding index in
-        // '_indices' will be incremented if a new bundle is created.
-        // Returns whether a new bundle was created.
+        // Add 'eq' from 'eqs' to an eq-bundle if possible.  The index will
+        // be incremented if a new bundle is created.  Returns whether a new
+        // bundle was created.
         virtual bool add_eq_to_bundle(Eqs& eqs,
                                       equals_expr_ptr eq,
-                                      const string& base_name,
                                       const CompilerSettings& settings);
 
     public:
         EqBundles() {}
-        EqBundles(const string& basename_default, Dimensions& dims) :
-            _basename_default(basename_default),
+        EqBundles(Dimensions& dims) :
             _dims(&dims) {}
         virtual ~EqBundles() {}
 
-        virtual void set_basename_default(const string& basename_default) {
-            _basename_default = basename_default;
-        }
         virtual void set_dims(Dimensions& dims) {
             _dims = &dims;
         }
@@ -662,7 +656,7 @@ namespace yask {
     protected:
         string _base_name = "stage";
 
-        // Bundle index.
+        // Stage index.
         int _idx = 0;
 
         // Track vars that are updated.

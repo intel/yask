@@ -48,7 +48,6 @@ namespace yask {
         IntTuple _cluster_options; // cluster multipliers.
         map<int, int> _prefetch_dists;
         bool _first_inner = true; // first dimension of fold is unit step.
-        string _eq_bundle_basename_default = "bundle";
         bool _allow_unaligned_loads = false;
         bool _bundle = true;
         bool _bundle_scratch = true;
