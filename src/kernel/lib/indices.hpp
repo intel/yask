@@ -744,7 +744,8 @@ namespace yask {
 
             // Init tile size & stride to whole range.
             DOMAIN_VAR_LOOP_FAST(i, j)
-                inner.tile_size[i] = inner.stride[i] = get_overall_range(i);
+                inner.tile_size[i] = inner.stride[i] =
+                ROUND_UP(get_overall_range(i), cluster_pts[j]);
 
             // Init first indices.
             inner.index.set_from_const(0);
@@ -769,15 +770,40 @@ namespace yask {
             assert(ndims == orig_sizes_of_inner.get_num_dims());
             DOMAIN_VAR_LOOP(i, j) {
             
-                // If original [or auto-tuned] inner area covers
-                // this entire area, set stride size to full width.
+                // If original [or auto-tuned] inner area covers this entire
+                // area, set stride size to full width.  This is to keep the
+                // assumed intention that only one inner iteration is done.
+                // Make sure to round up so that normalizing won't break
+                // later.
                 if (orig_sizes_of_inner[i] >= orig_sizes_of_this[i])
-                    stride[i] = get_overall_range(i);
+                    stride[i] = ROUND_UP(get_overall_range(i), cluster_pts[j]);
 
                 // Similar for tiles.
                 if (orig_tile_sizes_of_this[i] >= orig_sizes_of_this[i])
-                    tile_size[i] = get_overall_range(i);
+                    tile_size[i] = ROUND_UP(get_overall_range(i), cluster_pts[j]);
             }
+        }
+
+        // Set strides based on inner block sizes.
+        void set_strides_from_inner(const IdxTuple& inner_block_sizes, idx_t stride_t) {
+            assert(inner_block_sizes.get_num_dims() == NUM_STENCIL_DIMS);
+            DOMAIN_VAR_LOOP_FAST(i, j)
+                stride[i] = ROUND_UP(inner_block_sizes[i], cluster_pts[j]);;
+            stride[step_posn] = stride_t;
+        }
+
+        // For debug.
+        std::string make_range_str(bool use_begin_end) const {
+            if (use_begin_end)
+                return std::string("[{") +
+                    begin.make_val_str() + "}...{" +
+                    end.make_val_str() + "}) by {" +
+                    stride.make_val_str() + "}";
+            else
+                return std::string("[{") +
+                    start.make_val_str() + "}...{" +
+                    stop.make_val_str() + "}) by {" +
+                    stride.make_val_str() + "}";
         }
     };
 

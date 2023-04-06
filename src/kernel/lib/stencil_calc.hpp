@@ -150,7 +150,9 @@ namespace yask {
         // expand indices to calculate values in scratch-halo.
         // Adjust offsets in vars based on original idxs.
         // Return adjusted indices.
-        ScanIndices adjust_span(int thread_idx, const ScanIndices& idxs) const;
+        ScanIndices adjust_span(int thread_idx,
+                                const ScanIndices& idxs,
+                                KernelSettings& settings) const;
 
         // Set the bounding-box vars for this bundle in this rank.
         // This includes the overall-BB and the constituent full-BBs.
@@ -378,10 +380,9 @@ namespace yask {
                            KernelSettings& settings,
                            const ScanIndices& micro_block_idxs) {
             STATE_VARS(this);
-            TRACE_MSG("calc_nano_block_dbg for bundle '" << get_name() << "': [" <<
-                      micro_block_idxs.start.make_val_str() <<
-                      " ... " << micro_block_idxs.stop.make_val_str() <<
-                      ") by outer thread " << outer_thread_idx <<
+            TRACE_MSG("calc_nano_block_dbg for bundle '" << get_name() << "': " <<
+                      micro_block_idxs.make_range_str(false) <<
+                      " via outer thread " << outer_thread_idx <<
                       " and inner thread " << inner_thread_idx);
 
             auto* cp = _corep();
@@ -439,10 +440,9 @@ namespace yask {
                            KernelSettings& settings,
                            const ScanIndices& micro_block_idxs) {
             STATE_VARS(this);
-            TRACE_MSG("calc_nano_block_opt for bundle '" << get_name() << "': [" <<
-                      micro_block_idxs.start.make_val_str() <<
-                      " ... " << micro_block_idxs.stop.make_val_str() <<
-                      ") by outer thread " << outer_thread_idx <<
+            TRACE_MSG("calc_nano_block_opt for bundle '" << get_name() << "': " <<
+                      micro_block_idxs.make_range_str(false) <<
+                      " via outer thread " << outer_thread_idx <<
                       " and inner thread " << inner_thread_idx);
             auto* cp = _corep();
 
@@ -492,13 +492,12 @@ namespace yask {
             ScanIndices sb_idxs = micro_block_idxs.create_inner();
 
             // Strides within a nano-blk are based on pico-blk sizes.
-            sb_idxs.stride = settings._pico_block_sizes;
-            sb_idxs.stride[step_posn] = idx_t(1);
+            sb_idxs.set_strides_from_inner(settings._pico_block_sizes, 1);
 
             // Tiles in nano-blocks.
             sb_idxs.tile_size = settings._nano_block_tile_sizes;
 
-            // Sub block indices in element units and rank-relative.
+            // Nano-block indices in element units and rank-relative.
             ScanIndices sb_eidxs(sb_idxs);
 
             // Subset of nano-block that is full clusters.
@@ -704,6 +703,11 @@ namespace yask {
                     set_bit(do_right_pvecs, j);
 
             } // domain dims.
+            TRACE_MSG("nano-blk: " << sb_idxs.make_range_str(true) <<
+                      "; rank-rel: " << sb_eidxs.make_range_str(true) <<
+                      "; full-clusters: " << sb_fcidxs.make_range_str(true) <<
+                      "; full-vectors: " << sb_fvidxs.make_range_str(true) <<
+                      "; vector bounds: " << sb_ovidxs.make_range_str(true));
 
             int thread_limit = actl_opts->thread_limit;
             
@@ -717,11 +721,9 @@ namespace yask {
             // code for full clusters w/o masking.
             else {
                 TRACE_MSG("calculating clusters within "
-                          "normalized local indices [" <<
-                          norm_fcidxs.begin.make_val_str() <<
-                          " ... " << norm_fcidxs.end.make_val_str() <<
-                          ") with stride " << norm_fcidxs.stride.make_val_str() <<
-                          " by outer thread " << outer_thread_idx <<
+                          "normalized local indices " <<
+                          norm_fcidxs.make_range_str(true) <<
+                          " via outer thread " << outer_thread_idx <<
                           " and inner thread " << inner_thread_idx);
                 
                 // Perform the calculations in this block.
@@ -734,13 +736,11 @@ namespace yask {
                 TRACE_MSG("no full or partial vectors to calculate");
             else {
                 TRACE_MSG("processing full and/or partial vectors "
-                          "within local indices [" <<
-                          sb_eidxs.begin.make_val_str() <<
-                          " ... " << sb_eidxs.end.make_val_str() <<
-                          ") bordering full clusters at [" <<
-                          sb_fcidxs.begin.make_val_str() <<
-                          " ... " << sb_fcidxs.end.make_val_str() <<
-                          ") by outer thread " << outer_thread_idx <<
+                          "within local indices " <<
+                          sb_eidxs.make_range_str(true) <<
+                          " bordering full clusters at " <<
+                          sb_fcidxs.make_range_str(true) <<
+                          " via outer thread " << outer_thread_idx <<
                           " and inner thread " << inner_thread_idx);
                 #if CPTS == 1
                 THROW_YASK_EXCEPTION("(internal fault) vector border-code not expected with cluster-size==1");
@@ -886,10 +886,9 @@ namespace yask {
                             // Calc this full-vector part.
                             if (fv_needed) {
                                 TRACE_MSG("calculating full vectors for " << descr <<
-                                          " within normalized local indices [" <<
-                                          fv_part.begin.make_val_str() <<
-                                          " ... " << fv_part.end.make_val_str() <<
-                                          ") by outer thread " << outer_thread_idx <<
+                                          " within normalized local indices " <<
+                                          fv_part.make_range_str(true) <<
+                                          " via outer thread " << outer_thread_idx <<
                                           " and inner thread " << inner_thread_idx);
                                 
                                 calc_vectors_opt2(cp,
@@ -902,10 +901,9 @@ namespace yask {
                             if (pv_needed) {
                                 TRACE_MSG("calculating partial vectors with mask 0x" << 
                                           std::hex << pv_mask << std::dec << " for " << descr <<
-                                          " within normalized local indices [" <<
-                                          pv_part.begin.make_val_str() <<
-                                          " ... " << pv_part.end.make_val_str() <<
-                                          ") by outer thread " << outer_thread_idx <<
+                                          " within normalized local indices " <<
+                                          pv_part.make_range_str(true) <<
+                                          " via outer thread " << outer_thread_idx <<
                                           " and inner thread " << inner_thread_idx);
                                 
                                 calc_vectors_opt2(cp,

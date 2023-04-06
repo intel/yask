@@ -42,11 +42,9 @@ namespace yask {
                                              const ScanIndices& micro_block_idxs,
                                              MpiSection& mpisec) {
         STATE_VARS(this);
-        TRACE_MSG("calculating micro-block in '" << get_name() << "': [" <<
-                   micro_block_idxs.begin.make_val_str() << " ... " <<
-                   micro_block_idxs.end.make_val_str() << ") by " <<
-                   micro_block_idxs.stride.make_val_str() <<
-                   " by outer thread " << outer_thread_idx);
+        TRACE_MSG("calculating micro-block in '" << get_name() << "': " <<
+                  micro_block_idxs.make_range_str(true) <<
+                  " via outer thread " << outer_thread_idx);
         assert(!is_scratch());
 
         // No temporal blocking allowed here.
@@ -108,9 +106,8 @@ namespace yask {
                 continue; // to next full BB.
             }
 
-            TRACE_MSG("after trimming for BB " << bbn << ": [" <<
-                      mb_idxs1.begin.make_val_str() <<
-                      " ... " << mb_idxs1.end.make_val_str() << ")");
+            TRACE_MSG("after trimming for BB " << bbn << ": " <<
+                      mb_idxs1.make_range_str(true));
 
             // Get the bundles that need to be processed in
             // this block. This will be any prerequisite scratch-var
@@ -132,12 +129,8 @@ namespace yask {
                 // For scratch-vars, expand indices based on halo.
                 ScanIndices mb_idxs2(mb_idxs1);
                 if (is_scratch)
-                    mb_idxs2 = sg->adjust_span(outer_thread_idx, mb_idxs1);
-
-                // Tweak strides based on settings.
-                mb_idxs2.adjust_from_settings(settings._micro_block_sizes,
-                                              settings._micro_block_tile_sizes,
-                                              settings._nano_block_sizes);
+                    mb_idxs2 = sg->adjust_span(outer_thread_idx, mb_idxs1,
+                                               settings);
 
                 // Loop through all the full BBs in this bundle.
                 auto fbbs = sg->get_bbs();
@@ -181,9 +174,8 @@ namespace yask {
                         continue;
                     }
                     TRACE_MSG("full BB " << fbbn << " in reqd bundle '" <<
-                              sg->get_name() << "' trimmed to [" <<
-                              mb_idxs3.begin.make_val_str() << " ... " <<
-                              mb_idxs3.end.make_val_str() << ")");
+                              sg->get_name() << "' trimmed to " <<
+                              mb_idxs3.make_range_str(true));
 
                     ///// Bounds set for this BB; ready to evaluate it.
 
@@ -212,11 +204,9 @@ namespace yask {
                                 mb_idxs3.stride[i] = mb_idxs3.get_overall_range(i);
                         }
 
-                        TRACE_MSG("reqd bundle '" << sg->get_name() << "': [" <<
-                                  mb_idxs3.begin.make_val_str() << " ... " <<
-                                  mb_idxs3.end.make_val_str() << ") by " <<
-                                  mb_idxs3.stride.make_val_str() <<
-                                  " by outer thread " << outer_thread_idx <<
+                        TRACE_MSG("reqd bundle '" << sg->get_name() << "': " <<
+                                  mb_idxs3.make_range_str(true) <<
+                                  " via outer thread " << outer_thread_idx <<
                                   " with " << nbt << " block thread(s) bound to data...");
 
                         // Start threads within a block.  Each of these threads
@@ -263,11 +253,9 @@ namespace yask {
                     // (This is the more common case.)
                     else {
 
-                        TRACE_MSG("reqd bundle '" << sg->get_name() << "': [" <<
-                                  mb_idxs3.begin.make_val_str() << " ... " <<
-                                  mb_idxs3.end.make_val_str() << ") by " <<
-                                  mb_idxs3.stride.make_val_str() <<
-                                  " by outer thread " << outer_thread_idx <<
+                        TRACE_MSG("reqd bundle '" << sg->get_name() << "': " <<
+                                  mb_idxs3.make_range_str(true) << 
+                                  " via outer thread " << outer_thread_idx <<
                                   " with " << nbt << " block thread(s) NOT bound to data...");
 
                         // Call calc_nano_block() with a different thread for
@@ -400,7 +388,8 @@ namespace yask {
     // add to 'idxs'.
     // Returns adjusted indices.
     ScanIndices StencilBundleBase::adjust_span(int outer_thread_idx,
-                                               const ScanIndices& idxs) const {
+                                               const ScanIndices& idxs,
+                                               KernelSettings& settings) const {
         assert(is_scratch());
         STATE_VARS(this);
         assert(max_lh.get_num_dims() == NUM_DOMAIN_DIMS);
@@ -418,9 +407,15 @@ namespace yask {
             idx_t ae = idxs.end[i] + max_rh[j];
 
             #if 1
-            // Round up halos to vector sizes.
-            // TODO: consider cluster sizes, but need to make changes
-            // elsewhere in code.
+            // Round up halos to vector sizes.  This is to [try to] avoid
+            // costly masking around edges of scratch write area. For
+            // scratch vars, it won't hurt to calculate extra values outside
+            // of the write area because those values should never be
+            // used. Just have to be careful to allocate enough memory in
+            // StencilContext::alloc_scratch_data().  NB: When a scratch var
+            // has domain conditions, this won't always work.  TODO:
+            // consider cluster sizes, but need to make changes elsewhere in
+            // code.
             ab = round_down_flr(ab, fold_pts[j]);
             ae = round_up_flr(ae, fold_pts[j]);
             #endif
@@ -428,12 +423,10 @@ namespace yask {
             adj_idxs.begin[i] = ab;
             adj_idxs.end[i] = ae;
 
-            // If existing stride is >= whole tile, adjust new stride also.
-            idx_t width = idxs.end[i] - idxs.begin[i];
-            if (idxs.stride[i] >= width) {
-                idx_t adj_width = ae - ab;
-                adj_idxs.stride[i] = adj_width;
-            }
+            // Adjust strides and/or tiles as needed.
+            adj_idxs.adjust_from_settings(settings._micro_block_sizes,
+                                          settings._micro_block_tile_sizes,
+                                          settings._nano_block_sizes);
 
             auto& dim = dims->_domain_dims.get_dim(j);
             auto& dname = dim._get_name();
@@ -442,7 +435,7 @@ namespace yask {
             #ifdef CHECK
             for (auto* sv : output_scratch_vecs) {
                 assert(sv);
-                
+
                 // Get the one for this thread.
                 auto& gp = sv->at(outer_thread_idx);
                 assert(gp);
@@ -451,24 +444,24 @@ namespace yask {
                 // Is this dim used in this var?
                 int posn = gb.get_dim_posn(dname);
                 if (posn >= 0) {
-                    
-                    TRACE_MSG("checking micro-blk adjusted from [" <<
+
+                    TRACE_MSG("micro-blk adjusted from [" <<
                               idxs.begin[i] << "..." <<
                               idxs.end[i] << ") to [" <<
                               adj_idxs.begin[i] << "..." <<
-                              adj_idxs.end[i] << ") by " <<
-                              adj_idxs.stride[i] <<" against scratch-var '" <<
+                              adj_idxs.end[i] << "); checking" <<
+                              " against scratch-var '" <<
                               gp->get_name() << "' with halos " <<
                               gp->get_left_halo_size(posn) << " and " <<
                               gp->get_right_halo_size(posn) << " allocated [" <<
                               gp->get_first_local_index(posn) << "..." <<
                               gp->get_last_local_index(posn) << "] in dim '" << dname << "'");
+                
                     assert(ab >= gp->get_first_local_index(posn));
                     assert(ae <= gp->get_last_local_index(posn) + 1);
                 }
             }
             #endif // check.
-
         } // dims.
         
         return adj_idxs;

@@ -164,14 +164,14 @@ namespace yask {
 
                     // Adjust for scratch vars.
                     if (sg->is_scratch())
-                        misc_idxs = sg->adjust_span(scratch_var_idx, rank_idxs);
+                        misc_idxs = sg->adjust_span(scratch_var_idx, rank_idxs,
+                                                    *actl_opts);
                     misc_idxs.stride.set_from_const(1); // ensure unit stride.
 
                     // Scan through n-D space.
                     TRACE_MSG("run_ref: step " << start_t <<
-                              " in bundle '" << sg->get_name() << "': [" <<
-                              misc_idxs.begin.make_val_str() <<
-                              " ... " << misc_idxs.end.make_val_str() << ")");
+                              " in bundle '" << sg->get_name() << "': " <<
+                              misc_idxs.make_range_str(true));
                     sg->calc_in_domain(scratch_var_idx, misc_idxs);
 
                 } // needed bundles.
@@ -316,11 +316,9 @@ namespace yask {
                                            actl_opts->_rank_tile_sizes,
                                            actl_opts->_mega_block_sizes);
             TRACE_MSG("after adjustment for " << num_wf_shifts <<
-                      " wave-front shift(s): [" <<
-                      rank_idxs.begin.make_val_str() << " ... " <<
-                      rank_idxs.end.make_val_str() << ") by " <<
-                      rank_idxs.stride.make_val_str());
-            
+                      " wave-front shift(s): " <<
+                      rank_idxs.make_range_str(true));
+           
             // Make sure threads are set properly for a mega-block.
             set_num_outer_threads();
 
@@ -638,12 +636,11 @@ namespace yask {
                                          const ScanIndices& rank_idxs,
                                          MpiSection& mpisec) {
         STATE_VARS(this);
-        TRACE_MSG("calc_mega_block: mega-block [" <<
-                  rank_idxs.start.make_val_str() << " ... " <<
-                  rank_idxs.stop.make_val_str() << ") within possibly-adjusted rank [" <<
-                  rank_idxs.begin.make_val_str() << " ... " <<
-                  rank_idxs.end.make_val_str() << ") for " <<
-                  mpisec.make_descr());
+        TRACE_MSG("calc_mega_block: mega-block " <<
+                  rank_idxs.make_range_str(false) <<
+                  " within possibly-adjusted rank " <<
+                  rank_idxs.make_range_str(true) <<
+                  " for " << mpisec.make_descr());
 
         // Track time separately for MPI exterior and interior.
         if (mpisec.is_exterior_active())
@@ -706,8 +703,7 @@ namespace yask {
                     }
 
                     // Strides within a mega-block are based on block sizes.
-                    mega_block_idxs.stride = actl_opts->_block_sizes;
-                    mega_block_idxs.stride[step_posn] = stride_t;
+                    mega_block_idxs.set_strides_from_inner(actl_opts->_block_sizes, stride_t);
 
                     // Tiles in mega-block loops.
                     mega_block_idxs.tile_size = actl_opts->_mega_block_tile_sizes;
@@ -769,14 +765,12 @@ namespace yask {
                 // calc_block() is called.
                 StagePtr bp;
 
-                // Strides within a mega-block are based on rank block sizes.
+                // Strides within a mega-block are based on block sizes.
                 // Cannot use different strides per stage with TB.
-                auto& settings = *actl_opts;
-                mega_block_idxs.stride = settings._block_sizes;
-                mega_block_idxs.stride[step_posn] = stride_t;
+                mega_block_idxs.set_strides_from_inner(actl_opts->_block_sizes, stride_t);
 
                 // Tiles in mega-block loops.
-                mega_block_idxs.tile_size = settings._mega_block_tile_sizes;
+                mega_block_idxs.tile_size = actl_opts->_mega_block_tile_sizes;
                 
                 // Set mega_block_idxs begin & end based on shifted start & stop
                 // and rank boundaries.  This will be the base of the mega-block
@@ -785,9 +779,9 @@ namespace yask {
                 bool ok = shift_mega_block(rank_idxs.start, rank_idxs.stop,
                                            mega_block_shift_num, bp,
                                            mega_block_idxs, mpisec);
-                mega_block_idxs.adjust_from_settings(settings._mega_block_sizes,
-                                                     settings._mega_block_tile_sizes,
-                                                     settings._block_sizes);
+                mega_block_idxs.adjust_from_settings(actl_opts->_mega_block_sizes,
+                                                     actl_opts->_mega_block_tile_sizes,
+                                                     actl_opts->_block_sizes);
 
                 // Should always be valid because we just shifted (no trim).
                 // Trimming will be done at the micro-block level.
@@ -866,13 +860,11 @@ namespace yask {
         STATE_VARS(this);
         auto* bp = sel_bp.get();
         int outer_thread_idx = omp_get_thread_num();
-        TRACE_MSG("calc_block: phase " << phase << ", block [" <<
-                  mega_block_idxs.start.make_val_str() << " ... " <<
-                  mega_block_idxs.stop.make_val_str() <<
-                  ") within mega-block [" <<
-                  mega_block_idxs.begin.make_val_str() << " ... " <<
-                  mega_block_idxs.end.make_val_str() <<
-                  ") by mega-block thread " << outer_thread_idx);
+        TRACE_MSG("calc_block: phase " << phase << ", block " <<
+                  mega_block_idxs.make_range_str(false) <<
+                  " within mega-block " <<
+                  mega_block_idxs.make_range_str(true) <<
+                  " via outer thread " << outer_thread_idx);
 
         // Init block begin & end from mega-block start & stop indices.
         ScanIndices block_idxs = mega_block_idxs.create_inner();
@@ -905,8 +897,7 @@ namespace yask {
             block_idxs.stop[step_posn] = end_t;
 
             // Strides within a block are based on micro-block sizes.
-            block_idxs.stride = actl_opts->_micro_block_sizes;
-            block_idxs.stride[step_posn] = stride_t;
+            block_idxs.set_strides_from_inner(actl_opts->_micro_block_sizes, stride_t);
 
             // Tiles in block loops.
             block_idxs.tile_size = actl_opts->_block_tile_sizes;
@@ -961,12 +952,10 @@ namespace yask {
             block_idxs.stop[step_posn] = end_t;
 
             // Strides within a block are based on rank micro-block sizes.
-            auto& settings = *actl_opts;
-            block_idxs.stride = settings._micro_block_sizes;
-            block_idxs.stride[step_posn] = step_dir;
+            block_idxs.set_strides_from_inner(actl_opts->_micro_block_sizes, step_dir);
 
             // Tiles in block loops.
-            block_idxs.tile_size = settings._block_tile_sizes;
+            block_idxs.tile_size = actl_opts->_block_tile_sizes;
 
             // Increase range of block to cover all phases and
             // shapes.
@@ -985,15 +974,12 @@ namespace yask {
                 auto width = mega_block_idxs.stop[i] - mega_block_idxs.start[i];
                 adj_block_idxs.end[i] += width;
             }
-            adj_block_idxs.adjust_from_settings(settings._block_sizes,
-                                                settings._block_tile_sizes,
-                                                settings._micro_block_sizes);
+            adj_block_idxs.adjust_from_settings(actl_opts->_block_sizes,
+                                                actl_opts->_block_tile_sizes,
+                                                actl_opts->_micro_block_sizes);
             TRACE_MSG("calc_block: phase " << phase <<
-                      ", adjusted block [" <<
-                      adj_block_idxs.begin.make_val_str() << " ... " <<
-                      adj_block_idxs.end.make_val_str() <<
-                      ") with micro-block stride " <<
-                      adj_block_idxs.stride.make_val_str());
+                      ", adjusted block " <<
+                      adj_block_idxs.make_range_str(true));
 
             // Loop thru shapes.
             for (idx_t shape = 0; shape < nshapes; shape++) {
@@ -1052,14 +1038,13 @@ namespace yask {
         STATE_VARS(this);
         TRACE_MSG("calc_micro_block: phase " << phase <<
                   ", shape " << shape <<
-                  ", micro-block [" <<
-                  adj_block_idxs.start.make_val_str() << " ... " <<
-                  adj_block_idxs.stop.make_val_str() << ") within base-block [" <<
-                  base_block_idxs.begin.make_val_str() << " ... " <<
-                  base_block_idxs.end.make_val_str() << ") within base-mega-block [" <<
-                  base_mega_block_idxs.begin.make_val_str() << " ... " <<
-                  base_mega_block_idxs.end.make_val_str() <<
-                  ") by mega-block thread " << outer_thread_idx);
+                  ", micro-block " <<
+                  adj_block_idxs.make_range_str(false) <<
+                  " within base-block " <<
+                  base_block_idxs.make_range_str(true) <<
+                  " within base-mega-block " <<
+                  base_mega_block_idxs.make_range_str(true) <<
+                  " via outer thread " << outer_thread_idx);
 
         // Promote forward progress in MPI when calc'ing interior
         // only. Call from one thread only.
@@ -1130,8 +1115,7 @@ namespace yask {
 
                 // Strides within a micro-blk are based on nano-blk sizes.
                 // This will get overridden later if thread binding is enabled.
-                micro_block_idxs.stride = actl_opts->_nano_block_sizes;
-                micro_block_idxs.stride[step_posn] = stride_t;
+                micro_block_idxs.set_strides_from_inner(actl_opts->_nano_block_sizes, stride_t);
 
                 // Tiles in micro-blk loops.
                 micro_block_idxs.tile_size = actl_opts->_micro_block_tile_sizes;
@@ -1361,13 +1345,12 @@ namespace yask {
             idxs.begin[i] = rstart;
             idxs.end[i] = rstop;
         }
-        TRACE_MSG("shift_mega_block: updated span: [" <<
-                  idxs.begin.make_val_str() << " ... " <<
-                  idxs.end.make_val_str() << ") for " <<
-                  mpisec.make_descr() << 
-                  " within mega-block base [" <<
-                  base_start.make_val_str() << " ... " <<
-                  base_stop.make_val_str() << ") shifted " <<
+        TRACE_MSG("shift_mega_block: updated span: " <<
+                  idxs.make_range_str(true) <<
+                  " for " << mpisec.make_descr() << 
+                  " within mega-block base [{" <<
+                  base_start.make_val_str() << "}...{" <<
+                  base_stop.make_val_str() << "}) shifted " <<
                   shift_num << " time(s) is " <<
                   (ok ? "not " : "") << "empty");
         return ok;
@@ -1527,18 +1510,18 @@ namespace yask {
 
         TRACE_MSG("shift_micro_block: phase " << phase << "/" << nphases <<
                   ", shape " << shape << "/" << nshapes <<
-                  ", updated span: [" <<
-                  idxs.begin.make_val_str() << " ... " <<
-                  idxs.end.make_val_str() << ") from original micro-block [" <<
-                  mb_base_start.make_val_str() << " ... " <<
-                  mb_base_stop.make_val_str() << ") shifted " <<
-                  mb_shift_num << " time(s) within adj-block base [" <<
-                  adj_block_base_start.make_val_str() << " ... " <<
-                  adj_block_base_stop.make_val_str() << ") and actual block base [" <<
-                  block_base_start.make_val_str() << " ... " <<
-                  block_base_stop.make_val_str() << ") and mega-block base [" <<
-                  mega_block_base_start.make_val_str() << " ... " <<
-                  mega_block_base_stop.make_val_str() << ") is " <<
+                  ", updated span: " <<
+                  idxs.make_range_str(true) << " ... " <<
+                  " from original micro-block [{" <<
+                  mb_base_start.make_val_str() << "}...{" <<
+                  mb_base_stop.make_val_str() << "}) shifted " <<
+                  mb_shift_num << " time(s) within adj-block base [{" <<
+                  adj_block_base_start.make_val_str() << "}...{" <<
+                  adj_block_base_stop.make_val_str() << "}) and actual block base [{" <<
+                  block_base_start.make_val_str() << "}...{" <<
+                  block_base_stop.make_val_str() << "}) and mega-block base [{" <<
+                  mega_block_base_start.make_val_str() << "}...{" <<
+                  mega_block_base_stop.make_val_str() << "}) is " <<
                   (ok ? "not " : "") << "empty");
         return ok;
     }

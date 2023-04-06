@@ -711,14 +711,15 @@ namespace {
         // Define equation to apply to all points in 'A' var.
         virtual void define() {
 
-            // Set scratch vars.
+            // Set 2 scratch vars, dependent on 'A', but independent
+            // of each other.
             t1(x, y, z) EQUALS def_t3d(A, t, x, 0, 1, y, 2, 1, z, 1, 0);
             t2(x, y, z) EQUALS def_t3d(A, t, x, 1, 0, y, 0, 2, z, 0, 1);
 
-            // Set a scratch var from other scratch vars.
+            // Set another scratch var from 2 other scratch vars.
             t3(x, y, z) EQUALS t1(x-1, y+1, z) + t2(x, y, z-1);
 
-            // Update A from scratch vars.
+            // Update 'A' from 2 of the scratch vars.
             A(t+1, x, y, z) EQUALS A(t, x, y, z) +
                 def_3d(t1, x, 2, 0, y, 0, 1, z, 1, 0) +
                 def_3d(t3, x, 1, 0, y, 0, 1, z, 0, 2);
