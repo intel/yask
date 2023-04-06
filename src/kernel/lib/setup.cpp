@@ -1133,6 +1133,7 @@ namespace yask {
             find_write_halos();
 
             // Add halos.
+            // TODO: round up to fold sizes.
             _bundle_bb.bb_begin = _bundle_bb.bb_begin.sub_elements(max_lh);
             _bundle_bb.bb_end = _bundle_bb.bb_end.add_elements(max_rh);
             _bundle_bb.update_bb(bname, _context, false, false);

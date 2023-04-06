@@ -74,31 +74,31 @@ namespace yask {
     // Else if 'ep' has a match, change pointer to that match, return true.
     // Else, return false.
     bool CseVisitor::find_match_to(num_expr_ptr& ep) {
-#if DEBUG_CSE >= 1
+        #if DEBUG_CSE >= 1
         cout << " //** checking '" << ep->make_str() << "'@" << ep << endl;
-#endif
+        #endif
 
         // Already visited this node?
         if (_seen.count(ep)) {
-#if DEBUG_CSE >= 2
+            #if DEBUG_CSE >= 2
             cout << "  //** already seen '" << ep->make_str() << "'@" << ep << endl;
-#endif
+            #endif
             return true;
         }
 
         // Loop through nodes already seen.
         for (auto& oep : _seen) {
-#if DEBUG_CSE >= 3
+            #if DEBUG_CSE >= 3
             cout << "  //** comparing '" << ep->make_str() << "'@" << ep <<
                 " to '" << oep->make_str() << "'@" << oep << endl;
-#endif
+            #endif
 
             // Match?
             if (ep->is_same(oep.get())) {
-#if DEBUG_CSE >= 1
+                #if DEBUG_CSE >= 1
                 cout << "   //** found match: '" << ep->make_str() << "'@" << ep <<
                     " to '" << oep->make_str() << "'@" << oep << endl;
-#endif
+                #endif
 
                 // Redirect pointer to the matching expr.
                 ep = oep;
@@ -108,9 +108,9 @@ namespace yask {
         }
 
         // Mark as seen.
-#if DEBUG_CSE >= 2
+        #if DEBUG_CSE >= 2
         cout << "  //** no match to " << ep->make_str() << endl;
-#endif
+        #endif
         _seen.insert(ep);
         return false;
     }
@@ -120,25 +120,25 @@ namespace yask {
 
         // Already visited this node?
         if (_seen.count(fe)) {
-#if DEBUG_PAIR >= 2
+            #if DEBUG_PAIR >= 2
             cout << "  //** already seen '" << ep->make_str() << "'@" << ep << endl;
-#endif
+            #endif
             return "";
         }
 
         // Loop through func nodes already seen.
         for (auto& oep : _seen) {
-#if DEBUG_PAIR >= 3
+            #if DEBUG_PAIR >= 3
             cout << "  //** comparing '" << fe->make_str() << "'@" << ep <<
                 " to '" << oep->make_str() << "'@" << oep << endl;
-#endif
+            #endif
 
             // Pair?
             if (fe->make_pair(oep)) {
-#if DEBUG_PAIR >= 1
+                #if DEBUG_PAIR >= 1
                 cout << "   //** found pair: '" << ep->make_str() << "'@" << ep <<
                     " to '" << oep->make_str() << "'@" << oep << endl;
-#endif
+                #endif
 
                 // Count and done.
                 _num_changes++;

@@ -79,8 +79,6 @@ namespace yask {
         // Make expression node.
         auto expr = make_shared<EqualsExpr>(gpp, rhs);
         expr->set_cond(cond);
-        if (settings._print_eqs)
-            soln->get_ostr() << "Equation defined: " << expr->get_descr() << endl;
 
         // Save the expression in list of equations.
         eqs.add_item(expr);

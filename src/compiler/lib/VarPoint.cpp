@@ -311,7 +311,7 @@ namespace yask {
 
     // EqualsExpr methods.
     bool EqualsExpr::is_scratch() {
-        Var* gp = _get_var();
+        Var* gp = get_lhs_var();
         return gp && gp->is_scratch();
     }
     bool EqualsExpr::is_same(const Expr* other) const {

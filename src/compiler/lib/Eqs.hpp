@@ -34,7 +34,8 @@ IN THE SOFTWARE.
 using namespace std;
 
 namespace yask {
-
+    typedef equals_expr_ptr Eq;
+    
     // Dependencies between objects of type T.
     template <typename T>
     class Deps {
@@ -351,7 +352,7 @@ namespace yask {
     };
 
     // A list of unique equation ptrs.
-    typedef vector_set<equals_expr_ptr> EqList;
+    typedef vector_set<Eq> EqList;
 
     // A set of equations and related dependency data.
     class Eqs : public DepGroup<EqualsExpr> {
@@ -387,10 +388,10 @@ namespace yask {
 
     // A collection that holds various independent eqs.
     class EqLot {
-    protected:
-        EqList _eqs;            // all equations.
-        Vars _out_vars;        // vars updated by _eqs.
-        Vars _in_vars;         // vars read from by _eqs.
+    private:
+        EqList _eqs;            // all equations in this lot.
+        Vars _out_vars;         // vars updated by _eqs.
+        Vars _in_vars;          // vars read from by _eqs.
         bool _is_scratch = false; // true if _eqs update temp var(s).
 
     public:
@@ -401,9 +402,20 @@ namespace yask {
         int index;                  // index to distinguish repeated names.
 
         // Ctor.
-        EqLot(bool is_scratch) : _is_scratch(is_scratch) { }
+        EqLot(bool is_scratch) :
+            _is_scratch(is_scratch) { }
         virtual ~EqLot() {}
 
+        // Remove data.
+        virtual void clear() {
+            _eqs.clear();
+            _out_vars.clear();
+            _in_vars.clear();
+        }
+
+        // Add an eq.
+        virtual void add_eq(Eq ee);
+        
         // Get all eqs.
         virtual const EqList& get_eqs() const {
             return _eqs;
@@ -445,7 +457,7 @@ namespace yask {
     // will be combined into a single code block.
     class EqBundle : public EqLot {
     protected:
-        const Dimensions* _dims = 0;
+        const Dimensions* _dims = 0; // just a pointer to soln dims.
 
     public:
 
@@ -460,15 +472,15 @@ namespace yask {
 
         // Create a copy containing clones of the equations.
         virtual shared_ptr<EqBundle> clone() const {
-            auto p = make_shared<EqBundle>(*_dims, _is_scratch);
+            auto p = make_shared<EqBundle>(*_dims, is_scratch());
 
             // Shallow copy.
             *p = *this;
 
             // Delete copied eqs and replace w/clones.
-            p->_eqs.clear();
-            for (auto& i : _eqs)
-                p->_eqs.insert(i->clone());
+            p->clear();
+            for (auto& i : get_eqs())
+                p->add_eq(i->clone());
 
             return p;
         }
@@ -482,12 +494,9 @@ namespace yask {
         virtual string get_descr(bool show_cond = true,
                                  string quote = "'") const;
 
-        // Add an equation to this bundle.
-        virtual void add_eq(equals_expr_ptr ee);
-
         // Get the list of all equations.
         virtual const EqList& get_items() const {
-            return _eqs;
+            return get_eqs();
         }
 
         // Visit the condition.
@@ -530,13 +539,14 @@ namespace yask {
         int _idx = 0;
 
         // Track equations that have been added already.
-        set<equals_expr_ptr> _eqs_in_bundles;
+        set<Eq> _eqs_in_bundles;
 
-        // Add 'eq' from 'eqs' to an eq-bundle if possible.  The index will
-        // be incremented if a new bundle is created.  Returns whether a new
-        // bundle was created.
-        virtual bool add_eq_to_bundle(Eqs& eqs,
-                                      equals_expr_ptr eq,
+        // Add 'eq' (subset of 'all_eqs') to an existing eq-bundle if
+        // possible.  If not possible, create a new bundle and add 'eqs' to
+        // it. The index will be incremented if a new bundle is created.
+        // Returns whether a new bundle was created.
+        virtual bool add_eq_to_bundle(Eqs& all_eqs,
+                                      Eq& eq,
                                       const CompilerSettings& settings);
 
     public:
@@ -586,15 +596,14 @@ namespace yask {
                                          bool print_sets,
                                          ostream& os);
     };
-
     typedef shared_ptr<EqBundle> EqBundlePtr;
 
     // A list of unique equation bundles.
     typedef vector_set<EqBundlePtr> EqBundleList;
 
-    // A named equation stage, which contains one or more equation
-    // bundles.  All equations in a stage do not need to have the same
-    // domain condition, but they must have the same step condition.
+    // A named equation stage, which contains one or more equation bundles.
+    // All equations in a stage do not need to have the same domain
+    // condition, but non-scratch eqs must have the same step condition.
     // Equations in a stage must not have inter-dependencies because they
     // may be run in parallel or in any order on any sub-domain.
     class EqStage : public EqLot {
@@ -611,17 +620,22 @@ namespace yask {
             EqLot(is_scratch) { }
         virtual ~EqStage() { }
 
+        virtual void clear() override {
+            EqLot::clear();
+            _bundles.clear();
+        }
+
         // Create a copy containing clones of the bundles.
         virtual shared_ptr<EqStage> clone() const {
-            auto p = make_shared<EqStage>(_is_scratch);
+            auto p = make_shared<EqStage>(is_scratch());
 
             // Shallow copy.
             *p = *this;
 
             // Delete copied eqs and replace w/clones.
-            p->_eqs.clear();
+            p->clear();
             for (auto& i : _bundles)
-                p->_bundles.insert(i->clone());
+                p->add_bundle(i->clone());
 
             return p;
         }
@@ -650,6 +664,7 @@ namespace yask {
             return false;
         }
     };
+    typedef shared_ptr<EqStage> EqStagePtr;
 
     // Container for multiple equation stages.
     class EqStages : public DepGroup<EqStage> {
@@ -665,8 +680,8 @@ namespace yask {
         // Track bundles that have been added already.
         set<EqBundlePtr> _bundles_in_stages;
 
-        // Add 'bp' from 'all_bundles'. Create new stage if needed.  Returns
-        // whether a new stage was created.
+        // Add 'bp' from 'all_bundles' to a stage. Create new stage if
+        // needed.  Returns whether a new stage was created.
         bool add_bundle_to_stage(EqBundles& all_bundles,
                                  EqBundlePtr bp);
 

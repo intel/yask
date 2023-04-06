@@ -892,8 +892,9 @@ namespace {
         // Define equation to apply to all points in 'A' var.
         virtual void define() {
 
-            // Define sub-domain.
+            // Define sub-domains.
             auto sd0 = (x >= first_domain_index(x) + 5) && (x <= last_domain_index(x) - 3);
+            auto sd1 = (x >= first_domain_index(x) + 3) && (x <= last_domain_index(x) - 2);
         
             // Define values in scratch var 'B' using current values from 'A'.
             auto b0 = def_t1d(A, t, x, 1, 0);
@@ -902,8 +903,8 @@ namespace {
 
             // Define next values for 'A' from scratch var values.
             auto a1 = def_1d(B, x-6, 2, 3) - def_1d(B, x+7, 0, 2);
-            A(t+1, x) EQUALS  a1 IF_DOMAIN sd0;
-            A(t+1, x) EQUALS -a1 IF_DOMAIN !sd0;
+            A(t+1, x) EQUALS  a1 IF_DOMAIN sd1;
+            A(t+1, x) EQUALS -a1 IF_DOMAIN !sd1;
         }
     };
 

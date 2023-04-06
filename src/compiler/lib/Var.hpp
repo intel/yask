@@ -207,6 +207,29 @@ namespace yask {
             return h;
         }
 
+        // Print halos.
+        void print_halos(ostream& os, const string& leader) const {
+            bool found = false;
+            for (auto& hi : _halos) {
+                auto& stname = hi.first;
+                auto& h2 = hi.second;
+                for (auto& i0 : h2) {
+                    auto& left = i0.first;
+                    auto& m1 = i0.second;
+                    for (auto& i1 : m1) {
+                        auto& step = i1.first;
+                        const IntTuple& ohalos = i1.second;
+                        os << leader << "var " << get_name() << " halo[" << stname <<
+                            "][" << (left ? string("left") : string("right")) <<
+                            "][step " << step << "] = " << ohalos.make_dim_val_str() << endl;
+                        found = true;
+                    }
+                }
+            }
+            if (!found)
+                os << leader << "var " << get_name() << " has no halo data\n";
+        }
+
         // Extra padding.
         virtual void set_read_ahead_pad(int n) {
             _read_ahead_pad = n;
@@ -251,10 +274,12 @@ namespace yask {
         virtual bool is_halo_same(const Var& other) const;
 
         // Update halos and L1 dist based on halo in 'other' var.
-        virtual void update_halo(const Var& other);
+        // Returns 'true' if halo changed.
+        virtual bool update_halo(const Var& other);
 
         // Update halos and L1 dist based on each value in 'offsets'.
-        virtual void update_halo(const string& stage_name, const IntTuple& offsets);
+        // Returns 'true' if halo changed.
+        virtual bool update_halo(const string& stage_name, const IntTuple& offsets);
 
         // Stage(s) with writes.
         virtual const map<string, int>& get_write_points() const {
@@ -333,6 +358,9 @@ namespace yask {
         Vars(const Vars& src) : _vars(src._vars) {}
 
         // STL methods.
+        void clear() {
+            _vars.clear();
+        }
         size_t size() const {
             return _vars.size();
         }

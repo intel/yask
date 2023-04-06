@@ -27,6 +27,9 @@ IN THE SOFTWARE.
 
 #include "Cpp.hpp"
 
+//#define DEBUG_BUFFERS
+//#define DEBUG_GP
+
 namespace yask {
 
     /////////// Scalar code /////////////
@@ -414,9 +417,7 @@ namespace yask {
         }
     }
 
-    //#define DEBUG_BUFFERS
-    
-    // Collect some stats on read points.
+   // Collect some stats on read points.
     // These are used to create buffers and prefetches.
     void CppVecPrintHelper::get_point_stats() {
 

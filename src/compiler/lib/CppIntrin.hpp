@@ -29,8 +29,6 @@ IN THE SOFTWARE.
 
 #include "Cpp.hpp"
 
-//#define DEBUG_SHIFT
-
 namespace yask {
 
     // Add specialization for 256 and 512-bit intrinsics.

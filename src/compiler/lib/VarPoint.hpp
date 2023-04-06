@@ -212,7 +212,7 @@ namespace yask {
     // Equality operator for a var point.
     // This defines the LHS as equal to the RHS; it is NOT
     // a comparison operator; it is NOT an assignment operator.
-    // It also holds an optional condition.
+    // It also holds optional conditions.
     class EqualsExpr : public Expr,
                        public virtual yc_equation_node {
     protected:
@@ -255,7 +255,7 @@ namespace yask {
         static string step_cond_op_str() { return "IF_STEP"; }
 
         // Get pointer to var on LHS or NULL if not set.
-        virtual Var* _get_var() {
+        virtual Var* get_lhs_var() {
             if (_lhs.get())
                 return _lhs->_get_var();
             return NULL;

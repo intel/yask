@@ -35,16 +35,16 @@ namespace yask {
 
         // Nothing to do if this var-point is not vectorizable.
         if (gp->get_vec_type() == VarPoint::VEC_NONE) {
-#ifdef DEBUG_VV
+            #ifdef DEBUG_VV
             cout << " //** cannot vectorize scalar-access " << gp->make_quoted_str() << endl;
-#endif
+            #endif
             _scalar_points.insert(*gp);
             return "";
         }
         else if (gp->get_vec_type() == VarPoint::VEC_PARTIAL) {
-#ifdef DEBUG_VV
+            #ifdef DEBUG_VV
             cout << " //** cannot vectorize non-standard-access " << gp->make_quoted_str() << endl;
-#endif
+            #endif
             _non_vec_points.insert(*gp);
             return "";
         }
@@ -60,70 +60,70 @@ namespace yask {
         assert(_vblk2avblks.count(*gp) == 0);
 
         // Vec of points to calculate.
-#ifdef DEBUG_VV
+        #ifdef DEBUG_VV
         cout << " //** vec @ " << gp->make_quoted_str() << " => " << endl;
-#endif
+        #endif
 
         // Loop through all points in the vector fold.
-        _dims._fold.visit_all_points([&](const IntTuple& vec_point,
-                                         size_t pelem){
+        _dims._fold.visit_all_points
+            ([&](const IntTuple& vec_point, size_t pelem) {
 
-                // Final offset in each dim is offset of var point plus
-                // fold offset.
-                // This works because we know this var point is accessed
-                // only by simple offsets in each foldable dim.
-                // Note: there may be more or fewer dims in vec_point than in var point.
-                auto offsets = gp->get_arg_offsets().add_elements(vec_point, false);
+                 // Final offset in each dim is offset of var point plus
+                 // fold offset.
+                 // This works because we know this var point is accessed
+                 // only by simple offsets in each foldable dim.
+                 // Note: there may be more or fewer dims in vec_point than in var point.
+                 auto offsets = gp->get_arg_offsets().add_elements(vec_point, false);
 
-                // Find aligned vector indices and offsets
-                // for this one point.
-                IntTuple vec_offsets, vec_location;
-                for (auto& dim : offsets) {
-                    auto& dname = dim._get_name();
+                 // Find aligned vector indices and offsets
+                 // for this one point.
+                 IntTuple vec_offsets, vec_location;
+                 for (auto& dim : offsets) {
+                     auto& dname = dim._get_name();
 
-                    // length of this dimension in fold, if it exists.
-                    const int* p = _dims._fold.lookup(dname);
-                    int len = p ? *p : 1;
+                     // length of this dimension in fold, if it exists.
+                     const int* p = _dims._fold.lookup(dname);
+                     int len = p ? *p : 1;
 
-                    // convert this offset to vector index and vector offset.
-                    int vec_index, vec_offset;
-                    fix_index_offset(0, dim.get_val(), vec_index, vec_offset, len);
-                    vec_offsets.add_dim_back(dname, vec_offset);
-                    vec_location.add_dim_back(dname, vec_index * len);
-                }
-#ifdef DEBUG_VV
-                cout << "  //** element @ " << offsets.make_dim_val_str() << " => " <<
-                    " vec-location @ " << vec_location.make_dim_val_str() <<
-                    " & vec-offsets @ " << vec_offsets.make_dim_val_str() <<
-                    " => " << endl;
-#endif
+                     // convert this offset to vector index and vector offset.
+                     int vec_index, vec_offset;
+                     fix_index_offset(0, dim.get_val(), vec_index, vec_offset, len);
+                     vec_offsets.add_dim_back(dname, vec_offset);
+                     vec_location.add_dim_back(dname, vec_index * len);
+                 }
+                 #ifdef DEBUG_VV
+                 cout << "  //** element @ " << offsets.make_dim_val_str() << " => " <<
+                     " vec-location @ " << vec_location.make_dim_val_str() <<
+                     " & vec-offsets @ " << vec_offsets.make_dim_val_str() <<
+                     " => " << endl;
+                 #endif
 
-                // Create aligned vector block that contains this point.
-                VarPoint aligned_vec = *gp;  // copy original.
-                aligned_vec.set_arg_offsets(vec_location);
+                 // Create aligned vector block that contains this point.
+                 VarPoint aligned_vec = *gp;  // copy original.
+                 aligned_vec.set_arg_offsets(vec_location);
 
-                // Find linear offset within this aligned vector block.
-                int aligned_elem = _dims._fold.layout(vec_offsets, false);
-                assert(aligned_elem >= 0);
-                assert(aligned_elem < _vlen);
-#ifdef DEBUG_VV
-                cout << "   //** " << gp->make_str() << "[" << pelem << "] = aligned-" <<
-                    aligned_vec.make_str() << "[" << aligned_elem << "]" << endl;
-#endif
+                 // Find linear offset within this aligned vector block.
+                 int aligned_elem = _dims._fold.layout(vec_offsets, false);
+                 assert(aligned_elem >= 0);
+                 assert(aligned_elem < _vlen);
+                 #ifdef DEBUG_VV
+                 cout << "   //** " << gp->make_str() << "[" << pelem << "] = aligned-" <<
+                     aligned_vec.make_str() << "[" << aligned_elem << "]" << endl;
+                 #endif
 
-                // Update set of *all* aligned vec-blocks.
-                _aligned_vecs.insert(aligned_vec);
+                 // Update set of *all* aligned vec-blocks.
+                 _aligned_vecs.insert(aligned_vec);
 
-                // Update set of aligned vec-blocks and elements needed for *this* vec-block element.
-                _vblk2avblks[*gp].insert(aligned_vec);
+                 // Update set of aligned vec-blocks and elements needed for *this* vec-block element.
+                 _vblk2avblks[*gp].insert(aligned_vec);
 
-                // Save which aligned vec-block's element is needed for this vec-block element.
-                VecElem ve(aligned_vec, aligned_elem, offsets);
-                _vblk2elem_lists[*gp].push_back(ve); // should be at pelem index.
-                assert(_vblk2elem_lists[*gp].size() == pelem+1); // verify at pelem index.
+                 // Save which aligned vec-block's element is needed for this vec-block element.
+                 VecElem ve(aligned_vec, aligned_elem, offsets);
+                 _vblk2elem_lists[*gp].push_back(ve); // should be at pelem index.
+                 assert(_vblk2elem_lists[*gp].size() == pelem+1); // verify at pelem index.
 
-                return true;
-            });                  // end of vector lambda-function.
+                 return true;
+             });                  // end of vector lambda-function.
 
         // Mark as done.
         _vec_points.insert(*gp);
@@ -147,9 +147,9 @@ namespace yask {
         set<size_t> used_exprs; // expressions used.
         for (size_t i = 0; i < oev.size(); i++) {
 
-#ifdef DEBUG_SORT
+            #ifdef DEBUG_SORT
             cout << "  Looking for expr #" << i << "..." << endl;
-#endif
+            #endif
 
             // Scan unused exprs.
             size_t j_best = 0;
@@ -173,23 +173,23 @@ namespace yask {
 
                         // new vector needed?
                         if (aligned_vecs.count(av) == 0) {
-#ifdef DEBUG_SORT
+                            #ifdef DEBUG_SORT
                             cout << " Vec " << av.make_str("tmp") << " is new" << endl;
-#endif
+                            #endif
                             cost++;
                         }
                     }
-#ifdef DEBUG_SORT
+                    #ifdef DEBUG_SORT
                     cout << " Cost of expr " << j << " = " << cost << endl;
-#endif
+                    #endif
                     // Best so far?
                     if (cost < j_best_cost) {
                         j_best_cost = cost;
                         j_best = j;
                         j_best_aligned_vecs = tmp_aligned_vecs;
-#ifdef DEBUG_SORT
+                        #ifdef DEBUG_SORT
                         cout << "  Best so far has " << j_best_aligned_vecs.size() << " aligned vecs" << endl;
-#endif
+                        #endif
                     }
                 }
             }
@@ -214,7 +214,7 @@ namespace yask {
     }
 
     // TODO: fix this old code and make it available as an output.
-#if 0
+    #if 0
     // Print stats for various folding options.
     if (vlen_for_stats) {
         string separator(",");
@@ -240,6 +240,6 @@ namespace yask {
             }
         }
     }
-#endif
+    #endif
 
 } // namespace yask.

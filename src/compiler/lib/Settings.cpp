@@ -650,7 +650,7 @@ namespace yask {
         parser.add_option(make_shared<command_line_parser::bool_option>
                           ("print-eqs",
                            "[Debug] "
-                           "Print each equation when defined",
+                           "Print each equation when analyzed",
                            _print_eqs));
         parser.add_option(make_shared<IntTupleOption>
                           ("fold",

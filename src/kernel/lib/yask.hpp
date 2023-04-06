@@ -233,7 +233,8 @@ typedef std::uint64_t bit_mask_t;
             const auto last_slash_idx = fname.find_last_of("/");        \
             if (std::string::npos != last_slash_idx)                    \
                 fname.erase(0, last_slash_idx + 1);                     \
-            DEBUG_MSG("YASK: " << __TRACE_FN << ": " << msg <<          \
+            DEBUG_MSG("YASK: thread " << omp_get_thread_num() << ": " << \
+                      __TRACE_FN << ": " << msg <<                      \
                       " at " << fname << ":" << __LINE__);              \
         } } while(0)
 #else

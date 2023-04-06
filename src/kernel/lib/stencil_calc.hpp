@@ -55,7 +55,7 @@ namespace yask {
         // any invalid points. These will all be inside '_bundle_bb'.
 	BBList _bb_list;
 
-        // Max write halos for scratch bundles;
+        // Max write halos for scratch bundles on left and right in each dim.
         IdxTuple max_lh, max_rh;
 
         // Normalize the 'orig' indices, i.e., divide by vector len in each dim.
@@ -998,7 +998,7 @@ namespace yask {
         idx_t tot_fpops_per_step = 0;
 
         Stage(StencilContext* context,
-                   const std::string& name) :
+              const std::string& name) :
             ContextLinker(context),
             _name(name) { }
         virtual ~Stage() { }
@@ -1018,8 +1018,13 @@ namespace yask {
                 return false;
 
             // All step conditions must be the same, so
-            // we call first one.
-            return front()->is_in_valid_step(input_step_index);
+            // we use first non-scratch one.
+            for (auto* bp : *this) {
+                if (!bp->is_scratch())
+                    return bp->is_in_valid_step(input_step_index);
+            }
+            assert("no non-scratch bundle");
+            return false;
         }
 
         // Accessors.

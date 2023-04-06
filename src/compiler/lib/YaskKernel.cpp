@@ -464,7 +464,8 @@ namespace yask {
 
                 os << endl << " ////// Stencil " << eg_desc << " //////\n" <<
                 "\n struct " << egs_name << " {\n"
-                    "  const char* _name = \"" << eg_name << "\";\n"
+                    "  const char* _name = \"" << eg_name << "\";\n\n"
+                    "  // Per-point work stats for this bundle.\n"
                     "  const int _scalar_fp_ops = " << stats.get_num_ops() << ";\n"
                     "  const int _scalar_points_read = " << stats.get_num_reads() << ";\n"
                     "  const int _scalar_points_written = " << stats.get_num_writes() << ";\n"
@@ -999,72 +1000,72 @@ namespace yask {
                 " update_var_info(false);\n";
 
             // Push eq-bundle pointers to list.
-            for (auto& eg : _eq_bundles.get_all()) {
-                string eg_name = eg->_get_name();
+            for (auto& b : _eq_bundles.get_all()) {
+                string b_name = b->_get_name();
 
-                os << "\n // Configure '" << eg_name << "'.\n";
+                os << "\n // Configure '" << b_name << "'.\n";
 
                 // Only want non-scratch bundles in st_bundles.
                 // Each scratch bundle will be added to its
                 // parent bundle.
-                if (!eg->is_scratch())
-                    os << "  st_bundles.push_back(&" << eg_name << ");\n";
+                if (!b->is_scratch())
+                    os << "  st_bundles.push_back(&" << b_name << ");\n";
 
                 // Add scratch-bundle deps in proper order.
-                auto& sdeps = _eq_bundles.get_scratch_deps(eg);
-                for (auto& eg2 : _eq_bundles.get_all()) {
-                    if (sdeps.count(eg2)) {
-                        string eg2_name = eg2->_get_name();
-                        os << "  " << eg_name <<
-                            ".add_scratch_child(&" << eg2_name << ");\n";
+                auto& sdeps = _eq_bundles.get_scratch_deps(b);
+                for (auto& b2 : _eq_bundles.get_all()) {
+                    if (sdeps.count(b2)) {
+                        string b2_name = b2->_get_name();
+                        os << "  " << b_name <<
+                            ".add_scratch_child(&" << b2_name << ");\n";
                     }
                 }
 
                 // Add deps between bundles.
-                for (auto& dep : _eq_bundles.get_deps(eg)) {
+                for (auto& dep : _eq_bundles.get_deps(b)) {
                     string dep_name = dep->_get_name();
-                    os << "  " << eg_name <<
+                    os << "  " << b_name <<
                         ".add_dep(&" << dep_name << ");\n";
                 }
 
                 // Populate the var lists in the StencilBundleBase objs.
                 // I/O vars.
-                os << "\n // The following var(s) are read by '" << eg_name << "'.\n";
-                for (auto gp : eg->get_input_vars()) {
+                os << "\n // The following var(s) are read by '" << b_name << "'.\n";
+                for (auto gp : b->get_input_vars()) {
                     VAR_DECLS(gp);
                     if (gp->is_scratch())
-                        os << "  " << eg_name << ".input_scratch_vecs.push_back(&" << var_list << ");\n";
+                        os << "  " << b_name << ".input_scratch_vecs.push_back(&" << var_list << ");\n";
                     else
-                        os << "  " << eg_name << ".input_var_ptrs.push_back(" << var_ptr << ");\n";
+                        os << "  " << b_name << ".input_var_ptrs.push_back(" << var_ptr << ");\n";
                 }
-                os << "\n // The following var(s) are written by '" << eg_name << "'";
-                if (eg->step_expr)
-                    os << " at " << eg->step_expr->make_quoted_str();
+                os << "\n // The following var(s) are written by '" << b_name << "'";
+                if (b->step_expr)
+                    os << " at " << b->step_expr->make_quoted_str();
                 os << ".\n";
-                for (auto gp : eg->get_output_vars()) {
+                for (auto gp : b->get_output_vars()) {
                     VAR_DECLS(gp);
                     if (gp->is_scratch())
-                        os << "  " << eg_name << ".output_scratch_vecs.push_back(&" << var_list << ");\n";
+                        os << "  " << b_name << ".output_scratch_vecs.push_back(&" << var_list << ");\n";
                     else
-                        os << "  " << eg_name << ".output_var_ptrs.push_back(" << var_ptr << ");\n";
+                        os << "  " << b_name << ".output_var_ptrs.push_back(" << var_ptr << ");\n";
                 }
             } // bundles.
 
             // Stages.
-            os << "\n // Create stencil stage(s).\n";
-            for (auto& bp : _eq_stages.get_all()) {
-                if (bp->is_scratch())
+            os << "\n // Create non-scratch stencil stage(s), each w/its non-scratch bundle(s).\n";
+            for (auto& st : _eq_stages.get_all()) {
+                if (st->is_scratch())
                     continue;
-                string bp_name = bp->_get_name();
-                os << "  auto " << bp_name << " = std::make_shared<Stage>(this, \"" <<
-                    bp_name << "\");\n";
-                for (auto& eg : bp->get_bundles()) {
-                    if (eg->is_scratch())
+                string st_name = st->_get_name();
+                os << "  auto " << st_name << " = std::make_shared<Stage>(this, \"" <<
+                    st_name << "\");\n";
+                for (auto& b : st->get_bundles()) {
+                    if (b->is_scratch())
                         continue;
-                    string eg_name = eg->_get_name();
-                    os << "  " << bp_name << "->push_back(&" << eg_name << ");\n";
+                    string b_name = b->_get_name();
+                    os << "  " << st_name << "->push_back(&" << b_name << ");\n";
                 }
-                os << "  st_stages.push_back(" << bp_name << ");\n";
+                os << "  st_stages.push_back(" << st_name << ");\n";
             }
 
             os << "\n // Alloc core on offload device.\n"

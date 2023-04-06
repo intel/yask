@@ -198,14 +198,16 @@ namespace yask {
         return true;
     }
 
-    // Update halos based on halo in 'other' var.
-    // This var's halos can only be increased.
-    void Var::update_halo(const Var& other) {
+    // Update halos and L1 dist based on those in 'other' var.
+    // Halos are updated at corresponding stages, L-R sides, and steps.
+    // This var's halos and L1 dist can only be increased.
+    bool Var::update_halo(const Var& other) {
         assert(are_dims_same(other));
+        bool changed = false;
 
         // Loop thru other var's halo values.
         for (auto& hi : other._halos) {
-            auto& pname = hi.first;
+            auto& stname = hi.first;
             auto& h2 = hi.second;
             for (auto& i0 : h2) {
                 auto& left = i0.first;
@@ -216,18 +218,22 @@ namespace yask {
                     for (auto& dim : ohalos) {
                         auto& dname = dim._get_name();
                         auto& val = dim.get_val();
-                        
-                        // Any existing value?
-                        auto& halos = _halos[pname][left][step];
+
+                        // Any existing value in this var?
+                        auto& halos = _halos[stname][left][step];
                         auto* p = halos.lookup(dname);
 
                         // If not, add this one.
-                        if (!p)
+                        if (!p) {
                             halos.add_dim_back(dname, val);
+                            changed = true;
+                        }
 
                         // Keep larger value.
-                        else if (val > *p)
+                        else if (val > *p) {
                             *p = val;
+                            changed = true;
+                        }
 
                         // Else, current value is larger than val, so don't update.
                     }
@@ -235,12 +241,14 @@ namespace yask {
             }
         }
         update_l1_dist(other._l1_dist);
+        return changed;
     }
 
     // Update halos based on each value in 'offsets' in some
     // read or write to this var.
     // This var's halos can only be increased.
-    void Var::update_halo(const string& stage_name, const IntTuple& offsets) {
+    bool Var::update_halo(const string& stage_name, const IntTuple& offsets) {
+        bool changed = false;
 
         // Find step value or use 0 if none.
         int step_val = 0;
@@ -276,18 +284,24 @@ namespace yask {
             auto* p = halos.lookup(dname);
 
             // If not, add this one.
-            if (!p)
+            if (!p) {
                 halos.add_dim_back(dname, val);
+                changed = true;
+            }
 
             // Keep larger value.
-            else if (val > *p)
+            else if (val > *p) {
                 *p = val;
+                changed = true;
+            }
 
             // Else, current value is larger than val, so don't update.
         }
 
         // Update L1.
         update_l1_dist(l1_dist);
+
+        return changed;
     }
 
     // Update write stages and offsets.
@@ -342,6 +356,9 @@ namespace yask {
         for (auto& hi : _halos) {
             auto& stage_name = hi.first;
             auto& h2 = hi.second;
+            #ifdef DEBUG_HALOS
+            cout << "* var " << get_name() << " in " << stage_name << endl;
+            #endif
 
             // Written?
             bool is_written = false;
@@ -366,10 +383,6 @@ namespace yask {
 
                     // Any existing value?
                     if (halo.size()) {
-#ifdef DEBUG_HALOS
-                        cout << "** var " << _name << " has halo " << halo.make_dim_val_str() <<
-                            " at ofs " << ofs << " in stage " << stage_name << endl;
-#endif
 
                         // Update vars.
                         if (first_ofs == unset)
@@ -381,10 +394,11 @@ namespace yask {
                     }
                 }
             }
-#ifdef DEBUG_HALOS
-            cout << "** var " << _name << " has halos from " << first_ofs <<
-                " to " << last_ofs << " in stage " << pname << endl;
-#endif
+            #ifdef DEBUG_HALOS
+            print_halos(cout, "** ");
+            cout << "*** halo range: [" << first_ofs <<
+                "..." << last_ofs << "] in stage " << stage_name << endl;
+            #endif
 
             // Only need to process if >1 offset.
             if (last_ofs != unset && first_ofs != unset && last_ofs != first_ofs) {
@@ -393,6 +407,9 @@ namespace yask {
                 // For example, if equation touches 't-1' through 't+2',
                 // 'sz' is 4.
                 int sz = last_ofs - first_ofs + 1;
+                #ifdef DEBUG_HALOS
+                cout << "*** initial sz = " << sz << endl;
+                #endif
 
                 // Check for possible writeback.
                 if (is_written) {
@@ -420,6 +437,9 @@ namespace yask {
                             sdi.writeback_ofs[stage_name] = last_ofs; // replace lowest read.
                         else
                             assert("write ofs is neither first or last");
+                        #ifdef DEBUG_HALOS
+                        cout << "*** optimized sz = " << sz << endl;
+                        #endif
                     }
                 }
 
@@ -428,6 +448,9 @@ namespace yask {
             }
 
         } // stages.
+        #ifdef DEBUG_HALOS
+        cout << "* final sz = " << sz << endl;
+        #endif
 
         // Override by API.
         if (_step_alloc > 0)

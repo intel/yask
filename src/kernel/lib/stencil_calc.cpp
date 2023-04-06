@@ -356,7 +356,7 @@ namespace yask {
         for (auto* sv : output_scratch_vecs) {
             assert(sv);
 
-            // Make sure vars exist.
+            // Make sure vars exist; only need for one thread.
             if (sv->size() == 0)
                 _context->make_scratch_vars(1);
 
@@ -386,10 +386,10 @@ namespace yask {
                 }
             }
         } // output vars.
-    }
+    }     // find_write_halos.
     
     // Only for scratch bundles.
-    // Expand begin & end of 'idxs' by sizes of halos.
+    // Expand begin & end of 'idxs' by sizes of write halos.
     // Stride indices may also change.
     // NB: it is not necessary that the domain of each var
     // is the same as the span of 'idxs'. However, it should be
@@ -413,35 +413,32 @@ namespace yask {
         // i: index for stencil dims, j: index for domain dims.
         DOMAIN_VAR_LOOP(i, j) {
         
+            // Adjust begin & end scan indices based on write halos.
+            idx_t ab = idxs.begin[i] - max_lh[j];
+            idx_t ae = idxs.end[i] + max_rh[j];
+
+            #if 1
             // Round up halos to vector sizes.
             // TODO: consider cluster sizes, but need to make changes
             // elsewhere in code.
-            idx_t lh = ROUND_UP(max_lh[j], fold_pts[j]);
-            idx_t rh = ROUND_UP(max_rh[j], fold_pts[j]);
+            ab = round_down_flr(ab, fold_pts[j]);
+            ae = round_up_flr(ae, fold_pts[j]);
+            #endif
 
-            // Adjust begin & end scan indices based on halos.
-            adj_idxs.begin[i] = idxs.begin[i] - lh;
-            adj_idxs.end[i] = idxs.end[i] + rh;
-            
-            // If existing stride is >= whole tile, adjust it also.
+            adj_idxs.begin[i] = ab;
+            adj_idxs.end[i] = ae;
+
+            // If existing stride is >= whole tile, adjust new stride also.
             idx_t width = idxs.end[i] - idxs.begin[i];
             if (idxs.stride[i] >= width) {
-                idx_t adj_width = adj_idxs.end[i] - adj_idxs.begin[i];
+                idx_t adj_width = ae - ab;
                 adj_idxs.stride[i] = adj_width;
             }
 
             auto& dim = dims->_domain_dims.get_dim(j);
             auto& dname = dim._get_name();
 
-            TRACE_MSG("micro-blk [" <<
-                      idxs.begin[i] << "..." <<
-                      idxs.end[i] << ") adjusted to [" <<
-                      adj_idxs.begin[i] << "..." <<
-                      adj_idxs.end[i] << " by " <<
-                      adj_idxs.stride[i] << ") in dim '" << dname <<
-                      "' of scratch-bundle '" << get_name() << "'");
-
-            // Make sure vars cover index bounds.
+            // Make sure size of scratch vars cover new index bounds.
             #ifdef CHECK
             for (auto* sv : output_scratch_vecs) {
                 assert(sv);
@@ -455,15 +452,20 @@ namespace yask {
                 int posn = gb.get_dim_posn(dname);
                 if (posn >= 0) {
                     
-                    TRACE_MSG("checking scratch-var '" <<
+                    TRACE_MSG("checking micro-blk adjusted from [" <<
+                              idxs.begin[i] << "..." <<
+                              idxs.end[i] << ") to [" <<
+                              adj_idxs.begin[i] << "..." <<
+                              adj_idxs.end[i] << ") by " <<
+                              adj_idxs.stride[i] <<" against scratch-var '" <<
                               gp->get_name() << "' with halos " <<
                               gp->get_left_halo_size(posn) << " and " <<
                               gp->get_right_halo_size(posn) << " allocated [" <<
                               gp->get_first_local_index(posn) << "..." <<
                               gp->get_last_local_index(posn) << "] in dim '" << dname << "'");
+                    assert(ab >= gp->get_first_local_index(posn));
+                    assert(ae <= gp->get_last_local_index(posn) + 1);
                 }
-                assert(adj_idxs.begin[i] >= gp->get_first_local_index(posn));
-                assert(adj_idxs.end[i] <= gp->get_last_local_index(posn) + 1);
             }
             #endif // check.
 
