@@ -75,8 +75,8 @@ namespace yask {
         end.set_vals(rank_bb.bb_end_tuple(domain_dims), false);
         end[step_dim] = end_t;
 
-        TRACE_MSG("run_ref: [" << begin.make_dim_val_str() << " ... " <<
-                  end.make_dim_val_str() << ")");
+        TRACE_MSG("range: [{" << begin.make_dim_val_str() << "}...{" <<
+                  end.make_dim_val_str() << "})");
 
         // Force sub-sizes to whole rank size so that scratch
         // vars will be large enough. Turn off any temporal blocking.
@@ -139,12 +139,12 @@ namespace yask {
             for (auto* asg : st_bundles) {
 
                 // Scan through n-D space.
-                TRACE_MSG("run_ref: step " << start_t <<
+                TRACE_MSG("step " << start_t <<
                           " in non-scratch bundle '" << asg->get_name());
 
                 // Check step.
                 if (!asg->is_in_valid_step(start_t)) {
-                    TRACE_MSG("run_ref: not valid for step " << start_t);
+                    TRACE_MSG("not valid for step " << start_t);
                     continue;
                 }
 
@@ -164,12 +164,12 @@ namespace yask {
 
                     // Adjust for scratch vars.
                     if (sg->is_scratch())
-                        misc_idxs = sg->adjust_span(scratch_var_idx, rank_idxs,
-                                                    *actl_opts);
+                        misc_idxs = sg->adjust_scratch_span(scratch_var_idx, rank_idxs,
+                                                            *actl_opts);
                     misc_idxs.stride.set_from_const(1); // ensure unit stride.
 
                     // Scan through n-D space.
-                    TRACE_MSG("run_ref: step " << start_t <<
+                    TRACE_MSG("step " << start_t <<
                               " in bundle '" << sg->get_name() << "': " <<
                               misc_idxs.make_range_str(true));
                     sg->calc_in_domain(scratch_var_idx, misc_idxs);
@@ -636,7 +636,7 @@ namespace yask {
                                          const ScanIndices& rank_idxs,
                                          MpiSection& mpisec) {
         STATE_VARS(this);
-        TRACE_MSG("calc_mega_block: mega-block " <<
+        TRACE_MSG("mega-block " <<
                   rank_idxs.make_range_str(false) <<
                   " within possibly-adjusted rank " <<
                   rank_idxs.make_range_str(true) <<
@@ -758,7 +758,7 @@ namespace yask {
             // If using TB, iterate thru steps in a WF and stages in calc_block().
             else {
 
-                TRACE_MSG("calc_mega_block: w/TB in step(s) [" <<
+                TRACE_MSG("w/TB in step(s) [" <<
                           start_t << " ... " << stop_t << ")");
 
                 // Null ptr => Eval all stages each time
@@ -860,7 +860,7 @@ namespace yask {
         STATE_VARS(this);
         auto* bp = sel_bp.get();
         int outer_thread_idx = omp_get_thread_num();
-        TRACE_MSG("calc_block: phase " << phase << ", block " <<
+        TRACE_MSG("phase " << phase << ", block " <<
                   mega_block_idxs.make_range_str(false) <<
                   " within mega-block " <<
                   mega_block_idxs.make_range_str(true) <<
@@ -977,7 +977,7 @@ namespace yask {
             adj_block_idxs.adjust_from_settings(actl_opts->_block_sizes,
                                                 actl_opts->_block_tile_sizes,
                                                 actl_opts->_micro_block_sizes);
-            TRACE_MSG("calc_block: phase " << phase <<
+            TRACE_MSG("phase " << phase <<
                       ", adjusted block " <<
                       adj_block_idxs.make_range_str(true));
 
@@ -1017,12 +1017,12 @@ namespace yask {
         } // TB.
     } // calc_block().
 
-    // Calculate results within a micro-block.
-    // This function calls 'StencilBundleBase::calc_micro_block()'
-    // for each bundle in the specified stage or all stages if 'sel_bp' is
-    // null. When using TB, only the 'shape' needed for the tesselation
-    // 'phase' are computed. The starting 'shift_num' is relative
-    // to the bottom of the current mega-block and block.
+    // Calculate results within a micro-block.  This function calls
+    // 'StencilBundleBase::calc_micro_block()' for each bundle in the
+    // specified stage or all stages if 'sel_bp' is null. When using TB,
+    // only the points in the 'shape' needed for the tesselation 'phase' are
+    // computed. The starting 'shift_num' is relative to the bottom of the
+    // current mega-block and block.
     void StencilContext::calc_micro_block(int outer_thread_idx,
                                           StagePtr& sel_bp,
                                           idx_t mega_block_shift_num,
@@ -1036,7 +1036,7 @@ namespace yask {
                                           MpiSection& mpisec) {
 
         STATE_VARS(this);
-        TRACE_MSG("calc_micro_block: phase " << phase <<
+        TRACE_MSG("phase " << phase <<
                   ", shape " << shape <<
                   ", micro-block " <<
                   adj_block_idxs.make_range_str(false) <<
@@ -1076,7 +1076,7 @@ namespace yask {
             const idx_t stop_t = (stride_t > 0) ?
                 min(start_t + stride_t, end_t) :
                 max(start_t + stride_t, end_t);
-            TRACE_MSG("calc_micro_block: phase " << phase <<
+            TRACE_MSG("phase " << phase <<
                       ", shape " << shape <<
                       ", in step " << start_t);
             assert(abs(stop_t - start_t) == 1); // no more TB.
@@ -1097,12 +1097,12 @@ namespace yask {
 
                 // Check step.
                 if (!bp->is_in_valid_step(start_t)) {
-                    TRACE_MSG("calc_micro_block: step " << start_t <<
+                    TRACE_MSG("step " << start_t <<
                               " not valid for stage '" <<
                               bp->get_name() << "'");
                     continue;
                 }
-                TRACE_MSG("calc_micro_block: phase " << phase <<
+                TRACE_MSG("phase " << phase <<
                           ", shape " << shape <<
                           ", step " << start_t <<
                           ", stage '" << bp->get_name() <<
@@ -1345,7 +1345,7 @@ namespace yask {
             idxs.begin[i] = rstart;
             idxs.end[i] = rstop;
         }
-        TRACE_MSG("shift_mega_block: updated span: " <<
+        TRACE_MSG("updated span: " <<
                   idxs.make_range_str(true) <<
                   " for " << mpisec.make_descr() << 
                   " within mega-block base [{" <<
@@ -1444,7 +1444,7 @@ namespace yask {
             // Use list of dims to bridge for this shape
             // computed earlier.
             if (phase > 0 && is_bit_set(bridge_mask, j)) {
-                TRACE_MSG("shift_micro_block: phase " << phase <<
+                TRACE_MSG("phase " << phase <<
                           ", shape " << shape <<
                           ": bridging dim " << j);
 
@@ -1508,7 +1508,7 @@ namespace yask {
 
         } // dims.
 
-        TRACE_MSG("shift_micro_block: phase " << phase << "/" << nphases <<
+        TRACE_MSG("phase " << phase << "/" << nphases <<
                   ", shape " << shape << "/" << nshapes <<
                   ", updated span: " <<
                   idxs.make_range_str(true) << " ... " <<

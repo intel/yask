@@ -42,7 +42,7 @@ namespace yask {
                                              const ScanIndices& micro_block_idxs,
                                              MpiSection& mpisec) {
         STATE_VARS(this);
-        TRACE_MSG("calculating micro-block in '" << get_name() << "': " <<
+        TRACE_MSG("in '" << get_name() << "': " <<
                   micro_block_idxs.make_range_str(true) <<
                   " via outer thread " << outer_thread_idx);
         assert(!is_scratch());
@@ -74,7 +74,7 @@ namespace yask {
         // Loop through each solid BB for this non-scratch bundle.
         // For each BB, calc intersection between it and current 'micro_block_idxs'.
         // If this is non-empty, apply the bundle to all its required nano-blocks.
-        TRACE_MSG("checking " << _bb_list.size() << " full BB(s)");
+        TRACE_MSG("checking " << _bb_list.size() << " full non-scratch BB(s)");
         int bbn = 0;
   	for (auto& bb : _bb_list) {
             bbn++;
@@ -125,12 +125,13 @@ namespace yask {
                               sg->get_name() << "'");
                     continue;
                 }
+                TRACE_MSG("processing reqd bundle '" << sg->get_name() << "'");
                 
                 // For scratch-vars, expand indices based on halo.
                 ScanIndices mb_idxs2(mb_idxs1);
                 if (is_scratch)
-                    mb_idxs2 = sg->adjust_span(outer_thread_idx, mb_idxs1,
-                                               settings);
+                    mb_idxs2 = sg->adjust_scratch_span(outer_thread_idx, mb_idxs2,
+                                                       settings);
 
                 // Loop through all the full BBs in this bundle.
                 auto fbbs = sg->get_bbs();
@@ -387,9 +388,9 @@ namespace yask {
     // its halo sizes are still used to specify how much to
     // add to 'idxs'.
     // Returns adjusted indices.
-    ScanIndices StencilBundleBase::adjust_span(int outer_thread_idx,
-                                               const ScanIndices& idxs,
-                                               KernelSettings& settings) const {
+    ScanIndices StencilBundleBase::adjust_scratch_span(int outer_thread_idx,
+                                                       const ScanIndices& idxs,
+                                                       KernelSettings& settings) const {
         assert(is_scratch());
         STATE_VARS(this);
         assert(max_lh.get_num_dims() == NUM_DOMAIN_DIMS);
@@ -410,14 +411,17 @@ namespace yask {
             // Round up halos to vector sizes.  This is to [try to] avoid
             // costly masking around edges of scratch write area. For
             // scratch vars, it won't hurt to calculate extra values outside
-            // of the write area because those values should never be
-            // used. Just have to be careful to allocate enough memory in
+            // of the min write area because those values should never be
+            // used.  Rounding must be be rank-local, so rounding is after
+            // by subtracting rank offsets, and then they are re-added.  Be
+            // careful to allocate enough memory in
             // StencilContext::alloc_scratch_data().  NB: When a scratch var
-            // has domain conditions, this won't always work.  TODO:
-            // consider cluster sizes, but need to make changes elsewhere in
-            // code.
-            ab = round_down_flr(ab, fold_pts[j]);
-            ae = round_up_flr(ae, fold_pts[j]);
+            // has domain conditions, this won't always succeed in reducing
+            // masking.  TODO: consider cluster sizes, but need to make
+            // changes elsewhere in code, e.g., in allocation.
+            idx_t ro = _context->rank_domain_offsets[j];
+            ab = round_down_flr(ab - ro, fold_pts[j]) + ro;
+            ae = round_up_flr(ae - ro, fold_pts[j]) + ro;
             #endif
 
             adj_idxs.begin[i] = ab;
@@ -432,6 +436,7 @@ namespace yask {
             auto& dname = dim._get_name();
 
             // Make sure size of scratch vars cover new index bounds.
+            // TODO: check size of input vars, incl. read halos.
             #ifdef CHECK
             for (auto* sv : output_scratch_vecs) {
                 assert(sv);
@@ -465,7 +470,7 @@ namespace yask {
         } // dims.
         
         return adj_idxs;
-    } // adjust_span().
+    } // adjust_scratch_span().
     
     // Timer methods.
     // Start and stop stage timers for final stats and track steps done.

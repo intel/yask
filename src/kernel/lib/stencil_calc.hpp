@@ -146,13 +146,13 @@ namespace yask {
         // Determine max write halos.
         void find_write_halos();
 
-        // If this bundle is updating scratch var(s),
+        // For scratch bundle,
         // expand indices to calculate values in scratch-halo.
         // Adjust offsets in vars based on original idxs.
         // Return adjusted indices.
-        ScanIndices adjust_span(int thread_idx,
-                                const ScanIndices& idxs,
-                                KernelSettings& settings) const;
+        ScanIndices adjust_scratch_span(int thread_idx,
+                                        const ScanIndices& idxs,
+                                        KernelSettings& settings) const;
 
         // Set the bounding-box vars for this bundle in this rank.
         // This includes the overall-BB and the constituent full-BBs.
@@ -380,7 +380,7 @@ namespace yask {
                            KernelSettings& settings,
                            const ScanIndices& micro_block_idxs) {
             STATE_VARS(this);
-            TRACE_MSG("calc_nano_block_dbg for bundle '" << get_name() << "': " <<
+            TRACE_MSG("for bundle '" << get_name() << "': " <<
                       micro_block_idxs.make_range_str(false) <<
                       " via outer thread " << outer_thread_idx <<
                       " and inner thread " << inner_thread_idx);
@@ -440,7 +440,7 @@ namespace yask {
                            KernelSettings& settings,
                            const ScanIndices& micro_block_idxs) {
             STATE_VARS(this);
-            TRACE_MSG("calc_nano_block_opt for bundle '" << get_name() << "': " <<
+            TRACE_MSG("for bundle '" << get_name() << "': " <<
                       micro_block_idxs.make_range_str(false) <<
                       " via outer thread " << outer_thread_idx <<
                       " and inner thread " << inner_thread_idx);
@@ -872,7 +872,7 @@ namespace yask {
                                             pv_needed = false;
                                     }
                                     #ifdef TRACE
-                                    if (descr.length())
+                                    if (nsel > 0)
                                         descr += " & ";
                                     descr += std::string(is_left ? "left" : "right") + "-" +
                                         domain_dims.get_dim_name(j);
