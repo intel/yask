@@ -549,7 +549,8 @@ namespace yask {
         // Temporarily ignore step conditions to force eval of conditional
         // bundles.  NB: may affect perf, e.g., if stages A and B run in
         // AAABAAAB sequence, perf may be [very] different if run as
-        // ABABAB..., esp. w/temporal tiling.  TODO: work around this.
+        // ABABAB..., esp. w/temporal tiling.  TODO: work around this or
+        // at least provide a cmd-line option.
         check_step_conds = false;
 
         // Init tuners.
