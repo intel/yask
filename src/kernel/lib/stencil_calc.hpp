@@ -872,7 +872,7 @@ namespace yask {
                                             pv_needed = false;
                                     }
                                     #ifdef TRACE
-                                    if (nsel > 0)
+                                    if (nsel > 1)
                                         descr += " & ";
                                     descr += std::string(is_left ? "left" : "right") + "-" +
                                         domain_dims.get_dim_name(j);
