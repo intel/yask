@@ -652,12 +652,12 @@ namespace yask {
             sp->init_work_stats();
     }
 
-    // Set non-scratch var sizes and offsets based on settings.
-    // Set wave-front settings.
-    // This should be called anytime a setting or rank offset is changed.
+    // Set non-scratch var sizes and offsets based on settings.  Set
+    // wave-front settings.  This should be called anytime a relevant
+    // setting or rank offset is changed.
     void StencilContext::update_var_info(bool force) {
         STATE_VARS(this);
-        TRACE_MSG("update_var_info(" << force << ")...");
+        TRACE_MSG(force);
 
         // If we haven't finished constructing the context, it's too early
         // to do this.
@@ -854,7 +854,7 @@ namespace yask {
     // all stages always done.
     void StencilContext::update_tb_info() {
         STATE_VARS(this);
-        TRACE_MSG("update_tb_info()...");
+        TRACE_MSG("...");
 
         // Get requested size.
         tb_steps = actl_opts->_block_sizes[step_dim];

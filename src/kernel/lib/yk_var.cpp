@@ -374,14 +374,14 @@ namespace yask {
         if (state->_env->_trace) {
             string new_info = make_info_string(true);
             if (old_info != new_info)
-                TRACE_MSG("resize: FROM " << old_info << " TO " << new_info);
+                TRACE_MSG("FROM " << old_info << " TO " << new_info);
         }
 #endif
 
         // Copy changes to device.
         // TODO: do this only when needed.
         sync_core();
-    }
+    } // resize.
 
     // Check whether dim is used and of allowed type.
     void YkVarBase::check_dim_type(const std::string& dim,
@@ -568,7 +568,7 @@ namespace yask {
             else if (t > get_last_local_index(step_posn))
                 _corep->_local_offsets[step_posn] = t - _corep->_domains[step_posn] + 1;
 
-            TRACE_MSG("update_valid_step(" << t << "): valid step(s) in '" <<
+            TRACE_MSG("after updating at " << t << ", valid step(s) in '" <<
                       get_name() << "' are now [" << get_first_local_index(step_posn) <<
                       " ... " << get_last_local_index(step_posn) << "]");
         }
