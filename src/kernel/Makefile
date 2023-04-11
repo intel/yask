@@ -704,11 +704,12 @@ $(YK_CODE_FILE): $(YC_EXEC)
 	@- $(INDENT) $@
 
 # Pre-process the stencil code to create the context code.
-# This adds the nano- and pico-loop code to make it easier for humans
-# and performance tools to parse.
+# This adds the nano- and pico-loop code to make it easier for humans,
+# debug tools, and performance tools to understand.
 $(YK_SOLUTION_FILE): $(YK_CODE_FILE) $(YK_LOOP_FILES)
-	g++ -E -CC $(YK_CXX_INCFLAGS) $(YK_MACROS) -DDEFINE_SOLUTION $(YK_CODE_FILE) \
-	  | $(PERL) -n -e '$$start=1 if /Automatic/; print if $$start && !/^#/' > $@
+	$(BASH) -o pipefail -c \
+	  "g++ -E -CC $(YK_CXX_INCFLAGS) $(YK_MACROS) -DDEFINE_SOLUTION $(YK_CODE_FILE) \
+	    | $(PERL) -n -e '\$$start=1 if /Automatically-generated/; print if \$$start && !/^#/' > $@"
 	@- $(INDENT) $@
 
 headers: $(YK_GEN_HEADERS)
