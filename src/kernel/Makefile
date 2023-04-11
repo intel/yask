@@ -411,7 +411,10 @@ cxx_is_gnu	:= 	$(call MACRO_DEF,$(YK_CXX_TEST),__GNUC__)
 # LLVM-based Intel compiler (icpx).
 ifeq ($(cxx_is_llvm_intel),1)
  YK_CXXFLAGS	+=	$(GXX_ISA) $(ICC_ISA)
- YK_CXXDBG	+=	-gline-tables-only -fdebug-info-for-profiling
+ ifeq ($(check),0)
+  YK_CXXDBG	+=	-gline-tables-only
+ endif
+ YK_CXXDBG	+=	-fdebug-info-for-profiling
  YK_CXXFLAGS	+=	-ansi-alias \
 			-fimf-precision=low -fp-model fast -fimf-domain-exclusion=none -fma
  YK_CXXWARN	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable \
