@@ -76,12 +76,18 @@ namespace yask {
         inline IdxTuple bb_len_tuple(const IdxTuple& ddims) const {
             return bb_len.make_tuple(ddims);
         }
+        std::string make_len_string(const IdxTuple& ddims) const {
+            return bb_len_tuple(ddims).make_dim_val_str(" * ");
+        }
         std::string make_range_string(const IdxTuple& ddims) const {
             return bb_begin_tuple(ddims).make_dim_val_str() +
                 " ... " + bb_end_tuple(ddims).sub_elements(1).make_dim_val_str();
         }
-        std::string make_len_string(const IdxTuple& ddims) const {
-            return bb_len_tuple(ddims).make_dim_val_str(" * ");
+        std::string make_range_str_dbg(const IdxTuple& ddims) const {
+            return std::string("(") + make_len_string(ddims) + ") = " +
+                std::to_string(bb_end.sub_elements(bb_begin).max_const(0).product()) +
+                " at [{" + bb_begin_tuple(ddims).make_dim_val_str() +
+                "}...{" + bb_end_tuple(ddims).make_dim_val_str() + "})";
         }
 
         // Calc values and set valid to true.

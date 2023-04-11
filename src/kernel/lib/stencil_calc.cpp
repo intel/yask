@@ -40,7 +40,8 @@ namespace yask {
     void StencilBundleBase::calc_micro_block(int outer_thread_idx,
                                              KernelSettings& settings,
                                              const ScanIndices& micro_block_idxs,
-                                             MpiSection& mpisec) {
+                                             MpiSection& mpisec,
+                                             StencilBundleSet& bundles_done) {
         STATE_VARS(this);
         TRACE_MSG("in '" << get_name() << "': " <<
                   micro_block_idxs.make_range_str(true) <<
@@ -58,8 +59,6 @@ namespace yask {
             return;
         }
 
-        // TODO: if >1 BB, check limits of outer one first to save time.
-
         // Set number of threads in this block.
         // This will be the number of nano-blocks done in parallel.
         int nbt = _context->set_num_inner_threads();
@@ -71,197 +70,127 @@ namespace yask {
         int bind_posn = settings._bind_posn;
         idx_t bind_slab_pts = settings._nano_block_sizes[bind_posn]; // Other sizes not used.
 
-        // Loop through each solid BB for this non-scratch bundle.
-        // For each BB, calc intersection between it and current 'micro_block_idxs'.
-        // If this is non-empty, apply the bundle to all its required nano-blocks.
-        TRACE_MSG("checking " << _bb_list.size() << " full non-scratch BB(s)");
-        int bbn = 0;
-  	for (auto& bb : _bb_list) {
-            bbn++;
-            bool bb_ok = bb.bb_num_points > 0;
+        // Get the bundles that need to be processed in
+        // this block. This will be any prerequisite scratch-var
+        // bundles plus the current non-scratch bundle.
+        auto sg_list = get_reqd_bundles();
 
-            // Trim the micro-block indices based on the bounding box(es)
-            // for this bundle.
-            ScanIndices mb_idxs1(micro_block_idxs);
-            DOMAIN_VAR_LOOP_FAST(i, j) {
+        // Loop through all the needed bundles.
+        for (auto* sg : sg_list) {
+            TRACE_MSG("processing reqd bundle '" << sg->get_name() << "'");
+            bool is_scratch = sg->is_scratch();
 
-                // Begin point.
-                auto bbegin = max(micro_block_idxs.begin[i], bb.bb_begin[j]);
-                mb_idxs1.begin[i] = bbegin;
+            // Check step.
+            if (!sg->is_in_valid_step(t)) {
+                TRACE_MSG("step " << t <<
+                          " not valid for reqd bundle '" <<
+                          sg->get_name() << "'");
+                continue;
+            }
 
-                // End point.
-                auto bend = min(micro_block_idxs.end[i], bb.bb_end[j]);
-                mb_idxs1.end[i] = bend;
+            // Already done?  This is tracked across calls to this func
+            // because >1 non-scratch bundle in a stage can depend on the
+            // same scratch bundle(s). This is also the reason we don't trim
+            // the scratch bundle(s) to the BB(s) of the non-scratch
+            // bundle(s) that they depend on: the non-scratch bundles may be
+            // used by >1 non-scratch bundles with different BBs.
+            if (bundles_done.count(sg)) {
+                TRACE_MSG("already done for this micro-blk");
+                continue;
+            }
+            bundles_done.insert(sg);
+            
+            // For scratch-vars, expand indices based on halo.
+            ScanIndices mb_idxs2(micro_block_idxs);
+            if (is_scratch) {
+                mb_idxs2 = sg->adjust_scratch_span(outer_thread_idx, mb_idxs2,
+                                                   settings);
+                TRACE_MSG("micro-block adjusted to " << mb_idxs2.make_range_str(true));
+            }
 
-                // Anything to do?
-                if (bend <= bbegin) {
-                    bb_ok = false;
-                    break;
+            // Loop through all the full BBs in this reqd bundle.
+            TRACE_MSG("checking " << sg->get_bbs().size() <<
+                      " full BB(s) for reqd bundle '" << sg->get_name() << "'");
+            auto fbbs = sg->get_bbs();
+            int fbbn = 0;
+            for (auto& fbb : fbbs) {
+                fbbn++;
+                TRACE_MSG("reqd BB " << fbbn << ": " << fbb.make_range_str_dbg(domain_dims));
+
+                // Find intersection between full BB and 'mb_idxs2'.
+                ScanIndices mb_idxs3(mb_idxs2);
+                bool fbb_ok = fbb.bb_num_points > 0;
+                DOMAIN_VAR_LOOP_FAST(i, j) {
+
+                    // Begin point.
+                    auto bbegin = max(mb_idxs2.begin[i], fbb.bb_begin[j]);
+                    mb_idxs3.begin[i] = bbegin;
+
+                    // End point.
+                    auto bend = min(mb_idxs2.end[i], fbb.bb_end[j]);
+                    mb_idxs3.end[i] = bend;
+
+                    // Anything to do?
+                    if (bend <= bbegin)
+                        fbb_ok = false;
                 }
-            }
-
-            // nothing to do?
-            if (!bb_ok) {
-                TRACE_MSG("no overlap between bundle " << bbn << " and current micro-block");
-                continue; // to next full BB.
-            }
-
-            TRACE_MSG("after trimming for BB " << bbn << ": " <<
-                      mb_idxs1.make_range_str(true));
-
-            // Get the bundles that need to be processed in
-            // this block. This will be any prerequisite scratch-var
-            // bundles plus the current non-scratch bundle.
-            auto sg_list = get_reqd_bundles();
-
-            // Loop through all the needed bundles.
-            for (auto* sg : sg_list) {
-                bool is_scratch = sg->is_scratch();
-
-                // Check step.
-                if (!sg->is_in_valid_step(t)) {
-                    TRACE_MSG("step " << t <<
-                              " not valid for reqd bundle '" <<
-                              sg->get_name() << "'");
+                if (!fbb_ok) {
+                    TRACE_MSG("full reqd BB " << fbbn << " is empty");
                     continue;
                 }
-                TRACE_MSG("processing reqd bundle '" << sg->get_name() << "'");
-                
-                // For scratch-vars, expand indices based on halo.
-                ScanIndices mb_idxs2(mb_idxs1);
-                if (is_scratch)
-                    mb_idxs2 = sg->adjust_scratch_span(outer_thread_idx, mb_idxs2,
-                                                       settings);
+                TRACE_MSG("micro-block trimmed to " <<
+                          mb_idxs3.make_range_str(true));
 
-                // Loop through all the full BBs in this bundle.
-                auto fbbs = sg->get_bbs();
-                int fbbn = 0;
-                for (auto& fbb : fbbs) {
-                    fbbn++;
+                ///// Bounds set for this BB; ready to evaluate it.
 
-                    // If this is the non-scratch bundle, we only want the
-                    // one from above.
-                    ScanIndices mb_idxs3(mb_idxs2);
-                    if (!is_scratch && fbb != bb) {
-                        TRACE_MSG("full BB " << fbbn << " in reqd bundle '" <<
-                                  sg->get_name() << "' isn't needed");
-                        continue;
-                    }
+                // If binding threads to data.
+                if (bind_threads) {
 
-                    // For scratch vars, find intersection between BB and
-                    // 'mb_idxs2'.
-                    bool fbb_ok = fbb.bb_num_points > 0;
-                    if (is_scratch) {
-                        DOMAIN_VAR_LOOP_FAST(i, j) {
+                    // Tweak settings for adjusted indices.  This sets
+                    // up the nano-blocks as multiple slabs perpendicular
+                    // to the binding dim within the micro-block.
+                    DOMAIN_VAR_LOOP_FAST(i, j) {
 
-                            // Begin point.
-                            auto bbegin = max(mb_idxs2.begin[i], fbb.bb_begin[j]);
-                            mb_idxs3.begin[i] = bbegin;
-
-                            // End point.
-                            auto bend = min(mb_idxs2.end[i], fbb.bb_end[j]);
-                            mb_idxs3.end[i] = bend;
-
-                            // Anything to do?
-                            if (bend <= bbegin) {
-                                fbb_ok = false;
-                                break;
-                            }
-                        }
-                    }
-                    if (!fbb_ok) {
-                        TRACE_MSG("full BB " << fbbn << " in reqd bundle '" <<
-                                  sg->get_name() << "' is empty");
-                        continue;
-                    }
-                    TRACE_MSG("full BB " << fbbn << " in reqd bundle '" <<
-                              sg->get_name() << "' trimmed to " <<
-                              mb_idxs3.make_range_str(true));
-
-                    ///// Bounds set for this BB; ready to evaluate it.
-
-                    // If binding threads to data.
-                    if (bind_threads) {
-
-                        // Tweak settings for adjusted indices.  This sets
-                        // up the nano-blocks as multiple slabs perpendicular
-                        // to the binding dim within the micro-block.
-                        DOMAIN_VAR_LOOP_FAST(i, j) {
-
-                            // If this is the binding dim, set stride size
-                            // and alignment granularity to the slab
-                            // width. Setting the alignment keeps slabs
-                            // aligned between stages and/or steps.
-                            if (i == bind_posn) {
-                                mb_idxs3.stride[i] = bind_slab_pts;
-                                mb_idxs3.align[i] = bind_slab_pts;
-                            }
-
-                            // If this is not the binding dim, set stride
-                            // size to full width.  For now, this is the
-                            // only option for micro-block shapes when
-                            // binding.  TODO: consider other options.
-                            else
-                                mb_idxs3.stride[i] = mb_idxs3.get_overall_range(i);
+                        // If this is the binding dim, set stride size
+                        // and alignment granularity to the slab
+                        // width. Setting the alignment keeps slabs
+                        // aligned between stages and/or steps.
+                        if (i == bind_posn) {
+                            mb_idxs3.stride[i] = bind_slab_pts;
+                            mb_idxs3.align[i] = bind_slab_pts;
                         }
 
-                        TRACE_MSG("reqd bundle '" << sg->get_name() << "': " <<
-                                  mb_idxs3.make_range_str(true) <<
-                                  " via outer thread " << outer_thread_idx <<
-                                  " with " << nbt << " block thread(s) bound to data...");
+                        // If this is not the binding dim, set stride
+                        // size to full width.  For now, this is the
+                        // only option for micro-block shapes when
+                        // binding.  TODO: consider other options.
+                        else
+                            mb_idxs3.stride[i] = mb_idxs3.get_overall_range(i);
+                    }
 
-                        // Start threads within a block.  Each of these threads
-                        // will eventually work on a separate nano-block.  This
-                        // is nested within an OMP outer thread.
-                        _Pragma("omp parallel proc_bind(spread)") {
-                            assert(omp_get_level() == 2);
-                            assert(omp_get_num_threads() == nbt);
-                            int inner_thread_idx = omp_get_thread_num();
+                    TRACE_MSG("reqd bundle '" << sg->get_name() << "': " <<
+                              mb_idxs3.make_range_str(true) <<
+                              " via outer thread " << outer_thread_idx <<
+                              " with " << nbt << " block thread(s) bound to data...");
 
-                            // Run the micro-block loops on all block threads and
-                            // call calc_nano_block() only by the designated
-                            // thread for the given slab index in the binding
-                            // dim. This is an explicit replacement for "normal"
-                            // OpenMP scheduling.
+                    // Start threads within a block.  Each of these threads
+                    // will eventually work on a separate nano-block.  This
+                    // is nested within an OMP outer thread.
+                    _Pragma("omp parallel proc_bind(spread)") {
+                        assert(omp_get_level() == 2);
+                        assert(omp_get_num_threads() == nbt);
+                        int inner_thread_idx = omp_get_thread_num();
+
+                        // Run the micro-block loops on all block threads and
+                        // call calc_nano_block() only by the designated
+                        // thread for the given slab index in the binding
+                        // dim. This is an explicit replacement for "normal"
+                        // OpenMP scheduling.
                         
-                            // Disable the OpenMP construct in the micro-block loop
-                            // because we're already in the parallel section.
-                            #define MICRO_BLOCK_OMP_PRAGMA
+                        // Disable the OpenMP construct in the micro-block loop
+                        // because we're already in the parallel section.
+                        #define MICRO_BLOCK_OMP_PRAGMA
 
-                            // Loop prefix.
-                            #define MICRO_BLOCK_LOOP_INDICES mb_idxs3
-                            #define MICRO_BLOCK_BODY_INDICES nano_blk_range
-                            #define MICRO_BLOCK_USE_LOOP_PART_0
-                            #include "yask_micro_block_loops.hpp"
-
-                            // Loop body.
-                            const idx_t idx_ofs = 0x1000; // to help keep pattern when idx is neg.
-                            auto bind_elem_idx = nano_blk_range.start[bind_posn];
-                            auto bind_slab_idx = idiv_flr(bind_elem_idx + idx_ofs, bind_slab_pts);
-                            auto bind_thr = imod_flr<idx_t>(bind_slab_idx, nbt);
-                            if (inner_thread_idx == bind_thr)
-                                sg->calc_nano_block(outer_thread_idx, inner_thread_idx,
-                                                    settings, nano_blk_range);
-
-                            // Loop sufffix.
-                            #define MICRO_BLOCK_USE_LOOP_PART_1
-                            #include "yask_micro_block_loops.hpp"
-
-                        } // Parallel region.
-                    } // Binding threads to data.
-
-                    // If not binding or there is only one block per thread.
-                    // (This is the more common case.)
-                    else {
-
-                        TRACE_MSG("reqd bundle '" << sg->get_name() << "': " <<
-                                  mb_idxs3.make_range_str(true) << 
-                                  " via outer thread " << outer_thread_idx <<
-                                  " with " << nbt << " block thread(s) NOT bound to data...");
-
-                        // Call calc_nano_block() with a different thread for
-                        // each nano-block using standard OpenMP scheduling.
-                    
                         // Loop prefix.
                         #define MICRO_BLOCK_LOOP_INDICES mb_idxs3
                         #define MICRO_BLOCK_BODY_INDICES nano_blk_range
@@ -269,23 +198,56 @@ namespace yask {
                         #include "yask_micro_block_loops.hpp"
 
                         // Loop body.
-                        int inner_thread_idx = omp_get_thread_num();
-                        sg->calc_nano_block(outer_thread_idx, inner_thread_idx,
-                                            settings, nano_blk_range);
+                        const idx_t idx_ofs = 0x1000; // to help keep pattern when idx is neg.
+                        auto bind_elem_idx = nano_blk_range.start[bind_posn];
+                        auto bind_slab_idx = idiv_flr(bind_elem_idx + idx_ofs, bind_slab_pts);
+                        auto bind_thr = imod_flr<idx_t>(bind_slab_idx, nbt);
+                        if (inner_thread_idx == bind_thr)
+                            sg->calc_nano_block(outer_thread_idx, inner_thread_idx,
+                                                settings, nano_blk_range);
 
-                        // Loop suffix.
+                        // Loop sufffix.
                         #define MICRO_BLOCK_USE_LOOP_PART_1
                         #include "yask_micro_block_loops.hpp"
 
-                    } // OMP parallel when binding threads to data.
-                } // full BBs in this required bundle.
-            } // required bundles.
+                    } // Parallel region.
+                } // Binding threads to data.
 
-            // Mark exterior dirty for halo exchange if exterior was done.
-            bool mark_dirty = mpisec.do_mpi_left || mpisec.do_mpi_right;
-            update_var_info(YkVarBase::self, t, mark_dirty, true, false);
+                // If not binding or there is only one block per thread.
+                // (This is the more common case.)
+                else {
+
+                    TRACE_MSG("reqd bundle '" << sg->get_name() << "': " <<
+                              mb_idxs3.make_range_str(true) << 
+                              " via outer thread " << outer_thread_idx <<
+                              " with " << nbt << " block thread(s) NOT bound to data...");
+
+                    // Call calc_nano_block() with a different thread for
+                    // each nano-block using standard OpenMP scheduling.
+                    
+                    // Loop prefix.
+                    #define MICRO_BLOCK_LOOP_INDICES mb_idxs3
+                    #define MICRO_BLOCK_BODY_INDICES nano_blk_range
+                    #define MICRO_BLOCK_USE_LOOP_PART_0
+                    #include "yask_micro_block_loops.hpp"
+
+                    // Loop body.
+                    int inner_thread_idx = omp_get_thread_num();
+                    sg->calc_nano_block(outer_thread_idx, inner_thread_idx,
+                                        settings, nano_blk_range);
+
+                    // Loop suffix.
+                    #define MICRO_BLOCK_USE_LOOP_PART_1
+                    #include "yask_micro_block_loops.hpp"
+
+                } // OMP parallel when binding threads to data.
+            } // full BBs in this required bundle.
+        } // required bundles.
+
+        // Mark exterior dirty for halo exchange if exterior was done.
+        bool mark_dirty = mpisec.do_mpi_left || mpisec.do_mpi_right;
+        update_var_info(YkVarBase::self, t, mark_dirty, true, false);
             
-        } // BB list.
     } // calc_micro_block().
 
     // Mark vars dirty that are updated by this bundle and/or

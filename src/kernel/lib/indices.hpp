@@ -816,9 +816,11 @@ namespace yask {
     private:
         std::string _make_range_str(const Indices& b,
                                     const Indices& e) const {
-            auto range = e.sub_elements(b);
-            return std::string("{") +
-                range.make_val_str() + "} at [{" +
+            auto range = e.sub_elements(b).max_const(0);
+            auto num = range.product();
+            return std::string("(") +
+                range.make_val_str(" * ") + ") = " +
+                std::to_string(num) + " at [{" +
                 b.make_val_str() + "}...{" +
                 e.make_val_str() + "}) by {" +
                 stride.make_val_str() + "}";

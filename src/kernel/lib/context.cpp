@@ -1078,7 +1078,7 @@ namespace yask {
                 max(start_t + stride_t, end_t);
             TRACE_MSG("phase " << phase <<
                       ", shape " << shape <<
-                      ", in step " << start_t);
+                      ", step " << start_t);
             assert(abs(stop_t - start_t) == 1); // no more TB.
 
             // Set step indices that will pass through generated code.
@@ -1094,6 +1094,11 @@ namespace yask {
                 // Not a selected stage?
                 if (sel_bp && sel_bp != bp)
                     continue;
+                TRACE_MSG("phase " << phase <<
+                          ", shape " << shape <<
+                          ", step " << start_t <<
+                          ", stage '" << bp->get_name() <<
+                          "', shift-num " << shift_num);
 
                 // Check step.
                 if (!bp->is_in_valid_step(start_t)) {
@@ -1102,11 +1107,6 @@ namespace yask {
                               bp->get_name() << "'");
                     continue;
                 }
-                TRACE_MSG("phase " << phase <<
-                          ", shape " << shape <<
-                          ", step " << start_t <<
-                          ", stage '" << bp->get_name() <<
-                          "', shift-num " << shift_num);
 
                 // Start timers for this stage.  Tracking only on thread
                 // 0. TODO: track all threads and report cross-thread stats.
@@ -1155,9 +1155,13 @@ namespace yask {
                         update_scratch_var_info(outer_thread_idx, micro_block_idxs.begin);
 
                     // Call calc_micro_block() for each non-scratch bundle.
+                    // Keep track of reqd bundles that have been updated at the
+                    // current micro-blk idxs.
+                    StencilBundleSet bundles_done;
                     for (auto* sb : *bp)
                         if (sb->get_bb().bb_num_points)
-                            sb->calc_micro_block(outer_thread_idx, *actl_opts, micro_block_idxs, mpisec);
+                            sb->calc_micro_block(outer_thread_idx, *actl_opts, micro_block_idxs,
+                                                 mpisec, bundles_done);
 
                     // Make sure streaming stores are visible for later loads.
                     make_stores_visible();

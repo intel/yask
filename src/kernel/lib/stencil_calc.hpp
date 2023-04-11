@@ -171,7 +171,8 @@ namespace yask {
         calc_micro_block(int outer_thread_idx,
                          KernelSettings& settings,
                          const ScanIndices& micro_block_idxs,
-                         MpiSection& mpisec);
+                         MpiSection& mpisec,
+                         StencilBundleSet& bundles_done);
 
         // Mark vars dirty that are updated by this bundle and/or
         // update last valid step.

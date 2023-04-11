@@ -1339,15 +1339,15 @@ namespace yask {
         // Halo of u is 4 + 2 = 6.
         // Or, u(t+1,x) EQUALS u(t,(x+3)+1) + u(t,(x+4)+2) by subst.
         
-        // Algo: Keep a list of maps of shadow vars.
-        // Each map: key=real-var ptr, val=shadow-var ptr.
-        // These shadow vars will be used to track
-        // updated halos for each path.
-        // We don't want to update the real halos until
-        // we've walked all the paths using the original
-        // halos.
-        // At the end, the real vars will be updated
-        // from the shadows.
+        // Algo: Keep a list of maps of shadow vars. Each list entry is a
+        // unique dependency path.  Each map is key=real-var ptr,
+        // val=shadow-var ptr.  These shadow vars will be used to track
+        // updated halos for each path.  We don't want to update the real
+        // halos until we've walked all the paths using the original halos
+        // because that will update halos from already-updated ones.  At the
+        // end, the real vars will be updated from the shadows.  TODO: try
+        // new algo that keeps updated halos in each var instead of using
+        // shadow vars.
         vector< map<Var*, Var*>> shadows;
 
         // Stages.
