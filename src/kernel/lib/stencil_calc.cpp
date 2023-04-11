@@ -64,7 +64,7 @@ namespace yask {
         int nbt = _context->set_num_inner_threads();
 
         // Thread-binding info.
-        // We only bind threads if there is more than one block thread
+        // We only bind threads if there is more than one inner thread
         // and binding is enabled.
         bool bind_threads = nbt > 1 && settings.bind_inner_threads;
         int bind_posn = settings._bind_posn;
@@ -89,23 +89,23 @@ namespace yask {
             }
 
             // Already done?  This is tracked across calls to this func
-            // because >1 non-scratch bundle in a stage can depend on the
-            // same scratch bundle(s). This is also the reason we don't trim
-            // the scratch bundle(s) to the BB(s) of the non-scratch
+            // because >1 non-scratch bundle in a stage can depend on some
+            // common scratch bundle(s). This is also the reason we don't
+            // trim scratch bundle(s) to the BB(s) of the non-scratch
             // bundle(s) that they depend on: the non-scratch bundles may be
             // used by >1 non-scratch bundles with different BBs.
             if (bundles_done.count(sg)) {
                 TRACE_MSG("already done for this micro-blk");
                 continue;
             }
-            bundles_done.insert(sg);
             
-            // For scratch-vars, expand indices based on halo.
+            // For scratch-vars, expand indices based on write halo.
             ScanIndices mb_idxs2(micro_block_idxs);
             if (is_scratch) {
                 mb_idxs2 = sg->adjust_scratch_span(outer_thread_idx, mb_idxs2,
                                                    settings);
-                TRACE_MSG("micro-block adjusted to " << mb_idxs2.make_range_str(true));
+                TRACE_MSG("micro-block adjusted to " << mb_idxs2.make_range_str(true) <<
+                          " per scratch write halo");
             }
 
             // Loop through all the full BBs in this reqd bundle.
@@ -139,7 +139,7 @@ namespace yask {
                     continue;
                 }
                 TRACE_MSG("micro-block trimmed to " <<
-                          mb_idxs3.make_range_str(true));
+                          mb_idxs3.make_range_str(true) << " within BB " << fbbn);
 
                 ///// Bounds set for this BB; ready to evaluate it.
 
@@ -161,11 +161,12 @@ namespace yask {
                         }
 
                         // If this is not the binding dim, set stride
-                        // size to full width.  For now, this is the
+                        // size to > full width.  For now, this is the
                         // only option for micro-block shapes when
                         // binding.  TODO: consider other options.
                         else
-                            mb_idxs3.stride[i] = mb_idxs3.get_overall_range(i);
+                            mb_idxs3.stride[i] = ROUND_UP(mb_idxs3.get_overall_range(i),
+                                                          cluster_pts[j]) * 2;
                     }
 
                     TRACE_MSG("reqd bundle '" << sg->get_name() << "': " <<
@@ -242,6 +243,12 @@ namespace yask {
 
                 } // OMP parallel when binding threads to data.
             } // full BBs in this required bundle.
+
+            // Mark this bundle done. This avoid re-evaluating
+            // scratch bundles that are used more than once in
+            // a stage.
+            bundles_done.insert(sg);
+            
         } // required bundles.
 
         // Mark exterior dirty for halo exchange if exterior was done.
@@ -291,9 +298,8 @@ namespace yask {
         }
     }
 
-    // Only for scratch bundles.
-    // Find max write halos from scratch vars.
-    void StencilBundleBase::find_write_halos() {
+     // Find max write halos for scratch vars.
+    void StencilBundleBase::find_scratch_write_halos() {
         assert(is_scratch());
         STATE_VARS(this);
 
@@ -337,9 +343,8 @@ namespace yask {
                 }
             }
         } // output vars.
-    }     // find_write_halos.
+    }     // find_scratch_write_halos.
     
-    // Only for scratch bundles.
     // Expand begin & end of 'idxs' by sizes of write halos.
     // Stride indices may also change.
     // NB: it is not necessary that the domain of each var

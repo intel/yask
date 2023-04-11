@@ -144,7 +144,7 @@ namespace yask {
         }
 
         // Determine max write halos.
-        void find_write_halos();
+        void find_scratch_write_halos();
 
         // For scratch bundle,
         // expand indices to calculate values in scratch-halo.

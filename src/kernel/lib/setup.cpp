@@ -1130,7 +1130,7 @@ namespace yask {
         if (is_scratch()) {
 
             // Find sizes of write halos.
-            find_write_halos();
+            find_scratch_write_halos();
 
             // Add halos.
             // TODO: round up to fold sizes.

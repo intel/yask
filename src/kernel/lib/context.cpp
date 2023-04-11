@@ -1157,6 +1157,9 @@ namespace yask {
                     // Call calc_micro_block() for each non-scratch bundle.
                     // Keep track of reqd bundles that have been updated at the
                     // current micro-blk idxs.
+                    // TODO: track bundles-done across entire time-steps, not just within
+                    // a stage; this would require handling possible shifting due to
+                    // temporal blocking.
                     StencilBundleSet bundles_done;
                     for (auto* sb : *bp)
                         if (sb->get_bb().bb_num_points)
