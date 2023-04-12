@@ -1052,12 +1052,18 @@ namespace yask {
                 rsb->find_scratch_write_halos();
                 auto& lh = rsb->get_max_write_halo_left();
                 auto& rh = rsb->get_max_write_halo_right();
+                TRACE_MSG("max scratch-write halo for '" << rsb->get_name() << "': " <<
+                          lh.make_dim_val_str() << " on left, and " <<
+                          rh.make_dim_val_str() << " on right");
 
                 // Update max.
                 max_write_halo_left = max_write_halo_left.max_elements(lh);
                 max_write_halo_right = max_write_halo_right.max_elements(rh);
             }
         }
+        TRACE_MSG("max scratch-write halo across all bundles: " <<
+                  max_write_halo_left.make_dim_val_str() << " on left, and " <<
+                  max_write_halo_right.make_dim_val_str() << " on right");
     }
 
     // Set the bounding-boxes for each stage, bundle, and whole domain.

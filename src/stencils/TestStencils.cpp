@@ -758,12 +758,12 @@ namespace {
             
             // 'A'
             A(t+1, x) EQUALS def_1d(C, x, 1, 0);
-            C(x) EQUALS def_1d(D, x, 0, 1);
-            D(x) EQUALS def_t1d(B, t+1, x, 1, 1);
+            C(x) EQUALS def_1d(D, x, 0, 8); // Test a large RHS scratch halo.
+            D(x) EQUALS def_t1d(B, t+1, x, 1, 0);
 
             // 'B'
-            B(t+1, x) EQUALS def_1d(E, x, 0, 0);
-            E(x) EQUALS def_t1d(A, t, x, 0, 0);
+            B(t+1, x) EQUALS def_1d(E, x, 0, 1);
+            E(x) EQUALS def_t1d(A, t, x, 1, 0);
         }
     };
     REGISTER_SOLUTION(TestScratchStagesStencil1);
