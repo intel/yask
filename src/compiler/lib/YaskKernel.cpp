@@ -1012,7 +1012,7 @@ namespace yask {
                     os << "  st_bundles.push_back(&" << b_name << ");\n";
 
                 // Add scratch-bundle deps in proper order.
-                auto& sdeps = _eq_bundles.get_scratch_deps(b);
+                auto& sdeps = _eq_bundles.get_all_scratch_deps_on(b);
                 for (auto& b2 : _eq_bundles.get_all()) {
                     if (sdeps.count(b2)) {
                         string b2_name = b2->_get_name();
@@ -1022,7 +1022,7 @@ namespace yask {
                 }
 
                 // Add deps between bundles.
-                for (auto& dep : _eq_bundles.get_deps(b)) {
+                for (auto& dep : _eq_bundles.get_all_deps_on(b)) {
                     string dep_name = dep->_get_name();
                     os << "  " << b_name <<
                         ".add_dep(&" << dep_name << ");\n";

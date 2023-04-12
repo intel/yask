@@ -206,6 +206,9 @@ namespace yask {
 
         // Set core data needed in kernels.
         set_core();
+
+        // Determine the write halos for any scratch bundles.
+        find_scratch_write_halos();
         
         // Determine bounding-boxes for all bundles.  This must be done
         // after finding WF extensions.  And, this must be done after

@@ -200,10 +200,10 @@ namespace yask {
             assert(fp);
             auto tp = dynamic_pointer_cast<EqualsExpr>(to);
             assert(tp);
-            _eqs.get_deps().set_imm_dep_on(fp, tp);
+            _eqs.set_imm_dep_on(fp, tp);
         }
         virtual void clear_dependencies() override {
-            _eqs.get_deps().clear_deps();
+            _eqs.clear_deps();
         }
 
         virtual void set_fold_len(const yc_index_node_ptr, int len) override;

@@ -629,7 +629,7 @@ namespace yask {
                     cout << "  Exact match found to " << op1->make_quoted_str() << ".\n";
                     #endif
                     if (settings._find_deps)
-                        _deps.set_imm_dep_on(eq2, eq1);
+                        set_imm_dep_on(eq2, eq1);
 
                     // Move along to next eq2.
                     continue;
@@ -694,7 +694,7 @@ namespace yask {
                             #ifdef DEBUG_DEP
                             cout << "  Likely match found to " << op1->make_quoted_str() << ".\n";
                             #endif
-                            _deps.set_imm_dep_on(eq2, eq1);
+                            set_imm_dep_on(eq2, eq1);
 
                             // Move along to next equation.
                             break;
@@ -715,12 +715,6 @@ namespace yask {
         #ifdef DEBUG_DEP
         cout << "Dependencies for all eqs:\n";
         _deps.print_deps(cout);
-        #endif
-
-        // Find scratch children.
-        analyze_scratch();
-
-        #ifdef DEBUG_DEP
         cout << "Dependencies from non-scratch to scratch eqs:\n";
         _scratches.print_deps(cout);
         #endif
@@ -776,91 +770,6 @@ namespace yask {
                 auto* g = ap->_get_var(); // var for point 'ap'.
                 g->update_const_indices(ap->get_arg_consts());
             }
-        }
-    }
-
-    // Find scratch-var eqs needed for each non-scratch eq.  These will
-    // eventually be gathered into bundles and saved as the "scratch
-    // children" for each non-scratch bundle.
-    void Eqs::analyze_scratch() {
-
-        // Example:
-        // eq1: scr(x) EQUALS u(t,x+1);
-        // eq2: u(t+1,x) EQUALS scr(x+2);
-        // Direct deps: eq2 -> eq1(s).
-        // eq1 is scratch child of eq2.
-
-        // Example:
-        // eq1: scr1(x) EQUALS u(t,x+1);
-        // eq2: scr2(x) EQUALS scr1(x+2);
-        // eq3: u(t+1,x) EQUALS scr2(x+4);
-        // Direct deps: eq3 -> eq2(s) -> eq1(s).
-        // eq1 and eq2 are scratch children of eq3.
-        
-        // Find all LHS and RHS points and vars for all eqs.
-        PointVisitor pv;
-        visit_eqs(&pv);
-
-        // Analyze each eq.
-        for (auto& eq1 : get_all()) {
-
-            // Output var for this eq.
-            auto* og1 = pv.get_output_vars().at(eq1.get());
-
-            // Only need to look at dep paths starting from non-scratch eqs.
-            if (og1->is_scratch())
-                continue;
-
-            // We start with each non-scratch eq and walk the dep tree to
-            // find all dependent scratch eqs.  It's important to
-            // then visit the eqs in dep order using 'path' to get only
-            // unbroken chains of scratch vars.
-            // Note that sub-paths may be visited more than once, e.g.,
-            // 'eq3 -> eq2(s)' and 'eq3 -> eq2(s) -> eq1(s)' are 2 paths from
-            // the second example above, but this shouldn't cause any issues,
-            // just some redundant work.
-            get_deps().visit_deps
-
-                // For each 'b', 'eq1' is 'b' or depends on 'b',
-                // immediately or indirectly; 'path' leads from
-                // 'eq1' to 'b'.
-                (eq1, [&](equals_expr_ptr b, EqList& path) {
-                          //auto* ogb = pv.get_output_vars().at(b.get());
-
-                          // Find scratch-var eqs in this dep path that are
-                          // needed for 'eq1'. Walk dep path from 'eq1' to 'b'
-                          // until a non-scratch var is found.
-                          unordered_set<Var*> scratches_seen;
-                          for (auto eq2 : path) {
-
-                              // Don't process 'eq1', the initial non-scratch eq.
-                              if (eq2 == eq1)
-                                  continue;
-                        
-                              // If this isn't a scratch eq, we are done
-                              // w/this path because we only want the eqs
-                              // from 'eq1' through an *unbroken* chain of
-                              // scratch vars.
-                              auto* og2 = pv.get_output_vars().at(eq2.get());
-                              if (!og2->is_scratch())
-                                  break;
-
-                              // Add 'eq2' to the set needed for 'eq1'.
-                              // NB: scratch-deps are used as a map of sets.
-                              get_scratch_deps().set_imm_dep_on(eq1, eq2);
-
-                              // Check for illegal scratch path.
-                              // TODO: this is only illegal because the scratch
-                              // write area is stored in the var, so >1 write
-                              // areas can't be shared. Need to store the write
-                              // areas somewhere else, maybe in the equation or
-                              // bundle. Would require changes to kernel as well.
-                              if (scratches_seen.count(og2))
-                                  THROW_YASK_EXCEPTION("scratch-var '" +
-                                                       og2->get_name() + "' depends upon itself");
-                              scratches_seen.insert(og2);
-                          }
-                      });
         }
     }
 
@@ -926,7 +835,7 @@ namespace yask {
 
         // Use separate counter visitor for each bundle
         // to avoid treating repeated eqs as common sub-exprs.
-        for (auto& eq : _all) {
+        for (auto& eq : get_all()) {
             CounterVisitor ecv;
             eq->visit_eqs(&ecv);
             cv += ecv;
@@ -1270,10 +1179,9 @@ namespace yask {
             stages.push_back(st);
 
             // Add required scratch stage(s).
-            for (auto& ss : get_scratch_deps().get_deps_on(st)) {
+            for (auto& ss : get_all_scratch_deps_on(st))
                 stages.push_back(ss);
-            }
-
+  
             // Loop thru reqd stages.
             for (auto& rst : stages) {
                 #ifdef DEBUG_HALOS
@@ -1591,10 +1499,14 @@ namespace yask {
             os << ".\n";
 
             // Deps.
-            for (auto& eg2 : _deps.get_deps_on(eg1))
-                os << "  Dependent on bundle " << eg2->_get_name() << ".\n";
-            for (auto& sg : _scratches.get_deps_on(eg1))
-                os << "  Requires scratch bundle " << sg->_get_name() << ".\n";
+            auto& id = get_imm_deps_on(eg1);
+            for (auto& eg2 : id)
+                os << "  Immediately dependent on " << eg2->_get_name() << ".\n";
+            for (auto& eg2 : get_all_deps_on(eg1))
+                if (id.count(eg2) == 0)
+                    os << "   Indirectly dependent on " << eg2->_get_name() << ".\n";
+            for (auto& sg : get_all_scratch_deps_on(eg1))
+                os << "  Requires " << sg->_get_name() << ".\n";
         }
 
     }
@@ -1814,10 +1726,14 @@ namespace yask {
             os << ".\n";
 
             // Deps.
-            for (auto& bp2 : _deps.get_deps_on(bp1))
-                os << "  Dependent on stage " << bp2->_get_name() << ".\n";
-            for (auto& sp : _scratches.get_deps_on(bp1))
-                os << "  Requires scratch stage " << sp->_get_name() << ".\n";
+            auto& id = get_imm_deps_on(bp1);
+            for (auto& bp2 : id)
+                os << "  Immediately dependent " << bp2->_get_name() << ".\n";
+            for (auto& bp2 : get_all_deps_on(bp1))
+                if (id.count(bp2) == 0)
+                    os << "   Indirectly dependent " << bp2->_get_name() << ".\n";
+            for (auto& sp : get_all_scratch_deps_on(bp1))
+                os << "  Requires " << sp->_get_name() << ".\n";
         }
 
     }

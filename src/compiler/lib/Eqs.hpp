@@ -34,31 +34,34 @@ IN THE SOFTWARE.
 using namespace std;
 
 namespace yask {
-    typedef equals_expr_ptr Eq;
+
+    using Eq = equals_expr_ptr;
+    using EqList = vector_set<Eq>;
+
+    template<typename T> using Tp = shared_ptr<T>;
+    template<typename T> using TpSet = unordered_set<Tp<T>>;
+    template<typename T> using TpList = vector_set<Tp<T>>;
+    template<typename T> using TpSetMap = unordered_map<Tp<T>, TpSet<T>>;
     
     // Dependencies between objects of type T.
     template <typename T>
     class Deps {
-
+        
     public:
-        typedef shared_ptr<T> Tp;
-        typedef unordered_set<Tp> TpSet;
-        typedef vector_set<Tp> TpList;
-
         // dep_map[A].count(B) > 0 => A depends on B.
-        typedef unordered_map<Tp, TpSet> DepMap;
+        typedef TpSetMap<T> DepMap;
 
-    protected:
+    private:
+        TpSet<T> _all;          // set of all objs.
         DepMap _imm_deps;       // immediate deps, i.e., transitive reduction.
         DepMap _full_deps;      // transitive closure of _imm_deps.
-        TpSet _all;             // set of all objs.
         bool _done = false;     // transitive closure done?
-        TpSet _empty;
+        TpSet<T> _empty;        // for returning a ref to an empty set.
 
         // Recursive helper for visit_deps().
-        virtual void _visit_deps(Tp a,
-                                 std::function<void (Tp b, TpList& path)> visitor,
-                                 TpList* seen) const {
+        virtual void _visit_deps(Tp<T> a,
+                                 std::function<void (Tp<T> b, TpList<T>& path)> visitor,
+                                 TpList<T>* seen) const {
 
             // Already visited, i.e., a loop?
             bool was_seen = (seen && seen->count(a));
@@ -67,7 +70,7 @@ namespace yask {
 
             // Add 'a' to copy of path.
             // Important to make a separate copy for recursive calls.
-            TpList seen1;
+            TpList<T> seen1;
             if (seen)
                 seen1 = *seen; // copy nodes already seen.
             seen1.insert(a);   // add this one.
@@ -93,8 +96,16 @@ namespace yask {
         Deps() {}
         virtual ~Deps() {}
 
+        // Get deps.
+        virtual const DepMap& get_imm_deps() const {
+            return _imm_deps;
+        }
+        virtual const DepMap& get_all_deps() const {
+            return _full_deps;
+        }
+
         // Declare that eq a depends directly on b.
-        virtual void set_imm_dep_on(Tp a, Tp b) {
+        virtual void set_imm_dep_on(Tp<T> a, Tp<T> b) {
             _imm_deps[a].insert(b);
             _all.insert(a);
             _all.insert(b);
@@ -110,33 +121,33 @@ namespace yask {
         }
 
         // Check whether eq a directly depends on b.
-        virtual bool is_imm_dep_on(Tp a, Tp b) const {
+        virtual bool is_imm_dep_on(Tp<T> a, Tp<T> b) const {
             return _imm_deps.count(a) && _imm_deps.at(a).count(b) > 0;
         }
 
         // Checks for immediate dependencies in either direction.
-        virtual bool is_imm_dep(Tp a, Tp b) const {
+        virtual bool is_imm_dep(Tp<T> a, Tp<T> b) const {
             return is_imm_dep_on(a, b) || is_imm_dep_on(b, a);
         }
 
         // Check whether eq 'a' depends on 'b'.
-        virtual bool is_dep_on(Tp a, Tp b) const {
+        virtual bool is_dep_on(Tp<T> a, Tp<T> b) const {
             assert(_done);
             return _full_deps.count(a) && _full_deps.at(a).count(b) > 0;
         }
 
         // Checks for dependencies in either direction.
-        virtual bool is_dep(Tp a, Tp b) const {
+        virtual bool is_dep(Tp<T> a, Tp<T> b) const {
             return is_dep_on(a, b) || is_dep_on(b, a);
         }
 
         // Get all the objects that 'a' depends on.
-        virtual const TpSet& get_imm_deps_on(Tp a) const {
+        virtual const TpSet<T>& get_imm_deps_on(Tp<T> a) const {
             if (_imm_deps.count(a) == 0)
                 return _empty;
             return _imm_deps.at(a);
         }
-        virtual const TpSet& get_deps_on(Tp a) const {
+        virtual const TpSet<T>& get_all_deps_on(Tp<T> a) const {
             assert(_done);
             if (_full_deps.count(a) == 0)
                 return _empty;
@@ -146,18 +157,18 @@ namespace yask {
         // Visit 'a' and all its dependencies.
         // At each dep node 'b' in graph, 'visitor(b, path)' is called,
         // where 'path' contains all nodes from 'a' thru 'b' in dep order.
-        virtual void visit_deps(Tp a,
-                                std::function<void (Tp b,
-                                                    TpList& path)> visitor) const {
+        virtual void visit_deps(Tp<T> a,
+                                std::function<void (Tp<T> b,
+                                                    TpList<T>& path)> visitor) const {
             _visit_deps(a, visitor, NULL);
         }
 
-        // Print deps. 'T' must implement get_descr().
+        // Print deps for debugging. 'T' must implement get_descr().
         virtual void print_deps(ostream& os) const {
             os << "Dependencies within " << _all.size() << " objects:\n";
             for (auto& a : _all) {
                 os << " For " << a->get_descr() << ":\n";
-                visit_deps(a, [&](Tp b, TpList& path) {
+                visit_deps(a, [&](Tp<T> b, TpList<T>& path) {
                                   if (a == b)
                                       os << "  depends on self";
                                   else
@@ -167,45 +178,54 @@ namespace yask {
             }
         }
 
-        // Does recursive analysis to find transitive closure.
+        // Do recursive analysis to find transitive closure.
+        // https://en.wikipedia.org/wiki/Transitive_closure#In_graph_theory
         virtual void find_all_deps() {
             if (_done)
                 return;
             for (auto a : _all)
                 if (_full_deps.count(a) == 0)
-                    visit_deps(a, [&](Tp b, TpList& path) {
+                    visit_deps
+                        (a, [&](Tp<T> b, TpList<T>& path) {
 
-                                      // Walk path from ee to b.
-                                      // Every 'eq' in 'path' before 'b' depends on 'b'.
-                                      for (auto eq : path)
-                                          if (eq != b)
-                                              _full_deps[eq].insert(b);
-                                  });
+                                // Walk path from ee to b.
+                                // Every 'c' in 'path' before 'b' depends on 'b'.
+                                for (auto c : path)
+                                    if (c != b)
+                                        _full_deps[c].insert(b);
+                            });
             _done = true;
         }
     };
 
     // A set of objects that have inter-dependencies.
     // Class 'T' must implement 'clone()' that returns
-    // a 'shared_ptr<T>'.
+    // a 'shared_ptr<T>' and 'is_scratch()'.
     template <typename T>
     class DepGroup {
 
-    public:
-        typedef shared_ptr<T> Tp;
-        typedef unordered_set<Tp> TpSet;
-        typedef vector_set<Tp> TpList;
+        // Example:
+        // eq1: scr(x) EQUALS u(t,x+1);
+        // eq2: u(t+1,x) EQUALS scr(x+2);
+        // Direct deps: eq2 -> eq1(s).
+        // eq1 is scratch child of eq2.
 
-    protected:
+        // Example:
+        // eq1: scr1(x) EQUALS u(t,x+1);
+        // eq2: scr2(x) EQUALS scr1(x+2);
+        // eq3: u(t+1,x) EQUALS scr2(x+4);
+        // Direct deps: eq3 -> eq2(s) -> eq1(s).
+        // eq1 and eq2 are scratch children of eq3.
+        
+    private:
 
         // Objs in this group.
-        TpList _all;
+        TpList<T> _all;
 
         // Dependencies between all objs.
         Deps<T> _deps;
 
-        // Dependencies from non-scratch objs to/on scratch objs.
-        // NB: just using Deps::_imm_deps as a simple map of sets.
+        // Dependencies on scratch objs.
         Deps<T> _scratches;
 
     public:
@@ -225,10 +245,10 @@ namespace yask {
         }
 
         // list accessors.
-        virtual void add_item(Tp p) {
+        virtual void add_item(Tp<T> p) {
             _all.insert(p);
         }
-        virtual const TpList& get_all() const {
+        virtual const TpList<T>& get_all() const {
             return _all;
         }
         virtual int get_num() const {
@@ -239,22 +259,38 @@ namespace yask {
         virtual const Deps<T>& get_deps() const {
             return _deps;
         }
-        virtual Deps<T>& get_deps() {
-            return _deps;
+        virtual const TpSetMap<T>& get_imm_deps() const {
+            return _deps.get_imm_deps();
         }
-        virtual const TpSet& get_deps(Tp p) const {
-            return _deps.get_deps_on(p);
+        virtual const TpSet<T>& get_all_deps_on(Tp<T> p) const {
+            return _deps.get_all_deps_on(p);
+        }
+        virtual const TpSet<T>& get_imm_deps_on(Tp<T> p) const {
+            return _deps.get_imm_deps_on(p);
         }
 
         // Get the scratch deps.
         virtual const Deps<T>& get_scratch_deps() const {
             return _scratches;
         }
-        virtual Deps<T>& get_scratch_deps() {
-            return _scratches;
+        virtual const TpSet<T>& get_all_scratch_deps_on(Tp<T> p) const {
+            return _scratches.get_all_deps_on(p);
         }
-        virtual const TpSet& get_scratch_deps(Tp p) const {
-            return _scratches.get_deps_on(p);
+        virtual const TpSet<T>& get_imm_scratch_deps_on(Tp<T> p) const {
+            return _scratches.get_imm_deps_on(p);
+        }
+        
+        // Set deps.
+        virtual void set_imm_dep_on(Tp<T> a, Tp<T> b) {
+            _deps.set_imm_dep_on(a, b);
+            if (b->is_scratch())
+                _scratches.set_imm_dep_on(a, b);
+        }
+
+        // Clear all deps.
+        virtual void clear_deps() {
+            _deps.clear_deps();
+            _scratches.clear_deps();
         }
 
         // Find indirect dependencies based on direct deps.
@@ -351,9 +387,6 @@ namespace yask {
         }
     };
 
-    // A list of unique equation ptrs.
-    typedef vector_set<Eq> EqList;
-
     // A set of equations and related dependency data.
     class Eqs : public DepGroup<EqualsExpr> {
 
@@ -361,7 +394,7 @@ namespace yask {
 
         // Visit all equations.
         virtual void visit_eqs(ExprVisitor* ev) {
-            for (auto& ep : _all) {
+            for (auto& ep : get_all()) {
                 ep->accept(ev);
             }
         }
@@ -382,8 +415,6 @@ namespace yask {
         // Update var access stats.
         virtual void update_var_stats();
 
-        // Find scratch-var eqs needed for each non-scratch eq.
-        virtual void analyze_scratch();
     };
 
     // A collection that holds various independent eqs.
@@ -576,14 +607,14 @@ namespace yask {
 
         // Visit all the equations in all eq_bundles.
         virtual void visit_eqs(ExprVisitor* ev) {
-            for (auto& eg : _all)
+            for (auto& eg : get_all())
                 eg->visit_eqs(ev);
         }
 
         // Replicate each equation at the non-zero offsets for
         // each vector in a cluster.
         virtual void replicate_eqs_in_cluster(Dimensions& dims) {
-            for (auto& eg : _all)
+            for (auto& eg : get_all())
                 eg->replicate_eqs_in_cluster(dims);
         }
 
@@ -698,7 +729,7 @@ namespace yask {
 
         // Visit all the equations in all stages.
         virtual void visit_eqs(ExprVisitor* ev) {
-            for (auto& bp : _all)
+            for (auto& bp : get_all())
                 bp->visit_eqs(ev);
         }
 

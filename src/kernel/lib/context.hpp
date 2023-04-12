@@ -271,6 +271,9 @@ namespace yask {
         // include any extensions needed for WF.
         BoundingBox mpi_interior;
 
+        // Max write halos across all scratch bundles on left and right in each dim.
+        IdxTuple max_write_halo_left, max_write_halo_right;
+
         // Is there a non-zero exterior in the given section?
         inline bool does_exterior_exist(idx_t ddim, bool is_left) const {
             return is_left ?
@@ -567,6 +570,9 @@ namespace yask {
         // Set the bounding-box around all stencil bundles.
         void find_bounding_boxes();
 
+        // Determine max write halos for scratch bundles.
+        void find_scratch_write_halos();
+        
         // Set data needed by the kernels.
         // Implemented by the YASK compiler-generated code.
         virtual void set_core() =0;

@@ -56,7 +56,7 @@ namespace yask {
 	BBList _bb_list;
 
         // Max write halos for scratch bundles on left and right in each dim.
-        IdxTuple max_lh, max_rh;
+        IdxTuple max_write_halo_left, max_write_halo_right;
 
         // Normalize the 'orig' indices, i.e., divide by vector len in each dim.
         // Ranks offsets must already be subtracted.
@@ -143,8 +143,14 @@ namespace yask {
             return sg_list;
         }
 
-        // Determine max write halos.
+        // Max write halos for a scratch bundle.
         void find_scratch_write_halos();
+        inline const IdxTuple& get_max_write_halo_left() const {
+            return max_write_halo_left;
+        }
+        inline const IdxTuple& get_max_write_halo_right() const {
+            return max_write_halo_right;
+        }
 
         // For scratch bundle,
         // expand indices to calculate values in scratch-halo.

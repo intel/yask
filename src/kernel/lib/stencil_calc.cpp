@@ -297,53 +297,6 @@ namespace yask {
                 gb.update_valid_step(t_out);
         }
     }
-
-     // Find max write halos for scratch vars.
-    void StencilBundleBase::find_scratch_write_halos() {
-        assert(is_scratch());
-        STATE_VARS(this);
-
-        // Init.
-        max_lh = dims->_domain_dims;
-        max_lh.set_vals_same(0);
-        max_rh = dims->_domain_dims;
-        max_rh.set_vals_same(0);
-
-        // Loop thru vecs of scratch vars updated for this bundle.
-        for (auto* sv : output_scratch_vecs) {
-            assert(sv);
-
-            // Make sure vars exist; only need for one thread.
-            if (sv->size() == 0)
-                _context->make_scratch_vars(1);
-
-            // Get the one for thread 0.
-            auto& gp = sv->at(0);
-            assert(gp);
-            auto& gb = gp->gb();
-            assert(gb.is_scratch());
-
-            // i: index for stencil dims, j: index for domain dims.
-            DOMAIN_VAR_LOOP(i, j) {
-                auto& dim = dims->_domain_dims.get_dim(j);
-                auto& dname = dim._get_name();
-
-                // Is this dim used in this var?
-                int posn = gb.get_dim_posn(dname);
-                if (posn >= 0) {
-
-                    // Get halos, which need to be written to for
-                    // scratch vars.
-                    idx_t lh = gp->get_left_halo_size(posn);
-                    idx_t rh = gp->get_right_halo_size(posn);
-
-                    // Update max.
-                    max_lh[j] = max(max_lh[j], lh);
-                    max_rh[j] = max(max_rh[j], rh);
-                }
-            }
-        } // output vars.
-    }     // find_scratch_write_halos.
     
     // Expand begin & end of 'idxs' by sizes of write halos.
     // Stride indices may also change.
@@ -360,8 +313,8 @@ namespace yask {
                                                        KernelSettings& settings) const {
         assert(is_scratch());
         STATE_VARS(this);
-        assert(max_lh.get_num_dims() == NUM_DOMAIN_DIMS);
-        assert(max_rh.get_num_dims() == NUM_DOMAIN_DIMS);
+        assert(max_write_halo_left.get_num_dims() == NUM_DOMAIN_DIMS);
+        assert(max_write_halo_right.get_num_dims() == NUM_DOMAIN_DIMS);
 
         // Init return indices.
         ScanIndices adj_idxs(idxs);
@@ -371,8 +324,8 @@ namespace yask {
         DOMAIN_VAR_LOOP(i, j) {
         
             // Adjust begin & end scan indices based on write halos.
-            idx_t ab = idxs.begin[i] - max_lh[j];
-            idx_t ae = idxs.end[i] + max_rh[j];
+            idx_t ab = idxs.begin[i] - max_write_halo_left[j];
+            idx_t ae = idxs.end[i] + max_write_halo_right[j];
 
             #if 1
             // Round up halos to vector sizes.  This is to [try to] avoid

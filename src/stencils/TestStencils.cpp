@@ -731,6 +731,44 @@ namespace {
     // '-stencil' commmand-line option or the 'stencil=' build option.
     REGISTER_SOLUTION(TestScratchStencil3);
 
+    // Scratches in stages.
+    class TestScratchStagesStencil1 : public TestBase {
+
+    protected:
+
+        // Vars.
+        MAKE_VAR(A, t, x); // time-varying var.
+        MAKE_VAR(B, t, x); // time-varying var.
+
+        // Temporary storage.
+        MAKE_SCRATCH_VAR(C, x);
+        MAKE_SCRATCH_VAR(D, x);
+        MAKE_SCRATCH_VAR(E, x);
+
+    public:
+
+        TestScratchStagesStencil1(int radius=2) :
+            TestBase("test_scratch_stages_1d", radius) { }
+
+        // Define equation to apply to all points in 'A' and 'B' vars.
+        virtual void define() {
+
+            // NB: this stencil also illustrates that equations
+            // don't need to be defined in "assignment order."
+            
+            // 'A'
+            A(t+1, x) EQUALS def_1d(C, x, 1, 0);
+            C(x) EQUALS def_1d(D, x, 0, 1);
+            D(x) EQUALS def_t1d(B, t+1, x, 1, 1);
+
+            // 'B'
+            B(t+1, x) EQUALS def_1d(E, x, 0, 0);
+            E(x) EQUALS def_t1d(A, t, x, 0, 0);
+        }
+    };
+    REGISTER_SOLUTION(TestScratchStagesStencil1);
+    
+
     // Test the use of boundary code in sub-domains.
     class TestBoundaryStencil1 : public TestBase {
 
