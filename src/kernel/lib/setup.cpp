@@ -1084,10 +1084,21 @@ namespace yask {
         ext_bb.bb_end = rank_bb.bb_end.add_elements(right_wf_exts);
         ext_bb.update_bb("extended-rank", this, true);
 
-        // Remember sub-domain for each bundle.  TODO: expand to handle
-        // scratch bundles. This would require comparing write
-        // halos.
-        map<string, StencilBundleBase*> bb_cache;
+        // The max BB for any scratch bundle in this rank will be 'ext_bb'
+        // expanded by the max write halos across all scratch bundles.  It's
+        // okay to use the max BB for every scratch bundle, because the BB
+        // only sets the max bounds. Actual bounds will be created for each
+        // micro-block.
+        assert(max_write_halo_left.get_num_dims() == NUM_DOMAIN_DIMS);
+        assert(max_write_halo_right.get_num_dims() == NUM_DOMAIN_DIMS);
+        BoundingBox max_sbb;
+        max_sbb.bb_begin = ext_bb.bb_begin.sub_elements(max_write_halo_left);
+        max_sbb.bb_end = ext_bb.bb_end.add_elements(max_write_halo_right);
+        max_sbb.update_bb("max-scratch", this, true);
+
+        // Index the first completed bundle for each domain description.
+        // Keys: domain descr, is-scratch.
+        map<string, map<bool, StencilBundleBase*>> bb_cache;
 
         // Find BBs for each stage.
         for (auto sp : st_stages) {
@@ -1108,20 +1119,22 @@ namespace yask {
 
                     // Already done for this sub-domain?
                     auto bb_descr = rsb->get_domain_description();
-                    if (!is_scratch && bb_cache.count(bb_descr)) {
+                    if (bb_cache.count(bb_descr) && bb_cache.at(bb_descr).count(is_scratch)) {
 
                         // Copy existing.
-                        auto* src = bb_cache.at(bb_descr);
+                        auto* src = bb_cache.at(bb_descr).at(is_scratch);
                         rsb->copy_bounding_boxes(src);
                     }
 
                     // Find bundle BBs.
                     else {
-                        rsb->find_bounding_boxes();
+                        if (is_scratch)
+                            rsb->find_bounding_boxes(max_sbb);
+                        else
+                            rsb->find_bounding_boxes(ext_bb);
 
                         // Save in cache.
-                        if (!is_scratch)
-                            bb_cache[bb_descr] = rsb;
+                        bb_cache[bb_descr][is_scratch] = rsb;
                     }
                 } // All reqd bundles.
 
@@ -1148,8 +1161,6 @@ namespace yask {
         STATE_VARS(this);
         TRACE_MSG("copying BB from '" <<
                   src->get_name() << "' to '" << get_name() << "'...");
-        assert(!is_scratch());
-        assert(!src->is_scratch());
 
         _bundle_bb = src->_bundle_bb;
         assert(_bundle_bb.bb_valid);
@@ -1209,28 +1220,17 @@ namespace yask {
     // Only tests domain-var values, not step-vars.
     // Step-vars are tested dynamically for each step
     // as that step is evaluated.
-    void StencilBundleBase::find_bounding_boxes() {
+    void StencilBundleBase::find_bounding_boxes(BoundingBox& max_bb) {
         STATE_VARS(this);
         auto& bname = get_name();
         TRACE_MSG("finding BB for '" << bname << "'...");
 
         // Init overall bundle BB to that of context and clear list of full BBs.
-        // FIXME for scratch vars.
         assert(_context);
-        _bundle_bb = _context->ext_bb;
+        _bundle_bb = max_bb;
         assert(_bundle_bb.bb_valid);
         _bb_list.clear();
-        TRACE_MSG("starting with [" << _bundle_bb.make_range_string(domain_dims) << "]");
-
-        // For scratch vars, add write halos.
-        if (is_scratch()) {
-
-            // Extend BBs by write halos.
-            _bundle_bb.bb_begin = _bundle_bb.bb_begin.sub_elements(max_write_halo_left);
-            _bundle_bb.bb_end = _bundle_bb.bb_end.add_elements(max_write_halo_right);
-            _bundle_bb.update_bb(bname, _context, false, false);
-            TRACE_MSG("expanded by scratch write halos to [" << _bundle_bb.make_range_string(domain_dims) << "]");
-        }
+        TRACE_MSG("starting from max BB " << _bundle_bb.make_range_str_dbg(domain_dims));
 
         // If BB is empty, we are done.
         if (!_bundle_bb.bb_size) {
@@ -1240,7 +1240,7 @@ namespace yask {
 
         // If there is no condition, just add full BB to list.
         if (!is_sub_domain_expr()) {
-            TRACE_MSG("only 1 full sub-BB: [" << _bundle_bb.make_range_string(domain_dims) << "); done");
+            TRACE_MSG("only 1 full sub-BB " << _bundle_bb.make_range_str_dbg(domain_dims) << "; done");
             _bb_list.push_back(_bundle_bb);
             return;
         }
@@ -1423,7 +1423,7 @@ namespace yask {
 
             // BBs in slice 'n'.
             for (auto& bbn : cur_bb_list) {
-                TRACE_MSG(" sub-BB: [" << bbn.make_range_string(domain_dims) << "]");
+                TRACE_MSG(" sub-BB " << bbn.make_range_str_dbg(domain_dims));
 
                 // Don't bother with empty BB.
                 if (bbn.bb_size == 0)
@@ -1464,7 +1464,7 @@ namespace yask {
 
                         // Merge by just increasing the size of 'bb'.
                         bb.bb_end[odim] = bbn.bb_end[odim];
-                        TRACE_MSG("  merging to form [" << bb.make_range_string(domain_dims) << "]");
+                        TRACE_MSG("  merging to form " << bb.make_range_str_dbg(domain_dims));
                         bb.update_bb("sub-bb", _context, true);
                         break;
                     }

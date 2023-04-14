@@ -444,8 +444,9 @@ namespace yask {
             _in_vars.clear();
         }
 
-        // Add an eq.
+        // Add/remove an eq.
         virtual void add_eq(Eq ee);
+        virtual void remove_eq(Eq ee);
         
         // Get all eqs.
         virtual const EqList& get_eqs() const {
@@ -674,8 +675,9 @@ namespace yask {
         // Get a string description.
         virtual string get_descr(string quote = "'") const;
 
-        // Add a bundle to this stage.
+        // Add/remove a bundle to this stage.
         virtual void add_bundle(EqBundlePtr ee);
+        virtual void remove_bundle(EqBundlePtr ee);
 
         // Get the list of all bundles
         virtual const EqBundleList& get_bundles() const {

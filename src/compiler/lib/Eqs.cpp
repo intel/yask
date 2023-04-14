@@ -33,6 +33,7 @@ IN THE SOFTWARE.
 
 //#define DEBUG_HALOS
 //#define DEBUG_ADD_EXPRS
+//#define DEBUG_ADD_BUNDLES
 
 namespace yask {
 
@@ -356,7 +357,8 @@ namespace yask {
     // _imm_dep_on and _dep_on.
     // Throws exceptions on illegal dependencies.
     // TODO: split this into smaller functions.
-    // BIG-TODO: replace dependency algorithms with integration of a polyhedral
+    // BIG-TODO: replace dependency graph and algorithms with a DAG library.
+    // HUGE-TODO: replace dependency algorithms with integration of a polyhedral
     // library.
     void Eqs::analyze_eqs(const CompilerSettings& settings,
                           Dimensions& dims,
@@ -800,7 +802,29 @@ namespace yask {
         assert(out_var->is_scratch() == _is_scratch);
     }
 
-    
+    // Remove an eq from an EqLot.
+    void EqLot::remove_eq(equals_expr_ptr ee) {
+        _eqs.erase(ee);
+
+        // Update list of input and output vars.
+        // Must clear and re-add all because more than one
+        // eq can effect the same vars.
+        _out_vars.clear();
+        _in_vars.clear();
+        for (auto& eq : _eqs) {
+
+            // Get I/O point data from 'eq'.
+            PointVisitor pv;
+            eq->accept(&pv);
+            
+            auto* out_var = pv.get_output_vars().at(eq.get());
+            _out_vars.insert(out_var);
+            auto& in_vars = pv.get_input_vars().at(eq.get());
+            for (auto* g : in_vars)
+                _in_vars.insert(g);
+        }
+    }
+
     // Make a human-readable description of this eq bundle.
     string EqBundle::get_descr(bool show_cond,
                                string quote) const
@@ -980,7 +1004,6 @@ namespace yask {
 
         // Targeted bundle to add 'eq' to.
         EqBundle* target = 0;
-        bool is_ok = true;
         if (settings._bundle) {
          
             // To handle special scratch case above, check *all* eqs
@@ -1001,6 +1024,7 @@ namespace yask {
             
             // Loop through existing bundles, looking for one that
             // 'eq' can be added to.
+            bool is_ok = true;
             for (auto& b : get_all()) {
                 #ifdef DEBUG_ADD_EXPRS
                 cout << "** ae2b: checking " << b->get_descr() << endl;
@@ -1074,12 +1098,34 @@ namespace yask {
                 } // if ok.
                     
                 // Remember target bundle if ok and stop looking.
+                // Try to add if ok.
                 if (is_ok) {
-                    target = b.get();
-                    #ifdef DEBUG_ADD_EXPRS
-                    cout << "** ae2b: all checks passed: adding to existing bundle\n";
-                    #endif
-                    break;
+                    try {
+
+                        // Add eq.
+                        b->add_eq(eq);
+
+                        // Check dependencies between updated bundles.
+                        inherit_deps_from(all_eqs);
+                        topo_sort();
+
+                        // If we get this far, the add was okay;
+                        // remove the temp deps, and we're done.
+                        clear_deps();
+                        target = b.get();
+                        #ifdef DEBUG_ADD_EXPRS
+                        cout << "** ae2b: all checks passed: added to existing bundle\n";
+                        #endif
+                        break;
+                    }
+                    catch (yask_exception& e) {
+
+                        // Failure; must remove eq.
+                        b->remove_eq(eq);
+                        
+                        // Also remove the bad dependencies.
+                        clear_deps();
+                    }
                 }
                 else {
                     #ifdef DEBUG_ADD_EXPRS
@@ -1106,14 +1152,12 @@ namespace yask {
             target->step_expr = step_expr;
             new_bundle = true;
 
+            // Add eq to target eq-bundle.
             #ifdef DEBUG_ADD_EXPRS
             cout << "** ae2b: adding to new bundle " << target->get_descr() << endl;
             #endif
+            target->add_eq(eq);
         }
-
-        // Add eq to target eq-bundle.
-        assert(target);
-        target->add_eq(eq);
 
         // Remember eq and updated var.
         _eqs_in_bundles.insert(eq);
@@ -1447,35 +1491,33 @@ namespace yask {
         os << "\nPartitioning " << all_eqs.get_num() << " equation(s) into bundles...\n";
         //auto& step_dim = _dims->_step_dim;
         
-        // Add scratch equations.
-        for (auto eq : all_eqs.get_all()) {
-            if (eq->is_scratch()) {
-
-                // Add equation.
-                add_eq_to_bundle(all_eqs, eq, settings);
-            }
-        }
-
         // Make a regex for the allowed vars.
         regex varx(settings._var_regex);
 
-        // Add all remaining equations.
-        for (auto eq : all_eqs.get_all()) {
-            if (eq->is_scratch())
-                continue;
+        // Add non-scratch, then scratch eqs.
+        // This is done just to give the non-scratch ones lower indices.
+        for (bool do_scratch : { false, true }) {
+            for (auto eq : all_eqs.get_all()) {
+                if (eq->is_scratch() != do_scratch)
+                    continue;
 
-            // Get name of updated var.
-            auto vname = eq->get_lhs_var()->_get_name();
+                // Check name if not scratch.
+                if (!eq->is_scratch()) {
 
-            // Match to varx?
-            if (!regex_search(vname, varx)) {
-                os << "Equation updating '" << vname <<
-                    "' not added because it does not match regex '" << settings._var_regex << "'.\n";
-                continue;
+                    // Get name of updated var.
+                    auto vname = eq->get_lhs_var()->_get_name();
+                    
+                    // Match to varx?
+                    if (!regex_search(vname, varx)) {
+                        os << "Equation updating '" << vname <<
+                            "' not added because it does not match regex '" << settings._var_regex << "'.\n";
+                        continue;
+                    }
+                }
+
+                // Add equation(s).
+                add_eq_to_bundle(all_eqs, eq, settings);
             }
-
-            // Add equation(s).
-            add_eq_to_bundle(all_eqs, eq, settings);
         }
 
         os << "Collapsing dependencies from equations and finding transitive closure...\n";
@@ -1613,7 +1655,17 @@ namespace yask {
         for (auto& eq : bp->get_eqs())
             add_eq(eq);
         assert(is_scratch() == bp->is_scratch());
-   }
+    }
+
+    // Remove a bundle from this stage.
+    void EqStage::remove_bundle(EqBundlePtr bp)
+    {
+        _bundles.erase(bp);
+
+        // update list of eqs.
+        for (auto& eq : bp->get_eqs())
+            remove_eq(eq);
+    }
 
     // Add 'bp' from 'all_bundles'. Create new stage if needed.  Returns
     // whether a new stage was created.
@@ -1633,20 +1685,19 @@ namespace yask {
         // Loop through existing stages, looking for one that
         // 'bp' can be added to.
         EqStage* target = 0;
-        for (auto& ep : get_all()) {
+        for (auto& st : get_all()) {
 
             // Must be same scratch-ness.
-            if (ep->is_scratch() != bp->is_scratch())
+            if (st->is_scratch() != bp->is_scratch())
                 continue;
 
             // Step conditions must match (both may be null).
-            if (!are_exprs_same(ep->step_cond, stcond))
+            if (!are_exprs_same(st->step_cond, stcond))
                 continue;
 
-            // Look for any dependencies that would prevent adding
-            // 'bp' to 'ep'.
+            // Loop through all bundles in 'st'.
             bool is_ok = true;
-            for (auto& bp2 : ep->get_bundles()) {
+            for (auto& bp2 : st->get_bundles()) {
 
                 // Look for any dependency between 'bp' and 'bp2'.
                 if (deps.is_dep(bp, bp2)) {
@@ -1655,12 +1706,35 @@ namespace yask {
                 }
             }
 
-            // Remember target if ok and stop looking.
+            // Try to add bundle if ok.
             if (is_ok) {
-                target = ep.get();
-                break;
+
+                // Try to add 'bp' to 'st'.
+                try {
+
+                    // Add it.
+                    st->add_bundle(bp);
+
+                    // Check dependencies between updated stages.
+                    inherit_deps_from(all_bundles);
+                    topo_sort();
+
+                    // If we get this far, the add was okay;
+                    // remove the temp deps, and we're done.
+                    clear_deps();
+                    target = st.get();
+                    break;
+                }
+                catch (yask_exception& e) {
+
+                    // Failure; must remove bundle.
+                    st->remove_bundle(bp);
+
+                    // Also remove the bad dependencies.
+                    clear_deps();
+                }
             }
-        }
+        } // existing stages.
 
         // Make new stage if no target stage found.
         bool new_stage = false;
@@ -1675,17 +1749,22 @@ namespace yask {
             target->index = _idx++;
             target->step_cond = stcond;
             new_stage = true;
-        }
 
-        // Add bundle to target.
-        assert(target);
-        target->add_bundle(bp);
+            // Add bundle to target.
+            target->add_bundle(bp);
+
+            #ifdef DEBUG_ADD_BUNDLES
+            // Check dependencies between updated stages.
+            // Shouldn't be necessary for a newly-created stage.
+            inherit_deps_from(all_bundles);
+            topo_sort();
+            #endif
+        }
 
         // Remember stage and updated vars.
         _bundles_in_stages.insert(bp);
         for (auto& g : bp->get_output_vars())
             _out_vars.insert(g);
-
         return new_stage;
     }
 
@@ -1695,8 +1774,16 @@ namespace yask {
     {
         os << "\nPartitioning " << all_bundles.get_num() << " bundle(s) into stages...\n";
 
-        for (auto bp : all_bundles.get_all())
-            add_bundle_to_stage(all_bundles, bp);
+        // Add non-scratch, then scratch bundles.
+        // This is done just to give the non-scratch ones lower indices.
+        for (bool do_scratch : { false, true }) {
+            for (auto b : all_bundles.get_all()) {
+                if (b->is_scratch() != do_scratch)
+                    continue;
+
+                add_bundle_to_stage(all_bundles, b);
+            }
+        }
 
         os << "Collapsing dependencies from bundles and finding transitive closure...\n";
         inherit_deps_from(all_bundles);
@@ -1728,10 +1815,10 @@ namespace yask {
             // Deps.
             auto& id = get_imm_deps_on(bp1);
             for (auto& bp2 : id)
-                os << "  Immediately dependent " << bp2->_get_name() << ".\n";
+                os << "  Immediately dependent on " << bp2->_get_name() << ".\n";
             for (auto& bp2 : get_all_deps_on(bp1))
                 if (id.count(bp2) == 0)
-                    os << "   Indirectly dependent " << bp2->_get_name() << ".\n";
+                    os << "   Indirectly dependent on " << bp2->_get_name() << ".\n";
             for (auto& sp : get_all_scratch_deps_on(bp1))
                 os << "  Requires " << sp->_get_name() << ".\n";
         }

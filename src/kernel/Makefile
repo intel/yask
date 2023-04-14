@@ -1040,18 +1040,18 @@ test_args1	:=	$(DEF_TEST_ARGS) -l 64 -b 48 -mb 32 -nb 24 -pb 16 -Mbt 1 $(EXTRA_T
 test_args2	:=	$(DEF_TEST_ARGS) -l 63 -Mb 32 -b 24 -mb 16 -Mbt 2 -bundle_allocs $(EXTRA_TEST_ARGS)
 test_args3	:=	$(DEF_TEST_ARGS) -l 63 -Mb 48 -b 24 -mb 16 -bt 2 -no-bundle_allocs $(EXTRA_TEST_ARGS)
 ifeq ($(offload),1)
-test_args4	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 $(EXTRA_TEST_ARGS)
+test_args4	:=	$(DEF_TEST_ARGS) -l 64 -b 24 -mb 16 -bt 2 $(EXTRA_TEST_ARGS)
 else
-test_args4	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -bind_inner_threads $(EXTRA_TEST_ARGS)
+test_args4	:=	$(DEF_TEST_ARGS) -l 64 -b 24 -mb 16 -bt 2 -bind_inner_threads $(EXTRA_TEST_ARGS)
 endif
 
 # Test args for >1 ranks only.
 ifeq ($(offload),1)
-test_args10	:=	$(DEF_MPI_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -use_device_mpi -no-overlap_comms $(EXTRA_TEST_ARGS)
-test_args11	:=	$(DEF_MPI_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -no-use_device_mpi -overlap_comms $(EXTRA_TEST_ARGS)
+test_args10	:=	$(DEF_MPI_TEST_ARGS) -l 64 -b 24 -mb 16 -bt 2 -use_device_mpi -no-overlap_comms $(EXTRA_TEST_ARGS)
+test_args11	:=	$(DEF_MPI_TEST_ARGS) -l 64 -b 24 -mb 16 -bt 2 -no-use_device_mpi -overlap_comms $(EXTRA_TEST_ARGS)
 else
-test_args10	:=	$(DEF_MPI_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -no-use_shm -overlap_comms $(EXTRA_TEST_ARGS)
-test_args11	:=	$(DEF_MPI_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -use_shm -no-overlap_comms $(EXTRA_TEST_ARGS)
+test_args10	:=	$(DEF_MPI_TEST_ARGS) -l 64 -b 24 -mb 16 -bt 2 -no-use_shm -overlap_comms $(EXTRA_TEST_ARGS)
+test_args11	:=	$(DEF_MPI_TEST_ARGS) -l 64 -b 24 -mb 16 -bt 2 -use_shm -no-overlap_comms $(EXTRA_TEST_ARGS)
 endif
 
 # Run the kernel binary using several combos of sizes and ranks.
@@ -1168,6 +1168,20 @@ STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 
 4d-tests:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_4d $(call FOLD,w=2 x=2)
+
+# Selected collections from above for testing specific features.
+scratch-tests:
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_1d $(call FOLD,x=4)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_stages_1d $(call FOLD,x=4)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_boundary_1d $(call FOLD,x=4)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_2d $(call FOLD,x=2 y=2) read_ahead_dist=2
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_3d $(call FOLD,x=2 z=2) inner_loop_dim=x
+
+boundary-tests:
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_1d $(call FOLD,x=4)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_boundary_1d $(call FOLD,x=4)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_2d $(call FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_3d $(call FOLD,x=2 y=2) inner_loop_dim=1
 
 stencil-tests:
 	$(MAKE) 1d-tests

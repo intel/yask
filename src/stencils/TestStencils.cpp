@@ -621,7 +621,7 @@ namespace {
     // '-stencil' commmand-line option or the 'stencil=' build option.
     REGISTER_SOLUTION(TestDepStencil3);
 
-    // Test the use of scratch-pad vars.
+    /////// Test the use of scratch-pad vars. ////////
 
     class TestScratchStencil1 : public TestBase {
 

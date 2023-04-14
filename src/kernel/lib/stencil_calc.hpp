@@ -161,8 +161,8 @@ namespace yask {
                                         KernelSettings& settings) const;
 
         // Set the bounding-box vars for this bundle in this rank.
-        // This includes the overall-BB and the constituent full-BBs.
-        void find_bounding_boxes();
+        // This includes its overall-BB and the constituent full-BBs.
+        void find_bounding_boxes(BoundingBox& max_bb);
 
         // Copy BB vars from another.
         void copy_bounding_boxes(const StencilBundleBase* src);
