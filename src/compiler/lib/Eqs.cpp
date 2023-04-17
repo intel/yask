@@ -379,8 +379,12 @@ namespace yask {
         os << "\nProcessing " << get_num() << " stencil equation(s)...\n";
         for (auto eq1 : get_all()) {
 
-            if (settings._print_eqs)
-                os << "Equation: " << eq1->get_descr() << endl;
+            if (settings._print_eqs) {
+                if (eq1->is_scratch())
+                    os << "Scratch equation: " << eq1->get_descr() << endl;
+                else
+                    os << "Equation: " << eq1->get_descr() << endl;
+            }
             
             auto* eq1p = eq1.get();
             assert(out_vars.count(eq1p));

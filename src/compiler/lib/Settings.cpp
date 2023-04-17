@@ -72,7 +72,10 @@ namespace yask {
         // Get dims from vars.
         for (auto& gp : vars) {
             auto& gname = gp->_get_name();
-            os << "Var: " << gp->get_descr() << endl;
+            if (gp->is_scratch())
+                os << "Scratch var: " << gp->get_descr() << endl;
+            else
+                os << "Var: " << gp->get_descr() << endl;
 
             // Dimensions in this var.
             for (auto dim : gp->get_dims()) {
