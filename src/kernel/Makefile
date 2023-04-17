@@ -129,13 +129,13 @@ else ifeq ($(TARGET),avx512)
 
  ICC_ISA	?=	-xCORE-AVX512
  GXX_ISA	?=	-mavx512f -mavx512vl -mavx512cd -mavx512bw
- VEC_MACROS	?=	USE_INTRIN512
+ VEC_MACROS	?=	USE_INTRIN512 USE_RCP14
 
 else ifeq ($(TARGET),avx512-ymm)
 
  ICC_ISA	?=	-xCORE-AVX512
  GXX_ISA	?=	-mavx512f -mavx512vl -mavx512cd -mavx512bw
- VEC_MACROS	?=	USE_INTRIN512LO
+ VEC_MACROS	?=	USE_INTRIN512LO USE_RCP14
 
 else ifeq ($(TARGET),avx2)
 
