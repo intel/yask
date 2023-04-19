@@ -622,7 +622,9 @@ int main(int argc, char** argv)
                         cerr << "TEST FAILED on rank " << ri << ": " << errs << " mismatch(es).\n";
                         if (ksoln->get_element_bytes() < 8)
                             cerr << " Small differences are not uncommon for low-precision FP; "
-                                "try with 8-byte reals.\n";
+                                "try compiling the kernel with 8-byte reals.";
+                        cerr << " If the kernel contains division operations, try compiling"
+                            " the kernel with reciprocals disabled (compile with 'use_rcp=0').\n";
                         cerr << flush;
                         ok = false;
                     }

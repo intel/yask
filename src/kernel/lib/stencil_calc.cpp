@@ -327,18 +327,19 @@ namespace yask {
             idx_t ab = idxs.begin[i] - max_write_halo_left[j];
             idx_t ae = idxs.end[i] + max_write_halo_right[j];
 
-            #if 1
+            #if 0
             // Round up halos to vector sizes.  This is to [try to] avoid
             // costly masking around edges of scratch write area. For
             // scratch vars, it won't hurt to calculate extra values outside
             // of the min write area because those values should never be
-            // used.  Rounding must be be rank-local, so rounding is after
-            // by subtracting rank offsets, and then they are re-added.  Be
-            // careful to allocate enough memory in
+            // used. Also, reading is always done at vector-lengths; only
+            // writing is masked. Rounding must be rank-local, so
+            // rounding is after by subtracting rank offsets, and then they
+            // are re-added.  Be careful to allocate enough memory in
             // StencilContext::alloc_scratch_data().  NB: When a scratch var
             // has domain conditions, this won't always succeed in reducing
             // masking.  TODO: consider cluster sizes, but need to make
-            // changes elsewhere in code, e.g., in allocation.
+            // changes elsewhere in code, e.g., in padding & allocation.
             idx_t ro = _context->rank_domain_offsets[j];
             ab = round_down_flr(ab - ro, fold_pts[j]) + ro;
             ae = round_up_flr(ae - ro, fold_pts[j]) + ro;

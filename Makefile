@@ -44,6 +44,9 @@
 #
 # real_bytes: FP precision: 4=float, 8=double.
 #
+# use_rcp: 0, 1: whether to substitute divisions with reciprocals,
+#   e.g., A/B => A*(1/B).
+#
 # fold: In which dimension(s) to vectorize.
 # cluster: How many vectors to evaluate simultaneously.
 #

@@ -614,11 +614,6 @@ namespace yask {
                                               std::string prefix="",
                                               std::string suffix="") const;
 
-        // Determine required padding from halos.
-        // Does not include user-specified min padding or
-        // final rounding for left pad.
-        virtual Indices get_reqd_pad(const Indices& halos, const Indices& wf_exts) const;
-
         // Check whether dim exists and is of allowed type.
         virtual void check_dim_type(const std::string& dim,
                                     const std::string& fn_name,

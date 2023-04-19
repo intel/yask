@@ -1006,7 +1006,8 @@ namespace yask {
         if (p) {
 
             if (in_buf)
-                os << _line_prefix << "#ifdef CHECK\n";
+                os << _line_prefix << "#ifdef CHECK\n" <<
+                    _line_prefix << " // Check consistency of buffer.\n {";
 
             // Ptr expression.
             string ptr_expr = *p;
@@ -1033,10 +1034,23 @@ namespace yask {
                     _line_suffix;
             }
 
-            // Check value.
+            // Just check value if it was already in the buffer.
             else {
-                os << _line_prefix << "host_assert(" << mv_name << " == *" <<
-                    ptr_var << ")" << _line_suffix << 
+
+                // NB: it would be nice to be able to always check the value
+                // in the buffer against the value in memory here, i.e.,
+                // 'host_assert(mv_name == *ptr_val)'. However, it is
+                // possible that a *portion* of the vector will be written
+                // by another thread *after* the entire vector was loaded
+                // into the buffer, and this is allowed if the overwritten
+                // portion is not actually used.  So, we only make this
+                // check when not vectorizing.
+                os <<
+                    _line_prefix << "#if VLEN == 1\n" <<
+                    _line_prefix << "host_assert(" << mv_name << " == *" <<
+                    ptr_var << ")" << _line_suffix <<
+                    _line_prefix << "#endif\n" <<
+                    _line_prefix << " } // check.\n" <<
                     _line_prefix << "#endif // CHECK\n";
             }
 

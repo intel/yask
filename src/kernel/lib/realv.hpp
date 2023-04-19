@@ -349,17 +349,20 @@ namespace yask {
             return (*this) * rn;
         }
 
-        // div.
+        // Division.
         ALWAYS_INLINE real_vec_t operator/(real_vec_t rhs) const {
             real_vec_t res, rcp;
             #ifdef NO_INTRINSICS
             REAL_VEC_LOOP(i) res[i] = u.r[i] / rhs[i];
+
+            // Implement A/B as A*(1/B) if allowed.
             #elif defined(USE_RCP14)
             rcp.u.mr = INAME(rcp14)(rhs.u.mr);
             res.u.mr = INAME(mul)(u.mr, rcp.u.mr);
             #elif defined(USE_RCP28)
             rcp.u.mr = INAME(rcp28)(rhs.u.mr);
             res.u.mr = INAME(mul)(u.mr, rcp.u.mr);
+
             #else
             res.u.mr = INAME(div)(u.mr, rhs.u.mr);
             #endif

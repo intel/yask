@@ -39,6 +39,7 @@ numa			?=	1
 real_bytes		?=	4
 allow_new_var_types	?=	1
 streaming_stores	?=	0
+use_rcp			?=	1
 use_ptrs		?=	1
 use_safe_ptrs		?=	0
 outer_domain_layout	?=	0
@@ -121,7 +122,10 @@ ifeq ($(TARGET),knl)
  # either flat or cache memory modes, but these configurations are uncommon.
  ICC_ISA	?=	-xMIC-AVX512
  GXX_ISA	?=	-march=knl
- VEC_MACROS	?=	USE_INTRIN512 USE_RCP28
+ VEC_MACROS	?=	USE_INTRIN512
+ ifeq ($(use_rcp),1)
+  VEC_MACROS	+=	USE_RCP28
+ endif
  MACROS		+=	NUMA_PREF=1
  pfd_l1		?=	1
 
@@ -129,13 +133,19 @@ else ifeq ($(TARGET),avx512)
 
  ICC_ISA	?=	-xCORE-AVX512
  GXX_ISA	?=	-mavx512f -mavx512vl -mavx512cd -mavx512bw
- VEC_MACROS	?=	USE_INTRIN512 USE_RCP14
+ VEC_MACROS	?=	USE_INTRIN512
+ ifeq ($(use_rcp),1)
+  VEC_MACROS	+=	USE_RCP14
+ endif
 
 else ifeq ($(TARGET),avx512-ymm)
 
  ICC_ISA	?=	-xCORE-AVX512
  GXX_ISA	?=	-mavx512f -mavx512vl -mavx512cd -mavx512bw
- VEC_MACROS	?=	USE_INTRIN512LO USE_RCP14
+ VEC_MACROS	?=	USE_INTRIN512LO
+ ifeq ($(use_rcp),1)
+  VEC_MACROS	+=	USE_RCP14
+ endif
 
 else ifeq ($(TARGET),avx2)
 
@@ -943,7 +953,7 @@ FOLD		=	fold=$(subst $(space),$(comma),$(1))
 CLUSTER		=	cluster=$(subst $(space),$(comma),$(1))
 endif
 
-TEST_MAKE_ARGS	:=	real_bytes=8 allow_new_var_types=0 check=1 trace=1
+TEST_MAKE_ARGS	:=	real_bytes=8 use_rcp=0 allow_new_var_types=0 check=1 trace=1
 TEST_MAKE 	:=	$(MAKE) $(TEST_MAKE_ARGS)
 
 ### Unit tests.
@@ -1073,6 +1083,7 @@ yk-mpi-tests:
 yc-and-yk-test: $(YK_EXEC) $(YK_SCRIPT)
 	$(MAKE) ranks=1 yk-tests
 	if (( $(ranks) > 1 )); then $(MAKE) yk-tests yk-mpi-tests; fi
+STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 
 # Run the YASK kernel test without implicity using the YASK compiler.
 yk-test-no-yc: kernel-no-yc $(YK_SCRIPT)
@@ -1086,13 +1097,18 @@ api-tests:
 	$(MAKE) clean; $(MAKE) cxx-yk-api-test-with-exception
 	$(MAKE) clean; $(MAKE) py-yk-api-test-with-exception
 
-# Run several stencils using built-in validation.
+# Validate the kernel specified by the 'stencil' variable and
+# any other settings, e.g., 'fold'.
+single-stencil-tests:
+	$(MAKE) clean; $(STENCIL_TEST)
+
+# Validate several specified stencils with given fold, cluster, and
+# other settings.
 # NB: set arch var as applicable.
 # NB: save some compile time by using YK_CXXOPT=-O2 or -O1.
 # These tests are focused on the kernel and not the compiler.
 # For testing both the kernel and compiler in various combinations,
 # run the tests from the top-level Makefile.
-STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 
 1d-tests:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stream_1d $(call FOLD,x=4)
@@ -1183,6 +1199,7 @@ boundary-tests:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_2d $(call FOLD,x=2 y=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_3d $(call FOLD,x=2 y=2) inner_loop_dim=1
 
+# The standard set of stencils to test.
 stencil-tests:
 	$(MAKE) 1d-tests
 	$(MAKE) 2d-tests

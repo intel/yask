@@ -169,61 +169,35 @@ namespace yask {
     #define IDX_STR2(v, sep) make_index_string(_corep->v, sep)
     
     string YkVarBase::make_info_string(bool long_info) const {
-            std::stringstream oss;
-            if (is_scratch()) oss << "scratch ";
-            if (is_user_var()) oss << "user-defined ";
-            if (_fixed_size) oss << "fixed-size ";
-            oss << _make_info_string() <<
-                ", meta-data at " << (void*)this <<
-                ", and core-data at " << (void*)_corep;
-            #ifdef USE_OFFLOAD
-            if (KernelEnv::_use_offload)
-                oss << " (" << (void*)get_dev_ptr(_corep, false, false) <<
-                    " on device)";
-            #endif
-            if (long_info) {
-                if (_corep->_domains.get_num_dims())
-                    oss <<
-                        ", allocs = " << IDX_STR2(_allocs, " * ") <<
-                        ", domains = " << IDX_STR2(_domains, " * ") <<
-                        ", rank-offsets = " << IDX_STR(_rank_offsets) <<
-                        ", local-offsets = " << IDX_STR(_local_offsets) <<
-                        ", left-halos = " << IDX_STR(_left_halos) <<
-                        ", right-halos = " << IDX_STR(_right_halos) <<
-                        ", left-pads = " << IDX_STR(_actl_left_pads) <<
-                        ", right-pads = " << IDX_STR(_actl_right_pads) <<
-                        ", left-wf-exts = " << IDX_STR(_left_wf_exts) <<
-                        ", right-wf-exts = " << IDX_STR(_right_wf_exts) <<
-                        ", vec-strides = " << IDX_STR(_vec_strides);
-                oss << ", " << _dirty_steps[self].size() << " dirty flag(s)";
-            }
-            return oss.str();
+        std::stringstream oss;
+        if (is_scratch()) oss << "scratch ";
+        if (is_user_var()) oss << "user-defined ";
+        if (_fixed_size) oss << "fixed-size ";
+        oss << _make_info_string() <<
+            ", meta-data at " << (void*)this <<
+            ", and core-data at " << (void*)_corep;
+        #ifdef USE_OFFLOAD
+        if (KernelEnv::_use_offload)
+            oss << " (" << (void*)get_dev_ptr(_corep, false, false) <<
+                " on device)";
+        #endif
+        if (long_info) {
+            if (_corep->_domains.get_num_dims())
+                oss <<
+                    ", allocs = " << IDX_STR2(_allocs, " * ") <<
+                    ", domains = " << IDX_STR2(_domains, " * ") <<
+                    ", rank-offsets = " << IDX_STR(_rank_offsets) <<
+                    ", local-offsets = " << IDX_STR(_local_offsets) <<
+                    ", left-halos = " << IDX_STR(_left_halos) <<
+                    ", right-halos = " << IDX_STR(_right_halos) <<
+                    ", left-pads = " << IDX_STR(_actl_left_pads) <<
+                    ", right-pads = " << IDX_STR(_actl_right_pads) <<
+                    ", left-wf-exts = " << IDX_STR(_left_wf_exts) <<
+                    ", right-wf-exts = " << IDX_STR(_right_wf_exts) <<
+                    ", vec-strides = " << IDX_STR(_vec_strides);
+            oss << ", " << _dirty_steps[self].size() << " dirty flag(s)";
         }
-
-    // Determine required padding from halos.
-    // Does not include user-specified min padding or
-    // final rounding for left pad.
-    Indices YkVarBase::get_reqd_pad(const Indices& halos, const Indices& wf_exts) const {
-        STATE_VARS(this);
-
-        // Start with halos plus WF exts.
-        Indices mp = halos.add_elements(wf_exts);
-
-        // For any var, reads will be expanded to full vec-len during
-        // computation.  For scratch vars, halo area must be written to.
-        // Halo is sum of dependent's write halo and depender's read halo,
-        // but these two components are not stored individually.  Write halo
-        // will be expanded to full vec len during computation, requiring
-        // load from read halo beyond full vec len.  Worst case is when
-        // write halo is one and rest is read halo.  So, min padding should
-        // be halos + wave-front exts + vec-len - 1. This vec-len should be
-        // the solution one, not the one for this var to handle the case
-        // where this var is not vectorized.
-        for (int i = 0; i < get_num_dims(); i++) {
-            if (mp[i])
-                mp[i] += _corep->_soln_vec_lens[i] - 1;
-        }
-        return mp;
+        return oss.str();
     }
 
     // Resizes the underlying generic var.
@@ -262,9 +236,11 @@ namespace yask {
                 THROW_YASK_EXCEPTION("negative right extra padding in var '" + get_name() + "'");
         }
 
+        // Init pads to halos plus any WF extensions.
+        Indices new_left_pads = _corep->_left_halos.add_elements(_corep->_left_wf_exts);
+        Indices new_right_pads = _corep->_right_halos.add_elements(_corep->_right_wf_exts);
+
         // Increase padding as needed and calculate new allocs.
-        Indices new_left_pads = get_reqd_pad(_corep->_left_halos, _corep->_left_wf_exts);
-        Indices new_right_pads = get_reqd_pad(_corep->_right_halos, _corep->_right_wf_exts);
         IdxTuple new_allocs(old_allocs);
         for (int i = 0; i < get_num_dims(); i++) {
             idx_t mbit = 1LL << i;
@@ -275,11 +251,42 @@ namespace yask {
             // Adjust padding only for domain dims.
             if (_domain_dim_mask & mbit) {
 
-                // Add more padding.
+                // Rounding should use soln vec lengths in case
+                // this var is not vectorized.
+                auto svl = _corep->_soln_vec_lens[i];
+
+                // Add more padding requested by options or APIs.
                 new_left_pads[i] += _corep->_req_left_epads[i];
                 new_right_pads[i] += _corep->_req_right_epads[i];
                 new_left_pads[i] = max(new_left_pads[i], _corep->_req_left_pads[i]);
                 new_right_pads[i] = max(new_right_pads[i], _corep->_req_right_pads[i]);
+
+                // Round left pad up to vec len.
+                new_left_pads[i] = ROUND_UP(new_left_pads[i], svl);
+
+                // Round domain + right pad up to soln vec len by extending right pad.
+                // Using soln vec len to allow reading a non-vec var in this dim
+                // while calculating a vec var. (The var vec-len is always 1 or the same
+                // as the soln vec-len in a given dim.)
+                idx_t dprp = ROUND_UP(_corep->_domains[i] + new_right_pads[i], svl);
+
+                // Calculate pads from overall domain + right pad.
+                new_right_pads[i] = dprp - _corep->_domains[i];
+                
+                // Add yet another vec to both sides. This allows full-vector reads;
+                // only writes are masked.
+                new_left_pads[i] += svl;
+                new_right_pads[i] += svl;
+
+                // Make inner dim an odd number of vecs.
+                // This reportedly helps avoid some uarch aliasing.
+                auto na = new_left_pads[i] + _corep->_domains[i] + new_right_pads[i];
+                if (!p &&
+                    actl_opts->_allow_addl_pad &&
+                    get_dim_name(i) == inner_layout_dim &&
+                    (na / svl) % 2 == 0) {
+                    new_right_pads[i] += svl;
+                }
 
                 // If storage is allocated, get max of existing pad & new
                 // pad.  This will avoid throwing an exception due to
@@ -289,33 +296,13 @@ namespace yask {
                     new_right_pads[i] = max(new_right_pads[i], _corep->_actl_right_pads[i]);
                 }
 
-                // Round left pad up to vec len.
-                new_left_pads[i] = ROUND_UP(new_left_pads[i], _corep->_var_vec_lens[i]);
-
-                // Round domain + right pad up to soln vec len by extending right pad.
-                // Using soln vec len to allow reading a non-vec var in this dim
-                // while calculating a vec var. (The var vec-len is always 1 or the same
-                // as the soln vec-len in a given dim.)
-                idx_t dprp = ROUND_UP(_corep->_domains[i] + new_right_pads[i],
-                                      _corep->_soln_vec_lens[i]);
-                new_right_pads[i] = dprp - _corep->_domains[i];
-
-                // Make inner dim an odd number of vecs.
-                // This reportedly helps avoid some uarch aliasing.
-                if (!p &&
-                    actl_opts->_allow_addl_pad &&
-                    get_dim_name(i) == inner_layout_dim &&
-                    (new_allocs[i] / _corep->_var_vec_lens[i]) % 2 == 0) {
-                    new_right_pads[i] += _corep->_var_vec_lens[i];
-                }
-
                 // New allocation in each dim.
                 new_allocs[i] += new_left_pads[i] + new_right_pads[i];
                 assert(new_allocs[i] == new_left_pads[i] + _corep->_domains[i] + new_right_pads[i]);
 
                 // Since the left pad and domain + right pad were rounded up,
                 // the sum should also be a vec mult.
-                assert(new_allocs[i] % _corep->_var_vec_lens[i] == 0);
+                assert(new_allocs[i] % svl == 0);
             }
 
             // Non-domain dims.
