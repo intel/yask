@@ -27,6 +27,22 @@
 
 import yask_compiler
 
+def make_soln() :
+    global soln, t, x, y, z, A, B
+    
+    # Create a new stencil solution.
+    soln = cfac.new_solution("api_py_test")
+
+    # Define the problem dimensions.
+    t = nfac.new_step_index("t");
+    x = nfac.new_domain_index("x");
+    y = nfac.new_domain_index("y");
+    z = nfac.new_domain_index("z");
+
+    # Create vars.
+    A = soln.new_var("A", [t, x, y, z])
+    B = soln.new_var("B", [t, x, y, z])
+
 if __name__ == "__main__":
 
     # Counter for exception test
@@ -37,54 +53,116 @@ if __name__ == "__main__":
     ofac = yask_compiler.yask_output_factory()
     nfac = yask_compiler.yc_node_factory()
 
-    # Create a new stencil solution.
-    soln = cfac.new_solution("api_py_test")
-    do = ofac.new_string_output()
-    soln.set_debug_output(do)
-
-    # Define the problem dimensions.
-    t = nfac.new_step_index("t");
-    x = nfac.new_domain_index("x");
-    y = nfac.new_domain_index("y");
-    z = nfac.new_domain_index("z");
-
-    # Create a var.
-    g1 = soln.new_var("test_var", [t, x, y, z])
-    n0 = g1.new_var_point([t, x, y, z])  # center-point at this timestep.
-
-    # Exception test
-    print("Exception Test: Calling 'new_var_point' with too many arguments.")
+    yask_file = ofac.new_file_output("yc-api-test-py.hpp");
+    
+    num_expected = 0
+    print("**** calling 'new_var_point' with too many arguments.")
     try:
-        n1 = g1.new_var_point([t, x, y, z, x])
+        make_soln()
+        n1 = A.new_var_point([t, x, y, z, x]) # caught here.
+        print(n1.format_simple())
     except RuntimeError as e:
-        print ("YASK threw an expected exception.")
         print (format(e))
-        print ("Exception Test: Caught exception correctly.")
-        num_exception = num_exception + 1
+        num_exception += 1
+    num_expected += 1
+    
+    print("**** equation with illegal LHS (no 't' offset)")
+    try:
+        make_soln()
+        n1 = A.new_var_point([t, x, y, z])
+        n3 = A.new_var_point([t, x, y+1, z])
+        ns_eq = nfac.new_equation_node(n1, n3);
+        print(ns_eq.format_simple())
+        soln.set_target("avx");
+        soln.output_solution(yask_file) # caught here.
+    except RuntimeError as e:
+        print (format(e))
+        num_exception += 1
+    num_expected += 1
 
-    # Exception test
-    print("Exception Test: Call 'new_file_output' with invalid dir.")
+    print("**** equation with illegal LHS (mixed 't' offsets)")
+    try:
+        make_soln()
+        n1 = A.new_var_point([t+1, x, y, z])
+        n2 = B.new_var_point([t, x+1, y, z])
+        n3 = B.new_var_point([t-1, x, y, z])
+        n4 = A.new_var_point([t, x+1, y, z])
+        eq1 = nfac.new_equation_node(n1, n2);
+        print(eq1.format_simple())
+        eq2 = nfac.new_equation_node(n3, n4);
+        print(eq2.format_simple())
+        soln.set_target("avx");
+        soln.output_solution(yask_file) # caught here.
+    except RuntimeError as e:
+        print (format(e))
+        num_exception += 1
+    num_expected += 1
+
+    print("**** equation with illegal dependency (exact same point)")
+    try:
+        make_soln()
+        n0 = A.new_var_point([t+1, x, y, z])
+        n1 = A.new_var_point([t+1, x, y, z]) + 3.4
+        ns_eq = nfac.new_equation_node(n0, n1);
+        print(ns_eq.format_simple())
+        soln.set_target("avx");
+        soln.output_solution(yask_file) # caught here.
+    except RuntimeError as e:
+        print (format(e))
+        num_exception += 1
+    num_expected += 1
+
+    print("**** equation with illegal dependency (same var and time)")
+    try:
+        make_soln()
+        n0 = A.new_var_point([t+1, x, y, z])
+        n4 = A.new_var_point([t+1, x+1, y+1, z])
+        ns_eq = nfac.new_equation_node(n0, n4);
+        print(ns_eq.format_simple())
+        soln.set_target("avx");
+        soln.output_solution(yask_file) # caught here.
+    except RuntimeError as e:
+        print (format(e))
+        num_exception += 1
+    num_expected += 1
+
+    print("**** equation with illegal dependency (circular)")
+    try:
+        make_soln()
+        n1 = A.new_var_point([t+1, x, y, z])
+        n2 = B.new_var_point([t+1, x, y, z])
+        eq1 = nfac.new_equation_node(n1, n2);
+        print(eq1.format_simple())
+        eq2 = nfac.new_equation_node(n2, n1);
+        print(eq2.format_simple())
+        soln.set_target("avx");
+        soln.output_solution(yask_file) # caught here.
+    except RuntimeError as e:
+        print (format(e))
+        num_exception += 1
+    num_expected += 1
+
+     
+    print("**** call 'new_file_output' with invalid dir.")
     try:
         dot_file = ofac.new_file_output("/does-not-exist/foo.dot")
     except RuntimeError as e:
-        print ("YASK threw an expected exception.")
         print (format(e))
-        print ("Exception Test: Caught exception correctly.")
-        num_exception = num_exception + 1
+        num_exception += 1
+    num_expected += 1
 
-    # Exception test
-    print("Exception Test: Call 'set_target' with invalid target.")
+    print("**** call 'set_target' with invalid target.")
     try:
+        make_soln()
         soln.set_target("bad_target")
+        soln.output_solution(yask_file) # caught here.
     except RuntimeError as e:
-        print ("YASK threw an expected exception.")
         print (format(e))
-        print ("Exception Test: Caught exception correctly.")
-        num_exception = num_exception + 1
+        num_exception += 1
+    num_expected += 1
 
     # Check whether program handles exceptions or not.
-    if num_exception != 3:
-        print("There is a problem in exception test.")
+    print("Caught", num_exception, "of", num_expected, "expected exceptions.")
+    if num_exception != num_expected:
         exit(1)
-    else:
-        print("End of YASK compiler API test with exceptions.")
+    print("End of YASK compiler API test with exceptions.")

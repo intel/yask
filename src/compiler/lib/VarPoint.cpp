@@ -95,6 +95,20 @@ namespace yask {
     bool VarPoint::is_var_foldable() const {
         return _var->is_foldable();
     }
+
+    bool VarPoint::is_same_logical_var(const VarPoint& rhs,
+                                       const Dimensions& dims) const {
+        if (_var != rhs._var)
+            return false;
+        if (_consts != rhs._consts)
+            return false;
+        auto step_expr1 = get_arg(dims._step_dim);
+        auto step_expr2 = rhs.get_arg(dims._step_dim);
+        if (!are_exprs_same(step_expr1, step_expr2))
+            return false;
+        return true;
+    }
+
     string VarPoint::make_arg_str(const VarMap* var_map) const {
         string str;
         int i = 0;
@@ -117,10 +131,22 @@ namespace yask {
             make_arg_str(var_map) + ")";
         return str;
     }
-    string VarPoint::make_logical_var_str(const VarMap* var_map) const {
+    string VarPoint::make_logical_var_str(const Dimensions& dims,
+                                          const VarMap* var_map) const {
         string str = _var->_get_name();
-        if (_consts.size())
-            str += "(" + _consts.make_dim_val_str() + ")";
+        auto step_expr = get_arg(dims._step_dim);
+        auto has_consts = _consts.size() > 0;
+        if (has_consts || step_expr) {
+            str += "(";
+            if (step_expr)
+                str += step_expr->make_str();
+            if (has_consts) {
+                if (step_expr)
+                    str += ", ";
+                str += _consts.make_dim_val_str();
+            }
+            str += ")";
+        }
         return str;
     }
     const index_expr_ptr_vec& VarPoint::get_dims() const {

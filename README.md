@@ -65,6 +65,10 @@ and Intel(R) graphics processors.
 
 ## Backward-compatibility notices
 ### Version 4
+* Version 4.03.00 forces each stencil equation to update non-scratch vars
+    with offsets of +/-1 from the step-dimension on the LHS, e.g.,
+    `A(t+1, x, y) EQUALS B(t, x, y+1)`.
+    (-1 is used for less-common reverse-time stencils.)
 * Version 4.01.00 added several new APIs.
     The following changes were made to to the YASK compiler:
     removed the `-eq_bundles` option, and

@@ -198,9 +198,10 @@ namespace yask {
         }
     };
 
-    // A set of objects that have inter-dependencies.
-    // Class 'T' must implement 'clone()' that returns
-    // a 'shared_ptr<T>' and 'is_scratch()'.
+    // A set of objects that have inter-dependencies.  Class 'T' must
+    // implement 'clone()' that returns a 'shared_ptr<T>', 'is_scratch()',
+    // 'get_descr()'.  Any 2 objects of class 'T' (at different addrs) are
+    // considered different, even if they are identical.
     template <typename T>
     class DepGroup {
 
@@ -281,10 +282,16 @@ namespace yask {
         }
         
         // Set deps.
+        // Adds items if not already added.
         virtual void set_imm_dep_on(Tp<T> a, Tp<T> b) {
+            add_item(a);
+            add_item(b);
             _deps.set_imm_dep_on(a, b);
             if (b->is_scratch())
                 _scratches.set_imm_dep_on(a, b);
+            if (a == b)
+                THROW_YASK_EXCEPTION("immediate dependency of '" + a->get_descr() +
+                                     " on itself");
         }
 
         // Clear all deps.
@@ -323,6 +330,11 @@ namespace yask {
                     done = true;
                     for (size_t j = i+1; j < _all.size(); j++) {
                         auto& oj = _all.at(j);
+
+                        // Dependence on self?
+                        if (oi == oj)
+                            THROW_YASK_EXCEPTION("indirect dependency of " +
+                                                 oi->get_descr() + " on itself");
 
                         // Must swap if dependent.
                         if (_deps.is_dep_on(oi, oj)) {
@@ -386,6 +398,53 @@ namespace yask {
             find_all_deps();
         }
     };
+
+    // A logical var.
+    class LogicVar {
+        std::string _descr;
+        bool _is_scratch;
+
+    public:
+        LogicVar(VarPoint* vp,
+                 const Dimensions& dims) {
+            _descr = vp->make_logical_var_str(dims);
+            _is_scratch = vp->_get_var()->is_scratch();
+        }
+        virtual ~LogicVar() {}
+
+        const std::string& get_descr() const {
+            return _descr;
+        }
+        bool is_scratch() const {
+            return _is_scratch;
+        }
+
+        bool operator==(const LogicVar& rhs) const {
+            return _descr == rhs._descr;
+        }
+        bool operator!=(const LogicVar& rhs) const {
+            return _descr != rhs._descr;
+        }
+        bool operator<(const LogicVar& rhs) const {
+            return _descr < rhs._descr;
+        }
+        bool operator>(const LogicVar& rhs) const {
+            return _descr > rhs._descr;
+        }
+        bool operator<=(const LogicVar& rhs) const {
+            return _descr <= rhs._descr;
+        }
+        bool operator>=(const LogicVar& rhs) const {
+            return _descr >= rhs._descr;
+        }
+
+        shared_ptr<LogicVar> clone() {
+            return make_shared<LogicVar>(*this);
+        }
+    };
+
+    // A set of logical vars and related dependency data.
+    using LogicVars = DepGroup<LogicVar>;
 
     // A set of equations and related dependency data.
     class Eqs : public DepGroup<EqualsExpr> {

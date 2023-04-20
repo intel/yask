@@ -459,44 +459,24 @@ namespace yask {
                         THROW_YASK_EXCEPTION("LHS of equation " + eq1->make_quoted_str() +
                                              " contains expression " + argn->make_quoted_str() +
                                              " for misc dimension '" + dn +
-                                             "' where kernel-run-time constant integer is expected");
+                                             "' where constant integer is expected");
                     argn->get_int_val(); // throws exception if not an integer.
                 }
             }
         
-            // Heuristics to set the default step direction.
-            // The accuracy isn't critical, because the default is only be
-            // used in the standalone test utility and the auto-tuner.
+            // Set and/or check the step direction.
             if (!og1->is_scratch()) {
 
-                // First, see if LHS step arg is a simple offset, e.g., 'u(t+1, ...)'.
-                // This is the most common case.
+                // See if LHS step arg is a simple offset, e.g., 'u(t+1, ...)'.
                 auto& lofss = op1->get_arg_offsets();
                 auto* lofsp = lofss.lookup(step_dim); // offset at step dim.
                 if (lofsp) {
                     auto lofs = *lofsp;
 
-                    // Scan input (RHS) points.
-                    for (auto i1 : ip1) {
-                        
-                        // Is point a simple offset from step, e.g., 'u(t-2, ...)'?
-                        auto* rsi1p = i1->get_arg_offsets().lookup(step_dim);
-                        if (rsi1p) {
-                            int rofs = *rsi1p;
-
-                            // Example:
-                            // forward: 'u(t+1, ...) EQUALS ... u(t, ...) ...',
-                            // backward: 'u(t-1, ...) EQUALS ... u(t, ...) ...'.
-                            if (lofs > rofs) {
-                                dims._step_dir = 1;
-                                break;
-                            }
-                            else if (lofs < rofs) {
-                                dims._step_dir = -1;
-                                break;
-                            }
-                        }
-                    } // for all RHS points.
+                    if (abs(lofs) != 1)
+                        THROW_YASK_EXCEPTION("LHS of equation " + eq1->make_quoted_str() +
+                                             " does not contain an offset of +/-1 from step-dimension '" +
+                                             step_dim + "'");
                     
                     // Soln step-direction heuristic used only if not set.
                     // Assume 'u(t+1, ...) EQUALS ...' implies forward,
@@ -504,7 +484,47 @@ namespace yask {
                     if (dims._step_dir == 0 && lofs != 0)
                         dims._step_dir = (lofs > 0) ? 1 : -1;
 
+                    if (lofs != dims._step_dir)
+                        THROW_YASK_EXCEPTION("LHS of equation " + eq1->make_quoted_str() +
+                                             " does not contain the same offset from step-dimension '" +
+                                             step_dim + "' as previous equation(s)");
+                    
+                    // Scan input (RHS) points.
+                    for (auto i1 : ip1) {
+                        
+                        // Is RHS point a simple offset from step, e.g., 'u(t-2, ...)'?
+                        auto* rsi1p = i1->get_arg_offsets().lookup(step_dim);
+                        if (rsi1p) {
+                            int rofs = *rsi1p;
+
+                            // Examples:
+                            // forward: 'u(t+1, ...) EQUALS ... u(t, ...) ...',
+                            // forward: 'u(t+1, ...) EQUALS ... u(t-2, ...) ...',
+                            // bad forward: 'u(t+1, ...) EQUALS ... u(t+3, ...) ...',
+                            if (dims._step_dir == 1 && rofs > lofs) {
+                                THROW_YASK_EXCEPTION("equation " + eq1->make_quoted_str() +
+                                                     " contains an offset of " + to_string(rofs) +
+                                                     " from step-dimension '" + step_dim +
+                                                     "' on the RHS, which greater than offset " + to_string(lofs) +
+                                                     " on the LHS");
+                            }
+                            // backward: 'u(t-1, ...) EQUALS ... u(t, ...) ...'.
+                            // bad backward: 'u(t-1, ...) EQUALS ... u(t-2, ...) ...'.
+                            if (dims._step_dir == -11 && rofs < lofs) {
+                                THROW_YASK_EXCEPTION("equation " + eq1->make_quoted_str() +
+                                                     " contains an offset of " + to_string(rofs) +
+                                                     " from step-dimension '" + step_dim +
+                                                     "' on the RHS, which less than offset " + to_string(lofs) +
+                                                     " on the LHS (not allowed for reverse-time stencils)");
+                            }
+                        }
+                    } // for all RHS points.
                 }
+                else {
+                    THROW_YASK_EXCEPTION("LHS of equation " + eq1->make_quoted_str() +
+                                         " does not contain  an offset of +/-1 from step-dimension '" +
+                                         step_dim + "'");
+                }                    
             }
 
             // LHS of equation must be vectorizable.
@@ -515,7 +535,7 @@ namespace yask {
                                      " dimensions are accessed via simple offsets from their respective indices");
             }
 
-            // Check that domain indices are simple offsets and
+            // Check that step & domain indices are simple offsets and
             // misc indices are consts on RHS.
             for (auto i1 : ip1) {
                 auto* ig1 = i1->_get_var();
@@ -525,7 +545,15 @@ namespace yask {
                     auto argn = i1->get_args().at(di); // arg for this dim.
 
                     // Check based on dim type.
+                    // Must have simple indices in step dim.
                     if (dn == step_dim) {
+                        auto* rsi1p = i1->get_arg_offsets().lookup(dn);
+                        if (!rsi1p)
+                            THROW_YASK_EXCEPTION("RHS of equation " + eq1->make_quoted_str() +
+                                                 " contains expression " + argn->make_quoted_str() +
+                                                 " for step-dimension '" + dn +
+                                                 "' where constant-integer offset from '" + dn +
+                                                 "' is expected");
                     }
 
                     // Must have simple indices in domain dims.
@@ -534,7 +562,7 @@ namespace yask {
                         if (!rsi1p)
                             THROW_YASK_EXCEPTION("RHS of equation " + eq1->make_quoted_str() +
                                                  " contains expression " + argn->make_quoted_str() +
-                                                 " for domain dimension '" + dn +
+                                                 " for domain-dimension '" + dn +
                                                  "' where constant-integer offset from '" + dn +
                                                  "' is expected");
                     }
@@ -544,7 +572,7 @@ namespace yask {
                         if (!argn->is_const_val())
                             THROW_YASK_EXCEPTION("RHS of equation " + eq1->make_quoted_str() +
                                                  " contains expression " + argn->make_quoted_str() +
-                                                 " for misc dimension '" + dn +
+                                                 " for misc-dimension '" + dn +
                                                  "' where constant integer is expected");
                         argn->get_int_val(); // throws exception if not an integer.
                     }
@@ -553,6 +581,7 @@ namespace yask {
 
             // TODO: check to make sure cond1 depends only on domain indices.
             // TODO: check to make sure stcond1 does not depend on domain indices.
+
         } // for all eqs.
 
         // 2. Check each pair of eqs.
@@ -592,9 +621,6 @@ namespace yask {
                 bool same_cond = are_exprs_same(cond1, cond2);
                 bool same_stcond = are_exprs_same(stcond1, stcond2);
 
-                // A separate var is defined by its name and any const indices.
-                //bool same_og = op1->is_same_logical_var(*op2);
-
                 // If two different eqs have the same conditions, they
                 // cannot have the same LHS.
                 if (!same_eq && same_cond && same_stcond && same_op) {
@@ -609,102 +635,56 @@ namespace yask {
                                          eq2->make_quoted_str());
                 }
 
-                // First dep check: exact matches on LHS of eq1 to RHS of eq2.
-                // eq2 dep on eq1 => some output of eq1 is an input to eq2.
-                // If the two eqs have the same condition, detect
-                // dependencies by looking for exact matches.
-                // We do this check first because it's quicker than the
-                // detailed scan done later if this one doesn't find a dep.
-                // Also, this is always illegal, even if not finding deps.
-                //
-                // Example:
-                //  eq1: a(t+1, x, ...) EQUALS ...
-                //  eq2: b(t+1, x, ...) EQUALS a(t+1, x, ...) ...
-                if (same_cond && same_stcond && ip2.count(op1)) {
-
-                    // Eq depends on itself?
-                    if (same_eq) {
-
-                        // Exit with error.
-                        THROW_YASK_EXCEPTION("illegal dependency: LHS of equation " +
-                                             eq1->make_quoted_str() + " also appears on its RHS");
-                    }
-
-                    // Save dependency.
-                    #ifdef DEBUG_DEP
-                    cout << "  Exact match found to " << op1->make_quoted_str() << ".\n";
-                    #endif
-                    if (settings._find_deps)
-                        set_imm_dep_on(eq2, eq1);
-
-                    // Move along to next eq2.
-                    continue;
-                }
-
-                // Don't do more conservative checks if not looking for deps.
+                // Stop here if not looking for deps.
                 if (!settings._find_deps)
                     continue;
 
-                // Next dep check: inexact matches on LHS of eq1 to RHS of eq2.
-                // Does eq1 define *any* point in a var that eq2 inputs
-                // at the same step index?  If so, they *might* have a
-                // dependency. Some of these may not be real
-                // dependencies due to conditions. Those that are real
-                // may or may not be legal.
+                // Check for "logical-var" matches on LHS of eq1 to RHS of
+                // eq2.  Does eq1 define *any* point in a var that eq2
+                // inputs at the same step index?  (Some of these may not be
+                // actual dependencies due to conditions.)
                 //
                 // Example:
                 //  eq1: a(t+1, x, ...) EQUALS ... IF_DOMAIN ...
                 //  eq2: b(t+1, x, ...) EQUALS a(t+1, x+5, ...) ... IF_DOMAIN ...
+                //  eq2 depends on eq1.
                 //
                 // Example:
                 //  eq1: tmp(x, ...) EQUALS ...
                 //  eq2: b(t+1, x, ...) EQUALS tmp(x+2, ...)
+                //  eq2 depends on eq1.
                 //
                 // TODO: be much smarter about this and find only real
-                // dependencies--use a polyhedral library?
+                // dependencies considering the conditions.
                 if (ig2.count(og1)) {
 
                     // detailed check of g1 input points on RHS of eq2.
                     for (auto* i2 : ip2) {
 
-                        // Same logical var?
-                        bool same_var = i2->is_same_logical_var(*op1);
+                        // Same logical var (same name, time ofs, and misc indices)?
+                        bool same_var = i2->is_same_logical_var(*op1, dims);
 
                         // If not same var, no dependency.
                         if (!same_var)
                             continue;
 
-                        // Both points at same step?
-                        bool same_step = false;
-                        num_expr_ptr step_expr2 = i2->get_arg(step_dim);
-                        if (step_expr1 && step_expr2 &&
-                            are_exprs_same(step_expr1, step_expr2))
-                            same_step = true;
-
-                        // From same step index, e.g., same time?
-                        // Or, passing data thru a temp var?
-                        if (same_step || og1->is_scratch()) {
-
-                            // Eq depends on itself?
-                            if (same_eq) {
-
-                                // Exit with error.
-                                string stepmsg = same_step ? " at '" + step_expr1->make_quoted_str() + "'" : "";
-                                THROW_YASK_EXCEPTION("disallowed dependency: var '" +
-                                                     op1->make_logical_var_str() + "' on LHS of equation " +
-                                                     eq1->make_quoted_str() + " also appears on its RHS" +
-                                                     stepmsg);
-                            }
-
-                            // Save dependency.
-                            #ifdef DEBUG_DEP
-                            cout << "  Likely match found to " << op1->make_quoted_str() << ".\n";
-                            #endif
-                            set_imm_dep_on(eq2, eq1);
-
-                            // Move along to next equation.
-                            break;
+                        // Eq depends on itself?
+                        if (same_eq) {
+                            
+                            // Exit with error.
+                            THROW_YASK_EXCEPTION("illegal dependency: reference to '" +
+                                                 op1->make_logical_var_str(dims) + "' on LHS and RHS of equation " +
+                                                 eq1->make_quoted_str());
                         }
+
+                        // Save dependency.
+                        #ifdef DEBUG_DEP
+                        cout << "  Likely match found to " << op1->make_quoted_str() << ".\n";
+                        #endif
+                        set_imm_dep_on(eq2, eq1);
+
+                        // Move along to next equation.
+                        break;
                     }
                 }
                 #ifdef DEBUG_DEP
@@ -972,8 +952,10 @@ namespace yask {
           - b2 updates T1(part 2).
           - b3 updates T2(part 2) & depends on b1 & b2.
           - b4 updates A & depends on b1-3.
-          This is bad because the write halo for updates in b1 would typically need to
-          be larger than that of b3, but they are both defined by the halo of T2.
+
+          This is bad because the write halo for updates in b1 would
+          typically need to be larger than that of b3, but they are both
+          defined by the halo of T2.
 
           Correct:
           - b1 updates T1(part 1).
@@ -982,7 +964,16 @@ namespace yask {
           - b4 updates T2(part 2) & depends on b1 & b3.
           - b5 updates A & depends on b1-4.
           Write halo for T1 is typically made larger than T2 as in Ex s2.
+
+          Even though it's not illegal, it's also better not to bundle
+          partial updates of non-scratch vars inconsistently. This avoid
+          updating part of a var early and then more of it [much] later,
+          which is bad for cache locality.
         */
+
+        // Equation already added?
+        if (_eqs_in_bundles.count(eq))
+            return false;
 
         assert(_dims);
         auto& step_dim = _dims->_step_dim;
@@ -990,10 +981,6 @@ namespace yask {
         // Get deps between eqs.
         auto& eq_deps = all_eqs.get_deps();
         
-        // Equation already added?
-        if (_eqs_in_bundles.count(eq))
-            return false;
-
         // Get conditions, if any.
         auto cond = eq->_get_cond();
         auto stcond = eq->_get_step_cond();
@@ -1010,21 +997,19 @@ namespace yask {
         EqBundle* target = 0;
         if (settings._bundle) {
          
-            // To handle special scratch case above, check *all* eqs
-            // that update the same scratch var.
-            EqLot sc_eqs(true);
-            if (eq->is_scratch()) {
-                for (auto& eq2 : all_eqs.get_all()) {
-                    if (eq == eq2)
-                        continue;
-                    auto eq2v = eq2->get_lhs_var();
-                    if (eqv->_get_name() == eq2v->_get_name())
-                        sc_eqs.add_eq(eq2);
-                }
-                #ifdef DEBUG_ADD_EXPRS
-                cout << "** ae2b: will check " << sc_eqs.get_eqs().size() << " related scratch eqs\n";
-                #endif
+            // To avoid inconsistent bundling of var updates as described
+            // above, find *all* other eqs that update the same var as 'eq'.
+            EqLot rel_eqs(eq->is_scratch());
+            for (auto& eq2 : all_eqs.get_all()) {
+                if (eq == eq2)
+                    continue;
+                auto eq2v = eq2->get_lhs_var();
+                if (eqv->_get_name() == eq2v->_get_name())
+                    rel_eqs.add_eq(eq2);
             }
+            #ifdef DEBUG_ADD_EXPRS
+            cout << "** ae2b: will check " << rel_eqs.get_eqs().size() << " related eqs\n";
+            #endif
             
             // Loop through existing bundles, looking for one that
             // 'eq' can be added to.
@@ -1041,7 +1026,7 @@ namespace yask {
                 if (b->is_scratch() != eq->is_scratch())
                     is_ok = false;
 
-                // Conditions must match (both may be null).
+                // Domain & step conditions must match (both may be null).
                 else if (!are_exprs_same(b->cond, cond))
                     is_ok = false;
                 else if (!are_exprs_same(b->step_cond, stcond))
@@ -1071,23 +1056,23 @@ namespace yask {
                         // Look for any dependency between 'eq' and 'eq2'.
                         if (is_ok && eq_deps.is_dep(eq, eq2)) {
                             #ifdef DEBUG_ADD_EXPRS
-                            cout << "*** ae2b: NOT adding eq because of dependency w/bundle eq " <<
+                            cout << "*** ae2b: NOT adding eq because of dependency w/bundled eq " <<
                                 eq2->make_quoted_str() << endl;
                             #endif
                             is_ok = false;
                         }
 
-                        // Check against other scratch eqs.
+                        // Check against other eqs that update the same var.
                         if (is_ok) {
-                            for (auto& eq3 : sc_eqs.get_eqs()) {
+                            for (auto& eq3 : rel_eqs.get_eqs()) {
                                 #ifdef DEBUG_ADD_EXPRS
-                                cout << "** ae2b: checking related scratch eq " << eq3->get_descr() << endl;
+                                cout << "** ae2b: checking related eq " << eq3->get_descr() << endl;
                                 #endif
 
                                 // Look for any dependency between 'eq2' and 'eq3'.
                                 if (eq_deps.is_dep(eq2, eq3)) {
                                     #ifdef DEBUG_ADD_EXPRS
-                                    cout << "*** ae2b: NOT adding eq because of dependency of related scratch eq w/bundle eq " <<
+                                    cout << "*** ae2b: NOT adding eq because of dependency of related eq w/bundled eq " <<
                                         eq2->make_quoted_str() << endl;
                                     #endif
                                     is_ok = false;
@@ -1678,7 +1663,7 @@ namespace yask {
         if (_bundles_in_stages.count(bp))
             return false;
 
-        // Get condition, if any.
+        // Get step condition, if any.
         auto stcond = bp->step_cond;
         
         // Get deps between bundles.
@@ -1699,10 +1684,10 @@ namespace yask {
 
             // Loop through all bundles in 'st'.
             bool is_ok = true;
-            for (auto& bp2 : st->get_bundles()) {
+            for (auto& b2 : st->get_bundles()) {
 
                 // Look for any dependency between 'bp' and 'bp2'.
-                if (deps.is_dep(bp, bp2)) {
+                if (deps.is_dep(bp, b2)) {
                     is_ok = false;
                     break;
                 }
@@ -1779,11 +1764,12 @@ namespace yask {
         // Add non-scratch, then scratch bundles.
         // This is done just to give the non-scratch ones lower indices.
         for (bool do_scratch : { false, true }) {
-            for (auto b : all_bundles.get_all()) {
-                if (b->is_scratch() != do_scratch)
+            for (auto b1 : all_bundles.get_all()) {
+                if (b1->is_scratch() != do_scratch)
                     continue;
 
-                add_bundle_to_stage(all_bundles, b);
+                // Add this bundle to an existing or new stage.
+                add_bundle_to_stage(all_bundles, b1);
             }
         }
 
