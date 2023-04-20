@@ -28,7 +28,7 @@
 import yask_compiler
 
 def make_soln() :
-    global soln, t, x, y, z, A, B
+    global soln, t, x, y, z, k, A, B, C, T1
     
     # Create a new stencil solution.
     soln = cfac.new_solution("api_py_test")
@@ -38,10 +38,13 @@ def make_soln() :
     x = nfac.new_domain_index("x");
     y = nfac.new_domain_index("y");
     z = nfac.new_domain_index("z");
+    k = nfac.new_misc_index("k");
 
     # Create vars.
     A = soln.new_var("A", [t, x, y, z])
     B = soln.new_var("B", [t, x, y, z])
+    C = soln.new_var("C", [t, k, x, y, z])
+    T1 = soln.new_scratch_var("T1", [k, x, y, z]);
 
 if __name__ == "__main__":
 
@@ -61,11 +64,32 @@ if __name__ == "__main__":
         make_soln()
         n1 = A.new_var_point([t, x, y, z, x]) # caught here.
         print(n1.format_simple())
+        print("***** did NOT throw expected exception *****")
     except RuntimeError as e:
         print (format(e))
         num_exception += 1
     num_expected += 1
     
+    print("**** 2 equations defining same point");
+    try:
+        make_soln()
+        n1 = A.new_var_point([t+1, x, y, z])
+        n2 = nfac.new_const_number_node(6)
+        eq1 = nfac.new_equation_node(n1, n2);
+        print(eq1.format_simple())
+        n3 = A.new_var_point([t+1, x, y, z])
+        n4 = nfac.new_const_number_node(9)
+        eq2 = nfac.new_equation_node(n3, n4);
+        print(eq1.format_simple())
+
+        soln.set_target("avx");
+        soln.output_solution(yask_file) # caught here.
+        print("***** did NOT throw expected exception *****")
+    except RuntimeError as e:
+        print (format(e))
+        num_exception += 1
+    num_expected += 1
+
     print("**** equation with illegal LHS (no 't' offset)")
     try:
         make_soln()
@@ -75,6 +99,7 @@ if __name__ == "__main__":
         print(ns_eq.format_simple())
         soln.set_target("avx");
         soln.output_solution(yask_file) # caught here.
+        print("***** did NOT throw expected exception *****")
     except RuntimeError as e:
         print (format(e))
         num_exception += 1
@@ -93,6 +118,7 @@ if __name__ == "__main__":
         print(eq2.format_simple())
         soln.set_target("avx");
         soln.output_solution(yask_file) # caught here.
+        print("***** did NOT throw expected exception *****")
     except RuntimeError as e:
         print (format(e))
         num_exception += 1
@@ -107,6 +133,7 @@ if __name__ == "__main__":
         print(ns_eq.format_simple())
         soln.set_target("avx");
         soln.output_solution(yask_file) # caught here.
+        print("***** did NOT throw expected exception *****")
     except RuntimeError as e:
         print (format(e))
         num_exception += 1
@@ -121,6 +148,7 @@ if __name__ == "__main__":
         print(ns_eq.format_simple())
         soln.set_target("avx");
         soln.output_solution(yask_file) # caught here.
+        print("***** did NOT throw expected exception *****")
     except RuntimeError as e:
         print (format(e))
         num_exception += 1
@@ -137,15 +165,37 @@ if __name__ == "__main__":
         print(eq2.format_simple())
         soln.set_target("avx");
         soln.output_solution(yask_file) # caught here.
+        print("***** did NOT throw expected exception *****")
     except RuntimeError as e:
         print (format(e))
         num_exception += 1
     num_expected += 1
 
-     
+    print("**** equation with illegal dependency (scratch var)")
+    try:
+        make_soln()
+        n1 = C.new_var_point([t+1, nfac.new_const_number_node(5), x, y, z])
+        n2 = C.new_var_point([t+1, nfac.new_const_number_node(6), x, y, z])
+        eq1 = nfac.new_equation_node(n1, n2); # ok dep across non-scratch vars w/diff misc indices.
+        print(eq1.format_simple())
+        n3 = T1.new_var_point([nfac.new_const_number_node(3), x, y, z]);
+        n4 = T1.new_var_point([nfac.new_const_number_node(4), x, y, z]);
+        eq2 = nfac.new_equation_node(n3, n4); # not ok dep across scratch vars w/diff misc indices.
+        print(eq2.format_simple())
+        eq3 = nfac.new_equation_node(n2, n4);
+        print(eq3.format_simple())
+        soln.set_target("avx");
+        soln.output_solution(yask_file) # caught here.
+        print("***** did NOT throw expected exception *****")
+    except RuntimeError as e:
+        print (format(e))
+        num_exception += 1
+    num_expected += 1
+
     print("**** call 'new_file_output' with invalid dir.")
     try:
         dot_file = ofac.new_file_output("/does-not-exist/foo.dot")
+        print("***** did NOT throw expected exception *****")
     except RuntimeError as e:
         print (format(e))
         num_exception += 1
@@ -156,6 +206,7 @@ if __name__ == "__main__":
         make_soln()
         soln.set_target("bad_target")
         soln.output_solution(yask_file) # caught here.
+        print("***** did NOT throw expected exception *****")
     except RuntimeError as e:
         print (format(e))
         num_exception += 1

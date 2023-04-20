@@ -389,11 +389,11 @@ namespace yask {
             auto* eq1p = eq1.get();
             assert(out_vars.count(eq1p));
             assert(in_vars.count(eq1p));
-            auto* og1 = out_vars.at(eq1p);
-            assert(og1 == eq1->get_lhs_var());
+            auto* ov1 = out_vars.at(eq1p);
+            assert(ov1 == eq1->get_lhs_var());
             auto* op1 = out_pts.at(eq1p);
-            //auto& ig1 = in_vars.at(eq1p);
-            auto& ip1 = in_pts.at(eq1p);
+            //auto& ivs1 = in_vars.at(eq1p);
+            auto& ips1 = in_pts.at(eq1p);
             auto cond1 = eq1p->_get_cond();
             auto stcond1 = eq1p->_get_step_cond();
             num_expr_ptr step_expr1 = op1->get_arg(step_dim); // may be null.
@@ -414,7 +414,7 @@ namespace yask {
             }
 
             // LHS of non-scratch must have step dim and vice-versa.
-            if (!og1->is_scratch()) {
+            if (!ov1->is_scratch()) {
                 if (!step_expr1)
                     THROW_YASK_EXCEPTION("non-scratch var equation " + eq1->make_quoted_str() +
                                          " does not use step-dimension '" + step_dim +
@@ -426,8 +426,8 @@ namespace yask {
             }
 
             // Check LHS var dimensions and associated args.
-            for (int di = 0; di < og1->get_num_dims(); di++) {
-                auto& dn = og1->get_dim_name(di);  // name of this dim.
+            for (int di = 0; di < ov1->get_num_dims(); di++) {
+                auto& dn = ov1->get_dim_name(di);  // name of this dim.
                 auto argn = op1->get_args().at(di); // LHS arg for this dim.
 
                 // Check based on dim type.
@@ -465,7 +465,7 @@ namespace yask {
             }
         
             // Set and/or check the step direction.
-            if (!og1->is_scratch()) {
+            if (!ov1->is_scratch()) {
 
                 // See if LHS step arg is a simple offset, e.g., 'u(t+1, ...)'.
                 auto& lofss = op1->get_arg_offsets();
@@ -490,7 +490,7 @@ namespace yask {
                                              step_dim + "' as previous equation(s)");
                     
                     // Scan input (RHS) points.
-                    for (auto i1 : ip1) {
+                    for (auto i1 : ips1) {
                         
                         // Is RHS point a simple offset from step, e.g., 'u(t-2, ...)'?
                         auto* rsi1p = i1->get_arg_offsets().lookup(step_dim);
@@ -529,15 +529,16 @@ namespace yask {
 
             // LHS of equation must be vectorizable.
             // TODO: relax this restriction.
+            // TODO: is this needed? seems redundant w/above checks on LHS.
             if (op1->get_vec_type() != VarPoint::VEC_FULL) {
                 THROW_YASK_EXCEPTION("LHS of equation " + eq1->make_quoted_str() +
                                      " is not fully vectorizable because not all folded"
                                      " dimensions are accessed via simple offsets from their respective indices");
             }
 
-            // Check that step & domain indices are simple offsets and
-            // misc indices are consts on RHS.
-            for (auto i1 : ip1) {
+            // More RHS checks: step & domain indices must be simple offsets and
+            // misc indices must be consts.
+            for (auto i1 : ips1) {
                 auto* ig1 = i1->_get_var();
 
                 for (int di = 0; di < ig1->get_num_dims(); di++) {
@@ -590,23 +591,25 @@ namespace yask {
             auto* eq1p = eq1.get();
             assert(out_vars.count(eq1p));
             assert(in_vars.count(eq1p));
-            auto* og1 = out_vars.at(eq1p);
-            assert(og1 == eq1->get_lhs_var());
+            auto* ov1 = out_vars.at(eq1p);
+            assert(ov1 == eq1->get_lhs_var());
             auto* op1 = out_pts.at(eq1p);
-            //auto& ig1 = in_vars.at(eq1p);
-            //auto& ip1 = in_pts.at(eq1p);
+            //auto& ivs1 = in_vars.at(eq1p);
+            //auto& ips1 = in_pts.at(eq1p);
             auto cond1 = eq1p->_get_cond();
             auto stcond1 = eq1p->_get_step_cond();
             num_expr_ptr step_expr1 = op1->get_arg(step_dim);
+            bool is_scratch1 = op1->_get_var()->is_scratch();
 
             // Check each 'eq2' to see if it depends on 'eq1'.
+            // NB: 'eq2' == 'eq1' for one eq; see 'same_eq' below.
             for (auto eq2 : get_all()) {
                 auto* eq2p = eq2.get();
-                auto& og2 = out_vars.at(eq2p);
-                assert(og2 == eq2->get_lhs_var());
-                auto& op2 = out_pts.at(eq2p);
-                auto& ig2 = in_vars.at(eq2p);
-                auto& ip2 = in_pts.at(eq2p);
+                auto& ov2 = out_vars.at(eq2p);
+                assert(ov2 == eq2->get_lhs_var());
+                auto& ops2 = out_pts.at(eq2p);
+                auto& ivs2 = in_vars.at(eq2p);
+                auto& ips2 = in_pts.at(eq2p);
                 auto cond2 = eq2p->_get_cond();
                 auto stcond2 = eq2p->_get_step_cond();
 
@@ -617,7 +620,7 @@ namespace yask {
                 #endif
 
                 bool same_eq = eq1 == eq2;
-                bool same_op = are_exprs_same(op1, op2);
+                bool same_op = are_exprs_same(op1, ops2);
                 bool same_cond = are_exprs_same(cond1, cond2);
                 bool same_stcond = are_exprs_same(stcond1, stcond2);
 
@@ -656,31 +659,59 @@ namespace yask {
                 //
                 // TODO: be much smarter about this and find only real
                 // dependencies considering the conditions.
-                if (ig2.count(og1)) {
+
+                // Only need to check each point if LHS var of eq1 is one of
+                // the RHS vars of eq2.
+                if (ivs2.count(ov1)) {
 
                     // detailed check of g1 input points on RHS of eq2.
-                    for (auto* i2 : ip2) {
+                    for (auto* ip2 : ips2) {
+
+                        // Same var?
+                        bool same_var = ip2->_get_var() == op1->_get_var();
+
+                        // If not same var, there is no dependency.
+                        if (!same_var)
+                            continue; // to next RHS pt.
 
                         // Same logical var (same name, time ofs, and misc indices)?
-                        bool same_var = i2->is_same_logical_var(*op1, dims);
+                        bool same_lvar = ip2->is_same_logical_var(*op1, dims);
 
-                        // If not same var, no dependency.
-                        if (!same_var)
-                            continue;
+                        // Scratch vars have a dependency if the vars are the same
+                        // regardless of the misc indices.
+                        if (is_scratch1) {
 
-                        // Eq depends on itself?
-                        if (same_eq) {
+                            // Cannot have a dependency b/t same scratch var if only misc
+                            // indices are different. This is because only one write-halo size
+                            // can be stored per scratch var.
+                            if (same_eq) {
                             
-                            // Exit with error.
-                            THROW_YASK_EXCEPTION("illegal dependency: reference to '" +
-                                                 op1->make_logical_var_str(dims) + "' on LHS and RHS of equation " +
-                                                 eq1->make_quoted_str());
+                                // Exit with error.
+                                THROW_YASK_EXCEPTION("illegal dependency: reference to same scratch var '" +
+                                                     op1->get_var_name() + "' on LHS and RHS of equation " +
+                                                     eq1->make_quoted_str());
+                            }
                         }
 
-                        // Save dependency.
-                        #ifdef DEBUG_DEP
-                        cout << "  Likely match found to " << op1->make_quoted_str() << ".\n";
-                        #endif
+                        // Non-scratch vars have a dependency only if the logical vars
+                        // are the same.
+                        else {
+                        
+                            // If not same logical var, there is no dependency.
+                            if (!same_lvar)
+                                continue; // to next RHS pt.
+
+                            // Eq depends on itself?
+                            if (same_eq) {
+                                
+                                // Exit with error.
+                                THROW_YASK_EXCEPTION("illegal dependency: reference to '" +
+                                                     op1->make_logical_var_str(dims) + "' on LHS and RHS of equation " +
+                                                     eq1->make_quoted_str());
+                            }
+                        }
+
+                        // Save dependency between the 2 eqs.
                         set_imm_dep_on(eq2, eq1);
 
                         // Move along to next equation.
@@ -1376,14 +1407,14 @@ namespace yask {
 
                                  // First, set first eq halo the max of all.
                                  auto& eq1 = b2->get_eqs().front();
-                                 auto* og1 = shadow_map[eq1->get_lhs_var()];
+                                 auto* ov1 = shadow_map[eq1->get_lhs_var()];
                                  for (auto& eq2 : b2->get_eqs()) {
                                      if (eq1 == eq2)
                                          continue;
 
                                      // Adjust g1 to max(g1, g2).
-                                     auto* og2 = shadow_map[eq2->get_lhs_var()];
-                                     og1->update_halo(*og2);
+                                     auto* ov2 = shadow_map[eq2->get_lhs_var()];
+                                     ov1->update_halo(*ov2);
                                  }
 
                                  // Then, update all others based on first.
@@ -1392,17 +1423,17 @@ namespace yask {
                                          continue;
 
                                      // Adjust g2 to g1.
-                                     auto* og2 = shadow_map[eq2->get_lhs_var()];
-                                     og2->update_halo(*og1);
+                                     auto* ov2 = shadow_map[eq2->get_lhs_var()];
+                                     ov2->update_halo(*ov1);
                                  }
 
                                  // Get updated halos from the scratch bundle.  These
                                  // are the points that are read from the dependent
                                  // eq(s).  For scratch vars, the halo areas must
                                  // also be written to.
-                                 auto left_ohalo = og1->get_halo_sizes(stname, true);
-                                 auto right_ohalo = og1->get_halo_sizes(stname, false);
-                                 auto l1_dist = og1->get_l1_dist();
+                                 auto left_ohalo = ov1->get_halo_sizes(stname, true);
+                                 auto right_ohalo = ov1->get_halo_sizes(stname, false);
+                                 auto l1_dist = ov1->get_l1_dist();
 
                                  #ifdef DEBUG_HALOS
                                  cout << "** c_h: processing " << b2->get_descr() << "...\n"
