@@ -162,18 +162,21 @@ namespace yask {
         _eq_stages->calc_halos(*_eq_bundles);
 
         // Optimize bundles.
-        _eq_bundles->optimize_eq_bundles("scalar & vector", false);
+        _eq_bundles->optimize_eq_bundles("scalar & vector", true);
         
-        // Make a copy of each equation at each cluster offset.
-        // We will use these for inter-cluster optimizations and code generation.
-        // NB: these cluster bundles do not maintain dependencies, so cannot be used
-        // for sorting, making stages, etc.
-        *_dos << "\nConstructing cluster of equations containing " <<
-            _dims._cluster_mults.product() << " vector(s)...\n";
+        // Make a copy of each equation at each cluster offset.  We will use
+        // these for inter-cluster optimizations and code generation.  We
+        // don't recalculate new stages for the cluster bundles.  Instead,
+        // the stages from '_eq_bundles' are used for the corresponding
+        // entries in '_cluster_eq_bundles'.
         *_cluster_eq_bundles = *_eq_bundles;
-        _cluster_eq_bundles->replicate_eqs_in_cluster();
-        if (_settings._do_opt_cluster)
-            _cluster_eq_bundles->optimize_eq_bundles("cluster", true);
+        if (_dims._cluster_mults.product() > 1) {
+            *_dos << "\nConstructing equation bundles containing " <<
+                _dims._cluster_mults.product() << " vectors per cluster...\n";
+            _cluster_eq_bundles->replicate_eqs_in_cluster();
+            if (_settings._do_opt_cluster)
+                _cluster_eq_bundles->optimize_eq_bundles("cluster", true);
+        }
     }
 
     // Set options as if command-line.

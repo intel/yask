@@ -50,11 +50,7 @@ namespace yask {
         // Longer descriptive string.
         string _long_name;
 
-        // Debug output.
-        yask_output_ptr _debug_output;
-        ostream* _dos = &std::cout; // just a handy pointer to an ostream.
-
-        // All vars accessible by the kernel.
+        // All vars defined by the kernel.
         Vars _vars;
 
         // All logical vars accessed in this solution.
@@ -80,6 +76,10 @@ namespace yask {
         EqBundles* _eq_bundles = 0; // eq-bundles for scalar and vector.
         EqStages* _eq_stages = 0; // packs of bundles w/o inter-dependencies.
         EqBundles* _cluster_eq_bundles = 0; // eq-bundles for clusters.
+
+        // Debug output.
+        yask_output_ptr _debug_output;
+        ostream* _dos = &std::cout; // just a handy pointer to an ostream.
 
         // Create the intermediate data.
         void analyze_solution(int vlen,

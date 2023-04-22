@@ -657,7 +657,7 @@ namespace yask {
 
         // Apply optimizations requested in settings.
         virtual void optimize_eq_bundles(const string& descr,
-                                         bool print_sets);
+                                         bool print_stats);
     };
     typedef shared_ptr<EqBundle> EqBundlePtr;
 

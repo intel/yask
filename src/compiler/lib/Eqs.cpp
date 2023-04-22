@@ -1631,7 +1631,7 @@ namespace yask {
 
     // Apply optimizations according to the 'settings'.
     void EqBundles::optimize_eq_bundles(const string& descr,
-                                        bool print_sets)                                        
+                                        bool print_stats)                                        
     {
         auto& all_eqs = _soln->get_eqs();
         auto& settings = _soln->get_settings();
@@ -1703,7 +1703,7 @@ namespace yask {
         }
 
         // Final stats per equation bundle.
-        if (print_sets && get_num() > 1) {
+        if (print_stats && get_num() > 1) {
             os << "Stats per equation-bundle:\n";
             for (auto eg : get_all())
                 eg->print_stats(os, "for " + eg->get_descr());
