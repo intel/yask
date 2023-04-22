@@ -419,7 +419,7 @@ namespace yask {
         virtual void print_context(ostream& os);
 
     public:
-        YASKCppPrinter(StencilSolution& stencil,
+        YASKCppPrinter(Solution& stencil,
                        EqBundles& eq_bundles,
                        EqStages& eq_stages,
                        EqBundles& cluster_eq_bundles) :

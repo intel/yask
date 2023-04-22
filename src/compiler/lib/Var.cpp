@@ -39,15 +39,15 @@ namespace yask {
     Var::new_var_point(const std::vector<yc_number_node_ptr>& index_exprs) {
 
         // Check for correct number of indices.
-        if (_dims.size() != index_exprs.size()) {
+        if (_vdims.size() != index_exprs.size()) {
             FORMAT_AND_THROW_YASK_EXCEPTION("attempt to create a var point in " <<
-                                            _dims.size() << "D var '" << _name << "' with " <<
+                                            _vdims.size() << "D var '" << _name << "' with " <<
                                             index_exprs.size() << " index expressions");
         }
 
         // Make args.
         num_expr_ptr_vec args;
-        for (size_t i = 0; i < _dims.size(); i++) {
+        for (size_t i = 0; i < _vdims.size(); i++) {
             auto p = dynamic_pointer_cast<NumExpr>(index_exprs.at(i));
             assert(p);
             args.push_back(p->clone());
@@ -62,20 +62,20 @@ namespace yask {
     Var::new_relative_var_point(const std::vector<int>& dim_offsets) {
 
         // Check for correct number of indices.
-        if (_dims.size() != dim_offsets.size()) {
+        if (_vdims.size() != dim_offsets.size()) {
             FORMAT_AND_THROW_YASK_EXCEPTION("attempt to create a relative var point in " <<
-                                            _dims.size() << "D var '" << _name << "' with " <<
+                                            _vdims.size() << "D var '" << _name << "' with " <<
                                             dim_offsets.size() << " indices");
         }
 
         // Check dim types.
         // Make default args w/just index.
         num_expr_ptr_vec args;
-        for (size_t i = 0; i < _dims.size(); i++) {
-            auto dim = _dims.at(i);
+        for (size_t i = 0; i < _vdims.size(); i++) {
+            auto dim = _vdims.at(i);
             if (dim->get_type() == MISC_INDEX) {
                 FORMAT_AND_THROW_YASK_EXCEPTION("attempt to create a relative var point in " <<
-                                                _dims.size() << "D var '" << _name <<
+                                                _vdims.size() << "D var '" << _name <<
                                                 "' containing non-step or non-domain dim '" <<
                                                 dim->_get_name() << "'");
             }
@@ -88,8 +88,8 @@ namespace yask {
 
         // Set the offsets, which creates a new
         // expression for each index.
-        for (size_t i = 0; i < _dims.size(); i++) {
-            auto dim = _dims.at(i);
+        for (size_t i = 0; i < _vdims.size(); i++) {
+            auto dim = _vdims.at(i);
             IntScalar ofs(dim->_get_name(), dim_offsets.at(i));
             gpp->set_arg_offset(ofs);
         }
@@ -104,13 +104,13 @@ namespace yask {
     }
 
     // Ctor for Var.
-    Var::Var(string name,
-                     bool is_scratch,
-                     StencilSolution* soln,
-                     const index_expr_ptr_vec& dims) :
+    Var::Var(Solution* soln,
+             string name,
+             bool is_scratch,
+             const index_expr_ptr_vec& dims) :
+        _soln(soln),
         _name(name),       // TODO: validate that name is legal C++ var.
-        _is_scratch(is_scratch),
-        _soln(soln)
+        _is_scratch(is_scratch)
     {
         assert(soln);
 
@@ -125,7 +125,7 @@ namespace yask {
         vars.insert(this);
 
         // Define dims.
-        _dims = dims;
+        _vdims = dims;
     }
 
     // Simple accessors.
@@ -140,7 +140,7 @@ namespace yask {
         _num_domain_dims = 0;
         _num_misc_dims = 0;
         _num_foldable_dims = 0;
-        for (auto gdim : _dims) {
+        for (auto gdim : _vdims) {
             auto& dname = gdim->_get_name();
             auto dtype = gdim->get_type();
 
@@ -183,7 +183,7 @@ namespace yask {
             return false;
 
         // Same halos?
-        for (auto& dim : _dims) {
+        for (auto& dim : _vdims) {
             auto& dname = dim->_get_name();
             auto dtype = dim->get_type();
             if (dtype == DOMAIN_INDEX) {
@@ -475,5 +475,10 @@ namespace yask {
         d += ")";
         return d;
     }
+
+    void Vars::set_dim_counts() {
+            for (auto gp : _vars)
+                gp->set_dim_counts(_soln->get_dims());
+        }
 
 } // namespace yask.

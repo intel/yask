@@ -425,14 +425,14 @@ namespace yask {
     class PrinterBase {
 
     protected:
-        StencilSolution& _stencil;
+        Solution& _stencil;
         const CompilerSettings& _settings;
         const Dimensions& _dims;
         Vars& _vars;
         EqBundles& _eq_bundles;
 
     public:
-        PrinterBase(StencilSolution& stencil,
+        PrinterBase(Solution& stencil,
                     EqBundles& eq_bundles) :
             _stencil(stencil),
             _settings(stencil.get_settings()),
@@ -472,7 +472,7 @@ namespace yask {
         bool _long = false;
 
     public:
-        PseudoPrinter(StencilSolution& stencil,
+        PseudoPrinter(Solution& stencil,
                       EqBundles& eq_bundles,
                       bool is_long) :
             PrinterBase(stencil, eq_bundles), _long(is_long) { }
@@ -487,7 +487,7 @@ namespace yask {
         bool _is_simple;
 
     public:
-        DOTPrinter(StencilSolution& stencil, EqBundles& eq_bundles,
+        DOTPrinter(Solution& stencil, EqBundles& eq_bundles,
                    bool is_simple) :
             PrinterBase(stencil, eq_bundles),
             _is_simple(is_simple) { }
@@ -500,7 +500,7 @@ namespace yask {
     class POVRayPrinter : public PrinterBase {
 
     public:
-        POVRayPrinter(StencilSolution& stencil, EqBundles& eq_bundles) :
+        POVRayPrinter(Solution& stencil, EqBundles& eq_bundles) :
             PrinterBase(stencil, eq_bundles) { }
         virtual ~POVRayPrinter() { }
 

@@ -180,7 +180,6 @@ include $(YASK_BASE)/src/common/common.mk
 
 # Flags passed to stencil compiler.
 YC_FLAGS	:=	-stencil $(YC_STENCIL) -target $(YC_TARGET) -elem-bytes $(real_bytes)
-YC_FLAGS	+=	-print-eqs
 
 # Stencil compiler flags that take an argument.
 ifneq ($(radius),)

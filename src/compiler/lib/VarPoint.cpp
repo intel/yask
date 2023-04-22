@@ -96,8 +96,9 @@ namespace yask {
         return _var->is_foldable();
     }
 
-    bool VarPoint::is_same_logical_var(const VarPoint& rhs,
-                                       const Dimensions& dims) const {
+    bool VarPoint::is_same_logical_var(const VarPoint& rhs) const {
+        auto& dims = _var->_get_soln()->get_dims();
+        
         if (_var != rhs._var)
             return false;
         if (_consts != rhs._consts)
@@ -131,8 +132,9 @@ namespace yask {
             make_arg_str(var_map) + ")";
         return str;
     }
-    string VarPoint::make_logical_var_str(const Dimensions& dims,
-                                          const VarMap* var_map) const {
+    string VarPoint::make_logical_var_str(const VarMap* var_map) const {
+        auto& dims = _var->_get_soln()->get_dims();
+            
         string str = _var->_get_name();
         auto step_expr = get_arg(dims._step_dim);
         auto has_consts = _consts.size() > 0;

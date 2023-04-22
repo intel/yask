@@ -39,7 +39,7 @@ namespace yask {
     	return yask_get_version_string();
     }
     yc_solution_ptr yc_factory::new_solution(const std::string& name) const {
-        return make_shared<StencilSolution>(name);
+        return make_shared<Solution>(name);
     }
 
     // Find the dimensions to be used based on the vars in
@@ -650,11 +650,6 @@ namespace yask {
                            "Generate code to load variables early in the inner-kernel loop instead of "
                            "immediately before they are needed.",
                            _early_loads));
-        parser.add_option(make_shared<command_line_parser::bool_option>
-                          ("print-eqs",
-                           "[Debug] "
-                           "Print each equation when analyzed",
-                           _print_eqs));
         parser.add_option(make_shared<IntTupleOption>
                           ("fold",
                            "The recommended number of elements in each given dimension in a vector block. "

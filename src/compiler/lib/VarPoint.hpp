@@ -160,8 +160,7 @@ namespace yask {
         // - A(t+1, x, y, 1) is NOT same logical var as A(t, x+1, y, 1).
         // - A(t, x, y, 1) is NOT same logical var as A(t, x+1, y, 2).
         // - A(t, x, y, 1) is NOT same logical var as B(t, x, y, 1).
-        virtual bool is_same_logical_var(const VarPoint& rhs,
-                                         const Dimensions& dims) const;
+        virtual bool is_same_logical_var(const VarPoint& rhs) const;
 
         // String w/name and parens around args, e.g., 'u(x, y+2)'.
         // Apply substitutions to indices using 'var_map' if provided.
@@ -173,8 +172,7 @@ namespace yask {
 
         // String w/name and parens around const args, e.g., 'u(n=4)'.
         // Apply substitutions to indices using 'var_map' if provided.
-        virtual string make_logical_var_str(const Dimensions& dims,
-                                            const VarMap* var_map = 0) const;
+        virtual string make_logical_var_str(const VarMap* var_map = 0) const;
 
         // String w/just comma-sep args, e.g., 'x, y+2'.
         // Apply substitutions to indices using 'var_map' if provided.

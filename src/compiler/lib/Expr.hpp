@@ -80,7 +80,7 @@ namespace yask {
     // More forward-decls.
     class ExprVisitor;
     class Var;
-    class StencilSolution;
+    class Solution;
     struct Dimensions;
 
     // Type to convert original index vars (e.g., 'x', 'y') to

@@ -350,7 +350,7 @@ namespace yask {
     };
 
     ////////// Methods.
-   
+
     // Analyze group of equations.
     // Sets _step_dir in dims.
     // Finds dependencies based on all eqs if 'settings._find_deps', setting
@@ -360,9 +360,11 @@ namespace yask {
     // BIG-TODO: replace dependency graph and algorithms with a DAG library.
     // HUGE-TODO: replace dependency algorithms with integration of a polyhedral
     // library.
-    void Eqs::analyze_eqs(const CompilerSettings& settings,
-                          Dimensions& dims,
-                          ostream& os) {
+    void Eqs::analyze_eqs() {
+        auto& dims = _soln->get_dims();
+        auto& os = _soln->get_ostr();
+        auto& settings = _soln->get_settings();
+        auto& log_vars = _soln->get_logical_vars();
         auto& step_dim = dims._step_dim;
 
         // Gather initial stats from all eqs.
@@ -379,12 +381,10 @@ namespace yask {
         os << "\nProcessing " << get_num() << " stencil equation(s)...\n";
         for (auto eq1 : get_all()) {
 
-            if (settings._print_eqs) {
-                if (eq1->is_scratch())
-                    os << "Scratch equation: " << eq1->get_descr() << endl;
-                else
-                    os << "Equation: " << eq1->get_descr() << endl;
-            }
+            if (eq1->is_scratch())
+                os << "Scratch equation: " << eq1->get_descr() << endl;
+            else
+                os << "Equation: " << eq1->get_descr() << endl;
             
             auto* eq1p = eq1.get();
             assert(out_vars.count(eq1p));
@@ -539,10 +539,10 @@ namespace yask {
             // More RHS checks: step & domain indices must be simple offsets and
             // misc indices must be consts.
             for (auto i1 : ips1) {
-                auto* ig1 = i1->_get_var();
+                auto* iv1 = i1->_get_var();
 
-                for (int di = 0; di < ig1->get_num_dims(); di++) {
-                    auto& dn = ig1->get_dim_name(di);  // name of this dim.
+                for (int di = 0; di < iv1->get_num_dims(); di++) {
+                    auto& dn = iv1->get_dim_name(di);  // name of this dim.
                     auto argn = i1->get_args().at(di); // arg for this dim.
 
                     // Check based on dim type.
@@ -583,10 +583,29 @@ namespace yask {
             // TODO: check to make sure cond1 depends only on domain indices.
             // TODO: check to make sure stcond1 does not depend on domain indices.
 
+            // Find logical var dependencies.
+            auto olv1 = log_vars.add_var_slice(op1);
+            for (auto ip1 : ips1) {
+                auto ilv1 = log_vars.add_var_slice(ip1);
+
+                // Set dependence.
+                log_vars.set_imm_dep_on(olv1, ilv1);
+
+            }
+
+            // Re-process after every equation to assist with debug:
+            // exception will be thrown after printing offending eq.
+            log_vars.find_all_deps();
+            log_vars.topo_sort();
+            
         } // for all eqs.
 
+        // Dump logical vars.
+        os << endl;
+        log_vars.print_info();
+
         // 2. Check each pair of eqs.
-        os << "Analyzing for dependencies...\n";
+        os << "\nAnalyzing equations for dependencies...\n";
         for (auto eq1 : get_all()) {
             auto* eq1p = eq1.get();
             assert(out_vars.count(eq1p));
@@ -647,17 +666,17 @@ namespace yask {
                 // inputs at the same step index?  (Some of these may not be
                 // actual dependencies due to conditions.)
                 //
-                // Example:
-                //  eq1: a(t+1, x, ...) EQUALS ... IF_DOMAIN ...
-                //  eq2: b(t+1, x, ...) EQUALS a(t+1, x+5, ...) ... IF_DOMAIN ...
+                // Example of time-varying var dependency:
+                //  eq1: a(t+1, x, ...) EQUALS ...
+                //  eq2: b(t+1, x, ...) EQUALS a(t+1, x+5, ...) ...
                 //  eq2 depends on eq1.
                 //
-                // Example:
+                // Example of dependency through scratch var:
                 //  eq1: tmp(x, ...) EQUALS ...
                 //  eq2: b(t+1, x, ...) EQUALS tmp(x+2, ...)
                 //  eq2 depends on eq1.
                 //
-                // TODO: be much smarter about this and find only real
+                // TODO: be smarter about this and find only real
                 // dependencies considering the conditions.
 
                 // Only need to check each point if LHS var of eq1 is one of
@@ -675,44 +694,36 @@ namespace yask {
                             continue; // to next RHS pt.
 
                         // Same logical var (same name, time ofs, and misc indices)?
-                        bool same_lvar = ip2->is_same_logical_var(*op1, dims);
+                        bool same_lvar = ip2->is_same_logical_var(*op1);
 
-                        // Scratch vars have a dependency if the vars are the same
-                        // regardless of the misc indices.
+                        // If not same logical var, there is no dependency for
+                        // non-scratch eqs.
+                        if (!is_scratch1 && !same_lvar)
+                            continue; // to next RHS pt.                            
+
+                        // Scratch vars have a dependency if the vars are
+                        // the same regardless of the misc indices.
+                        // FIXME:
+                        // make this check after transitive closure to find
+                        // indirect dependencies. Even better: change
+                        // write-halo tracking mechanism to allow
+                        // scratch-var slice dependencies.
                         if (is_scratch1) {
 
-                            // Cannot have a dependency b/t same scratch var if only misc
-                            // indices are different. This is because only one write-halo size
-                            // can be stored per scratch var.
+                            // Cannot have a dependency b/t same scratch var
+                            // if only misc indices are different. This is
+                            // because only one write-halo size can be
+                            // stored per scratch var.
                             if (same_eq) {
-                            
-                                // Exit with error.
                                 THROW_YASK_EXCEPTION("illegal dependency: reference to same scratch var '" +
                                                      op1->get_var_name() + "' on LHS and RHS of equation " +
                                                      eq1->make_quoted_str());
                             }
                         }
 
-                        // Non-scratch vars have a dependency only if the logical vars
-                        // are the same.
-                        else {
-                        
-                            // If not same logical var, there is no dependency.
-                            if (!same_lvar)
-                                continue; // to next RHS pt.
-
-                            // Eq depends on itself?
-                            if (same_eq) {
-                                
-                                // Exit with error.
-                                THROW_YASK_EXCEPTION("illegal dependency: reference to '" +
-                                                     op1->make_logical_var_str(dims) + "' on LHS and RHS of equation " +
-                                                     eq1->make_quoted_str());
-                            }
-                        }
-
                         // Save dependency between the 2 eqs.
-                        set_imm_dep_on(eq2, eq1);
+                        if (!same_eq)
+                            set_imm_dep_on(eq2, eq1);
 
                         // Move along to next equation.
                         break;
@@ -748,8 +759,8 @@ namespace yask {
     }
 
     // Determine which var points can be vectorized.
-    void Eqs::analyze_vec(const CompilerSettings& settings,
-                          const Dimensions& dims) {
+    void Eqs::analyze_vec() {
+        auto& dims = _soln->get_dims();
 
         // Send a 'SetVecVisitor' to each point in
         // the current equations.
@@ -758,8 +769,9 @@ namespace yask {
     }
 
     // Determine loop access behavior of var points.
-    void Eqs::analyze_loop(const CompilerSettings& settings,
-                           const Dimensions& dims) {
+    void Eqs::analyze_loop() {
+        auto& dims = _soln->get_dims();
+        auto& settings = _soln->get_settings();
 
         // Send a 'SetLoopVisitor' to each point in
         // the current equations.
@@ -787,6 +799,28 @@ namespace yask {
                 auto* g = ap->_get_var(); // var for point 'ap'.
                 g->update_const_indices(ap->get_arg_consts());
             }
+        }
+    }
+
+    void LogicalVars::print_info() const {
+        auto& os = _soln->get_ostr();
+
+        os << "Found " << get_num() << " logical var slice(s):\n";
+
+        // Print them in reverse order to get most dependent first.
+        for (auto it1 = get_all().rbegin(); it1 != get_all().rend(); ++it1) {
+            auto& lv1 = *it1;
+            os << " '" << lv1->get_descr() << "':\n";
+
+            // Deps.
+            auto& id = get_imm_deps_on(lv1);
+            for (auto& lv2 : id)
+                os << "  Immediately dependent on '" << lv2->get_descr() << "'.\n";
+            for (auto& lv2 : get_all_deps_on(lv1))
+                if (id.count(lv2) == 0)
+                    os << "   Indirectly dependent on '" << lv2->get_descr() << "'.\n";
+            if (get_all_deps_on(lv1).size() == 0)
+                os << "  No dependencies within a step.\n";
         }
     }
 
@@ -869,7 +903,8 @@ namespace yask {
     }
 
     // Print stats from eqs in bundles.
-    void EqBundles::print_stats(ostream& os, const string& msg) {
+    void EqBundles::print_stats(const string& msg) {
+        auto& os = _soln->get_ostr();
         CounterVisitor cv;
 
         // Use separate counter visitor for each bundle
@@ -884,54 +919,60 @@ namespace yask {
 
     // Replicate each equation at the non-zero offsets for
     // each vector in a cluster.
-    void EqBundle::replicate_eqs_in_cluster(Dimensions& dims)
+    void EqBundle::replicate_eqs_in_cluster()
     {
+        auto& dims = _soln->get_dims();
+        
         // Make a copy of the original equations so we can iterate through
         // them while adding to the bundle.
         EqList eqs(get_eqs());
 
         // Loop thru points in cluster.
-        dims._cluster_mults.visit_all_points([&](const IntTuple& cluster_index,
-                                                 size_t idx) {
+        dims._cluster_mults.visit_all_points
+            ([&](const IntTuple& cluster_index,
+                 size_t idx) {
 
-                                                 // Don't need copy of one at origin.
-                                                 if (cluster_index.sum() > 0) {
+                 // Don't need copy of one at origin.
+                 if (cluster_index.sum() > 0) {
 
-                                                     // Get offset of cluster, which is each cluster index multipled
-                                                     // by corresponding vector size.  Example: for a 4x4 fold in a
-                                                     // 1x2 cluster, the 2nd cluster index will be (0,1) and the
-                                                     // corresponding cluster offset will be (0,4).
-                                                     auto cluster_offset = cluster_index.mult_elements(dims._fold);
+                     // Get offset of cluster, which is each cluster index multipled
+                     // by corresponding vector size.  Example: for a 4x4 fold in a
+                     // 1x2 cluster, the 2nd cluster index will be (0,1) and the
+                     // corresponding cluster offset will be (0,4).
+                     auto cluster_offset = cluster_index.mult_elements(dims._fold);
 
-                                                     // Loop thru eqs.
-                                                     for (auto eq : eqs) {
-                                                         assert(eq.get());
+                     // Loop thru eqs.
+                     for (auto eq : eqs) {
+                         assert(eq.get());
 
-                                                         // Make a copy.
-                                                         auto eq2 = eq->clone();
+                         // Make a copy.
+                         auto eq2 = eq->clone();
 
-                                                         // Add offsets to each var point.
-                                                         OffsetVisitor ov(cluster_offset);
-                                                         eq2->accept(&ov);
+                         // Add offsets to each var point.
+                         OffsetVisitor ov(cluster_offset);
+                         eq2->accept(&ov);
 
-                                                         // Put new equation into bundle.
-                                                         add_eq(eq2);
-                                                     }
-                                                 }
-                                                 return true;
-                                             });
+                         // Put new equation into bundle.
+                         add_eq(eq2);
+                     }
+                 }
+                 return true;
+             });
 
         // Ensure the expected number of equations now exist.
         assert(get_eqs().size() == eqs.size() * dims._cluster_mults.product());
     }
 
-    // Add 'eq' (subset of 'all_eqs') to an existing eq-bundle if
-    // possible.  If not possible, create a new bundle and add 'eqs' to
-    // it. The index will be incremented if a new bundle is created.
-    // Returns whether a new bundle was created.
-    bool EqBundles::add_eq_to_bundle(Eqs& all_eqs,
-                                     Eq& eq,
-                                     const CompilerSettings& settings) {
+    // Add 'eq' to an existing eq-bundle if possible.  If not possible,
+    // create a new bundle and add 'eqs' to it. The index will be
+    // incremented if a new bundle is created.  Returns whether a new bundle
+    // was created.
+    bool EqBundles::add_eq_to_bundle(Eq& eq)
+    {
+        auto& dims = _soln->get_dims();
+        auto& all_eqs = _soln->get_eqs();
+        auto& settings = _soln->get_settings();
+        
         /*
           Bundle scenarios:
 
@@ -997,17 +1038,16 @@ namespace yask {
           Write halo for T1 is typically made larger than T2 as in Ex s2.
 
           Even though it's not illegal, it's also better not to bundle
-          partial updates of non-scratch vars inconsistently. This avoid
-          updating part of a var early and then more of it [much] later,
-          which is bad for cache locality.
+          partial updates of non-scratch logical vars inconsistently. This
+          avoids updating part of a var early and then more of it [much]
+          later, which is bad for cache locality.
         */
 
         // Equation already added?
         if (_eqs_in_bundles.count(eq))
             return false;
 
-        assert(_dims);
-        auto& step_dim = _dims->_step_dim;
+        auto& step_dim = dims._step_dim;
 
         // Get deps between eqs.
         auto& eq_deps = all_eqs.get_deps();
@@ -1019,6 +1059,9 @@ namespace yask {
         // Get LHS info.
         auto eqv = eq->get_lhs_var();
         assert (eqv);
+        bool eq_scratch = eq->is_scratch();
+        auto eqp = eq->_get_lhs();
+        assert (eqp);
         auto step_expr = eq->_get_lhs()->get_arg(step_dim); // may be null.
         #ifdef DEBUG_ADD_EXPRS
         cout << "* ae2b: bundling " << eq->make_quoted_str() << endl;
@@ -1029,17 +1072,20 @@ namespace yask {
         if (settings._bundle) {
          
             // To avoid inconsistent bundling of var updates as described
-            // above, find *all* other eqs that update the same var as 'eq'.
-            EqLot rel_eqs(eq->is_scratch());
+            // above, find *all* other eqs that update the same var as 'eq'
+            // if scratch or same logical var if non-scratch.
+            EqList rel_eqs;
             for (auto& eq2 : all_eqs.get_all()) {
                 if (eq == eq2)
                     continue;
                 auto eq2v = eq2->get_lhs_var();
-                if (eqv->_get_name() == eq2v->_get_name())
-                    rel_eqs.add_eq(eq2);
+                auto eq2p = eq2->_get_lhs();
+                if ((eq_scratch && eqv == eq2v) ||
+                    (!eq_scratch && eqp->is_same_logical_var(*eq2p)))
+                    rel_eqs.insert(eq2);
             }
             #ifdef DEBUG_ADD_EXPRS
-            cout << "** ae2b: will check " << rel_eqs.get_eqs().size() << " related eqs\n";
+            cout << "** ae2b: will check " << rel_eqs.size() << " related eqs\n";
             #endif
             
             // Loop through existing bundles, looking for one that
@@ -1095,7 +1141,7 @@ namespace yask {
 
                         // Check against other eqs that update the same var.
                         if (is_ok) {
-                            for (auto& eq3 : rel_eqs.get_eqs()) {
+                            for (auto& eq3 : rel_eqs) {
                                 #ifdef DEBUG_ADD_EXPRS
                                 cout << "** ae2b: checking related eq " << eq3->get_descr() << endl;
                                 #endif
@@ -1159,7 +1205,7 @@ namespace yask {
         // Make new bundle if no target bundle found.
         bool new_bundle = false;
         if (!target) {
-            auto ne = make_shared<EqBundle>(*_dims, eq->is_scratch());
+            auto ne = make_shared<EqBundle>(_soln, eq->is_scratch());
             add_item(ne);
             target = ne.get();
             if (eq->is_scratch())
@@ -1205,7 +1251,7 @@ namespace yask {
         #endif
 
         ////// Phase 1 /////
-        // First, set halos based only on immediate accesses.
+        // First, set halos based only on immediate read accesses.
         // NB: This is relatively straighforward.
         
         // Example1:
@@ -1279,9 +1325,10 @@ namespace yask {
             } // reqd stages.
         } // stages.
 
-        ////// Phase 2 /////
+        ////// Phase 2 //////
         // Propagate halos through scratch vars as needed.
-        // NB: This is not so straightforward.
+        // NB: This is not so straightforward because write-halos depend on
+        // dependency paths.
 
         // Example 1:
         // eq1: scr1(x) EQUALS u(t,x+1); <-- orig halo of u = 1.
@@ -1311,13 +1358,13 @@ namespace yask {
         // Halo of u is 4 + 2 = 6.
         // Or, u(t+1,x) EQUALS u(t,(x+3)+1) + u(t,(x+4)+2) by subst.
         
-        // Algo: Keep a list of maps of shadow vars. Each list entry is a
+        // Algo: Keep a list of maps of "shadow vars". Each list entry is a
         // unique dependency path.  Each map is key=real-var ptr ->
-        // val=shadow-var ptr.  These shadow vars are used to track
-        // updated halos for each path.  We don't want to update the real
-        // halos until we've walked all the paths using the original halos
-        // because that will update halos from already-updated ones.  At the
-        // end, the real vars will be updated from the shadows.
+        // val=shadow-var ptr.  These shadow vars are used to track updated
+        // halos for each path.  We don't want to update the real halos
+        // until we've walked all the paths using the original halos because
+        // that will update halos from already-updated ones.  At the end,
+        // the real vars will be updated from the shadows.
         vector<map<Var*, Var*>> shadows;
 
         // Stages.
@@ -1376,10 +1423,13 @@ namespace yask {
                                  if (!b2->is_scratch())
                                      break;
 
+                                 // At this point, non-scratch bundle 'b1'
+                                 // depends on scratch-bundle 'b2'.
+                                 
                                  // Make shadow copies of all vars touched
-                                 // by 'b2'.  All changes will be applied to
-                                 // these shadow vars for the current
-                                 // 'path'.
+                                 // by 'b2'.  All halo updates will be
+                                 // applied to these shadow vars for the
+                                 // current 'path'.
                                  for (auto& eq : b2->get_eqs()) {
 
                                      // Output var.
@@ -1427,10 +1477,11 @@ namespace yask {
                                      ov2->update_halo(*ov1);
                                  }
 
-                                 // Get updated halos from the scratch bundle.  These
-                                 // are the points that are read from the dependent
-                                 // eq(s).  For scratch vars, the halo areas must
-                                 // also be written to.
+                                 // Get updated halos from the scratch
+                                 // bundle.  These are the points that are
+                                 // read from the dependent eq(s).  For
+                                 // scratch vars, the halo areas must also
+                                 // be written to.
                                  auto left_ohalo = ov1->get_halo_sizes(stname, true);
                                  auto right_ohalo = ov1->get_halo_sizes(stname, false);
                                  auto l1_dist = ov1->get_l1_dist();
@@ -1502,12 +1553,14 @@ namespace yask {
 
     // Divide all equations into eq_bundles.
     // Only process updates to vars in 'var_regex'.
-    void EqBundles::make_eq_bundles(Eqs& all_eqs,
-                                    const CompilerSettings& settings,
-                                    ostream& os)
+    void EqBundles::make_eq_bundles()
     {
+        auto& dims = _soln->get_dims();
+        auto& all_eqs = _soln->get_eqs();
+        auto& settings = _soln->get_settings();
+        auto& os = _soln->get_ostr();
+        
         os << "\nPartitioning " << all_eqs.get_num() << " equation(s) into bundles...\n";
-        //auto& step_dim = _dims->_step_dim;
         
         // Make a regex for the allowed vars.
         regex varx(settings._var_regex);
@@ -1534,7 +1587,7 @@ namespace yask {
                 }
 
                 // Add equation(s).
-                add_eq_to_bundle(all_eqs, eq, settings);
+                add_eq_to_bundle(eq);
             }
         }
 
@@ -1546,7 +1599,11 @@ namespace yask {
 
         // Dump info.
         os << "Created " << get_num() << " equation bundle(s):\n";
-        for (auto& eg1 : get_all()) {
+
+        // Print them in reverse order to get most dependent first.
+        for (auto it1 = get_all().rbegin(); it1 != get_all().rend(); ++it1) {
+            auto& eg1 = *it1;
+
             os << " " << eg1->get_descr() << ":\n"
                 "  Contains " << eg1->get_num_eqs() << " equation(s).\n"
                 "  Updates the following var(s): ";
@@ -1567,19 +1624,24 @@ namespace yask {
                     os << "   Indirectly dependent on " << eg2->_get_name() << ".\n";
             for (auto& sg : get_all_scratch_deps_on(eg1))
                 os << "  Requires " << sg->_get_name() << ".\n";
+            if (get_all_deps_on(eg1).size() == 0)
+                os << "  No dependencies within a step.\n";
         }
-
     }
 
     // Apply optimizations according to the 'settings'.
-    void EqBundles::optimize_eq_bundles(CompilerSettings& settings,
-                                        const string& descr,
-                                        bool print_sets,
-                                        ostream& os) {
+    void EqBundles::optimize_eq_bundles(const string& descr,
+                                        bool print_sets)                                        
+    {
+        auto& all_eqs = _soln->get_eqs();
+        auto& settings = _soln->get_settings();
+        auto& os = _soln->get_ostr();
+        auto& dims = _soln->get_dims();
+
         // print stats.
-        os << "Stats across " << get_num() << " equation-bundle(s):\n";
+        os << "\nStats across " << get_num() << " equation-bundle(s):\n";
         string edescr = "for " + descr + " equation-bundle(s)";
-        print_stats(os, edescr);
+        print_stats(edescr);
 
         // Make a list of optimizations to apply to eq_bundles.
         vector<OptVisitor*> opts;
@@ -1612,7 +1674,7 @@ namespace yask {
 
             // Get new stats.
             if (num_changes)
-                print_stats(os, odescr);
+                print_stats(odescr);
             else
                 os << " No changes " << odescr << '.' << endl;
 
@@ -1627,7 +1689,7 @@ namespace yask {
             // The visitor is accepted at all nodes in the cluster AST;
             // for each var access node in the AST, the vectors
             // needed are determined and saved in the visitor.
-            VecInfoVisitor vv(*_dims);
+            VecInfoVisitor vv(dims);
             visit_eqs(&vv);
 
             // Reorder some equations based on vector info.
@@ -1637,7 +1699,7 @@ namespace yask {
             // Get new stats.
             string odescr = "after applying reordering to " +
                 descr + " equation-bundle(s)";
-            print_stats(os, odescr);
+            print_stats(odescr);
         }
 
         // Final stats per equation bundle.
@@ -1757,7 +1819,7 @@ namespace yask {
         // Make new stage if no target stage found.
         bool new_stage = false;
         if (!target) {
-            auto np = make_shared<EqStage>(bp->is_scratch());
+            auto np = make_shared<EqStage>(_soln, bp->is_scratch());
             add_item(np);
             target = np.get();
             if (bp->is_scratch())
@@ -1787,9 +1849,10 @@ namespace yask {
     }
 
     // Divide all bundles into stages.
-    void EqStages::make_stages(EqBundles& all_bundles,
-                               ostream& os)
+    void EqStages::make_stages(EqBundles& all_bundles)
     {
+        auto& os = _soln->get_ostr();
+        
         os << "\nPartitioning " << all_bundles.get_num() << " bundle(s) into stages...\n";
 
         // Add non-scratch, then scratch bundles.
@@ -1812,7 +1875,11 @@ namespace yask {
 
         // Dump info.
         os << "Created " << get_num() << " equation stage(s):\n";
-        for (auto& bp1 : get_all()) {
+
+        // Print them in reverse order to get most dependent first.
+        for (auto it1 = get_all().rbegin(); it1 != get_all().rend(); ++it1) {
+            auto& bp1 = *it1;
+        
             os << " " << bp1->get_descr() << ":\n"
                 "  Contains " << bp1->get_bundles().size() << " bundle(s): ";
             int i = 0;
@@ -1840,6 +1907,8 @@ namespace yask {
                     os << "   Indirectly dependent on " << bp2->_get_name() << ".\n";
             for (auto& sp : get_all_scratch_deps_on(bp1))
                 os << "  Requires " << sp->_get_name() << ".\n";
+            if (get_all_deps_on(bp1).size() == 0)
+                os << "  No dependencies within a step.\n";
         }
 
     }

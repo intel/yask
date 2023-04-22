@@ -399,57 +399,42 @@ namespace yask {
         }
     };
 
-    // A logical var.
-    class LogicVar {
-        std::string _descr;
-        bool _is_scratch;
-
-    public:
-        LogicVar(VarPoint* vp,
-                 const Dimensions& dims) {
-            _descr = vp->make_logical_var_str(dims);
-            _is_scratch = vp->_get_var()->is_scratch();
-        }
-        virtual ~LogicVar() {}
-
-        const std::string& get_descr() const {
-            return _descr;
-        }
-        bool is_scratch() const {
-            return _is_scratch;
-        }
-
-        bool operator==(const LogicVar& rhs) const {
-            return _descr == rhs._descr;
-        }
-        bool operator!=(const LogicVar& rhs) const {
-            return _descr != rhs._descr;
-        }
-        bool operator<(const LogicVar& rhs) const {
-            return _descr < rhs._descr;
-        }
-        bool operator>(const LogicVar& rhs) const {
-            return _descr > rhs._descr;
-        }
-        bool operator<=(const LogicVar& rhs) const {
-            return _descr <= rhs._descr;
-        }
-        bool operator>=(const LogicVar& rhs) const {
-            return _descr >= rhs._descr;
-        }
-
-        shared_ptr<LogicVar> clone() {
-            return make_shared<LogicVar>(*this);
-        }
-    };
 
     // A set of logical vars and related dependency data.
-    using LogicVars = DepGroup<LogicVar>;
+    class LogicalVars : public DepGroup<LogicalVar> {
+    protected:
+        Solution* _soln;
+        map<std::string, LogicalVarPtr> _log_vars;
+
+    public:
+        LogicalVars(Solution* soln) : _soln(soln) { }
+        virtual ~LogicalVars() { }
+
+        LogicalVarPtr add_var_slice(VarPoint* vp) {
+
+            // Already exists?
+            auto descr = vp->make_logical_var_str();
+            auto it = _log_vars.find(descr);
+            if (it != _log_vars.end())
+                return it->second;
+            
+            auto p = make_shared<LogicalVar>(_soln, vp);
+            add_item(p);
+            _log_vars[descr] = p;
+            return p;
+        }
+
+        void print_info() const;
+     };
 
     // A set of equations and related dependency data.
     class Eqs : public DepGroup<EqualsExpr> {
+    protected:
+        Solution* _soln;
 
     public:
+        Eqs(Solution* soln) : _soln(soln) { }
+        virtual ~Eqs() { }
 
         // Visit all equations.
         virtual void visit_eqs(ExprVisitor* ev) {
@@ -459,17 +444,13 @@ namespace yask {
         }
 
         // Find dependencies based on all eqs.
-        virtual void analyze_eqs(const CompilerSettings& settings,
-                                 Dimensions& dims,
-                                 std::ostream& os);
+        virtual void analyze_eqs();
 
         // Determine which var points can be vectorized.
-        virtual void analyze_vec(const CompilerSettings& settings,
-                                 const Dimensions& dims);
+        virtual void analyze_vec();
 
         // Determine how var points are accessed in a loop.
-        virtual void analyze_loop(const CompilerSettings& settings,
-                                  const Dimensions& dims);
+        virtual void analyze_loop();
 
         // Update var access stats.
         virtual void update_var_stats();
@@ -478,6 +459,9 @@ namespace yask {
 
     // A collection that holds various independent eqs.
     class EqLot {
+    protected:
+        Solution* _soln;
+        
     private:
         EqList _eqs;            // all equations in this lot.
         Vars _out_vars;         // vars updated by _eqs.
@@ -492,7 +476,10 @@ namespace yask {
         int index;                  // index to distinguish repeated names.
 
         // Ctor.
-        EqLot(bool is_scratch) :
+        EqLot(Solution* soln, bool is_scratch) :
+            _soln(soln),
+            _out_vars(soln),
+            _in_vars(soln),
             _is_scratch(is_scratch) { }
         virtual ~EqLot() {}
 
@@ -547,10 +534,11 @@ namespace yask {
     // Equations in a bundle must not have inter-dependencies because they
     // will be combined into a single code block.
     class EqBundle : public EqLot {
-    protected:
-        const Dimensions* _dims = 0; // just a pointer to soln dims.
-
+ 
     public:
+        EqBundle(Solution* soln, bool is_scratch) :
+            EqLot(soln, is_scratch) { }
+        virtual ~EqBundle() { }
 
         // TODO: move these into protected section and make accessors.
 
@@ -563,7 +551,7 @@ namespace yask {
 
         // Create a copy containing clones of the equations.
         virtual shared_ptr<EqBundle> clone() const {
-            auto p = make_shared<EqBundle>(*_dims, is_scratch());
+            auto p = make_shared<EqBundle>(_soln, is_scratch());
 
             // Shallow copy.
             *p = *this;
@@ -575,11 +563,6 @@ namespace yask {
 
             return p;
         }
-
-        // Ctor.
-        EqBundle(const Dimensions& dims, bool is_scratch) :
-            EqLot(is_scratch), _dims(&dims) { }
-        virtual ~EqBundle() {}
 
         // Get a string description.
         virtual string get_descr(bool show_cond = true,
@@ -612,16 +595,15 @@ namespace yask {
 
         // Replicate each equation at the non-zero offsets for
         // each vector in a cluster.
-        virtual void replicate_eqs_in_cluster(Dimensions& dims);
+        virtual void replicate_eqs_in_cluster();
     };
 
     // Container for multiple equation bundles.
     class EqBundles : public DepGroup<EqBundle> {
     protected:
-        string _base_name = "bundle";
+        Solution* _soln;
 
-        // Copy of some global data.
-        Dimensions* _dims = 0;
+        string _base_name = "bundle";
 
         // Track vars that are updated.
         Vars _out_vars;
@@ -636,30 +618,22 @@ namespace yask {
         // possible.  If not possible, create a new bundle and add 'eqs' to
         // it. The index will be incremented if a new bundle is created.
         // Returns whether a new bundle was created.
-        virtual bool add_eq_to_bundle(Eqs& all_eqs,
-                                      Eq& eq,
-                                      const CompilerSettings& settings);
+        virtual bool add_eq_to_bundle(Eq& eq);
 
     public:
-        EqBundles() {}
-        EqBundles(Dimensions& dims) :
-            _dims(&dims) {}
-        virtual ~EqBundles() {}
+        EqBundles(Solution* soln) :
+            _soln(soln),
+            _out_vars(soln) { }
+        virtual ~EqBundles() { }
 
-        virtual void set_dims(Dimensions& dims) {
-            _dims = &dims;
-        }
-
-        // Separate a set of equations into eq_bundles based
+       // Separate a set of equations into eq_bundles based
         // on the target string.
         // Target string is a comma-separated list of key-value pairs, e.g.,
         // "eq_bundle1=foo,eq_bundle2=bar".
         // In this example, all eqs updating var names containing 'foo' go in eq_bundle1,
         // all eqs updating var names containing 'bar' go in eq_bundle2, and
         // each remaining eq goes into a separate eq_bundle.
-        void make_eq_bundles(Eqs& eqs,
-                             const CompilerSettings& settings,
-                             std::ostream& os);
+        void make_eq_bundles();
 
         virtual const Vars& get_output_vars() const {
             return _out_vars;
@@ -673,19 +647,17 @@ namespace yask {
 
         // Replicate each equation at the non-zero offsets for
         // each vector in a cluster.
-        virtual void replicate_eqs_in_cluster(Dimensions& dims) {
+        virtual void replicate_eqs_in_cluster() {
             for (auto& eg : get_all())
-                eg->replicate_eqs_in_cluster(dims);
+                eg->replicate_eqs_in_cluster();
         }
 
         // Print stats for the equation(s) in all bundles.
-        virtual void print_stats(ostream& os, const string& msg);
+        virtual void print_stats(const string& msg);
 
         // Apply optimizations requested in settings.
-        virtual void optimize_eq_bundles(CompilerSettings& settings,
-                                         const string& descr,
-                                         bool print_sets,
-                                         ostream& os);
+        virtual void optimize_eq_bundles(const string& descr,
+                                         bool print_sets);
     };
     typedef shared_ptr<EqBundle> EqBundlePtr;
 
@@ -707,8 +679,8 @@ namespace yask {
         bool_expr_ptr step_cond;
 
         // Ctor.
-        EqStage(bool is_scratch) :
-            EqLot(is_scratch) { }
+        EqStage(Solution* soln, bool is_scratch) :
+            EqLot(soln, is_scratch) { }
         virtual ~EqStage() { }
 
         virtual void clear() override {
@@ -718,7 +690,7 @@ namespace yask {
 
         // Create a copy containing clones of the bundles.
         virtual shared_ptr<EqStage> clone() const {
-            auto p = make_shared<EqStage>(is_scratch());
+            auto p = make_shared<EqStage>(_soln, is_scratch());
 
             // Shallow copy.
             *p = *this;
@@ -761,6 +733,8 @@ namespace yask {
     // Container for multiple equation stages.
     class EqStages : public DepGroup<EqStage> {
     protected:
+        Solution* _soln;
+        
         string _base_name = "stage";
 
         // Stage index.
@@ -778,10 +752,13 @@ namespace yask {
                                  EqBundlePtr bp);
 
     public:
+        EqStages(Solution* soln) :
+            _soln(soln),
+            _out_vars(soln) { }
+        virtual ~EqStages() { }
 
         // Separate bundles into stages.
-        void make_stages(EqBundles& bundles,
-                         std::ostream& os);
+        void make_stages(EqBundles& bundles);
 
         // Get all output vars.
         virtual const Vars& get_output_vars() const {

@@ -176,7 +176,7 @@ namespace yask {
         }
 
     public:
-        YASKAvx2Printer(StencilSolution& stencil,
+        YASKAvx2Printer(Solution& stencil,
                         EqBundles& eq_bundles,
                         EqStages& eq_stages,
                         EqBundles& cluster_eq_bundles) :
@@ -198,7 +198,7 @@ namespace yask {
         }
 
     public:
-        YASKAvx512Printer(StencilSolution& stencil,
+        YASKAvx512Printer(Solution& stencil,
                           EqBundles& eq_bundles,
                           EqStages& eq_stages,
                           EqBundles& cluster_eq_bundles,

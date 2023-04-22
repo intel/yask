@@ -45,17 +45,16 @@ namespace yask {
     class Var : public virtual yc_var {
 
     protected:
+        Solution* _soln = 0;
+
         string _name;           // name of this var.
-        index_expr_ptr_vec _dims;  // dimensions of this var in param order.
+        index_expr_ptr_vec _vdims;  // dimensions of this var in param order.
         index_expr_ptr_vec _layout_dims;  // dimensions of this var in layout order.
         bool _is_scratch = false; // true if a temp var.
 
         // Step-dim info.
         bool _is_step_alloc_fixed = true; // step alloc cannot be changed at run-time.
         idx_t _step_alloc = 0;         // step-alloc override (0 => calculate).
-
-        // Ptr to solution that this var belongs to (its parent).
-        StencilSolution* _soln = 0;
 
         // How many dims of various types.
         // -1 => unknown.
@@ -100,10 +99,10 @@ namespace yask {
 
     public:
         // Ctors.
-        Var(string name,
+        Var(Solution* soln,
+            string name,
             bool is_scratch,
-            StencilSolution* soln,
-            const index_expr_ptr_vec& dims);
+            const index_expr_ptr_vec& vdims);
 
         // Dtor.
         virtual ~Var() { }
@@ -115,10 +114,10 @@ namespace yask {
 
         // Access dims for this var (not for soln).
         // The are returned in declaration order (not necessarily layout order).
-        virtual const index_expr_ptr_vec& get_dims() const { return _dims; }
+        virtual const index_expr_ptr_vec& get_dims() const { return _vdims; }
         IntTuple get_dims_tuple() const {
             IntTuple gdims;
-            for (const auto& dim : _dims) {
+            for (const auto& dim : _vdims) {
                 const auto& dname = dim->_get_name();
                 gdims.add_dim_back(dname, 0);
             }
@@ -131,7 +130,7 @@ namespace yask {
         virtual const index_expr_ptr get_step_dim() const {
             _check_ok();
             if (_num_step_dims > 0) {
-                for (auto d : _dims)
+                for (auto d : _vdims)
                     if (d->get_type() == STEP_INDEX)
                         return d;
                 assert("internal error: step dim not found");
@@ -143,8 +142,8 @@ namespace yask {
         virtual bool is_scratch() const { return _is_scratch; }
 
         // Access to solution.
-        virtual StencilSolution* _get_soln() { return _soln; }
-        virtual void set_soln(StencilSolution* soln) { _soln = soln; }
+        virtual Solution* _get_soln() { return _soln; }
+        virtual void set_soln(Solution* soln) { _soln = soln; }
         virtual CompilerSettings& get_settings();
         virtual const Dimensions& get_soln_dims();
 
@@ -248,11 +247,11 @@ namespace yask {
 
         // Determine whether dims are same as 'other' var.
         virtual bool are_dims_same(const Var& other) const {
-            if (_dims.size() != other._dims.size())
+            if (_vdims.size() != other._vdims.size())
                 return false;
             size_t i = 0;
-            for (auto& dim : _dims) {
-                auto d2 = other._dims[i].get();
+            for (auto& dim : _vdims) {
+                auto d2 = other._vdims[i].get();
                 if (!dim->is_same(d2))
                     return false;
                 i++;
@@ -300,12 +299,12 @@ namespace yask {
             return _name;
         }
         virtual int get_num_dims() const {
-            return int(_dims.size());
+            return int(_vdims.size());
         }
         virtual const string& get_dim_name(int n) const {
             assert(n >= 0);
             assert(n < get_num_dims());
-            auto dp = _dims.at(n);
+            auto dp = _vdims.at(n);
             assert(dp);
             return dp->_get_name();
         }
@@ -346,16 +345,20 @@ namespace yask {
     // A list of vars.  This holds pointers to vars defined by the stencil
     // class in the order in which they are added via the INIT_VAR_* macros.
     class Vars {
+    protected:
+        Solution* _soln;
         vector_set<Var*> _vars;
 
     public:
-
-        Vars() {}
+        Vars(Solution* soln) :
+            _soln(soln) { }
         virtual ~Vars() {}
 
         // Copy ctor.
         // Copies list of var pointers, but not vars (shallow copy).
-        Vars(const Vars& src) : _vars(src._vars) {}
+        Vars(const Vars& src) :
+            _soln(src._soln),
+            _vars(src._vars) {}
 
         // STL methods.
         void clear() {
@@ -384,9 +387,56 @@ namespace yask {
         }
 
         // Determine dim-type counts and whether each var can be folded.
-        virtual void set_dim_counts(const Dimensions& dims) {
-            for (auto gp : _vars)
-                gp->set_dim_counts(dims);
+        virtual void set_dim_counts();
+    };
+
+    class LogicalVar;
+    using LogicalVarPtr = shared_ptr<LogicalVar>;
+    
+    // A reference to a specific time offset and misc indices of a var.
+    class LogicalVar {
+    protected:
+        Solution* _soln;
+        std::string _descr;
+        bool _is_scratch;
+
+    public:
+        LogicalVar(Solution* soln,
+                 VarPoint* vp) :
+            _soln(soln) {
+            _descr = vp->make_logical_var_str();
+            _is_scratch = vp->_get_var()->is_scratch();
+        }
+        virtual ~LogicalVar() {}
+
+        const std::string& get_descr() const {
+            return _descr;
+        }
+        bool is_scratch() const {
+            return _is_scratch;
+        }
+
+        bool operator==(const LogicalVar& rhs) const {
+            return _descr == rhs._descr;
+        }
+        bool operator!=(const LogicalVar& rhs) const {
+            return _descr != rhs._descr;
+        }
+        bool operator<(const LogicalVar& rhs) const {
+            return _descr < rhs._descr;
+        }
+        bool operator>(const LogicalVar& rhs) const {
+            return _descr > rhs._descr;
+        }
+        bool operator<=(const LogicalVar& rhs) const {
+            return _descr <= rhs._descr;
+        }
+        bool operator>=(const LogicalVar& rhs) const {
+            return _descr >= rhs._descr;
+        }
+
+        LogicalVarPtr clone() {
+            return make_shared<LogicalVar>(*this);
         }
     };
 

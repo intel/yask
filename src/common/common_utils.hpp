@@ -324,6 +324,12 @@ namespace yask {
         typename std::vector<T>::const_iterator end() const {
             return _items.end();
         }
+        typename std::vector<T>::const_reverse_iterator rbegin() const {
+            return _items.rbegin();
+        }
+        typename std::vector<T>::const_reverse_iterator rend() const {
+            return _items.rend();
+        }
         const T& at(size_t i) const {
             return _items.at(i);
         }

@@ -40,7 +40,7 @@ namespace yask {
     // A base class for whole stencil solutions.  This is used by solutions
     // defined in C++ that are inherited from StencilBase as well as those
     // defined via the stencil-compiler API.
-    class StencilSolution :
+    class Solution :
         public virtual yc_solution {
     protected:
 
@@ -57,12 +57,18 @@ namespace yask {
         // All vars accessible by the kernel.
         Vars _vars;
 
+        // All logical vars accessed in this solution.
+        LogicalVars _logical_vars;
+
         // All equations defined in this solution.
         Eqs _eqs;
 
         // Settings for the solution.
         CompilerSettings _settings;
 
+        // Various dimensions.
+        Dimensions _dims; 
+        
         // Code extensions.
         vector<string> _kernel_code;
         vector<output_hook_t> _output_hooks;
@@ -70,11 +76,10 @@ namespace yask {
     private:
 
         // Intermediate data needed to format output.
-        Dimensions _dims;          // various dimensions.
         PrinterBase* _printer = 0;
-        EqBundles* _eq_bundles = 0;         // eq-bundles for scalar and vector.
+        EqBundles* _eq_bundles = 0; // eq-bundles for scalar and vector.
         EqStages* _eq_stages = 0; // packs of bundles w/o inter-dependencies.
-        EqBundles* _cluster_eq_bundles = 0;  // eq-bundles for scalar and vector.
+        EqBundles* _cluster_eq_bundles = 0; // eq-bundles for clusters.
 
         // Create the intermediate data.
         void analyze_solution(int vlen,
@@ -84,8 +89,12 @@ namespace yask {
         void _free(bool free_printer);
 
     public:
-        StencilSolution(const string& name) : _name(name) { }
-        virtual ~StencilSolution() { _free(true); }
+        Solution(const string& name) :
+            _name(name),
+            _vars(this),
+            _logical_vars(this),
+            _eqs(this) { }
+        virtual ~Solution() { _free(true); }
 
         // Identification.
         virtual const string& _get_name() const { return _name; }
@@ -100,11 +109,12 @@ namespace yask {
         virtual void set_settings(const CompilerSettings& settings) {
             _settings = settings;
         }
-        virtual const Dimensions& get_dims() { return _dims; }
+        virtual Dimensions& get_dims() { return _dims; }
+        virtual LogicalVars& get_logical_vars() { return _logical_vars; }
         virtual const vector<string>& get_kernel_code() { return _kernel_code; }
 
         // Get the messsage output stream.
-        virtual std::ostream& get_ostr() const {
+        virtual std::ostream& get_ostr() {
             assert(_dos);
             return *_dos;
         }
