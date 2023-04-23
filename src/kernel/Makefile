@@ -1154,7 +1154,7 @@ single-stencil-tests:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_partial_3d YK_STENCIL_SUFFIX=-t2 $(call FOLD,x=2 z=2) inner_loop_dim=1
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_partial_3d YK_STENCIL_SUFFIX=-t3 $(call FOLD,x=2 z=2) domain_dims=x,z,y
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_3d $(call FOLD,x=2 y=2) inner_loop_dim=1
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_3d $(call FOLD,x=2 z=2) inner_loop_dim=x
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_3d $(call FOLD,x=2 z=2) $(call CLUSTER,y=2) inner_loop_dim=x
 
 # 3D tests w/specific shapes.
 3d-tests2:
@@ -1190,7 +1190,7 @@ scratch-tests:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_stages_1d $(call FOLD,x=4)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_boundary_1d $(call FOLD,x=4)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_2d $(call FOLD,x=2 y=2) read_ahead_dist=2
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_3d $(call FOLD,x=2 z=2) inner_loop_dim=x
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_3d $(call FOLD,x=2 z=2) $(call CLUSTER,y=2) inner_loop_dim=x
 
 boundary-tests:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_1d $(call FOLD,x=4)
