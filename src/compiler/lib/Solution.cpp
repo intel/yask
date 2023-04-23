@@ -162,7 +162,7 @@ namespace yask {
         _eq_stages->calc_halos(*_eq_bundles);
 
         // Optimize bundles.
-        _eq_bundles->optimize_eq_bundles("scalar & vector", true);
+        _eq_bundles->optimize_eq_bundles("scalar & vector");
         
         // Make a copy of each equation at each cluster offset.  We will use
         // these for inter-cluster optimizations and code generation.  We
@@ -175,7 +175,7 @@ namespace yask {
                 _dims._cluster_mults.product() << " vectors per cluster...\n";
             _cluster_eq_bundles->replicate_eqs_in_cluster();
             if (_settings._do_opt_cluster)
-                _cluster_eq_bundles->optimize_eq_bundles("cluster", true);
+                _cluster_eq_bundles->optimize_eq_bundles("cluster");
         }
     }
 

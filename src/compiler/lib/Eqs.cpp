@@ -590,7 +590,6 @@ namespace yask {
 
                 // Set dependence.
                 log_vars.set_imm_dep_on(olv1, ilv1);
-
             }
 
             // Re-process after every equation to assist with debug:
@@ -722,12 +721,13 @@ namespace yask {
                         }
 
                         // Save dependency between the 2 eqs.
-                        if (!same_eq)
+                        if (!same_eq) {
                             set_imm_dep_on(eq2, eq1);
 
-                        // Move along to next equation.
-                        break;
-                    }
+                            // Move along to next equation.
+                            break;
+                        }
+                    } // input pts in eq2.
                 }
                 #ifdef DEBUG_DEP
                 cout << "  No deps found.\n";
@@ -1173,7 +1173,6 @@ namespace yask {
 
                         // Check dependencies between updated bundles.
                         inherit_deps_from(all_eqs);
-                        topo_sort();
 
                         // If we get this far, the add was okay;
                         // remove the temp deps, and we're done.
@@ -1630,8 +1629,7 @@ namespace yask {
     }
 
     // Apply optimizations according to the 'settings'.
-    void EqBundles::optimize_eq_bundles(const string& descr,
-                                        bool print_stats)                                        
+    void EqBundles::optimize_eq_bundles(const string& descr)
     {
         auto& all_eqs = _soln->get_eqs();
         auto& settings = _soln->get_settings();
@@ -1703,7 +1701,7 @@ namespace yask {
         }
 
         // Final stats per equation bundle.
-        if (print_stats && get_num() > 1) {
+        if (get_num() > 1) {
             os << "Stats per equation-bundle:\n";
             for (auto eg : get_all())
                 eg->print_stats(os, "for " + eg->get_descr());
@@ -1747,47 +1745,114 @@ namespace yask {
             remove_eq(eq);
     }
 
-    // Add 'bp' from 'all_bundles'. Create new stage if needed.  Returns
-    // whether a new stage was created.
-    bool EqStages::add_bundle_to_stage(EqBundles& all_bundles,
-                                       EqBundlePtr bp)
+    // Add 'bps', a subset of 'all_bundles'. Create new stage if needed.
+    // Returns whether a new stage was created.
+    bool EqStages::add_bundles_to_stage(EqBundles& all_bundles,
+                                        EqBundleList& bps,
+                                        bool var_grouping,
+                                        bool logical_var_grouping)
     {
+        // None to add?
+        if (bps.size() == 0)
+            return false;
+
+        #ifdef DEBUG_ADD_BUNDLES
+        cout << "** Adding " << bps.size() << " bundle(s):\n";
+        for (auto& bp : bps)
+            cout << "*** " << bp->get_descr() << "\n";
+        cout << flush;
+        #endif
+            
         // Already added?
-        if (_bundles_in_stages.count(bp))
+        // (All bps should be added or not by construction.)
+        if (_bundles_in_stages.count(bps.front()))
             return false;
 
         // Get step condition, if any.
-        auto stcond = bp->step_cond;
+        // (All bps should have same step cond by construction.)
+        auto stcond = bps.front()->step_cond;
+
+        // Get scratch-ness.
+        // (All bps should have same scratch-ness by construction.)
+        auto is_scratch = bps.front()->is_scratch();
         
         // Get deps between bundles.
         auto& deps = all_bundles.get_deps();
 
         // Loop through existing stages, looking for one that
-        // 'bp' can be added to.
-        EqStage* target = 0;
+        // 'bps' can be added to.
+        Tp<EqStage> target = 0;
         for (auto& st : get_all()) {
+            #ifdef DEBUG_ADD_BUNDLES
+            cout << "*** Checking against existing " << st->get_descr() << "\n" << flush;
+            #endif
 
             // Must be same scratch-ness.
-            if (st->is_scratch() != bp->is_scratch())
+            if (st->is_scratch() != is_scratch)
                 continue;
 
             // Step conditions must match (both may be null).
             if (!are_exprs_same(st->step_cond, stcond))
                 continue;
 
-            // Loop through all bundles in 'st'.
-            bool is_ok = true;
-            for (auto& b2 : st->get_bundles()) {
-
-                // Look for any dependency between 'bp' and 'bp2'.
-                if (deps.is_dep(bp, b2)) {
-                    is_ok = false;
-                    break;
+            // Var matching. Look for any match.
+            if (logical_var_grouping || var_grouping) {
+                bool match_found = false;
+                for (auto& bp1 : bps) {
+                    for (auto& eq1 : bp1->get_eqs()) {
+                        auto lhs1 = eq1->_get_lhs();
+                        auto v1 = lhs1->_get_var();
+                        for (auto& b2 : st->get_bundles()) {
+                            for (auto& eq2 : b2->get_eqs()) {
+                                auto lhs2 = eq2->_get_lhs();
+                                auto* v2 = lhs2->_get_var();
+                                if (logical_var_grouping) {
+                                    if (lhs1->is_same_logical_var(*lhs2)) {
+                                        match_found = true;
+                                        goto match_loop_end;
+                                    }
+                                }
+                                else if (v1 == v2) {
+                                    match_found = true;
+                                    goto match_loop_end;
+                                }
+                            }
+                        }
+                    }
                 }
+                
+                // Yes, we know gotos are considered harmful, but C++
+                // doesn't have a cleaner way to exit multiple loop levels.
+            match_loop_end:
+                if (!match_found)
+                    continue;
+                #ifdef DEBUG_ADD_BUNDLES
+                cout << "*** Passed var-matching: " << st->get_descr() << "\n" << flush;
+                #endif
             }
+            
+            // Loop through all bps. All bps must be able to
+            // be added to 'st' to use it.
+            bool is_ok = true;
+            for (auto& bp : bps) {
+                #ifdef DEBUG_ADD_BUNDLES
+                cout << "**** checking " << bp->get_descr() << endl << flush;
+                #endif
 
-            // Try to add bundle if ok.
-            if (is_ok) {
+                // Loop through all bundles in 'st'.
+                for (auto& b2 : st->get_bundles()) {
+                    #ifdef DEBUG_ADD_BUNDLES
+                    cout << "**** checking against " << bp->get_descr() << " in " << st->get_descr() << endl << flush;
+                    #endif
+
+                    // Look for any dependency between 'bp' and 'b2'.
+                    if (deps.is_dep(bp, b2)) {
+                        is_ok = false;
+                        break;
+                    }
+                }
+                if (!is_ok)
+                    break;
 
                 // Try to add 'bp' to 'st'.
                 try {
@@ -1797,54 +1862,64 @@ namespace yask {
 
                     // Check dependencies between updated stages.
                     inherit_deps_from(all_bundles);
-                    topo_sort();
 
-                    // If we get this far, the add was okay;
-                    // remove the temp deps, and we're done.
-                    clear_deps();
-                    target = st.get();
-                    break;
+                    // If we get this far, the add was okay.
                 }
                 catch (yask_exception& e) {
 
-                    // Failure; must remove bundle.
-                    st->remove_bundle(bp);
-
-                    // Also remove the bad dependencies.
-                    clear_deps();
+                    // A circular-dependency was detected.
+                    is_ok = false;
                 }
+
+                // Remove the trial bundle and temp deps.
+                st->remove_bundle(bp);
+                clear_deps();
+
+                if (!is_ok)
+                    break;
+
+            } // each bp in bps.
+
+            // Found a viable target stage?
+            if (is_ok) {
+                target = st;
+                #ifdef DEBUG_ADD_BUNDLES
+                cout << "*** Adding to existing " << st->get_descr() << "\n" << flush;
+                #endif
+                break;
             }
+            
         } // existing stages.
 
         // Make new stage if no target stage found.
         bool new_stage = false;
         if (!target) {
-            auto np = make_shared<EqStage>(_soln, bp->is_scratch());
+            auto np = make_shared<EqStage>(_soln, is_scratch);
             add_item(np);
-            target = np.get();
-            if (bp->is_scratch())
+            target = np;
+            if (is_scratch)
                 target->base_name = string("scratch_") + _base_name;
             else
                 target->base_name = _base_name;
             target->index = _idx++;
             target->step_cond = stcond;
             new_stage = true;
-
-            // Add bundle to target.
-            target->add_bundle(bp);
-
             #ifdef DEBUG_ADD_BUNDLES
-            // Check dependencies between updated stages.
-            // Shouldn't be necessary for a newly-created stage.
-            inherit_deps_from(all_bundles);
-            topo_sort();
+            cout << "*** Adding to new " << target->get_descr() << "\n" << flush;
             #endif
         }
+        assert(target);
+        
+        // Add bundles to target.
+        for (auto& bp : bps) {
+            target->add_bundle(bp);
 
-        // Remember stage and updated vars.
-        _bundles_in_stages.insert(bp);
-        for (auto& g : bp->get_output_vars())
-            _out_vars.insert(g);
+            // Remember bundles and updated vars.
+            _bundles_in_stages.insert(bp);
+            for (auto& g : bp->get_output_vars())
+                _out_vars.insert(g);
+        }
+
         return new_stage;
     }
 
@@ -1855,26 +1930,48 @@ namespace yask {
         
         os << "\nPartitioning " << all_bundles.get_num() << " bundle(s) into stages...\n";
 
+        // Temp stages with grouped-by-logical-var stages.
+        EqStages sts1(_soln);
+        for (auto& b0 : all_bundles.get_all()) {
+
+            // Make trivial list with 1 bundle.
+            EqBundleList bl0;
+            bl0.insert(b0);
+
+            // Group by logical vars.
+            sts1.add_bundles_to_stage(all_bundles, bl0, true, true);
+        }
+        os << "Found " << sts1.get_num() << " groups of bundle(s) by logical var(s).\n";
+
+        // Temp stages with grouped-by-var stages.
+        EqStages sts2(_soln);
+        for (auto& st1 : sts1.get_all()) {
+            auto& bl1 = st1->get_bundles();
+
+            // Group by vars.
+            sts2.add_bundles_to_stage(all_bundles, bl1, true, false);
+        }
+        os << "Found " << sts1.get_num() << " groups of bundle(s) by var(s).\n";
+
+        // Finally, make stages with any non-dependency.
         // Add non-scratch, then scratch bundles.
         // This is done just to give the non-scratch ones lower indices.
         for (bool do_scratch : { false, true }) {
-            for (auto b1 : all_bundles.get_all()) {
-                if (b1->is_scratch() != do_scratch)
+            for (auto& st2 : sts2.get_all()) {
+                if (st2->is_scratch() != do_scratch)
                     continue;
-
-                // Add this bundle to an existing or new stage.
-                add_bundle_to_stage(all_bundles, b1);
+                
+                auto& bl2 = st2->get_bundles();
+                add_bundles_to_stage(all_bundles, bl2, false, false);
             }
         }
+        os << "Created " << get_num() << " equation stage(s).\n";
 
         os << "Collapsing dependencies from bundles and finding transitive closure...\n";
         inherit_deps_from(all_bundles);
 
         os << "Topologically ordering stages...\n";
         topo_sort();
-
-        // Dump info.
-        os << "Created " << get_num() << " equation stage(s):\n";
 
         // Print them in reverse order to get most dependent first.
         for (auto it1 = get_all().rbegin(); it1 != get_all().rend(); ++it1) {

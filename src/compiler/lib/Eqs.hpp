@@ -370,32 +370,55 @@ namespace yask {
             auto& fdeps = full.get_deps();
             auto& fscrs = full.get_scratch_deps();
 
-            // All T objs in this.
-            for (auto& oi : _all) {
+            // Two passes:
+            // 0: set immediate deps and find indirect deps.
+            // 1: check again for circular dependencies.
 
-                // All other T objs in this.
-                for (auto& oj : _all) {
+            for (int pass : { 0, 1 }) {
 
-                    // Don't compare to self.
-                    if (oi == oj) continue;
+                // All T objs in this.
+                for (auto& oi : _all) {
 
-                    // All Tf objs in 'oi'.
-                    for (auto& foi : oi->get_items()) {
+                    // All other T objs in this.
+                    for (auto& oj : _all) {
 
-                        // All Tf objs in 'oj'.
-                        for (auto& foj : oj->get_items()) {
+                        // Don't compare to self.
+                        if (oi == oj) continue;
 
-                            // If 'foi' is dep on 'foj',
-                            // then 'oi' is dep on 'oj'.
-                            if (fdeps.is_imm_dep_on(foi, foj))
-                                _deps.set_imm_dep_on(oi, oj);
-                            if (fscrs.is_imm_dep_on(foi, foj))
-                                _scratches.set_imm_dep_on(oi, oj);
+                        if (pass == 1) {
+                            
+                            // Look for 2-way dep.
+                            if (_deps.is_dep_on(oi, oj) &&
+                                _deps.is_dep_on(oj, oi)) {
+                                THROW_YASK_EXCEPTION("circular dependency between " +
+                                                     oi->get_descr() + " and " +
+                                                     oj->get_descr());
+                            }
+                        }
+                        
+                        // All Tf objs in 'oi'.
+                        for (auto& foi : oi->get_items()) {
+
+                            // All Tf objs in 'oj'.
+                            for (auto& foj : oj->get_items()) {
+
+                                if (pass == 0) {
+
+                                    // Copy deps from 'full', i.e.,
+                                    // if 'foi' is dep on 'foj',
+                                    // then 'oi' is dep on 'oj'.
+                                    if (fdeps.is_imm_dep_on(foi, foj))
+                                        _deps.set_imm_dep_on(oi, oj);
+                                    if (fscrs.is_imm_dep_on(foi, foj))
+                                        _scratches.set_imm_dep_on(oi, oj);
+                                }
+                            }
                         }
                     }
                 }
-            }
-            find_all_deps();
+                if (pass == 0)
+                    find_all_deps();
+            } // passes.
         }
     };
 
@@ -656,8 +679,7 @@ namespace yask {
         virtual void print_stats(const string& msg);
 
         // Apply optimizations requested in settings.
-        virtual void optimize_eq_bundles(const string& descr,
-                                         bool print_stats);
+        virtual void optimize_eq_bundles(const string& descr);
     };
     typedef shared_ptr<EqBundle> EqBundlePtr;
 
@@ -711,7 +733,7 @@ namespace yask {
         virtual void remove_bundle(EqBundlePtr ee);
 
         // Get the list of all bundles
-        virtual const EqBundleList& get_bundles() const {
+        virtual EqBundleList& get_bundles() {
             return _bundles;
         }
         virtual const EqBundleList& get_items() const {
@@ -746,10 +768,12 @@ namespace yask {
         // Track bundles that have been added already.
         set<EqBundlePtr> _bundles_in_stages;
 
-        // Add 'bp' from 'all_bundles' to a stage. Create new stage if
-        // needed.  Returns whether a new stage was created.
-        bool add_bundle_to_stage(EqBundles& all_bundles,
-                                 EqBundlePtr bp);
+        // Add 'bps', a subset of 'all_bundles'. Create new stage if needed.
+        // Returns whether a new stage was created.
+        bool add_bundles_to_stage(EqBundles& all_bundles,
+                                  EqBundleList& bps,
+                                  bool var_grouping,
+                                  bool logical_var_grouping);
 
     public:
         EqStages(Solution* soln) :

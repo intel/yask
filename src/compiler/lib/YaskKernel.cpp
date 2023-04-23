@@ -999,27 +999,11 @@ namespace yask {
                 "\n // Update vars with context info.\n"
                 " update_var_info(false);\n";
 
-            // Push eq-bundle pointers to list.
+            // Deps between bundles.
+            os << "\n // Configure bundles:\n";
             for (auto& b : _eq_bundles.get_all()) {
                 string b_name = b->_get_name();
-
-                os << "\n // Configure '" << b_name << "'.\n";
-
-                // Only want non-scratch bundles in st_bundles.
-                // Each scratch bundle will be added to its
-                // parent bundle.
-                if (!b->is_scratch())
-                    os << "  st_bundles.push_back(&" << b_name << ");\n";
-
-                // Add scratch-bundle deps in proper order.
-                auto& sdeps = _eq_bundles.get_all_scratch_deps_on(b);
-                for (auto& b2 : _eq_bundles.get_all()) {
-                    if (sdeps.count(b2)) {
-                        string b2_name = b2->_get_name();
-                        os << "  " << b_name <<
-                            ".add_scratch_child(&" << b2_name << ");\n";
-                    }
-                }
+                os << "\n // " << b->get_descr() << ".\n";
 
                 // Add deps between bundles.
                 for (auto& dep : _eq_bundles.get_all_deps_on(b)) {
@@ -1052,22 +1036,55 @@ namespace yask {
             } // bundles.
 
             // Stages.
-            os << "\n // Create non-scratch stencil stage(s), each w/its non-scratch bundle(s).\n";
+            os << "\n // Stage(s) and their bundles:\n";
             for (auto& st : _eq_stages.get_all()) {
-                if (st->is_scratch())
-                    continue;
-                string st_name = st->_get_name();
-                os << "  auto " << st_name << " = std::make_shared<Stage>(this, \"" <<
-                    st_name << "\");\n";
-                for (auto& b : st->get_bundles()) {
-                    if (b->is_scratch())
-                        continue;
-                    string b_name = b->_get_name();
-                    os << "  " << st_name << "->push_back(&" << b_name << ");\n";
-                }
-                os << "  st_stages.push_back(" << st_name << ");\n";
-            }
+                auto st_name = st->_get_name();
 
+                // Bundles in this scratch stage.
+                auto& sbs = st->get_bundles();
+                
+                // Passing only non-scratch stages to kernel (for now).
+                if (!st->is_scratch()) {
+                    os << "\n // Non-scratch " << st->get_descr() << ".\n";
+                    os << "  auto " << st_name << " = std::make_shared<Stage>(this, \"" <<
+                        st_name << "\");\n";
+                    os << "  st_stages.push_back(" << st_name << ");\n";
+
+                    // Non-scratch bundles in this stage.
+                    for (auto& b : sbs) {
+                        if (b->is_scratch())
+                            continue;
+                        auto b_name = b->_get_name();
+                        os << "  " << st_name << "->push_back(&" << b_name << ");\n";
+                        os << "  st_bundles.push_back(&" << b_name << ");\n";
+                    }
+                }
+
+                // Add info on scratch stages.
+                else {
+                    os << "\n // " << st->get_descr() << ".\n";
+                    
+                    // Scan all non-scratch bundles.
+                    for (auto& b : _eq_bundles.get_all()) {
+                        if (b->is_scratch())
+                            continue;
+
+                        // What scratch bundles are needed?
+                        auto& sbdeps = _eq_bundles.get_all_scratch_deps_on(b);
+                        for (auto& b2 : _eq_bundles.get_all()) {
+                            
+                            // Print bundles only in this scratch stage.
+                            if (sbdeps.count(b2) && sbs.count(b2)) {
+                                auto b_name = b->_get_name();
+                                auto b2_name = b2->_get_name();
+                                os << "  " << b_name <<
+                                    ".add_scratch_child(&" << b2_name << ");\n";
+                            }
+                        }
+                    }
+                }
+            }
+            
             os << "\n // Alloc core on offload device.\n"
                 "  auto* cxt_cd = &_core_data;\n"
                 "  offload_map_alloc(cxt_cd, 1);\n";
