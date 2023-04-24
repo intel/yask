@@ -926,6 +926,8 @@ namespace yask {
                              if (buf.get_size() == 0)
                                  continue;
 
+                             // Enabling the following block may cause a large number
+                             // of allocations when there are many vars and many ranks.
                              #if 0
                              // If not bundling allocations, increase sequence number.
                              if (!actl_opts->_bundle_allocs)

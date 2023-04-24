@@ -327,7 +327,7 @@ namespace yask {
             idx_t ab = idxs.begin[i] - max_write_halo_left[j];
             idx_t ae = idxs.end[i] + max_write_halo_right[j];
 
-            #if 0
+            #if 1
             // Round up halos to vector sizes.  This is to [try to] avoid
             // costly masking around edges of scratch write area. For
             // scratch vars, it won't hurt to calculate extra values outside

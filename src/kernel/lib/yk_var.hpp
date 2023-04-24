@@ -1046,7 +1046,7 @@ namespace yask {
                              // Inner loop.
                              for (idx_t i = 0; i < ni; i++) {
                                  idx_t bofs = tofs + idx * ni + i;
-                                 #if 0
+                                 #ifdef DEBUG_VISIT_SLICE
                                  TRACE_MSG(Visitor::fname() << ": visting pt " <<
                                            make_index_string(pt) << " w/buf ofs " << bofs);
                                  #endif
