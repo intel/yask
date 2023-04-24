@@ -381,9 +381,7 @@ namespace yask {
            If the number of ranks is zero in one or more 
            dimensions, those values will be set by a heuristic when
            prepare_solution() is called.
-           An exception will be thrown if no legal values are possible
-           given the specified (non-zero) values.
-
+           
            The curent MPI rank will be assigned a unique location
            within the overall problem domain based on its MPI rank index.
            Or, you can set it explicitly via set_rank_index().
@@ -399,7 +397,10 @@ namespace yask {
            that is decomposable across MPI ranks. Specifically, a
            domain dimension does not have to correspond to a
            spatial dimension in the physical problem description.
-        */
+ 
+           @throws yask_exception if no legal values are possible
+           given the specified (non-zero) values.
+         */
         virtual void
         set_num_ranks(const std::string& dim
                       /**< [in] Name of dimension to set.  Must be one of
@@ -584,7 +585,8 @@ namespace yask {
         /// Get the specified var.
         /**
            This cannot be used to access scratch vars.
-           @returns Pointer to the specified var or null pointer if it does not exist.
+           @returns Pointer to the specified var.
+           @throws yask_exception if named var does not exist.
         */
         virtual yk_var_ptr
         get_var(const std::string& name

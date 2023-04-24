@@ -1197,10 +1197,16 @@ virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc
 </div><div class="memdoc">
 
 <p>Set the number of MPI ranks in the given dimension. </p>
-<p>If <a class="el" href="classyask_1_1yk__solution.html#ac4cd27d412b6fe013db58b167999a362" title="Set the number of MPI ranks in the given dimension.">set_num_ranks()</a> is set to a non-zero value in all dimensions, then the <em>product</em> of the number of ranks across all dimensions must equal the value returned by <a class="el" href="classyask_1_1yk__env.html#add8b12cd6d10f964665a41acedbb9b14" title="Get number of MPI ranks.">yk_env::get_num_ranks()</a>. If the number of ranks is zero in one or more dimensions, those values will be set by a heuristic when <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a> is called. An exception will be thrown if no legal values are possible given the specified (non-zero) values.</p>
+<p>If <a class="el" href="classyask_1_1yk__solution.html#ac4cd27d412b6fe013db58b167999a362" title="Set the number of MPI ranks in the given dimension.">set_num_ranks()</a> is set to a non-zero value in all dimensions, then the <em>product</em> of the number of ranks across all dimensions must equal the value returned by <a class="el" href="classyask_1_1yk__env.html#add8b12cd6d10f964665a41acedbb9b14" title="Get number of MPI ranks.">yk_env::get_num_ranks()</a>. If the number of ranks is zero in one or more dimensions, those values will be set by a heuristic when <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a> is called.</p>
 <p>The curent MPI rank will be assigned a unique location within the overall problem domain based on its MPI rank index. Or, you can set it explicitly via <a class="el" href="classyask_1_1yk__solution.html#ac0eccaa1d228d7f3408e3c2b0881f279" title="Set the rank index in the specified dimension.">set_rank_index()</a>.</p>
 <p>The same number of MPI ranks must be set via this API on each constituent MPI rank to ensure a consistent overall configuration. The number of ranks in each dimension must be properly set before calling <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">yk_solution::prepare_solution()</a>. There is no rank setting allowed in the solution-step dimension (usually "t") or in a misc dimension.</p>
-<p>In fact, a practical definition of a domain dimension is one that is decomposable across MPI ranks. Specifically, a domain dimension does not have to correspond to a spatial dimension in the physical problem description. </p>
+<p>In fact, a practical definition of a domain dimension is one that is decomposable across MPI ranks. Specifically, a domain dimension does not have to correspond to a spatial dimension in the physical problem description.</p>
+<dl class="exception"><dt>Exceptions</dt><dd>
+  <table class="exception">
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if no legal values are possible given the specified (non-zero) values. </td></tr>
+  </table>
+  </dd>
+</dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to set. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a24c2619b5f0471bcfe8eeb5aed769fec" title="Get all the domain dimension names.">get_domain_dim_names()</a>.</td></tr>
@@ -1750,7 +1756,13 @@ virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc
 </div><div class="memdoc">
 
 <p>Get the specified var. </p>
-<p>This cannot be used to access scratch vars. </p><dl class="section return"><dt>Returns</dt><dd>Pointer to the specified var or null pointer if it does not exist. </dd></dl>
+<p>This cannot be used to access scratch vars. </p><dl class="section return"><dt>Returns</dt><dd>Pointer to the specified var. </dd></dl>
+<dl class="exception"><dt>Exceptions</dt><dd>
+  <table class="exception">
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if named var does not exist. </td></tr>
+  </table>
+  </dd>
+</dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[in]</td><td class="paramname">name</td><td>Name of the var. </td></tr>

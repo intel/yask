@@ -446,7 +446,12 @@ virtual void&#160;</td><td class="memItemRight" valign="bottom"><b>clear_cluster
 
 <p>Get the current output-file format. </p>
 <dl class="section return"><dt>Returns</dt><dd>Current target.</dd></dl>
-<p>Throws an exception if the target hasn't been set via <a class="el" href="classyask_1_1yc__solution.html#a1c03fc69e306a700de8c5ae3973229c2" title="Set the output target.">set_target()</a>. </p>
+<dl class="exception"><dt>Exceptions</dt><dd>
+  <table class="exception">
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if the target hasn't been set via <a class="el" href="classyask_1_1yc__solution.html#a1c03fc69e306a700de8c5ae3973229c2" title="Set the output target.">set_target()</a>. </td></tr>
+  </table>
+  </dd>
+</dl>
 
 </div>
 </div>
@@ -1380,6 +1385,12 @@ Default is one (1) in each dimension. </dd></dl>
 <p>Optimize and the current equation(s) and write to given output object. </p>
 <p>Output will be formatted according to <a class="el" href="classyask_1_1yc__solution.html#a1c03fc69e306a700de8c5ae3973229c2" title="Set the output target.">set_target()</a> and all other preceding YASK compiler API calls.</p>
 <p>Progress text will be written to the output stream set via <a class="el" href="classyask_1_1yc__solution.html#aff540803d358a5dcd304f09c522ec867" title="Set object to receive debug output.">set_debug_output()</a>.</p>
+<dl class="exception"><dt>Exceptions</dt><dd>
+  <table class="exception">
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if the target set via <a class="el" href="classyask_1_1yc__solution.html#a1c03fc69e306a700de8c5ae3973229c2" title="Set the output target.">set_target()</a> is invalid.</td></tr>
+  </table>
+  </dd>
+</dl>
 <dl class="section warning"><dt>Warning</dt><dd><em>Side effect:</em> Applies optimizations to the equation(s), so some pointers to nodes in the original equations may refer to modified nodes or nodes that have been optimized away after calling <a class="el" href="classyask_1_1yc__solution.html#a5f3624ded964c465724fd0221d5a2aaa" title="[Deprecated] Use set_target() and output_solution().">format()</a>. In general, do not use pointers to nodes across calls to <a class="el" href="classyask_1_1yc__solution.html#a5f3624ded964c465724fd0221d5a2aaa" title="[Deprecated] Use set_target() and output_solution().">format()</a>. </dd></dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
@@ -1676,7 +1687,7 @@ Default is one (1) in each dimension. </dd></dl>
 <li>It is not necessary to connect all the equations into a single graph. For example, if <b>A</b> depends on <b>B</b> and <b>C</b> depends on <b>D</b>, there will be two disconnected subgraphs. In this example, the YASK kernel is free to 1) schedule the functions created for B** and <b>D</b> to run together in parallel followed by those for A** and <b>C</b> together in parallel, 2) run a single function that implements both <b>B</b> and <b>D</b> simultaneously followed by a single function that implements both <b>A</b> and <b>C</b> simultaneously, or 3) a combination of the implementations.</li>
 <li>Only <em>immediate</em> dependencies should be added. In other words, each subgraph created should be a transitive reduction. For example, if <b>A</b> depends on <b>B</b> and <b>B</b> depends on <b>C</b>, it is not necessary to add the transitive dependence from <b>A</b> to <b>C</b>.</li>
 <li>Only dependencies at a given step-index value should be added. For example, given equation <b>A</b>: <code>A(t+1, x) EQUALS B(t+1, x) + 5</code> and equation <b>B</b>: <code>B(t+1, x) EQUALS A(t, x) / 2</code>, A** depends on <b>B</b> at some value of the step-index <code>t</code>. That dependency should be added if the automatic checker is disabled. (It is true that the next value of <code>B(t+2)</code> depends on <code>A(t+1)</code>, but such inter-step &ndash; analgous to loop-carried &ndash; dependencies should <em>not</em> be added with this function.)</li>
-<li>The dependencies should create one or more directed acyclic graphs (DAGs). If a cycle is created, the YASK compiler will throw an exception containing an error message about a circular dependency. This exception may not be thrown until <a class="el" href="classyask_1_1yc__solution.html#a5f3624ded964c465724fd0221d5a2aaa" title="[Deprecated] Use set_target() and output_solution().">format()</a> is called.</li>
+<li>The dependencies should create one or more directed acyclic graphs (DAGs). If a cycle is created, the YASK compiler will throw an exception containing an error message about a circular dependency. This exception may not be thrown until <a class="el" href="classyask_1_1yc__solution.html#a9c18b4c2eba024a830d5e43c83df958b" title="Optimize and the current equation(s) and write to given output object.">output_solution()</a> is called.</li>
 <li>If using scratch vars, dependencies among scratch vars and between scratch equations and non-scratch equations should also be added. Each scratch equation should ultimately depend on non-scratch values.</li>
 <li>This function can be used in cooperation with or instead of the built-in automatic dependency checker. When used in cooperation with the built-in checker, both dependencies from this function and the built-in checker will be considered. When the built-in checker is diabled via <code>set_dependency_checker_enabled(false)</code>, only dependencies from this function will be considered. In this case, it is imperative that all immediate dependencies are added. If the dependency graph is incomplete, the resulting generated stencil code will contain illegal race conditions, and it will most likely produce incorrect results. </li>
 </ul>

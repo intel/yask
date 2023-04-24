@@ -168,7 +168,7 @@ namespace yask {
         /**
            @returns Current target.
 
-           Throws an exception if the target hasn't been set via set_target().
+           @throws yask_exception if the target hasn't been set via set_target().
         */
         virtual std::string
         get_target() =0;
@@ -478,6 +478,8 @@ namespace yask {
 
             Progress text will be written to the output stream set via set_debug_output().
 
+            @throws yask_exception if the target set via set_target() is invalid.
+
             @warning *Side effect:* Applies optimizations to the equation(s), so some pointers
             to nodes in the original equations may refer to modified nodes or nodes
             that have been optimized away after calling format(). In general, do not use
@@ -656,7 +658,7 @@ namespace yask {
            If a cycle is created, the YASK compiler
            will throw an exception containing an error message
            about a circular dependency. This exception may not be
-           thrown until format() is called.
+           thrown until output_solution() is called.
 
            - If using scratch vars, dependencies among scratch vars
            and between scratch equations and non-scratch

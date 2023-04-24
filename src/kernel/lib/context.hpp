@@ -629,7 +629,7 @@ namespace yask {
             auto i = all_var_map.find(name);
             if (i != all_var_map.end())
                 return i->second;
-            return nullptr;
+            THROW_YASK_EXCEPTION("YASK variable '" + name + "' not found");
         }
         virtual std::vector<yk_var_ptr> get_vars() {
             std::vector<yk_var_ptr> vars;

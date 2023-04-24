@@ -628,7 +628,7 @@ namespace yask {
                     string nelems = (do_cluster ? nvecs + " * ": "") + "VLEN_" + all_caps(idim);
                     string write_mask = do_cluster ? "__ERROR__" : "write_mask";
                     int npts = do_cluster ? _dims._cluster_pts.product() : _dims._fold.product();
-                        
+
                     // Loop-calculation code.
                     // Function header.
                     os << endl << " // Calculate a nano-block of " << vcstr << "s bounded by 'norm_nb_idxs'.\n";

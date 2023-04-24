@@ -266,8 +266,8 @@ namespace yask {
         /**
            Must be called from all ranks.
            
-           Throws an exception if `rank_val` does not have the same
-           value across all ranks. Exception contains message with `descr`
+           @throws yask_exception if `rank_val` does not have the same
+           value across all ranks. Exception contains message with
            description of the value.
 
            Does nothing if MPI is not enabled.

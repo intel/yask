@@ -359,7 +359,7 @@ namespace yask {
             /**
                @returns the value at `args[argi]` and increments `argi`.
 
-               Throws an exception if `args[argi]` is not a double.
+               @throws yask_exception if `args[argi]` is not a double.
             */
             virtual double _double_val(const string_vec& args, int& argi);
 
@@ -367,7 +367,7 @@ namespace yask {
             /**
                @returns the value at `args[argi]` and increments `argi`.
 
-               Throws an exception if `args[argi]` is not an integer.
+               @throws yask_exception if `args[argi]` is not an integer.
             */
             virtual idx_t _idx_val(const string_vec& args, int& argi);
 
@@ -375,7 +375,7 @@ namespace yask {
             /**
                @returns the value at `args[argi]` and increments `argi`.
 
-               Throws an exception if `args[argi]` does not exist.
+               @throws yask_exception if `args[argi]` does not exist.
             */
             virtual std::string _string_val(const string_vec& args, int& argi);
 
