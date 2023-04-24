@@ -650,7 +650,16 @@ namespace yask {
                         " int thread_limit, ScanIndices& norm_nb_idxs";
                     if (!do_cluster)
                         os << ", bit_mask_t " << write_mask;
-                    os << ") {\n"
+                    os << ")\n";
+
+                    // Simply call calc_vectors() if there is only 1 vector in a cluster.
+                    if (do_cluster && _dims._cluster_mults.product() == 1) {
+                        os << " {\n // Call calc_vectors() because there is only 1 vector in a cluster.\n"
+                            " calc_vectors(core_data, core_idx,"
+                            " block_thread_idx, thread_limit, norm_nb_idxs, bit_mask_t(-1)); }\n";
+                        continue;
+                    }
+                    os << " {\n"
                         " FORCE_INLINE_RECURSIVE {\n"
                         " assert(core_data);\n"
                         " assert(core_data->_thread_core_list.get());\n"
@@ -748,7 +757,7 @@ namespace yask {
                         "#define NANO_BLOCK_USE_LOOP_PART_1\n"
                         "#include \"yask_nano_block_loops.hpp\"\n";
 
-                    // End of recursive block & function.
+                    // End of recursive block & calc function.
                     os << "} } // " << funcstr << ".\n";
                     delete vp;
                 } // cluster/vector
