@@ -626,8 +626,9 @@ namespace yask {
                     string funcstr = "calc_" + vcstr + "s";
                     string nvecs = do_cluster ? "CMULT_" + all_caps(idim) : "1";
                     string nelems = (do_cluster ? nvecs + " * ": "") + "VLEN_" + all_caps(idim);
-                    string write_mask = do_cluster ? "" : "write_mask";
-
+                    string write_mask = do_cluster ? "__ERROR__" : "write_mask";
+                    int npts = do_cluster ? _dims._cluster_pts.product() : _dims._fold.product();
+                        
                     // Loop-calculation code.
                     // Function header.
                     os << endl << " // Calculate a nano-block of " << vcstr << "s bounded by 'norm_nb_idxs'.\n";
@@ -650,17 +651,20 @@ namespace yask {
                         " int thread_limit, ScanIndices& norm_nb_idxs";
                     if (!do_cluster)
                         os << ", bit_mask_t " << write_mask;
-                    os << ")\n";
+                    os << ") {\n";
+
+                    // Early out.
+                    if (!do_cluster)
+                        os << " if (write_mask == 0) return;\n";
 
                     // Simply call calc_vectors() if there is only 1 vector in a cluster.
                     if (do_cluster && _dims._cluster_mults.product() == 1) {
-                        os << " {\n // Call calc_vectors() because there is only 1 vector in a cluster.\n"
+                        os << " // Call calc_vectors() because there is only 1 vector in a cluster.\n"
                             " calc_vectors(core_data, core_idx,"
                             " block_thread_idx, thread_limit, norm_nb_idxs, bit_mask_t(-1)); }\n";
                         continue;
                     }
-                    os << " {\n"
-                        " FORCE_INLINE_RECURSIVE {\n"
+                    os << " FORCE_INLINE_RECURSIVE {\n"
                         " assert(core_data);\n"
                         " assert(core_data->_thread_core_list.get());\n"
                         " auto& thread_core_data = core_data->_thread_core_list[core_idx];\n"
@@ -669,7 +673,8 @@ namespace yask {
  
                     // C++ vector print assistant.
                     auto* vp = new_cpp_vec_print_helper(vv, cv);
-                    vp->set_write_mask(write_mask);
+                    if (!do_cluster && npts > 1)
+                        vp->set_write_mask(write_mask); // Only need mask for actual vectors.
                     vp->set_using_cluster(do_cluster);
                     vp->set_stage_name(stage_name);
                     vp->get_point_stats();
