@@ -563,7 +563,7 @@ namespace yask {
         parser.add_option(make_shared<command_line_parser::bool_option>
                           ("bundle",
                            "[Advanced] "
-                           "Bundle multiple equations together for evaluation in a single code block when possible.",
+                           "Bundle multiple equations together into solution parts for evaluation in a single code block when possible.",
                            _bundle));
         parser.add_option(make_shared<command_line_parser::bool_option>
                           ("bundle-scratch",

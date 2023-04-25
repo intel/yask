@@ -35,12 +35,12 @@ namespace yask {
     void Solution::_free(bool free_printer) {
         if (free_printer && _printer)
             delete _printer;
-        if (_eq_bundles)
-            delete _eq_bundles;
+        if (_parts)
+            delete _parts;
         if (_eq_stages)
             delete _eq_stages;
-        if (_cluster_eq_bundles)
-            delete _cluster_eq_bundles;
+        if (_cluster_parts)
+            delete _cluster_parts;
     }
     
     // Stencil-solution APIs.
@@ -151,31 +151,31 @@ namespace yask {
         // Update access stats for the vars.
         _eqs.update_var_stats();
 
-        // Create equation bundles based on dependencies and/or target strings.
+        // Create equation parts based on dependencies and/or target strings.
         // This process may alter the halos in scratch vars.
-        _eq_bundles->make_eq_bundles();
+        _parts->make_parts();
 
-        // Separate bundles into stages.
-        _eq_stages->make_stages(*_eq_bundles);
+        // Separate parts into stages.
+        _eq_stages->make_stages(*_parts);
 
         // Compute halos.
-        _eq_stages->calc_halos(*_eq_bundles);
+        _eq_stages->calc_halos(*_parts);
 
-        // Optimize bundles.
-        _eq_bundles->optimize_eq_bundles("scalar & vector");
+        // Optimize parts.
+        _parts->optimize_parts("scalar & vector");
         
         // Make a copy of each equation at each cluster offset.  We will use
         // these for inter-cluster optimizations and code generation.  We
-        // don't recalculate new stages for the cluster bundles.  Instead,
-        // the stages from '_eq_bundles' are used for the corresponding
-        // entries in '_cluster_eq_bundles'.
-        *_cluster_eq_bundles = *_eq_bundles;
+        // don't recalculate new stages for the cluster parts.  Instead,
+        // the stages from '_parts' are used for the corresponding
+        // entries in '_cluster_parts'.
+        *_cluster_parts = *_parts;
         if (_dims._cluster_mults.product() > 1) {
-            *_dos << "\nConstructing equation bundles containing " <<
+            *_dos << "\nConstructing equation parts containing " <<
                 _dims._cluster_mults.product() << " vectors per cluster...\n";
-            _cluster_eq_bundles->replicate_eqs_in_cluster();
+            _cluster_parts->replicate_eqs_in_cluster();
             if (_settings._do_opt_cluster)
-                _cluster_eq_bundles->optimize_eq_bundles("cluster");
+                _cluster_parts->optimize_parts("cluster");
         }
     }
 
@@ -232,9 +232,9 @@ namespace yask {
 
         // Ensure all intermediate data is clean.
         _free(true);
-        _eq_bundles = new EqBundles(this);
-        _eq_stages = new EqStages(this);
-        _cluster_eq_bundles = new EqBundles(this);
+        _parts = new Parts(this);
+        _eq_stages = new Stages(this);
+        _cluster_parts = new Parts(this);
 
         if (!is_target_set())
             THROW_YASK_EXCEPTION("output_solution() without format target being set");
@@ -259,23 +259,23 @@ namespace yask {
         // Most args to the printers just set references to data.
         // Data itself will be created in analyze_solution().
         if (target == "intel64")
-            _printer = new YASKCppPrinter(*this, *_eq_bundles, *_eq_stages, *_cluster_eq_bundles);
+            _printer = new YASKCppPrinter(*this, *_parts, *_eq_stages, *_cluster_parts);
         else if (target == "avx" || target == "avx2")
-            _printer = new YASKAvx2Printer(*this, *_eq_bundles, *_eq_stages, *_cluster_eq_bundles);
+            _printer = new YASKAvx2Printer(*this, *_parts, *_eq_stages, *_cluster_parts);
         else if (target == "avx512" || target == "knl")
-            _printer = new YASKAvx512Printer(*this, *_eq_bundles, *_eq_stages, *_cluster_eq_bundles);
+            _printer = new YASKAvx512Printer(*this, *_parts, *_eq_stages, *_cluster_parts);
         else if (target == "avx512-ymm")
-            _printer = new YASKAvx512Printer(*this, *_eq_bundles, *_eq_stages, *_cluster_eq_bundles, true);
+            _printer = new YASKAvx512Printer(*this, *_parts, *_eq_stages, *_cluster_parts, true);
         else if (target == "dot")
-            _printer = new DOTPrinter(*this, *_cluster_eq_bundles, false);
+            _printer = new DOTPrinter(*this, *_cluster_parts, false);
         else if (target == "dot-lite")
-            _printer = new DOTPrinter(*this, *_cluster_eq_bundles, true);
+            _printer = new DOTPrinter(*this, *_cluster_parts, true);
         else if (target == "pseudo")
-            _printer = new PseudoPrinter(*this, *_cluster_eq_bundles, false);
+            _printer = new PseudoPrinter(*this, *_cluster_parts, false);
         else if (target == "pseudo-long")
-            _printer = new PseudoPrinter(*this, *_cluster_eq_bundles, true);
+            _printer = new PseudoPrinter(*this, *_cluster_parts, true);
         else if (target == "pov-ray") // undocumented.
-            _printer = new POVRayPrinter(*this, *_cluster_eq_bundles);
+            _printer = new POVRayPrinter(*this, *_cluster_parts);
         else {
             _printer = 0;
             THROW_YASK_EXCEPTION("format-target '" + target +
@@ -283,7 +283,7 @@ namespace yask {
         }
         assert(_printer);
                 
-        // Set data for equation bundles, dims, etc.
+        // Set data for equation parts, dims, etc.
         int vlen = _printer->num_vec_elems();
         bool is_folding_efficient = _printer->is_folding_efficient();
         analyze_solution(vlen, is_folding_efficient);

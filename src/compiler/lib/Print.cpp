@@ -644,13 +644,13 @@ namespace yask {
     // Print out a stencil in human-readable form, for debug or documentation.
     void PseudoPrinter::print(ostream& os) {
 
-        os << "Stencil '" << _stencil._get_name() << "' pseudo-code:" << endl;
+        os << "Solution '" << _stencil._get_name() << "' pseudo-code:" << endl;
 
-        // Loop through all eq_bundles.
-        for (auto& eq : _eq_bundles.get_all()) {
+        // Loop through all parts.
+        for (auto& eq : _parts.get_all()) {
 
             string eg_name = eq->_get_name();
-            os << endl << " ////// Equation bundle '" << eg_name <<
+            os << endl << " ////// Solution part '" << eg_name <<
                 "' //////" << endl;
 
             CounterVisitor cv;
@@ -690,9 +690,9 @@ namespace yask {
         os << "digraph \"Stencil " << _stencil._get_name() << "\" {\n"
             "rankdir=LR; ranksep=1.5;\n";
 
-        // Loop through all eq_bundles.
-        for (auto& eq : _eq_bundles.get_all()) {
-            os << "subgraph \"Equation-bundle " << eq->_get_name() << "\" {" << endl;
+        // Loop through all parts.
+        for (auto& eq : _parts.get_all()) {
+            os << "subgraph \"Part " << eq->_get_name() << "\" {" << endl;
             eq->visit_eqs(pv);
             os << "}" << endl;
         }
@@ -713,8 +713,8 @@ namespace yask {
             "  look_at <0, 0, 0>" << endl <<
             "}" << endl;
 
-        // Loop through all eq_bundles.
-        for (auto& eq : _eq_bundles.get_all()) {
+        // Loop through all parts.
+        for (auto& eq : _parts.get_all()) {
 
             // TODO: separate mutiple vars.
             POVRayPrintVisitor pv(os);

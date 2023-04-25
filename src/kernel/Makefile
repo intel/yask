@@ -191,9 +191,6 @@ endif
 ifneq ($(cluster),)
  YC_FLAGS	+=	-cluster $(cluster)
 endif
-ifneq ($(eqs),)
- YC_FLAGS	+=	-eq-bundles $(eqs)
-endif
 ifneq ($(halo),)
  YC_FLAGS	+=	-halo $(halo)
 endif

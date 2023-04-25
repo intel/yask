@@ -197,10 +197,10 @@ namespace yask {
     };
 
     // Things in a context.
-    class StencilBundleBase;
+    class StencilPartBase;
     class Stage;
-    typedef std::vector<StencilBundleBase*> StencilBundleList;
-    typedef std::set<StencilBundleBase*> StencilBundleSet;
+    typedef std::vector<StencilPartBase*> StencilPartList;
+    typedef std::set<StencilPartBase*> StencilPartSet;
     typedef std::shared_ptr<Stage> StagePtr;
     typedef std::vector<StagePtr> StageList;
 
@@ -271,7 +271,7 @@ namespace yask {
         // include any extensions needed for WF.
         BoundingBox mpi_interior;
 
-        // Max write halos across all scratch bundles on left and right in each dim.
+        // Max write halos across all scratch parts on left and right in each dim.
         IdxTuple max_write_halo_left, max_write_halo_right;
 
         // Is there a non-zero exterior in the given section?
@@ -281,9 +281,9 @@ namespace yask {
                 mpi_interior.bb_end[ddim] < ext_bb.bb_end[ddim];
         }
 
-        // List of all non-scratch stencil bundles in the order in which
+        // List of all non-scratch stencil parts in the order in which
         // they should be evaluated within a step.
-        StencilBundleList st_bundles;
+        StencilPartList st_parts;
 
         // List of all non-scratch stencil-stages in the order in
         // which they should be evaluated within a step.
@@ -522,14 +522,14 @@ namespace yask {
                               const ScanIndices& adj_block_idxs,
                               MpiSection& mpisec);
 
-        // Exchange all dirty halo data for all stencil bundles.
+        // Exchange all dirty halo data for all stencil parts.
         void exchange_halos(MpiSection& mpisec);
 
         // Call MPI_Test() on all unfinished requests to advance MPI progress.
         void adv_halo_exchange();
 
         // Update valid steps in vars that have been written to by stage 'sel_bp'.
-        // If sel_bp==null, use all bundles.
+        // If sel_bp==null, use all parts.
         // If 'mark_dirty', also mark as needing halo exchange.
         void update_var_info(const StagePtr& sel_bp,
                              idx_t start, idx_t stop,
@@ -567,10 +567,10 @@ namespace yask {
                               const bit_mask_t& bridge_mask,
                               ScanIndices& idxs);
 
-        // Set the bounding-box around all stencil bundles.
+        // Set the bounding-box around all stencil parts.
         void find_bounding_boxes();
 
-        // Determine max write halos for scratch bundles.
+        // Determine max write halos for scratch parts.
         void find_scratch_write_halos();
         
         // Set data needed by the kernels.

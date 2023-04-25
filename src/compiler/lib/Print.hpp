@@ -429,16 +429,16 @@ namespace yask {
         const CompilerSettings& _settings;
         const Dimensions& _dims;
         Vars& _vars;
-        EqBundles& _eq_bundles;
+        Parts& _parts;
 
     public:
         PrinterBase(Solution& stencil,
-                    EqBundles& eq_bundles) :
+                    Parts& parts) :
             _stencil(stencil),
             _settings(stencil.get_settings()),
             _dims(stencil.get_dims()),
             _vars(stencil._get_vars()),
-            _eq_bundles(eq_bundles)
+            _parts(parts)
         { }
         virtual ~PrinterBase() { }
 
@@ -473,9 +473,9 @@ namespace yask {
 
     public:
         PseudoPrinter(Solution& stencil,
-                      EqBundles& eq_bundles,
+                      Parts& parts,
                       bool is_long) :
-            PrinterBase(stencil, eq_bundles), _long(is_long) { }
+            PrinterBase(stencil, parts), _long(is_long) { }
         virtual ~PseudoPrinter() { }
 
         virtual void print(ostream& os);
@@ -487,9 +487,9 @@ namespace yask {
         bool _is_simple;
 
     public:
-        DOTPrinter(Solution& stencil, EqBundles& eq_bundles,
+        DOTPrinter(Solution& stencil, Parts& parts,
                    bool is_simple) :
-            PrinterBase(stencil, eq_bundles),
+            PrinterBase(stencil, parts),
             _is_simple(is_simple) { }
         virtual ~DOTPrinter() { }
 
@@ -500,8 +500,8 @@ namespace yask {
     class POVRayPrinter : public PrinterBase {
 
     public:
-        POVRayPrinter(Solution& stencil, EqBundles& eq_bundles) :
-            PrinterBase(stencil, eq_bundles) { }
+        POVRayPrinter(Solution& stencil, Parts& parts) :
+            PrinterBase(stencil, parts) { }
         virtual ~POVRayPrinter() { }
 
         virtual void print(ostream& os);

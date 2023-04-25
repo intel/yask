@@ -177,10 +177,10 @@ namespace yask {
 
     public:
         YASKAvx2Printer(Solution& stencil,
-                        EqBundles& eq_bundles,
-                        EqStages& eq_stages,
-                        EqBundles& cluster_eq_bundles) :
-            YASKCppPrinter(stencil, eq_bundles, eq_stages, cluster_eq_bundles) { }
+                        Parts& parts,
+                        Stages& eq_stages,
+                        Parts& cluster_parts) :
+            YASKCppPrinter(stencil, parts, eq_stages, cluster_parts) { }
 
         virtual int num_vec_elems() const override {
             return 32 / _settings._elem_bytes;
@@ -199,11 +199,11 @@ namespace yask {
 
     public:
         YASKAvx512Printer(Solution& stencil,
-                          EqBundles& eq_bundles,
-                          EqStages& eq_stages,
-                          EqBundles& cluster_eq_bundles,
+                          Parts& parts,
+                          Stages& eq_stages,
+                          Parts& cluster_parts,
                           bool is_lo = false) :
-            YASKCppPrinter(stencil, eq_bundles, eq_stages, cluster_eq_bundles),
+            YASKCppPrinter(stencil, parts, eq_stages, cluster_parts),
             _is_lo(is_lo) { }
 
         virtual int num_vec_elems() const override {

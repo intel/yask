@@ -27,35 +27,35 @@ IN THE SOFTWARE.
 
 namespace yask {
 
-    // Classes that support evaluation of one stencil bundle
-    // and a stage of bundles.
+    // Classes that support evaluation of one stencil part
+    // and a stage of parts.
     // A stencil solution contains one or more stages.
 
-    // A pure-virtual class base for a stencil bundle.
-    class StencilBundleBase :
+    // A pure-virtual class base for a stencil part.
+    class StencilPartBase :
         public ContextLinker {
 
     protected:
 
-        // Other bundles that this one depends on.
-        StencilBundleSet _depends_on;
+        // Other parts that this one depends on.
+        StencilPartSet _depends_on;
 
-        // List of scratch-var bundles that need to be evaluated
-        // before this bundle. Listed in eval order first-to-last.
-        StencilBundleList _scratch_children;
+        // List of scratch-var parts that need to be evaluated
+        // before this part. Listed in eval order first-to-last.
+        StencilPartList _scratch_children;
 
-        // Overall bounding box for the bundle.
+        // Overall bounding box for the part.
         // This may or may not be solid, i.e., it
         // may contain some invalid points.
         // This must fit inside the extended BB for this rank.
-        BoundingBox _bundle_bb;
+        BoundingBox _part_bb;
 
-	// Bounding box(es) that indicate where this bundle is valid.
+	// Bounding box(es) that indicate where this part is valid.
 	// These must be non-overlapping. These do NOT contain
-        // any invalid points. These will all be inside '_bundle_bb'.
+        // any invalid points. These will all be inside '_part_bb'.
 	BBList _bb_list;
 
-        // Max write halos for scratch bundles on left and right in each dim.
+        // Max write halos for scratch parts on left and right in each dim.
         IdxTuple max_write_halo_left, max_write_halo_right;
 
         // Normalize the 'orig' indices, i.e., divide by vector len in each dim.
@@ -108,42 +108,42 @@ namespace yask {
         ScratchVecs input_scratch_vecs;
 
         // ctor, dtor.
-        StencilBundleBase(StencilContext* context) :
+        StencilPartBase(StencilContext* context) :
             ContextLinker(context) { }
-        virtual ~StencilBundleBase() { }
+        virtual ~StencilPartBase() { }
 
         // Access to BBs.
-        BoundingBox& get_bb() { return _bundle_bb; }
+        BoundingBox& get_bb() { return _part_bb; }
         BBList& get_bbs() { return _bb_list; }
 
         // Add dependency.
-        void add_dep(StencilBundleBase* eg) {
+        void add_dep(StencilPartBase* eg) {
             _depends_on.insert(eg);
         }
 
         // Get dependencies.
-        const StencilBundleSet& get_deps() const {
+        const StencilPartSet& get_deps() const {
             return _depends_on;
         }
 
-        // Add needed scratch-bundle.
-        void add_scratch_child(StencilBundleBase* eg) {
+        // Add needed scratch-part.
+        void add_scratch_child(StencilPartBase* eg) {
             _scratch_children.push_back(eg);
         }
 
-        // Get needed scratch-bundle(s).
-        const StencilBundleList& get_scratch_children() const {
+        // Get needed scratch-part(s).
+        const StencilPartList& get_scratch_children() const {
             return _scratch_children;
         }
 
         // Get scratch children plus self.
-        StencilBundleList get_reqd_bundles() {
+        StencilPartList get_reqd_parts() {
             auto sg_list = get_scratch_children(); // Do children first.
             sg_list.push_back(this); // Do self last.
             return sg_list;
         }
 
-        // Max write halos for a scratch bundle.
+        // Max write halos for a scratch part.
         void find_scratch_write_halos();
         inline const IdxTuple& get_max_write_halo_left() const {
             return max_write_halo_left;
@@ -152,7 +152,7 @@ namespace yask {
             return max_write_halo_right;
         }
 
-        // For scratch bundle,
+        // For scratch part,
         // expand indices to calculate values in scratch-halo.
         // Adjust offsets in vars based on original idxs.
         // Return adjusted indices.
@@ -160,12 +160,12 @@ namespace yask {
                                         const ScanIndices& idxs,
                                         KernelSettings& settings) const;
 
-        // Set the bounding-box vars for this bundle in this rank.
+        // Set the bounding-box vars for this part in this rank.
         // This includes its overall-BB and the constituent full-BBs.
         void find_bounding_boxes(BoundingBox& max_bb);
 
         // Copy BB vars from another.
-        void copy_bounding_boxes(const StencilBundleBase* src);
+        void copy_bounding_boxes(const StencilPartBase* src);
 
         // Calculate results for an arbitrary tile for points in the valid domain.
         // Scratch vars, if any, are indexed via 'scratch_var_idx'.
@@ -178,9 +178,9 @@ namespace yask {
                          KernelSettings& settings,
                          const ScanIndices& micro_block_idxs,
                          MpiSection& mpisec,
-                         StencilBundleSet& bundles_done);
+                         StencilPartSet& parts_done);
 
-        // Mark vars dirty that are updated by this bundle and/or
+        // Mark vars dirty that are updated by this part and/or
         // update last valid step.
         void
         update_var_info(YkVarBase::dirty_idx whose,
@@ -199,7 +199,7 @@ namespace yask {
         // Functions below are stubs for the code generated
         // by the stencil compiler.
         
-        // Get name of this bundle.
+        // Get name of this part.
         virtual const std::string
         get_name() const =0;
 
@@ -213,7 +213,7 @@ namespace yask {
         virtual int
         get_scalar_points_written() const =0;
 
-        // Whether this bundle updates scratch var(s)?
+        // Whether this part updates scratch var(s)?
         virtual bool
         is_scratch() const =0;
 
@@ -237,7 +237,7 @@ namespace yask {
         virtual bool
         is_in_valid_step(idx_t input_step_index) const =0;
 
-        // If bundle updates var(s) with the step index,
+        // If part updates var(s) with the step index,
         // set 'output_step_index' to the step that an update
         // occurs when calling one of the calc_*() methods with
         // 'input_step_index' and return 'true'.
@@ -246,17 +246,17 @@ namespace yask {
         get_output_step_index(idx_t input_step_index,
                               idx_t& output_step_index) const =0;
 
-    };                          // StencilBundleBase.
+    };                          // StencilPartBase.
 
     // A template that is instantiated with the stencil-compiler
     // output class.
-    template <typename StencilBundleImplT,
+    template <typename StencilPartImplT,
               typename StencilCoreDataT>
-    class StencilBundleTempl:
-        public StencilBundleBase {
+    class StencilPartTmpl:
+        public StencilPartBase {
 
     protected:
-        StencilBundleImplT _bundle;
+        StencilPartImplT _part;
 
         // Access core data.
         // TODO: use dynamic_cast in CHECK mode.
@@ -270,70 +270,70 @@ namespace yask {
     public:
 
         // Ctor.
-        StencilBundleTempl(StencilContext* context):
-            StencilBundleBase(context) { }
+        StencilPartTmpl(StencilContext* context):
+            StencilPartBase(context) { }
 
         // Dtor.
-        virtual ~StencilBundleTempl() { }
+        virtual ~StencilPartTmpl() { }
 
-        // Get name of this bundle.
+        // Get name of this part.
         const std::string get_name() const override {
-            return _bundle._name;
+            return _part._name;
         }
 
         // Get estimated number of FP ops done for one scalar eval.
         int get_scalar_fp_ops() const override {
-            return _bundle._scalar_fp_ops;
+            return _part._scalar_fp_ops;
         }
 
         // Get number of points read and written for one scalar eval.
         int get_scalar_points_read() const override {
-            return _bundle._scalar_points_read;
+            return _part._scalar_points_read;
         }
         int get_scalar_points_written() const override {
-            return _bundle._scalar_points_written;
+            return _part._scalar_points_written;
         }
 
-        // Whether this bundle updates scratch var(s)?
+        // Whether this part updates scratch var(s)?
         bool is_scratch() const override {
-            return _bundle._is_scratch;
+            return _part._is_scratch;
         }
 
         // Determine whether indices are in [sub-]domain.
         bool is_in_valid_domain(const Indices& idxs) const override {
-            return _bundle.is_in_valid_domain(_corep(), idxs);
+            return _part.is_in_valid_domain(_corep(), idxs);
         }
 
         // Return true if there are any non-default conditions.
         bool is_sub_domain_expr() const override {
-            return _bundle.is_sub_domain_expr();
+            return _part.is_sub_domain_expr();
         }
         bool is_step_cond_expr() const override {
-            return _bundle.is_step_cond_expr();
+            return _part.is_step_cond_expr();
         }
 
         // Return human-readable description of conditions.
         std::string get_domain_description() const override {
-            return _bundle.get_domain_description();
+            return _part.get_domain_description();
         }
         std::string get_step_cond_description() const override {
-            return _bundle.get_step_cond_description();
+            return _part.get_step_cond_description();
         }
 
         // Determine whether step index is enabled.
         bool is_in_valid_step(idx_t input_step_index) const override {
             return !_context->check_step_conds ||
-                _bundle.is_in_valid_step(_corep(), input_step_index);
+                _part.is_in_valid_step(_corep(), input_step_index);
         }
 
-        // If bundle updates var(s) with the step index,
+        // If part updates var(s) with the step index,
         // set 'output_step_index' to the step that an update
         // occurs when calling one of the calc_*() methods with
         // 'input_step_index' and return 'true'.
         // Else, return 'false';
         bool get_output_step_index(idx_t input_step_index,
                                    idx_t& output_step_index) const override {
-            return _bundle.get_output_step_index(input_step_index,
+            return _part.get_output_step_index(input_step_index,
                                                  output_step_index);
         }
 
@@ -351,11 +351,11 @@ namespace yask {
             #include "yask_misc_loops.hpp"
 
             // Loop body.  Since stride is always 1, we ignore
-            // stop indices.  If point is in sub-domain for this bundle,
+            // stop indices.  If point is in sub-domain for this part,
             // then execute the reference scalar code.  TODO: fix domain of
             // scratch vars.
-            if (_bundle.is_in_valid_domain(cp, misc_range.start))
-                _bundle.calc_scalar(cp, scratch_var_idx, misc_range.start);
+            if (_part.is_in_valid_domain(cp, misc_range.start))
+                _part.calc_scalar(cp, scratch_var_idx, misc_range.start);
 
             // Loop suffix.
             #define MISC_USE_LOOP_PART_1
@@ -387,7 +387,7 @@ namespace yask {
                            KernelSettings& settings,
                            const ScanIndices& micro_block_idxs) {
             STATE_VARS(this);
-            TRACE_MSG("for bundle '" << get_name() << "': " <<
+            TRACE_MSG("for part '" << get_name() << "': " <<
                       micro_block_idxs.make_range_str(false) <<
                       " via outer thread " << outer_thread_idx <<
                       " and inner thread " << inner_thread_idx);
@@ -430,7 +430,7 @@ namespace yask {
 
             // Loop body.
             // Since stride is always 1, we only need start indices.
-            StencilBundleImplT::calc_scalar(cp, outer_thread_idx, misc_range.start);
+            StencilPartImplT::calc_scalar(cp, outer_thread_idx, misc_range.start);
 
             // Loop suffix.
             #define MISC_USE_LOOP_PART_1
@@ -447,7 +447,7 @@ namespace yask {
                            KernelSettings& settings,
                            const ScanIndices& micro_block_idxs) {
             STATE_VARS(this);
-            TRACE_MSG("for bundle '" << get_name() << "': " <<
+            TRACE_MSG("for part '" << get_name() << "': " <<
                       micro_block_idxs.make_range_str(false) <<
                       " via outer thread " << outer_thread_idx <<
                       " and inner thread " << inner_thread_idx);
@@ -941,7 +941,7 @@ namespace yask {
 
             // Call code from stencil compiler.
             ssc_start();
-            StencilBundleImplT::calc_clusters(corep,
+            StencilPartImplT::calc_clusters(corep,
                                               outer_thread_idx, inner_thread_idx,
                                               thread_limit, norm_idxs);
             ssc_stop();
@@ -964,25 +964,25 @@ namespace yask {
             #else
             
             // Call code from stencil compiler.
-            StencilBundleImplT::calc_vectors(corep,
+            StencilPartImplT::calc_vectors(corep,
                                              outer_thread_idx, inner_thread_idx,
                                              thread_limit, norm_idxs, mask);
             #endif
         }
 
-    }; // StencilBundleBase.
+    }; // StencilPartBase.
     
-    // A collection of independent stencil bundles.
+    // A collection of independent stencil parts.
     // "Independent" implies that they may be evaluated
     // in any order.
     class Stage :
         public ContextLinker,
-        public std::vector<StencilBundleBase*> {
+        public std::vector<StencilPartBase*> {
 
     protected:
         std::string _name;
 
-        // Union of bounding boxes for all non-scratch bundles in this stage.
+        // Union of bounding boxes for all non-scratch parts in this stage.
         BoundingBox _stage_bb;
 
     public:
@@ -1028,7 +1028,7 @@ namespace yask {
                 if (!bp->is_scratch())
                     return bp->is_in_valid_step(input_step_index);
             }
-            assert("no non-scratch bundle");
+            assert("no non-scratch part");
             return false;
         }
 

@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-///////// Classes for equations, equation bundles, and stages. ////////////
+///////// Classes for equations, parts, and stages. ////////////
 
 #pragma once
 
@@ -495,7 +495,7 @@ namespace yask {
 
         // Parts of the name.
         // TODO: move these into protected section and make accessors.
-        string base_name;            // base name of this bundle.
+        string base_name;            // base name of this part.
         int index;                  // index to distinguish repeated names.
 
         // Ctor.
@@ -552,16 +552,16 @@ namespace yask {
         virtual void print_stats(ostream& os, const string& msg);
     };
 
-    // A named equation bundle, which contains one or more var-update
-    // equations.  All equations in a bundle must have the same conditions.
-    // Equations in a bundle must not have inter-dependencies because they
+    // A named solution part, which contains one or more var-update
+    // equations.  All equations in a part must have the same conditions.
+    // Equations in a part must not have inter-dependencies because they
     // will be combined into a single code block.
-    class EqBundle : public EqLot {
+    class Part : public EqLot {
  
     public:
-        EqBundle(Solution* soln, bool is_scratch) :
+        Part(Solution* soln, bool is_scratch) :
             EqLot(soln, is_scratch) { }
-        virtual ~EqBundle() { }
+        virtual ~Part() { }
 
         // TODO: move these into protected section and make accessors.
 
@@ -573,8 +573,8 @@ namespace yask {
         num_expr_ptr step_expr;
 
         // Create a copy containing clones of the equations.
-        virtual shared_ptr<EqBundle> clone() const {
-            auto p = make_shared<EqBundle>(_soln, is_scratch());
+        virtual Tp<Part> clone() const {
+            auto p = make_shared<Part>(_soln, is_scratch());
 
             // Shallow copy.
             *p = *this;
@@ -621,48 +621,48 @@ namespace yask {
         virtual void replicate_eqs_in_cluster();
     };
 
-    // Container for multiple equation bundles.
-    class EqBundles : public DepGroup<EqBundle> {
+    // Container for multiple equation parts.
+    class Parts : public DepGroup<Part> {
     protected:
         Solution* _soln;
 
-        string _base_name = "bundle";
+        string _base_name = "part";
 
         // Track vars that are updated.
         Vars _out_vars;
 
-        // Bundle index;
-        int _idx = 0;
+        // part index;
+        int _idx = 1;
 
         // Track equations that have been added already.
-        set<Eq> _eqs_in_bundles;
+        set<Eq> _eqs_in_parts;
 
-        // Add 'eq' (subset of 'all_eqs') to an existing eq-bundle if
-        // possible.  If not possible, create a new bundle and add 'eqs' to
-        // it. The index will be incremented if a new bundle is created.
-        // Returns whether a new bundle was created.
-        virtual bool add_eq_to_bundle(Eq& eq);
+        // Add 'eq' (subset of 'all_eqs') to an existing part if
+        // possible.  If not possible, create a new part and add 'eqs' to
+        // it. The index will be incremented if a new part is created.
+        // Returns whether a new part was created.
+        virtual bool add_eq_to_part(Eq& eq);
 
     public:
-        EqBundles(Solution* soln) :
+        Parts(Solution* soln) :
             _soln(soln),
             _out_vars(soln) { }
-        virtual ~EqBundles() { }
+        virtual ~Parts() { }
 
-       // Separate a set of equations into eq_bundles based
+        // Separate a set of equations into parts based
         // on the target string.
         // Target string is a comma-separated list of key-value pairs, e.g.,
-        // "eq_bundle1=foo,eq_bundle2=bar".
-        // In this example, all eqs updating var names containing 'foo' go in eq_bundle1,
-        // all eqs updating var names containing 'bar' go in eq_bundle2, and
-        // each remaining eq goes into a separate eq_bundle.
-        void make_eq_bundles();
+        // "part1=foo,part2=bar".
+        // In this example, all eqs updating var names containing 'foo' go in part1,
+        // all eqs updating var names containing 'bar' go in part2, and
+        // each remaining eq goes into a separate part.
+        void make_parts();
 
         virtual const Vars& get_output_vars() const {
             return _out_vars;
         }
 
-        // Visit all the equations in all eq_bundles.
+        // Visit all the equations in all parts.
         virtual void visit_eqs(ExprVisitor* ev) {
             for (auto& eg : get_all())
                 eg->visit_eqs(ev);
@@ -675,25 +675,25 @@ namespace yask {
                 eg->replicate_eqs_in_cluster();
         }
 
-        // Print stats for the equation(s) in all bundles.
+        // Print stats for the equation(s) in all parts.
         virtual void print_stats(const string& msg);
 
         // Apply optimizations requested in settings.
-        virtual void optimize_eq_bundles(const string& descr);
+        virtual void optimize_parts(const string& descr);
     };
-    typedef shared_ptr<EqBundle> EqBundlePtr;
+    typedef shared_ptr<Part> PartPtr;
 
-    // A list of unique equation bundles.
-    typedef vector_set<EqBundlePtr> EqBundleList;
+    // A list of unique equation parts.
+    typedef vector_set<PartPtr> PartList;
 
-    // A named equation stage, which contains one or more equation bundles.
+    // A named equation stage, which contains one or more equation parts.
     // All equations in a stage do not need to have the same domain
     // condition, but non-scratch eqs must have the same step condition.
     // Equations in a stage must not have inter-dependencies because they
     // may be run in parallel or in any order on any sub-domain.
-    class EqStage : public EqLot {
+    class Stage : public EqLot {
     protected:
-        EqBundleList _bundles;  // bundles in this stage.
+        PartList _parts;  // parts in this stage.
 
     public:
 
@@ -701,26 +701,26 @@ namespace yask {
         bool_expr_ptr step_cond;
 
         // Ctor.
-        EqStage(Solution* soln, bool is_scratch) :
+        Stage(Solution* soln, bool is_scratch) :
             EqLot(soln, is_scratch) { }
-        virtual ~EqStage() { }
+        virtual ~Stage() { }
 
         virtual void clear() override {
             EqLot::clear();
-            _bundles.clear();
+            _parts.clear();
         }
 
-        // Create a copy containing clones of the bundles.
-        virtual shared_ptr<EqStage> clone() const {
-            auto p = make_shared<EqStage>(_soln, is_scratch());
+        // Create a copy containing clones of the parts.
+        virtual shared_ptr<Stage> clone() const {
+            auto p = make_shared<Stage>(_soln, is_scratch());
 
             // Shallow copy.
             *p = *this;
 
             // Delete copied eqs and replace w/clones.
             p->clear();
-            for (auto& i : _bundles)
-                p->add_bundle(i->clone());
+            for (auto& i : _parts)
+                p->add_part(i->clone());
 
             return p;
         }
@@ -728,16 +728,16 @@ namespace yask {
         // Get a string description.
         virtual string get_descr(string quote = "'") const;
 
-        // Add/remove a bundle to this stage.
-        virtual void add_bundle(EqBundlePtr ee);
-        virtual void remove_bundle(EqBundlePtr ee);
+        // Add/remove a part to this stage.
+        virtual void add_part(PartPtr ee);
+        virtual void remove_part(PartPtr ee);
 
-        // Get the list of all bundles
-        virtual EqBundleList& get_bundles() {
-            return _bundles;
+        // Get the list of all parts
+        virtual PartList& get_parts() {
+            return _parts;
         }
-        virtual const EqBundleList& get_items() const {
-            return _bundles;
+        virtual const PartList& get_items() const {
+            return _parts;
         }
 
         // Visit the step condition.
@@ -750,39 +750,39 @@ namespace yask {
             return false;
         }
     };
-    typedef shared_ptr<EqStage> EqStagePtr;
+    typedef shared_ptr<Stage> StagePtr;
 
     // Container for multiple equation stages.
-    class EqStages : public DepGroup<EqStage> {
+    class Stages : public DepGroup<Stage> {
     protected:
         Solution* _soln;
         
         string _base_name = "stage";
 
         // Stage index.
-        int _idx = 0;
+        int _idx = 1;
 
         // Track vars that are updated.
         Vars _out_vars;
 
-        // Track bundles that have been added already.
-        set<EqBundlePtr> _bundles_in_stages;
+        // Track parts that have been added already.
+        set<PartPtr> _parts_in_stages;
 
-        // Add 'bps', a subset of 'all_bundles'. Create new stage if needed.
+        // Add 'pps', a subset of 'all_parts'. Create new stage if needed.
         // Returns whether a new stage was created.
-        bool add_bundles_to_stage(EqBundles& all_bundles,
-                                  EqBundleList& bps,
-                                  bool var_grouping,
-                                  bool logical_var_grouping);
+        bool add_parts_to_stage(Parts& all_parts,
+                                PartList& pps,
+                                bool var_grouping,
+                                bool logical_var_grouping);
 
     public:
-        EqStages(Solution* soln) :
+        Stages(Solution* soln) :
             _soln(soln),
             _out_vars(soln) { }
-        virtual ~EqStages() { }
+        virtual ~Stages() { }
 
-        // Separate bundles into stages.
-        void make_stages(EqBundles& bundles);
+        // Separate parts into stages.
+        void make_stages(Parts& parts);
 
         // Get all output vars.
         virtual const Vars& get_output_vars() const {
@@ -791,14 +791,14 @@ namespace yask {
 
         // Visit all the equations in all stages.
         virtual void visit_eqs(ExprVisitor* ev) {
-            for (auto& bp : get_all())
-                bp->visit_eqs(ev);
+            for (auto& pp : get_all())
+                pp->visit_eqs(ev);
         }
 
         // Find halos needed for each var.
-        virtual void calc_halos(EqBundles& all_bundles);
+        virtual void calc_halos(Parts& all_parts);
 
-    }; // EqStages.
+    }; // Stages.
 
 } // namespace yask.
 

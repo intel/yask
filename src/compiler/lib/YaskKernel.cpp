@@ -61,7 +61,7 @@ namespace yask {
     }
 
     // Print an expression as a one-line C++ comment.
-    void YASKCppPrinter::add_comment(ostream& os, EqBundle& eq) {
+    void YASKCppPrinter::add_comment(ostream& os, Part& eq) {
 
         // Use a simple human-readable visitor to create a comment.
         PrintHelper ph(_settings, _dims, NULL, "", " // ", ".\n");
@@ -91,8 +91,8 @@ namespace yask {
         // First, create a class to hold the data (vars).
         print_data(os);
 
-        // A struct for each equation bundle.
-        print_eq_bundles(os);
+        // A struct for each equation part.
+        print_parts(os);
 
         // Finish the solution.
         print_context(os);
@@ -280,7 +280,7 @@ namespace yask {
             os << " '" << var << "', which is ";
             if (gp->is_scratch())
                 os << " a scratch variable.\n";
-            else if (_eq_bundles.get_output_vars().count(gp))
+            else if (_parts.get_output_vars().count(gp))
                 os << "updated by one or more equations.\n";
             else
                 os << "not updated by any equation (read-only).\n";
@@ -433,8 +433,8 @@ namespace yask {
         }
     }
         
-    // Print YASK equation bundles.
-    void YASKCppPrinter::print_eq_bundles(ostream& os) {
+    // Print YASK stencil parts.
+    void YASKCppPrinter::print_parts(ostream& os) {
 
         for (auto& bp : _eq_stages.get_all()) {
             string stage_name = bp->_get_name();
@@ -443,29 +443,29 @@ namespace yask {
                 os << "scratch-";
             os << "stage '" << stage_name << "' //////\n";
 
-            // Bundles in this stage;
-            for (auto& eq : bp->get_bundles()) {
+            // parts in this stage;
+            for (auto& eq : bp->get_parts()) {
 
                 // Find equation index.
                 // TODO: remove need for this.
                 int ei = 0;
-                for (; ei < _eq_bundles.get_num(); ei++) {
-                    if (eq == _eq_bundles.get_all().at(ei))
+                for (; ei < _parts.get_num(); ei++) {
+                    if (eq == _parts.get_all().at(ei))
                         break;
                 }
-                assert(ei < _eq_bundles.get_num());
+                assert(ei < _parts.get_num());
                 string eg_name = eq->_get_name();
                 string eg_desc = eq->get_descr();
                 string egs_name = _stencil_prefix + eg_name;
 
-                // Stats for this eq_bundle.
+                // Stats for this part.
                 CounterVisitor stats;
                 eq->visit_eqs(&stats);
 
                 os << endl << " ////// Stencil " << eg_desc << " //////\n" <<
                 "\n struct " << egs_name << " {\n"
                     "  const char* _name = \"" << eg_name << "\";\n\n"
-                    "  // Per-point work stats for this bundle.\n"
+                    "  // Per-point work stats for this part.\n"
                     "  const int _scalar_fp_ops = " << stats.get_num_ops() << ";\n"
                     "  const int _scalar_points_read = " << stats.get_num_reads() << ";\n"
                     "  const int _scalar_points_written = " << stats.get_num_writes() << ";\n"
@@ -552,7 +552,7 @@ namespace yask {
                             " occurs when calling one of the calc_*() methods with"
                             " 'input_step_index' and return 'true'.\n";
                     else
-                        os << " // Return 'false' because this bundle does not update"
+                        os << " // Return 'false' because this part does not update"
                             " vars with the step dimension.\n";
                     os << " ALWAYS_INLINE static bool get_output_step_index(idx_t input_step_index,"
                         " idx_t& output_step_index) {\n";
@@ -599,14 +599,14 @@ namespace yask {
                 // Vector/Cluster code.
                 for (bool do_cluster : { false, true }) {
 
-                    // Cluster eq_bundle at same 'ei' index.
-                    // This should be the same eq-bundle because it was copied from the
+                    // Cluster part at same 'ei' index.
+                    // This should be the same eq-part because it was copied from the
                     // scalar one.
                     auto& vceq = do_cluster ?
-                        _cluster_eq_bundles.get_all().at(ei) : eq;
+                        _cluster_parts.get_all().at(ei) : eq;
                     assert(eg_desc == vceq->get_descr());
 
-                    // Create vector info for this eq_bundle.  The visitor is
+                    // Create vector info for this part.  The visitor is
                     // accepted at all nodes in the cluster AST; for each var
                     // access node in the AST, the vectors needed are determined
                     // and saved in the visitor.
@@ -771,7 +771,7 @@ namespace yask {
                     " static_assert(std::is_trivially_copyable<" << egs_name << ">::value,"
                     "\"Needed for OpenMP offload\");\n";
 
-            } // stencil eq_bundles.
+            } // stencil parts.
         } // stages.
     }
 
@@ -929,7 +929,7 @@ namespace yask {
                 // Var init.
                 ctor_code += init_code;
                 ctor_code += " add_var(" + var_ptr + ", true, ";
-                if (_eq_bundles.get_output_vars().count(gp))
+                if (_parts.get_output_vars().count(gp))
                     ctor_code += "true /* is an output var */";
                 else
                     ctor_code += "false /* is not an output var */";
@@ -982,11 +982,11 @@ namespace yask {
             " std::vector<" << _thread_core_t << ", yask_allocator<" <<
             _thread_core_t << ">> _thread_cores;\n";
 
-        // Stencil eq_bundle objects.
-        os << endl << " // Stencil equation-bundles." << endl;
-        for (auto& eg : _eq_bundles.get_all()) {
+        // Stencil part objects.
+        os << endl << " // Stencil parts." << endl;
+        for (auto& eg : _parts.get_all()) {
             string eg_name = eg->_get_name();
-            os << " StencilBundleTempl<" << _stencil_prefix << eg_name << ", " <<
+            os << " StencilPartTmpl<" << _stencil_prefix << eg_name << ", " <<
                 _core_t << "> " << eg_name << ";" << endl;
         }
 
@@ -999,7 +999,7 @@ namespace yask {
                 "KernelSettingsPtr ksettings, "
                 "KernelSettingsPtr user_settings) : " <<
                 " StencilContext(kenv, ksettings, user_settings)";
-            for (auto& eg : _eq_bundles.get_all()) {
+            for (auto& eg : _parts.get_all()) {
                 string eg_name = eg->_get_name();
                 os << ",\n  " << eg_name << "(this)";
             }
@@ -1013,20 +1013,20 @@ namespace yask {
                 "\n // Update vars with context info.\n"
                 " update_var_info(false);\n";
 
-            // Deps between bundles.
-            os << "\n // Configure bundles:\n";
-            for (auto& b : _eq_bundles.get_all()) {
+            // Deps between parts.
+            os << "\n // Configure parts:\n";
+            for (auto& b : _parts.get_all()) {
                 string b_name = b->_get_name();
                 os << "\n // " << b->get_descr() << ".\n";
 
-                // Add deps between bundles.
-                for (auto& dep : _eq_bundles.get_all_deps_on(b)) {
+                // Add deps between parts.
+                for (auto& dep : _parts.get_all_deps_on(b)) {
                     string dep_name = dep->_get_name();
                     os << "  " << b_name <<
                         ".add_dep(&" << dep_name << ");\n";
                 }
 
-                // Populate the var lists in the StencilBundleBase objs.
+                // Populate the var lists in the StencilPartTmpl objs.
                 // I/O vars.
                 os << "\n // The following var(s) are read by '" << b_name << "'.\n";
                 for (auto gp : b->get_input_vars()) {
@@ -1047,15 +1047,15 @@ namespace yask {
                     else
                         os << "  " << b_name << ".output_var_ptrs.push_back(" << var_ptr << ");\n";
                 }
-            } // bundles.
+            } // parts.
 
             // Stages.
-            os << "\n // Stage(s) and their bundles:\n";
+            os << "\n // Stage(s) and their parts:\n";
             for (auto& st : _eq_stages.get_all()) {
                 auto st_name = st->_get_name();
 
-                // Bundles in this scratch stage.
-                auto& sbs = st->get_bundles();
+                // parts in this scratch stage.
+                auto& sbs = st->get_parts();
                 
                 // Passing only non-scratch stages to kernel (for now).
                 if (!st->is_scratch()) {
@@ -1064,13 +1064,13 @@ namespace yask {
                         st_name << "\");\n";
                     os << "  st_stages.push_back(" << st_name << ");\n";
 
-                    // Non-scratch bundles in this stage.
+                    // Non-scratch parts in this stage.
                     for (auto& b : sbs) {
                         if (b->is_scratch())
                             continue;
                         auto b_name = b->_get_name();
                         os << "  " << st_name << "->push_back(&" << b_name << ");\n";
-                        os << "  st_bundles.push_back(&" << b_name << ");\n";
+                        os << "  st_parts.push_back(&" << b_name << ");\n";
                     }
                 }
 
@@ -1078,16 +1078,16 @@ namespace yask {
                 else {
                     os << "\n // " << st->get_descr() << ".\n";
                     
-                    // Scan all non-scratch bundles.
-                    for (auto& b : _eq_bundles.get_all()) {
+                    // Scan all non-scratch parts.
+                    for (auto& b : _parts.get_all()) {
                         if (b->is_scratch())
                             continue;
 
-                        // What scratch bundles are needed?
-                        auto& sbdeps = _eq_bundles.get_all_scratch_deps_on(b);
-                        for (auto& b2 : _eq_bundles.get_all()) {
+                        // What scratch parts are needed?
+                        auto& sbdeps = _parts.get_all_scratch_deps_on(b);
+                        for (auto& b2 : _parts.get_all()) {
                             
-                            // Print bundles only in this scratch stage.
+                            // Print parts only in this scratch stage.
                             if (sbdeps.count(b2) && sbs.count(b2)) {
                                 auto b_name = b->_get_name();
                                 auto b2_name = b2->_get_name();

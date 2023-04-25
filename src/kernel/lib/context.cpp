@@ -41,7 +41,7 @@ namespace yask {
         _rank_domain_offsets = cxt->rank_domain_offsets;
     }
     
-    // Eval stencil bundle(s) over var(s) using reference scalar code.
+    // Eval stencil part(s) over var(s) using reference scalar code.
     // Does NOT offload computations.
     void StencilContext::run_ref(idx_t first_step_index,
                                  idx_t last_step_index) {
@@ -134,13 +134,13 @@ namespace yask {
             rank_idxs.stop[step_posn] = stop_t;
             rank_idxs.stride[step_posn] = stride_t;
 
-            // Loop thru all non-scratch bundles. We ignore stages here
+            // Loop thru all non-scratch parts. We ignore stages here
             // because staging is an optional optimization.
-            for (auto* asg : st_bundles) {
+            for (auto* asg : st_parts) {
 
                 // Scan through n-D space.
                 TRACE_MSG("step " << start_t <<
-                          " in non-scratch bundle '" << asg->get_name());
+                          " in non-scratch part '" << asg->get_name());
 
                 // Check step.
                 if (!asg->is_in_valid_step(start_t)) {
@@ -151,12 +151,12 @@ namespace yask {
                 // Exchange all dirty halos.
                 exchange_halos(mpisec);
 
-                // Find the bundles that need to be processed.
+                // Find the parts that need to be processed.
                 // This will be the prerequisite scratch-var
-                // bundles plus this non-scratch tile.
-                auto sg_list = asg->get_reqd_bundles();
+                // parts plus this non-scratch tile.
+                auto sg_list = asg->get_reqd_parts();
 
-                // Loop through all the needed bundles.
+                // Loop through all the needed parts.
                 for (auto* sg : sg_list) {
 
                     // Indices needed for the generated misc loops.
@@ -170,11 +170,11 @@ namespace yask {
 
                     // Scan through n-D space.
                     TRACE_MSG("step " << start_t <<
-                              " in bundle '" << sg->get_name() << "': " <<
+                              " in part '" << sg->get_name() << "': " <<
                               misc_idxs.make_range_str(true));
                     sg->calc_in_domain(scratch_var_idx, misc_idxs);
 
-                } // needed bundles.
+                } // needed parts.
 
                 // Mark vars that were updated in this rank.
                 asg->update_var_info(YkVarBase::self, start_t, true, false, false);
@@ -182,7 +182,7 @@ namespace yask {
                 // Mark vars that *may* have been written to by any rank.
                 update_var_info(nullptr, start_t, stop_t, true, false);
 
-           } // all bundles.
+           } // all parts.
 
          } // iterations.
         steps_done += abs(end_t - begin_t);
@@ -277,7 +277,7 @@ namespace yask {
             // -----------------------------  t = rt ------------------------------
             //   \   | \     \     \|  \   |    .    |   / |  \     \     \|  \   |
             //    \  |  \     \     |   \  |    .    |  / \|   \     \     |   \  |
-            //     \ |r0 \  r1 \ r2 |\ r3\ |    .    | /r0 | r1 \  r2 \ r3 |\ r4\ |
+            //     \ |Mb0\ Mb1 \ Mb2|\Mb3\ |    .    | /Mb0| Mb1\ Mb2 \ Mb3|\Mb4\ |
             //      \|    \     \   | \   \|         |/    |\    \     \   | \   \|
             // ------------------------------ t = 0 -------------------------------
             //       |   rank 0     |      |         |     |   rank 1      |      |
@@ -349,7 +349,7 @@ namespace yask {
 
                 // If no wave-fronts (default), loop through stages here, and do
                 // only one stage at a time in calc_mega_block(). This is similar to
-                // loop in calc_rank_ref(), but with stages instead of bundles.
+                // loop in calc_rank_ref(), but with stages instead of parts.
                 if (wf_steps == 0) {
 
                     // Loop thru stages.
@@ -1018,7 +1018,7 @@ namespace yask {
     } // calc_block().
 
     // Calculate results within a micro-block.  This function calls
-    // 'StencilBundleBase::calc_micro_block()' for each bundle in the
+    // 'StencilPartBase::calc_micro_block()' for each part in the
     // specified stage or all stages if 'sel_bp' is null. When using TB,
     // only the points in the 'shape' needed for the tesselation 'phase' are
     // computed. The starting 'shift_num' is relative to the bottom of the
@@ -1154,17 +1154,17 @@ namespace yask {
                     if (scratch_vecs.size())
                         update_scratch_var_info(outer_thread_idx, micro_block_idxs.begin);
 
-                    // Call calc_micro_block() for each non-scratch bundle.
-                    // Keep track of reqd bundles that have been updated at the
+                    // Call calc_micro_block() for each non-scratch part.
+                    // Keep track of reqd parts that have been updated at the
                     // current micro-blk idxs.
-                    // TODO: track bundles-done across entire time-steps, not just within
+                    // TODO: track parts-done across entire time-steps, not just within
                     // a stage; this would require handling possible shifting due to
                     // temporal blocking.
-                    StencilBundleSet bundles_done;
+                    StencilPartSet parts_done;
                     for (auto* sb : *bp)
                         if (sb->get_bb().bb_num_points)
                             sb->calc_micro_block(outer_thread_idx, *actl_opts, micro_block_idxs,
-                                                 mpisec, bundles_done);
+                                                 mpisec, parts_done);
 
                     // Make sure streaming stores are visible for later loads.
                     make_stores_visible();
@@ -1575,13 +1575,13 @@ namespace yask {
             // Each input step.
             for (idx_t t = start; t != stop; t += stride) {
 
-                // Each bundle in this stage.
+                // Each part in this stage.
                 for (auto* sb : *bp) {
 
-                    // Output vars for this bundle.
+                    // Output vars for this part.
                     sb->update_var_info(YkVarBase::others, t, mark_dirty, mod_dev_data, true);
 
-                } // bundles.
+                } // parts.
             } // steps.
         } // stages.
     } // update_var_info().

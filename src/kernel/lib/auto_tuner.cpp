@@ -547,7 +547,7 @@ namespace yask {
         actl_opts->do_halo_exchange = false;
 
         // Temporarily ignore step conditions to force eval of conditional
-        // bundles.  NB: may affect perf, e.g., if stages A and B run in
+        // parts.  NB: may affect perf, e.g., if stages A and B run in
         // AAABAAAB sequence, perf may be [very] different if run as
         // ABABAB..., esp. w/temporal tiling.  TODO: work around this or
         // at least provide a cmd-line option.

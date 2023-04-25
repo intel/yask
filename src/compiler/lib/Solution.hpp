@@ -73,9 +73,9 @@ namespace yask {
 
         // Intermediate data needed to format output.
         PrinterBase* _printer = 0;
-        EqBundles* _eq_bundles = 0; // eq-bundles for scalar and vector.
-        EqStages* _eq_stages = 0; // packs of bundles w/o inter-dependencies.
-        EqBundles* _cluster_eq_bundles = 0; // eq-bundles for clusters.
+        Parts* _parts = 0; // parts for scalar and vector.
+        Stages* _eq_stages = 0; // stages of parts w/o inter-dependencies.
+        Parts* _cluster_parts = 0; // parts for clusters.
 
         // Debug output.
         yask_output_ptr _debug_output;

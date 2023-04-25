@@ -1314,9 +1314,10 @@ namespace yask {
         /// Get the estimated number of floating-point operations executed across all steps.
         /**
            @returns Number of FP ops created by the stencil compiler, summed over
-           all stencil-bundles, steps executed, and ranks.
+           all stencils, steps executed, and ranks.
            It may be slightly more or less than the actual number of FP ops executed
-           by the CPU due to C++ compiler transformations.
+           by the CPU due to C++ compiler transformations, redundant calculations
+           for temporal tiling, etc.
         */
         virtual idx_t
         get_est_fp_ops_done() =0;

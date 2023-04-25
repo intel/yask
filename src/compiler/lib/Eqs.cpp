@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-///////// Methods for equations and equation bundles ////////////
+///////// Methods for equations and stencil parts ////////////
 
 #include "Print.hpp"
 #include "ExprUtils.hpp"
@@ -33,7 +33,7 @@ IN THE SOFTWARE.
 
 //#define DEBUG_HALOS
 //#define DEBUG_ADD_EXPRS
-//#define DEBUG_ADD_BUNDLES
+//#define DEBUG_ADD_PARTS
 
 namespace yask {
 
@@ -129,30 +129,30 @@ namespace yask {
         }
 
         // Callback at a var point.
-        virtual string visit(VarPoint* gp) {
+        virtual string visit(VarPoint* vp) {
             assert(_eq);
-            auto* g = gp->_get_var();
-            _all_pts[_eq].insert(gp);
+            auto* g = vp->_get_var();
+            _all_pts[_eq].insert(vp);
 
             // Save pt and/or var based on state.
             switch (_state) {
 
             case _in_lhs:
-                _lhs_pts[_eq] = gp;
+                _lhs_pts[_eq] = vp;
                 _lhs_vars[_eq] = g;
                 break;
 
             case _in_rhs:
-                _rhs_pts[_eq].insert(gp);
+                _rhs_pts[_eq].insert(vp);
                 _rhs_vars[_eq].insert(g);
                 break;
 
             case _in_cond:
-                _cond_pts[_eq].insert(gp);
+                _cond_pts[_eq].insert(vp);
                 break;
 
             case _in_step_cond:
-                _step_cond_pts[_eq].insert(gp);
+                _step_cond_pts[_eq].insert(vp);
                 break;
 
             default:
@@ -177,8 +177,8 @@ namespace yask {
         }
 
         // Check each var point in expr.
-        virtual string visit(VarPoint* gp) {
-            auto* var = gp->_get_var();
+        virtual string visit(VarPoint* vp) {
+            auto* var = vp->_get_var();
 
             // Folded dims in the solution.
             int soln_nfd = _dims._fold_gt1.size();
@@ -190,11 +190,11 @@ namespace yask {
             // Degenerate case with no folding in soln: we still mark points
             // using vars with some domain dims as vectorizable.
             if (soln_nfd == 0 && var->is_foldable())
-                gp->set_vec_type(VarPoint::VEC_FULL);
+                vp->set_vec_type(VarPoint::VEC_FULL);
 
             // No foldable dims.
             else if (var_nfd == 0)
-                gp->set_vec_type(VarPoint::VEC_NONE);
+                vp->set_vec_type(VarPoint::VEC_NONE);
 
             else {
                 assert(var_nfd > 0);
@@ -208,7 +208,7 @@ namespace yask {
                 int fdoffsets = 0;
                 for (auto fdim : _dims._fold_gt1) {
                     auto& fdname = fdim._get_name();
-                    if (gp->get_arg_offsets().lookup(fdname))
+                    if (vp->get_arg_offsets().lookup(fdname))
                         fdoffsets++;
                 }
                 assert(fdoffsets <= var_nfd);
@@ -216,21 +216,21 @@ namespace yask {
                 // All folded dims are vectorizable?
                 if (fdoffsets == soln_nfd) {
                     assert(var->is_foldable());
-                    gp->set_vec_type(VarPoint::VEC_FULL); // all good.
+                    vp->set_vec_type(VarPoint::VEC_FULL); // all good.
                 }
 
                 // Some dims are vectorizable?
                 else if (fdoffsets > 0)
-                    gp->set_vec_type(VarPoint::VEC_PARTIAL);
+                    vp->set_vec_type(VarPoint::VEC_PARTIAL);
 
                 // No dims are vectorizable.
                 else
-                    gp->set_vec_type(VarPoint::VEC_NONE);
+                    vp->set_vec_type(VarPoint::VEC_NONE);
 
             }
 
             // Also check args of this var point.
-            return ExprVisitor::visit(gp);
+            return ExprVisitor::visit(vp);
         }
     };
 
@@ -268,10 +268,10 @@ namespace yask {
         }
 
         // Check each var point in expr.
-        virtual string visit(VarPoint* gp) {
+        virtual string visit(VarPoint* vp) {
 
             // Info from var.
-            auto* var = gp->_get_var();
+            auto* var = vp->_get_var();
             auto gdims = var->get_dim_names();
 
             // Inner-loop var.
@@ -282,7 +282,7 @@ namespace yask {
             VarPoint::VarDepType lt = VarPoint::DOMAIN_VAR_INVARIANT;
 
             // Check every point arg.
-            auto& args = gp->get_args();
+            auto& args = vp->get_args();
             for (size_t ai = 0; ai < args.size(); ai++) {
                 auto& arg = args.at(ai);
                 assert(ai < gdims.size());
@@ -321,7 +321,7 @@ namespace yask {
                     }
                 }
             }
-            gp->set_var_dep(lt);
+            vp->set_var_dep(lt);
             return "";
         }
     };
@@ -339,12 +339,12 @@ namespace yask {
         }
 
         // Visit a var point.
-        virtual string visit(VarPoint* gp) {
+        virtual string visit(VarPoint* vp) {
 
             // Shift var _ofs points.
-            auto ofs0 = gp->get_arg_offsets();
+            auto ofs0 = vp->get_arg_offsets();
             IntTuple new_loc = ofs0.add_elements(_ofs, false);
-            gp->set_arg_offsets(new_loc);
+            vp->set_arg_offsets(new_loc);
             return "";
         }
     };
@@ -874,14 +874,14 @@ namespace yask {
         }
     }
 
-    // Make a human-readable description of this eq bundle.
-    string EqBundle::get_descr(bool show_cond,
+    // Make a human-readable description of this part.
+    string Part::get_descr(bool show_cond,
                                string quote) const
     {
         string des;
         if (is_scratch())
             des += "scratch ";
-        des += "equation-bundle " + quote + _get_name() + quote;
+        des += "part " + quote + _get_name() + quote;
         if (show_cond) {
             if (cond.get())
                 des += " w/domain condition " + cond->make_quoted_str(quote);
@@ -902,12 +902,12 @@ namespace yask {
         cv.print_stats(os, msg);
     }
 
-    // Print stats from eqs in bundles.
-    void EqBundles::print_stats(const string& msg) {
+    // Print stats from eqs in parts.
+    void Parts::print_stats(const string& msg) {
         auto& os = _soln->get_ostr();
         CounterVisitor cv;
 
-        // Use separate counter visitor for each bundle
+        // Use separate counter visitor for each part
         // to avoid treating repeated eqs as common sub-exprs.
         for (auto& eq : get_all()) {
             CounterVisitor ecv;
@@ -919,12 +919,12 @@ namespace yask {
 
     // Replicate each equation at the non-zero offsets for
     // each vector in a cluster.
-    void EqBundle::replicate_eqs_in_cluster()
+    void Part::replicate_eqs_in_cluster()
     {
         auto& dims = _soln->get_dims();
         
         // Make a copy of the original equations so we can iterate through
-        // them while adding to the bundle.
+        // them while adding to the part.
         EqList eqs(get_eqs());
 
         // Loop thru points in cluster.
@@ -952,7 +952,7 @@ namespace yask {
                          OffsetVisitor ov(cluster_offset);
                          eq2->accept(&ov);
 
-                         // Put new equation into bundle.
+                         // Put new equation into part.
                          add_eq(eq2);
                      }
                  }
@@ -963,88 +963,88 @@ namespace yask {
         assert(get_eqs().size() == eqs.size() * dims._cluster_mults.product());
     }
 
-    // Add 'eq' to an existing eq-bundle if possible.  If not possible,
-    // create a new bundle and add 'eqs' to it. The index will be
-    // incremented if a new bundle is created.  Returns whether a new bundle
+    // Add 'eq' to an existing part if possible.  If not possible,
+    // create a new part and add 'eqs' to it. The index will be
+    // incremented if a new part is created.  Returns whether a new part
     // was created.
-    bool EqBundles::add_eq_to_bundle(Eq& eq)
+    bool Parts::add_eq_to_part(Eq& eq)
     {
         auto& dims = _soln->get_dims();
         auto& all_eqs = _soln->get_eqs();
         auto& settings = _soln->get_settings();
         
         /*
-          Bundle scenarios:
+          part scenarios:
 
-          Normal sequences of non-scratch bundles:
+          Normal sequences of non-scratch parts:
           Ex 0: eq B depends on eq A.
-          - b1 updates A.
-          - b2 updates B & depends on b1.
-          Ex 1: B1 & B2 depend on A1 & A2.
-          - b1 updates A1 & A2 b/c A1 & A2 are independent.
-          - b2 updates B1 & B2 & depends on b1 b/c B1 & B2 are independent.
+          - p1 updates A.
+          - p2 updates B & depends on p1.
+          Ex 1: P1 & P2 depend on A1 & A2.
+          - p1 updates A1 & A2 b/c A1 & A2 are independent.
+          - p2 updates P1 & P2 & depends on p1 b/c P1 & P2 are independent.
           Ex 2 w/partitions (sub-domains): B depends on A in both parts.
-          - b1 updates A(part 1).
-          - b2 updates A(part 2).
-          - b3 updates B(part 1) & depends on b1 & b2.
-          - b4 updates B(part 2) & depends on b1 & b2.
+          - p1 updates A(part 1).
+          - p2 updates A(part 2).
+          - p3 updates B(part 1) & depends on p1 & p2.
+          - p4 updates B(part 2) & depends on p1 & p2.
           Ex 3 w/partitions: B depends on A, but only in part 2.
-          - b1 updates A(part 1) & B(part 1) b/c A & B are independent in part 1.
-          - b2 updates A(part 2).
-          - b3 updates B(part 2) & depends on b1 & b2.
+          - p1 updates A(part 1) & B(part 1) b/c A & B are independent in part 1.
+          - p2 updates A(part 2).
+          - p3 updates B(part 2) & depends on p1 & p2.
           Writes to non-scratch vars are limited by domain.
 
-          Normal sequences with scratch-bundles (updating Tn):
+          Normal sequences with scratch-parts (updating Tn):
           Ex s0: A depends on T1.
-          - b1 updates T1.
-          - b2 updates A & depends on b1.
+          - p1 updates T1.
+          - p2 updates A & depends on p1.
           Ex s1: T1 & T2 are independent; A depends on T1 and T2.
-          - b1 updates T1 & T2.
-          - b2 updates A & depends on b1.
+          - p1 updates T1 & T2.
+          - p2 updates A & depends on p1.
           Write halos for T1 & T2 will be made equal.
           Ex s2: T2 depends on T1; A depends on T2.
-          - b1 updates T1.
-          - b2 updates T2 & depends on b1.
-          - b3 updates A & depends on b2.
+          - p1 updates T1.
+          - p2 updates T2 & depends on p1.
+          - p3 updates A & depends on p2.
           Write halo for T1 is typically made larger than T2 b/c T2 is updated from a 
           stencil on T1.
           Ex s3 w/partitions; T1 & T2 are independent; A depends on T1 and T2.
-          - b1 updates T1(part 1) & T2(part 1) b/c T1 & T2 are independent in part 1.
-          - b2 updates T1(part 2) & T2(part 2) b/c T1 & T2 are independent in part 2.
-          - b3 updates A & depends on b1-2.
+          - p1 updates T1(part 1) & T2(part 1) b/c T1 & T2 are independent in part 1.
+          - p2 updates T1(part 2) & T2(part 2) b/c T1 & T2 are independent in part 2.
+          - p3 updates A & depends on p1-2.
           Write halos for T1 & T2 will be made equal.
-          This is okay b/c b2 is independent of b1.
+          This is okay b/c p2 is independent of p1.
 
           Special consideration:
           Need to avoid splitting partial updates to a scratch var across dependent
-          bundles, e.g., situation in Ex s3, except T2(only part 2) depends on T1:
+          parts, e.g., situation in Ex s3, except T2(only part 2) depends on T1:
 
           Incorrect:
-          - b1 updates T1(part 1) & T2(part 1) b/c T1 & T2 are independent in part 1.
-          - b2 updates T1(part 2).
-          - b3 updates T2(part 2) & depends on b1 & b2.
-          - b4 updates A & depends on b1-3.
+          - p1 updates T1(part 1) & T2(part 1) b/c T1 & T2 are independent in part 1.
+          - p2 updates T1(part 2).
+          - p3 updates T2(part 2) & depends on p1 & p2.
+          - p4 updates A & depends on p1-3.
 
-          This is bad because the write halo for updates in b1 would
-          typically need to be larger than that of b3, but they are both
+          This is bad because the write halo for updates in p1 would
+          typically need to be larger than that of p3, but they are both
           defined by the halo of T2.
 
           Correct:
-          - b1 updates T1(part 1).
-          - b2 updates T2(part 1): not bundled w/b1 b/c of dependency of T2(*part 2*) on T1.
-          - b3 updates T1(part 2).
-          - b4 updates T2(part 2) & depends on b1 & b3.
-          - b5 updates A & depends on b1-4.
+          - p1 updates T1(part 1).
+          - p2 updates T2(part 1): not partd w/p1 b/c of dependency of T2(*part 2*) on T1.
+          - p3 updates T1(part 2).
+          - p4 updates T2(part 2) & depends on p1 & p3.
+          - p5 updates A & depends on p1-4.
           Write halo for T1 is typically made larger than T2 as in Ex s2.
 
-          Even though it's not illegal, it's also better not to bundle
+          Even though it's not illegal, it's also better not to part
           partial updates of non-scratch logical vars inconsistently. This
           avoids updating part of a var early and then more of it [much]
           later, which is bad for cache locality.
         */
 
         // Equation already added?
-        if (_eqs_in_bundles.count(eq))
+        if (_eqs_in_parts.count(eq))
             return false;
 
         auto& step_dim = dims._step_dim;
@@ -1067,8 +1067,8 @@ namespace yask {
         cout << "* ae2b: bundling " << eq->make_quoted_str() << endl;
         #endif
 
-        // Targeted bundle to add 'eq' to.
-        EqBundle* target = 0;
+        // Targeted part to add 'eq' to.
+        PartPtr target = 0;
         if (settings._bundle) {
          
             // To avoid inconsistent bundling of var updates as described
@@ -1088,34 +1088,34 @@ namespace yask {
             cout << "** ae2b: will check " << rel_eqs.size() << " related eqs\n";
             #endif
             
-            // Loop through existing bundles, looking for one that
+            // Loop through existing parts, looking for one that
             // 'eq' can be added to.
             bool is_ok = true;
-            for (auto& b : get_all()) {
+            for (auto& p : get_all()) {
                 #ifdef DEBUG_ADD_EXPRS
                 cout << "** ae2b: checking " << b->get_descr() << endl;
                 #endif
 
                 // Look for any condition or dependencies that would prevent
-                // adding 'eq' to 'b'.
+                // adding 'eq' to 'p'.
 
                 // Must be same scratch-ness.
-                if (b->is_scratch() != eq->is_scratch())
+                if (p->is_scratch() != eq->is_scratch())
                     is_ok = false;
 
                 // Domain & step conditions must match (both may be null).
-                else if (!are_exprs_same(b->cond, cond))
+                else if (!are_exprs_same(p->cond, cond))
                     is_ok = false;
-                else if (!are_exprs_same(b->step_cond, stcond))
+                else if (!are_exprs_same(p->step_cond, stcond))
                     is_ok = false;
 
                 // LHS step exprs must match (both may be null for scratch updates).
-                else if (!are_exprs_same(b->step_expr, step_expr))
+                else if (!are_exprs_same(p->step_expr, step_expr))
                     is_ok = false;
 
                 // Loop over all eqs already in 'b'.
                 if (is_ok) {
-                    for (auto& eq2 : b->get_eqs()) {
+                    for (auto& eq2 : p->get_eqs()) {
                         auto eq2v = eq2->get_lhs_var();
                         assert (eq2v);
 
@@ -1133,7 +1133,7 @@ namespace yask {
                         // Look for any dependency between 'eq' and 'eq2'.
                         if (is_ok && eq_deps.is_dep(eq, eq2)) {
                             #ifdef DEBUG_ADD_EXPRS
-                            cout << "*** ae2b: NOT adding eq because of dependency w/bundled eq " <<
+                            cout << "*** ae2b: NOT adding eq because of dependency w/eq " <<
                                 eq2->make_quoted_str() << endl;
                             #endif
                             is_ok = false;
@@ -1149,7 +1149,7 @@ namespace yask {
                                 // Look for any dependency between 'eq2' and 'eq3'.
                                 if (eq_deps.is_dep(eq2, eq3)) {
                                     #ifdef DEBUG_ADD_EXPRS
-                                    cout << "*** ae2b: NOT adding eq because of dependency of related eq w/bundled eq " <<
+                                    cout << "*** ae2b: NOT adding eq because of dependency of related eq w/eq " <<
                                         eq2->make_quoted_str() << endl;
                                     #endif
                                     is_ok = false;
@@ -1160,33 +1160,33 @@ namespace yask {
 
                         if (!is_ok)
                             break;
-                    } // eqs in bundle.
+                    } // eqs in part.
                 } // if ok.
                     
-                // Remember target bundle if ok and stop looking.
+                // Remember target part if ok and stop looking.
                 // Try to add if ok.
                 if (is_ok) {
                     try {
 
                         // Add eq.
-                        b->add_eq(eq);
+                        p->add_eq(eq);
 
-                        // Check dependencies between updated bundles.
+                        // Check dependencies between updated parts.
                         inherit_deps_from(all_eqs);
 
                         // If we get this far, the add was okay;
                         // remove the temp deps, and we're done.
                         clear_deps();
-                        target = b.get();
+                        target = p;
                         #ifdef DEBUG_ADD_EXPRS
-                        cout << "** ae2b: all checks passed: added to existing bundle\n";
+                        cout << "** ae2b: all checks passed: added to existing part\n";
                         #endif
                         break;
                     }
                     catch (yask_exception& e) {
 
-                        // Failure; must remove eq.
-                        b->remove_eq(eq);
+                        // Failure; must remove part.
+                        p->remove_eq(eq);
                         
                         // Also remove the bad dependencies.
                         clear_deps();
@@ -1194,19 +1194,19 @@ namespace yask {
                 }
                 else {
                     #ifdef DEBUG_ADD_EXPRS
-                    cout << "** ae2b: NOT adding equation to existing bundle\n";
+                    cout << "** ae2b: NOT adding equation to existing part\n";
                     #endif
                 }
                 
-            } // existing bundles.
+            } // existing parts.
         } // if bundling.
         
-        // Make new bundle if no target bundle found.
-        bool new_bundle = false;
+        // Make new part if no target part found.
+        bool new_part = false;
         if (!target) {
-            auto ne = make_shared<EqBundle>(_soln, eq->is_scratch());
+            auto ne = make_shared<Part>(_soln, eq->is_scratch());
             add_item(ne);
-            target = ne.get();
+            target = ne;
             if (eq->is_scratch())
                 target->base_name = string("scratch_") + _base_name;
             else
@@ -1215,20 +1215,20 @@ namespace yask {
             target->cond = cond;
             target->step_cond = stcond;
             target->step_expr = step_expr;
-            new_bundle = true;
+            new_part = true;
 
-            // Add eq to target eq-bundle.
+            // Add eq to target part.
             #ifdef DEBUG_ADD_EXPRS
-            cout << "** ae2b: adding to new bundle " << target->get_descr() << endl;
+            cout << "** ae2b: adding to new part " << target->get_descr() << endl;
             #endif
             target->add_eq(eq);
         }
 
         // Remember eq and updated var.
-        _eqs_in_bundles.insert(eq);
+        _eqs_in_parts.insert(eq);
         _out_vars.insert(eq->get_lhs_var());
 
-        return new_bundle;
+        return new_part;
     }
 
     // Find halos needed for each var.
@@ -1239,7 +1239,7 @@ namespace yask {
     // They are also tracked by their non-scratch stage and the
     // step offset when applicable. This info is needed to properly
     // determine whether memory can be reused.
-    void EqStages::calc_halos(EqBundles& all_bundles) {
+    void Stages::calc_halos(Parts& all_parts) {
 
         // Find all LHS and RHS points and vars for all eqs.
         PointVisitor pv;
@@ -1284,7 +1284,7 @@ namespace yask {
             #endif
 
             // A list of this stage and required ones.
-            vector<EqStagePtr> stages;
+            vector<StagePtr> stages;
             stages.push_back(st);
 
             // Add required scratch stage(s).
@@ -1352,7 +1352,7 @@ namespace yask {
         // eq1: scr1(x) EQUALS u(t,x+1); <--|
         // eq2: scr2(x) EQUALS u(t,x+2); <--| orig halo of u = max(1,2) = 2.
         // eq3: u(t+1,x) EQUALS scr1(x+3) + scr2(x+4);
-        // eq1 and eq2 are bundled => scr1 and scr2 halos are max(3,4) = 4.
+        // eq1 and eq2 are partd => scr1 and scr2 halos are max(3,4) = 4.
         // Direct deps: eq3 -> eq1(s), eq3 -> eq2(s).
         // Halo of u is 4 + 2 = 6.
         // Or, u(t+1,x) EQUALS u(t,(x+3)+1) + u(t,(x+4)+2) by subst.
@@ -1369,7 +1369,7 @@ namespace yask {
         // Stages.
         for (auto& st : get_all()) {
             auto stname = st->_get_name();
-            auto& stbundles = st->get_bundles(); // list of bundles.
+            auto& stparts = st->get_parts(); // list of parts.
 
             // Only need to start from non-scratch stages.
             if (st->is_scratch())
@@ -1378,58 +1378,58 @@ namespace yask {
             cout << "* c_h, phase 2: analyzing stage '" << stname << "'" << endl;
             #endif
  
-            // Bundles with their dependency info.
-            for (auto& b1 : all_bundles.get_all()) {
+            // parts with their dependency info.
+            for (auto& p1 : all_parts.get_all()) {
 
-                // Only need to start from bundles in this stage.
-                if (stbundles.count(b1) == 0)
+                // Only need to start from parts in this stage.
+                if (stparts.count(p1) == 0)
                     continue;
 
-                // Should be starting from a non-scratch bundle since this is
+                // Should be starting from a non-scratch part since this is
                 // a non-scratch stage.
-                assert(!b1->is_scratch());
+                assert(!p1->is_scratch());
 
-                // We start with each non-scratch bundle and walk the dep
-                // tree to find all dependent scratch bundles.  It's
+                // We start with each non-scratch part and walk the dep
+                // tree to find all dependent scratch parts.  It's
                 // important to then visit them in dep order using 'path' to
-                // get only unbroken chains of scratch bundles.
+                // get only unbroken chains of scratch parts.
                 #ifdef DEBUG_HALOS
-                cout << "** c_h: visiting deps of " << b1->get_descr() << endl;
+                cout << "** c_h: visiting deps of " << p1->get_descr() << endl;
                 #endif
-                all_bundles.get_deps().visit_deps
+                all_parts.get_deps().visit_deps
                 
-                    // For each 'bn', 'b1' is 'bn' or depends on 'bn',
+                    // For each 'bn', 'p1' is 'bn' or depends on 'bn',
                     // immediately or indirectly; 'path' leads from
-                    // 'b1' to 'bn'.
-                    (b1, [&](EqBundlePtr bn, EqBundleList& path) {
+                    // 'p1' to 'bn'.
+                    (p1, [&](PartPtr bn, PartList& path) {
 
                              // Create a new empty map of shadow vars for this path.
                              shadows.resize(shadows.size() + 1);
                              auto& shadow_map = shadows.back(); // Use the new one.
 
-                             // Walk path from 'b1', stopping at end of scratch
+                             // Walk path from 'p1', stopping at end of scratch
                              // chain.
-                             for (auto b2 : path) {
+                             for (auto p2 : path) {
 
-                                 // Don't process 'b1', the initial non-scratch bundle.
-                                 if (b2 == b1)
+                                 // Don't process 'p1', the initial non-scratch part.
+                                 if (p2 == p1)
                                      continue;
                         
-                                 // If this isn't a scratch bundle, we are
+                                 // If this isn't a scratch part, we are
                                  // done w/this path because we only want
-                                 // the bundles from 'b1' through an
-                                 // *unbroken* chain of scratch bundles.
-                                 if (!b2->is_scratch())
+                                 // the parts from 'p1' through an
+                                 // *unbroken* chain of scratch parts.
+                                 if (!p2->is_scratch())
                                      break;
 
-                                 // At this point, non-scratch bundle 'b1'
-                                 // depends on scratch-bundle 'b2'.
+                                 // At this point, non-scratch part 'p1'
+                                 // depends on scratch-part 'p2'.
                                  
                                  // Make shadow copies of all vars touched
-                                 // by 'b2'.  All halo updates will be
+                                 // by 'p2'.  All halo updates will be
                                  // applied to these shadow vars for the
                                  // current 'path'.
-                                 for (auto& eq : b2->get_eqs()) {
+                                 for (auto& eq : p2->get_eqs()) {
 
                                      // Output var.
                                      auto* og = pv.get_output_vars().at(eq.get());
@@ -1445,19 +1445,19 @@ namespace yask {
                                      }
                                  }
                         
-                                 // For each scratch bundle, set the size of
+                                 // For each scratch part, set the size of
                                  // all its output vars' halos to the max
                                  // across its halos. We need to do this
                                  // because halos are written in a scratch
-                                 // var.  Since they are bundled, meaning
+                                 // var.  Since they are partd, meaning
                                  // they are all written in a single code
                                  // block, all the writes will be over the
                                  // same area.
 
                                  // First, set first eq halo the max of all.
-                                 auto& eq1 = b2->get_eqs().front();
+                                 auto& eq1 = p2->get_eqs().front();
                                  auto* ov1 = shadow_map[eq1->get_lhs_var()];
-                                 for (auto& eq2 : b2->get_eqs()) {
+                                 for (auto& eq2 : p2->get_eqs()) {
                                      if (eq1 == eq2)
                                          continue;
 
@@ -1467,7 +1467,7 @@ namespace yask {
                                  }
 
                                  // Then, update all others based on first.
-                                 for (auto& eq2 : b2->get_eqs()) {
+                                 for (auto& eq2 : p2->get_eqs()) {
                                      if (eq1 == eq2)
                                          continue;
 
@@ -1477,7 +1477,7 @@ namespace yask {
                                  }
 
                                  // Get updated halos from the scratch
-                                 // bundle.  These are the points that are
+                                 // part.  These are the points that are
                                  // read from the dependent eq(s).  For
                                  // scratch vars, the halo areas must also
                                  // be written to.
@@ -1486,15 +1486,15 @@ namespace yask {
                                  auto l1_dist = ov1->get_l1_dist();
 
                                  #ifdef DEBUG_HALOS
-                                 cout << "** c_h: processing " << b2->get_descr() << "...\n"
+                                 cout << "** c_h: processing " << p2->get_descr() << "...\n"
                                      "*** c_h: LHS halos " << left_ohalo.make_dim_val_str() <<
                                      " & RHS halos " << right_ohalo.make_dim_val_str() << endl;
                                  #endif
                         
                                  // Recalc min halos of all *input* vars of all
-                                 // scratch eqs in this bundle by adding size of
+                                 // scratch eqs in this part by adding size of
                                  // output-var halos.
-                                 for (auto& eq : b2->get_eqs()) {
+                                 for (auto& eq : p2->get_eqs()) {
                                      auto& in_pts = pv.get_input_pts().at(eq.get());
 
                                      // Input points.
@@ -1515,10 +1515,10 @@ namespace yask {
                                              " & " << right_ihalo.make_dim_val_str() << endl;
                                          #endif
                                      } // input pts.
-                                 } // eqs in bundle.
+                                 } // eqs in part.
                              } // path.
                          }); // lambda fn for deps.
-            } // bundles.
+            } // parts.
         } // stages.
 
         // Apply the changes from the shadow vars.
@@ -1529,37 +1529,37 @@ namespace yask {
             cout << "* c_h: applying changes from a shadow map...\n";
             #endif
             for (auto& si : shadow_map) {
-                auto* orig_gp = si.first;
-                auto* shadow_gp = si.second;
-                assert(orig_gp);
-                assert(shadow_gp);
+                auto* orig_vp = si.first;
+                auto* shadow_vp = si.second;
+                assert(orig_vp);
+                assert(shadow_vp);
 
                 // Update the original.
-                auto changed = orig_gp->update_halo(*shadow_gp);
+                auto changed = orig_vp->update_halo(*shadow_vp);
                 #ifdef DEBUG_HALOS
                 if (changed) {
                     cout << "** c_h: updated halos:" << endl;
-                    orig_gp->print_halos(cout, "*** ");
+                    orig_vp->print_halos(cout, "*** ");
                 }
                 #endif
 
                 // Release the shadow var mem.
-                delete shadow_gp;
-                shadow_map.at(orig_gp) = NULL;
+                delete shadow_vp;
+                shadow_map.at(orig_vp) = NULL;
             }
         } // shadows.
     } // calc_halos().
 
-    // Divide all equations into eq_bundles.
+    // Divide all equations into parts.
     // Only process updates to vars in 'var_regex'.
-    void EqBundles::make_eq_bundles()
+    void Parts::make_parts()
     {
         auto& dims = _soln->get_dims();
         auto& all_eqs = _soln->get_eqs();
         auto& settings = _soln->get_settings();
         auto& os = _soln->get_ostr();
         
-        os << "\nPartitioning " << all_eqs.get_num() << " equation(s) into bundles...\n";
+        os << "\nPartitioning " << all_eqs.get_num() << " equation(s) into solution parts...\n";
         
         // Make a regex for the allowed vars.
         regex varx(settings._var_regex);
@@ -1586,18 +1586,18 @@ namespace yask {
                 }
 
                 // Add equation(s).
-                add_eq_to_bundle(eq);
+                add_eq_to_part(eq);
             }
         }
 
         os << "Collapsing dependencies from equations and finding transitive closure...\n";
         inherit_deps_from(all_eqs);
 
-        os << "Topologically ordering bundles...\n";
+        os << "Topologically ordering parts...\n";
         topo_sort();
 
         // Dump info.
-        os << "Created " << get_num() << " equation bundle(s):\n";
+        os << "Created " << get_num() << " solution part(s):\n";
 
         // Print them in reverse order to get most dependent first.
         for (auto it1 = get_all().rbegin(); it1 != get_all().rend(); ++it1) {
@@ -1629,7 +1629,7 @@ namespace yask {
     }
 
     // Apply optimizations according to the 'settings'.
-    void EqBundles::optimize_eq_bundles(const string& descr)
+    void Parts::optimize_parts(const string& descr)
     {
         auto& all_eqs = _soln->get_eqs();
         auto& settings = _soln->get_settings();
@@ -1637,11 +1637,11 @@ namespace yask {
         auto& dims = _soln->get_dims();
 
         // print stats.
-        os << "\nStats across " << get_num() << " equation-bundle(s):\n";
-        string edescr = "for " + descr + " equation-bundle(s)";
+        os << "\nStats across " << get_num() << " part(s):\n";
+        string edescr = "for " + descr + " part(s)";
         print_stats(edescr);
 
-        // Make a list of optimizations to apply to eq_bundles.
+        // Make a list of optimizations to apply to parts.
         vector<OptVisitor*> opts;
 
         // CSE.
@@ -1668,7 +1668,7 @@ namespace yask {
             visit_eqs(optimizer);
             int num_changes = optimizer->get_num_changes();
             string odescr = "after applying " + optimizer->_get_name() + " to " +
-                descr + " equation-bundle(s)";
+                descr + " part(s)";
 
             // Get new stats.
             if (num_changes)
@@ -1683,7 +1683,7 @@ namespace yask {
         // Reordering. TODO: make this an optimizer.
         if (settings._do_reorder) {
             
-            // Create vector info for this eq_bundle.
+            // Create vector info for this part.
             // The visitor is accepted at all nodes in the cluster AST;
             // for each var access node in the AST, the vectors
             // needed are determined and saved in the visitor.
@@ -1696,20 +1696,20 @@ namespace yask {
 
             // Get new stats.
             string odescr = "after applying reordering to " +
-                descr + " equation-bundle(s)";
+                descr + " part(s)";
             print_stats(odescr);
         }
 
-        // Final stats per equation bundle.
+        // Final stats per equation part.
         if (get_num() > 1) {
-            os << "Stats per equation-bundle:\n";
+            os << "Stats per part:\n";
             for (auto eg : get_all())
                 eg->print_stats(os, "for " + eg->get_descr());
         }
     }
 
     // Make a human-readable description of this eq stage.
-    string EqStage::get_descr(string quote) const
+    string Stage::get_descr(string quote) const
     {
         string des;
         if (is_scratch())
@@ -1724,66 +1724,66 @@ namespace yask {
         return des;
     }
 
-    // Add a bundle to this stage.
-    void EqStage::add_bundle(EqBundlePtr bp)
+    // Add a part to this stage.
+    void Stage::add_part(PartPtr pp)
     {
-        _bundles.insert(bp);
+        _parts.insert(pp);
 
         // update list of eqs.
-        for (auto& eq : bp->get_eqs())
+        for (auto& eq : pp->get_eqs())
             add_eq(eq);
-        assert(is_scratch() == bp->is_scratch());
+        assert(is_scratch() == pp->is_scratch());
     }
 
-    // Remove a bundle from this stage.
-    void EqStage::remove_bundle(EqBundlePtr bp)
+    // Remove a part from this stage.
+    void Stage::remove_part(PartPtr pp)
     {
-        _bundles.erase(bp);
+        _parts.erase(pp);
 
         // update list of eqs.
-        for (auto& eq : bp->get_eqs())
+        for (auto& eq : pp->get_eqs())
             remove_eq(eq);
     }
 
-    // Add 'bps', a subset of 'all_bundles'. Create new stage if needed.
+    // Add 'pps', a subset of 'all_parts'. Create new stage if needed.
     // Returns whether a new stage was created.
-    bool EqStages::add_bundles_to_stage(EqBundles& all_bundles,
-                                        EqBundleList& bps,
-                                        bool var_grouping,
-                                        bool logical_var_grouping)
+    bool Stages::add_parts_to_stage(Parts& all_parts,
+                                    PartList& pps,
+                                    bool var_grouping,
+                                    bool logical_var_grouping)
     {
         // None to add?
-        if (bps.size() == 0)
+        if (pps.size() == 0)
             return false;
 
-        #ifdef DEBUG_ADD_BUNDLES
-        cout << "** Adding " << bps.size() << " bundle(s):\n";
-        for (auto& bp : bps)
-            cout << "*** " << bp->get_descr() << "\n";
+        #ifdef DEBUG_ADD_PARTS
+        cout << "** Adding " << pps.size() << " part(s):\n";
+        for (auto& pp : pps)
+            cout << "*** " << pp->get_descr() << "\n";
         cout << flush;
         #endif
             
         // Already added?
-        // (All bps should be added or not by construction.)
-        if (_bundles_in_stages.count(bps.front()))
+        // (All pps should be added or not by construction.)
+        if (_parts_in_stages.count(pps.front()))
             return false;
 
         // Get step condition, if any.
-        // (All bps should have same step cond by construction.)
-        auto stcond = bps.front()->step_cond;
+        // (All pps should have same step cond by construction.)
+        auto stcond = pps.front()->step_cond;
 
         // Get scratch-ness.
-        // (All bps should have same scratch-ness by construction.)
-        auto is_scratch = bps.front()->is_scratch();
+        // (All pps should have same scratch-ness by construction.)
+        auto is_scratch = pps.front()->is_scratch();
         
-        // Get deps between bundles.
-        auto& deps = all_bundles.get_deps();
+        // Get deps between parts.
+        auto& deps = all_parts.get_deps();
 
         // Loop through existing stages, looking for one that
-        // 'bps' can be added to.
-        Tp<EqStage> target = 0;
+        // 'pps' can be added to.
+        Tp<Stage> target = 0;
         for (auto& st : get_all()) {
-            #ifdef DEBUG_ADD_BUNDLES
+            #ifdef DEBUG_ADD_PARTS
             cout << "*** Checking against existing " << st->get_descr() << "\n" << flush;
             #endif
 
@@ -1798,12 +1798,12 @@ namespace yask {
             // Var matching. Look for any match.
             if (logical_var_grouping || var_grouping) {
                 bool match_found = false;
-                for (auto& bp1 : bps) {
-                    for (auto& eq1 : bp1->get_eqs()) {
+                for (auto& pp1 : pps) {
+                    for (auto& eq1 : pp1->get_eqs()) {
                         auto lhs1 = eq1->_get_lhs();
                         auto v1 = lhs1->_get_var();
-                        for (auto& b2 : st->get_bundles()) {
-                            for (auto& eq2 : b2->get_eqs()) {
+                        for (auto& p2 : st->get_parts()) {
+                            for (auto& eq2 : p2->get_eqs()) {
                                 auto lhs2 = eq2->_get_lhs();
                                 auto* v2 = lhs2->_get_var();
                                 if (logical_var_grouping) {
@@ -1826,27 +1826,27 @@ namespace yask {
             match_loop_end:
                 if (!match_found)
                     continue;
-                #ifdef DEBUG_ADD_BUNDLES
+                #ifdef DEBUG_ADD_PARTS
                 cout << "*** Passed var-matching: " << st->get_descr() << "\n" << flush;
                 #endif
             }
             
-            // Loop through all bps. All bps must be able to
+            // Loop through all pps. All pps must be able to
             // be added to 'st' to use it.
             bool is_ok = true;
-            for (auto& bp : bps) {
-                #ifdef DEBUG_ADD_BUNDLES
-                cout << "**** checking " << bp->get_descr() << endl << flush;
+            for (auto& pp : pps) {
+                #ifdef DEBUG_ADD_PARTS
+                cout << "**** checking " << pp->get_descr() << endl << flush;
                 #endif
 
-                // Loop through all bundles in 'st'.
-                for (auto& b2 : st->get_bundles()) {
-                    #ifdef DEBUG_ADD_BUNDLES
-                    cout << "**** checking against " << bp->get_descr() << " in " << st->get_descr() << endl << flush;
+                // Loop through all parts in 'st'.
+                for (auto& p2 : st->get_parts()) {
+                    #ifdef DEBUG_ADD_PARTS
+                    cout << "**** checking against " << pp->get_descr() << " in " << st->get_descr() << endl << flush;
                     #endif
 
-                    // Look for any dependency between 'bp' and 'b2'.
-                    if (deps.is_dep(bp, b2)) {
+                    // Look for any dependency between 'pp' and 'p2'.
+                    if (deps.is_dep(pp, p2)) {
                         is_ok = false;
                         break;
                     }
@@ -1854,14 +1854,14 @@ namespace yask {
                 if (!is_ok)
                     break;
 
-                // Try to add 'bp' to 'st'.
+                // Try to add 'pp' to 'st'.
                 try {
 
                     // Add it.
-                    st->add_bundle(bp);
+                    st->add_part(pp);
 
                     // Check dependencies between updated stages.
-                    inherit_deps_from(all_bundles);
+                    inherit_deps_from(all_parts);
 
                     // If we get this far, the add was okay.
                 }
@@ -1871,19 +1871,19 @@ namespace yask {
                     is_ok = false;
                 }
 
-                // Remove the trial bundle and temp deps.
-                st->remove_bundle(bp);
+                // Remove the trial part and temp deps.
+                st->remove_part(pp);
                 clear_deps();
 
                 if (!is_ok)
                     break;
 
-            } // each bp in bps.
+            } // each pp in pps.
 
             // Found a viable target stage?
             if (is_ok) {
                 target = st;
-                #ifdef DEBUG_ADD_BUNDLES
+                #ifdef DEBUG_ADD_PARTS
                 cout << "*** Adding to existing " << st->get_descr() << "\n" << flush;
                 #endif
                 break;
@@ -1894,7 +1894,7 @@ namespace yask {
         // Make new stage if no target stage found.
         bool new_stage = false;
         if (!target) {
-            auto np = make_shared<EqStage>(_soln, is_scratch);
+            auto np = make_shared<Stage>(_soln, is_scratch);
             add_item(np);
             target = np;
             if (is_scratch)
@@ -1904,107 +1904,107 @@ namespace yask {
             target->index = _idx++;
             target->step_cond = stcond;
             new_stage = true;
-            #ifdef DEBUG_ADD_BUNDLES
+            #ifdef DEBUG_ADD_PARTS
             cout << "*** Adding to new " << target->get_descr() << "\n" << flush;
             #endif
         }
         assert(target);
         
-        // Add bundles to target.
-        for (auto& bp : bps) {
-            target->add_bundle(bp);
+        // Add parts to target.
+        for (auto& pp : pps) {
+            target->add_part(pp);
 
-            // Remember bundles and updated vars.
-            _bundles_in_stages.insert(bp);
-            for (auto& g : bp->get_output_vars())
+            // Remember parts and updated vars.
+            _parts_in_stages.insert(pp);
+            for (auto& g : pp->get_output_vars())
                 _out_vars.insert(g);
         }
 
         return new_stage;
     }
 
-    // Divide all bundles into stages.
-    void EqStages::make_stages(EqBundles& all_bundles)
+    // Divide all parts into stages.
+    void Stages::make_stages(Parts& all_parts)
     {
         auto& os = _soln->get_ostr();
         
-        os << "\nPartitioning " << all_bundles.get_num() << " bundle(s) into stages...\n";
+        os << "\nPartitioning " << all_parts.get_num() << " part(s) into stages...\n";
 
         // Temp stages with grouped-by-logical-var stages.
-        EqStages sts1(_soln);
-        for (auto& b0 : all_bundles.get_all()) {
+        Stages sts1(_soln);
+        for (auto& b0 : all_parts.get_all()) {
 
-            // Make trivial list with 1 bundle.
-            EqBundleList bl0;
+            // Make trivial list with 1 part.
+            PartList bl0;
             bl0.insert(b0);
 
             // Group by logical vars.
-            sts1.add_bundles_to_stage(all_bundles, bl0, true, true);
+            sts1.add_parts_to_stage(all_parts, bl0, true, true);
         }
-        os << "Found " << sts1.get_num() << " groups of bundle(s) by logical var(s).\n";
+        os << "Found " << sts1.get_num() << " groups of part(s) by logical var(s).\n";
 
         // Temp stages with grouped-by-var stages.
-        EqStages sts2(_soln);
+        Stages sts2(_soln);
         for (auto& st1 : sts1.get_all()) {
-            auto& bl1 = st1->get_bundles();
+            auto& bl1 = st1->get_parts();
 
             // Group by vars.
-            sts2.add_bundles_to_stage(all_bundles, bl1, true, false);
+            sts2.add_parts_to_stage(all_parts, bl1, true, false);
         }
-        os << "Found " << sts1.get_num() << " groups of bundle(s) by var(s).\n";
+        os << "Found " << sts1.get_num() << " groups of part(s) by var(s).\n";
 
         // Finally, make stages with any non-dependency.
-        // Add non-scratch, then scratch bundles.
+        // Add non-scratch, then scratch parts.
         // This is done just to give the non-scratch ones lower indices.
         for (bool do_scratch : { false, true }) {
             for (auto& st2 : sts2.get_all()) {
                 if (st2->is_scratch() != do_scratch)
                     continue;
                 
-                auto& bl2 = st2->get_bundles();
-                add_bundles_to_stage(all_bundles, bl2, false, false);
+                auto& bl2 = st2->get_parts();
+                add_parts_to_stage(all_parts, bl2, false, false);
             }
         }
         os << "Created " << get_num() << " equation stage(s).\n";
 
-        os << "Collapsing dependencies from bundles and finding transitive closure...\n";
-        inherit_deps_from(all_bundles);
+        os << "Collapsing dependencies from parts and finding transitive closure...\n";
+        inherit_deps_from(all_parts);
 
         os << "Topologically ordering stages...\n";
         topo_sort();
 
         // Print them in reverse order to get most dependent first.
         for (auto it1 = get_all().rbegin(); it1 != get_all().rend(); ++it1) {
-            auto& bp1 = *it1;
+            auto& pp1 = *it1;
         
-            os << " " << bp1->get_descr() << ":\n"
-                "  Contains " << bp1->get_bundles().size() << " bundle(s): ";
+            os << " " << pp1->get_descr() << ":\n"
+                "  Contains " << pp1->get_parts().size() << " part(s): ";
             int i = 0;
-            for (auto b : bp1->get_bundles()) {
+            for (auto p : pp1->get_parts()) {
                 if (i++)
                     os << ", ";
-                os << b->_get_name();
+                os << p->_get_name();
             }
             os << ".\n";
             os << "  Updates the following var(s): ";
             i = 0;
-            for (auto* g : bp1->get_output_vars()) {
+            for (auto* v : pp1->get_output_vars()) {
                 if (i++)
                     os << ", ";
-                os << g->_get_name();
+                os << v->_get_name();
             }
             os << ".\n";
 
             // Deps.
-            auto& id = get_imm_deps_on(bp1);
-            for (auto& bp2 : id)
-                os << "  Immediately dependent on " << bp2->_get_name() << ".\n";
-            for (auto& bp2 : get_all_deps_on(bp1))
-                if (id.count(bp2) == 0)
-                    os << "   Indirectly dependent on " << bp2->_get_name() << ".\n";
-            for (auto& sp : get_all_scratch_deps_on(bp1))
+            auto& id = get_imm_deps_on(pp1);
+            for (auto& pp2 : id)
+                os << "  Immediately dependent on " << pp2->_get_name() << ".\n";
+            for (auto& pp2 : get_all_deps_on(pp1))
+                if (id.count(pp2) == 0)
+                    os << "   Indirectly dependent on " << pp2->_get_name() << ".\n";
+            for (auto& sp : get_all_scratch_deps_on(pp1))
                 os << "  Requires " << sp->_get_name() << ".\n";
-            if (get_all_deps_on(bp1).size() == 0)
+            if (get_all_deps_on(pp1).size() == 0)
                 os << "  No dependencies within a step.\n";
         }
 

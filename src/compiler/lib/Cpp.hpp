@@ -387,14 +387,14 @@ namespace yask {
     // Print out a stencil in C++ form for YASK.
     class YASKCppPrinter : public PrinterBase {
     protected:
-        EqStages& _eq_stages; // stages of bundles w/o inter-dependencies.
-        EqBundles& _cluster_eq_bundles;  // eq-bundles for scalar and vector.
+        Stages& _eq_stages; // stages of parts w/o inter-dependencies.
+        Parts& _cluster_parts;  // eq-parts for scalar and vector.
         string _stencil_prefix;
         string _context, _context_hook; // class names;
         string _core_t, _thread_core_t; // core struct names;
 
         // Print an expression as a one-line C++ comment.
-        void add_comment(ostream& os, EqBundle& eq);
+        void add_comment(ostream& os, Part& eq);
 
         // A factory method to create a new PrintHelper.
         // This can be overridden in derived classes to provide
@@ -415,17 +415,17 @@ namespace yask {
         // Print pieces of YASK output.
         virtual void print_macros(ostream& os);
         virtual void print_data(ostream& os);
-        virtual void print_eq_bundles(ostream& os);
+        virtual void print_parts(ostream& os);
         virtual void print_context(ostream& os);
 
     public:
         YASKCppPrinter(Solution& stencil,
-                       EqBundles& eq_bundles,
-                       EqStages& eq_stages,
-                       EqBundles& cluster_eq_bundles) :
-            PrinterBase(stencil, eq_bundles),
+                       Parts& parts,
+                       Stages& eq_stages,
+                       Parts& cluster_parts) :
+            PrinterBase(stencil, parts),
             _eq_stages(eq_stages),
-            _cluster_eq_bundles(cluster_eq_bundles)
+            _cluster_parts(cluster_parts)
         {
             // name of C++ struct.
             _stencil_prefix = "stencil_" + _stencil._get_name() + "_";

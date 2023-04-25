@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// This file contains implementations of bundle and stage methods.
+// This file contains implementations of part and stage methods.
 // Also see context_setup.cpp.
 
 #include "yask_stencil.hpp"
@@ -32,16 +32,16 @@ using namespace std;
 namespace yask {
 
     // Calculate results within a micro-block defined by 'micro_block_idxs'.
-    // This is called by StencilContext::calc_micro_block() for each bundle.
+    // This is called by StencilContext::calc_micro_block() for each part.
     // It is here that any required scratch-var stencils are evaluated
-    // first and then the non-scratch stencils in the stencil bundle.
-    // It is also here that the boundaries of the bounding-box(es) of the bundle
+    // first and then the non-scratch stencils in the stencil part.
+    // It is also here that the boundaries of the bounding-box(es) of the part
     // are respected. There must not be any temporal blocking at this point.
-    void StencilBundleBase::calc_micro_block(int outer_thread_idx,
+    void StencilPartBase::calc_micro_block(int outer_thread_idx,
                                              KernelSettings& settings,
                                              const ScanIndices& micro_block_idxs,
                                              MpiSection& mpisec,
-                                             StencilBundleSet& bundles_done) {
+                                             StencilPartSet& parts_done) {
         STATE_VARS(this);
         TRACE_MSG("in '" << get_name() << "': " <<
                   micro_block_idxs.make_range_str(true) <<
@@ -54,7 +54,7 @@ namespace yask {
         assert(abs(micro_block_idxs.end[step_posn] - t) == 1);
 
         // Nothing to do if outer BB is empty.
-        if (_bundle_bb.bb_num_points == 0) {
+        if (_part_bb.bb_num_points == 0) {
             TRACE_MSG("empty BB");
             return;
         }
@@ -70,31 +70,31 @@ namespace yask {
         int bind_posn = settings._bind_posn;
         idx_t bind_slab_pts = settings._nano_block_sizes[bind_posn]; // Other sizes not used.
 
-        // Get the bundles that need to be processed in
+        // Get the parts that need to be processed in
         // this block. This will be any prerequisite scratch-var
-        // bundles plus the current non-scratch bundle.
-        auto sg_list = get_reqd_bundles();
+        // parts plus the current non-scratch part.
+        auto sg_list = get_reqd_parts();
 
-        // Loop through all the needed bundles.
+        // Loop through all the needed parts.
         for (auto* sg : sg_list) {
-            TRACE_MSG("processing reqd bundle '" << sg->get_name() << "'");
+            TRACE_MSG("processing reqd part '" << sg->get_name() << "'");
             bool is_scratch = sg->is_scratch();
 
             // Check step.
             if (!sg->is_in_valid_step(t)) {
                 TRACE_MSG("step " << t <<
-                          " not valid for reqd bundle '" <<
+                          " not valid for reqd part '" <<
                           sg->get_name() << "'");
                 continue;
             }
 
             // Already done?  This is tracked across calls to this func
-            // because >1 non-scratch bundle in a stage can depend on some
-            // common scratch bundle(s). This is also the reason we don't
-            // trim scratch bundle(s) to the BB(s) of the non-scratch
-            // bundle(s) that they depend on: the non-scratch bundles may be
-            // used by >1 non-scratch bundles with different BBs.
-            if (bundles_done.count(sg)) {
+            // because >1 non-scratch part in a stage can depend on some
+            // common scratch part(s). This is also the reason we don't
+            // trim scratch part(s) to the BB(s) of the non-scratch
+            // part(s) that they depend on: the non-scratch parts may be
+            // used by >1 non-scratch parts with different BBs.
+            if (parts_done.count(sg)) {
                 TRACE_MSG("already done for this micro-blk");
                 continue;
             }
@@ -108,9 +108,9 @@ namespace yask {
                           " per scratch write halo");
             }
 
-            // Loop through all the full BBs in this reqd bundle.
+            // Loop through all the full BBs in this reqd part.
             TRACE_MSG("checking " << sg->get_bbs().size() <<
-                      " full BB(s) for reqd bundle '" << sg->get_name() << "'");
+                      " full BB(s) for reqd part '" << sg->get_name() << "'");
             auto fbbs = sg->get_bbs();
             int fbbn = 0;
             for (auto& fbb : fbbs) {
@@ -169,7 +169,7 @@ namespace yask {
                                                           cluster_pts[j]) * 2;
                     }
 
-                    TRACE_MSG("reqd bundle '" << sg->get_name() << "': " <<
+                    TRACE_MSG("reqd part '" << sg->get_name() << "': " <<
                               mb_idxs3.make_range_str(true) <<
                               " via outer thread " << outer_thread_idx <<
                               " with " << nbt << " block thread(s) bound to data...");
@@ -218,7 +218,7 @@ namespace yask {
                 // (This is the more common case.)
                 else {
 
-                    TRACE_MSG("reqd bundle '" << sg->get_name() << "': " <<
+                    TRACE_MSG("reqd part '" << sg->get_name() << "': " <<
                               mb_idxs3.make_range_str(true) << 
                               " via outer thread " << outer_thread_idx <<
                               " with " << nbt << " block thread(s) NOT bound to data...");
@@ -242,14 +242,14 @@ namespace yask {
                     #include "yask_micro_block_loops.hpp"
 
                 } // OMP parallel when binding threads to data.
-            } // full BBs in this required bundle.
+            } // full BBs in this required part.
 
-            // Mark this bundle done. This avoid re-evaluating
-            // scratch bundles that are used more than once in
+            // Mark this part done. This avoid re-evaluating
+            // scratch parts that are used more than once in
             // a stage.
-            bundles_done.insert(sg);
+            parts_done.insert(sg);
             
-        } // required bundles.
+        } // required parts.
 
         // Mark exterior dirty for halo exchange if exterior was done.
         bool mark_dirty = mpisec.do_mpi_left || mpisec.do_mpi_right;
@@ -257,16 +257,16 @@ namespace yask {
             
     } // calc_micro_block().
 
-    // Mark vars dirty that are updated by this bundle and/or
+    // Mark vars dirty that are updated by this part and/or
     // update last valid step.
-    void StencilBundleBase::update_var_info(YkVarBase::dirty_idx whose,
+    void StencilPartBase::update_var_info(YkVarBase::dirty_idx whose,
                                             idx_t t,
                                             bool mark_extern_dirty,
                                             bool mod_dev_data,
                                             bool update_valid_step) {
         STATE_VARS(this);
 
-        // Get output step for this bundle, if any.  For most stencils, this
+        // Get output step for this part, if any.  For most stencils, this
         // will be t+1 or t-1 if striding backward.
         idx_t t_out = 0;
         if (!get_output_step_index(t, t_out)) {
@@ -274,7 +274,7 @@ namespace yask {
             return;
         }
 
-        // Output vars for this bundle.  NB: don't need to mark
+        // Output vars for this part.  NB: don't need to mark
         // scratch vars as dirty because they are never exchanged.
         for (auto gp : output_var_ptrs) {
             auto& gb = gp->gb();
@@ -308,7 +308,7 @@ namespace yask {
     // its halo sizes are still used to specify how much to
     // add to 'idxs'.
     // Returns adjusted indices.
-    ScanIndices StencilBundleBase::adjust_scratch_span(int outer_thread_idx,
+    ScanIndices StencilPartBase::adjust_scratch_span(int outer_thread_idx,
                                                        const ScanIndices& idxs,
                                                        KernelSettings& settings) const {
         assert(is_scratch());
@@ -433,31 +433,31 @@ namespace yask {
         num_fpops_per_step = 0;
 
         DEBUG_MSG("Stage '" << get_name() << "':\n" <<
-                  " num non-scratch bundles:     " << size() << endl <<
+                  " num non-scratch parts:     " << size() << endl <<
                   " stage scope:                 " << _stage_bb.make_range_string(domain_dims));
 
-        // Non-scratch bundles.
+        // Non-scratch parts.
         for (auto* sg : *this) {
 
-            // This bundle and its scratch bundles.
+            // This part and its scratch parts.
             auto sc_list = sg->get_scratch_children();
-            auto sg_list = sg->get_reqd_bundles();
-            DEBUG_MSG(" Non-scratch bundle '" << sg->get_name() << "':\n" <<
-                      "  num reqd scratch bundles:   " << sc_list.size());
+            auto sg_list = sg->get_reqd_parts();
+            DEBUG_MSG(" Non-scratch part '" << sg->get_name() << "':\n" <<
+                      "  num reqd scratch parts:   " << sc_list.size());
             
-            // Stats for each bundle.
+            // Stats for each part.
             typedef map<string, idx_t> bstats;
             bstats npts, writes, reads, fpops;
 
-            // Loop through all the full BBs in this bundle.
+            // Loop through all the full BBs in this part.
             auto fbbs = sg->get_bbs();
             for (auto& fbb : fbbs) {
 
-                // Loop through all the needed bundles.
+                // Loop through all the needed parts.
                 for (auto* rsg : sg_list) {
                     auto& bname = rsg->get_name();
 
-                    // Loop through all full BBs in needed bundle.
+                    // Loop through all full BBs in needed part.
                     auto fnbbs = rsg->get_bbs();
                     for (auto& fnbb : fnbbs) {
                     
@@ -476,17 +476,17 @@ namespace yask {
                 }
             }
 
-            // Loop through all needed bundles.
+            // Loop through all needed parts.
             for (auto* rsg : sg_list) {
                 auto& bname = rsg->get_name();
-                DEBUG_MSG("  Bundle '" << rsg->get_name() << "':");
+                DEBUG_MSG("  part '" << rsg->get_name() << "':");
 
                 if (rsg->is_sub_domain_expr())
                     DEBUG_MSG("   sub-domain expr:            '" << rsg->get_domain_description() << "'");
                 if (rsg->is_step_cond_expr())
                     DEBUG_MSG("   step-condition expr:        '" << rsg->get_step_cond_description() << "'");
 
-                DEBUG_MSG("   points to eval in bundle:   " << make_num_str(npts[bname]) << endl <<
+                DEBUG_MSG("   points to eval in part:   " << make_num_str(npts[bname]) << endl <<
                           "   var-reads per point:        " << rsg->get_scalar_points_read() << endl <<
                           "   var-writes per point:       " << rsg->get_scalar_points_written() << endl <<
                           "   est FP-ops per point:       " << rsg->get_scalar_fp_ops() << endl <<
@@ -498,7 +498,7 @@ namespace yask {
                 num_fpops_per_step += fpops[bname];
 
                 auto& bb = rsg->get_bb();
-                DEBUG_MSG("   bundle scope:               " << bb.make_range_string(domain_dims));
+                DEBUG_MSG("   part scope:               " << bb.make_range_string(domain_dims));
                 auto& bbs = rsg->get_bbs();
                 DEBUG_MSG("   num full rectangles in box: " << bbs.size());
                 for (size_t ri = 0; ri < bbs.size(); ri++) {
@@ -552,7 +552,7 @@ namespace yask {
             print_var_list(os, omvars, "output-only other");
             print_var_list(os, iomvars, "input-output other");
 
-        } // bundles.
+        } // parts.
 
         // Sum across ranks.
         tot_reads_per_step = env->sum_over_ranks(num_reads_per_step);
