@@ -515,6 +515,22 @@ namespace yask {
         virtual idx_t_vec
         get_rank_index_vec() const =0;
 
+        /// Get the number of outer OpenMP threads.
+        /**
+           @returns Number of threads used for evaluating blocks concurrently
+           within each Mega-block.
+        */
+        virtual int
+        get_num_outer_threads() const =0;
+
+        /// Get the number of inner (nested) OpenMP threads.
+        /**
+           @returns Number of threads used for evaluating nano-blocks concurrently
+           within each micro-block.
+        */
+        virtual int
+        get_num_inner_threads() const =0;
+
         /// Set kernel options from a string.
         /**
            Parses the string for options as if from a command-line.

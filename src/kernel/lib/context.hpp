@@ -680,6 +680,17 @@ namespace yask {
             return misc_dims.get_dim_names();
         }
 
+        // Threads.
+        virtual int get_num_outer_threads() const {
+            STATE_VARS(this);
+            return actl_opts->num_outer_threads;
+        }
+        virtual int get_num_inner_threads() const {
+            STATE_VARS(this);
+            return actl_opts->num_inner_threads;
+        }
+
+
         virtual void run_solution(idx_t first_step_index,
                                   idx_t last_step_index);
         virtual void run_solution(idx_t step_index) {

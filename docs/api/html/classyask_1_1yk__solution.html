@@ -202,6 +202,12 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a64ce6c3bb5a4a467e6a23e4aa619881d"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a64ce6c3bb5a4a467e6a23e4aa619881d">get_rank_index_vec</a> () const =0</td></tr>
 <tr class="memdesc:a64ce6c3bb5a4a467e6a23e4aa619881d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the rank index in all domain dimensions.  <br /></td></tr>
 <tr class="separator:a64ce6c3bb5a4a467e6a23e4aa619881d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a072a37aa309558e213c6aed2f641828d"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a072a37aa309558e213c6aed2f641828d">get_num_outer_threads</a> () const =0</td></tr>
+<tr class="memdesc:a072a37aa309558e213c6aed2f641828d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the number of outer OpenMP threads.  <br /></td></tr>
+<tr class="separator:a072a37aa309558e213c6aed2f641828d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6a07a3d09e3268aa0d14e9fa32234ad9"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a6a07a3d09e3268aa0d14e9fa32234ad9">get_num_inner_threads</a> () const =0</td></tr>
+<tr class="memdesc:a6a07a3d09e3268aa0d14e9fa32234ad9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the number of inner (nested) OpenMP threads.  <br /></td></tr>
+<tr class="separator:a6a07a3d09e3268aa0d14e9fa32234ad9"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ac111abbade055c4923cd0044360ec3b7"><td class="memItemLeft" align="right" valign="top">virtual std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ac111abbade055c4923cd0044360ec3b7">apply_command_line_options</a> (const std::string &amp;args)=0</td></tr>
 <tr class="memdesc:ac111abbade055c4923cd0044360ec3b7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set kernel options from a string.  <br /></td></tr>
 <tr class="separator:ac111abbade055c4923cd0044360ec3b7"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -1538,6 +1544,62 @@ virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc
 
 <p>Get the rank index in all domain dimensions. </p>
 <p>See <a class="el" href="classyask_1_1yk__solution.html#a3268e5e7e2f0e45f951f1c38063bc59f" title="Get the rank index in the specified dimension.">get_rank_index()</a>; </p><dl class="section return"><dt>Returns</dt><dd>Vector of zero-based indices of this rank in all domain dimensions. </dd></dl>
+
+</div>
+</div>
+<a id="a072a37aa309558e213c6aed2f641828d" name="a072a37aa309558e213c6aed2f641828d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a072a37aa309558e213c6aed2f641828d">&#9670;&#160;</a></span>get_num_outer_threads()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual int yask::yk_solution::get_num_outer_threads </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get the number of outer OpenMP threads. </p>
+<dl class="section return"><dt>Returns</dt><dd>Number of threads used for evaluating blocks concurrently within each Mega-block. </dd></dl>
+
+</div>
+</div>
+<a id="a6a07a3d09e3268aa0d14e9fa32234ad9" name="a6a07a3d09e3268aa0d14e9fa32234ad9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6a07a3d09e3268aa0d14e9fa32234ad9">&#9670;&#160;</a></span>get_num_inner_threads()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual int yask::yk_solution::get_num_inner_threads </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get the number of inner (nested) OpenMP threads. </p>
+<dl class="section return"><dt>Returns</dt><dd>Number of threads used for evaluating nano-blocks concurrently within each micro-block. </dd></dl>
 
 </div>
 </div>
