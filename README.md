@@ -71,7 +71,8 @@ and Intel(R) graphics processors.
     `A(t+1, x, y) EQUALS B(t, x, y+1)`.
     (-1 is used for less-common reverse-time stencils.)
   - The `yk_solution::get_var()` API throws an exception if the
-    named var does not exist. (Used to return `std::nullptr`.);
+    named var does not exist. (Used to return `std::nullptr`.)
+  - Add APIs for getting OpenMP thread counts.
 * Version 4.01.00 added several new APIs.
     The following changes were made to to the YASK compiler:
     removed the `-eq_bundles` option, and
