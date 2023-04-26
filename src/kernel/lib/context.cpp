@@ -355,14 +355,6 @@ namespace yask {
                     // Loop thru stages.
                     for (auto& bp : st_stages) {
 
-                        // Check step.
-                        if (!bp->is_in_valid_step(start_t)) {
-                            TRACE_MSG("step " << start_t <<
-                                      " not valid for stage '" <<
-                                      bp->get_name() << "'");
-                            continue;
-                        }
-
                         // Do MPI-external parts separately?
                         if (mpi_interior.bb_valid) {
                             mpisec.do_mpi_interior = false;
@@ -575,24 +567,9 @@ namespace yask {
                 // Count steps for each stage to properly account for
                 // step conditions when using temporal tiling.
                 for (auto& bp : st_stages) {
-                    idx_t num_stage_steps = 0;
-
-                    if (!check_step_conds)
-                        num_stage_steps = this_num_t;
-                    else {
-
-                        // Loop through each step.
-                        assert(abs(step_dir) == 1);
-                        for (idx_t t = start_t; t != stop_t; t += step_dir) {
-
-                            // Check step cond for this t.
-                            if (bp->is_in_valid_step(t))
-                                num_stage_steps++;
-                        }
-                    }
 
                     // Add to steps done for this stage.
-                    bp->add_steps(num_stage_steps);
+                    bp->add_steps(this_num_t);
                 }
 
                 // Call the auto-tuner to evaluate these steps and change
@@ -694,13 +671,6 @@ namespace yask {
                     TRACE_MSG("no TB; stage '" <<
                               bp->get_name() << "' in step(s) [" <<
                               start_t << " ... " << stop_t << ")");
-
-                    // Check step.
-                    if (!bp->is_in_valid_step(start_t)) {
-                        TRACE_MSG("step " << start_t <<
-                                  " not valid for stage '" << bp->get_name() << "'");
-                        continue;
-                    }
 
                     // Strides within a mega-block are based on block sizes.
                     mega_block_idxs.set_strides_from_inner(actl_opts->_block_sizes, stride_t);
@@ -822,10 +792,6 @@ namespace yask {
                 // calc_block().
                 for (idx_t t = start_t; t != stop_t; t += step_dir) {
                     for (auto& bp : st_stages) {
-
-                        // Check step.
-                        if (!bp->is_in_valid_step(t))
-                            continue;
 
                         // One shift for each stage in each TB step.
                         mega_block_shift_num++;
@@ -1100,14 +1066,6 @@ namespace yask {
                           ", stage '" << bp->get_name() <<
                           "', shift-num " << shift_num);
 
-                // Check step.
-                if (!bp->is_in_valid_step(start_t)) {
-                    TRACE_MSG("step " << start_t <<
-                              " not valid for stage '" <<
-                              bp->get_name() << "'");
-                    continue;
-                }
-
                 // Start timers for this stage.  Tracking only on thread
                 // 0. TODO: track all threads and report cross-thread stats.
                 if (outer_thread_idx == 0)
@@ -1161,10 +1119,24 @@ namespace yask {
                     // a stage; this would require handling possible shifting due to
                     // temporal blocking.
                     StencilPartUSet parts_done;
-                    for (auto* sb : *bp)
-                        if (sb->get_bb().bb_num_points)
-                            sb->calc_micro_block(outer_thread_idx, *actl_opts, micro_block_idxs,
-                                                 mpisec, parts_done);
+                    for (auto* sp : *bp) {
+
+                        // Check step.
+                        if (!sp->is_in_valid_step(start_t)) {
+                            TRACE_MSG("step " << start_t <<
+                                      " not valid for reqd part '" <<
+                                      sp->get_name() << "'");
+                            continue;
+                        }
+                        
+                        // Any points to do?
+                        if (sp->get_bb().bb_num_points <= 0)
+                            continue;
+
+                        // Evaluate this part and any required scratch parts.
+                        sp->calc_micro_block(outer_thread_idx, *actl_opts, micro_block_idxs,
+                                             mpisec, parts_done);
+                    }
 
                     // Make sure streaming stores are visible for later loads.
                     make_stores_visible();
@@ -1576,10 +1548,10 @@ namespace yask {
             for (idx_t t = start; t != stop; t += stride) {
 
                 // Each part in this stage.
-                for (auto* sb : *bp) {
+                for (auto* sp : *bp) {
 
                     // Output vars for this part.
-                    sb->update_var_info(YkVarBase::others, t, mark_dirty, mod_dev_data, true);
+                    sp->update_var_info(YkVarBase::others, t, mark_dirty, mod_dev_data, true);
 
                 } // parts.
             } // steps.

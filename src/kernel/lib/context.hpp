@@ -342,9 +342,6 @@ namespace yask {
         IdxTuple tb_tops;      // top of TB trapezoid.
         IdxTuple mb_angles;  // MB skewing angles for each shift (in points).
 
-        // Clear this to ignore step conditions during auto-tuning.
-        bool check_step_conds = true;
-
         // MPI buffers for each var.
         // Map key: var name.
         std::map<std::string, MPIData> mpi_data;

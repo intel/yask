@@ -73,18 +73,18 @@ namespace yask {
         // Get the parts that need to be processed in
         // this block. This will be any prerequisite scratch-var
         // parts plus the current non-scratch part.
-        auto sg_list = get_reqd_parts();
+        auto rp_list = get_reqd_parts();
 
         // Loop through all the needed parts.
-        for (auto* sg : sg_list) {
-            TRACE_MSG("processing reqd part '" << sg->get_name() << "'");
-            bool is_scratch = sg->is_scratch();
+        for (auto* rp : rp_list) {
+            TRACE_MSG("processing reqd part '" << rp->get_name() << "'");
+            bool is_scratch = rp->is_scratch();
 
             // Check step.
-            if (!sg->is_in_valid_step(t)) {
+            if (!rp->is_in_valid_step(t)) {
                 TRACE_MSG("step " << t <<
                           " not valid for reqd part '" <<
-                          sg->get_name() << "'");
+                          rp->get_name() << "'");
                 continue;
             }
 
@@ -94,7 +94,7 @@ namespace yask {
             // trim scratch part(s) to the BB(s) of the non-scratch
             // part(s) that they depend on: the non-scratch parts may be
             // used by >1 non-scratch parts with different BBs.
-            if (parts_done.count(sg)) {
+            if (parts_done.count(rp)) {
                 TRACE_MSG("already done for this micro-blk");
                 continue;
             }
@@ -102,16 +102,16 @@ namespace yask {
             // For scratch-vars, expand indices based on write halo.
             ScanIndices mb_idxs2(micro_block_idxs);
             if (is_scratch) {
-                mb_idxs2 = sg->adjust_scratch_span(outer_thread_idx, mb_idxs2,
+                mb_idxs2 = rp->adjust_scratch_span(outer_thread_idx, mb_idxs2,
                                                    settings);
                 TRACE_MSG("micro-block adjusted to " << mb_idxs2.make_range_str(true) <<
                           " per scratch write halo");
             }
 
             // Loop through all the full BBs in this reqd part.
-            TRACE_MSG("checking " << sg->get_bbs().size() <<
-                      " full BB(s) for reqd part '" << sg->get_name() << "'");
-            auto fbbs = sg->get_bbs();
+            TRACE_MSG("checking " << rp->get_bbs().size() <<
+                      " full BB(s) for reqd part '" << rp->get_name() << "'");
+            auto fbbs = rp->get_bbs();
             int fbbn = 0;
             for (auto& fbb : fbbs) {
                 fbbn++;
@@ -169,7 +169,7 @@ namespace yask {
                                                           fold_pts[j]) * 2;
                     }
 
-                    TRACE_MSG("reqd part '" << sg->get_name() << "': " <<
+                    TRACE_MSG("reqd part '" << rp->get_name() << "': " <<
                               mb_idxs3.make_range_str(true) <<
                               " via outer thread " << outer_thread_idx <<
                               " with " << nbt << " block thread(s) bound to data...");
@@ -204,7 +204,7 @@ namespace yask {
                         auto bind_slab_idx = idiv_flr(bind_elem_idx + idx_ofs, bind_slab_pts);
                         auto bind_thr = imod_flr<idx_t>(bind_slab_idx, nbt);
                         if (inner_thread_idx == bind_thr)
-                            sg->calc_nano_block(outer_thread_idx, inner_thread_idx,
+                            rp->calc_nano_block(outer_thread_idx, inner_thread_idx,
                                                 settings, nano_blk_range);
 
                         // Loop sufffix.
@@ -218,7 +218,7 @@ namespace yask {
                 // (This is the more common case.)
                 else {
 
-                    TRACE_MSG("reqd part '" << sg->get_name() << "': " <<
+                    TRACE_MSG("reqd part '" << rp->get_name() << "': " <<
                               mb_idxs3.make_range_str(true) << 
                               " via outer thread " << outer_thread_idx <<
                               " with " << nbt << " block thread(s) NOT bound to data...");
@@ -234,7 +234,7 @@ namespace yask {
 
                     // Loop body.
                     int inner_thread_idx = omp_get_thread_num();
-                    sg->calc_nano_block(outer_thread_idx, inner_thread_idx,
+                    rp->calc_nano_block(outer_thread_idx, inner_thread_idx,
                                         settings, nano_blk_range);
 
                     // Loop suffix.
@@ -247,7 +247,7 @@ namespace yask {
             // Mark this part done. This avoid re-evaluating
             // scratch parts that are used more than once in
             // a stage.
-            parts_done.insert(sg);
+            parts_done.insert(rp);
             
         } // required parts.
 

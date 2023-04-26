@@ -688,8 +688,6 @@ namespace yask {
     typedef vector_set<PartPtr> PartList;
 
     // A named equation stage, which contains one or more equation parts.
-    // All equations in a stage do not need to have the same domain
-    // condition, but non-scratch eqs must have the same step condition.
     // Equations in a stage must not have inter-dependencies because they
     // may be run in parallel or in any order on any sub-domain.
     class Stage : public EqLot {
@@ -697,9 +695,6 @@ namespace yask {
         PartList _parts;  // parts in this stage.
 
     public:
-
-        // Common condition.
-        bool_expr_ptr step_cond;
 
         // Ctor.
         Stage(Solution* soln, bool is_scratch) :
@@ -739,16 +734,6 @@ namespace yask {
         }
         virtual const PartList& get_items() const {
             return _parts;
-        }
-
-        // Visit the step condition.
-        // Return true if there was one to visit.
-        virtual bool visit_step_cond(ExprVisitor* ev) {
-            if (step_cond.get()) {
-                step_cond->accept(ev);
-                return true;
-            }
-            return false;
         }
     };
     typedef shared_ptr<Stage> StagePtr;

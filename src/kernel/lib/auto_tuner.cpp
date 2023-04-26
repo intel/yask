@@ -546,13 +546,6 @@ namespace yask {
         auto save_halo_exchange = actl_opts->do_halo_exchange;
         actl_opts->do_halo_exchange = false;
 
-        // Temporarily ignore step conditions to force eval of conditional
-        // parts.  NB: may affect perf, e.g., if stages A and B run in
-        // AAABAAAB sequence, perf may be [very] different if run as
-        // ABABAB..., esp. w/temporal tiling.  TODO: work around this or
-        // at least provide a cmd-line option.
-        check_step_conds = false;
-
         // Init tuners.
         reset_auto_tuner(true, verbose);
 
@@ -583,7 +576,6 @@ namespace yask {
 
         // reenable normal operation.
         actl_opts->do_halo_exchange = save_halo_exchange;
-        check_step_conds = true;
 
         // Report results.
         at_timer.stop();

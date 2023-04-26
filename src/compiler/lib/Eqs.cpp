@@ -1620,12 +1620,6 @@ namespace yask {
         if (is_scratch())
             des += "scratch ";
         des += "stage " + quote + _get_name() + quote;
-        if (!is_scratch()) {
-            if (step_cond.get())
-                des += " w/step condition " + step_cond->make_quoted_str(quote);
-            else
-                des += " w/o step condition";
-        }
         return des;
     }
 
@@ -1673,11 +1667,7 @@ namespace yask {
         if (_parts_in_stages.count(pps.front()))
             return false;
 
-        // Get step condition, if any.
-        // (All pps should have same step cond by construction.)
-        auto stcond = pps.front()->step_cond;
-
-        // Get scratch-ness.
+       // Get scratch-ness.
         // (All pps should have same scratch-ness by construction.)
         auto is_scratch = pps.front()->is_scratch();
         
@@ -1694,10 +1684,6 @@ namespace yask {
 
             // Must be same scratch-ness.
             if (st->is_scratch() != is_scratch)
-                continue;
-
-            // Step conditions must match (both may be null).
-            if (!are_exprs_same(st->step_cond, stcond))
                 continue;
 
             // Var matching. Look for any match.
@@ -1807,7 +1793,6 @@ namespace yask {
             else
                 target->base_name = _base_name;
             target->index = _idx++;
-            target->step_cond = stcond;
             new_stage = true;
             #ifdef DEBUG_ADD_PARTS
             cout << "*** Adding to new " << target->get_descr() << "\n" << flush;

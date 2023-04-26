@@ -322,8 +322,7 @@ namespace yask {
 
         // Determine whether step index is enabled.
         bool is_in_valid_step(idx_t input_step_index) const override {
-            return !_context->check_step_conds ||
-                _part.is_in_valid_step(_corep(), input_step_index);
+            return _part.is_in_valid_step(_corep(), input_step_index);
         }
 
         // If part updates var(s) with the step index,
@@ -921,22 +920,6 @@ namespace yask {
         // Update the amount of work stats.
         // Print to current debug stream.
         void init_work_stats();
-
-        // Determine whether step index is enabled.
-        bool
-        is_in_valid_step(idx_t input_step_index) const {
-            if (!size())
-                return false;
-
-            // All step conditions must be the same, so
-            // we use first non-scratch one.
-            for (auto* bp : *this) {
-                if (!bp->is_scratch())
-                    return bp->is_in_valid_step(input_step_index);
-            }
-            assert("no non-scratch part");
-            return false;
-        }
 
         // Accessors.
         BoundingBox& get_bb() { return _stage_bb; }
