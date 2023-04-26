@@ -984,11 +984,11 @@ namespace yask {
     } // calc_block().
 
     // Calculate results within a micro-block.  This function calls
-    // 'StencilPartBase::calc_micro_block()' for each part in the
-    // specified stage or all stages if 'sel_bp' is null. When using TB,
-    // only the points in the 'shape' needed for the tesselation 'phase' are
-    // computed. The starting 'shift_num' is relative to the bottom of the
-    // current mega-block and block.
+    // 'StencilPartBase::calc_micro_block()' for each part in the specified
+    // stage or all stages if 'sel_bp' is null. When using TB, only the
+    // points in the 'shape' needed for the tesselation 'phase' are
+    // computed. The starting 'shift_num' is relative to the temporal
+    // "bottom" of the current mega-block and block.
     void StencilContext::calc_micro_block(int outer_thread_idx,
                                           StagePtr& sel_bp,
                                           idx_t mega_block_shift_num,
@@ -1138,8 +1138,6 @@ namespace yask {
                                              mpisec, parts_done);
                     }
 
-                    // Make sure streaming stores are visible for later loads.
-                    make_stores_visible();
                 }
 
                 // Need to shift for next stage and/or time-step.

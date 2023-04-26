@@ -244,6 +244,9 @@ namespace yask {
                 } // OMP parallel when binding threads to data.
             } // full BBs in this required part.
 
+            // Make sure streaming stores are visible for later loads.
+            make_stores_visible();
+            
             // Mark this part done. This avoid re-evaluating
             // scratch parts that are used more than once in
             // a stage.
