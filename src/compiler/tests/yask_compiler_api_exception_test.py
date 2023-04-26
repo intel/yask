@@ -48,8 +48,9 @@ def make_soln() :
 
 if __name__ == "__main__":
 
-    # Counter for exception test
+    # Counters for exception test
     num_exception = 0;
+    num_expected = 0
 
     # Compiler 'bootstrap' factories.
     cfac = yask_compiler.yc_factory()
@@ -58,7 +59,6 @@ if __name__ == "__main__":
 
     yask_file = ofac.new_file_output("yc-api-test-py.hpp");
     
-    num_expected = 0
     print("**** calling 'new_var_point' with too many arguments.")
     try:
         make_soln()

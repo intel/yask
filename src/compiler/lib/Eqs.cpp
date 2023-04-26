@@ -57,8 +57,8 @@ namespace yask {
         typedef unordered_map<EqualsExpr*, VarPoint*> PointMap;
         typedef unordered_map<EqualsExpr*, PointSet> PointSetMap;
 
-        PointMap _lhs_pts; // outputs of eqs.
-        PointSetMap _rhs_pts; // inputs of eqs.
+        PointMap _lhs_pts; // outputs of eqs (1 for each eq).
+        PointSetMap _rhs_pts; // inputs of eqs (set for each eq).
         PointSetMap _cond_pts;  // sub-domain expr inputs.
         PointSetMap _step_cond_pts;  // step-cond expr inputs.
         PointSetMap _all_pts;  // all points in each eq (union of above).
@@ -583,7 +583,7 @@ namespace yask {
             // TODO: check to make sure cond1 depends only on domain indices.
             // TODO: check to make sure stcond1 does not depend on domain indices.
 
-            // Find logical var dependencies.
+            // Find logical var dependencies: LHS var depends on RHS vars.
             auto olv1 = log_vars.add_var_slice(op1);
             for (auto ip1 : ips1) {
                 auto ilv1 = log_vars.add_var_slice(ip1);
@@ -620,12 +620,12 @@ namespace yask {
             bool is_scratch1 = op1->_get_var()->is_scratch();
 
             // Check each 'eq2' to see if it depends on 'eq1'.
-            // NB: 'eq2' == 'eq1' for one eq; see 'same_eq' below.
+            // NB: includes case 'eq2' == 'eq1'; see 'same_eq' below.
             for (auto eq2 : get_all()) {
                 auto* eq2p = eq2.get();
                 auto& ov2 = out_vars.at(eq2p);
                 assert(ov2 == eq2->get_lhs_var());
-                auto& ops2 = out_pts.at(eq2p);
+                auto& op2 = out_pts.at(eq2p);
                 auto& ivs2 = in_vars.at(eq2p);
                 auto& ips2 = in_pts.at(eq2p);
                 auto cond2 = eq2p->_get_cond();
@@ -638,7 +638,7 @@ namespace yask {
                 #endif
 
                 bool same_eq = eq1 == eq2;
-                bool same_op = are_exprs_same(op1, ops2);
+                bool same_op = are_exprs_same(op1, op2);
                 bool same_cond = are_exprs_same(cond1, cond2);
                 bool same_stcond = are_exprs_same(stcond1, stcond2);
 
@@ -660,79 +660,28 @@ namespace yask {
                 if (!settings._find_deps)
                     continue;
 
-                // Check for "logical-var" matches on LHS of eq1 to RHS of
-                // eq2.  Does eq1 define *any* point in a var that eq2
-                // inputs at the same step index?  (Some of these may not be
-                // actual dependencies due to conditions.)
-                //
-                // Example of time-varying var dependency:
-                //  eq1: a(t+1, x, ...) EQUALS ...
-                //  eq2: b(t+1, x, ...) EQUALS a(t+1, x+5, ...) ...
-                //  eq2 depends on eq1.
-                //
-                // Example of dependency through scratch var:
-                //  eq1: tmp(x, ...) EQUALS ...
-                //  eq2: b(t+1, x, ...) EQUALS tmp(x+2, ...)
-                //  eq2 depends on eq1.
-                //
-                // TODO: be smarter about this and find only real
-                // dependencies considering the conditions.
-
-                // Only need to check each point if LHS var of eq1 is one of
-                // the RHS vars of eq2.
-                if (ivs2.count(ov1)) {
-
-                    // detailed check of g1 input points on RHS of eq2.
-                    for (auto* ip2 : ips2) {
-
-                        // Same var?
-                        bool same_var = ip2->_get_var() == op1->_get_var();
-
-                        // If not same var, there is no dependency.
-                        if (!same_var)
-                            continue; // to next RHS pt.
-
-                        // Same logical var (same name, time ofs, and misc indices)?
-                        bool same_lvar = ip2->is_same_logical_var(*op1);
-
-                        // If not same logical var, there is no dependency for
-                        // non-scratch eqs.
-                        if (!is_scratch1 && !same_lvar)
-                            continue; // to next RHS pt.                            
-
-                        // Scratch vars have a dependency if the vars are
-                        // the same regardless of the misc indices.
-                        // FIXME:
-                        // make this check after transitive closure to find
-                        // indirect dependencies. Even better: change
-                        // write-halo tracking mechanism to allow
-                        // scratch-var slice dependencies.
-                        if (is_scratch1) {
-
-                            // Cannot have a dependency b/t same scratch var
-                            // if only misc indices are different. This is
-                            // because only one write-halo size can be
-                            // stored per scratch var.
-                            if (same_eq) {
-                                THROW_YASK_EXCEPTION("illegal dependency: reference to same scratch var '" +
-                                                     op1->get_var_name() + "' on LHS and RHS of equation " +
-                                                     eq1->make_quoted_str());
-                            }
-                        }
-
-                        // Save dependency between the 2 eqs.
-                        if (!same_eq) {
-                            set_imm_dep_on(eq2, eq1);
-
-                            // Move along to next equation.
-                            break;
-                        }
-                    } // input pts in eq2.
+                /* Use logical-var dependencies to determine if eq2
+                   depends on eq1.
+                  
+                   Example of non-scratch var dependency:
+                    eq1: a(t+1, x, ...) EQUALS ...
+                    eq2: b(t+1, x, ...) EQUALS a(t+1, x+5, ...) ...
+                    eq2 depends on eq1 because b(t+1) depends on a(t+1).
+                  
+                   Example of dependency through scratch var:
+                    eq1: tmp(x, ...) EQUALS ...
+                    eq2: b(t+1, x, ...) EQUALS tmp(x+2, ...)
+                    eq2 depends on eq1 because b(t+1) depends on tmp.
+                */
+                if (!same_eq) {
+                    auto olv1 = log_vars.find_var_slice(op1);
+                    assert(olv1);
+                    auto olv2 = log_vars.find_var_slice(op2);
+                    assert(olv2);
+                    if (log_vars.get_deps().is_dep_on(olv2, olv1))
+                        set_imm_dep_on(eq2, eq1);
                 }
-                #ifdef DEBUG_DEP
-                cout << "  No deps found.\n";
-                #endif
-
+                
             } // for all eqs (eq2).
         } // for all eqs (eq1).
 
@@ -991,9 +940,9 @@ namespace yask {
           - p5 updates A & depends on p1-4.
           Write halo for T1 is typically made larger than T2 as in Ex s2.
 
-          Even though it's not illegal, it's also better not to part
+          Even though it's not illegal, it's also better not to bundle
           partial updates of non-scratch logical vars inconsistently. This
-          avoids updating part of a var early and then more of it [much]
+          avoids updating a sub-domain of a var early and then more of it [much]
           later, which is bad for cache locality.
         */
 
@@ -1188,11 +1137,11 @@ namespace yask {
     // Find halos needed for each var.
     // These are read halos for non-scratch vars and
     // read/write halos for scratch vars.
-    // Also updates write points in vars.
     // Halos are tracked for each left/right dim separately.
     // They are also tracked by their non-scratch stage and the
     // step offset when applicable. This info is needed to properly
     // determine whether memory can be reused.
+    // Also updates write points in vars.
     void Stages::calc_halos(Parts& all_parts) {
 
         // Find all LHS and RHS points and vars for all eqs.
@@ -1206,6 +1155,8 @@ namespace yask {
         ////// Phase 1 /////
         // First, set halos based only on immediate read accesses.
         // NB: This is relatively straighforward.
+        // Halo data is keyed by the name of the
+        // non-scratch stage it is accessed from.
         
         // Example1:
         // eq: A(t+1, x) EQUALS A(t, x+3).
@@ -1352,10 +1303,10 @@ namespace yask {
                 #endif
                 all_parts.get_deps().visit_deps
                 
-                    // For each 'bn', 'p1' is 'bn' or depends on 'bn',
+                    // For each 'pn', 'p1' is 'pn' or depends on 'pn',
                     // immediately or indirectly; 'path' leads from
-                    // 'p1' to 'bn'.
-                    (p1, [&](PartPtr bn, PartList& path) {
+                    // 'p1' to 'pn'.
+                    (p1, [&](PartPtr pn, PartList& path) {
 
                              // Create a new empty map of shadow vars for this path.
                              shadows.resize(shadows.size() + 1);
@@ -1403,10 +1354,10 @@ namespace yask {
                                  // all its output vars' halos to the max
                                  // across its halos. We need to do this
                                  // because halos are written in a scratch
-                                 // var.  Since they are partd, meaning
-                                 // they are all written in a single code
-                                 // block, all the writes will be over the
-                                 // same area.
+                                 // var.  Since they are bundled into a
+                                 // part, meaning they are all written in a
+                                 // single code block, all the writes will
+                                 // be over the same area.
 
                                  // First, set first eq halo the max of all.
                                  auto& eq1 = p2->get_eqs().front();
@@ -1513,7 +1464,7 @@ namespace yask {
         auto& settings = _soln->get_settings();
         auto& os = _soln->get_ostr();
         
-        os << "\nPartitioning " << all_eqs.get_num() << " equation(s) into solution parts...\n";
+        os << "\nBundling " << all_eqs.get_num() << " equation(s) into solution parts...\n";
         
         // Make a regex for the allowed vars.
         regex varx(settings._var_regex);
@@ -1882,7 +1833,7 @@ namespace yask {
     {
         auto& os = _soln->get_ostr();
         
-        os << "\nPartitioning " << all_parts.get_num() << " part(s) into stages...\n";
+        os << "\nBundling " << all_parts.get_num() << " part(s) into stages...\n";
 
         // Temp stages with grouped-by-logical-var stages.
         Stages sts1(_soln);

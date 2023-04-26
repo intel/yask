@@ -291,7 +291,7 @@ namespace yask {
                 _scratches.set_imm_dep_on(a, b);
             if (a == b)
                 THROW_YASK_EXCEPTION("immediate dependency of '" + a->get_descr() +
-                                     " on itself");
+                                     "' on itself");
         }
 
         // Clear all deps.
@@ -333,17 +333,17 @@ namespace yask {
 
                         // Dependence on self?
                         if (oi == oj)
-                            THROW_YASK_EXCEPTION("indirect dependency of " +
-                                                 oi->get_descr() + " on itself");
+                            THROW_YASK_EXCEPTION("indirect dependency of '" +
+                                                 oi->get_descr() + "' on itself");
 
                         // Must swap if dependent.
                         if (_deps.is_dep_on(oi, oj)) {
 
                             // Error if also back-dep.
                             if (_deps.is_dep_on(oj, oi)) {
-                                THROW_YASK_EXCEPTION("circular dependency between " +
-                                                     oi->get_descr() + " and " +
-                                                     oj->get_descr());
+                                THROW_YASK_EXCEPTION("circular dependency between '" +
+                                                     oi->get_descr() + "' and '" +
+                                                     oj->get_descr() + "'");
                             }
 
                             // Swap them.
@@ -433,14 +433,26 @@ namespace yask {
         LogicalVars(Solution* soln) : _soln(soln) { }
         virtual ~LogicalVars() { }
 
-        LogicalVarPtr add_var_slice(VarPoint* vp) {
+        LogicalVarPtr find_var_slice(VarPoint* vp) {
 
             // Already exists?
             auto descr = vp->make_logical_var_str();
             auto it = _log_vars.find(descr);
             if (it != _log_vars.end())
                 return it->second;
-            
+
+            return nullptr;
+        }
+
+        LogicalVarPtr add_var_slice(VarPoint* vp) {
+
+            // Already exists?
+            auto lvp = find_var_slice(vp);
+            if (lvp)
+                return lvp;
+
+            // Make new one.
+            auto descr = vp->make_logical_var_str();
             auto p = make_shared<LogicalVar>(_soln, vp);
             add_item(p);
             _log_vars[descr] = p;

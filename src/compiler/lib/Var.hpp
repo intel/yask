@@ -393,17 +393,19 @@ namespace yask {
     class LogicalVar;
     using LogicalVarPtr = shared_ptr<LogicalVar>;
     
-    // A reference to a specific time offset and misc indices of a var.
+    // A reference to a specific time offset and misc index values of a var,
+    // i.e., a slice of a var in step and misc dims.
     class LogicalVar {
     protected:
         Solution* _soln;
+        Var* _var;
         std::string _descr;
         bool _is_scratch;
 
     public:
         LogicalVar(Solution* soln,
-                 VarPoint* vp) :
-            _soln(soln) {
+                   VarPoint* vp) :
+            _soln(soln), _var(vp->_get_var()) {
             _descr = vp->make_logical_var_str();
             _is_scratch = vp->_get_var()->is_scratch();
         }
@@ -436,6 +438,8 @@ namespace yask {
         }
 
         LogicalVarPtr clone() {
+
+            // Don't copy the soln or the var.
             return make_shared<LogicalVar>(*this);
         }
     };
