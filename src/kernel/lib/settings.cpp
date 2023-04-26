@@ -1068,8 +1068,8 @@ namespace yask {
     // Return number of threads.
     // Do nothing and return 0 if not properly initialized.
     int KernelStateBase::set_num_outer_threads() {
-        int rt=0, bt=0;
-        int at = get_num_comp_threads(rt, bt);
+        int ot=0, it=0;
+        int at = get_num_comp_threads(ot, it);
 
         // Must call before entering top parallel mega-block.
         int ol = omp_get_level();
@@ -1080,12 +1080,12 @@ namespace yask {
         omp_set_max_active_levels(yask_max_levels + 1); // Add 1 for offload.
          
         // Set num threads to use for inner and outer loops.
-        yask_num_threads[0] = rt;
-        yask_num_threads[1] = bt;
+        yask_num_threads[0] = ot;
+        yask_num_threads[1] = it;
 
         // Set num threads for a mega-block.
-        omp_set_num_threads(rt);
-        return rt;
+        omp_set_num_threads(ot);
+        return ot;
     }
 
     // Set number of threads for a block.
@@ -1093,8 +1093,8 @@ namespace yask {
     // Return number of threads.
     // Do nothing and return 0 if not properly initialized.
     int KernelStateBase::set_num_inner_threads() {
-        int rt=0, bt=0;
-        int at = get_num_comp_threads(rt, bt);
+        int ot=0, it=0;
+        int at = get_num_comp_threads(ot, it);
 
         // Must call within top parallel region.
         #ifdef _OPENMP
@@ -1104,8 +1104,8 @@ namespace yask {
         assert (mal >= 2);
         #endif
 
-        omp_set_num_threads(bt);
-        return bt;
+        omp_set_num_threads(it);
+        return it;
     }
 
 

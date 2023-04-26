@@ -71,6 +71,7 @@ typedef int MPI_Status;
 #include <map>
 #include <unordered_map>
 #include <set>
+#include <unordered_set>
 #include <sstream>
 #include <stdexcept>
 #include <malloc.h>

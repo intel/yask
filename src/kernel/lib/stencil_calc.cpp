@@ -41,7 +41,7 @@ namespace yask {
                                              KernelSettings& settings,
                                              const ScanIndices& micro_block_idxs,
                                              MpiSection& mpisec,
-                                             StencilPartSet& parts_done) {
+                                             StencilPartUSet& parts_done) {
         STATE_VARS(this);
         TRACE_MSG("in '" << get_name() << "': " <<
                   micro_block_idxs.make_range_str(true) <<

@@ -201,6 +201,7 @@ namespace yask {
     class Stage;
     typedef std::vector<StencilPartBase*> StencilPartList;
     typedef std::set<StencilPartBase*> StencilPartSet;
+    typedef std::unordered_set<StencilPartBase*> StencilPartUSet;
     typedef std::shared_ptr<Stage> StagePtr;
     typedef std::vector<StagePtr> StageList;
 
@@ -683,11 +684,19 @@ namespace yask {
         // Threads.
         virtual int get_num_outer_threads() const {
             STATE_VARS(this);
-            return actl_opts->num_outer_threads;
+
+            // Numbers of threads.
+            int othr, ithr;
+            get_num_comp_threads(othr, ithr);
+            return othr;
         }
         virtual int get_num_inner_threads() const {
             STATE_VARS(this);
-            return actl_opts->num_inner_threads;
+
+            // Numbers of threads.
+            int othr, ithr;
+            get_num_comp_threads(othr, ithr);
+            return ithr;
         }
 
 

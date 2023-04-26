@@ -1160,7 +1160,7 @@ namespace yask {
                     // TODO: track parts-done across entire time-steps, not just within
                     // a stage; this would require handling possible shifting due to
                     // temporal blocking.
-                    StencilPartSet parts_done;
+                    StencilPartUSet parts_done;
                     for (auto* sb : *bp)
                         if (sb->get_bb().bb_num_points)
                             sb->calc_micro_block(outer_thread_idx, *actl_opts, micro_block_idxs,
