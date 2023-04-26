@@ -68,7 +68,6 @@ my $nranks;                    # num ranks.
 my $debugCheck = 0;            # print each initial check result.
 my $doBuild = 1;               # do compiles.
 my $doVal = 0;                 # do validation runs.
-my $maxVecsInCluster = 4;      # max vectors in a cluster.
 my @folds = ();                # folding variations to explore.
 my $killCmd = '/usr/bin/timeout'; # command to kill runaway jobs.
 
@@ -113,7 +112,6 @@ sub usage {
       "                    Examples: '-l=512'      Set local-domain size to 512^3.\n".
       "                              '-bx=64'      Set block size to 64 in 'x' dim.\n".
       "                              '-ep=0'       Disable extra padding.\n".
-      "                              '-c=1'        Allow only one vector in a cluster.\n".
       "                              '-Mb=0'       Allow only one Mega-block (Mb=0 => Mb=local-domain size).\n".
       " -<gene_name>=<N>-<M> Restrict <gene_name> between <N> and <M>, inclusive.\n".
       "                    Example:  '-bx=8-128'.\n".
@@ -126,7 +124,6 @@ sub usage {
       "                    Can only specify 3D folds.\n".
       " -mem=<N>-<M>       Set allowable est. memory usage between <N> and <M> GiB (default is $minGB-$maxGB).\n".
       "                    Ignored if all problem-size vars are set to a fixed value.\n".
-      " -maxVecsInCluster=<N>  Maximum vectors allowed in cluster (default is $maxVecsInCluster).*\n".
       " -noPrefetch        Disable any prefetching (shortcut for '-pfd_l1=0 -pfd_l2=0').*\n".
       " -noFolding         Allow only 1D vectorization (in any direction).*\n".
       " -zVec              Force 1D vectorization in 'z' direction (traditional 'inline' style).*\n".
@@ -224,9 +221,6 @@ for my $origOpt (@ARGV) {
   elsif ($opt eq '-noprefetch') {
     $geneRanges{$autoKey.'pfd_l1'} = [ 0 ];
     $geneRanges{$autoKey.'pfd_l2'} = [ 0 ];
-  }
-  elsif ($opt =~ '^-?maxvecsincluster=(\d+)$') {
-    $maxVecsInCluster = $rhs;
   }
   elsif ($opt eq '-zvec') {
     $zVec = 1;
@@ -344,10 +338,9 @@ my $minDim = 128;        # min dimension on any axis.
 my $maxDim = 2 * $YaskUtils::oneKi;  # max dimension on any axis.
 my $maxPad = 3;
 my $maxTimeBlock = 10;          # max temporal blocking.
-my $maxCluster = 4;
 my $minPoints;
 my $maxPoints;
-my $minClustersInBlock = 10;
+my $minVecsInBlock = 10;
 my $minBlocksInMegaBlock = 10;
 
 # Threads.
@@ -477,11 +470,6 @@ if ($doBuild) {
 
      # how to shape vectors, from the list above.
      [ 0, $#folds, 1, 'fold' ],
-
-     # vector-cluster sizes.
-     [ 1, $maxCluster, 1, 'cx' ],
-     [ 1, $maxCluster, 1, 'cy' ],
-     [ 1, $maxCluster, 1, 'cz' ],
 
      # prefetch distances for l1 and l2.
      # all non-pos numbers => no prefetching, so ~50% chance of being enabled.
@@ -1149,17 +1137,6 @@ sub fitness {
   my $foldNums = $folds[$fold];
   my @fs = split ' ', $foldNums;
 
-  # vectors in cluster.
-  my $cvs = mult(@cvs);
-  if ($cvs > $maxVecsInCluster) {
-    print "  overall cluster size of $cvs vectors > $maxVecsInCluster\n" if $debugCheck;
-    $checkStats{'cluster too large'}++;
-    $ok = 0;
-  }
-
-  # cluster sizes in points.
-  my @cs = map { $fs[$_] * $cvs[$_] } 0..$#dirs;
-
   # adjust inner sizes to fit in their enclosing sizes.
   adjSizes(\@Mbs, \@ds);         # Mega-block <= domain.
   adjSizes(\@bs, \@Mbs);         # block <= Mega-block.
@@ -1177,7 +1154,6 @@ sub fitness {
   my $bPts = mult(@bs);
   my $mbPts = mult(@mbs);
   my $nbPts = mult(@nbs);
-  my $cPts = mult(@cs);
   my $fPts = mult(@fs);
   my ($b_tilePts, $mb_tilePts, $nb_tilePts);
   if ($showTiles) {
@@ -1186,9 +1162,9 @@ sub fitness {
     $nb_tilePts = mult(@nb_tiles);
   }
 
-  # Clusters per block.
-  my @bcs = map { ceil($bs[$_] / $cs[$_]) } 0..$#dirs;
-  my $bcs = mult(@bcs);
+  # Vecs per block.
+  my @bvs = map { ceil($bs[$_] / $fs[$_]) } 0..$#dirs;
+  my $bvs = mult(@bvs);
 
   # Micro-blocks per block.
   my @bmbs = map { ceil($bs[$_] / $mbs[$_]) } 0..$#dirs;
@@ -1203,7 +1179,7 @@ sub fitness {
   my $dMbs = mult(@dMbs);
 
   # mem usage estimate.
-  my $overallSize = calcSize(\@ds, \@ps, \@cs);
+  my $overallSize = calcSize(\@ds, \@ps, \@fs);
 
   if ($debugCheck) {
     print "Sizes:\n";
@@ -1211,11 +1187,10 @@ sub fitness {
     print "  Mega-block size = $MbPts\n";
     print "  block size = $bPts\n";
     print "  nano-block size = $nbPts\n";
-    print "  cluster size = $cPts\n";
     print "  fold size = $fPts\n";
     print "  Mega-blocks per local-domain = $dMbs\n";
     print "  blocks per Mega-block = $Mbbs\n";
-    print "  clusters per block = $bcs\n";
+    print "  vecs per block = $bvs\n";
     print "  micro-blocks per block = $bmbs\n";
     print "  mem estimate = ".($overallSize/$YaskUtils::oneGi)." GB\n";
     if ($showTiles) {
@@ -1248,8 +1223,8 @@ sub fitness {
   }
 
   # Each block should do minimal work.
-  if ($bcs < $minClustersInBlock) {
-    print "  $bcs clusters per block < $minClustersInBlock\n" if $debugCheck;
+  if ($bvs < $minVecsInBlock) {
+    print "  $bvs vecs per block < $minVecsInBlock\n" if $debugCheck;
     $checkStats{'block size too small'}++;
     $ok = 0;
   }
@@ -1271,12 +1246,11 @@ sub fitness {
   addStat($ok, 'block size', $bPts);
   addStat($ok, 'micro-block size', $mbPts);
   addStat($ok, 'nano-block size', $nbPts);
-  addStat($ok, 'cluster size', $cPts);
+  addStat($ok, 'vector size', $fPts);
   addStat($ok, 'Mega-blocks per local-domain', $dMbs);
   addStat($ok, 'blocks per Mega-block', $Mbbs);
-  addStat($ok, 'clusters per block', $bcs);
+  addStat($ok, 'vectors per block', $bvs);
   addStat($ok, 'micro-blocks per block', $bmbs);
-  addStat($ok, 'vectors per cluster', $cvs);
   if ($showTiles) {
     addStat($ok, 'block-tile size', $b_tilePts);
     addStat($ok, 'micro-block-tile size', $mb_tilePts);
@@ -1300,8 +1274,7 @@ sub fitness {
   }
   $mvars .= " pfd_l1=$pfd_l1 pfd_l2=$pfd_l2";
 
-  # cluster & fold.
-  $mvars .= " cluster=x=$cvs[0],y=$cvs[1],z=$cvs[2]";
+  # fold.
   $mvars .= " fold=x=$fs[0],y=$fs[1],z=$fs[2]";
 
   # gen-loops vars.

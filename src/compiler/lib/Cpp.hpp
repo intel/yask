@@ -144,11 +144,6 @@ namespace yask {
         // Set to var name of write mask if/when used.
         string _write_mask = "";
 
-        // Inner-loop steps.
-        bool _is_using_cluster = false;
-        int _inner_loop_vec_step = 1;
-        int _inner_loop_elem_step = 1;
-
         // A simple constant.
         virtual string add_const_expr(ostream& os, double v) override {
             return CppPrintHelper::format_real(v);
@@ -232,9 +227,7 @@ namespace yask {
                           const string& line_suffix) :
             CppPrintHelper(settings, dims, cv,
                            var_type, line_prefix, line_suffix),
-            VecPrintHelper(vv) {
-            set_using_cluster(false);
-        }
+            VecPrintHelper(vv) { }
         
         // Whether to use masks during write.
         virtual void set_write_mask(string mask_var) {
@@ -244,15 +237,7 @@ namespace yask {
             return _write_mask;
         }
 
-        // Set step lengths.
-        virtual void set_using_cluster(bool use) {
-            _is_using_cluster = use;
-            const string& ildim = _settings._inner_loop_dim;
-            _inner_loop_vec_step = use ? _dims._cluster_mults[ildim] : 1;
-            _inner_loop_elem_step = _inner_loop_vec_step * _dims._fold[ildim];
-        }
-
-        // Set stage name.
+       // Set stage name.
         virtual void set_stage_name(const string& sname) {
             _stage_name = sname;
         }
@@ -388,7 +373,6 @@ namespace yask {
     class YASKCppPrinter : public PrinterBase {
     protected:
         Stages& _eq_stages; // stages of parts w/o inter-dependencies.
-        Parts& _cluster_parts;  // eq-parts for scalar and vector.
         string _stencil_prefix;
         string _context, _context_hook; // class names;
         string _core_t, _thread_core_t; // core struct names;
@@ -421,11 +405,9 @@ namespace yask {
     public:
         YASKCppPrinter(Solution& stencil,
                        Parts& parts,
-                       Stages& eq_stages,
-                       Parts& cluster_parts) :
+                       Stages& eq_stages) :
             PrinterBase(stencil, parts),
-            _eq_stages(eq_stages),
-            _cluster_parts(cluster_parts)
+            _eq_stages(eq_stages)
         {
             // name of C++ struct.
             _stencil_prefix = "stencil_" + _stencil._get_name() + "_";

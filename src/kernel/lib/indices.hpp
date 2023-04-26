@@ -667,7 +667,6 @@ namespace yask {
         // or their placement on threads, etc.
     
         // Ctor.
-        // TODO: should we use cluster alignment instead?
         ScanIndices(bool use_vec_align) :
             ndims(NUM_STENCIL_DIMS),
             begin(idx_t(0), ndims),
@@ -749,7 +748,7 @@ namespace yask {
             // to keep alignment from splitting it.
             DOMAIN_VAR_LOOP_FAST(i, j)
                 inner.tile_size[i] = inner.stride[i] =
-                ROUND_UP(get_overall_range(i), cluster_pts[j]) * 2;
+                ROUND_UP(get_overall_range(i), fold_pts[j]) * 2;
 
             // Init first indices.
             inner.index.set_from_const(0);
@@ -773,7 +772,7 @@ namespace yask {
             assert(ndims == orig_tile_sizes_of_this.get_num_dims());
             assert(ndims == orig_sizes_of_inner.get_num_dims());
             DOMAIN_VAR_LOOP(i, j) {
-                auto cpts = cluster_pts[j];
+                auto fpts = fold_pts[j];
             
                 // If original [or auto-tuned] inner area covers this entire
                 // area, set stride size to full width.  This is to keep the
@@ -781,11 +780,11 @@ namespace yask {
                 // Round up so that normalizing won't break later. Mult by 2
                 // to keep alignment from splitting it.
                 if (orig_sizes_of_inner[i] >= orig_sizes_of_this[i])
-                    stride[i] = ROUND_UP(get_overall_range(i), cpts) * 2;
+                    stride[i] = ROUND_UP(get_overall_range(i), fpts) * 2;
 
                 // Similar for tiles.
                 if (orig_tile_sizes_of_this[i] >= orig_sizes_of_this[i])
-                    tile_size[i] = ROUND_UP(get_overall_range(i), cpts) * 2;
+                    tile_size[i] = ROUND_UP(get_overall_range(i), fpts) * 2;
             }
         }
 
@@ -796,7 +795,7 @@ namespace yask {
             DOMAIN_VAR_LOOP_FAST(i, j) {
 
                 // Round up so that normalizing won't break later.
-                stride[i] = ROUND_UP(inner_block_sizes[i], cluster_pts[j]);
+                stride[i] = ROUND_UP(inner_block_sizes[i], fold_pts[j]);
 
                 // Mult by 2 to keep alignment from splitting it if larger
                 // than range.

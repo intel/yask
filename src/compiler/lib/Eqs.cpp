@@ -917,52 +917,6 @@ namespace yask {
         cv.print_stats(os, msg);
     }
 
-    // Replicate each equation at the non-zero offsets for
-    // each vector in a cluster.
-    void Part::replicate_eqs_in_cluster()
-    {
-        auto& dims = _soln->get_dims();
-        
-        // Make a copy of the original equations so we can iterate through
-        // them while adding to the part.
-        EqList eqs(get_eqs());
-
-        // Loop thru points in cluster.
-        dims._cluster_mults.visit_all_points
-            ([&](const IntTuple& cluster_index,
-                 size_t idx) {
-
-                 // Don't need copy of one at origin.
-                 if (cluster_index.sum() > 0) {
-
-                     // Get offset of cluster, which is each cluster index multipled
-                     // by corresponding vector size.  Example: for a 4x4 fold in a
-                     // 1x2 cluster, the 2nd cluster index will be (0,1) and the
-                     // corresponding cluster offset will be (0,4).
-                     auto cluster_offset = cluster_index.mult_elements(dims._fold);
-
-                     // Loop thru eqs.
-                     for (auto eq : eqs) {
-                         assert(eq.get());
-
-                         // Make a copy.
-                         auto eq2 = eq->clone();
-
-                         // Add offsets to each var point.
-                         OffsetVisitor ov(cluster_offset);
-                         eq2->accept(&ov);
-
-                         // Put new equation into part.
-                         add_eq(eq2);
-                     }
-                 }
-                 return true;
-             });
-
-        // Ensure the expected number of equations now exist.
-        assert(get_eqs().size() == eqs.size() * dims._cluster_mults.product());
-    }
-
     // Add 'eq' to an existing part if possible.  If not possible,
     // create a new part and add 'eqs' to it. The index will be
     // incremented if a new part is created.  Returns whether a new part
@@ -1684,7 +1638,7 @@ namespace yask {
         if (settings._do_reorder) {
             
             // Create vector info for this part.
-            // The visitor is accepted at all nodes in the cluster AST;
+            // The visitor is accepted at all nodes in the AST;
             // for each var access node in the AST, the vectors
             // needed are determined and saved in the visitor.
             VecInfoVisitor vv(dims);

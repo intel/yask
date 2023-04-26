@@ -167,7 +167,7 @@ namespace yask {
         os << "\n// Number of stencil equations:\n"
             "#define NUM_STENCIL_EQS " << _stencil.get_num_equations() << endl;
 
-        // Vec/cluster lengths.
+        // Vec lengths.
         auto nvec = _dims._fold_gt1.get_num_dims();
         os << "\n// One vector fold: " << _dims._fold.make_dim_val_str(" * ") << endl;
         for (auto& dim : _dims._fold) {
@@ -176,20 +176,15 @@ namespace yask {
             os << "#define VLEN_" << uc_dim << " " << dim.get_val() << endl;
         }
         os << "namespace yask {\n"
-            "\n // Number of points or multipliers in domain dims.\n"
+            "\n // Number of points in domain dims.\n"
             " constexpr idx_t fold_pts[]{ " << _dims._fold.make_val_str() << " };\n"
-            " constexpr idx_t cluster_pts[]{ " << _dims._cluster_pts.make_val_str() << " };\n"
-            " constexpr idx_t cluster_mults[]{ " << _dims._cluster_mults.make_val_str() << " };\n"
-            "\n // Number of points or multipliers in stencil dims.\n"
+            "\n // Number of points in stencil dims.\n"
             " constexpr idx_t stencil_fold_pts[]{ 1, " << _dims._fold.make_val_str() << " };\n"
-            " constexpr idx_t stencil_cluster_pts[]{ 1, " << _dims._cluster_pts.make_val_str() << " };\n"
-            " constexpr idx_t stencil_cluster_mults[]{ 1, " << _dims._cluster_mults.make_val_str() << " };\n"
             "}\n";
         os << "#define VLEN (" << _dims._fold.product() << ")\n"
-            "#define CPTS (" << _dims._cluster_pts.product() << ")\n";
-        os << "#define FIRST_FOLD_INDEX_IS_UNIT_STRIDE (" <<
-            (_dims._fold.is_first_inner() ? 1 : 0) << ")" << endl;
-        os << "#define NUM_VEC_FOLD_DIMS (" << nvec << ")" << endl;
+            "#define FIRST_FOLD_INDEX_IS_UNIT_STRIDE (" <<
+            (_dims._fold.is_first_inner() ? 1 : 0) << ")" << endl <<
+            "#define NUM_VEC_FOLD_DIMS (" << nvec << ")" << endl;
 
         // Layout for folding.
         // This contains only the vectorized (len > 1) dims.
@@ -222,15 +217,6 @@ namespace yask {
             (_settings._allow_unaligned_loads ? 1 : 0) << ")" << endl;
 
         os << endl;
-        os << "// Cluster multipliers of vector folds: " <<
-            _dims._cluster_mults.make_dim_val_str(" * ") << endl;
-        for (auto& dim : _dims._cluster_mults) {
-            auto& dname = dim._get_name();
-            string uc_dim = all_caps(dname);
-            os << "#define CMULT_" << uc_dim << " (" <<
-                dim.get_val() << ")\n";
-        }
-        os << "#define CMULT (" << _dims._cluster_mults.product() << ")\n";
 
         os << "\n// Prefetch distances\n";
         for (int level : { 1, 2 }) {
@@ -596,74 +582,40 @@ namespace yask {
                     delete sp;
                 }
 
-                // Vector/Cluster code.
-                for (bool do_cluster : { false, true }) {
-
-                    // Cluster part at same 'ei' index.
-                    // This should be the same eq-part because it was copied from the
-                    // scalar one.
-                    auto& vceq = do_cluster ?
-                        _cluster_parts.get_all().at(ei) : eq;
-                    assert(eg_desc == vceq->get_descr());
-
+                // Vector code.
+                {
                     // Create vector info for this part.  The visitor is
-                    // accepted at all nodes in the cluster AST; for each var
-                    // access node in the AST, the vectors needed are determined
+                    // accepted at all nodes in the AST; for each var access
+                    // node in the AST, the vectors needed are determined
                     // and saved in the visitor.
                     VecInfoVisitor vv(_dims);
-                    vceq->visit_eqs(&vv);
+                    eq->visit_eqs(&vv);
 
                     // Collect stats.
                     CounterVisitor cv;
-                    vceq->visit_eqs(&cv);
-                    int num_results = do_cluster ?
-                        _dims._cluster_pts.product() :
-                        _dims._fold.product();
-
-                    // Vector/cluster vars.
-                    string idim = _settings._inner_loop_dim;
-                    string vcstr = do_cluster ? "cluster" : "vector";
-                    string funcstr = "calc_" + vcstr + "s";
-                    string nvecs = do_cluster ? "CMULT_" + all_caps(idim) : "1";
-                    string nelems = (do_cluster ? nvecs + " * ": "") + "VLEN_" + all_caps(idim);
-                    string write_mask = do_cluster ? "__ERROR__" : "write_mask";
-                    int npts = do_cluster ? _dims._cluster_pts.product() : _dims._fold.product();
+                    eq->visit_eqs(&cv);
 
                     // Loop-calculation code.
                     // Function header.
-                    os << endl << " // Calculate a nano-block of " << vcstr << "s bounded by 'norm_nb_idxs'.\n";
-                    if (do_cluster)
-                        os << " // Each cluster calculates '" << _dims._cluster_pts.make_dim_val_str(" * ") <<
-                            "' point(s) containing " << _dims._cluster_mults.product() << " '" <<
-                            _dims._fold.make_dim_val_str(" * ") << "' vector(s).\n";
-                    else
-                        os << " // Each vector calculates '" << _dims._fold.make_dim_val_str(" * ") <<
-                            "' point(s).\n";
-                    os << " // Indices must be rank-relative (not global).\n"
+                    os << endl << " // Calculate a nano-block of vectors bounded by 'norm_nb_idxs'.\n"
+                        " // Each vector calculates '" << _dims._fold.make_dim_val_str(" * ") <<
+                        "' point(s).\n"
+                        " // Indices must be rank-relative (not global).\n"
                         " // Indices must be normalized, i.e., already divided by VLEN_*.\n"
                         " // SIMD calculations use " << vv.get_num_points() <<
-                        " vector block(s) created from " << vv.get_num_aligned_vecs() <<
+                        " vector block(s) read from " << vv.get_num_aligned_vecs() <<
                         " aligned vector-block(s).\n"
-                        " // There are approximately " << (stats.get_num_ops() * num_results) <<
+                        " // There are approximately " << (stats.get_num_ops() * _dims._fold.product()) <<
                         " FP operation(s) per inner-loop iteration.\n" <<
-                        " static void " << funcstr << "(" <<
+                        " static void calc_vectors(" <<
                         _core_t << "* core_data, int core_idx, int block_thread_idx,"
-                        " int thread_limit, ScanIndices& norm_nb_idxs";
-                    if (!do_cluster)
-                        os << ", bit_mask_t " << write_mask;
-                    os << ") {\n";
+                        " int thread_limit, ScanIndices& norm_nb_idxs, bit_mask_t write_mask"
+                        ") {\n";
 
                     // Early out.
-                    if (!do_cluster)
-                        os << " if (write_mask == 0) return;\n";
+                    os << " if (write_mask == 0) return;\n";
 
-                    // Simply call calc_vectors() if there is only 1 vector in a cluster.
-                    if (do_cluster && _dims._cluster_mults.product() == 1) {
-                        os << " // Call calc_vectors() because there is only 1 vector in a cluster.\n"
-                            " calc_vectors(core_data, core_idx,"
-                            " block_thread_idx, thread_limit, norm_nb_idxs, bit_mask_t(-1)); }\n";
-                        continue;
-                    }
+                    // Begin main code block.
                     os << " FORCE_INLINE_RECURSIVE {\n"
                         " assert(core_data);\n"
                         " assert(core_data->_thread_core_list.get());\n"
@@ -673,30 +625,23 @@ namespace yask {
  
                     // C++ vector print assistant.
                     auto* vp = new_cpp_vec_print_helper(vv, cv);
-                    if (!do_cluster && npts > 1)
-                        vp->set_write_mask(write_mask); // Only need mask for actual vectors.
-                    vp->set_using_cluster(do_cluster);
+                    if (_dims._fold.product() > 1)
+                        vp->set_write_mask("write_mask"); // Only need mask for actual vectors.
                     vp->set_stage_name(stage_name);
                     vp->get_point_stats();
 
                     // Print loop-invariant meta values.
                     // Store them in the CppVecPrintHelper for later use in the loop body.
-                    os << "\n ////// Loop-invariant meta values.\n";
+                    os << "\n ////// Loop-invariant values.\n";
                     CppPreLoopPrintMetaVisitor plpmv(os, *vp);
-                    vceq->visit_eqs(&plpmv);
+                    eq->visit_eqs(&plpmv);
                     vp->print_rank_data(os);
 
                     // Print loop-invariant data values.
                     // Store them in the CppVecPrintHelper for later use in the loop body.
                     CppPreLoopPrintDataVisitor plpdv(os, *vp);
-                    vceq->visit_eqs(&plpdv);
+                    eq->visit_eqs(&plpdv);
                 
-                    // Inner-loop strides.
-                    // Will be 1 for vectors and cluster-mults for clusters.
-                    string inner_strides = do_cluster ?
-                        "stencil_cluster_mults[dn]" :
-                        "idx_t(1)";
-
                     // Computation loops.
                     // Include generated loops.
                     os <<
@@ -710,7 +655,7 @@ namespace yask {
                         " // Use macros to get values directly from nano loops.\n"
                         "#define PICO_BLOCK_BEGIN(dn) NANO_BLOCK_BODY_START(dn)\n"
                         "#define PICO_BLOCK_END(dn) NANO_BLOCK_BODY_STOP(dn)\n"
-                        "#define PICO_BLOCK_STRIDE(dn) " << inner_strides << "\n";
+                        "#define PICO_BLOCK_STRIDE(dn) idx_t(1)\n";
                     os <<
                         "\n // Start Pico outer-loop(s).\n"
                         "#define PICO_BLOCK_USE_LOOP_PART_0\n"
@@ -741,9 +686,9 @@ namespace yask {
                         vp->print_early_loads(os);
                 
                     // Generate loop body using vars stored in print helper.
-                    // Visit all expressions to cover the whole vector/cluster.
+                    // Visit all expressions to cover the whole vector.
                     PrintVisitorBottomUp pcv(os, *vp);
-                    vceq->visit_eqs(&pcv);
+                    eq->visit_eqs(&pcv);
 
                     // Insert prefetches using vars stored in print helper for next iteration.
                     vp->print_prefetches(os, true);
@@ -763,9 +708,9 @@ namespace yask {
                         "#include \"yask_nano_block_loops.hpp\"\n";
 
                     // End of recursive block & calc function.
-                    os << "} } // " << funcstr << ".\n";
+                    os << "} } // calc_vectors\n";
                     delete vp;
-                } // cluster/vector
+                } // calc_vector
 
                 os << "}; // " << egs_name << ".\n" // end of struct.
                     " static_assert(std::is_trivially_copyable<" << egs_name << ">::value,"
@@ -1213,18 +1158,8 @@ namespace yask {
         }
         string ffi = (_dims._fold.is_first_inner()) ? "true" : "false";
         os << "    p->_fold_pts.set_first_inner(" << ffi << ");\n"
-            "    p->_vec_fold_pts.set_first_inner(" << ffi << ");\n";
-        for (auto& dim : _dims._cluster_pts) {
-            auto& dname = dim._get_name();
-            auto& dval = dim.get_val();
-            os << "    p->_cluster_pts.add_dim_back(\"" << dname << "\", " << dval << ");\n";
-        }
-        for (auto& dim : _dims._cluster_mults) {
-            auto& dname = dim._get_name();
-            auto& dval = dim.get_val();
-            os << "    p->_cluster_mults.add_dim_back(\"" << dname << "\", " << dval << ");\n";
-        }
-        os << "    p->_step_dir = " << _dims._step_dir << ";\n";
+            "    p->_vec_fold_pts.set_first_inner(" << ffi << ");\n"
+            "    p->_step_dir = " << _dims._step_dir << ";\n";
 
         os << "    return p;\n"
             "  }\n";

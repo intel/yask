@@ -39,8 +39,6 @@ namespace yask {
             delete _parts;
         if (_eq_stages)
             delete _eq_stages;
-        if (_cluster_parts)
-            delete _cluster_parts;
     }
     
     // Stencil-solution APIs.
@@ -68,11 +66,6 @@ namespace yask {
                                        int len) {
         auto& fold = _settings._fold_options;
         fold.add_dim_back(dim->get_name(), len);
-    }
-    void Solution::set_cluster_mult(const yc_index_node_ptr dim,
-                                           int mult) {
-        auto& cluster = _settings._cluster_options;
-        cluster.add_dim_back(dim->get_name(), mult);
     }
     int Solution::get_prefetch_dist(int level) {
         if (level < 1 || level > 2)
@@ -135,7 +128,7 @@ namespace yask {
                                     bool is_folding_efficient) {
 
         // Find all the stencil dimensions in the settings and/or vars.
-        // Create the final folds and clusters.
+        // Create the final folds.
         _dims.set_dims(_vars, _settings, vlen, is_folding_efficient, *_dos);
 
         // Count dim types in each var and determine foldability.
@@ -163,20 +156,6 @@ namespace yask {
 
         // Optimize parts.
         _parts->optimize_parts("scalar & vector");
-        
-        // Make a copy of each equation at each cluster offset.  We will use
-        // these for inter-cluster optimizations and code generation.  We
-        // don't recalculate new stages for the cluster parts.  Instead,
-        // the stages from '_parts' are used for the corresponding
-        // entries in '_cluster_parts'.
-        *_cluster_parts = *_parts;
-        if (_dims._cluster_mults.product() > 1) {
-            *_dos << "\nConstructing equation parts containing " <<
-                _dims._cluster_mults.product() << " vectors per cluster...\n";
-            _cluster_parts->replicate_eqs_in_cluster();
-            if (_settings._do_opt_cluster)
-                _cluster_parts->optimize_parts("cluster");
-        }
     }
 
     // Set options as if command-line.
@@ -234,7 +213,6 @@ namespace yask {
         _free(true);
         _parts = new Parts(this);
         _eq_stages = new Stages(this);
-        _cluster_parts = new Parts(this);
 
         if (!is_target_set())
             THROW_YASK_EXCEPTION("output_solution() without format target being set");
@@ -259,23 +237,23 @@ namespace yask {
         // Most args to the printers just set references to data.
         // Data itself will be created in analyze_solution().
         if (target == "intel64")
-            _printer = new YASKCppPrinter(*this, *_parts, *_eq_stages, *_cluster_parts);
+            _printer = new YASKCppPrinter(*this, *_parts, *_eq_stages);
         else if (target == "avx" || target == "avx2")
-            _printer = new YASKAvx2Printer(*this, *_parts, *_eq_stages, *_cluster_parts);
+            _printer = new YASKAvx2Printer(*this, *_parts, *_eq_stages);
         else if (target == "avx512" || target == "knl")
-            _printer = new YASKAvx512Printer(*this, *_parts, *_eq_stages, *_cluster_parts);
+            _printer = new YASKAvx512Printer(*this, *_parts, *_eq_stages);
         else if (target == "avx512-ymm")
-            _printer = new YASKAvx512Printer(*this, *_parts, *_eq_stages, *_cluster_parts, true);
+            _printer = new YASKAvx512Printer(*this, *_parts, *_eq_stages, true);
         else if (target == "dot")
-            _printer = new DOTPrinter(*this, *_cluster_parts, false);
+            _printer = new DOTPrinter(*this, *_parts, false);
         else if (target == "dot-lite")
-            _printer = new DOTPrinter(*this, *_cluster_parts, true);
+            _printer = new DOTPrinter(*this, *_parts, true);
         else if (target == "pseudo")
-            _printer = new PseudoPrinter(*this, *_cluster_parts, false);
+            _printer = new PseudoPrinter(*this, *_parts, false);
         else if (target == "pseudo-long")
-            _printer = new PseudoPrinter(*this, *_cluster_parts, true);
+            _printer = new PseudoPrinter(*this, *_parts, true);
         else if (target == "pov-ray") // undocumented.
-            _printer = new POVRayPrinter(*this, *_cluster_parts);
+            _printer = new POVRayPrinter(*this, *_parts);
         else {
             _printer = 0;
             THROW_YASK_EXCEPTION("format-target '" + target +

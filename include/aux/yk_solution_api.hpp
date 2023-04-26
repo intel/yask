@@ -174,7 +174,7 @@ namespace yask {
            and so forth, for each domain dimension.
            The local-domain size does *not* include the halo area or any padding.
            For best performance, set the local-domain
-           size to a multiple of the number of elements in a vector-cluster in
+           size to a multiple of the number of elements in a vector in
            each dimension.
 
            You should set either the local-domain size or the global-domain size
@@ -301,17 +301,17 @@ namespace yask {
            A block is typically the unit of work done by a
            top-level OpenMP thread.  The actual number of elements evaluated
            in a block may be greater than the specified size due to rounding
-           up to fold-cluster sizes.  The number of elements in a block may
+           up to vector sizes.  The number of elements in a block may
            also be smaller than the specified size when the block is at the
-           edge of the domain. The block size cannot be set in the
-           solution-step dimension (because temporal blocking is not yet enabled).
+           edge of the domain.
 
            Unless auto-tuning is disabled, the block size will be used as
            a starting point for an automated search for a higher-performing
            block size.
 
            This and all other tile sizes (Mega-blocks, blocks, micro-blocks, etc.)
-           can be set via apply_command_line_options().
+           can be set via apply_command_line_options(). Only block sizes
+           have a dedicated API.
         */
         virtual void
         set_block_size(const std::string& dim

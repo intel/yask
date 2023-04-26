@@ -166,7 +166,7 @@ namespace yask {
                         // binding.  TODO: consider other options.
                         else
                             mb_idxs3.stride[i] = ROUND_UP(mb_idxs3.get_overall_range(i),
-                                                          cluster_pts[j]) * 2;
+                                                          fold_pts[j]) * 2;
                     }
 
                     TRACE_MSG("reqd part '" << sg->get_name() << "': " <<
@@ -338,8 +338,7 @@ namespace yask {
             // are re-added.  Be careful to allocate enough memory in
             // StencilContext::alloc_scratch_data().  NB: When a scratch var
             // has domain conditions, this won't always succeed in reducing
-            // masking.  TODO: consider cluster sizes, but need to make
-            // changes elsewhere in code, e.g., in padding & allocation.
+            // masking.
             idx_t ro = _context->rank_domain_offsets[j];
             ab = round_down_flr(ab - ro, fold_pts[j]) + ro;
             ae = round_up_flr(ae - ro, fold_pts[j]) + ro;

@@ -314,11 +314,11 @@ namespace yask {
                     auto& dofs = odim.get_val(); // always [0..2].
 
                     // Min and max sizes in this dim.
-                    auto dmin = dims->_cluster_pts[dname];
+                    auto dmin = dims->_fold_pts[dname];
                     auto dmax = (*outerp)[dname];
 
                     // Determine distance of GD neighbors.
-                    auto dist = dmin; // stride by cluster size.
+                    auto dist = dmin; // stride by vector size.
                     dist = max(dist, min_dist);
                     dist *= at_state.radius;
 

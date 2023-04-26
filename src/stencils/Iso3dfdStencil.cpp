@@ -166,7 +166,6 @@ namespace {
                     if (target == "knl") {
                         soln->set_fold_len(x, 2);
                         soln->set_fold_len(y, 8);
-                        soln->set_cluster_mult(x, 2);
                         soln->set_prefetch_dist(1, 1);
                         soln->set_prefetch_dist(2, 0);
                     }

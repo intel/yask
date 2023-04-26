@@ -42,7 +42,7 @@ namespace yask {
         idx_t bb_size=0;       // points in the entire box; bb_size >= bb_num_points.
         bool bb_is_full=false; // all points in box are valid (bb_size == bb_num_points).
         bool bb_is_aligned=false; // starting points are vector-aligned in all dims.
-        bool bb_is_cluster_mult=false; // num points are cluster multiples in all dims.
+        bool bb_is_vec_mult=false; // num points are fold multiples in all dims.
         bool bb_valid=false;   // lengths and sizes have been calculated.
 
         BoundingBox() :

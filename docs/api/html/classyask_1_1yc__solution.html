@@ -157,16 +157,6 @@ Public Member Functions</h2></td></tr>
 virtual void&#160;</td><td class="memItemRight" valign="bottom"><b>clear_folding</b> ()=0</td></tr>
 <tr class="memdesc:afaf489e67ed8cc753e999b1495dd4dde"><td class="mdescLeft">&#160;</td><td class="mdescRight">Remove all vector-folding settings. <br /></td></tr>
 <tr class="separator:afaf489e67ed8cc753e999b1495dd4dde"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a45cb1df4af6886e82f98904473873272"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__solution.html#a45cb1df4af6886e82f98904473873272">set_cluster_mult</a> (const <a class="el" href="group__yc.html#gac5a8be4a272d764b1145f1e0c6f493e0">yc_index_node_ptr</a> dim, int mult)=0</td></tr>
-<tr class="memdesc:a45cb1df4af6886e82f98904473873272"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set the cluster multiplier (unroll factor) in given dimension.  <br /></td></tr>
-<tr class="separator:a45cb1df4af6886e82f98904473873272"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:a8927aebccf305d7224d6bc3dafb8f263"><td class="memItemLeft" align="right" valign="top">virtual bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__solution.html#a8927aebccf305d7224d6bc3dafb8f263">is_clustering_set</a> ()=0</td></tr>
-<tr class="memdesc:a8927aebccf305d7224d6bc3dafb8f263"><td class="mdescLeft">&#160;</td><td class="mdescRight">Determine whether any clustering has been set.  <br /></td></tr>
-<tr class="separator:a8927aebccf305d7224d6bc3dafb8f263"><td class="memSeparator" colspan="2">&#160;</td></tr>
-<tr class="memitem:ac4ddf5e4155d64cea2b39d5cb1e2435e"><td class="memItemLeft" align="right" valign="top"><a id="ac4ddf5e4155d64cea2b39d5cb1e2435e" name="ac4ddf5e4155d64cea2b39d5cb1e2435e"></a>
-virtual void&#160;</td><td class="memItemRight" valign="bottom"><b>clear_clustering</b> ()=0</td></tr>
-<tr class="memdesc:ac4ddf5e4155d64cea2b39d5cb1e2435e"><td class="mdescLeft">&#160;</td><td class="mdescRight">Remove all vector-clustering settings. <br /></td></tr>
-<tr class="separator:ac4ddf5e4155d64cea2b39d5cb1e2435e"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a2c0d2dad6b123d0a1444e2f2a74d1ad4"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__solution.html#a2c0d2dad6b123d0a1444e2f2a74d1ad4">get_num_equations</a> () const =0</td></tr>
 <tr class="memdesc:a2c0d2dad6b123d0a1444e2f2a74d1ad4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the number of equations in the solution.  <br /></td></tr>
 <tr class="separator:a2c0d2dad6b123d0a1444e2f2a74d1ad4"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -224,6 +214,17 @@ virtual void&#160;</td><td class="memItemRight" valign="bottom"><b>clear_cluster
 <tr class="memitem:a42cd08d7a26c93d5073134f3b76dcc38"><td class="memItemLeft" align="right" valign="top">virtual void&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__solution.html#a42cd08d7a26c93d5073134f3b76dcc38">clear_dependencies</a> ()=0</td></tr>
 <tr class="memdesc:a42cd08d7a26c93d5073134f3b76dcc38"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Advanced]</b> Remove all existing dependencies.  <br /></td></tr>
 <tr class="separator:a42cd08d7a26c93d5073134f3b76dcc38"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:accddeafe51aa3bc7682e8e70f952afda"><td class="memItemLeft" align="right" valign="top"><a id="accddeafe51aa3bc7682e8e70f952afda" name="accddeafe51aa3bc7682e8e70f952afda"></a>
+<a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> void&#160;</td><td class="memItemRight" valign="bottom"><b>set_cluster_mult</b> (const <a class="el" href="group__yc.html#gac5a8be4a272d764b1145f1e0c6f493e0">yc_index_node_ptr</a> dim, int mult)</td></tr>
+<tr class="memdesc:accddeafe51aa3bc7682e8e70f952afda"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Does nothing; will be removed in future versions. <br /></td></tr>
+<tr class="separator:accddeafe51aa3bc7682e8e70f952afda"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ac6966d1a6e9f7e1a7e2fe31a781b6b3a"><td class="memItemLeft" align="right" valign="top"><a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> bool&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yc__solution.html#ac6966d1a6e9f7e1a7e2fe31a781b6b3a">is_clustering_set</a> ()</td></tr>
+<tr class="memdesc:ac6966d1a6e9f7e1a7e2fe31a781b6b3a"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Will be removed in future versions.  <br /></td></tr>
+<tr class="separator:ac6966d1a6e9f7e1a7e2fe31a781b6b3a"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:afc9c0e79c85baa51018fd006d66dae70"><td class="memItemLeft" align="right" valign="top"><a id="afc9c0e79c85baa51018fd006d66dae70" name="afc9c0e79c85baa51018fd006d66dae70"></a>
+<a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> void&#160;</td><td class="memItemRight" valign="bottom"><b>clear_clustering</b> ()</td></tr>
+<tr class="memdesc:afc9c0e79c85baa51018fd006d66dae70"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Does nothing; will be removed in future versions. <br /></td></tr>
+<tr class="separator:afc9c0e79c85baa51018fd006d66dae70"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:a5f3624ded964c465724fd0221d5a2aaa"><td class="memItemLeft" align="right" valign="top"><a id="a5f3624ded964c465724fd0221d5a2aaa" name="a5f3624ded964c465724fd0221d5a2aaa"></a>
 <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> void&#160;</td><td class="memItemRight" valign="bottom"><b>format</b> (const std::string &amp;format_type, <a class="el" href="group__yask.html#ga605185252a3f3f917593c83b7dde4b66">yask_output_ptr</a> output)</td></tr>
 <tr class="memdesc:a5f3624ded964c465724fd0221d5a2aaa"><td class="mdescLeft">&#160;</td><td class="mdescRight"><b>[Deprecated]</b> Use <a class="el" href="classyask_1_1yc__solution.html#a1c03fc69e306a700de8c5ae3973229c2" title="Set the output target.">set_target()</a> and <a class="el" href="classyask_1_1yc__solution.html#a9c18b4c2eba024a830d5e43c83df958b" title="Optimize and the current equation(s) and write to given output object.">output_solution()</a>. <br /></td></tr>
@@ -983,83 +984,6 @@ virtual void&#160;</td><td class="memItemRight" valign="bottom"><b>clear_cluster
 
 </div>
 </div>
-<a id="a45cb1df4af6886e82f98904473873272" name="a45cb1df4af6886e82f98904473873272"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a45cb1df4af6886e82f98904473873272">&#9670;&#160;</a></span>set_cluster_mult()</h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">virtual void yask::yc_solution::set_cluster_mult </td>
-          <td>(</td>
-          <td class="paramtype">const <a class="el" href="group__yc.html#gac5a8be4a272d764b1145f1e0c6f493e0">yc_index_node_ptr</a>&#160;</td>
-          <td class="paramname"><em>dim</em>, </td>
-        </tr>
-        <tr>
-          <td class="paramkey"></td>
-          <td></td>
-          <td class="paramtype">int&#160;</td>
-          <td class="paramname"><em>mult</em>&#160;</td>
-        </tr>
-        <tr>
-          <td></td>
-          <td>)</td>
-          <td></td><td></td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-
-<p>Set the cluster multiplier (unroll factor) in given dimension. </p>
-<p>For YASK kernel-code generation, this will have the effect of creating N vectors of output for each equation, where N is the product of the cluster multipliers.</p>
-<dl class="section note"><dt>Note</dt><dd>A multiplier &gt;1 cannot be applied to the step dimension. </dd>
-<dd>
-Default is one (1) in each dimension. </dd></dl>
-<dl class="params"><dt>Parameters</dt><dd>
-  <table class="params">
-    <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Direction of unroll, e.g., "y". This must be an index created by new_domain_index().</td></tr>
-    <tr><td class="paramdir">[in]</td><td class="paramname">mult</td><td>Number of vectors in <code>dim</code> </td></tr>
-  </table>
-  </dd>
-</dl>
-
-</div>
-</div>
-<a id="a8927aebccf305d7224d6bc3dafb8f263" name="a8927aebccf305d7224d6bc3dafb8f263"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#a8927aebccf305d7224d6bc3dafb8f263">&#9670;&#160;</a></span>is_clustering_set()</h2>
-
-<div class="memitem">
-<div class="memproto">
-<table class="mlabels">
-  <tr>
-  <td class="mlabels-left">
-      <table class="memname">
-        <tr>
-          <td class="memname">virtual bool yask::yc_solution::is_clustering_set </td>
-          <td>(</td>
-          <td class="paramname"></td><td>)</td>
-          <td></td>
-        </tr>
-      </table>
-  </td>
-  <td class="mlabels-right">
-<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
-  </tr>
-</table>
-</div><div class="memdoc">
-
-<p>Determine whether any clustering has been set. </p>
-<dl class="section return"><dt>Returns</dt><dd><code>true</code> if any cluster multiple has been specified; <code>false</code> if not. </dd></dl>
-
-</div>
-</div>
 <a id="a2c0d2dad6b123d0a1444e2f2a74d1ad4" name="a2c0d2dad6b123d0a1444e2f2a74d1ad4"></a>
 <h2 class="memtitle"><span class="permalink"><a href="#a2c0d2dad6b123d0a1444e2f2a74d1ad4">&#9670;&#160;</a></span>get_num_equations()</h2>
 
@@ -1726,6 +1650,34 @@ Default is one (1) in each dimension. </dd></dl>
 
 <p><b>[Advanced]</b> Remove all existing dependencies. </p>
 <p>Removes dependencies added via <a class="el" href="classyask_1_1yc__solution.html#a727a91bb87e42de9822ac6540e3fc93e" title="[Advanced] Add a dependency between two equations.">add_flow_dependency()</a>. </p>
+
+</div>
+</div>
+<a id="ac6966d1a6e9f7e1a7e2fe31a781b6b3a" name="ac6966d1a6e9f7e1a7e2fe31a781b6b3a"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ac6966d1a6e9f7e1a7e2fe31a781b6b3a">&#9670;&#160;</a></span>is_clustering_set()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname"><a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc3e7b04123">YASK_DEPRECATED</a> bool yask::yc_solution::is_clustering_set </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">inline</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p><b>[Deprecated]</b> Will be removed in future versions. </p>
+<dl class="section return"><dt>Returns</dt><dd><code>false</code> always. </dd></dl>
 
 </div>
 </div>

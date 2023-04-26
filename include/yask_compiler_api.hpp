@@ -364,32 +364,6 @@ namespace yask {
         virtual void
         clear_folding() =0;
 
-        /// Set the cluster multiplier (unroll factor) in given dimension.
-        /** For YASK kernel-code generation, this will have the effect of creating
-            N vectors of output for each equation, where N is the product of
-            the cluster multipliers.
-
-            @note A multiplier >1 cannot be applied to
-            the step dimension.
-            @note Default is one (1) in each dimension. */
-        virtual void
-        set_cluster_mult(const yc_index_node_ptr dim
-                         /**< [in] Direction of unroll, e.g., "y".
-                            This must be an index created by new_domain_index().  */,
-                         int mult /**< [in] Number of vectors in `dim` */ ) =0;
-
-        /// Determine whether any clustering has been set.
-        /**
-           @returns `true` if any cluster multiple has been specified;
-           `false` if not.
-        */
-        virtual bool
-        is_clustering_set() =0;
-        
-        /// Remove all vector-clustering settings.
-        virtual void
-        clear_clustering() =0;
-
         /// Get the number of equations in the solution.
         /** Equations are added when yc_node_factory::new_equation_node() is called.
             @returns Number of equations that have been created. */
@@ -692,6 +666,25 @@ namespace yask {
         virtual void
         clear_dependencies() =0;
 
+        /// **[Deprecated]** Does nothing; will be removed in future versions.
+        YASK_DEPRECATED
+        void
+        set_cluster_mult(const yc_index_node_ptr dim,
+                         int mult) { }
+
+        ///  **[Deprecated]** Will be removed in future versions.
+        /**
+           @returns `false` always.
+        */
+        YASK_DEPRECATED
+        bool
+        is_clustering_set() { return false; }
+        
+        /// **[Deprecated]** Does nothing; will be removed in future versions.
+        YASK_DEPRECATED
+        void
+        clear_clustering() { }
+
         /// **[Deprecated]** Use set_target() and output_solution().
         YASK_DEPRECATED
         inline void
@@ -711,8 +704,8 @@ namespace yask {
 
         #ifndef SWIG
         /// **[Deprecated]** Use new_var().
-         YASK_DEPRECATED
-       inline yc_var_ptr
+        YASK_DEPRECATED
+        inline yc_var_ptr
         new_grid(const std::string& name,
                  const std::initializer_list<yc_index_node_ptr>& dims) {
             return new_var(name, dims);

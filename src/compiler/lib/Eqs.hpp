@@ -615,10 +615,6 @@ namespace yask {
             }
             return false;
         }
-
-        // Replicate each equation at the non-zero offsets for
-        // each vector in a cluster.
-        virtual void replicate_eqs_in_cluster();
     };
 
     // Container for multiple equation parts.
@@ -666,13 +662,6 @@ namespace yask {
         virtual void visit_eqs(ExprVisitor* ev) {
             for (auto& eg : get_all())
                 eg->visit_eqs(ev);
-        }
-
-        // Replicate each equation at the non-zero offsets for
-        // each vector in a cluster.
-        virtual void replicate_eqs_in_cluster() {
-            for (auto& eg : get_all())
-                eg->replicate_eqs_in_cluster();
         }
 
         // Print stats for the equation(s) in all parts.

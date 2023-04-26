@@ -469,8 +469,8 @@ namespace yask {
                         // Divide sum by num of ranks in this dim.
                         auto rsz = CEIL_DIV(gsz, nranks);
 
-                        // Round up to whole vector-clusters.
-                        rsz = ROUND_UP(rsz, dims->_cluster_pts[j]);
+                        // Round up to whole vectors.
+                        rsz = ROUND_UP(rsz, dims->_fold_pts[j]);
 
                         // Remainder for last rank.
                         auto rem = gsz - (rsz * (nranks - 1));
@@ -590,6 +590,7 @@ namespace yask {
 #endif
         DEBUG_MSG(prefix << "pico-block-size:        " <<
                   actl_opts->_pico_block_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+        DEBUG_MSG(prefix << "vector-size:            " << dims->_fold_pts.make_dim_val_str(" * "));
     }
 
     void StencilContext::init_work_stats() {
@@ -614,8 +615,6 @@ namespace yask {
         DEBUG_MSG(" local-domain-size:      " <<
                   actl_opts->_rank_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
         print_sizes(" ");
-        DEBUG_MSG(" cluster-size:           " << dims->_cluster_pts.make_dim_val_str(" * "));
-        DEBUG_MSG(" vector-size:            " << dims->_fold_pts.make_dim_val_str(" * "));
         DEBUG_MSG("\nOther settings:\n"
                   " yask-version:           " << yask_get_version_string() << endl <<
                   " target:                 " << get_target() << endl <<
@@ -1524,18 +1523,18 @@ namespace yask {
             }
         }
 
-        // Lengths are cluster-length multiples?
-        bb_is_cluster_mult = true;
+        // Lengths are vec-length multiples?
+        bb_is_vec_mult = true;
         DOMAIN_VAR_LOOP(i, j) {
             auto& dim = domain_dims.get_dim(j);
             auto& dname = dim._get_name();
-            if (bb_len[j] % dims->_cluster_pts[dname] != 0) {
+            if (bb_len[j] % dims->_fold_pts[dname] != 0) {
                 if (bb_is_full && bb_is_aligned)
                     if (print_info && bb_is_aligned)
                         DEBUG_MSG("Note: '" << name << "' domain"
-                                  " has one or more sizes that are not vector-cluster multiples;"
-                                  " masked calculations will be used in peel and remainder nano-blocks.");
-                bb_is_cluster_mult = false;
+                                  " has one or more sizes that are not vector-length multiples;"
+                                  " masked writes will be used in peel and remainder nano-blocks.");
+                bb_is_vec_mult = false;
                 break;
             }
         }

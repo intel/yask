@@ -222,7 +222,7 @@ namespace yask {
         _nano_block_tile_sizes.set_vals_same(0); // 0 => nano-block size.
 
         _pico_block_sizes = dims->_stencil_dims;
-        _pico_block_sizes.set_vals_same(0);            // 0 => cluster size.
+        _pico_block_sizes.set_vals_same(0);            // 0 => nano-block size.
 
         _min_pad_sizes = dims->_stencil_dims;
         _min_pad_sizes.set_vals_same(0);
@@ -584,14 +584,9 @@ namespace yask {
             "   cache-locality within a kernel work item.\n"
             #endif
             "  There is no temporal tiling at the pico-block level.\n"
-            "  Each pico-block is composed of one or more clusters.\n"
-            " A 'cluster' is the work done in each inner-most pico-loop iteration.\n"
-            "  Clusters are evaluated sequentially within pico-blocks.\n"
-            "  The purpose of clustering is to allow more than one vector of\n"
-            "   work to be done in each loop iteration, useful for very simple stencils.\n"
-            "  Each cluster is composed of one or more vectors.\n"
+            "  Each pico-block is composed of one or more vectors.\n"
             " A 'vector' is typically the work done by a SIMD instruction.\n"
-            "  Vectors are evaluated sequentially within clusters.\n"
+            "  Vectors are evaluated sequentially within pico-blocks.\n"
             "  A 'folded vector' contains points in more than one dimension.\n"
             "  The size of a vector is typically that of a SIMD register.\n"
             "  Each vector is composed of one or more points.\n"
@@ -643,9 +638,9 @@ namespace yask {
             "   when there is more than one block-thread, the first dimension\n"
             "   will instead be set to the vector length to create \"slab\" shapes.\n"
             "  A pico-block size of 0 in a given domain dimension =>\n"
-            "   pico-block size is set to cluster size in that dimension;\n"
-            " The vector and cluster sizes are set at compile-time, so\n"
-            "  there are no run-time options to set them.\n"
+            "   pico-block size is set to nano-block size in that dimension;\n"
+            " The vector sizes are set at compile-time, so there are no run-time\n"
+            "   options to set them.\n"
             #ifdef USE_TILING
             " Set 'tile' sizes to provide finer control over the order of evaluation\n"
             "  within the given area. For example, nano-block-tiles create smaller areas\n"
@@ -767,7 +762,7 @@ namespace yask {
         auto& rt = _mega_block_sizes[step_dim];
         auto& bt = _block_sizes[step_dim];
         auto& mbt = _micro_block_sizes[step_dim];
-        auto& cluster_pts = _dims->_cluster_pts;
+        auto& vpts = _dims->_fold_pts;
         int nddims = _dims->_domain_dims.get_num_dims();
 
         // Fix up step-dim sizes.
@@ -799,7 +794,7 @@ namespace yask {
         auto nr = find_num_subsets(os,
                                    _mega_block_sizes, "mega-block",
                                    _rank_sizes, "local-domain",
-                                   cluster_pts, "cluster",
+                                   vpts, "vector",
                                    step_dim);
         os << " num-mega-blocks-per-local-domain-per-step: " << nr << endl;
         os << " Since the mega-block size in the '" << step_dim <<
@@ -813,7 +808,7 @@ namespace yask {
         auto nb = find_num_subsets(os,
                                    _block_sizes, "block",
                                    _mega_block_sizes, "mega-block",
-                                   cluster_pts, "cluster",
+                                   vpts, "vector",
                                    step_dim);
         os << " num-blocks-per-mega-block-per-step: " << nb << endl;
         os << " num-blocks-per-local-domain-per-step: " << (nb * nr) << endl;
@@ -828,7 +823,7 @@ namespace yask {
         auto nmb = find_num_subsets(os,
                                     _micro_block_sizes, "micro-block",
                                     _block_sizes, "block",
-                                    cluster_pts, "cluster",
+                                    vpts, "vector",
                                     step_dim);
         os << " num-micro-blocks-per-block-per-step: " << nmb << endl;
         os << " num-micro-blocks-per-mega-block-per-step: " << (nmb * nb) << endl;
@@ -857,12 +852,11 @@ namespace yask {
                     continue;
 
                 auto bsz = _block_sizes[i];
-                auto cpts = cluster_pts[j];
-                auto clus_per_blk = bsz / cpts;
+                auto vecs_per_blk = bsz / vpts[j];
 
-                // Subdivide this dim if there are enough clusters in
+                // Subdivide this dim if there are enough vecs in
                 // the block for each thread.
-                if (clus_per_blk >= num_inner_threads) {
+                if (vecs_per_blk >= num_inner_threads) {
                     _bind_posn = i;
 
                     // Stop when first dim picked.
@@ -872,16 +866,16 @@ namespace yask {
 
             // Divide on best dim.
             auto bsz = _block_sizes[_bind_posn - 1]; // "-1" to adjust stencil to domain dims.
-            auto cpts = cluster_pts[_bind_posn - 1];
+            auto vbpts = vpts[_bind_posn - 1];
 
             // Use narrow slabs if at least 2D.
             // TODO: consider a better heuristic.
             if (nddims >= 2)
-                _nano_block_sizes[_bind_posn] = cpts;
+                _nano_block_sizes[_bind_posn] = vbpts;
 
             // Divide block equally.
             else
-                _nano_block_sizes[_bind_posn] = ROUND_UP(bsz / num_inner_threads, cpts);
+                _nano_block_sizes[_bind_posn] = ROUND_UP(bsz / num_inner_threads, vbpts);
         }
 
         // Determine num nano-blocks.
@@ -890,7 +884,7 @@ namespace yask {
         auto nsb = find_num_subsets(os,
                                     _nano_block_sizes, "nano-block",
                                     _micro_block_sizes, "micro-block",
-                                    cluster_pts, "cluster",
+                                    vpts, "vector",
                                     step_dim);
         os << " num-nano-blocks-per-micro-block-per-step: " << nsb << endl;
         os << " num-nano-blocks-per-block-per-step: " << (nsb * nmb) << endl;
@@ -904,7 +898,7 @@ namespace yask {
         auto npb = find_num_subsets(os,
                                     _pico_block_sizes, "pico-block",
                                     _nano_block_sizes, "nano-block",
-                                    cluster_pts, "cluster",
+                                    vpts, "vector",
                                     step_dim);
         os << " num-pico-blocks-per-nano-block-per-step: " << npb << endl;
         os << " num-pico-blocks-per-micro-block-per-step: " << (npb * nsb) << endl;

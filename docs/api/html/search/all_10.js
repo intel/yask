@@ -5,7 +5,7 @@ var searchData=
   ['set_5fargs_2',['set_args',['../classyask_1_1command__line__parser.html#abbbb98c7e2b47e1775a17df55106fb65',1,'yask::command_line_parser']]],
   ['set_5fblock_5fsize_3',['set_block_size',['../classyask_1_1yk__solution.html#abd3c7317bf1b397f332962d658f38839',1,'yask::yk_solution']]],
   ['set_5fblock_5fsize_5fvec_4',['set_block_size_vec',['../classyask_1_1yk__solution.html#a98ae9c07fbc60e4323fa16ee4a2400b5',1,'yask::yk_solution::set_block_size_vec(const idx_t_init_list &amp;vals)=0'],['../classyask_1_1yk__solution.html#a191580e8eab142bbf5eeb7573546c9c9',1,'yask::yk_solution::set_block_size_vec(const idx_t_vec &amp;vals)=0']]],
-  ['set_5fcluster_5fmult_5',['set_cluster_mult',['../classyask_1_1yc__solution.html#a45cb1df4af6886e82f98904473873272',1,'yask::yc_solution']]],
+  ['set_5fcluster_5fmult_5',['set_cluster_mult',['../classyask_1_1yc__solution.html#accddeafe51aa3bc7682e8e70f952afda',1,'yask::yc_solution']]],
   ['set_5fcond_6',['set_cond',['../classyask_1_1yc__equation__node.html#ac264942915dfb99fcfc9578873109bdb',1,'yask::yc_equation_node']]],
   ['set_5fdebug_5foutput_7',['set_debug_output',['../classyask_1_1yc__solution.html#aff540803d358a5dcd304f09c522ec867',1,'yask::yc_solution::set_debug_output()'],['../classyask_1_1yk__env.html#aa5cf0e8d885f4d9ebde6539d5246cda1',1,'yask::yk_env::set_debug_output()'],['../classyask_1_1yk__solution.html#a7e8ce77d85b54ebaf15ddf11009066c4',1,'yask::yk_solution::set_debug_output(yask_output_ptr debug)=0']]],
   ['set_5fdefault_5fnuma_5fpreferred_8',['set_default_numa_preferred',['../classyask_1_1yk__solution.html#ac8bde8dfc73219cec84ad3033faabb90',1,'yask::yk_solution']]],

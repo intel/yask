@@ -396,7 +396,7 @@ namespace yask {
 
             // Init nano-block begin & end from block start & stop indices.
             // Use the 'misc' loops. Indices for these loops will be scalar and
-            // global rather than normalized as in the cluster and vector loops.
+            // global rather than normalized as in the vector loops.
             ScanIndices sb_idxs = micro_block_idxs.create_inner();
 
             // Stride and alignment to 1 element.
@@ -439,7 +439,7 @@ namespace yask {
 
         // Calculate results for one nano-block.
         // The index ranges in 'micro_block_idxs' are sub-divided
-        // into full vector-clusters, full vectors, and partial vectors.
+        // into full vectors and partial vectors.
         // The resulting areas are evaluated by the YASK-compiler-generated code.
         void
         calc_nano_block_opt(int outer_thread_idx,
@@ -459,36 +459,36 @@ namespace yask {
               |                    |
               |  +--------------+  |
               |  |              |  |
-              |  |   +------+   |  |
-              |  |   |   <------------ full clusters (multiple vectors)
-              |  |   |      |   |  |
-              |  |   +------+  <------ full (unmasked, single) vectors
               |  |              |  |
-              |  +--------------+ <--- partial (masked, single) vectors (peel/rem)
-              |                    |
+              |  |              |  |
+              |  |              |  |
+              |  |        <----------- full (unmasked) vectors
+              |  |              |  |
+              |  +--------------+  |
+              |               <------- partial (masked) vectors (peel/rem)
               +--------------------+
 
               Indices and areas in each domain dim:
 
               eidxs.begin
+               |
                | peel <--------- partial vecs here -------> remainder
-               | |   left <------ full vecs here ----> right |
-               | |    |         full clusters here       |   | eidxs.end
-               | |    |                 |                |   |  |
-               v v    v                 v                v   v  v
-               +--+-------+---------------------------+-----+--+  "+" => compute boundaries.
-                  |       |                           |     |
-              +---+-------+---------------------------+-----+---+ "+" => vec-aligned boundaries.
-              ^   ^       ^                            ^     ^   ^
-              |   |       |                            |     |   |
-              |   |      fcidxs.begin (rounded up)     |     |  ovidxs.end (rounded up)
-              |  fvidxs.begin (rounded up)             |    fvidxs.end (rounded down)
-             ovidxs.begin (rounded down)              fcidxs.end (rounded down)
+               | |                                           |
+               | |               full vecs here              | eidxs.end
+               | |                      |                    |  |
+               v v                      v                    v  v
+               +--+-----------------------------------------+--+  "+" => compute boundaries.
+                  |                                         |
+              +---+-----------------------------------------+---+ "+" => vec-aligned boundaries.
+              ^   ^                                          ^   ^
+              |   |                                          |   |
+              |   |                                          |  ovidxs.end (rounded up)
+              |  fvidxs.begin (rounded up)                  fvidxs.end (rounded down)
+             ovidxs.begin (rounded down) 
                                                    ('end' indices are one past last)
 
              Also need to handle all sorts of cases where some of these
-             sections are empty, the case where the peel and remainder
-             overlap, and the case where the left and right full vecs
+             sections are empty and the case where the peel and remainder
              overlap.
             */
 
@@ -507,10 +507,6 @@ namespace yask {
             // Nano-block indices in element units and rank-relative.
             ScanIndices sb_eidxs(sb_idxs);
 
-            // Subset of nano-block that is full clusters.
-            // These indices are in element units and rank-relative.
-            ScanIndices sb_fcidxs(sb_idxs);
-
             // Subset of nano-block that is full vectors.
             // These indices are in element units and rank-relative.
             ScanIndices sb_fvidxs(sb_idxs);
@@ -521,17 +517,15 @@ namespace yask {
 
             // These will be set to rank-relative, so set ofs to zero.
             sb_eidxs.align_ofs.set_from_const(0);
-            sb_fcidxs.align_ofs.set_from_const(0);
             sb_fvidxs.align_ofs.set_from_const(0);
             sb_ovidxs.align_ofs.set_from_const(0);
 
-            // Flag for full clusters.
-            bool do_clusters = true;
-            bool do_outside_clusters = false;
+            // Flag for full vecs.
+            bool do_fvecs = true;
+            bool do_outside_fvecs = false;
 
             // Bit-field flags for full and partial vecs on left and right
             // in each dim.
-            bit_mask_t do_left_fvecs = 0, do_right_fvecs = 0;
             bit_mask_t do_left_pvecs = 0, do_right_pvecs = 0;
 
             // Bit-masks for computing partial vectors in each dim.
@@ -541,7 +535,7 @@ namespace yask {
             // For each domain dim:
             // - Adjust indices to be rank-relative.
             // - Determine the subset of this nano-block that is
-            //   clusters, vectors, and partial vectors.
+            //   full and partial vectors.
             DOMAIN_VAR_LOOP(i, j) {
 
                 // Rank offset.
@@ -551,21 +545,12 @@ namespace yask {
                 auto ebgn = sb_idxs.begin[i] - rofs;
                 auto eend = sb_idxs.end[i] - rofs;
 
-                // Find range of full clusters.
+                // Find range of full vecs.
                 // These are also the inner-boundaries of the
-                // full vectors.
-                // NB: fcbgn will be > fcend if the nano-block
-                // is within a cluster.
-                auto cpts = dims->_cluster_pts[j];
-                auto fcbgn = round_up_flr(ebgn, cpts);
-                auto fcend = round_down_flr(eend, cpts);
-
-                // Find range of full vectors.
-                // These are also the inner-boundaries of the peel
-                // and rem sections.
+                // peel and rem sections.
                 // NB: fvbgn will be > fvend if the nano-block
-                // is within a vector.
-                auto vpts = fold_pts[j];
+                // is within a vec.
+                auto vpts = dims->_fold_pts[j];
                 auto fvbgn = round_up_flr(ebgn, vpts);
                 auto fvend = round_down_flr(eend, vpts);
 
@@ -579,11 +564,6 @@ namespace yask {
                 assert(ovbgn <= fvbgn);
                 assert(ovend >= fvend);
                 
-                // Any full vectors to do on left or right?  These should
-                // always be false when cluster size is 1.
-                bool do_left_fvec = fvbgn < fcbgn;
-                bool do_right_fvec = fvend > fcend;
-
                 // Any partial vectors to do on left or right?
                 bool do_left_pvec = ebgn < fvbgn;
                 bool do_right_pvec = eend > fvend;
@@ -660,38 +640,26 @@ namespace yask {
                     rmask = 0;
                     do_left_pvec = true;
                     do_right_pvec = false;
-                    do_left_fvec = false;
-                    do_right_fvec = false;
-                    do_clusters = false;
+                    do_fvecs = false;
                 }
 
-                // No clusters.
-                else if (fcend <= fcbgn) {
+                // No full vecs.
+                else if (fvend <= fvbgn) {
 
-                    // Move both cluster boundaries to end
+                    // Move both boundaries to end
                     // of full-vec range.
-                    fcbgn = fcend = fvend;
-                    do_clusters = false;
-
-                    // Any full vecs?  Do left only due to fc-range
-                    // adjustment above.
-                    if (do_left_fvec || do_right_fvec) {
-                        do_left_fvec = true;
-                        do_right_fvec = false;
-                    }
+                    fvbgn = fvend;
+                    do_fvecs = false;
                 }
 
                 // Any outside parts at all?
-                if (do_left_fvec || do_right_fvec ||
-                    do_left_pvec || do_right_pvec)
-                    do_outside_clusters = true;
+                if (do_left_pvec || do_right_pvec)
+                    do_outside_fvecs = true;
 
                 // Save loop-local (current dim) vars.
                 // ScanIndices vars.
                 sb_eidxs.begin[i] = ebgn;
                 sb_eidxs.end[i] = eend;
-                sb_fcidxs.begin[i] = fcbgn;
-                sb_fcidxs.end[i] = fcend;
                 sb_fvidxs.begin[i] = fvbgn;
                 sb_fvidxs.end[i] = fvend;
                 sb_ovidxs.begin[i] = ovbgn;
@@ -700,10 +668,6 @@ namespace yask {
                 // Domain-dim mask vars.
                 peel_masks[j] = pmask;
                 rem_masks[j] = rmask;
-                if (do_left_fvec)
-                    set_bit(do_left_fvecs, j);
-                if (do_right_fvec)
-                    set_bit(do_right_fvecs, j);
                 if (do_left_pvec)
                     set_bit(do_left_pvecs, j);
                 if (do_right_pvec)
@@ -712,49 +676,47 @@ namespace yask {
             } // domain dims.
             TRACE_MSG("nano-blk: " << sb_idxs.make_range_str(true) <<
                       "; rank-rel: " << sb_eidxs.make_range_str(true) <<
-                      "; full-clusters: " << sb_fcidxs.make_range_str(true) <<
                       "; full-vectors: " << sb_fvidxs.make_range_str(true) <<
                       "; vector bounds: " << sb_ovidxs.make_range_str(true));
 
             int thread_limit = actl_opts->thread_limit;
             
-            // Normalized cluster indices.
-            auto norm_fcidxs = normalize_indices(sb_fcidxs);
+            // Normalized vec indices.
+            auto norm_fvidxs = normalize_indices(sb_fvidxs);
 
-            if (!do_clusters)
-                TRACE_MSG("no full clusters to calculate");
+            if (!do_fvecs)
+                TRACE_MSG("no full vectors to calculate");
 
-            // Full rectilinear polytope of aligned clusters: use optimized
-            // code for full clusters w/o masking.
+            // Full rectilinear polytope of aligned vecs.
             else {
-                TRACE_MSG("calculating clusters within "
+                TRACE_MSG("calculating vecs within "
                           "normalized local indices " <<
-                          norm_fcidxs.make_range_str(true) <<
+                          norm_fvidxs.make_range_str(true) <<
                           " via outer thread " << outer_thread_idx <<
                           " and inner thread " << inner_thread_idx);
                 
                 // Perform the calculations in this block.
-                calc_clusters_opt2(cp, outer_thread_idx, inner_thread_idx,
-                                   thread_limit, norm_fcidxs);
+                idx_t mask = idx_t(-1); // all elements.
+                calc_vectors_opt2(cp, outer_thread_idx, inner_thread_idx,
+                                  thread_limit, norm_fvidxs, mask);
                 
-            } // whole clusters.
+            } // whole vecs.
 
-            if (!do_outside_clusters)
-                TRACE_MSG("no full or partial vectors to calculate");
+            if (!do_outside_fvecs)
+                TRACE_MSG("no partial vectors to calculate");
             else {
-                TRACE_MSG("processing full and/or partial vectors "
+                TRACE_MSG("processing partial vectors "
                           "within local indices " <<
                           sb_eidxs.make_range_str(true) <<
-                          " bordering full clusters at " <<
-                          sb_fcidxs.make_range_str(true) <<
+                          " bordering full vecs at " <<
+                          sb_fvidxs.make_range_str(true) <<
                           " via outer thread " << outer_thread_idx <<
                           " and inner thread " << inner_thread_idx);
-                #if CPTS == 1
-                THROW_YASK_EXCEPTION("(internal fault) vector border-code not expected with cluster-size==1");
+                #if VPTS == 1
+                THROW_YASK_EXCEPTION("(internal fault) vector border-code not expected with vec-size==1");
                 #else
 
                 // Normalized vector indices.
-                auto norm_fvidxs = normalize_indices(sb_fvidxs);
                 auto norm_ovidxs = normalize_indices(sb_ovidxs);
 
                 // Need to find range in each border part.
@@ -772,12 +734,6 @@ namespace yask {
                 // +---+------+---+
                 // l=left or peel.
                 // r=right or remainder.
-                // Same idea for full or partial vectors, but
-                // different start and stop indices.
-                // Strictly, full vectors could be done with fewer parts since
-                // masking isn't needed, but full vectors are only needed when
-                // using clustering, and clustering is usually done at most
-                // along one dim, so this optimization wouldn't help much in practice.
                 int partn = 0;
                 
                 // Loop through progressively more intersections of domain dims, e.g.,
@@ -832,11 +788,8 @@ namespace yask {
                             // are actually overridded by the STRIDE
                             // macros generated by the YASK compiler, so
                             // these settings are not needed.
-                            auto fv_part(norm_fcidxs);
-                            ///fv_part.stride.set_from_const(1); // 1-vector stride.
                             auto pv_part(norm_fvidxs);
 
-                            bool fv_needed = true;
                             bool pv_needed = true;
                             bit_mask_t pv_mask = bit_mask_t(-1);
 
@@ -858,20 +811,12 @@ namespace yask {
                                     // Set left-right ranges.
                                     // See indices diagram at beginning of this function.
                                     if (is_left) {
-                                        fv_part.begin[i] = norm_fvidxs.begin[i];
-                                        fv_part.end[i] = norm_fcidxs.begin[i];
-                                        if (!is_bit_set(do_left_fvecs, j))
-                                            fv_needed = false;
                                         pv_part.begin[i] = norm_ovidxs.begin[i];
                                         pv_part.end[i] = norm_fvidxs.begin[i];
                                         pv_mask &= peel_masks[j];
                                         if (!is_bit_set(do_left_pvecs, j))
                                             pv_needed = false;
                                     } else {
-                                        fv_part.begin[i] = norm_fcidxs.end[i];
-                                        fv_part.end[i] = norm_fvidxs.end[i];
-                                        if (!is_bit_set(do_right_fvecs, j))
-                                            fv_needed = false;
                                         pv_part.begin[i] = norm_fvidxs.end[i];
                                         pv_part.end[i] = norm_ovidxs.end[i];
                                         pv_mask &= rem_masks[j];
@@ -889,20 +834,6 @@ namespace yask {
                             #ifdef TRACE
                             descr += "'";
                             #endif
-
-                            // Calc this full-vector part.
-                            if (fv_needed) {
-                                TRACE_MSG("calculating full vectors for " << descr <<
-                                          " within normalized local indices " <<
-                                          fv_part.make_range_str(true) <<
-                                          " via outer thread " << outer_thread_idx <<
-                                          " and inner thread " << inner_thread_idx);
-                                
-                                calc_vectors_opt2(cp,
-                                                  outer_thread_idx, inner_thread_idx,
-                                                  thread_limit, fv_part, bit_mask_t(-1));
-                            }
-                            //else TRACE_MSG("full vectors not needed for " << descr);
 
                             // Calc this partial-vector part.
                             if (pv_needed) {
@@ -927,26 +858,6 @@ namespace yask {
             
         } // calc_nano_block_opt.
 
-        // Calculate a tile of clusters.
-        // This should be the hottest function for most stencils.
-        // All functions called from this one should be inlined.
-        // Indices must be vec-len-normalized and rank-relative.
-        // Static to make sure offload doesn't need 'this'.
-        static void
-        calc_clusters_opt2(StencilCoreDataT* corep,
-                           int outer_thread_idx,
-                           int inner_thread_idx,
-                           int thread_limit,
-                           ScanIndices& norm_idxs) {
-
-            // Call code from stencil compiler.
-            ssc_start();
-            StencilPartImplT::calc_clusters(corep,
-                                              outer_thread_idx, inner_thread_idx,
-                                              thread_limit, norm_idxs);
-            ssc_stop();
-        }
-
         // Calculate a tile of vectors using the given mask.
         // All functions called from this one should be inlined.
         // Indices must be vec-len-normalized and rank-relative.
@@ -959,15 +870,10 @@ namespace yask {
                           ScanIndices& norm_idxs,
                           bit_mask_t mask) {
 
-            #if CPTS == 1
-            THROW_YASK_EXCEPTION("(internal fault) masked-vector code not expected with cluster-size==1");
-            #else
-            
             // Call code from stencil compiler.
             StencilPartImplT::calc_vectors(corep,
-                                             outer_thread_idx, inner_thread_idx,
-                                             thread_limit, norm_idxs, mask);
-            #endif
+                                           outer_thread_idx, inner_thread_idx,
+                                           thread_limit, norm_idxs, mask);
         }
 
     }; // StencilPartBase.

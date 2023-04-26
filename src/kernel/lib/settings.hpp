@@ -144,9 +144,7 @@ namespace yask {
         // Dimensions and sizes.
         IdxTuple _fold_pts;     // all domain dims.
         IdxTuple _vec_fold_pts; // just those with >1 pts.
-        IdxTuple _cluster_pts;  // all domain dims.
-        IdxTuple _cluster_mults; // all domain dims.
-
+ 
         // Just sizes.
         Indices _fold_sizes;    // all domain dims.
 

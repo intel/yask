@@ -427,6 +427,7 @@ namespace yask {
         
         const string& ildim = _settings._inner_loop_dim;
         const string& sdim = _dims._step_dim;
+        int il_elem_step = _dims._fold[ildim];
         
         // Loop through all aligned read points.
         for (auto& gp : _vv._aligned_vecs) {
@@ -494,14 +495,7 @@ namespace yask {
 
                 // Need a buffer? (This will change as new points are
                 // discovered.)  Length will cover range of vecs needed.
-                // The num of vecs stepped in the inner loop is subtracted
-                // because we don't need to put the vecs read in the current
-                // loop iteration in the buffer (until it's shifted at the
-                // end of the loop.)  Then, the length may then be increased
-                // if reading ahead unless we're also writing back, in which
-                // case read-ahead can't be used.
-                auto len = hi - lo + 1;
-                len -= _inner_loop_vec_step;
+                auto len = hi - lo;
                 #ifdef DEBUG_BUFFERS
                 cout << "*** Buffer for " << key->make_str() <<
                     " has non-read-ahead length " << len << endl;
@@ -510,11 +504,9 @@ namespace yask {
 
                 // Add read-ahead if requested and allowed.
                 auto rad = _settings._read_ahead_dist;
-                auto ralv = _inner_loop_vec_step * rad;
-                auto rale = _inner_loop_elem_step * rad;
-                if (rad > 0 && !is_write && (len + ralv) >= mbl) {
+                if (rad > 0 && !is_write && (len + rad) >= mbl) {
                     #ifdef DEBUG_BUFFERS
-                    cout << " *** Adding " << ralv << " vecs to buffer for read-ahead\n";
+                    cout << " *** Adding " << rad << " vecs to buffer for read-ahead\n";
                     #endif
 
                     // Add more read points to read set.
@@ -522,7 +514,7 @@ namespace yask {
                     // for reading ahead.
                     // If some already exist, it will not hurt to re-add them.
                     auto ofs = lo + len + 1;
-                    for (int i = 0; i < ralv; i++, ofs++) {
+                    for (int i = 0; i < rad; i++, ofs++) {
                         auto rap = key->clone_var_point();
                         auto eofs = ofs * _dims._fold[ildim];
                         IntScalar idi(ildim, eofs); // At end of buffer.
@@ -535,13 +527,14 @@ namespace yask {
                     }
 
                     // Increase buf len.
-                    len += ralv;
+                    len += rad;
 
                     // Increase var allocation for read-ahead (in elements,
                     // not vecs).  TODO: be more accurate about when to
                     // increase pad; this assumes it extends beyond halo
                     // region.
-                    var.update_read_ahead_pad(rale);
+                    auto rade = il_elem_step * rad;
+                    var.update_read_ahead_pad(rade);
                 }
 
                 // Remember buf len using key if above threshold.
@@ -605,12 +598,12 @@ namespace yask {
                 os << _line_prefix << "{\n";
                 assert(_pt_buf_name.count(*key));
                 bname = _pt_buf_name.at(*key);
-                for (int i = 0; i < len - _inner_loop_vec_step; i++)
+                for (int i = 0; i < len - 1; i++)
                     os << _line_prefix << bname << "[" << i << "] = " <<
-                        bname << "[" << (i + _inner_loop_vec_step) << "]" << _line_suffix;
+                        bname << "[" << (i + 1) << "]" << _line_suffix;
                 start_ofs = end;
-                stop_ofs = end + _inner_loop_vec_step;
-                start_load = max(len - _inner_loop_vec_step, 0);
+                stop_ofs = end + 1;
+                start_load = max(len - 1, 0);
             }
 
             // Before start of loop.
@@ -667,7 +660,6 @@ namespace yask {
             return;
         
         const string& ildim = _settings._inner_loop_dim;
-        auto& imult = _inner_loop_vec_step;
 
         // 'level': cache level.
         for (int level = 1; level <= 2; level++) {
@@ -689,8 +681,8 @@ namespace yask {
                 auto hi = i.second; // Furthest vec read at offset in key.
 
                 // Pts in vec.
-                int start_ofs = hi + (pfd - 1) * _inner_loop_vec_step + 1;
-                int stop_ofs = start_ofs + _inner_loop_vec_step;
+                int start_ofs = hi + (pfd - 1) + 1;
+                int stop_ofs = start_ofs + 1;
                 for (int vofs = start_ofs; vofs < stop_ofs; vofs++) {
                     auto eofs = vofs * _dims._fold[ildim]; // Vector ofs.
 
@@ -729,24 +721,25 @@ namespace yask {
     void CppVecPrintHelper::print_end_inner_loop(ostream& os) {
         get_point_stats();
 
+        const string& ildim = _settings._inner_loop_dim;
+        int il_elem_step = _dims._fold[ildim];
+        
         auto& ild = _settings._inner_loop_dim;
         os << "\n // Increment indices and pointers.\n" <<
-            _line_prefix << ild << " += " <<
-            _inner_loop_vec_step << _line_suffix <<
+            _line_prefix << ild << "++" << _line_suffix <<
 
             _line_prefix << get_local_elem_index(ild) << " += " <<
-            _inner_loop_elem_step << _line_suffix <<
+            il_elem_step << _line_suffix <<
 
             _line_prefix << get_global_elem_index(ild) << " += " <<
-            _inner_loop_elem_step << _line_suffix;
+            il_elem_step << _line_suffix;
         
         for (auto& i : _inner_loop_base_ptrs) {
             auto& vp = i.first;
             auto& ptr = i.second;
             auto* stride = lookup_stride(*vp._get_var(), _settings._inner_loop_dim);
             assert(stride);
-            os << _line_prefix << ptr << " += " <<
-                _inner_loop_vec_step << " * " << *stride << _line_suffix;
+            os << _line_prefix << ptr << " += " << *stride << _line_suffix;
         }
     }
     

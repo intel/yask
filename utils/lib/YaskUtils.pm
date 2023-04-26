@@ -134,7 +134,6 @@ our @size_log_keys =
    'micro-block size',
    'nano-block size',
    'pico-block size',
-   'cluster size',
    'vector size',
   );
 if (0) {

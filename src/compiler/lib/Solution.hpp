@@ -75,7 +75,6 @@ namespace yask {
         PrinterBase* _printer = 0;
         Parts* _parts = 0; // parts for scalar and vector.
         Stages* _eq_stages = 0; // stages of parts w/o inter-dependencies.
-        Parts* _cluster_parts = 0; // parts for clusters.
 
         // Debug output.
         yask_output_ptr _debug_output;
@@ -222,13 +221,6 @@ namespace yask {
         }
         virtual void clear_folding() override {
             _settings._fold_options.clear();
-        }
-        virtual void set_cluster_mult(const yc_index_node_ptr, int mult) override;
-        virtual bool is_clustering_set() override {
-            return _settings._cluster_options.size() > 0;
-        }
-        virtual void clear_clustering() override {
-            _settings._cluster_options.clear();
         }
 
         virtual bool is_target_set() override {

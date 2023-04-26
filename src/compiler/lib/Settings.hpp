@@ -45,7 +45,6 @@ namespace yask {
         int _min_buffer_len = 1;     // min length of an inner-loop buffer.
         int _read_ahead_dist = 0;    // iterations to read ahead.
         IntTuple _fold_options;    // vector fold.
-        IntTuple _cluster_options; // cluster multipliers.
         map<int, int> _prefetch_dists;
         bool _first_inner = true; // first dimension of fold is unit step.
         bool _allow_unaligned_loads = false;
@@ -60,7 +59,6 @@ namespace yask {
         bool _do_cse = true;      // do common-subexpr elim.
         bool _do_comb = true;    // combine commutative operations.
         bool _do_pairs = true;   // find equation pairs.
-        bool _do_opt_cluster = true; // apply optimizations also to cluster.
         bool _do_reorder = false;   // reorder commutative operations.
         string _var_regex;       // vars to update.
         bool _find_deps = true;
@@ -92,8 +90,6 @@ namespace yask {
         IntTuple _scalar;       // points in scalar (value 1 in each).
         IntTuple _fold;         // points in fold.
         IntTuple _fold_gt1;      // subset of _fold w/values >1.
-        IntTuple _cluster_pts;    // cluster size in points.
-        IntTuple _cluster_mults;  // cluster size in vectors.
 
         // Direction of stepping.
         int _step_dir = 0;       // 0: undetermined, +1: forward, -1: backward.
@@ -114,7 +110,6 @@ namespace yask {
             _stencil_dims.add_dim_back(dname, 0);
             _scalar.add_dim_back(dname, 1);
             _fold.add_dim_back(dname, 1);
-            _cluster_mults.add_dim_back(dname, 1);
         }
         
         // Find the dimensions to be used.
