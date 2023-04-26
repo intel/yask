@@ -510,7 +510,9 @@ namespace yask {
         /// Get the rank index in all domain dimensions.
         /**
            See get_rank_index();
-           @returns Vector of zero-based indices of this rank in all domain dimensions.
+
+           @returns Vector of zero-based indices of this rank in all domain
+           dimensions.
         */
         virtual idx_t_vec
         get_rank_index_vec() const =0;
@@ -519,14 +521,21 @@ namespace yask {
         /**
            @returns Number of threads used for evaluating blocks concurrently
            within each Mega-block.
+
+           @note The number of outer threads might vary from that specified
+           via the command-line option because of the `max_threads` setting.
         */
         virtual int
         get_num_outer_threads() const =0;
 
         /// Get the number of inner (nested) OpenMP threads.
         /**
-           @returns Number of threads used for evaluating nano-blocks concurrently
-           within each micro-block.
+           @returns Number of threads used for evaluating nano-blocks
+           concurrently within each micro-block.
+ 
+           @note The number of innter threads might vary from that specified
+           via the command-line option because of the `inner_threads` and
+           `max_threads` settings.
         */
         virtual int
         get_num_inner_threads() const =0;

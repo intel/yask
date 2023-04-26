@@ -1543,7 +1543,8 @@ virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc
 </div><div class="memdoc">
 
 <p>Get the rank index in all domain dimensions. </p>
-<p>See <a class="el" href="classyask_1_1yk__solution.html#a3268e5e7e2f0e45f951f1c38063bc59f" title="Get the rank index in the specified dimension.">get_rank_index()</a>; </p><dl class="section return"><dt>Returns</dt><dd>Vector of zero-based indices of this rank in all domain dimensions. </dd></dl>
+<p>See <a class="el" href="classyask_1_1yk__solution.html#a3268e5e7e2f0e45f951f1c38063bc59f" title="Get the rank index in the specified dimension.">get_rank_index()</a>;</p>
+<dl class="section return"><dt>Returns</dt><dd>Vector of zero-based indices of this rank in all domain dimensions. </dd></dl>
 
 </div>
 </div>
@@ -1571,7 +1572,8 @@ virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc
 </div><div class="memdoc">
 
 <p>Get the number of outer OpenMP threads. </p>
-<dl class="section return"><dt>Returns</dt><dd>Number of threads used for evaluating blocks concurrently within each Mega-block. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Number of threads used for evaluating blocks concurrently within each Mega-block.</dd></dl>
+<dl class="section note"><dt>Note</dt><dd>The number of outer threads might vary from that specified via the command-line option because of the <code>max_threads</code> setting. </dd></dl>
 
 </div>
 </div>
@@ -1599,7 +1601,8 @@ virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc
 </div><div class="memdoc">
 
 <p>Get the number of inner (nested) OpenMP threads. </p>
-<dl class="section return"><dt>Returns</dt><dd>Number of threads used for evaluating nano-blocks concurrently within each micro-block. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Number of threads used for evaluating nano-blocks concurrently within each micro-block.</dd></dl>
+<dl class="section note"><dt>Note</dt><dd>The number of innter threads might vary from that specified via the command-line option because of the <code>inner_threads</code> and <code>max_threads</code> settings. </dd></dl>
 
 </div>
 </div>
