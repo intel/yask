@@ -921,7 +921,7 @@ namespace {
         MAKE_VAR(A, t, x); // time-varying var.
 
         // Temporary storage.
-        MAKE_SCRATCH_VAR(B, x);
+        MAKE_SCRATCH_VAR(T1, x);
 
     public:
 
@@ -932,16 +932,19 @@ namespace {
         virtual void define() {
 
             // Define sub-domains.
-            auto sd0 = (x >= first_domain_index(x) + 5) && (x <= last_domain_index(x) - 3);
+            auto sd0a = (x >= first_domain_index(x) + 5) && (x <= last_domain_index(x) - 3);
+            auto sd0b = (x > last_domain_index(x) - 3); // just right side.
             auto sd1 = (x >= first_domain_index(x) + 3) && (x <= last_domain_index(x) - 2);
         
             // Define values in scratch var 'B' using current values from 'A'.
             auto b0 = def_t1d(A, t, x, 1, 0);
-            B(x) EQUALS  b0 IF_DOMAIN sd0;
-            B(x) EQUALS -b0 IF_DOMAIN !sd0;
+            T1(x) EQUALS  b0 IF_DOMAIN sd0a; // middle.
+            T1(x) EQUALS -b0 IF_DOMAIN sd0b; // right side.
+            // Do not set values on left side to test auto initialization of
+            // scratch vars.
 
             // Define next values for 'A' from scratch var values.
-            auto a1 = def_1d(B, x-6, 2, 3) - def_1d(B, x+7, 0, 2);
+            auto a1 = def_1d(T1, x-6, 2, 3) - def_1d(T1, x+7, 0, 2);
             A(t+1, x) EQUALS  a1 IF_DOMAIN sd1;
             A(t+1, x) EQUALS -a1 IF_DOMAIN !sd1;
         }

@@ -122,7 +122,7 @@ namespace yask {
         map<VarDimKey, string> _offsets; // var containing offset expr for given dim in var.
         map<string, string> _ptr_ofs; // var containing offset expr for key var.
         map<VarPoint, var_point_ptr> _inner_loop_key; // offsets perpendicular to inner-loop dim for var.
-        VarPointSet _aligned_reads;                   // _vv._aligned_vecs plus those for read-ahead.
+        VarPointSet _aligned_reads;                   // _vv._aligned_vecs.
 
         // Read stats.
         // Key: point w/no inner-loop offset.

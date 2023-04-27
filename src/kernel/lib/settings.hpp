@@ -36,6 +36,7 @@ namespace yask {
     // Some derivations from var types.
     typedef std::shared_ptr<YkVarImpl> YkVarPtr;
     typedef std::set<YkVarPtr> VarPtrSet;
+    typedef std::unordered_set<YkVarPtr> VarPtrUSet;
     typedef std::vector<YkVarPtr> VarPtrs;
     typedef std::map<std::string, YkVarPtr> VarPtrMap;
     typedef std::vector<VarPtrs*> ScratchVecs;

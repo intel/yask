@@ -471,12 +471,6 @@ namespace yask {
                            "This may result in more values stored in registers rather than being re-read in each loop iteration "
                            "when multiple stencil inputs must be read along the inner-loop dimension.",
                            _min_buffer_len));
-        parser.add_option(make_shared<command_line_parser::int_option>
-                          ("read-ahead-dist",
-                           "[Advanced] "
-                           "Number of iterations to read ahead into the inter-loop buffers. "
-                           "This may be used as an alternative to prefetch hints.",
-                           _read_ahead_dist));
         parser.add_option(make_shared<command_line_parser::bool_option>
                           ("inner-misc-layout",
                            "[Advanced] "

@@ -66,15 +66,16 @@ and Intel(R) graphics processors.
 ## Backward-compatibility notices
 ### Version 4
 * Version 4.03.00 is a significant release with the following notices:
-  - Enforces each non-scratch stencil equation to use
+  - Each non-scratch stencil equation is now checked to ensure
     offsets of +/-1 from the step-dimension on the LHS, e.g.,
     `A(t+1, x, y) EQUALS B(t, x, y+1)`.
     (-1 is used for less-common reverse-time stencils.)
-  - The `yk_solution::get_var()` API throws an exception if the
+  - The `yk_solution::get_var()` API now throws an exception if the
     named var does not exist. (Used to return `std::nullptr`.)
   - Vector clustering (unrolling by the YASK compiler) is no
     longer supported.
-  - Add APIs for getting OpenMP thread counts.
+  - Read-ahead in the inner-loop is no longer supported.
+  - APIs for getting OpenMP thread counts were added.
   - Equation "bundles" are now called solution "parts".
 * Version 4.01.00 added several new APIs.
     The following changes were made to to the YASK compiler:

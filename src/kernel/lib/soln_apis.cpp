@@ -179,11 +179,11 @@ namespace yask {
         // Set the number of outer threads. The number of threads
         // used in top-level OpenMP parallel sections should not change
         // during execution.
-        int rthreads = set_num_outer_threads();
+        int othreads = set_num_outer_threads();
 
         // Run a dummy nested OMP loop to make sure nested threading is
         // initialized.
-        yask_parallel_for(0, rthreads * 10, 1,
+        yask_parallel_for(0, othreads * 10, 1,
                           [&](idx_t start, idx_t stop, idx_t thread_num) { });
 
         // Some var stats.
@@ -214,6 +214,11 @@ namespace yask {
         // after finding WF extensions.  And, this must be done after
         // set_core() because is_in_valid_domain() needs the core data.
         find_bounding_boxes();
+
+        // Set up the correct number of trackers.
+        // TODO: make sure num threads aren't changed after prepare_solution().
+        _vars_written.resize(othreads);
+        _parts_done.resize(othreads);
 
         // Free the scratch and MPI data first to give vars preference.
         // Alloc vars (if needed), scratch vars, MPI bufs.

@@ -38,10 +38,11 @@ namespace yask {
     // It is also here that the boundaries of the bounding-box(es) of the part
     // are respected. There must not be any temporal blocking at this point.
     void StencilPartBase::calc_micro_block(int outer_thread_idx,
-                                             KernelSettings& settings,
-                                             const ScanIndices& micro_block_idxs,
-                                             MpiSection& mpisec,
-                                             StencilPartUSet& parts_done) {
+                                           KernelSettings& settings,
+                                           const ScanIndices& micro_block_idxs,
+                                           MpiSection& mpisec,
+                                           StencilPartUSet& parts_done,
+                                           VarPtrUSet& vars_written) {
         STATE_VARS(this);
         TRACE_MSG("in '" << get_name() << "': " <<
                   micro_block_idxs.make_range_str(true) <<
@@ -82,9 +83,7 @@ namespace yask {
 
             // Check step.
             if (!rp->is_in_valid_step(t)) {
-                TRACE_MSG("step " << t <<
-                          " not valid for reqd part '" <<
-                          rp->get_name() << "'");
+                TRACE_MSG(rp->get_name() << " not needed for step " << t);
                 continue;
             }
 
@@ -95,7 +94,7 @@ namespace yask {
             // part(s) that they depend on: the non-scratch parts may be
             // used by >1 non-scratch parts with different BBs.
             if (parts_done.count(rp)) {
-                TRACE_MSG("already done for this micro-blk");
+                TRACE_MSG(rp->get_name() << " already done for this micro-blk");
                 continue;
             }
             
@@ -108,6 +107,28 @@ namespace yask {
                           " per scratch write halo");
             }
 
+            // Initialize any scratch output vars that haven't been written
+            // to yet.
+            if (is_scratch) {
+                for (auto* sv : rp->output_scratch_vecs) {
+                    assert(sv);
+                    auto vp = sv->at(outer_thread_idx); // Var for my thread.
+                    assert(vp);
+                    if (vars_written.count(vp) == 0) {
+
+                        // Only need to init if there are conditional
+                        // expressions; otherwise, all points will be
+                        // written do, so no need to init var.
+                        if (rp->is_sub_domain_expr() ||
+                            rp->is_step_cond_expr()) {
+                            TRACE_MSG("initializing " << vp->get_name());
+                            vp->set_all_elements_same(0.0);
+                        }
+                        vars_written.insert(vp); // Mark as written.
+                    }
+                }
+            }
+            
             // Loop through all the full BBs in this reqd part.
             TRACE_MSG("checking " << rp->get_bbs().size() <<
                       " full BB(s) for reqd part '" << rp->get_name() << "'");
@@ -241,7 +262,7 @@ namespace yask {
                     #define MICRO_BLOCK_USE_LOOP_PART_1
                     #include "yask_micro_block_loops.hpp"
 
-                } // OMP parallel when binding threads to data.
+                } // not binding threads to data.
             } // full BBs in this required part.
 
             // Make sure streaming stores are visible for later loads.
@@ -251,7 +272,7 @@ namespace yask {
             // scratch parts that are used more than once in
             // a stage.
             parts_done.insert(rp);
-            
+
         } // required parts.
 
         // Mark exterior dirty for halo exchange if exterior was done.

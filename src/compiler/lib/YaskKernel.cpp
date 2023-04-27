@@ -798,12 +798,7 @@ namespace yask {
                         init_code += " " + var_ptr + "->set" + bstr + "size(\"" + dname +
                             "\", " + hvar + ");\n";
                     }
-
-                    // Extra padding for read-ahead.
-                    if (dname == _settings._inner_loop_dim &&
-                        gp->get_read_ahead_pad() > 0)
-                        init_code += " " + var_ptr + "->update_right_extra_pad_size(\"" + dname +
-                            "\", " + to_string(gp->get_read_ahead_pad()) + "); // For read-ahead.\n";
+                    
                 }
 
                 // non-domain dimension.

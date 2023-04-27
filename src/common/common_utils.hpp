@@ -180,7 +180,7 @@ namespace yask {
             ": " << niter << " iters\n";
         #endif
 
-        // Only 1 value.
+        // Only 1 iteration.
         if (niter == 1) {
             visitor(begin, end, 0);
             return;
@@ -190,13 +190,21 @@ namespace yask {
         // Canonical sequential loop.
         for (idx_t i = begin; i < end; i += stride) {
             idx_t stop = std::min(i + stride, end);
-            idx_t tn = omp_get_thread_num();
-            visitor(i, stop, tn);
+            visitor(i, stop, 0);
         }
         #else
 
+        // If already in a parallel region, just
+        // execute sequential loop.
+        if (omp_get_num_threads() > 1) {
+            for (idx_t i = begin; i < end; i += stride) {
+                idx_t stop = std::min(i + stride, end);
+                visitor(i, stop, 0);
+            }
+        }
+
         // Non-nested parallel.
-        if (omp_get_max_active_levels() < 2 ||
+        else if (omp_get_max_active_levels() < 2 ||
             yask_num_threads[0] <= 0 ||
             yask_num_threads[1] <= 1 ||
             niter <= yask_num_threads[0]) {

@@ -95,7 +95,7 @@ namespace yask {
 
     public:
 
-        // Vars that are written to by these stencils.
+        // Vars that are written to by the stencils in this part.
         VarPtrs output_var_ptrs;
 
         // Vars that are read by these stencils (not necessarify
@@ -178,7 +178,8 @@ namespace yask {
                          KernelSettings& settings,
                          const ScanIndices& micro_block_idxs,
                          MpiSection& mpisec,
-                         StencilPartUSet& parts_done);
+                         StencilPartUSet& parts_done,
+                         VarPtrUSet& vars_written);
 
         // Mark vars dirty that are updated by this part and/or
         // update last valid step.

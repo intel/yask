@@ -311,6 +311,10 @@ namespace yask {
         idx_t rank_nbytes=0, tot_nbytes=0;
         idx_t rank_domain_pts=0, tot_domain_pts=0;
 
+        // Vars for tracking things in a stage: vecs with one entry per outer thread.
+        std::vector<StencilPartUSet> _parts_done;
+        std::vector<VarPtrUSet> _vars_written;
+         
         // Elapsed-time tracking.
         YaskTimer run_time;     // time in run_solution(), including halo exchange.
         YaskTimer ext_time;     // time in exterior stencil calculation.

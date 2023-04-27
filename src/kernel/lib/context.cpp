@@ -156,16 +156,39 @@ namespace yask {
                 // parts plus this non-scratch tile.
                 auto sg_list = asg->get_reqd_parts();
 
+                // Initialization that's needed every step.
                 // Loop through all the needed parts.
                 for (auto* sg : sg_list) {
 
+                    // Init data in scratch vars.
+                    for (auto* sv : sg->output_scratch_vecs) {
+                        assert(sv);
+                        auto vp = sv->at(0); // Only need var for thread 0.
+                        TRACE_MSG(sg->get_name() << ": initializing " << vp->get_name());
+                        vp->set_all_elements_same(0.0);
+                    }
+                }
+
+                // Evaluation.
+                // Loop through all the needed parts.
+                for (auto* sg : sg_list) {
+
+                    // Check step.
+                    if (!sg->is_in_valid_step(start_t)) {
+                        TRACE_MSG(sg->get_name() << " not valid for step " << start_t);
+                        continue;
+                    }
+                    
                     // Indices needed for the generated misc loops.
                     ScanIndices misc_idxs(rank_idxs);
 
-                    // Adjust for scratch vars.
-                    if (sg->is_scratch())
+                    // Prep for scratch parts.
+                    if (sg->is_scratch()) {
+
+                        // Adjust indices.
                         misc_idxs = sg->adjust_scratch_span(scratch_var_idx, rank_idxs,
                                                             *actl_opts);
+                    }
                     misc_idxs.stride.set_from_const(1); // ensure unit stride.
 
                     // Scan through n-D space.
@@ -184,7 +207,7 @@ namespace yask {
 
            } // all parts.
 
-         } // iterations.
+        } // iterations.
         steps_done += abs(end_t - begin_t);
 
         // Final halo exchange.
@@ -802,11 +825,11 @@ namespace yask {
 
         if (mpisec.is_exterior_active()) {
             double ext_delta = ext_time.stop();
-            TRACE_MSG("secs spent in this mega-block for rank-exterior blocks: " << make_num_str(ext_delta));
+            TRACE_MSG(make_num_str(ext_delta) << " secs spent in this mega-block for rank-exterior blocks");
         }
         else {
             double int_delta = int_time.stop();
-            TRACE_MSG("secs spent in this mega-block for rank-interior blocks: " << make_num_str(int_delta));
+            TRACE_MSG(make_num_str(int_delta) << " secs spent in this mega-block for rank-interior blocks");
         }
 
     } // calc_mega_block.
@@ -1112,16 +1135,18 @@ namespace yask {
                     if (scratch_vecs.size())
                         update_scratch_var_info(outer_thread_idx, micro_block_idxs.begin);
 
+                    // Keep track of reqd parts that have been updated and
+                    // scratch vars written at the current micro-blk idxs.
+                    StencilPartUSet& parts_done = _parts_done.at(outer_thread_idx);
+                    parts_done.clear();
+                    VarPtrUSet& vars_written = _vars_written.at(outer_thread_idx);
+                    vars_written.clear();
+
                     // Call calc_micro_block() for each non-scratch part.
-                    // Keep track of reqd parts that have been updated at the
-                    // current micro-blk idxs.
-                    // TODO: track parts-done across entire time-steps, not just within
-                    // a stage; this would require handling possible shifting due to
-                    // temporal blocking.
-                    StencilPartUSet parts_done;
                     for (auto* sp : *bp) {
 
-                        // Check step.
+                        // Check step. If this part isn't valid at this step,
+                        // there is no need to eval any req'd scratch parts.
                         if (!sp->is_in_valid_step(start_t)) {
                             TRACE_MSG("step " << start_t <<
                                       " not valid for reqd part '" <<
@@ -1135,7 +1160,7 @@ namespace yask {
 
                         // Evaluate this part and any required scratch parts.
                         sp->calc_micro_block(outer_thread_idx, *actl_opts, micro_block_idxs,
-                                             mpisec, parts_done);
+                                             mpisec, parts_done, vars_written);
                     }
 
                 }

@@ -78,9 +78,6 @@ namespace yask {
         // int key: step-dim offset or 0 if no step-dim.
         map<string, map<bool, map<int, IntTuple>>> _halos;
 
-        // Extra padding needed for read-ahead.
-        int _read_ahead_pad = 0;
-
         // Key: stage.
         // Val: step-index for write in stage.
         map<string, int> _write_points;
@@ -227,17 +224,6 @@ namespace yask {
             }
             if (!found)
                 os << leader << "var " << get_name() << " has no halo data\n";
-        }
-
-        // Extra padding.
-        virtual void set_read_ahead_pad(int n) {
-            _read_ahead_pad = n;
-        }
-        virtual void update_read_ahead_pad(int n) {
-            _read_ahead_pad = max(_read_ahead_pad, n);
-        }
-        virtual int get_read_ahead_pad() const {
-            return _read_ahead_pad;
         }
 
         // Get max L1 dist of halos.

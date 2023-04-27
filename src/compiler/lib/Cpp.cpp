@@ -417,7 +417,7 @@ namespace yask {
         }
     }
 
-   // Collect some stats on read points.
+    // Collect some stats on read points.
     // These are used to create buffers and prefetches.
     void CppVecPrintHelper::get_point_stats() {
 
@@ -448,23 +448,6 @@ namespace yask {
 
             // Get offset in step dim, if any.
             auto* sofs = offsets.lookup(sdim);
-
-            // Is there also a write to this var that might overwrite
-            // a read at this step-dim offset?
-            // This would be true only with immediate replacement (writeback)
-            // optimization.
-            bool is_write = false;
-            if (sofs) {
-
-                auto sdi = var.get_step_dim_info();
-                if (sdi.writeback_ofs.count(_stage_name) &&
-                    sdi.writeback_ofs.at(_stage_name) == *sofs) {
-                    is_write = true;
-                    #ifdef DEBUG_BUFFERS
-                    cout << "** Found writeback to " << vname << " over ofs " << *sofs << endl;
-                    #endif
-                }
-            }
 
             // Get offset in inner-loop dim.
             // E.g., A(t, x+1, y+4, z-2) => 4 if ildim = 'y'.
@@ -498,44 +481,9 @@ namespace yask {
                 auto len = hi - lo;
                 #ifdef DEBUG_BUFFERS
                 cout << "*** Buffer for " << key->make_str() <<
-                    " has non-read-ahead length " << len << endl;
+                    " has length " << len << endl;
                 #endif
                 auto mbl = max(_settings._min_buffer_len, 1);
-
-                // Add read-ahead if requested and allowed.
-                auto rad = _settings._read_ahead_dist;
-                if (rad > 0 && !is_write && (len + rad) >= mbl) {
-                    #ifdef DEBUG_BUFFERS
-                    cout << " *** Adding " << rad << " vecs to buffer for read-ahead\n";
-                    #endif
-
-                    // Add more read points to read set.
-                    // These may not be in the original set because they are
-                    // for reading ahead.
-                    // If some already exist, it will not hurt to re-add them.
-                    auto ofs = lo + len + 1;
-                    for (int i = 0; i < rad; i++, ofs++) {
-                        auto rap = key->clone_var_point();
-                        auto eofs = ofs * _dims._fold[ildim];
-                        IntScalar idi(ildim, eofs); // At end of buffer.
-                        rap->set_arg_offset(idi);
-                        #ifdef DEBUG_READ_AHEAD
-                        cout << "  *** Adding read point " << rap->make_str() << endl;
-                        #endif
-                        _aligned_reads.insert(*rap); // Save new read point.
-                        _inner_loop_key[*rap] = key; // Save its key.
-                    }
-
-                    // Increase buf len.
-                    len += rad;
-
-                    // Increase var allocation for read-ahead (in elements,
-                    // not vecs).  TODO: be more accurate about when to
-                    // increase pad; this assumes it extends beyond halo
-                    // region.
-                    auto rade = il_elem_step * rad;
-                    var.update_read_ahead_pad(rade);
-                }
 
                 // Remember buf len using key if above threshold.
                 if (len >= mbl)
