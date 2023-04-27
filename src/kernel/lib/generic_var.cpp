@@ -137,7 +137,7 @@ namespace yask {
     void GenericVarTyped<T>::set_elems_same(T val) {
         void* _elems = get_storage();
         auto ne = get_num_elems();
-        if (_elems) {
+        if (_elems && ne) {
             yask_parallel_for(0, ne, _init_blk_size,
                               [&](idx_t start, idx_t stop, idx_t thread_num) {
                                   for (idx_t i = start; i < stop; i++)
@@ -157,9 +157,10 @@ namespace yask {
     template <typename T>
     void GenericVarTyped<T>::set_elems_in_seq(T seed) {
         void* _elems = get_storage();
-        if (_elems) {
+        auto ne = get_num_elems();
+        if (_elems && ne) {
             const idx_t wrap = 31; // TODO: avoid multiple of any dim size.
-            yask_parallel_for(0, get_num_elems(), _init_blk_size,
+            yask_parallel_for(0, ne, _init_blk_size,
                               [&](idx_t start, idx_t stop, idx_t thread_num) {
                                   for (idx_t i = start; i < stop; i++)
                                       ((T*)_elems)[i] = seed * T(i % wrap + 1);

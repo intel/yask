@@ -108,11 +108,12 @@ namespace yask {
     // The <0 case is handy for calculating the initial
     // starting point when passing 'n'-1 and 'n'==0.
     // Example:
-    //  div_equally_cumu_size_n(6, 4, -1) returns 0.
-    //  div_equally_cumu_size_n(6, 4, 0) returns 2.
-    //  div_equally_cumu_size_n(6, 4, 1) returns 4.
-    //  div_equally_cumu_size_n(6, 4, 2) returns 5.
-    //  div_equally_cumu_size_n(6, 4, 3) returns 6.
+    // 6 div into 4 parts of sizes 2, 2, 1, 1.
+    //  div_equally_cumu_size_n(6, 4, -1) returns 0, i.e., empty.
+    //  div_equally_cumu_size_n(6, 4, 0) returns 2, i.e., 0-1.
+    //  div_equally_cumu_size_n(6, 4, 1) returns 4, i.e., 2-3.
+    //  div_equally_cumu_size_n(6, 4, 2) returns 5, i.e., 4.
+    //  div_equally_cumu_size_n(6, 4, 3) returns 6, i.e., 6.
     template <typename T>
     inline T div_equally_cumu_size_n(T num, T nparts, T n) {
         if (n < 0)
@@ -165,13 +166,15 @@ namespace yask {
     // Execute a nested OMP for loop as if it was a single loop.
     // 'start' will be 'begin', 'begin'+'stride', 'begin'+2*'stride', etc.
     // 'stop' will be 'begin'+'stride', etc.
-    // 'thread_num' will be a unique number across the nested threads.
-    //#define DEBUG_PAR_FOR
+    // (Not guaranteed that each 'thread_num" will be unique in every OMP
+    // impl, so don't rely on it.)
     inline void yask_parallel_for(idx_t begin, idx_t end, idx_t stride,
                                   std::function<void (idx_t start, idx_t stop,
                                                       idx_t thread_num)> visitor) {
+        //#define DEBUG_PAR_FOR
         if (end <= begin)
             return;
+        idx_t tn = omp_get_thread_num();
 
         // Number of iterations in canonical loop.
         idx_t niter = CEIL_DIV(end - begin, stride);
@@ -190,16 +193,16 @@ namespace yask {
         // Canonical sequential loop.
         for (idx_t i = begin; i < end; i += stride) {
             idx_t stop = std::min(i + stride, end);
-            visitor(i, stop, 0);
+            visitor(i, stop, tn);
         }
         #else
 
         // If already in a parallel region, just
-        // execute sequential loop.
+        // execute sequential loop in current thread.
         if (omp_get_num_threads() > 1) {
             for (idx_t i = begin; i < end; i += stride) {
                 idx_t stop = std::min(i + stride, end);
-                visitor(i, stop, 0);
+                visitor(i, stop, tn);
             }
         }
 
@@ -235,6 +238,7 @@ namespace yask {
                 // Calculate begin and end points for this thread.
                 idx_t tbegin = div_equally_cumu_size_n(niter, nthr0, n0 - 1) * stride;
                 idx_t tend = div_equally_cumu_size_n(niter, nthr0, n0) * stride;
+                tend = std::min(tend, end);
 
                 #ifdef DEBUG_PAR_FOR
                 #pragma omp critical
@@ -247,10 +251,16 @@ namespace yask {
                 if (tend <= tbegin) {
                 }
 
-                // Only need one in this thread?
-                else if (tend - tbegin == 1)
+                // Only need one iter in this outer thread?
+                else if (tend - tbegin <= stride) {
+                    #ifdef DEBUG_PAR_FOR
+                    #pragma omp critical
+                    std::cout << "** issuing in outer thread due to size\n";
+                    #endif
                     visitor(tbegin, tend, n0);
+                }
 
+                // Use nested threads.
                 else {
 
                     // Set number of threads for the nested OMP loop.
@@ -272,7 +282,7 @@ namespace yask {
                             ")\n" << std::flush;
                     }
                     #endif
-                    
+
                     // Inner parallel loop over elements.
                     #pragma omp parallel for schedule(static)
                     for (idx_t i = tbegin; i < tend; i += stride) {
