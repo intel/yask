@@ -82,7 +82,7 @@ namespace yask {
             if (_imm_deps.count(a)) {
                 auto& adeps = _imm_deps.at(a);
 
-                // loop thru deps of 'a', i.e., each 'b' deps on 'a'.
+                // loop thru deps of 'a', i.e., 'a' deps on each 'b'.
                 for (auto b : adeps) {
 
                     // Recurse to deps of 'b'.
@@ -167,14 +167,14 @@ namespace yask {
         virtual void print_deps(ostream& os) const {
             os << "Dependencies within " << _all.size() << " objects:\n";
             for (auto& a : _all) {
-                os << " For " << a->get_descr() << ":\n";
-                visit_deps(a, [&](Tp<T> b, TpList<T>& path) {
-                                  if (a == b)
-                                      os << "  depends on self";
-                                  else
-                                      os << "  depends on " << b->get_descr();
-                                  os << " w/path of length " << path.size() << endl;
-                              });
+                os << " from " << a->get_descr() << ":\n";
+                visit_deps
+                    (a, [&](Tp<T> b, TpList<T>& path) {
+                            os << "  path (len " << path.size() << "):";
+                            for (auto c : path)
+                                os << " " << c->get_descr();
+                            os << endl;
+                        });
             }
         }
 
@@ -183,18 +183,20 @@ namespace yask {
         virtual void find_all_deps() {
             if (_done)
                 return;
+            //cout << "** before find_all_deps(): "; print_deps(cout);
             for (auto a : _all)
                 if (_full_deps.count(a) == 0)
                     visit_deps
                         (a, [&](Tp<T> b, TpList<T>& path) {
 
-                                // Walk path from ee to b.
+                                // Walk path from a to b.
                                 // Every 'c' in 'path' before 'b' depends on 'b'.
                                 for (auto c : path)
                                     if (c != b)
                                         _full_deps[c].insert(b);
                             });
             _done = true;
+            //cout << "** after find_all_deps(): "; print_deps(cout);
         }
     };
 
