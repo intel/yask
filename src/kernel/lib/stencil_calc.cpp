@@ -81,6 +81,35 @@ namespace yask {
             TRACE_MSG("processing reqd part '" << rp->get_name() << "'");
             bool is_scratch = rp->is_scratch();
 
+            // Initialize any scratch output vars that haven't been written
+            // to yet. For each scratch var, do this only when the first
+            // scratch part that writes to it is scheduled. This helps with
+            // cache locality: we don't want to init a var long before it's
+            // used, which might evict another var's data from a cache.
+            // Also, we do this before we check the step-condition. This is
+            // so that a var will be properly initialized in the case where
+            // it is read from after a part that would have written to it,
+            // but the step condition wasn't true.
+            if (is_scratch) {
+                for (auto* sv : rp->output_scratch_vecs) {
+                    assert(sv);
+                    auto vp = sv->at(outer_thread_idx); // Var for current thread.
+                    assert(vp);
+                    if (vars_written.count(vp) == 0) {
+
+                        // Only need to init if there are conditional
+                        // expressions; otherwise, all points will be
+                        // written do, so no need to init var.
+                        if (rp->is_sub_domain_expr() ||
+                            rp->is_step_cond_expr()) {
+                            TRACE_MSG("initializing " << vp->get_name());
+                            vp->set_all_elements_same(0.0);
+                        }
+                        vars_written.insert(vp); // Mark as written.
+                    }
+                }
+            }
+            
             // Check step.
             if (!rp->is_in_valid_step(t)) {
                 TRACE_MSG(rp->get_name() << " not needed for step " << t);
@@ -107,28 +136,6 @@ namespace yask {
                           " per scratch write halo");
             }
 
-            // Initialize any scratch output vars that haven't been written
-            // to yet.
-            if (is_scratch) {
-                for (auto* sv : rp->output_scratch_vecs) {
-                    assert(sv);
-                    auto vp = sv->at(outer_thread_idx); // Var for my thread.
-                    assert(vp);
-                    if (vars_written.count(vp) == 0) {
-
-                        // Only need to init if there are conditional
-                        // expressions; otherwise, all points will be
-                        // written do, so no need to init var.
-                        if (rp->is_sub_domain_expr() ||
-                            rp->is_step_cond_expr()) {
-                            TRACE_MSG("initializing " << vp->get_name());
-                            vp->set_all_elements_same(0.0);
-                        }
-                        vars_written.insert(vp); // Mark as written.
-                    }
-                }
-            }
-            
             // Loop through all the full BBs in this reqd part.
             TRACE_MSG("checking " << rp->get_bbs().size() <<
                       " full BB(s) for reqd part '" << rp->get_name() << "'");
