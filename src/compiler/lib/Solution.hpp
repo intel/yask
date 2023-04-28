@@ -73,7 +73,7 @@ namespace yask {
 
         // Intermediate data needed to format output.
         PrinterBase* _printer = 0;
-        Parts* _parts = 0; // parts for scalar and vector.
+        Parts* _parts = 0; // solution parts for scalar and vector.
         Stages* _eq_stages = 0; // stages of parts w/o inter-dependencies.
 
         // Debug output.

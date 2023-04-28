@@ -403,6 +403,12 @@ namespace yask {
         bool is_scratch() const {
             return _is_scratch;
         }
+        Var& get_var() {
+            return *_var;
+        }
+        const Var& get_var() const {
+            return *_var;
+        }
 
         bool operator==(const LogicalVar& rhs) const {
             return _descr == rhs._descr;

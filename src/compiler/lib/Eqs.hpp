@@ -33,6 +33,8 @@ IN THE SOFTWARE.
 
 using namespace std;
 
+//#define DEBUG_DEPS
+
 namespace yask {
 
     using Eq = equals_expr_ptr;
@@ -58,8 +60,8 @@ namespace yask {
         bool _done = false;     // transitive closure done?
         TpSet<T> _empty;        // for returning a ref to an empty set.
 
-        // Recursive helper for visit_deps().
-        virtual void _visit_deps(Tp<T> a,
+        // Recursive helper for visit_dep_paths().
+        virtual void _visit_dep_paths(Tp<T> a,
                                  std::function<void (Tp<T> b, TpList<T>& path)> visitor,
                                  TpList<T>* seen) const {
 
@@ -86,9 +88,50 @@ namespace yask {
                 for (auto b : adeps) {
 
                     // Recurse to deps of 'b'.
-                    _visit_deps(b, visitor, &seen1);
+                    _visit_dep_paths(b, visitor, &seen1);
                 }
             }
+        }
+
+        // Recursive helper for dfs_visit_deps().
+        virtual void _dfs_visit_deps(Tp<T> a, bool preorder,
+                                     std::function<void (Tp<T> b)> visitor,
+                                     TpSet<T>& visited, TpSet<T>& finished) const {
+
+            // Done?
+            if (finished.count(a))
+                return;
+
+            // Cycle?
+            if (visited.count(a)) {
+                THROW_YASK_EXCEPTION("circular dependency on '" +
+                                     a->get_descr() + "'");
+            }
+            visited.insert(a);
+
+            // Callback.
+            if (preorder)
+                visitor(a);
+            
+            // any dependencies?
+            if (_imm_deps.count(a)) {
+                auto& adeps = _imm_deps.at(a);
+
+                // loop thru deps of 'a', i.e., 'a' deps on each 'b'.
+                for (auto b : adeps) {
+
+                    // Recurse.
+                    _dfs_visit_deps(b, preorder, visitor, visited, finished);
+
+                }
+            }
+
+            // Callback.
+            if (!preorder)
+                visitor(a);
+            
+            // Done.
+            finished.insert(a);
         }
 
     public:
@@ -154,21 +197,47 @@ namespace yask {
             return _full_deps.at(a);
         }
 
-        // Visit 'a' and all its dependencies.
-        // At each dep node 'b' in graph, 'visitor(b, path)' is called,
-        // where 'path' contains all nodes from 'a' thru 'b' in dep order.
-        virtual void visit_deps(Tp<T> a,
-                                std::function<void (Tp<T> b,
-                                                    TpList<T>& path)> visitor) const {
-            _visit_deps(a, visitor, NULL);
+        // Visit 'a' and all its dependencies along every possible path.  At
+        // each dep node 'b' in graph, 'visitor(b, path)' is called, where
+        // 'path' contains all nodes from 'a' thru 'b' in dep order.
+        // Warning: use only for debug--dependency tree may cause a
+        // combinatorial explosion in number of paths: millions have been
+        // seen in example stencils.
+        virtual void visit_dep_paths(Tp<T> a,
+                                     std::function<void (Tp<T> b,
+                                                         TpList<T>& path)> visitor) const {
+            _visit_dep_paths(a, visitor, NULL);
+        }
+
+        // Visit 'a' and dependencies 'b' of 'a' using a depth-first-search
+        // with pre-ordering, i.e., visit nodes before their children or
+        // post-ordering, i.e., visit children before their parents.
+        void dfs_visit_deps(Tp<T> a, bool preorder,
+                            std::function<void (Tp<T> b)> visitor) const {
+            TpSet<T> visited, finished;
+            _dfs_visit_deps(a, preorder, visitor, visited, finished);
         }
 
         // Print deps for debugging. 'T' must implement get_descr().
-        virtual void print_deps(ostream& os) const {
+        void print_deps(ostream& os, bool preorder=true) const {
             os << "Dependencies within " << _all.size() << " objects:\n";
             for (auto& a : _all) {
                 os << " from " << a->get_descr() << ":\n";
-                visit_deps
+                dfs_visit_deps
+                    (a, preorder,
+                     [&](Tp<T> b) {
+                         if (b != a)
+                             os << "  " << b->get_descr() << endl;
+                     });
+            }
+        }
+
+        // Print dep paths for debugging. 'T' must implement get_descr().
+        virtual void print_dep_paths(ostream& os) const {
+            os << "Dependencies within " << _all.size() << " objects:\n";
+            for (auto& a : _all) {
+                os << " from " << a->get_descr() << ":\n";
+                visit_dep_paths
                     (a, [&](Tp<T> b, TpList<T>& path) {
                             os << "  path (len " << path.size() << "):";
                             for (auto c : path)
@@ -183,20 +252,42 @@ namespace yask {
         virtual void find_all_deps() {
             if (_done)
                 return;
-            //cout << "** before find_all_deps(): "; print_deps(cout);
-            for (auto a : _all)
-                if (_full_deps.count(a) == 0)
-                    visit_deps
-                        (a, [&](Tp<T> b, TpList<T>& path) {
 
-                                // Walk path from a to b.
-                                // Every 'c' in 'path' before 'b' depends on 'b'.
-                                for (auto c : path)
-                                    if (c != b)
-                                        _full_deps[c].insert(b);
-                            });
+            #ifdef DEBUG_DEPS
+            cout << "** find_all_deps among " << _all.size() << " objs...\n"
+                "*** imm_deps has " << _imm_deps.size() << " entries w/sizes:";
+            for (auto& a : _imm_deps)
+                cout << " " << a.second.size();
+            cout << endl;
+            #endif
+            
+            for (auto a : _all) {
+                #ifdef DEBUG_DEPS
+                cout << "*** visiting deps of " << a->get_descr() << endl;
+                int nd = 0;
+                #endif
+
+                // Visit every node 'b' in the imm-dep tree starting at 'a'.
+                dfs_visit_deps
+                    (a, true,
+                     [&](Tp<T> b) {
+
+                         // 'a' depends on 'b', directly or indirectly.
+                         if (a != b)
+                             _full_deps[a].insert(b);
+
+                         #ifdef DEBUG_DEPS
+                         nd++;
+                         #endif
+                     });
+                #ifdef DEBUG_DEPS
+                cout << "*** visited " << nd << " nodes\n";
+                #endif
+            }
             _done = true;
-            //cout << "** after find_all_deps(): "; print_deps(cout);
+            #ifdef DEBUG_DEPS
+            cout << "*** done finding all deps on " << _all.size() << " objs\n";
+            #endif
         }
     };
 
@@ -226,9 +317,11 @@ namespace yask {
         TpList<T> _all;
 
         // Dependencies between all objs.
+        // NB: There may be objs in _all that are not in _deps.
         Deps<T> _deps;
 
         // Dependencies on scratch objs.
+        // Entries will be a subset of _deps.
         Deps<T> _scratches;
 
     public:
@@ -292,8 +385,8 @@ namespace yask {
             if (b->is_scratch())
                 _scratches.set_imm_dep_on(a, b);
             if (a == b)
-                THROW_YASK_EXCEPTION("immediate dependency of '" + a->get_descr() +
-                                     "' on itself");
+                THROW_YASK_EXCEPTION("circular dependency on '" +
+                                     a->get_descr() + "'");
         }
 
         // Clear all deps.
@@ -308,19 +401,22 @@ namespace yask {
             _scratches.find_all_deps();
         }
 
-        // Reorder based on dependencies,
-        // i.e., topological sort.
+        // Reorder based on dependencies, i.e., topological sort.  Objs will
+        // be sorted such that evaluations that need to be done first will
+        // be at the beginning of the list.
         virtual void topo_sort() {
-            find_all_deps();
 
             // No need to sort less than two things.
             if (_all.size() <= 1)
                 return;
 
-            // Want to keep original order as much as possible.
-            // Only reorder if dependencies are in conflict.
-
-            // Scan from beginning to next-to-last.
+            // Want to keep original order as much as possible.  Only
+            // reorder if dependencies are in conflict.  NB: This also is
+            // probably not as efficient as Kuhn's algorithm, but not bad,
+            // and simpler. Depends on having transitive closure first.
+            find_all_deps();
+                
+            // Scan obj list from beginning to next-to-last.
             for (size_t i = 0; i < _all.size() - 1; i++) {
 
                 // Repeat until no dependent found.
@@ -330,21 +426,24 @@ namespace yask {
                     // Does obj[i] depend on any obj after it?
                     auto& oi = _all.at(i);
                     done = true;
+
+                    // Scan from i+1 to last.
                     for (size_t j = i+1; j < _all.size(); j++) {
                         auto& oj = _all.at(j);
 
-                        // Dependence on self?
+                        // Found again?
                         if (oi == oj)
-                            THROW_YASK_EXCEPTION("indirect dependency of '" +
-                                                 oi->get_descr() + "' on itself");
+                            THROW_YASK_EXCEPTION("internal error: '" +
+                                                 oi->get_descr() +
+                                                 "' in dependency graph multiple times");
 
                         // Must swap if dependent.
                         if (_deps.is_dep_on(oi, oj)) {
 
                             // Error if also back-dep.
                             if (_deps.is_dep_on(oj, oi)) {
-                                THROW_YASK_EXCEPTION("circular dependency between '" +
-                                                     oi->get_descr() + "' and '" +
+                                THROW_YASK_EXCEPTION("circular dependency on '" +
+                                                     oi->get_descr() + "' via '" +
                                                      oj->get_descr() + "'");
                             }
 
@@ -352,6 +451,8 @@ namespace yask {
                             _all.swap(i, j);
 
                             // Start over at index i.
+                            // This is safe because we're not moving anything
+                            // before i.
                             done = false;
                             break;
                         }
@@ -372,56 +473,41 @@ namespace yask {
             auto& fdeps = full.get_deps();
             auto& fscrs = full.get_scratch_deps();
 
-            // Two passes:
-            // 0: set immediate deps and find indirect deps.
-            // 1: check again for circular dependencies.
+            // All T objs in this.
+            for (auto& oi : _all) {
 
-            for (int pass : { 0, 1 }) {
+                // All other T objs in this.
+                for (auto& oj : _all) {
 
-                // All T objs in this.
-                for (auto& oi : _all) {
+                    // Don't compare to self.
+                    if (oi == oj) continue;
 
-                    // All other T objs in this.
-                    for (auto& oj : _all) {
+                    // All Tf objs in 'oi'.
+                    for (auto& foi : oi->get_items()) {
+                                
+                        // All Tf objs in 'oj'.
+                        for (auto& foj : oj->get_items()) {
 
-                        // Don't compare to self.
-                        if (oi == oj) continue;
+                            if (foi == foj)
+                                continue;
 
-                        if (pass == 1) {
-                            
-                            // Look for 2-way dep.
-                            if (_deps.is_dep_on(oi, oj) &&
-                                _deps.is_dep_on(oj, oi)) {
-                                THROW_YASK_EXCEPTION("circular dependency between " +
-                                                     oi->get_descr() + " and " +
-                                                     oj->get_descr());
-                            }
-                        }
-                        
-                        // All Tf objs in 'oi'.
-                        for (auto& foi : oi->get_items()) {
-
-                            // All Tf objs in 'oj'.
-                            for (auto& foj : oj->get_items()) {
-
-                                if (pass == 0) {
-
-                                    // Copy deps from 'full', i.e.,
-                                    // if 'foi' is dep on 'foj',
-                                    // then 'oi' is dep on 'oj'.
-                                    if (fdeps.is_imm_dep_on(foi, foj))
-                                        _deps.set_imm_dep_on(oi, oj);
-                                    if (fscrs.is_imm_dep_on(foi, foj))
-                                        _scratches.set_imm_dep_on(oi, oj);
-                                }
-                            }
+                            // Copy deps from 'full', i.e., if 'foi' is dep
+                            // on 'foj', then 'oi' is dep on 'oj'.  This may
+                            // create a circular dependency in 'this' that
+                            // wasn't in 'full'.
+                            if (fdeps.is_imm_dep_on(foi, foj))
+                                _deps.set_imm_dep_on(oi, oj);
+                            if (fscrs.is_imm_dep_on(foi, foj))
+                                _scratches.set_imm_dep_on(oi, oj);
                         }
                     }
                 }
-                if (pass == 0)
-                    find_all_deps();
-            } // passes.
-        }
+            }
+
+            // Find indirect deps.
+            find_all_deps();
+
+        } // inherit_deps_from().
     };
 
 
@@ -630,6 +716,9 @@ namespace yask {
             return false;
         }
     };
+    typedef Tp<Part> PartPtr;
+    typedef TpList<Part> PartList;
+    typedef TpSet<Part> PartSet;
 
     // Container for multiple equation parts.
     class Parts : public DepGroup<Part> {
@@ -684,10 +773,6 @@ namespace yask {
         // Apply optimizations requested in settings.
         virtual void optimize_parts(const string& descr);
     };
-    typedef shared_ptr<Part> PartPtr;
-
-    // A list of unique equation parts.
-    typedef vector_set<PartPtr> PartList;
 
     // A named equation stage, which contains one or more equation parts.
     // Equations in a stage must not have inter-dependencies because they
@@ -738,7 +823,9 @@ namespace yask {
             return _parts;
         }
     };
-    typedef shared_ptr<Stage> StagePtr;
+    typedef Tp<Stage> StagePtr;
+    typedef TpSet<Stage> StageSet;
+    typedef TpList<Stage> StageList;
 
     // Container for multiple equation stages.
     class Stages : public DepGroup<Stage> {
@@ -754,7 +841,7 @@ namespace yask {
         Vars _out_vars;
 
         // Track parts that have been added already.
-        set<PartPtr> _parts_in_stages;
+        PartSet _parts_in_stages;
 
         // Add 'pps', a subset of 'all_parts'. Create new stage if needed.
         // Returns whether a new stage was created.

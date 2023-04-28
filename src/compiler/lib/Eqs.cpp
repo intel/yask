@@ -683,6 +683,12 @@ namespace yask {
                 }
                 
             } // for all eqs (eq2).
+
+            // Re-process after every equation to assist with debug:
+            // exception will be thrown after printing offending eq.
+            find_all_deps();
+            topo_sort();
+            
         } // for all eqs (eq1).
 
         // If the step dir wasn't set (no eqs), set it now.
@@ -694,7 +700,6 @@ namespace yask {
         _deps.print_deps(cout);
         cout << "Dependencies from non-scratch to scratch eqs:\n";
         _scratches.print_deps(cout);
-        #endif
 
         // Resolve indirect dependencies.
         // Do this even if not finding deps because we want to
@@ -705,6 +710,7 @@ namespace yask {
         // Sort.
         os << "Topologically ordering equations...\n";
         topo_sort();
+        #endif
     }
 
     // Determine which var points can be vectorized.
@@ -755,10 +761,13 @@ namespace yask {
         auto& os = _soln->get_ostr();
 
         os << "Found " << get_num() << " logical var slice(s):\n";
-
-        // Print them in reverse order to get most dependent first.
-        for (auto it1 = get_all().rbegin(); it1 != get_all().rend(); ++it1) {
-            auto& lv1 = *it1;
+        for (auto& lv1 : get_all()) {
+            if (lv1->get_var().is_scratch())
+                os << " scratch";
+            if (lv1->get_var().get_num_dims() == 0)
+                os << " scalar";
+            else
+                os << " var slice";
             os << " '" << lv1->get_descr() << "':\n";
 
             // Deps.
@@ -823,6 +832,13 @@ namespace yask {
         }
     }
 
+    // Print stats from eqs.
+    void EqLot::print_stats(ostream& os, const string& msg) {
+        CounterVisitor cv;
+        visit_eqs(&cv);
+        cv.print_stats(os, msg);
+    }
+
     // Make a human-readable description of this part.
     string Part::get_descr(bool show_cond,
                                string quote) const
@@ -842,13 +858,6 @@ namespace yask {
                 des += " w/o step condition";
         }
         return des;
-    }
-
-    // Print stats from eqs.
-    void EqLot::print_stats(ostream& os, const string& msg) {
-        CounterVisitor cv;
-        visit_eqs(&cv);
-        cv.print_stats(os, msg);
     }
 
     // Print stats from eqs in parts.
@@ -934,7 +943,7 @@ namespace yask {
 
           Correct:
           - p1 updates T1(part 1).
-          - p2 updates T2(part 1): not partd w/p1 b/c of dependency of T2(*part 2*) on T1.
+          - p2 updates T2(part 1): not bundled w/p1 b/c of dependency of T2(*part 2*) on T1.
           - p3 updates T1(part 2).
           - p4 updates T2(part 2) & depends on p1 & p3.
           - p5 updates A & depends on p1-4.
@@ -993,11 +1002,11 @@ namespace yask {
             
             // Loop through existing parts, looking for one that
             // 'eq' can be added to.
-            bool is_ok = true;
             for (auto& p : get_all()) {
                 #ifdef DEBUG_ADD_EXPRS
                 cout << "** ae2b: checking " << b->get_descr() << endl;
                 #endif
+                bool is_ok = true;
 
                 // Look for any condition or dependencies that would prevent
                 // adding 'eq' to 'p'.
@@ -1084,7 +1093,7 @@ namespace yask {
                         #ifdef DEBUG_ADD_EXPRS
                         cout << "** ae2b: all checks passed: added to existing part\n";
                         #endif
-                        break;
+                        break; // out of existing part loop.
                     }
                     catch (yask_exception& e) {
 
@@ -1134,327 +1143,6 @@ namespace yask {
         return new_part;
     }
 
-    // Find halos needed for each var.
-    // These are read halos for non-scratch vars and
-    // read/write halos for scratch vars.
-    // Halos are tracked for each left/right dim separately.
-    // They are also tracked by their non-scratch stage and the
-    // step offset when applicable. This info is needed to properly
-    // determine whether memory can be reused.
-    // Also updates write points in vars.
-    void Stages::calc_halos(Parts& all_parts) {
-
-        // Find all LHS and RHS points and vars for all eqs.
-        PointVisitor pv;
-        visit_eqs(&pv);
-
-        #ifdef DEBUG_HALOS
-        cout << "* c_h: analyzing " << get_all().size() << " eqs...\n";
-        #endif
-
-        ////// Phase 1 /////
-        // First, set halos based only on immediate read accesses.
-        // NB: This is relatively straighforward.
-        // Halo data is keyed by the name of the
-        // non-scratch stage it is accessed from.
-        
-        // Example1:
-        // eq: A(t+1, x) EQUALS A(t, x+3).
-        // So, A's RHS 'x' halo for is 3.
-        // Since A is read and written in the same stage,
-        // we need to keep 2 steps of A in memory.
-
-        // Example2:
-        // eq1 in stage1: A(t+1, x) EQUALS B(t, x+3);
-        // eq2 in stage2: B(t+1, x) EQUALS A(t, x-2);
-        // B's RHS 'x' halo is 3 for stage1.
-        // A's LHS 'x' halo is 2 for stage2.
-        // Since B is read and written in different stages,
-        // we can optimize storage by keeping only 1 step
-        // of B in memory; same for A.
-
-        // The memory-optimization is done elsewhere, and
-        // it is based on the data collected here.
-
-        // Loop thru stages.
-        for (auto& st : get_all()) {
-
-            // Only need to start from non-scratch stages.
-            if (st->is_scratch())
-                continue;
-
-            auto stname = st->_get_name();
-            #ifdef DEBUG_HALOS
-            cout << "* c_h, phase 1: analyzing stage '" << stname << "'" << endl;
-            #endif
-
-            // A list of this stage and required ones.
-            vector<StagePtr> stages;
-            stages.push_back(st);
-
-            // Add required scratch stage(s).
-            for (auto& ss : get_all_scratch_deps_on(st))
-                stages.push_back(ss);
-  
-            // Loop thru reqd stages.
-            for (auto& rst : stages) {
-                #ifdef DEBUG_HALOS
-                cout << "** c_h, phase 1: reqd stage '" << rst->_get_name() << "'" << endl;
-                #endif
-
-                // Loop thru equations in this stage.
-                for (auto& eq : rst->get_eqs()) {
-                    #ifdef DEBUG_HALOS
-                    cout << "*** c_h: eq " << eq->make_quoted_str() << endl;
-                    #endif
-
-                    // Get all var points touched by this eq.
-                    auto& all_pts1 = pv.get_all_pts().at(eq.get());
-                    auto& out_pt1 = pv.get_output_pts().at(eq.get());
-
-                    // Update stats of each var accessed in 'eq'.
-                    for (auto ap : all_pts1) {
-                        auto* g = ap->_get_var(); // var for point 'ap'.
-                        auto changed = g->update_halo(stname, ap->get_arg_offsets());
-                        #ifdef DEBUG_HALOS
-                        if (changed) {
-                            cout << "**** c_h: updated halos:\n";
-                            g->print_halos(cout, "***** c_h: ");
-                        }
-                        #endif
-                    }
-                    auto* g = out_pt1->_get_var();
-                    g->update_write_points(stname, out_pt1->get_arg_offsets());
-                } // eqs.
-            } // reqd stages.
-        } // stages.
-
-        ////// Phase 2 //////
-        // Propagate halos through scratch vars as needed.
-        // NB: This is not so straightforward because write-halos depend on
-        // dependency paths.
-
-        // Example 1:
-        // eq1: scr1(x) EQUALS u(t,x+1); <-- orig halo of u = 1.
-        // eq2: u(t+1,x) EQUALS scr1(x+2); <-- orig halo of scr1 = 2.
-        // Direct deps: eq2 -> eq1(s).
-        // Halo of u must be increased to 1 + 2 = 3 due to
-        // eq1: u(t,x+1) on rhs and orig halo of scr1 on lhs,
-        // i.e., because u(t+1,x) EQUALS u(t,(x+2)+1) by subst.
-
-        // Example 2:
-        // eq1: scr1(x) EQUALS u(t,x+1); <-- orig halo of u = 1.
-        // eq2: scr2(x) EQUALS scr1(x+2); <-- orig halo of scr1 = 2.
-        // eq3: u(t+1,x) EQUALS scr2(x+4); <-- orig halo of scr2 = 4.
-        // Direct deps: eq3 -> eq2(s) -> eq1(s).
-        // Halo of scr1 must be increased to 2 + 4 = 6 due to
-        // eq2: scr1(x+2) on rhs and orig halo of scr2 on lhs.
-        // Then, halo of u must be increased to 1 + 6 = 7 due to
-        // eq1: u(t,x+1) on rhs and new halo of scr1 on lhs.
-        // Or, u(t+1,x) EQUALS u(t,((x+4)+2)+1) by subst.
-
-        // Example 3:
-        // eq1: scr1(x) EQUALS u(t,x+1); <--|
-        // eq2: scr2(x) EQUALS u(t,x+2); <--| orig halo of u = max(1,2) = 2.
-        // eq3: u(t+1,x) EQUALS scr1(x+3) + scr2(x+4);
-        // eq1 and eq2 are partd => scr1 and scr2 halos are max(3,4) = 4.
-        // Direct deps: eq3 -> eq1(s), eq3 -> eq2(s).
-        // Halo of u is 4 + 2 = 6.
-        // Or, u(t+1,x) EQUALS u(t,(x+3)+1) + u(t,(x+4)+2) by subst.
-        
-        // Algo: Keep a list of maps of "shadow vars". Each list entry is a
-        // unique dependency path.  Each map is key=real-var ptr ->
-        // val=shadow-var ptr.  These shadow vars are used to track updated
-        // halos for each path.  We don't want to update the real halos
-        // until we've walked all the paths using the original halos because
-        // that will update halos from already-updated ones.  At the end,
-        // the real vars will be updated from the shadows.
-        vector<map<Var*, Var*>> shadows;
-
-        // Stages.
-        for (auto& st : get_all()) {
-            auto stname = st->_get_name();
-            auto& stparts = st->get_parts(); // list of parts.
-
-            // Only need to start from non-scratch stages.
-            if (st->is_scratch())
-                continue;
-            #ifdef DEBUG_HALOS
-            cout << "* c_h, phase 2: analyzing stage '" << stname << "'" << endl;
-            #endif
- 
-            // parts with their dependency info.
-            for (auto& p1 : all_parts.get_all()) {
-
-                // Only need to start from parts in this stage.
-                if (stparts.count(p1) == 0)
-                    continue;
-
-                // Should be starting from a non-scratch part since this is
-                // a non-scratch stage.
-                assert(!p1->is_scratch());
-
-                // We start with each non-scratch part and walk the dep
-                // tree to find all dependent scratch parts.  It's
-                // important to then visit them in dep order using 'path' to
-                // get only unbroken chains of scratch parts.
-                #ifdef DEBUG_HALOS
-                cout << "** c_h: visiting deps of " << p1->get_descr() << endl;
-                #endif
-                all_parts.get_deps().visit_deps
-                
-                    // For each 'pn', 'p1' is 'pn' or depends on 'pn',
-                    // immediately or indirectly; 'path' leads from
-                    // 'p1' to 'pn'.
-                    (p1, [&](PartPtr pn, PartList& path) {
-
-                             // Create a new empty map of shadow vars for this path.
-                             shadows.resize(shadows.size() + 1);
-                             auto& shadow_map = shadows.back(); // Use the new one.
-
-                             // Walk path from 'p1', stopping at end of scratch
-                             // chain.
-                             for (auto p2 : path) {
-
-                                 // Don't process 'p1', the initial non-scratch part.
-                                 if (p2 == p1)
-                                     continue;
-                        
-                                 // If this isn't a scratch part, we are
-                                 // done w/this path because we only want
-                                 // the parts from 'p1' through an
-                                 // *unbroken* chain of scratch parts.
-                                 if (!p2->is_scratch())
-                                     break;
-
-                                 // At this point, non-scratch part 'p1'
-                                 // depends on scratch-part 'p2'.
-                                 
-                                 // Make shadow copies of all vars touched
-                                 // by 'p2'.  All halo updates will be
-                                 // applied to these shadow vars for the
-                                 // current 'path'.
-                                 for (auto& eq : p2->get_eqs()) {
-
-                                     // Output var.
-                                     auto* og = pv.get_output_vars().at(eq.get());
-                                     if (shadow_map.count(og) == 0)
-                                         shadow_map[og] = new Var(*og);
-
-                                     // Input vars.
-                                     auto& in_pts = pv.get_input_pts().at(eq.get());
-                                     for (auto* ip : in_pts) {
-                                         auto* ig = ip->_get_var();
-                                         if (shadow_map.count(ig) == 0)
-                                             shadow_map[ig] = new Var(*ig);
-                                     }
-                                 }
-                        
-                                 // For each scratch part, set the size of
-                                 // all its output vars' halos to the max
-                                 // across its halos. We need to do this
-                                 // because halos are written in a scratch
-                                 // var.  Since they are bundled into a
-                                 // part, meaning they are all written in a
-                                 // single code block, all the writes will
-                                 // be over the same area.
-
-                                 // First, set first eq halo the max of all.
-                                 auto& eq1 = p2->get_eqs().front();
-                                 auto* ov1 = shadow_map[eq1->get_lhs_var()];
-                                 for (auto& eq2 : p2->get_eqs()) {
-                                     if (eq1 == eq2)
-                                         continue;
-
-                                     // Adjust g1 to max(g1, g2).
-                                     auto* ov2 = shadow_map[eq2->get_lhs_var()];
-                                     ov1->update_halo(*ov2);
-                                 }
-
-                                 // Then, update all others based on first.
-                                 for (auto& eq2 : p2->get_eqs()) {
-                                     if (eq1 == eq2)
-                                         continue;
-
-                                     // Adjust g2 to g1.
-                                     auto* ov2 = shadow_map[eq2->get_lhs_var()];
-                                     ov2->update_halo(*ov1);
-                                 }
-
-                                 // Get updated halos from the scratch
-                                 // part.  These are the points that are
-                                 // read from the dependent eq(s).  For
-                                 // scratch vars, the halo areas must also
-                                 // be written to.
-                                 auto left_ohalo = ov1->get_halo_sizes(stname, true);
-                                 auto right_ohalo = ov1->get_halo_sizes(stname, false);
-                                 auto l1_dist = ov1->get_l1_dist();
-
-                                 #ifdef DEBUG_HALOS
-                                 cout << "** c_h: processing " << p2->get_descr() << "...\n"
-                                     "*** c_h: LHS halos " << left_ohalo.make_dim_val_str() <<
-                                     " & RHS halos " << right_ohalo.make_dim_val_str() << endl;
-                                 #endif
-                        
-                                 // Recalc min halos of all *input* vars of all
-                                 // scratch eqs in this part by adding size of
-                                 // output-var halos.
-                                 for (auto& eq : p2->get_eqs()) {
-                                     auto& in_pts = pv.get_input_pts().at(eq.get());
-
-                                     // Input points.
-                                     for (auto ip : in_pts) {
-                                         auto* ig = shadow_map[ip->_get_var()];
-                                         auto& ao = ip->get_arg_offsets(); // e.g., '2' for 'x+2'.
-
-                                         // Increase range by subtracting left halos and
-                                         // adding right halos.
-                                         auto left_ihalo = ao.sub_elements(left_ohalo, false);
-                                         ig->update_halo(stname, left_ihalo);
-                                         auto right_ihalo = ao.add_elements(right_ohalo, false);
-                                         ig->update_halo(stname, right_ihalo);
-                                         ig->update_l1_dist(l1_dist);
-                                         #ifdef DEBUG_HALOS
-                                         cout << "*** c_h: updated min halos of '" << ig->get_name() << "' to " <<
-                                             left_ihalo.make_dim_val_str() <<
-                                             " & " << right_ihalo.make_dim_val_str() << endl;
-                                         #endif
-                                     } // input pts.
-                                 } // eqs in part.
-                             } // path.
-                         }); // lambda fn for deps.
-            } // parts.
-        } // stages.
-
-        // Apply the changes from the shadow vars.
-        // This will result in the vars containing the max
-        // of the shadow halos.
-        for (auto& shadow_map : shadows) {
-            #ifdef DEBUG_HALOS
-            cout << "* c_h: applying changes from a shadow map...\n";
-            #endif
-            for (auto& si : shadow_map) {
-                auto* orig_vp = si.first;
-                auto* shadow_vp = si.second;
-                assert(orig_vp);
-                assert(shadow_vp);
-
-                // Update the original.
-                auto changed = orig_vp->update_halo(*shadow_vp);
-                #ifdef DEBUG_HALOS
-                if (changed) {
-                    cout << "** c_h: updated halos:" << endl;
-                    orig_vp->print_halos(cout, "*** ");
-                }
-                #endif
-
-                // Release the shadow var mem.
-                delete shadow_vp;
-                shadow_map.at(orig_vp) = NULL;
-            }
-        } // shadows.
-    } // calc_halos().
-
     // Divide all equations into parts.
     // Only process updates to vars in 'var_regex'.
     void Parts::make_parts()
@@ -1503,11 +1191,7 @@ namespace yask {
 
         // Dump info.
         os << "Created " << get_num() << " solution part(s):\n";
-
-        // Print them in reverse order to get most dependent first.
-        for (auto it1 = get_all().rbegin(); it1 != get_all().rend(); ++it1) {
-            auto& eg1 = *it1;
-
+        for (auto& eg1 : get_all()) {
             os << " " << eg1->get_descr() << ":\n"
                 "  Contains " << eg1->get_num_eqs() << " equation(s).\n"
                 "  Updates the following var(s): ";
@@ -1863,14 +1547,11 @@ namespace yask {
         os << "Topologically ordering stages...\n";
         topo_sort();
 
-        // Print them in reverse order to get most dependent first.
-        for (auto it1 = get_all().rbegin(); it1 != get_all().rend(); ++it1) {
-            auto& pp1 = *it1;
-        
-            os << " " << pp1->get_descr() << ":\n"
-                "  Contains " << pp1->get_parts().size() << " part(s): ";
+        for (auto& st1 : get_all()) {
+            os << " " << st1->get_descr() << ":\n"
+                "  Contains " << st1->get_parts().size() << " part(s): ";
             int i = 0;
-            for (auto p : pp1->get_parts()) {
+            for (auto p : st1->get_parts()) {
                 if (i++)
                     os << ", ";
                 os << p->_get_name();
@@ -1878,7 +1559,7 @@ namespace yask {
             os << ".\n";
             os << "  Updates the following var(s): ";
             i = 0;
-            for (auto* v : pp1->get_output_vars()) {
+            for (auto* v : st1->get_output_vars()) {
                 if (i++)
                     os << ", ";
                 os << v->_get_name();
@@ -1886,18 +1567,323 @@ namespace yask {
             os << ".\n";
 
             // Deps.
-            auto& id = get_imm_deps_on(pp1);
-            for (auto& pp2 : id)
-                os << "  Immediately dependent on " << pp2->_get_name() << ".\n";
-            for (auto& pp2 : get_all_deps_on(pp1))
-                if (id.count(pp2) == 0)
-                    os << "   Indirectly dependent on " << pp2->_get_name() << ".\n";
-            for (auto& sp : get_all_scratch_deps_on(pp1))
-                os << "  Requires " << sp->_get_name() << ".\n";
-            if (get_all_deps_on(pp1).size() == 0)
+            auto& id = get_imm_deps_on(st1);
+            for (auto& st2 : id)
+                os << "  Immediately dependent on " << st2->_get_name() << ".\n";
+            for (auto& st2 : get_all_deps_on(st1))
+                if (id.count(st2) == 0)
+                    os << "   Indirectly dependent on " << st2->_get_name() << ".\n";
+            for (auto& st2 : get_all_scratch_deps_on(st1))
+                os << "  Requires " << st2->_get_name() << ".\n";
+            if (get_all_deps_on(st1).size() == 0)
                 os << "  No dependencies within a step.\n";
         }
 
     }
 
+    // Find halos needed for each var.
+    // These are read halos for non-scratch vars and
+    // read/write halos for scratch vars.
+    // Halos are tracked for each left/right dim separately.
+    // They are also tracked by their non-scratch stage and the
+    // step offset when applicable. This info is needed to properly
+    // determine whether memory can be reused.
+    // Also updates write points in vars.
+    void Stages::calc_halos(Parts& all_parts) {
+        auto& os = _soln->get_ostr();
+        os << "Calculating halos...\n";
+
+        // Find all LHS and RHS points and vars for all eqs.
+        PointVisitor pv;
+        visit_eqs(&pv);
+
+        #ifdef DEBUG_HALOS
+        cout << "* c_h: analyzing " << get_all().size() << " eqs...\n";
+        #endif
+
+        /* Phase 1:
+           First, set halos based only on immediate read accesses.
+           Halo data is keyed by the name of the
+           non-scratch stage it is accessed from.
+        
+           Example1:
+           eq: A(t+1, x) EQUALS A(t, x+3).
+           So, A's RHS 'x' halo for is 3.
+           Since A is read and written in the same stage,
+           we need to keep 2 steps of A in memory.
+
+           Example2:
+           eq1 in stage1: A(t+1, x) EQUALS B(t, x+3);
+           eq2 in stage2: B(t+1, x) EQUALS A(t, x-2);
+           B's RHS 'x' halo is 3 for stage1.
+           A's LHS 'x' halo is 2 for stage2.
+           Since B is read and written in different stages,
+           we can optimize storage by keeping only 1 step
+           of B in memory; same for A.
+
+           The memory-optimization is done elsewhere, and
+           it is based on the data collected here.
+        */
+        
+        // Loop thru stages.
+        for (auto& st : get_all()) {
+
+            // Only need to start from non-scratch stages.
+            if (st->is_scratch())
+                continue;
+
+            auto stname = st->_get_name();
+            #ifdef DEBUG_HALOS
+            cout << "* c_h, phase 1: analyzing stage '" << stname << "'" << endl;
+            #endif
+
+            // A list of this stage and required ones.
+            vector<StagePtr> stages;
+            stages.push_back(st);
+
+            // Add required scratch stage(s).
+            for (auto& ss : get_all_scratch_deps_on(st))
+                stages.push_back(ss);
+  
+            // Loop thru reqd stages.
+            for (auto& rst : stages) {
+                #ifdef DEBUG_HALOS
+                cout << "** c_h, phase 1: reqd stage '" << rst->_get_name() << "'" << endl;
+                #endif
+
+                // Loop thru equations in this stage.
+                // Note that a scratch eq may be reqd from
+                // more than one non-scratch stage.
+                for (auto& eq : rst->get_eqs()) {
+                    #ifdef DEBUG_HALOS
+                    cout << "*** c_h: eq " << eq->make_quoted_str() << endl;
+                    #endif
+
+                    // Get all var points touched by this eq.
+                    auto& all_pts1 = pv.get_all_pts().at(eq.get());
+                    auto& out_pt1 = pv.get_output_pts().at(eq.get());
+
+                    // Update stats of each var accessed in 'eq'.
+                    for (auto ap : all_pts1) {
+                        auto* g = ap->_get_var(); // var for point 'ap'.
+
+                        // Track halos by non-scratch stage name.
+                        auto changed = g->update_halo(stname, ap->get_arg_offsets());
+                        #ifdef DEBUG_HALOS
+                        if (changed) {
+                            cout << "**** c_h: updated halos:\n";
+                            g->print_halos(cout, "***** c_h: ");
+                        }
+                        #endif
+                    }
+                    auto* g = out_pt1->_get_var();
+                    g->update_write_points(stname, out_pt1->get_arg_offsets());
+                } // eqs.
+            } // reqd stages.
+        } // stages.
+
+        /* Phase 2:
+           Propagate halos through scratch vars as needed.  Using scratch
+           vars is roughly equivalent to using intermediate values in the
+           equation, so accessing neighbor cells in a scratch var will
+           increase the halos in dependent vars.  This propagates through
+           dependency chains until a non-scratch var is reached, affecting
+           each var in the chain, including the non-scratch var(s) that the
+           scratch vars depend on.
+
+           Example 1:
+           eq1: scr1(x) EQUALS u(t,x+1); <-- orig halo of u = 1.
+           eq2: u(t+1,x) EQUALS scr1(x+2); <-- orig halo of scr1 = 2.
+           Direct deps: eq2 -> eq1(scr).
+           Halo of u must be increased to 1 + 2 = 3 due to
+           eq1: u(t,x+1) on rhs and orig halo of scr1 on lhs.
+           Or, because u(t+1,x) EQUALS u(t,(x+2)+1) by subst.
+
+           Example 2:
+           eq1: scr1(x) EQUALS u(t,x+1); <-- orig halo of u = 1.
+           eq2: scr2(x) EQUALS scr1(x+2); <-- orig halo of scr1 = 2.
+           eq3: u(t+1,x) EQUALS scr2(x+4); <-- orig halo of scr2 = 4.
+           Direct deps: eq3 -> eq2(scr) -> eq1(scr).
+           Halo of scr1 must be increased to 2 + 4 = 6 due to
+           eq2: scr1(x+2) on rhs and orig halo of scr2 on lhs.
+           Then, halo of u must be increased to 1 + 6 = 7 due to
+           eq1: u(t,x+1) on rhs and new halo of scr1 on lhs.
+           Or, u(t+1,x) EQUALS u(t,((x+4)+2)+1) by subst.
+
+           Example 3:
+           eq1: scr1(x) EQUALS u(t,x+1); <--|
+           eq2: scr2(x) EQUALS u(t,x+2); <--| orig halo of u = max(1,2) = 2.
+           eq3: u(t+1,x) EQUALS scr1(x+3) + scr2(x+4);
+           eq1 and eq2 are bundled => scr1 and scr2 halos are max(3,4) = 4.
+           Direct deps: eq3 -> eq1(scr), eq3 -> eq2(scr).
+           Halo of u is 4 + 2 = 6.
+           Or, u(t+1,x) EQUALS u(t,(x+3)+1) + u(t,(x+4)+2) by subst.
+
+           Algo: Keep a list of maps of "shadow vars". Each list entry is a
+           non-scratch stage.  Each map is key=real-var ptr ->
+           val=shadow-var ptr.  These shadow vars are used to track updated
+           halos for each stage.  We don't want to update the real halos
+           until we've determined halo sizes using the original halos because
+           doing so would update halos from already-updated ones.  At the end,
+           the real vars will be updated from the shadows.
+        */
+        vector<map<Var*, Var*>> shadows;
+
+        // Stages.
+        for (auto& st1 : get_all()) {
+            auto stname = st1->_get_name();
+            auto& stparts = st1->get_parts(); // list of parts in this stage.
+
+            // Only need to start from non-scratch stages.
+            if (st1->is_scratch())
+                continue;
+            #ifdef DEBUG_HALOS
+            cout << "* c_h, phase 2: analyzing stage '" << stname << "'" << endl;
+            #endif
+
+            // Create a new empty map of shadow vars for this stage.
+            shadows.resize(shadows.size() + 1);
+            auto& shadow_map = shadows.back(); // Use the new one.
+
+            // Loop over the stages in reverse topo order, i.e., from most
+            // to least dependent. This is critical to ensure that halo
+            // expansions propagate in the correct order.  See
+            // https://en.wikipedia.org/wiki/Longest_path_problem
+            for (auto it2 = get_all().rbegin(); it2 != get_all().rend(); ++it2) {
+                auto& st2 = *it2;
+
+                // Only want scratch stages needed for 'st1'.
+                if (!get_all_scratch_deps_on(st1).count(st2))
+                    continue;
+
+                // Loop through all parts in this stage. Order doesn't
+                // matter because parts within a stage are independent.
+                for (auto& p2 : st2->get_parts()) {
+                    assert(p2->is_scratch());
+
+                    // Make shadow copies of all vars touched
+                    // by 'p2'.  All halo updates will be
+                    // applied to these shadow vars for the
+                    // current stage 'st1'.
+                    for (auto& eq2 : p2->get_eqs()) {
+
+                        // Output var.
+                        auto* og = pv.get_output_vars().at(eq2.get());
+                        if (shadow_map.count(og) == 0)
+                            shadow_map[og] = new Var(*og);
+
+                        // Input vars.
+                        auto& in_pts = pv.get_input_pts().at(eq2.get());
+                        for (auto* ip : in_pts) {
+                            auto* ig = ip->_get_var();
+                            if (shadow_map.count(ig) == 0)
+                                shadow_map[ig] = new Var(*ig);
+                        }
+                    }
+
+                    // For each scratch part, set the size of all its output
+                    // vars' halos to the max across its halos. We need to
+                    // do this because halos are written in a scratch var.
+                    // Since they are bundled into a part, meaning they are
+                    // all written in a single code block, all the writes
+                    // will be over the same area. Get and store results
+                    // using current shadow map.
+
+                    // First, set first eq halo the max of all.
+                    auto& eq1 = p2->get_eqs().front();
+                    auto* ov1 = shadow_map.at(eq1->get_lhs_var());
+                    for (auto& eq2 : p2->get_eqs()) {
+                        if (eq1 == eq2)
+                            continue;
+
+                        // Adjust halo of ov1 to max(ov1, ov2).
+                        auto* ov2 = shadow_map.at(eq2->get_lhs_var());
+                        ov1->update_halo(*ov2);
+                    }
+
+                    // Then, update all others based on first.
+                    for (auto& eq2 : p2->get_eqs()) {
+                        if (eq1 == eq2)
+                            continue;
+
+                        // Adjust halo of ov2 to that of ov1.
+                        auto* ov2 = shadow_map.at(eq2->get_lhs_var());
+                        ov2->update_halo(*ov1);
+                    }
+
+                    // Get updated halos from the scratch vars.  These are the
+                    // points that are read from the dependent eq(s).  For
+                    // scratch vars, the halo areas must also be written to.
+                    auto left_ohalo = ov1->get_halo_sizes(stname, true);
+                    auto right_ohalo = ov1->get_halo_sizes(stname, false);
+                    auto l1_dist = ov1->get_l1_dist();
+
+                    #ifdef DEBUG_HALOS
+                    cout << "** c_h: processing " << p2->get_descr() << "...\n"
+                        "*** c_h: LHS halos " << left_ohalo.make_dim_val_str() <<
+                        " & RHS halos " << right_ohalo.make_dim_val_str() << endl;
+                    #endif
+                        
+                    // Recalc min halos of all *input* vars of all scratch
+                    // eqs in this part by adding size of output-var
+                    // halos. These inputs may include scratch and
+                    // non-scratch vars. Get and stroe results using current
+                    // shadow map.
+                    for (auto& eq2 : p2->get_eqs()) {
+                        assert(eq2->is_scratch());
+                        auto& in_pts = pv.get_input_pts().at(eq2.get());
+
+                        // Input points.
+                        for (auto ip : in_pts) {
+                            auto* iv2 = shadow_map.at(ip->_get_var());
+                            auto& ao = ip->get_arg_offsets(); // e.g., '2' for 'x+2'.
+
+                            // Increase range by subtracting left halos and
+                            // adding right halos.
+                            auto left_ihalo = ao.sub_elements(left_ohalo, false);
+                            iv2->update_halo(stname, left_ihalo);
+                            auto right_ihalo = ao.add_elements(right_ohalo, false);
+                            iv2->update_halo(stname, right_ihalo);
+                            iv2->update_l1_dist(l1_dist);
+                            #ifdef DEBUG_HALOS
+                            cout << "*** c_h: updated min halos of '" << iv2->get_name() << "' to " <<
+                                left_ihalo.make_dim_val_str() <<
+                                " & " << right_ihalo.make_dim_val_str() << endl;
+                            #endif
+                        } // input pts.
+                    } // eqs in part.
+                } // parts in scratch stage.
+                
+            } // stages in rev topo-order.
+        } // all stages.                
+
+        // Apply the changes from the shadow vars.
+        // This will result in the vars containing the max
+        // of the shadow halos.
+        for (auto& shadow_map : shadows) {
+            #ifdef DEBUG_HALOS
+            cout << "* c_h: applying changes from a shadow map...\n";
+            #endif
+            for (auto& si : shadow_map) {
+                auto* orig_vp = si.first;
+                auto* shadow_vp = si.second;
+                assert(orig_vp);
+                assert(shadow_vp);
+
+                // Update the original.
+                auto changed = orig_vp->update_halo(*shadow_vp);
+                #ifdef DEBUG_HALOS
+                if (changed) {
+                    cout << "** c_h: updated halos:" << endl;
+                    orig_vp->print_halos(cout, "*** ");
+                }
+                #endif
+
+                // Release the shadow var mem.
+                delete shadow_vp;
+                shadow_map.at(orig_vp) = NULL;
+            }
+        } // shadows.
+    } // calc_halos().
+    
 } // namespace yask.
