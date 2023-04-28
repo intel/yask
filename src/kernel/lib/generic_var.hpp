@@ -257,7 +257,7 @@ namespace yask {
         virtual synced_ptr<T>& get_elems() =0;
 
         // Block size for parallel init.
-        idx_t _init_blk_size = 128;
+        idx_t _init_blk_size = 1024;
 
     public:
 

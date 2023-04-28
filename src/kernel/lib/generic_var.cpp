@@ -135,13 +135,18 @@ namespace yask {
 
     template <typename T>
     void GenericVarTyped<T>::set_elems_same(T val) {
-        void* _elems = get_storage();
+        T* RESTRICT elems = (T*)get_storage();
         auto ne = get_num_elems();
-        if (_elems && ne) {
+        if (elems && ne) {
             yask_parallel_for(0, ne, _init_blk_size,
-                              [&](idx_t start, idx_t stop, idx_t thread_num) {
+                              [=](idx_t start, idx_t stop, idx_t thread_num) {
+
+                                  // Copy vars captured by lambda to ensure
+                                  // that compiler treats them as local.
+                                  const T v = val;
+                                  T* RESTRICT e = elems;
                                   for (idx_t i = start; i < stop; i++)
-                                      ((T*)_elems)[i] = val;
+                                      e[i] = v;
                               });
 
             #ifdef USE_OFFLOAD_NO_USM
@@ -149,21 +154,27 @@ namespace yask {
             
             _Pragma("omp target teams distribute parallel for device(devn)")
                 for (idx_t i = 0; i < ne; i++)
-                    ((T*)_elems)[i] = val;
+                    elems[i] = val;
             #endif
         }
     }
 
     template <typename T>
     void GenericVarTyped<T>::set_elems_in_seq(T seed) {
-        void* _elems = get_storage();
+        T* RESTRICT elems = (T*)get_storage();
         auto ne = get_num_elems();
-        if (_elems && ne) {
-            const idx_t wrap = 31; // TODO: avoid multiple of any dim size.
+        if (elems && ne) {
             yask_parallel_for(0, ne, _init_blk_size,
-                              [&](idx_t start, idx_t stop, idx_t thread_num) {
+                              [=](idx_t start, idx_t stop, idx_t thread_num) {
+
+                                  // Copy vars captured by lambda to ensure
+                                  // that compiler treats them as local.
+                                  T* RESTRICT e = elems;
+                                  const T s = seed;
+                                  const idx_t wrap = 31;
+                                  
                                   for (idx_t i = start; i < stop; i++)
-                                      ((T*)_elems)[i] = seed * T(i % wrap + 1);
+                                      e[i] = s * T(i % wrap + 1);
                               });
 
             #ifdef USE_OFFLOAD_NO_USM
@@ -171,7 +182,7 @@ namespace yask {
             
             _Pragma("omp target teams distribute parallel for device(devn)")
                 for (idx_t i = 0; i < ne; i++)
-                    ((T*)_elems)[i] = seed * T(i % wrap + 1);
+                    elems[i] = seed * T(i % wrap + 1);
             #endif
         }
     }

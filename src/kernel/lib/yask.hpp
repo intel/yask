@@ -184,6 +184,10 @@ typedef std::uint64_t bit_mask_t;
 #define __assume_aligned(p,n) ((void)0)
 #endif
 
+#ifndef RESTRICT
+#define RESTRICT __restrict__
+#endif
+
 // Default alloc settings.
 #define CACHELINE_BYTES  (64)
 #define YASK_PAD (3) // cache-lines between data buffers.

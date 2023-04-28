@@ -166,6 +166,9 @@ namespace yask {
     // Execute a nested OMP for loop as if it was a single loop.
     // 'start' will be 'begin', 'begin'+'stride', 'begin'+2*'stride', etc.
     // 'stop' will be 'begin'+'stride', etc.
+    // However, 'stride' is just a hint; don't assume that
+    // 'stop - start <= stride'.
+    // This will only be enforced when 'stride == 1'.
     // (Not guaranteed that each 'thread_num" will be unique in every OMP
     // impl, so don't rely on it.)
     inline void yask_parallel_for(idx_t begin, idx_t end, idx_t stride,
@@ -177,6 +180,7 @@ namespace yask {
         idx_t tn = omp_get_thread_num();
 
         // Number of iterations in canonical loop.
+        assert(stride >= 1);
         idx_t niter = CEIL_DIV(end - begin, stride);
         #ifdef DEBUG_PAR_FOR
         std::cout << "** yask_parallel_for: [" << begin << "..." << end << ") by " << stride <<
@@ -191,18 +195,26 @@ namespace yask {
         
         #ifndef _OPENMP
         // Canonical sequential loop.
-        for (idx_t i = begin; i < end; i += stride) {
-            idx_t stop = std::min(i + stride, end);
-            visitor(i, stop, tn);
+        if (stride == 1)
+            visitor(begin, end, tn);
+        else {
+            for (idx_t i = begin; i < end; i += stride) {
+                idx_t stop = std::min(i + stride, end);
+                visitor(i, stop, tn);
+            }
         }
         #else
 
         // If already in a parallel region, just
         // execute sequential loop in current thread.
         if (omp_get_num_threads() > 1) {
-            for (idx_t i = begin; i < end; i += stride) {
-                idx_t stop = std::min(i + stride, end);
-                visitor(i, stop, tn);
+            if (stride == 1)
+                visitor(begin, end, tn);
+            else {
+                for (idx_t i = begin; i < end; i += stride) {
+                    idx_t stop = std::min(i + stride, end);
+                    visitor(i, stop, tn);
+                }
             }
         }
 
