@@ -453,6 +453,13 @@ namespace yask {
                            "a single large chunk when possible. "
                            "If 'false', allocate each YASK var separately.",
                            _bundle_allocs));
+        parser.add_option(make_shared<command_line_parser::bool_option>
+                          ("init_scratch_vars",
+                           "[Advanced] Initialize scratch vars to all zeros (0.0) "
+                           "in each micro-block. This is useful for debugging your "
+                           "stencil code that contains scratch-var value definitions "
+                           "with sub-domain conditions.",
+                           _init_scratch_vars));
         parser.add_option(make_shared<command_line_parser::int_option>
                           ("numa_pref",
                            string("[Advanced] Specify allocation policy for vars and MPI buffers. ") +

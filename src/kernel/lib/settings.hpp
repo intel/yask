@@ -262,6 +262,7 @@ namespace yask {
         bool _allow_addl_pad = true; // Allow extending padding beyond what's needed for alignment.
         bool _bundle_allocs = !KernelEnv::_use_offload; // Group allocations together.
         int _numa_pref = NUMA_PREF;
+        bool _init_scratch_vars = false; // Init scratch vars to zero.
 
         // Stencil-dim posn in which to apply block-thread binding.
         // TODO: make this a cmd-line parameter.

@@ -90,7 +90,7 @@ namespace yask {
             // so that a var will be properly initialized in the case where
             // it is read from after a part that would have written to it,
             // but the step condition wasn't true.
-            if (is_scratch) {
+            if (is_scratch && actl_opts->_init_scratch_vars) {
                 for (auto* sv : rp->output_scratch_vecs) {
                     assert(sv);
                     auto vp = sv->at(outer_thread_idx); // Var for current thread.
