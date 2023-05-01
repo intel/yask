@@ -374,7 +374,7 @@ namespace yask {
         auto& in_vars = pt_vis.get_input_vars();
         auto& out_pts = pt_vis.get_output_pts();
         auto& in_pts = pt_vis.get_input_pts();
-        //auto& cond_pts = pt_vis.get_cond_pts();
+        //auto& dcond_pts = pt_vis.get_dcond_pts();
         //auto& step_cond_pts = pt_vis.get_step_cond_pts();
 
         // 1. Check each eq internally.
@@ -394,7 +394,7 @@ namespace yask {
             auto* op1 = out_pts.at(eq1p);
             //auto& ivs1 = in_vars.at(eq1p);
             auto& ips1 = in_pts.at(eq1p);
-            auto cond1 = eq1p->_get_cond();
+            auto dcond1 = eq1p->_get_cond();
             auto stcond1 = eq1p->_get_step_cond();
             num_expr_ptr step_expr1 = op1->get_arg(step_dim); // may be null.
 
@@ -580,7 +580,7 @@ namespace yask {
                 }
             } // input pts.
 
-            // TODO: check to make sure cond1 depends only on domain indices.
+            // TODO: check to make sure dcond1 depends only on domain indices.
             // TODO: check to make sure stcond1 does not depend on domain indices.
 
             // Find logical var dependencies: LHS var depends on RHS vars.
@@ -595,12 +595,12 @@ namespace yask {
             // Re-process after every equation to assist with debug:
             // exception will be thrown after printing offending eq.
             log_vars.find_all_deps();
-            log_vars.topo_sort();
             
         } // for all eqs.
-
-        // Dump logical vars.
         os << endl;
+
+        // Finish processing and dump logical vars.
+        log_vars.topo_sort();
         log_vars.print_info();
 
         // 2. Check each pair of eqs.
@@ -614,21 +614,23 @@ namespace yask {
             auto* op1 = out_pts.at(eq1p);
             //auto& ivs1 = in_vars.at(eq1p);
             //auto& ips1 = in_pts.at(eq1p);
-            auto cond1 = eq1p->_get_cond();
+            auto dcond1 = eq1p->_get_cond();
             auto stcond1 = eq1p->_get_step_cond();
             num_expr_ptr step_expr1 = op1->get_arg(step_dim);
             bool is_scratch1 = op1->_get_var()->is_scratch();
 
             // Check each 'eq2' to see if it depends on 'eq1'.
-            // NB: includes case 'eq2' == 'eq1'; see 'same_eq' below.
             for (auto eq2 : get_all()) {
+                if (eq1 == eq2)
+                    continue;
+                
                 auto* eq2p = eq2.get();
                 auto& ov2 = out_vars.at(eq2p);
                 assert(ov2 == eq2->get_lhs_var());
                 auto& op2 = out_pts.at(eq2p);
                 auto& ivs2 = in_vars.at(eq2p);
                 auto& ips2 = in_pts.at(eq2p);
-                auto cond2 = eq2p->_get_cond();
+                auto dcond2 = eq2p->_get_cond();
                 auto stcond2 = eq2p->_get_step_cond();
 
                 #ifdef DEBUG_DEP
@@ -637,23 +639,44 @@ namespace yask {
                     eq2->make_quoted_str() << "...\n";
                 #endif
 
-                bool same_eq = eq1 == eq2;
                 bool same_op = are_exprs_same(op1, op2);
-                bool same_cond = are_exprs_same(cond1, cond2);
+                bool same_dcond = are_exprs_same(dcond1, dcond2);
                 bool same_stcond = are_exprs_same(stcond1, stcond2);
 
-                // If two different eqs have the same conditions, they
-                // cannot have the same LHS.
-                if (!same_eq && same_cond && same_stcond && same_op) {
-                    string cdesc = cond1 ? "with domain condition " + cond1->make_quoted_str() :
+                // Check pairs that have same LHS.
+                if (same_op) {
+
+                    string dcdesc = dcond2 ? "with domain condition " + dcond2->make_quoted_str() :
                         "without domain conditions";
-                    string stcdesc = stcond1 ? "with step condition " + stcond1->make_quoted_str() :
+                    string stcdesc = stcond2 ? "with step condition " + stcond2->make_quoted_str() :
                         "without step conditions";
-                    THROW_YASK_EXCEPTION("two equations " + cdesc +
-                                         " and " + stcdesc +
-                                         " have the same LHS: " +
-                                         eq1->make_quoted_str() + " and " +
-                                         eq2->make_quoted_str());
+                    string cdesc = dcdesc + " and " + stcdesc;
+                    
+                    // If 2 different eqs have the same or no conditions, they
+                    // cannot have the same LHS.
+                    if (same_dcond && same_stcond) {
+                        THROW_YASK_EXCEPTION("two equations, both with " + cdesc +
+                                             ", have the same LHS: " +
+                                             eq1->make_quoted_str() + " and " +
+                                             eq2->make_quoted_str());
+                    }
+
+                    // If 1 eq has no conditions, and another has any conditions,
+                    // they cannot have the same LHS.
+                    if (is_expr_null(dcond1) && is_expr_null(stcond1) &&
+                        (!is_expr_null(dcond2) || !is_expr_null(stcond2))) {
+                        THROW_YASK_EXCEPTION("equation " + eq1->make_quoted_str() +
+                                             " without domain or step conditions and equation " +
+                                             eq2->make_quoted_str() + " " + cdesc +
+                                             " have the same LHS");
+                    }
+
+                    // NB: if both of the preceding tests pass, we could still
+                    // have two equations with different conditions updating the
+                    // same logical var.  We will assume the stencil programmer
+                    // has ensured they do not overlap.  TODO: check this at
+                    // compile-time (difficult) or at run-time (easier, but not
+                    // as nice for stencil programmer.)
                 }
 
                 // Stop here if not looking for deps.
@@ -673,21 +696,18 @@ namespace yask {
                     eq2: b(t+1, x, ...) EQUALS tmp(x+2, ...)
                     eq2 depends on eq1 because b(t+1) depends on tmp.
                 */
-                if (!same_eq) {
-                    auto olv1 = log_vars.find_var_slice(op1);
-                    assert(olv1);
-                    auto olv2 = log_vars.find_var_slice(op2);
-                    assert(olv2);
-                    if (log_vars.get_deps().is_dep_on(olv2, olv1))
-                        set_imm_dep_on(eq2, eq1);
-                }
+                auto olv1 = log_vars.find_var_slice(op1);
+                assert(olv1);
+                auto olv2 = log_vars.find_var_slice(op2);
+                assert(olv2);
+                if (log_vars.get_deps().is_dep_on(olv2, olv1))
+                    set_imm_dep_on(eq2, eq1);
                 
             } // for all eqs (eq2).
 
-            // Re-process after every equation to assist with debug:
-            // exception will be thrown after printing offending eq.
+            // Re-process dependencies after every equation to assist with
+            // debug: exception will be thrown after printing offending eq.
             find_all_deps();
-            topo_sort();
             
         } // for all eqs (eq1).
 
@@ -852,6 +872,7 @@ namespace yask {
                 des += " w/domain condition " + cond->make_quoted_str(quote);
             else
                 des += " w/o domain condition";
+            des += " and";
             if (step_cond.get())
                 des += " w/step condition " + step_cond->make_quoted_str(quote);
             else
