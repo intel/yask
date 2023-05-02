@@ -452,7 +452,7 @@ namespace yask {
         return ep;
     }
     yc_equation_node_ptr operator IF_STEP(yc_equation_node_ptr expr,
-                                               const yc_bool_node_ptr cond) {
+                                          const yc_bool_node_ptr cond) {
         auto ep = dynamic_pointer_cast<EqualsExpr>(expr);
         assert(ep);
         auto cp = dynamic_pointer_cast<BoolExpr>(cond);

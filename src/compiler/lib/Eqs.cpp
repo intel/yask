@@ -1913,10 +1913,11 @@ namespace yask {
         auto& os = _soln->get_ostr();
         os << "Calculating lifespans of scratch vars...\n";
 
-        unordered_map<Var*, pair<int, int>> first_last;
+        map<Var*, pair<int, int>> first_last;
         
         // Loop thru stages in execution order,
         // assuming topo sort is done.
+        // Find first and last access of each var.
         int snum = 0;
         for (auto& st : get_all()) {
 
@@ -1941,6 +1942,10 @@ namespace yask {
         }
 
         // Mem info is separated by scratch-var sizes.
+        // This is done because vars with different misc-dim ranges
+        // have different size requirements.
+        // TODO: allow storage from a larger scratch-var to be used
+        // by a smaller one.
         map<int, int> nmems_per_sz;
         map<int, stack<int>> free_stack_per_sz;
         map<int, map<Var*, int>> var_slots_per_sz;
@@ -1948,7 +1953,7 @@ namespace yask {
         // Simple greedy memory assignment.
         for (int si = 0; si < snum; si++) {
 
-            // Do allocs, then frees.
+            // Do allocs, then frees at this stage index.
             for (bool do_alloc : { true, false }) {
 
                 // Scratch vars.
@@ -2000,7 +2005,7 @@ namespace yask {
             }
         }
 
-        // Roll up final slots by size.
+        // Assign final slot numbers sequentially by size.
         int slot_ofs = 0;
         for (auto& ni : nmems_per_sz) {
             auto msz = ni.first;
@@ -2021,7 +2026,7 @@ namespace yask {
         os << "  " << first_last.size() << " scratch var(s) assigned to " <<
             slot_ofs << " memory slot(s):\n";
         for (auto& mi : nmems_per_sz)
-            os << "    " << mi.second << " memory slot(s) with misc-dim size " <<
+            os << "    " << mi.second << " with misc-dim size " <<
                 mi.first << ".\n";
     }
     

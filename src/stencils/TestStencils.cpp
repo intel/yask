@@ -908,7 +908,11 @@ namespace {
             A(t+1, x) EQUALS def_t1d(A, t, x, 1, 2) IF_STEP !tc0 && vc0;
 
             // Use this equation when t is even and B(0) <= B(1).
-            A(t+1, x) EQUALS def_t1d(A, t, x, 2, 0) IF_STEP !tc0 && !vc0;
+            // Also use a domain condition.
+            // When adding both step and domain conditions, need to use
+            // parens as shown.
+            (A(t+1, x) EQUALS def_t1d(A, t, x, 2, 0) IF_STEP !tc0 && !vc0)
+                IF_DOMAIN (x > first_domain_index(x) + 5);
         }
     };
 
