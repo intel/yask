@@ -174,6 +174,27 @@ namespace yask {
             _is_foldable = _num_foldable_dims == int(dims._fold_gt1.size());
         }
     }
+
+    // Determine size of the misc space.
+    // This is the product of all the observed misc ranges.
+    int Var::get_misc_space_size() const {
+
+        int msz = 1;
+        for (auto& dim : _vdims) {
+            auto dtype = dim->get_type();
+            if (dtype == MISC_INDEX) {
+                auto& dname = dim->_get_name();
+                auto* minp = _min_indices.lookup(dname);
+                auto* maxp = _max_indices.lookup(dname);
+                if (minp && maxp) {
+                    assert(*maxp >= *minp);
+                    int sz = *maxp - *minp + 1;
+                    msz *= sz;
+                }
+            }
+        }
+        return msz;
+    }
     
     // Determine whether halo sizes are equal.
     bool Var::is_halo_same(const Var& other) const {

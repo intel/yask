@@ -148,11 +148,12 @@ namespace yask {
         // This process may alter the halos in scratch vars.
         _parts->make_parts();
 
-        // Separate parts into stages.
+        // Group parts into stages.
         _eq_stages->make_stages(*_parts);
 
-        // Compute halos.
-        _eq_stages->calc_halos(*_parts);
+        // Compute halos & lifespans of vars.
+        _eq_stages->calc_halos();
+        _eq_stages->calc_lifespans();
 
         // Optimize parts.
         _parts->optimize_parts("scalar & vector");

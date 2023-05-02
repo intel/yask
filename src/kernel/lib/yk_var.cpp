@@ -236,9 +236,13 @@ namespace yask {
                 THROW_YASK_EXCEPTION("negative right extra padding in var '" + get_name() + "'");
         }
 
+        // Get starting halos.
+        Indices left_halos = _corep->_left_halos;
+        Indices right_halos = _corep->_right_halos;
+
         // Init pads to halos plus any WF extensions.
-        Indices new_left_pads = _corep->_left_halos.add_elements(_corep->_left_wf_exts);
-        Indices new_right_pads = _corep->_right_halos.add_elements(_corep->_right_wf_exts);
+        Indices new_left_pads = left_halos.add_elements(_corep->_left_wf_exts);
+        Indices new_right_pads = right_halos.add_elements(_corep->_right_wf_exts);
 
         // Increase padding as needed and calculate new allocs.
         IdxTuple new_allocs(old_allocs);

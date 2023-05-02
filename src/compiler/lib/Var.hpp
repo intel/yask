@@ -51,6 +51,7 @@ namespace yask {
         index_expr_ptr_vec _vdims;  // dimensions of this var in param order.
         index_expr_ptr_vec _layout_dims;  // dimensions of this var in layout order.
         bool _is_scratch = false; // true if a temp var.
+        int _scratch_mem_slot = -1; // mem chunk for scratch var.
 
         // Step-dim info.
         bool _is_step_alloc_fixed = true; // step alloc cannot be changed at run-time.
@@ -135,8 +136,19 @@ namespace yask {
             return nullptr;
         }
 
-        // Temp var?
+        // Temp var info.
         virtual bool is_scratch() const { return _is_scratch; }
+        virtual int get_scratch_mem_slot() const {
+            assert(_is_scratch);
+            return _scratch_mem_slot;
+        }
+        virtual void set_scratch_mem_slot(int ms) {
+            assert(_is_scratch);
+            _scratch_mem_slot = ms;
+        }
+        virtual bool is_needed() const {
+            return !is_scratch() || get_scratch_mem_slot() >= 0;
+        }
 
         // Access to solution.
         virtual Solution* _get_soln() { return _soln; }
@@ -171,6 +183,7 @@ namespace yask {
         // Get min and max observed indices.
         virtual const IntTuple& get_min_indices() const { return _min_indices; }
         virtual const IntTuple& get_max_indices() const { return _max_indices; }
+        virtual int get_misc_space_size() const;
 
         // Get the max sizes of halo across all steps for given stage.
         virtual IntTuple get_halo_sizes(const string& stage_name, bool left) const {

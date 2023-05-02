@@ -664,6 +664,7 @@ namespace {
         // Temporary storage.
         MAKE_SCRATCH_VAR(t1, x, y);
         MAKE_SCRATCH_VAR(t2, x, y);
+        MAKE_SCRATCH_VAR(t3, x, y);
 
     public:
 
@@ -676,13 +677,17 @@ namespace {
             // Set scratch var.
             t1(x, y) EQUALS def_t2d(A, t, x, 0, 1, y, 2, 1);
 
-            // Set one scratch var from other scratch var.
+            // Set 2nd scratch var from 1st scratch var.
             t2(x, y) EQUALS t1(x, y+1);
+
+            // Set 3rd scratch var from 2nd scratch var.
+            // This should reuse t1's memory.
+            t3(x, y) EQUALS t2(x+1, y);
 
             // Update A from scratch vars.
             A(t+1, x, y) EQUALS A(t, x, y) +
-                def_2d(t1, x, 2, 0, y, 1, 0) +
-                def_2d(t2, x, 1, 0, y, 0, 1);
+                def_2d(t2, x, 2, 0, y, 1, 0) +
+                def_2d(t3, x, 1, 0, y, 0, 1);
         }
     };
 

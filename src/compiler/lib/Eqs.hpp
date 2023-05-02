@@ -871,7 +871,10 @@ namespace yask {
         }
 
         // Find halos needed for each var.
-        virtual void calc_halos(Parts& all_parts);
+        virtual void calc_halos();
+
+        // Find lifespans for each var.
+        virtual void calc_lifespans();
 
     }; // Stages.
 

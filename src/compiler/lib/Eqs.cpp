@@ -34,6 +34,7 @@ IN THE SOFTWARE.
 //#define DEBUG_HALOS
 //#define DEBUG_ADD_EXPRS
 //#define DEBUG_ADD_PARTS
+//#define DEBUG_LIFESPAN
 
 namespace yask {
 
@@ -1610,7 +1611,7 @@ namespace yask {
     // step offset when applicable. This info is needed to properly
     // determine whether memory can be reused.
     // Also updates write points in vars.
-    void Stages::calc_halos(Parts& all_parts) {
+    void Stages::calc_halos() {
         auto& os = _soln->get_ostr();
         os << "Calculating halos...\n";
 
@@ -1906,5 +1907,122 @@ namespace yask {
             }
         } // shadows.
     } // calc_halos().
+
+    // A very simple lifespan-analysis for the scratch vars.
+    void Stages::calc_lifespans() {
+        auto& os = _soln->get_ostr();
+        os << "Calculating lifespans of scratch vars...\n";
+
+        unordered_map<Var*, pair<int, int>> first_last;
+        
+        // Loop thru stages in execution order,
+        // assuming topo sort is done.
+        int snum = 0;
+        for (auto& st : get_all()) {
+
+            // Scratch vars accessed in this stage.
+            for (auto& vs : { st->get_output_vars(), st->get_input_vars() }) {
+                for (auto* vp : vs) {
+                    if (vp->is_scratch()) {
+                        if (!first_last.count(vp))
+                            first_last[vp] = make_pair(snum, snum);
+                        else
+                            first_last[vp].second = snum; // update last stage.
+                        #ifdef DEBUG_LIFESPAN
+                        os << "* " << st->get_descr() << "(" << snum << "): " <<
+                            vp->get_name() << ": " <<
+                            first_last[vp].first << " to " << first_last[vp].second << endl;
+                        #endif
+                    }
+                }
+            }
+
+            snum++;
+        }
+
+        // Mem info is separated by scratch-var sizes.
+        map<int, int> nmems_per_sz;
+        map<int, stack<int>> free_stack_per_sz;
+        map<int, map<Var*, int>> var_slots_per_sz;
+        
+        // Simple greedy memory assignment.
+        for (int si = 0; si < snum; si++) {
+
+            // Do allocs, then frees.
+            for (bool do_alloc : { true, false }) {
+
+                // Scratch vars.
+                for (const auto& vi : first_last) {
+                    auto* vp = vi.first;
+                    auto fs = vi.second.first; // first stage.
+                    auto ls = vi.second.second; // last stage.
+                    int msz = vp->get_misc_space_size();
+                    auto& free = free_stack_per_sz[msz];
+                    auto& nmems = nmems_per_sz[msz];
+                    auto& slots = var_slots_per_sz[msz];
+
+                    // New var?
+                    if (do_alloc && fs == si) {
+                        assert(slots.count(vp) == 0);
+
+                        // Find most recent freed slot.
+                        if (free.size()) {
+                            auto n = free.top();
+                            free.pop();
+                            slots[vp] = n;
+                            #ifdef DEBUG_LIFESPAN
+                            os << "* " << vp->get_name() << " needed at " << si <<
+                                " gets freed slot " << n << endl;
+                            #endif
+                        }
+
+                        // Make a new one.
+                        else {
+                            #ifdef DEBUG_LIFESPAN
+                            os << "* " << vp->get_name() << " needed at " << si <<
+                                " gets new slot " << nmems << endl;
+                            #endif
+                            slots[vp] = nmems;
+                            nmems++;
+                        }
+                    }
+
+                    // Done w/var?
+                    if (!do_alloc && ls == si) {
+                        int n = slots.at(vp);
+                        free.push(n);
+                        #ifdef DEBUG_LIFESPAN
+                        os << "* " << vp->get_name() << " done at " << si <<
+                            " releases slot " << n << endl;
+                        #endif
+                    }
+                }
+            }
+        }
+
+        // Roll up final slots by size.
+        int slot_ofs = 0;
+        for (auto& ni : nmems_per_sz) {
+            auto msz = ni.first;
+            auto nmems = ni.second;
+
+            auto& slots = var_slots_per_sz[msz];
+            for (auto& si : slots) {
+                auto* vp = si.first;
+                auto n = si.second; // slot number for this size.
+                assert(n < nmems);
+
+                vp->set_scratch_mem_slot(slot_ofs + n);
+            }
+
+            slot_ofs += nmems;
+        }
+
+        os << "  " << first_last.size() << " scratch var(s) assigned to " <<
+            slot_ofs << " memory slot(s):\n";
+        for (auto& mi : nmems_per_sz)
+            os << "    " << mi.second << " memory slot(s) with misc-dim size " <<
+                mi.first << ".\n";
+    }
     
 } // namespace yask.

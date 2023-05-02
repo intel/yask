@@ -96,7 +96,7 @@ namespace yask {
         Indices _left_wf_exts, _right_wf_exts; // additional halos for wave-fronts | zero.
         Indices _rank_offsets;   // offsets of this rank in global space | zero.
         Indices _local_offsets; // offsets of this var's domain in this rank | first index.
-        Indices _allocs;    // actual var alloc | same.
+        Indices _allocs;    // actual var alloc size | same.
 
         // Each entry in _soln_vec_lens is same as the corresponding dim in dims->_fold_pts.
         Indices _soln_vec_lens;  // num reals in each elem in soln fold | one.
@@ -589,8 +589,10 @@ namespace yask {
         // Whether to resize this var based on solution parameters.
         bool _fixed_size = false;
 
-        // Whether this is a scratch var.
+        // Scratch info.
         bool _is_scratch = false;
+        int _scratch_mem_slot = -1;
+        int _misc_mult = 1;     // product of all misc ranges (1 if none).
 
         // Whether this was created via an API.
         bool _is_user_var = false;
@@ -795,6 +797,20 @@ namespace yask {
             _is_scratch = is_scratch;
             if (is_scratch)
                 _corep->_rank_offsets.set_from_const(0);
+        }
+        virtual int get_scratch_mem_slot() const {
+            assert(_is_scratch);
+            return _scratch_mem_slot;
+        }
+        virtual void set_scratch_mem_slot(int ms) {
+            assert(_is_scratch);
+            _scratch_mem_slot = ms;
+        }
+        virtual int get_misc_mult() const {
+            return _misc_mult;
+        }
+        virtual void set_misc_mult(int mm) {
+            _misc_mult = mm;
         }
 
         // New-var accessors.

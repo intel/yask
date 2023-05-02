@@ -257,6 +257,8 @@ namespace yask {
         // Var types.
         for (auto gp : _vars) {
             VAR_DECLS(gp);
+            if (!gp->is_needed())
+                continue;
 
             os << "\n // The ";
             if (ndims)
@@ -392,6 +394,8 @@ namespace yask {
             bool found = false;
             for (auto gp : _vars) {
                 VAR_DECLS(gp);
+                if (!gp->is_needed())
+                    continue;
                 if (gp->is_scratch()) {
                     if (!found)
                         os << "\n // Pointer(s) to scratch-var core data.\n";
@@ -410,6 +414,8 @@ namespace yask {
             os << "\n // Pointer(s) to var core data.\n";
             for (auto gp : _vars) {
                 VAR_DECLS(gp);
+                if (!gp->is_needed())
+                    continue;
                 if (!gp->is_scratch())
                     os << " synced_ptr<" << core_t << "> " << core_ptr << ";\n";
             }
@@ -744,6 +750,8 @@ namespace yask {
         os << "\n ///// Var(s)." << endl;
         for (auto gp : _vars) {
             VAR_DECLS(gp);
+            if (!gp->is_needed())
+                continue;
 
             string header = "\n // " +
                 (gp->is_scratch() ? string("Scratch var") : string("Var")) +
@@ -827,7 +835,10 @@ namespace yask {
                         init_code += " " + base_ptr + "->_set_dynamic_step_alloc(" +
                             (gp->is_dynamic_step_alloc() ? "true" : "false") +
                             ");\n";
-                    } else {
+                    }
+
+                    // Misc.
+                    else {
                         auto* minp = gp->get_min_indices().lookup(dname);
                         auto* maxp = gp->get_max_indices().lookup(dname);
                         if (minp && maxp) {
@@ -861,7 +872,9 @@ namespace yask {
             // Allow dynamic misc alloc setting if not interleaved.
             init_code += " " + base_ptr + "->_set_dynamic_misc_alloc(" +
                 (_settings._inner_misc ? "false" : "true") +
-                ");\n";
+                ");\n" +
+                " " + base_ptr + "->set_misc_mult(" +
+                to_string(gp->get_misc_space_size()) + ");\n";
 
             // If not scratch, init vars in ctor.
             if (!gp->is_scratch()) {
@@ -891,6 +904,7 @@ namespace yask {
                     " YkVarPtr " + var_ptr + ";\n" +
                     init_code +
                     " " + base_ptr + "->set_scratch(true);\n" +
+                    " " + base_ptr + "->set_scratch_mem_slot(" + to_string(gp-> get_scratch_mem_slot()) + ");\n" +
                     " " + var_list + "[i] = " + var_ptr + ";\n" +
 
                     // Init core ptr for this var.
@@ -955,37 +969,41 @@ namespace yask {
 
             // Deps between parts.
             os << "\n // Configure parts:\n";
-            for (auto& b : _parts.get_all()) {
-                string b_name = b->_get_name();
-                os << "\n // " << b->get_descr() << ".\n";
+            for (auto& p : _parts.get_all()) {
+                string p_name = p->_get_name();
+                os << "\n // " << p->get_descr() << ".\n";
 
                 // Add deps between parts.
-                for (auto& dep : _parts.get_all_deps_on(b)) {
+                for (auto& dep : _parts.get_all_deps_on(p)) {
                     string dep_name = dep->_get_name();
-                    os << "  " << b_name <<
+                    os << "  " << p_name <<
                         ".add_dep(&" << dep_name << ");\n";
                 }
 
                 // Populate the var lists in the StencilPartTmpl objs.
                 // I/O vars.
-                os << "\n // The following var(s) are read by '" << b_name << "'.\n";
-                for (auto gp : b->get_input_vars()) {
+                os << "\n // The following var(s) are read by '" << p_name << "'.\n";
+                for (auto gp : p->get_input_vars()) {
                     VAR_DECLS(gp);
+                    if (!gp->is_needed())
+                        continue;
                     if (gp->is_scratch())
-                        os << "  " << b_name << ".input_scratch_vecs.push_back(&" << var_list << ");\n";
+                        os << "  " << p_name << ".input_scratch_vecs.push_back(&" << var_list << ");\n";
                     else
-                        os << "  " << b_name << ".input_var_ptrs.push_back(" << var_ptr << ");\n";
+                        os << "  " << p_name << ".input_var_ptrs.push_back(" << var_ptr << ");\n";
                 }
-                os << "\n // The following var(s) are written by '" << b_name << "'";
-                if (b->step_expr)
-                    os << " at " << b->step_expr->make_quoted_str();
+                os << "\n // The following var(s) are written by '" << p_name << "'";
+                if (p->step_expr)
+                    os << " at " << p->step_expr->make_quoted_str();
                 os << ".\n";
-                for (auto gp : b->get_output_vars()) {
+                for (auto gp : p->get_output_vars()) {
                     VAR_DECLS(gp);
+                    if (!gp->is_needed())
+                        continue;
                     if (gp->is_scratch())
-                        os << "  " << b_name << ".output_scratch_vecs.push_back(&" << var_list << ");\n";
+                        os << "  " << p_name << ".output_scratch_vecs.push_back(&" << var_list << ");\n";
                     else
-                        os << "  " << b_name << ".output_var_ptrs.push_back(" << var_ptr << ");\n";
+                        os << "  " << p_name << ".output_var_ptrs.push_back(" << var_ptr << ");\n";
                 }
             } // parts.
 
@@ -995,7 +1013,7 @@ namespace yask {
                 auto st_name = st->_get_name();
 
                 // parts in this scratch stage.
-                auto& sbs = st->get_parts();
+                auto& sps = st->get_parts();
                 
                 // Passing only non-scratch stages to kernel (for now).
                 if (!st->is_scratch()) {
@@ -1005,12 +1023,12 @@ namespace yask {
                     os << "  st_stages.push_back(" << st_name << ");\n";
 
                     // Non-scratch parts in this stage.
-                    for (auto& b : sbs) {
-                        if (b->is_scratch())
+                    for (auto& p : sps) {
+                        if (p->is_scratch())
                             continue;
-                        auto b_name = b->_get_name();
-                        os << "  " << st_name << "->push_back(&" << b_name << ");\n";
-                        os << "  st_parts.push_back(&" << b_name << ");\n";
+                        auto p_name = p->_get_name();
+                        os << "  " << st_name << "->push_back(&" << p_name << ");\n";
+                        os << "  st_parts.push_back(&" << p_name << ");\n";
                     }
                 }
 
@@ -1019,20 +1037,20 @@ namespace yask {
                     os << "\n // " << st->get_descr() << ".\n";
                     
                     // Scan all non-scratch parts.
-                    for (auto& b : _parts.get_all()) {
-                        if (b->is_scratch())
+                    for (auto& p : _parts.get_all()) {
+                        if (p->is_scratch())
                             continue;
 
                         // What scratch parts are needed?
-                        auto& sbdeps = _parts.get_all_scratch_deps_on(b);
-                        for (auto& b2 : _parts.get_all()) {
+                        auto& spdeps = _parts.get_all_scratch_deps_on(p);
+                        for (auto& p2 : _parts.get_all()) {
                             
                             // Print parts only in this scratch stage.
-                            if (sbdeps.count(b2) && sbs.count(b2)) {
-                                auto b_name = b->_get_name();
-                                auto b2_name = b2->_get_name();
-                                os << "  " << b_name <<
-                                    ".add_scratch_child(&" << b2_name << ");\n";
+                            if (spdeps.count(p2) && sps.count(p2)) {
+                                auto p_name = p->_get_name();
+                                auto p2_name = p2->_get_name();
+                                os << "  " << p_name <<
+                                    ".add_scratch_child(&" << p2_name << ");\n";
                             }
                         }
                     }

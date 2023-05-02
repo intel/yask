@@ -136,14 +136,14 @@ namespace yask {
 
             // Loop thru all non-scratch parts. We ignore stages here
             // because staging is an optional optimization.
-            for (auto* asg : st_parts) {
+            for (auto* ap : st_parts) {
 
                 // Scan through n-D space.
                 TRACE_MSG("step " << start_t <<
-                          " in non-scratch part '" << asg->get_name());
+                          " in non-scratch part '" << ap->get_name());
 
                 // Check step.
-                if (!asg->is_in_valid_step(start_t)) {
+                if (!ap->is_in_valid_step(start_t)) {
                     TRACE_MSG("not valid for step " << start_t);
                     continue;
                 }
@@ -154,28 +154,28 @@ namespace yask {
                 // Find the parts that need to be processed.
                 // This will be the prerequisite scratch-var
                 // parts plus this non-scratch tile.
-                auto sg_list = asg->get_reqd_parts();
-
-                // Initialization that's needed every step.
-                // Loop through all the needed parts.
-                for (auto* sg : sg_list) {
-
-                    // Init data in scratch vars.
-                    for (auto* sv : sg->output_scratch_vecs) {
-                        assert(sv);
-                        auto vp = sv->at(0); // Only need var for thread 0.
-                        TRACE_MSG(sg->get_name() << ": initializing " << vp->get_name());
-                        vp->set_all_elements_same(0.0);
-                    }
-                }
+                auto p_list = ap->get_reqd_parts();
 
                 // Evaluation.
                 // Loop through all the needed parts.
-                for (auto* sg : sg_list) {
+                auto& vars_written = _vars_written.at(0);
+                vars_written.clear();
+                for (auto* p : p_list) {
 
+                    // Init data in scratch vars when first seen.
+                    for (auto* sv : p->output_scratch_vecs) {
+                        assert(sv);
+                        auto vp = sv->at(0); // Only need var for thread 0.
+                        if (vars_written.count(vp) == 0) {
+                            TRACE_MSG(p->get_name() << ": initializing " << vp->get_name());
+                            vp->set_all_elements_same(0.0);
+                        }
+                        vars_written.insert(vp);
+                    }
+                    
                     // Check step.
-                    if (!sg->is_in_valid_step(start_t)) {
-                        TRACE_MSG(sg->get_name() << " not valid for step " << start_t);
+                    if (!p->is_in_valid_step(start_t)) {
+                        TRACE_MSG(p->get_name() << " not valid for step " << start_t);
                         continue;
                     }
                     
@@ -183,24 +183,24 @@ namespace yask {
                     ScanIndices misc_idxs(rank_idxs);
 
                     // Prep for scratch parts.
-                    if (sg->is_scratch()) {
+                    if (p->is_scratch()) {
 
                         // Adjust indices.
-                        misc_idxs = sg->adjust_scratch_span(scratch_var_idx, rank_idxs,
+                        misc_idxs = p->adjust_scratch_span(scratch_var_idx, rank_idxs,
                                                             *actl_opts);
                     }
                     misc_idxs.stride.set_from_const(1); // ensure unit stride.
 
                     // Scan through n-D space.
                     TRACE_MSG("step " << start_t <<
-                              " in part '" << sg->get_name() << "': " <<
+                              " in part '" << p->get_name() << "': " <<
                               misc_idxs.make_range_str(true));
-                    sg->calc_in_domain(scratch_var_idx, misc_idxs);
+                    p->calc_in_domain(scratch_var_idx, misc_idxs);
 
                 } // needed parts.
 
                 // Mark vars that were updated in this rank.
-                asg->update_var_info(YkVarBase::self, start_t, true, false, false);
+                ap->update_var_info(YkVarBase::self, start_t, true, false, false);
 
                 // Mark vars that *may* have been written to by any rank.
                 update_var_info(nullptr, start_t, stop_t, true, false);
@@ -1137,9 +1137,9 @@ namespace yask {
 
                     // Keep track of reqd parts that have been updated and
                     // scratch vars written at the current micro-blk idxs.
-                    StencilPartUSet& parts_done = _parts_done.at(outer_thread_idx);
+                    auto& parts_done = _parts_done.at(outer_thread_idx);
                     parts_done.clear();
-                    VarPtrUSet& vars_written = _vars_written.at(outer_thread_idx);
+                    auto& vars_written = _vars_written.at(outer_thread_idx);
                     vars_written.clear();
 
                     // Call calc_micro_block() for each non-scratch part.

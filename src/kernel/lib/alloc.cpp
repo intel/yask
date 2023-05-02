@@ -1022,7 +1022,7 @@ namespace yask {
 
     // Delete and re-create all the scratch vars.  Delete and re-allocate
     // memory for scratch vars based on number of threads and block sizes.
-    // This destroy-everything-and-start-over approach allows for the
+    // This destroy-everything-and-rebuild approach allows for the
     // number of threads and/or block sizes to be changed.
     // TODO: be smarter about what to redo.
     void StencilContext::alloc_scratch_data() {
@@ -1050,6 +1050,10 @@ namespace yask {
         // Micro-block sizes determine scratch-data sizes.
         IdxTuple& mblksize = actl_opts->_micro_block_sizes;
 
+        // Remember alloc data for each thread and slot number.
+        using ThreadAndSlot = pair<int, int>;
+        map<ThreadAndSlot, AllocData> mem_slot_data;
+        
         // Pass 0: count required size, allocate chunk of memory at end.
         // Pass 1: distribute parts of already-allocated memory chunk.
         for (int pass = 0; pass < 2; pass++) {
@@ -1065,6 +1069,9 @@ namespace yask {
             }
             int seq_num = 0;
 
+            // Mem-slots seen in this pass for each thread.
+            map<int, set<int>> mem_slots_seen;
+
             // Loop through each scratch var vector.
             for (auto* sgv : scratch_vecs) {
                 assert(sgv);
@@ -1079,55 +1086,87 @@ namespace yask {
                     int numa_pref = gp->get_numa_preferred();
                     auto& gb = gp->gb();
 
-                    // Loop through each domain dim.
-                    for (auto& dim : domain_dims) {
-                        auto& dname = dim._get_name();
+                    // Mem-allocation info from YASK compiler.
+                    int mem_slot = gb.get_scratch_mem_slot();
+                    auto tns = make_pair(thr_num, mem_slot);
 
-                        if (gp->is_dim_used(dname)) {
+                    // Need a new mem slot?
+                    bool new_slot = mem_slots_seen[thr_num].count(mem_slot) == 0;
+                    if (new_slot)
+                        mem_slots_seen[thr_num].insert(mem_slot);
 
-                            // Set domain size of scratch var to micro-block size.
-                            gp->_set_domain_size(dname, mblksize[dname]);
+                    // Set sizes in var.
+                    if (pass == 0) {
+                    
+                        // Loop through each domain dim.
+                        for (auto& dim : domain_dims) {
+                            auto& dname = dim._get_name();
 
-                            // Conservative allowance for WF exts and/or temporal shifts.
-                            idx_t shift_pts = max(wf_shift_pts[dname], tb_angles[dname] * num_tb_shifts) * 2;
-                            gp->_set_left_wf_ext(dname, shift_pts);
-                            gp->_set_right_wf_ext(dname, shift_pts);
+                            if (gp->is_dim_used(dname)) {
 
-                            // Pads.
-                            // Set via both 'extra' and 'min'; larger result will be used.
-                            gp->update_extra_pad_size(dname, actl_opts->_extra_pad_sizes[dname]);
-                            gp->update_min_pad_size(dname, actl_opts->_min_pad_sizes[dname]);
-                        }
-                    } // dims.
+                                // Set domain size of scratch var to micro-block size.
+                                gp->_set_domain_size(dname, mblksize[dname]);
+
+                                // Conservative allowance for WF exts and/or temporal shifts.
+                                idx_t shift_pts = max(wf_shift_pts[dname], tb_angles[dname] * num_tb_shifts) * 2;
+                                gp->_set_left_wf_ext(dname, shift_pts);
+                                gp->_set_right_wf_ext(dname, shift_pts);
+
+                                // For pads, use the max halos instead of the options.
+                                gp->update_extra_pad_size(dname, 0);
+                                gp->update_left_min_pad_size(dname, max_write_halo_left[dname]);
+                                gp->update_right_min_pad_size(dname, max_write_halo_right[dname]);
+                            }
+                        } // dims.
+                    }
 
                     // If not bundling allocations, increase sequence number.
-                    if (!actl_opts->_bundle_allocs)
+                    if (new_slot && !actl_opts->_bundle_allocs)
                         seq_num++;
-
+                    
                     // Make a request key and make or lookup data.
                     AllocKey req_key = make_pair(numa_pref, seq_num);
-                    auto& req_data = alloc_reqs[req_key];
+                    auto* req_data = &alloc_reqs[req_key];
+
+                    // New or reusing?
+                    if (new_slot)
+                        mem_slot_data[tns] = *req_data; // store current data.
+                    else {
+                        assert(mem_slot_data.count(tns));
+                        req_data = &mem_slot_data.at(tns); // get stored data.
+                    }
                     
                     // Set storage if buffer has been allocated.
                     if (pass == 1) {
-                        auto p = req_data.ptr;
+                        auto p = req_data->ptr;
                         assert(p);
-                        gp->set_storage(p, req_data.nbytes);
+                        gp->set_storage(p, req_data->nbytes);
                         TRACE_MSG(gb.make_info_string());
                     }
 
                     // Determine size used (also offset to next location).
                     size_t nbytes = gp->get_num_storage_bytes();
-                    req_data.nbytes += ROUND_UP(nbytes + _data_buf_pad,
-                                                CACHELINE_BYTES);
-                    req_data.nvars++;
-                    if (pass == 0)
-                        TRACE_MSG("scratch var '" << gname << "' for thread " <<
-                                  thr_num << " needs " << make_byte_str(nbytes) <<
-                                  " on NUMA node " << numa_pref);
+                    if (new_slot) {
+                        req_data->nbytes += ROUND_UP(nbytes + _data_buf_pad,
+                                                     CACHELINE_BYTES);
+                        req_data->nvars++;
+                        if (pass == 0)
+                            TRACE_MSG("scratch var '" << gname << "' for thread " <<
+                                      thr_num << " needs " << make_byte_str(nbytes) <<
+                                      " on NUMA node " << numa_pref <<
+                                      " in mem slot " << mem_slot);
+                    }
+                    else {
+                        if (pass == 0)
+                            TRACE_MSG("scratch var '" << gname << "' for thread " <<
+                                      thr_num << " reusing " << make_byte_str(nbytes) <<
+                                      " from mem slot " << mem_slot);
+                    }
+
+                    // Next thread.
                     thr_num++;
 
-                } // scratch vars.
+                } // scratch vars (threads).
             } // scratch-var vecs.
 
             // Alloc for each node.
