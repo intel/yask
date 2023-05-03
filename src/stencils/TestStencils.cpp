@@ -982,7 +982,7 @@ namespace {
 
             // Define 'A(t+1)' and 'B(t+1)' based on values at 't'.
             A(t+1, x) EQUALS cos(A(t, x)) - 2 * sin(A(t, x));
-            B(t+1, x) EQUALS pow(def_t1d(B, t, x, 0, 1), 1.0/2.5);
+            B(t+1, x) EQUALS max(def_t1d(B, t, x, 0, 1), 2.5);
 
             // 'C(t+1)' depends on 'A(t+1)', creating a 2nd stage.
             C(t+1, x) EQUALS atan(def_t1d(A, t+1, x, 1, 0) / cbrt(C(t, x+1)));

@@ -483,7 +483,7 @@ namespace yask {
                 cout << "*** Buffer for " << key->make_str() <<
                     " has length " << len << endl;
                 #endif
-                auto mbl = max(_settings._min_buffer_len, 1);
+                auto mbl = std::max(_settings._min_buffer_len, 1);
 
                 // Remember buf len using key if above threshold.
                 if (len >= mbl)
@@ -551,7 +551,7 @@ namespace yask {
                         bname << "[" << (i + 1) << "]" << _line_suffix;
                 start_ofs = end;
                 stop_ofs = end + 1;
-                start_load = max(len - 1, 0);
+                start_load = std::max(len - 1, 0);
             }
 
             // Before start of loop.

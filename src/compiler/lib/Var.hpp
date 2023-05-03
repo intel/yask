@@ -287,7 +287,7 @@ namespace yask {
 
         // Update L1 dist.
         virtual void update_l1_dist(int l1_dist) {
-            _l1_dist = max(_l1_dist, l1_dist);
+            _l1_dist = std::max(_l1_dist, l1_dist);
         }
 
         // Update const indices based on 'indices'.

@@ -670,6 +670,8 @@ namespace yask {
     SVML_1ARG(yask_cos, cos, cos, cosf) // cosine.
     SVML_1ARG(yask_atan, atan, atan, atanf) // inv (arc) tangent.
     SVML_2ARG(yask_pow, pow, pow, powf) // power.
+    SVML_2ARG(yask_min, min, std::min, std::min) // min.
+    SVML_2ARG(yask_max, max, std::max, std::max) // max.
     #undef SVML_1ARG_SCALAR
     #undef SVML_1ARG
     #undef SVML_2ARG_SCALAR

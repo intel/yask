@@ -157,12 +157,12 @@ namespace yask {
         int gdims = 0;
         for (auto gp : _vars) {
             int ndims = gp->get_num_dims();
-            gdims = max(gdims, ndims);
+            gdims = std::max(gdims, ndims);
         }
         os << "\n// Max number of var dimensions:\n"
             "#define NUM_VAR_DIMS " << gdims << endl;
         os << "\n// Max of stencil and var dims:\n"
-            "#define NUM_STENCIL_AND_VAR_DIMS " << max<int>(gdims, nsdims) << endl;
+            "#define NUM_STENCIL_AND_VAR_DIMS " << std::max<int>(gdims, nsdims) << endl;
 
         os << "\n// Number of stencil equations:\n"
             "#define NUM_STENCIL_EQS " << _stencil.get_num_equations() << endl;

@@ -409,8 +409,8 @@ namespace yask {
                         if (first_ofs == unset)
                             first_ofs = last_ofs = ofs;
                         else {
-                            first_ofs = min(first_ofs, ofs);
-                            last_ofs = max(last_ofs, ofs);
+                            first_ofs = std::min(first_ofs, ofs);
+                            last_ofs = std::max(last_ofs, ofs);
                         }
                     }
                 }
@@ -442,9 +442,9 @@ namespace yask {
                         auto& h3 = i.second; // map of step-dims to halos.
                         
                         if (h3.count(first_ofs) && h3.at(first_ofs).size())
-                            first_max_halo = max(first_max_halo, h3.at(first_ofs).max());
+                            first_max_halo = std::max(first_max_halo, h3.at(first_ofs).max());
                         if (h3.count(last_ofs) && h3.at(last_ofs).size())
-                            last_max_halo = max(last_max_halo, h3.at(last_ofs).max());
+                            last_max_halo = std::max(last_max_halo, h3.at(last_ofs).max());
                     }
 
                     // If first and last halos are zero, we can further optimize
@@ -465,7 +465,7 @@ namespace yask {
                 }
 
                 // Keep max so far.
-                max_sz = max(max_sz, sz);
+                max_sz = std::max(max_sz, sz);
             }
 
         } // stages.

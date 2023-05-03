@@ -940,11 +940,11 @@ namespace yask {
     UNARY_MATH_EXPR(atan);
 #undef UNARY_MATH_EXPR
 
-    /// Binary math functions. Used internally to define pow().
-#define BINARY_MATH_EXPR(fn_name) \
-    yc_number_node_ptr fn_name(const yc_number_node_ptr arg1, const yc_number_node_ptr arg2);   \
-    yc_number_node_ptr fn_name(double arg1, const yc_number_node_ptr arg2); \
-    yc_number_node_ptr fn_name(const yc_number_node_ptr arg1, double arg2)
+    /// Binary math functions. Used internally.
+    #define BINARY_MATH_EXPR(fn_name)                                   \
+        yc_number_node_ptr fn_name(const yc_number_node_ptr arg1, const yc_number_node_ptr arg2); \
+        yc_number_node_ptr fn_name(double arg1, const yc_number_node_ptr arg2); \
+        yc_number_node_ptr fn_name(const yc_number_node_ptr arg1, double arg2)
 
     /// Power function.
     /**
@@ -952,7 +952,23 @@ namespace yask {
        the power of the second argument node.
     */
     BINARY_MATH_EXPR(pow);
-#undef BINARY_MATH_EXPR
+
+    /// Minimum function.
+    /**
+       Create an expression node to return the minimum of the first argument node
+       and the second argument node.
+    */
+    BINARY_MATH_EXPR(min);
+
+
+    /// Maximum function.
+    /**
+       Create an expression node to return the maximum of the first argument node
+       and the second argument node.
+    */
+    BINARY_MATH_EXPR(max);
+
+    #undef BINARY_MATH_EXPR
 
 #if !defined SWIG
 

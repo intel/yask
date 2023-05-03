@@ -437,6 +437,8 @@ namespace yask {
         return fn(nfac.new_const_number_node(arg1), arg2);              \
     }
     FUNC_EXPR(pow)
+    FUNC_EXPR(max)
+    FUNC_EXPR(min)
 #undef FUNC_EXPR
 
     // Define a conditional.
