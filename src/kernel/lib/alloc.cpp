@@ -30,6 +30,11 @@ using namespace std;
 
 namespace yask {
 
+    // Advise kernel to use huge pages for this range.
+    static void set_huge(void *addr, size_t length) {
+        madvise(addr, length, MADV_HUGEPAGE);
+    }
+
     ////// Allocators and deleters //////
 
     // Free device mem.
@@ -59,6 +64,9 @@ namespace yask {
         if (!p)
             THROW_YASK_EXCEPTION("cannot allocate " + make_byte_str(nbytes) +
                                  " aligned to " + make_byte_str(align));
+
+        // Advise kernel to use huge pages.
+        set_huge(p, nbytes);
 
         // Return as a char* as required for shared_ptr ctor.
         return static_cast<char*>(p);
@@ -164,6 +172,9 @@ namespace yask {
             FORMAT_AND_THROW_YASK_EXCEPTION("NUMA-allocated " << p << " is not " <<
                                             CACHELINE_BYTES << "-byte aligned");
 
+        // Advise kernel to use huge pages.
+        set_huge(p, nbytes);
+
         // Return as a char* as required for shared_ptr ctor.
         return static_cast<char*>(p);
     }
@@ -233,6 +244,8 @@ namespace yask {
         THROW_YASK_EXCEPTION("mapping offload device memory to shm not yet supported; "
                              "use '-no-use_shm'");
         #endif
+
+        // Cannot typically use huge pages for shm, so not calling set_huge().
         
         // Return as a char* as required for shared_ptr ctor.
         return static_cast<char*>(p);
