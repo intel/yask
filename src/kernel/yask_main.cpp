@@ -62,6 +62,7 @@ struct MySettings {
     bool do_trace = false;         // tracing.
     int msg_rank = 0;              // rank to print debug msgs.
     double init_val = def_init_val;        // value to init all points.
+    double init_seed = 0.1;                // seed for sequence init.
 
     // Parser for local options.
     command_line_parser parser;
@@ -122,6 +123,10 @@ struct MySettings {
                            "If value is " + to_string(MySettings::def_init_val) +
                            ", points are set to varying values.",
                            init_val));
+        parser.add_option(make_shared<command_line_parser::double_option>
+                          ("init_seed",
+                           string("Seed for varying sequence used to initialize all points in all stencil vars."),
+                           init_seed));
         parser.add_option(make_shared<command_line_parser::double_option>
                           ("trial_time",
                            "Approximate number of seconds to run each performance trial. "
@@ -228,7 +233,7 @@ static void init_vars(yk_solution_ptr soln, const MySettings& opts,
         for (auto varp : soln->get_vars())
             varp->set_all_elements_same(opts.init_val);
     else {
-        double seed = opts.validate ? 1.0 : 0.1;
+        double seed = opts.init_seed;
         context->init_diff(seed);
     }
 }

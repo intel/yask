@@ -174,7 +174,7 @@ namespace yask {
                                   const idx_t wrap = 31;
                                   
                                   for (idx_t i = start; i < stop; i++)
-                                      e[i] = s * T(i % wrap + 1);
+                                      e[i] = s * T(imod_flr(i, wrap) + 1);
                               });
 
             #ifdef USE_OFFLOAD_NO_USM
@@ -182,7 +182,7 @@ namespace yask {
             
             _Pragma("omp target teams distribute parallel for device(devn)")
                 for (idx_t i = 0; i < ne; i++)
-                    elems[i] = seed * T(i % wrap + 1);
+                    elems[i] = seed * T(imod_flr(i, wrap) + 1);
             #endif
         }
     }

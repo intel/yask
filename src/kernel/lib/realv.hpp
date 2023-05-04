@@ -219,6 +219,32 @@ namespace yask {
             operator=(val);
         }
 
+        // Check for bad FP vals.
+        ALWAYS_INLINE void check_value(uidx_t k1, const std::string& msg, const void* p) const {
+            #ifndef USE_OFFLOAD
+            for (int i=0; i<VLEN; i++)
+                if ((k1 >> i) & 1) {
+                    auto fpc = std::fpclassify(u.r[i]);
+                    if (fpc == FP_INFINITE || fpc == FP_NAN)
+                        FORMAT_AND_THROW_YASK_EXCEPTION("element " << i <<  msg <<
+                                                        p << " = " << u.r[i]);
+                }
+            #endif
+        }
+        ALWAYS_INLINE void check_loaded_value(const void* from, uidx_t k1 = uidx_t(-1)) const {
+
+            // Checking loads often gives false positives because
+            // many values are loaded and not used near the boundaries.
+            #ifdef CHECK_LOADS
+            check_value(k1, " loaded from ", from);
+            #endif
+        }
+        ALWAYS_INLINE void check_stored_value(void* to, uidx_t k1 = uidx_t(-1)) const {
+            #ifdef CHECK
+            check_value(k1, " stored to ", to);
+            #endif
+        }
+
         // copy whole vector.
         ALWAYS_INLINE real_vec_t& operator=(const real_vec_t& rhs) {
             #ifdef NO_INTRINSICS
@@ -298,7 +324,7 @@ namespace yask {
 
         // unary plus (no-op).
         ALWAYS_INLINE real_vec_t operator+() const {
-	  return *this;
+            return *this;
         }
 
         // add.
@@ -431,6 +457,7 @@ namespace yask {
             #else
             u.mr = INAME(load)((imem_t const*)from);
             #endif
+            check_loaded_value(from);
         }
         ALWAYS_INLINE void load_from_masked(const real_vec_t* __restrict from,
                                             uidx_t k1) {
@@ -439,6 +466,7 @@ namespace yask {
             #else
             u.mr = INAME(mask_load)(u.mr, real_mask_t(k1), (imem_t const*)from);
             #endif
+            check_loaded_value(from, k1);
         }
 
         // unaligned load into 'this'.
@@ -448,14 +476,16 @@ namespace yask {
             #else
             u.mr = INAME(loadu)((imem_t const*)from);
             #endif
+            check_loaded_value(from);
         }
         ALWAYS_INLINE void load_unaligned_from_masked(const real_vec_t* __restrict from,
-                                                    uidx_t k1) {
+                                                      uidx_t k1) {
             #if defined(NO_INTRINSICS) || defined(NO_LOAD_INTRINSICS) || !defined(USE_AVX512)
             REAL_VEC_LOOP_UNALIGNED(i) if ((k1 >> i) & 1) u.r[i] = (*from)[i];
             #else
             u.mr = INAME(mask_loadu)(u.mr, real_mask_t(k1), (imem_t const*)from);
             #endif
+            check_loaded_value(from, k1);
         }
 
         // aligned store from 'this'.
@@ -464,13 +494,14 @@ namespace yask {
             #if defined(NO_INTRINSICS) || defined(NO_STORE_INTRINSICS)
             #if (VLEN > 1) && defined(USE_STREAMING_STORE)
             _VEC_STREAMING
-            #endif
-            REAL_VEC_LOOP(i) (*to)[i] = u.r[i];
+                #endif
+                REAL_VEC_LOOP(i) (*to)[i] = u.r[i];
             #elif !defined(USE_STREAMING_STORE)
             INAME(store)((imem_t*)to, u.mr);
             #else
             INAME(stream)((imem_t*)to, u.mr);
             #endif
+            check_stored_value(to);
         }
         ALWAYS_INLINE void store_to_masked(real_vec_t* __restrict to, uidx_t k1) const {
 
@@ -488,6 +519,8 @@ namespace yask {
             #else
             INAME(mask_store)((imem_t*)to, real_mask_t(k1), u.mr);
             #endif
+
+            check_stored_value(to, k1);
         }
 
         // unaligned store from 'this'.
@@ -499,9 +532,10 @@ namespace yask {
             #else
             INAME(storeu)((imem_t*)to, u.mr);
             #endif
+            check_stored_value(to);
         }
         ALWAYS_INLINE void store_unaligned_to_masked(real_vec_t* __restrict to,
-                                                   uidx_t k1) const {
+                                                     uidx_t k1) const {
 
             // No unaligned masked streaming stores.
             #if defined(NO_INTRINSICS) || defined(NO_STORE_INTRINSICS) || !defined(USE_AVX512)
@@ -517,6 +551,7 @@ namespace yask {
             #else
             INAME(mask_storeu)((imem_t*)to, real_mask_t(k1), u.mr);
             #endif
+            check_stored_value(to, k1);
         }
 
         // Debug output.
@@ -603,10 +638,10 @@ namespace yask {
         ALWAYS_INLINE real_t yask_fn(const real_t& a) {         \
             return libm_spfn(a);                                \
         }
-        #define SVML_2ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)         \
-            ALWAYS_INLINE real_t yask_fn(const real_t& a, const real_t& b) { \
-                return libm_spfn(a, b);                                 \
-            }
+    #define SVML_2ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)             \
+        ALWAYS_INLINE real_t yask_fn(const real_t& a, const real_t& b) { \
+            return libm_spfn(a, b);                                     \
+        }
     #else
     #define SVML_1ARG_SCALAR(yask_fn, libm_dpfn, libm_spfn)     \
         ALWAYS_INLINE real_t yask_fn(const real_t& a) {         \

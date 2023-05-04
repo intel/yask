@@ -1026,7 +1026,7 @@ DEF_TEST_ARGS := -log_dir $(TEST_LOG_OUT_DIR) \
 	-ranks $(ranks) -stencil $(YK_STENCIL) -arch $(YK_ARCH) \
 	-validate -no-pre_auto_tune -no-auto_tune -no-warmup -num_trials 1 -trial_steps 2 \
 	-outer_threads $(outer_threads) -inner_threads $(inner_threads) \
-	-ep 0 -mp 0 -no-allow_addl_padding
+	-ep 0 -mp 0 -no-allow_addl_padding -init_seed 1.0
 DEF_MPI_TEST_ARGS := $(DEF_TEST_ARGS) -min_exterior 0
 
 # Test args for 1 and >1 ranks.
