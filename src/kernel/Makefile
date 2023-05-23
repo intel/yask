@@ -1121,6 +1121,10 @@ single-stencil-tests:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_2d $(call FOLD,x=2 y=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_2d $(call FOLD,x=2 y=4)
 
+# 2D tests w/actual HPC stencils.
+2d-tests2:
+	$(MAKE) clean; $(STENCIL_TEST) stencil=wave2d
+
 3d-tests:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stream_3d radius=5
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d YK_STENCIL_SUFFIX=-t1 $(call FOLD,x=2 y=2 z=2) EXTRA_YC_FLAGS=-first-inner
@@ -1180,6 +1184,7 @@ boundary-tests:
 stencil-tests:
 	$(MAKE) 1d-tests
 	$(MAKE) 2d-tests
+	$(MAKE) 2d-tests2
 	$(MAKE) 3d-tests
 	$(MAKE) 3d-tests2
 	$(MAKE) 3d-tests3
