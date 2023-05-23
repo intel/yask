@@ -149,6 +149,7 @@ namespace yask {
                                       e[i] = v;
                               });
 
+            // Also update the version on the device.
             #ifdef USE_OFFLOAD_NO_USM
             auto devn = KernelEnv::_omp_devn;
             
@@ -163,6 +164,7 @@ namespace yask {
     void GenericVarTyped<T>::set_elems_in_seq(T seed) {
         T* RESTRICT elems = (T*)get_storage();
         auto ne = get_num_elems();
+        constexpr idx_t wrap = 31;
         if (elems && ne) {
             yask_parallel_for(0, ne, _init_blk_size,
                               [=](idx_t start, idx_t stop, idx_t thread_num) {
@@ -171,12 +173,12 @@ namespace yask {
                                   // that compiler treats them as local.
                                   T* RESTRICT e = elems;
                                   const T s = seed;
-                                  const idx_t wrap = 31;
                                   
                                   for (idx_t i = start; i < stop; i++)
                                       e[i] = s * T(imod_flr(i, wrap) + 1);
                               });
 
+            // Also update the version on the device to the same sequence.
             #ifdef USE_OFFLOAD_NO_USM
             auto devn = KernelEnv::_omp_devn;
             
