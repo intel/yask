@@ -711,7 +711,7 @@ $(YK_CODE_FILE): $(YC_EXEC)
 $(YK_SOLUTION_FILE): $(YK_CODE_FILE) $(YK_LOOP_FILES)
 	$(BASH) -o pipefail -c \
 	  "g++ -E -CC $(YK_CXX_INCFLAGS) $(YK_MACROS) -DDEFINE_SOLUTION $(YK_CODE_FILE) \
-	    | $(PERL) -n -e '\$$start=1 if /Automatically-generated/; print if \$$start && !/^#/' > $@"
+	    | $(PERL) -n -e '\$$start=1 if /Automatically-generated/; print if \$$start && !/^#\s[1-9]/' > $@"
 	@- $(INDENT) $@
 
 headers: $(YK_GEN_HEADERS)
