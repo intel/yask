@@ -137,7 +137,7 @@ int main(int argc, char* argv[]) {
     long pn = 1024;             // Problem size.
     int nreg = 2;               // Number of regions.
     int nthr = 4;               // Number of host threads.
-    int nruns = 2;              // Number of runs.
+    int nruns = 3;              // Number of runs.
     bool help = false;
     #if USE_HOST_OMP==0
     nthr = 1;
@@ -338,10 +338,55 @@ int main(int argc, char* argv[]) {
                         }
                     }
 
-                    // 2nd stage, >1st run.
+                    // 2nd stage, 2nd run.
+                    else if (r == 1) {
+
+                        // Nested blocking.
+                        long jbsz = 128;
+                        #ifdef USE_OFFLOAD
+                        #pragma omp target teams distribute device(devn)
+                        #endif
+                        for (long j = begin; j < end; j += jbsz)
+                        {
+                            if (j == begin) {
+                                int ntm1 = omp_get_num_teams();
+                                int nt1 = omp_get_num_threads();
+                                int nthr = ntm1 * nt1;
+                                printf("     Running thread %i w/%i teams and %i threads/team: %i threads\n",
+                                       tn0, ntm1, nt1, nthr);
+                                #ifndef USE_OFFLOAD
+                                fflush(stdout);
+                                #endif
+                            }
+                            long kend = min(end, j + jbsz);
+                            constexpr long kbsz = 32;
+                            #ifdef USE_OFFLOAD
+                            #pragma omp parallel for
+                            #elif USE_NESTED_HOST_OMP==1
+                            #pragma omp parallel for num_threads(nthr)
+                            #endif
+                            for (long k = j; k < kend; k += kbsz) {
+                                long lend = min(kend, k + kbsz);
+
+                                double buf1[kbsz];
+                                double buf2[kbsz];
+                                double buf3[kbsz];
+                                for (long l = k; l < lend; l++) {
+                                    buf1[l-k] = A[l - halo_sz];
+                                    buf2[l-k] = A[l + halo_sz];
+                                    buf3[l-k] = C[l];
+                                }
+
+                                for (long l = k; l < lend; l++)
+                                    C[l] = FN_C(buf1[l-k], buf2[l-k], buf3[l-k]);
+                            }
+                        }
+                    }
+
+                    // 2nd stage, remaining runs.
                     else {
 
-                        // Use a manually-generated parallel loop after the 1st run.
+                        // Use a manually-generated parallel loop.
                         #ifdef USE_OFFLOAD
                         #pragma omp critical
                         {
