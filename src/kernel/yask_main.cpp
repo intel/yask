@@ -608,7 +608,7 @@ int main(int argc, char** argv)
             os << "  Done in " << make_num_str(rstats->get_elapsed_secs()) << " secs.\n" << flush;
 
             // check for equality.
-            os << "\nChecking results...\n";
+            os << "\nChecking results...\n" << flush;
             idx_t errs = _context->compare_data(*_ref_context);
             auto ri = kenv->get_rank_index();
 

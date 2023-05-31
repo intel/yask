@@ -1124,6 +1124,7 @@ single-stencil-tests:
 # 2D tests w/actual HPC stencils.
 2d-tests2:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=wave2d
+	$(MAKE) clean; $(STENCIL_TEST) stencil=swe2d EXTRA_TEST_ARGS="-init_seed 0.01"
 
 3d-tests:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stream_3d radius=5
