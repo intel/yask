@@ -318,13 +318,14 @@ YK_CXX		:=	$(CXX)
 MPI_CXX 	:=	mpiicpc
 YK_CXXOPT	?=	-O3
 YK_CXXDBG	?=	-g
-YK_CXXFLAGS	:=	-std=c++17
+YK_CXXFLAGS	:=
+YK_CXXFLAGS_API	:=	-std=c++17
 YK_CXXWARN	:=	-Wall
-YK_CXX_INCFLAGS	:=	$(addprefix -I,$(YK_INC_DIRS) $(YK_GEN_DIR))
-YK_CXXFLAGS	+=	$(YK_CXX_INCFLAGS)
 SWIG_CXXFLAGS	:= 	$(DBL_EPSILON_CXXFLAG)
 YK_SO_FLAGS	:=	-shared -fPIC
 OMPFLAG 	:=	-fopenmp
+YK_CXX_INCFLAGS		:=	$(addprefix -I,$(YK_INC_DIRS) $(YK_GEN_DIR))
+YK_CXX_INCFLAGS_API	:=	$(addprefix -I,$(INC_DIR))
 
 # Linker flags.
 YK_LIBS		:=	-lrt
@@ -401,7 +402,7 @@ endif
 
 # Create a compiler invocation to test for macro settings.
 # Use the flags defined so far.
-YK_CXX_TEST 	:= 	$(YK_CXX) $(YK_CXXFLAGS) $(EXTRA_YK_CXXFLAGS)
+YK_CXX_TEST 	:= 	$(YK_CXX) $(YK_CXXFLAGS_API) $(EXTRA_YK_CXXFLAGS)
 cxx_is_llvm_intel :=	$(call MACRO_DEF,$(YK_CXX_TEST),__INTEL_LLVM_COMPILER)
 cxx_is_clang	:=	$(call MACRO_DEF,$(YK_CXX_TEST),__clang__)
 cxx_is_intel	:=	$(call MACRO_DEF,$(YK_CXX_TEST),__INTEL_COMPILER)
@@ -506,7 +507,8 @@ endif
 
 # Add in final flags and user-added flags.
 YK_MACROS	:=	$(addprefix -D,$(MACROS) $(subst $(comma),$(space),$(EXTRA_MACROS)))
-YK_CXXFLAGS	+=	$(YK_CXXDBG) $(YK_CXXOPT) $(OMPFLAGS) $(YK_MACROS) $(YK_CXXWARN) $(EXTRA_YK_CXXFLAGS)
+YK_CXXFLAGS_API	+=	$(YK_CXXDBG) $(YK_CXXOPT) $(YK_CXXWARN) $(YK_CXX_INCFLAGS_API) $(EXTRA_YK_CXXFLAGS)
+YK_CXXFLAGS	+=	$(OMPFLAGS) $(YK_MACROS) $(YK_CXX_INCFLAGS) $(YK_CXXFLAGS_API)
 YK_LIBS		+=	$(EXTRA_YK_LIBS)
 
 # Number of stencil/var dims extracted from YASK compiler output.
@@ -810,6 +812,7 @@ echo-settings:
 	echo YK_CXXCMD=$(YK_CXXCMD); \
 	echo YK_CXXDBG=$(YK_CXXDBG); \
 	echo YK_CXXFLAGS="\"$(YK_CXXFLAGS)\""; \
+	echo YK_CXXFLAGS_API="\"$(YK_CXXFLAGS_API)\""; \
 	echo YK_CXXOPT=$(YK_CXXOPT); \
 	echo YK_EXT_TAG=$(YK_EXT_TAG); \
 	echo YK_STENCIL=$(YK_STENCIL); \
@@ -971,7 +974,7 @@ cxx-yk-var-test:
 # Build C++ kernel tests.
 $(YK_API_TEST_EXEC): $(YK_TEST_SRC_DIR)/yask_kernel_api_test.cpp $(YK_LIB)
 	$(call MK_DIR,$(dir $@))
-	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS_API) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
 	@ls -l $@
 
 # Build and run C++ tests.
@@ -992,7 +995,7 @@ py-yk-api-test: $(YK_TEST_SRC_DIR)/yask_kernel_api_test.py $(YK_PY_LIB)
 # Build C++ kernel tests with exceptions.
 $(YK_API_TEST_EXEC_WITH_EXCEPTION): $(YK_TEST_SRC_DIR)/yask_kernel_api_exception_test.cpp $(YK_LIB)
 	$(call MK_DIR,$(dir $@))
-	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
+	$(CXX_PREFIX) $(YK_CXXCMD) $(YK_CXXFLAGS_API) $< $(YK_LFLAGS) -o $@ $(YK_LIBS)
 	@ls -l $@
 
 # Run C++ tests with exceptions.

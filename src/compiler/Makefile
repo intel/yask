@@ -50,8 +50,8 @@ YC_TEST_EXEC	:=	$(BIN_OUT_DIR)/$(YC_BASE)_api_test.exe
 YC_TEST_EXEC_WITH_EXCEPTION	:=	$(BIN_OUT_DIR)/$(YC_BASE)_api_exception_test.exe
 YC_SRC_NAMES	:=	Expr VarPoint ExprUtils Var Settings Eqs Print Vec Cpp CppIntrin YaskKernel Solution
 YC_OBJS		:=	$(addprefix $(YC_OBJ_DIR)/,$(addsuffix .o,$(YC_SRC_NAMES) $(COMM_SRC_NAMES)))
-YC_INC_DIRS	:=	$(INC_DIR) $(YC_LIB_SRC_DIR) $(COMM_DIR) $(COEFF_DIR)
-YC_INC_FILES	:=	$(wildcard $(addsuffix /*.hpp,$(YC_INC_DIRS)))
+YC_INC_DIRS	:=	$(INC_DIRS) $(YC_LIB_SRC_DIR) $(COMM_DIR) $(COEFF_DIR)
+YC_INC_GLOB	:=	$(addsuffix /*.hpp,$(YC_INC_DIRS))
 YC_STENCIL_SRC_FILES	:=	$(foreach dir,$(YC_STENCIL_DIRS),$(wildcard $(dir)/*.cpp))
 YC_STENCIL_INC_FILES	:=	$(foreach dir,$(YC_STENCIL_DIRS),$(wildcard $(dir)/*.hpp))
 YC_STENCIL_NAMES	:=	$(notdir $(basename $(YC_STENCIL_SRC_FILES)))
@@ -59,15 +59,17 @@ YC_STENCIL_OBJS		:=	$(addprefix $(YC_STENCIL_OBJ_DIR)/,$(addsuffix .o,$(YC_STENC
 
 # Compiler and default flags.
 YC_CXX    	:=	$(CXX)
-YC_CXXOPT	:= 	-O2
-YC_CXXFLAGS 	:=	-g -std=c++17 -Wall
-YC_CXXFLAGS	+=	-Wno-unknown-pragmas -Wno-unused-variable
-YC_CXXFLAGS	+=	$(INC_CXXFLAGS)
-YC_CXXFLAGS	+=	$(YC_CXXOPT)
-YC_INC_CXXFLAGS :=	$(addprefix -I,$(YC_INC_DIRS))
+YC_CXXOPT	?= 	-O2
+YC_CXXDBG	?=	-g
+YC_CXXFLAGS 	:=
+YC_CXXFLAGS_API	:=	-std=c++17
+YC_CXXFLAGS_API	+=	-Wall -Wno-unknown-pragmas -Wno-unused-variable
+YC_CXX_INCFLAGS 	:=	$(addprefix -I,$(YC_INC_DIRS))
+YC_CXX_INCFLAGS_API	:=	$(addprefix -I,$(INC_DIR))
 
-# Add user-defined flags.
-YC_CXXFLAGS	+=	$(EXTRA_YC_CXXFLAGS)
+# Add i final flags and user-defined flags.
+YC_CXXFLAGS_API	+=	$(YC_CXXDBG) $(YC_CXXOPT) $(YC_CXX_INCFLAGS_API) $(EXTRA_YC_CXXFLAGS)
+YC_CXXFLAGS	+=	$(YC_CXX_INCFLAGS) $(YC_CXXFLAGS_API)
 
 # Linker.
 YC_LD		:=	$(YC_CXX)
@@ -78,7 +80,7 @@ VPATH	:=	$(patsubst $space,$colon,$(YC_STENCIL_DIRS) $(COMM_DIR) $(COEFF_DIR) $(
 
 # Compile rules for non-stencil files.
 
-$(YC_OBJ_DIR)/%.o: %.cpp $(YC_INC_FILES)
+$(YC_OBJ_DIR)/%.o: %.cpp $(YC_INC_GLOB)
 	$(call MK_DIR,$(dir $@))
 	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) $(YC_INC_CXXFLAGS) -x c++ -fPIC -c -o $@ $<
 	@ls -l $@
@@ -87,9 +89,9 @@ $(YC_OBJ_DIR)/%.o: %.cpp $(YC_INC_FILES)
 # - Build at O0 to avoid C++ compiler wasting time optimizing them.
 # - Set macro to use internal DSL instead of conflicting API operators.
 
-$(YC_STENCIL_OBJ_DIR)/%.o: %.cpp $(INC_FILES) $(YC_STENCIL_INC_FILES)
+$(YC_STENCIL_OBJ_DIR)/%.o: %.cpp $(INC_GLOB) $(YC_STENCIL_INC_FILES)
 	$(call MK_DIR,$(dir $@))
-	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) -O0 -x c++ -DUSE_INTERNAL_DSL -c -o $@ $<
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS_API) $(INC_CXXFLAGS) -O0 -x c++ -DUSE_INTERNAL_DSL -c -o $@ $<
 	@ls -l $@
 
 ######## Primary targets.
@@ -108,7 +110,7 @@ $(YC_LIB): $(YC_OBJS)
 
 $(YC_EXEC): compiler_main.cpp $(YC_STENCIL_OBJS) $(YC_LIB)
 	$(call MK_DIR,$(dir $@))
-	$(CXX_PREFIX) $(YC_LD) $(YC_CXXFLAGS) $(YC_INC_CXXFLAGS) $^ $(YC_LFLAGS) -o $@
+	$(CXX_PREFIX) $(YC_LD) $(YC_CXXFLAGS_API) $(YC_INC_CXXFLAGS) $^ $(YC_LFLAGS) -o $@
 	@ls -l $@
 	$(MAKE) echo-settings
 
@@ -148,7 +150,7 @@ $(YC_PY_LIB): $(YC_OBJS) $(YC_OBJ_DIR)/yask_compiler_api_wrap.o
 # Build C++ compiler API test.
 $(YC_TEST_EXEC): $(YC_TEST_SRC_DIR)/yask_compiler_api_test.cpp $(YC_LIB)
 	$(call MK_DIR,$(dir $@))
-	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) $< $(YC_LFLAGS) -o $@
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS_API) $< $(YC_LFLAGS) -o $@
 	@ls -l $@
 
 # Run Python compiler API test to create stencil-code file.
@@ -170,7 +172,7 @@ cxx-yc-api-test: $(YC_TEST_EXEC)
 # Build C++ compiler API test with exception.
 $(YC_TEST_EXEC_WITH_EXCEPTION): $(YC_TEST_SRC_DIR)/yask_compiler_api_exception_test.cpp $(YC_LIB)
 	$(call MK_DIR,$(dir $@))
-	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS) $< $(YC_LFLAGS) -o $@
+	$(CXX_PREFIX) $(YC_CXX) $(YC_CXXFLAGS_API) $< $(YC_LFLAGS) -o $@
 	@ls -l $@
 
 # Run Python compiler API test with exceptions to create stencil-code file.
@@ -229,6 +231,7 @@ echo-settings:
 	@echo YC_CXX=$(YC_CXX)
 	@$(YC_CXX) --version
 	@echo YC_CXXFLAGS="\"$(YC_CXXFLAGS)\""
+	@echo YC_CXXFLAGS_API="\"$(YC_CXXFLAGS_API)\""
 
 help:
 	@echo "Example YASK-compiler make commands:"

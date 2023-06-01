@@ -265,6 +265,7 @@ combo-test: $(COMBO_TEST_EXEC)
 
 api-tests: compiler-api
 	$(MAKE) combo-api-tests
+	$(YC_MAKE) $@
 	$(YK_MAKE) $@
 
 unit-tests:
@@ -272,6 +273,7 @@ unit-tests:
 	$(MAKE) combo-test
 
 all-tests: compiler-api unit-tests
+	$(YC_MAKE) $@
 	$(YK_MAKE) $@
 	$(MAKE) combo-api-tests
 	$(MAKE) clean
