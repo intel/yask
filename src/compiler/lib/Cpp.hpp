@@ -122,7 +122,7 @@ namespace yask {
         map<VarDimKey, string> _offsets; // var containing offset expr for given dim in var.
         map<string, string> _ptr_ofs; // var containing offset expr for key var.
         map<VarPoint, var_point_ptr> _inner_loop_key; // offsets perpendicular to inner-loop dim for var.
-        VarPointSet _aligned_reads;                   // _vv._aligned_vecs plus those for read-ahead.
+        VarPointSet _aligned_reads;                   // _vv._aligned_vecs.
 
         // Read stats.
         // Key: point w/no inner-loop offset.
@@ -143,11 +143,6 @@ namespace yask {
 
         // Set to var name of write mask if/when used.
         string _write_mask = "";
-
-        // Inner-loop steps.
-        bool _is_using_cluster = false;
-        int _inner_loop_vec_step = 1;
-        int _inner_loop_elem_step = 1;
 
         // A simple constant.
         virtual string add_const_expr(ostream& os, double v) override {
@@ -232,9 +227,7 @@ namespace yask {
                           const string& line_suffix) :
             CppPrintHelper(settings, dims, cv,
                            var_type, line_prefix, line_suffix),
-            VecPrintHelper(vv) {
-            set_using_cluster(false);
-        }
+            VecPrintHelper(vv) { }
         
         // Whether to use masks during write.
         virtual void set_write_mask(string mask_var) {
@@ -244,15 +237,7 @@ namespace yask {
             return _write_mask;
         }
 
-        // Set step lengths.
-        virtual void set_using_cluster(bool use) {
-            _is_using_cluster = use;
-            const string& ildim = _settings._inner_loop_dim;
-            _inner_loop_vec_step = use ? _dims._cluster_mults[ildim] : 1;
-            _inner_loop_elem_step = _inner_loop_vec_step * _dims._fold[ildim];
-        }
-
-        // Set stage name.
+       // Set stage name.
         virtual void set_stage_name(const string& sname) {
             _stage_name = sname;
         }
@@ -387,14 +372,13 @@ namespace yask {
     // Print out a stencil in C++ form for YASK.
     class YASKCppPrinter : public PrinterBase {
     protected:
-        EqStages& _eq_stages; // stages of bundles w/o inter-dependencies.
-        EqBundles& _cluster_eq_bundles;  // eq-bundles for scalar and vector.
+        Stages& _eq_stages; // stages of parts w/o inter-dependencies.
         string _stencil_prefix;
         string _context, _context_hook; // class names;
         string _core_t, _thread_core_t; // core struct names;
 
         // Print an expression as a one-line C++ comment.
-        void add_comment(ostream& os, EqBundle& eq);
+        void add_comment(ostream& os, Part& eq);
 
         // A factory method to create a new PrintHelper.
         // This can be overridden in derived classes to provide
@@ -415,17 +399,15 @@ namespace yask {
         // Print pieces of YASK output.
         virtual void print_macros(ostream& os);
         virtual void print_data(ostream& os);
-        virtual void print_eq_bundles(ostream& os);
+        virtual void print_parts(ostream& os);
         virtual void print_context(ostream& os);
 
     public:
-        YASKCppPrinter(StencilSolution& stencil,
-                       EqBundles& eq_bundles,
-                       EqStages& eq_stages,
-                       EqBundles& cluster_eq_bundles) :
-            PrinterBase(stencil, eq_bundles),
-            _eq_stages(eq_stages),
-            _cluster_eq_bundles(cluster_eq_bundles)
+        YASKCppPrinter(Solution& stencil,
+                       Parts& parts,
+                       Stages& eq_stages) :
+            PrinterBase(stencil, parts),
+            _eq_stages(eq_stages)
         {
             // name of C++ struct.
             _stencil_prefix = "stencil_" + _stencil._get_name() + "_";

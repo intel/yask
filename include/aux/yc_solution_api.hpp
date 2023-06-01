@@ -79,7 +79,9 @@ namespace yask {
         /// Constructor.
         /**
            Creates a new yc_solution object and adds this object to the
-           registry.  Throws an exception if a solution with this name
+           registry.  
+
+           @throws yask_exception if a solution with this name
            already exists.
         */
         yc_solution_base(const std::string& name);
@@ -215,6 +217,35 @@ namespace yask {
         }
     };
 
+    /// Convenience macro for declaring a step index in a class derived from yask::yc_solution_base.
+    /*** Example: `MAKE_STEP_INDEX(t)` */
+    #define MAKE_STEP_INDEX(dim_name)   yc_index_node_ptr dim_name = new_step_index(#dim_name)
+    
+    /// Convenience macro for declaring a domain index in a class derived from yask::yc_solution_base.
+    /*** Example: `MAKE_DOMAIN_INDEX(x)` */
+    #define MAKE_DOMAIN_INDEX(dim_name) yc_index_node_ptr dim_name = new_domain_index(#dim_name)
+
+    /// Convenience macro for declaring a misc index in a class derived from yask::yc_solution_base.
+    /*** Example: `MAKE_MISC_INDEX(a)` */
+    #define MAKE_MISC_INDEX(dim_name)   yc_index_node_ptr dim_name = new_misc_index(#dim_name)
+
+    /// Convenience macro for creating a yask::yc_var_proxy for an n-dimensional YASK variable.
+    /*** Example: `MAKE_VAR(pressure, t, x, y, z)` */
+    #define MAKE_VAR(var_name, ...) \
+        yc_var_proxy var_name = yc_var_proxy(#var_name, get_soln(), { __VA_ARGS__ }, false)
+    
+    /// Convenience macro for creating a yask::yc_var_proxy for an n-dimensional YASK scratch variable.
+    #define MAKE_SCRATCH_VAR(var_name, ...) \
+        yc_var_proxy var_name = yc_var_proxy(#var_name, get_soln(), { __VA_ARGS__ }, true)
+    
+    /// Convenience macro for creating a yask::yc_var_proxy for a scalar YASK variable.
+    #define MAKE_SCALAR_VAR(var_name) MAKE_VAR(var_name)
+
+    /// Convenience macro for declaring an object of a type derived from \ref yask::yc_solution_base
+    // and registering it in the list used by the YASK compiler binary.
+    #define REGISTER_SOLUTION(class_name)                       \
+        static class_name class_name ## _instance
+    
     /** @}*/
 
 } // namespace yask.

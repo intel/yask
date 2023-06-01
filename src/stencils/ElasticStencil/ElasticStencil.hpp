@@ -54,10 +54,10 @@ class ElasticBoundaryCondition : public yc_solution_base
 protected:
 
     // Dimensions.
-    yc_index_node_ptr t = new_step_index("t");           // step in time dim.
-    yc_index_node_ptr x = new_domain_index("x");         // spatial dim.
-    yc_index_node_ptr y = new_domain_index("y");         // spatial dim.
-    yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
+    MAKE_STEP_INDEX(t);           // step in time dim.
+    MAKE_DOMAIN_INDEX(x);         // spatial dim.
+    MAKE_DOMAIN_INDEX(y);         // spatial dim.
+    MAKE_DOMAIN_INDEX(z);         // spatial dim.
 
 public:
     ElasticBoundaryCondition(yc_solution_base& base) :
@@ -76,13 +76,13 @@ class ElasticStencilBase : public yc_solution_base {
 protected:
 
     // Dimensions.
-    yc_index_node_ptr t = new_step_index("t");           // step in time dim.
-    yc_index_node_ptr x = new_domain_index("x");         // spatial dim.
-    yc_index_node_ptr y = new_domain_index("y");         // spatial dim.
-    yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
+    MAKE_STEP_INDEX(t);           // step in time dim.
+    MAKE_DOMAIN_INDEX(x);         // spatial dim.
+    MAKE_DOMAIN_INDEX(y);         // spatial dim.
+    MAKE_DOMAIN_INDEX(z);         // spatial dim.
 
     // 3D-spatial coefficients.
-    yc_var_proxy rho = yc_var_proxy("rho", get_soln(), { x, y, z });
+    MAKE_VAR(rho, x, y, z);
 
     // Spatial FD coefficients.
     const double c0_8 = 1.2;

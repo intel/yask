@@ -36,6 +36,7 @@ namespace yask {
     // Some derivations from var types.
     typedef std::shared_ptr<YkVarImpl> YkVarPtr;
     typedef std::set<YkVarPtr> VarPtrSet;
+    typedef std::unordered_set<YkVarPtr> VarPtrUSet;
     typedef std::vector<YkVarPtr> VarPtrs;
     typedef std::map<std::string, YkVarPtr> VarPtrMap;
     typedef std::vector<VarPtrs*> ScratchVecs;
@@ -144,9 +145,7 @@ namespace yask {
         // Dimensions and sizes.
         IdxTuple _fold_pts;     // all domain dims.
         IdxTuple _vec_fold_pts; // just those with >1 pts.
-        IdxTuple _cluster_pts;  // all domain dims.
-        IdxTuple _cluster_mults; // all domain dims.
-
+ 
         // Just sizes.
         Indices _fold_sizes;    // all domain dims.
 
@@ -253,7 +252,7 @@ namespace yask {
         int num_inner_threads = 1; // Number of threads to use within a block.
         bool bind_inner_threads = false; // Bind inner threads to global indices.
         #ifdef USE_OFFLOAD
-        int thread_limit = 32;           // Offload threads per team.
+        int thread_limit = 1024;           // Offload threads per team.
         #else
         int thread_limit = 1;
         #endif
@@ -261,8 +260,13 @@ namespace yask {
         // Var behavior, including allocation.
         bool _step_wrap = false; // Allow invalid step indices to alias to valid ones (set via APIs only).
         bool _allow_addl_pad = true; // Allow extending padding beyond what's needed for alignment.
-        bool _bundle_allocs = !KernelEnv::_use_offload; // Group allocations together.
+        #ifdef USE_OFFLOAD
+        bool _bundle_allocs = false;
+        #else
+        bool _bundle_allocs = true;
+        #endif
         int _numa_pref = NUMA_PREF;
+        bool _init_scratch_vars = false; // Init scratch vars to zero.
 
         // Stencil-dim posn in which to apply block-thread binding.
         // TODO: make this a cmd-line parameter.
@@ -278,8 +282,9 @@ namespace yask {
         bool force_scalar = false; // Do only scalar ops.
         bool do_halo_exchange = true; // False => skip halo exchanges.
         bool force_scalar_exchange = false; // Don't allow vec exchanges.
+        bool _verbose = false;
 
-        // Ctor/dtor.
+            // Ctor/dtor.
         KernelSettings(DimsPtr dims, KernelEnvPtr env);
         virtual ~KernelSettings() { }
 

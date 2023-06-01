@@ -202,6 +202,12 @@ Public Member Functions</h2></td></tr>
 <tr class="memitem:a64ce6c3bb5a4a467e6a23e4aa619881d"><td class="memItemLeft" align="right" valign="top">virtual <a class="el" href="group__yask.html#gab23959584aacc15a84d1eca058036d09">idx_t_vec</a>&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a64ce6c3bb5a4a467e6a23e4aa619881d">get_rank_index_vec</a> () const =0</td></tr>
 <tr class="memdesc:a64ce6c3bb5a4a467e6a23e4aa619881d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the rank index in all domain dimensions.  <br /></td></tr>
 <tr class="separator:a64ce6c3bb5a4a467e6a23e4aa619881d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a072a37aa309558e213c6aed2f641828d"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a072a37aa309558e213c6aed2f641828d">get_num_outer_threads</a> () const =0</td></tr>
+<tr class="memdesc:a072a37aa309558e213c6aed2f641828d"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the number of outer OpenMP threads.  <br /></td></tr>
+<tr class="separator:a072a37aa309558e213c6aed2f641828d"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:a6a07a3d09e3268aa0d14e9fa32234ad9"><td class="memItemLeft" align="right" valign="top">virtual int&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#a6a07a3d09e3268aa0d14e9fa32234ad9">get_num_inner_threads</a> () const =0</td></tr>
+<tr class="memdesc:a6a07a3d09e3268aa0d14e9fa32234ad9"><td class="mdescLeft">&#160;</td><td class="mdescRight">Get the number of inner (nested) OpenMP threads.  <br /></td></tr>
+<tr class="separator:a6a07a3d09e3268aa0d14e9fa32234ad9"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ac111abbade055c4923cd0044360ec3b7"><td class="memItemLeft" align="right" valign="top">virtual std::string&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="classyask_1_1yk__solution.html#ac111abbade055c4923cd0044360ec3b7">apply_command_line_options</a> (const std::string &amp;args)=0</td></tr>
 <tr class="memdesc:ac111abbade055c4923cd0044360ec3b7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Set kernel options from a string.  <br /></td></tr>
 <tr class="separator:ac111abbade055c4923cd0044360ec3b7"><td class="memSeparator" colspan="2">&#160;</td></tr>
@@ -646,7 +652,7 @@ virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc
 </div><div class="memdoc">
 
 <p>Set the local-domain size in the specified dimension, i.e., the size of the part of the domain that is in this rank. </p>
-<p>The domain defines the number of elements that will be evaluated with the stencil(s). If MPI is not enabled, this is equivalent to the global-domain size. If MPI is enabled, this is the domain size for the current rank only, and the global-domain size is the sum of all local-domain sizes in each dimension. The local-domain size in each rank does not have to be the same, but all local-domains in the same column of ranks must have the same width, all local-domains in the same row must have the same height, and so forth, for each domain dimension. The local-domain size does <em>not</em> include the halo area or any padding. For best performance, set the local-domain size to a multiple of the number of elements in a vector-cluster in each dimension.</p>
+<p>The domain defines the number of elements that will be evaluated with the stencil(s). If MPI is not enabled, this is equivalent to the global-domain size. If MPI is enabled, this is the domain size for the current rank only, and the global-domain size is the sum of all local-domain sizes in each dimension. The local-domain size in each rank does not have to be the same, but all local-domains in the same column of ranks must have the same width, all local-domains in the same row must have the same height, and so forth, for each domain dimension. The local-domain size does <em>not</em> include the halo area or any padding. For best performance, set the local-domain size to a multiple of the number of elements in a vector in each dimension.</p>
 <p>You should set either the local-domain size or the global-domain size in each dimension; the other should be set to zero (unspecified). The unspecified (zero) sizes will be calculated based on the specified ones when <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a> is called.</p>
 <p>See the "Detailed Description" for <a class="el" href="classyask_1_1yk__var.html">yk_var</a> for more information on var sizes. </p>
 <dl class="params"><dt>Parameters</dt><dd>
@@ -1012,9 +1018,9 @@ virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc
 </div><div class="memdoc">
 
 <p>Set the block size in the given dimension. </p>
-<p>This sets the approximate number of elements that are evaluated in each "block". This is a performance setting and should not affect the functional correctness or total number of elements evaluated. A block is typically the unit of work done by a top-level OpenMP thread. The actual number of elements evaluated in a block may be greater than the specified size due to rounding up to fold-cluster sizes. The number of elements in a block may also be smaller than the specified size when the block is at the edge of the domain. The block size cannot be set in the solution-step dimension (because temporal blocking is not yet enabled).</p>
+<p>This sets the approximate number of elements that are evaluated in each "block". This is a performance setting and should not affect the functional correctness or total number of elements evaluated. A block is typically the unit of work done by a top-level OpenMP thread. The actual number of elements evaluated in a block may be greater than the specified size due to rounding up to vector sizes. The number of elements in a block may also be smaller than the specified size when the block is at the edge of the domain.</p>
 <p>Unless auto-tuning is disabled, the block size will be used as a starting point for an automated search for a higher-performing block size.</p>
-<p>This and all other tile sizes (Mega-blocks, blocks, micro-blocks, etc.) can be set via <a class="el" href="classyask_1_1yk__solution.html#ac111abbade055c4923cd0044360ec3b7" title="Set kernel options from a string.">apply_command_line_options()</a>. </p>
+<p>This and all other tile sizes (Mega-blocks, blocks, micro-blocks, etc.) can be set via <a class="el" href="classyask_1_1yk__solution.html#ac111abbade055c4923cd0044360ec3b7" title="Set kernel options from a string.">apply_command_line_options()</a>. Only block sizes have a dedicated API. </p>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to set. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a7039e7151857e2652592a585c6d00931" title="Get the solution step dimension.">get_step_dim_name()</a> or <a class="el" href="classyask_1_1yk__solution.html#a24c2619b5f0471bcfe8eeb5aed769fec" title="Get all the domain dimension names.">get_domain_dim_names()</a>.</td></tr>
@@ -1197,10 +1203,16 @@ virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc
 </div><div class="memdoc">
 
 <p>Set the number of MPI ranks in the given dimension. </p>
-<p>If <a class="el" href="classyask_1_1yk__solution.html#ac4cd27d412b6fe013db58b167999a362" title="Set the number of MPI ranks in the given dimension.">set_num_ranks()</a> is set to a non-zero value in all dimensions, then the <em>product</em> of the number of ranks across all dimensions must equal the value returned by <a class="el" href="classyask_1_1yk__env.html#add8b12cd6d10f964665a41acedbb9b14" title="Get number of MPI ranks.">yk_env::get_num_ranks()</a>. If the number of ranks is zero in one or more dimensions, those values will be set by a heuristic when <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a> is called. An exception will be thrown if no legal values are possible given the specified (non-zero) values.</p>
+<p>If <a class="el" href="classyask_1_1yk__solution.html#ac4cd27d412b6fe013db58b167999a362" title="Set the number of MPI ranks in the given dimension.">set_num_ranks()</a> is set to a non-zero value in all dimensions, then the <em>product</em> of the number of ranks across all dimensions must equal the value returned by <a class="el" href="classyask_1_1yk__env.html#add8b12cd6d10f964665a41acedbb9b14" title="Get number of MPI ranks.">yk_env::get_num_ranks()</a>. If the number of ranks is zero in one or more dimensions, those values will be set by a heuristic when <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">prepare_solution()</a> is called.</p>
 <p>The curent MPI rank will be assigned a unique location within the overall problem domain based on its MPI rank index. Or, you can set it explicitly via <a class="el" href="classyask_1_1yk__solution.html#ac0eccaa1d228d7f3408e3c2b0881f279" title="Set the rank index in the specified dimension.">set_rank_index()</a>.</p>
 <p>The same number of MPI ranks must be set via this API on each constituent MPI rank to ensure a consistent overall configuration. The number of ranks in each dimension must be properly set before calling <a class="el" href="classyask_1_1yk__solution.html#aa0edfde033c251e3f8d2d184a682d4cb" title="Prepare the solution for stencil application.">yk_solution::prepare_solution()</a>. There is no rank setting allowed in the solution-step dimension (usually "t") or in a misc dimension.</p>
-<p>In fact, a practical definition of a domain dimension is one that is decomposable across MPI ranks. Specifically, a domain dimension does not have to correspond to a spatial dimension in the physical problem description. </p>
+<p>In fact, a practical definition of a domain dimension is one that is decomposable across MPI ranks. Specifically, a domain dimension does not have to correspond to a spatial dimension in the physical problem description.</p>
+<dl class="exception"><dt>Exceptions</dt><dd>
+  <table class="exception">
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if no legal values are possible given the specified (non-zero) values. </td></tr>
+  </table>
+  </dd>
+</dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[in]</td><td class="paramname">dim</td><td>Name of dimension to set. Must be one of the names from <a class="el" href="classyask_1_1yk__solution.html#a24c2619b5f0471bcfe8eeb5aed769fec" title="Get all the domain dimension names.">get_domain_dim_names()</a>.</td></tr>
@@ -1531,7 +1543,66 @@ virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc
 </div><div class="memdoc">
 
 <p>Get the rank index in all domain dimensions. </p>
-<p>See <a class="el" href="classyask_1_1yk__solution.html#a3268e5e7e2f0e45f951f1c38063bc59f" title="Get the rank index in the specified dimension.">get_rank_index()</a>; </p><dl class="section return"><dt>Returns</dt><dd>Vector of zero-based indices of this rank in all domain dimensions. </dd></dl>
+<p>See <a class="el" href="classyask_1_1yk__solution.html#a3268e5e7e2f0e45f951f1c38063bc59f" title="Get the rank index in the specified dimension.">get_rank_index()</a>;</p>
+<dl class="section return"><dt>Returns</dt><dd>Vector of zero-based indices of this rank in all domain dimensions. </dd></dl>
+
+</div>
+</div>
+<a id="a072a37aa309558e213c6aed2f641828d" name="a072a37aa309558e213c6aed2f641828d"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a072a37aa309558e213c6aed2f641828d">&#9670;&#160;</a></span>get_num_outer_threads()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual int yask::yk_solution::get_num_outer_threads </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get the number of outer OpenMP threads. </p>
+<dl class="section return"><dt>Returns</dt><dd>Number of threads used for evaluating blocks concurrently within each Mega-block.</dd></dl>
+<dl class="section note"><dt>Note</dt><dd>The number of outer threads might vary from that specified via the command-line option because of the <code>max_threads</code> setting. </dd></dl>
+
+</div>
+</div>
+<a id="a6a07a3d09e3268aa0d14e9fa32234ad9" name="a6a07a3d09e3268aa0d14e9fa32234ad9"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#a6a07a3d09e3268aa0d14e9fa32234ad9">&#9670;&#160;</a></span>get_num_inner_threads()</h2>
+
+<div class="memitem">
+<div class="memproto">
+<table class="mlabels">
+  <tr>
+  <td class="mlabels-left">
+      <table class="memname">
+        <tr>
+          <td class="memname">virtual int yask::yk_solution::get_num_inner_threads </td>
+          <td>(</td>
+          <td class="paramname"></td><td>)</td>
+          <td> const</td>
+        </tr>
+      </table>
+  </td>
+  <td class="mlabels-right">
+<span class="mlabels"><span class="mlabel">pure virtual</span></span>  </td>
+  </tr>
+</table>
+</div><div class="memdoc">
+
+<p>Get the number of inner (nested) OpenMP threads. </p>
+<dl class="section return"><dt>Returns</dt><dd>Number of threads used for evaluating nano-blocks concurrently within each micro-block.</dd></dl>
+<dl class="section note"><dt>Note</dt><dd>The number of innter threads might vary from that specified via the command-line option because of the <code>inner_threads</code> and <code>max_threads</code> settings. </dd></dl>
 
 </div>
 </div>
@@ -1750,7 +1821,13 @@ virtual <a class="el" href="yask__common__api_8hpp.html#af7d3d837169568cf38a2efc
 </div><div class="memdoc">
 
 <p>Get the specified var. </p>
-<p>This cannot be used to access scratch vars. </p><dl class="section return"><dt>Returns</dt><dd>Pointer to the specified var or null pointer if it does not exist. </dd></dl>
+<p>This cannot be used to access scratch vars. </p><dl class="section return"><dt>Returns</dt><dd>Pointer to the specified var. </dd></dl>
+<dl class="exception"><dt>Exceptions</dt><dd>
+  <table class="exception">
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if named var does not exist. </td></tr>
+  </table>
+  </dd>
+</dl>
 <dl class="params"><dt>Parameters</dt><dd>
   <table class="params">
     <tr><td class="paramdir">[in]</td><td class="paramname">name</td><td>Name of the var. </td></tr>

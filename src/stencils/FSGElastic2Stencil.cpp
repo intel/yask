@@ -56,20 +56,20 @@ namespace fsg {
     protected:
 
         // Velocity and stress vars.
-        yc_var_proxy v = yc_var_proxy("v", get_soln(), { t, x, y, z, vidx });
+        MAKE_VAR(v, t, x, y, z, vidx);
         enum VIDX { V_BL_U, V_BL_V, V_BL_W,
                     V_BR_U, V_BR_V, V_BR_W,
                     V_TL_U, V_TL_V, V_TL_W,
                     V_TR_U, V_TR_V, V_TR_W };
 
-        yc_var_proxy s = yc_var_proxy("s", get_soln(), { t, x, y, z, sidx });
+        MAKE_VAR(s, t, x, y, z, sidx);
         enum SIDX { S_BL_XX, S_BL_YY, S_BL_ZZ, S_BL_YZ, S_BL_XZ, S_BL_XY,
                     S_BR_XX, S_BR_YY, S_BR_ZZ, S_BR_YZ, S_BR_XZ, S_BR_XY,
                     S_TL_XX, S_TL_YY, S_TL_ZZ, S_TL_YZ, S_TL_XZ, S_TL_XY,
                     S_TR_XX, S_TR_YY, S_TR_ZZ, S_TR_YZ, S_TR_XZ, S_TR_XY };
 
         // 3D-spatial coefficients.
-        yc_var_proxy c = yc_var_proxy("c", get_soln(), { x, y, z, cidx });
+        MAKE_VAR(c, x, y, z, cidx);
         enum CIDX { C11, C12, C13, C14, C15, C16,
                     C22, C23, C24, C25, C26,
                     C33, C34, C35, C36,
@@ -301,8 +301,8 @@ namespace fsg {
         const int abc_width = 20;
 
         // Sponge coefficients.
-        yc_index_node_ptr spidx = new_misc_index("spidx");
-        yc_var_proxy sponge = yc_var_proxy("sponge", get_soln(), { x, y, z, spidx });
+        MAKE_MISC_INDEX(spidx);
+        MAKE_VAR(sponge, x, y, z, spidx);
         enum SPONGE_IDX { SPONGE_LX, SPONGE_RX, SPONGE_BZ,
                           SPONGE_TZ, SPONGE_FY, SPONGE_BY,
                           SPONGE_SQ_LX, SPONGE_SQ_RX, SPONGE_SQ_BZ,
@@ -496,12 +496,12 @@ namespace fsg {
     // Create an object of type 'FSGElastic2Stencil',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static FSGElastic2Stencil FSGElastic2Stencil_instance;
+    REGISTER_SOLUTION(FSGElastic2Stencil);
     
     // Create an object of type 'FSG2ABCElasticStencil',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static FSG2ABCElasticStencil FSG2ABCElasticStencil_instance;
+    REGISTER_SOLUTION(FSG2ABCElasticStencil);
 
 }
  

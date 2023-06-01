@@ -40,16 +40,14 @@ namespace {
     protected:
 
         // Indices & dimensions.
-        yc_index_node_ptr t = new_step_index("t");           // step in time dim.
-        yc_index_node_ptr x = new_domain_index("x");         // spatial dim.
-        yc_index_node_ptr y = new_domain_index("y");         // spatial dim.
-        yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
+        MAKE_STEP_INDEX(t);           // step in time dim.
+        MAKE_DOMAIN_INDEX(x);         // spatial dim.
+        MAKE_DOMAIN_INDEX(y);         // spatial dim.
+        MAKE_DOMAIN_INDEX(z);         // spatial dim.
 
         // Vars.
-        yc_var_proxy p =
-            yc_var_proxy("p", get_soln(), { t, x, y, z }); // time-varying 3D var.
-        yc_var_proxy v =
-            yc_var_proxy("v", get_soln(), { x, y, z }); // constant 3D var = (c(x,y,z)^2 * delta_t^2).
+        MAKE_VAR(p, t, x, y, z); // time-varying 3D var.
+        MAKE_VAR(v, x, y, z); // constant 3D var = (c(x,y,z)^2 * delta_t^2).
 
     public:
 
@@ -168,7 +166,6 @@ namespace {
                     if (target == "knl") {
                         soln->set_fold_len(x, 2);
                         soln->set_fold_len(y, 8);
-                        soln->set_cluster_mult(x, 2);
                         soln->set_prefetch_dist(1, 1);
                         soln->set_prefetch_dist(2, 0);
                     }
@@ -210,7 +207,7 @@ namespace {
     // Create an object of type 'Iso3dfdStencil',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static Iso3dfdStencil Iso3dfdStencil_instance;
+    REGISTER_SOLUTION(Iso3dfdStencil);
 
     // Add a sponge absorption factor.
     class Iso3dfdSpongeStencil : public Iso3dfdStencil {
@@ -228,9 +225,9 @@ namespace {
             // In practice, the interior values would be set to 1.0,
             // and values nearer the boundary would be set to values
             // increasingly approaching 0.0.
-            yc_var_proxy cr_x("cr_x", get_soln(), { x });
-            yc_var_proxy cr_y("cr_y", get_soln(), { y });
-            yc_var_proxy cr_z("cr_z", get_soln(), { z });
+            MAKE_VAR(cr_x, x);
+            MAKE_VAR(cr_y, y);
+            MAKE_VAR(cr_z, z);
         
             // Get equation for RHS.
             auto next_p = get_next_p();
@@ -249,6 +246,6 @@ namespace {
     // Create an object of type 'Iso3dfdSpongeStencil',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static Iso3dfdSpongeStencil Iso3dfdSpongeStencil_instance;
+    REGISTER_SOLUTION(Iso3dfdSpongeStencil);
 
 } // namespace.

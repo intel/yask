@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-// This file contains implementations of bundle and stage methods.
+// This file contains implementations of part and stage methods.
 // Also see context_setup.cpp.
 
 #include "yask_stencil.hpp"
@@ -32,21 +32,21 @@ using namespace std;
 namespace yask {
 
     // Calculate results within a micro-block defined by 'micro_block_idxs'.
-    // This is called by StencilContext::calc_micro_block() for each bundle.
+    // This is called by StencilContext::calc_micro_block() for each part.
     // It is here that any required scratch-var stencils are evaluated
-    // first and then the non-scratch stencils in the stencil bundle.
-    // It is also here that the boundaries of the bounding-box(es) of the bundle
+    // first and then the non-scratch stencils in the stencil part.
+    // It is also here that the boundaries of the bounding-box(es) of the part
     // are respected. There must not be any temporal blocking at this point.
-    void StencilBundleBase::calc_micro_block(int outer_thread_idx,
-                                             KernelSettings& settings,
-                                             const ScanIndices& micro_block_idxs,
-                                             MpiSection& mpisec) {
+    void StencilPartBase::calc_micro_block(int outer_thread_idx,
+                                           KernelSettings& settings,
+                                           const ScanIndices& micro_block_idxs,
+                                           MpiSection& mpisec,
+                                           StencilPartUSet& parts_done,
+                                           VarPtrUSet& vars_written) {
         STATE_VARS(this);
-        TRACE_MSG("calc_micro_block('" << get_name() << "'): [" <<
-                   micro_block_idxs.begin.make_val_str() << " ... " <<
-                   micro_block_idxs.end.make_val_str() << ") by " <<
-                   micro_block_idxs.stride.make_val_str() <<
-                   " by outer thread " << outer_thread_idx);
+        TRACE_MSG("in '" << get_name() << "': " <<
+                  micro_block_idxs.make_range_str(true) <<
+                  " via outer thread " << outer_thread_idx);
         assert(!is_scratch());
 
         // No temporal blocking allowed here.
@@ -55,84 +55,121 @@ namespace yask {
         assert(abs(micro_block_idxs.end[step_posn] - t) == 1);
 
         // Nothing to do if outer BB is empty.
-        if (_bundle_bb.bb_num_points == 0) {
-            TRACE_MSG("calc_micro_block: empty BB");
+        if (_part_bb.bb_num_points == 0) {
+            TRACE_MSG("empty BB");
             return;
         }
-
-        // TODO: if >1 BB, check limits of outer one first to save time.
 
         // Set number of threads in this block.
         // This will be the number of nano-blocks done in parallel.
         int nbt = _context->set_num_inner_threads();
 
         // Thread-binding info.
-        // We only bind threads if there is more than one block thread
+        // We only bind threads if there is more than one inner thread
         // and binding is enabled.
         bool bind_threads = nbt > 1 && settings.bind_inner_threads;
         int bind_posn = settings._bind_posn;
         idx_t bind_slab_pts = settings._nano_block_sizes[bind_posn]; // Other sizes not used.
 
-        // Loop through each solid BB for this bundle.
-        // For each BB, calc intersection between it and 'micro_block_idxs'.
-        // If this is non-empty, apply the bundle to all its required nano-blocks.
-        TRACE_MSG("calc_micro_block('" << get_name() << "'): checking " <<
-                   _bb_list.size() << " BB(s)");
-        int bbn = 0;
-  	for (auto& bb : _bb_list) {
-            bbn++;
-            bool bb_ok = true;
-            if (bb.bb_num_points == 0)
-                bb_ok = false;
+        // Get the parts that need to be processed in
+        // this block. This will be any prerequisite scratch-var
+        // parts plus the current non-scratch part.
+        auto rp_list = get_reqd_parts();
 
-            // Trim the micro-block indices based on the bounding box(es)
-            // for this bundle.
-            ScanIndices mb_idxs(micro_block_idxs);
-            DOMAIN_VAR_LOOP_FAST(i, j) {
+        // Loop through all the needed parts.
+        for (auto* rp : rp_list) {
+            TRACE_MSG("processing reqd part '" << rp->get_name() << "'");
+            bool is_scratch = rp->is_scratch();
 
-                // Begin point.
-                auto bbegin = max(micro_block_idxs.begin[i], bb.bb_begin[j]);
-                mb_idxs.begin[i] = bbegin;
+            // Initialize any scratch output vars that haven't been written
+            // to yet. For each scratch var, do this only when the first
+            // scratch part that writes to it is scheduled. This helps with
+            // cache locality: we don't want to init a var long before it's
+            // used, which might evict another var's data from a cache.
+            // Also, we do this before we check the step-condition. This is
+            // so that a var will be properly initialized in the case where
+            // it is read from after a part that would have written to it,
+            // but the step condition wasn't true.
+            if (is_scratch && actl_opts->_init_scratch_vars) {
+                for (auto* sv : rp->output_scratch_vecs) {
+                    assert(sv);
+                    auto vp = sv->at(outer_thread_idx); // Var for current thread.
+                    assert(vp);
+                    if (vars_written.count(vp) == 0) {
 
-                // End point.
-                auto bend = min(micro_block_idxs.end[i], bb.bb_end[j]);
-                mb_idxs.end[i] = bend;
-
-                // Anything to do?
-                if (bend <= bbegin) {
-                    bb_ok = false;
-                    break;
+                        // Only need to init if there are conditional
+                        // expressions; otherwise, all points will be
+                        // written do, so no need to init var.
+                        if (rp->is_sub_domain_expr() ||
+                            rp->is_step_cond_expr()) {
+                            TRACE_MSG("initializing " << vp->get_name());
+                            vp->set_all_elements_same(0.0);
+                        }
+                        vars_written.insert(vp); // Mark as written.
+                    }
                 }
             }
-
-            // nothing to do?
-            if (!bb_ok) {
-                TRACE_MSG("calc_micro_block for bundle '" << get_name() <<
-                           "': no overlap between bundle " << bbn << " and current block");
-                continue; // to next BB.
+            
+            // Check step.
+            if (!rp->is_in_valid_step(t)) {
+                TRACE_MSG(rp->get_name() << " not needed for step " << t);
+                continue;
             }
 
-            TRACE_MSG("calc_micro_block('" << get_name() <<
-                       "'): after trimming for BB " << bbn << ": [" <<
-                       mb_idxs.begin.make_val_str() <<
-                       " ... " << mb_idxs.end.make_val_str() << ")");
+            // Already done?  This is tracked across calls to this func
+            // because >1 non-scratch part in a stage can depend on some
+            // common scratch part(s). This is also the reason we don't
+            // trim scratch part(s) to the BB(s) of the non-scratch
+            // part(s) that they depend on: the non-scratch parts may be
+            // used by >1 non-scratch parts with different BBs.
+            if (parts_done.count(rp)) {
+                TRACE_MSG(rp->get_name() << " already done for this micro-blk");
+                continue;
+            }
+            
+            // For scratch-vars, expand indices based on write halo.
+            ScanIndices mb_idxs2(micro_block_idxs);
+            if (is_scratch) {
+                mb_idxs2 = rp->adjust_scratch_span(outer_thread_idx, mb_idxs2,
+                                                   settings);
+                TRACE_MSG("micro-block adjusted to " << mb_idxs2.make_range_str(true) <<
+                          " per scratch write halo");
+            }
 
-            // Get the bundles that need to be processed in
-            // this block. This will be any prerequisite scratch-var
-            // bundles plus the current non-scratch bundle.
-            auto sg_list = get_reqd_bundles();
+            // Loop through all the full BBs in this reqd part.
+            TRACE_MSG("checking " << rp->get_bbs().size() <<
+                      " full BB(s) for reqd part '" << rp->get_name() << "'");
+            auto fbbs = rp->get_bbs();
+            int fbbn = 0;
+            for (auto& fbb : fbbs) {
+                fbbn++;
+                TRACE_MSG("reqd BB " << fbbn << ": " << fbb.make_range_str_dbg(domain_dims));
 
-            // Loop through all the needed bundles.
-            for (auto* sg : sg_list) {
+                // Find intersection between full BB and 'mb_idxs2'.
+                ScanIndices mb_idxs3(mb_idxs2);
+                bool fbb_ok = fbb.bb_num_points > 0;
+                DOMAIN_VAR_LOOP_FAST(i, j) {
 
-                // Indices needed for the generated loops.  Will normally be a
-                // copy of 'mb_idxs' except when updating scratch-vars.
-                ScanIndices adj_mb_idxs = sg->adjust_span(outer_thread_idx, mb_idxs);
+                    // Begin point.
+                    auto bbegin = max(mb_idxs2.begin[i], fbb.bb_begin[j]);
+                    mb_idxs3.begin[i] = bbegin;
 
-                // Tweak settings for adjusted indices.
-                adj_mb_idxs.adjust_from_settings(settings._micro_block_sizes,
-                                                 settings._micro_block_tile_sizes,
-                                                 settings._nano_block_sizes);
+                    // End point.
+                    auto bend = min(mb_idxs2.end[i], fbb.bb_end[j]);
+                    mb_idxs3.end[i] = bend;
+
+                    // Anything to do?
+                    if (bend <= bbegin)
+                        fbb_ok = false;
+                }
+                if (!fbb_ok) {
+                    TRACE_MSG("full reqd BB " << fbbn << " is empty");
+                    continue;
+                }
+                TRACE_MSG("micro-block trimmed to " <<
+                          mb_idxs3.make_range_str(true) << " within BB " << fbbn);
+
+                ///// Bounds set for this BB; ready to evaluate it.
 
                 // If binding threads to data.
                 if (bind_threads) {
@@ -147,25 +184,23 @@ namespace yask {
                         // width. Setting the alignment keeps slabs
                         // aligned between stages and/or steps.
                         if (i == bind_posn) {
-                            adj_mb_idxs.stride[i] = bind_slab_pts;
-                            adj_mb_idxs.align[i] = bind_slab_pts;
+                            mb_idxs3.stride[i] = bind_slab_pts;
+                            mb_idxs3.align[i] = bind_slab_pts;
                         }
 
                         // If this is not the binding dim, set stride
-                        // size to full width.  For now, this is the
+                        // size to > full width.  For now, this is the
                         // only option for micro-block shapes when
                         // binding.  TODO: consider other options.
                         else
-                            adj_mb_idxs.stride[i] = adj_mb_idxs.get_overall_range(i);
+                            mb_idxs3.stride[i] = ROUND_UP(mb_idxs3.get_overall_range(i),
+                                                          fold_pts[j]) * 2;
                     }
 
-                    TRACE_MSG("calc_micro_block('" << get_name() << "'): " <<
-                              " for reqd bundle '" << sg->get_name() << "': [" <<
-                              adj_mb_idxs.begin.make_val_str() << " ... " <<
-                              adj_mb_idxs.end.make_val_str() << ") by " <<
-                              adj_mb_idxs.stride.make_val_str() <<
-                              " by outer thread " << outer_thread_idx <<
-                              " with " << nbt << " block thread(s) bound to data");
+                    TRACE_MSG("reqd part '" << rp->get_name() << "': " <<
+                              mb_idxs3.make_range_str(true) <<
+                              " via outer thread " << outer_thread_idx <<
+                              " with " << nbt << " block thread(s) bound to data...");
 
                     // Start threads within a block.  Each of these threads
                     // will eventually work on a separate nano-block.  This
@@ -186,7 +221,7 @@ namespace yask {
                         #define MICRO_BLOCK_OMP_PRAGMA
 
                         // Loop prefix.
-                        #define MICRO_BLOCK_LOOP_INDICES adj_mb_idxs
+                        #define MICRO_BLOCK_LOOP_INDICES mb_idxs3
                         #define MICRO_BLOCK_BODY_INDICES nano_blk_range
                         #define MICRO_BLOCK_USE_LOOP_PART_0
                         #include "yask_micro_block_loops.hpp"
@@ -197,8 +232,8 @@ namespace yask {
                         auto bind_slab_idx = idiv_flr(bind_elem_idx + idx_ofs, bind_slab_pts);
                         auto bind_thr = imod_flr<idx_t>(bind_slab_idx, nbt);
                         if (inner_thread_idx == bind_thr)
-                            sg->calc_nano_block(outer_thread_idx, inner_thread_idx,
-                                               settings, nano_blk_range);
+                            rp->calc_nano_block(outer_thread_idx, inner_thread_idx,
+                                                settings, nano_blk_range);
 
                         // Loop sufffix.
                         #define MICRO_BLOCK_USE_LOOP_PART_1
@@ -211,52 +246,58 @@ namespace yask {
                 // (This is the more common case.)
                 else {
 
-                    TRACE_MSG("calc_micro_block('" << get_name() << "'): " <<
-                              " for reqd bundle '" << sg->get_name() << "': [" <<
-                              adj_mb_idxs.begin.make_val_str() << " ... " <<
-                              adj_mb_idxs.end.make_val_str() << ") by " <<
-                              adj_mb_idxs.stride.make_val_str() <<
-                              " by outer thread " << outer_thread_idx <<
-                              " with " << nbt << " block thread(s) NOT bound to data");
+                    TRACE_MSG("reqd part '" << rp->get_name() << "': " <<
+                              mb_idxs3.make_range_str(true) << 
+                              " via outer thread " << outer_thread_idx <<
+                              " with " << nbt << " block thread(s) NOT bound to data...");
 
                     // Call calc_nano_block() with a different thread for
                     // each nano-block using standard OpenMP scheduling.
                     
                     // Loop prefix.
-                    #define MICRO_BLOCK_LOOP_INDICES adj_mb_idxs
+                    #define MICRO_BLOCK_LOOP_INDICES mb_idxs3
                     #define MICRO_BLOCK_BODY_INDICES nano_blk_range
                     #define MICRO_BLOCK_USE_LOOP_PART_0
                     #include "yask_micro_block_loops.hpp"
 
                     // Loop body.
                     int inner_thread_idx = omp_get_thread_num();
-                    sg->calc_nano_block(outer_thread_idx, inner_thread_idx,
-                                       settings, nano_blk_range);
+                    rp->calc_nano_block(outer_thread_idx, inner_thread_idx,
+                                        settings, nano_blk_range);
 
                     // Loop suffix.
                     #define MICRO_BLOCK_USE_LOOP_PART_1
                     #include "yask_micro_block_loops.hpp"
 
-                } // OMP parallel when binding threads to data.
-            } // bundles.
+                } // not binding threads to data.
+            } // full BBs in this required part.
 
-            // Mark exterior dirty for halo exchange if exterior was done.
-            bool mark_dirty = mpisec.do_mpi_left || mpisec.do_mpi_right;
-            update_var_info(YkVarBase::self, t, mark_dirty, true, false);
+            // Make sure streaming stores are visible for later loads.
+            make_stores_visible();
             
-        } // BB list.
+            // Mark this part done. This avoid re-evaluating
+            // scratch parts that are used more than once in
+            // a stage.
+            parts_done.insert(rp);
+
+        } // required parts.
+
+        // Mark exterior dirty for halo exchange if exterior was done.
+        bool mark_dirty = mpisec.do_mpi_left || mpisec.do_mpi_right;
+        update_var_info(YkVarBase::self, t, mark_dirty, true, false);
+            
     } // calc_micro_block().
 
-    // Mark vars dirty that are updated by this bundle and/or
+    // Mark vars dirty that are updated by this part and/or
     // update last valid step.
-    void StencilBundleBase::update_var_info(YkVarBase::dirty_idx whose,
+    void StencilPartBase::update_var_info(YkVarBase::dirty_idx whose,
                                             idx_t t,
                                             bool mark_extern_dirty,
                                             bool mod_dev_data,
                                             bool update_valid_step) {
         STATE_VARS(this);
 
-        // Get output step for this bundle, if any.  For most stencils, this
+        // Get output step for this part, if any.  For most stencils, this
         // will be t+1 or t-1 if striding backward.
         idx_t t_out = 0;
         if (!get_output_step_index(t, t_out)) {
@@ -264,7 +305,7 @@ namespace yask {
             return;
         }
 
-        // Output vars for this bundle.  NB: don't need to mark
+        // Output vars for this part.  NB: don't need to mark
         // scratch vars as dirty because they are never exchanged.
         for (auto gp : output_var_ptrs) {
             auto& gb = gp->gb();
@@ -287,9 +328,8 @@ namespace yask {
                 gb.update_valid_step(t_out);
         }
     }
-
-    // If this bundle is updating scratch var(s),
-    // expand begin & end of 'idxs' by sizes of halos.
+    
+    // Expand begin & end of 'idxs' by sizes of write halos.
     // Stride indices may also change.
     // NB: it is not necessary that the domain of each var
     // is the same as the span of 'idxs'. However, it should be
@@ -299,75 +339,93 @@ namespace yask {
     // its halo sizes are still used to specify how much to
     // add to 'idxs'.
     // Returns adjusted indices.
-    ScanIndices StencilBundleBase::adjust_span(int outer_thread_idx,
-                                               const ScanIndices& idxs) const {
+    ScanIndices StencilPartBase::adjust_scratch_span(int outer_thread_idx,
+                                                       const ScanIndices& idxs,
+                                                       KernelSettings& settings) const {
+        assert(is_scratch());
         STATE_VARS(this);
+        assert(max_write_halo_left.get_num_dims() == NUM_DOMAIN_DIMS);
+        assert(max_write_halo_right.get_num_dims() == NUM_DOMAIN_DIMS);
+
+        // Init return indices.
         ScanIndices adj_idxs(idxs);
 
-        // Loop thru vecs of scratch vars for this bundle.
-        for (auto* sv : output_scratch_vecs) {
-            assert(sv);
+        // Adjust for each dim.
+        // i: index for stencil dims, j: index for domain dims.
+        DOMAIN_VAR_LOOP(i, j) {
+        
+            // Adjust begin & end scan indices based on write halos.
+            idx_t ab = idxs.begin[i] - max_write_halo_left[j];
+            idx_t ae = idxs.end[i] + max_write_halo_right[j];
 
-            // Get the one for this thread.
-            auto& gp = sv->at(outer_thread_idx);
-            assert(gp);
-            auto& gb = gp->gb();
-            assert(gb.is_scratch());
+            #if 0
+            // Currently disabled because it causes the bad-FP-value
+            // checker to throw exceptions when outside normal bounds.
+            //
+            // Round up halos to vector sizes.  This is to [try to] avoid
+            // costly masking around edges of scratch write area. For
+            // scratch vars, it won't hurt to calculate extra values outside
+            // of the min write area because those values should never be
+            // used. Also, reading is always done at vector-lengths; only
+            // writing is masked. Rounding must be rank-local, so
+            // rounding is after by subtracting rank offsets, and then they
+            // are re-added.  Be careful to allocate enough memory in
+            // StencilContext::alloc_scratch_data().  NB: When a scratch var
+            // has domain conditions, this won't always succeed in reducing
+            // masking.
+            idx_t ro = _context->rank_domain_offsets[j];
+            ab = round_down_flr(ab - ro, fold_pts[j]) + ro;
+            ae = round_up_flr(ae - ro, fold_pts[j]) + ro;
+            #endif
 
-            // i: index for stencil dims, j: index for domain dims.
-            DOMAIN_VAR_LOOP_FAST(i, j) {
-                auto& dim = dims->_stencil_dims.get_dim(i);
-                auto& dname = dim._get_name();
+            adj_idxs.begin[i] = ab;
+            adj_idxs.end[i] = ae;
 
+            // Adjust strides and/or tiles as needed.
+            adj_idxs.adjust_from_settings(settings._micro_block_sizes,
+                                          settings._micro_block_tile_sizes,
+                                          settings._nano_block_sizes);
+
+            auto& dim = dims->_domain_dims.get_dim(j);
+            auto& dname = dim._get_name();
+
+            // Make sure size of scratch vars cover new index bounds.
+            // TODO: check size of input vars, incl. read halos.
+            #ifdef CHECK
+            for (auto* sv : output_scratch_vecs) {
+                assert(sv);
+
+                // Get the one for this thread.
+                auto& gp = sv->at(outer_thread_idx);
+                assert(gp);
+                auto& gb = gp->gb();
+                
                 // Is this dim used in this var?
                 int posn = gb.get_dim_posn(dname);
                 if (posn >= 0) {
 
-                    // Get halos, which need to be written to for
-                    // scratch vars.
-                    idx_t lh = gp->get_left_halo_size(posn);
-                    idx_t rh = gp->get_right_halo_size(posn);
-
-                    // Round up halos to vector sizes.
-                    // TODO: consider cluster sizes, but need to make changes
-                    // elsewhere in code.
-                    lh = ROUND_UP(lh, fold_pts[j]);
-                    rh = ROUND_UP(rh, fold_pts[j]);
-
-                    // Adjust begin & end scan indices based on halos.
-                    adj_idxs.begin[i] = idxs.begin[i] - lh;
-                    adj_idxs.end[i] = idxs.end[i] + rh;
-
-                    // Make sure var covers index bounds.
-                    TRACE_MSG("adjust_span: micro-blk [" <<
+                    TRACE_MSG("micro-blk adjusted from [" <<
                               idxs.begin[i] << "..." <<
-                              idxs.end[i] << ") adjusted to [" <<
+                              idxs.end[i] << ") to [" <<
                               adj_idxs.begin[i] << "..." <<
-                              adj_idxs.end[i] << ") within scratch-var '" <<
+                              adj_idxs.end[i] << "); checking" <<
+                              " against scratch-var '" <<
                               gp->get_name() << "' with halos " <<
                               gp->get_left_halo_size(posn) << " and " <<
                               gp->get_right_halo_size(posn) << " allocated [" <<
                               gp->get_first_local_index(posn) << "..." <<
                               gp->get_last_local_index(posn) << "] in dim '" << dname << "'");
-                    assert(adj_idxs.begin[i] >= gp->get_first_local_index(posn));
-                    assert(adj_idxs.end[i] <= gp->get_last_local_index(posn) + 1);
-
-                    // If existing stride is >= whole tile, adjust it also.
-                    idx_t width = idxs.end[i] - idxs.begin[i];
-                    if (idxs.stride[i] >= width) {
-                        idx_t adj_width = adj_idxs.end[i] - adj_idxs.begin[i];
-                        adj_idxs.stride[i] = adj_width;
-                    }
+                
+                    assert(ab >= gp->get_first_local_index(posn));
+                    assert(ae <= gp->get_last_local_index(posn) + 1);
                 }
             }
-
-            // Only need to get info from one var.
-            // TODO: check that vars are consistent.
-            break;
-        }
+            #endif // check.
+        } // dims.
+        
         return adj_idxs;
-    } // adjust_span().
-
+    } // adjust_scratch_span().
+    
     // Timer methods.
     // Start and stop stage timers for final stats and track steps done.
     void Stage::start_timers() {
@@ -399,7 +457,7 @@ namespace yask {
     }
 
     // Calc the work stats.
-    // Contains MPI barriers!
+    // NB: Contains MPI barriers to sum work across ranks!
     void Stage::init_work_stats() {
         STATE_VARS(this);
 
@@ -408,69 +466,87 @@ namespace yask {
         num_fpops_per_step = 0;
 
         DEBUG_MSG("Stage '" << get_name() << "':\n" <<
-                  " num bundles:                 " << size() << endl <<
+                  " num non-scratch parts:     " << size() << endl <<
                   " stage scope:                 " << _stage_bb.make_range_string(domain_dims));
 
-        // Bundles.
+        // Non-scratch parts.
         for (auto* sg : *this) {
 
-            // Stats for this bundle for 1 pt.
-            idx_t writes1 = 0, reads1 = 0, fpops1 = 0;
+            // This part and its scratch parts.
+            auto sc_list = sg->get_scratch_children();
+            auto sg_list = sg->get_reqd_parts();
+            DEBUG_MSG(" Non-scratch part '" << sg->get_name() << "':\n" <<
+                      "  num reqd scratch parts:   " << sc_list.size());
+            
+            // Stats for each part.
+            typedef map<string, idx_t> bstats;
+            bstats npts, writes, reads, fpops;
 
-            // Loop through all the needed bundles to count stats for
-            // scratch bundles.  Does not count extra ops needed in scratch
-            // halos since this varies depending on block size.
-            auto sg_list = sg->get_reqd_bundles();
-            for (auto* rsg : sg_list) {
-                reads1 += rsg->get_scalar_points_read();
-                writes1 += rsg->get_scalar_points_written();
-                fpops1 += rsg->get_scalar_fp_ops();
-            }
+            // Loop through all the full BBs in this part.
+            auto fbbs = sg->get_bbs();
+            for (auto& fbb : fbbs) {
 
-            // Multiply by valid pts in BB for this bundle.
-            auto& bb = sg->get_bb();
-            idx_t writes_bb = writes1 * bb.bb_num_points;
-            num_writes_per_step += writes_bb;
-            idx_t reads_bb = reads1 * bb.bb_num_points;
-            num_reads_per_step += reads_bb;
-            idx_t fpops_bb = fpops1 * bb.bb_num_points;
-            num_fpops_per_step += fpops_bb;
+                // Loop through all the needed parts.
+                for (auto* rsg : sg_list) {
+                    auto& bname = rsg->get_name();
 
-            DEBUG_MSG(" Bundle '" << sg->get_name() << "':\n" <<
-                      "  num reqd scratch bundles:   " << (sg_list.size() - 1));
-            // TODO: add info on scratch bundles here.
+                    // Loop through all full BBs in needed part.
+                    auto fnbbs = rsg->get_bbs();
+                    for (auto& fnbb : fnbbs) {
+                    
+                        // Find intersection between BBs.
+                        // NB: If fbb == fnbb, then bbi = fbb;
+                        // TODO: add scratch halos in pad area.
+                        auto bbi = fbb.intersection_with(fnbb, _context);
+                        auto nptsi = bbi.bb_num_points;
 
-            if (sg->is_sub_domain_expr())
-                DEBUG_MSG("  sub-domain expr:            '" << sg->get_domain_description() << "'");
-            if (sg->is_step_cond_expr())
-                DEBUG_MSG("  step-condition expr:        '" << sg->get_step_cond_description() << "'");
-
-            DEBUG_MSG("  bundle size (points):       " << make_num_str(bb.bb_size));
-            if (bb.bb_size) {
-                DEBUG_MSG("  valid points in bundle:     " << make_num_str(bb.bb_num_points));
-                if (bb.bb_num_points) {
-                    DEBUG_MSG("  bundle scope:               " << bb.make_range_string(domain_dims) <<
-                              "\n  bundle bounding-box size:   " << bb.make_len_string(domain_dims));
-                }
-            }
-            DEBUG_MSG("  num full rectangles in box: " << sg->get_bbs().size());
-            if (sg->get_bbs().size() > 1) {
-                for (size_t ri = 0; ri < sg->get_bbs().size(); ri++) {
-                    auto& rbb = sg->get_bbs()[ri];
-                    DEBUG_MSG("   Rectangle " << ri << ":\n"
-                              "    num points in rect:       " << make_num_str(rbb.bb_num_points));
-                    if (rbb.bb_num_points) {
-                        DEBUG_MSG("    rect scope:               " << rbb.make_range_string(domain_dims) <<
-                                  "\n    rect size:                " << rbb.make_len_string(domain_dims));
+                        // Add stats.
+                        npts[bname] += nptsi;
+                        reads[bname] += rsg->get_scalar_points_read() * nptsi;
+                        writes[bname] += rsg->get_scalar_points_written() * nptsi;
+                        fpops[bname] += rsg->get_scalar_fp_ops() * nptsi;
                     }
                 }
             }
-            DEBUG_MSG("  var-reads per point:        " << reads1 << endl <<
-                      "  var-reads in rank:          " << make_num_str(reads_bb) << endl <<
-                      "  var-writes per point:       " << writes1 << endl <<
-                      "  var-writes in rank:         " << make_num_str(writes_bb) << endl <<
-                      "  est FP-ops per point:       " << fpops1 << endl <<
-                      "  est FP-ops in rank:         " << make_num_str(fpops_bb));
+
+            // Loop through all needed parts.
+            for (auto* rsg : sg_list) {
+                auto& bname = rsg->get_name();
+                num_reads_per_step += reads[bname];
+                num_writes_per_step += writes[bname];
+                num_fpops_per_step += fpops[bname];
+
+                if (actl_opts->_verbose) {
+                    DEBUG_MSG("  part '" << rsg->get_name() << "':");
+
+                    if (rsg->is_sub_domain_expr())
+                        DEBUG_MSG("   sub-domain expr:            '" << rsg->get_domain_description() << "'");
+                    if (rsg->is_step_cond_expr())
+                        DEBUG_MSG("   step-condition expr:        '" << rsg->get_step_cond_description() << "'");
+
+                    DEBUG_MSG("   points to eval in part:   " << make_num_str(npts[bname]) << endl <<
+                              "   var-reads per point:        " << rsg->get_scalar_points_read() << endl <<
+                              "   var-writes per point:       " << rsg->get_scalar_points_written() << endl <<
+                              "   est FP-ops per point:       " << rsg->get_scalar_fp_ops() << endl <<
+                              "   var-reads in rank:          " << make_num_str(reads[bname]) << endl <<
+                              "   var-writes in rank:         " << make_num_str(writes[bname]) << endl <<
+                              "   est FP-ops in rank:         " << make_num_str(fpops[bname]));
+
+                    auto& bb = rsg->get_bb();
+                    DEBUG_MSG("   part scope:                 " << bb.make_range_string(domain_dims));
+                    auto& bbs = rsg->get_bbs();
+                    DEBUG_MSG("   num full rectangles in box: " << bbs.size());
+                    for (size_t ri = 0; ri < bbs.size(); ri++) {
+                        auto& rbb = bbs[ri];
+                        DEBUG_MSG("    Rectangle " << ri << ":\n"
+                                  "     num points in rect:       " << make_num_str(rbb.bb_size));
+                        if (rbb.bb_size) {
+                            DEBUG_MSG("     rect scope:               " << rbb.make_range_string(domain_dims) <<
+                                      "\n     rect size:                " << rbb.make_len_string(domain_dims));
+                        }
+                    }
+                }
+            }
 
             // Classify vars.
             VarPtrs idvars, imvars, odvars, omvars, iodvars, iomvars; // i[nput], o[utput], d[omain], m[isc].
@@ -512,7 +588,7 @@ namespace yask {
             print_var_list(os, omvars, "output-only other");
             print_var_list(os, iomvars, "input-output other");
 
-        } // bundles.
+        } // parts.
 
         // Sum across ranks.
         tot_reads_per_step = env->sum_over_ranks(num_reads_per_step);

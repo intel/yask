@@ -154,10 +154,13 @@ namespace yask {
         }
 
         // Check for same logical var.  A logical var is defined by the var
-        // itself and any const indices.
-        virtual bool is_same_logical_var(const VarPoint& rhs) const {
-            return _var == rhs._var && _consts == rhs._consts;
-        }
+        // itself, any const indices, and the step offset, if any.
+        // Examples:
+        // - A(t, x, y, 1) is same logical var as A(t, x+1, y, 1).
+        // - A(t+1, x, y, 1) is NOT same logical var as A(t, x+1, y, 1).
+        // - A(t, x, y, 1) is NOT same logical var as A(t, x+1, y, 2).
+        // - A(t, x, y, 1) is NOT same logical var as B(t, x, y, 1).
+        virtual bool is_same_logical_var(const VarPoint& rhs) const;
 
         // String w/name and parens around args, e.g., 'u(x, y+2)'.
         // Apply substitutions to indices using 'var_map' if provided.
@@ -212,7 +215,7 @@ namespace yask {
     // Equality operator for a var point.
     // This defines the LHS as equal to the RHS; it is NOT
     // a comparison operator; it is NOT an assignment operator.
-    // It also holds an optional condition.
+    // It also holds optional conditions.
     class EqualsExpr : public Expr,
                        public virtual yc_equation_node {
     protected:
@@ -255,7 +258,7 @@ namespace yask {
         static string step_cond_op_str() { return "IF_STEP"; }
 
         // Get pointer to var on LHS or NULL if not set.
-        virtual Var* _get_var() {
+        virtual Var* get_lhs_var() {
             if (_lhs.get())
                 return _lhs->_get_var();
             return NULL;

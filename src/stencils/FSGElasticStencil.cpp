@@ -50,66 +50,66 @@ namespace fsg {
 
     protected:
 
-        yc_var_proxy v_bl_u = yc_var_proxy("v_bl_u", get_soln(), { t, x, y, z });
-        yc_var_proxy v_bl_v = yc_var_proxy("v_bl_v", get_soln(), { t, x, y, z });
-        yc_var_proxy v_bl_w = yc_var_proxy("v_bl_w", get_soln(), { t, x, y, z });
-        yc_var_proxy v_br_u = yc_var_proxy("v_br_u", get_soln(), { t, x, y, z });
-        yc_var_proxy v_br_v = yc_var_proxy("v_br_v", get_soln(), { t, x, y, z });
-        yc_var_proxy v_br_w = yc_var_proxy("v_br_w", get_soln(), { t, x, y, z });
-        yc_var_proxy v_tl_u = yc_var_proxy("v_tl_u", get_soln(), { t, x, y, z });
-        yc_var_proxy v_tl_v = yc_var_proxy("v_tl_v", get_soln(), { t, x, y, z });
-        yc_var_proxy v_tl_w = yc_var_proxy("v_tl_w", get_soln(), { t, x, y, z });
-        yc_var_proxy v_tr_u = yc_var_proxy("v_tr_u", get_soln(), { t, x, y, z });
-        yc_var_proxy v_tr_v = yc_var_proxy("v_tr_v", get_soln(), { t, x, y, z });
-        yc_var_proxy v_tr_w = yc_var_proxy("v_tr_w", get_soln(), { t, x, y, z });
+        MAKE_VAR(v_bl_u, t, x, y, z);
+        MAKE_VAR(v_bl_v, t, x, y, z);
+        MAKE_VAR(v_bl_w, t, x, y, z);
+        MAKE_VAR(v_br_u, t, x, y, z);
+        MAKE_VAR(v_br_v, t, x, y, z);
+        MAKE_VAR(v_br_w, t, x, y, z);
+        MAKE_VAR(v_tl_u, t, x, y, z);
+        MAKE_VAR(v_tl_v, t, x, y, z);
+        MAKE_VAR(v_tl_w, t, x, y, z);
+        MAKE_VAR(v_tr_u, t, x, y, z);
+        MAKE_VAR(v_tr_v, t, x, y, z);
+        MAKE_VAR(v_tr_w, t, x, y, z);
 
-        yc_var_proxy s_bl_xx = yc_var_proxy("s_bl_xx", get_soln(), { t, x, y, z });
-        yc_var_proxy s_bl_yy = yc_var_proxy("s_bl_yy", get_soln(), { t, x, y, z });
-        yc_var_proxy s_bl_zz = yc_var_proxy("s_bl_zz", get_soln(), { t, x, y, z });
-        yc_var_proxy s_bl_yz = yc_var_proxy("s_bl_yz", get_soln(), { t, x, y, z });
-        yc_var_proxy s_bl_xz = yc_var_proxy("s_bl_xz", get_soln(), { t, x, y, z });
-        yc_var_proxy s_bl_xy = yc_var_proxy("s_bl_xy", get_soln(), { t, x, y, z });
-        yc_var_proxy s_br_xx = yc_var_proxy("s_br_xx", get_soln(), { t, x, y, z });
-        yc_var_proxy s_br_yy = yc_var_proxy("s_br_yy", get_soln(), { t, x, y, z });
-        yc_var_proxy s_br_zz = yc_var_proxy("s_br_zz", get_soln(), { t, x, y, z });
-        yc_var_proxy s_br_yz = yc_var_proxy("s_br_yz", get_soln(), { t, x, y, z });
-        yc_var_proxy s_br_xz = yc_var_proxy("s_br_xz", get_soln(), { t, x, y, z });
-        yc_var_proxy s_br_xy = yc_var_proxy("s_br_xy", get_soln(), { t, x, y, z });
-        yc_var_proxy s_tl_xx = yc_var_proxy("s_tl_xx", get_soln(), { t, x, y, z });
-        yc_var_proxy s_tl_yy = yc_var_proxy("s_tl_yy", get_soln(), { t, x, y, z });
-        yc_var_proxy s_tl_zz = yc_var_proxy("s_tl_zz", get_soln(), { t, x, y, z });
-        yc_var_proxy s_tl_yz = yc_var_proxy("s_tl_yz", get_soln(), { t, x, y, z });
-        yc_var_proxy s_tl_xz = yc_var_proxy("s_tl_xz", get_soln(), { t, x, y, z });
-        yc_var_proxy s_tl_xy = yc_var_proxy("s_tl_xy", get_soln(), { t, x, y, z });
-        yc_var_proxy s_tr_xx = yc_var_proxy("s_tr_xx", get_soln(), { t, x, y, z });
-        yc_var_proxy s_tr_yy = yc_var_proxy("s_tr_yy", get_soln(), { t, x, y, z });
-        yc_var_proxy s_tr_zz = yc_var_proxy("s_tr_zz", get_soln(), { t, x, y, z });
-        yc_var_proxy s_tr_yz = yc_var_proxy("s_tr_yz", get_soln(), { t, x, y, z });
-        yc_var_proxy s_tr_xz = yc_var_proxy("s_tr_xz", get_soln(), { t, x, y, z });
-        yc_var_proxy s_tr_xy = yc_var_proxy("s_tr_xy", get_soln(), { t, x, y, z });
+        MAKE_VAR(s_bl_xx, t, x, y, z);
+        MAKE_VAR(s_bl_yy, t, x, y, z);
+        MAKE_VAR(s_bl_zz, t, x, y, z);
+        MAKE_VAR(s_bl_yz, t, x, y, z);
+        MAKE_VAR(s_bl_xz, t, x, y, z);
+        MAKE_VAR(s_bl_xy, t, x, y, z);
+        MAKE_VAR(s_br_xx, t, x, y, z);
+        MAKE_VAR(s_br_yy, t, x, y, z);
+        MAKE_VAR(s_br_zz, t, x, y, z);
+        MAKE_VAR(s_br_yz, t, x, y, z);
+        MAKE_VAR(s_br_xz, t, x, y, z);
+        MAKE_VAR(s_br_xy, t, x, y, z);
+        MAKE_VAR(s_tl_xx, t, x, y, z);
+        MAKE_VAR(s_tl_yy, t, x, y, z);
+        MAKE_VAR(s_tl_zz, t, x, y, z);
+        MAKE_VAR(s_tl_yz, t, x, y, z);
+        MAKE_VAR(s_tl_xz, t, x, y, z);
+        MAKE_VAR(s_tl_xy, t, x, y, z);
+        MAKE_VAR(s_tr_xx, t, x, y, z);
+        MAKE_VAR(s_tr_yy, t, x, y, z);
+        MAKE_VAR(s_tr_zz, t, x, y, z);
+        MAKE_VAR(s_tr_yz, t, x, y, z);
+        MAKE_VAR(s_tr_xz, t, x, y, z);
+        MAKE_VAR(s_tr_xy, t, x, y, z);
 
         // 3D-spatial coefficients.
-        yc_var_proxy c11 = yc_var_proxy("c11", get_soln(), { x, y, z });
-        yc_var_proxy c12 = yc_var_proxy("c12", get_soln(), { x, y, z });
-        yc_var_proxy c13 = yc_var_proxy("c13", get_soln(), { x, y, z });
-        yc_var_proxy c14 = yc_var_proxy("c14", get_soln(), { x, y, z });
-        yc_var_proxy c15 = yc_var_proxy("c15", get_soln(), { x, y, z });
-        yc_var_proxy c16 = yc_var_proxy("c16", get_soln(), { x, y, z });
-        yc_var_proxy c22 = yc_var_proxy("c22", get_soln(), { x, y, z });
-        yc_var_proxy c23 = yc_var_proxy("c23", get_soln(), { x, y, z });
-        yc_var_proxy c24 = yc_var_proxy("c24", get_soln(), { x, y, z });
-        yc_var_proxy c25 = yc_var_proxy("c25", get_soln(), { x, y, z });
-        yc_var_proxy c26 = yc_var_proxy("c26", get_soln(), { x, y, z });
-        yc_var_proxy c33 = yc_var_proxy("c33", get_soln(), { x, y, z });
-        yc_var_proxy c34 = yc_var_proxy("c34", get_soln(), { x, y, z });
-        yc_var_proxy c35 = yc_var_proxy("c35", get_soln(), { x, y, z });
-        yc_var_proxy c36 = yc_var_proxy("c36", get_soln(), { x, y, z });
-        yc_var_proxy c44 = yc_var_proxy("c44", get_soln(), { x, y, z });
-        yc_var_proxy c45 = yc_var_proxy("c45", get_soln(), { x, y, z });
-        yc_var_proxy c46 = yc_var_proxy("c46", get_soln(), { x, y, z });
-        yc_var_proxy c55 = yc_var_proxy("c55", get_soln(), { x, y, z });
-        yc_var_proxy c56 = yc_var_proxy("c56", get_soln(), { x, y, z });
-        yc_var_proxy c66 = yc_var_proxy("c66", get_soln(), { x, y, z });
+        MAKE_VAR(c11, x, y, z);
+        MAKE_VAR(c12, x, y, z);
+        MAKE_VAR(c13, x, y, z);
+        MAKE_VAR(c14, x, y, z);
+        MAKE_VAR(c15, x, y, z);
+        MAKE_VAR(c16, x, y, z);
+        MAKE_VAR(c22, x, y, z);
+        MAKE_VAR(c23, x, y, z);
+        MAKE_VAR(c24, x, y, z);
+        MAKE_VAR(c25, x, y, z);
+        MAKE_VAR(c26, x, y, z);
+        MAKE_VAR(c33, x, y, z);
+        MAKE_VAR(c34, x, y, z);
+        MAKE_VAR(c35, x, y, z);
+        MAKE_VAR(c36, x, y, z);
+        MAKE_VAR(c44, x, y, z);
+        MAKE_VAR(c45, x, y, z);
+        MAKE_VAR(c46, x, y, z);
+        MAKE_VAR(c55, x, y, z);
+        MAKE_VAR(c56, x, y, z);
+        MAKE_VAR(c66, x, y, z);
 
     public:
 
@@ -367,18 +367,18 @@ namespace fsg {
         const int abc_width = 20;
 
         // Sponge coefficients.
-        yc_var_proxy sponge_lx = yc_var_proxy("sponge_lx", get_soln(), { x, y, z });
-        yc_var_proxy sponge_rx = yc_var_proxy("sponge_rx", get_soln(), { x, y, z });
-        yc_var_proxy sponge_bz = yc_var_proxy("sponge_bz", get_soln(), { x, y, z });
-        yc_var_proxy sponge_tz = yc_var_proxy("sponge_tz", get_soln(), { x, y, z });
-        yc_var_proxy sponge_fy = yc_var_proxy("sponge_fy", get_soln(), { x, y, z });
-        yc_var_proxy sponge_by = yc_var_proxy("sponge_by", get_soln(), { x, y, z });
-        yc_var_proxy sponge_sq_lx = yc_var_proxy("sponge_sq_lx", get_soln(), { x, y, z });
-        yc_var_proxy sponge_sq_rx = yc_var_proxy("sponge_sq_rx", get_soln(), { x, y, z });
-        yc_var_proxy sponge_sq_bz = yc_var_proxy("sponge_sq_bz", get_soln(), { x, y, z });
-        yc_var_proxy sponge_sq_tz = yc_var_proxy("sponge_sq_tz", get_soln(), { x, y, z });
-        yc_var_proxy sponge_sq_fy = yc_var_proxy("sponge_sq_fy", get_soln(), { x, y, z });
-        yc_var_proxy sponge_sq_by = yc_var_proxy("sponge_sq_by", get_soln(), { x, y, z });
+        MAKE_VAR(sponge_lx, x, y, z);
+        MAKE_VAR(sponge_rx, x, y, z);
+        MAKE_VAR(sponge_bz, x, y, z);
+        MAKE_VAR(sponge_tz, x, y, z);
+        MAKE_VAR(sponge_fy, x, y, z);
+        MAKE_VAR(sponge_by, x, y, z);
+        MAKE_VAR(sponge_sq_lx, x, y, z);
+        MAKE_VAR(sponge_sq_rx, x, y, z);
+        MAKE_VAR(sponge_sq_bz, x, y, z);
+        MAKE_VAR(sponge_sq_tz, x, y, z);
+        MAKE_VAR(sponge_sq_fy, x, y, z);
+        MAKE_VAR(sponge_sq_by, x, y, z);
 
         FSGElasticStencilBase &fsg;
 
@@ -559,10 +559,10 @@ namespace fsg {
 // Create an object of type 'FSGElasticStencil',
 // making it available in the YASK compiler utility via the
 // '-stencil' commmand-line option or the 'stencil=' build option.
-static FSGElasticStencil FSGElasticStencil_instance;
+REGISTER_SOLUTION(FSGElasticStencil);
 // Create an object of type 'FSGABCElasticStencil',
 // making it available in the YASK compiler utility via the
 // '-stencil' commmand-line option or the 'stencil=' build option.
-static FSGABCElasticStencil FSGABCElasticStencil_instance;
+REGISTER_SOLUTION(FSGABCElasticStencil);
 
 }

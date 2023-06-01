@@ -197,7 +197,7 @@ Macros</h2></td></tr>
 <tr class="memdesc:ga68044db7711ff9ff8fcd69316151381c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Unary math functions. Used internally to define sqrt(), sin(), etc. <br /></td></tr>
 <tr class="separator:ga68044db7711ff9ff8fcd69316151381c"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:gaac990460b6ca6815d6c48cd1892164d1"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__yc.html#gaac990460b6ca6815d6c48cd1892164d1">BINARY_MATH_EXPR</a>(fn_name)</td></tr>
-<tr class="memdesc:gaac990460b6ca6815d6c48cd1892164d1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Binary math functions. Used internally to define pow().  <br /></td></tr>
+<tr class="memdesc:gaac990460b6ca6815d6c48cd1892164d1"><td class="mdescLeft">&#160;</td><td class="mdescRight">Binary math functions. Used internally.  <br /></td></tr>
 <tr class="separator:gaac990460b6ca6815d6c48cd1892164d1"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:ga15c2237d38cdf6a14d9f383e141a7f21"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__yc.html#ga15c2237d38cdf6a14d9f383e141a7f21">BOOL_OPER</a>(oper,  fn)</td></tr>
 <tr class="memdesc:ga15c2237d38cdf6a14d9f383e141a7f21"><td class="mdescLeft">&#160;</td><td class="mdescRight">Binary numerical-to-boolean operators. Used internally to define <code>==</code>, <code>&lt;</code>, etc.  <br /></td></tr>
@@ -211,6 +211,34 @@ Macros</h2></td></tr>
 <tr class="memitem:ga5fabd22dd6b26cd147074d603cb6f367"><td class="memItemLeft" align="right" valign="top">#define&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__yc.html#ga5fabd22dd6b26cd147074d603cb6f367">IF_STEP</a>&#160;&#160;&#160;|=</td></tr>
 <tr class="memdesc:ga5fabd22dd6b26cd147074d603cb6f367"><td class="mdescLeft">&#160;</td><td class="mdescRight">Recommended macro to make the step-condition operator readable and self-explanatory.  <br /></td></tr>
 <tr class="separator:ga5fabd22dd6b26cd147074d603cb6f367"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ga1b0c986aa4405208ac93d10dc5a1031c"><td class="memItemLeft" align="right" valign="top"><a id="ga1b0c986aa4405208ac93d10dc5a1031c" name="ga1b0c986aa4405208ac93d10dc5a1031c"></a>
+#define&#160;</td><td class="memItemRight" valign="bottom"><b>MAKE_STEP_INDEX</b>(dim_name)&#160;&#160;&#160;yc_index_node_ptr dim_name = new_step_index(#dim_name)</td></tr>
+<tr class="memdesc:ga1b0c986aa4405208ac93d10dc5a1031c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convenience macro for declaring a step index in a class derived from <a class="el" href="classyask_1_1yc__solution__base.html" title="A base class for defining solutions to be kept in a common registry.">yask::yc_solution_base</a>. <br /></td></tr>
+<tr class="separator:ga1b0c986aa4405208ac93d10dc5a1031c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ga4ff9e4d0af940392f53c7dc6bf321ee7"><td class="memItemLeft" align="right" valign="top"><a id="ga4ff9e4d0af940392f53c7dc6bf321ee7" name="ga4ff9e4d0af940392f53c7dc6bf321ee7"></a>
+#define&#160;</td><td class="memItemRight" valign="bottom"><b>MAKE_DOMAIN_INDEX</b>(dim_name)&#160;&#160;&#160;yc_index_node_ptr dim_name = new_domain_index(#dim_name)</td></tr>
+<tr class="memdesc:ga4ff9e4d0af940392f53c7dc6bf321ee7"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convenience macro for declaring a domain index in a class derived from <a class="el" href="classyask_1_1yc__solution__base.html" title="A base class for defining solutions to be kept in a common registry.">yask::yc_solution_base</a>. <br /></td></tr>
+<tr class="separator:ga4ff9e4d0af940392f53c7dc6bf321ee7"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ga03ed1eacd8ce2afafd8fb011124f1957"><td class="memItemLeft" align="right" valign="top"><a id="ga03ed1eacd8ce2afafd8fb011124f1957" name="ga03ed1eacd8ce2afafd8fb011124f1957"></a>
+#define&#160;</td><td class="memItemRight" valign="bottom"><b>MAKE_MISC_INDEX</b>(dim_name)&#160;&#160;&#160;yc_index_node_ptr dim_name = new_misc_index(#dim_name)</td></tr>
+<tr class="memdesc:ga03ed1eacd8ce2afafd8fb011124f1957"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convenience macro for declaring a misc index in a class derived from <a class="el" href="classyask_1_1yc__solution__base.html" title="A base class for defining solutions to be kept in a common registry.">yask::yc_solution_base</a>. <br /></td></tr>
+<tr class="separator:ga03ed1eacd8ce2afafd8fb011124f1957"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:gae3d7fce5f0ac5dba65bc16ce8a342553"><td class="memItemLeft" align="right" valign="top"><a id="gae3d7fce5f0ac5dba65bc16ce8a342553" name="gae3d7fce5f0ac5dba65bc16ce8a342553"></a>
+#define&#160;</td><td class="memItemRight" valign="bottom"><b>MAKE_VAR</b>(var_name, ...)&#160;&#160;&#160;        yc_var_proxy var_name = yc_var_proxy(#var_name, get_soln(), { __VA_ARGS__ }, false)</td></tr>
+<tr class="memdesc:gae3d7fce5f0ac5dba65bc16ce8a342553"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convenience macro for creating a <a class="el" href="classyask_1_1yc__var__proxy.html" title="A wrapper or &quot;proxy&quot; class around a yc_var pointer.">yask::yc_var_proxy</a> for an n-dimensional YASK variable. <br /></td></tr>
+<tr class="separator:gae3d7fce5f0ac5dba65bc16ce8a342553"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ga88e55b6e366e52e371a6a3335e40ecd4"><td class="memItemLeft" align="right" valign="top"><a id="ga88e55b6e366e52e371a6a3335e40ecd4" name="ga88e55b6e366e52e371a6a3335e40ecd4"></a>
+#define&#160;</td><td class="memItemRight" valign="bottom"><b>MAKE_SCRATCH_VAR</b>(var_name, ...)&#160;&#160;&#160;        yc_var_proxy var_name = yc_var_proxy(#var_name, get_soln(), { __VA_ARGS__ }, true)</td></tr>
+<tr class="memdesc:ga88e55b6e366e52e371a6a3335e40ecd4"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convenience macro for creating a <a class="el" href="classyask_1_1yc__var__proxy.html" title="A wrapper or &quot;proxy&quot; class around a yc_var pointer.">yask::yc_var_proxy</a> for an n-dimensional YASK scratch variable. <br /></td></tr>
+<tr class="separator:ga88e55b6e366e52e371a6a3335e40ecd4"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:gaeffa30a0f89b2b06f584de318b844b06"><td class="memItemLeft" align="right" valign="top"><a id="gaeffa30a0f89b2b06f584de318b844b06" name="gaeffa30a0f89b2b06f584de318b844b06"></a>
+#define&#160;</td><td class="memItemRight" valign="bottom"><b>MAKE_SCALAR_VAR</b>(var_name)&#160;&#160;&#160;<a class="el" href="group__yc.html#gae3d7fce5f0ac5dba65bc16ce8a342553">MAKE_VAR</a>(var_name)</td></tr>
+<tr class="memdesc:gaeffa30a0f89b2b06f584de318b844b06"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convenience macro for creating a <a class="el" href="classyask_1_1yc__var__proxy.html" title="A wrapper or &quot;proxy&quot; class around a yc_var pointer.">yask::yc_var_proxy</a> for a scalar YASK variable. <br /></td></tr>
+<tr class="separator:gaeffa30a0f89b2b06f584de318b844b06"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ga5da241c3ace73c5bf889aa973ab4a867"><td class="memItemLeft" align="right" valign="top"><a id="ga5da241c3ace73c5bf889aa973ab4a867" name="ga5da241c3ace73c5bf889aa973ab4a867"></a>
+#define&#160;</td><td class="memItemRight" valign="bottom"><b>REGISTER_SOLUTION</b>(class_name)&#160;&#160;&#160;        static class_name class_name ## _instance</td></tr>
+<tr class="memdesc:ga5da241c3ace73c5bf889aa973ab4a867"><td class="mdescLeft">&#160;</td><td class="mdescRight">Convenience macro for declaring an object of a type derived from <a class="el" href="classyask_1_1yc__solution__base.html">yask::yc_solution_base</a>. <br /></td></tr>
+<tr class="separator:ga5da241c3ace73c5bf889aa973ab4a867"><td class="memSeparator" colspan="2">&#160;</td></tr>
 </table><table class="memberdecls">
 <tr class="heading"><td colspan="2"><h2 class="groupheader"><a id="typedef-members" name="typedef-members"></a>
 Typedefs</h2></td></tr>
@@ -368,6 +396,12 @@ Functions</h2></td></tr>
 <tr class="memitem:ga25e29820b9a539043d250d5f0c1fa47c"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__yc.html#ga25e29820b9a539043d250d5f0c1fa47c">yask::BINARY_MATH_EXPR</a> (pow)</td></tr>
 <tr class="memdesc:ga25e29820b9a539043d250d5f0c1fa47c"><td class="mdescLeft">&#160;</td><td class="mdescRight">Power function.  <br /></td></tr>
 <tr class="separator:ga25e29820b9a539043d250d5f0c1fa47c"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:gafbf99c47df9c51c91a856c8c9f23f600"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__yc.html#gafbf99c47df9c51c91a856c8c9f23f600">yask::BINARY_MATH_EXPR</a> (min)</td></tr>
+<tr class="memdesc:gafbf99c47df9c51c91a856c8c9f23f600"><td class="mdescLeft">&#160;</td><td class="mdescRight">Minimum function.  <br /></td></tr>
+<tr class="separator:gafbf99c47df9c51c91a856c8c9f23f600"><td class="memSeparator" colspan="2">&#160;</td></tr>
+<tr class="memitem:ga124b130e20db38ec6db79c67425290b8"><td class="memItemLeft" align="right" valign="top">&#160;</td><td class="memItemRight" valign="bottom"><a class="el" href="group__yc.html#ga124b130e20db38ec6db79c67425290b8">yask::BINARY_MATH_EXPR</a> (max)</td></tr>
+<tr class="memdesc:ga124b130e20db38ec6db79c67425290b8"><td class="mdescLeft">&#160;</td><td class="mdescRight">Maximum function.  <br /></td></tr>
+<tr class="separator:ga124b130e20db38ec6db79c67425290b8"><td class="memSeparator" colspan="2">&#160;</td></tr>
 <tr class="memitem:gac6ba77a19aea67fe7da1c1349ca48941"><td class="memItemLeft" align="right" valign="top"><a id="gac6ba77a19aea67fe7da1c1349ca48941" name="gac6ba77a19aea67fe7da1c1349ca48941"></a>
 <a class="el" href="group__yc.html#ga22125cb7af210ef5a3ffad03f544074a">yc_number_node_ptr</a>&#160;</td><td class="memItemRight" valign="bottom"><b>yask::operator-</b> (<a class="el" href="classyask_1_1yc__number__ptr__arg.html">yc_number_ptr_arg</a> rhs)</td></tr>
 <tr class="memdesc:gac6ba77a19aea67fe7da1c1349ca48941"><td class="mdescLeft">&#160;</td><td class="mdescRight">Operator version of <a class="el" href="classyask_1_1yc__node__factory.html#a45e3d4a1d08812ffb9d39d486d34822e" title="Create a numerical negation operator node.">yc_node_factory::new_negate_node()</a>. <br /></td></tr>
@@ -504,11 +538,11 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>yask::operator/=</b> 
         </tr>
       </table>
 </div><div class="memdoc">
-<b>Value:</b><div class="fragment"><div class="line">    yc_number_node_ptr fn_name(<span class="keyword">const</span> yc_number_node_ptr arg1, <span class="keyword">const</span> yc_number_node_ptr arg2);   \</div>
-<div class="line">    yc_number_node_ptr fn_name(<span class="keywordtype">double</span> arg1, <span class="keyword">const</span> yc_number_node_ptr arg2); \</div>
-<div class="line">    yc_number_node_ptr fn_name(<span class="keyword">const</span> yc_number_node_ptr arg1, <span class="keywordtype">double</span> arg2)</div>
+<b>Value:</b><div class="fragment"><div class="line">        yc_number_node_ptr fn_name(<span class="keyword">const</span> yc_number_node_ptr arg1, <span class="keyword">const</span> yc_number_node_ptr arg2); \</div>
+<div class="line">        yc_number_node_ptr fn_name(<span class="keywordtype">double</span> arg1, <span class="keyword">const</span> yc_number_node_ptr arg2); \</div>
+<div class="line">        yc_number_node_ptr fn_name(<span class="keyword">const</span> yc_number_node_ptr arg1, <span class="keywordtype">double</span> arg2)</div>
 </div><!-- fragment -->
-<p>Binary math functions. Used internally to define pow(). </p>
+<p>Binary math functions. Used internally. </p>
 
 </div>
 </div>
@@ -621,7 +655,7 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>yask::operator/=</b> 
 </div>
 <h2 class="groupheader">Function Documentation</h2>
 <a id="ga25e29820b9a539043d250d5f0c1fa47c" name="ga25e29820b9a539043d250d5f0c1fa47c"></a>
-<h2 class="memtitle"><span class="permalink"><a href="#ga25e29820b9a539043d250d5f0c1fa47c">&#9670;&#160;</a></span>BINARY_MATH_EXPR()</h2>
+<h2 class="memtitle"><span class="permalink"><a href="#ga25e29820b9a539043d250d5f0c1fa47c">&#9670;&#160;</a></span>BINARY_MATH_EXPR() <span class="overload">[1/3]</span></h2>
 
 <div class="memitem">
 <div class="memproto">
@@ -638,6 +672,48 @@ void&#160;</td><td class="memItemRight" valign="bottom"><b>yask::operator/=</b> 
 
 <p>Power function. </p>
 <p>Create an expression node to calculate the first argument node raised to the power of the second argument node. </p>
+
+</div>
+</div>
+<a id="gafbf99c47df9c51c91a856c8c9f23f600" name="gafbf99c47df9c51c91a856c8c9f23f600"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#gafbf99c47df9c51c91a856c8c9f23f600">&#9670;&#160;</a></span>BINARY_MATH_EXPR() <span class="overload">[2/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">yask::BINARY_MATH_EXPR </td>
+          <td>(</td>
+          <td class="paramtype">min&#160;</td>
+          <td class="paramname"></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Minimum function. </p>
+<p>Create an expression node to return the minimum of the first argument node and the second argument node. </p>
+
+</div>
+</div>
+<a id="ga124b130e20db38ec6db79c67425290b8" name="ga124b130e20db38ec6db79c67425290b8"></a>
+<h2 class="memtitle"><span class="permalink"><a href="#ga124b130e20db38ec6db79c67425290b8">&#9670;&#160;</a></span>BINARY_MATH_EXPR() <span class="overload">[3/3]</span></h2>
+
+<div class="memitem">
+<div class="memproto">
+      <table class="memname">
+        <tr>
+          <td class="memname">yask::BINARY_MATH_EXPR </td>
+          <td>(</td>
+          <td class="paramtype">max&#160;</td>
+          <td class="paramname"></td><td>)</td>
+          <td></td>
+        </tr>
+      </table>
+</div><div class="memdoc">
+
+<p>Maximum function. </p>
+<p>Create an expression node to return the maximum of the first argument node and the second argument node. </p>
 
 </div>
 </div>

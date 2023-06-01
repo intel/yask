@@ -101,12 +101,6 @@ namespace yask {
 #define REGISTER_STENCIL(class_name) \
     static class_name class_name ## _v2instance(std::cout)
 
-// Convenience macros for declaring dims in a class derived from \ref StencilBase.
-// The 'd' arg is the new var name and the dim name.
-#define MAKE_STEP_INDEX(d)   yc_index_node_ptr d = new_step_index(#d)
-#define MAKE_DOMAIN_INDEX(d) yc_index_node_ptr d = new_domain_index(#d)
-#define MAKE_MISC_INDEX(d)   yc_index_node_ptr d = new_misc_index(#d)
-
 // Convenience macros for creating vars in a class implementing get_soln().
 // The 'gvar' arg is the C++ var and YASK var name.
 // The remaining args are the dimension names.

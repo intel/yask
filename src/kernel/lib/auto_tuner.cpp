@@ -314,11 +314,11 @@ namespace yask {
                     auto& dofs = odim.get_val(); // always [0..2].
 
                     // Min and max sizes in this dim.
-                    auto dmin = dims->_cluster_pts[dname];
+                    auto dmin = dims->_fold_pts[dname];
                     auto dmax = (*outerp)[dname];
 
                     // Determine distance of GD neighbors.
-                    auto dist = dmin; // stride by cluster size.
+                    auto dist = dmin; // stride by vector size.
                     dist = max(dist, min_dist);
                     dist *= at_state.radius;
 
@@ -546,12 +546,6 @@ namespace yask {
         auto save_halo_exchange = actl_opts->do_halo_exchange;
         actl_opts->do_halo_exchange = false;
 
-        // Temporarily ignore step conditions to force eval of conditional
-        // bundles.  NB: may affect perf, e.g., if stages A and B run in
-        // AAABAAAB sequence, perf may be [very] different if run as
-        // ABABAB..., esp. w/temporal tiling.  TODO: work around this.
-        check_step_conds = false;
-
         // Init tuners.
         reset_auto_tuner(true, verbose);
 
@@ -582,7 +576,6 @@ namespace yask {
 
         // reenable normal operation.
         actl_opts->do_halo_exchange = save_halo_exchange;
-        check_step_conds = true;
 
         // Report results.
         at_timer.stop();

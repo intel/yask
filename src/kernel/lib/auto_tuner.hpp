@@ -106,7 +106,9 @@ namespace yask {
         bool next_target();
 
     public:
-        static constexpr idx_t max_stride_t = 100;
+        // Max number of steps to run during off-line
+        // auto-tuning.
+        static constexpr idx_t max_stride_t = 10;
 
         AutoTuner(StencilContext* context,
                   KernelSettings* settings);

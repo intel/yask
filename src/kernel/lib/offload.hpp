@@ -405,7 +405,8 @@ namespace yask {
     public:
 
         // Coherency states.
-        enum coh_state { host_mod, // Host copy modified; device copy out-of-sync.
+        enum coh_state { not_init, // Neither host nor device copy initialized.
+                         host_mod, // Host copy modified; device copy out-of-sync.
                          dev_mod, // Device copy modified; host copy out-of-sync.
                          in_sync, // Host and device have same data.
                          num_states };
@@ -424,7 +425,7 @@ namespace yask {
         }
 
     protected:
-        coh_state _state = host_mod;
+        coh_state _state = not_init;
 
     public:
 
@@ -461,10 +462,10 @@ namespace yask {
         coh_state mod_both() {
             if (_state == dev_mod)
                 THROW_YASK_EXCEPTION("(internal fault) "
-                                     "host copy modified, but device copy was newer");
+                                     "host and device copies modified, but device copy was newer than host");
             if (_state == host_mod)
                 THROW_YASK_EXCEPTION("(internal fault) "
-                                     "device copy modified, but host copy was newer");
+                                     "host and device copies modified, but host copy was newer than device");
             assert(_state == in_sync);
             return _state;
         }

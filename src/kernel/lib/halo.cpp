@@ -187,7 +187,7 @@ namespace yask {
                          MPIBufs& bufs) {
                          auto& send_buf = bufs.bufs[MPIBufs::buf_send];
                          auto& recv_buf = bufs.bufs[MPIBufs::buf_recv];
-                         TRACE_MSG("exchange_halos:   with rank " << neighbor_rank <<
+                         TRACE_MSG("with rank " << neighbor_rank <<
                                    " at relative position " <<
                                    offsets.sub_elements(1).make_dim_val_offset_str());
 
@@ -200,11 +200,11 @@ namespace yask {
                              auto nbbytes = recv_buf.get_bytes();
                              if (nbbytes) {
                                  if (using_shm)
-                                     TRACE_MSG("exchange_halos:    no receive req due to shm");
+                                     TRACE_MSG("no receive req due to shm");
                                  else {
                                      void* buf = (void*)recv_buf._elems;
                                      void* rbuf = use_device_mpi ? get_dev_ptr(buf) : buf;
-                                     TRACE_MSG("exchange_halos:    requesting up to " <<
+                                     TRACE_MSG("requesting up to " <<
                                                make_byte_str(nbbytes) << " into " << rbuf);
                                      auto& r = var_recv_reqs[ni];
                                      if (nbbytes != int(nbbytes))
@@ -216,7 +216,7 @@ namespace yask {
                                  }
                              }
                              else
-                                 TRACE_MSG("exchange_halos:    0B to request");
+                                 TRACE_MSG("0B to request");
                          } // recv step.
 
                          // Pack data into send buffer, then send to neighbor.
@@ -235,7 +235,7 @@ namespace yask {
 
                                  // Wait until buffer is avail if sharing one.
                                  if (using_shm) {
-                                     TRACE_MSG("exchange_halos:    waiting to write to shm buffer");
+                                     TRACE_MSG("waiting to write to shm buffer");
                                      halo_lock_wait_time.start();
                                      send_buf.wait_for_ok_to_write();
                                      wait_delta += halo_lock_wait_time.stop();
@@ -268,7 +268,7 @@ namespace yask {
                                              first.set_val(step_dim, t);
                                              last.set_val(step_dim, t);
                                          }
-                                         TRACE_MSG("exchange_halos:    packing [" << first.make_dim_val_str() <<
+                                         TRACE_MSG("packing [" << first.make_dim_val_str() <<
                                                    " ... " << last.make_dim_val_str() << "] with " <<
                                                    (send_vec_ok ? "vector" : "scalar") <<
                                                    " copy into " << (void*)bufp <<
@@ -287,13 +287,13 @@ namespace yask {
 
                                      // Copy packed data from device if needed.
                                      if (use_offload && !use_device_mpi) {
-                                         TRACE_MSG("exchange_halos:    copying buffer from device");
+                                         TRACE_MSG("copying buffer from device");
                                          halo_copy_time.start();
                                          offload_copy_from_device(buf, npbytes);
 
                                          if (npbytes) {
                                              real_t v0 = *((real_t*)buf);
-                                             TRACE_MSG("exchange_halos:    got " << v0 << " ... from device");
+                                             TRACE_MSG("got " << v0 << " ... from device");
                                          }
                                          
                                          halo_copy_time.stop();
@@ -303,7 +303,7 @@ namespace yask {
 
                                  // Send data (might be 0 bytes, but still need to send).
                                  if (using_shm) {
-                                     TRACE_MSG("exchange_halos:    put " << make_byte_str(npbytes) <<
+                                     TRACE_MSG("put " << make_byte_str(npbytes) <<
                                                " into shm");
                                      send_buf.set_data(npbytes);  // Send size thru lock.
                                      send_buf.mark_write_done();
@@ -313,7 +313,7 @@ namespace yask {
                                      // Send packed buffer to neighbor.
                                      auto& r = var_send_reqs[ni];
                                      void* sbuf = use_device_mpi ? get_dev_ptr(buf) : buf;
-                                     TRACE_MSG("exchange_halos:    sending " << make_byte_str(npbytes) <<
+                                     TRACE_MSG("sending " << make_byte_str(npbytes) <<
                                                " from " << sbuf);
                                      if (npbytes != int(npbytes))
                                          THROW_YASK_EXCEPTION("(internal fault) int overflow in MPI_Isend()");
@@ -323,7 +323,7 @@ namespace yask {
                                  }
                              }
                              else
-                                 TRACE_MSG("   0B to send");
+                                 TRACE_MSG("0B to send");
                          } // pack & send step.
 
                          // Wait for data from neighbor, then unpack it.
@@ -334,7 +334,7 @@ namespace yask {
 
                                  // Wait until data in buffer is avail.
                                  if (using_shm) {
-                                     TRACE_MSG("exchange_halos:    waiting for data in shm buffer");
+                                     TRACE_MSG("waiting for data in shm buffer");
                                      halo_lock_wait_time.start();
                                      recv_buf.wait_for_ok_to_read();
                                      wait_delta += halo_lock_wait_time.stop();
@@ -347,13 +347,13 @@ namespace yask {
 
                                      if (r == MPI_REQUEST_NULL) {
                                          // Already got status from an MPI_Test* or MPI_Wait* function.
-                                         TRACE_MSG("exchange_halos:    already received up to " <<
+                                         TRACE_MSG("already received up to " <<
                                                    make_byte_str(nbbytes));
                                      }
 
                                      else {
                                          // Wait for data from neighbor before unpacking it.
-                                         TRACE_MSG("exchange_halos:    waiting for receipt of up to " <<
+                                         TRACE_MSG("waiting for receipt of up to " <<
                                                    make_byte_str(nbbytes));
                                          halo_wait_time.start();
                                          MPI_Wait(&r, &s);
@@ -362,11 +362,11 @@ namespace yask {
                                      }
                                      MPI_Get_count(&s, MPI_BYTE, &nbytes);
                                  }
-                                 TRACE_MSG("exchange_halos:    got " << make_byte_str(nbytes));
+                                 TRACE_MSG("got " << make_byte_str(nbytes));
                                  assert(nbytes <= nbbytes);
 
                                  if (!nbytes) {
-                                     TRACE_MSG("exchange_halos:    received no data");
+                                     TRACE_MSG("received no data");
                                  } else {
 
                                      // Vec ok?
@@ -378,12 +378,12 @@ namespace yask {
 
                                      void* buf = (void*)recv_buf._elems;
                                      if (use_offload && !use_device_mpi) {
-                                         TRACE_MSG("exchange_halos:    copying buffer to device");
+                                         TRACE_MSG("copying buffer to device");
                                          halo_copy_time.start();
                                          offload_copy_to_device(buf, nbytes);
                                          
                                          real_t v0 = *((real_t*)buf);
-                                         TRACE_MSG("exchange_halos:    sent " << v0 << " ... to device");
+                                         TRACE_MSG("sent " << v0 << " ... to device");
                                          
                                          halo_copy_time.stop();
                                      }
@@ -399,7 +399,7 @@ namespace yask {
                                              first.set_val(step_dim, t);
                                              last.set_val(step_dim, t);
                                          }
-                                         TRACE_MSG("exchange_halos:    unpacking into [" <<
+                                         TRACE_MSG("unpacking into [" <<
                                                    first.make_dim_val_str() <<
                                                    " ... " << last.make_dim_val_str() << "] with " <<
                                                    (recv_vec_ok ? "vector" : "scalar") <<
@@ -424,7 +424,7 @@ namespace yask {
                                      recv_buf.mark_read_done();
                              }
                              else
-                                 TRACE_MSG("exchange_halos:    0B to wait for");
+                                 TRACE_MSG("0B to wait for");
                          } // unpack step.
 
                          // Final steps.
@@ -433,7 +433,7 @@ namespace yask {
                              if (nbbytes) {
 
                                  if (using_shm)
-                                     TRACE_MSG("exchange_halos:    no send wait due to shm");
+                                     TRACE_MSG("no send wait due to shm");
                                  else {
 
                                      // Wait for send to finish.
@@ -445,7 +445,7 @@ namespace yask {
                                      // doing another one.
                                      auto& r = var_send_reqs[ni];
                                      if (r != MPI_REQUEST_NULL) {
-                                         TRACE_MSG("   waiting to finish send of up to " << make_byte_str(nbbytes));
+                                         TRACE_MSG("waiting to finish send of up to " << make_byte_str(nbbytes));
                                          halo_wait_time.start();
                                          MPI_Wait(&var_send_reqs[ni], MPI_STATUS_IGNORE);
                                          wait_delta += halo_wait_time.stop();
@@ -465,7 +465,7 @@ namespace yask {
                     // Mark var as up-to-date.
                     gb.set_dirty_all(YkVarBase::self, false);
                     gb.set_dirty_all(YkVarBase::others, false);
-                    TRACE_MSG(" var '" << gname << "' marked as clean");
+                    TRACE_MSG("var '" << gname << "' marked as clean");
                 }
                 
             } // vars to swap.

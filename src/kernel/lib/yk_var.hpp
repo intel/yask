@@ -96,7 +96,7 @@ namespace yask {
         Indices _left_wf_exts, _right_wf_exts; // additional halos for wave-fronts | zero.
         Indices _rank_offsets;   // offsets of this rank in global space | zero.
         Indices _local_offsets; // offsets of this var's domain in this rank | first index.
-        Indices _allocs;    // actual var alloc | same.
+        Indices _allocs;    // actual var alloc size | same.
 
         // Each entry in _soln_vec_lens is same as the corresponding dim in dims->_fold_pts.
         Indices _soln_vec_lens;  // num reals in each elem in soln fold | one.
@@ -589,8 +589,10 @@ namespace yask {
         // Whether to resize this var based on solution parameters.
         bool _fixed_size = false;
 
-        // Whether this is a scratch var.
+        // Scratch info.
         bool _is_scratch = false;
+        int _scratch_mem_slot = -1;
+        int _misc_mult = 1;     // product of all misc ranges (1 if none).
 
         // Whether this was created via an API.
         bool _is_user_var = false;
@@ -613,11 +615,6 @@ namespace yask {
                                               std::string infix="=",
                                               std::string prefix="",
                                               std::string suffix="") const;
-
-        // Determine required padding from halos.
-        // Does not include user-specified min padding or
-        // final rounding for left pad.
-        virtual Indices get_reqd_pad(const Indices& halos, const Indices& wf_exts) const;
 
         // Check whether dim exists and is of allowed type.
         virtual void check_dim_type(const std::string& dim,
@@ -800,6 +797,20 @@ namespace yask {
             _is_scratch = is_scratch;
             if (is_scratch)
                 _corep->_rank_offsets.set_from_const(0);
+        }
+        virtual int get_scratch_mem_slot() const {
+            assert(_is_scratch);
+            return _scratch_mem_slot;
+        }
+        virtual void set_scratch_mem_slot(int ms) {
+            assert(_is_scratch);
+            _scratch_mem_slot = ms;
+        }
+        virtual int get_misc_mult() const {
+            return _misc_mult;
+        }
+        virtual void set_misc_mult(int mm) {
+            _misc_mult = mm;
         }
 
         // New-var accessors.
@@ -1051,7 +1062,7 @@ namespace yask {
                              // Inner loop.
                              for (idx_t i = 0; i < ni; i++) {
                                  idx_t bofs = tofs + idx * ni + i;
-                                 #if 0
+                                 #ifdef DEBUG_VISIT_SLICE
                                  TRACE_MSG(Visitor::fname() << ": visting pt " <<
                                            make_index_string(pt) << " w/buf ofs " << bofs);
                                  #endif
@@ -1173,10 +1184,12 @@ namespace yask {
         void set_all_elements_same(double seed) override final {
             _data.set_elems_same(seed);
             set_dirty_all(self, true);
+            _coh.mod_both();
         }
         void set_all_elements_in_seq(double seed) override final {
             _data.set_elems_in_seq(seed);
             set_dirty_all(self, true);
+            _coh.mod_both();
         }
 
         // Get a pointer to given element.
@@ -1353,6 +1366,7 @@ namespace yask {
             real_vec_t seedv = seed; // bcast.
             _data.set_elems_same(seedv);
             set_dirty_all(self, true);
+            _coh.mod_both();
         }
         void set_all_elements_in_seq(double seed) override final {
             real_vec_t seedv;
@@ -1363,6 +1377,7 @@ namespace yask {
                 seedv[i] = seed * (double(n - i));
             _data.set_elems_in_seq(seedv);
             set_dirty_all(self, true);
+            _coh.mod_both();
         }
 
         // Get a pointer to given element.
@@ -1543,25 +1558,25 @@ namespace yask {
 
                     // Run outer loop on device in parallel.
                     _Pragma("omp target teams distribute parallel for device(devn)")
-                    for (idx_t j = 0; j < nj; j++) {
+                        for (idx_t j = 0; j < nj; j++) {
 
-                        // Init vars for first point.
-                        Indices ofs = vec_range.unlayout(false, j);
-                        Indices pt = firstv.add_elements(ofs);
-                        auto* vp = core_p->get_vec_ptr_norm(pt, ti);
-                        idx_t bofs = tofs + j * ni;
+                            // Init vars for first point.
+                            Indices ofs = vec_range.unlayout(false, j);
+                            Indices pt = firstv.add_elements(ofs);
+                            auto* vp = core_p->get_vec_ptr_norm(pt, ti);
+                            idx_t bofs = tofs + j * ni;
 
-                        // Inner loop. 
-                        for (idx_t i = 0; i < ni; i++) {
+                            // Inner loop. 
+                            for (idx_t i = 0; i < ni; i++) {
                             
-                            // Do the copy operation specified in visitor.
-                            Visitor::do_copy(((real_vec_t*)buffer_ptr), bofs, vp);
+                                // Do the copy operation specified in visitor.
+                                Visitor::do_copy(((real_vec_t*)buffer_ptr), bofs, vp);
 
-                            // Next point in buffer and var.
-                            vp += si;
-                            bofs++;
+                                // Next point in buffer and var.
+                                vp += si;
+                                bofs++;
+                            }
                         }
-                    }
                     #else
                     THROW_YASK_EXCEPTION("(internal fault) call to _copy_vecs_in_slice on device"
                                          " in non-offload build");

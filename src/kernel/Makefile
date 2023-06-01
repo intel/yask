@@ -39,13 +39,13 @@ numa			?=	1
 real_bytes		?=	4
 allow_new_var_types	?=	1
 streaming_stores	?=	0
+use_rcp			?=	0
 use_ptrs		?=	1
 use_safe_ptrs		?=	0
 outer_domain_layout	?=	0
 inner_misc_layout 	?=	1
 early_loads		?=	0
 min_buffer_len		?=	1
-read_ahead_dist		?=	0
 
 trace			?=	0
 trace_mem		?=	0
@@ -121,7 +121,10 @@ ifeq ($(TARGET),knl)
  # either flat or cache memory modes, but these configurations are uncommon.
  ICC_ISA	?=	-xMIC-AVX512
  GXX_ISA	?=	-march=knl
- VEC_MACROS	?=	USE_INTRIN512 USE_RCP28
+ VEC_MACROS	?=	USE_INTRIN512
+ ifeq ($(use_rcp),1)
+  VEC_MACROS	+=	USE_RCP28
+ endif
  MACROS		+=	NUMA_PREF=1
  pfd_l1		?=	1
 
@@ -130,12 +133,18 @@ else ifeq ($(TARGET),avx512)
  ICC_ISA	?=	-xCORE-AVX512
  GXX_ISA	?=	-mavx512f -mavx512vl -mavx512cd -mavx512bw
  VEC_MACROS	?=	USE_INTRIN512
+ ifeq ($(use_rcp),1)
+  VEC_MACROS	+=	USE_RCP14
+ endif
 
 else ifeq ($(TARGET),avx512-ymm)
 
  ICC_ISA	?=	-xCORE-AVX512
  GXX_ISA	?=	-mavx512f -mavx512vl -mavx512cd -mavx512bw
  VEC_MACROS	?=	USE_INTRIN512LO
+ ifeq ($(use_rcp),1)
+  VEC_MACROS	+=	USE_RCP14
+ endif
 
 else ifeq ($(TARGET),avx2)
 
@@ -178,12 +187,6 @@ endif
 ifneq ($(fold),)
  YC_FLAGS	+=	-fold $(fold)
 endif
-ifneq ($(cluster),)
- YC_FLAGS	+=	-cluster $(cluster)
-endif
-ifneq ($(eqs),)
- YC_FLAGS	+=	-eq-bundles $(eqs)
-endif
 ifneq ($(halo),)
  YC_FLAGS	+=	-halo $(halo)
 endif
@@ -207,9 +210,6 @@ ifneq ($(inner_loop_dim),)
 endif
 ifneq ($(min_buffer_len),)
  YC_FLAGS	+=	-min-buffer-len $(min_buffer_len)
-endif
-ifneq ($(read_ahead_dist),)
- YC_FLAGS	+=	-read-ahead-dist $(read_ahead_dist)
 endif
 
 # Stencil compiler flags that are boolean.
@@ -410,7 +410,10 @@ cxx_is_gnu	:= 	$(call MACRO_DEF,$(YK_CXX_TEST),__GNUC__)
 # LLVM-based Intel compiler (icpx).
 ifeq ($(cxx_is_llvm_intel),1)
  YK_CXXFLAGS	+=	$(GXX_ISA) $(ICC_ISA)
- YK_CXXDBG	+=	-gline-tables-only -fdebug-info-for-profiling
+ ifeq ($(check),0)
+  YK_CXXDBG	+=	-gline-tables-only
+ endif
+ YK_CXXDBG	+=	-fdebug-info-for-profiling
  YK_CXXFLAGS	+=	-ansi-alias \
 			-fimf-precision=low -fp-model fast -fimf-domain-exclusion=none -fma
  YK_CXXWARN	+=	-Wno-unknown-pragmas -Wno-unused-variable -Wno-unused-but-set-variable \
@@ -575,7 +578,7 @@ else
 NANO_BLOCK_LOOP_CODE	:=	$(NANO_BLOCK_LOOP_MODS) loop($(NANO_BLOCK_LOOP_ORDER)) { }
 endif
 
-# Pico-Block loops break up a pico-block into vectors or clusters.
+# Pico-Block loops break up a pico-block into vectors.
 # When offloading, each pico-block is executed by a team of threads on the device.
 # Pico-blocks must contain a separate inner loop over PICO_BLOCK_INNER_LOOP_DIM.
 PICO_BLOCK_LOOP_FLAGS	?=	-no-align -prefix pico_block_
@@ -703,11 +706,12 @@ $(YK_CODE_FILE): $(YC_EXEC)
 	@- $(INDENT) $@
 
 # Pre-process the stencil code to create the context code.
-# This adds the nano- and pico-loop code to make it easier for humans
-# and performance tools to parse.
+# This adds the nano- and pico-loop code to make it easier for humans,
+# debug tools, and performance tools to understand.
 $(YK_SOLUTION_FILE): $(YK_CODE_FILE) $(YK_LOOP_FILES)
-	g++ -E -CC $(YK_CXX_INCFLAGS) $(YK_MACROS) -DDEFINE_SOLUTION $(YK_CODE_FILE) \
-	  | $(PERL) -n -e '$$start=1 if /Automatic/; print if $$start && !/^#/' > $@
+	$(BASH) -o pipefail -c \
+	  "g++ -E -CC $(YK_CXX_INCFLAGS) $(YK_MACROS) -DDEFINE_SOLUTION $(YK_CODE_FILE) \
+	    | $(PERL) -n -e '\$$start=1 if /Automatically-generated/; print if \$$start && !/^#\s[1-9]/' > $@"
 	@- $(INDENT) $@
 
 headers: $(YK_GEN_HEADERS)
@@ -812,7 +816,6 @@ echo-settings:
 	echo YK_TAG=$(YK_TAG); \
 	echo YK_CXXVER=`$(YK_CXX) --version`; \
 	echo arch=$(arch); \
-	echo cluster=$(cluster); \
 	echo fold=$(fold); \
 	echo offload=$(offload); \
 	echo offload_usm=$(offload_usm); \
@@ -874,7 +877,6 @@ help:
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd radius=2 YK_STENCIL=iso3d_r2 # Specify binary stencil name"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=iso3dfd arch=avx512    # Specify arch target"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg fold='x=1,y=2,z=4' # Specify folding (data layout)"; \
-	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg cluster='x=2' # Specify clustering (unrolling)"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg real_bytes=8  # Use 8-byte (double) floats"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg YK_CXXOPT='-O2' # Use O2 optimization"; \
 	echo " $(MAKE) clean; $(MAKE) -j stencil=ssg YK_CXX=icpc   # Use classic Intel compiler"; \
@@ -928,17 +930,15 @@ outer_threads	:=	8
 inner_threads	:=	2
 endif
 
-# Makefile functions for folding and clustering.
-# Disable folding and clustering for offload testing.
+# Makefile functions for folding.
+# Disable folding for offload testing.
 ifeq ($(offload),1)
 FOLD		=
-CLUSTER		=
 else
 FOLD		=	fold=$(subst $(space),$(comma),$(1))
-CLUSTER		=	cluster=$(subst $(space),$(comma),$(1))
 endif
 
-TEST_MAKE_ARGS	:=	real_bytes=8 allow_new_var_types=0 check=1 trace=1
+TEST_MAKE_ARGS	:=	real_bytes=8 use_rcp=0 allow_new_var_types=0 check=1 trace=1
 TEST_MAKE 	:=	$(MAKE) $(TEST_MAKE_ARGS)
 
 ### Unit tests.
@@ -1026,7 +1026,7 @@ DEF_TEST_ARGS := -log_dir $(TEST_LOG_OUT_DIR) \
 	-ranks $(ranks) -stencil $(YK_STENCIL) -arch $(YK_ARCH) \
 	-validate -no-pre_auto_tune -no-auto_tune -no-warmup -num_trials 1 -trial_steps 2 \
 	-outer_threads $(outer_threads) -inner_threads $(inner_threads) \
-	-ep 0 -mp 0 -no-allow_addl_padding
+	-ep 0 -mp 0 -no-allow_addl_padding -init_seed 1.0
 DEF_MPI_TEST_ARGS := $(DEF_TEST_ARGS) -min_exterior 0
 
 # Test args for 1 and >1 ranks.
@@ -1035,18 +1035,18 @@ test_args1	:=	$(DEF_TEST_ARGS) -l 64 -b 48 -mb 32 -nb 24 -pb 16 -Mbt 1 $(EXTRA_T
 test_args2	:=	$(DEF_TEST_ARGS) -l 63 -Mb 32 -b 24 -mb 16 -Mbt 2 -bundle_allocs $(EXTRA_TEST_ARGS)
 test_args3	:=	$(DEF_TEST_ARGS) -l 63 -Mb 48 -b 24 -mb 16 -bt 2 -no-bundle_allocs $(EXTRA_TEST_ARGS)
 ifeq ($(offload),1)
-test_args4	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 $(EXTRA_TEST_ARGS)
+test_args4	:=	$(DEF_TEST_ARGS) -l 64 -b 24 -mb 16 -bt 2 $(EXTRA_TEST_ARGS)
 else
-test_args4	:=	$(DEF_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -bind_inner_threads $(EXTRA_TEST_ARGS)
+test_args4	:=	$(DEF_TEST_ARGS) -l 64 -b 24 -mb 16 -bt 2 -bind_inner_threads $(EXTRA_TEST_ARGS)
 endif
 
 # Test args for >1 ranks only.
 ifeq ($(offload),1)
-test_args10	:=	$(DEF_MPI_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -use_device_mpi -no-overlap_comms $(EXTRA_TEST_ARGS)
-test_args11	:=	$(DEF_MPI_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -no-use_device_mpi -overlap_comms $(EXTRA_TEST_ARGS)
+test_args10	:=	$(DEF_MPI_TEST_ARGS) -l 64 -b 24 -mb 16 -bt 2 -use_device_mpi -no-overlap_comms $(EXTRA_TEST_ARGS)
+test_args11	:=	$(DEF_MPI_TEST_ARGS) -l 64 -b 24 -mb 16 -bt 2 -no-use_device_mpi -overlap_comms $(EXTRA_TEST_ARGS)
 else
-test_args10	:=	$(DEF_MPI_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -no-use_shm -overlap_comms $(EXTRA_TEST_ARGS)
-test_args11	:=	$(DEF_MPI_TEST_ARGS) -l 48 -b 24 -mb 16 -bt 2 -use_shm -no-overlap_comms $(EXTRA_TEST_ARGS)
+test_args10	:=	$(DEF_MPI_TEST_ARGS) -l 64 -b 24 -mb 16 -bt 2 -no-use_shm -overlap_comms $(EXTRA_TEST_ARGS)
+test_args11	:=	$(DEF_MPI_TEST_ARGS) -l 64 -b 24 -mb 16 -bt 2 -use_shm -no-overlap_comms $(EXTRA_TEST_ARGS)
 endif
 
 # Run the kernel binary using several combos of sizes and ranks.
@@ -1068,6 +1068,7 @@ yk-mpi-tests:
 yc-and-yk-test: $(YK_EXEC) $(YK_SCRIPT)
 	$(MAKE) ranks=1 yk-tests
 	if (( $(ranks) > 1 )); then $(MAKE) yk-tests yk-mpi-tests; fi
+STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 
 # Run the YASK kernel test without implicity using the YASK compiler.
 yk-test-no-yc: kernel-no-yc $(YK_SCRIPT)
@@ -1081,45 +1082,49 @@ api-tests:
 	$(MAKE) clean; $(MAKE) cxx-yk-api-test-with-exception
 	$(MAKE) clean; $(MAKE) py-yk-api-test-with-exception
 
-# Run several stencils using built-in validation.
+# Validate the kernel specified by the 'stencil' variable and
+# any other settings, e.g., 'fold'.
+single-stencil-tests:
+	$(MAKE) clean; $(STENCIL_TEST)
+
+# Validate several specified stencils with given fold and
+# other settings.
 # NB: set arch var as applicable.
 # NB: save some compile time by using YK_CXXOPT=-O2 or -O1.
 # These tests are focused on the kernel and not the compiler.
 # For testing both the kernel and compiler in various combinations,
 # run the tests from the top-level Makefile.
-STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 
 1d-tests:
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stream_1d $(call FOLD,x=4)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_1d YK_STENCIL_SUFFIX=-t1 $(call FOLD,x=4)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_1d YK_STENCIL_SUFFIX=-t2 $(call FOLD,x=4) $(call CLUSTER,x=2)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_1d YK_STENCIL_SUFFIX=-t3 $(call FOLD,x=4) $(call CLUSTER,x=5)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_1d YK_STENCIL_SUFFIX=-t4 $(call FOLD,x=4) $(call CLUSTER,x=5) read_ahead_dist=3
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stages_1d $(call FOLD,x=4)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_func_1d $(call FOLD,x=4)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_step_cond_1d $(call FOLD,x=4)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_1d $(call FOLD,x=4)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_1d $(call FOLD,x=4)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_boundary_1d $(call FOLD,x=4)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stream_1d
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_1d YK_STENCIL_SUFFIX=-t1
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stages_1d
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_func_1d
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_step_cond_1d
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_1d
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_1d
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_stages_1d
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_boundary_1d
 
 2d-tests:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_empty step_dim=t domain_dims=d1,d2
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_empty_2d
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d YK_STENCIL_SUFFIX=-t1 $(call FOLD,x=2 y=2) inner_loop_dim=1
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d YK_STENCIL_SUFFIX=-t2 $(call FOLD,x=2 y=2) inner_loop_dim=2
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d YK_STENCIL_SUFFIX=-t3 $(call FOLD,x=2 y=2) $(call CLUSTER,y=2)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d YK_STENCIL_SUFFIX=-t4 $(call FOLD,x=2 y=2) $(call CLUSTER,x=3 y=2)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d YK_STENCIL_SUFFIX=-t5 $(call FOLD,x=2 y=2) mpi=0 ranks=1
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d YK_STENCIL_SUFFIX=-t6 arch=intel64 $(call FOLD,x=3 y=2) domain_dims=y,x
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_2d YK_STENCIL_SUFFIX=-t3 arch=intel64 $(call FOLD,x=3 y=2) domain_dims=y,x
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_reverse_2d YK_STENCIL_SUFFIX=-t1 radius=1
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_reverse_2d YK_STENCIL_SUFFIX=-t2 radius=1 read_ahead_dist=2
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stages_2d $(call FOLD,x=2 y=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d YK_STENCIL_SUFFIX=-t1 $(call FOLD,x=2 y=2) inner_misc_layout=0 outer_domain_layout=0
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d YK_STENCIL_SUFFIX=-t2 $(call FOLD,x=2 y=2) inner_misc_layout=0 outer_domain_layout=1
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d YK_STENCIL_SUFFIX=-t3 $(call FOLD,x=2 y=2) inner_misc_layout=1 outer_domain_layout=0
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d YK_STENCIL_SUFFIX=-t2 $(call FOLD,x=4 y=2) inner_misc_layout=0 outer_domain_layout=1
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d YK_STENCIL_SUFFIX=-t3 $(call FOLD,x=2 y=4) inner_misc_layout=1 outer_domain_layout=0
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_misc_2d YK_STENCIL_SUFFIX=-t4 $(call FOLD,x=2 y=2) inner_misc_layout=1 outer_domain_layout=1
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_2d $(call FOLD,x=2 y=2) read_ahead_dist=2
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_2d $(call FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_2d $(call FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_2d $(call FOLD,x=2 y=4)
+
+# 2D tests w/actual HPC stencils.
+2d-tests2:
+	$(MAKE) clean; $(STENCIL_TEST) stencil=wave2d
+	$(MAKE) clean; $(STENCIL_TEST) stencil=swe2d EXTRA_TEST_ARGS="-init_seed 0.01"
 
 3d-tests:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stream_3d radius=5
@@ -1127,21 +1132,20 @@ STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d YK_STENCIL_SUFFIX=-t2 $(call FOLD,x=2 y=2 z=2) EXTRA_YC_FLAGS=-no-first-inner
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d YK_STENCIL_SUFFIX=-t3 $(call FOLD,x=2 z=2) domain_dims=z,y,x
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d YK_STENCIL_SUFFIX=-t4 $(call FOLD,x=2 z=2) inner_loop_dim=2
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d YK_STENCIL_SUFFIX=-t5 $(call FOLD,x=2 z=2) NANO_BLOCK_LOOP_MODS=serpentine
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_3d YK_STENCIL_SUFFIX=-t5 $(call FOLD,x=2 y=2) NANO_BLOCK_LOOP_MODS=serpentine
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_stages_3d $(call FOLD,y=2 x=2) domain_dims=x,z,y
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_partial_3d YK_STENCIL_SUFFIX=-t1 $(call FOLD,x=2 z=2) read_ahead_dist=2
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_partial_3d YK_STENCIL_SUFFIX=-t1 $(call FOLD,x=2 z=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_partial_3d YK_STENCIL_SUFFIX=-t2 $(call FOLD,x=2 z=2) inner_loop_dim=1
-	$(MAKE) clean; $(STENCIL_TEST) stencil=test_partial_3d YK_STENCIL_SUFFIX=-t3 $(call FOLD,x=2 z=2) domain_dims=x,z,y
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_partial_3d YK_STENCIL_SUFFIX=-t3 $(call FOLD,x=2 z=4) domain_dims=x,z,y
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_3d $(call FOLD,x=2 y=2) inner_loop_dim=1
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_3d $(call FOLD,x=2 z=2) inner_loop_dim=x
 
 # 3D tests w/specific shapes.
 3d-tests2:
-	$(MAKE) clean; $(STENCIL_TEST) stencil=3axis YK_STENCIL_SUFFIX=-t1 $(call FOLD,x=2 y=2) $(call CLUSTER,x=2)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=3axis YK_STENCIL_SUFFIX=-t2 $(call FOLD,x=2 y=2) $(call CLUSTER,z=2 y=2)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=3axis_with_diags $(call FOLD,x=2 z=2)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=3plane $(call FOLD,y=2 z=2)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=cube $(call FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=3axis $(call FOLD,x=2 y=4)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=3axis_with_diags $(call FOLD,x=4 z=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=3plane $(call FOLD,y=2 z=4)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=cube $(call FOLD,x=4 y=2)
 
 # 3D tests w/actual seismic stencils.
 3d-tests3:
@@ -1150,7 +1154,7 @@ STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 	$(MAKE) clean; $(STENCIL_TEST) stencil=ssg $(call FOLD,x=2 y=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=ssg_merged $(call FOLD,x=2 y=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=awp $(call FOLD,x=2 y=2)
-	$(MAKE) clean; $(STENCIL_TEST) stencil=awp_abc $(call FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=awp_abc $(call FOLD,x=2 z=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=tti $(call FOLD,x=2 y=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=fsg_merged $(call FOLD,x=2 y=2)
 	$(MAKE) clean; $(STENCIL_TEST) stencil=fsg_merged_abc $(call FOLD,x=2 y=2)
@@ -1163,9 +1167,25 @@ STENCIL_TEST	:=	$(TEST_MAKE) yc-and-yk-test
 4d-tests:
 	$(MAKE) clean; $(STENCIL_TEST) stencil=test_4d $(call FOLD,w=2 x=2)
 
+# Selected collections from above for testing specific features.
+scratch-tests:
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_1d $(call FOLD,x=4)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_stages_1d $(call FOLD,x=4)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_boundary_1d $(call FOLD,x=4)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_2d $(call FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_3d $(call FOLD,x=2 z=2) inner_loop_dim=x
+
+boundary-tests:
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_1d $(call FOLD,x=4)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_scratch_boundary_1d $(call FOLD,x=4)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_2d $(call FOLD,x=2 y=2)
+	$(MAKE) clean; $(STENCIL_TEST) stencil=test_boundary_3d $(call FOLD,x=2 y=2) inner_loop_dim=1
+
+# The standard set of stencils to test.
 stencil-tests:
 	$(MAKE) 1d-tests
 	$(MAKE) 2d-tests
+	$(MAKE) 2d-tests2
 	$(MAKE) 3d-tests
 	$(MAKE) 3d-tests2
 	$(MAKE) 3d-tests3

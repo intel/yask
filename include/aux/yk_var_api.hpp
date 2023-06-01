@@ -608,16 +608,15 @@ namespace yask {
            If `strict_indices` is `false` and any non-step index values
            are invalid as defined by are_indices_local(),
            the API will have no effect and return zero (0).
-           If `strict_indices` is `true` and any non-step index values
-           are invalid, the API will throw an exception.
            If storage has not been allocated for this var, this will have no effect
-           and return zero (0) if `strict_indices` is `false`,
-           or it will throw an exception if `strict_indices` is `true`.
+           and return zero (0) if `strict_indices` is `false`.
            @note The parameter value is a double-precision floating-point value, but
            it will be converted to single-precision if
            yk_solution::get_element_bytes() returns 4.
            @returns Number of elements set, which will be one (1) if the indices
            are valid and zero (0) if they are not.
+           @throws yask_exception if `strict_indices` is `true` and any non-step index values
+           are invalid or storage has not been allocated.
         */
         virtual idx_t
         set_element(double val /**< [in] Element in var will be set to this. */,
@@ -682,12 +681,13 @@ namespace yask {
            Updates are OpenMP atomic, meaning that this function can be called by
            several OpenMP threads without causing a race condition.
            If storage has not been allocated for this var, this will have no effect
-           and return zero (0) if `strict_indices` is `false`,
-           or it will throw an exception if `strict_indices` is `true`.
+           and return zero (0) if `strict_indices` is `false`.
            @note The parameter value is a double-precision floating-point value, but
            it will be converted to single-precision if
            yk_solution::get_element_bytes() returns 4.
            @returns Number of elements updated.
+           @throws yask_exception if `strict_indices` is `true` and any non-step index values
+           are invalid or storage has not been allocated.
         */
         virtual idx_t
         add_to_element(double val /**< [in] This value will be added to element in var. */,
@@ -736,9 +736,10 @@ namespace yask {
            get_first_local_index() and get_last_local_index(), inclusive,
            if `strict_indices` is `true`.
            If storage has not been allocated for this var, this will have no effect
-           and return zero (0) if `strict_indices` is `false`,
-           or it will throw an exception if `strict_indices` is `true`.
+           and return zero (0) if `strict_indices` is `false`.
            @returns Number of elements set.
+           @throws yask_exception if `strict_indices` is `true` and any non-step index values
+           are invalid or storage has not been allocated.
         */
         virtual idx_t
         set_elements_in_slice_same(double val /**< [in] All elements in the slice will be set to this. */,
@@ -771,9 +772,8 @@ namespace yask {
            Indices are relative to the *overall* problem domain.
            Index values must fall between the values returned by
            get_first_local_index() and get_last_local_index(), inclusive.
-           If storage has not been allocated for this var, this will
-           throw an exception.
            @returns Number of elements written.
+           @throws yask_exception if storage has not been allocated.
         */
         virtual idx_t
         set_elements_in_slice(const void* buffer_ptr
@@ -797,6 +797,8 @@ namespace yask {
            get_first_local_index() and get_last_local_index(), inclusive, for
            each dimension in both vars.
            @returns Number of elements copied.
+           @throws yask_exception if any indices are invalid or
+           storage has not been allocated.
         */
         virtual idx_t
         set_elements_in_slice(const yk_var_ptr source
@@ -1118,17 +1120,15 @@ namespace yask {
            - After fusing, calling release_storage() on this var
            or the `source` var will apply to both.
 
-           To ensure that the kernels created by the YASK compiler work
-           properly, if this var is used in a kernel, the dimensions and
-           fold-lengths of the `source` var must be identical or an
-           exception will the thrown.  If the `source` var is a fixed-size
-           var, the storage, local domain sizes, halos, etc. of the var
-           must be set to be compatible with the solution before 
-           calling yk_solution::prepare_solution(). Otherwise,
-           yk_solution::prepare_solution() will throw an exception.
-
            See allocation options and more information about var sizes
            in the "Detailed Description" for \ref yk_var.
+
+           @throws yask_exception if the dimensions and
+           fold-lengths of the `source` var are not identical to `this` var.
+           @throws yask_exception if `source` var is a fixed-size
+           var, and the storage, local domain sizes, halos, etc. of the var
+           are not compatible with the solution before 
+           calling yk_solution::prepare_solution().
         */
         virtual void
         fuse_vars(yk_var_ptr source

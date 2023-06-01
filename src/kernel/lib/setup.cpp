@@ -469,8 +469,8 @@ namespace yask {
                         // Divide sum by num of ranks in this dim.
                         auto rsz = CEIL_DIV(gsz, nranks);
 
-                        // Round up to whole vector-clusters.
-                        rsz = ROUND_UP(rsz, dims->_cluster_pts[j]);
+                        // Round up to whole vectors.
+                        rsz = ROUND_UP(rsz, dims->_fold_pts[j]);
 
                         // Remainder for last rank.
                         auto rem = gsz - (rsz * (nranks - 1));
@@ -590,6 +590,7 @@ namespace yask {
 #endif
         DEBUG_MSG(prefix << "pico-block-size:        " <<
                   actl_opts->_pico_block_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
+        DEBUG_MSG(prefix << "vector-size:            " << dims->_fold_pts.make_dim_val_str(" * "));
     }
 
     void StencilContext::init_work_stats() {
@@ -614,8 +615,6 @@ namespace yask {
         DEBUG_MSG(" local-domain-size:      " <<
                   actl_opts->_rank_sizes.remove_dim(step_posn).make_dim_val_str(" * "));
         print_sizes(" ");
-        DEBUG_MSG(" cluster-size:           " << dims->_cluster_pts.make_dim_val_str(" * "));
-        DEBUG_MSG(" vector-size:            " << dims->_fold_pts.make_dim_val_str(" * "));
         DEBUG_MSG("\nOther settings:\n"
                   " yask-version:           " << yask_get_version_string() << endl <<
                   " target:                 " << get_target() << endl <<
@@ -640,10 +639,10 @@ namespace yask {
                   " max-halos:              " << max_halos.make_dim_val_str());
         print_temporal_tiling_info(" ");
 
-        // Info about eqs, stages and bundles.
+        // Info about eqs, stages and parts.
         DEBUG_MSG("\n"
                   "Num stages:              " << st_stages.size() << endl <<
-                  "Num stencil bundles:     " << st_bundles.size() << endl <<
+                  "Num stencil parts:     " << st_parts.size() << endl <<
                   "Num stencil equations:   " << NUM_STENCIL_EQS);
 
         // Info on work in stages.
@@ -652,12 +651,12 @@ namespace yask {
             sp->init_work_stats();
     }
 
-    // Set non-scratch var sizes and offsets based on settings.
-    // Set wave-front settings.
-    // This should be called anytime a setting or rank offset is changed.
+    // Set non-scratch var sizes and offsets based on settings.  Set
+    // wave-front settings.  This should be called anytime a relevant
+    // setting or rank offset is changed.
     void StencilContext::update_var_info(bool force) {
         STATE_VARS(this);
-        TRACE_MSG("update_var_info(" << force << ")...");
+        TRACE_MSG(force);
 
         // If we haven't finished constructing the context, it's too early
         // to do this.
@@ -854,7 +853,7 @@ namespace yask {
     // all stages always done.
     void StencilContext::update_tb_info() {
         STATE_VARS(this);
-        TRACE_MSG("update_tb_info()...");
+        TRACE_MSG("...");
 
         // Get requested size.
         tb_steps = actl_opts->_block_sizes[step_dim];
@@ -1027,12 +1026,50 @@ namespace yask {
                   make_num_str(itimer.get_elapsed_secs()) << " secs.");
     }
 
-    // Set the bounding-box for each stencil-bundle and whole domain.
+    // Find scratch-var write halos for each scratch part and
+    // across all parts.
+    void StencilContext::find_scratch_write_halos()
+    {
+        STATE_VARS(this);
+        DEBUG_MSG("Finding write halos for all scratch parts...");
+
+        // Init.
+        max_write_halo_left = dims->_domain_dims;
+        max_write_halo_left.set_vals_same(0);
+        max_write_halo_right = dims->_domain_dims;
+        max_write_halo_right.set_vals_same(0);
+        
+        // Non-scratch parts.
+        for (auto sb : st_parts) {
+            TRACE_MSG(sb->get_name() << "...");
+            
+            // Loop over its required scratch-parts.
+            for (auto rsb : sb->get_scratch_children()) {
+                TRACE_MSG(rsb->get_name() << "...");
+                assert(rsb->is_scratch());
+
+                rsb->find_scratch_write_halos();
+                auto& lh = rsb->get_max_write_halo_left();
+                auto& rh = rsb->get_max_write_halo_right();
+                TRACE_MSG("max scratch-write halo for '" << rsb->get_name() << "': " <<
+                          lh.make_dim_val_str() << " on left, and " <<
+                          rh.make_dim_val_str() << " on right");
+
+                // Update max.
+                max_write_halo_left = max_write_halo_left.max_elements(lh);
+                max_write_halo_right = max_write_halo_right.max_elements(rh);
+            }
+        }
+        TRACE_MSG("max scratch-write halo across all parts: " <<
+                  max_write_halo_left.make_dim_val_str() << " on left, and " <<
+                  max_write_halo_right.make_dim_val_str() << " on right");
+    }
+
+    // Set the bounding-boxes for each stage, part, and whole domain.
     void StencilContext::find_bounding_boxes()
     {
         STATE_VARS(this);
-        DEBUG_MSG("Constructing bounding boxes for " <<
-                  st_bundles.size() << " stencil-bundles(s)...");
+        DEBUG_MSG("Constructing bounding boxes for all parts...");
         YaskTimer bbtimer;
         bbtimer.start();
 
@@ -1046,40 +1083,68 @@ namespace yask {
         ext_bb.bb_end = rank_bb.bb_end.add_elements(right_wf_exts);
         ext_bb.update_bb("extended-rank", this, true);
 
-        // Remember sub-domain for each bundle.
-        map<string, StencilBundleBase*> bb_descrs;
+        // The max BB for any scratch part in this rank will be 'ext_bb'
+        // expanded by the max write halos across all scratch parts.  It's
+        // okay to use the max BB for every scratch part, because the BB
+        // only sets the max bounds. Actual bounds will be created for each
+        // micro-block.
+        assert(max_write_halo_left.get_num_dims() == NUM_DOMAIN_DIMS);
+        assert(max_write_halo_right.get_num_dims() == NUM_DOMAIN_DIMS);
+        BoundingBox max_sbb;
+        max_sbb.bb_begin = ext_bb.bb_begin.sub_elements(max_write_halo_left);
+        max_sbb.bb_end = ext_bb.bb_end.add_elements(max_write_halo_right);
+        max_sbb.update_bb("max-scratch", this, true);
 
-        // Find BB for each stage.
+        // Index the first completed part for each domain description.
+        // Keys: domain descr, is-scratch.
+        map<string, map<bool, StencilPartBase*>> bb_cache;
+
+        // Find BBs for each stage.
         for (auto sp : st_stages) {
+            TRACE_MSG(sp->get_name() << "...");
             auto& spbb = sp->get_bb();
             spbb.bb_begin = domain_dims;
             spbb.bb_end = domain_dims;
 
-            // Find BB for each bundle in this stage.
+            // Find BBs for each part in this stage.
+            // Loop over all non-scratch parts.
             for (auto sb : *sp) {
 
-                // Already done?
-                auto bb_descr = sb->get_domain_description();
-                if (bb_descrs.count(bb_descr)) {
+                // Loop over this non-scratch part and all
+                // its required scratch-parts.
+                for (auto rsb : sb->get_reqd_parts()) {
+                    TRACE_MSG(rsb->get_name() << "...");
+                    bool is_scratch = rsb->is_scratch();
 
-                    // Copy existing.
-                    auto* src = bb_descrs.at(bb_descr);
-                    sb->copy_bounding_box(src);
-                }
+                    // Already done for this sub-domain?
+                    auto bb_descr = rsb->get_domain_description();
+                    if (bb_cache.count(bb_descr) && bb_cache.at(bb_descr).count(is_scratch)) {
 
-                // Find bundle BB.
-                else {
-                    sb->find_bounding_box();
-                    bb_descrs[bb_descr] = sb;
-                }
+                        // Copy existing.
+                        auto* src = bb_cache.at(bb_descr).at(is_scratch);
+                        rsb->copy_bounding_boxes(src);
+                    }
 
+                    // Find part BBs.
+                    else {
+                        if (is_scratch)
+                            rsb->find_bounding_boxes(max_sbb);
+                        else
+                            rsb->find_bounding_boxes(ext_bb);
+
+                        // Save in cache.
+                        bb_cache[bb_descr][is_scratch] = rsb;
+                    }
+                } // All reqd parts.
+
+                // Expand stage BB to encompass non-scratch part BB.
                 auto& sbbb = sb->get_bb();
-
-                // Expand stage BB to encompass bundle BB.
                 spbb.bb_begin = spbb.bb_begin.min_elements(sbbb.bb_begin);
                 spbb.bb_end = spbb.bb_end.max_elements(sbbb.bb_end);
+
+                // Update this BB.
+                spbb.update_bb(sp->get_name(), this, false);
             }
-            spbb.update_bb(sp->get_name(), this, false);
         }
 
         // Init MPI interior to extended BB.
@@ -1091,42 +1156,95 @@ namespace yask {
     }
 
     // Copy BB vars from another.
-    void StencilBundleBase::copy_bounding_box(const StencilBundleBase* src) {
+    void StencilPartBase::copy_bounding_boxes(const StencilPartBase* src) {
         STATE_VARS(this);
-        TRACE_MSG("copy_bounding_box for '" << get_name() << "' from '" <<
-                  src->get_name() << "'...");
+        TRACE_MSG("copying BB from '" <<
+                  src->get_name() << "' to '" << get_name() << "'...");
 
-        _bundle_bb = src->_bundle_bb;
-        assert(_bundle_bb.bb_valid);
+        _part_bb = src->_part_bb;
+        assert(_part_bb.bb_valid);
         _bb_list = src->_bb_list;
     }
 
-    // Find the bounding-boxes for this bundle in this rank.
+    // Find max write halos for scratch output vars in this scratch part.
+    // They are stored in 'this' object.
+    void StencilPartBase::find_scratch_write_halos() {
+        assert(is_scratch());
+        STATE_VARS(this);
+
+        // Init.
+        max_write_halo_left = dims->_domain_dims;
+        max_write_halo_left.set_vals_same(0);
+        max_write_halo_right = dims->_domain_dims;
+        max_write_halo_right.set_vals_same(0);
+
+        // Loop thru vecs of scratch vars updated for this part.
+        for (auto* sv : output_scratch_vecs) {
+            assert(sv);
+
+            // Make sure vars exist; only need for one thread.
+            if (sv->size() == 0)
+                _context->make_scratch_vars(1);
+
+            // Get the one for thread 0.
+            auto& gp = sv->at(0);
+            assert(gp);
+            auto& gb = gp->gb();
+            assert(gb.is_scratch());
+
+            // i: index for stencil dims, j: index for domain dims.
+            DOMAIN_VAR_LOOP(i, j) {
+                auto& dim = dims->_domain_dims.get_dim(j);
+                auto& dname = dim._get_name();
+
+                // Is this dim used in this var?
+                int posn = gb.get_dim_posn(dname);
+                if (posn >= 0) {
+
+                    // Get halos, which need to be written to for
+                    // scratch vars.
+                    idx_t lh = gp->get_left_halo_size(posn);
+                    idx_t rh = gp->get_right_halo_size(posn);
+
+                    // Update max.
+                    max_write_halo_left[j] = max(max_write_halo_left[j], lh);
+                    max_write_halo_right[j] = max(max_write_halo_right[j], rh);
+                }
+            }
+        } // output vars.
+    }     // find_scratch_write_halos.
+
+    // Find the bounding-boxes in this rank for this part.
+    // Also sets max write halos if a scratch part.
     // Only tests domain-var values, not step-vars.
     // Step-vars are tested dynamically for each step
-    // as it is executed.
-    void StencilBundleBase::find_bounding_box() {
+    // as that step is evaluated.
+    void StencilPartBase::find_bounding_boxes(BoundingBox& max_bb) {
         STATE_VARS(this);
-        TRACE_MSG("find_bounding_box for '" << get_name() << "'...");
+        auto& bname = get_name();
+        TRACE_MSG("finding BB for '" << bname << "'...");
 
-        // Init overall bundle BB to that of parent and clear list.
+        // Init overall part BB to that of context and clear list of full BBs.
         assert(_context);
-        _bundle_bb = _context->ext_bb;
-        assert(_bundle_bb.bb_valid);
+        _part_bb = max_bb;
+        assert(_part_bb.bb_valid);
         _bb_list.clear();
+        TRACE_MSG("starting from max BB " << _part_bb.make_range_str_dbg(domain_dims));
 
         // If BB is empty, we are done.
-        if (!_bundle_bb.bb_size)
-            return;
-
-        // If there is no condition, just add full BB to list.
-        if (!is_sub_domain_expr()) {
-            TRACE_MSG("adding 1 sub-BB: [" << _bundle_bb.make_range_string(domain_dims) << "]");
-            _bb_list.push_back(_bundle_bb);
+        if (!_part_bb.bb_size) {
+            TRACE_MSG("empty BB; done");
             return;
         }
 
-        // Goal: Create list of full BBs (non-overlapping & with no invalid
+        // If there is no condition, just add full BB to list.
+        if (!is_sub_domain_expr()) {
+            TRACE_MSG("only 1 full sub-BB " << _part_bb.make_range_str_dbg(domain_dims) << "; done");
+            _bb_list.push_back(_part_bb);
+            return;
+        }
+
+        // Goal: Create list of full BBs (non-overlapping & w/only valid
         // points) inside overall BB.
         YaskTimer bbtimer;
         bbtimer.start();
@@ -1134,10 +1252,10 @@ namespace yask {
         // Divide the overall BB into a slice for each thread
         // across the outer dim.
         const int odim = 0;     // Split across first domain dim; TODO: pick smarter.
-        idx_t outer_len = _bundle_bb.bb_len[odim];
+        idx_t outer_len = _part_bb.bb_len[odim];
         idx_t nthreads = yask_get_num_threads();
         idx_t len_per_thr = CEIL_DIV(outer_len, nthreads);
-        TRACE_MSG("find_bounding_box: running " << nthreads << " thread(s) over " <<
+        TRACE_MSG("running " << nthreads << " thread(s) over " <<
                   outer_len << " point(s) in outer dim");
 
         // Struct w/padding to avoid false sharing.
@@ -1159,9 +1277,9 @@ namespace yask {
 
                  // Begin and end of this slice.
                  // These Indices contain domain dims.
-                 Indices islice_begin(_bundle_bb.bb_begin);
+                 Indices islice_begin(_part_bb.bb_begin);
                  islice_begin[odim] += start * len_per_thr;
-                 Indices islice_end(_bundle_bb.bb_end);
+                 Indices islice_end(_part_bb.bb_end);
                  islice_end[odim] = min(islice_end[odim], islice_begin[odim] + len_per_thr);
                  if (islice_end[odim] <= islice_begin[odim])
                      return; // from lambda.
@@ -1289,36 +1407,36 @@ namespace yask {
              }); // threads/slices.
         TRACE_MSG("sub-bbs found in " <<
                   bbtimer.get_secs_since_start() << " secs.");
-        // At this point, we have a set of full BBs.
+        // At this point, we have a set of full BBs for each slice.
 
         // Reset overall BB.
-        _bundle_bb.bb_num_points = 0;
+        _part_bb.bb_num_points = 0;
 
-        // Collect BBs in all slices.
+        // Merge BBs from all slices.
         // TODO: merge in a parallel binary tree instead of sequentially.
         for (int n = 0; n < nthreads; n++) {
             auto& cur_bb_list = bb_lists[n].bbl;
             TRACE_MSG("processing " << cur_bb_list.size() <<
-                      " sub-BB(s) in bundle '" << get_name() <<
+                      " sub-BB(s) in part '" << get_name() <<
                       "' from thread " << n);
 
             // BBs in slice 'n'.
             for (auto& bbn : cur_bb_list) {
-                TRACE_MSG(" sub-BB: [" << bbn.make_range_string(domain_dims) << "]");
+                TRACE_MSG(" sub-BB " << bbn.make_range_str_dbg(domain_dims));
 
                 // Don't bother with empty BB.
                 if (bbn.bb_size == 0)
                     continue;
 
                 // Init or update overall BB.
-                if (!_bundle_bb.bb_num_points) {
-                    _bundle_bb.bb_begin = bbn.bb_begin;
-                    _bundle_bb.bb_end = bbn.bb_end;
+                if (!_part_bb.bb_num_points) {
+                    _part_bb.bb_begin = bbn.bb_begin;
+                    _part_bb.bb_end = bbn.bb_end;
                 } else {
-                    _bundle_bb.bb_begin = _bundle_bb.bb_begin.min_elements(bbn.bb_begin);
-                    _bundle_bb.bb_end = _bundle_bb.bb_end.max_elements(bbn.bb_end);
+                    _part_bb.bb_begin = _part_bb.bb_begin.min_elements(bbn.bb_begin);
+                    _part_bb.bb_end = _part_bb.bb_end.max_elements(bbn.bb_end);
                 }
-                _bundle_bb.bb_num_points += bbn.bb_size;
+                _part_bb.bb_num_points += bbn.bb_size;
 
                 // Scan existing final BBs looking for one to merge with.
                 bool do_merge = false;
@@ -1345,7 +1463,7 @@ namespace yask {
 
                         // Merge by just increasing the size of 'bb'.
                         bb.bb_end[odim] = bbn.bb_end[odim];
-                        TRACE_MSG("  merging to form [" << bb.make_range_string(domain_dims) << "]");
+                        TRACE_MSG("  merging to form " << bb.make_range_str_dbg(domain_dims));
                         bb.update_bb("sub-bb", _context, true);
                         break;
                     }
@@ -1360,7 +1478,7 @@ namespace yask {
         }
 
         // Finalize overall BB.
-        _bundle_bb.update_bb(get_name(), _context, false);
+        _part_bb.update_bb(get_name(), _context, false);
         bbtimer.stop();
         TRACE_MSG("find-bounding-box: done in " <<
                   bbtimer.get_elapsed_secs() << " secs.");
@@ -1405,18 +1523,18 @@ namespace yask {
             }
         }
 
-        // Lengths are cluster-length multiples?
-        bb_is_cluster_mult = true;
+        // Lengths are vec-length multiples?
+        bb_is_vec_mult = true;
         DOMAIN_VAR_LOOP(i, j) {
             auto& dim = domain_dims.get_dim(j);
             auto& dname = dim._get_name();
-            if (bb_len[j] % dims->_cluster_pts[dname] != 0) {
+            if (bb_len[j] % dims->_fold_pts[dname] != 0) {
                 if (bb_is_full && bb_is_aligned)
                     if (print_info && bb_is_aligned)
                         DEBUG_MSG("Note: '" << name << "' domain"
-                                  " has one or more sizes that are not vector-cluster multiples;"
-                                  " masked calculations will be used in peel and remainder nano-blocks.");
-                bb_is_cluster_mult = false;
+                                  " has one or more sizes that are not vector-length multiples;"
+                                  " masked writes will be used in peel and remainder nano-blocks.");
+                bb_is_vec_mult = false;
                 break;
             }
         }

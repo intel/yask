@@ -379,12 +379,12 @@ sub addIndexVars1($$$$) {
                         "const $itype $aavar = std::min($avar, $svar);",
                         "// Aligned beginning point such that ($bvar - $svar) < $abvar <= $bvar.",
                         "const $itype $abvar = yask::round_down_flr($bvar - $aovar, $aavar) + $aovar;",
-                        "// Number of iterations to get from $abvar to (but not including) $evar, striding by $svar.".
+                        "// Number of iterations to get from $abvar to (but not including) $evar, striding by $svar. ".
                         "This value is rounded up because the last iteration may cover fewer than $svar strides.",
                         "const $itype $nvar = yask::ceil_idiv_flr($evar - $abvar, $svar);";
                 } else {
                     push @$code,
-                        "// Number of iterations to get from $bvar to (but not including) $evar, striding by $svar.".
+                        "// Number of iterations to get from $bvar to (but not including) $evar, striding by $svar. ".
                         "This value is rounded up because the last iteration may cover fewer than $svar strides.",
                         "const $itype $nvar = yask::ceil_idiv_flr($evar - $bvar, $svar);";
                 }

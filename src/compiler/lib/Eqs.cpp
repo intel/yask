@@ -23,13 +23,18 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-///////// Methods for equations and equation bundles ////////////
+///////// Methods for equations and stencil parts ////////////
 
 #include "Print.hpp"
 #include "ExprUtils.hpp"
 #include "Eqs.hpp"
 #include "Print.hpp"
 #include "CppIntrin.hpp"
+
+//#define DEBUG_HALOS
+//#define DEBUG_ADD_EXPRS
+//#define DEBUG_ADD_PARTS
+//#define DEBUG_LIFESPAN
 
 namespace yask {
 
@@ -53,8 +58,8 @@ namespace yask {
         typedef unordered_map<EqualsExpr*, VarPoint*> PointMap;
         typedef unordered_map<EqualsExpr*, PointSet> PointSetMap;
 
-        PointMap _lhs_pts; // outputs of eqs.
-        PointSetMap _rhs_pts; // inputs of eqs.
+        PointMap _lhs_pts; // outputs of eqs (1 for each eq).
+        PointSetMap _rhs_pts; // inputs of eqs (set for each eq).
         PointSetMap _cond_pts;  // sub-domain expr inputs.
         PointSetMap _step_cond_pts;  // step-cond expr inputs.
         PointSetMap _all_pts;  // all points in each eq (union of above).
@@ -125,30 +130,30 @@ namespace yask {
         }
 
         // Callback at a var point.
-        virtual string visit(VarPoint* gp) {
+        virtual string visit(VarPoint* vp) {
             assert(_eq);
-            auto* g = gp->_get_var();
-            _all_pts[_eq].insert(gp);
+            auto* g = vp->_get_var();
+            _all_pts[_eq].insert(vp);
 
             // Save pt and/or var based on state.
             switch (_state) {
 
             case _in_lhs:
-                _lhs_pts[_eq] = gp;
+                _lhs_pts[_eq] = vp;
                 _lhs_vars[_eq] = g;
                 break;
 
             case _in_rhs:
-                _rhs_pts[_eq].insert(gp);
+                _rhs_pts[_eq].insert(vp);
                 _rhs_vars[_eq].insert(g);
                 break;
 
             case _in_cond:
-                _cond_pts[_eq].insert(gp);
+                _cond_pts[_eq].insert(vp);
                 break;
 
             case _in_step_cond:
-                _step_cond_pts[_eq].insert(gp);
+                _step_cond_pts[_eq].insert(vp);
                 break;
 
             default:
@@ -173,8 +178,8 @@ namespace yask {
         }
 
         // Check each var point in expr.
-        virtual string visit(VarPoint* gp) {
-            auto* var = gp->_get_var();
+        virtual string visit(VarPoint* vp) {
+            auto* var = vp->_get_var();
 
             // Folded dims in the solution.
             int soln_nfd = _dims._fold_gt1.size();
@@ -186,11 +191,11 @@ namespace yask {
             // Degenerate case with no folding in soln: we still mark points
             // using vars with some domain dims as vectorizable.
             if (soln_nfd == 0 && var->is_foldable())
-                gp->set_vec_type(VarPoint::VEC_FULL);
+                vp->set_vec_type(VarPoint::VEC_FULL);
 
             // No foldable dims.
             else if (var_nfd == 0)
-                gp->set_vec_type(VarPoint::VEC_NONE);
+                vp->set_vec_type(VarPoint::VEC_NONE);
 
             else {
                 assert(var_nfd > 0);
@@ -204,7 +209,7 @@ namespace yask {
                 int fdoffsets = 0;
                 for (auto fdim : _dims._fold_gt1) {
                     auto& fdname = fdim._get_name();
-                    if (gp->get_arg_offsets().lookup(fdname))
+                    if (vp->get_arg_offsets().lookup(fdname))
                         fdoffsets++;
                 }
                 assert(fdoffsets <= var_nfd);
@@ -212,21 +217,21 @@ namespace yask {
                 // All folded dims are vectorizable?
                 if (fdoffsets == soln_nfd) {
                     assert(var->is_foldable());
-                    gp->set_vec_type(VarPoint::VEC_FULL); // all good.
+                    vp->set_vec_type(VarPoint::VEC_FULL); // all good.
                 }
 
                 // Some dims are vectorizable?
                 else if (fdoffsets > 0)
-                    gp->set_vec_type(VarPoint::VEC_PARTIAL);
+                    vp->set_vec_type(VarPoint::VEC_PARTIAL);
 
                 // No dims are vectorizable.
                 else
-                    gp->set_vec_type(VarPoint::VEC_NONE);
+                    vp->set_vec_type(VarPoint::VEC_NONE);
 
             }
 
             // Also check args of this var point.
-            return ExprVisitor::visit(gp);
+            return ExprVisitor::visit(vp);
         }
     };
 
@@ -264,10 +269,10 @@ namespace yask {
         }
 
         // Check each var point in expr.
-        virtual string visit(VarPoint* gp) {
+        virtual string visit(VarPoint* vp) {
 
             // Info from var.
-            auto* var = gp->_get_var();
+            auto* var = vp->_get_var();
             auto gdims = var->get_dim_names();
 
             // Inner-loop var.
@@ -278,7 +283,7 @@ namespace yask {
             VarPoint::VarDepType lt = VarPoint::DOMAIN_VAR_INVARIANT;
 
             // Check every point arg.
-            auto& args = gp->get_args();
+            auto& args = vp->get_args();
             for (size_t ai = 0; ai < args.size(); ai++) {
                 auto& arg = args.at(ai);
                 assert(ai < gdims.size());
@@ -317,7 +322,7 @@ namespace yask {
                     }
                 }
             }
-            gp->set_var_dep(lt);
+            vp->set_var_dep(lt);
             return "";
         }
     };
@@ -335,29 +340,32 @@ namespace yask {
         }
 
         // Visit a var point.
-        virtual string visit(VarPoint* gp) {
+        virtual string visit(VarPoint* vp) {
 
             // Shift var _ofs points.
-            auto ofs0 = gp->get_arg_offsets();
+            auto ofs0 = vp->get_arg_offsets();
             IntTuple new_loc = ofs0.add_elements(_ofs, false);
-            gp->set_arg_offsets(new_loc);
+            vp->set_arg_offsets(new_loc);
             return "";
         }
     };
 
     ////////// Methods.
-   
+
     // Analyze group of equations.
     // Sets _step_dir in dims.
     // Finds dependencies based on all eqs if 'settings._find_deps', setting
     // _imm_dep_on and _dep_on.
     // Throws exceptions on illegal dependencies.
     // TODO: split this into smaller functions.
-    // BIG-TODO: replace dependency algorithms with integration of a polyhedral
+    // BIG-TODO: replace dependency graph and algorithms with a DAG library.
+    // HUGE-TODO: replace dependency algorithms with integration of a polyhedral
     // library.
-    void Eqs::analyze_eqs(const CompilerSettings& settings,
-                          Dimensions& dims,
-                          ostream& os) {
+    void Eqs::analyze_eqs() {
+        auto& dims = _soln->get_dims();
+        auto& os = _soln->get_ostr();
+        auto& settings = _soln->get_settings();
+        auto& log_vars = _soln->get_logical_vars();
         auto& step_dim = dims._step_dim;
 
         // Gather initial stats from all eqs.
@@ -367,36 +375,34 @@ namespace yask {
         auto& in_vars = pt_vis.get_input_vars();
         auto& out_pts = pt_vis.get_output_pts();
         auto& in_pts = pt_vis.get_input_pts();
-        //auto& cond_pts = pt_vis.get_cond_pts();
+        //auto& dcond_pts = pt_vis.get_dcond_pts();
         //auto& step_cond_pts = pt_vis.get_step_cond_pts();
 
         // 1. Check each eq internally.
         os << "\nProcessing " << get_num() << " stencil equation(s)...\n";
         for (auto eq1 : get_all()) {
+
+            if (eq1->is_scratch())
+                os << "Scratch equation: " << eq1->get_descr() << endl;
+            else
+                os << "Equation: " << eq1->get_descr() << endl;
+            
             auto* eq1p = eq1.get();
             assert(out_vars.count(eq1p));
             assert(in_vars.count(eq1p));
-            auto* og1 = out_vars.at(eq1p);
-            assert(og1 == eq1->_get_var());
+            auto* ov1 = out_vars.at(eq1p);
+            assert(ov1 == eq1->get_lhs_var());
             auto* op1 = out_pts.at(eq1p);
-            //auto& ig1 = in_vars.at(eq1p);
-            auto& ip1 = in_pts.at(eq1p);
-            auto cond1 = eq1p->_get_cond();
+            //auto& ivs1 = in_vars.at(eq1p);
+            auto& ips1 = in_pts.at(eq1p);
+            auto dcond1 = eq1p->_get_cond();
             auto stcond1 = eq1p->_get_step_cond();
             num_expr_ptr step_expr1 = op1->get_arg(step_dim); // may be null.
 
-#ifdef DEBUG_DEP
+            #ifdef DEBUG_DEP
             cout << " Checking internal consistency of equation " <<
                 eq1->make_quoted_str() << "...\n";
-#endif
-
-            // Scratch var must not have a condition.
-            if (cond1 && og1->is_scratch())
-                THROW_YASK_EXCEPTION("scratch-var equation " + eq1->make_quoted_str() +
-                                     " cannot have a domain condition");
-            if (stcond1 && og1->is_scratch())
-                THROW_YASK_EXCEPTION("scratch-var equation " + eq1->make_quoted_str() +
-                                     " cannot have a step condition");
+            #endif
 
             // LHS must have all domain dims.
             for (auto& dd : dims._domain_dims) {
@@ -409,7 +415,7 @@ namespace yask {
             }
 
             // LHS of non-scratch must have step dim and vice-versa.
-            if (!og1->is_scratch()) {
+            if (!ov1->is_scratch()) {
                 if (!step_expr1)
                     THROW_YASK_EXCEPTION("non-scratch var equation " + eq1->make_quoted_str() +
                                          " does not use step-dimension '" + step_dim +
@@ -421,8 +427,8 @@ namespace yask {
             }
 
             // Check LHS var dimensions and associated args.
-            for (int di = 0; di < og1->get_num_dims(); di++) {
-                auto& dn = og1->get_dim_name(di);  // name of this dim.
+            for (int di = 0; di < ov1->get_num_dims(); di++) {
+                auto& dn = ov1->get_dim_name(di);  // name of this dim.
                 auto argn = op1->get_args().at(di); // LHS arg for this dim.
 
                 // Check based on dim type.
@@ -454,44 +460,24 @@ namespace yask {
                         THROW_YASK_EXCEPTION("LHS of equation " + eq1->make_quoted_str() +
                                              " contains expression " + argn->make_quoted_str() +
                                              " for misc dimension '" + dn +
-                                             "' where kernel-run-time constant integer is expected");
+                                             "' where constant integer is expected");
                     argn->get_int_val(); // throws exception if not an integer.
                 }
             }
         
-            // Heuristics to set the default step direction.
-            // The accuracy isn't critical, because the default is only be
-            // used in the standalone test utility and the auto-tuner.
-            if (!og1->is_scratch()) {
+            // Set and/or check the step direction.
+            if (!ov1->is_scratch()) {
 
-                // First, see if LHS step arg is a simple offset, e.g., 'u(t+1, ...)'.
-                // This is the most common case.
+                // See if LHS step arg is a simple offset, e.g., 'u(t+1, ...)'.
                 auto& lofss = op1->get_arg_offsets();
                 auto* lofsp = lofss.lookup(step_dim); // offset at step dim.
                 if (lofsp) {
                     auto lofs = *lofsp;
 
-                    // Scan input (RHS) points.
-                    for (auto i1 : ip1) {
-                        
-                        // Is point a simple offset from step, e.g., 'u(t-2, ...)'?
-                        auto* rsi1p = i1->get_arg_offsets().lookup(step_dim);
-                        if (rsi1p) {
-                            int rofs = *rsi1p;
-
-                            // Example:
-                            // forward: 'u(t+1, ...) EQUALS ... u(t, ...) ...',
-                            // backward: 'u(t-1, ...) EQUALS ... u(t, ...) ...'.
-                            if (lofs > rofs) {
-                                dims._step_dir = 1;
-                                break;
-                            }
-                            else if (lofs < rofs) {
-                                dims._step_dir = -1;
-                                break;
-                            }
-                        }
-                    } // for all RHS points.
+                    if (abs(lofs) != 1)
+                        THROW_YASK_EXCEPTION("LHS of equation " + eq1->make_quoted_str() +
+                                             " does not contain an offset of +/-1 from step-dimension '" +
+                                             step_dim + "'");
                     
                     // Soln step-direction heuristic used only if not set.
                     // Assume 'u(t+1, ...) EQUALS ...' implies forward,
@@ -499,28 +485,77 @@ namespace yask {
                     if (dims._step_dir == 0 && lofs != 0)
                         dims._step_dir = (lofs > 0) ? 1 : -1;
 
+                    if (lofs != dims._step_dir)
+                        THROW_YASK_EXCEPTION("LHS of equation " + eq1->make_quoted_str() +
+                                             " does not contain the same offset from step-dimension '" +
+                                             step_dim + "' as previous equation(s)");
+                    
+                    // Scan input (RHS) points.
+                    for (auto i1 : ips1) {
+                        
+                        // Is RHS point a simple offset from step, e.g., 'u(t-2, ...)'?
+                        auto* rsi1p = i1->get_arg_offsets().lookup(step_dim);
+                        if (rsi1p) {
+                            int rofs = *rsi1p;
+
+                            // Examples:
+                            // forward: 'u(t+1, ...) EQUALS ... u(t, ...) ...',
+                            // forward: 'u(t+1, ...) EQUALS ... u(t-2, ...) ...',
+                            // bad forward: 'u(t+1, ...) EQUALS ... u(t+3, ...) ...',
+                            if (dims._step_dir == 1 && rofs > lofs) {
+                                THROW_YASK_EXCEPTION("equation " + eq1->make_quoted_str() +
+                                                     " contains an offset of " + to_string(rofs) +
+                                                     " from step-dimension '" + step_dim +
+                                                     "' on the RHS, which greater than offset " + to_string(lofs) +
+                                                     " on the LHS");
+                            }
+                            // backward: 'u(t-1, ...) EQUALS ... u(t, ...) ...'.
+                            // bad backward: 'u(t-1, ...) EQUALS ... u(t-2, ...) ...'.
+                            if (dims._step_dir == -11 && rofs < lofs) {
+                                THROW_YASK_EXCEPTION("equation " + eq1->make_quoted_str() +
+                                                     " contains an offset of " + to_string(rofs) +
+                                                     " from step-dimension '" + step_dim +
+                                                     "' on the RHS, which less than offset " + to_string(lofs) +
+                                                     " on the LHS (not allowed for reverse-time stencils)");
+                            }
+                        }
+                    } // for all RHS points.
                 }
+                else {
+                    THROW_YASK_EXCEPTION("LHS of equation " + eq1->make_quoted_str() +
+                                         " does not contain  an offset of +/-1 from step-dimension '" +
+                                         step_dim + "'");
+                }                    
             }
 
             // LHS of equation must be vectorizable.
             // TODO: relax this restriction.
+            // TODO: is this needed? seems redundant w/above checks on LHS.
             if (op1->get_vec_type() != VarPoint::VEC_FULL) {
                 THROW_YASK_EXCEPTION("LHS of equation " + eq1->make_quoted_str() +
                                      " is not fully vectorizable because not all folded"
                                      " dimensions are accessed via simple offsets from their respective indices");
             }
 
-            // Check that domain indices are simple offsets and
-            // misc indices are consts on RHS.
-            for (auto i1 : ip1) {
-                auto* ig1 = i1->_get_var();
+            // More RHS checks: step & domain indices must be simple offsets and
+            // misc indices must be consts.
+            for (auto i1 : ips1) {
+                auto* iv1 = i1->_get_var();
 
-                for (int di = 0; di < ig1->get_num_dims(); di++) {
-                    auto& dn = ig1->get_dim_name(di);  // name of this dim.
+                for (int di = 0; di < iv1->get_num_dims(); di++) {
+                    auto& dn = iv1->get_dim_name(di);  // name of this dim.
                     auto argn = i1->get_args().at(di); // arg for this dim.
 
                     // Check based on dim type.
+                    // Must have simple indices in step dim.
                     if (dn == step_dim) {
+                        auto* rsi1p = i1->get_arg_offsets().lookup(dn);
+                        if (!rsi1p)
+                            THROW_YASK_EXCEPTION("RHS of equation " + eq1->make_quoted_str() +
+                                                 " contains expression " + argn->make_quoted_str() +
+                                                 " for step-dimension '" + dn +
+                                                 "' where constant-integer offset from '" + dn +
+                                                 "' is expected");
                     }
 
                     // Must have simple indices in domain dims.
@@ -529,7 +564,7 @@ namespace yask {
                         if (!rsi1p)
                             THROW_YASK_EXCEPTION("RHS of equation " + eq1->make_quoted_str() +
                                                  " contains expression " + argn->make_quoted_str() +
-                                                 " for domain dimension '" + dn +
+                                                 " for domain-dimension '" + dn +
                                                  "' where constant-integer offset from '" + dn +
                                                  "' is expected");
                     }
@@ -539,192 +574,153 @@ namespace yask {
                         if (!argn->is_const_val())
                             THROW_YASK_EXCEPTION("RHS of equation " + eq1->make_quoted_str() +
                                                  " contains expression " + argn->make_quoted_str() +
-                                                 " for misc dimension '" + dn +
+                                                 " for misc-dimension '" + dn +
                                                  "' where constant integer is expected");
                         argn->get_int_val(); // throws exception if not an integer.
                     }
                 }
             } // input pts.
 
-            // TODO: check to make sure cond1 depends only on domain indices.
+            // TODO: check to make sure dcond1 depends only on domain indices.
             // TODO: check to make sure stcond1 does not depend on domain indices.
+
+            // Find logical var dependencies: LHS var depends on RHS vars.
+            auto olv1 = log_vars.add_var_slice(op1);
+            for (auto ip1 : ips1) {
+                auto ilv1 = log_vars.add_var_slice(ip1);
+
+                // Set dependence.
+                log_vars.set_imm_dep_on(olv1, ilv1);
+            }
+
+            // Re-process after every equation to assist with debug:
+            // exception will be thrown after printing offending eq.
+            log_vars.find_all_deps();
+            
         } // for all eqs.
+        os << endl;
+
+        // Finish processing and dump logical vars.
+        log_vars.topo_sort();
+        log_vars.print_info();
 
         // 2. Check each pair of eqs.
-        os << "Analyzing for dependencies...\n";
+        os << "\nAnalyzing equations for dependencies...\n";
         for (auto eq1 : get_all()) {
             auto* eq1p = eq1.get();
             assert(out_vars.count(eq1p));
             assert(in_vars.count(eq1p));
-            auto* og1 = out_vars.at(eq1p);
-            assert(og1 == eq1->_get_var());
+            auto* ov1 = out_vars.at(eq1p);
+            assert(ov1 == eq1->get_lhs_var());
             auto* op1 = out_pts.at(eq1p);
-            //auto& ig1 = in_vars.at(eq1p);
-            //auto& ip1 = in_pts.at(eq1p);
-            auto cond1 = eq1p->_get_cond();
+            //auto& ivs1 = in_vars.at(eq1p);
+            //auto& ips1 = in_pts.at(eq1p);
+            auto dcond1 = eq1p->_get_cond();
             auto stcond1 = eq1p->_get_step_cond();
             num_expr_ptr step_expr1 = op1->get_arg(step_dim);
+            bool is_scratch1 = op1->_get_var()->is_scratch();
 
             // Check each 'eq2' to see if it depends on 'eq1'.
             for (auto eq2 : get_all()) {
+                if (eq1 == eq2)
+                    continue;
+                
                 auto* eq2p = eq2.get();
-                auto& og2 = out_vars.at(eq2p);
-                assert(og2 == eq2->_get_var());
+                auto& ov2 = out_vars.at(eq2p);
+                assert(ov2 == eq2->get_lhs_var());
                 auto& op2 = out_pts.at(eq2p);
-                auto& ig2 = in_vars.at(eq2p);
-                auto& ip2 = in_pts.at(eq2p);
-                auto cond2 = eq2p->_get_cond();
+                auto& ivs2 = in_vars.at(eq2p);
+                auto& ips2 = in_pts.at(eq2p);
+                auto dcond2 = eq2p->_get_cond();
                 auto stcond2 = eq2p->_get_step_cond();
 
-#ifdef DEBUG_DEP
+                #ifdef DEBUG_DEP
                 cout << " Checking eq " <<
                     eq1->make_quoted_str() << " vs " <<
                     eq2->make_quoted_str() << "...\n";
-#endif
+                #endif
 
-                bool same_eq = eq1 == eq2;
                 bool same_op = are_exprs_same(op1, op2);
-                bool same_cond = are_exprs_same(cond1, cond2);
+                bool same_dcond = are_exprs_same(dcond1, dcond2);
                 bool same_stcond = are_exprs_same(stcond1, stcond2);
 
-                // A separate var is defined by its name and any const indices.
-                //bool same_og = op1->is_same_logical_var(*op2);
+                // Check pairs that have same LHS.
+                if (same_op) {
 
-                // If two different eqs have the same conditions, they
-                // cannot have the same LHS.
-                if (!same_eq && same_cond && same_stcond && same_op) {
-                    string cdesc = cond1 ? "with domain condition " + cond1->make_quoted_str() :
+                    string dcdesc = dcond2 ? "with domain condition " + dcond2->make_quoted_str() :
                         "without domain conditions";
-                    string stcdesc = stcond1 ? "with step condition " + stcond1->make_quoted_str() :
+                    string stcdesc = stcond2 ? "with step condition " + stcond2->make_quoted_str() :
                         "without step conditions";
-                    THROW_YASK_EXCEPTION("two equations " + cdesc +
-                                         " and " + stcdesc +
-                                         " have the same LHS: " +
-                                         eq1->make_quoted_str() + " and " +
-                                         eq2->make_quoted_str());
-                }
-
-                // First dep check: exact matches on LHS of eq1 to RHS of eq2.
-                // eq2 dep on eq1 => some output of eq1 is an input to eq2.
-                // If the two eqs have the same condition, detect
-                // dependencies by looking for exact matches.
-                // We do this check first because it's quicker than the
-                // detailed scan done later if this one doesn't find a dep.
-                // Also, this is always illegal, even if not finding deps.
-                //
-                // Example:
-                //  eq1: a(t+1, x, ...) EQUALS ...
-                //  eq2: b(t+1, x, ...) EQUALS a(t+1, x, ...) ...
-                if (same_cond && same_stcond && ip2.count(op1)) {
-
-                    // Eq depends on itself?
-                    if (same_eq) {
-
-                        // Exit with error.
-                        THROW_YASK_EXCEPTION("illegal dependency: LHS of equation " +
-                                             eq1->make_quoted_str() + " also appears on its RHS");
+                    string cdesc = dcdesc + " and " + stcdesc;
+                    
+                    // If 2 different eqs have the same or no conditions, they
+                    // cannot have the same LHS.
+                    if (same_dcond && same_stcond) {
+                        THROW_YASK_EXCEPTION("two equations, both with " + cdesc +
+                                             ", have the same LHS: " +
+                                             eq1->make_quoted_str() + " and " +
+                                             eq2->make_quoted_str());
                     }
 
-                    // Save dependency.
-#ifdef DEBUG_DEP
-                    cout << "  Exact match found to " << op1->make_quoted_str() << ".\n";
-#endif
-                    if (settings._find_deps)
-                        _deps.set_imm_dep_on(eq2, eq1);
+                    // If 1 eq has no conditions, and another has any conditions,
+                    // they cannot have the same LHS.
+                    if (is_expr_null(dcond1) && is_expr_null(stcond1) &&
+                        (!is_expr_null(dcond2) || !is_expr_null(stcond2))) {
+                        THROW_YASK_EXCEPTION("equation " + eq1->make_quoted_str() +
+                                             " without domain or step conditions and equation " +
+                                             eq2->make_quoted_str() + " " + cdesc +
+                                             " have the same LHS");
+                    }
 
-                    // Move along to next eq2.
-                    continue;
+                    // NB: if both of the preceding tests pass, we could still
+                    // have two equations with different conditions updating the
+                    // same logical var.  We will assume the stencil programmer
+                    // has ensured they do not overlap.  TODO: check this at
+                    // compile-time (difficult) or at run-time (easier, but not
+                    // as nice for stencil programmer.)
                 }
 
-                // Don't do more conservative checks if not looking for deps.
+                // Stop here if not looking for deps.
                 if (!settings._find_deps)
                     continue;
 
-                // Next dep check: inexact matches on LHS of eq1 to RHS of eq2.
-                // Does eq1 define *any* point in a var that eq2 inputs
-                // at the same step index?  If so, they *might* have a
-                // dependency. Some of these may not be real
-                // dependencies due to conditions. Those that are real
-                // may or may not be legal.
-                //
-                // Example:
-                //  eq1: a(t+1, x, ...) EQUALS ... IF_DOMAIN ...
-                //  eq2: b(t+1, x, ...) EQUALS a(t+1, x+5, ...) ... IF_DOMAIN ...
-                //
-                // Example:
-                //  eq1: tmp(x, ...) EQUALS ...
-                //  eq2: b(t+1, x, ...) EQUALS tmp(x+2, ...)
-                //
-                // TODO: be much smarter about this and find only real
-                // dependencies--use a polyhedral library?
-                if (ig2.count(og1)) {
-
-                    // detailed check of g1 input points on RHS of eq2.
-                    for (auto* i2 : ip2) {
-
-                        // Same logical var?
-                        bool same_var = i2->is_same_logical_var(*op1);
-
-                        // If not same var, no dependency.
-                        if (!same_var)
-                            continue;
-
-                        // Both points at same step?
-                        bool same_step = false;
-                        num_expr_ptr step_expr2 = i2->get_arg(step_dim);
-                        if (step_expr1 && step_expr2 &&
-                            are_exprs_same(step_expr1, step_expr2))
-                            same_step = true;
-
-                        // From same step index, e.g., same time?
-                        // Or, passing data thru a temp var?
-                        if (same_step || og1->is_scratch()) {
-
-                            // Eq depends on itself?
-                            if (same_eq) {
-
-                                // Exit with error.
-                                string stepmsg = same_step ? " at '" + step_expr1->make_quoted_str() + "'" : "";
-                                THROW_YASK_EXCEPTION("disallowed dependency: var '" +
-                                                     op1->make_logical_var_str() + "' on LHS of equation " +
-                                                     eq1->make_quoted_str() + " also appears on its RHS" +
-                                                     stepmsg);
-                            }
-
-                            // Save dependency.
-#ifdef DEBUG_DEP
-                            cout << "  Likely match found to " << op1->make_quoted_str() << ".\n";
-#endif
-                            _deps.set_imm_dep_on(eq2, eq1);
-
-                            // Move along to next equation.
-                            break;
-                        }
-                    }
-                }
-#ifdef DEBUG_DEP
-                cout << "  No deps found.\n";
-#endif
-
+                /* Use logical-var dependencies to determine if eq2
+                   depends on eq1.
+                  
+                   Example of non-scratch var dependency:
+                    eq1: a(t+1, x, ...) EQUALS ...
+                    eq2: b(t+1, x, ...) EQUALS a(t+1, x+5, ...) ...
+                    eq2 depends on eq1 because b(t+1) depends on a(t+1).
+                  
+                   Example of dependency through scratch var:
+                    eq1: tmp(x, ...) EQUALS ...
+                    eq2: b(t+1, x, ...) EQUALS tmp(x+2, ...)
+                    eq2 depends on eq1 because b(t+1) depends on tmp.
+                */
+                auto olv1 = log_vars.find_var_slice(op1);
+                assert(olv1);
+                auto olv2 = log_vars.find_var_slice(op2);
+                assert(olv2);
+                if (log_vars.get_deps().is_dep_on(olv2, olv1))
+                    set_imm_dep_on(eq2, eq1);
+                
             } // for all eqs (eq2).
+
+            // Re-process dependencies after every equation to assist with
+            // debug: exception will be thrown after printing offending eq.
+            find_all_deps();
+            
         } // for all eqs (eq1).
 
         // If the step dir wasn't set (no eqs), set it now.
         if (!dims._step_dir)
             dims._step_dir = 1;
 
-#ifdef DEBUG_DEP
+        #ifdef DEBUG_DEP
         cout << "Dependencies for all eqs:\n";
         _deps.print_deps(cout);
-#endif
-
-        // Find scratch children.
-        analyze_scratch();
-
-#ifdef DEBUG_DEP
         cout << "Dependencies from non-scratch to scratch eqs:\n";
         _scratches.print_deps(cout);
-#endif
 
         // Resolve indirect dependencies.
         // Do this even if not finding deps because we want to
@@ -735,11 +731,12 @@ namespace yask {
         // Sort.
         os << "Topologically ordering equations...\n";
         topo_sort();
+        #endif
     }
 
     // Determine which var points can be vectorized.
-    void Eqs::analyze_vec(const CompilerSettings& settings,
-                          const Dimensions& dims) {
+    void Eqs::analyze_vec() {
+        auto& dims = _soln->get_dims();
 
         // Send a 'SetVecVisitor' to each point in
         // the current equations.
@@ -748,8 +745,9 @@ namespace yask {
     }
 
     // Determine loop access behavior of var points.
-    void Eqs::analyze_loop(const CompilerSettings& settings,
-                           const Dimensions& dims) {
+    void Eqs::analyze_loop() {
+        auto& dims = _soln->get_dims();
+        auto& settings = _soln->get_settings();
 
         // Send a 'SetLoopVisitor' to each point in
         // the current equations.
@@ -780,89 +778,28 @@ namespace yask {
         }
     }
 
-    // Find scratch-var eqs needed for each non-scratch eq.  These will
-    // eventually be gathered into bundles and saved as the "scratch
-    // children" for each non-scratch bundles.
-    void Eqs::analyze_scratch() {
+    void LogicalVars::print_info() const {
+        auto& os = _soln->get_ostr();
 
-        // Example:
-        // eq1: scr(x) EQUALS u(t,x+1);
-        // eq2: u(t+1,x) EQUALS scr(x+2);
-        // Direct deps: eq2 -> eq1(s).
-        // eq1 is scratch child of eq2.
+        os << "Found " << get_num() << " logical var slice(s):\n";
+        for (auto& lv1 : get_all()) {
+            if (lv1->get_var().is_scratch())
+                os << " scratch";
+            if (lv1->get_var().get_num_dims() == 0)
+                os << " scalar";
+            else
+                os << " var slice";
+            os << " '" << lv1->get_descr() << "':\n";
 
-        // Example:
-        // eq1: scr1(x) EQUALS u(t,x+1);
-        // eq2: scr2(x) EQUALS scr1(x+2);
-        // eq3: u(t+1,x) EQUALS scr2(x+4);
-        // Direct deps: eq3 -> eq2(s) -> eq1(s).
-        // eq1 and eq2 are scratch children of eq3.
-        
-        // Find all LHS and RHS points and vars for all eqs.
-        PointVisitor pv;
-        visit_eqs(&pv);
-
-        // Analyze each eq.
-        for (auto& eq1 : get_all()) {
-
-            // Output var for this eq.
-            auto* og1 = pv.get_output_vars().at(eq1.get());
-
-            // Only need to look at dep paths starting from non-scratch eqs.
-            if (og1->is_scratch())
-                continue;
-
-            // We start with each non-scratch eq and walk the dep tree to
-            // find all dependent scratch eqs.  It's important to
-            // then visit the eqs in dep order using 'path' to get only
-            // unbroken chains of scratch vars.
-            // Note that sub-paths may be visited more than once, e.g.,
-            // 'eq3 -> eq2(s)' and 'eq3 -> eq2(s) -> eq1(s)' are 2 paths from
-            // the second example above, but this shouldn't cause any issues,
-            // just some redundant work.
-            get_deps().visit_deps
-
-                // For each 'b', 'eq1' is 'b' or depends on 'b',
-                // immediately or indirectly; 'path' leads from
-                // 'eq1' to 'b'.
-                (eq1, [&](equals_expr_ptr b, EqList& path) {
-                    //auto* ogb = pv.get_output_vars().at(b.get());
-
-                    // Find scratch-var eqs in this dep path that are
-                    // needed for 'eq1'. Walk dep path from 'eq1' to 'b'
-                    // until a non-scratch var is found.
-                    unordered_set<Var*> scratches_seen;
-                    for (auto eq2 : path) {
-
-                        // Don't process 'eq1', the initial non-scratch eq.
-                        if (eq2 == eq1)
-                            continue;
-                        
-                        // If this isn't a scratch eq, we are done
-                        // w/this path because we only want the eqs
-                        // from 'eq1' through an *unbroken* chain of
-                        // scratch vars.
-                        auto* og2 = pv.get_output_vars().at(eq2.get());
-                        if (!og2->is_scratch())
-                            break;
-
-                        // Add 'eq2' to the set needed for 'eq1'.
-                        // NB: scratch-deps are used as a map of sets.
-                        get_scratch_deps().set_imm_dep_on(eq1, eq2);
-
-                        // Check for illegal scratch path.
-                        // TODO: this is only illegal because the scratch
-                        // write area is stored in the var, so >1 write
-                        // areas can't be shared. Need to store the write
-                        // areas somewhere else, maybe in the equation or
-                        // bundle. Would require changes to kernel as well.
-                        if (scratches_seen.count(og2))
-                            THROW_YASK_EXCEPTION("scratch-var '" +
-                                                 og2->get_name() + "' depends upon itself");
-                        scratches_seen.insert(og2);
-                    }
-
-                });
+            // Deps.
+            auto& id = get_imm_deps_on(lv1);
+            for (auto& lv2 : id)
+                os << "  Immediately dependent on '" << lv2->get_descr() << "'.\n";
+            for (auto& lv2 : get_all_deps_on(lv1))
+                if (id.count(lv2) == 0)
+                    os << "   Indirectly dependent on '" << lv2->get_descr() << "'.\n";
+            if (get_all_deps_on(lv1).size() == 0)
+                os << "  No dependencies within a step.\n";
         }
     }
 
@@ -874,45 +811,46 @@ namespace yask {
         return base_name + "_" + to_string(index);
     }
 
-    // Make a human-readable description of this eq bundle.
-    string EqBundle::get_descr(bool show_cond,
-                              string quote) const
-    {
-        string des;
-        if (is_scratch())
-            des += "scratch ";
-        des += "equation-bundle " + quote + _get_name() + quote;
-        if (!is_scratch() && show_cond) {
-            if (cond.get())
-                des += " w/domain condition " + cond->make_quoted_str(quote);
-            else
-                des += " w/o domain condition";
-            if (step_cond.get())
-                des += " w/step condition " + step_cond->make_quoted_str(quote);
-            else
-                des += " w/o step condition";
-        }
-        return des;
-    }
-
-    // Add an equation to an EqBundle.
-    void EqBundle::add_eq(equals_expr_ptr ee)
-    {
-#ifdef DEBUG_EQ_BUNDLE
-        cout << "EqBundle: adding " << ee->make_quoted_str() << endl;
-#endif
+    // Add an eq to an EqLot.
+    void EqLot::add_eq(equals_expr_ptr ee) {
         _eqs.insert(ee);
 
         // Get I/O point data from eq 'ee'.
         PointVisitor pv;
         ee->accept(&pv);
-
-        // update list of input and output vars for this bundle.
+            
+        // update list of input and output vars.
         auto* out_var = pv.get_output_vars().at(ee.get());
         _out_vars.insert(out_var);
         auto& in_vars = pv.get_input_vars().at(ee.get());
         for (auto* g : in_vars)
             _in_vars.insert(g);
+
+        // check scratch-ness.
+        assert(out_var->is_scratch() == _is_scratch);
+    }
+
+    // Remove an eq from an EqLot.
+    void EqLot::remove_eq(equals_expr_ptr ee) {
+        _eqs.erase(ee);
+
+        // Update list of input and output vars.
+        // Must clear and re-add all because more than one
+        // eq can effect the same vars.
+        _out_vars.clear();
+        _in_vars.clear();
+        for (auto& eq : _eqs) {
+
+            // Get I/O point data from 'eq'.
+            PointVisitor pv;
+            eq->accept(&pv);
+            
+            auto* out_var = pv.get_output_vars().at(eq.get());
+            _out_vars.insert(out_var);
+            auto& in_vars = pv.get_input_vars().at(eq.get());
+            for (auto* g : in_vars)
+                _in_vars.insert(g);
+        }
     }
 
     // Print stats from eqs.
@@ -922,13 +860,36 @@ namespace yask {
         cv.print_stats(os, msg);
     }
 
-    // Print stats from eqs in bundles.
-    void EqBundles::print_stats(ostream& os, const string& msg) {
+    // Make a human-readable description of this part.
+    string Part::get_descr(bool show_cond,
+                               string quote) const
+    {
+        string des;
+        if (is_scratch())
+            des += "scratch ";
+        des += "part " + quote + _get_name() + quote;
+        if (show_cond) {
+            if (cond.get())
+                des += " w/domain condition " + cond->make_quoted_str(quote);
+            else
+                des += " w/o domain condition";
+            des += " and";
+            if (step_cond.get())
+                des += " w/step condition " + step_cond->make_quoted_str(quote);
+            else
+                des += " w/o step condition";
+        }
+        return des;
+    }
+
+    // Print stats from eqs in parts.
+    void Parts::print_stats(const string& msg) {
+        auto& os = _soln->get_ostr();
         CounterVisitor cv;
 
-        // Use separate counter visitor for each bundle
+        // Use separate counter visitor for each part
         // to avoid treating repeated eqs as common sub-exprs.
-        for (auto& eq : _all) {
+        for (auto& eq : get_all()) {
             CounterVisitor ecv;
             eq->visit_eqs(&ecv);
             cv += ecv;
@@ -936,457 +897,322 @@ namespace yask {
         cv.print_stats(os, msg);
     }
 
-    // Replicate each equation at the non-zero offsets for
-    // each vector in a cluster.
-    void EqBundle::replicate_eqs_in_cluster(Dimensions& dims)
+    // Add 'eq' to an existing part if possible.  If not possible,
+    // create a new part and add 'eqs' to it. The index will be
+    // incremented if a new part is created.  Returns whether a new part
+    // was created.
+    bool Parts::add_eq_to_part(Eq& eq)
     {
-        // Make a copy of the original equations so we can iterate through
-        // them while adding to the bundle.
-        EqList eqs(_eqs);
-
-        // Loop thru points in cluster.
-        dims._cluster_mults.visit_all_points([&](const IntTuple& cluster_index,
-                                                 size_t idx) {
-
-                // Don't need copy of one at origin.
-                if (cluster_index.sum() > 0) {
-
-                    // Get offset of cluster, which is each cluster index multipled
-                    // by corresponding vector size.  Example: for a 4x4 fold in a
-                    // 1x2 cluster, the 2nd cluster index will be (0,1) and the
-                    // corresponding cluster offset will be (0,4).
-                    auto cluster_offset = cluster_index.mult_elements(dims._fold);
-
-                    // Loop thru eqs.
-                    for (auto eq : eqs) {
-                        assert(eq.get());
-
-                        // Make a copy.
-                        auto eq2 = eq->clone();
-
-                        // Add offsets to each var point.
-                        OffsetVisitor ov(cluster_offset);
-                        eq2->accept(&ov);
-
-                        // Put new equation into bundle.
-                        add_eq(eq2);
-                    }
-                }
-                return true;
-            });
-
-        // Ensure the expected number of equations now exist.
-        assert(_eqs.size() == eqs.size() * dims._cluster_mults.product());
-    }
-
-    // Add 'eq' from 'all_eqs' to eq-bundle with 'base_name' unless
-    // alread added or illegal.  The corresponding index in '_indices' will
-    // be incremented if a new bundle is created.  Returns whether a new
-    // bundle was created.
-    bool EqBundles::add_eq_to_bundle(Eqs& all_eqs,
-                                  equals_expr_ptr eq,
-                                  const string& base_name,
-                                  const CompilerSettings& settings) {
-        assert(_dims);
-        auto& step_dim = _dims->_step_dim;
+        auto& dims = _soln->get_dims();
+        auto& all_eqs = _soln->get_eqs();
+        auto& settings = _soln->get_settings();
         
+        /*
+          part scenarios:
+
+          Normal sequences of non-scratch parts:
+          Ex 0: eq B depends on eq A.
+          - p1 updates A.
+          - p2 updates B & depends on p1.
+          Ex 1: P1 & P2 depend on A1 & A2.
+          - p1 updates A1 & A2 b/c A1 & A2 are independent.
+          - p2 updates P1 & P2 & depends on p1 b/c P1 & P2 are independent.
+          Ex 2 w/partitions (sub-domains): B depends on A in both parts.
+          - p1 updates A(part 1).
+          - p2 updates A(part 2).
+          - p3 updates B(part 1) & depends on p1 & p2.
+          - p4 updates B(part 2) & depends on p1 & p2.
+          Ex 3 w/partitions: B depends on A, but only in part 2.
+          - p1 updates A(part 1) & B(part 1) b/c A & B are independent in part 1.
+          - p2 updates A(part 2).
+          - p3 updates B(part 2) & depends on p1 & p2.
+          Writes to non-scratch vars are limited by domain.
+
+          Normal sequences with scratch-parts (updating Tn):
+          Ex s0: A depends on T1.
+          - p1 updates T1.
+          - p2 updates A & depends on p1.
+          Ex s1: T1 & T2 are independent; A depends on T1 and T2.
+          - p1 updates T1 & T2.
+          - p2 updates A & depends on p1.
+          Write halos for T1 & T2 will be made equal.
+          Ex s2: T2 depends on T1; A depends on T2.
+          - p1 updates T1.
+          - p2 updates T2 & depends on p1.
+          - p3 updates A & depends on p2.
+          Write halo for T1 is typically made larger than T2 b/c T2 is updated from a 
+          stencil on T1.
+          Ex s3 w/partitions; T1 & T2 are independent; A depends on T1 and T2.
+          - p1 updates T1(part 1) & T2(part 1) b/c T1 & T2 are independent in part 1.
+          - p2 updates T1(part 2) & T2(part 2) b/c T1 & T2 are independent in part 2.
+          - p3 updates A & depends on p1-2.
+          Write halos for T1 & T2 will be made equal.
+          This is okay b/c p2 is independent of p1.
+
+          Special consideration:
+          Need to avoid splitting partial updates to a scratch var across dependent
+          parts, e.g., situation in Ex s3, except T2(only part 2) depends on T1:
+
+          Incorrect:
+          - p1 updates T1(part 1) & T2(part 1) b/c T1 & T2 are independent in part 1.
+          - p2 updates T1(part 2).
+          - p3 updates T2(part 2) & depends on p1 & p2.
+          - p4 updates A & depends on p1-3.
+
+          This is bad because the write halo for updates in p1 would
+          typically need to be larger than that of p3, but they are both
+          defined by the halo of T2.
+
+          Correct:
+          - p1 updates T1(part 1).
+          - p2 updates T2(part 1): not bundled w/p1 b/c of dependency of T2(*part 2*) on T1.
+          - p3 updates T1(part 2).
+          - p4 updates T2(part 2) & depends on p1 & p3.
+          - p5 updates A & depends on p1-4.
+          Write halo for T1 is typically made larger than T2 as in Ex s2.
+
+          Even though it's not illegal, it's also better not to bundle
+          partial updates of non-scratch logical vars inconsistently. This
+          avoids updating a sub-domain of a var early and then more of it [much]
+          later, which is bad for cache locality.
+        */
+
         // Equation already added?
-        if (_eqs_in_bundles.count(eq))
+        if (_eqs_in_parts.count(eq))
             return false;
 
+        auto& step_dim = dims._step_dim;
+
+        // Get deps between eqs.
+        auto& eq_deps = all_eqs.get_deps();
+        
         // Get conditions, if any.
         auto cond = eq->_get_cond();
         auto stcond = eq->_get_step_cond();
 
-        // Get step expr, if any.
-        auto step_expr = eq->_get_lhs()->get_arg(step_dim);
-        
-        // Get deps between eqs.
-        auto& eq_deps = all_eqs.get_deps();
+        // Get LHS info.
+        auto eqv = eq->get_lhs_var();
+        assert (eqv);
+        bool eq_scratch = eq->is_scratch();
+        auto eqp = eq->_get_lhs();
+        assert (eqp);
+        auto step_expr = eq->_get_lhs()->get_arg(step_dim); // may be null.
+        #ifdef DEBUG_ADD_EXPRS
+        cout << "* ae2b: bundling " << eq->make_quoted_str() << endl;
+        #endif
 
-        // Loop through existing bundles, looking for one that
-        // 'eq' can be added to.
-        EqBundle* target = 0;
-        auto eqg = eq->_get_var();
-        for (auto& eg : get_all()) {
+        // Targeted part to add 'eq' to.
+        PartPtr target = 0;
+        if (settings._bundle) {
+         
+            // To avoid inconsistent bundling of var updates as described
+            // above, find *all* other eqs that update the same var as 'eq'
+            // if scratch or same logical var if non-scratch.
+            EqList rel_eqs;
+            for (auto& eq2 : all_eqs.get_all()) {
+                if (eq == eq2)
+                    continue;
+                auto eq2v = eq2->get_lhs_var();
+                auto eq2p = eq2->_get_lhs();
+                if ((eq_scratch && eqv == eq2v) ||
+                    (!eq_scratch && eqp->is_same_logical_var(*eq2p)))
+                    rel_eqs.insert(eq2);
+            }
+            #ifdef DEBUG_ADD_EXPRS
+            cout << "** ae2b: will check " << rel_eqs.size() << " related eqs\n";
+            #endif
+            
+            // Loop through existing parts, looking for one that
+            // 'eq' can be added to.
+            for (auto& p : get_all()) {
+                #ifdef DEBUG_ADD_EXPRS
+                cout << "** ae2b: checking " << b->get_descr() << endl;
+                #endif
+                bool is_ok = true;
 
-            // Must be same scratch-ness.
-            if (eg->is_scratch() != eq->is_scratch())
-                continue;
+                // Look for any condition or dependencies that would prevent
+                // adding 'eq' to 'p'.
 
-            // Names must match.
-            if (eg->base_name != base_name)
-                continue;
-
-            // Conditions must match (both may be null).
-            if (!are_exprs_same(eg->cond, cond))
-                continue;
-            if (!are_exprs_same(eg->step_cond, stcond))
-                continue;
-
-            // LHS step exprs must match (both may be null).
-            if (!are_exprs_same(eg->step_expr, step_expr))
-                continue;
-
-            // Look for any condition or dependencies that would prevent
-            // adding 'eq' to 'eg'.
-            bool is_ok = true;
-            for (auto& eq2 : eg->get_eqs()) {
-                auto eq2g = eq2->_get_var();
-                assert (eqg);
-                assert (eq2g);
-
-                // If scratch, 'eq' and 'eq2' must have same halo.
-                // This is because scratch halos are written to.
-                // If dims are same, halos can be adjusted if allowed.
-                if (eq->is_scratch()) {
-                    if (!eq2g->are_dims_same(*eqg))
-                        is_ok = false;
-                    else if (!settings._bundle_scratch && !eq2g->is_halo_same(*eqg))
-                        is_ok = false;
-                }
-
-                // Look for any dependency between 'eq' and 'eq2'.
-                if (is_ok && eq_deps.is_dep(eq, eq2)) {
-#if DEBUG_ADD_EXPRS
-                    cout << "add_eq_from_var: not adding equation " <<
-                        eq->make_quoted_str() << " to " << eg.get_descr() <<
-                        " because of dependency w/equation " <<
-                        eq2->make_quoted_str() << endl;
-#endif
+                // Must be same scratch-ness.
+                if (p->is_scratch() != eq->is_scratch())
                     is_ok = false;
+
+                // Domain & step conditions must match (both may be null).
+                else if (!are_exprs_same(p->cond, cond))
+                    is_ok = false;
+                else if (!are_exprs_same(p->step_cond, stcond))
+                    is_ok = false;
+
+                // LHS step exprs must match (both may be null for scratch updates).
+                else if (!are_exprs_same(p->step_expr, step_expr))
+                    is_ok = false;
+
+                // Loop over all eqs already in 'b'.
+                if (is_ok) {
+                    for (auto& eq2 : p->get_eqs()) {
+                        auto eq2v = eq2->get_lhs_var();
+                        assert (eq2v);
+
+                        // If scratch, 'eq' and 'eq2' must have same dims and
+                        // same halo.  This is because scratch halos are written
+                        // to.  If dims are same, halos can be adjusted if
+                        // allowed.
+                        if (eq->is_scratch()) {
+                            if (!eq2v->are_dims_same(*eqv))
+                                is_ok = false;
+                            else if (!settings._bundle_scratch && !eq2v->is_halo_same(*eqv))
+                                is_ok = false;
+                        }
+
+                        // Look for any dependency between 'eq' and 'eq2'.
+                        if (is_ok && eq_deps.is_dep(eq, eq2)) {
+                            #ifdef DEBUG_ADD_EXPRS
+                            cout << "*** ae2b: NOT adding eq because of dependency w/eq " <<
+                                eq2->make_quoted_str() << endl;
+                            #endif
+                            is_ok = false;
+                        }
+
+                        // Check against other eqs that update the same var.
+                        if (is_ok) {
+                            for (auto& eq3 : rel_eqs) {
+                                #ifdef DEBUG_ADD_EXPRS
+                                cout << "** ae2b: checking related eq " << eq3->get_descr() << endl;
+                                #endif
+
+                                // Look for any dependency between 'eq2' and 'eq3'.
+                                if (eq_deps.is_dep(eq2, eq3)) {
+                                    #ifdef DEBUG_ADD_EXPRS
+                                    cout << "*** ae2b: NOT adding eq because of dependency of related eq w/eq " <<
+                                        eq2->make_quoted_str() << endl;
+                                    #endif
+                                    is_ok = false;
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (!is_ok)
+                            break;
+                    } // eqs in part.
+                } // if ok.
+                    
+                // Remember target part if ok and stop looking.
+                // Try to add if ok.
+                if (is_ok) {
+                    try {
+
+                        // Add eq.
+                        p->add_eq(eq);
+
+                        // Check dependencies between updated parts.
+                        inherit_deps_from(all_eqs);
+
+                        // If we get this far, the add was okay;
+                        // remove the temp deps, and we're done.
+                        clear_deps();
+                        target = p;
+                        #ifdef DEBUG_ADD_EXPRS
+                        cout << "** ae2b: all checks passed: added to existing part\n";
+                        #endif
+                        break; // out of existing part loop.
+                    }
+                    catch (yask_exception& e) {
+
+                        // Failure; must remove part.
+                        p->remove_eq(eq);
+                        
+                        // Also remove the bad dependencies.
+                        clear_deps();
+                    }
                 }
-
-                if (!is_ok)
-                    break;
-            }
-
-            // Remember target bundle if ok and stop looking.
-            if (is_ok) {
-                target = eg.get();
-                break;
-            }
-        }
-
-        // Make new bundle if no target bundle found.
-        bool new_bundle = false;
+                else {
+                    #ifdef DEBUG_ADD_EXPRS
+                    cout << "** ae2b: NOT adding equation to existing part\n";
+                    #endif
+                }
+                
+            } // existing parts.
+        } // if bundling.
+        
+        // Make new part if no target part found.
+        bool new_part = false;
         if (!target) {
-            auto ne = make_shared<EqBundle>(*_dims, eq->is_scratch());
+            auto ne = make_shared<Part>(_soln, eq->is_scratch());
             add_item(ne);
-            target = ne.get();
-            target->base_name = base_name;
-            target->index = _indices[base_name]++;
+            target = ne;
+            if (eq->is_scratch())
+                target->base_name = string("scratch_") + _base_name;
+            else
+                target->base_name = _base_name;
+            target->index = _idx++;
             target->cond = cond;
             target->step_cond = stcond;
             target->step_expr = step_expr;
-            new_bundle = true;
+            new_part = true;
 
-#if DEBUG_ADD_EXPRS
-            cout << "Creating new " << target->get_descr() << endl;
-#endif
+            // Add eq to target part.
+            #ifdef DEBUG_ADD_EXPRS
+            cout << "** ae2b: adding to new part " << target->get_descr() << endl;
+            #endif
+            target->add_eq(eq);
         }
-
-        // Add eq to target eq-bundle.
-        assert(target);
-#if DEBUG_ADD_EXPRS
-        cout << "Adding " << eq->make_quoted_str() <<
-            " to " << target->get_descr() << endl;
-#endif
-        target->add_eq(eq);
 
         // Remember eq and updated var.
-        _eqs_in_bundles.insert(eq);
-        _out_vars.insert(eq->_get_var());
+        _eqs_in_parts.insert(eq);
+        _out_vars.insert(eq->get_lhs_var());
 
-        return new_bundle;
+        return new_part;
     }
 
-    // Find halos needed for each var.
-    void EqStages::calc_halos(EqBundles& all_bundles) {
-
-        // Find all LHS and RHS points and vars for all eqs.
-        PointVisitor pv;
-        visit_eqs(&pv);
-
-#ifdef DEBUG_SCRATCH
-        cout << "* c_h: analyzing " << get_all().size() << " eqs...\n";
-#endif
-        
-        // First, set halos based only on immediate accesses.
-        // Loop thru stages.
-        for (auto& sp : get_all()) {
-            auto stage_name = sp->_get_name();
-
-            // Loop thru equations in this stage.
-            for (auto& eq : sp->get_eqs()) {
-
-                // Get all var points touched by this eq.
-                auto& all_pts1 = pv.get_all_pts().at(eq.get());
-                auto& out_pt1 = pv.get_output_pts().at(eq.get());
-
-                // Update stats of each var accessed in 'eq'.
-                for (auto ap : all_pts1) {
-                    auto* g = ap->_get_var(); // var for point 'ap'.
-                    g->update_halo(stage_name, ap->get_arg_offsets());
-                }
-                auto* g = out_pt1->_get_var();
-                g->update_write_points(stage_name, out_pt1->get_arg_offsets());
-            }
-        }
-
-        // Next, propagate halos through scratch vars as needed.
-
-        // Example 1:
-        // eq1: scr1(x) EQUALS u(t,x+1); <-- orig halo of u = 1.
-        // eq2: u(t+1,x) EQUALS scr1(x+2); <-- orig halo of scr1 = 2.
-        // Direct deps: eq2 -> eq1(s).
-        // Halo of u must be increased to 1 + 2 = 3 due to
-        // eq1: u(t,x+1) on rhs and orig halo of scr1 on lhs,
-        // i.e., because u(t+1,x) EQUALS u(t,(x+2)+1) by subst.
-
-        // Example 2:
-        // eq1: scr1(x) EQUALS u(t,x+1); <-- orig halo of u = 1.
-        // eq2: scr2(x) EQUALS scr1(x+2); <-- orig halo of scr1 = 2.
-        // eq3: u(t+1,x) EQUALS scr2(x+4); <-- orig halo of scr2 = 4.
-        // Direct deps: eq3 -> eq2(s) -> eq1(s).
-        // Halo of scr1 must be increased to 2 + 4 = 6 due to
-        // eq2: scr1(x+2) on rhs and orig halo of scr2 on lhs.
-        // Then, halo of u must be increased to 1 + 6 = 7 due to
-        // eq1: u(t,x+1) on rhs and new halo of scr1 on lhs.
-        // Or, u(t+1,x) EQUALS u(t,((x+4)+2)+1) by subst.
-
-        // Example 3:
-        // eq1: scr1(x) EQUALS u(t,x+1); <--|
-        // eq2: scr2(x) EQUALS u(t,x+2); <--| orig halo of u = max(1,2) = 2.
-        // eq3: u(t+1,x) EQUALS scr1(x+3) + scr2(x+4);
-        // eq1 and eq2 are bundled => scr1 and scr2 halos are max(3,4) = 4.
-        // Direct deps: eq3 -> eq1(s), eq3 -> eq2(s).
-        // Halo of u is 4 + 2 = 6.
-        // Or, u(t+1,x) EQUALS u(t,(x+3)+1) + u(t,(x+4)+2) by subst.
-        
-        // Algo: Keep a list of maps of shadow vars.
-        // Each map: key=real-var ptr, val=shadow-var ptr.
-        // These shadow vars will be used to track
-        // updated halos for each path.
-        // We don't want to update the real halos until
-        // we've walked all the paths using the original
-        // halos.
-        // At the end, the real vars will be updated
-        // from the shadows.
-        vector< map<Var*, Var*>> shadows;
-
-        // Stages.
-        for (auto& bp : get_all()) {
-            auto pname = bp->_get_name();
-            auto& pbundles = bp->get_bundles(); // list of bundles.
-
-            // Bundles with their dependency info.
-            for (auto& b1 : all_bundles.get_all()) {
-
-                // Only need bundles in this stage.
-                if (pbundles.count(b1) == 0)
-                    continue;
-
-                // Only need to look at dep paths starting from non-scratch bundles.
-                if (b1->is_scratch())
-                    continue;
-
-                // We start with each non-scratch bundle and walk the dep
-                // tree to find all dependent scratch bundles.  It's
-                // important to then visit them in dep order using 'path' to
-                // get only unbroken chains of scratch bundles.
-#ifdef DEBUG_SCRATCH
-                cout << "* c_h: visiting deps of " << b1->get_descr() << endl;
-#endif
-                all_bundles.get_deps().visit_deps
-                
-                    // For each 'bn', 'b1' is 'bn' or depends on 'bn',
-                    // immediately or indirectly; 'path' leads from
-                    // 'b1' to 'bn'.
-                    (b1, [&](EqBundlePtr bn, EqBundleList& path) {
-
-                        // Create a new empty map of shadow vars for this path.
-                        shadows.resize(shadows.size() + 1);
-                        auto& shadow_map = shadows.back();
-
-                        // Walk path from 'b1', stopping at end of scratch
-                        // chain.
-                        for (auto b2 : path) {
-
-                            // Don't process 'b1', the initial non-scratch bundle.
-                            if (b2 == b1)
-                                continue;
-                        
-                            // If this isn't a scratch bundle, we are done
-                            // w/this path because we only want the bundles
-                            // from 'b1' through an *unbroken* chain of
-                            // scratch bundles.
-                            if (!b2->is_scratch())
-                                break;
-
-                            // Make shadow copies of all vars touched by 'eq2'.
-                            // All changes will be applied to these shadow vars
-                            // for the current 'path'.
-                            for (auto& eq : b2->get_eqs()) {
-
-                                // Output var.
-                                auto* og = pv.get_output_vars().at(eq.get());
-                                if (shadow_map.count(og) == 0)
-                                    shadow_map[og] = new Var(*og);
-
-                                // Input vars.
-                                auto& in_pts = pv.get_input_pts().at(eq.get());
-                                for (auto* ip : in_pts) {
-                                    auto* ig = ip->_get_var();
-                                    if (shadow_map.count(ig) == 0)
-                                        shadow_map[ig] = new Var(*ig);
-                                }
-                            }
-                        
-                            // For each scratch bundle, set the size of all its
-                            // output vars' halos to the max across its
-                            // halos. We need to do this because halos are
-                            // written in a scratch var.  Since they are
-                            // bundled, all the writes must be over the same
-                            // area.
-
-                            // First, set first eq halo the max of all.
-                            auto& eq1 = b2->get_eqs().front();
-                            auto* og1 = shadow_map[eq1->_get_var()];
-                            for (auto& eq2 : b2->get_eqs()) {
-                                if (eq1 == eq2)
-                                    continue;
-
-                                // Adjust g1 to max(g1, g2).
-                                auto* og2 = shadow_map[eq2->_get_var()];
-                                og1->update_halo(*og2);
-                            }
-
-                            // Then, update all others based on first.
-                            for (auto& eq2 : b2->get_eqs()) {
-                                if (eq1 == eq2)
-                                    continue;
-
-                                // Adjust g2 to g1.
-                                auto* og2 = shadow_map[eq2->_get_var()];
-                                og2->update_halo(*og1);
-                            }
-
-                            // Get updated halos from the scratch bundle.  These
-                            // are the points that are read from the dependent
-                            // eq(s).  For scratch vars, the halo areas must
-                            // also be written to.
-                            auto left_ohalo = og1->get_halo_sizes(pname, true);
-                            auto right_ohalo = og1->get_halo_sizes(pname, false);
-                            auto l1_dist = og1->get_l1_dist();
-
-#ifdef DEBUG_SCRATCH
-                            cout << "** c_h: processing " << b2->get_descr() << "...\n" 
-                                "*** c_h: LHS halos: " << left_ohalo.make_dim_val_str() <<
-                                " & " << right_ohalo.make_dim_val_str() << endl;
-#endif
-                        
-                            // Recalc min halos of all input vars of all
-                            // scratch eqs in this bundle by adding size of
-                            // output-var halos.
-                            for (auto& eq : b2->get_eqs()) {
-                                auto& in_pts = pv.get_input_pts().at(eq.get());
-
-                                // Input points.
-                                for (auto ip : in_pts) {
-                                    auto* ig = shadow_map[ip->_get_var()];
-                                    auto& ao = ip->get_arg_offsets(); // e.g., '2' for 'x+2'.
-
-                                    // Increase range by subtracting left halos and
-                                    // adding right halos.
-                                    auto left_ihalo = ao.sub_elements(left_ohalo, false);
-                                    ig->update_halo(pname, left_ihalo);
-                                    auto right_ihalo = ao.add_elements(right_ohalo, false);
-                                    ig->update_halo(pname, right_ihalo);
-                                    ig->update_l1_dist(l1_dist);
-#ifdef DEBUG_SCRATCH
-                                    cout << "*** c_h: updated min halos of '" << ig->get_name() << "' to " <<
-                                        left_ihalo.make_dim_val_str() <<
-                                        " & " << right_ihalo.make_dim_val_str() << endl;
-#endif
-                                } // input pts.
-                            } // eqs in bundle.
-                        } // path.
-                    }); // lambda fn.
-            } // bundles.
-        } // stages.
-
-        // Apply the changes from the shadow vars.
-        // This will result in the vars containing the max
-        // of the shadow halos.
-        for (auto& shadow_map : shadows) {
-#ifdef DEBUG_SCRATCH
-            cout << "* c_h: applying changes from a shadow map...\n";
-#endif
-            for (auto& si : shadow_map) {
-                auto* orig_gp = si.first;
-                auto* shadow_gp = si.second;
-                assert(orig_gp);
-                assert(shadow_gp);
-
-                // Update the original.
-                orig_gp->update_halo(*shadow_gp);
-#ifdef DEBUG_SCRATCH
-                cout << "** c_h: updated '" << orig_gp->get_name() << "'.\n";
-#endif
-
-                // Release the shadow var.
-                delete shadow_gp;
-                shadow_map.at(orig_gp) = NULL;
-            }
-        }
-    } // calc_halos().
-
-    // Divide all equations into eq_bundles.
+    // Divide all equations into parts.
     // Only process updates to vars in 'var_regex'.
-    void EqBundles::make_eq_bundles(Eqs& all_eqs,
-                                    const CompilerSettings& settings,
-                                    ostream& os)
+    void Parts::make_parts()
     {
-        os << "\nPartitioning " << all_eqs.get_num() << " equation(s) into bundles...\n";
-        //auto& step_dim = _dims->_step_dim;
-
-        // Add scratch equations.
-        for (auto eq : all_eqs.get_all()) {
-            if (eq->is_scratch()) {
-
-                // Add equation.
-                add_eq_to_bundle(all_eqs, eq, _basename_default, settings);
-            }
-        }
-
+        auto& dims = _soln->get_dims();
+        auto& all_eqs = _soln->get_eqs();
+        auto& settings = _soln->get_settings();
+        auto& os = _soln->get_ostr();
+        
+        os << "\nBundling " << all_eqs.get_num() << " equation(s) into solution parts...\n";
+        
         // Make a regex for the allowed vars.
         regex varx(settings._var_regex);
 
-        // Add all remaining equations.
-        for (auto eq : all_eqs.get_all()) {
+        // Add non-scratch, then scratch eqs.
+        // This is done just to give the non-scratch ones lower indices.
+        for (bool do_scratch : { false, true }) {
+            for (auto eq : all_eqs.get_all()) {
+                if (eq->is_scratch() != do_scratch)
+                    continue;
 
-            // Get name of updated var.
-            auto gp = eq->_get_var();
-            assert(gp);
-            string gname = gp->_get_name();
+                // Check name if not scratch.
+                if (!eq->is_scratch()) {
 
-            // Match to varx?
-            if (!regex_search(gname, varx))
-                continue;
+                    // Get name of updated var.
+                    auto vname = eq->get_lhs_var()->_get_name();
+                    
+                    // Match to varx?
+                    if (!regex_search(vname, varx)) {
+                        os << "Equation updating '" << vname <<
+                            "' not added because it does not match regex '" << settings._var_regex << "'.\n";
+                        continue;
+                    }
+                }
 
-            // Add equation.
-            add_eq_to_bundle(all_eqs, eq, _basename_default, settings);
+                // Add equation(s).
+                add_eq_to_part(eq);
+            }
         }
 
         os << "Collapsing dependencies from equations and finding transitive closure...\n";
         inherit_deps_from(all_eqs);
 
-        os << "Topologically ordering bundles...\n";
+        os << "Topologically ordering parts...\n";
         topo_sort();
 
         // Dump info.
-        os << "Created " << get_num() << " equation bundle(s):\n";
+        os << "Created " << get_num() << " solution part(s):\n";
         for (auto& eg1 : get_all()) {
             os << " " << eg1->get_descr() << ":\n"
                 "  Contains " << eg1->get_num_eqs() << " equation(s).\n"
@@ -1400,25 +1226,33 @@ namespace yask {
             os << ".\n";
 
             // Deps.
-            for (auto& eg2 : _deps.get_deps_on(eg1))
-                os << "  Dependent on bundle " << eg2->_get_name() << ".\n";
-            for (auto& sg : _scratches.get_deps_on(eg1))
-                os << "  Requires scratch bundle " << sg->_get_name() << ".\n";
+            auto& id = get_imm_deps_on(eg1);
+            for (auto& eg2 : id)
+                os << "  Immediately dependent on " << eg2->_get_name() << ".\n";
+            for (auto& eg2 : get_all_deps_on(eg1))
+                if (id.count(eg2) == 0)
+                    os << "   Indirectly dependent on " << eg2->_get_name() << ".\n";
+            for (auto& sg : get_all_scratch_deps_on(eg1))
+                os << "  Requires " << sg->_get_name() << ".\n";
+            if (get_all_deps_on(eg1).size() == 0)
+                os << "  No dependencies within a step.\n";
         }
-
     }
 
     // Apply optimizations according to the 'settings'.
-    void EqBundles::optimize_eq_bundles(CompilerSettings& settings,
-                                    const string& descr,
-                                    bool print_sets,
-                                    ostream& os) {
-        // print stats.
-        os << "Stats across " << get_num() << " equation-bundle(s):\n";
-        string edescr = "for " + descr + " equation-bundle(s)";
-        print_stats(os, edescr);
+    void Parts::optimize_parts(const string& descr)
+    {
+        auto& all_eqs = _soln->get_eqs();
+        auto& settings = _soln->get_settings();
+        auto& os = _soln->get_ostr();
+        auto& dims = _soln->get_dims();
 
-        // Make a list of optimizations to apply to eq_bundles.
+        // print stats.
+        os << "\nStats across " << get_num() << " part(s):\n";
+        string edescr = "for " + descr + " part(s)";
+        print_stats(edescr);
+
+        // Make a list of optimizations to apply to parts.
         vector<OptVisitor*> opts;
 
         // CSE.
@@ -1445,11 +1279,11 @@ namespace yask {
             visit_eqs(optimizer);
             int num_changes = optimizer->get_num_changes();
             string odescr = "after applying " + optimizer->_get_name() + " to " +
-                descr + " equation-bundle(s)";
+                descr + " part(s)";
 
             // Get new stats.
             if (num_changes)
-                print_stats(os, odescr);
+                print_stats(odescr);
             else
                 os << " No changes " << odescr << '.' << endl;
 
@@ -1460,11 +1294,11 @@ namespace yask {
         // Reordering. TODO: make this an optimizer.
         if (settings._do_reorder) {
             
-            // Create vector info for this eq_bundle.
-            // The visitor is accepted at all nodes in the cluster AST;
+            // Create vector info for this part.
+            // The visitor is accepted at all nodes in the AST;
             // for each var access node in the AST, the vectors
             // needed are determined and saved in the visitor.
-            VecInfoVisitor vv(*_dims);
+            VecInfoVisitor vv(dims);
             visit_eqs(&vv);
 
             // Reorder some equations based on vector info.
@@ -1473,165 +1307,727 @@ namespace yask {
 
             // Get new stats.
             string odescr = "after applying reordering to " +
-                descr + " equation-bundle(s)";
-            print_stats(os, odescr);
+                descr + " part(s)";
+            print_stats(odescr);
         }
 
-        // Final stats per equation bundle.
-        if (print_sets && get_num() > 1) {
-            os << "Stats per equation-bundle:\n";
+        // Final stats per equation part.
+        if (get_num() > 1) {
+            os << "Stats per part:\n";
             for (auto eg : get_all())
                 eg->print_stats(os, "for " + eg->get_descr());
         }
     }
 
     // Make a human-readable description of this eq stage.
-    string EqStage::get_descr(string quote) const
+    string Stage::get_descr(string quote) const
     {
         string des;
         if (is_scratch())
             des += "scratch ";
-        des += "equation bundle-stage " + quote + _get_name() + quote;
-        if (!is_scratch()) {
-            if (step_cond.get())
-                des += " w/step condition " + step_cond->make_quoted_str(quote);
-            else
-                des += " w/o step condition";
-        }
+        des += "stage " + quote + _get_name() + quote;
         return des;
     }
 
-    // Add a bundle to this stage.
-    void EqStage::add_bundle(EqBundlePtr bp)
+    // Add a part to this stage.
+    void Stage::add_part(PartPtr pp)
     {
-        _bundles.insert(bp);
-        _is_scratch = bp->is_scratch();
+        _parts.insert(pp);
 
         // update list of eqs.
-        for (auto& eq : bp->get_eqs())
-            _eqs.insert(eq);
-
-        // update list of input and output vars for this stage.
-        for (auto& g : bp->get_output_vars())
-            _out_vars.insert(g);
-        for (auto& g : bp->get_input_vars())
-            _in_vars.insert(g);
+        for (auto& eq : pp->get_eqs())
+            add_eq(eq);
+        assert(is_scratch() == pp->is_scratch());
     }
 
-    // Add 'bp' from 'all_bundles'. Create new stage if needed.  Returns
-    // whether a new stage was created.
-    bool EqStages::add_bundle_to_stage(EqBundles& all_bundles,
-                                        EqBundlePtr bp)
+    // Remove a part from this stage.
+    void Stage::remove_part(PartPtr pp)
     {
-        // Already added?
-        if (_bundles_in_stages.count(bp))
+        _parts.erase(pp);
+
+        // update list of eqs.
+        for (auto& eq : pp->get_eqs())
+            remove_eq(eq);
+    }
+
+    // Add 'pps', a subset of 'all_parts'. Create new stage if needed.
+    // Returns whether a new stage was created.
+    bool Stages::add_parts_to_stage(Parts& all_parts,
+                                    PartList& pps,
+                                    bool var_grouping,
+                                    bool logical_var_grouping)
+    {
+        // None to add?
+        if (pps.size() == 0)
             return false;
 
-        // Get condition, if any.
-        auto stcond = bp->step_cond;
+        #ifdef DEBUG_ADD_PARTS
+        cout << "** Adding " << pps.size() << " part(s):\n";
+        for (auto& pp : pps)
+            cout << "*** " << pp->get_descr() << "\n";
+        cout << flush;
+        #endif
+            
+        // Already added?
+        // (All pps should be added or not by construction.)
+        if (_parts_in_stages.count(pps.front()))
+            return false;
+
+       // Get scratch-ness.
+        // (All pps should have same scratch-ness by construction.)
+        auto is_scratch = pps.front()->is_scratch();
         
-        // Get deps between bundles.
-        auto& deps = all_bundles.get_deps();
+        // Get deps between parts.
+        auto& deps = all_parts.get_deps();
 
         // Loop through existing stages, looking for one that
-        // 'bp' can be added to.
-        EqStage* target = 0;
-        for (auto& ep : get_all()) {
+        // 'pps' can be added to.
+        Tp<Stage> target = 0;
+        for (auto& st : get_all()) {
+            #ifdef DEBUG_ADD_PARTS
+            cout << "*** Checking against existing " << st->get_descr() << "\n" << flush;
+            #endif
 
             // Must be same scratch-ness.
-            if (ep->is_scratch() != bp->is_scratch())
+            if (st->is_scratch() != is_scratch)
                 continue;
 
-            // Step conditions must match (both may be null).
-            if (!are_exprs_same(ep->step_cond, stcond))
-                continue;
-
-            // Look for any dependencies that would prevent adding
-            // 'bp' to 'ep'.
-            bool is_ok = true;
-            for (auto& bp2 : ep->get_bundles()) {
-
-                // Look for any dependency between 'bp' and 'bp2'.
-                if (deps.is_dep(bp, bp2)) {
-                    is_ok = false;
-                    break;
+            // Var matching. Look for any match.
+            if (logical_var_grouping || var_grouping) {
+                bool match_found = false;
+                for (auto& pp1 : pps) {
+                    for (auto& eq1 : pp1->get_eqs()) {
+                        auto lhs1 = eq1->_get_lhs();
+                        auto v1 = lhs1->_get_var();
+                        for (auto& p2 : st->get_parts()) {
+                            for (auto& eq2 : p2->get_eqs()) {
+                                auto lhs2 = eq2->_get_lhs();
+                                auto* v2 = lhs2->_get_var();
+                                if (logical_var_grouping) {
+                                    if (lhs1->is_same_logical_var(*lhs2)) {
+                                        match_found = true;
+                                        goto match_loop_end;
+                                    }
+                                }
+                                else if (v1 == v2) {
+                                    match_found = true;
+                                    goto match_loop_end;
+                                }
+                            }
+                        }
+                    }
                 }
+                
+                // Yes, we know gotos are considered harmful, but C++
+                // doesn't have a cleaner way to exit multiple loop levels.
+            match_loop_end:
+                if (!match_found)
+                    continue;
+                #ifdef DEBUG_ADD_PARTS
+                cout << "*** Passed var-matching: " << st->get_descr() << "\n" << flush;
+                #endif
             }
+            
+            // Loop through all pps. All pps must be able to
+            // be added to 'st' to use it.
+            bool is_ok = true;
+            for (auto& pp : pps) {
+                #ifdef DEBUG_ADD_PARTS
+                cout << "**** checking " << pp->get_descr() << endl << flush;
+                #endif
 
-            // Remember target if ok and stop looking.
+                // Loop through all parts in 'st'.
+                for (auto& p2 : st->get_parts()) {
+                    #ifdef DEBUG_ADD_PARTS
+                    cout << "**** checking against " << pp->get_descr() << " in " << st->get_descr() << endl << flush;
+                    #endif
+
+                    // Look for any dependency between 'pp' and 'p2'.
+                    if (deps.is_dep(pp, p2)) {
+                        is_ok = false;
+                        break;
+                    }
+                }
+                if (!is_ok)
+                    break;
+
+                // Try to add 'pp' to 'st'.
+                try {
+
+                    // Add it.
+                    st->add_part(pp);
+
+                    // Check dependencies between updated stages.
+                    inherit_deps_from(all_parts);
+
+                    // If we get this far, the add was okay.
+                }
+                catch (yask_exception& e) {
+
+                    // A circular-dependency was detected.
+                    is_ok = false;
+                }
+
+                // Remove the trial part and temp deps.
+                st->remove_part(pp);
+                clear_deps();
+
+                if (!is_ok)
+                    break;
+
+            } // each pp in pps.
+
+            // Found a viable target stage?
             if (is_ok) {
-                target = ep.get();
+                target = st;
+                #ifdef DEBUG_ADD_PARTS
+                cout << "*** Adding to existing " << st->get_descr() << "\n" << flush;
+                #endif
                 break;
             }
-        }
+            
+        } // existing stages.
 
         // Make new stage if no target stage found.
         bool new_stage = false;
         if (!target) {
-            auto np = make_shared<EqStage>(bp->is_scratch());
+            auto np = make_shared<Stage>(_soln, is_scratch);
             add_item(np);
-            target = np.get();
-            target->base_name = _base_name;
+            target = np;
+            if (is_scratch)
+                target->base_name = string("scratch_") + _base_name;
+            else
+                target->base_name = _base_name;
             target->index = _idx++;
-            target->step_cond = stcond;
             new_stage = true;
+            #ifdef DEBUG_ADD_PARTS
+            cout << "*** Adding to new " << target->get_descr() << "\n" << flush;
+            #endif
         }
-
-        // Add bundle to target.
         assert(target);
-        target->add_bundle(bp);
+        
+        // Add parts to target.
+        for (auto& pp : pps) {
+            target->add_part(pp);
 
-        // Remember stage and updated vars.
-        _bundles_in_stages.insert(bp);
-        for (auto& g : bp->get_output_vars())
-            _out_vars.insert(g);
+            // Remember parts and updated vars.
+            _parts_in_stages.insert(pp);
+            for (auto& g : pp->get_output_vars())
+                _out_vars.insert(g);
+        }
 
         return new_stage;
     }
 
-    // Divide all bundles into stages.
-    void EqStages::make_stages(EqBundles& all_bundles,
-                                  ostream& os)
+    // Divide all parts into stages.
+    void Stages::make_stages(Parts& all_parts)
     {
-        os << "\nPartitioning " << all_bundles.get_num() << " bundle(s) into stages...\n";
+        auto& os = _soln->get_ostr();
+        
+        os << "\nBundling " << all_parts.get_num() << " part(s) into stages...\n";
 
-        for (auto bp : all_bundles.get_all())
-            add_bundle_to_stage(all_bundles, bp);
+        // Temp stages with grouped-by-logical-var stages.
+        Stages sts1(_soln);
+        for (auto& b0 : all_parts.get_all()) {
 
-        os << "Collapsing dependencies from bundles and finding transitive closure...\n";
-        inherit_deps_from(all_bundles);
+            // Make trivial list with 1 part.
+            PartList bl0;
+            bl0.insert(b0);
+
+            // Group by logical vars.
+            sts1.add_parts_to_stage(all_parts, bl0, true, true);
+        }
+        os << "Found " << sts1.get_num() << " groups of part(s) by logical var(s).\n";
+
+        // Temp stages with grouped-by-var stages.
+        Stages sts2(_soln);
+        for (auto& st1 : sts1.get_all()) {
+            auto& bl1 = st1->get_parts();
+
+            // Group by vars.
+            sts2.add_parts_to_stage(all_parts, bl1, true, false);
+        }
+        os << "Found " << sts1.get_num() << " groups of part(s) by var(s).\n";
+
+        // Finally, make stages with any non-dependency.
+        // Add non-scratch, then scratch parts.
+        // This is done just to give the non-scratch ones lower indices.
+        for (bool do_scratch : { false, true }) {
+            for (auto& st2 : sts2.get_all()) {
+                if (st2->is_scratch() != do_scratch)
+                    continue;
+                
+                auto& bl2 = st2->get_parts();
+                add_parts_to_stage(all_parts, bl2, false, false);
+            }
+        }
+        os << "Created " << get_num() << " equation stage(s).\n";
+
+        os << "Collapsing dependencies from parts and finding transitive closure...\n";
+        inherit_deps_from(all_parts);
 
         os << "Topologically ordering stages...\n";
         topo_sort();
 
-        // Dump info.
-        os << "Created " << get_num() << " equation stage(s):\n";
-        for (auto& bp1 : get_all()) {
-            os << " " << bp1->get_descr() << ":\n"
-                "  Contains " << bp1->get_bundles().size() << " bundle(s): ";
+        for (auto& st1 : get_all()) {
+            os << " " << st1->get_descr() << ":\n"
+                "  Contains " << st1->get_parts().size() << " part(s): ";
             int i = 0;
-            for (auto b : bp1->get_bundles()) {
+            for (auto p : st1->get_parts()) {
                 if (i++)
                     os << ", ";
-                os << b->_get_name();
+                os << p->_get_name();
             }
             os << ".\n";
             os << "  Updates the following var(s): ";
             i = 0;
-            for (auto* g : bp1->get_output_vars()) {
+            for (auto* v : st1->get_output_vars()) {
                 if (i++)
                     os << ", ";
-                os << g->_get_name();
+                os << v->_get_name();
             }
             os << ".\n";
 
             // Deps.
-            for (auto& bp2 : _deps.get_deps_on(bp1))
-                os << "  Dependent on stage " << bp2->_get_name() << ".\n";
-            for (auto& sp : _scratches.get_deps_on(bp1))
-                os << "  Requires scratch stage " << sp->_get_name() << ".\n";
+            auto& id = get_imm_deps_on(st1);
+            for (auto& st2 : id)
+                os << "  Immediately dependent on " << st2->_get_name() << ".\n";
+            for (auto& st2 : get_all_deps_on(st1))
+                if (id.count(st2) == 0)
+                    os << "   Indirectly dependent on " << st2->_get_name() << ".\n";
+            for (auto& st2 : get_all_scratch_deps_on(st1))
+                os << "  Requires " << st2->_get_name() << ".\n";
+            if (get_all_deps_on(st1).size() == 0)
+                os << "  No dependencies within a step.\n";
         }
 
     }
 
+    // Find halos needed for each var.
+    // These are read halos for non-scratch vars and
+    // read/write halos for scratch vars.
+    // Halos are tracked for each left/right dim separately.
+    // They are also tracked by their non-scratch stage and the
+    // step offset when applicable. This info is needed to properly
+    // determine whether memory can be reused.
+    // Also updates write points in vars.
+    void Stages::calc_halos() {
+        auto& os = _soln->get_ostr();
+        os << "Calculating halos...\n";
+
+        // Find all LHS and RHS points and vars for all eqs.
+        PointVisitor pv;
+        visit_eqs(&pv);
+
+        #ifdef DEBUG_HALOS
+        cout << "* c_h: analyzing " << get_all().size() << " eqs...\n";
+        #endif
+
+        /* Phase 1:
+           First, set halos based only on immediate read accesses.
+           Halo data is keyed by the name of the
+           non-scratch stage it is accessed from.
+        
+           Example1:
+           eq: A(t+1, x) EQUALS A(t, x+3).
+           So, A's RHS 'x' halo for is 3.
+           Since A is read and written in the same stage,
+           we need to keep 2 steps of A in memory.
+
+           Example2:
+           eq1 in stage1: A(t+1, x) EQUALS B(t, x+3);
+           eq2 in stage2: B(t+1, x) EQUALS A(t, x-2);
+           B's RHS 'x' halo is 3 for stage1.
+           A's LHS 'x' halo is 2 for stage2.
+           Since B is read and written in different stages,
+           we can optimize storage by keeping only 1 step
+           of B in memory; same for A.
+
+           The memory-optimization is done elsewhere, and
+           it is based on the data collected here.
+        */
+        
+        // Loop thru stages.
+        for (auto& st : get_all()) {
+
+            // Only need to start from non-scratch stages.
+            if (st->is_scratch())
+                continue;
+
+            auto stname = st->_get_name();
+            #ifdef DEBUG_HALOS
+            cout << "* c_h, phase 1: analyzing stage '" << stname << "'" << endl;
+            #endif
+
+            // A list of this stage and required ones.
+            vector<StagePtr> stages;
+            stages.push_back(st);
+
+            // Add required scratch stage(s).
+            for (auto& ss : get_all_scratch_deps_on(st))
+                stages.push_back(ss);
+  
+            // Loop thru reqd stages.
+            for (auto& rst : stages) {
+                #ifdef DEBUG_HALOS
+                cout << "** c_h, phase 1: reqd stage '" << rst->_get_name() << "'" << endl;
+                #endif
+
+                // Loop thru equations in this stage.
+                // Note that a scratch eq may be reqd from
+                // more than one non-scratch stage.
+                for (auto& eq : rst->get_eqs()) {
+                    #ifdef DEBUG_HALOS
+                    cout << "*** c_h: eq " << eq->make_quoted_str() << endl;
+                    #endif
+
+                    // Get all var points touched by this eq.
+                    auto& all_pts1 = pv.get_all_pts().at(eq.get());
+                    auto& out_pt1 = pv.get_output_pts().at(eq.get());
+
+                    // Update stats of each var accessed in 'eq'.
+                    for (auto ap : all_pts1) {
+                        auto* g = ap->_get_var(); // var for point 'ap'.
+
+                        // Track halos by non-scratch stage name.
+                        auto changed = g->update_halo(stname, ap->get_arg_offsets());
+                        #ifdef DEBUG_HALOS
+                        if (changed) {
+                            cout << "**** c_h: updated halos:\n";
+                            g->print_halos(cout, "***** c_h: ");
+                        }
+                        #endif
+                    }
+                    auto* g = out_pt1->_get_var();
+                    g->update_write_points(stname, out_pt1->get_arg_offsets());
+                } // eqs.
+            } // reqd stages.
+        } // stages.
+
+        /* Phase 2:
+           Propagate halos through scratch vars as needed.  Using scratch
+           vars is roughly equivalent to using intermediate values in the
+           equation, so accessing neighbor cells in a scratch var will
+           increase the halos in dependent vars.  This propagates through
+           dependency chains until a non-scratch var is reached, affecting
+           each var in the chain, including the non-scratch var(s) that the
+           scratch vars depend on.
+
+           Example 1:
+           eq1: scr1(x) EQUALS u(t,x+1); <-- orig halo of u = 1.
+           eq2: u(t+1,x) EQUALS scr1(x+2); <-- orig halo of scr1 = 2.
+           Direct deps: eq2 -> eq1(scr).
+           Halo of u must be increased to 1 + 2 = 3 due to
+           eq1: u(t,x+1) on rhs and orig halo of scr1 on lhs.
+           Or, because u(t+1,x) EQUALS u(t,(x+2)+1) by subst.
+
+           Example 2:
+           eq1: scr1(x) EQUALS u(t,x+1); <-- orig halo of u = 1.
+           eq2: scr2(x) EQUALS scr1(x+2); <-- orig halo of scr1 = 2.
+           eq3: u(t+1,x) EQUALS scr2(x+4); <-- orig halo of scr2 = 4.
+           Direct deps: eq3 -> eq2(scr) -> eq1(scr).
+           Halo of scr1 must be increased to 2 + 4 = 6 due to
+           eq2: scr1(x+2) on rhs and orig halo of scr2 on lhs.
+           Then, halo of u must be increased to 1 + 6 = 7 due to
+           eq1: u(t,x+1) on rhs and new halo of scr1 on lhs.
+           Or, u(t+1,x) EQUALS u(t,((x+4)+2)+1) by subst.
+
+           Example 3:
+           eq1: scr1(x) EQUALS u(t,x+1); <--|
+           eq2: scr2(x) EQUALS u(t,x+2); <--| orig halo of u = max(1,2) = 2.
+           eq3: u(t+1,x) EQUALS scr1(x+3) + scr2(x+4);
+           eq1 and eq2 are bundled => scr1 and scr2 halos are max(3,4) = 4.
+           Direct deps: eq3 -> eq1(scr), eq3 -> eq2(scr).
+           Halo of u is 4 + 2 = 6.
+           Or, u(t+1,x) EQUALS u(t,(x+3)+1) + u(t,(x+4)+2) by subst.
+
+           Algo: Keep a list of maps of "shadow vars". Each list entry is a
+           non-scratch stage.  Each map is key=real-var ptr ->
+           val=shadow-var ptr.  These shadow vars are used to track updated
+           halos for each stage.  We don't want to update the real halos
+           until we've determined halo sizes using the original halos because
+           doing so would update halos from already-updated ones.  At the end,
+           the real vars will be updated from the shadows.
+        */
+        vector<map<Var*, Var*>> shadows;
+
+        // Stages.
+        for (auto& st1 : get_all()) {
+            auto stname = st1->_get_name();
+            auto& stparts = st1->get_parts(); // list of parts in this stage.
+
+            // Only need to start from non-scratch stages.
+            if (st1->is_scratch())
+                continue;
+            #ifdef DEBUG_HALOS
+            cout << "* c_h, phase 2: analyzing stage '" << stname << "'" << endl;
+            #endif
+
+            // Create a new empty map of shadow vars for this stage.
+            shadows.resize(shadows.size() + 1);
+            auto& shadow_map = shadows.back(); // Use the new one.
+
+            // Loop over the stages in reverse topo order, i.e., from most
+            // to least dependent. This is critical to ensure that halo
+            // expansions propagate in the correct order.  See
+            // https://en.wikipedia.org/wiki/Longest_path_problem
+            for (auto it2 = get_all().rbegin(); it2 != get_all().rend(); ++it2) {
+                auto& st2 = *it2;
+
+                // Only want scratch stages needed for 'st1'.
+                if (!get_all_scratch_deps_on(st1).count(st2))
+                    continue;
+
+                // Loop through all parts in this stage. Order doesn't
+                // matter because parts within a stage are independent.
+                for (auto& p2 : st2->get_parts()) {
+                    assert(p2->is_scratch());
+
+                    // Make shadow copies of all vars touched
+                    // by 'p2'.  All halo updates will be
+                    // applied to these shadow vars for the
+                    // current stage 'st1'.
+                    for (auto& eq2 : p2->get_eqs()) {
+
+                        // Output var.
+                        auto* og = pv.get_output_vars().at(eq2.get());
+                        if (shadow_map.count(og) == 0)
+                            shadow_map[og] = new Var(*og);
+
+                        // Input vars.
+                        auto& in_pts = pv.get_input_pts().at(eq2.get());
+                        for (auto* ip : in_pts) {
+                            auto* ig = ip->_get_var();
+                            if (shadow_map.count(ig) == 0)
+                                shadow_map[ig] = new Var(*ig);
+                        }
+                    }
+
+                    // For each scratch part, set the size of all its output
+                    // vars' halos to the max across its halos. We need to
+                    // do this because halos are written in a scratch var.
+                    // Since they are bundled into a part, meaning they are
+                    // all written in a single code block, all the writes
+                    // will be over the same area. Get and store results
+                    // using current shadow map.
+
+                    // First, set first eq halo the max of all.
+                    auto& eq1 = p2->get_eqs().front();
+                    auto* ov1 = shadow_map.at(eq1->get_lhs_var());
+                    for (auto& eq2 : p2->get_eqs()) {
+                        if (eq1 == eq2)
+                            continue;
+
+                        // Adjust halo of ov1 to max(ov1, ov2).
+                        auto* ov2 = shadow_map.at(eq2->get_lhs_var());
+                        ov1->update_halo(*ov2);
+                    }
+
+                    // Then, update all others based on first.
+                    for (auto& eq2 : p2->get_eqs()) {
+                        if (eq1 == eq2)
+                            continue;
+
+                        // Adjust halo of ov2 to that of ov1.
+                        auto* ov2 = shadow_map.at(eq2->get_lhs_var());
+                        ov2->update_halo(*ov1);
+                    }
+
+                    // Get updated halos from the scratch vars.  These are the
+                    // points that are read from the dependent eq(s).  For
+                    // scratch vars, the halo areas must also be written to.
+                    auto left_ohalo = ov1->get_halo_sizes(stname, true);
+                    auto right_ohalo = ov1->get_halo_sizes(stname, false);
+                    auto l1_dist = ov1->get_l1_dist();
+
+                    #ifdef DEBUG_HALOS
+                    cout << "** c_h: processing " << p2->get_descr() << "...\n"
+                        "*** c_h: LHS halos " << left_ohalo.make_dim_val_str() <<
+                        " & RHS halos " << right_ohalo.make_dim_val_str() << endl;
+                    #endif
+                        
+                    // Recalc min halos of all *input* vars of all scratch
+                    // eqs in this part by adding size of output-var
+                    // halos. These inputs may include scratch and
+                    // non-scratch vars. Get and stroe results using current
+                    // shadow map.
+                    for (auto& eq2 : p2->get_eqs()) {
+                        assert(eq2->is_scratch());
+                        auto& in_pts = pv.get_input_pts().at(eq2.get());
+
+                        // Input points.
+                        for (auto ip : in_pts) {
+                            auto* iv2 = shadow_map.at(ip->_get_var());
+                            auto& ao = ip->get_arg_offsets(); // e.g., '2' for 'x+2'.
+
+                            // Increase range by subtracting left halos and
+                            // adding right halos.
+                            auto left_ihalo = ao.sub_elements(left_ohalo, false);
+                            iv2->update_halo(stname, left_ihalo);
+                            auto right_ihalo = ao.add_elements(right_ohalo, false);
+                            iv2->update_halo(stname, right_ihalo);
+                            iv2->update_l1_dist(l1_dist);
+                            #ifdef DEBUG_HALOS
+                            cout << "*** c_h: updated min halos of '" << iv2->get_name() << "' to " <<
+                                left_ihalo.make_dim_val_str() <<
+                                " & " << right_ihalo.make_dim_val_str() << endl;
+                            #endif
+                        } // input pts.
+                    } // eqs in part.
+                } // parts in scratch stage.
+                
+            } // stages in rev topo-order.
+        } // all stages.                
+
+        // Apply the changes from the shadow vars.
+        // This will result in the vars containing the max
+        // of the shadow halos.
+        for (auto& shadow_map : shadows) {
+            #ifdef DEBUG_HALOS
+            cout << "* c_h: applying changes from a shadow map...\n";
+            #endif
+            for (auto& si : shadow_map) {
+                auto* orig_vp = si.first;
+                auto* shadow_vp = si.second;
+                assert(orig_vp);
+                assert(shadow_vp);
+
+                // Update the original.
+                auto changed = orig_vp->update_halo(*shadow_vp);
+                #ifdef DEBUG_HALOS
+                if (changed) {
+                    cout << "** c_h: updated halos:" << endl;
+                    orig_vp->print_halos(cout, "*** ");
+                }
+                #endif
+
+                // Release the shadow var mem.
+                delete shadow_vp;
+                shadow_map.at(orig_vp) = NULL;
+            }
+        } // shadows.
+    } // calc_halos().
+
+    // A very simple lifespan-analysis for the scratch vars.
+    void Stages::calc_lifespans() {
+        auto& os = _soln->get_ostr();
+        os << "Calculating lifespans of scratch vars...\n";
+
+        map<Var*, pair<int, int>> first_last;
+        
+        // Loop thru stages in execution order,
+        // assuming topo sort is done.
+        // Find first and last access of each var.
+        int snum = 0;
+        for (auto& st : get_all()) {
+
+            // Scratch vars accessed in this stage.
+            for (auto& vs : { st->get_output_vars(), st->get_input_vars() }) {
+                for (auto* vp : vs) {
+                    if (vp->is_scratch()) {
+                        if (!first_last.count(vp))
+                            first_last[vp] = make_pair(snum, snum);
+                        else
+                            first_last[vp].second = snum; // update last stage.
+                        #ifdef DEBUG_LIFESPAN
+                        os << "* " << st->get_descr() << "(" << snum << "): " <<
+                            vp->get_name() << ": " <<
+                            first_last[vp].first << " to " << first_last[vp].second << endl;
+                        #endif
+                    }
+                }
+            }
+
+            snum++;
+        }
+
+        // Mem info is separated by scratch-var sizes.
+        // This is done because vars with different misc-dim ranges
+        // have different size requirements.
+        // TODO: allow storage from a larger scratch-var to be used
+        // by a smaller one.
+        map<int, int> nmems_per_sz;
+        map<int, stack<int>> free_stack_per_sz;
+        map<int, map<Var*, int>> var_slots_per_sz;
+        
+        // Simple greedy memory assignment.
+        for (int si = 0; si < snum; si++) {
+
+            // Do allocs, then frees at this stage index.
+            for (bool do_alloc : { true, false }) {
+
+                // Scratch vars.
+                for (const auto& vi : first_last) {
+                    auto* vp = vi.first;
+                    auto fs = vi.second.first; // first stage.
+                    auto ls = vi.second.second; // last stage.
+                    int msz = vp->get_misc_space_size();
+                    auto& free = free_stack_per_sz[msz];
+                    auto& nmems = nmems_per_sz[msz];
+                    auto& slots = var_slots_per_sz[msz];
+
+                    // New var?
+                    if (do_alloc && fs == si) {
+                        assert(slots.count(vp) == 0);
+
+                        // Find most recent freed slot.
+                        if (free.size()) {
+                            auto n = free.top();
+                            free.pop();
+                            slots[vp] = n;
+                            #ifdef DEBUG_LIFESPAN
+                            os << "* " << vp->get_name() << " needed at " << si <<
+                                " gets freed slot " << n << endl;
+                            #endif
+                        }
+
+                        // Make a new one.
+                        else {
+                            #ifdef DEBUG_LIFESPAN
+                            os << "* " << vp->get_name() << " needed at " << si <<
+                                " gets new slot " << nmems << endl;
+                            #endif
+                            slots[vp] = nmems;
+                            nmems++;
+                        }
+                    }
+
+                    // Done w/var?
+                    if (!do_alloc && ls == si) {
+                        int n = slots.at(vp);
+                        free.push(n);
+                        #ifdef DEBUG_LIFESPAN
+                        os << "* " << vp->get_name() << " done at " << si <<
+                            " releases slot " << n << endl;
+                        #endif
+                    }
+                }
+            }
+        }
+
+        // Assign final slot numbers sequentially by size.
+        int slot_ofs = 0;
+        for (auto& ni : nmems_per_sz) {
+            auto msz = ni.first;
+            auto nmems = ni.second;
+
+            auto& slots = var_slots_per_sz[msz];
+            for (auto& si : slots) {
+                auto* vp = si.first;
+                auto n = si.second; // slot number for this size.
+                assert(n < nmems);
+
+                vp->set_scratch_mem_slot(slot_ofs + n);
+            }
+
+            slot_ofs += nmems;
+        }
+
+        os << "  " << first_last.size() << " scratch var(s) assigned to " <<
+            slot_ofs << " memory slot(s):\n";
+        for (auto& mi : nmems_per_sz)
+            os << "    " << mi.second << " with misc-dim size " <<
+                mi.first << ".\n";
+    }
+    
 } // namespace yask.

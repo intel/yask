@@ -488,7 +488,12 @@ Static Public Member Functions</h2></td></tr>
 
 <p>Makes sure an <code>idx_t</code> values is the same over all ranks. </p>
 <p>Must be called from all ranks.</p>
-<p>Throws an exception if <code>rank_val</code> does not have the same value across all ranks. Exception contains message with <code>descr</code> description of the value.</p>
+<dl class="exception"><dt>Exceptions</dt><dd>
+  <table class="exception">
+    <tr><td class="paramname"><a class="el" href="classyask_1_1yask__exception.html" title="Exception from YASK framework.">yask_exception</a></td><td>if <code>rank_val</code> does not have the same value across all ranks. Exception contains message with description of the value.</td></tr>
+  </table>
+  </dd>
+</dl>
 <p>Does nothing if MPI is not enabled. </p>
 
 </div>

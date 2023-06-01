@@ -660,7 +660,7 @@ namespace yask {
         // 1. index=0, start=5, stop=20 (peel for alignment: adj_begin=0)
 	// 2. index=1, start=20, stop=40
         // 3. index=2, start=40, stop=60
-        // 4. index=3, start=60, stop=65 (rem)        
+        // 4. index=3, start=60, stop=65 (rem)
         // The calculation of these vars is done so that the 4 iterations
         // can be done concurrently, i.e., everything is based on the
         // current index, and there are no dependencies between iterations
@@ -702,6 +702,7 @@ namespace yask {
             }
         }
 
+        // Not defining copy ctors and operators.
         // Default bit-wise copy should be okay.
 
         // Get ranges.
@@ -716,9 +717,9 @@ namespace yask {
             return stop[dim_posn] - start[dim_posn];
         }
 
-        // Create inner-loop indices from outer-loop indices.
-        // Start..stop from point in outer loop become begin..end
-        // for this loop.
+        // Create inner-loop indices from outer-loop indices of '*this'.
+        // Start..stop from point in outer loop become begin..end for this
+        // loop.
         //
         // Example:
         // begin              (outer)                    end
@@ -742,9 +743,12 @@ namespace yask {
             inner.align = align;
             inner.align_ofs = align_ofs;
 
-            // Init tile size & stride to whole range.
+            // Init tile size & stride > whole range.
+            // Round up so that normalizing won't break later. Mult by 2
+            // to keep alignment from splitting it.
             DOMAIN_VAR_LOOP_FAST(i, j)
-                inner.tile_size[i] = inner.stride[i] = get_overall_range(i);
+                inner.tile_size[i] = inner.stride[i] =
+                ROUND_UP(get_overall_range(i), fold_pts[j]) * 2;
 
             // Init first indices.
             inner.index.set_from_const(0);
@@ -768,16 +772,57 @@ namespace yask {
             assert(ndims == orig_tile_sizes_of_this.get_num_dims());
             assert(ndims == orig_sizes_of_inner.get_num_dims());
             DOMAIN_VAR_LOOP(i, j) {
+                auto fpts = fold_pts[j];
             
-                // If original [or auto-tuned] inner area covers
-                // this entire area, set stride size to full width.
+                // If original [or auto-tuned] inner area covers this entire
+                // area, set stride size to full width.  This is to keep the
+                // assumed intention that only one inner iteration is done.
+                // Round up so that normalizing won't break later. Mult by 2
+                // to keep alignment from splitting it.
                 if (orig_sizes_of_inner[i] >= orig_sizes_of_this[i])
-                    stride[i] = get_overall_range(i);
+                    stride[i] = ROUND_UP(get_overall_range(i), fpts) * 2;
 
                 // Similar for tiles.
                 if (orig_tile_sizes_of_this[i] >= orig_sizes_of_this[i])
-                    tile_size[i] = get_overall_range(i);
+                    tile_size[i] = ROUND_UP(get_overall_range(i), fpts) * 2;
             }
+        }
+
+        // Set strides based on nested block sizes.
+        // Example: set micro-block strides to sizes of nano-blocks.
+        void set_strides_from_inner(const IdxTuple& inner_block_sizes, idx_t stride_t) {
+            assert(inner_block_sizes.get_num_dims() == NUM_STENCIL_DIMS);
+            DOMAIN_VAR_LOOP_FAST(i, j) {
+
+                // Round up so that normalizing won't break later.
+                stride[i] = ROUND_UP(inner_block_sizes[i], fold_pts[j]);
+
+                // Mult by 2 to keep alignment from splitting it if larger
+                // than range.
+                if (stride[i] > get_overall_range(i))
+                    stride[i] *= 2;
+            }
+            stride[step_posn] = stride_t;
+        }
+
+        // For debug.
+        std::string make_range_str(bool use_begin_end) const {
+            return (use_begin_end) ?
+                _make_range_str(begin, end) :
+                _make_range_str(start, stop);
+        }
+
+    private:
+        std::string _make_range_str(const Indices& b,
+                                    const Indices& e) const {
+            auto range = e.sub_elements(b).max_const(0);
+            auto num = range.product();
+            return std::string("(") +
+                range.make_val_str(" * ") + ") = " +
+                std::to_string(num) + " at [{" +
+                b.make_val_str() + "}...{" +
+                e.make_val_str() + "}) by {" +
+                stride.make_val_str() + "}";
         }
     };
 

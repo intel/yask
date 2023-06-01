@@ -27,33 +27,36 @@ IN THE SOFTWARE.
 
 namespace yask {
 
-    // Classes that support evaluation of one stencil bundle
-    // and a stage of bundles.
+    // Classes that support evaluation of one stencil part
+    // and a stage of parts.
     // A stencil solution contains one or more stages.
 
-    // A pure-virtual class base for a stencil bundle.
-    class StencilBundleBase :
+    // A pure-virtual class base for a stencil part.
+    class StencilPartBase :
         public ContextLinker {
 
     protected:
 
-        // Other bundles that this one depends on.
-        StencilBundleSet _depends_on;
+        // Other parts that this one depends on.
+        StencilPartSet _depends_on;
 
-        // List of scratch-var bundles that need to be evaluated
-        // before this bundle. Listed in eval order first-to-last.
-        StencilBundleList _scratch_children;
+        // List of scratch-var parts that need to be evaluated
+        // before this part. Listed in eval order first-to-last.
+        StencilPartList _scratch_children;
 
-        // Overall bounding box for the bundle.
+        // Overall bounding box for the part.
         // This may or may not be solid, i.e., it
         // may contain some invalid points.
         // This must fit inside the extended BB for this rank.
-        BoundingBox _bundle_bb;
+        BoundingBox _part_bb;
 
-	// Bounding box(es) that indicate where this bundle is valid.
+	// Bounding box(es) that indicate where this part is valid.
 	// These must be non-overlapping. These do NOT contain
-        // any invalid points. These will all be inside '_bundle_bb'.
+        // any invalid points. These will all be inside '_part_bb'.
 	BBList _bb_list;
+
+        // Max write halos for scratch parts on left and right in each dim.
+        IdxTuple max_write_halo_left, max_write_halo_right;
 
         // Normalize the 'orig' indices, i.e., divide by vector len in each dim.
         // Ranks offsets must already be subtracted.
@@ -92,7 +95,7 @@ namespace yask {
 
     public:
 
-        // Vars that are written to by these stencils.
+        // Vars that are written to by the stencils in this part.
         VarPtrs output_var_ptrs;
 
         // Vars that are read by these stencils (not necessarify
@@ -100,56 +103,69 @@ namespace yask {
         VarPtrs input_var_ptrs;
 
         // Vectors of scratch vars that are written to/read from.
+        // Vectors contain one entry per outer thread.
         ScratchVecs output_scratch_vecs;
         ScratchVecs input_scratch_vecs;
 
         // ctor, dtor.
-        StencilBundleBase(StencilContext* context) :
+        StencilPartBase(StencilContext* context) :
             ContextLinker(context) { }
-        virtual ~StencilBundleBase() { }
+        virtual ~StencilPartBase() { }
 
         // Access to BBs.
-        BoundingBox& get_bb() { return _bundle_bb; }
+        BoundingBox& get_bb() { return _part_bb; }
         BBList& get_bbs() { return _bb_list; }
 
         // Add dependency.
-        void add_dep(StencilBundleBase* eg) {
+        void add_dep(StencilPartBase* eg) {
             _depends_on.insert(eg);
         }
 
         // Get dependencies.
-        const StencilBundleSet& get_deps() const {
+        const StencilPartSet& get_deps() const {
             return _depends_on;
         }
 
-        // Add needed scratch-bundle.
-        void add_scratch_child(StencilBundleBase* eg) {
+        // Add needed scratch-part.
+        void add_scratch_child(StencilPartBase* eg) {
             _scratch_children.push_back(eg);
         }
 
-        // Get needed scratch-bundle(s).
-        const StencilBundleList& get_scratch_children() const {
+        // Get needed scratch-part(s).
+        const StencilPartList& get_scratch_children() const {
             return _scratch_children;
         }
 
         // Get scratch children plus self.
-        StencilBundleList get_reqd_bundles() {
+        StencilPartList get_reqd_parts() {
             auto sg_list = get_scratch_children(); // Do children first.
             sg_list.push_back(this); // Do self last.
             return sg_list;
         }
 
-        // If this bundle is updating scratch var(s),
-        // expand indices to calculate values in halo.
+        // Max write halos for a scratch part.
+        void find_scratch_write_halos();
+        inline const IdxTuple& get_max_write_halo_left() const {
+            return max_write_halo_left;
+        }
+        inline const IdxTuple& get_max_write_halo_right() const {
+            return max_write_halo_right;
+        }
+
+        // For scratch part,
+        // expand indices to calculate values in scratch-halo.
         // Adjust offsets in vars based on original idxs.
         // Return adjusted indices.
-        ScanIndices adjust_span(int thread_idx, const ScanIndices& idxs) const;
+        ScanIndices adjust_scratch_span(int thread_idx,
+                                        const ScanIndices& idxs,
+                                        KernelSettings& settings) const;
 
-        // Set the bounding-box vars for this bundle in this rank.
-        void find_bounding_box();
+        // Set the bounding-box vars for this part in this rank.
+        // This includes its overall-BB and the constituent full-BBs.
+        void find_bounding_boxes(BoundingBox& max_bb);
 
         // Copy BB vars from another.
-        void copy_bounding_box(const StencilBundleBase* src);
+        void copy_bounding_boxes(const StencilPartBase* src);
 
         // Calculate results for an arbitrary tile for points in the valid domain.
         // Scratch vars, if any, are indexed via 'scratch_var_idx'.
@@ -161,9 +177,11 @@ namespace yask {
         calc_micro_block(int outer_thread_idx,
                          KernelSettings& settings,
                          const ScanIndices& micro_block_idxs,
-                         MpiSection& mpisec);
+                         MpiSection& mpisec,
+                         StencilPartUSet& parts_done,
+                         VarPtrUSet& vars_written);
 
-        // Mark vars dirty that are updated by this bundle and/or
+        // Mark vars dirty that are updated by this part and/or
         // update last valid step.
         void
         update_var_info(YkVarBase::dirty_idx whose,
@@ -182,7 +200,7 @@ namespace yask {
         // Functions below are stubs for the code generated
         // by the stencil compiler.
         
-        // Get name of this bundle.
+        // Get name of this part.
         virtual const std::string
         get_name() const =0;
 
@@ -196,7 +214,7 @@ namespace yask {
         virtual int
         get_scalar_points_written() const =0;
 
-        // Whether this bundle updates scratch var(s)?
+        // Whether this part updates scratch var(s)?
         virtual bool
         is_scratch() const =0;
 
@@ -220,7 +238,7 @@ namespace yask {
         virtual bool
         is_in_valid_step(idx_t input_step_index) const =0;
 
-        // If bundle updates var(s) with the step index,
+        // If part updates var(s) with the step index,
         // set 'output_step_index' to the step that an update
         // occurs when calling one of the calc_*() methods with
         // 'input_step_index' and return 'true'.
@@ -229,17 +247,17 @@ namespace yask {
         get_output_step_index(idx_t input_step_index,
                               idx_t& output_step_index) const =0;
 
-    };                          // StencilBundleBase.
+    };                          // StencilPartBase.
 
     // A template that is instantiated with the stencil-compiler
     // output class.
-    template <typename StencilBundleImplT,
+    template <typename StencilPartImplT,
               typename StencilCoreDataT>
-    class StencilBundleTempl:
-        public StencilBundleBase {
+    class StencilPartTmpl:
+        public StencilPartBase {
 
     protected:
-        StencilBundleImplT _bundle;
+        StencilPartImplT _part;
 
         // Access core data.
         // TODO: use dynamic_cast in CHECK mode.
@@ -253,69 +271,69 @@ namespace yask {
     public:
 
         // Ctor.
-        StencilBundleTempl(StencilContext* context):
-            StencilBundleBase(context) { }
+        StencilPartTmpl(StencilContext* context):
+            StencilPartBase(context) { }
 
         // Dtor.
-        virtual ~StencilBundleTempl() { }
+        virtual ~StencilPartTmpl() { }
 
-        // Get name of this bundle.
+        // Get name of this part.
         const std::string get_name() const override {
-            return _bundle._name;
+            return _part._name;
         }
 
         // Get estimated number of FP ops done for one scalar eval.
         int get_scalar_fp_ops() const override {
-            return _bundle._scalar_fp_ops;
+            return _part._scalar_fp_ops;
         }
 
         // Get number of points read and written for one scalar eval.
         int get_scalar_points_read() const override {
-            return _bundle._scalar_points_read;
+            return _part._scalar_points_read;
         }
         int get_scalar_points_written() const override {
-            return _bundle._scalar_points_written;
+            return _part._scalar_points_written;
         }
 
-        // Whether this bundle updates scratch var(s)?
+        // Whether this part updates scratch var(s)?
         bool is_scratch() const override {
-            return _bundle._is_scratch;
+            return _part._is_scratch;
         }
 
         // Determine whether indices are in [sub-]domain.
         bool is_in_valid_domain(const Indices& idxs) const override {
-            return _bundle.is_in_valid_domain(_corep(), idxs);
+            return _part.is_in_valid_domain(_corep(), idxs);
         }
 
         // Return true if there are any non-default conditions.
         bool is_sub_domain_expr() const override {
-            return _bundle.is_sub_domain_expr();
+            return _part.is_sub_domain_expr();
         }
         bool is_step_cond_expr() const override {
-            return _bundle.is_step_cond_expr();
+            return _part.is_step_cond_expr();
         }
 
         // Return human-readable description of conditions.
         std::string get_domain_description() const override {
-            return _bundle.get_domain_description();
+            return _part.get_domain_description();
         }
         std::string get_step_cond_description() const override {
-            return _bundle.get_step_cond_description();
+            return _part.get_step_cond_description();
         }
 
         // Determine whether step index is enabled.
         bool is_in_valid_step(idx_t input_step_index) const override {
-            return _bundle.is_in_valid_step(_corep(), input_step_index);
+            return _part.is_in_valid_step(_corep(), input_step_index);
         }
 
-        // If bundle updates var(s) with the step index,
+        // If part updates var(s) with the step index,
         // set 'output_step_index' to the step that an update
         // occurs when calling one of the calc_*() methods with
         // 'input_step_index' and return 'true'.
         // Else, return 'false';
         bool get_output_step_index(idx_t input_step_index,
                                    idx_t& output_step_index) const override {
-            return _bundle.get_output_step_index(input_step_index,
+            return _part.get_output_step_index(input_step_index,
                                                  output_step_index);
         }
 
@@ -333,11 +351,11 @@ namespace yask {
             #include "yask_misc_loops.hpp"
 
             // Loop body.  Since stride is always 1, we ignore
-            // stop indices.  If point is in sub-domain for this bundle,
+            // stop indices.  If point is in sub-domain for this part,
             // then execute the reference scalar code.  TODO: fix domain of
             // scratch vars.
-            if (_bundle.is_in_valid_domain(cp, misc_range.start))
-                _bundle.calc_scalar(cp, scratch_var_idx, misc_range.start);
+            if (_part.is_in_valid_domain(cp, misc_range.start))
+                _part.calc_scalar(cp, scratch_var_idx, misc_range.start);
 
             // Loop suffix.
             #define MISC_USE_LOOP_PART_1
@@ -369,17 +387,16 @@ namespace yask {
                            KernelSettings& settings,
                            const ScanIndices& micro_block_idxs) {
             STATE_VARS(this);
-            TRACE_MSG("calc_nano_block_dbg for bundle '" << get_name() << "': [" <<
-                      micro_block_idxs.start.make_val_str() <<
-                      " ... " << micro_block_idxs.stop.make_val_str() <<
-                      ") by outer thread " << outer_thread_idx <<
+            TRACE_MSG("for part '" << get_name() << "': " <<
+                      micro_block_idxs.make_range_str(false) <<
+                      " via outer thread " << outer_thread_idx <<
                       " and inner thread " << inner_thread_idx);
 
             auto* cp = _corep();
 
             // Init nano-block begin & end from block start & stop indices.
             // Use the 'misc' loops. Indices for these loops will be scalar and
-            // global rather than normalized as in the cluster and vector loops.
+            // global rather than normalized as in the vector loops.
             ScanIndices sb_idxs = micro_block_idxs.create_inner();
 
             // Stride and alignment to 1 element.
@@ -413,7 +430,7 @@ namespace yask {
 
             // Loop body.
             // Since stride is always 1, we only need start indices.
-            StencilBundleImplT::calc_scalar(cp, outer_thread_idx, misc_range.start);
+            StencilPartImplT::calc_scalar(cp, outer_thread_idx, misc_range.start);
 
             // Loop suffix.
             #define MISC_USE_LOOP_PART_1
@@ -422,7 +439,7 @@ namespace yask {
 
         // Calculate results for one nano-block.
         // The index ranges in 'micro_block_idxs' are sub-divided
-        // into full vector-clusters, full vectors, and partial vectors.
+        // into full vectors and partial vectors.
         // The resulting areas are evaluated by the YASK-compiler-generated code.
         void
         calc_nano_block_opt(int outer_thread_idx,
@@ -430,10 +447,9 @@ namespace yask {
                            KernelSettings& settings,
                            const ScanIndices& micro_block_idxs) {
             STATE_VARS(this);
-            TRACE_MSG("calc_nano_block_opt for bundle '" << get_name() << "': [" <<
-                      micro_block_idxs.start.make_val_str() <<
-                      " ... " << micro_block_idxs.stop.make_val_str() <<
-                      ") by outer thread " << outer_thread_idx <<
+            TRACE_MSG("for part '" << get_name() << "': " <<
+                      micro_block_idxs.make_range_str(false) <<
+                      " via outer thread " << outer_thread_idx <<
                       " and inner thread " << inner_thread_idx);
             auto* cp = _corep();
 
@@ -443,36 +459,36 @@ namespace yask {
               |                    |
               |  +--------------+  |
               |  |              |  |
-              |  |   +------+   |  |
-              |  |   |   <------------ full clusters (multiple vectors)
-              |  |   |      |   |  |
-              |  |   +------+  <------ full (unmasked, single) vectors
               |  |              |  |
-              |  +--------------+ <--- partial (masked, single) vectors (peel/rem)
-              |                    |
+              |  |              |  |
+              |  |              |  |
+              |  |        <----------- full (unmasked) vectors
+              |  |              |  |
+              |  +--------------+  |
+              |               <------- partial (masked) vectors (peel/rem)
               +--------------------+
 
               Indices and areas in each domain dim:
 
               eidxs.begin
+               |
                | peel <--------- partial vecs here -------> remainder
-               | |   left <------ full vecs here ----> right |
-               | |    |         full clusters here       |   | eidxs.end
-               | |    |                 |                |   |  |
-               v v    v                 v                v   v  v
-               +--+-------+---------------------------+-----+--+  "+" => compute boundaries.
-                  |       |                           |     |
-              +---+-------+---------------------------+-----+---+ "+" => vec-aligned boundaries.
-              ^   ^       ^                            ^     ^   ^
-              |   |       |                            |     |   |
-              |   |      fcidxs.begin (rounded up)     |     |  ovidxs.end (rounded up)
-              |  fvidxs.begin (rounded up)             |    fvidxs.end (rounded down)
-             ovidxs.begin (rounded down)              fcidxs.end (rounded down)
+               | |                                           |
+               | |               full vecs here              | eidxs.end
+               | |                      |                    |  |
+               v v                      v                    v  v
+               +--+-----------------------------------------+--+  "+" => compute boundaries.
+                  |                                         |
+              +---+-----------------------------------------+---+ "+" => vec-aligned boundaries.
+              ^   ^                                          ^   ^
+              |   |                                          |   |
+              |   |                                          |  ovidxs.end (rounded up)
+              |  fvidxs.begin (rounded up)                  fvidxs.end (rounded down)
+             ovidxs.begin (rounded down) 
                                                    ('end' indices are one past last)
 
              Also need to handle all sorts of cases where some of these
-             sections are empty, the case where the peel and remainder
-             overlap, and the case where the left and right full vecs
+             sections are empty and the case where the peel and remainder
              overlap.
             */
 
@@ -483,18 +499,13 @@ namespace yask {
             ScanIndices sb_idxs = micro_block_idxs.create_inner();
 
             // Strides within a nano-blk are based on pico-blk sizes.
-            sb_idxs.stride = settings._pico_block_sizes;
-            sb_idxs.stride[step_posn] = idx_t(1);
+            sb_idxs.set_strides_from_inner(settings._pico_block_sizes, 1);
 
             // Tiles in nano-blocks.
             sb_idxs.tile_size = settings._nano_block_tile_sizes;
 
-            // Sub block indices in element units and rank-relative.
+            // Nano-block indices in element units and rank-relative.
             ScanIndices sb_eidxs(sb_idxs);
-
-            // Subset of nano-block that is full clusters.
-            // These indices are in element units and rank-relative.
-            ScanIndices sb_fcidxs(sb_idxs);
 
             // Subset of nano-block that is full vectors.
             // These indices are in element units and rank-relative.
@@ -506,17 +517,15 @@ namespace yask {
 
             // These will be set to rank-relative, so set ofs to zero.
             sb_eidxs.align_ofs.set_from_const(0);
-            sb_fcidxs.align_ofs.set_from_const(0);
             sb_fvidxs.align_ofs.set_from_const(0);
             sb_ovidxs.align_ofs.set_from_const(0);
 
-            // Flag for full clusters.
-            bool do_clusters = true;
-            bool do_outside_clusters = false;
+            // Flag for full vecs.
+            bool do_fvecs = true;
+            bool do_outside_fvecs = false;
 
             // Bit-field flags for full and partial vecs on left and right
             // in each dim.
-            bit_mask_t do_left_fvecs = 0, do_right_fvecs = 0;
             bit_mask_t do_left_pvecs = 0, do_right_pvecs = 0;
 
             // Bit-masks for computing partial vectors in each dim.
@@ -526,7 +535,7 @@ namespace yask {
             // For each domain dim:
             // - Adjust indices to be rank-relative.
             // - Determine the subset of this nano-block that is
-            //   clusters, vectors, and partial vectors.
+            //   full and partial vectors.
             DOMAIN_VAR_LOOP(i, j) {
 
                 // Rank offset.
@@ -536,21 +545,12 @@ namespace yask {
                 auto ebgn = sb_idxs.begin[i] - rofs;
                 auto eend = sb_idxs.end[i] - rofs;
 
-                // Find range of full clusters.
+                // Find range of full vecs.
                 // These are also the inner-boundaries of the
-                // full vectors.
-                // NB: fcbgn will be > fcend if the nano-block
-                // is within a cluster.
-                auto cpts = dims->_cluster_pts[j];
-                auto fcbgn = round_up_flr(ebgn, cpts);
-                auto fcend = round_down_flr(eend, cpts);
-
-                // Find range of full vectors.
-                // These are also the inner-boundaries of the peel
-                // and rem sections.
+                // peel and rem sections.
                 // NB: fvbgn will be > fvend if the nano-block
-                // is within a vector.
-                auto vpts = fold_pts[j];
+                // is within a vec.
+                auto vpts = dims->_fold_pts[j];
                 auto fvbgn = round_up_flr(ebgn, vpts);
                 auto fvend = round_down_flr(eend, vpts);
 
@@ -564,11 +564,6 @@ namespace yask {
                 assert(ovbgn <= fvbgn);
                 assert(ovend >= fvend);
                 
-                // Any full vectors to do on left or right?  These should
-                // always be false when cluster size is 1.
-                bool do_left_fvec = fvbgn < fcbgn;
-                bool do_right_fvec = fvend > fcend;
-
                 // Any partial vectors to do on left or right?
                 bool do_left_pvec = ebgn < fvbgn;
                 bool do_right_pvec = eend > fvend;
@@ -645,38 +640,26 @@ namespace yask {
                     rmask = 0;
                     do_left_pvec = true;
                     do_right_pvec = false;
-                    do_left_fvec = false;
-                    do_right_fvec = false;
-                    do_clusters = false;
+                    do_fvecs = false;
                 }
 
-                // No clusters.
-                else if (fcend <= fcbgn) {
+                // No full vecs.
+                else if (fvend <= fvbgn) {
 
-                    // Move both cluster boundaries to end
+                    // Move both boundaries to end
                     // of full-vec range.
-                    fcbgn = fcend = fvend;
-                    do_clusters = false;
-
-                    // Any full vecs?  Do left only due to fc-range
-                    // adjustment above.
-                    if (do_left_fvec || do_right_fvec) {
-                        do_left_fvec = true;
-                        do_right_fvec = false;
-                    }
+                    fvbgn = fvend;
+                    do_fvecs = false;
                 }
 
                 // Any outside parts at all?
-                if (do_left_fvec || do_right_fvec ||
-                    do_left_pvec || do_right_pvec)
-                    do_outside_clusters = true;
+                if (do_left_pvec || do_right_pvec)
+                    do_outside_fvecs = true;
 
                 // Save loop-local (current dim) vars.
                 // ScanIndices vars.
                 sb_eidxs.begin[i] = ebgn;
                 sb_eidxs.end[i] = eend;
-                sb_fcidxs.begin[i] = fcbgn;
-                sb_fcidxs.end[i] = fcend;
                 sb_fvidxs.begin[i] = fvbgn;
                 sb_fvidxs.end[i] = fvend;
                 sb_ovidxs.begin[i] = ovbgn;
@@ -685,60 +668,55 @@ namespace yask {
                 // Domain-dim mask vars.
                 peel_masks[j] = pmask;
                 rem_masks[j] = rmask;
-                if (do_left_fvec)
-                    set_bit(do_left_fvecs, j);
-                if (do_right_fvec)
-                    set_bit(do_right_fvecs, j);
                 if (do_left_pvec)
                     set_bit(do_left_pvecs, j);
                 if (do_right_pvec)
                     set_bit(do_right_pvecs, j);
 
             } // domain dims.
+            TRACE_MSG("nano-blk: " << sb_idxs.make_range_str(true) <<
+                      "; rank-rel: " << sb_eidxs.make_range_str(true) <<
+                      "; full-vectors: " << sb_fvidxs.make_range_str(true) <<
+                      "; vector bounds: " << sb_ovidxs.make_range_str(true));
 
             int thread_limit = actl_opts->thread_limit;
             
-            // Normalized cluster indices.
-            auto norm_fcidxs = normalize_indices(sb_fcidxs);
+            // Normalized vec indices.
+            auto norm_fvidxs = normalize_indices(sb_fvidxs);
 
-            if (!do_clusters)
-                TRACE_MSG("no full clusters to calculate");
+            if (!do_fvecs)
+                TRACE_MSG("no full vectors to calculate");
 
-            // Full rectilinear polytope of aligned clusters: use optimized
-            // code for full clusters w/o masking.
+            // Full rectilinear polytope of aligned vecs.
             else {
-                TRACE_MSG("calculating clusters within "
-                          "normalized local indices [" <<
-                          norm_fcidxs.begin.make_val_str() <<
-                          " ... " << norm_fcidxs.end.make_val_str() <<
-                          ") with stride " << norm_fcidxs.stride.make_val_str() <<
-                          " by outer thread " << outer_thread_idx <<
+                TRACE_MSG("calculating vecs within "
+                          "normalized local indices " <<
+                          norm_fvidxs.make_range_str(true) <<
+                          " via outer thread " << outer_thread_idx <<
                           " and inner thread " << inner_thread_idx);
                 
                 // Perform the calculations in this block.
-                calc_clusters_opt2(cp, outer_thread_idx, inner_thread_idx,
-                                   thread_limit, norm_fcidxs);
+                idx_t mask = idx_t(-1); // all elements.
+                calc_vectors_opt2(cp, outer_thread_idx, inner_thread_idx,
+                                  thread_limit, norm_fvidxs, mask);
                 
-            } // whole clusters.
+            } // whole vecs.
 
-            if (!do_outside_clusters)
-                TRACE_MSG("no full or partial vectors to calculate");
+            if (!do_outside_fvecs)
+                TRACE_MSG("no partial vectors to calculate");
             else {
-                TRACE_MSG("processing full and/or partial vectors "
-                          "within local indices [" <<
-                          sb_eidxs.begin.make_val_str() <<
-                          " ... " << sb_eidxs.end.make_val_str() <<
-                          ") bordering full clusters at [" <<
-                          sb_fcidxs.begin.make_val_str() <<
-                          " ... " << sb_fcidxs.end.make_val_str() <<
-                          ") by outer thread " << outer_thread_idx <<
+                TRACE_MSG("processing partial vectors "
+                          "within local indices " <<
+                          sb_eidxs.make_range_str(true) <<
+                          " bordering full vecs at " <<
+                          sb_fvidxs.make_range_str(true) <<
+                          " via outer thread " << outer_thread_idx <<
                           " and inner thread " << inner_thread_idx);
-                #if CPTS == 1
-                THROW_YASK_EXCEPTION("(internal fault) vector border-code not expected with cluster-size==1");
+                #if VPTS == 1
+                THROW_YASK_EXCEPTION("(internal fault) vector border-code not expected with vec-size==1");
                 #else
 
                 // Normalized vector indices.
-                auto norm_fvidxs = normalize_indices(sb_fvidxs);
                 auto norm_ovidxs = normalize_indices(sb_ovidxs);
 
                 // Need to find range in each border part.
@@ -756,12 +734,6 @@ namespace yask {
                 // +---+------+---+
                 // l=left or peel.
                 // r=right or remainder.
-                // Same idea for full or partial vectors, but
-                // different start and stop indices.
-                // Strictly, full vectors could be done with fewer parts since
-                // masking isn't needed, but full vectors are only needed when
-                // using clustering, and clustering is usually done at most
-                // along one dim, so this optimization wouldn't help much in practice.
                 int partn = 0;
                 
                 // Loop through progressively more intersections of domain dims, e.g.,
@@ -816,11 +788,8 @@ namespace yask {
                             // are actually overridded by the STRIDE
                             // macros generated by the YASK compiler, so
                             // these settings are not needed.
-                            auto fv_part(norm_fcidxs);
-                            ///fv_part.stride.set_from_const(1); // 1-vector stride.
                             auto pv_part(norm_fvidxs);
 
-                            bool fv_needed = true;
                             bool pv_needed = true;
                             bit_mask_t pv_mask = bit_mask_t(-1);
 
@@ -842,20 +811,12 @@ namespace yask {
                                     // Set left-right ranges.
                                     // See indices diagram at beginning of this function.
                                     if (is_left) {
-                                        fv_part.begin[i] = norm_fvidxs.begin[i];
-                                        fv_part.end[i] = norm_fcidxs.begin[i];
-                                        if (!is_bit_set(do_left_fvecs, j))
-                                            fv_needed = false;
                                         pv_part.begin[i] = norm_ovidxs.begin[i];
                                         pv_part.end[i] = norm_fvidxs.begin[i];
                                         pv_mask &= peel_masks[j];
                                         if (!is_bit_set(do_left_pvecs, j))
                                             pv_needed = false;
                                     } else {
-                                        fv_part.begin[i] = norm_fcidxs.end[i];
-                                        fv_part.end[i] = norm_fvidxs.end[i];
-                                        if (!is_bit_set(do_right_fvecs, j))
-                                            fv_needed = false;
                                         pv_part.begin[i] = norm_fvidxs.end[i];
                                         pv_part.end[i] = norm_ovidxs.end[i];
                                         pv_mask &= rem_masks[j];
@@ -863,7 +824,7 @@ namespace yask {
                                             pv_needed = false;
                                     }
                                     #ifdef TRACE
-                                    if (descr.length())
+                                    if (nsel > 1)
                                         descr += " & ";
                                     descr += std::string(is_left ? "left" : "right") + "-" +
                                         domain_dims.get_dim_name(j);
@@ -874,29 +835,13 @@ namespace yask {
                             descr += "'";
                             #endif
 
-                            // Calc this full-vector part.
-                            if (fv_needed) {
-                                TRACE_MSG("calculating full vectors for " << descr <<
-                                          " within normalized local indices [" <<
-                                          fv_part.begin.make_val_str() <<
-                                          " ... " << fv_part.end.make_val_str() <<
-                                          ") by outer thread " << outer_thread_idx <<
-                                          " and inner thread " << inner_thread_idx);
-                                
-                                calc_vectors_opt2(cp,
-                                                  outer_thread_idx, inner_thread_idx,
-                                                  thread_limit, fv_part, bit_mask_t(-1));
-                            }
-                            //else TRACE_MSG("full vectors not needed for " << descr);
-
                             // Calc this partial-vector part.
                             if (pv_needed) {
                                 TRACE_MSG("calculating partial vectors with mask 0x" << 
                                           std::hex << pv_mask << std::dec << " for " << descr <<
-                                          " within normalized local indices [" <<
-                                          pv_part.begin.make_val_str() <<
-                                          " ... " << pv_part.end.make_val_str() <<
-                                          ") by outer thread " << outer_thread_idx <<
+                                          " within normalized local indices " <<
+                                          pv_part.make_range_str(true) <<
+                                          " via outer thread " << outer_thread_idx <<
                                           " and inner thread " << inner_thread_idx);
                                 
                                 calc_vectors_opt2(cp,
@@ -913,26 +858,6 @@ namespace yask {
             
         } // calc_nano_block_opt.
 
-        // Calculate a tile of clusters.
-        // This should be the hottest function for most stencils.
-        // All functions called from this one should be inlined.
-        // Indices must be vec-len-normalized and rank-relative.
-        // Static to make sure offload doesn't need 'this'.
-        static void
-        calc_clusters_opt2(StencilCoreDataT* corep,
-                           int outer_thread_idx,
-                           int inner_thread_idx,
-                           int thread_limit,
-                           ScanIndices& norm_idxs) {
-
-            // Call code from stencil compiler.
-            ssc_start();
-            StencilBundleImplT::calc_clusters(corep,
-                                              outer_thread_idx, inner_thread_idx,
-                                              thread_limit, norm_idxs);
-            ssc_stop();
-        }
-
         // Calculate a tile of vectors using the given mask.
         // All functions called from this one should be inlined.
         // Indices must be vec-len-normalized and rank-relative.
@@ -945,30 +870,25 @@ namespace yask {
                           ScanIndices& norm_idxs,
                           bit_mask_t mask) {
 
-            #if CPTS == 1
-            THROW_YASK_EXCEPTION("(internal fault) masked-vector code not expected with cluster-size==1");
-            #else
-            
             // Call code from stencil compiler.
-            StencilBundleImplT::calc_vectors(corep,
-                                             outer_thread_idx, inner_thread_idx,
-                                             thread_limit, norm_idxs, mask);
-            #endif
+            StencilPartImplT::calc_vectors(corep,
+                                           outer_thread_idx, inner_thread_idx,
+                                           thread_limit, norm_idxs, mask);
         }
 
-    }; // StencilBundleBase.
+    }; // StencilPartBase.
     
-    // A collection of independent stencil bundles.
+    // A collection of independent stencil parts.
     // "Independent" implies that they may be evaluated
     // in any order.
     class Stage :
         public ContextLinker,
-        public std::vector<StencilBundleBase*> {
+        public std::vector<StencilPartBase*> {
 
     protected:
         std::string _name;
 
-        // Union of bounding boxes for all bundles in this stage.
+        // Union of bounding boxes for all non-scratch parts in this stage.
         BoundingBox _stage_bb;
 
     public:
@@ -989,7 +909,7 @@ namespace yask {
         idx_t tot_fpops_per_step = 0;
 
         Stage(StencilContext* context,
-                   const std::string& name) :
+              const std::string& name) :
             ContextLinker(context),
             _name(name) { }
         virtual ~Stage() { }
@@ -1001,17 +921,6 @@ namespace yask {
         // Update the amount of work stats.
         // Print to current debug stream.
         void init_work_stats();
-
-        // Determine whether step index is enabled.
-        bool
-        is_in_valid_step(idx_t input_step_index) const {
-            if (!size())
-                return false;
-
-            // All step conditions must be the same, so
-            // we call first one.
-            return front()->is_in_valid_step(input_step_index);
-        }
 
         // Accessors.
         BoundingBox& get_bb() { return _stage_bb; }

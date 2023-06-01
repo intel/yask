@@ -39,15 +39,15 @@ namespace yask {
     Var::new_var_point(const std::vector<yc_number_node_ptr>& index_exprs) {
 
         // Check for correct number of indices.
-        if (_dims.size() != index_exprs.size()) {
+        if (_vdims.size() != index_exprs.size()) {
             FORMAT_AND_THROW_YASK_EXCEPTION("attempt to create a var point in " <<
-                                            _dims.size() << "D var '" << _name << "' with " <<
+                                            _vdims.size() << "D var '" << _name << "' with " <<
                                             index_exprs.size() << " index expressions");
         }
 
         // Make args.
         num_expr_ptr_vec args;
-        for (size_t i = 0; i < _dims.size(); i++) {
+        for (size_t i = 0; i < _vdims.size(); i++) {
             auto p = dynamic_pointer_cast<NumExpr>(index_exprs.at(i));
             assert(p);
             args.push_back(p->clone());
@@ -62,20 +62,20 @@ namespace yask {
     Var::new_relative_var_point(const std::vector<int>& dim_offsets) {
 
         // Check for correct number of indices.
-        if (_dims.size() != dim_offsets.size()) {
+        if (_vdims.size() != dim_offsets.size()) {
             FORMAT_AND_THROW_YASK_EXCEPTION("attempt to create a relative var point in " <<
-                                            _dims.size() << "D var '" << _name << "' with " <<
+                                            _vdims.size() << "D var '" << _name << "' with " <<
                                             dim_offsets.size() << " indices");
         }
 
         // Check dim types.
         // Make default args w/just index.
         num_expr_ptr_vec args;
-        for (size_t i = 0; i < _dims.size(); i++) {
-            auto dim = _dims.at(i);
+        for (size_t i = 0; i < _vdims.size(); i++) {
+            auto dim = _vdims.at(i);
             if (dim->get_type() == MISC_INDEX) {
                 FORMAT_AND_THROW_YASK_EXCEPTION("attempt to create a relative var point in " <<
-                                                _dims.size() << "D var '" << _name <<
+                                                _vdims.size() << "D var '" << _name <<
                                                 "' containing non-step or non-domain dim '" <<
                                                 dim->_get_name() << "'");
             }
@@ -88,8 +88,8 @@ namespace yask {
 
         // Set the offsets, which creates a new
         // expression for each index.
-        for (size_t i = 0; i < _dims.size(); i++) {
-            auto dim = _dims.at(i);
+        for (size_t i = 0; i < _vdims.size(); i++) {
+            auto dim = _vdims.at(i);
             IntScalar ofs(dim->_get_name(), dim_offsets.at(i));
             gpp->set_arg_offset(ofs);
         }
@@ -104,13 +104,13 @@ namespace yask {
     }
 
     // Ctor for Var.
-    Var::Var(string name,
-                     bool is_scratch,
-                     StencilSolution* soln,
-                     const index_expr_ptr_vec& dims) :
+    Var::Var(Solution* soln,
+             string name,
+             bool is_scratch,
+             const index_expr_ptr_vec& dims) :
+        _soln(soln),
         _name(name),       // TODO: validate that name is legal C++ var.
-        _is_scratch(is_scratch),
-        _soln(soln)
+        _is_scratch(is_scratch)
     {
         assert(soln);
 
@@ -125,7 +125,7 @@ namespace yask {
         vars.insert(this);
 
         // Define dims.
-        _dims = dims;
+        _vdims = dims;
     }
 
     // Simple accessors.
@@ -140,7 +140,7 @@ namespace yask {
         _num_domain_dims = 0;
         _num_misc_dims = 0;
         _num_foldable_dims = 0;
-        for (auto gdim : _dims) {
+        for (auto gdim : _vdims) {
             auto& dname = gdim->_get_name();
             auto dtype = gdim->get_type();
 
@@ -174,6 +174,27 @@ namespace yask {
             _is_foldable = _num_foldable_dims == int(dims._fold_gt1.size());
         }
     }
+
+    // Determine size of the misc space.
+    // This is the product of all the observed misc ranges.
+    int Var::get_misc_space_size() const {
+
+        int msz = 1;
+        for (auto& dim : _vdims) {
+            auto dtype = dim->get_type();
+            if (dtype == MISC_INDEX) {
+                auto& dname = dim->_get_name();
+                auto* minp = _min_indices.lookup(dname);
+                auto* maxp = _max_indices.lookup(dname);
+                if (minp && maxp) {
+                    assert(*maxp >= *minp);
+                    int sz = *maxp - *minp + 1;
+                    msz *= sz;
+                }
+            }
+        }
+        return msz;
+    }
     
     // Determine whether halo sizes are equal.
     bool Var::is_halo_same(const Var& other) const {
@@ -183,7 +204,7 @@ namespace yask {
             return false;
 
         // Same halos?
-        for (auto& dim : _dims) {
+        for (auto& dim : _vdims) {
             auto& dname = dim->_get_name();
             auto dtype = dim->get_type();
             if (dtype == DOMAIN_INDEX) {
@@ -198,14 +219,16 @@ namespace yask {
         return true;
     }
 
-    // Update halos based on halo in 'other' var.
-    // This var's halos can only be increased.
-    void Var::update_halo(const Var& other) {
+    // Update halos and L1 dist based on those in 'other' var.
+    // Halos are updated at corresponding stages, L-R sides, and steps.
+    // This var's halos and L1 dist can only be increased.
+    bool Var::update_halo(const Var& other) {
         assert(are_dims_same(other));
+        bool changed = false;
 
         // Loop thru other var's halo values.
         for (auto& hi : other._halos) {
-            auto& pname = hi.first;
+            auto& stname = hi.first;
             auto& h2 = hi.second;
             for (auto& i0 : h2) {
                 auto& left = i0.first;
@@ -216,18 +239,22 @@ namespace yask {
                     for (auto& dim : ohalos) {
                         auto& dname = dim._get_name();
                         auto& val = dim.get_val();
-                        
-                        // Any existing value?
-                        auto& halos = _halos[pname][left][step];
+
+                        // Any existing value in this var?
+                        auto& halos = _halos[stname][left][step];
                         auto* p = halos.lookup(dname);
 
                         // If not, add this one.
-                        if (!p)
+                        if (!p) {
                             halos.add_dim_back(dname, val);
+                            changed = true;
+                        }
 
                         // Keep larger value.
-                        else if (val > *p)
+                        else if (val > *p) {
                             *p = val;
+                            changed = true;
+                        }
 
                         // Else, current value is larger than val, so don't update.
                     }
@@ -235,12 +262,14 @@ namespace yask {
             }
         }
         update_l1_dist(other._l1_dist);
+        return changed;
     }
 
     // Update halos based on each value in 'offsets' in some
     // read or write to this var.
     // This var's halos can only be increased.
-    void Var::update_halo(const string& stage_name, const IntTuple& offsets) {
+    bool Var::update_halo(const string& stage_name, const IntTuple& offsets) {
+        bool changed = false;
 
         // Find step value or use 0 if none.
         int step_val = 0;
@@ -276,18 +305,24 @@ namespace yask {
             auto* p = halos.lookup(dname);
 
             // If not, add this one.
-            if (!p)
+            if (!p) {
                 halos.add_dim_back(dname, val);
+                changed = true;
+            }
 
             // Keep larger value.
-            else if (val > *p)
+            else if (val > *p) {
                 *p = val;
+                changed = true;
+            }
 
             // Else, current value is larger than val, so don't update.
         }
 
         // Update L1.
         update_l1_dist(l1_dist);
+
+        return changed;
     }
 
     // Update write stages and offsets.
@@ -342,6 +377,9 @@ namespace yask {
         for (auto& hi : _halos) {
             auto& stage_name = hi.first;
             auto& h2 = hi.second;
+            #ifdef DEBUG_HALOS
+            cout << "* var " << get_name() << " in " << stage_name << endl;
+            #endif
 
             // Written?
             bool is_written = false;
@@ -366,25 +404,22 @@ namespace yask {
 
                     // Any existing value?
                     if (halo.size()) {
-#ifdef DEBUG_HALOS
-                        cout << "** var " << _name << " has halo " << halo.make_dim_val_str() <<
-                            " at ofs " << ofs << " in stage " << stage_name << endl;
-#endif
 
                         // Update vars.
                         if (first_ofs == unset)
                             first_ofs = last_ofs = ofs;
                         else {
-                            first_ofs = min(first_ofs, ofs);
-                            last_ofs = max(last_ofs, ofs);
+                            first_ofs = std::min(first_ofs, ofs);
+                            last_ofs = std::max(last_ofs, ofs);
                         }
                     }
                 }
             }
-#ifdef DEBUG_HALOS
-            cout << "** var " << _name << " has halos from " << first_ofs <<
-                " to " << last_ofs << " in stage " << pname << endl;
-#endif
+            #ifdef DEBUG_HALOS
+            print_halos(cout, "** ");
+            cout << "*** halo range: [" << first_ofs <<
+                "..." << last_ofs << "] in stage " << stage_name << endl;
+            #endif
 
             // Only need to process if >1 offset.
             if (last_ofs != unset && first_ofs != unset && last_ofs != first_ofs) {
@@ -393,6 +428,9 @@ namespace yask {
                 // For example, if equation touches 't-1' through 't+2',
                 // 'sz' is 4.
                 int sz = last_ofs - first_ofs + 1;
+                #ifdef DEBUG_HALOS
+                cout << "*** initial sz = " << sz << endl;
+                #endif
 
                 // Check for possible writeback.
                 if (is_written) {
@@ -404,9 +442,9 @@ namespace yask {
                         auto& h3 = i.second; // map of step-dims to halos.
                         
                         if (h3.count(first_ofs) && h3.at(first_ofs).size())
-                            first_max_halo = max(first_max_halo, h3.at(first_ofs).max());
+                            first_max_halo = std::max(first_max_halo, h3.at(first_ofs).max());
                         if (h3.count(last_ofs) && h3.at(last_ofs).size())
-                            last_max_halo = max(last_max_halo, h3.at(last_ofs).max());
+                            last_max_halo = std::max(last_max_halo, h3.at(last_ofs).max());
                     }
 
                     // If first and last halos are zero, we can further optimize
@@ -420,14 +458,20 @@ namespace yask {
                             sdi.writeback_ofs[stage_name] = last_ofs; // replace lowest read.
                         else
                             assert("write ofs is neither first or last");
+                        #ifdef DEBUG_HALOS
+                        cout << "*** optimized sz = " << sz << endl;
+                        #endif
                     }
                 }
 
                 // Keep max so far.
-                max_sz = max(max_sz, sz);
+                max_sz = std::max(max_sz, sz);
             }
 
         } // stages.
+        #ifdef DEBUG_HALOS
+        cout << "* final sz = " << sz << endl;
+        #endif
 
         // Override by API.
         if (_step_alloc > 0)
@@ -452,5 +496,10 @@ namespace yask {
         d += ")";
         return d;
     }
+
+    void Vars::set_dim_counts() {
+            for (auto gp : _vars)
+                gp->set_dim_counts(_soln->get_dims());
+        }
 
 } // namespace yask.

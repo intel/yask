@@ -174,7 +174,7 @@ namespace yask {
            and so forth, for each domain dimension.
            The local-domain size does *not* include the halo area or any padding.
            For best performance, set the local-domain
-           size to a multiple of the number of elements in a vector-cluster in
+           size to a multiple of the number of elements in a vector in
            each dimension.
 
            You should set either the local-domain size or the global-domain size
@@ -301,17 +301,17 @@ namespace yask {
            A block is typically the unit of work done by a
            top-level OpenMP thread.  The actual number of elements evaluated
            in a block may be greater than the specified size due to rounding
-           up to fold-cluster sizes.  The number of elements in a block may
+           up to vector sizes.  The number of elements in a block may
            also be smaller than the specified size when the block is at the
-           edge of the domain. The block size cannot be set in the
-           solution-step dimension (because temporal blocking is not yet enabled).
+           edge of the domain.
 
            Unless auto-tuning is disabled, the block size will be used as
            a starting point for an automated search for a higher-performing
            block size.
 
            This and all other tile sizes (Mega-blocks, blocks, micro-blocks, etc.)
-           can be set via apply_command_line_options().
+           can be set via apply_command_line_options(). Only block sizes
+           have a dedicated API.
         */
         virtual void
         set_block_size(const std::string& dim
@@ -381,9 +381,7 @@ namespace yask {
            If the number of ranks is zero in one or more 
            dimensions, those values will be set by a heuristic when
            prepare_solution() is called.
-           An exception will be thrown if no legal values are possible
-           given the specified (non-zero) values.
-
+           
            The curent MPI rank will be assigned a unique location
            within the overall problem domain based on its MPI rank index.
            Or, you can set it explicitly via set_rank_index().
@@ -399,7 +397,10 @@ namespace yask {
            that is decomposable across MPI ranks. Specifically, a
            domain dimension does not have to correspond to a
            spatial dimension in the physical problem description.
-        */
+ 
+           @throws yask_exception if no legal values are possible
+           given the specified (non-zero) values.
+         */
         virtual void
         set_num_ranks(const std::string& dim
                       /**< [in] Name of dimension to set.  Must be one of
@@ -509,10 +510,35 @@ namespace yask {
         /// Get the rank index in all domain dimensions.
         /**
            See get_rank_index();
-           @returns Vector of zero-based indices of this rank in all domain dimensions.
+
+           @returns Vector of zero-based indices of this rank in all domain
+           dimensions.
         */
         virtual idx_t_vec
         get_rank_index_vec() const =0;
+
+        /// Get the number of outer OpenMP threads.
+        /**
+           @returns Number of threads used for evaluating blocks concurrently
+           within each Mega-block.
+
+           @note The number of outer threads might vary from that specified
+           via the command-line option because of the `max_threads` setting.
+        */
+        virtual int
+        get_num_outer_threads() const =0;
+
+        /// Get the number of inner (nested) OpenMP threads.
+        /**
+           @returns Number of threads used for evaluating nano-blocks
+           concurrently within each micro-block.
+ 
+           @note The number of innter threads might vary from that specified
+           via the command-line option because of the `inner_threads` and
+           `max_threads` settings.
+        */
+        virtual int
+        get_num_inner_threads() const =0;
 
         /// Set kernel options from a string.
         /**
@@ -584,7 +610,8 @@ namespace yask {
         /// Get the specified var.
         /**
            This cannot be used to access scratch vars.
-           @returns Pointer to the specified var or null pointer if it does not exist.
+           @returns Pointer to the specified var.
+           @throws yask_exception if named var does not exist.
         */
         virtual yk_var_ptr
         get_var(const std::string& name
@@ -1296,9 +1323,10 @@ namespace yask {
         /// Get the estimated number of floating-point operations executed across all steps.
         /**
            @returns Number of FP ops created by the stencil compiler, summed over
-           all stencil-bundles, steps executed, and ranks.
+           all stencils, steps executed, and ranks.
            It may be slightly more or less than the actual number of FP ops executed
-           by the CPU due to C++ compiler transformations.
+           by the CPU due to C++ compiler transformations, redundant calculations
+           for temporal tiling, etc.
         */
         virtual idx_t
         get_est_fp_ops_done() =0;

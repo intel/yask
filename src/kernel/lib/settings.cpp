@@ -222,7 +222,7 @@ namespace yask {
         _nano_block_tile_sizes.set_vals_same(0); // 0 => nano-block size.
 
         _pico_block_sizes = dims->_stencil_dims;
-        _pico_block_sizes.set_vals_same(0);            // 0 => cluster size.
+        _pico_block_sizes.set_vals_same(0);            // 0 => nano-block size.
 
         _min_pad_sizes = dims->_stencil_dims;
         _min_pad_sizes.set_vals_same(0);
@@ -335,6 +335,10 @@ namespace yask {
                            yask::is_suffix_print_enabled));
 
         // Following options are in 'this' object.
+        parser.add_option(make_shared<command_line_parser::bool_option>
+                          ("verbose",
+                           "[Debug] Print more debug information.",
+                           _verbose));
         _add_domain_option(parser, "g", "Global-domain (overall-problem) size", _global_sizes);
         _add_domain_option(parser, "l", "Local-domain (rank) size", _rank_sizes);
         _add_domain_option(parser, _mega_block_str, "Mega-block size", _mega_block_sizes, true);
@@ -356,8 +360,8 @@ namespace yask {
                            " applied to all YASK vars", _extra_pad_sizes);
         parser.add_option(make_shared<command_line_parser::bool_option>
                           ("allow_addl_padding",
-                           "[Advanced] Allow automatic extension of padding for"
-                           " additional performance on any or all YASK vars.",
+                           "[Advanced] Allow automatic extension of padding"
+                           " beyond minimal vector alignment on any or all YASK vars.",
                            _allow_addl_pad));
         #ifdef USE_MPI
         _add_domain_option(parser, "nr", "Num ranks", _num_ranks);
@@ -453,6 +457,13 @@ namespace yask {
                            "a single large chunk when possible. "
                            "If 'false', allocate each YASK var separately.",
                            _bundle_allocs));
+        parser.add_option(make_shared<command_line_parser::bool_option>
+                          ("init_scratch_vars",
+                           "[Advanced] Initialize scratch vars to all zeros (0.0) "
+                           "in each micro-block. This is useful for debugging your "
+                           "stencil code that contains scratch-var value definitions "
+                           "with sub-domain conditions.",
+                           _init_scratch_vars));
         parser.add_option(make_shared<command_line_parser::int_option>
                           ("numa_pref",
                            string("[Advanced] Specify allocation policy for vars and MPI buffers. ") +
@@ -584,14 +595,9 @@ namespace yask {
             "   cache-locality within a kernel work item.\n"
             #endif
             "  There is no temporal tiling at the pico-block level.\n"
-            "  Each pico-block is composed of one or more clusters.\n"
-            " A 'cluster' is the work done in each inner-most pico-loop iteration.\n"
-            "  Clusters are evaluated sequentially within pico-blocks.\n"
-            "  The purpose of clustering is to allow more than one vector of\n"
-            "   work to be done in each loop iteration, useful for very simple stencils.\n"
-            "  Each cluster is composed of one or more vectors.\n"
+            "  Each pico-block is composed of one or more vectors.\n"
             " A 'vector' is typically the work done by a SIMD instruction.\n"
-            "  Vectors are evaluated sequentially within clusters.\n"
+            "  Vectors are evaluated sequentially within pico-blocks.\n"
             "  A 'folded vector' contains points in more than one dimension.\n"
             "  The size of a vector is typically that of a SIMD register.\n"
             "  Each vector is composed of one or more points.\n"
@@ -643,9 +649,9 @@ namespace yask {
             "   when there is more than one block-thread, the first dimension\n"
             "   will instead be set to the vector length to create \"slab\" shapes.\n"
             "  A pico-block size of 0 in a given domain dimension =>\n"
-            "   pico-block size is set to cluster size in that dimension;\n"
-            " The vector and cluster sizes are set at compile-time, so\n"
-            "  there are no run-time options to set them.\n"
+            "   pico-block size is set to nano-block size in that dimension;\n"
+            " The vector sizes are set at compile-time, so there are no run-time\n"
+            "   options to set them.\n"
             #ifdef USE_TILING
             " Set 'tile' sizes to provide finer control over the order of evaluation\n"
             "  within the given area. For example, nano-block-tiles create smaller areas\n"
@@ -767,7 +773,7 @@ namespace yask {
         auto& rt = _mega_block_sizes[step_dim];
         auto& bt = _block_sizes[step_dim];
         auto& mbt = _micro_block_sizes[step_dim];
-        auto& cluster_pts = _dims->_cluster_pts;
+        auto& vpts = _dims->_fold_pts;
         int nddims = _dims->_domain_dims.get_num_dims();
 
         // Fix up step-dim sizes.
@@ -799,7 +805,7 @@ namespace yask {
         auto nr = find_num_subsets(os,
                                    _mega_block_sizes, "mega-block",
                                    _rank_sizes, "local-domain",
-                                   cluster_pts, "cluster",
+                                   vpts, "vector",
                                    step_dim);
         os << " num-mega-blocks-per-local-domain-per-step: " << nr << endl;
         os << " Since the mega-block size in the '" << step_dim <<
@@ -813,7 +819,7 @@ namespace yask {
         auto nb = find_num_subsets(os,
                                    _block_sizes, "block",
                                    _mega_block_sizes, "mega-block",
-                                   cluster_pts, "cluster",
+                                   vpts, "vector",
                                    step_dim);
         os << " num-blocks-per-mega-block-per-step: " << nb << endl;
         os << " num-blocks-per-local-domain-per-step: " << (nb * nr) << endl;
@@ -828,7 +834,7 @@ namespace yask {
         auto nmb = find_num_subsets(os,
                                     _micro_block_sizes, "micro-block",
                                     _block_sizes, "block",
-                                    cluster_pts, "cluster",
+                                    vpts, "vector",
                                     step_dim);
         os << " num-micro-blocks-per-block-per-step: " << nmb << endl;
         os << " num-micro-blocks-per-mega-block-per-step: " << (nmb * nb) << endl;
@@ -857,12 +863,11 @@ namespace yask {
                     continue;
 
                 auto bsz = _block_sizes[i];
-                auto cpts = cluster_pts[j];
-                auto clus_per_blk = bsz / cpts;
+                auto vecs_per_blk = bsz / vpts[j];
 
-                // Subdivide this dim if there are enough clusters in
+                // Subdivide this dim if there are enough vecs in
                 // the block for each thread.
-                if (clus_per_blk >= num_inner_threads) {
+                if (vecs_per_blk >= num_inner_threads) {
                     _bind_posn = i;
 
                     // Stop when first dim picked.
@@ -872,16 +877,16 @@ namespace yask {
 
             // Divide on best dim.
             auto bsz = _block_sizes[_bind_posn - 1]; // "-1" to adjust stencil to domain dims.
-            auto cpts = cluster_pts[_bind_posn - 1];
+            auto vbpts = vpts[_bind_posn - 1];
 
             // Use narrow slabs if at least 2D.
             // TODO: consider a better heuristic.
             if (nddims >= 2)
-                _nano_block_sizes[_bind_posn] = cpts;
+                _nano_block_sizes[_bind_posn] = vbpts;
 
             // Divide block equally.
             else
-                _nano_block_sizes[_bind_posn] = ROUND_UP(bsz / num_inner_threads, cpts);
+                _nano_block_sizes[_bind_posn] = ROUND_UP(bsz / num_inner_threads, vbpts);
         }
 
         // Determine num nano-blocks.
@@ -890,7 +895,7 @@ namespace yask {
         auto nsb = find_num_subsets(os,
                                     _nano_block_sizes, "nano-block",
                                     _micro_block_sizes, "micro-block",
-                                    cluster_pts, "cluster",
+                                    vpts, "vector",
                                     step_dim);
         os << " num-nano-blocks-per-micro-block-per-step: " << nsb << endl;
         os << " num-nano-blocks-per-block-per-step: " << (nsb * nmb) << endl;
@@ -904,7 +909,7 @@ namespace yask {
         auto npb = find_num_subsets(os,
                                     _pico_block_sizes, "pico-block",
                                     _nano_block_sizes, "nano-block",
-                                    cluster_pts, "cluster",
+                                    vpts, "vector",
                                     step_dim);
         os << " num-pico-blocks-per-nano-block-per-step: " << npb << endl;
         os << " num-pico-blocks-per-micro-block-per-step: " << (npb * nsb) << endl;
@@ -1074,8 +1079,8 @@ namespace yask {
     // Return number of threads.
     // Do nothing and return 0 if not properly initialized.
     int KernelStateBase::set_num_outer_threads() {
-        int rt=0, bt=0;
-        int at = get_num_comp_threads(rt, bt);
+        int ot=0, it=0;
+        int at = get_num_comp_threads(ot, it);
 
         // Must call before entering top parallel mega-block.
         int ol = omp_get_level();
@@ -1086,12 +1091,12 @@ namespace yask {
         omp_set_max_active_levels(yask_max_levels + 1); // Add 1 for offload.
          
         // Set num threads to use for inner and outer loops.
-        yask_num_threads[0] = rt;
-        yask_num_threads[1] = bt;
+        yask_num_threads[0] = ot;
+        yask_num_threads[1] = it;
 
         // Set num threads for a mega-block.
-        omp_set_num_threads(rt);
-        return rt;
+        omp_set_num_threads(ot);
+        return ot;
     }
 
     // Set number of threads for a block.
@@ -1099,8 +1104,8 @@ namespace yask {
     // Return number of threads.
     // Do nothing and return 0 if not properly initialized.
     int KernelStateBase::set_num_inner_threads() {
-        int rt=0, bt=0;
-        int at = get_num_comp_threads(rt, bt);
+        int ot=0, it=0;
+        int at = get_num_comp_threads(ot, it);
 
         // Must call within top parallel region.
         #ifdef _OPENMP
@@ -1110,8 +1115,8 @@ namespace yask {
         assert (mal >= 2);
         #endif
 
-        omp_set_num_threads(bt);
-        return bt;
+        omp_set_num_threads(it);
+        return it;
     }
 
 

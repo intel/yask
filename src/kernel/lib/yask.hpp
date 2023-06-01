@@ -71,6 +71,7 @@ typedef int MPI_Status;
 #include <map>
 #include <unordered_map>
 #include <set>
+#include <unordered_set>
 #include <sstream>
 #include <stdexcept>
 #include <malloc.h>
@@ -183,6 +184,10 @@ typedef std::uint64_t bit_mask_t;
 #define __assume_aligned(p,n) ((void)0)
 #endif
 
+#ifndef RESTRICT
+#define RESTRICT __restrict__
+#endif
+
 // Default alloc settings.
 #define CACHELINE_BYTES  (64)
 #define YASK_PAD (3) // cache-lines between data buffers.
@@ -233,7 +238,8 @@ typedef std::uint64_t bit_mask_t;
             const auto last_slash_idx = fname.find_last_of("/");        \
             if (std::string::npos != last_slash_idx)                    \
                 fname.erase(0, last_slash_idx + 1);                     \
-            DEBUG_MSG("YASK: " << __TRACE_FN << ": " << msg <<          \
+            DEBUG_MSG("YASK: thread " << omp_get_thread_num() << ": " << \
+                      __TRACE_FN << ": " << msg <<                      \
                       " at " << fname << ":" << __LINE__);              \
         } } while(0)
 #else

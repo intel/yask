@@ -27,6 +27,9 @@ IN THE SOFTWARE.
 
 #include "Cpp.hpp"
 
+//#define DEBUG_BUFFERS
+//#define DEBUG_GP
+
 namespace yask {
 
     /////////// Scalar code /////////////
@@ -414,8 +417,6 @@ namespace yask {
         }
     }
 
-    //#define DEBUG_BUFFERS
-    
     // Collect some stats on read points.
     // These are used to create buffers and prefetches.
     void CppVecPrintHelper::get_point_stats() {
@@ -426,6 +427,7 @@ namespace yask {
         
         const string& ildim = _settings._inner_loop_dim;
         const string& sdim = _dims._step_dim;
+        int il_elem_step = _dims._fold[ildim];
         
         // Loop through all aligned read points.
         for (auto& gp : _vv._aligned_vecs) {
@@ -446,23 +448,6 @@ namespace yask {
 
             // Get offset in step dim, if any.
             auto* sofs = offsets.lookup(sdim);
-
-            // Is there also a write to this var that might overwrite
-            // a read at this step-dim offset?
-            // This would be true only with immediate replacement (writeback)
-            // optimization.
-            bool is_write = false;
-            if (sofs) {
-
-                auto sdi = var.get_step_dim_info();
-                if (sdi.writeback_ofs.count(_stage_name) &&
-                    sdi.writeback_ofs.at(_stage_name) == *sofs) {
-                    is_write = true;
-                    #ifdef DEBUG_BUFFERS
-                    cout << "** Found writeback to " << vname << " over ofs " << *sofs << endl;
-                    #endif
-                }
-            }
 
             // Get offset in inner-loop dim.
             // E.g., A(t, x+1, y+4, z-2) => 4 if ildim = 'y'.
@@ -493,55 +478,12 @@ namespace yask {
 
                 // Need a buffer? (This will change as new points are
                 // discovered.)  Length will cover range of vecs needed.
-                // The num of vecs stepped in the inner loop is subtracted
-                // because we don't need to put the vecs read in the current
-                // loop iteration in the buffer (until it's shifted at the
-                // end of the loop.)  Then, the length may then be increased
-                // if reading ahead unless we're also writing back, in which
-                // case read-ahead can't be used.
-                auto len = hi - lo + 1;
-                len -= _inner_loop_vec_step;
+                auto len = hi - lo;
                 #ifdef DEBUG_BUFFERS
                 cout << "*** Buffer for " << key->make_str() <<
-                    " has non-read-ahead length " << len << endl;
+                    " has length " << len << endl;
                 #endif
-                auto mbl = max(_settings._min_buffer_len, 1);
-
-                // Add read-ahead if requested and allowed.
-                auto rad = _settings._read_ahead_dist;
-                auto ralv = _inner_loop_vec_step * rad;
-                auto rale = _inner_loop_elem_step * rad;
-                if (rad > 0 && !is_write && (len + ralv) >= mbl) {
-                    #ifdef DEBUG_BUFFERS
-                    cout << " *** Adding " << ralv << " vecs to buffer for read-ahead\n";
-                    #endif
-
-                    // Add more read points to read set.
-                    // These may not be in the original set because they are
-                    // for reading ahead.
-                    // If some already exist, it will not hurt to re-add them.
-                    auto ofs = lo + len + 1;
-                    for (int i = 0; i < ralv; i++, ofs++) {
-                        auto rap = key->clone_var_point();
-                        auto eofs = ofs * _dims._fold[ildim];
-                        IntScalar idi(ildim, eofs); // At end of buffer.
-                        rap->set_arg_offset(idi);
-                        #ifdef DEBUG_READ_AHEAD
-                        cout << "  *** Adding read point " << rap->make_str() << endl;
-                        #endif
-                        _aligned_reads.insert(*rap); // Save new read point.
-                        _inner_loop_key[*rap] = key; // Save its key.
-                    }
-
-                    // Increase buf len.
-                    len += ralv;
-
-                    // Increase var allocation for read-ahead (in elements,
-                    // not vecs).  TODO: be more accurate about when to
-                    // increase pad; this assumes it extends beyond halo
-                    // region.
-                    var.update_read_ahead_pad(rale);
-                }
+                auto mbl = std::max(_settings._min_buffer_len, 1);
 
                 // Remember buf len using key if above threshold.
                 if (len >= mbl)
@@ -604,12 +546,12 @@ namespace yask {
                 os << _line_prefix << "{\n";
                 assert(_pt_buf_name.count(*key));
                 bname = _pt_buf_name.at(*key);
-                for (int i = 0; i < len - _inner_loop_vec_step; i++)
+                for (int i = 0; i < len - 1; i++)
                     os << _line_prefix << bname << "[" << i << "] = " <<
-                        bname << "[" << (i + _inner_loop_vec_step) << "]" << _line_suffix;
+                        bname << "[" << (i + 1) << "]" << _line_suffix;
                 start_ofs = end;
-                stop_ofs = end + _inner_loop_vec_step;
-                start_load = max(len - _inner_loop_vec_step, 0);
+                stop_ofs = end + 1;
+                start_load = std::max(len - 1, 0);
             }
 
             // Before start of loop.
@@ -666,7 +608,6 @@ namespace yask {
             return;
         
         const string& ildim = _settings._inner_loop_dim;
-        auto& imult = _inner_loop_vec_step;
 
         // 'level': cache level.
         for (int level = 1; level <= 2; level++) {
@@ -688,8 +629,8 @@ namespace yask {
                 auto hi = i.second; // Furthest vec read at offset in key.
 
                 // Pts in vec.
-                int start_ofs = hi + (pfd - 1) * _inner_loop_vec_step + 1;
-                int stop_ofs = start_ofs + _inner_loop_vec_step;
+                int start_ofs = hi + (pfd - 1) + 1;
+                int stop_ofs = start_ofs + 1;
                 for (int vofs = start_ofs; vofs < stop_ofs; vofs++) {
                     auto eofs = vofs * _dims._fold[ildim]; // Vector ofs.
 
@@ -728,24 +669,25 @@ namespace yask {
     void CppVecPrintHelper::print_end_inner_loop(ostream& os) {
         get_point_stats();
 
+        const string& ildim = _settings._inner_loop_dim;
+        int il_elem_step = _dims._fold[ildim];
+        
         auto& ild = _settings._inner_loop_dim;
         os << "\n // Increment indices and pointers.\n" <<
-            _line_prefix << ild << " += " <<
-            _inner_loop_vec_step << _line_suffix <<
+            _line_prefix << ild << "++" << _line_suffix <<
 
             _line_prefix << get_local_elem_index(ild) << " += " <<
-            _inner_loop_elem_step << _line_suffix <<
+            il_elem_step << _line_suffix <<
 
             _line_prefix << get_global_elem_index(ild) << " += " <<
-            _inner_loop_elem_step << _line_suffix;
+            il_elem_step << _line_suffix;
         
         for (auto& i : _inner_loop_base_ptrs) {
             auto& vp = i.first;
             auto& ptr = i.second;
             auto* stride = lookup_stride(*vp._get_var(), _settings._inner_loop_dim);
             assert(stride);
-            os << _line_prefix << ptr << " += " <<
-                _inner_loop_vec_step << " * " << *stride << _line_suffix;
+            os << _line_prefix << ptr << " += " << *stride << _line_suffix;
         }
     }
     
@@ -1005,7 +947,8 @@ namespace yask {
         if (p) {
 
             if (in_buf)
-                os << _line_prefix << "#ifdef CHECK\n";
+                os << _line_prefix << "#ifdef CHECK\n" <<
+                    _line_prefix << " // Check consistency of buffer.\n {";
 
             // Ptr expression.
             string ptr_expr = *p;
@@ -1032,10 +975,23 @@ namespace yask {
                     _line_suffix;
             }
 
-            // Check value.
+            // Just check value if it was already in the buffer.
             else {
-                os << _line_prefix << "host_assert(" << mv_name << " == *" <<
-                    ptr_var << ")" << _line_suffix << 
+
+                // NB: it would be nice to be able to always check the value
+                // in the buffer against the value in memory here, i.e.,
+                // 'host_assert(mv_name == *ptr_val)'. However, it is
+                // possible that a *portion* of the vector will be written
+                // by another thread *after* the entire vector was loaded
+                // into the buffer, and this is allowed if the overwritten
+                // portion is not actually used.  So, we only make this
+                // check when not vectorizing.
+                os <<
+                    _line_prefix << "#if VLEN == 1\n" <<
+                    _line_prefix << "host_assert(" << mv_name << " == *" <<
+                    ptr_var << ")" << _line_suffix <<
+                    _line_prefix << "#endif\n" <<
+                    _line_prefix << " } // check.\n" <<
                     _line_prefix << "#endif // CHECK\n";
             }
 

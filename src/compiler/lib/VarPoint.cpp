@@ -95,6 +95,7 @@ namespace yask {
     bool VarPoint::is_var_foldable() const {
         return _var->is_foldable();
     }
+
     string VarPoint::make_arg_str(const VarMap* var_map) const {
         string str;
         int i = 0;
@@ -118,11 +119,34 @@ namespace yask {
         return str;
     }
     string VarPoint::make_logical_var_str(const VarMap* var_map) const {
+        auto& dims = _var->_get_soln()->get_dims();
+            
         string str = _var->_get_name();
-        if (_consts.size())
-            str += "(" + _consts.make_dim_val_str() + ")";
+        auto step_expr = get_arg(dims._step_dim);
+
+        // ATM, any access to a scratch var is considered the same
+        // logical var.
+        // TODO: relax this; would require more complex scratch
+        // write-halo tracking.
+        auto use_consts = !_var->is_scratch() && _consts.size() > 0;
+        
+        if (use_consts || step_expr) {
+            str += "(";
+            if (step_expr)
+                str += step_expr->make_str();
+            if (use_consts) {
+                if (step_expr)
+                    str += ", ";
+                str += _consts.make_dim_val_str();
+            }
+            str += ")";
+        }
         return str;
     }
+    bool VarPoint::is_same_logical_var(const VarPoint& rhs) const {
+        return make_logical_var_str() == rhs.make_logical_var_str();
+    }
+
     const index_expr_ptr_vec& VarPoint::get_dims() const {
         return _var->get_dims();
     }
@@ -311,7 +335,7 @@ namespace yask {
 
     // EqualsExpr methods.
     bool EqualsExpr::is_scratch() {
-        Var* gp = _get_var();
+        Var* gp = get_lhs_var();
         return gp && gp->is_scratch();
     }
     bool EqualsExpr::is_same(const Expr* other) const {

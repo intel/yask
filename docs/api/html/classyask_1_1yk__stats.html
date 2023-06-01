@@ -216,7 +216,7 @@ Public Member Functions</h2></td></tr>
 </div><div class="memdoc">
 
 <p>Get the estimated number of floating-point operations executed across all steps. </p>
-<dl class="section return"><dt>Returns</dt><dd>Number of FP ops created by the stencil compiler, summed over all stencil-bundles, steps executed, and ranks. It may be slightly more or less than the actual number of FP ops executed by the CPU due to C++ compiler transformations. </dd></dl>
+<dl class="section return"><dt>Returns</dt><dd>Number of FP ops created by the stencil compiler, summed over all stencils, steps executed, and ranks. It may be slightly more or less than the actual number of FP ops executed by the CPU due to C++ compiler transformations, redundant calculations for temporal tiling, etc. </dd></dl>
 
 </div>
 </div>

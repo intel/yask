@@ -41,11 +41,11 @@ namespace {
 
         // Indices & dimensions.
         // Not all these will be used in all tests.
-        yc_index_node_ptr t = new_step_index("t");           // step in time dim.
-        yc_index_node_ptr w = new_domain_index("w");         // spatial dim.
-        yc_index_node_ptr x = new_domain_index("x");         // spatial dim.
-        yc_index_node_ptr y = new_domain_index("y");         // spatial dim.
-        yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
+        MAKE_STEP_INDEX(t);                          // step in time dim.
+        MAKE_DOMAIN_INDEX(w);                        // spatial dim.
+        MAKE_DOMAIN_INDEX(x);                        // spatial dim.
+        MAKE_DOMAIN_INDEX(y);                        // spatial dim.
+        MAKE_DOMAIN_INDEX(z);                        // spatial dim.
 
         // Define some stencils in different dimensions.
         // The size is based on the 'radius' option.
@@ -57,7 +57,7 @@ namespace {
                                            const yc_number_node_ptr& x0,
                                            int left_ext, int right_ext) {
             auto r = get_radius();
-            yc_number_node_ptr v;
+            yc_number_node_ptr v = new_number_node(2.0);
             for (int i = -r - left_ext; i <= r + right_ext; i++)
                 v += V(t0, x0+i);
             return v;
@@ -69,7 +69,7 @@ namespace {
                                           const yc_number_node_ptr& x0,
                                           int left_ext, int right_ext) {
             auto r = get_radius();
-            yc_number_node_ptr v;
+            yc_number_node_ptr v = new_number_node(3.0);
             for (int i = -r - left_ext; i <= r + right_ext; i++)
                 v += V(x0+i);
             return v;
@@ -84,7 +84,7 @@ namespace {
                                            const yc_number_node_ptr& y0,
                                            int y_left_ext, int y_right_ext) {
             auto r = get_radius();
-            yc_number_node_ptr v;
+            yc_number_node_ptr v = new_number_node(4.0);
             for (int i : { -r - x_left_ext, 0, r + x_right_ext })
                 for (int j : { -r - y_left_ext, 0, r + y_right_ext })
                     v += V(t0, x0+i, y0+j);
@@ -100,7 +100,7 @@ namespace {
                                           const yc_number_node_ptr& y0,
                                           int y_left_ext, int y_right_ext) {
             auto r = get_radius();
-            yc_number_node_ptr v;
+            yc_number_node_ptr v = new_number_node(5.0);
             for (int i : { -r - x_left_ext, 0, r + x_right_ext })
                 for (int j : { -r - y_left_ext, 0, r + y_right_ext })
                     v += V(x0+i, y0+j);
@@ -179,7 +179,7 @@ namespace {
     protected:
 
         // Vars.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x }); // time-varying var.
+        MAKE_VAR(A, t, x); // time-varying var.
 
     public:
 
@@ -197,7 +197,7 @@ namespace {
     // Create an object of type 'Test1dStencil',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static Test1dStencil Test1dStencil_instance;
+    REGISTER_SOLUTION(Test1dStencil);
 
     // Simple 2D test.
     class Test2dStencil : public TestBase {
@@ -205,7 +205,7 @@ namespace {
     protected:
 
         // Vars.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y }); // time-varying var.
+        MAKE_VAR(A, t, x, y); // time-varying var.
 
     public:
 
@@ -223,7 +223,7 @@ namespace {
     // Create an object of type 'Test2dStencil',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static Test2dStencil Test2dStencil_instance;
+    REGISTER_SOLUTION(Test2dStencil);
 
     // Simple 3D test.
     class Test3dStencil : public TestBase {
@@ -231,7 +231,7 @@ namespace {
     protected:
 
         // Vars.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y, z }); // time-varying var.
+        MAKE_VAR(A, t, x, y, z); // time-varying var.
 
     public:
 
@@ -249,7 +249,7 @@ namespace {
     // Create an object of type 'Test3dStencil',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static Test3dStencil Test3dStencil_instance;
+    REGISTER_SOLUTION(Test3dStencil);
 
     // Simple 4D test.
     class Test4dStencil : public TestBase {
@@ -257,7 +257,7 @@ namespace {
     protected:
 
         // Vars.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, w, x, y, z }); // time-varying var.
+        MAKE_VAR(A, t, w, x, y, z); // time-varying var.
 
     public:
 
@@ -275,7 +275,7 @@ namespace {
     // Create an object of type 'Test4dStencil',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static Test4dStencil Test4dStencil_instance;
+    REGISTER_SOLUTION(Test4dStencil);
 
     // Test vars that don't cover all domain dims.
     class TestPartialStencil3 : public TestBase {
@@ -283,18 +283,18 @@ namespace {
     protected:
 
         // Vars.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y, z }); // time-varying var.
-        yc_var_proxy B = yc_var_proxy("B", get_soln(), { x }); // 1D.
-        yc_var_proxy C = yc_var_proxy("C", get_soln(), { y });
-        yc_var_proxy D = yc_var_proxy("D", get_soln(), { z });
-        yc_var_proxy E = yc_var_proxy("E", get_soln(), { x, y }); // 2D.
-        yc_var_proxy F = yc_var_proxy("F", get_soln(), { y, z });
-        yc_var_proxy G = yc_var_proxy("G", get_soln(), { z, y });
-        yc_var_proxy H = yc_var_proxy("H", get_soln(), { y, z, x }); // 3D in different order.
-        yc_var_proxy I = yc_var_proxy("I", get_soln(), { }); // scalar.
-        yc_var_proxy J = yc_var_proxy("J", get_soln(), { t }); // time-only.
-        yc_var_proxy K = yc_var_proxy("K", get_soln(), { t, y }); // time + 1D.
-        yc_var_proxy L = yc_var_proxy("L", get_soln(), { t, y, z }); // time + 2D.
+        MAKE_VAR(A, t, x, y, z); // time-varying var.
+        MAKE_VAR(B, x); // 1D.
+        MAKE_VAR(C, y);
+        MAKE_VAR(D, z);
+        MAKE_VAR(E, x, y); // 2D.
+        MAKE_VAR(F, y, z);
+        MAKE_VAR(G, z, y);
+        MAKE_VAR(H, y, z, x); // 3D in different order.
+        MAKE_SCALAR_VAR(I); // scalar.
+        MAKE_VAR(J, t); // time-only.
+        MAKE_VAR(K, t, y); // time + 1D.
+        MAKE_VAR(L, t, y, z); // time + 2D.
 
     public:
 
@@ -324,7 +324,7 @@ namespace {
     // Create an object of type 'TestPartialStencil3',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static TestPartialStencil3 TestPartialStencil3_instance;
+    REGISTER_SOLUTION(TestPartialStencil3);
 
     // Test misc indices.
     class TestMisc2dStencil : public yc_solution_with_radius_base {
@@ -332,22 +332,22 @@ namespace {
     protected:
 
         // Indices & dimensions.
-        yc_index_node_ptr t = new_step_index("t");           // step in time dim.
-        yc_index_node_ptr x = new_domain_index("x");         // spatial dim.
-        yc_index_node_ptr y = new_domain_index("y");         // spatial dim.
-        yc_index_node_ptr a = new_misc_index("a");
-        yc_index_node_ptr b = new_misc_index("b");
-        yc_index_node_ptr c = new_misc_index("c");
+        MAKE_STEP_INDEX(t);                          // step in time dim.
+        MAKE_DOMAIN_INDEX(x);                        // spatial dim.
+        MAKE_DOMAIN_INDEX(y);                        // spatial dim.
+        MAKE_MISC_INDEX(a);
+        MAKE_MISC_INDEX(b);
+        MAKE_MISC_INDEX(c);
     
         // Time-varying var. Intermix last domain dim with misc dims to make
         // sure compiler creates correct layout.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, a, y, b, c });
+        MAKE_VAR(A, t, x, a, y, b, c);
 
         // Misc-only var.
-        yc_var_proxy B = yc_var_proxy("B", get_soln(), { c, b });
+        MAKE_VAR(B, c, b);
 
         // Time-and-misc var.
-        yc_var_proxy C = yc_var_proxy("C", get_soln(), { t, b, a });
+        MAKE_VAR(C, t, b, a);
 
     public:
 
@@ -377,7 +377,7 @@ namespace {
     // Create an object of type 'TestMisc2dStencil',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static TestMisc2dStencil TestMisc2dStencil_instance;
+    REGISTER_SOLUTION(TestMisc2dStencil);
 
     // "Stream-like" stencils that just read and write
     // with no spatial offsets.
@@ -389,11 +389,11 @@ namespace {
     protected:
 
         // Indices & dimensions.
-        yc_index_node_ptr t = new_step_index("t");           // step in time dim.
-        yc_index_node_ptr x = new_domain_index("x");         // spatial dim.
-
+        MAKE_STEP_INDEX(t);                          // step in time dim.
+        MAKE_DOMAIN_INDEX(x);                        // spatial dim.
+ 
         // Vars.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x }); // time-varying 3D var.
+        MAKE_VAR(A, t, x); // time-varying 3D var.
 
     public:
 
@@ -418,19 +418,19 @@ namespace {
     // Create an object of type 'StreamStencil1',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static StreamStencil1 StreamStencil1_instance;
+    REGISTER_SOLUTION(StreamStencil1);
 
     class StreamStencil2 : public yc_solution_with_radius_base {
 
     protected:
 
         // Indices & dimensions.
-        yc_index_node_ptr t = new_step_index("t");           // step in time dim.
-        yc_index_node_ptr x = new_domain_index("x");         // spatial dim.
-        yc_index_node_ptr y = new_domain_index("y");         // spatial dim.
-
+        MAKE_STEP_INDEX(t);                          // step in time dim.
+        MAKE_DOMAIN_INDEX(x);                        // spatial dim.
+        MAKE_DOMAIN_INDEX(y);                        // spatial dim.
+ 
         // Vars.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y }); // time-varying 3D var.
+        MAKE_VAR(A, t, x, y); // time-varying 3D var.
 
     public:
 
@@ -455,7 +455,7 @@ namespace {
     // Create an object of type 'StreamStencil2',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static StreamStencil2 StreamStencil2_instance;
+    REGISTER_SOLUTION(StreamStencil2);
 
 
     class StreamStencil3 : public yc_solution_with_radius_base {
@@ -463,13 +463,13 @@ namespace {
     protected:
 
         // Indices & dimensions.
-        yc_index_node_ptr t = new_step_index("t");           // step in time dim.
-        yc_index_node_ptr x = new_domain_index("x");         // spatial dim.
-        yc_index_node_ptr y = new_domain_index("y");         // spatial dim.
-        yc_index_node_ptr z = new_domain_index("z");         // spatial dim.
+        MAKE_STEP_INDEX(t);                          // step in time dim.
+        MAKE_DOMAIN_INDEX(x);                        // spatial dim.
+        MAKE_DOMAIN_INDEX(y);                        // spatial dim.
+        MAKE_DOMAIN_INDEX(z);                        // spatial dim.
 
         // Vars.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y, z }); // time-varying 3D var.
+        MAKE_VAR(A, t, x, y, z); // time-varying 3D var.
 
     public:
 
@@ -494,7 +494,7 @@ namespace {
     // Create an object of type 'StreamStencil3',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static StreamStencil3 StreamStencil3_instance;
+    REGISTER_SOLUTION(StreamStencil3);
 
     // Reverse-time stencil.
     // In this test, A(t-1) depends on A(t).
@@ -503,7 +503,7 @@ namespace {
     protected:
 
         // Vars.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y });
+        MAKE_VAR(A, t, x, y);
 
     public:
 
@@ -521,7 +521,7 @@ namespace {
     // Create an object of type 'TestReverseStencil',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static TestReverseStencil TestReverseStencil_instance;
+    REGISTER_SOLUTION(TestReverseStencil);
 
     // Test dependent equations.
     // These will create >= 2 stages that will be applied in sequence
@@ -531,9 +531,9 @@ namespace {
     protected:
 
         // Vars.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x });
-        yc_var_proxy B = yc_var_proxy("B", get_soln(), { t, x });
-        yc_var_proxy C = yc_var_proxy("C", get_soln(), { t, x });
+        MAKE_VAR(A, t, x);
+        MAKE_VAR(B, t, x);
+        MAKE_VAR(C, t, x);
 
     public:
 
@@ -555,16 +555,16 @@ namespace {
     // Create an object of type 'TestDepStencil1',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static TestDepStencil1 TestDepStencil1_instance;
+    REGISTER_SOLUTION(TestDepStencil1);
 
     class TestDepStencil2 : public TestBase {
 
     protected:
 
         // Vars.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y }); // time-varying var.
-        yc_var_proxy B = yc_var_proxy("B", get_soln(), { t, x, y }); // time-varying var.
-        yc_var_proxy C = yc_var_proxy("C", get_soln(), { t, x, y }); // time-varying var.
+        MAKE_VAR(A, t, x, y); // time-varying var.
+        MAKE_VAR(B, t, x, y); // time-varying var.
+        MAKE_VAR(C, t, x, y); // time-varying var.
 
     public:
 
@@ -588,15 +588,15 @@ namespace {
     // Create an object of type 'TestDepStencil2',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static TestDepStencil2 TestDepStencil2_instance;
+    REGISTER_SOLUTION(TestDepStencil2);
 
     class TestDepStencil3 : public TestBase {
 
     protected:
 
         // Vars.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y, z }); // time-varying var.
-        yc_var_proxy B = yc_var_proxy("B", get_soln(), { t, x, y, z }); // time-varying var.
+        MAKE_VAR(A, t, x, y, z); // time-varying var.
+        MAKE_VAR(B, t, x, y, z); // time-varying var.
 
     public:
 
@@ -619,19 +619,19 @@ namespace {
     // Create an object of type 'TestDepStencil3',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static TestDepStencil3 TestDepStencil3_instance;
+    REGISTER_SOLUTION(TestDepStencil3);
 
-    // Test the use of scratch-pad vars.
+    /////// Test the use of scratch-pad vars. ////////
 
     class TestScratchStencil1 : public TestBase {
 
     protected:
 
         // Vars.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x }); // time-varying var.
+        MAKE_VAR(A, t, x); // time-varying var.
 
         // Temporary storage.
-        yc_var_proxy B = yc_var_proxy("B", get_soln(), { x }, true);
+        MAKE_SCRATCH_VAR(B, x);
 
     public:
 
@@ -652,18 +652,19 @@ namespace {
     // Create an object of type 'TestScratchStencil1',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static TestScratchStencil1 TestScratchStencil1_instance;
+    REGISTER_SOLUTION(TestScratchStencil1);
 
     class TestScratchStencil2 : public TestBase {
 
     protected:
 
         // Vars.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y }); // time-varying var.
+        MAKE_VAR(A, t, x, y); // time-varying var.
 
         // Temporary storage.
-        yc_var_proxy t1 = yc_var_proxy("t1", get_soln(), { x, y }, true);
-        yc_var_proxy t2 = yc_var_proxy("t2", get_soln(), { x, y }, true);
+        MAKE_SCRATCH_VAR(t1, x, y);
+        MAKE_SCRATCH_VAR(t2, x, y);
+        MAKE_SCRATCH_VAR(t3, x, y);
 
     public:
 
@@ -676,32 +677,36 @@ namespace {
             // Set scratch var.
             t1(x, y) EQUALS def_t2d(A, t, x, 0, 1, y, 2, 1);
 
-            // Set one scratch var from other scratch var.
+            // Set 2nd scratch var from 1st scratch var.
             t2(x, y) EQUALS t1(x, y+1);
+
+            // Set 3rd scratch var from 2nd scratch var.
+            // This should reuse t1's memory.
+            t3(x, y) EQUALS t2(x+1, y);
 
             // Update A from scratch vars.
             A(t+1, x, y) EQUALS A(t, x, y) +
-                def_2d(t1, x, 2, 0, y, 1, 0) +
-                def_2d(t2, x, 1, 0, y, 0, 1);
+                def_2d(t2, x, 2, 0, y, 1, 0) +
+                def_2d(t3, x, 1, 0, y, 0, 1);
         }
     };
 
     // Create an object of type 'TestScratchStencil2',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static TestScratchStencil2 TestScratchStencil2_instance;
+    REGISTER_SOLUTION(TestScratchStencil2);
 
     class TestScratchStencil3 : public TestBase {
 
     protected:
 
         // Vars.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y, z }); // time-varying var.
+        MAKE_VAR(A, t, x, y, z); // time-varying var.
 
         // Temporary storage.
-        yc_var_proxy t1 = yc_var_proxy("t1", get_soln(), { x, y, z }, true);
-        yc_var_proxy t2 = yc_var_proxy("t2", get_soln(), { x, y, z }, true);
-        yc_var_proxy t3 = yc_var_proxy("t3", get_soln(), { x, y, z }, true);
+        MAKE_SCRATCH_VAR(t1, x, y, z);
+        MAKE_SCRATCH_VAR(t2, x, y, z);
+        MAKE_SCRATCH_VAR(t3, x, y, z);
 
     public:
 
@@ -711,14 +716,15 @@ namespace {
         // Define equation to apply to all points in 'A' var.
         virtual void define() {
 
-            // Set scratch vars.
+            // Set 2 scratch vars, dependent on 'A', but independent
+            // of each other.
             t1(x, y, z) EQUALS def_t3d(A, t, x, 0, 1, y, 2, 1, z, 1, 0);
             t2(x, y, z) EQUALS def_t3d(A, t, x, 1, 0, y, 0, 2, z, 0, 1);
 
-            // Set a scratch var from other scratch vars.
+            // Set another scratch var from 2 other scratch vars.
             t3(x, y, z) EQUALS t1(x-1, y+1, z) + t2(x, y, z-1);
 
-            // Update A from scratch vars.
+            // Update 'A' from 2 of the scratch vars.
             A(t+1, x, y, z) EQUALS A(t, x, y, z) +
                 def_3d(t1, x, 2, 0, y, 0, 1, z, 1, 0) +
                 def_3d(t3, x, 1, 0, y, 0, 1, z, 0, 2);
@@ -728,7 +734,45 @@ namespace {
     // Create an object of type 'TestScratchStencil3',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static TestScratchStencil3 TestScratchStencil3_instance;
+    REGISTER_SOLUTION(TestScratchStencil3);
+
+    // Scratches in stages.
+    class TestScratchStagesStencil1 : public TestBase {
+
+    protected:
+
+        // Vars.
+        MAKE_VAR(A, t, x); // time-varying var.
+        MAKE_VAR(B, t, x); // time-varying var.
+
+        // Temporary storage.
+        MAKE_SCRATCH_VAR(C, x);
+        MAKE_SCRATCH_VAR(D, x);
+        MAKE_SCRATCH_VAR(E, x);
+
+    public:
+
+        TestScratchStagesStencil1(int radius=2) :
+            TestBase("test_scratch_stages_1d", radius) { }
+
+        // Define equation to apply to all points in 'A' and 'B' vars.
+        virtual void define() {
+
+            // NB: this stencil also illustrates that equations
+            // don't need to be defined in "assignment order."
+            
+            // 'A'
+            A(t+1, x) EQUALS def_1d(C, x, 1, 0);
+            C(x) EQUALS def_1d(D, x, 0, 8); // Test a large RHS scratch halo.
+            D(x) EQUALS def_t1d(B, t+1, x, 1, 0);
+
+            // 'B'
+            B(t+1, x) EQUALS def_1d(E, x, 0, 1);
+            E(x) EQUALS def_t1d(A, t, x, 1, 0);
+        }
+    };
+    REGISTER_SOLUTION(TestScratchStagesStencil1);
+    
 
     // Test the use of boundary code in sub-domains.
     class TestBoundaryStencil1 : public TestBase {
@@ -736,7 +780,7 @@ namespace {
     protected:
 
         // Vars.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x }); // time-varying var.
+        MAKE_VAR(A, t, x); // time-varying var.
 
     public:
 
@@ -761,14 +805,14 @@ namespace {
     // Create an object of type 'TestBoundaryStencil1',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static TestBoundaryStencil1 TestBoundaryStencil1_instance;
+    REGISTER_SOLUTION(TestBoundaryStencil1);
 
     class TestBoundaryStencil2 : public TestBase {
 
     protected:
 
         // Vars.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y }); // time-varying var.
+        MAKE_VAR(A, t, x, y); // time-varying var.
 
     public:
 
@@ -792,14 +836,14 @@ namespace {
     // Create an object of type 'TestBoundaryStencil2',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static TestBoundaryStencil2 TestBoundaryStencil2_instance;
+    REGISTER_SOLUTION(TestBoundaryStencil2);
 
     class TestBoundaryStencil3 : public TestBase {
 
     protected:
 
         // Vars.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y, z }); // time-varying var.
+        MAKE_VAR(A, t, x, y, z); // time-varying var.
 
     public:
 
@@ -824,7 +868,7 @@ namespace {
     // Create an object of type 'TestBoundaryStencil3',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static TestBoundaryStencil3 TestBoundaryStencil3_instance;
+    REGISTER_SOLUTION(TestBoundaryStencil3);
 
     // Test step condition.
     class TestStepCondStencil1 : public TestBase {
@@ -832,11 +876,11 @@ namespace {
     protected:
 
         // Indices.
-        yc_index_node_ptr b = new_misc_index("b");
+        MAKE_MISC_INDEX(b);
 
         // Vars.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x }); // time-varying var.
-        yc_var_proxy B = yc_var_proxy("B", get_soln(), { b });
+        MAKE_VAR(A, t, x); // time-varying var.
+        MAKE_VAR(B, b);
 
     public:
 
@@ -864,14 +908,18 @@ namespace {
             A(t+1, x) EQUALS def_t1d(A, t, x, 1, 2) IF_STEP !tc0 && vc0;
 
             // Use this equation when t is even and B(0) <= B(1).
-            A(t+1, x) EQUALS def_t1d(A, t, x, 2, 0) IF_STEP !tc0 && !vc0;
+            // Also use a domain condition.
+            // When adding both step and domain conditions, need to use
+            // parens as shown.
+            (A(t+1, x) EQUALS def_t1d(A, t, x, 2, 0) IF_STEP !tc0 && !vc0)
+                IF_DOMAIN (x > first_domain_index(x) + 5);
         }
     };
 
     // Create an object of type 'TestStepCondStencil1',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static TestStepCondStencil1 TestStepCondStencil1_instance;
+    REGISTER_SOLUTION(TestStepCondStencil1);
 
     // Test the use of conditional updates with scratch-pad vars.
     class TestScratchBoundaryStencil1 : public TestBase {
@@ -879,10 +927,10 @@ namespace {
     protected:
 
         // Vars.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x }); // time-varying var.
+        MAKE_VAR(A, t, x); // time-varying var.
 
         // Temporary storage.
-        yc_var_proxy B = yc_var_proxy("B", get_soln(), { x }, true);
+        MAKE_SCRATCH_VAR(T1, x);
 
     public:
 
@@ -892,23 +940,26 @@ namespace {
         // Define equation to apply to all points in 'A' var.
         virtual void define() {
 
-            // Define values in scratch var 'B' using current values from 'A'.
-            B(x) EQUALS def_t1d(A, t, x, 1, 0);
-
-            // Define sub-domain.
+            // Define sub-domains.
             auto sd0 = (x >= first_domain_index(x) + 5) && (x <= last_domain_index(x) - 3);
+            auto sd1 = (x >= first_domain_index(x) + 3) && (x <= last_domain_index(x) - 2);
         
+            // Define values in scratch var 'B' using current values from 'A'.
+            auto b0 = def_t1d(A, t, x, 1, 0);
+            T1(x) EQUALS  b0 IF_DOMAIN sd0;
+            T1(x) EQUALS -b0 IF_DOMAIN !sd0;
+
             // Define next values for 'A' from scratch var values.
-            auto v = def_1d(B, x-6, 2, 3) - def_1d(B, x+7, 0, 2);
-            A(t+1, x) EQUALS v IF_DOMAIN sd0;
-            A(t+1, x) EQUALS -v IF_DOMAIN !sd0;
+            auto a1 = def_1d(T1, x-6, 2, 3) - def_1d(T1, x+7, 0, 2);
+            A(t+1, x) EQUALS  a1 IF_DOMAIN sd1;
+            A(t+1, x) EQUALS -a1 IF_DOMAIN !sd1;
         }
     };
 
     // Create an object of type 'TestScratchBoundaryStencil1',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static TestScratchBoundaryStencil1 TestScratchBoundaryStencil1_instance;
+    REGISTER_SOLUTION(TestScratchBoundaryStencil1);
 
     // A stencil that uses math functions.
     // This stencil is an exception to the integer-result calculations
@@ -918,9 +969,9 @@ namespace {
     protected:
 
         // Vars.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x });
-        yc_var_proxy B = yc_var_proxy("B", get_soln(), { t, x });
-        yc_var_proxy C = yc_var_proxy("C", get_soln(), { t, x });
+        MAKE_VAR(A, t, x);
+        MAKE_VAR(B, t, x);
+        MAKE_VAR(C, t, x);
 
     public:
 
@@ -931,17 +982,17 @@ namespace {
 
             // Define 'A(t+1)' and 'B(t+1)' based on values at 't'.
             A(t+1, x) EQUALS cos(A(t, x)) - 2 * sin(A(t, x));
-            B(t+1, x) EQUALS pow(def_t1d(B, t, x, 0, 1), 1.0/2.5);
+            B(t+1, x) EQUALS max(def_t1d(B, t, x, 0, 1), 2.5);
 
             // 'C(t+1)' depends on 'A(t+1)', creating a 2nd stage.
-            C(t+1, x) EQUALS atan(def_t1d(A, t+1, x, 1, 0) + cbrt(C(t, x+1)));
+            C(t+1, x) EQUALS atan(def_t1d(A, t+1, x, 1, 0) / cbrt(C(t, x+1)));
         }
     };
 
     // Create an object of type 'TestFuncStencil1',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static TestFuncStencil1 TestFuncStencil1_instance;
+    REGISTER_SOLUTION(TestFuncStencil1);
 
     // A stencil that no vars and no stencil equation.
     // Kernel must be built with domain_dims and step_dim options.
@@ -960,7 +1011,7 @@ namespace {
     // Create an object of type 'TestEmptyStencil0',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static TestEmptyStencil0 TestEmptyStencil0_instance;
+    REGISTER_SOLUTION(TestEmptyStencil0);
 
     // A stencil that has vars but no stencil equation.
     class TestEmptyStencil2 : public TestBase {
@@ -968,7 +1019,7 @@ namespace {
     protected:
 
         // Vars.
-        yc_var_proxy A = yc_var_proxy("A", get_soln(), { t, x, y }); // time-varying var.
+        MAKE_VAR(A, t, x, y); // time-varying var.
 
     public:
 
@@ -981,6 +1032,6 @@ namespace {
     // Create an object of type 'TestEmptyStencil2',
     // making it available in the YASK compiler utility via the
     // '-stencil' commmand-line option or the 'stencil=' build option.
-    static TestEmptyStencil2 TestEmptyStencil2_instance;
+    REGISTER_SOLUTION(TestEmptyStencil2);
 
 } // namespace.

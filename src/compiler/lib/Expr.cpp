@@ -79,8 +79,6 @@ namespace yask {
         // Make expression node.
         auto expr = make_shared<EqualsExpr>(gpp, rhs);
         expr->set_cond(cond);
-        if (settings._print_eqs)
-            soln->get_ostr() << "Equation defined: " << expr->get_descr() << endl;
 
         // Save the expression in list of equations.
         eqs.add_item(expr);
@@ -439,6 +437,8 @@ namespace yask {
         return fn(nfac.new_const_number_node(arg1), arg2);              \
     }
     FUNC_EXPR(pow)
+    FUNC_EXPR(max)
+    FUNC_EXPR(min)
 #undef FUNC_EXPR
 
     // Define a conditional.
@@ -454,7 +454,7 @@ namespace yask {
         return ep;
     }
     yc_equation_node_ptr operator IF_STEP(yc_equation_node_ptr expr,
-                                               const yc_bool_node_ptr cond) {
+                                          const yc_bool_node_ptr cond) {
         auto ep = dynamic_pointer_cast<EqualsExpr>(expr);
         assert(ep);
         auto cp = dynamic_pointer_cast<BoolExpr>(cond);

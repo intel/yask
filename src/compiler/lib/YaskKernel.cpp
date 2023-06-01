@@ -61,7 +61,7 @@ namespace yask {
     }
 
     // Print an expression as a one-line C++ comment.
-    void YASKCppPrinter::add_comment(ostream& os, EqBundle& eq) {
+    void YASKCppPrinter::add_comment(ostream& os, Part& eq) {
 
         // Use a simple human-readable visitor to create a comment.
         PrintHelper ph(_settings, _dims, NULL, "", " // ", ".\n");
@@ -91,8 +91,8 @@ namespace yask {
         // First, create a class to hold the data (vars).
         print_data(os);
 
-        // A struct for each equation bundle.
-        print_eq_bundles(os);
+        // A struct for each equation part.
+        print_parts(os);
 
         // Finish the solution.
         print_context(os);
@@ -157,17 +157,17 @@ namespace yask {
         int gdims = 0;
         for (auto gp : _vars) {
             int ndims = gp->get_num_dims();
-            gdims = max(gdims, ndims);
+            gdims = std::max(gdims, ndims);
         }
         os << "\n// Max number of var dimensions:\n"
             "#define NUM_VAR_DIMS " << gdims << endl;
         os << "\n// Max of stencil and var dims:\n"
-            "#define NUM_STENCIL_AND_VAR_DIMS " << max<int>(gdims, nsdims) << endl;
+            "#define NUM_STENCIL_AND_VAR_DIMS " << std::max<int>(gdims, nsdims) << endl;
 
         os << "\n// Number of stencil equations:\n"
             "#define NUM_STENCIL_EQS " << _stencil.get_num_equations() << endl;
 
-        // Vec/cluster lengths.
+        // Vec lengths.
         auto nvec = _dims._fold_gt1.get_num_dims();
         os << "\n// One vector fold: " << _dims._fold.make_dim_val_str(" * ") << endl;
         for (auto& dim : _dims._fold) {
@@ -176,20 +176,15 @@ namespace yask {
             os << "#define VLEN_" << uc_dim << " " << dim.get_val() << endl;
         }
         os << "namespace yask {\n"
-            "\n // Number of points or multipliers in domain dims.\n"
+            "\n // Number of points in domain dims.\n"
             " constexpr idx_t fold_pts[]{ " << _dims._fold.make_val_str() << " };\n"
-            " constexpr idx_t cluster_pts[]{ " << _dims._cluster_pts.make_val_str() << " };\n"
-            " constexpr idx_t cluster_mults[]{ " << _dims._cluster_mults.make_val_str() << " };\n"
-            "\n // Number of points or multipliers in stencil dims.\n"
+            "\n // Number of points in stencil dims.\n"
             " constexpr idx_t stencil_fold_pts[]{ 1, " << _dims._fold.make_val_str() << " };\n"
-            " constexpr idx_t stencil_cluster_pts[]{ 1, " << _dims._cluster_pts.make_val_str() << " };\n"
-            " constexpr idx_t stencil_cluster_mults[]{ 1, " << _dims._cluster_mults.make_val_str() << " };\n"
             "}\n";
         os << "#define VLEN (" << _dims._fold.product() << ")\n"
-            "#define CPTS (" << _dims._cluster_pts.product() << ")\n";
-        os << "#define FIRST_FOLD_INDEX_IS_UNIT_STRIDE (" <<
-            (_dims._fold.is_first_inner() ? 1 : 0) << ")" << endl;
-        os << "#define NUM_VEC_FOLD_DIMS (" << nvec << ")" << endl;
+            "#define FIRST_FOLD_INDEX_IS_UNIT_STRIDE (" <<
+            (_dims._fold.is_first_inner() ? 1 : 0) << ")" << endl <<
+            "#define NUM_VEC_FOLD_DIMS (" << nvec << ")" << endl;
 
         // Layout for folding.
         // This contains only the vectorized (len > 1) dims.
@@ -222,15 +217,6 @@ namespace yask {
             (_settings._allow_unaligned_loads ? 1 : 0) << ")" << endl;
 
         os << endl;
-        os << "// Cluster multipliers of vector folds: " <<
-            _dims._cluster_mults.make_dim_val_str(" * ") << endl;
-        for (auto& dim : _dims._cluster_mults) {
-            auto& dname = dim._get_name();
-            string uc_dim = all_caps(dname);
-            os << "#define CMULT_" << uc_dim << " (" <<
-                dim.get_val() << ")\n";
-        }
-        os << "#define CMULT (" << _dims._cluster_mults.product() << ")\n";
 
         os << "\n// Prefetch distances\n";
         for (int level : { 1, 2 }) {
@@ -271,6 +257,8 @@ namespace yask {
         // Var types.
         for (auto gp : _vars) {
             VAR_DECLS(gp);
+            if (!gp->is_needed())
+                continue;
 
             os << "\n // The ";
             if (ndims)
@@ -280,7 +268,7 @@ namespace yask {
             os << " '" << var << "', which is ";
             if (gp->is_scratch())
                 os << " a scratch variable.\n";
-            else if (_eq_bundles.get_output_vars().count(gp))
+            else if (_parts.get_output_vars().count(gp))
                 os << "updated by one or more equations.\n";
             else
                 os << "not updated by any equation (read-only).\n";
@@ -406,6 +394,8 @@ namespace yask {
             bool found = false;
             for (auto gp : _vars) {
                 VAR_DECLS(gp);
+                if (!gp->is_needed())
+                    continue;
                 if (gp->is_scratch()) {
                     if (!found)
                         os << "\n // Pointer(s) to scratch-var core data.\n";
@@ -424,6 +414,8 @@ namespace yask {
             os << "\n // Pointer(s) to var core data.\n";
             for (auto gp : _vars) {
                 VAR_DECLS(gp);
+                if (!gp->is_needed())
+                    continue;
                 if (!gp->is_scratch())
                     os << " synced_ptr<" << core_t << "> " << core_ptr << ";\n";
             }
@@ -433,8 +425,8 @@ namespace yask {
         }
     }
         
-    // Print YASK equation bundles.
-    void YASKCppPrinter::print_eq_bundles(ostream& os) {
+    // Print YASK stencil parts.
+    void YASKCppPrinter::print_parts(ostream& os) {
 
         for (auto& bp : _eq_stages.get_all()) {
             string stage_name = bp->_get_name();
@@ -443,28 +435,29 @@ namespace yask {
                 os << "scratch-";
             os << "stage '" << stage_name << "' //////\n";
 
-            // Bundles in this stage;
-            for (auto& eq : bp->get_bundles()) {
+            // parts in this stage;
+            for (auto& eq : bp->get_parts()) {
 
                 // Find equation index.
                 // TODO: remove need for this.
                 int ei = 0;
-                for (; ei < _eq_bundles.get_num(); ei++) {
-                    if (eq == _eq_bundles.get_all().at(ei))
+                for (; ei < _parts.get_num(); ei++) {
+                    if (eq == _parts.get_all().at(ei))
                         break;
                 }
-                assert(ei < _eq_bundles.get_num());
+                assert(ei < _parts.get_num());
                 string eg_name = eq->_get_name();
                 string eg_desc = eq->get_descr();
                 string egs_name = _stencil_prefix + eg_name;
 
-                // Stats for this eq_bundle.
+                // Stats for this part.
                 CounterVisitor stats;
                 eq->visit_eqs(&stats);
 
                 os << endl << " ////// Stencil " << eg_desc << " //////\n" <<
                 "\n struct " << egs_name << " {\n"
-                    "  const char* _name = \"" << eg_name << "\";\n"
+                    "  const char* _name = \"" << eg_name << "\";\n\n"
+                    "  // Per-point work stats for this part.\n"
                     "  const int _scalar_fp_ops = " << stats.get_num_ops() << ";\n"
                     "  const int _scalar_points_read = " << stats.get_num_reads() << ";\n"
                     "  const int _scalar_points_written = " << stats.get_num_writes() << ";\n"
@@ -478,7 +471,7 @@ namespace yask {
                 {
                     os << "\n // Determine whether " << egs_name << " is valid at the domain indices " <<
                         _dims._stencil_dims.make_dim_str() << ".\n"
-                        " // Return true if indices are within the valid sub-domain or false otherwise.\n"
+                        " // Return 'true' if indices are within the valid sub-domain or false otherwise.\n"
                         " ALWAYS_INLINE static bool is_in_valid_domain(const " <<
                         _core_t << "* core_data, const Indices& idxs) {"
                         " host_assert(core_data);\n";
@@ -507,7 +500,7 @@ namespace yask {
                 {
                     os << endl << " // Determine whether " << egs_name <<
                         " is valid at the step input_step_index.\n" <<
-                        " // Return true if valid or false otherwise.\n"
+                        " // Return 'true' if valid or 'false' otherwise.\n"
                         " ALWAYS_INLINE static bool is_in_valid_step(const " <<
                         _core_t << "* core_data, idx_t input_step_index) {"
                         " host_assert(core_data);\n";
@@ -551,7 +544,7 @@ namespace yask {
                             " occurs when calling one of the calc_*() methods with"
                             " 'input_step_index' and return 'true'.\n";
                     else
-                        os << "// Return 'false' because this bundle does not update"
+                        os << " // Return 'false' because this part does not update"
                             " vars with the step dimension.\n";
                     os << " ALWAYS_INLINE static bool get_output_step_index(idx_t input_step_index,"
                         " idx_t& output_step_index) {\n";
@@ -595,62 +588,41 @@ namespace yask {
                     delete sp;
                 }
 
-                // Vector/Cluster code.
-                for (bool do_cluster : { false, true }) {
-
-                    // Cluster eq_bundle at same 'ei' index.
-                    // This should be the same eq-bundle because it was copied from the
-                    // scalar one.
-                    auto& vceq = do_cluster ?
-                        _cluster_eq_bundles.get_all().at(ei) : eq;
-                    assert(eg_desc == vceq->get_descr());
-
-                    // Create vector info for this eq_bundle.  The visitor is
-                    // accepted at all nodes in the cluster AST; for each var
-                    // access node in the AST, the vectors needed are determined
+                // Vector code.
+                {
+                    // Create vector info for this part.  The visitor is
+                    // accepted at all nodes in the AST; for each var access
+                    // node in the AST, the vectors needed are determined
                     // and saved in the visitor.
                     VecInfoVisitor vv(_dims);
-                    vceq->visit_eqs(&vv);
+                    eq->visit_eqs(&vv);
 
                     // Collect stats.
                     CounterVisitor cv;
-                    vceq->visit_eqs(&cv);
-                    int num_results = do_cluster ?
-                        _dims._cluster_pts.product() :
-                        _dims._fold.product();
-
-                    // Vector/cluster vars.
-                    string idim = _settings._inner_loop_dim;
-                    string vcstr = do_cluster ? "cluster" : "vector";
-                    string funcstr = "calc_" + vcstr + "s";
-                    string nvecs = do_cluster ? "CMULT_" + all_caps(idim) : "1";
-                    string nelems = (do_cluster ? nvecs + " * ": "") + "VLEN_" + all_caps(idim);
-                    string write_mask = do_cluster ? "" : "write_mask";
+                    eq->visit_eqs(&cv);
 
                     // Loop-calculation code.
                     // Function header.
-                    os << endl << " // Calculate a nano-block of " << vcstr << "s bounded by 'norm_nb_idxs'.\n";
-                    if (do_cluster)
-                        os << " // Each cluster calculates '" << _dims._cluster_pts.make_dim_val_str(" * ") <<
-                            "' point(s) containing " << _dims._cluster_mults.product() << " '" <<
-                            _dims._fold.make_dim_val_str(" * ") << "' vector(s).\n";
-                    else
-                        os << " // Each vector calculates '" << _dims._fold.make_dim_val_str(" * ") <<
-                            "' point(s).\n";
-                    os << " // Indices must be rank-relative (not global).\n"
+                    os << endl << " // Calculate a nano-block of vectors bounded by 'norm_nb_idxs'.\n"
+                        " // Each vector calculates '" << _dims._fold.make_dim_val_str(" * ") <<
+                        "' point(s).\n"
+                        " // Indices must be rank-relative (not global).\n"
                         " // Indices must be normalized, i.e., already divided by VLEN_*.\n"
                         " // SIMD calculations use " << vv.get_num_points() <<
-                        " vector block(s) created from " << vv.get_num_aligned_vecs() <<
+                        " vector block(s) read from " << vv.get_num_aligned_vecs() <<
                         " aligned vector-block(s).\n"
-                        " // There are approximately " << (stats.get_num_ops() * num_results) <<
+                        " // There are approximately " << (stats.get_num_ops() * _dims._fold.product()) <<
                         " FP operation(s) per inner-loop iteration.\n" <<
-                        " static void " << funcstr << "(" <<
+                        " static void calc_vectors(" <<
                         _core_t << "* core_data, int core_idx, int block_thread_idx,"
-                        " int thread_limit, ScanIndices& norm_nb_idxs";
-                    if (!do_cluster)
-                        os << ", bit_mask_t " << write_mask;
-                    os << ") {\n"
-                        " FORCE_INLINE_RECURSIVE {\n"
+                        " int thread_limit, ScanIndices& norm_nb_idxs, bit_mask_t write_mask"
+                        ") {\n";
+
+                    // Early out.
+                    os << " if (write_mask == 0) return;\n";
+
+                    // Begin main code block.
+                    os << " FORCE_INLINE_RECURSIVE {\n"
                         " assert(core_data);\n"
                         " assert(core_data->_thread_core_list.get());\n"
                         " auto& thread_core_data = core_data->_thread_core_list[core_idx];\n"
@@ -659,29 +631,23 @@ namespace yask {
  
                     // C++ vector print assistant.
                     auto* vp = new_cpp_vec_print_helper(vv, cv);
-                    vp->set_write_mask(write_mask);
-                    vp->set_using_cluster(do_cluster);
+                    if (_dims._fold.product() > 1)
+                        vp->set_write_mask("write_mask"); // Only need mask for actual vectors.
                     vp->set_stage_name(stage_name);
                     vp->get_point_stats();
 
                     // Print loop-invariant meta values.
                     // Store them in the CppVecPrintHelper for later use in the loop body.
-                    os << "\n ////// Loop-invariant meta values.\n";
+                    os << "\n ////// Loop-invariant values.\n";
                     CppPreLoopPrintMetaVisitor plpmv(os, *vp);
-                    vceq->visit_eqs(&plpmv);
+                    eq->visit_eqs(&plpmv);
                     vp->print_rank_data(os);
 
                     // Print loop-invariant data values.
                     // Store them in the CppVecPrintHelper for later use in the loop body.
                     CppPreLoopPrintDataVisitor plpdv(os, *vp);
-                    vceq->visit_eqs(&plpdv);
+                    eq->visit_eqs(&plpdv);
                 
-                    // Inner-loop strides.
-                    // Will be 1 for vectors and cluster-mults for clusters.
-                    string inner_strides = do_cluster ?
-                        "stencil_cluster_mults[dn]" :
-                        "idx_t(1)";
-
                     // Computation loops.
                     // Include generated loops.
                     os <<
@@ -695,7 +661,7 @@ namespace yask {
                         " // Use macros to get values directly from nano loops.\n"
                         "#define PICO_BLOCK_BEGIN(dn) NANO_BLOCK_BODY_START(dn)\n"
                         "#define PICO_BLOCK_END(dn) NANO_BLOCK_BODY_STOP(dn)\n"
-                        "#define PICO_BLOCK_STRIDE(dn) " << inner_strides << "\n";
+                        "#define PICO_BLOCK_STRIDE(dn) idx_t(1)\n";
                     os <<
                         "\n // Start Pico outer-loop(s).\n"
                         "#define PICO_BLOCK_USE_LOOP_PART_0\n"
@@ -726,9 +692,9 @@ namespace yask {
                         vp->print_early_loads(os);
                 
                     // Generate loop body using vars stored in print helper.
-                    // Visit all expressions to cover the whole vector/cluster.
+                    // Visit all expressions to cover the whole vector.
                     PrintVisitorBottomUp pcv(os, *vp);
-                    vceq->visit_eqs(&pcv);
+                    eq->visit_eqs(&pcv);
 
                     // Insert prefetches using vars stored in print helper for next iteration.
                     vp->print_prefetches(os, true);
@@ -747,16 +713,16 @@ namespace yask {
                         "#define NANO_BLOCK_USE_LOOP_PART_1\n"
                         "#include \"yask_nano_block_loops.hpp\"\n";
 
-                    // End of recursive block & function.
-                    os << "} } // " << funcstr << ".\n";
+                    // End of recursive block & calc function.
+                    os << "} } // calc_vectors\n";
                     delete vp;
-                } // cluster/vector
+                } // calc_vector
 
                 os << "}; // " << egs_name << ".\n" // end of struct.
                     " static_assert(std::is_trivially_copyable<" << egs_name << ">::value,"
                     "\"Needed for OpenMP offload\");\n";
 
-            } // stencil eq_bundles.
+            } // stencil parts.
         } // stages.
     }
 
@@ -784,8 +750,12 @@ namespace yask {
         os << "\n ///// Var(s)." << endl;
         for (auto gp : _vars) {
             VAR_DECLS(gp);
+            if (!gp->is_needed())
+                continue;
 
-            string header = "\n // Var '" + var + "'.\n";
+            string header = "\n // " +
+                (gp->is_scratch() ? string("Scratch var") : string("Var")) +
+                " '" + var + "'.\n";
             os << header;
             ctor_code += header;
 
@@ -836,12 +806,7 @@ namespace yask {
                         init_code += " " + var_ptr + "->set" + bstr + "size(\"" + dname +
                             "\", " + hvar + ");\n";
                     }
-
-                    // Extra padding for read-ahead.
-                    if (dname == _settings._inner_loop_dim &&
-                        gp->get_read_ahead_pad() > 0)
-                        init_code += " " + var_ptr + "->update_right_extra_pad_size(\"" + dname +
-                            "\", " + to_string(gp->get_read_ahead_pad()) + "); // For read-ahead.\n";
+                    
                 }
 
                 // non-domain dimension.
@@ -870,7 +835,10 @@ namespace yask {
                         init_code += " " + base_ptr + "->_set_dynamic_step_alloc(" +
                             (gp->is_dynamic_step_alloc() ? "true" : "false") +
                             ");\n";
-                    } else {
+                    }
+
+                    // Misc.
+                    else {
                         auto* minp = gp->get_min_indices().lookup(dname);
                         auto* maxp = gp->get_max_indices().lookup(dname);
                         if (minp && maxp) {
@@ -904,7 +872,9 @@ namespace yask {
             // Allow dynamic misc alloc setting if not interleaved.
             init_code += " " + base_ptr + "->_set_dynamic_misc_alloc(" +
                 (_settings._inner_misc ? "false" : "true") +
-                ");\n";
+                ");\n" +
+                " " + base_ptr + "->set_misc_mult(" +
+                to_string(gp->get_misc_space_size()) + ");\n";
 
             // If not scratch, init vars in ctor.
             if (!gp->is_scratch()) {
@@ -912,7 +882,7 @@ namespace yask {
                 // Var init.
                 ctor_code += init_code;
                 ctor_code += " add_var(" + var_ptr + ", true, ";
-                if (_eq_bundles.get_output_vars().count(gp))
+                if (_parts.get_output_vars().count(gp))
                     ctor_code += "true /* is an output var */";
                 else
                     ctor_code += "false /* is not an output var */";
@@ -934,6 +904,7 @@ namespace yask {
                     " YkVarPtr " + var_ptr + ";\n" +
                     init_code +
                     " " + base_ptr + "->set_scratch(true);\n" +
+                    " " + base_ptr + "->set_scratch_mem_slot(" + to_string(gp-> get_scratch_mem_slot()) + ");\n" +
                     " " + var_list + "[i] = " + var_ptr + ";\n" +
 
                     // Init core ptr for this var.
@@ -965,11 +936,11 @@ namespace yask {
             " std::vector<" << _thread_core_t << ", yask_allocator<" <<
             _thread_core_t << ">> _thread_cores;\n";
 
-        // Stencil eq_bundle objects.
-        os << endl << " // Stencil equation-bundles." << endl;
-        for (auto& eg : _eq_bundles.get_all()) {
+        // Stencil part objects.
+        os << endl << " // Stencil parts." << endl;
+        for (auto& eg : _parts.get_all()) {
             string eg_name = eg->_get_name();
-            os << " StencilBundleTempl<" << _stencil_prefix << eg_name << ", " <<
+            os << " StencilPartTmpl<" << _stencil_prefix << eg_name << ", " <<
                 _core_t << "> " << eg_name << ";" << endl;
         }
 
@@ -982,7 +953,7 @@ namespace yask {
                 "KernelSettingsPtr ksettings, "
                 "KernelSettingsPtr user_settings) : " <<
                 " StencilContext(kenv, ksettings, user_settings)";
-            for (auto& eg : _eq_bundles.get_all()) {
+            for (auto& eg : _parts.get_all()) {
                 string eg_name = eg->_get_name();
                 os << ",\n  " << eg_name << "(this)";
             }
@@ -996,75 +967,96 @@ namespace yask {
                 "\n // Update vars with context info.\n"
                 " update_var_info(false);\n";
 
-            // Push eq-bundle pointers to list.
-            for (auto& eg : _eq_bundles.get_all()) {
-                string eg_name = eg->_get_name();
+            // Deps between parts.
+            os << "\n // Configure parts:\n";
+            for (auto& p : _parts.get_all()) {
+                string p_name = p->_get_name();
+                os << "\n // " << p->get_descr() << ".\n";
 
-                os << "\n // Configure '" << eg_name << "'.\n";
-
-                // Only want non-scratch bundles in st_bundles.
-                // Each scratch bundle will be added to its
-                // parent bundle.
-                if (!eg->is_scratch())
-                    os << "  st_bundles.push_back(&" << eg_name << ");\n";
-
-                // Add scratch-bundle deps in proper order.
-                auto& sdeps = _eq_bundles.get_scratch_deps(eg);
-                for (auto& eg2 : _eq_bundles.get_all()) {
-                    if (sdeps.count(eg2)) {
-                        string eg2_name = eg2->_get_name();
-                        os << "  " << eg_name <<
-                            ".add_scratch_child(&" << eg2_name << ");\n";
-                    }
-                }
-
-                // Add deps between bundles.
-                for (auto& dep : _eq_bundles.get_deps(eg)) {
+                // Add deps between parts.
+                for (auto& dep : _parts.get_all_deps_on(p)) {
                     string dep_name = dep->_get_name();
-                    os << "  " << eg_name <<
+                    os << "  " << p_name <<
                         ".add_dep(&" << dep_name << ");\n";
                 }
 
-                // Populate the var lists in the StencilBundleBase objs.
+                // Populate the var lists in the StencilPartTmpl objs.
                 // I/O vars.
-                os << "\n // The following var(s) are read by '" << eg_name << "'.\n";
-                for (auto gp : eg->get_input_vars()) {
+                os << "\n // The following var(s) are read by '" << p_name << "'.\n";
+                for (auto gp : p->get_input_vars()) {
                     VAR_DECLS(gp);
+                    if (!gp->is_needed())
+                        continue;
                     if (gp->is_scratch())
-                        os << "  " << eg_name << ".input_scratch_vecs.push_back(&" << var_list << ");\n";
+                        os << "  " << p_name << ".input_scratch_vecs.push_back(&" << var_list << ");\n";
                     else
-                        os << "  " << eg_name << ".input_var_ptrs.push_back(" << var_ptr << ");\n";
+                        os << "  " << p_name << ".input_var_ptrs.push_back(" << var_ptr << ");\n";
                 }
-                os << "\n // The following var(s) are written by '" << eg_name << "'";
-                if (eg->step_expr)
-                    os << " at " << eg->step_expr->make_quoted_str();
+                os << "\n // The following var(s) are written by '" << p_name << "'";
+                if (p->step_expr)
+                    os << " at " << p->step_expr->make_quoted_str();
                 os << ".\n";
-                for (auto gp : eg->get_output_vars()) {
+                for (auto gp : p->get_output_vars()) {
                     VAR_DECLS(gp);
+                    if (!gp->is_needed())
+                        continue;
                     if (gp->is_scratch())
-                        os << "  " << eg_name << ".output_scratch_vecs.push_back(&" << var_list << ");\n";
+                        os << "  " << p_name << ".output_scratch_vecs.push_back(&" << var_list << ");\n";
                     else
-                        os << "  " << eg_name << ".output_var_ptrs.push_back(" << var_ptr << ");\n";
+                        os << "  " << p_name << ".output_var_ptrs.push_back(" << var_ptr << ");\n";
                 }
-            } // bundles.
+            } // parts.
 
             // Stages.
-            os << "\n // Create stencil stage(s).\n";
-            for (auto& bp : _eq_stages.get_all()) {
-                if (bp->is_scratch())
-                    continue;
-                string bp_name = bp->_get_name();
-                os << "  auto " << bp_name << " = std::make_shared<Stage>(this, \"" <<
-                    bp_name << "\");\n";
-                for (auto& eg : bp->get_bundles()) {
-                    if (eg->is_scratch())
-                        continue;
-                    string eg_name = eg->_get_name();
-                    os << "  " << bp_name << "->push_back(&" << eg_name << ");\n";
-                }
-                os << "  st_stages.push_back(" << bp_name << ");\n";
-            }
+            os << "\n // Stage(s) and their parts:\n";
+            for (auto& st : _eq_stages.get_all()) {
+                auto st_name = st->_get_name();
 
+                // parts in this scratch stage.
+                auto& sps = st->get_parts();
+                
+                // Passing only non-scratch stages to kernel (for now).
+                if (!st->is_scratch()) {
+                    os << "\n // Non-scratch " << st->get_descr() << ".\n";
+                    os << "  auto " << st_name << " = std::make_shared<Stage>(this, \"" <<
+                        st_name << "\");\n";
+                    os << "  st_stages.push_back(" << st_name << ");\n";
+
+                    // Non-scratch parts in this stage.
+                    for (auto& p : sps) {
+                        if (p->is_scratch())
+                            continue;
+                        auto p_name = p->_get_name();
+                        os << "  " << st_name << "->push_back(&" << p_name << ");\n";
+                        os << "  st_parts.push_back(&" << p_name << ");\n";
+                    }
+                }
+
+                // Add info on scratch stages.
+                else {
+                    os << "\n // " << st->get_descr() << ".\n";
+                    
+                    // Scan all non-scratch parts.
+                    for (auto& p : _parts.get_all()) {
+                        if (p->is_scratch())
+                            continue;
+
+                        // What scratch parts are needed?
+                        auto& spdeps = _parts.get_all_scratch_deps_on(p);
+                        for (auto& p2 : _parts.get_all()) {
+                            
+                            // Print parts only in this scratch stage.
+                            if (spdeps.count(p2) && sps.count(p2)) {
+                                auto p_name = p->_get_name();
+                                auto p2_name = p2->_get_name();
+                                os << "  " << p_name <<
+                                    ".add_scratch_child(&" << p2_name << ");\n";
+                            }
+                        }
+                    }
+                }
+            }
+            
             os << "\n // Alloc core on offload device.\n"
                 "  auto* cxt_cd = &_core_data;\n"
                 "  offload_map_alloc(cxt_cd, 1);\n";
@@ -1089,7 +1081,7 @@ namespace yask {
 
         // New-var method.
         os << "\n // Make a new var iff its dims match any in the stencil.\n"
-            " // Returns pointer to the new var or nullptr if no match.\n"
+            " // Return pointer to the new var or nullptr if no match.\n"
             " VarBasePtr new_stencil_var(const std::string& name,"
             " const VarDimNames& dims) override {\n"
             " VarBasePtr gp;\n" <<
@@ -1179,18 +1171,8 @@ namespace yask {
         }
         string ffi = (_dims._fold.is_first_inner()) ? "true" : "false";
         os << "    p->_fold_pts.set_first_inner(" << ffi << ");\n"
-            "    p->_vec_fold_pts.set_first_inner(" << ffi << ");\n";
-        for (auto& dim : _dims._cluster_pts) {
-            auto& dname = dim._get_name();
-            auto& dval = dim.get_val();
-            os << "    p->_cluster_pts.add_dim_back(\"" << dname << "\", " << dval << ");\n";
-        }
-        for (auto& dim : _dims._cluster_mults) {
-            auto& dname = dim._get_name();
-            auto& dval = dim.get_val();
-            os << "    p->_cluster_mults.add_dim_back(\"" << dname << "\", " << dval << ");\n";
-        }
-        os << "    p->_step_dir = " << _dims._step_dir << ";\n";
+            "    p->_vec_fold_pts.set_first_inner(" << ffi << ");\n"
+            "    p->_step_dir = " << _dims._step_dir << ";\n";
 
         os << "    return p;\n"
             "  }\n";

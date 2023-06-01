@@ -23,7 +23,7 @@ IN THE SOFTWARE.
 
 *****************************************************************************/
 
-///////// Classes for equations, equation bundles, and stages. ////////////
+///////// Classes for equations, parts, and stages. ////////////
 
 #pragma once
 
@@ -33,31 +33,37 @@ IN THE SOFTWARE.
 
 using namespace std;
 
+//#define DEBUG_DEPS
+
 namespace yask {
 
+    using Eq = equals_expr_ptr;
+    using EqList = vector_set<Eq>;
+
+    template<typename T> using Tp = shared_ptr<T>;
+    template<typename T> using TpSet = unordered_set<Tp<T>>;
+    template<typename T> using TpList = vector_set<Tp<T>>;
+    template<typename T> using TpSetMap = unordered_map<Tp<T>, TpSet<T>>;
+    
     // Dependencies between objects of type T.
     template <typename T>
     class Deps {
-
+        
     public:
-        typedef shared_ptr<T> Tp;
-        typedef unordered_set<Tp> TpSet;
-        typedef vector_set<Tp> TpList;
-
         // dep_map[A].count(B) > 0 => A depends on B.
-        typedef unordered_map<Tp, TpSet> DepMap;
+        typedef TpSetMap<T> DepMap;
 
-    protected:
+    private:
+        TpSet<T> _all;          // set of all objs.
         DepMap _imm_deps;       // immediate deps, i.e., transitive reduction.
         DepMap _full_deps;      // transitive closure of _imm_deps.
-        TpSet _all;             // set of all objs.
         bool _done = false;     // transitive closure done?
-        TpSet _empty;
+        TpSet<T> _empty;        // for returning a ref to an empty set.
 
-        // Recursive helper for visit_deps().
-        virtual void _visit_deps(Tp a,
-                                 std::function<void (Tp b, TpList& path)> visitor,
-                                 TpList* seen) const {
+        // Recursive helper for visit_dep_paths().
+        virtual void _visit_dep_paths(Tp<T> a,
+                                 std::function<void (Tp<T> b, TpList<T>& path)> visitor,
+                                 TpList<T>* seen) const {
 
             // Already visited, i.e., a loop?
             bool was_seen = (seen && seen->count(a));
@@ -66,7 +72,7 @@ namespace yask {
 
             // Add 'a' to copy of path.
             // Important to make a separate copy for recursive calls.
-            TpList seen1;
+            TpList<T> seen1;
             if (seen)
                 seen1 = *seen; // copy nodes already seen.
             seen1.insert(a);   // add this one.
@@ -78,13 +84,54 @@ namespace yask {
             if (_imm_deps.count(a)) {
                 auto& adeps = _imm_deps.at(a);
 
-                // loop thru deps of 'a', i.e., each 'b' deps on 'a'.
+                // loop thru deps of 'a', i.e., 'a' deps on each 'b'.
                 for (auto b : adeps) {
 
                     // Recurse to deps of 'b'.
-                    _visit_deps(b, visitor, &seen1);
+                    _visit_dep_paths(b, visitor, &seen1);
                 }
             }
+        }
+
+        // Recursive helper for dfs_visit_deps().
+        virtual void _dfs_visit_deps(Tp<T> a, bool preorder,
+                                     std::function<void (Tp<T> b)> visitor,
+                                     TpSet<T>& visited, TpSet<T>& finished) const {
+
+            // Done?
+            if (finished.count(a))
+                return;
+
+            // Cycle?
+            if (visited.count(a)) {
+                THROW_YASK_EXCEPTION("circular dependency on '" +
+                                     a->get_descr() + "'");
+            }
+            visited.insert(a);
+
+            // Callback.
+            if (preorder)
+                visitor(a);
+            
+            // any dependencies?
+            if (_imm_deps.count(a)) {
+                auto& adeps = _imm_deps.at(a);
+
+                // loop thru deps of 'a', i.e., 'a' deps on each 'b'.
+                for (auto b : adeps) {
+
+                    // Recurse.
+                    _dfs_visit_deps(b, preorder, visitor, visited, finished);
+
+                }
+            }
+
+            // Callback.
+            if (!preorder)
+                visitor(a);
+            
+            // Done.
+            finished.insert(a);
         }
 
     public:
@@ -92,8 +139,16 @@ namespace yask {
         Deps() {}
         virtual ~Deps() {}
 
+        // Get deps.
+        virtual const DepMap& get_imm_deps() const {
+            return _imm_deps;
+        }
+        virtual const DepMap& get_all_deps() const {
+            return _full_deps;
+        }
+
         // Declare that eq a depends directly on b.
-        virtual void set_imm_dep_on(Tp a, Tp b) {
+        virtual void set_imm_dep_on(Tp<T> a, Tp<T> b) {
             _imm_deps[a].insert(b);
             _all.insert(a);
             _all.insert(b);
@@ -109,102 +164,164 @@ namespace yask {
         }
 
         // Check whether eq a directly depends on b.
-        virtual bool is_imm_dep_on(Tp a, Tp b) const {
+        virtual bool is_imm_dep_on(Tp<T> a, Tp<T> b) const {
             return _imm_deps.count(a) && _imm_deps.at(a).count(b) > 0;
         }
 
         // Checks for immediate dependencies in either direction.
-        virtual bool is_imm_dep(Tp a, Tp b) const {
+        virtual bool is_imm_dep(Tp<T> a, Tp<T> b) const {
             return is_imm_dep_on(a, b) || is_imm_dep_on(b, a);
         }
 
         // Check whether eq 'a' depends on 'b'.
-        virtual bool is_dep_on(Tp a, Tp b) const {
+        virtual bool is_dep_on(Tp<T> a, Tp<T> b) const {
             assert(_done);
             return _full_deps.count(a) && _full_deps.at(a).count(b) > 0;
         }
 
         // Checks for dependencies in either direction.
-        virtual bool is_dep(Tp a, Tp b) const {
+        virtual bool is_dep(Tp<T> a, Tp<T> b) const {
             return is_dep_on(a, b) || is_dep_on(b, a);
         }
 
         // Get all the objects that 'a' depends on.
-        virtual const TpSet& get_imm_deps_on(Tp a) const {
+        virtual const TpSet<T>& get_imm_deps_on(Tp<T> a) const {
             if (_imm_deps.count(a) == 0)
                 return _empty;
             return _imm_deps.at(a);
         }
-        virtual const TpSet& get_deps_on(Tp a) const {
+        virtual const TpSet<T>& get_all_deps_on(Tp<T> a) const {
             assert(_done);
             if (_full_deps.count(a) == 0)
                 return _empty;
             return _full_deps.at(a);
         }
 
-        // Visit 'a' and all its dependencies.
-        // At each dep node 'b' in graph, 'visitor(b, path)' is called,
-        // where 'path' contains all nodes from 'a' thru 'b' in dep order.
-        virtual void visit_deps(Tp a,
-                                std::function<void (Tp b,
-                                                    TpList& path)> visitor) const {
-            _visit_deps(a, visitor, NULL);
+        // Visit 'a' and all its dependencies along every possible path.  At
+        // each dep node 'b' in graph, 'visitor(b, path)' is called, where
+        // 'path' contains all nodes from 'a' thru 'b' in dep order.
+        // Warning: use only for debug--dependency tree may cause a
+        // combinatorial explosion in number of paths: millions have been
+        // seen in example stencils.
+        virtual void visit_dep_paths(Tp<T> a,
+                                     std::function<void (Tp<T> b,
+                                                         TpList<T>& path)> visitor) const {
+            _visit_dep_paths(a, visitor, NULL);
         }
 
-        // Print deps. 'T' must implement get_descr().
-        virtual void print_deps(ostream& os) const {
+        // Visit 'a' and dependencies 'b' of 'a' using a depth-first-search
+        // with pre-ordering, i.e., visit nodes before their children or
+        // post-ordering, i.e., visit children before their parents.
+        void dfs_visit_deps(Tp<T> a, bool preorder,
+                            std::function<void (Tp<T> b)> visitor) const {
+            TpSet<T> visited, finished;
+            _dfs_visit_deps(a, preorder, visitor, visited, finished);
+        }
+
+        // Print deps for debugging. 'T' must implement get_descr().
+        void print_deps(ostream& os, bool preorder=true) const {
             os << "Dependencies within " << _all.size() << " objects:\n";
             for (auto& a : _all) {
-                os << " For " << a->get_descr() << ":\n";
-                visit_deps(a, [&](Tp b, TpList& path) {
-                                  if (a == b)
-                                      os << "  depends on self";
-                                  else
-                                      os << "  depends on " << b->get_descr();
-                                  os << " w/path of length " << path.size() << endl;
-                              });
+                os << " from " << a->get_descr() << ":\n";
+                dfs_visit_deps
+                    (a, preorder,
+                     [&](Tp<T> b) {
+                         if (b != a)
+                             os << "  " << b->get_descr() << endl;
+                     });
             }
         }
 
-        // Does recursive analysis to find transitive closure.
+        // Print dep paths for debugging. 'T' must implement get_descr().
+        virtual void print_dep_paths(ostream& os) const {
+            os << "Dependencies within " << _all.size() << " objects:\n";
+            for (auto& a : _all) {
+                os << " from " << a->get_descr() << ":\n";
+                visit_dep_paths
+                    (a, [&](Tp<T> b, TpList<T>& path) {
+                            os << "  path (len " << path.size() << "):";
+                            for (auto c : path)
+                                os << " " << c->get_descr();
+                            os << endl;
+                        });
+            }
+        }
+
+        // Do recursive analysis to find transitive closure.
+        // https://en.wikipedia.org/wiki/Transitive_closure#In_graph_theory
         virtual void find_all_deps() {
             if (_done)
                 return;
-            for (auto a : _all)
-                if (_full_deps.count(a) == 0)
-                    visit_deps(a, [&](Tp b, TpList& path) {
 
-                                      // Walk path from ee to b.
-                                      // Every 'eq' in 'path' before 'b' depends on 'b'.
-                                      for (auto eq : path)
-                                          if (eq != b)
-                                              _full_deps[eq].insert(b);
-                                  });
+            #ifdef DEBUG_DEPS
+            cout << "** find_all_deps among " << _all.size() << " objs...\n"
+                "*** imm_deps has " << _imm_deps.size() << " entries w/sizes:";
+            for (auto& a : _imm_deps)
+                cout << " " << a.second.size();
+            cout << endl;
+            #endif
+            
+            for (auto a : _all) {
+                #ifdef DEBUG_DEPS
+                cout << "*** visiting deps of " << a->get_descr() << endl;
+                int nd = 0;
+                #endif
+
+                // Visit every node 'b' in the imm-dep tree starting at 'a'.
+                dfs_visit_deps
+                    (a, true,
+                     [&](Tp<T> b) {
+
+                         // 'a' depends on 'b', directly or indirectly.
+                         if (a != b)
+                             _full_deps[a].insert(b);
+
+                         #ifdef DEBUG_DEPS
+                         nd++;
+                         #endif
+                     });
+                #ifdef DEBUG_DEPS
+                cout << "*** visited " << nd << " nodes\n";
+                #endif
+            }
             _done = true;
+            #ifdef DEBUG_DEPS
+            cout << "*** done finding all deps on " << _all.size() << " objs\n";
+            #endif
         }
     };
 
-    // A set of objects that have inter-dependencies.
-    // Class 'T' must implement 'clone()' that returns
-    // a 'shared_ptr<T>'.
+    // A set of objects that have inter-dependencies.  Class 'T' must
+    // implement 'clone()' that returns a 'shared_ptr<T>', 'is_scratch()',
+    // 'get_descr()'.  Any 2 objects of class 'T' (at different addrs) are
+    // considered different, even if they are identical.
     template <typename T>
     class DepGroup {
 
-    public:
-        typedef shared_ptr<T> Tp;
-        typedef unordered_set<Tp> TpSet;
-        typedef vector_set<Tp> TpList;
+        // Example:
+        // eq1: scr(x) EQUALS u(t,x+1);
+        // eq2: u(t+1,x) EQUALS scr(x+2);
+        // Direct deps: eq2 -> eq1(s).
+        // eq1 is scratch child of eq2.
 
-    protected:
+        // Example:
+        // eq1: scr1(x) EQUALS u(t,x+1);
+        // eq2: scr2(x) EQUALS scr1(x+2);
+        // eq3: u(t+1,x) EQUALS scr2(x+4);
+        // Direct deps: eq3 -> eq2(s) -> eq1(s).
+        // eq1 and eq2 are scratch children of eq3.
+        
+    private:
 
         // Objs in this group.
-        TpList _all;
+        TpList<T> _all;
 
         // Dependencies between all objs.
+        // NB: There may be objs in _all that are not in _deps.
         Deps<T> _deps;
 
-        // Dependencies from non-scratch objs to/on scratch objs.
-        // NB: just using Deps::_imm_deps as a simple map of sets.
+        // Dependencies on scratch objs.
+        // Entries will be a subset of _deps.
         Deps<T> _scratches;
 
     public:
@@ -224,10 +341,10 @@ namespace yask {
         }
 
         // list accessors.
-        virtual void add_item(Tp p) {
+        virtual void add_item(Tp<T> p) {
             _all.insert(p);
         }
-        virtual const TpList& get_all() const {
+        virtual const TpList<T>& get_all() const {
             return _all;
         }
         virtual int get_num() const {
@@ -238,22 +355,44 @@ namespace yask {
         virtual const Deps<T>& get_deps() const {
             return _deps;
         }
-        virtual Deps<T>& get_deps() {
-            return _deps;
+        virtual const TpSetMap<T>& get_imm_deps() const {
+            return _deps.get_imm_deps();
         }
-        virtual const TpSet& get_deps(Tp p) const {
-            return _deps.get_deps_on(p);
+        virtual const TpSet<T>& get_all_deps_on(Tp<T> p) const {
+            return _deps.get_all_deps_on(p);
+        }
+        virtual const TpSet<T>& get_imm_deps_on(Tp<T> p) const {
+            return _deps.get_imm_deps_on(p);
         }
 
         // Get the scratch deps.
         virtual const Deps<T>& get_scratch_deps() const {
             return _scratches;
         }
-        virtual Deps<T>& get_scratch_deps() {
-            return _scratches;
+        virtual const TpSet<T>& get_all_scratch_deps_on(Tp<T> p) const {
+            return _scratches.get_all_deps_on(p);
         }
-        virtual const TpSet& get_scratch_deps(Tp p) const {
-            return _scratches.get_deps_on(p);
+        virtual const TpSet<T>& get_imm_scratch_deps_on(Tp<T> p) const {
+            return _scratches.get_imm_deps_on(p);
+        }
+        
+        // Set deps.
+        // Adds items if not already added.
+        virtual void set_imm_dep_on(Tp<T> a, Tp<T> b) {
+            add_item(a);
+            add_item(b);
+            _deps.set_imm_dep_on(a, b);
+            if (b->is_scratch())
+                _scratches.set_imm_dep_on(a, b);
+            if (a == b)
+                THROW_YASK_EXCEPTION("circular dependency on '" +
+                                     a->get_descr() + "'");
+        }
+
+        // Clear all deps.
+        virtual void clear_deps() {
+            _deps.clear_deps();
+            _scratches.clear_deps();
         }
 
         // Find indirect dependencies based on direct deps.
@@ -262,19 +401,22 @@ namespace yask {
             _scratches.find_all_deps();
         }
 
-        // Reorder based on dependencies,
-        // i.e., topological sort.
+        // Reorder based on dependencies, i.e., topological sort.  Objs will
+        // be sorted such that evaluations that need to be done first will
+        // be at the beginning of the list.
         virtual void topo_sort() {
-            find_all_deps();
 
             // No need to sort less than two things.
             if (_all.size() <= 1)
                 return;
 
-            // Want to keep original order as much as possible.
-            // Only reorder if dependencies are in conflict.
-
-            // Scan from beginning to next-to-last.
+            // Want to keep original order as much as possible.  Only
+            // reorder if dependencies are in conflict.  NB: This also is
+            // probably not as efficient as Kuhn's algorithm, but not bad,
+            // and simpler. Depends on having transitive closure first.
+            find_all_deps();
+                
+            // Scan obj list from beginning to next-to-last.
             for (size_t i = 0; i < _all.size() - 1; i++) {
 
                 // Repeat until no dependent found.
@@ -284,23 +426,33 @@ namespace yask {
                     // Does obj[i] depend on any obj after it?
                     auto& oi = _all.at(i);
                     done = true;
+
+                    // Scan from i+1 to last.
                     for (size_t j = i+1; j < _all.size(); j++) {
                         auto& oj = _all.at(j);
+
+                        // Found again?
+                        if (oi == oj)
+                            THROW_YASK_EXCEPTION("internal error: '" +
+                                                 oi->get_descr() +
+                                                 "' in dependency graph multiple times");
 
                         // Must swap if dependent.
                         if (_deps.is_dep_on(oi, oj)) {
 
                             // Error if also back-dep.
                             if (_deps.is_dep_on(oj, oi)) {
-                                THROW_YASK_EXCEPTION("circular dependency between " +
-                                                     oi->get_descr() + " and " +
-                                                     oj->get_descr());
+                                THROW_YASK_EXCEPTION("circular dependency on '" +
+                                                     oi->get_descr() + "' via '" +
+                                                     oj->get_descr() + "'");
                             }
 
                             // Swap them.
                             _all.swap(i, j);
 
                             // Start over at index i.
+                            // This is safe because we're not moving anything
+                            // before i.
                             done = false;
                             break;
                         }
@@ -332,12 +484,17 @@ namespace yask {
 
                     // All Tf objs in 'oi'.
                     for (auto& foi : oi->get_items()) {
-
+                                
                         // All Tf objs in 'oj'.
                         for (auto& foj : oj->get_items()) {
 
-                            // If 'foi' is dep on 'foj',
-                            // then 'oi' is dep on 'oj'.
+                            if (foi == foj)
+                                continue;
+
+                            // Copy deps from 'full', i.e., if 'foi' is dep
+                            // on 'foj', then 'oi' is dep on 'oj'.  This may
+                            // create a circular dependency in 'this' that
+                            // wasn't in 'full'.
                             if (fdeps.is_imm_dep_on(foi, foj))
                                 _deps.set_imm_dep_on(oi, oj);
                             if (fscrs.is_imm_dep_on(foi, foj))
@@ -346,64 +503,120 @@ namespace yask {
                     }
                 }
             }
+
+            // Find indirect deps.
             find_all_deps();
-        }
+
+        } // inherit_deps_from().
     };
 
-    // A list of unique equation ptrs.
-    typedef vector_set<equals_expr_ptr> EqList;
+
+    // A set of logical vars and related dependency data.
+    class LogicalVars : public DepGroup<LogicalVar> {
+    protected:
+        Solution* _soln;
+        map<std::string, LogicalVarPtr> _log_vars;
+
+    public:
+        LogicalVars(Solution* soln) : _soln(soln) { }
+        virtual ~LogicalVars() { }
+
+        LogicalVarPtr find_var_slice(VarPoint* vp) {
+
+            // Already exists?
+            auto descr = vp->make_logical_var_str();
+            auto it = _log_vars.find(descr);
+            if (it != _log_vars.end())
+                return it->second;
+
+            return nullptr;
+        }
+
+        LogicalVarPtr add_var_slice(VarPoint* vp) {
+
+            // Already exists?
+            auto lvp = find_var_slice(vp);
+            if (lvp)
+                return lvp;
+
+            // Make new one.
+            auto descr = vp->make_logical_var_str();
+            auto p = make_shared<LogicalVar>(_soln, vp);
+            add_item(p);
+            _log_vars[descr] = p;
+            return p;
+        }
+
+        void print_info() const;
+     };
 
     // A set of equations and related dependency data.
     class Eqs : public DepGroup<EqualsExpr> {
+    protected:
+        Solution* _soln;
 
     public:
+        Eqs(Solution* soln) : _soln(soln) { }
+        virtual ~Eqs() { }
 
         // Visit all equations.
         virtual void visit_eqs(ExprVisitor* ev) {
-            for (auto& ep : _all) {
+            for (auto& ep : get_all()) {
                 ep->accept(ev);
             }
         }
 
         // Find dependencies based on all eqs.
-        virtual void analyze_eqs(const CompilerSettings& settings,
-                                 Dimensions& dims,
-                                 std::ostream& os);
+        virtual void analyze_eqs();
 
         // Determine which var points can be vectorized.
-        virtual void analyze_vec(const CompilerSettings& settings,
-                                 const Dimensions& dims);
+        virtual void analyze_vec();
 
         // Determine how var points are accessed in a loop.
-        virtual void analyze_loop(const CompilerSettings& settings,
-                                  const Dimensions& dims);
+        virtual void analyze_loop();
 
         // Update var access stats.
         virtual void update_var_stats();
 
-        // Find scratch-var eqs needed for each non-scratch eq.
-        virtual void analyze_scratch();
     };
 
     // A collection that holds various independent eqs.
     class EqLot {
     protected:
-        EqList _eqs;            // all equations.
-        Vars _out_vars;        // vars updated by _eqs.
-        Vars _in_vars;         // vars read from by _eqs.
+        Solution* _soln;
+        
+    private:
+        EqList _eqs;            // all equations in this lot.
+        Vars _out_vars;         // vars updated by _eqs.
+        Vars _in_vars;          // vars read from by _eqs.
         bool _is_scratch = false; // true if _eqs update temp var(s).
 
     public:
 
         // Parts of the name.
         // TODO: move these into protected section and make accessors.
-        string base_name;            // base name of this bundle.
+        string base_name;            // base name of this part.
         int index;                  // index to distinguish repeated names.
 
         // Ctor.
-        EqLot(bool is_scratch) : _is_scratch(is_scratch) { }
+        EqLot(Solution* soln, bool is_scratch) :
+            _soln(soln),
+            _out_vars(soln),
+            _in_vars(soln),
+            _is_scratch(is_scratch) { }
         virtual ~EqLot() {}
 
+        // Remove data.
+        virtual void clear() {
+            _eqs.clear();
+            _out_vars.clear();
+            _in_vars.clear();
+        }
+
+        // Add/remove an eq.
+        virtual void add_eq(Eq ee);
+        virtual void remove_eq(Eq ee);
+        
         // Get all eqs.
         virtual const EqList& get_eqs() const {
             return _eqs;
@@ -439,15 +652,16 @@ namespace yask {
         virtual void print_stats(ostream& os, const string& msg);
     };
 
-    // A named equation bundle, which contains one or more var-update
-    // equations.  All equations in a bundle must have the same conditions.
-    // Equations in a bundle must not have inter-dependencies because they
-    // will be combined into a single expression.
-    class EqBundle : public EqLot {
-    protected:
-        const Dimensions* _dims = 0;
-
+    // A named solution part, which contains one or more var-update
+    // equations.  All equations in a part must have the same conditions.
+    // Equations in a part must not have inter-dependencies because they
+    // will be combined into a single code block.
+    class Part : public EqLot {
+ 
     public:
+        Part(Solution* soln, bool is_scratch) :
+            EqLot(soln, is_scratch) { }
+        virtual ~Part() { }
 
         // TODO: move these into protected section and make accessors.
 
@@ -459,35 +673,27 @@ namespace yask {
         num_expr_ptr step_expr;
 
         // Create a copy containing clones of the equations.
-        virtual shared_ptr<EqBundle> clone() const {
-            auto p = make_shared<EqBundle>(*_dims, _is_scratch);
+        virtual Tp<Part> clone() const {
+            auto p = make_shared<Part>(_soln, is_scratch());
 
             // Shallow copy.
             *p = *this;
 
             // Delete copied eqs and replace w/clones.
-            p->_eqs.clear();
-            for (auto& i : _eqs)
-                p->_eqs.insert(i->clone());
+            p->clear();
+            for (auto& i : get_eqs())
+                p->add_eq(i->clone());
 
             return p;
         }
-
-        // Ctor.
-        EqBundle(const Dimensions& dims, bool is_scratch) :
-            EqLot(is_scratch), _dims(&dims) { }
-        virtual ~EqBundle() {}
 
         // Get a string description.
         virtual string get_descr(bool show_cond = true,
                                  string quote = "'") const;
 
-        // Add an equation to this bundle.
-        virtual void add_eq(equals_expr_ptr ee);
-
         // Get the list of all equations.
         virtual const EqList& get_items() const {
-            return _eqs;
+            return get_eqs();
         }
 
         // Visit the condition.
@@ -509,125 +715,95 @@ namespace yask {
             }
             return false;
         }
-
-        // Replicate each equation at the non-zero offsets for
-        // each vector in a cluster.
-        virtual void replicate_eqs_in_cluster(Dimensions& dims);
     };
+    typedef Tp<Part> PartPtr;
+    typedef TpList<Part> PartList;
+    typedef TpSet<Part> PartSet;
 
-    // Container for multiple equation bundles.
-    class EqBundles : public DepGroup<EqBundle> {
+    // Container for multiple equation parts.
+    class Parts : public DepGroup<Part> {
     protected:
+        Solution* _soln;
 
-        // Copy of some global data.
-        string _basename_default;
-        Dimensions* _dims = 0;
+        string _base_name = "part";
 
         // Track vars that are updated.
         Vars _out_vars;
 
-        // Map to track indices per eq-bundle name.
-        map<string, int> _indices;
+        // part index;
+        int _idx = 1;
 
         // Track equations that have been added already.
-        set<equals_expr_ptr> _eqs_in_bundles;
+        set<Eq> _eqs_in_parts;
 
-        // Add 'eq' from 'eqs' to eq-bundle with 'base_name'
-        // unless already added or illegal.  The corresponding index in
-        // '_indices' will be incremented if a new bundle is created.
-        // Returns whether a new bundle was created.
-        virtual bool add_eq_to_bundle(Eqs& eqs,
-                                      equals_expr_ptr eq,
-                                      const string& base_name,
-                                      const CompilerSettings& settings);
+        // Add 'eq' (subset of 'all_eqs') to an existing part if
+        // possible.  If not possible, create a new part and add 'eqs' to
+        // it. The index will be incremented if a new part is created.
+        // Returns whether a new part was created.
+        virtual bool add_eq_to_part(Eq& eq);
 
     public:
-        EqBundles() {}
-        EqBundles(const string& basename_default, Dimensions& dims) :
-            _basename_default(basename_default),
-            _dims(&dims) {}
-        virtual ~EqBundles() {}
+        Parts(Solution* soln) :
+            _soln(soln),
+            _out_vars(soln) { }
+        virtual ~Parts() { }
 
-        virtual void set_basename_default(const string& basename_default) {
-            _basename_default = basename_default;
-        }
-        virtual void set_dims(Dimensions& dims) {
-            _dims = &dims;
-        }
-
-        // Separate a set of equations into eq_bundles based
+        // Separate a set of equations into parts based
         // on the target string.
         // Target string is a comma-separated list of key-value pairs, e.g.,
-        // "eq_bundle1=foo,eq_bundle2=bar".
-        // In this example, all eqs updating var names containing 'foo' go in eq_bundle1,
-        // all eqs updating var names containing 'bar' go in eq_bundle2, and
-        // each remaining eq goes into a separate eq_bundle.
-        void make_eq_bundles(Eqs& eqs,
-                             const CompilerSettings& settings,
-                             std::ostream& os);
+        // "part1=foo,part2=bar".
+        // In this example, all eqs updating var names containing 'foo' go in part1,
+        // all eqs updating var names containing 'bar' go in part2, and
+        // each remaining eq goes into a separate part.
+        void make_parts();
 
         virtual const Vars& get_output_vars() const {
             return _out_vars;
         }
 
-        // Visit all the equations in all eq_bundles.
+        // Visit all the equations in all parts.
         virtual void visit_eqs(ExprVisitor* ev) {
-            for (auto& eg : _all)
+            for (auto& eg : get_all())
                 eg->visit_eqs(ev);
         }
 
-        // Replicate each equation at the non-zero offsets for
-        // each vector in a cluster.
-        virtual void replicate_eqs_in_cluster(Dimensions& dims) {
-            for (auto& eg : _all)
-                eg->replicate_eqs_in_cluster(dims);
-        }
-
-        // Print stats for the equation(s) in all bundles.
-        virtual void print_stats(ostream& os, const string& msg);
+        // Print stats for the equation(s) in all parts.
+        virtual void print_stats(const string& msg);
 
         // Apply optimizations requested in settings.
-        virtual void optimize_eq_bundles(CompilerSettings& settings,
-                                         const string& descr,
-                                         bool print_sets,
-                                         ostream& os);
+        virtual void optimize_parts(const string& descr);
     };
 
-    typedef shared_ptr<EqBundle> EqBundlePtr;
-
-    // A list of unique equation bundles.
-    typedef vector_set<EqBundlePtr> EqBundleList;
-
-    // A named equation stage, which contains one or more equation
-    // bundles.  All equations in a stage do not need to have the same
-    // domain condition, but they must have the same step condition.
+    // A named equation stage, which contains one or more equation parts.
     // Equations in a stage must not have inter-dependencies because they
     // may be run in parallel or in any order on any sub-domain.
-    class EqStage : public EqLot {
+    class Stage : public EqLot {
     protected:
-        EqBundleList _bundles;  // bundles in this stage.
+        PartList _parts;  // parts in this stage.
 
     public:
 
-        // Common condition.
-        bool_expr_ptr step_cond;
-
         // Ctor.
-        EqStage(bool is_scratch) :
-            EqLot(is_scratch) { }
-        virtual ~EqStage() { }
+        Stage(Solution* soln, bool is_scratch) :
+            EqLot(soln, is_scratch) { }
+        virtual ~Stage() { }
 
-        // Create a copy containing clones of the bundles.
-        virtual shared_ptr<EqStage> clone() const {
-            auto p = make_shared<EqStage>(_is_scratch);
+        virtual void clear() override {
+            EqLot::clear();
+            _parts.clear();
+        }
+
+        // Create a copy containing clones of the parts.
+        virtual shared_ptr<Stage> clone() const {
+            auto p = make_shared<Stage>(_soln, is_scratch());
 
             // Shallow copy.
             *p = *this;
 
             // Delete copied eqs and replace w/clones.
-            p->_eqs.clear();
-            for (auto& i : _bundles)
-                p->_bundles.insert(i->clone());
+            p->clear();
+            for (auto& i : _parts)
+                p->add_part(i->clone());
 
             return p;
         }
@@ -635,53 +811,53 @@ namespace yask {
         // Get a string description.
         virtual string get_descr(string quote = "'") const;
 
-        // Add a bundle to this stage.
-        virtual void add_bundle(EqBundlePtr ee);
+        // Add/remove a part to this stage.
+        virtual void add_part(PartPtr ee);
+        virtual void remove_part(PartPtr ee);
 
-        // Get the list of all bundles
-        virtual const EqBundleList& get_bundles() const {
-            return _bundles;
+        // Get the list of all parts
+        virtual PartList& get_parts() {
+            return _parts;
         }
-        virtual const EqBundleList& get_items() const {
-            return _bundles;
+        virtual const PartList& get_items() const {
+            return _parts;
         }
-
-        // Visit the step condition.
-        // Return true if there was one to visit.
-        virtual bool visit_step_cond(ExprVisitor* ev) {
-            if (step_cond.get()) {
-                step_cond->accept(ev);
-                return true;
-            }
-            return false;
-        }
-
     };
+    typedef Tp<Stage> StagePtr;
+    typedef TpSet<Stage> StageSet;
+    typedef TpList<Stage> StageList;
 
     // Container for multiple equation stages.
-    class EqStages : public DepGroup<EqStage> {
+    class Stages : public DepGroup<Stage> {
     protected:
+        Solution* _soln;
+        
         string _base_name = "stage";
 
-        // Bundle index.
-        int _idx = 0;
+        // Stage index.
+        int _idx = 1;
 
         // Track vars that are updated.
         Vars _out_vars;
 
-        // Track bundles that have been added already.
-        set<EqBundlePtr> _bundles_in_stages;
+        // Track parts that have been added already.
+        PartSet _parts_in_stages;
 
-        // Add 'bp' from 'all_bundles'. Create new stage if needed.  Returns
-        // whether a new stage was created.
-        bool add_bundle_to_stage(EqBundles& all_bundles,
-                                 EqBundlePtr bp);
+        // Add 'pps', a subset of 'all_parts'. Create new stage if needed.
+        // Returns whether a new stage was created.
+        bool add_parts_to_stage(Parts& all_parts,
+                                PartList& pps,
+                                bool var_grouping,
+                                bool logical_var_grouping);
 
     public:
+        Stages(Solution* soln) :
+            _soln(soln),
+            _out_vars(soln) { }
+        virtual ~Stages() { }
 
-        // Separate bundles into stages.
-        void make_stages(EqBundles& bundles,
-                         std::ostream& os);
+        // Separate parts into stages.
+        void make_stages(Parts& parts);
 
         // Get all output vars.
         virtual const Vars& get_output_vars() const {
@@ -690,14 +866,17 @@ namespace yask {
 
         // Visit all the equations in all stages.
         virtual void visit_eqs(ExprVisitor* ev) {
-            for (auto& bp : _all)
-                bp->visit_eqs(ev);
+            for (auto& pp : get_all())
+                pp->visit_eqs(ev);
         }
 
         // Find halos needed for each var.
-        virtual void calc_halos(EqBundles& all_bundles);
+        virtual void calc_halos();
 
-    }; // EqStages.
+        // Find lifespans for each var.
+        virtual void calc_lifespans();
+
+    }; // Stages.
 
 } // namespace yask.
 

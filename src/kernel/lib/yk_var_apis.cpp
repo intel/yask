@@ -335,7 +335,7 @@ namespace yask {
         STATE_VARS(gbp());
         auto op = dynamic_pointer_cast<YkVarImpl>(src);
         assert(op);
-        TRACE_MSG("fuse_vars(" << src.get() << "): this=" << gb().make_info_string() <<
+        TRACE_MSG(src.get() << ": this=" << gb().make_info_string() <<
                   "; source=" << op->gb().make_info_string());
         auto* sp = op.get();
         assert(!_gbp->is_scratch());
@@ -362,7 +362,7 @@ namespace yask {
         if (force_native)
             _gbp->set_user_var(false);
 
-        TRACE_MSG("after fuse_vars: this=" << gb().make_info_string() <<
+        TRACE_MSG("after fusing this=" << gb().make_info_string() <<
                   "; source=" << op->gb().make_info_string());
     }
 
@@ -374,7 +374,7 @@ namespace yask {
     }
     double YkVarImpl::get_element(const Indices& indices) const {
         STATE_VARS(gbp());
-        TRACE_MSG("get_element({" << gb().make_index_string(indices) << "}) on " <<
+        TRACE_MSG("{" << gb().make_index_string(indices) << "} on " <<
                   gb().make_info_string());
         if (!is_storage_allocated())
             THROW_YASK_EXCEPTION("call to 'get_element' with no storage allocated for var '" +
@@ -385,7 +385,7 @@ namespace yask {
         gb().const_copy_data_from_device(); // TODO: make more efficient.
         real_t val = gb().read_elem(indices, asi, __LINE__);
 
-        TRACE_MSG("get_element({" << gb().make_index_string(indices) << "}) on '" <<
+        TRACE_MSG("{" << gb().make_index_string(indices) << "} on '" <<
                   get_name() + "' returns " << val);
         return double(val);
     }
@@ -393,9 +393,9 @@ namespace yask {
                                  const Indices& indices,
                                  bool strict_indices) {
         STATE_VARS(gbp());
-        TRACE_MSG("set_element(" << val << ", {" <<
+        TRACE_MSG("setting to " << val << " at {" <<
                   gb().make_index_string(indices) << "}, " <<
-                  strict_indices << ") on " <<
+                  strict_indices << " on " <<
                   gb().make_info_string());
         idx_t nup = 0;
         if (!get_raw_storage_buffer() && strict_indices)
@@ -416,19 +416,16 @@ namespace yask {
             gb()._coh.mod_host();
             gb().set_dirty_using_alloc_index(YkVarBase::self, true, asi);
         }
-        TRACE_MSG("set_element(" << val << ", {" <<
-                  gb().make_index_string(indices) << "}, " <<
-                  strict_indices << ") on '" <<
-                  get_name() + "' returns " << nup);
+        TRACE_MSG("returns " << nup);
         return nup;
     }
     idx_t YkVarImpl::add_to_element(double val,
                                     const Indices& indices,
                                     bool strict_indices) {
         STATE_VARS(gbp());
-        TRACE_MSG("add_to_element(" << val << ", {" <<
+        TRACE_MSG("adding " << val << " at {" <<
                   gb().make_index_string(indices) <<  "}, " <<
-                  strict_indices << ") on " <<
+                  strict_indices << " on " <<
                   gb().make_info_string());
         idx_t nup = 0;
         if (!get_raw_storage_buffer() && strict_indices)
@@ -454,10 +451,7 @@ namespace yask {
             gb()._coh.mod_host();
             gb().set_dirty_using_alloc_index(YkVarBase::self, true, asi);
         }
-        TRACE_MSG("add_to_element(" << val << ", {" <<
-                  gb().make_index_string(indices) <<  "}, " <<
-                  strict_indices << ") on '" <<
-                  get_name() + "' returns " << nup);
+        TRACE_MSG("returns " << nup);
         return nup;
     }
 

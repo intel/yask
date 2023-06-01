@@ -29,8 +29,6 @@ IN THE SOFTWARE.
 
 #include "Cpp.hpp"
 
-//#define DEBUG_SHIFT
-
 namespace yask {
 
     // Add specialization for 256 and 512-bit intrinsics.
@@ -178,11 +176,10 @@ namespace yask {
         }
 
     public:
-        YASKAvx2Printer(StencilSolution& stencil,
-                        EqBundles& eq_bundles,
-                        EqStages& eq_stages,
-                        EqBundles& cluster_eq_bundles) :
-            YASKCppPrinter(stencil, eq_bundles, eq_stages, cluster_eq_bundles) { }
+        YASKAvx2Printer(Solution& stencil,
+                        Parts& parts,
+                        Stages& eq_stages) :
+            YASKCppPrinter(stencil, parts, eq_stages) { }
 
         virtual int num_vec_elems() const override {
             return 32 / _settings._elem_bytes;
@@ -200,12 +197,11 @@ namespace yask {
         }
 
     public:
-        YASKAvx512Printer(StencilSolution& stencil,
-                          EqBundles& eq_bundles,
-                          EqStages& eq_stages,
-                          EqBundles& cluster_eq_bundles,
+        YASKAvx512Printer(Solution& stencil,
+                          Parts& parts,
+                          Stages& eq_stages,
                           bool is_lo = false) :
-            YASKCppPrinter(stencil, eq_bundles, eq_stages, cluster_eq_bundles),
+            YASKCppPrinter(stencil, parts, eq_stages),
             _is_lo(is_lo) { }
 
         virtual int num_vec_elems() const override {

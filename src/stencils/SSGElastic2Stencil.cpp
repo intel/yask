@@ -35,15 +35,15 @@ class SSGElastic2Stencil : public Elastic2StencilBase {
 protected:
 
     // Time-varying 3D-spatial velocity vars.
-    yc_var_proxy v = yc_var_proxy("v", get_soln(), { t, x, y, z, vidx });
+    MAKE_VAR(v, t, x, y, z, vidx);
     enum VIDX { V_BL_W, V_TL_V, V_TR_U };
 
     // Time-varying 3D-spatial Stress vars.
-    yc_var_proxy s = yc_var_proxy("s", get_soln(), { t, x, y, z, sidx });
+    MAKE_VAR(s, t, x, y, z, sidx);
     enum SIDX { S_BL_YZ, S_BR_XZ, S_TL_XX, S_TL_YY, S_TL_ZZ, S_TR_XY };
 
     // 3D-spatial coefficients.
-    yc_var_proxy coef = yc_var_proxy("c", get_soln(), { x, y, z, cidx });
+    MAKE_VAR(coef, x, y, z, cidx);
     enum CIDX { C_MU, C_LAMBDA, C_LAMBDA_MU2 };
 
 public:
@@ -153,4 +153,4 @@ public:
 // Create an object of type 'SSGElastic2Stencil',
 // making it available in the YASK compiler utility via the
 // '-stencil' commmand-line option or the 'stencil=' build option.
-static SSGElastic2Stencil SSGElastic2Stencil_instance;
+REGISTER_SOLUTION(SSGElastic2Stencil);

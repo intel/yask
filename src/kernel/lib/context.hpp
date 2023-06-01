@@ -42,7 +42,7 @@ namespace yask {
         idx_t bb_size=0;       // points in the entire box; bb_size >= bb_num_points.
         bool bb_is_full=false; // all points in box are valid (bb_size == bb_num_points).
         bool bb_is_aligned=false; // starting points are vector-aligned in all dims.
-        bool bb_is_cluster_mult=false; // num points are cluster multiples in all dims.
+        bool bb_is_vec_mult=false; // num points are fold multiples in all dims.
         bool bb_valid=false;   // lengths and sizes have been calculated.
 
         BoundingBox() :
@@ -50,28 +50,44 @@ namespace yask {
             bb_end(NUM_DOMAIN_DIMS),
             bb_len(NUM_DOMAIN_DIMS) { }
 
+        // Same?
+        // Only compares indices.
+        inline bool operator==(const BoundingBox& rhs) const {
+            return bb_begin == rhs.bb_begin &&
+                bb_end == rhs.bb_end;
+        }
+        inline bool operator!=(const BoundingBox& rhs) const {
+            return !operator==(rhs);
+        }
+
         // Make Tuples.
-        IdxTuple bb_begin_tuple(const IdxTuple& ddims) const {
+        inline IdxTuple bb_begin_tuple(const IdxTuple& ddims) const {
             return bb_begin.make_tuple(ddims);
         }
-        IdxTuple bb_end_tuple(const IdxTuple& ddims) const {
+        inline IdxTuple bb_end_tuple(const IdxTuple& ddims) const {
             return bb_end.make_tuple(ddims);
         }
-        IdxTuple bb_last_tuple(const IdxTuple& ddims) const {
+        inline IdxTuple bb_last_tuple(const IdxTuple& ddims) const {
             auto res = bb_end.make_tuple(ddims);
             DOMAIN_VAR_LOOP(i, j)
                 res[j] = res[j] - 1;
             return res;
         }
-        IdxTuple bb_len_tuple(const IdxTuple& ddims) const {
+        inline IdxTuple bb_len_tuple(const IdxTuple& ddims) const {
             return bb_len.make_tuple(ddims);
+        }
+        std::string make_len_string(const IdxTuple& ddims) const {
+            return bb_len_tuple(ddims).make_dim_val_str(" * ");
         }
         std::string make_range_string(const IdxTuple& ddims) const {
             return bb_begin_tuple(ddims).make_dim_val_str() +
                 " ... " + bb_end_tuple(ddims).sub_elements(1).make_dim_val_str();
         }
-        std::string make_len_string(const IdxTuple& ddims) const {
-            return bb_len_tuple(ddims).make_dim_val_str(" * ");
+        std::string make_range_str_dbg(const IdxTuple& ddims) const {
+            return std::string("(") + make_len_string(ddims) + ") = " +
+                std::to_string(bb_end.sub_elements(bb_begin).max_const(0).product()) +
+                " at [{" + bb_begin_tuple(ddims).make_dim_val_str() +
+                "}...{" + bb_end_tuple(ddims).make_dim_val_str() + "})";
         }
 
         // Calc values and set valid to true.
@@ -102,6 +118,19 @@ namespace yask {
                     return false;
             }
             return true;
+        }
+
+        // Intersection between 'this' and 'other'.
+        BoundingBox intersection_with(const BoundingBox& other,
+                                      StencilContext* context) const {
+            BoundingBox bbi;
+            DOMAIN_VAR_LOOP_FAST(i, j) {
+                bbi.bb_begin[j] = std::max(bb_begin[j], other.bb_begin[j]);
+                bbi.bb_end[j] = std::min(bb_end[j], other.bb_end[j]);
+                bbi.bb_end[j] = std::max(bbi.bb_begin[j], bbi.bb_end[j]);
+            }
+            bbi.update_bb("", context, true);
+            return bbi;
         }
     };
 
@@ -168,10 +197,11 @@ namespace yask {
     };
 
     // Things in a context.
-    class StencilBundleBase;
+    class StencilPartBase;
     class Stage;
-    typedef std::vector<StencilBundleBase*> StencilBundleList;
-    typedef std::set<StencilBundleBase*> StencilBundleSet;
+    typedef std::vector<StencilPartBase*> StencilPartList;
+    typedef std::set<StencilPartBase*> StencilPartSet;
+    typedef std::unordered_set<StencilPartBase*> StencilPartUSet;
     typedef std::shared_ptr<Stage> StagePtr;
     typedef std::vector<StagePtr> StageList;
 
@@ -242,6 +272,9 @@ namespace yask {
         // include any extensions needed for WF.
         BoundingBox mpi_interior;
 
+        // Max write halos across all scratch parts on left and right in each dim.
+        IdxTuple max_write_halo_left, max_write_halo_right;
+
         // Is there a non-zero exterior in the given section?
         inline bool does_exterior_exist(idx_t ddim, bool is_left) const {
             return is_left ?
@@ -249,9 +282,9 @@ namespace yask {
                 mpi_interior.bb_end[ddim] < ext_bb.bb_end[ddim];
         }
 
-        // List of all non-scratch stencil bundles in the order in which
+        // List of all non-scratch stencil parts in the order in which
         // they should be evaluated within a step.
-        StencilBundleList st_bundles;
+        StencilPartList st_parts;
 
         // List of all non-scratch stencil-stages in the order in
         // which they should be evaluated within a step.
@@ -278,6 +311,10 @@ namespace yask {
         idx_t rank_nbytes=0, tot_nbytes=0;
         idx_t rank_domain_pts=0, tot_domain_pts=0;
 
+        // Vars for tracking things in a stage: vecs with one entry per outer thread.
+        std::vector<StencilPartUSet> _parts_done;
+        std::vector<VarPtrUSet> _vars_written;
+         
         // Elapsed-time tracking.
         YaskTimer run_time;     // time in run_solution(), including halo exchange.
         YaskTimer ext_time;     // time in exterior stencil calculation.
@@ -308,9 +345,6 @@ namespace yask {
         IdxTuple tb_widths;      // base of TB trapezoid.
         IdxTuple tb_tops;      // top of TB trapezoid.
         IdxTuple mb_angles;  // MB skewing angles for each shift (in points).
-
-        // Clear this to ignore step conditions during auto-tuning.
-        bool check_step_conds = true;
 
         // MPI buffers for each var.
         // Map key: var name.
@@ -490,14 +524,14 @@ namespace yask {
                               const ScanIndices& adj_block_idxs,
                               MpiSection& mpisec);
 
-        // Exchange all dirty halo data for all stencil bundles.
+        // Exchange all dirty halo data for all stencil parts.
         void exchange_halos(MpiSection& mpisec);
 
         // Call MPI_Test() on all unfinished requests to advance MPI progress.
         void adv_halo_exchange();
 
         // Update valid steps in vars that have been written to by stage 'sel_bp'.
-        // If sel_bp==null, use all bundles.
+        // If sel_bp==null, use all parts.
         // If 'mark_dirty', also mark as needing halo exchange.
         void update_var_info(const StagePtr& sel_bp,
                              idx_t start, idx_t stop,
@@ -535,9 +569,12 @@ namespace yask {
                               const bit_mask_t& bridge_mask,
                               ScanIndices& idxs);
 
-        // Set the bounding-box around all stencil bundles.
+        // Set the bounding-box around all stencil parts.
         void find_bounding_boxes();
 
+        // Determine max write halos for scratch parts.
+        void find_scratch_write_halos();
+        
         // Set data needed by the kernels.
         // Implemented by the YASK compiler-generated code.
         virtual void set_core() =0;
@@ -594,7 +631,7 @@ namespace yask {
             auto i = all_var_map.find(name);
             if (i != all_var_map.end())
                 return i->second;
-            return nullptr;
+            THROW_YASK_EXCEPTION("YASK variable '" + name + "' not found");
         }
         virtual std::vector<yk_var_ptr> get_vars() {
             std::vector<yk_var_ptr> vars;
@@ -644,6 +681,25 @@ namespace yask {
             STATE_VARS_CONST(this);
             return misc_dims.get_dim_names();
         }
+
+        // Threads.
+        virtual int get_num_outer_threads() const {
+            STATE_VARS(this);
+
+            // Numbers of threads.
+            int othr, ithr;
+            get_num_comp_threads(othr, ithr);
+            return othr;
+        }
+        virtual int get_num_inner_threads() const {
+            STATE_VARS(this);
+
+            // Numbers of threads.
+            int othr, ithr;
+            get_num_comp_threads(othr, ithr);
+            return ithr;
+        }
+
 
         virtual void run_solution(idx_t first_step_index,
                                   idx_t last_step_index);

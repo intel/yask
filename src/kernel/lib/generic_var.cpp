@@ -131,28 +131,61 @@ namespace yask {
 
         // Set as storage for this var.
         set_storage(base, 0);
-   }
+    }
 
     template <typename T>
     void GenericVarTyped<T>::set_elems_same(T val) {
-        void* _elems = get_storage();
-        if (_elems) {
-            yask_parallel_for(0, get_num_elems(), 1,
-                              [&](idx_t start, idx_t stop, idx_t thread_num) {
-                                  ((T*)_elems)[start] = val;
+        T* RESTRICT elems = (T*)get_storage();
+        auto ne = get_num_elems();
+        if (elems && ne) {
+            yask_parallel_for(0, ne, _init_blk_size,
+                              [=](idx_t start, idx_t stop, idx_t thread_num) {
+
+                                  // Copy vars captured by lambda to ensure
+                                  // that compiler treats them as local.
+                                  const T v = val;
+                                  T* RESTRICT e = elems;
+                                  for (idx_t i = start; i < stop; i++)
+                                      e[i] = v;
                               });
+
+            // Also update the version on the device.
+            #ifdef USE_OFFLOAD_NO_USM
+            auto devn = KernelEnv::_omp_devn;
+            
+            _Pragma("omp target teams distribute parallel for device(devn)")
+                for (idx_t i = 0; i < ne; i++)
+                    elems[i] = val;
+            #endif
         }
     }
 
     template <typename T>
     void GenericVarTyped<T>::set_elems_in_seq(T seed) {
-        void* _elems = get_storage();
-        if (_elems) {
-            const idx_t wrap = 31; // TODO: avoid multiple of any dim size.
-            yask_parallel_for(0, get_num_elems(), 1,
-                              [&](idx_t start, idx_t stop, idx_t thread_num) {
-                                  ((T*)_elems)[start] = seed * T(start % wrap + 1);
+        T* RESTRICT elems = (T*)get_storage();
+        auto ne = get_num_elems();
+        constexpr idx_t wrap = 31;
+        if (elems && ne) {
+            yask_parallel_for(0, ne, _init_blk_size,
+                              [=](idx_t start, idx_t stop, idx_t thread_num) {
+
+                                  // Copy vars captured by lambda to ensure
+                                  // that compiler treats them as local.
+                                  T* RESTRICT e = elems;
+                                  const T s = seed;
+                                  
+                                  for (idx_t i = start; i < stop; i++)
+                                      e[i] = s * T(imod_flr(i, wrap) + 1);
                               });
+
+            // Also update the version on the device to the same sequence.
+            #ifdef USE_OFFLOAD_NO_USM
+            auto devn = KernelEnv::_omp_devn;
+            
+            _Pragma("omp target teams distribute parallel for device(devn)")
+                for (idx_t i = 0; i < ne; i++)
+                    elems[i] = seed * T(imod_flr(i, wrap) + 1);
+            #endif
         }
     }
 

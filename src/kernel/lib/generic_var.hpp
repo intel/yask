@@ -256,6 +256,9 @@ namespace yask {
         // Direct access to storage ptr.
         virtual synced_ptr<T>& get_elems() =0;
 
+        // Block size for parallel init.
+        idx_t _init_blk_size = 1024;
+
     public:
 
         // Get size of one element.

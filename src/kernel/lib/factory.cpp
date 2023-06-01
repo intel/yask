@@ -75,6 +75,10 @@ namespace yask {
         assert(ep);
         auto dp = YASK_STENCIL_SOLUTION::new_dims(); // create Dims.
         assert(dp);
+
+        // Make 2 copies of settings:
+        // - Original requested options.
+        // - Actual used options; will be modified from requested ones as needed.
         auto req_opts = make_shared<KernelSettings>(dp, ep);
         assert(req_opts);
         auto actl_opts = make_shared<KernelSettings>(dp, ep);

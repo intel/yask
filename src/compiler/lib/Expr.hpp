@@ -80,7 +80,7 @@ namespace yask {
     // More forward-decls.
     class ExprVisitor;
     class Var;
-    class StencilSolution;
+    class Solution;
     struct Dimensions;
 
     // Type to convert original index vars (e.g., 'x', 'y') to
@@ -121,6 +121,7 @@ namespace yask {
         }
 
         // Return a formatted expr.
+        // This includes LHS, RHS, and any conditions.
         virtual string make_str(const VarMap* var_map = 0) const;
         virtual string make_quoted_str(string quote = "'",
                                        const VarMap* var_map = 0) const {
@@ -174,6 +175,14 @@ namespace yask {
     }
     inline bool are_exprs_same(const expr_ptr e1, const expr_ptr e2) {
         return are_exprs_same(e1.get(), e2.get());
+    }
+
+    // Expr is null?
+    inline bool is_expr_null(const Expr* e) {
+        return e == NULL;
+    }
+    inline bool is_expr_null(const expr_ptr e) {
+        return e.get() == NULL;
     }
 
     // Real or int value.
@@ -338,6 +347,7 @@ namespace yask {
     };
 
     // Any expression that returns a real (not from a YASK var).
+    // Used only internally, not by the API programmer.
     // This is an expression leaf-node.
     class CodeExpr : public NumExpr {
     protected:

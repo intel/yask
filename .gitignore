@@ -1,6 +1,10 @@
 *.o
 bin
 lib
+!utils/bin
+!utils/lib
+!src/compiler/lib
+!src/kernel/lib
 build
 logs
 r[0-9][0-9][0-9]*

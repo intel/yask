@@ -168,7 +168,7 @@ namespace yask {
         /**
            @returns Current target.
 
-           Throws an exception if the target hasn't been set via set_target().
+           @throws yask_exception if the target hasn't been set via set_target().
         */
         virtual std::string
         get_target() =0;
@@ -364,32 +364,6 @@ namespace yask {
         virtual void
         clear_folding() =0;
 
-        /// Set the cluster multiplier (unroll factor) in given dimension.
-        /** For YASK kernel-code generation, this will have the effect of creating
-            N vectors of output for each equation, where N is the product of
-            the cluster multipliers.
-
-            @note A multiplier >1 cannot be applied to
-            the step dimension.
-            @note Default is one (1) in each dimension. */
-        virtual void
-        set_cluster_mult(const yc_index_node_ptr dim
-                         /**< [in] Direction of unroll, e.g., "y".
-                            This must be an index created by new_domain_index().  */,
-                         int mult /**< [in] Number of vectors in `dim` */ ) =0;
-
-        /// Determine whether any clustering has been set.
-        /**
-           @returns `true` if any cluster multiple has been specified;
-           `false` if not.
-        */
-        virtual bool
-        is_clustering_set() =0;
-        
-        /// Remove all vector-clustering settings.
-        virtual void
-        clear_clustering() =0;
-
         /// Get the number of equations in the solution.
         /** Equations are added when yc_node_factory::new_equation_node() is called.
             @returns Number of equations that have been created. */
@@ -477,6 +451,8 @@ namespace yask {
             YASK compiler API calls.
 
             Progress text will be written to the output stream set via set_debug_output().
+
+            @throws yask_exception if the target set via set_target() is invalid.
 
             @warning *Side effect:* Applies optimizations to the equation(s), so some pointers
             to nodes in the original equations may refer to modified nodes or nodes
@@ -656,7 +632,7 @@ namespace yask {
            If a cycle is created, the YASK compiler
            will throw an exception containing an error message
            about a circular dependency. This exception may not be
-           thrown until format() is called.
+           thrown until output_solution() is called.
 
            - If using scratch vars, dependencies among scratch vars
            and between scratch equations and non-scratch
@@ -690,6 +666,25 @@ namespace yask {
         virtual void
         clear_dependencies() =0;
 
+        /// **[Deprecated]** Does nothing; will be removed in future versions.
+        YASK_DEPRECATED
+        void
+        set_cluster_mult(const yc_index_node_ptr dim,
+                         int mult) { }
+
+        ///  **[Deprecated]** Will be removed in future versions.
+        /**
+           @returns `false` always.
+        */
+        YASK_DEPRECATED
+        bool
+        is_clustering_set() { return false; }
+        
+        /// **[Deprecated]** Does nothing; will be removed in future versions.
+        YASK_DEPRECATED
+        void
+        clear_clustering() { }
+
         /// **[Deprecated]** Use set_target() and output_solution().
         YASK_DEPRECATED
         inline void
@@ -709,8 +704,8 @@ namespace yask {
 
         #ifndef SWIG
         /// **[Deprecated]** Use new_var().
-         YASK_DEPRECATED
-       inline yc_var_ptr
+        YASK_DEPRECATED
+        inline yc_var_ptr
         new_grid(const std::string& name,
                  const std::initializer_list<yc_index_node_ptr>& dims) {
             return new_var(name, dims);
@@ -978,7 +973,7 @@ namespace yask {
         }
         #endif
         
-        /// Contructor for a simple scalar value.
+        /// Contructor for a simple scalar YASK variable.
         /**
            A wrapper around yc_solution::new_var().
         */
@@ -990,7 +985,7 @@ namespace yask {
             _var = soln->new_var(name, { });
         }
 
-        /// Contructor taking an existing var.
+        /// Contructor taking an existing YASK variable.
         /**
            Creates a new \ref yc_var_proxy wrapper around an
            existing var.
@@ -1017,7 +1012,7 @@ namespace yask {
             return _var;
         }
 
-        /// Create an expression for a point in a var.
+        /// Create an expression for a point in a YASK variable.
         /**
            A wrapper around yc_var::new_var_point().
            The number of arguments must match the dimensionality of the var.

@@ -39,7 +39,7 @@ namespace yask {
     	return yask_get_version_string();
     }
     yc_solution_ptr yc_factory::new_solution(const std::string& name) const {
-        return make_shared<StencilSolution>(name);
+        return make_shared<Solution>(name);
     }
 
     // Find the dimensions to be used based on the vars in
@@ -55,8 +55,6 @@ namespace yask {
         _scalar.clear();
         _fold.clear();
         _fold_gt1.clear();
-        _cluster_pts.clear();
-        _cluster_mults.clear();
         _misc_dims.clear();
 
         // Get dims from settings.
@@ -72,7 +70,10 @@ namespace yask {
         // Get dims from vars.
         for (auto& gp : vars) {
             auto& gname = gp->_get_name();
-            os << "Var: " << gp->get_descr() << endl;
+            if (gp->is_scratch())
+                os << "Scratch var: " << gp->get_descr() << endl;
+            else
+                os << "Var: " << gp->get_descr() << endl;
 
             // Dimensions in this var.
             for (auto dim : gp->get_dims()) {
@@ -167,7 +168,7 @@ namespace yask {
             _fold.set_val(dname, sz);
             fold_opts.add_dim_back(dname, sz);
         }
-        os << "Folding and clustering:\n"
+        os << "Folding:\n"
             " Number of SIMD elements: " << vlen << endl;
         if (fold_opts.get_num_dims())
             os << " Requested vector-fold dimension(s) and point-size(s): " <<
@@ -318,32 +319,6 @@ namespace yask {
                 cout << "Notice: memory layout MUST have unit-stride in " <<
                     _fold_gt1.make_dim_str() << " dimension!" << endl;
         }
-
-        // Create final cluster lengths based on cmd-line options.
-        for (auto& dim : settings._cluster_options) {
-            auto& dname = dim._get_name();
-            int mult = dim.get_val();
-
-            // Nothing to do for mult < 2.
-            if (mult <= 1)
-                continue;
-
-            // Does it exist anywhere?
-            if (!_domain_dims.lookup(dname)) {
-                os << "Warning: cluster-multiplier in '" << dname <<
-                    "' dim ignored because it's not a domain dim.\n";
-                continue;
-            }
-
-            // Set the size.
-            _cluster_mults.add_dim_back(dname, mult);
-        }
-        _cluster_pts = _fold.mult_elements(_cluster_mults);
-
-        os << " Cluster dimension(s) and multiplier(s): " <<
-            _cluster_mults.make_dim_val_str(" * ") << endl;
-        os << " Cluster dimension(s) and point-size(s): " <<
-            _cluster_pts.make_dim_val_str(" * ") << endl;
     }
 
     // Make string like "+(4/VLEN_X)" or "-(2/VLEN_Y)" or "" if ofs==zero.
@@ -384,7 +359,7 @@ namespace yask {
         return step.make_dim_val_offset_str();
     }
 
-    // A class to add fold and cluster options.
+    // A class to add fold options.
     class IntTupleOption : public command_line_parser::option_base {
         IntTuple& _val;
         string_vec _strvec;
@@ -449,15 +424,15 @@ namespace yask {
                            "Output format (required).\n"
                            "Supported formats:\n"
                            "- avx:     YASK code for CORE AVX ISA (256-bit HW SIMD vectors).\n"
-                           "- avx2:        YASK code for CORE AVX2 ISA (256-bit HW SIMD vectors).\n"
-                           "- avx512: YASK code classes for CORE AVX-512 ISA (512-bit HW SIMD vectors).\n"
+                           "- avx2:    YASK code for CORE AVX2 ISA (256-bit HW SIMD vectors).\n"
+                           "- avx512:  YASK code classes for CORE AVX-512 ISA (512-bit HW SIMD vectors).\n"
                            "- avx512-ymm:  YASK code for CORE AVX-512 ISA (256-bit HW SIMD vectors).\n"
-                           "- knl:   YASK code for Knights-Landing (MIC) AVX-512 ISA (512-bit HW SIMD vectors).\n"
-                           "- intel64:  YASK code for generic C++ with 64-bit indices (no explicit HW SIMD vectors).\n"
+                           "- knl:     YASK code for Knights-Landing (MIC) AVX-512 ISA (512-bit HW SIMD vectors).\n"
+                           "- intel64: YASK code for generic C++ with 64-bit indices (no explicit HW SIMD vectors).\n"
                            "- pseudo:  Human-readable scalar pseudo-code.\n"
                            "- pseudo-long: Human-readable scalar pseudo-code with intermediate variables.\n"
-                           "- dot:    DOT-language description.\n"
-                           "- dot-lite:  DOT-language description of var accesses only.",
+                           "- dot:      DOT-language description.\n"
+                           "- dot-lite: DOT-language description of var accesses only.",
                            _target));
         parser.add_option(make_shared<command_line_parser::int_option>
                           ("elem-bytes",
@@ -496,12 +471,6 @@ namespace yask {
                            "This may result in more values stored in registers rather than being re-read in each loop iteration "
                            "when multiple stencil inputs must be read along the inner-loop dimension.",
                            _min_buffer_len));
-        parser.add_option(make_shared<command_line_parser::int_option>
-                          ("read-ahead-dist",
-                           "[Advanced] "
-                           "Number of iterations to read ahead into the inter-loop buffers. "
-                           "This may be used as an alternative to prefetch hints.",
-                           _read_ahead_dist));
         parser.add_option(make_shared<command_line_parser::bool_option>
                           ("inner-misc-layout",
                            "[Advanced] "
@@ -558,9 +527,14 @@ namespace yask {
                            "This can be used to generate code for a subset of the stencil equations.",
                            _var_regex));
         parser.add_option(make_shared<command_line_parser::bool_option>
+                          ("bundle",
+                           "[Advanced] "
+                           "Bundle multiple equations together into solution parts for evaluation in a single code block when possible.",
+                           _bundle));
+        parser.add_option(make_shared<command_line_parser::bool_option>
                           ("bundle-scratch",
                            "[Advanced] "
-                           "Bundle scratch equations together even if the sizes of their scratch vars must be increased "
+                           "Bundle scratch equations together even if the sizes of some scratch vars must be increased "
                            "in order to do so.",
                            _bundle_scratch));
         parser.add_option(make_shared<command_line_parser::int_option>
@@ -589,7 +563,7 @@ namespace yask {
         parser.add_option(make_shared<command_line_parser::bool_option>
                           ("opt-comb",
                            "[Advanced] "
-                           "Combine a sequence of commutative operations, e.g., 'a + b + c' into a single parse-tree node.",
+                           "Combine a sequence of commutative operations, e.g., 'a + b + c', into a single parse-tree node.",
                            _do_comb));
         parser.add_option(make_shared<command_line_parser::bool_option>
                           ("opt-reorder",
@@ -607,12 +581,6 @@ namespace yask {
                            "Combine matching pairs of eligible function calls into a single parse-tree node. "
                            "Currently enables 'sin(x)' and 'cos(x)' to be replaced with 'sincos(x)'.",
                            _do_pairs));
-        parser.add_option(make_shared<command_line_parser::bool_option>
-                          ("opt-cluster",
-                           "[Advanced] "
-                           "Apply optimizations across a cluster of stencil equations. "
-                           "Only has an effect if there are more than one vector in a cluster.",
-                           _do_opt_cluster));
         parser.add_option(make_shared<command_line_parser::int_option>
                           ("max-es",
                            "[Advanced] "
@@ -642,11 +610,6 @@ namespace yask {
                            "Generate code to load variables early in the inner-kernel loop instead of "
                            "immediately before they are needed.",
                            _early_loads));
-        parser.add_option(make_shared<command_line_parser::bool_option>
-                          ("print-eqs",
-                           "[Debug] "
-                           "Print each equation when defined",
-                           _print_eqs));
         parser.add_option(make_shared<IntTupleOption>
                           ("fold",
                            "The recommended number of elements in each given dimension in a vector block. "
@@ -655,12 +618,6 @@ namespace yask {
                            "formats with defined lengths (e.g., 16 for 'avx512' when using 4-byte reals), "
                            "lengths will adjusted as needed.",
                            _fold_options));
-        parser.add_option(make_shared<IntTupleOption>
-                          ("cluster",
-                           "The number of vectors to evaluate per inner-kernel loop iteration "
-                           "in each domain dimension. "
-                           "Default is one (1) in each unspecified dimension.",
-                           _cluster_options));
     }    
 
 } // namespace yask.
