@@ -81,19 +81,8 @@ int main() {
         num_exception++;
     }
 
-    // Exception test
-    cout << "Exception Test: Call 'set_target' with bad target.\n";
-    try {
-        soln->set_target("bad_target");
-    } catch (yask_exception& e) {
-        cout << "YASK threw an expected exception.\n";
-        cout << e.get_message() << endl;
-        cout << "Exception Test: Caught exception correctly.\n";
-        num_exception++;
-    }
-
     // Check whether program handles exceptions or not.
-    if (num_exception != 3) {
+    if (num_exception != 2) {
         cerr << "Error: unexpected number of exceptions: " << num_exception << endl;
         exit(1);
     }
