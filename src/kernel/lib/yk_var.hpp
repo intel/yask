@@ -888,7 +888,7 @@ namespace yask {
 
         // Set elements.
         virtual void set_all_elements_in_seq(double seed) =0;
-        virtual void set_all_elements_same(double seed) =0;
+        virtual void set_all_elements_same(double val) =0;
 
         // Set/get_elements_in_slice().
         idx_t set_elements_in_slice_same(double val,
@@ -1181,12 +1181,16 @@ namespace yask {
         }
 
         // Init data.
-        void set_all_elements_same(double seed) override final {
-            _data.set_elems_same(seed);
+        void set_all_elements_same(double val) override final {
+            TRACE_MSG("setting all elements in '" + get_name() + "' to " << val);
+            _coh._force_state(Coherency::not_init); // because all values will be written.
+            _data.set_elems_same(val);
             set_dirty_all(self, true);
             _coh.mod_both();
         }
         void set_all_elements_in_seq(double seed) override final {
+            TRACE_MSG("setting all elements in '" + get_name() + "' using seed " << seed);
+            _coh._force_state(Coherency::not_init); // because all values will be written.
             _data.set_elems_in_seq(seed);
             set_dirty_all(self, true);
             _coh.mod_both();
@@ -1362,13 +1366,17 @@ namespace yask {
         }
 
         // Init data.
-        void set_all_elements_same(double seed) override final {
-            real_vec_t seedv = seed; // bcast.
-            _data.set_elems_same(seedv);
+        void set_all_elements_same(double val) override final {
+            TRACE_MSG("setting all elements in '" + get_name() + "' to " << val);
+            _coh._force_state(Coherency::not_init); // because all values will be written.
+            real_vec_t valv = val; // bcast.
+            _data.set_elems_same(valv);
             set_dirty_all(self, true);
             _coh.mod_both();
         }
         void set_all_elements_in_seq(double seed) override final {
+            TRACE_MSG("setting all elements in '" + get_name() + "' using seed " << seed);
+            _coh._force_state(Coherency::not_init); // because all values will be written.
             real_vec_t seedv;
             auto n = seedv.get_num_elems();
 
