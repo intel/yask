@@ -252,7 +252,7 @@ namespace yask {
         int num_inner_threads = 1; // Number of threads to use within a block.
         bool bind_inner_threads = false; // Bind inner threads to global indices.
         #ifdef USE_OFFLOAD
-        int thread_limit = 32;           // Offload threads per team.
+        int thread_limit = 1024;           // Offload threads per team.
         #else
         int thread_limit = 1;
         #endif
@@ -260,7 +260,11 @@ namespace yask {
         // Var behavior, including allocation.
         bool _step_wrap = false; // Allow invalid step indices to alias to valid ones (set via APIs only).
         bool _allow_addl_pad = true; // Allow extending padding beyond what's needed for alignment.
-        bool _bundle_allocs = !KernelEnv::_use_offload; // Group allocations together.
+        #ifdef USE_OFFLOAD
+        bool _bundle_allocs = false;
+        #else
+        bool _bundle_allocs = true;
+        #endif
         int _numa_pref = NUMA_PREF;
         bool _init_scratch_vars = false; // Init scratch vars to zero.
 
