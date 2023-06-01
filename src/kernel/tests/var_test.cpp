@@ -137,25 +137,30 @@ void run_tests(int argc, char* argv[]) {
         }
         Indices firsti(first), lasti(last);
 
+        // Buffer for copying.
         size_t sz = g3f->get_num_storage_bytes();
         char* buf = new char[sz];
         offload_map_alloc(buf, sz);
+
+        // Buffer with zeros.
+        char* buf0 = new char[sz];
+        memset(buf0, 0, sz);
                           
         bool done = false;
         for (int testn = 0; !done; testn++) {
+            os << "\n*** test " << testn << endl;
 
             // Fill w/bad values.
-            gb3f->set_all_elements_same(-1.0);
-            gb3f->copy_data_to_device();
+            os << "initializing data...\n";
+            gb3f->set_all_elements_in_seq(-1.0);
 
-            os << testn << ". copying seq of vals to " << gb3f->get_name() << endl;
+            os << "copying seq of vals to " << gb3f->get_name() << endl;
             switch (testn) {
 
             case 0: {
                 os << " element-by-element in parallel on host...\n";
                 sizes.visit_all_points_in_parallel
-                    ( [&](const IdxTuple& pt,
-                          size_t idx) {
+                    ( [&](const IdxTuple& pt, size_t idx) {
                           IdxTuple pt2 = pt;
                           for (auto dname : gdims)
                               pt2[dname] += first[dname];
@@ -187,7 +192,7 @@ void run_tests(int argc, char* argv[]) {
                 gb3f->copy_data_to_device();
 
                 #ifndef USE_OFFLOAD_USM
-                gb3f->set_all_elements_same(-2.0);
+                gb3f->set_elements_in_slice(buf0, firsti, lasti, false);
                 gb3f->get_coh()._force_state(Coherency::dev_mod);
                 #endif
 
@@ -207,7 +212,7 @@ void run_tests(int argc, char* argv[]) {
                 gb3f->get_vecs_in_slice(buf, firsti, lasti, false);
 
                 #ifndef USE_OFFLOAD_USM
-                gb3f->set_all_elements_same(-2.0);
+                gb3f->set_elements_in_slice(buf0, firsti, lasti, false);
                 gb3f->get_coh()._force_state(Coherency::dev_mod);
                 #endif
 
@@ -231,11 +236,12 @@ void run_tests(int argc, char* argv[]) {
 
             if (!done) {
                 os << "Checking vals...\n";
-                idx_t nbad = 0;
+                idx_t nbad = 0, npts = 0;
                 idx_t max_bad = 50;
                 sizes.visit_all_points
                     ([&](const IdxTuple& pt,
                          size_t idx) {
+                         npts++;
                          IdxTuple pt2 = pt;
                          for (auto dname : gdims)
                              pt2[dname] += first[dname];
@@ -253,7 +259,7 @@ void run_tests(int argc, char* argv[]) {
                          }
                          return true;
                      });
-                os << " done checking\n";
+                os << " done checking: " << nbad << "/" << npts << " are incorrect.\n";
                 if (nbad)
                     exit(1);
             }
