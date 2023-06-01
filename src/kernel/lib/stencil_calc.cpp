@@ -512,35 +512,38 @@ namespace yask {
             // Loop through all needed parts.
             for (auto* rsg : sg_list) {
                 auto& bname = rsg->get_name();
-                DEBUG_MSG("  part '" << rsg->get_name() << "':");
-
-                if (rsg->is_sub_domain_expr())
-                    DEBUG_MSG("   sub-domain expr:            '" << rsg->get_domain_description() << "'");
-                if (rsg->is_step_cond_expr())
-                    DEBUG_MSG("   step-condition expr:        '" << rsg->get_step_cond_description() << "'");
-
-                DEBUG_MSG("   points to eval in part:   " << make_num_str(npts[bname]) << endl <<
-                          "   var-reads per point:        " << rsg->get_scalar_points_read() << endl <<
-                          "   var-writes per point:       " << rsg->get_scalar_points_written() << endl <<
-                          "   est FP-ops per point:       " << rsg->get_scalar_fp_ops() << endl <<
-                          "   var-reads in rank:          " << make_num_str(reads[bname]) << endl <<
-                          "   var-writes in rank:         " << make_num_str(writes[bname]) << endl <<
-                          "   est FP-ops in rank:         " << make_num_str(fpops[bname]));
                 num_reads_per_step += reads[bname];
                 num_writes_per_step += writes[bname];
                 num_fpops_per_step += fpops[bname];
 
-                auto& bb = rsg->get_bb();
-                DEBUG_MSG("   part scope:               " << bb.make_range_string(domain_dims));
-                auto& bbs = rsg->get_bbs();
-                DEBUG_MSG("   num full rectangles in box: " << bbs.size());
-                for (size_t ri = 0; ri < bbs.size(); ri++) {
-                    auto& rbb = bbs[ri];
-                    DEBUG_MSG("    Rectangle " << ri << ":\n"
-                              "     num points in rect:       " << make_num_str(rbb.bb_size));
-                    if (rbb.bb_size) {
-                        DEBUG_MSG("     rect scope:               " << rbb.make_range_string(domain_dims) <<
-                                  "\n     rect size:                " << rbb.make_len_string(domain_dims));
+                if (actl_opts->_verbose) {
+                    DEBUG_MSG("  part '" << rsg->get_name() << "':");
+
+                    if (rsg->is_sub_domain_expr())
+                        DEBUG_MSG("   sub-domain expr:            '" << rsg->get_domain_description() << "'");
+                    if (rsg->is_step_cond_expr())
+                        DEBUG_MSG("   step-condition expr:        '" << rsg->get_step_cond_description() << "'");
+
+                    DEBUG_MSG("   points to eval in part:   " << make_num_str(npts[bname]) << endl <<
+                              "   var-reads per point:        " << rsg->get_scalar_points_read() << endl <<
+                              "   var-writes per point:       " << rsg->get_scalar_points_written() << endl <<
+                              "   est FP-ops per point:       " << rsg->get_scalar_fp_ops() << endl <<
+                              "   var-reads in rank:          " << make_num_str(reads[bname]) << endl <<
+                              "   var-writes in rank:         " << make_num_str(writes[bname]) << endl <<
+                              "   est FP-ops in rank:         " << make_num_str(fpops[bname]));
+
+                    auto& bb = rsg->get_bb();
+                    DEBUG_MSG("   part scope:                 " << bb.make_range_string(domain_dims));
+                    auto& bbs = rsg->get_bbs();
+                    DEBUG_MSG("   num full rectangles in box: " << bbs.size());
+                    for (size_t ri = 0; ri < bbs.size(); ri++) {
+                        auto& rbb = bbs[ri];
+                        DEBUG_MSG("    Rectangle " << ri << ":\n"
+                                  "     num points in rect:       " << make_num_str(rbb.bb_size));
+                        if (rbb.bb_size) {
+                            DEBUG_MSG("     rect scope:               " << rbb.make_range_string(domain_dims) <<
+                                      "\n     rect size:                " << rbb.make_len_string(domain_dims));
+                        }
                     }
                 }
             }

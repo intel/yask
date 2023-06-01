@@ -278,8 +278,9 @@ namespace yask {
         bool force_scalar = false; // Do only scalar ops.
         bool do_halo_exchange = true; // False => skip halo exchanges.
         bool force_scalar_exchange = false; // Don't allow vec exchanges.
+        bool _verbose = false;
 
-        // Ctor/dtor.
+            // Ctor/dtor.
         KernelSettings(DimsPtr dims, KernelEnvPtr env);
         virtual ~KernelSettings() { }
 

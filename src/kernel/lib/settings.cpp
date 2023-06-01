@@ -335,6 +335,10 @@ namespace yask {
                            yask::is_suffix_print_enabled));
 
         // Following options are in 'this' object.
+        parser.add_option(make_shared<command_line_parser::bool_option>
+                          ("verbose",
+                           "[Debug] Print more debug information.",
+                           _verbose));
         _add_domain_option(parser, "g", "Global-domain (overall-problem) size", _global_sizes);
         _add_domain_option(parser, "l", "Local-domain (rank) size", _rank_sizes);
         _add_domain_option(parser, _mega_block_str, "Mega-block size", _mega_block_sizes, true);
