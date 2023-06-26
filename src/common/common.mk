@@ -54,18 +54,6 @@ BUILD_OUT_DIR	:=	$(YASK_OUT_BASE)/build
 PY_OUT_DIR	:=	$(YASK_OUT_BASE)/yask
 TEST_LOG_OUT_DIR :=	$(YASK_OUT_BASE)/logs/tests.$(HOSTNAME).$(TIMESTAMP)
 
-# OS-specific
-ifeq ($(shell uname -o),Cygwin)
-  SO_SUFFIX	:=	.dll
-  RUN_PREFIX	:=	env PATH="${PATH}:$(LIB_DIR):$(LIB_OUT_DIR):$(PY_OUT_DIR):$(YASK_DIR)"
-  PYTHON	:=	python3
-else
-  SO_SUFFIX	:=	.so
-  RUN_PREFIX	:=	env I_MPI_DEBUG=+5 I_MPI_PRINT_VERSION=1 OMP_DISPLAY_ENV=VERBOSE KMP_VERSION=1
-  PYTHON	:=	python3
-endif
-SHELL		:=	/bin/bash
-
 # Common source.
 COMM_DIR	:=	$(SRC_DIR)/common
 COMM_SRC_NAMES	:=	output common_utils tuple combo fd_coeff fd_coeff2
@@ -86,13 +74,18 @@ CXX		:=	icpx
 SWIG		:=	swig
 PERL		:=	perl
 MKDIR		:=	mkdir -p -v
-BASH		:=	bash
+BASH		:=	/bin/bash
 INDENT		:=	$(UTILS_BIN_DIR)/yask_indent.sh
+PYTHON  	:=	python3
+SHELL		:=	/bin/bash
 
 # Find include path needed for python interface.
 # NB: constructing string inside print() to work for python 2 or 3.
 PYINC		:= 	$(addprefix -I,$(shell $(PYTHON) -c 'import distutils.sysconfig; print(distutils.sysconfig.get_python_inc() + " " + distutils.sysconfig.get_python_inc(plat_specific=1))'))
 
+# OS-specific
+SO_SUFFIX	:=	.so
+RUN_PREFIX	:=	env I_MPI_DEBUG=+5 I_MPI_PRINT_VERSION=1 OMP_DISPLAY_ENV=VERBOSE KMP_VERSION=1
 RUN_PYTHON	:= 	$(RUN_PREFIX) \
 	env PYTHONPATH=$(LIB_DIR):$(LIB_OUT_DIR):$(PY_OUT_DIR):$(YASK_DIR):$(PYTHONPATH) $(PYTHON)
 
@@ -122,3 +115,88 @@ SWIG_GCCFLAGS	:= -DYASK_DEPRECATED=''
 
 # Define deprecated macro used by SWIG.
 DBL_EPSILON_CXXFLAG	:=	-DDBL_EPSILON=2.2204460492503131e-16
+
+# Determine default architecture by running kernel script w/special knob.
+# (Do not assume 'yask.sh' has been installed in $(BIN_OUT_DIR) yet.)
+arch			?=	$(shell $(BASH) $(SRC_DIR)/kernel/yask.sh -show_arch)
+
+# Set 'TARGET' from 'arch', converting codenames and other aliases to ISA names.
+# 'TARGET' is the canonical target name.
+# The possible values must agree with those in the APIs and YASK compiler.
+ifneq ($(filter $(arch),avx snb ivb),)
+  TARGET		:=	avx
+else ifneq ($(filter $(arch),avx2 hsw bdw),)
+  TARGET		:=	avx2
+else ifneq ($(filter $(arch),avx512-ymm avx512lo),)
+  TARGET		:=	avx512-ymm
+else ifneq ($(filter $(arch),avx512 avx512-zmm avx512hi avx512f skx skl clx icx spr),)
+  TARGET		:=	avx512
+else ifneq ($(filter $(arch),knl),)
+  TARGET		:=	knl
+else ifneq ($(filter $(arch),intel64 cpp),)
+  TARGET		:=	intel64
+else
+  $(error Target not recognized; use arch=avx512, avx512-ymm, avx2, avx, knl, or intel64)
+endif
+
+# Set 'offload=1' to build device-offload (e.g., GPU) library.
+# Set 'offload_usm=1' to build with unified shared mem model.
+# Set 'offload_arch' to the target offload architecture.
+offload			?=	0
+offload_usm		?=	0
+ifeq ($(offload_usm),1)
+ offload		:=	1
+endif
+ifeq ($(offload),1)
+ offload_arch		?=	spir64
+endif
+
+# Set 'stencil' to the name of the YASK solution to build.
+stencil			?=	iso3dfd
+
+# Set 'real_bytes' to number of bytes in a float (4 or 8).
+real_bytes		?=	4
+
+# Set 'mpi=0' to build without MPI support.
+mpi			?=	1
+
+# Set 'omp=0' to build without OpenMP support.
+omp			?=	1
+
+# Main vars for naming the libraries and executables.
+# Set the following vars on 'make' cmd-line for corresponding effects:
+# - YK_STENCIL and/or YK_ARCH to name libraries and executables differently.
+YK_STENCIL	?=	$(stencil)$(YK_STENCIL_SUFFIX)
+ifeq ($(offload),1)
+  YK_ARCH	:=	$(arch).offload-$(offload_arch)
+else
+  YK_ARCH	:=	$(arch)
+endif
+YK_TAG  	:=	$(YK_STENCIL).$(YK_ARCH)
+
+# Kernel lib file names.
+YK_BASE		:=	yask_kernel
+YK_EXT_BASE	:=	$(YK_BASE).$(YK_TAG)
+YK_LIB		:=	$(LIB_OUT_DIR)/lib$(YK_EXT_BASE)$(SO_SUFFIX)
+
+# Compiler for building kernel lib and apps.
+YK_CXX		:=	$(CXX)
+MPI_CXX 	:=	mpiicpc
+ifeq ($(mpi),1)
+ YK_CXXCMD	:=	$(MPI_CXX) -cxx=$(YK_CXX)
+else
+ YK_CXXCMD	:=	$(YK_CXX)
+endif
+ifeq ($(offload),1)
+ CXX_PREFIX	:=
+endif
+
+# Base compiler flags for building kernel lib and apps.
+YK_CXXOPT	:=	-O3
+YK_CXXDBG	:=	-g
+YK_CXXWARN	:=	-Wall
+YK_CXXFLAGS	:=	-std=c++17 $(YK_CXXDBG) $(YK_CXXOPT) $(YK_CXXWARN) -I$(INC_DIR) $(EXTRA_YK_CXXFLAGS)
+
+# Linker flags.
+YK_LIBS		:=	-lrt
+YK_LFLAGS	:=	-Wl,-rpath=$(LIB_OUT_DIR) -L$(LIB_OUT_DIR) -l$(YK_EXT_BASE)
